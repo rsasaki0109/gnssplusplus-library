@@ -1,0 +1,123 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-alignment-v1.4-selection.v1",
+  "status": "selection-frozen-before-member-content-read-no-eligible-validation",
+  "selected_at": "2026-08-30",
+  "scope": "truth-free multi-phone alignment tolerance research",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_directory_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true,
+    "member_content_read": false,
+    "truth_opened": false
+  },
+  "alignment_contract": {
+    "candidate_methods_unchanged": [
+      "coordinate_wise_ecef_median",
+      "geometric_median_ecef",
+      "trimmed_mean_ecef"
+    ],
+    "baseline_method": "single_phone_wls",
+    "previous_tolerance_ms": 1,
+    "candidate_tolerance_ms": 10,
+    "absolute_delta_rule": "abs(source_timestamp-target_timestamp) <= 10 ms passes; 11 ms fails",
+    "tie_rule": "nearest absolute delta; equal-distance source timestamps choose the earlier timestamp deterministically",
+    "extrapolation": "forbidden",
+    "all_phone_unresolved": "fail-closed",
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "candidate_coordinate_median_and_numeric_parameters_unchanged": true
+  },
+  "prior_route_exclusion": {
+    "source": "central_directory_inventory and existing sealed records only",
+    "all_previously_used_routes_excluded": true,
+    "multi_phone_routes_considered": 8,
+    "fresh_multi_phone_routes_after_exclusion": 0,
+    "truth_open_count_at_selection": 0,
+    "payload_sha256_computed_at_selection": false,
+    "excluded_routes": [
+      {
+        "route": "2021-01-04-21-50-us-ca-e1highway280driveroutea",
+        "calendar_year": 2021,
+        "region": "e1highway280driveroutea",
+        "phones": ["mi8", "pixel5"],
+        "required_files_complete": true,
+        "reason": "previous development/generalization/segment use"
+      },
+      {
+        "route": "2021-01-04-22-40-us-ca-mtv-a",
+        "calendar_year": 2021,
+        "region": "mtv",
+        "phones": ["mi8", "pixel5"],
+        "required_files_complete": true,
+        "reason": "previous multi-phone train route"
+      },
+      {
+        "route": "2021-07-14-20-50-us-ca-mtv-e",
+        "calendar_year": 2021,
+        "region": "mtv",
+        "phones": ["pixel4", "sm-g988b"],
+        "required_files_complete": true,
+        "reason": "previous development/generalization/segment use"
+      },
+      {
+        "route": "2022-01-26-20-02-us-ca-mtv-pe1",
+        "calendar_year": 2022,
+        "region": "mtv",
+        "phones": ["mi8", "pixel5"],
+        "required_files_complete": true,
+        "reason": "previous multi-phone train route"
+      },
+      {
+        "route": "2022-05-13-20-57-us-ca-mtv-pe1",
+        "calendar_year": 2022,
+        "region": "mtv",
+        "phones": ["pixel6pro", "sm-g988b"],
+        "required_files_complete": true,
+        "reason": "previous multi-phone validation route"
+      },
+      {
+        "route": "2022-08-04-20-07-us-ca-sjc-q",
+        "calendar_year": 2022,
+        "region": "sjc",
+        "phones": ["mi8", "pixel5", "sm-a325f"],
+        "required_files_complete": true,
+        "reason": "previous development/generalization/segment use"
+      },
+      {
+        "route": "2022-10-06-21-51-us-ca-mtv-n",
+        "calendar_year": 2022,
+        "region": "mtv",
+        "phones": ["sm-a205u", "sm-a217m", "sm-a325f"],
+        "required_files_complete": true,
+        "reason": "reserved and executed multi-phone holdout v1.1/v1.2/v1.3"
+      },
+      {
+        "route": "2023-03-08-21-34-us-ca-mtv-u",
+        "calendar_year": 2023,
+        "region": "mtv",
+        "phones": ["pixel5", "pixel6pro"],
+        "required_files_complete": true,
+        "reason": "previous development/generalization/segment use"
+      }
+    ]
+  },
+  "new_validation": null,
+  "next_holdout": null,
+  "decision": {
+    "fresh_validation_available": false,
+    "v1_4_freeze_created": false,
+    "holdout_materialization_permitted": false,
+    "holdout_truth_open_count": 0,
+    "result": "no-go-no-fresh-multi-phone-route",
+    "reason": "inventory contains no multi-phone route outside all previously used routes and multi-phone holdouts"
+  },
+  "selection_contract": {
+    "required_files": ["device_gnss.csv", "ground_truth.csv", "brdc.nav"],
+    "metadata_only_route_selection": true,
+    "truth_free_generation_required_before_truth": true,
+    "candidate_search_after_selection": false,
+    "no_post_holdout_tuning": true,
+    "production_rtk_spp_default_changed": false
+  }
+}

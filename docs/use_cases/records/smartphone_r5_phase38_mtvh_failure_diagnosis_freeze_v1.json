@@ -1,0 +1,215 @@
+{
+  "schema_version": "smartphone-r5-phase38-mtvh-failure-diagnosis-freeze.v1",
+  "phase": 38,
+  "status": "frozen-before-phase38-diagnosis-rerun",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "45242c8e0fbf934ec18d0787bfa4d0255e85fd37",
+    "phase37_freeze_v2": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v2.json",
+      "sha256": "61f46ac734d0c712bc317603570a0630234ee67ab642d12368eb5e3bf3962a3e"
+    },
+    "phase37_failure_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_structural_failure_manifest_v1.json",
+      "sha256": "d268d29ee5bb8b3244a964445dbb9e69724077c64b451c8535de142999b9678f"
+    },
+    "phase37_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_evaluator_manifest_v1.json",
+      "sha256": "42e17e555fd4d249721fe64ba00fe2c6d68469b30b88ef532b44f73e76d7e4c1"
+    },
+    "phase37_raw_materialization": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_raw_materialization.json",
+      "sha256": "4db95d2d3c6180d9855e596fd516b04644099c0c71b13eeb47af8a85cefbb6ac"
+    },
+    "phase37_failure_result": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_structural_failure.json",
+      "sha256": "b48afb71de727743360ba0fcea8cc4200d775c463ce7d15c17b42b3a3fab61dc"
+    }
+  },
+  "objective": {
+    "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "question": "Distinguish a native solver-state failure from a runner-only UTC/output projection failure using truth-free raw/nav evidence.",
+    "permitted_inputs": [
+      "already-materialized raw device_gnss.csv",
+      "already-materialized raw device_imu.csv",
+      "already-materialized broadcast brdc.nav"
+    ],
+    "no_accuracy_claim": true,
+    "no_common_constant_fit_or_application": true,
+    "no_body_frame_fit": true
+  },
+  "input_contract": {
+    "target_raw_root": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs",
+    "target_raw_sha256": {
+      "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "device_imu.csv": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+      "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+    },
+    "archive_reopened": false,
+    "archive_member_materialization": false,
+    "ground_truth_opened": false,
+    "mat_read_or_generated": false,
+    "precomputed_coordinates_used": false,
+    "validation_or_holdout_opened": false,
+    "token_or_kaggle_access": false
+  },
+  "native_baseline": {
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+    },
+    "flags_exact": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "direct_run_before_instrumented_source": true,
+    "production_default_changed": false,
+    "phase31_binary_or_flags_changed": false,
+    "outputs_preserved": true,
+    "output_root": "output/smartphone-r5/phase38-mtvh-failure-diagnosis-v1"
+  },
+  "diagnostic_stage_order": [
+    {
+      "stage": "raw_input_ingest",
+      "evidence": "raw GNSS epoch count/UTC keys, IMU load and finite sample/leveling diagnostics, broadcast navigation load",
+      "failure_class": "input_or_clock_ingest"
+    },
+    {
+      "stage": "spp_seed_and_gnss_first",
+      "evidence": "first finite SPP seed and norm, GNSS-first graph convergence/cost/velocity-state count, first invalid seed index/state",
+      "failure_class": "spp_or_gnss_first_state_failure"
+    },
+    {
+      "stage": "quality_anchor_replay",
+      "evidence": "anchor selected/index/candidate count, forward/backward valid epochs, fallback count, anchor seed finiteness",
+      "failure_class": "anchor_replay_failure"
+    },
+    {
+      "stage": "graph_pre_state",
+      "evidence": "problem epoch count, first/last seed finite Earth norms, factor-family counts, IMU interval count and graph initialization state",
+      "failure_class": "graph_initialization_failure"
+    },
+    {
+      "stage": "graph_post_state",
+      "evidence": "convergence/cost, solution count, first invalid solution epoch/state and finite/Earth norm scan before any UTC projection",
+      "failure_class": "solver_state_failure"
+    },
+    {
+      "stage": "utc_alignment_and_projection",
+      "evidence": "raw target keys, exact/interpolated/edge-held/unresolved counts, first invalid aligned state",
+      "failure_class": "runner_projection_failure_only_if_native_states_are_valid"
+    }
+  ],
+  "classification": {
+    "runner_projection_failure": "All native solution states are finite and Earth-valid before alignment, while alignment/projection alone reports a key or output contract failure.",
+    "native_solver_state_failure": "A native solution/seed state is non-finite or outside the frozen Earth norm bounds before UTC alignment; no projection or replacement trajectory may hide it.",
+    "ambiguous_failure": "If stage evidence cannot distinguish the two classes, record diagnosis-no-go and do not repair or rerun with relaxed policy."
+  },
+  "candidate_contract": {
+    "implementation_allowed": "Only a new explicit opt-in native C++ flag may alter solver behavior; production/default behavior and the Phase31 flag-off path remain unchanged.",
+    "candidate_flag": "--native-mtvh-failure-recovery",
+    "requirements": [
+      "truth-free and coordinate-free",
+      "must expose, not conceal, failed states",
+      "must not use edge hold, alternate trajectory, coordinate substitution, or result/submission data",
+      "must preserve raw UTC key semantics",
+      "source and focused tests must be committed and pushed before matrix execution"
+    ],
+    "if_not_justified": "diagnosis-no-go; no candidate implementation or matrix promotion"
+  },
+  "acceptance_gates": {
+    "target_mtvh_candidate": {
+      "all_conditions": true,
+      "finite_native_states_and_output": true,
+      "graph_converged": true,
+      "raw_keys_exact_and_unresolved_zero": true,
+      "over_70_mps_count": 0,
+      "repeat_runs": 2,
+      "byte_identical_submission_and_summary": true
+    },
+    "structural_non_regression_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "structural_non_regression_baselines": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "raw_sha256": {
+          "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+        },
+        "baseline_submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "baseline_summary_sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "raw_sha256": {
+          "device_gnss.csv": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+          "device_imu.csv": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8",
+          "brdc.nav": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+        },
+        "baseline_submission_sha256": "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc",
+        "baseline_summary_sha256": "915f002eeb1c2f4728741d72e8225f6a36959462d4569f8a04f0ce3eb17da988"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "raw_sha256": {
+          "device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+          "device_imu.csv": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+          "brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+        },
+        "baseline_submission_sha256": "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47",
+        "baseline_summary_sha256": "77beb1b59aadefcdac0394c775f5ab45eb58c10ec7af92f21990dbbc694438b8"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "raw_sha256": {
+          "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "device_imu.csv": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+        },
+        "baseline_submission_sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+        "baseline_summary_sha256": "2c85fd545ecf6b1bc815c7c4c42a139424a722787b2b58da6ae48b412188a542"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "raw_sha256": {
+          "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+          "device_imu.csv": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+          "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+        },
+        "baseline_submission_sha256": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+        "baseline_summary_sha256": "84b354751b617258db6499cf5ab477f520e3463ae73ec8b73dd3f3b438d45f31"
+      }
+    },
+    "non_regression_conditions": [
+      "each route remains finite, converged, raw-key exact, unresolved-zero, and <=70 m/s",
+      "each route has deterministic two-run byte identity",
+      "candidate flag-off output is byte-identical to the frozen baseline whenever the candidate source is built",
+      "candidate flag-off does not change Phase31 factor/model/default contracts",
+      "candidate flag-on must not increase any frozen route over-70-m/s count or introduce edge holds"
+    ],
+    "failure_policy": "All gates are ANDed. Any missing input, solver failure, ambiguity, non-regression failure, or nondeterminism is fail-closed; no truth, repair rerun, tuning, or promotion follows."
+  },
+  "forbidden_actions": [
+    "open or materialize ground_truth.csv",
+    "open Phase34 validation 2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "open future holdout 2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "read or create any MATLAB .mat",
+    "use precomputed result/submission coordinates for inference",
+    "delete or overwrite Phase37 native outputs, summaries, or logs",
+    "change Phase31 champion binary, flags, or production defaults",
+    "use Kaggle or tokens"
+  ],
+  "truth_accounting": {
+    "allowed_truth_reads": 0,
+    "ground_truth_materialized": 0,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "kaggle_or_token_access": 0
+  }
+}

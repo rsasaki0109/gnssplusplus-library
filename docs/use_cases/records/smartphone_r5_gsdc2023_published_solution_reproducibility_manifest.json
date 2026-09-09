@@ -1,0 +1,45 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-published-solution-reproducibility-manifest.v1",
+  "record_path": "docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_audit.json",
+  "record_sha256": "ef47e8a7833b261dd7566f2c50ae168a0505bfd03badb6e01cfa1acc69ec72d2",
+  "published_repository": {
+    "url": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "git_tree_listing_sha256": "64939d3369edac1d908251a2e071dae56badff5eeaa6b1d0b367507930b9dc83"
+  },
+  "dependency_commits": {
+    "gtsam-4.3a": "88d94f517c39619c93087bf3611d4dee16751390",
+    "gtsam_gnss": "e679b72b620fc6800723578e4077dd157587d129",
+    "MatRTKLIB": "69bcbd3faebc39815adb03e4b329033a4a7deb4a",
+    "MatlabProgressBar": "0e4acf5f3656d4c772552fdd01c7a93043457586"
+  },
+  "public_artifact": {
+    "url": "https://taroz.net/data/dataset_2023.zip",
+    "size_bytes": 2761355999,
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "route_smoke": {
+    "route": "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+    "cache_path": "output/reproducibility-cache/taroz-train-smoke-v2",
+    "settings_sha256": "cb868652632a90919d9b21decaa9b77627d75d16d75287a5430a92b6cf29e080",
+    "device_gnss_sha256": "3dcb29d9793384fd7e45930784a0b60fb909bebe4e5a83cd1924541df8880680",
+    "device_imu_sha256": "8544e7ef2a1069d3ff78081a5174ae6bcb90a17faf71130bbd3c2bd60e6500d4",
+    "ground_truth_sha256": "a7eeb418bd8c8bb3beb37b166371b8fc3cf709b48a8f3ab5b84a422a8c440f97",
+    "truth_parsed_by_this_phase": false
+  },
+  "execution_logs": {
+    "gtsam_gnss_without_gtwrap_sha256": "9dc2a35924b64eda3d12317285b4b10976136c02d1fe0f0c54a8c0c207c6aca3",
+    "gtsam_gnss_with_gtwrap_sha256": "be3dfdce4d005b33352b411a05e5cc007383ccd5fd348318252289fa1f3a21ae",
+    "matlab_probe_stderr_sha256": "973daad1a1a89f2f6a90501688d285114fe8b53a51cd39ae92515f53f384c387",
+    "native_factor_smoke_summary_sha256": "bad038335b1188007387769905f222330d56917bfc0390ae2c9b5422ab9bebcb",
+    "native_factor_smoke_position_sha256": "dda28db9e0a810834611668a895df20ed37f8cbd7340416455819906b1c67084"
+  },
+  "contract": {
+    "external_mutation": false,
+    "token_access": false,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "production_default_changed": false,
+    "source_vendored": false
+  }
+}

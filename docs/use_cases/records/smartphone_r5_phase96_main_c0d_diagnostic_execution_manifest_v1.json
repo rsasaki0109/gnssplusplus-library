@@ -1,0 +1,377 @@
+{
+  "schema_version": "smartphone-r5-phase96-main-c0d-diagnostic-execution-manifest.v1",
+  "phase": 96,
+  "status": "sealed-before-phase96-main-c0d-diagnostic-raw-execution",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Pin exactly one diagnostic-only Phase96 native execution for the two primary Phase95 successful-handoff routes. The main C0/D graph is observed through its existing factor, linearization, and LM trial paths; no algorithm, unit, sigma, filter, solver, or LM behavior is changed.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_diagnostic_telemetry_freeze_v1.json",
+    "sha256": "9605f3ce32ad08ae3f17254834df50a65cd93918cee593b487a02ad7b97ebc65",
+    "commit": "d4c640312568bffc01f21282767d33756a1ef1a9",
+    "execution_authorized_before_this_manifest": false
+  },
+  "authority": {
+    "phase96_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_diagnostic_telemetry_freeze_v1.json",
+      "sha256": "9605f3ce32ad08ae3f17254834df50a65cd93918cee593b487a02ad7b97ebc65",
+      "commit": "d4c640312568bffc01f21282767d33756a1ef1a9"
+    },
+    "phase91_inherited_raw_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988"
+    },
+    "implementation": {
+      "commit": "bcdcd952943623650cdf77410c17e9ec87f45d7f",
+      "native_algorithm_changed": false,
+      "solver_filter_lm_changed": false,
+      "equation_units_sigma_changed": false
+    },
+    "raw_execution_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_diagnostic_raw_execution_authorization_v1.json",
+      "role": "separate one-shot authorization; final manifest hash is pinned by the authorization"
+    }
+  },
+  "implementation": {
+    "commit": "bcdcd952943623650cdf77410c17e9ec87f45d7f",
+    "source_sha256": "8e71268904fde04db14db8d9357aea97a9b6eed62b67ffd15fc2acbd7865799f",
+    "native_algorithm_changed": false,
+    "solver_filter_lm_changed": false,
+    "equation_units_sigma_changed": false,
+    "source": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "8e71268904fde04db14db8d9357aea97a9b6eed62b67ffd15fc2acbd7865799f"
+    },
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "60e244d27fa48bdc962dfeb63047314f16cbed2ce09fc93040bced0bcd790009"
+    },
+    "changed_files": [
+      {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "8e71268904fde04db14db8d9357aea97a9b6eed62b67ffd15fc2acbd7865799f",
+        "diagnostic_or_test_only": true
+      },
+      {
+        "path": "include/libgnss++/algorithms/fgo.hpp",
+        "sha256": "623dc927266bc82e944b2e9965f3dfa35a2b749c892beeae9ae39fd71d83feef",
+        "diagnostic_or_test_only": true
+      },
+      {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "b4dd5cbae90a3ac8a357dc15fc011b44d923943a7384335688b116731e660ecf",
+        "diagnostic_or_test_only": true
+      },
+      {
+        "path": "src/algorithms/fgo.cpp",
+        "sha256": "b297eccfb866d08346cdebbf2e0dff3ac7db001c0a6a539056c4647714d6f746",
+        "diagnostic_or_test_only": true
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_backend.cpp",
+        "sha256": "077afd8df8745fe0c01fc52d35c33ac5908b44185e27d55cdb8c19eac7f6cdc7",
+        "diagnostic_or_test_only": true
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_internal.hpp",
+        "sha256": "7691fa988b6236c14152cd7d9d66aba66fc2879df2861174a5cbe87b3bbef1cb",
+        "diagnostic_or_test_only": true
+      },
+      {
+        "path": "tests/test_fgo_gtsam_backend.cpp",
+        "sha256": "8ef84fb719bf77fc2f72a98fb3a9cc1e8481ddc607a5e529b0589d3f911767e2",
+        "diagnostic_or_test_only": true
+      }
+    ]
+  },
+  "inherited_raw_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+    "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988",
+    "runtime_resolution": "exact retained Phase91 route/key path; metadata-only stat before native launch",
+    "raw_byte_reads_by_verifier": 0,
+    "raw_content_copy_or_transform": false
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase96_main_c0d_diagnostic.py",
+    "sha256": "ad4bd05a5739789e3a8a89647e18374e66e7408d66f43256c1caef474e319ac7",
+    "role": "static freeze/manifest/authorization verifier only; no native launch and no raw-byte read"
+  },
+  "wrapper": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase96_main_c0d_diagnostic_execute.py",
+    "sha256": "5e878913f9f2683366b8b064ffd6dfac03cfb2e9bf4bf39e0bc7bc423e09058e",
+    "role": "post-authorization sequential native launcher; exact Phase91 route/key metadata-only resolver and compact diagnostic sealer"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase96_main_c0d_diagnostic.py",
+    "sha256": "4d62316fe143a6df828eae2136de8afc379ee38abef1254b51d77808905e4022",
+    "role": "launch-free exact route/flag/pin/publication-policy regression checks"
+  },
+  "pre_raw_qualification": {
+    "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_diagnostic_pre_raw_qualification_v1.md",
+    "sha256": "3167e17eb6374a0bd3b4ba12505bb5d537df0d94a2532a684fa32307788fbdbd",
+    "raw_route_execution": false,
+    "native_solver_invocations": 0
+  },
+  "candidate": {
+    "id": "phase96_main_c0d_factor_family_lm_trial_diagnostic_telemetry",
+    "selector": "--native-source-clock-c0d-phase96-main-diagnostics",
+    "phase93_selector": "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "candidate_count": 1,
+    "diagnostic_only": true,
+    "default_off": true,
+    "raw_only": true,
+    "runs_per_route": 1,
+    "controls": 0,
+    "accuracy_scoring": false,
+    "truth_evaluation": false,
+    "submission_release": false,
+    "no_solver_filter_or_lm_change": true,
+    "no_fallback_or_guard_bypass": true,
+    "no_solution_output_publication": true,
+    "raw_content_copy_or_transform": false,
+    "raw_input_contract": {
+      "input_names_exact": [
+        "device_gnss.csv",
+        "device_imu.csv",
+        "brdc.nav"
+      ],
+      "device_gnss_only": true,
+      "device_imu_only": true,
+      "broadcast_navigation_only": true,
+      "truth_mat_base_precomputed_coordinate_kaggle_accuracy": false,
+      "copy_or_transform": false
+    },
+    "diagnostic_payload": {
+      "factor_family_costs": true,
+      "variable_family_gradient_norms": true,
+      "variable_family_normal_diagonal_norms": true,
+      "existing_lm_trials_max": 10,
+      "linear_solver_and_exception_telemetry": true,
+      "solution_values": false,
+      "raw_observations": false
+    }
+  },
+  "routes": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "domain_rows": 2158,
+      "diagnostic_only": true,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "sha256": null,
+          "sha256_available": false,
+          "read_at_manifest_creation": false
+        },
+        "device_imu.csv": {
+          "path": "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "sha256": null,
+          "sha256_available": false,
+          "read_at_manifest_creation": false
+        },
+        "brdc.nav": {
+          "path": "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "sha256": null,
+          "sha256_available": false,
+          "read_at_manifest_creation": false
+        }
+      },
+      "planned_output": {
+        "summary": "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "withheld_solution_output": "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv"
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "--android-gnss",
+        "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+        "--android-imu",
+        "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+        "--nav",
+        "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-phase96-main-diagnostics",
+        "--out",
+        "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json"
+      ]
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "domain_rows": 1465,
+      "diagnostic_only": true,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+          "sha256": null,
+          "sha256_available": false,
+          "read_at_manifest_creation": false
+        },
+        "device_imu.csv": {
+          "path": "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/device_imu.csv",
+          "sha256": null,
+          "sha256_available": false,
+          "read_at_manifest_creation": false
+        },
+        "brdc.nav": {
+          "path": "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/brdc.nav",
+          "sha256": null,
+          "sha256_available": false,
+          "read_at_manifest_creation": false
+        }
+      },
+      "planned_output": {
+        "summary": "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "withheld_solution_output": "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv"
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "--android-gnss",
+        "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+        "--android-imu",
+        "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/device_imu.csv",
+        "--nav",
+        "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-phase96-main-diagnostics",
+        "--out",
+        "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase96-main-c0d-diagnostic-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json"
+      ]
+    }
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "routes": 2,
+    "runs_per_route": 1,
+    "native_invocations_planned": 2,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "raw_device_gnss_route_arguments": 2,
+    "raw_device_imu_route_arguments": 2,
+    "broadcast_navigation_route_arguments": 2,
+    "truth_reads_planned": 0,
+    "mat_reads_or_generated_planned": 0,
+    "precomputed_coordinate_reads_planned": 0,
+    "base_rinex_reads_planned": 0,
+    "accuracy_calculations_planned": 0,
+    "kaggle_or_token_access_planned": 0,
+    "route_score_selection": false
+  },
+  "structural_gates": {
+    "required_before_stop": true,
+    "gnss_first_guard_predicate_and_counts": true,
+    "gnss_first_progress_or_fail_closed_telemetry": true,
+    "main_validation_predicates": true,
+    "main_factor_family_costs": true,
+    "main_gradient_normal_norms_by_variable": true,
+    "first_ten_existing_lm_trials": true,
+    "linear_solver_exception_telemetry": true,
+    "no_solution_or_accuracy_publication": true,
+    "command_policy_no_pdc_external_precomputed": true
+  },
+  "qualification_evidence": {
+    "full_cpp_suite": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:build:build/tests build/tests/run_tests",
+      "tests_run": 1104,
+      "passed": 1046,
+      "skipped": 58,
+      "failed": 0,
+      "exit_code": 0,
+      "raw_route_execution": false,
+      "skip_reason_summary": "fixture-dependent live/kinematic tests skipped because bundled data is unavailable"
+    },
+    "focused_cpp_phase96": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:build:build/tests build/tests/run_tests --gtest_filter='FGOGtsamPhase96DiagnosticTest.*:FGOGtsamSourceClockC0DPhase93Test.*:FGOGtsamActiveSolveDiagnosticTest.*'",
+      "tests_run": 6,
+      "passed": 6,
+      "failed": 0,
+      "exit_code": 0,
+      "raw_route_execution": false
+    },
+    "focused_python": {
+      "command": "python3 -m unittest tests.test_smartphone_phase94_source_clock_c0d_stage_diagnostics",
+      "tests_run": 6,
+      "passed": 6,
+      "failed": 0,
+      "exit_code": 0,
+      "raw_route_execution": false
+    },
+    "phase96_contract_tests": {
+      "command": "python3 -m unittest tests.test_smartphone_phase96_main_c0d_diagnostic",
+      "tests_run": 6,
+      "passed": 6,
+      "failed": 0,
+      "exit_code": 0,
+      "raw_route_execution": false,
+      "recorded_after_manifest_and_before_native_launch": true
+    },
+    "diff_check_command": "git diff --check d4c6403..bcdcd95",
+    "diff_check_clean": true,
+    "native_source_or_binary_changed_by_qualification": false,
+    "additional_large_artifact_created": false
+  },
+  "workspace_archive_record": {
+    "original_paths": [
+      "/tmp/phase38-debug.PhRaoH/libgnss_lib.a",
+      "/tmp/phase38-debug.PhRaoH/libgnss_lib_solvers.a"
+    ],
+    "current_paths": [
+      "/dev/shm/phase96-build-space/libgnss_lib.a",
+      "/dev/shm/phase96-build-space/libgnss_lib_solvers.a"
+    ],
+    "original_paths_present_at_record": false,
+    "current_paths_present_at_record": true,
+    "user_data_deleted": false,
+    "operation": "reversible move of two old temporary build archives; no user/repo data deletion"
+  },
+  "execution_authorization": {
+    "before_raw_execution": true,
+    "raw_execution_authorized": true,
+    "native_route_rerun_performed": false,
+    "accuracy_or_submission_release": false,
+    "stop_after_two_routes": true
+  },
+  "read_accounting_before_execution": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "base_rinex_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "raw_input_hash_reads": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "schema_version": "smartphone-r5-phase123-doppler-velocity-factor-parity-freeze.v1",
+  "phase": 123,
+  "execution_label": "Luna Max",
+  "status": "sealed-no-candidate-read-only",
+  "purpose": "Freeze the read-only official/native Doppler and velocity-factor parity audit. No implementation, raw run, solver run, truth evaluation, accuracy calculation, solution release, or Kaggle action is authorized.",
+  "decision": {
+    "candidate_count": 0,
+    "decision": "no-candidate",
+    "source_backed_independent_candidate": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "wavelength-and-doppler-sign-are-already-source-equivalent",
+      "receiver-and-satellite-clock-drift-units-are-already-source-equivalent",
+      "target-highway-doppler-snr-sigma-and-huber-are-already-source-equivalent",
+      "official-explicit-sagnac-and-native-rotated-state-geometry-are-coupled",
+      "official-absolute-residual-screen-differs-from-native-median-screen",
+      "native-corrected-branch-omits-first-epoch-d-factor",
+      "gate-or-first-epoch-change-would-change-factor-admission",
+      "satellite-velocity-interpolation-parity-remains-unresolved",
+      "no-safe-count-preserving-independent-candidate-remains"
+    ]
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase123_doppler_velocity_factor_parity_audit_v1.md",
+    "commit": "db4e23255529b6212f86f37409a1931d60641fcc",
+    "sha256": "1a0c5afdbccdda64e9c238d8d1966af101a4ffdf899570d699bd5f9fefe5ffb7"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "official_source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "baseline_phase118_source_freeze": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+    "baseline_phase118_structural_contract": "25f3bada02c4073175054b5d668de02020761208",
+    "baseline_phase122_audit": "4480b05a2686353a72b523ea0b32cf9d4142296d",
+    "baseline_phase122_freeze": "310b529d325b09d83a71214bff602db363d3c745",
+    "native_android_corrected_undifferenced_doppler": true,
+    "native_direct_observable_quality": true,
+    "target_route_type": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "Highway",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "Highway"
+    },
+    "target_d_huber_k": 0.8,
+    "read_only": true,
+    "new_raw_read": false,
+    "new_base_read": false,
+    "truth_read": false,
+    "solution_row_read": false,
+    "mat_read": false,
+    "precomputed_coordinate_read": false,
+    "solver_run": false,
+    "accuracy_read_or_calculation": false,
+    "pdc_access": false,
+    "kaggle_access": false,
+    "rerun": false,
+    "fallback": false,
+    "parameter_sweep": false
+  },
+  "equations": {
+    "official_android_to_rinex_doppler": "D=-PseudorangeRateMetersPerSecond/(c/frequency)",
+    "native_android_to_rinex_doppler": "D=-pseudorange_rate_mps/(c/carrier_frequency_hz)",
+    "official_doppler_residual_mps": "-D*lambda-(satellite_range_rate-satellite_clock_drift)",
+    "native_receiver_only_residual_mps": "measured_range_rate-(known_satellite_range_rate-satellite_clock_drift_mps)",
+    "official_factor": "los*(velocity-initial_velocity)+clock_drift-prr",
+    "native_factor": "los_nav*velocity_nav+clock_drift_mps-measured_mps",
+    "official_sagnac_range_rate": "relative_satellite_velocity_dot_los+OMEGA/CLIGHT*(sat_y*receiver_vx+receiver_y*sat_vx-sat_x*receiver_vy-receiver_x*sat_vy)",
+    "native_corrected_satellite_rate": "knownSatelliteRangeRate(earth_rotation_corrected_satellite_state), without a second explicit Sagnac term"
+  },
+  "term_classification": {
+    "wavelength_hz_to_mps_and_sign": "exact",
+    "receiver_clock_drift_unit_and_retained_key": "equivalent_first_epoch_admission_differs",
+    "satellite_clock_drift_sign_and_unit": "equivalent",
+    "satellite_motion_and_affine_receiver_factor": "equivalent_algebraically",
+    "earth_rotation_and_sagnac_representation": "divergent",
+    "satellite_velocity_interpolation": "unresolved",
+    "doppler_atmosphere_terms": "exact_absent",
+    "lever_arm_and_angular_velocity_in_doppler": "equivalent_absent",
+    "signal_frequency_mapping": "equivalent",
+    "doppler_snr_sigma_and_signal_factor": "exact_for_target_lane",
+    "basic_snr_elevation_and_status_gate": "equivalent_thresholds_with_native_health_checks",
+    "doppler_huber_kernel_and_application": "exact_for_target_routes",
+    "residual_outlier_screen": "divergent",
+    "same_satellite_signal_identity": "equivalent_key_identity",
+    "adjacent_clock_interval": "equivalent",
+    "first_epoch_d_factor_admission": "divergent",
+    "fixed_los_linearization": "equivalent_receiver_model_geometry_representation_differs"
+  },
+  "candidate_assessment": {
+    "candidate_count": 0,
+    "candidates": [
+      {
+        "id": "phase123-official-absolute-doppler-screen-v1",
+        "status": "rejected-admission-changing",
+        "source_backed": true,
+        "reason": "Official exobs_residuals.m uses resD-dclk/dt, while Phase112/118 uses an epoch-median-centered direct-quality screen. The retained D factor set and count would change."
+      },
+      {
+        "id": "phase123-official-sagnac-range-rate-v1",
+        "status": "rejected-coupled-geometry-equation-change",
+        "source_backed": true,
+        "reason": "Official Gsat.rate has an explicit receiver-velocity Sagnac term; native Android uses rotated satellite state and fixed corrected LOS. A coherent source port changes both known rate and geometry linearization, so it is not an isolated count-preserving correction."
+      },
+      {
+        "id": "phase123-admit-first-epoch-d-factor-v1",
+        "status": "rejected-factor-topology-change",
+        "source_backed": true,
+        "reason": "The native corrected branch intentionally starts D factors after the first epoch/clock interval. Admitting epoch 0 changes factor count and clock observability topology."
+      }
+    ]
+  },
+  "source_pins": {
+    "official": {
+      "fgo_gnss.m": {
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "123-175"
+      },
+      "fgo_gnss_imu.m": {
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "lines": "195-294"
+      },
+      "gnsslog2obs.m": {
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "lines": "118,158-184"
+      },
+      "Gobs.m": {
+        "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+        "lines": "1151-1165"
+      },
+      "Gsat.m": {
+        "sha256": "a56c3236646606c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+        "lines": "259-306"
+      },
+      "exobs.m": {
+        "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+        "lines": "23-31"
+      },
+      "exobs_residuals.m": {
+        "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+        "lines": "14-24"
+      },
+      "obserrmodel.m": {
+        "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+        "lines": "11-30"
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "22-44,85-108"
+      },
+      "DopplerFactor_VD.h": {
+        "sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1",
+        "lines": "15-56"
+      }
+    },
+    "native": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": {
+        "sha256": "df77ab6556f90d6d9a8464d360e85d2a49a50d6fc04ef396833f354f821a1176",
+        "lines": "378-413,7603-7608,7693-7713"
+      },
+      "src/io/android_raw_gnss.cpp": {
+        "sha256": "a020ce900db6a9d3a994cc3adb3dcebbe84cbf67c1ff9793991b7a75039529c5",
+        "lines": "874-955"
+      },
+      "src/algorithms/fgo_problems.cpp": {
+        "sha256": "5675e82fc595933da4e7c14ad468ae69437dc04bac79a7ef55f1edfa03e098da",
+        "lines": "429-515,719-843,869-1015"
+      },
+      "include/libgnss++/algorithms/doppler_contract.hpp": {
+        "sha256": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+        "lines": "18-166"
+      },
+      "src/algorithms/fgo_gtsam_internal.hpp": {
+        "sha256": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd",
+        "lines": "3620-3680,3733-3742"
+      },
+      "src/algorithms/fgo_gtsam_backend.cpp": {
+        "sha256": "c0da12d7a1d5eeb9492b02ad80f0e9868cbda32e452bbdd9c3f90cc57b4db0fa",
+        "lines": "1128-1164"
+      },
+      "src/core/navigation.cpp": {
+        "sha256": "f876803d2e61fa62f370419f4ee4db16afb6b12b2d7ab00cd8b613af6f2649d3",
+        "lines": "39-51"
+      }
+    }
+  },
+  "read_accounting": {
+    "official_and_native_source_text": "read-only",
+    "sealed_phase_metadata": "metadata-only",
+    "raw_phone_gnss_imu_navigation_payload": 0,
+    "raw_base_payload": 0,
+    "truth_or_coordinate_rows": 0,
+    "solution_rows": 0,
+    "mat_files_or_data": 0,
+    "precomputed_coordinates": 0,
+    "solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0,
+    "parameter_or_weight_sweeps": 0
+  },
+  "next_boundary": "Keep Phase118 Doppler/velocity recipe unchanged. A future candidate requires source-complete proof of a single count-preserving geometry term; this freeze authorizes no raw, solver, truth, accuracy, or implementation action."
+}

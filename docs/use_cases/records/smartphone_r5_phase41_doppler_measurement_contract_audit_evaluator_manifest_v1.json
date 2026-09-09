@@ -1,0 +1,90 @@
+{
+  "schema_version": "smartphone-r5-phase41-doppler-contract-audit-evaluator.v1",
+  "phase": 41,
+  "status": "evaluator-frozen-before-phase41-raw-read",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "4727c665171f1082a2dfc5b21f433f1ea9128cc2",
+    "evaluator_commit": "3b94994",
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json",
+    "freeze_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
+    "freeze_is_immutable": true
+  },
+  "evaluator": {
+    "binary_path": "build/apps/gnss_doppler_contract_audit",
+    "binary_sha256": "02d2f5200c20192a9eb552a6f6b3be7886ab6302490d50bb505cca3e86962639",
+    "source_sha256": {
+      "apps/native/gnss_doppler_contract_audit.cpp": "524e06d736018e91a92f2a2244a32c5e8ed0b1e0832490b2109e451f030d1904",
+      "include/libgnss++/core/observation.hpp": "2375bce2837c0af4826e625d54dff372dbadd62a382cfcc35ad39a57f3e9c3a1",
+      "src/io/android_raw_gnss.cpp": "7252f6b7e171a9fe995bc6154ae9b02b71a85eb48f85f6c4b1c18ab653284327",
+      "include/libgnss++/algorithms/fgo.hpp": "67b5be0090647aa02934111d8d6c20eebe55bfd16b39e759a54325273d873868",
+      "src/algorithms/fgo_problems.cpp": "5a03367176ebb5ecb9119b8e5a321fc2bc40594a77f32d85d990d645c44f9234",
+      "apps/CMakeLists.txt": "31876c262efab41e1fd6802e5ad691455e73577a4d4ec84fe437196c947e98fb",
+      "tests/CMakeLists.txt": "3343890b1f5d965ae957d7f95c37d264869c442ce45474e01bb74cfa22a53145",
+      "tests/test_android_raw_gnss.cpp": "5322edd2569730d658dd02f016450a1f058b04d95e5aed9ac1c29af567dc1814",
+      "tests/test_smartphone_phase41_doppler_contract.py": "0573ef86eb85c4a4eed67df117963d89da8d6135c12af3282064fa3a47083649"
+    },
+    "command": "gnss_doppler_contract_audit --android-gnss <device_gnss.csv> --nav <brdc.nav> --rows-csv <audit_rows.csv> --summary-json <audit.json> --dataset-id <route/phone>",
+    "raw_loader_call": "loadAndroidRawGnssCsv exactly once per process with verify_enriched_pseudorange=false",
+    "nav_loader_call": "RINEXReader::open/readNavigationData exactly once per process",
+    "process_model": "one process per route; no subprocess, shell pipeline, or second estimator process"
+  },
+  "row_identity_tolerances": {
+    "raw_minus_neg_doppler_lambda_mps": 1.0e-9,
+    "adapter_measured_minus_neg_doppler_lambda_mps": 1.0e-9,
+    "fgo_measured_minus_neg_doppler_lambda_mps": 1.0e-8,
+    "fgo_residual_minus_independent_receiver_residual_mps": 1.0e-8,
+    "fgo_los_minus_negative_receiver_to_satellite_los": 1.0e-12,
+    "fgo_satellite_position_difference_m": 1.0e-6,
+    "fgo_satellite_velocity_difference_mps": 1.0e-9,
+    "fgo_wavelength_difference_m": 1.0e-12,
+    "fgo_satellite_range_rate_difference_mps": 1.0e-8,
+    "fgo_satellite_clock_drift_difference_mps": 1.0e-8
+  },
+  "row_identity_key": [
+    "dataset_id",
+    "raw_epoch_index",
+    "utc_time_millis",
+    "satellite",
+    "signal"
+  ],
+  "row_selection_contract": {
+    "report_every_valid_nonzero_adapter_doppler_row_at_first_solvable_epoch": true,
+    "spp_candidate_definition": "valid adapter Doppler, finite nonzero Hz, broadcast state, frequency and finite independent equation terms",
+    "fgo_factor_definition": "same row key present in unchanged corrected undifferenced FGO factor list",
+    "unreported_row_is_failure": true,
+    "selection_difference_is_not_silently_repaired": true,
+    "no_threshold_or_gate_relaxation": true
+  },
+  "read_accounting": {
+    "one_process_per_route": true,
+    "process_count_per_route": 1,
+    "raw_gnss_open_count_per_route": 1,
+    "broadcast_nav_open_count_per_route": 1,
+    "imu_open_count_per_route": 0,
+    "truth_open_count_per_route": 0,
+    "validation_open_count_per_route": 0,
+    "holdout_open_count_per_route": 0,
+    "mat_read_count_per_route": 0,
+    "precomputed_coordinate_read_count_per_route": 0,
+    "device_wls_coordinate_read_count_per_route": 0,
+    "result_or_submission_coordinate_read_count_per_route": 0,
+    "kaggle_or_token_access": false
+  },
+  "route_order": [
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "verdict_policy": {
+    "contract_bug_requires_code_and_numeric_identity_mismatch": true,
+    "implausible_velocity_is_not_bug_evidence": true,
+    "unproven_sign_flip_forbidden": true,
+    "threshold_relaxation_forbidden": true,
+    "correction_flag_required_if_go": true,
+    "default_path_unchanged": true
+  }
+}

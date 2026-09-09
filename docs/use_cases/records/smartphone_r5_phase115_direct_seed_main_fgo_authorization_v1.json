@@ -1,0 +1,142 @@
+{
+  "schema_version": "smartphone-r5-phase115-direct-seed-main-fgo-authorization.v1",
+  "phase": 115,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-exact-two-route-phase115-direct-seed-raw-structural-execution",
+  "authority": {
+    "phase115_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase115_recipe_correction_freeze_v1.json",
+      "sha256": "46e9b09423aa828c0c578dbd66120056dc977dc7abb17ea7b938e51a3793055d"
+    },
+    "phase115_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase115_direct_seed_main_fgo_manifest_v1.json",
+      "sha256": "9063a9a039f6b8743ec4661d7598cdced4695bb5848e16d976d6388af7d3fdec"
+    },
+    "phase115_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase115_direct_seed_main_fgo.py",
+      "sha256": "69c0ef8661dadef00531d1504e09edf7015def1b008d0004ac0f6da2a15e98cb"
+    },
+    "phase115_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase115_direct_seed_main_fgo_execute.py",
+      "sha256": "bbe7c939ff62c166f5760170b0569138b9c91a8cb68c4b206a973227f0ec2b79"
+    },
+    "phase115_focused_tests": {
+      "path": "tests/test_smartphone_phase115_direct_seed_main_fgo.py",
+      "sha256": "d669ec56fbffcf4b8b41da293ddb74eb80c5ffd990a17fb53a349cb6783adc7b"
+    },
+    "phase110_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase110_additional_band_noop_decision_audit_v1.md",
+      "sha256": "2b134217568797aeeaee85f1d2836202702b89222c4950f133dbde3c6a0fbb05"
+    },
+    "phase110_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase110_additional_band_noop_decision_freeze_v1.json",
+      "sha256": "91064f377228a506951599c946cbaaf6acf5fb7c5feb33a27dad8a6ba0172033"
+    },
+    "phase114_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase114_direct_seed_main_fgo_structural_result_v1.json",
+      "sha256": "fc2674dde4c7641f393dd7ad1fb7f06660e5bdedc4c008b667ef1448bf01275b"
+    },
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281"
+    },
+    "phase65_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_manifest_v1.json",
+      "sha256": "1306480f6b7fb839e55309e9c2c77b41f2ac0a1baf9f6971949612fd485d2255"
+    },
+    "freeze_commit": "24a2be36bc51e999065171eaf692b6d88ee417eb",
+    "audit_commit": "c43ec28",
+    "implementation_commit": "44771ef6b52eddb0df6193b8b9d9f1b52b7fcea5",
+    "manifest_sha256": "9063a9a039f6b8743ec4661d7598cdced4695bb5848e16d976d6388af7d3fdec",
+    "evaluator_sha256": "69c0ef8661dadef00531d1504e09edf7015def1b008d0004ac0f6da2a15e98cb",
+    "wrapper_sha256": "bbe7c939ff62c166f5760170b0569138b9c91a8cb68c4b206a973227f0ec2b79",
+    "binary_sha256": "96374063aa91aea6ea72fd1402b6c4895cb5f004a506e57e10c620234fa0bd69"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "candidate": {
+    "id": "phase115-direct-seed-phase107-base-recipe-v1",
+    "candidate_count": 1,
+    "selectors": [
+      "--native-direct-wls-ephemeral-c7d-main-seed",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-upstream-position-offset"
+    ],
+    "base_selectors": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "removed_selector": "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "gnss_first_stage": "bypassed by design",
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_evaluation": false,
+    "accuracy_scoring": false,
+    "solution_output_publication": false,
+    "no_fallback_or_guard_bypass": true,
+    "direct_seed_exact_full_finite_gate": true,
+    "base_correction_exactly_once": true,
+    "pixel5_offset_exactly_once": true
+  },
+  "input_policy": {
+    "authorized_inputs": [
+      "Phase95 sealed raw phone device_gnss.csv",
+      "Phase95 sealed raw phone device_imu.csv",
+      "Phase95 sealed broadcast brdc.nav",
+      "Phase65 sealed raw base RINEX base.obs"
+    ],
+    "raw_content_copied_or_transformed": false,
+    "raw_phone_payload_hashes_read_by_wrapper": false,
+    "base_hash_reads_per_route": 1,
+    "base_native_reads_per_route": 1,
+    "base_coordinate_source": "raw base RINEX header APPROX POSITION XYZ in native process",
+    "truth_mat_pdc_precomputed_phone_coordinate_kaggle": false,
+    "solution": "withheld and unread"
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations": 2,
+    "raw_phone_gnss_process_reads_max": 2,
+    "raw_phone_imu_process_reads_max": 2,
+    "broadcast_navigation_process_reads_max": 2,
+    "raw_base_hash_reads_max": 2,
+    "raw_base_native_process_reads_max": 2,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_rows_authorized": false,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "execution_policy": {
+    "authorized": true,
+    "order": "MTV-A then LAX-T, sequentially",
+    "one_invocation_per_route": true,
+    "no_rerun": true,
+    "no_fallback": true,
+    "removed_selector": "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "solver_filter_lm_equation_unit_sigma_unchanged": true,
+    "gnss_first_stage": "not attempted by design",
+    "truth_or_accuracy_evaluation": false,
+    "solution_output": "isolated withheld path; stat metadata only, never opened/published",
+    "base_input": "sealed raw base RINEX; one wrapper hash read plus one native process read per route"
+  },
+  "release_boundary": {
+    "raw_base_execution_authorized": true,
+    "structural_result_authorized": true,
+    "truth_or_accuracy_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false
+  }
+}

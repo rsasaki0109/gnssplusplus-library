@@ -1,0 +1,285 @@
+{
+  "schema_version": "smartphone-r5-phase143-optimizer-termination-parity-freeze.v1",
+  "phase": 143,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-implementation-and-raw-execution",
+  "scope": "Read-only official/native LM termination parity audit and one default-off main-iteration-budget candidate. No algorithm, graph, factor, equation, unit, sigma, filter, initialization, solver branch, output, raw, solver, truth, MAT/PDC/precomputed-coordinate, accuracy, or Kaggle execution is authorized.",
+  "source_snapshot": {
+    "audit_base_head": "53e90683df43e76f6c4757d9d114f943cdfac326",
+    "phase142_accuracy_reopened": false,
+    "phase141_structural_result": {
+      "commit": "9b2427bb03ca14df5bf3c3668d46d3638b03388a",
+      "path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_raw_result_v1.json",
+      "sha256": "33d67248b9423a841ebb29b6373eed042d4da6b15924df710dcc37f18b73ff13"
+    },
+    "phase112_structural_result": {
+      "commit": "dfa9c3a186c9d8633dc572192b513b584f18800a",
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_structural_result_v1.json",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0"
+    }
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase143_optimizer_termination_parity_audit_v1.md",
+    "commit": "8a345be4c267ba2be269c1e679f04a356c5ba188",
+    "sha256": "6a7f1775474578cc3c7d8048976d0e55027a97af9918d08d64cd311e4f93a8b6"
+  },
+  "official_evidence": {
+    "gnss_optimizer": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "lines": "203-207",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "max_iterations": 1000,
+      "base_verbosity": "TERMINATION",
+      "lm_specific_verbosity_explicit": false
+    },
+    "gnss_imu_optimizer": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "lines": "325-329",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "max_iterations": 1000,
+      "base_verbosity": "TERMINATION",
+      "lm_specific_verbosity_explicit": false
+    },
+    "gtsam_default_params": {
+      "params_header": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtParams.h",
+        "lines": "49-81",
+        "sha256": "dd9348c08a96f0dffb2cf6b6f24eab18d4d32280a21e333a1e38725b254ec3f2"
+      },
+      "nonlinear_params_header": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizerParams.h",
+        "lines": "42-47,97-108",
+        "sha256": "0cf55b15a4d04aa1364b63bdae659fc65f568a8e08898a104a28d7fdc6ca07a5"
+      },
+      "relative_error_tolerance": 1e-5,
+      "absolute_error_tolerance": 1e-5,
+      "error_tolerance": 0.0,
+      "lambda_initial": 1e-5,
+      "lambda_factor": 10.0,
+      "lambda_lower_bound": 0.0,
+      "lambda_upper_bound": 100000.0,
+      "min_model_fidelity": 0.001,
+      "diagonal_damping": false,
+      "use_fixed_lambda_factor": true,
+      "linear_solver": "MULTIFRONTAL_CHOLESKY",
+      "ordering": "COLAMD",
+      "explicit_ordering_default": false
+    }
+  },
+  "native_evidence": {
+    "application": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "912b8f6cfca175bf5a91ab63d1d4803f33a1acbc89438c785b42fec469957181",
+      "main_lines": "9154-9158",
+      "main_max_iterations": 12,
+      "gnss_first_lines": "9968-9972",
+      "gnss_first_max_iterations": 1000,
+      "main_cli_override_found": false
+    },
+    "backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "fdf1e9b19300c52ed50f363e96f3b9df5515c82b8a1e23a1718cc978626a23",
+      "params_lines": "2207-2226",
+      "main_relative_tolerance_when_config_zero": 1e-8,
+      "main_absolute_tolerance_when_config_zero": 1e-10,
+      "main_solver": "MULTIFRONTAL_QR",
+      "main_elimination": "EliminateQR",
+      "gnss_first_solver": "MULTIFRONTAL_CHOLESKY",
+      "ordering_mutated": false,
+      "lambda_policy_mutated": false,
+      "damping_mutated": false
+    },
+    "internal_wrapper": {
+      "path": "src/algorithms/fgo_gtsam_internal.hpp",
+      "sha256": "fc328bf55099841b6478df9e0f82af72eb9e0f9365c04e86eb618ae9d91cd8a6",
+      "termination_lines": "467-579",
+      "maximum_outer_iterations_predicate": "accepted_outer_iterations >= optimizer.params.maxIterations",
+      "diagnostic_parameter_mutation": "verbosity only"
+    },
+    "gtsam_loop": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizer.cpp",
+      "sha256": "594fd9bf3d48199f00d05794913df6c84d300664458d609fcdf0fb6ed3215a35",
+      "loop_lines": "62-117",
+      "convergence_lines": "182-230"
+    },
+    "gtsam_lm": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtOptimizer.cpp",
+      "sha256": "834f732ac4ad4130b2a719a3181e5dfcd2ecdf584ece6f0c76bdf5f390e10cbc",
+      "lambda_trial_lines": "121-269",
+      "iteration_lines": "272-307"
+    }
+  },
+  "sealed_cap_evidence": {
+    "phase141": {
+      "MTV-A": {
+        "gnss_first_accepted_iterations": 111,
+        "main_accepted_iterations": 12,
+        "main_terminal_branch": "maximum_outer_iterations",
+        "main_costs_finite": true,
+        "main_strict_cost_decrease": true,
+        "main_solver": "MULTIFRONTAL_QR"
+      },
+      "LAX-T": {
+        "gnss_first_accepted_iterations": 116,
+        "main_accepted_iterations": 12,
+        "main_terminal_branch": "maximum_outer_iterations",
+        "main_costs_finite": true,
+        "main_strict_cost_decrease": true,
+        "main_solver": "MULTIFRONTAL_QR"
+      }
+    },
+    "phase112": {
+      "MTV-A": {
+        "gnss_first_accepted_iterations": 218,
+        "main_accepted_iterations": 12,
+        "main_terminal_branch": "maximum_outer_iterations",
+        "main_total_inner_lambda_attempts": 20
+      },
+      "LAX-T": {
+        "gnss_first_accepted_iterations": 234,
+        "main_accepted_iterations": 12,
+        "main_terminal_branch": "maximum_outer_iterations",
+        "main_total_inner_lambda_attempts": 20
+      }
+    },
+    "interpretation": "12 is a main-stage hard cap, not a global solver or route-specific convergence limit."
+  },
+  "candidate": {
+    "count": 1,
+    "id": "phase143-official-main-lm-termination-budget-v1",
+    "selector": "--native-phase143-official-main-lm-termination-budget",
+    "default_off": true,
+    "implementation_status": "design-only",
+    "scope": "Phase142/Phase99 meter-state Pose3+IMU main batch LM call only",
+    "parameter_delta": {
+      "main_max_iterations_off": 12,
+      "main_max_iterations_on": 1000,
+      "gnss_first_max_iterations_off": 1000,
+      "gnss_first_max_iterations_on": 1000,
+      "only_changed_parameter": "main.maxIterations",
+      "official_value_sources": [
+        "fgo_gnss.m:206",
+        "fgo_gnss_imu.m:328"
+      ]
+    },
+    "unchanged_parameters": {
+      "relative_error_tolerance": 1e-8,
+      "absolute_error_tolerance": 1e-10,
+      "error_tolerance": 0.0,
+      "lambda_initial": 1e-5,
+      "lambda_factor": 10.0,
+      "lambda_lower_bound": 0.0,
+      "lambda_upper_bound": 100000.0,
+      "min_model_fidelity": 0.001,
+      "diagonal_damping": false,
+      "use_fixed_lambda_factor": true,
+      "ordering": "COLAMD",
+      "linear_solver": "MULTIFRONTAL_QR",
+      "elimination": "EliminateQR",
+      "graph_factors_values_noises_filters_initialization": "unchanged",
+      "c7_d_ccdd_raw_base_tdcp_imu_pixel5_offset": "unchanged",
+      "fallback_retry_sweep": "forbidden"
+    },
+    "preconditions": [
+      "Phase142 meter-state C0/D recipe is active",
+      "Phase99 main MULTIFRONTAL_QR is selected",
+      "the call is the main batch LM solve, not GNSS-first",
+      "no incompatible experiment selector is active"
+    ],
+    "fail_closed": [
+      "selector outside the Phase142 meter-state/Phase99 main recipe",
+      "effective main maxIterations is not exactly 1000 when enabled",
+      "any non-max-iteration optimizer parameter differs",
+      "termination telemetry is missing, duplicated, renamed, inferred, non-finite, or conflicting",
+      "accepted_iterations is derived from generic iterations or return code",
+      "a cap is relabeled as convergence",
+      "fallback, retry, sweep, score-based choice, or alternate solver"
+    ]
+  },
+  "required_termination_telemetry": {
+    "authority": "native active solve report; wrapper validates only",
+    "per_stage": true,
+    "required_fields": [
+      "selector_enabled",
+      "stage",
+      "effective_max_iterations",
+      "attempted",
+      "accepted_outer_iterations",
+      "total_inner_lambda_attempts",
+      "initial_cost",
+      "final_cost",
+      "costs_finite",
+      "strict_cost_decrease",
+      "termination_branch",
+      "relative_error_tolerance",
+      "absolute_error_tolerance",
+      "error_tolerance",
+      "initial_lambda",
+      "final_lambda",
+      "maximum_lambda",
+      "lambda_factor",
+      "lambda_lower_bound",
+      "lambda_upper_bound",
+      "min_model_fidelity",
+      "diagonal_damping",
+      "linear_solver",
+      "elimination",
+      "ordering_type",
+      "explicit_ordering_present",
+      "no_fallback",
+      "termination_trace_complete"
+    ],
+    "allowed_termination_branches": [
+      "maximum_outer_iterations",
+      "outer_convergence_tolerance",
+      "small_cost_change",
+      "maximum_lambda",
+      "no_inner_iteration",
+      "exception",
+      "no_progress_unclassified"
+    ],
+    "no_solution_or_accuracy_fields": true
+  },
+  "legacy_invariants": {
+    "selector_off_main_max_iterations": 12,
+    "selector_off_summary_semantics_unchanged": true,
+    "default_graph_and_solver_unchanged": true,
+    "gnss_first_unchanged": true,
+    "historical_artifacts_immutable": true
+  },
+  "qualification": {
+    "launch_free_required_before_authorization": true,
+    "focused_requirements": [
+      "selector off preserves main maxIterations 12 and all existing parameters",
+      "selector on changes exactly main maxIterations to 1000",
+      "GNSS-first remains 1000 in both modes",
+      "QR, EliminateQR, COLAMD, tolerances, lambda, damping, and graph fingerprints remain unchanged",
+      "termination branch is native-authoritative and distinguishes cap from tolerance/lambda/exception",
+      "missing or conflicting termination telemetry fails closed",
+      "no solution rows or values are serialized"
+    ],
+    "full_cpp_suite_required": true,
+    "pre_raw_read_accounting": {
+      "raw_phone_gnss_reads": 0,
+      "raw_phone_imu_reads": 0,
+      "broadcast_navigation_reads": 0,
+      "raw_base_rinex_reads": 0,
+      "native_solver_invocations": 0,
+      "truth_reads": 0,
+      "solution_coordinate_reads": 0,
+      "mat_pdc_precomputed_coordinate_reads": 0,
+      "accuracy_calculations": 0,
+      "kaggle_or_token_access": 0,
+      "reruns_fallbacks_repairs_sweeps": 0
+    }
+  },
+  "authorization_boundary": {
+    "audit_commit_before_freeze": true,
+    "implementation_not_authorized_by_this_freeze": true,
+    "new_implementation_commit_required": true,
+    "new_launch_free_manifest_and_pre_raw_seal_required": true,
+    "new_independent_raw_authorization_required": true,
+    "truth_accuracy_authorization": false,
+    "solution_publication": false
+  }
+}

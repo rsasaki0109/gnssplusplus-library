@@ -1,0 +1,275 @@
+{
+  "schema_version": "smartphone-r5-phase118-tdcp-robust-k-source-parity-freeze.v1",
+  "phase": 118,
+  "execution_label": "Luna Max",
+  "status": "frozen-one-source-backed-tdcp-robust-k-candidate-before-execution",
+  "purpose": "Freeze one isolated official TDCP Huber-k mapping after a read-only source/telemetry audit. This record is not implementation, raw execution, solver, truth, accuracy, or solution-release authorization.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_source_parity_audit_v1.md",
+    "commit": "3e7e6d098ae737a6df6f98aa1b50da169b237d38",
+    "sha256": "9960dc0557c3112803db41b2893bb5ded4408b22401ab06fd0564bdd263b3c53"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase118-official-tdcp-huber-k-mapping-v1",
+    "source_backed": true,
+    "selected_dimension": "ordinary TDCP Huber robust threshold mapping only",
+    "official_native_sigma_match": false,
+    "official_native_robust_k_match": false,
+    "official_sigma_and_robust_k_are_source_separable": true,
+    "fixed_phase112_sigma_preserved": true,
+    "phase117_dynamic_sigma_combined": false,
+    "implementation_in_this_freeze": false,
+    "graph_factor_value_key_change_in_this_freeze": false,
+    "legacy_default_changed": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "reason": "The official source constructs one L_kernel per run and sets its Huber k from setting.Type (Street/Mix=0.2, otherwise=0.5), while native Phase112/116 uses k=4.0. Official SNR/frequency-dependent carrier sigma is a separate source contract and Phase117 already tested that independent dimension. The sole candidate therefore preserves the Phase112 fixed 0.03 m sigma and changes only the TDCP robust-k value."
+  },
+  "candidate": {
+    "id": "phase118-official-tdcp-huber-k-mapping-v1",
+    "selector": "--native-phase118-official-tdcp-huber-k",
+    "opt_in": true,
+    "default_off": true,
+    "raw_only": true,
+    "diagnostic_or_algorithm_candidate": "future raw-only algorithm candidate; no code or run is authorized by this freeze",
+    "recipe_anchor": "Phase112 champion recipe with the existing Phase101 C7/D topology, Phase99 MULTIFRONTAL_QR main, raw-base correction, and final Pixel5 output offset",
+    "tdcp_factor_family": "existing ordinary same-satellite/same-signal adjacent TDCP only",
+    "native_current_contract": {
+      "tdcp_sigma_m": 0.03,
+      "tdcp_huber_threshold_sigma": 4.0,
+      "use_official_tdcp_snr_type_sigma": false,
+      "pair_key": "(SatelliteId,SignalType)",
+      "factor_count_and_insertion": "unchanged",
+      "robust_cost_domain": "Huber on whitened residual"
+    },
+    "official_huber_contract": {
+      "kernel": "GTSAM Huber",
+      "street_k": 0.2,
+      "mix_k": 0.2,
+      "other_type_k": 0.5,
+      "threshold_unit": "whitened residual sigma units",
+      "selection_input": "setting.Type only",
+      "not_selected_by": [
+        "observation SNR",
+        "frequency band",
+        "constellation",
+        "individual satellite",
+        "individual epoch",
+        "signal type"
+      ]
+    },
+    "route_type_crosswalk": [
+      {
+        "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "official_setting_type": "Highway",
+        "tdcp_huber_k": 0.5
+      },
+      {
+        "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "official_setting_type": "Street",
+        "tdcp_huber_k": 0.2
+      },
+      {
+        "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "official_setting_type": "Highway",
+        "tdcp_huber_k": 0.5
+      },
+      {
+        "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+        "official_setting_type": "Street",
+        "tdcp_huber_k": 0.2
+      }
+    ],
+    "official_observation_crosswalk_not_a_k_selector": {
+      "frequencies": [
+        "L1",
+        "L5"
+      ],
+      "snr_percentile": 85,
+      "snr_denominator": 20,
+      "L_sn_ratio": 0.0025,
+      "signal_factor_order": [
+        "L1",
+        "G1",
+        "E1",
+        "B1",
+        "L5",
+        "E5",
+        "B2a"
+      ],
+      "signal_factors": [
+        0.8,
+        1.5,
+        0.8,
+        0.8,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "mapping": {
+        "L1": {
+          "GPS": 0,
+          "GLO": 1,
+          "GAL": 2,
+          "BDS": 3
+        },
+        "L5": {
+          "GPS": 4,
+          "GAL": 5,
+          "BDS": 6
+        },
+        "unsupported": 7
+      },
+      "purpose": "These values determine source carrier sigma before whitening; they do not select Huber k and remain unchanged by this candidate."
+    },
+    "exact_change_boundary": {
+      "change": "Set only the existing ordinary TDCP Huber threshold to the exact source Type mapping before the existing TDCP noise wrapper.",
+      "preserve_fixed_tdcp_sigma_m": true,
+      "preserve_official_dynamic_sigma_disabled": true,
+      "preserve_residual_equation": true,
+      "preserve_meter_units": true,
+      "preserve_factor_count_and_insertion": true,
+      "preserve_exact_pair_keys": true,
+      "preserve_pair_reject_predicate": true,
+      "preserve_other_robust_kernels": true,
+      "preserve_c7_d_c0d_handoff": true,
+      "preserve_phase99_qr": true,
+      "preserve_raw_base_correction": true,
+      "preserve_pixel5_final_offset": true,
+      "preserve_imu_p_doppler_filter_lm_initialization": true,
+      "unknown_route_or_type": "fail closed; no default type or score/truth lookup"
+    },
+    "does_not": [
+      "change TDCP sigma from the Phase112 fixed 0.03 m value",
+      "enable Phase117 official SNR/type dynamic sigma",
+      "change TDCP residual, wavelength conversion, units, or key order",
+      "change raw carrier/status/SNR/multipath/cycle/dDL/clock-jump admission",
+      "change P, Doppler, carrier, or any non-TDCP robust kernel",
+      "add or remove TDCP, carrier-phase, DD, ambiguity, C7, D, ISB, prior, or output rows",
+      "change QR, graph topology, ordering, damping, filter, LM schedule, or initialization",
+      "read MAT, PDC, precomputed phone coordinates, truth, or solution rows",
+      "authorize raw, base, solver, truth, accuracy, rerun, fallback, or Kaggle activity"
+    ],
+    "fail_closed": true,
+    "solution_withheld": true,
+    "accuracy_evaluation": false
+  },
+  "source_pins": {
+    "official_fgo_gnss_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "30,154-200"
+    },
+    "official_fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "36,252-321"
+    },
+    "official_parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": "22-44,57-125"
+    },
+    "official_obserrmodel_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/obserrmodel.m",
+      "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+      "lines": "11-37"
+    },
+    "official_sysfreq2sigtype_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/sysfreq2sigtype.m",
+      "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079",
+      "lines": "6-17"
+    },
+    "official_exobs_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs.m",
+      "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+      "lines": "53-75"
+    },
+    "official_exobs_residuals_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m",
+      "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+      "lines": "82-99"
+    },
+    "native_app_cpp": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "ae89f38d5672474bcd63a7134f852f1fb63c44c55e70990116875001508fe667",
+      "lines": "369-381,3492-3506,7465-7475,7593-7598"
+    },
+    "native_fgo_config_hpp": {
+      "path": "include/libgnss++/algorithms/fgo_config.hpp",
+      "sha256": "b0bba8f8f1c0f5aac1e1dca19705e7291b3134fe1d3155436ff05995da177342",
+      "lines": "385,477"
+    },
+    "native_gtsam_backend_cpp": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "78792c9306abe339228a3004e3d23f1486fac77822d0f1785b69dc07af14f578",
+      "lines": "1206-1227"
+    },
+    "native_fgo_problems_cpp": {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "327fdc792afbeb29f150bc8566acaef63156c519d2dcb0a40f626659658edddc",
+      "lines": "1408-1529"
+    },
+    "native_tdcp_contract_hpp": {
+      "path": "include/libgnss++/algorithms/tdcp_contract.hpp",
+      "sha256": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf",
+      "lines": "34-67"
+    }
+  },
+  "sealed_records": {
+    "phase112_structural": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_structural_result_v1.json",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0",
+      "fields": "fixed 0.03 m recipe, route TDCP factors, progress and cost telemetry"
+    },
+    "phase116_structural": {
+      "path": "docs/use_cases/records/smartphone_r5_phase116_carrier_tdcp_incidence_structural_result_v1.json",
+      "sha256": "394ce1660ae5f181967b672bffab14d9228ffbe62ec6b748ca3854d30a14876f",
+      "fields": "fixed sigma, ordinary factor/reject counts, robust cost telemetry"
+    },
+    "phase117_structural": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_structural_result_v1.json",
+      "sha256": "2517dcc805146dc34e790c78a392caf000c79eaba837fe099b6d522c147e9cf2",
+      "fields": "official dynamic sigma, unchanged factor/reject counts, robust cost telemetry"
+    },
+    "phase117_source_parity_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_source_parity_freeze_v1.json",
+      "sha256": "aba967b2ffab7ded84daa232ab948848d49497a70561262d1077200584b92dea",
+      "commit": "283e129b16ea21f077e041b55c87772d03e74f58",
+      "fields": "prior independent sigma candidate boundary; not combined here"
+    }
+  },
+  "read_accounting": {
+    "official_cached_source_reads": "source code only",
+    "tracked_native_source_reads": "source code only",
+    "sealed_structural_json_records": 3,
+    "raw_phone_gnss_imu_navigation_reads": 0,
+    "raw_base_payload_or_member_hash_reads": 0,
+    "mat_reads_or_generated": 0,
+    "truth_reads": 0,
+    "precomputed_phone_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_or_evaluator_invocations": 0,
+    "solution_rows_opened_or_published": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_or_fallbacks": 0
+  },
+  "authorization_boundary": {
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "next_required_artifacts": [
+      "independent implementation contract and focused tests",
+      "pre-raw qualification and manifest pin",
+      "independent one-shot raw authorization",
+      "separate truth authorization if an accuracy lane is later requested"
+    ]
+  }
+}

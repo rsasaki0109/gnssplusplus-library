@@ -1,0 +1,50 @@
+{
+  "phase": 569,
+  "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+  "role": "previously evaluated development, not heldout",
+  "truth": {
+    "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+    "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+    "bytes": 210009,
+    "rows": 2159,
+    "expected_missing_truth_key": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      1615921153434
+    ]
+  },
+  "authority": {
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "scripts/evaluate_phase569_mtv_a.py": {
+      "path": "scripts/evaluate_phase569_mtv_a.py",
+      "sha256": "c05a6fad47061bc38f66183bb32c0c37e7d7fc28be7e79bbc746866c5aa8b713"
+    },
+    "output/smartphone-r5/phase568-mtv-a-transfer-v1/manifest.json": {
+      "path": "output/smartphone-r5/phase568-mtv-a-transfer-v1/manifest.json",
+      "sha256": "574174af3ac61d0e447ff3f65e17baec92fe37c5cde18bab2ff14e56f8eac3ac"
+    },
+    "output/smartphone-r5/phase568-mtv-a-transfer-v1/completed.json": {
+      "path": "output/smartphone-r5/phase568-mtv-a-transfer-v1/completed.json",
+      "sha256": "7e9bbc3622e7fb137d2328190d42912eb079aac84672b4dbd6a5842fb885cb1c"
+    },
+    "output/smartphone-r5/phase568-mtv-a-transfer-v1/native_summary.json": {
+      "path": "output/smartphone-r5/phase568-mtv-a-transfer-v1/native_summary.json",
+      "sha256": "147045849ab0593b8edec3bca4ae90827fb4752c4254c37a7f46d593a9da1e7b"
+    }
+  },
+  "candidate": {
+    "path": "output/smartphone-r5/phase568-mtv-a-transfer-v1/opaque_solution_output.csv",
+    "sha256": "76322d25a5399d5a1324ad8bc4dd9d8a36b2a9148d4cbf13b33f2445c9f209b5",
+    "bytes": 172694,
+    "rows": 2158
+  },
+  "policy": "one score; historical first-key exclusion only; no repair, interpolation or inference"
+}

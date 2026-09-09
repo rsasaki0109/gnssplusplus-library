@@ -1,0 +1,126 @@
+{
+  "schema_version": "smartphone-r5-phase81-phase80-direct-observable-quality-reclassification-record.v1",
+  "phase": 81,
+  "status": "go-phase81-phase80-sealed-artifact-reclassification",
+  "decision": "The immutable Phase80 v2 candidate artifacts pass independent truth-free structural reclassification. The original Phase80 v2 fail-closed JSON remains unchanged; only the warmup-aware domain interpretation is represented in this separate Phase81 result.",
+  "truth_free": true,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase81_phase80_direct_observable_quality_reclassification_freeze_v1.json",
+    "sha256": "c648ec5f49f9023239360a70a1d77ee4b546e2b4d6f07cdf076f00694a2aeb6f"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase81_phase80_direct_observable_quality_reclassification_manifest_v1.json",
+    "sha256": "82962ad707f08623f7064d271fdc8ebb7b015668121a8027ba577f40a1ce222a"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase81_phase80_direct_observable_quality_reclassification.py",
+    "sha256": "2188c6354514a08a95c1b4d27e449645a4cdbebb3cdc6e7b55b3d51e6abe0394"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase81_phase80_direct_observable_quality_reclassification.py",
+    "sha256": "ac6fdce95987e4420d86613b74ee4ac807bfb6a0bae0de53a634ad4e25bdbd80",
+    "passed": 5
+  },
+  "cmake": {
+    "path": "tests/CMakeLists.txt",
+    "sha256": "294e7cc31a04f2d5ebbf53933db715d9f457b6c77c45e089a1cd8f62ce1d5184"
+  },
+  "source_artifacts": {
+    "phase80_v2_failure": {
+      "path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/phase80_direct_observable_quality_structural_failure.json",
+      "sha256": "767ef5f7089e535063ec6cbe4e9dc3e6d061bdab62eb521f794c3fab0b171903",
+      "bytes": 600598,
+      "rewritten": false
+    },
+    "phase78_result_row_counts": {
+      "path": "output/smartphone-r5/phase78-phase77-structural-reclassification-v1/phase78_phase77_structural_reclassification_result.json",
+      "sha256": "d3d190d8da951afc0a62abcf82d87498a6b8ff1da68cb2154966ca387e357114",
+      "rows": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2158,
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3139,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 1465,
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1101
+      }
+    }
+  },
+  "output": {
+    "root": "output/smartphone-r5/phase81-phase80-direct-observable-quality-reclassification-v1",
+    "result_path": "output/smartphone-r5/phase81-phase80-direct-observable-quality-reclassification-v1/phase81_phase80_direct_observable_quality_reclassification_result.json",
+    "result_sha256": "9be901177748363a35dac0d84c4c9f1725d3b525092163f76b189d89327005a6",
+    "result_bytes": 28151,
+    "manifest_path": "output/smartphone-r5/phase81-phase80-direct-observable-quality-reclassification-v1/phase81_phase80_direct_observable_quality_reclassification_manifest.json",
+    "manifest_sha256": "897a11f378917b0fda8ecf23096f150e0fb05f668343fa4046380a319b1172dd"
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "rows": 2158,
+      "output_epochs": 2159,
+      "environment": "Highway",
+      "p_and_d_huber": {"pseudorange_sigma": 0.2, "doppler_sigma": 0.8},
+      "pseudorange": {"candidates": 80977, "factors": 78853, "residual_rejections": 2124},
+      "doppler": {"candidates": 82477, "factors": 29626, "graph_factors": 29588, "residual_rejections": 52851},
+      "max_speed_mps": 44.312005778387686,
+      "repeat_identity": true
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "rows": 3139,
+      "output_epochs": 3140,
+      "environment": "Street",
+      "p_and_d_huber": {"pseudorange_sigma": 0.1, "doppler_sigma": 0.4},
+      "pseudorange": {"candidates": 105188, "factors": 101916, "residual_rejections": 3272},
+      "doppler": {"candidates": 107275, "factors": 66715, "graph_factors": 66685, "residual_rejections": 40560},
+      "max_speed_mps": 20.570146234281918,
+      "repeat_identity": true
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "rows": 1465,
+      "output_epochs": 1466,
+      "environment": "Highway",
+      "p_and_d_huber": {"pseudorange_sigma": 0.2, "doppler_sigma": 0.8},
+      "pseudorange": {"candidates": 48268, "factors": 46487, "residual_rejections": 1781},
+      "doppler": {"candidates": 49579, "factors": 13828, "graph_factors": 13795, "residual_rejections": 35751},
+      "max_speed_mps": 35.94800677361127,
+      "repeat_identity": true
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "rows": 1101,
+      "output_epochs": 1102,
+      "environment": "Street",
+      "p_and_d_huber": {"pseudorange_sigma": 0.1, "doppler_sigma": 0.4},
+      "pseudorange": {"candidates": 33687, "factors": 32475, "residual_rejections": 1212},
+      "doppler": {"candidates": 34533, "factors": 12527, "graph_factors": 12496, "residual_rejections": 22006},
+      "max_speed_mps": 29.18495028916442,
+      "repeat_identity": true
+    }
+  },
+  "gates": {
+    "all_four_routes": true,
+    "legacy_only_false_gate_was_prediction_domain": true,
+    "candidate_artifact_hashes_exact": true,
+    "candidate_repeat_identity": true,
+    "candidate_prediction_domain_coverage": 1.0,
+    "rows_plus_warmup_equals_summary_output_epochs": true,
+    "candidate_coordinates_finite_and_earth_valid": true,
+    "candidate_speed_finite_and_over_70_zero": true,
+    "candidate_converged": true,
+    "direct_quality_object_and_counts": true,
+    "direct_no_pdc": true,
+    "base_phase78_frequency_policy": true,
+    "miss_mask_contract": true,
+    "signal_bias_material_and_finite": true,
+    "tdcp_built_equals_inserted_and_finite": true,
+    "raw_utc_warmup_contract": true,
+    "truth_free": true,
+    "all_passed": true
+  },
+  "read_accounting": {
+    "native_solver_invocations": 0,
+    "raw_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopens": 0
+  }
+}

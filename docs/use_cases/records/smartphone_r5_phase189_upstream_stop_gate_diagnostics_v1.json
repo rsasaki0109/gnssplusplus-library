@@ -1,0 +1,63 @@
+{
+  "schema_version": "smartphone-r5-phase189-upstream-stop-gate-diagnostics.v1",
+  "phase": 189,
+  "execution_label": "Luna Max",
+  "status": "implementation-sealed-no-native-run",
+  "purpose": "Expose scalar, source-authoritative reasons for each detected upstream stationary-stop epoch without changing factor admission or numerical settings.",
+  "implementation_commit": "db3e3aaac51346dc40bbb18cb9923fb6e24f009c",
+  "prior_structural_run": {
+    "phase": 188,
+    "result": "docs/use_cases/records/smartphone_r5_phase188_h_native_upstream_stop_result_v1.json",
+    "native_return_code": 0,
+    "detected_stop_epochs": 987,
+    "velocity_factors": 0,
+    "pose_factors": 0,
+    "candidate_sha256": "f40d93300075d99844fc3d74b66bd3558376ac6f247fc22731d917467ecf5873"
+  },
+  "diagnostic_contract": {
+    "detected_epoch_conservation": "detected = missing_velocity_key + graph_velocity_nonfinite + speed_nonfinite + speed_gate_accepted + speed_gate_rejected",
+    "speed_conservation": "speed_evaluated = speed_gate_accepted + speed_gate_rejected",
+    "fallback_conservation": "graph_velocity_fallback = seed_unavailable + seed_nonfinite",
+    "seed_precedence": "finite exact same-run stop seed; otherwise existing graph velocity fallback",
+    "threshold": "speed >= 0.5 m/s rejects, including equality",
+    "min_max_policy": "finite evaluated speeds only; summary emits null when none",
+    "factor_recipe_changed": false,
+    "threshold_changed": false,
+    "trajectory_values_serialized": false
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "caf03a4420cf3d153200e796c6c7879993ead7844fd05a31718515977689dac3",
+    "include/libgnss++/algorithms/fgo.hpp": "d0ba456e861213afac61bae9492c922786db64a2a84e0df1f126a3346fbaa346",
+    "src/algorithms/fgo_gtsam_backend.cpp": "db45889595d0640eac6d3ac11db3408466a3529082ced4c8f9ef8db569aa3fc0",
+    "tests/test_fgo_gtsam_backend.cpp": "3021f770a28ade19d8960840fc43554d1e8a143b70f67c95f892ddc1c7f7a79a"
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "882d3cc3fe80921953fd4c657990cd067b447a2d4eefc4ff2fad46e343c93828",
+    "bytes": 4053672
+  },
+  "tests": {
+    "build": "cmake --build build --target gnss_run_tests -j2; cmake --build build --target gnss_fgo_imu_no_base -j2",
+    "focused_gtest": "FGOGtsamPhase164RawNoDopplerGraphTest.*:FGOGtsamPhase165RawNoDopplerGraphTest.*:FGOGtsamPhase171NoDopplerImuMainTest.*",
+    "focused_gtest_result": "7/7 passed; includes missing/nonfinite seed fallback and exact threshold cases",
+    "upstream_stop_gtest_result": "7/7 passed",
+    "expanded_regression": "76/76 passed in parent verification",
+    "actual_app_build": "passed"
+  },
+  "execution_policy": {
+    "native_runs": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "nav_reads": 0,
+    "truth_reads": 0,
+    "mat_or_precomputed_coordinate_reads": 0,
+    "base_reads": 0,
+    "kaggle_or_token_access": 0,
+    "next_run_requires_reviewed_manifest": true
+  },
+  "limitations": [
+    "A normal IMU graph materializes every velocity key, so the missing-key bucket is fail-closed telemetry and remains zero in the valid synthetic handoff; it is not fabricated by removing a graph state.",
+    "Phase188 detected 987 stop epochs but had zero stop factors; this record does not attribute that outcome to speed until a later diagnostic run reports the new counters.",
+    "No raw diagnostic run was launched from this record, and no truth or accuracy evaluation is authorized here."
+  ]
+}

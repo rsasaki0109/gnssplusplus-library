@@ -1,0 +1,273 @@
+{
+  "algorithm_parameter_hash_comparison": {
+    "canonicalization": "json.dumps(parameters, sort_keys=True, separators=(',', ':')) SHA256",
+    "changed_fields": [],
+    "equal": true,
+    "v1_parameters_sha256": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "v2_parameters_sha256": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "v3_parameters_sha256": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "change_scope": {
+    "algorithm_sources_changed": false,
+    "candidate_source_set_changed": false,
+    "classification": "preflight-orchestration-only",
+    "description": "Accept v3 freeze schema and map each full repository-relative freeze source path explicitly to the adapter/WLS required basename; basename-only lookup is rejected.",
+    "fixture_regression_test": {
+      "path": "tests/test_smartphone_wls_stability_selector_holdout_eval.py",
+      "sha256": "6d23c8f9484e9d83995c9a58d68fd51c53648960a7a38177c84efd83e495bc3f",
+      "archive_access": false,
+      "materialization_to_adapter_smoke": true
+    },
+    "authorization_source_key_mapping": [
+      {
+        "freeze_source_key": "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py",
+        "required_basename": "gnss_smartphone_gnss_adapter.py",
+        "lookup": "exact full relative key; basename-only key rejected"
+      },
+      {
+        "freeze_source_key": "apps/commands/benchmarks/gnss_smartphone_wls.py",
+        "required_basename": "gnss_smartphone_wls.py",
+        "lookup": "exact full relative key; basename-only key rejected"
+      }
+    ],
+    "preflight_only_files": [
+      "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py",
+      "apps/commands/benchmarks/gnss_smartphone_wls.py",
+      "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_holdout_eval.py",
+      "tests/test_smartphone_wls_stability_selector_holdout_eval.py"
+    ],
+    "post_holdout_tuning": false,
+    "selector_sources_changed": false,
+    "v2_preflight_provenance": {
+      "v2_freeze_sha256": "c99c44d7d59bc491cfbbb3337f842ef7a18570a3af465fdc32aed64282fa0f91",
+      "v2_failure_artifact_sha256": "2748ddfbde15bd4cf36c5bc7e4e0304b45a51bad4d84d2b040b43c235bfb85ca",
+      "v2_failure_stage": "truth-free adapter preflight authorization",
+      "v2_materialization_manifest_sha256": "36deea5ffad04d48d495f31b484f7cf616edbeaa82a7a4d8b5ef7ea5beeea9ed",
+      "v2_payload_open_count": 1,
+      "v2_truth_open_count": 0
+    }
+  },
+  "cli_commands": {
+    "entrypoint": "python3 apps/gnss.py smartphone-wls-stability-selector-holdout-eval --archive data/gsdc2023/cache/dataset_2023.zip --profile configs/benchmarks/smartphone_r5_gsdc2023.json --freeze docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v3.json --freeze-manifest docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v3_manifest.json --previous-record docs/use_cases/records/smartphone_r5_holdout_run1.json --output-dir output/smartphone-r5/wls-stability-selector-holdout-run2-v3",
+    "fixture": "python3 -m unittest tests.test_smartphone_wls_stability_selector_holdout_eval",
+    "native": "smartphone-gnss-adapter truth-free holdout Galileo E1 Hatch30 -> gnss spp -> timestamp canonicalization -> segment stability r15/d15",
+    "selector": "selector.select_and_publish native-stable/WLS + manifests/submission atomically",
+    "truth": "open designated ground_truth.csv exactly once only after truth-free manifest and selector artifact hashes",
+    "wls": "wls.extract_to_directory truth-free holdout with consistency 0.001 m and fail-closed ECEF ranges"
+  },
+  "freeze_id": "smartphone-r5-wls-stability-selector-release-freeze-2026-08-30-v3",
+  "frozen_at": "2026-08-30",
+  "holdout": {
+    "broadcast_nav_sha256_from_frozen_profile": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696",
+    "device_gnss_sha256_from_frozen_profile": "f6c05015842cc0a389ed2c426b15aed980819a80a2baa828ca77bfa53aba245b",
+    "ground_truth_sha256_from_frozen_profile": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+    "id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "payload_opened_before_v3_freeze": false,
+    "skip_epochs": 1,
+    "truth_opened_before_v3_freeze": false,
+    "v1_payload_open_count": 0,
+    "v1_truth_open_count": 0,
+    "v2_payload_open_count": 1,
+    "v2_truth_open_count": 0,
+    "v2_materialized_device_sha256": "f6c05015842cc0a389ed2c426b15aed980819a80a2baa828ca77bfa53aba245b",
+    "v2_materialized_nav_sha256": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696"
+  },
+  "holdout_execution_contract": {
+    "authorized": true,
+    "environment_io_verification_restart_only": true,
+    "no_algorithm_or_parameter_change_after_v3_freeze": true,
+    "no_code_or_parameter_change_after_holdout_open": true,
+    "no_post_holdout_tuning": true,
+    "one_shot_run_number": 2,
+    "production_rtk_spp_default_changed": false,
+    "rerun_after_v2_failure": false,
+    "rerun_after_v3_result": false,
+    "truth_open_count_maximum": 1,
+    "v1_failure_was_preflight_only": true,
+    "v2_preflight_only_change": true,
+    "v3_preflight_only_change": true
+  },
+  "kaggle_diagnostics": [
+    "haversine_sphere__linear_n_minus_1",
+    "haversine_sphere__nearest_rank_ceiling",
+    "wgs84_vincenty__linear_n_minus_1",
+    "wgs84_vincenty__nearest_rank_ceiling"
+  ],
+  "navigation": {
+    "designated_holdout_member": "dataset_2023/train/2023-09-06-22-49-us-ca-routebb1/brdc.nav",
+    "designated_holdout_sha256_from_profile": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696",
+    "development_main_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "holdout_payload_opened_before_v3_freeze": false
+  },
+  "parameters": {
+    "galileo_e1": {
+      "broadcast_navigation_max_nearest_record_age_s": 14400,
+      "carrier_frequency_hz": 1575420000,
+      "constellation_type": "6",
+      "enabled": true,
+      "missing_prn_policy": "fail-closed; no synthesis",
+      "prn_range": [1, 36],
+      "rinex_observation_types": ["C1C", "L1C", "D1C", "S1C"],
+      "rinex_system": "E",
+      "signal": "GAL_E1_C_P",
+      "source_code_type_policy": "empty-only"
+    },
+    "hatch": {
+      "adr_units": "AccumulatedDeltaRangeMeters in meters",
+      "algorithm": "S_t=((N-1)*(S_(t-1)+ADR_t-ADR_(t-1))+P_t)/N",
+      "clock_discontinuity_resets": true,
+      "cycle_slip_bit": 4,
+      "enabled": true,
+      "gap_reset_threshold_ms": 1500,
+      "reset_bit": 2,
+      "reset_row_emits": "raw pseudorange",
+      "state_key": "RINEX system + PRN + SignalType",
+      "valid_bit": 1,
+      "window_s": 30
+    },
+    "segment_stability": {
+      "max_consecutive_rejects_r": 15,
+      "max_prediction_duration_d_s": 15.0,
+      "reject_fraction_max": null,
+      "truth_used": false
+    },
+    "stability_selector": {
+      "device_model_used": false,
+      "key_mismatch_policy": "fail-closed",
+      "nonfinite_policy": "fail-closed",
+      "rule": "all native Galileo E1/Hatch30 segments stable selects native stable POS; otherwise raw handset WLS POS",
+      "selected_pos_submission": "atomic publish",
+      "truth_used": false
+    },
+    "time": {
+      "gps_utc_leap_seconds": 18,
+      "position_timestamp_tolerance_ms": 1,
+      "skip_epochs": 1
+    },
+    "trajectory": {
+      "algorithm": "constant-velocity Kalman filter plus per-segment RTS smoother",
+      "measurement_floor_m": 1.0,
+      "outlier_gate_sigma": 5.0,
+      "process_noise_q": 1.0,
+      "segment_gap_s": 10.0,
+      "truth_used": false
+    },
+    "wls_integrity": {
+      "consistency_tolerance_m": 0.001,
+      "ecef_component_abs_max_m": 7500000.0,
+      "ecef_norm_range_m": [6000000.0, 7500000.0],
+      "missing_partial_nonfinite_policy": "fail-closed",
+      "truth_used": false
+    }
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+    "sha256_before_holdout": "89f3762d9bd89e9fe321924621785ca95b9857e2807c112d28b38bcad17d1b3d"
+  },
+  "release_build": {
+    "binary": "build/apps/gnss_spp",
+    "build_type": "Release",
+    "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-freeze.v3",
+  "self_hash_policy": {
+    "record_hash_not_embedded": true,
+    "separate_manifest_required": true
+  },
+  "signoff_thresholds": {
+    "availability_min": 0.98,
+    "horizontal_median_max_m": 7.0,
+    "horizontal_p95_max_m": 25.0,
+    "max_solution_gap_s": 10.0,
+    "truth_coverage_min": 0.98,
+    "vertical_p95_max_m": 45.0
+  },
+  "source_files": {
+    "CMakeLists.txt": {
+      "sha256": "3af1f167256ade28e949bdf2496b02fcb6f0e4379bd3f52050ae940e1042870f"
+    },
+    "apps/CMakeLists.txt": {
+      "sha256": "4136d966b68c5c766a2711b43ce27d3fe76f654906c95ea8944ce59ca1ebb28f"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_generalization.py": {
+      "sha256": "ed6111efe9321281ee0ba49df3082e4464ed105675e12d05cfb477fcbc37fc93"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": {
+      "sha256": "d0ddaa5e7a51cea99a153a4e313326a47a0918aa9bbb24bff4c4bba1c38bca11"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": {
+      "sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_reacquisition_eval.py": {
+      "sha256": "7880101df1ce416292be2af109ab374087c0dee068cacc6c268d3846d408c87e"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_segment_stability.py": {
+      "sha256": "446aac858b6a9d5163d121645eb8cc4f6567c1a454632b87ac379aa24d8bafe9"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": {
+      "sha256": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": {
+      "sha256": "007ecd1def19a72efed23154cc3e7a999a7ccc7f0073d74222333bf1dabd5036"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector.py": {
+      "sha256": "0a9a7e50bd8bee78460eb57929aa690c75de0ce81af5e07215c1845ee6136cb2"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_eval.py": {
+      "sha256": "235ade902fb7339f994f765efec7e0b52814d825d0551cb95cced92cb10ad72d"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_holdout_eval.py": {
+      "sha256": "44ab74161105aba1b6286643874dfe3401849a7cc6fc49ef4e2a44e6b030b28b"
+    },
+    "apps/gnss.py": {
+      "sha256": "3a6fe4727fe0869b1a399aee83e6b4c44d74eeaf0883e3179ca607b880165cfb"
+    },
+    "apps/native/gnss_spp.cpp": {
+      "sha256": "51a3c1e099280639392c1b8631310306c9e5ab070c8fb9850aa789a5280b3af6"
+    },
+    "tests/CMakeLists.txt": {
+      "sha256": "e812136a3c2690300a46d4b227e4ee7ec8a3d210c96871bba1c8a77b555c0fc5"
+    },
+    "tests/test_smartphone_wls_stability_selector_holdout_eval.py": {
+      "sha256": "6d23c8f9484e9d83995c9a58d68fd51c53648960a7a38177c84efd83e495bc3f"
+    }
+  },
+  "source_revision": "a947409878fe78ca9234b20288cadd4d75baedea",
+  "status": "frozen-before-holdout-evaluation-v3",
+  "truth_free_atomic_contract": {
+    "archive_hash_verified_before_member_open": true,
+    "invalid_nonfinite_key_mismatch_fail_closed": true,
+    "only_required_device_and_nav_materialized_before_truth": true,
+    "selector_pos_submission_atomic": true,
+    "truth_deferred_until_native_wls_selector_hashes_fixed": true,
+    "truth_read_count": 1
+  },
+  "v1_freeze": {
+    "failure_artifact": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v1/wls_stability_selector_holdout_run2_failure.json",
+      "payload_open_count": 0,
+      "sha256": "a4e804191315146eae3ffd8ec343dd0a1ca5d1007519f23a1f997e0e32663c3b",
+      "truth_open_count": 0
+    },
+    "freeze_manifest_sha256": "636465b4d9b14c96b1a96a8d7d1352998aa250b5b3ec4c2f340bdff081dd6848",
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze.json",
+    "sha256": "49ec6a07ca770aac764f562abfa2d4823cd74aabbb948163250f7c3b5656783f"
+  },
+  "v2_freeze": {
+    "failure_artifact": {
+      "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v2/wls_stability_selector_holdout_run2_failure.json",
+      "payload_open_count": 1,
+      "sha256": "2748ddfbde15bd4cf36c5bc7e4e0304b45a51bad4d84d2b040b43c235bfb85ca",
+      "truth_open_count": 0
+    },
+    "freeze_manifest_sha256": "5fd80750a6e3e4bc07917f8f0728cba96df74e01ee1a02a718ae763eb8ccfd58",
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v2.json",
+    "sha256": "c99c44d7d59bc491cfbbb3337f842ef7a18570a3af465fdc32aed64282fa0f91",
+    "materialization_manifest_sha256": "36deea5ffad04d48d495f31b484f7cf616edbeaa82a7a4d8b5ef7ea5beeea9ed"
+  }
+}

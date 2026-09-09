@@ -1,0 +1,125 @@
+{
+  "schema_version": "smartphone-r5-phase34-quality-anchor-validation-freeze.v1",
+  "phase": 34,
+  "status": "frozen-before-validation-truth-materialization",
+  "purpose": "Evaluate the already sealed Phase31 quality-anchor candidate against its already sealed Phase28 control while treating the control continuity defect as a diagnostic baseline, not as a candidate safety veto.",
+  "prior_structural_result": {
+    "phase33_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_structural_result_v1.json",
+      "sha256": "f71a20abf5705e7f47d2288f8c1a8a1f56bf01f7b6ac5e7b1bb26e7929504b69"
+    },
+    "phase33_seal": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_seal.json",
+      "sha256": "e6d9750c5005d12d11cdb0f91003a2720a85644e4159e67c3c44482c5473d171",
+      "status": "sealed-truth-free-structural-no-go",
+      "reason": "control had three initial >70 m/s transitions; candidate itself passed continuity"
+    },
+    "solver_rerun": false,
+    "candidate_control_mutation": false
+  },
+  "split": {
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "route": "2023-05-09-21-32-us-ca-mtv-pe1",
+    "phone": "pixel5",
+    "route_disjoint_from_phase32_train": true,
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "future_holdout_remains_sealed": true
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "phase24_split_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase24_route_group_split_freeze_v1.json",
+      "sha256": "a20fb65524648fab76c5494d2f28b1846e48fae821296bbdfc212cf6519e4a62"
+    },
+    "ground_truth_member": {
+      "name": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/ground_truth.csv",
+      "file_size": 206062,
+      "compressed_size": 58798,
+      "crc32_hex": "015842bb",
+      "materialize_before_truth_free_artifact_seal": false
+    }
+  },
+  "sealed_artifacts": {
+    "raw_materialization": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/raw_materialization.json",
+      "sha256": "24ebc000ae8f266a799ea4f354f1b3cac3b591fd98914ab8bdc3cb5d27dd4fb9",
+      "truth_open_count": 0
+    },
+    "truth_free_run": {
+      "path": "output/smartphone-r5/phase33-quality-anchor-validation-v1/truth_free_run.json",
+      "sha256": "44f5d1f98ebccf88297cbf3e4a7e5088458982843eff9737652506591b439d6a",
+      "solver_runs": 4
+    },
+    "control": {
+      "submission": "output/smartphone-r5/phase33-quality-anchor-validation-v1/control/run1/submission.csv",
+      "submission_sha256": "af725435a049e88ad8c3934e3899b703d8207d5fc9c972465ea9bcf9804ca58d",
+      "summary": "output/smartphone-r5/phase33-quality-anchor-validation-v1/control/run1/summary.json",
+      "summary_sha256": "5ecc88b2a3a6cb872078318cc00779ce335c50c97d2c1e80af08100420ceccc1",
+      "repeat_submission_sha256": "af725435a049e88ad8c3934e3899b703d8207d5fc9c972465ea9bcf9804ca58d",
+      "repeat_summary_sha256": "5ecc88b2a3a6cb872078318cc00779ce335c50c97d2c1e80af08100420ceccc1",
+      "rows": 2131,
+      "finite_converged": true,
+      "exact_target_keys": true,
+      "repeat_byte_identical": true,
+      "continuity_over_70_mps": 3,
+      "continuity_is_baseline_diagnostic_only": true
+    },
+    "candidate": {
+      "submission": "output/smartphone-r5/phase33-quality-anchor-validation-v1/candidate/run1/submission.csv",
+      "submission_sha256": "181c5512d1fcd3bed6e46d08251c63edc7e03a72b5f451c4cbce091fc06edd77",
+      "summary": "output/smartphone-r5/phase33-quality-anchor-validation-v1/candidate/run1/summary.json",
+      "summary_sha256": "2c74925d42a0b39f6f9d7fe1cbe6afcba4020eb8f3bb6e83e0e423b6a14dcc73",
+      "repeat_submission_sha256": "181c5512d1fcd3bed6e46d08251c63edc7e03a72b5f451c4cbce091fc06edd77",
+      "repeat_summary_sha256": "2c74925d42a0b39f6f9d7fe1cbe6afcba4020eb8f3bb6e83e0e423b6a14dcc73",
+      "rows": 2131,
+      "finite_converged": true,
+      "exact_target_keys": true,
+      "repeat_byte_identical": true,
+      "continuity_over_70_mps": 0,
+      "candidate_safety_gate": true
+    }
+  },
+  "evaluation_contract": {
+    "truth_read_after_freeze_only": true,
+    "truth_read_count": 1,
+    "control_and_candidate_same_truth_matched_key_set": true,
+    "candidate_all_four_horizontal_variants_strict_improvement": true,
+    "candidate_horizontal_p50_p95_non_regression": true,
+    "candidate_coverage_non_regression": true,
+    "candidate_continuity_safe": true,
+    "control_continuity": "informational-baseline-diagnostic; does not block candidate scoring",
+    "vertical": "informational-unavailable",
+    "post_score_tuning": false,
+    "rerun_after_truth": false
+  },
+  "truth_access": {
+    "validation_truth_materialized_before_freeze": false,
+    "validation_truth_open_count_before_freeze": 0,
+    "phase32_train_truth_reads": 3,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "ground_truth_used_for_inference_or_selection": false
+  },
+  "source_and_binary_hashes_before_truth": {
+    "apps/commands/benchmarks/gnss_smartphone_phase33_quality_anchor_validation.py": "4f5b467bdd74b6164b63beee39d40fdc981483d15beec88f675943555d360d6c",
+    "tests/test_smartphone_phase33_quality_anchor_validation.py": "25644c6be652b6ef85917fa72c760f54e681a0cde51d56e4d2d9749241e43efa",
+    "tests/CMakeLists.txt": "92894a453fe45e251981741c8377a040291ab3d9c72084ba01f07515d0a01df0",
+    "build/apps/gnss_fgo_imu_no_base": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+  },
+  "authorization": {
+    "candidate_control_artifacts_immutable": true,
+    "solver_rerun": false,
+    "validation_truth_open_after_seal_only": true,
+    "one_process_one_truth_read": true,
+    "no_post_validation_tuning": true,
+    "holdout_remains_sealed": true
+  },
+  "integrity": {
+    "freeze_hash": "computed-after-commit",
+    "existing_phase33_outputs_reused_without_regeneration": true,
+    "truth_hash_and_bytes_must_be_recorded": true,
+    "atomic_result_required": true
+  }
+}

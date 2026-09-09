@@ -1,0 +1,15 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-state-backend-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_state_backend_freeze_v1.json",
+  "freeze_record_sha256": "a7cc67fffdec34a8320694d86ff39a17be680b2a75b4bfb743c814bd21fac9db",
+  "truth_free_run_manifest": "output/smartphone-r5/native-gnss-pdc-state-contract-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+  "truth_free_run_manifest_sha256": "1563029a3ad3eb1e72c5336464979c68dae2796b86840b1ead50ab7a77d06191",
+  "one_development_train_score_authorized": true,
+  "truth_opened_before_freeze": false,
+  "validation_truth_opened": false,
+  "holdout_truth_opened": false,
+  "mat_inputs_used": false,
+  "candidate_or_numeric_parameters_changed_after_freeze": false,
+  "no_post_holdout_tuning": true,
+  "external_mutation": false
+}

@@ -1,0 +1,200 @@
+{
+  "schema_version": "smartphone-r5-phase147-hu-structural-diagnostic-report.v1",
+  "phase": 147,
+  "execution_label": "Luna Max",
+  "result_source": {
+    "path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_result_v1.json",
+    "route_order": ["MTV-H", "MTV-U"],
+    "native_summary_reads": 1,
+    "solution_coordinate_interpretation": false
+  },
+  "route_reports": {
+    "MTV-H": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "type": "Street",
+      "tdcp_huber_threshold_sigma": 0.2,
+      "input_integrity": {
+        "device_gnss.csv": {"read_count": 1, "hash_match": true},
+        "device_imu.csv": {"read_count": 1, "hash_match": true},
+        "brdc.nav": {"read_count": 1, "hash_match": true},
+        "base.obs": {"read_count": 1, "hash_match": true}
+      },
+      "native_process": {
+        "invocation_count": 1,
+        "return_code": -6,
+        "summary_present": false,
+        "summary_fields": "unavailable: native threw before summary serialization",
+        "stderr_sha256": "eeaebdbb64dd6a8fd67e5ce6d1b0aacb3304fcd314062fc5cf899fd52fd57099",
+        "failure_stage": "main-optimizer-admission",
+        "failure_message": "Phase143 official main LM budget requires the Phase142/99 meter-state main graph or the unchanged 1000-iteration GNSS-first staging graph",
+        "cause_class": "current Phase143 main-graph admission failed before factor telemetry; historical Phase113/Phase95 metadata recorded zero retained undifferenced-Doppler factors for H, but the current run emitted no factor count; no state was synthesized and no guard was removed"
+      },
+      "factors_epochs_termination_coverage": {
+        "status": "unavailable",
+        "reason": "no native summary was emitted after the admission exception",
+        "configured_effective_limits": {
+          "main": {"configured": 12, "effective": 1000},
+          "gnss_first": {"configured": 1000, "effective": 1000}
+        }
+      }
+    },
+    "MTV-U": {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "type": "Street",
+      "tdcp_huber_threshold_sigma": 0.2,
+      "input_integrity": {
+        "device_gnss.csv": {"read_count": 1, "hash_match": true},
+        "device_imu.csv": {"read_count": 1, "hash_match": true},
+        "brdc.nav": {"read_count": 1, "hash_match": true},
+        "base.obs": {"read_count": 1, "hash_match": true}
+      },
+      "native_process": {
+        "invocation_count": 1,
+        "return_code": 0,
+        "summary_present": true,
+        "summary_path": "output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/native_summary.json",
+        "summary_sha256": "7ef1c3290ddf7e69201ffd067ee6de67a58ab4d12c2802ee37f306d610793014",
+        "summary_preserved": true,
+        "summary_structural_gate": "failed expected_epoch_coverage=true",
+        "failure_stage": "output-epoch-coverage",
+        "failure_message": "native output expected_epoch_coverage=false",
+        "opaque_solution": {
+          "path": "output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/opaque_solution_output.csv",
+          "sha256": "035af42301063c050b22fb34ad041b4d75c417b568d9d7ec16a5e2c77e60dd50",
+          "bytes": 88134,
+          "newline_count": 1102,
+          "content_interpreted": false
+        }
+      },
+      "factors_epochs_termination_coverage": {
+        "factor_counts": {
+          "pseudorange": 12126,
+          "doppler": 4845,
+          "ordinary_tdcp": 5712,
+          "legacy_pseudorange": 0,
+          "legacy_doppler": 0,
+          "legacy_tdcp": 0
+        },
+        "epoch_contract": {
+          "raw_epoch_keys": 1102,
+          "target_epochs": 1101,
+          "exact_solution_epochs": 720,
+          "interpolated_epochs": 380,
+          "edge_hold_epochs": 1,
+          "unresolved_epochs": 0,
+          "problem_epochs": 720,
+          "output_epochs": 720
+        },
+        "clock_and_bridge": {
+          "c7_dimension": 7,
+          "c_epoch_count": 720,
+          "d_epoch_count": 720,
+          "c7_handoff_count": 720,
+          "d_full_finite_exact_alignment": true,
+          "pose3_x_count": 720,
+          "pose3_x_keys_exact": true,
+          "phase131_sync_count": 0
+        },
+        "offset": {
+          "enabled": true,
+          "applied": true,
+          "application_passes": 1,
+          "corrected_epochs": 720,
+          "pixel5_offset_reapplication": 0
+        },
+        "output_gates": {
+          "finite": true,
+          "earth_valid": true,
+          "expected_epoch_coverage": false,
+          "opaque_solution_seal": true,
+          "coordinate_rows_interpreted": false
+        },
+        "termination": {
+          "schema_version": "smartphone-r5-native-fgo-phase143-termination.v1",
+          "authority": "FGOResult.diagnostics.native_phase143_termination",
+          "no_solution_or_accuracy_fields": true,
+          "gnss_first": {
+            "stage": "gnss-first",
+            "selector_enabled": true,
+            "configured_max_iterations": 1000,
+            "effective_max_iterations": 1000,
+            "attempted": true,
+            "attempted_outer_iterations": 103,
+            "accepted_outer_iterations": 103,
+            "rejected_outer_iterations": 0,
+            "total_inner_lambda_attempts": 204,
+            "initial_cost": 23108591431.55758,
+            "final_cost": 3365.1254945683727,
+            "costs_finite": true,
+            "strict_cost_decrease": true,
+            "termination_branch": "outer_convergence_tolerance",
+            "relative_error_tolerance": 1e-08,
+            "absolute_error_tolerance": 1e-10,
+            "error_tolerance": 0,
+            "initial_lambda": 1e-05,
+            "final_lambda": 1.0000000000000002e-07,
+            "maximum_lambda": 1e-05,
+            "lambda_factor": 10,
+            "lambda_lower_bound": 0,
+            "lambda_upper_bound": 100000,
+            "min_model_fidelity": 0.001,
+            "diagonal_damping": false,
+            "use_fixed_lambda_factor": true,
+            "linear_solver": "MULTIFRONTAL_CHOLESKY",
+            "elimination": "EliminatePreferCholesky",
+            "ordering_type": "COLAMD",
+            "explicit_ordering_present": false,
+            "no_fallback": true,
+            "termination_trace_complete": true,
+            "configuration_valid": true,
+            "configuration_failure": ""
+          },
+          "main": {
+            "stage": "main",
+            "selector_enabled": true,
+            "configured_max_iterations": 12,
+            "effective_max_iterations": 1000,
+            "attempted": true,
+            "attempted_outer_iterations": 28,
+            "accepted_outer_iterations": 28,
+            "rejected_outer_iterations": 0,
+            "total_inner_lambda_attempts": 53,
+            "initial_cost": 2760749262.524003,
+            "final_cost": 3861.2656623278394,
+            "costs_finite": true,
+            "strict_cost_decrease": true,
+            "termination_branch": "outer_convergence_tolerance",
+            "relative_error_tolerance": 1e-08,
+            "absolute_error_tolerance": 1e-10,
+            "error_tolerance": 0,
+            "initial_lambda": 1e-05,
+            "final_lambda": 1.0000000000000002e-08,
+            "maximum_lambda": 1e-05,
+            "lambda_factor": 10,
+            "lambda_lower_bound": 0,
+            "lambda_upper_bound": 100000,
+            "min_model_fidelity": 0.001,
+            "diagonal_damping": false,
+            "use_fixed_lambda_factor": true,
+            "linear_solver": "MULTIFRONTAL_QR",
+            "elimination": "EliminateQR",
+            "ordering_type": "COLAMD",
+            "explicit_ordering_present": false,
+            "no_fallback": true,
+            "termination_trace_complete": true,
+            "configuration_valid": true,
+            "configuration_failure": ""
+          }
+        }
+      }
+    }
+  },
+  "interpretation_boundary": {
+    "accuracy_evaluation": false,
+    "truth_used": false,
+    "coordinates_read": false,
+    "kaggle_or_token_access": false,
+    "rerun_fallback_repair": false,
+    "diagnostic_success_is_not_accuracy_or_leaderboard_proof": true
+  }
+}

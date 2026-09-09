@@ -1,0 +1,304 @@
+{
+  "schema_version": "smartphone-r5-phase134-native-summary-bridge-structural-manifest.v1",
+  "phase": 134,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-independent-authorization",
+  "candidate_id": "phase134-native-phase131-summary-diagnostics-bridge-v1",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase134_native_summary_bridge_structural_contract_audit_v1.md",
+    "commit": "a116556d2437f039f0d6947b2b4b445928d64af8",
+    "sha256": "d5e62de1e4ad4b2c6219428e5c58a19f0f4b12549a8f0e9b8a27c04626aaa1a3"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase134_native_summary_bridge_structural_contract_freeze_v1.json",
+    "commit": "7d00f6e0a43d1b4a8c504db9705a3fa34e67b4cc",
+    "sha256": "506c0433556c62f17fdf408e8e34b35238e0b8c579f4dbd796867ffee97e8dbb"
+  },
+  "implementation": {
+    "commit": "130a7f8f12e191cc12ebd0ff66ad591d732775f7",
+    "candidate_id": "phase134-native-phase131-summary-diagnostics-bridge-v1",
+    "default_off": true,
+    "native_selector_argv_counts": {
+      "--native-phase118-official-tdcp-huber-k": 1,
+      "--native-phase126-raw-base-source-complete": 1,
+      "--native-phase127-glonass-channel-provenance": 1,
+      "--native-phase128-glonass-provenance-parser-admission": 1,
+      "--native-phase129-glonass-local-miss-mask": 1,
+      "--native-phase131-canonical-correction-band-key": 1
+    },
+    "phase130_argv_count": 0,
+    "off_selector_argv_counts": {
+      "--native-phase117-tdcp-snr-type-sigma": 0,
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0,
+      "--native-base-pseudorange-preserve-additional-frequency-bands": 0
+    },
+    "factor_topology_unchanged": true,
+    "native_source_changed": false,
+    "native_binary_changed": false,
+    "native_summary_overwrite": false,
+    "native_summary_bytes_hash_immutable": true,
+    "no_fallback": true,
+    "no_rerun": true,
+    "source_sha256": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": "efddfed4104d71db3df13a9b4cd0240bd603e4c78a3be313750dfe96c9273769",
+      "include/libgnss++/algorithms/fgo.hpp": "4f2df010f8b4c73bb1ca83d17811db7672c31d154507f758dc940ee1124b22ae",
+      "apps/commands/benchmarks/gnss_smartphone_phase133_runner_native_selector_boundary_authorized_execute.py": "37b02693ae183edee8435a4247ef474f67e50ecb65773901ebad593900f92fab",
+      "build/apps/gnss_fgo_imu_no_base": "3965852271023671cd0e9c6ea3e779ab6f67f4e883d724ccacadf28bd8b2fb79"
+    }
+  },
+  "artifacts": {
+    "validator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase134_native_summary_bridge.py",
+      "sha256": "cd15b908a758595cdb8c4885a67912a8aa8de60b8fe22152ebb2eaac42cdbe22"
+    },
+    "launch_free_runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase134_native_summary_bridge_execute.py",
+      "sha256": "4b19e13fae965721895bb34f51554ae7d7b6231426a1ae8a51ec977c1a7e9e47"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase134_native_summary_bridge_contract.py",
+      "sha256": "3e6dcc6257a88bae62813ae797e217cda5e5a9dc9d52e4614c125b7377c66186"
+    },
+    "authorized_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase133_runner_native_selector_boundary_authorized_execute.py",
+      "sha256": "37b02693ae183edee8435a4247ef474f67e50ecb65773901ebad593900f92fab"
+    }
+  },
+  "selector_ownership": {
+    "native_exactly_once": [
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase131-canonical-correction-band-key"
+    ],
+    "phase130_runner_only_count": 0,
+    "off": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "other_forbidden": [
+      "--native-direct-wls-ephemeral-c7d-main-seed",
+      "--native-pdc-state-bridge"
+    ]
+  },
+  "bridge_contract": {
+    "source_type": "BasePseudorangeCompensationReport",
+    "destination_type": "FGOProblemDiagnostics",
+    "sync_count": 1,
+    "copy_policy": "exact value copy; no accumulation or recomputation",
+    "native_summary_path": "native_summary.json",
+    "normalized_summary_path": "structural_summary.json",
+    "paths_must_be_distinct": true,
+    "native_bytes_hash_immutable": true,
+    "wrapper_must_not_overwrite_native": true,
+    "resolver_attempt_formula": "resolver_call_count = canonical_rows + canonical_rejected_rows",
+    "required_conservation": [
+      "original_adopted_pseudorange_rows",
+      "retained_finite_pc_pseudorange_rows",
+      "dropped_missing_exact_stream_rows",
+      "dropped_out_of_domain_rows",
+      "dropped_nonfinite_correction_rows",
+      "matched_factor_rows",
+      "finite_correction_rows_among_matched",
+      "correction_application_pass_count",
+      "correction_applied_exactly_once",
+      "duplicate_correction_rejected"
+    ]
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0,
+    "native_solver_invocations_planned": 2,
+    "solution_rows_authorized": false,
+    "truth_reads_planned": 0,
+    "accuracy_calculations_planned": 0
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "placeholder": "__PHASE134_RAW_DEVICE_GNSS__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "placeholder": "__PHASE134_RAW_DEVICE_IMU__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "placeholder": "__PHASE134_RAW_BROADCAST_NAV__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "placeholder": "__PHASE134_RAW_BASE_RINEX__",
+        "sha256_placeholder": "__PHASE134_RAW_BASE_SHA256__",
+        "raw_rinex_only": true,
+        "payload_read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "--android-gnss",
+        "__PHASE134_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE134_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE134_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-upstream-position-offset",
+        "--native-phase118-official-tdcp-huber-k",
+        "--native-phase126-raw-base-source-complete",
+        "--native-phase127-glonass-channel-provenance",
+        "--native-phase128-glonass-provenance-parser-admission",
+        "--native-phase129-glonass-local-miss-mask",
+        "--native-phase131-canonical-correction-band-key",
+        "--native-base-rinex",
+        "__PHASE134_RAW_BASE_RINEX__",
+        "--native-base-rinex-sha256",
+        "__PHASE134_RAW_BASE_SHA256__",
+        "--out",
+        "output/smartphone-r5/phase134-native-summary-bridge-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/opaque_solution_output.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase134-native-summary-bridge-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/native_summary.json"
+      ]
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "placeholder": "__PHASE134_RAW_DEVICE_GNSS__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "placeholder": "__PHASE134_RAW_DEVICE_IMU__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "placeholder": "__PHASE134_RAW_BROADCAST_NAV__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "placeholder": "__PHASE134_RAW_BASE_RINEX__",
+        "sha256_placeholder": "__PHASE134_RAW_BASE_SHA256__",
+        "raw_rinex_only": true,
+        "payload_read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "--android-gnss",
+        "__PHASE134_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE134_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE134_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-upstream-position-offset",
+        "--native-phase118-official-tdcp-huber-k",
+        "--native-phase126-raw-base-source-complete",
+        "--native-phase127-glonass-channel-provenance",
+        "--native-phase128-glonass-provenance-parser-admission",
+        "--native-phase129-glonass-local-miss-mask",
+        "--native-phase131-canonical-correction-band-key",
+        "--native-base-rinex",
+        "__PHASE134_RAW_BASE_RINEX__",
+        "--native-base-rinex-sha256",
+        "__PHASE134_RAW_BASE_SHA256__",
+        "--out",
+        "output/smartphone-r5/phase134-native-summary-bridge-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/opaque_solution_output.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase134-native-summary-bridge-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/native_summary.json"
+      ]
+    }
+  ],
+  "read_accounting_before_authorization": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_coordinate_row_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "authorization_boundary": {
+    "independent_authorization_required": true,
+    "materialize_raw_after_authorization_only": true,
+    "allowed_solver_inputs": [
+      "raw phone GNSS",
+      "raw phone IMU",
+      "broadcast navigation",
+      "sealed raw-base RINEX"
+    ],
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "PDC",
+      "precomputed coordinates",
+      "accuracy",
+      "Kaggle",
+      "token resource"
+    ],
+    "solution_policy": "opaque hash and row count only",
+    "failure_policy": "fail closed; no rerun/fallback/repair/sweep"
+  }
+}

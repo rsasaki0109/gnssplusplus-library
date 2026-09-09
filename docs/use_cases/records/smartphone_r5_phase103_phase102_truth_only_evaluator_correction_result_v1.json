@@ -1,0 +1,485 @@
+{
+  "accuracy_scored": true,
+  "aggregate": {
+    "candidate_macro_score_m": 2.225306568701026,
+    "control_phase43_macro_score_m": 3.3158312396716876,
+    "macro_improvement_vs_phase43_m": 1.0905246709706615,
+    "macro_route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "macro_weighting": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "phase100_qr_scalar_clock_two_route_macro_m": 2.2339371202271145,
+    "phase82_same_route_two_route_macro_m": 1.026451431707709,
+    "route_count": 2
+  },
+  "authority": {
+    "phase100_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7"
+    },
+    "phase101_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a"
+    },
+    "phase102_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_raw_evaluation_authorization_v1.json",
+      "sha256": "403b8feb245786180a12c0430de9a797e1c5c2c5355f1c75c79b11546ddce583",
+      "status": "authorized-for-exact-two-route-phase102-epoch-clock-vector-raw-and-isolated-truth-evaluation"
+    },
+    "phase102_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy.py",
+      "sha256": "576ebf9749d1f295737bd82716275a20eb30a5aeeff3fc3828de10960c2255d8"
+    },
+    "phase102_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+      "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1"
+    },
+    "phase102_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_manifest_v1.json",
+      "sha256": "3b7b5dc48d6a172dda21c5d27bd4d8b92a64347615768ab87d4716ca17d81cd9"
+    },
+    "phase102_result": {
+      "native_outputs_reused": 2,
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_result_v1.json",
+      "sha256": "d4fcd2246407ad22f75dbf528ef0bbc41c391af341df66f8958b2eff0c48ada2"
+    },
+    "phase102_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy_execute.py",
+      "sha256": "ed3e86f57a2b494aab9156a5f83ede44ab92f3863b7b0098acc81adcb900e389"
+    },
+    "phase103_correction_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase103_phase102_truth_only_evaluator_correction.py",
+      "sha256": "b12a6779ae7e9256e44732ab549c74a394316ad81329790af42373f45c4c7aa3"
+    },
+    "phase103_correction_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_freeze_v1.json",
+      "sha256": "984fdd26171e8327095cbe9b37ba519c55c71a952dfd150a24938f14f2d0c9d1"
+    },
+    "phase103_truth_only_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_authorization_v1.json",
+      "sha256": "99f7f263fe376b21bae9f80040837d2ec98afaf157e081b0c126e869da648a14",
+      "status": "authorized-for-phase103-truth-only-evaluator-correction"
+    },
+    "phase43_control_source": "Phase82 artifact_sources.phase43_control resolved through sealed Phase43 structural identity",
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    }
+  },
+  "candidate": "phase103-phase102-truth-only-evaluator-correction-v1",
+  "decision": "truth-only correction accuracy gate failed closed; preserve artifacts and do not release",
+  "execution_label": "Luna Max",
+  "failed_gates": [
+    "candidate_each_route_score_at_most_3m",
+    "candidate_macro_score_at_most_2m",
+    "candidate_macro_score_strict_at_most_0_782m",
+    "candidate_no_route_regression_vs_phase82_same_route",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5:candidate_no_route_regression_vs_phase82",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5:candidate_route_score_at_most_3m",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5:candidate_no_route_regression_vs_phase82"
+  ],
+  "forbidden_lanes": {
+    "base": false,
+    "kaggle_or_token": false,
+    "mat": false,
+    "native_solver_rerun": false,
+    "pdc": false,
+    "precomputed_coordinates": false,
+    "solution_rows_in_result": false,
+    "truth_in_native_argv_or_environment": false
+  },
+  "metric_contract": {
+    "candidate_submission_header": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "distance": "spherical Haversine per row",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "earth_radius_m": 6371008.8,
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "finite_and_earth_valid": "all coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]",
+    "key": "(phone, UnixTimeMillis)",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "matching": "exact integer key intersection only",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "required_truth_fields": [
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "timestamp_type": "exact integer",
+    "truth_phone_policy": "optional phone must equal declared route; absent phone is assigned route",
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed"
+  },
+  "phase": 103,
+  "promotion_gates": {
+    "candidate_all_finite_and_earth_valid": true,
+    "candidate_each_route_score_at_most_3m": false,
+    "candidate_improves_each_route_vs_phase43_by_at_least_0_05m": true,
+    "candidate_macro_improvement_vs_phase43_at_least_0_10m": true,
+    "candidate_macro_score_at_most_2m": false,
+    "candidate_macro_score_strict_at_most_0_782m": false,
+    "candidate_no_route_regression_vs_phase100_qr_scalar_clock": true,
+    "candidate_no_route_regression_vs_phase43": true,
+    "candidate_no_route_regression_vs_phase82_same_route": false,
+    "candidate_over_70_mps_count_zero": true,
+    "candidate_prediction_domain_coverage_exact": true,
+    "exact_two_routes_one_run_each": true,
+    "no_kaggle_submission": true,
+    "no_solution_rows_in_result": true,
+    "truth_read_only_by_evaluator": true
+  },
+  "read_accounting": {
+    "accuracy_calculations": 2,
+    "base_reads": 0,
+    "broadcast_navigation_reads_by_correction": 0,
+    "broadcast_navigation_reads_by_native": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "phase102_native_output_root_reused": true,
+    "phase102_native_solver_invocations_reused": 2,
+    "phase43_control_artifact_reads": 4,
+    "phase43_seal_metadata_reads": 2,
+    "raw_byte_reads_by_wrapper": 0,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_reads_by_correction": 0,
+    "raw_device_gnss_reads_by_native": 2,
+    "raw_device_imu_reads_by_correction": 0,
+    "raw_device_imu_reads_by_native": 2,
+    "raw_hash_reads_by_wrapper": 0,
+    "reruns": 0,
+    "solution_reads_for_hash_and_parse": 2,
+    "solution_seal_metadata_reads": 2,
+    "summary_reads": 2,
+    "truth_reads": 2,
+    "truth_reads_by_process": "Phase103 truth-only evaluator subprocess",
+    "truth_reads_per_route_max": 1
+  },
+  "release_or_submission_authorized": false,
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_scored": true,
+      "artifact_hashes": {
+        "candidate_solution": "07afdb7f16515e069c8396cc8ff5b78910a44b68f26766d3b25e7248420fd075",
+        "candidate_summary": "14041ae5e65e1616cbf893aecdcddf1d2780ed7050e006dd9e62930330213ce5",
+        "phase43_control_submission": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "phase43_control_summary": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe"
+      },
+      "baseline_phase100_qr_scalar_clock": {
+        "score_m": 1.147436714982201
+      },
+      "baseline_phase82_same_route": {
+        "score_m": 1.1139384500152307
+      },
+      "candidate": {
+        "finite": true,
+        "matched_rows": 2158,
+        "max_m": 1.6381448305241129,
+        "max_speed_mps": 44.323030535390544,
+        "mean_m": 0.942369748784677,
+        "missing_truth_keys": [
+          [
+            "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+            1615921153434
+          ]
+        ],
+        "missing_truth_rows": 1,
+        "over_70_mps_count": 0,
+        "p50_m": 0.9084184291292443,
+        "p95_m": 1.3711677150733736,
+        "prediction_domain_coverage": 1.0,
+        "prediction_rows": 2158,
+        "score_m": 1.139793072101309,
+        "truth_row_coverage": 0.999536822603057,
+        "truth_rows": 2159
+      },
+      "candidate_solution": {
+        "bytes": 172694,
+        "header": [
+          "phone",
+          "UnixTimeMillis",
+          "LatitudeDegrees",
+          "LongitudeDegrees"
+        ],
+        "path": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "pretruth_schema_valid": true,
+        "rows": 2158,
+        "sha256": "07afdb7f16515e069c8396cc8ff5b78910a44b68f26766d3b25e7248420fd075"
+      },
+      "control_phase43": {
+        "finite": true,
+        "matched_rows": 2158,
+        "max_m": 3.7879579355078863,
+        "max_speed_mps": 44.32923497066116,
+        "mean_m": 1.3959453275603422,
+        "missing_truth_keys": [
+          [
+            "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+            1615921153434
+          ]
+        ],
+        "missing_truth_rows": 1,
+        "over_70_mps_count": 0,
+        "p50_m": 1.2928753544176828,
+        "p95_m": 2.9471371992975763,
+        "prediction_domain_coverage": 1.0,
+        "prediction_rows": 2158,
+        "score_m": 2.1200062768576293,
+        "truth_row_coverage": 0.999536822603057,
+        "truth_rows": 2159
+      },
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "gates": {
+        "checks": {
+          "candidate_finite": true,
+          "candidate_improvement_vs_phase43_at_least_0_05m": true,
+          "candidate_no_route_regression_vs_phase100": true,
+          "candidate_no_route_regression_vs_phase43": true,
+          "candidate_no_route_regression_vs_phase82": false,
+          "candidate_over_70_mps_count_zero": true,
+          "candidate_prediction_domain_coverage_exact": true,
+          "candidate_route_score_at_most_3m": true,
+          "native_exit_zero": true,
+          "phase43_control_identity": true
+        },
+        "failures": [
+          "candidate_no_route_regression_vs_phase82"
+        ],
+        "passed": false
+      },
+      "improvement_vs_phase43_m": 0.9802132047563203,
+      "native": {
+        "forbidden_solution_keys": [],
+        "interrupted": false,
+        "launch_error": "",
+        "return_code": 0,
+        "solution": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "summary_sha256": "14041ae5e65e1616cbf893aecdcddf1d2780ed7050e006dd9e62930330213ce5",
+        "telemetry": {
+          "gnss_first": {
+            "attempted": true,
+            "c0d_accepted_outer_iterations": 157,
+            "c0d_factor_count": 2158,
+            "converged": true,
+            "epochs": 2159,
+            "exact_retained_key_alignment": null,
+            "final_cost": 21298.112661390598,
+            "initial_cost": 5618000.786274777,
+            "iterations": 157,
+            "optimized_d_coverage": null,
+            "optimized_d_epoch_count": 2159,
+            "optimized_d_finite_count": 2159,
+            "optimized_d_nonfinite_count": 0,
+            "strict_cost_progress": null,
+            "terminal_branch": null
+          },
+          "main": {
+            "accepted_outer_iterations": null,
+            "attempted": null,
+            "converged": null,
+            "exact_retained_key_alignment": null,
+            "final_cost": null,
+            "final_cost_strictly_less_than_initial": null,
+            "initial_cost": null,
+            "optimized_d_all_finite": null,
+            "optimized_d_epoch_count": null,
+            "optimized_d_finite_count": null,
+            "optimized_d_nonfinite_count": null,
+            "problem_epoch_count": null,
+            "terminal_branch": null
+          },
+          "schema_version": "smartphone-r5-native-fgo-android-imu-no-base-run.v3",
+          "selected_elimination_function": "EliminateQR",
+          "selected_linear_solver_type": "MULTIFRONTAL_QR",
+          "selected_solver_branch": "multifrontal",
+          "status": "imu-combined-factor"
+        }
+      },
+      "truth": {
+        "bytes": 210009,
+        "expected_missing_key": [
+          "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+          1615921153434
+        ],
+        "expected_missing_truth_rows": 1,
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "read_count": 1,
+        "rows": 2159,
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d"
+      },
+      "truth_read": true
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_scored": true,
+      "artifact_hashes": {
+        "candidate_solution": "99fc5c92c30609ce6e023ff008bf4f6de27a4f734b3378a84d80b08e80c06b8b",
+        "candidate_summary": "c7ba119120667f53b69421d3ce5fffb779eb5877a728ee1c3d3007b1275ca557",
+        "phase43_control_submission": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+        "phase43_control_summary": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8"
+      },
+      "baseline_phase100_qr_scalar_clock": {
+        "score_m": 3.3204375254720286
+      },
+      "baseline_phase82_same_route": {
+        "score_m": 0.9389644134001871
+      },
+      "candidate": {
+        "finite": true,
+        "matched_rows": 1465,
+        "max_m": 11.86631393508422,
+        "max_speed_mps": 35.94736591149061,
+        "mean_m": 3.2073145313018916,
+        "missing_truth_keys": [],
+        "missing_truth_rows": 0,
+        "over_70_mps_count": 0,
+        "p50_m": 2.99267890361043,
+        "p95_m": 3.628961226991056,
+        "prediction_domain_coverage": 1.0,
+        "prediction_rows": 1465,
+        "score_m": 3.310820065300743,
+        "truth_row_coverage": 1.0,
+        "truth_rows": 1465
+      },
+      "candidate_solution": {
+        "bytes": 117254,
+        "header": [
+          "phone",
+          "UnixTimeMillis",
+          "LatitudeDegrees",
+          "LongitudeDegrees"
+        ],
+        "path": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "pretruth_schema_valid": true,
+        "rows": 1465,
+        "sha256": "99fc5c92c30609ce6e023ff008bf4f6de27a4f734b3378a84d80b08e80c06b8b"
+      },
+      "control_phase43": {
+        "finite": true,
+        "matched_rows": 1465,
+        "max_m": 9.376927526039337,
+        "max_speed_mps": 35.94791506394138,
+        "mean_m": 3.815337690945583,
+        "missing_truth_keys": [],
+        "missing_truth_rows": 0,
+        "over_70_mps_count": 0,
+        "p50_m": 3.4051074086529356,
+        "p95_m": 5.618204996318556,
+        "prediction_domain_coverage": 1.0,
+        "prediction_rows": 1465,
+        "score_m": 4.511656202485746,
+        "truth_row_coverage": 1.0,
+        "truth_rows": 1465
+      },
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "gates": {
+        "checks": {
+          "candidate_finite": true,
+          "candidate_improvement_vs_phase43_at_least_0_05m": true,
+          "candidate_no_route_regression_vs_phase100": true,
+          "candidate_no_route_regression_vs_phase43": true,
+          "candidate_no_route_regression_vs_phase82": false,
+          "candidate_over_70_mps_count_zero": true,
+          "candidate_prediction_domain_coverage_exact": true,
+          "candidate_route_score_at_most_3m": false,
+          "native_exit_zero": true,
+          "phase43_control_identity": true
+        },
+        "failures": [
+          "candidate_route_score_at_most_3m",
+          "candidate_no_route_regression_vs_phase82"
+        ],
+        "passed": false
+      },
+      "improvement_vs_phase43_m": 1.2008361371850027,
+      "native": {
+        "forbidden_solution_keys": [],
+        "interrupted": false,
+        "launch_error": "",
+        "return_code": 0,
+        "solution": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "summary_sha256": "c7ba119120667f53b69421d3ce5fffb779eb5877a728ee1c3d3007b1275ca557",
+        "telemetry": {
+          "gnss_first": {
+            "attempted": true,
+            "c0d_accepted_outer_iterations": 270,
+            "c0d_factor_count": 1465,
+            "converged": true,
+            "epochs": 1466,
+            "exact_retained_key_alignment": null,
+            "final_cost": 12818.289257688237,
+            "initial_cost": 6419784.856579111,
+            "iterations": 270,
+            "optimized_d_coverage": null,
+            "optimized_d_epoch_count": 1466,
+            "optimized_d_finite_count": 1466,
+            "optimized_d_nonfinite_count": 0,
+            "strict_cost_progress": null,
+            "terminal_branch": null
+          },
+          "main": {
+            "accepted_outer_iterations": null,
+            "attempted": null,
+            "converged": null,
+            "exact_retained_key_alignment": null,
+            "final_cost": null,
+            "final_cost_strictly_less_than_initial": null,
+            "initial_cost": null,
+            "optimized_d_all_finite": null,
+            "optimized_d_epoch_count": null,
+            "optimized_d_finite_count": null,
+            "optimized_d_nonfinite_count": null,
+            "problem_epoch_count": null,
+            "terminal_branch": null
+          },
+          "schema_version": "smartphone-r5-native-fgo-android-imu-no-base-run.v3",
+          "selected_elimination_function": "EliminateQR",
+          "selected_linear_solver_type": "MULTIFRONTAL_QR",
+          "selected_solver_branch": "multifrontal",
+          "status": "imu-combined-factor"
+        }
+      },
+      "truth": {
+        "bytes": 143441,
+        "expected_missing_key": null,
+        "expected_missing_truth_rows": 0,
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "read_count": 1,
+        "rows": 1465,
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8"
+      },
+      "truth_read": true
+    }
+  },
+  "schema_version": "smartphone-r5-phase103-phase102-truth-only-evaluator-correction-result.v1",
+  "solution_output_published": false,
+  "status": "no-go-phase103-phase102-truth-only-correction-accuracy-gates",
+  "strict_0_782_gate": {
+    "candidate_macro_score_m": 2.225306568701026,
+    "passed": false,
+    "threshold_m": 0.782
+  },
+  "truth_evaluator_only": true,
+  "truth_only_correction": {
+    "fallbacks": 0,
+    "id": "phase103-phase102-truth-only-evaluator-correction-v1",
+    "native_solver_invocations": 0,
+    "optional_summary_field_policy": "mat_used absent is accepted without synthesis; present mat_used must be false",
+    "phase102_native_outputs_reused": 2,
+    "raw_reads_by_correction": 0,
+    "reruns": 0,
+    "solution_rows_in_result": false,
+    "truth_reads": 2
+  }
+}

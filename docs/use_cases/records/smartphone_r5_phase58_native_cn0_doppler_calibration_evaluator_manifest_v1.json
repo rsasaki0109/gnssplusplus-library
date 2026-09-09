@@ -1,0 +1,111 @@
+{
+  "schema_version": "smartphone-r5-phase58-native-cn0-doppler-calibration-evaluator-manifest.v1",
+  "phase": 58,
+  "execution_label": "Luna Max",
+  "status": "evaluator-sealed-before-native-structural-matrix",
+  "seal_commit": "pre-raw-native-structural-seal",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase58_native_cn0_doppler_calibration_freeze_v1.json",
+    "sha256": "b4884659a84be8c3afd5daf6f9bbab11fae958b34af942190aa4eb6ef313d526",
+    "base_commit": "8da76f0"
+  },
+  "implementation": {
+    "source_commit": "c47a67d53b269304a52bf30e95bf1804465288b6",
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "cd6c713e8e50fbe0dacff4b0968f7e5d20744f0e64336432331347afbd55c7e9"
+    },
+    "source_hashes": {
+      "include/libgnss++/algorithms/cn0_doppler_calibration.hpp": "f1ef3016e98bb9c2122b6a1f0286aad9175b83085000192f5b39599de6c4e90c",
+      "include/libgnss++/algorithms/fgo_config.hpp": "e7a72c89475d0edf1da3a767ea7d1702d76b8b52dc90a4bd5db225826875ffbe",
+      "include/libgnss++/algorithms/fgo.hpp": "90efe485b2c50eb56535a7eb0709a1b7daa29e4f7a9bd3878acf527dc624ab36",
+      "src/algorithms/fgo_problems.cpp": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "2a924ddd681ce43e1bf08fc4155b3fa62569a9c7694a1550c28f153af4db5218",
+      "tests/test_fgo.cpp": "f35d64bc1a25fb71bc33b2a696219b0e58f705834bda0ed4e9f86ec226930b65",
+      "tests/test_smartphone_phase58_native_cn0_doppler_calibration.py": "a596ed8022ea4a0e9dc97764321a55051bceda1650bc9dec008e462807fc5b79",
+      "tests/CMakeLists.txt": "9f5ca43633cc512284cb41f41fbde1f140753d922b63a67d15bd4a38d60f0872"
+    }
+  },
+  "candidate": {
+    "flag": "--native-cn0-doppler-calibration",
+    "alpha_mps_at_reference": 0.7586783350728457,
+    "reference_cn0_dbhz": 40.0,
+    "formula": "max(existing_doppler_sigma_mps, 0.7586783350728457*10^(-(Cn0DbHz-40.0)/20.0))",
+    "scope": "FGO undifferenced Doppler only",
+    "spp_applied": false,
+    "upper_clip": false,
+    "existing_p85_over_12_mutated": false,
+    "default_enabled": false
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "device_gnss_process_reads_per_route": 3,
+    "device_imu_process_reads_per_route": 3,
+    "broadcast_nav_process_reads_per_route": 3,
+    "candidate_runs_per_route": 2,
+    "control_runs_per_route": 1
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase58_native_cn0_doppler_calibration.py",
+    "sha256": "704730166b335da82f7f45dd2c763f16ef8eba00541ff662786b9901a0beedaa",
+    "single_process_per_case": true,
+    "native_solver_invocations": 12,
+    "raw_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_reads": 0,
+    "forbidden": ["truth", "validation/holdout", "MAT", "Kaggle/token", "precomputed coordinates", "device WLS"]
+  },
+  "focused_tests": {
+    "python_path": "tests/test_smartphone_phase58_native_cn0_doppler_calibration.py",
+    "python_sha256": "44421d57b857f5db5dbf61c191273e159b12828f6e523b820d54cbbe27d42763",
+    "cpp_filter": "*Cn0DopplerCalibration*",
+    "cmake_path": "tests/CMakeLists.txt",
+    "cmake_sha256": "9f5ca43633cc512284cb41f41fbde1f140753d922b63a67d15bd4a38d60f0872"
+  },
+  "commands": {
+    "verify_freeze": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_phase58_native_cn0_doppler_calibration.py --verify-freeze",
+    "run_matrix": "PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_phase58_native_cn0_doppler_calibration.py --run-matrix --output-root output/smartphone-r5/phase58-native-cn0-doppler-calibration-v1",
+    "truth_or_accuracy": "not authorized in this stage"
+  },
+  "structural_gates": {
+    "logic": "AND; any failure is fail-closed and no truth is opened",
+    "candidate_repeat_bytes": true,
+    "candidate_repeat_projection": true,
+    "flag_off_phase43_bytes": true,
+    "control_candidate_projected_identity": true,
+    "finite_output": true,
+    "raw_utc_key_contract": true,
+    "converged": true,
+    "tdcp_built_equals_inserted": true,
+    "over_70_mps_count": 0,
+    "truth_reads_before_and_after_matrix": 0
+  },
+  "read_accounting": {
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "input_hash_verification_reads": 12,
+    "truth_reads": 0,
+    "validation_holdout_reads": 0,
+    "mat_reads_or_generated": 0,
+    "coordinate_or_wls_inputs": 0,
+    "kaggle_token_access": 0,
+    "solver_reruns_after_truth": 0,
+    "post_truth_tuning": false
+  },
+  "fail_closed": {
+    "input_hash_mismatch": true,
+    "source_binary_hash_mismatch": true,
+    "missing_calibration_telemetry": true,
+    "candidate_repeat_mismatch": true,
+    "flag_off_mutation": true,
+    "projected_identity_mismatch": true,
+    "any_truth_access": true
+  }
+}

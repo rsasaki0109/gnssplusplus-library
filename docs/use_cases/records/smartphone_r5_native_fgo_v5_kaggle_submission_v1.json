@@ -1,0 +1,203 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-v5-kaggle-submission.v1",
+  "status": "submitted-and-scored",
+  "observed_at_utc": "2026-08-30T21:45:36Z",
+  "competition": {
+    "slug": "smartphone-decimeter-2023",
+    "id": 60095,
+    "official_api_endpoint": "https://api.kaggle.com"
+  },
+  "authorization": {
+    "user_explicitly_authorized_this_single_submission": true,
+    "authorized_file": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+    "authorized_description": "libgnss++ native FGO v5",
+    "create_submission_api_call_count": 1,
+    "resubmission_after_response": false,
+    "no_other_submission_file_submitted": true,
+    "score_used_for_tuning": false
+  },
+  "preflight": {
+    "submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+      "bytes": 6150020,
+      "row_count": 71936,
+      "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "unique_keys": 71936,
+      "duplicate_keys": 0,
+      "missing_keys": 0,
+      "extra_keys": 0,
+      "nonfinite_coordinates": 0,
+      "coordinates_in_range": true,
+      "timestamp_order_per_trip": true
+    },
+    "official_sample_key_contract": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "role": "sealed schema/key/order authority only; coordinates not used",
+      "key_order_matches_sealed_v5_record": true
+    },
+    "v5_provenance": {
+      "source_seam_result_record": {
+        "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_v1.json",
+        "sha256": "ff90e3f9e2164765503a7a5c4ea2a794851db532e9e89a257b40e9dd6840ca8e"
+      },
+      "source_seam_freeze_record": {
+        "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_freeze_v1.json",
+        "sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48"
+      },
+      "source_seam_manifest": {
+        "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/source_seam_bridge_manifest.json",
+        "sha256": "dbba0ebe190d99aaeb1163405bd49f19bd7dc449be76241880f0d11f7e43c519"
+      },
+      "source_seam_run_manifest": {
+        "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/source_seam_bridge_run_manifest.json",
+        "sha256": "89330f31ec5bde1575c664f108c4a1c71744f24810c937051cdf440a4f768d1b"
+      },
+      "release_gnss_fgo_sha256": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+      "release_gnss_spp_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+      "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    },
+    "api_read_only_preflight": {
+      "competition_id": 60095,
+      "submissions_disabled": false,
+      "num_allowed_now": 99,
+      "num_total_before": 307,
+      "read_only": true
+    }
+  },
+  "official_protocol": {
+    "client": "official kagglesdk",
+    "kagglesdk_version": "0.1.37",
+    "service": "competitions.CompetitionApiService",
+    "start_upload_method": "StartSubmissionUpload",
+    "signed_upload_method": "single HTTP PUT to returned signed URL",
+    "create_method": "CreateSubmission",
+    "status_method": "GetSubmission",
+    "download_method": "DownloadSubmission",
+    "token_source": "~/.kaggle/access_token",
+    "token_value_recorded": false,
+    "token_value_printed": false,
+    "token_value_in_argv_or_artifact": false
+  },
+  "network": {
+    "start_upload": {
+      "request_timestamp_utc": "2026-08-30T21:44:40.816576Z",
+      "response_timestamp_utc": "2026-08-30T21:44:41.085214Z",
+      "call_count": 1,
+      "content_length": 6150020,
+      "response_received": true
+    },
+    "signed_upload": {
+      "response_timestamp_utc": "2026-08-30T21:44:42.830267Z",
+      "call_count": 1,
+      "http_status": 200,
+      "bytes_sent": 6150020,
+      "success": true
+    },
+    "create_submission": {
+      "request_timestamp_utc": "2026-08-30T21:44:42.830322Z",
+      "response_timestamp_utc": "2026-08-30T21:44:44.342382Z",
+      "call_count": 1,
+      "response_received": true,
+      "no_retry": true
+    }
+  },
+  "submission_result": {
+    "submission_ref": 55900482,
+    "status": "COMPLETE",
+    "server_submission_date": "2026-08-30T21:44:43.477000Z",
+    "description": "libgnss++ native FGO v5",
+    "file_name": "submission.csv",
+    "total_bytes": 6150020,
+    "public_score": "3.952",
+    "private_score": "4.276",
+    "error_description_present": false,
+    "status_poll": {
+      "poll_count": 2,
+      "poll_interval_seconds": 15,
+      "terminal_poll_number": 2,
+      "read_only": true,
+      "first_status": "PENDING",
+      "terminal_status": "COMPLETE"
+    }
+  },
+  "payload_verification": {
+    "download_endpoint": "DownloadSubmission",
+    "http_status": 200,
+    "downloaded_bytes": 6150020,
+    "downloaded_sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "server_payload_matches_local": true,
+    "local_sha256_after": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "local_file_unchanged": true,
+    "read_only": true
+  },
+  "submission_list_verification": {
+    "endpoint": "ListSubmissions",
+    "pages": 1,
+    "matched_ref": 55900482,
+    "matched_status": "COMPLETE",
+    "matched_file_name": "submission.csv",
+    "matched_description": "libgnss++ native FGO v5",
+    "matched_total_bytes": 6150020,
+    "metadata_matches_local_submission": true,
+    "read_only": true
+  },
+  "leaderboard_verification": {
+    "read_only": true,
+    "score_order": "ascending_lower_is_better",
+    "team_names_recorded": false,
+    "official_rank_asserted": false,
+    "public": {
+      "pages": 3,
+      "entry_count": 280,
+      "rank1_score": "0.789",
+      "top10_score_range": {"min": "0.789", "max": "1.453"},
+      "submitted_score": "3.952",
+      "hypothetical_rank": 172,
+      "hypothetical_only": true
+    },
+    "private": {
+      "pages": 3,
+      "entry_count": 280,
+      "rank1_score": "0.883",
+      "top10_score_range": {"min": "0.883", "max": "1.832"},
+      "submitted_score": "4.276",
+      "hypothetical_rank": 167,
+      "hypothetical_only": true
+    },
+    "interpretation": "The authenticated leaderboard snapshots did not expose the submitting team; the score-order positions are hypothetical and not official ranks."
+  },
+  "prior_submission_comparison": {
+    "prior_submission_ref": 55886678,
+    "prior_description": "libgnss++ truth-free WLS v2.1",
+    "prior_sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+    "prior_public_score": "4.018",
+    "prior_private_score": "4.873",
+    "current_minus_prior_public": "-0.066",
+    "current_minus_prior_private": "-0.597",
+    "comparison_is_read_only": true,
+    "scores_not_used_for_tuning": true
+  },
+  "policy": {
+    "truth_used": false,
+    "truth_open_count": 0,
+    "algorithm_rerun_for_submission": false,
+    "candidate_or_numeric_parameter_changed": false,
+    "production_rtk_spp_default_changed": false,
+    "v5_artifact_changed": false,
+    "external_create_submission_calls": 1,
+    "external_resubmission_calls": 0,
+    "future_submission_authorized": false,
+    "rank_one_achieved": false,
+    "leaderboard_status": "read-only hypothetical rank only",
+    "token_access_recorded": false
+  },
+  "integrity": {
+    "record_manifest_companion": "docs/use_cases/records/smartphone_r5_native_fgo_v5_kaggle_submission_v1_manifest.json",
+    "record_has_no_token_value": true,
+    "submission_hash_checked_before_and_after": true,
+    "download_hash_matches_submission": true,
+    "no_retry_after_create_response": true
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-freeze-manifest.v1",
+  "status": "freeze-hash-sealed-before-truth-free-run",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_freeze_v1.json",
+    "bytes": 8061,
+    "sha256": "0514ae2d818ac2b31fade709d08864551a9884ab06fa30a1cb08cd26ede8dc7a"
+  },
+  "candidate_source_sha256": "b2d5600799826b3d3b25b50851a3865e6e8e111f5cf9238e478a58adea5f26d4",
+  "binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+  "truth_policy": {
+    "truth_open_count": 0,
+    "validation_open_count": 0,
+    "holdout_open_count": 0,
+    "test_data_used": false
+  },
+  "algorithm_immutability": {
+    "window_epochs": 120,
+    "overlap_epochs": 60,
+    "stride_epochs": 60,
+    "max_iterations": 1000,
+    "relative_cost_threshold": 1e-6,
+    "absolute_cost_threshold": 1e-9,
+    "factor_recipe": "P+D(corrected)+TDCP+float carrier+velocity/clock/position motion",
+    "numeric_parameter_change_after_freeze": false
+  }
+}

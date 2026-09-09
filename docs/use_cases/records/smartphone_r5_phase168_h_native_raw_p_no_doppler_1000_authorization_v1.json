@@ -1,0 +1,47 @@
+{
+  "schema_version": "smartphone-r5-phase168-h-native-raw-p-no-doppler-1000-authorization.v1",
+  "phase": 168,
+  "authorization": "single scoped offline H diagnostic execution is authorized by the Phase168 task after Phase167 implementation validation and the pinned manifest",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase168_h_native_raw_p_no_doppler_1000_manifest_v1.json",
+    "sha256": "143ad1f1255f65e3fd60f9924b700c42ee74fb43594fc08e1c9868b67829e538",
+    "commit": "0126a402be3bf0460a44fcefd4ae45864075e6a8"
+  },
+  "implementation_commit": "a9c4927d63bf96ef828ab0465bd69720a329b345",
+  "binary_sha256": "d883c54c7f2aa9da88c9220dacb08a1b45447f1d2a9db93b56dd0efbc1412021",
+  "source_validation": {
+    "phase167_focused_tests": "15/15 local; expanded 61/61 independently verified",
+    "actual_app_build": true,
+    "cached_fgo_gnss_sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+    "configured_max_iterations": 1000,
+    "effective_max_iterations": 1000,
+    "velocity_derivation": true
+  },
+  "input_policy": {
+    "android_gnss_path_and_sha256_pinned_by_phase162": true,
+    "nav_path_and_sha256_pinned_by_phase162": true,
+    "new_payload_reads_before_launch": 0,
+    "expected_native_invocations": 1,
+    "expected_gnss_reads": 1,
+    "expected_nav_reads": 1
+  },
+  "prohibitions": {
+    "phase159_collect_all": true,
+    "phase149_prep_only": true,
+    "imu": true,
+    "main_imu_graph": true,
+    "truth": true,
+    "mat": true,
+    "base_correction": true,
+    "precomputed_seed_files": true,
+    "kaggle": true,
+    "coordinate_rows_in_public_result": true,
+    "rerun_fallback_repair": true
+  },
+  "output": {
+    "summary_path": "output/smartphone-r5/phase168-h-native-raw-p-no-doppler-1000-v1/mtv-h/native_summary.json",
+    "aggregate_only": true,
+    "phase162_and_phase166_artifacts_immutable": true,
+    "termination_sidecar_required": true
+  }
+}

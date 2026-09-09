@@ -1,0 +1,78 @@
+{
+  "schema_version": "smartphone-r5-phase132-typed-canonical-preflight-structural-pre-raw-accounting.v1",
+  "phase": 132,
+  "execution_label": "Luna Max",
+  "status": "sealed-pre-raw-zero-read",
+  "audit_commit": "f6f15a5bb90a533ae5f06590cd274f005609eaca",
+  "freeze_commit": "75bd859ea29aa8dadc03fc53b131eacc7da6298b",
+  "implementation_commit": "4f546734771ac56d8342aadb88d6c36f454540fa",
+  "contract_code_commit": "9c833dcaccffc079cdbb7b1e4c73876c7f5b8d70",
+  "manifest_pin": {
+    "path": "docs/use_cases/records/smartphone_r5_phase132_typed_canonical_structural_manifest_v1.json",
+    "commit": "df3672fd5fb7abae733cd0aed8657162d2cdcb42",
+    "sha256": "03d8d89b9cbd544cc3cfdabc9157c51531ecc360ea95e0a66cbb5c1bc6ed372a"
+  },
+  "runner_pin": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase132_typed_canonical_structural_execute.py",
+    "sha256": "5e065cbcdafaaa6b510925313e28cdd64541d76413698ea3638e54641b75c42c"
+  },
+  "validator_pin": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase132_typed_canonical_structural.py",
+    "sha256": "c1dd7e2024bfe8e142840a058bc15a4f6fb85a3121aa39af01876f55b7bbe818"
+  },
+  "target_binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e",
+    "hash_only": true,
+    "execution": false
+  },
+  "future_authorization": {
+    "required": true,
+    "old_phase131_authorization_reusable": false,
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "authorization_must_pin": [
+      "Phase132 audit commit and SHA-256",
+      "Phase132 freeze commit and SHA-256",
+      "Phase132 implementation commit",
+      "Phase132 validator/runner/manifest/test commits and SHA-256",
+      "Phase132 pre-raw commit and SHA-256",
+      "target binary SHA-256"
+    ],
+    "allowed_solver_inputs": [
+      "raw phone GNSS",
+      "raw phone IMU",
+      "broadcast navigation",
+      "sealed raw base RINEX"
+    ],
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "PDC",
+      "precomputed coordinates",
+      "accuracy evaluator",
+      "Kaggle"
+    ],
+    "solution_policy": "opaque hash and row count only; no coordinate rows and no re-feed",
+    "failure_policy": "fail closed; no rerun/fallback/repair/sweep/truth/accuracy/publication"
+  },
+  "read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "native_solver_invocations": 0,
+    "native_commands_constructed": 0,
+    "native_binary_invocations": 0,
+    "solution_coordinate_row_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  }
+}

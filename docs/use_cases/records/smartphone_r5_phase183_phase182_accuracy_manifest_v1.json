@@ -1,0 +1,189 @@
+{
+  "schema_version": "smartphone-r5-phase183-phase182-accuracy-manifest.v1",
+  "phase": 183,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-phase183-truth-pass",
+  "purpose": "One offline accuracy evaluation of the immutable Phase182 H native output using the exact Phase142 parser, join, metric, percentile, and row policy.",
+  "route_order": [
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5"
+  ],
+  "candidate_reference": {
+    "source": "Phase182 opaque H output",
+    "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "path": "output/smartphone-r5/phase182-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+    "sha256": "f40d93300075d99844fc3d74b66bd3558376ac6f247fc22731d917467ecf5873",
+    "bytes": 251174,
+    "rows": 3139,
+    "modeled_epochs": 3140,
+    "warmup_epoch_excluded": true,
+    "pixel5_offset_reapplication": 0,
+    "opaque_only": true
+  },
+  "truth_reference": {
+    "source": "Phase44 frozen development truth; Phase37 official archive provenance",
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "bytes": 305432,
+    "rows": 3139,
+    "expected_missing_truth_key": null,
+    "role": "development/train added Pixel5 route; not heldout or leaderboard proof",
+    "archive_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "archive_crc32": "fe212a4d",
+    "prior_phase44_materialization": true
+  },
+  "coverage_policy": {
+    "modeled_epochs": 3140,
+    "published_prediction_rows": 3139,
+    "warmup_epoch_excluded": true,
+    "truth_rows": 3139,
+    "expected_prediction_domain_coverage": 1.0,
+    "expected_full_truth_domain_coverage": 1.0,
+    "missing_truth_rows": 0,
+    "interpolation": false,
+    "nearest": false,
+    "edge_hold": false,
+    "extrapolation": false,
+    "fill": false,
+    "duplicate_or_extra_keys": "fail closed"
+  },
+  "metric_contract": {
+    "source": "Phase118/120 truth-only contract and pinned Phase82/Phase76 scorer; no semantic change",
+    "candidate_submission_header": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed",
+    "required_truth_fields": [
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "truth_phone_policy": "optional phone must equal declared route; absent phone is assigned the declared route",
+    "key": "(phone, UnixTimeMillis)",
+    "timestamp_type": "exact integer",
+    "matching": "exact integer key intersection only",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "truth_row_coverage": "informational only; pinned warm-up exclusion is enforced",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "distance": "spherical Haversine per row",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "finite_and_earth_valid": "all candidate coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]",
+    "strict_promotion_comparator": "candidate_macro_score_m < 0.782",
+    "strict_promotion_threshold_m": 0.782,
+    "equality_at_threshold": "fails; strict less-than is required"
+  },
+  "comparison_baselines": {
+    "phase118_champion_macro_m": 0.8141981503,
+    "phase142_macro_m": 0.8142362396358963,
+    "informational_only": true,
+    "not_comparable_to_single_route_h": true
+  },
+  "authority": {
+    "phase182_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase182_h_native_raw_p_no_doppler_imu_main_result_v1.json",
+      "sha256": "1ea944668d9af9cfbcc2fdb2539172a21a4abd15f6674adfdd631133de104843",
+      "commit": "e9becbb0b0387551d6024677c8fb01b240dd9140"
+    },
+    "phase182_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase182_h_native_raw_p_no_doppler_imu_main_manifest_v1.json",
+      "sha256": "cc873daa97bfcbaa32bd1439a49bcc47a010bb68b54cc1846e62f142eabc1756",
+      "commit": "52ec0e43f1d5fc9396ed9fe9546240446fe1db1b"
+    },
+    "phase37_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v1.json",
+      "sha256": "629689a206e59655c7cafbc59b6011553fa1953381df74d644bfd567708be8fd",
+      "commit": "fc47084edde5217bfb933729a58344408f994081"
+    },
+    "phase44_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json",
+      "sha256": "95c0990af0015b7cb5fcf736aefbcff6fc97356093edcf03094b31b4083b28bc",
+      "commit": "e33c198745b0fc94ab425b9e57bf9663c67c60f8"
+    },
+    "phase44_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json",
+      "sha256": "9e441c78f7c2bf8b3cf2cf9a7c9fe7e447fb2ff8eb6324fa5ef138c3b419e48a",
+      "commit": "a323eb621d2cd3d13b2d298d6c5a57dd3c681638"
+    },
+    "archive_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+    },
+    "phase142_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase142_phase141_accuracy.py",
+      "sha256": "03253d1f7c70dc761699ce19d03123457e386b6ab9cd0facb395c942f8450fb6",
+      "commit": "adbce9bd266922bb584ffb40db7134790c71be07"
+    },
+    "phase82_scorer": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb",
+      "commit": "be45879297a2a00a8574c77b71be0a5b721ff8c9"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase137_metric_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase137_phase136_accuracy.py",
+      "sha256": "f294aecadca1e427673ada124f24f91bb5cb2b880156d8337fde8f7afc32c200",
+      "commit": "97bc75d4e94b339507864a7b7c9f188ae33915fd"
+    },
+    "phase134_metric_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase134_native_summary_bridge_accuracy.py",
+      "sha256": "b554e2c07bedffcb53751e4e6351bcf5006fe99370dee34a16cc4f3eb81b145a",
+      "commit": "b59ca771dabcc1185910d3d95259572f76b16869"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase183_phase182_accuracy.py",
+      "sha256": "3c99b44726bb4bf81c2218256bccbd5da1f10f3cc6afbcf8d57911669dd08974"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase183_phase182_accuracy.py",
+      "sha256": "7e9cef302690883b4f8687ee0ff7154035658469f9171e5edf6b957960340939"
+    }
+  },
+  "read_accounting_before_truth": {
+    "candidate_payload_reads": 0,
+    "truth_payload_reads": 0,
+    "candidate_coordinate_interpretations": 0,
+    "accuracy_calculations": 0,
+    "native_solver_invocations": 0,
+    "raw_gnss_imu_navigation_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0
+  },
+  "execution_policy": {
+    "candidate_reads": 1,
+    "truth_reads": 1,
+    "accuracy_calculations": 1,
+    "candidate_route_order": "MTV-H",
+    "native_solver_invocations": 0,
+    "raw_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "solution_publication": false,
+    "result_aggregate_only_no_coordinates": true,
+    "candidate_output_evaluation_only": true,
+    "strict_macro_comparator": "candidate_macro_score_m < 0.782"
+  },
+  "release": {
+    "development_truth": true,
+    "heldout_or_leaderboard_proof": false,
+    "submission_authorized": false,
+    "broad_evaluation_required_before_submission": true
+  }
+}

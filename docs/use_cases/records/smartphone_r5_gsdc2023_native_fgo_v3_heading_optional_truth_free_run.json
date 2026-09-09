@@ -1,0 +1,147 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-truth-free-run.v1",
+  "status": "truth-free-artifacts-sealed-before-train-truth",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze.json",
+    "sha256": "38602200af437fe324ef738b5463cbea379406d2640e1372fb4c595b83e23b9a"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze_manifest.json",
+    "sha256": "c1d61e1875fd2ae9962de686804d79325d2af706c5ef7329b46d7142730f32e1"
+  },
+  "truth_policy": {
+    "selected_routes": [
+      "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+      "2023-09-05-23-07-us-ca-routen/pixel5"
+    ],
+    "payload_materialized_after_freeze": true,
+    "ground_truth_materialized_before_this_record": false,
+    "ground_truth_open_count_before_this_record": 0,
+    "validation_materialized_or_opened": false,
+    "future_holdout_materialized_or_opened": false,
+    "old_holdout_or_public_private_score_used": false,
+    "post_truth_tuning": false
+  },
+  "candidate": {
+    "entrypoint": "build/apps/gnss_fgo_imu_v3_heading_optional",
+    "source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+    "release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+    "preserved_v2_1_source_sha256": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "preserved_v2_1_binary_sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "recipe": "v2.1 preserve-v1 PR+ordinary TDCP+position/clock motion+Huber+CombinedImuFactor; heading-optional initialization only",
+    "numeric_parameters_from_freeze": true,
+    "production_default_changed": false
+  },
+  "truth_free_materialization_manifest": {
+    "path": "output/smartphone-r5/native-fgo-v3-heading-optional-v1/truth_free_materialization_manifest.json",
+    "sha256": "f1572ceeec5f31708ea04c072a61e3561576941a1d38edd48ec10ee667214053",
+    "truth_open_count": 0,
+    "ground_truth_materialized": false
+  },
+  "route_results": [
+    {
+      "dataset_id": "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+      "materialization_manifest_sha256": "29863e6c48322159a36688a013be953d2b27c50f2883aa044f2ed15dbf0135a0",
+      "adapter_summary_sha256": "3781cf8ec7b86f993c317c3a0ce8b23626af22f57d721654b165250766a52933",
+      "adapter_rover_obs_sha256": "65d0723ff6359260f4c993572d068992991798702910b85448c69e2840cb4120",
+      "imu_processed_sha256": "7cf01c5faf806888aa2eff1fe627208ad9d39c39f2dc5c70b55eda6f4f6ff4c9",
+      "candidate_truth_free": {
+        "submission_sha256": "41fc0e7facea5530010d3bbeeec7c6e8af53259caa659c746cdfe80a597652dd",
+        "summary_sha256": "99466d242e6651ee840684b2d99d1e61f5e666b6a15194120c4ec2e1f57bddce",
+        "detail_sha256": "878f121fd081b623d3cbe435e8b96044a2490392b20a569e0ae298f88ccf7f27",
+        "epochs": 30,
+        "pseudorange_factors": 505,
+        "ordinary_tdcp_factors": 393,
+        "ordinary_tdcp_inserted": 393,
+        "position_clock_motion_pairs": 29,
+        "combined_imu_factors": 29,
+        "forbidden_base_or_single_difference_factors": 0,
+        "converged": true,
+        "finite_covariance_initialization": true,
+        "yaw_mode": "multi-epoch-gnss-course"
+      },
+      "exact_v1_truth_free_reference": {
+        "seed_sha256": "fab38c4d6e68cfa621a0e06f5480402f7bfb0fce47960a319ea664926549a42b",
+        "position_sha256": "e4aeadf414ae15c0fb764bdf855ea27ab5d34a42a2622d33fa66e46138d84c95",
+        "summary_sha256": "f73e90666c86d6ad456b27079b83a5d10e065d038543862efcaf186694227eaa",
+        "epochs": 30,
+        "finite_rows": 30,
+        "converged_flag": false,
+        "fixed_iterations": 8,
+        "note": "Existing exact-v1 command emitted finite 30-row output but reported its fixed-iteration convergence flag false; this is recorded, not tuned."
+      },
+      "weak_heading_structural_smoke": {
+        "legacy_v2_1_command": "--skip-epochs 950 --max-epochs 30",
+        "legacy_v2_1_return_code": 1,
+        "legacy_v2_1_failure": "GNSS course did not make heading observable under frozen gate",
+        "legacy_failure_stderr_sha256": "2d870b943d924e5dcdb332041adcf42733b13b849037f76817f3edf2f6361888",
+        "v3_command": "--skip-epochs 950 --max-epochs 30",
+        "v3_summary_sha256": "2c4a17a5885ea30424de779473dcc1e89b71724effcda527310bdd6a093e7477",
+        "v3_yaw_mode": "broad-yaw-prior-joint-estimation",
+        "v3_course_valid_windows": 13,
+        "v3_course_scatter_deg": 137.88250187921975,
+        "v3_combined_imu_factors": 29,
+        "v3_converged": true,
+        "v3_output_rows": 30
+      }
+    },
+    {
+      "dataset_id": "2023-09-05-23-07-us-ca-routen/pixel5",
+      "materialization_manifest_sha256": "f01cf7a933faab2d30fbcdd00eb0f3ef4129359563e19f3dcea729cee30a6122",
+      "adapter_summary_sha256": "184e723f1cc79393c190597bced7f8656d5e7a529d0793cb7e557327ae8e43a9",
+      "adapter_rover_obs_sha256": "54ec5a550e500551a3999ace378f71c1aad4e4fa657418c29cd464a3f012d740",
+      "imu_processed_sha256": "ad212f3c301a9697bfbdfe8937d9c74436c38acd2cdad65183a48a8a6c5a700c",
+      "candidate_truth_free": {
+        "submission_sha256": "539aede76140ffab30181d29d1930acc7c4334fd25228b0f01649eade457322e",
+        "summary_sha256": "450f4ade40b77ca9e80bfbcf8d337454007723495db55e73363a606202f89b87",
+        "detail_sha256": "b1eac6080f0a3f16399544f269f9ba21037d3d5e2c38c2e7eab6e9bb46ebc7f8",
+        "epochs": 30,
+        "pseudorange_factors": 538,
+        "ordinary_tdcp_factors": 288,
+        "ordinary_tdcp_inserted": 288,
+        "position_clock_motion_pairs": 29,
+        "combined_imu_factors": 29,
+        "forbidden_base_or_single_difference_factors": 0,
+        "converged": true,
+        "finite_covariance_initialization": true,
+        "yaw_mode": "multi-epoch-gnss-course"
+      },
+      "exact_v1_truth_free_reference": {
+        "seed_sha256": "28072792f61abe55822c479d4d7263597cfe7f0600efb50f66dbb2cce115a1d7",
+        "position_sha256": "c5d448634263b411681e6034d295b0da5ba1ad6b851b97241e5546fad4d6d6b4",
+        "summary_sha256": "b6d7b360e9061d4660c5593fa061f5a5afb3ab20d2780724b44940f5833cfd15",
+        "epochs": 30,
+        "finite_rows": 30,
+        "converged_flag": false,
+        "fixed_iterations": 8,
+        "note": "Existing exact-v1 command emitted finite 30-row output but reported its fixed-iteration convergence flag false; this is recorded, not tuned."
+      },
+      "weak_heading_structural_smoke": {
+        "legacy_v2_1_command": "--skip-epochs 0 --max-epochs 30",
+        "legacy_v2_1_return_code": 1,
+        "legacy_v2_1_failure": "GNSS course did not make heading observable under frozen gate",
+        "legacy_failure_stderr_sha256": "2d870b943d924e5dcdb332041adcf42733b13b849037f76817f3edf2f6361888",
+        "v3_command": "--skip-epochs 0 --max-epochs 30",
+        "v3_summary_sha256": "1ebec4e97df8ed69859b63938f3035fe4df4a9134561f322d4510fd05386489e",
+        "v3_yaw_mode": "broad-yaw-prior-joint-estimation",
+        "v3_course_valid_windows": 11,
+        "v3_course_scatter_deg": 92.58723420561293,
+        "v3_combined_imu_factors": 29,
+        "v3_converged": true,
+        "v3_output_rows": 30
+      }
+    }
+  ],
+  "structural_decision": {
+    "two_weak_heading_route_smokes_operational": true,
+    "gravity_leveling_finite": true,
+    "broad_yaw_prior_finite_and_gauged": true,
+    "all_required_factors_nonzero_on_default_windows": true,
+    "forbidden_factor_classes_zero": true,
+    "candidate_truth_free_artifacts_sealed": true,
+    "train_truth_scoring_authorized_once": true,
+    "validation_or_holdout_authorized": false
+  },
+  "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_truth_free_run_manifest.json"
+}

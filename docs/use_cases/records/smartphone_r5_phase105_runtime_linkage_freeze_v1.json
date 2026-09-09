@@ -1,0 +1,129 @@
+{
+  "schema_version": "smartphone-r5-phase105-runtime-linkage-freeze.v1",
+  "phase": 105,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase105-wrapper-fix-and-raw-execution",
+  "purpose": "Freeze exactly one child-process runtime-linkage repair for the Phase104 stage-vs-main attribution flow.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_audit_v1.md",
+      "commit": "2253cdcce79337d57cfe48f50a2088a3261ec9db",
+      "sha256": "af0985c7c52d478355cd66f4492e6000f12b7be239f27f7433812289d42d82a3"
+    },
+    "phase104_failure_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase104_stage_main_attribution_raw_failure_result_v1.json",
+      "commit": "b7abeb0",
+      "sha256": "b7314ab9f95c5e1b89c8eb9951c8a6a30c905927a11f60ffc341ad2a2b93734d"
+    },
+    "phase104_wrapper_before_fix": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase104_stage_main_attribution_execute.py",
+      "sha256": "0028b1a79dc38bd5f26ea25e1815f846e4ae4f93fd1d07261995b67afd339e47"
+    },
+    "phase104_native_source": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "c81381b0a8fa8cea5c101fc5d54e6364173c0e8cffb83f02eac18c8b6cafde5b"
+    },
+    "phase104_native_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "6c2fbf9ed119e84383beb3b7db7f11cf1bce8db7a7e64919a38378373784c5c4"
+    }
+  },
+  "observed_failure": {
+    "return_codes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 127,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 127
+    },
+    "application_main_entered": false,
+    "solver_entered": false,
+    "loader_error": "libmetis-gtsam.so: cannot open shared object file: No such file or directory",
+    "raw_reads": 0,
+    "truth_reads": 0,
+    "reruns": 0
+  },
+  "binary_linkage": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "6c2fbf9ed119e84383beb3b7db7f11cf1bce8db7a7e64919a38378373784c5c4",
+    "runpath": ["/home/sasaki/.local/lib"],
+    "direct_needed": [
+      "libgtsam.so.4",
+      "libm.so.6",
+      "libcholmod.so.5",
+      "libstdc++.so.6",
+      "libgcc_s.so.1",
+      "libc.so.6",
+      "libboost_serialization.so.1.83.0",
+      "libboost_timer.so.1.83.0"
+    ],
+    "indirect_needed_missing_without_override": ["libmetis-gtsam.so", "libcephes-gtsam.so.1"]
+  },
+  "trusted_runtime_directory": {
+    "path": "/home/sasaki/.local/lib",
+    "prepend_exactly": true,
+    "libraries": [
+      {"name": "libgtsam.so.4", "resolved_target": "libgtsam.so.4.3a2", "bytes": 12240736, "sha256": "0bb5858e396250a1afecc990c766bde5255fecc38b22b22bd9964775dc9e47a3"},
+      {"name": "libmetis-gtsam.so", "resolved_target": "libmetis-gtsam.so", "bytes": 511632, "sha256": "27d1eafe1948d539734637a685b0459411b56b6b575d443a328ed06742810571"},
+      {"name": "libcephes-gtsam.so.1", "resolved_target": "libcephes-gtsam.so.1.0.0", "bytes": 38928, "sha256": "e28cf8a3f92a13773bad55f1a7c0e319bdd3da32bbd37ed95175bbf1b3800ceb"}
+    ]
+  },
+  "ldd_closure_with_candidate": {
+    "environment": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:${inherited_when_nonempty}",
+    "resolved_entries": [
+      {"name": "libgtsam.so.4", "path": "/home/sasaki/.local/lib/libgtsam.so.4", "sha256": "0bb5858e396250a1afecc990c766bde5255fecc38b22b22bd9964775dc9e47a3"},
+      {"name": "libm.so.6", "path": "/lib/x86_64-linux-gnu/libm.so.6", "sha256": "e9c4b28d340e415b8137480ec442662f981e1399386c5931dae0e886e3639e91"},
+      {"name": "libcholmod.so.5", "path": "/lib/x86_64-linux-gnu/libcholmod.so.5", "sha256": "f72594b896387b607d6c885ae9f1d73f19a419cde5e1d1c04c1b8f804c0c68eb"},
+      {"name": "libstdc++.so.6", "path": "/lib/x86_64-linux-gnu/libstdc++.so.6", "sha256": "1fd75fe70354a416d75aef22bcae68c47bd25d20e2d0568c30b1a9838cf62f11"},
+      {"name": "libgcc_s.so.1", "path": "/lib/x86_64-linux-gnu/libgcc_s.so.1", "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb"},
+      {"name": "libc.so.6", "path": "/lib/x86_64-linux-gnu/libc.so.6", "sha256": "8db37cf3f2169f59a0f07ef1fea308c35656668c64c8ff294e1860f4121eb161"},
+      {"name": "libboost_serialization.so.1.83.0", "path": "/lib/x86_64-linux-gnu/libboost_serialization.so.1.83.0", "sha256": "cb6b870f1c1278453f38b01f5e0c3e7feff8f23fcd533c8969cf08e6364b890c"},
+      {"name": "libboost_timer.so.1.83.0", "path": "/lib/x86_64-linux-gnu/libboost_timer.so.1.83.0", "sha256": "1ab8ccc485c6e599dccf54843f554305b0bc7600107f0bea146e6495479ce3ae"},
+      {"name": "libmetis-gtsam.so", "path": "/home/sasaki/.local/lib/libmetis-gtsam.so", "sha256": "27d1eafe1948d539734637a685b0459411b56b6b575d443a328ed06742810571"},
+      {"name": "libcephes-gtsam.so.1", "path": "/home/sasaki/.local/lib/libcephes-gtsam.so.1", "sha256": "e28cf8a3f92a13773bad55f1a7c0e319bdd3da32bbd37ed95175bbf1b3800ceb"},
+      {"name": "libamd.so.3", "path": "/lib/x86_64-linux-gnu/libamd.so.3", "sha256": "242ddc8b1812397afccec6c435f099b7acbd477ab12534e3c84a84386032cfa4"},
+      {"name": "libcolamd.so.3", "path": "/lib/x86_64-linux-gnu/libcolamd.so.3", "sha256": "2c50410c2e57b719fd797106e291bb98771f02fd737c948ef93b3c27e0127456"},
+      {"name": "libcamd.so.3", "path": "/lib/x86_64-linux-gnu/libcamd.so.3", "sha256": "5324f4256e1b27bb68c1b6d3178cc2ba57ea4fbb77ecc3021902ad04f03440fe"},
+      {"name": "libccolamd.so.3", "path": "/lib/x86_64-linux-gnu/libccolamd.so.3", "sha256": "722311b0c9d074c97c6d3e5b651e9006e248da181293a7ba62b86d8d79df83fb"},
+      {"name": "liblapack.so.3", "path": "/lib/x86_64-linux-gnu/liblapack.so.3", "sha256": "851bb1fc5833ede9ed704b4417a251a899976d5e0915de40452615187a65278"},
+      {"name": "libblas.so.3", "path": "/lib/x86_64-linux-gnu/libblas.so.3", "sha256": "e748efcae5753fe4a652877fccdb5895ac6f7605668a2db878b19c914e78e3a8"},
+      {"name": "libsuitesparseconfig.so.7", "path": "/lib/x86_64-linux-gnu/libsuitesparseconfig.so.7", "sha256": "e1619265d8ad8e3f04902aebc2e415c5c3f1f9d0595fb948f29c60218a334679"},
+      {"name": "libgomp.so.1", "path": "/lib/x86_64-linux-gnu/libgomp.so.1", "sha256": "135f3c8f006d2fe5e68e51281c7974cb991a03de3bfb3593d68d174dfcf854d1"},
+      {"name": "libgfortran.so.5", "path": "/lib/x86_64-linux-gnu/libgfortran.so.5", "sha256": "342618ccfebe840446e4ef2b7893f4161b2084845e570f42d68a70bfde58a58d"}
+    ],
+    "unresolved_entries": [],
+    "resolved_entry_count": 19
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase105-child-only-trusted-gtsam-library-path-prepend-v1",
+    "target": "Phase104 execution wrapper only",
+    "child_process_only": true,
+    "exact_assignment": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:${inherited_when_nonempty}",
+    "parent_environment_changed": false,
+    "native_binary_changed": false,
+    "solver_or_graph_changed": false,
+    "raw_input_contract_changed": false,
+    "stage_or_main_contract_changed": false,
+    "truth_or_accuracy_in_native": false,
+    "no_fallback_or_rerun": true,
+    "default_legacy_unchanged": true
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_reads_or_generated": 0,
+    "base_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_or_tuning": 0
+  },
+  "authorization_boundary": {
+    "wrapper_fix_authorized_by_this_record": false,
+    "raw_execution_authorized_by_this_record": false,
+    "truth_evaluation_authorized_by_this_record": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false
+  }
+}

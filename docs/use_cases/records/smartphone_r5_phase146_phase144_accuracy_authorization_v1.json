@@ -1,0 +1,55 @@
+{
+  "schema_version": "smartphone-r5-phase146-phase144-accuracy-authorization.v1",
+  "phase": 146,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-phase146-one-shot-accuracy",
+  "plan_commit": "5649fdd650c0d5764efd29e625b74b0efdc17cdb",
+  "authorization_commit_is_separate": true,
+  "manifest_sha256": "74c546375c10b95687799d86feea7ae1731c16b19527e617dbe35a7c6f50556f",
+  "pre_truth_sha256": "9ad326d9cd2a8d130585508fb89870db2eb4809ee33a804e2df91b4b52058018",
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "candidate_source": "Phase144 raw result opaque_solution; Phase141/142 candidates forbidden",
+  "truth_source": "Phase142 frozen truth cohort",
+  "authority": {
+    "accuracy_evaluator": {"path": "apps/commands/benchmarks/gnss_smartphone_phase146_phase144_accuracy.py", "sha256": "5cd2cd7a68b99cd239d269a0002ef2651c85ce3a3b972ab3c4ad9e60edf601ad"},
+    "focused_tests": {"path": "tests/test_smartphone_phase146_phase144_accuracy.py", "sha256": "526162d71b73b5558ea0ab24ab564909ddb21fd24267b67b23daf7e77205c102"},
+    "audit": {"path": "docs/use_cases/records/smartphone_r5_phase146_phase144_accuracy_gate_audit_v1.md", "sha256": "0f34e35e9e12136ccb0bd3a035ed81a32d1ded2fa6fc34e69a54f84e3446532f"},
+    "manifest": {"path": "docs/use_cases/records/smartphone_r5_phase146_phase144_accuracy_gate_manifest_v1.json", "sha256": "74c546375c10b95687799d86feea7ae1731c16b19527e617dbe35a7c6f50556f"},
+    "pre_truth": {"path": "docs/use_cases/records/smartphone_r5_phase146_phase144_accuracy_gate_pre_truth_v1.json", "sha256": "9ad326d9cd2a8d130585508fb89870db2eb4809ee33a804e2df91b4b52058018"},
+    "phase144_result": {"path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_raw_result_v1.json", "sha256": "86fa44a595d71ed7f8bf400001a30060e61f343815bac92e76f9e4d3fefc50ee"},
+    "phase145_result": {"path": "docs/use_cases/records/smartphone_r5_phase145_phase144_contract_revalidation_result_v1.json", "sha256": "04b81bc9dd299eb1fa286c5142c5d16cb3785902d727693d8f440e83030f3e67"},
+    "phase142_evaluator": {"path": "apps/commands/benchmarks/gnss_smartphone_phase142_phase141_accuracy.py", "sha256": "03253d1f7c70dc761699ce19d03123457e386b6ab9cd0facb395c942f8450fb6"},
+    "phase82_scorer": {"path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py", "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"},
+    "phase76_truth_parser": {"path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py", "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761"}
+  },
+  "execution_policy": {
+    "candidate_reads": 2,
+    "truth_reads": 2,
+    "accuracy_calculations": 2,
+    "candidate_route_order": "MTV-A then LAX-T",
+    "native_solver_invocations": 0,
+    "raw_reads": 0,
+    "base_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "solution_publication": false,
+    "strict_macro_comparator": "candidate_macro_score_m < 0.782",
+    "result_aggregate_only_no_coordinates": true,
+    "candidate_outputs_evaluation_only": true
+  },
+  "release": {
+    "leaderboard_proof": false,
+    "submission_authorized": false,
+    "broad_evaluation_required_before_submission": true
+  }
+}

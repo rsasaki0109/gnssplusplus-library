@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-phase64-base-preflight-policy-recovery-manifest-v4.v1",
+  "status": "sealed-before-phase64-result-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "erratum": "v3 failed closed on an evaluator-only settings-digest lookup; v4 pins the source-recorded Phase63 digest without changing the frozen policy or any payload.",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json",
+  "freeze_record_sha256": "94487186338d85d289c64d04805254f95568020664e37d4402f1f9b238aee993",
+  "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_phase64_base_preflight_policy_recovery_v4.py",
+  "evaluator_source_sha256": "2e6e40e318bc0da46028451d027be68de1562bdc3be4d29b13156508713ee183",
+  "supersedes_manifest": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v3.json",
+  "v3_manifest_sha256": "5470b04e0a8867c4dbcbfd4273f0ba48c9e4242ff86b728dad635dbfef62acf9",
+  "v3_evaluator_sha256": "c5828a1f344abb41c359b9332eaa43edf0f882696be6bf0c84c7e0474a043d1c",
+  "phase63_result": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_result_v1.json",
+  "phase63_result_sha256": "d6dc56c00c89ddd4e38624bbfe36567a76632aecae3f3f87f529ab0c8f93799b",
+  "phase63_settings_sha256_expected": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+  "archive_reopen_count": 0,
+  "base_file_reread_count": 0,
+  "read_contract": {
+    "phase64_result_json_read_count": 1,
+    "phase64_archive_open_count": 0,
+    "phase64_base_file_reread_count": 0,
+    "phase64_raw_device_read_count": 0,
+    "phase64_truth_read_count": 0,
+    "phase64_mat_read_count": 0,
+    "phase64_nav_read_count": 0,
+    "phase64_solver_invocation_count": 0,
+    "phase64_v1_failed_attempt_result_read_count": 1,
+    "phase64_v2_failed_attempt_result_read_count": 1,
+    "phase64_v3_failed_attempt_result_read_count": 1,
+    "phase64_total_result_json_reads_including_v1_v2_v3_attempts": 4
+  },
+  "recovery_scope": {
+    "input": "immutable Phase63 result JSON and its recorded hashes/metrics only",
+    "settings_schema": "top-level settings.sha256 (observed_sha256 accepted for compatible sealed schema)",
+    "flat_route_schema": "top-level routes[route] with materialized hashes/metrics",
+    "base_file_reread": false,
+    "archive_reopen": false,
+    "accuracy": false,
+    "native_algorithm_change": false,
+    "prior_failures_disclosed": true
+  }
+}

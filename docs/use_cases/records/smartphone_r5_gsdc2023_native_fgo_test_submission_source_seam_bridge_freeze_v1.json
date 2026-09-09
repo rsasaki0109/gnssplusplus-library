@@ -1,0 +1,137 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-source-seam-bridge-freeze.v1",
+  "status": "sealed-before-source-seam-bridge-decision",
+  "purpose": "Audit the sealed v4 truth-free submission for a generic source-seam bridge without rerunning FGO/WLS or selecting with truth.",
+  "candidate": "truth_free_same_lane_source_seam_bridge_v1",
+  "inputs": {
+    "v4_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/submission.csv",
+      "sha256": "64b85bd5946ad33d77e522bf7456d5dc0c4e4870cd7b65756faedd9f18ca1af8",
+      "bytes": 6150020,
+      "row_count": 71936
+    },
+    "v4_continuity_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_manifest.json",
+      "sha256": "e2c309d200d4cecca26fcf59e721b7d43349db192a4be25e90b27cab8f535bd3"
+    },
+    "v4_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_run_manifest.json",
+      "sha256": "2345909b4e237791a713a2c845be8718f5b49dfcbf91d6cde2bd9e9f1d52622d"
+    },
+    "v4_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_v1.json",
+      "sha256": "ee4f6b080baa2fbaf66a95ab5e6eb2de0b16fff62eac877d0364fd5ac791feae"
+    },
+    "v4_result_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_v1_manifest.json",
+      "sha256": "5af0cb7f55ab2778979b8498df1ff522f9ae91df4c3140df8a28e27052ee6704"
+    },
+    "native_fgo_target_route_position": {
+      "path": "output/smartphone-r5/native-fgo-test-v2/cache/e45f139a77b7662bf79300f61cc0b28176fcf7adfd88faf60c1b3b5cfb03b951/fgo/fgo.pos",
+      "sha256": "78f06b18e344b3d0c9f332403bca0ef9f064106c18155262680cb6b54e17ea63"
+    },
+    "current_wls_target_route_position": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-02-23-22-35-us-ca-lax-m/outputs/pixel5/selected.pos",
+      "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746"
+    },
+    "prior_wls_target_route_position": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/cache/807a879ac6566c28e2865e6b5b1fcfe49dab89a4c052bcd456e8470a163affe0/wls.pos",
+      "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746",
+      "byte_identical_to_current_wls": true
+    },
+    "target_wls_route_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-02-23-22-35-us-ca-lax-m/route_manifest.json",
+      "sha256": "c5b60cf2bc0689d44f84b760b57456f3b20940f7b6153bc7f8246a74d63d2ee4"
+    },
+    "official_sample_key_order": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "coordinates_read": false,
+      "role": "key/order/schema authority only"
+    }
+  },
+  "bridge_contract": {
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "source_seam_or_gap_only": true,
+    "high_speed_boundary_trigger": "At least one endpoint-to-adjacent-seam transition must exceed the frozen 70 m/s bound; otherwise the source seam is preserved byte-for-byte.",
+    "trusted_lanes": [
+      "native_fgo",
+      "wls"
+    ],
+    "both_endpoints_same_trusted_lane": true,
+    "maximum_bracket_gap_ms": 10000,
+    "endpoint_speed_metric": "finite ECEF Euclidean displacement divided by elapsed seconds",
+    "maximum_endpoint_speed_mps": 70.0,
+    "finite_ecef_required": true,
+    "earth_ecef_norm_range_m": [
+      6000000.0,
+      7500000.0
+    ],
+    "known_sample_coordinates_forbidden": true,
+    "dummy_or_sample_coordinate_rows_must_equal": 0,
+    "replace_entire_interior_seam": true,
+    "interior_only": true,
+    "replacement": "timestamp-weighted ECEF linear interpolation between same-lane bracketing endpoints, followed by WGS84 conversion",
+    "no_velocity_extrapolation": true,
+    "no_truth_selection": true,
+    "fgo_wls_rerun": false,
+    "numeric_parameter_change": false,
+    "invalid_nonfinite_or_unresolved_policy": "fail-closed",
+    "atomic_publish_if_applicable": true,
+    "no_v5_if_no_eligible_bridge": true
+  },
+  "pre_generation_diagnosis": {
+    "remaining_speed_above_bound_transition_count": 19,
+    "v4_isolated_two_sided_spike_points_after": 0,
+    "v4_output_retained_pending_decision": true,
+    "target": {
+      "trip_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "candidate_timestamp_ms": 1645656530438,
+      "candidate_source": "native_fgo_exact",
+      "previous_timestamp_ms": 1645656529438,
+      "previous_source": "prior_wls_exact",
+      "following_timestamp_ms": 1645656531438,
+      "following_source": "native_fgo_exact",
+      "incident_speeds_mps": {
+        "previous_to_candidate": 606.0351772746234,
+        "candidate_to_following": 37.3529415154502
+      },
+      "direct_neighbor_speed_mps": 308.9480111333876,
+      "source_seam": true
+    },
+    "same_lane_bracket_checks": {
+      "native_fgo": {
+        "before_timestamp_ms": 1645656473438,
+        "after_timestamp_ms": 1645656531438,
+        "bracket_gap_ms": 58000,
+        "endpoint_speed_mps": 11.062436422397814,
+        "within_10_second_window": false
+      },
+      "prior_wls_and_current_wls_alias": {
+        "before_timestamp_ms": 1645656529438,
+        "after_timestamp_ms": 1645656531438,
+        "bracket_gap_ms": 2000,
+        "endpoint_speed_mps": 312.0172260562024,
+        "within_10_second_window": true,
+        "endpoint_speed_at_or_below_70_mps": false
+      }
+    },
+    "decision": "pending_sealed_read_only_audit",
+    "truth_free": true
+  },
+  "truth_policy": {
+    "ground_truth_members_read": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "holdout_or_test_truth_used": false,
+    "leaderboard_used": false
+  },
+  "publication_policy": {
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false,
+    "no_post_generation_tuning": true
+  }
+}

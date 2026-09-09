@@ -1,0 +1,48 @@
+{
+  "schema_version": "smartphone-r5-phase75-phase74-accuracy-integrity-recovery-failure.v1",
+  "phase": 75,
+  "execution_label": "Luna Max",
+  "status": "evaluator-integrity-failure-fail-closed",
+  "decision": "no accuracy conclusion; no validation or Kaggle; preserve Phase43 champion",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase75_phase74_accuracy_integrity_recovery_freeze_v1.json",
+    "sha256": "47dcbaa1f2e7ec8d43e87905d29a2d7fd9c520327516db8c3c871d62fd67b663"
+  },
+  "initial_evaluator_manifest": {
+    "evaluator_path": "apps/commands/benchmarks/gnss_smartphone_phase75_phase74_accuracy_integrity_recovery.py",
+    "evaluator_sha256": "6adf405b7f683aae258ac254aa778158f90c4a59d8536300123a2d9f18b6bf32",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase75_phase74_accuracy_integrity_recovery_manifest_v1.json",
+    "manifest_sha256": "4ed6f12c75a1c717c16ad22907b25dd3eef92cc1b50ab7c815db86dfaa8a15c7",
+    "commit": "e8ed24c"
+  },
+  "failure": {
+    "exception_type": "AttributeError",
+    "error": "module 'phase74_accuracy_helpers' has no attribute 'PHASE43_CONTROL'",
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "cause": "The recovery scorer attempted to use a helper constant that is not exported by the sealed Phase74 module; control identity must instead be compared directly with the inherited Phase74 freeze route pins.",
+    "accuracy_observed": false,
+    "native_or_solver_subprocess": 0
+  },
+  "read_accounting": {
+    "candidate_artifact_reads": 2,
+    "control_artifact_reads": 2,
+    "truth_reads": 1,
+    "truth_reads_per_route": {"2021-03-16-18-59-us-ca-mtv-a/pixel5": 1},
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "native_or_solver_subprocess": 0,
+    "validation_holdout_reads": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": false,
+    "post_truth_tuning": false
+  },
+  "recovery_policy": {
+    "phase75_truth_reread": false,
+    "phase75_accuracy_score_published": false,
+    "phase76_new_freeze_and_output_root_required": true,
+    "phase76_control_identity_source": "Phase74 freeze sealed_phase73_artifacts route control pins"
+  }
+}

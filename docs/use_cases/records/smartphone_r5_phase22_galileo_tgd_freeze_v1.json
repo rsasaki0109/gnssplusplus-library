@@ -1,0 +1,63 @@
+{
+  "schema_version": "smartphone-r5-phase22-galileo-tgd-freeze.v1",
+  "status": "frozen-before-implementation-and-truth",
+  "base_commit": "7d48344",
+  "candidate_id": "native_raw_galileo_signal_specific_group_delay_v1",
+  "purpose": "Port the established Galileo broadcast clock-reference group-delay selection to the raw-only native GNSS measurement model without changing production defaults.",
+  "selection_basis": {
+    "audit_record": "docs/use_cases/records/smartphone_r5_phase22_measurement_model_gap_audit_v1.json",
+    "upstream_rule": "external/madocalib/src/pntpos.c:155-158: F/NAV selects BGD E1/E5a (field 0), I/NAV selects BGD E1/E5b (field 1)",
+    "native_gap": "src/algorithms/fgo_internal.hpp:241-246 currently returns eph.tgd for all Galileo signals; src/algorithms/spp.cpp:158-179 has the same behavior",
+    "raw_evidence": "The declared development RINEX contains source codes 258 (F/NAV) and 513/516/517 (I/NAV); the retained two BGD fields differ on the I/NAV records.",
+    "truth_and_leaderboard_not_used": true
+  },
+  "raw_only_contract": {
+    "allowed_inputs": ["raw device_gnss.csv timing/pseudorange/rate/ADR/CN0/status/signal fields", "broadcast brdc.nav"],
+    "forbidden_inputs": ["all .mat files", "ground_truth.csv before the post-freeze score", "sample_submission.csv", "result coordinates", "device WLS coordinates", "enriched SvPosition/SvElevation/Wls columns", "leaderboard scores", "Kaggle token"],
+    "coordinate_source": "in-memory native raw GNSS/nav FGO only",
+    "mat_read_count_before_freeze": 0,
+    "truth_read_count_before_freeze": 0,
+    "external_mutation": false,
+    "production_default_changed": false
+  },
+  "candidate_contract": {
+    "flag": "--native-signal-specific-galileo-tgd",
+    "config_field": "FGOConfig::use_signal_specific_galileo_group_delay",
+    "scope": "Galileo E1 only; no Galileo E5a inference is added",
+    "source_selection": {
+      "inav_clock_bit": 512,
+      "fnav_clock_bit": 256,
+      "i_nav": "when bit 9 is set and bit 8 is clear, use eph.tgd_secondary (BGD E1/E5b)",
+      "f_nav": "when bit 8 is set and bit 9 is clear, use eph.tgd (BGD E1/E5a)",
+      "ambiguous_or_missing_source": "preserve eph.tgd and increment a diagnostic fallback count; never guess"
+    },
+    "unchanged": ["GPS/QZSS/GLONASS/BeiDou/other signals", "satellite orbit/clock/relativity", "Sagnac rotation", "Klobuchar/Saastamoinen", "TDCP/carrier arcs", "optimizer/noise parameters", "all production/default paths"],
+    "fail_closed": ["nonfinite selected delay", "unknown source bits when strict candidate preflight is requested", "out-of-range correction or invalid ephemeris"],
+    "shared_contract": "SPP seed and FGO pseudorange correction must call the same raw group-delay helper so candidate factors do not mix correction semantics"
+  },
+  "structural_gate_before_truth": {
+    "routes": ["2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro", "2022-08-04-20-07-us-ca-sjc-q/mi8"],
+    "requirements": ["raw/nav only", "no enriched columns read", "finite/in-Earth output", "exact raw UTC key coverage", "no interpolation or fallback", "graph convergence and monotonic cost", "default-off output byte-identical", "candidate deterministic repeat", "candidate source-specific counters nonzero or an explicit zero observation explanation", "no new >70m/s isolated transition"],
+    "artifact_policy": "seal input/source/binary/config hashes and both control/candidate truth-free summaries before any ground-truth read"
+  },
+  "post_freeze_evaluation": {
+    "scope": "already-used development evidence only; not validation/holdout/generalization",
+    "truth_policy": "after structural artifacts are sealed, one evaluator process may read the declared development ground_truth.csv once and compare frozen control/candidate outputs",
+    "gate": ["all four local diagnostic variants strictly improve", "coverage equal", "finite/physical continuity safety", "candidate remains opt-in", "no post-score tuning"],
+    "native_0_782_class_target": "must remain explicitly unclaimed unless independently achieved"
+  },
+  "source_hashes_at_freeze": {
+    "audit": "compute after committing the paired audit record",
+    "src/algorithms/fgo_problems.cpp": "3452d2b252d1a38624011f4af968809594d2b03b6a410c5b16b2675f74461dd8",
+    "src/algorithms/fgo_internal.hpp": "1d4c5bbd7912bfc57a7b1ce5d1131ec853c1df3213a3fb6bbab066e447cf35e0",
+    "src/algorithms/spp.cpp": "13a06c1ac432efb7dce261b2bfd0fa619b01f5669339844e1b8cb6334a43c202",
+    "src/io/rinex.cpp": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533",
+    "include/libgnss++/algorithms/fgo_config.hpp": "fa76822c8519ff935f69ce720908f91e0e2a75cfa13ece615537b1c5433f9eca",
+    "include/libgnss++/algorithms/spp.hpp": "efec0c0e44ff0433f26ac34b7ff88d168cecb65267c4e087ea3a141223d6b485",
+    "include/libgnss++/core/navigation.hpp": "578aca8779f7e2bbc891f8a5936ca1eeaa51eef28c85b9172d3700f5ae1f4bed",
+    "external/madocalib/src/pntpos.c": "9ab3195abafa29b9526c1baa01c373153228144bfee06416590ead98df5c8382",
+    "src/io/android_raw_gnss.cpp": "790ff71c83482de0dfc9760b4d7c45d4d8adc135082d78f0b75e034bcfd645e8"
+  },
+  "implementation_rule": "Commit this record before changing source. Implement only the shared source-specific E1 group-delay helper, explicit opt-in config/CLI wiring, diagnostics, and synthetic parity tests; do not change candidate scope or parameters after truth access.",
+  "freeze_record_sha256": "excluded-from-self-hash; compute from the committed file"
+}

@@ -1,0 +1,87 @@
+{
+  "schema_version": "smartphone-r5-phase65-native-base-pseudorange-compensation-structural-failure.v1",
+  "phase": 65,
+  "execution_label": "Luna Max",
+  "status": "fail-closed-evaluator-integrity",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_freeze_v1.json",
+    "sha256": "1f3cb0bedd9b64d08943ef14f87b6429ade367805ae28511ec56b78dd26033d7"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_manifest_v1.json",
+    "sha256": "1306480f6b7fb839e55309e9c2c77b41f2ac0a1baf9f6971949612fd485d2255"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase65_native_base_pseudorange_compensation.py",
+    "sha256": "6be7dd346a1ff219c15036fcf194861ebeda700678d52e3d93b2f3c2b96a16ae"
+  },
+  "source_commit": "f8cdf3b",
+  "failure": {
+    "class": "presentation-contract-bug-before-candidate",
+    "error": "run_matrix stopped after the first MTV-a control process because phase43_control() returned submission/summary objects with a nested sha256 key, while the comparison accessed control_reference['submission']['sha256'] and control_reference['summary']['sha256']; this raised KeyError: sha256.",
+    "raw_or_truth_result_valid": false,
+    "candidate_runs_completed": 0,
+    "remaining_native_invocations_not_run": 11,
+    "no_candidate_metric_or_materiality_observed": true,
+    "no_runner_repair_or_rerun_in_phase65": true
+  },
+  "partial_control_artifact": {
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "variant": "control",
+    "run": 1,
+    "submission": {
+      "path": "output/smartphone-r5/phase65-native-base-pseudorange-compensation-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/submission.csv",
+      "bytes": 172694,
+      "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+      "phase43_identity": true
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase65-native-base-pseudorange-compensation-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/summary.json",
+      "bytes": 14534,
+      "sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+      "phase43_identity": true
+    },
+    "run_log": {
+      "path": "output/smartphone-r5/phase65-native-base-pseudorange-compensation-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1/run.log",
+      "bytes": 113,
+      "sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28"
+    },
+    "structural_observation": {
+      "problem_epochs": 2159,
+      "output_epochs": 2159,
+      "pseudorange_factors": 61754,
+      "tdcp_factors_built": 31488,
+      "native_process_return_code": 0,
+      "truth_used": false
+    }
+  },
+  "read_accounting": {
+    "hash_verification_reads": {
+      "device_gnss": 4,
+      "device_imu": 4,
+      "broadcast_nav": 4,
+      "base_rinex": 4
+    },
+    "native_solver_invocations_started": 1,
+    "native_solver_invocations_completed": 1,
+    "raw_device_gnss_process_reads": 1,
+    "raw_device_imu_process_reads": 1,
+    "broadcast_nav_process_reads": 1,
+    "base_rinex_process_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "post_truth_tuning": false
+  },
+  "decision": {
+    "phase65_structural_gate": "not-evaluable; fail closed",
+    "native_base_correction_authorized_for_accuracy": false,
+    "phase43_champion_preserved": true,
+    "phase51_experimental_preserved": true,
+    "phase58_experimental_preserved": true,
+    "next_action": "A separately frozen evaluator-integrity recovery may reuse this immutable control artifact and fix only the nested-hash presentation bug; it must not reopen this phase's raw inputs without a new freeze.",
+    "zero_point_782": "not evaluated"
+  }
+}

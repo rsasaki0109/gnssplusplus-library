@@ -1,0 +1,251 @@
+{
+  "schema_version": "smartphone-r5-phase158-h-raw-p-bootstrap-result.v1",
+  "phase": 158,
+  "execution_label": "Luna Max",
+  "status": "raw-ingress-success-bootstrap-reached-later-rank-failure",
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase158_h_raw_p_bootstrap_authorization_v1.json",
+    "commit": "e90a16800da20004339343e849786e5651fec119",
+    "sha256": "624776bc748dff34d9214fc4545463fa1b5d8c6c370b42631f3fd925405261ad"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase158_h_raw_p_bootstrap_manifest_v1.json",
+    "commit": "24f8fcfc96f60ac409db41346ad3feb3306d7df9",
+    "sha256": "3614a61d5e2f29b9ebab46bdc76249e5dcb67c507324c31fdfea5894c04e26f2"
+  },
+  "source_and_binary": {
+    "implementation_commit": "eb8cef998f6c99eb0c4a07e3d3330a88f21b1b94",
+    "current_head_before_raw_reads": "24f8fcfc96f60ac409db41346ad3feb3306d7df9",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "f4ca8c496da861cb8c26f784f159ed3bc0977030da54ba574136faf3e49b68fa",
+    "app_source_sha256": "fccae5b68e05095f89cf5f522fb850e772d35f588aa49e762e252fdb4e8f728a",
+    "raw_p_seed_header_sha256": "af3b2f3dfec1e3a1bc4d76f479f562eb663724386bdb49b62210ffa548535a8f",
+    "raw_p_seed_source_sha256": "239fa6490bb6ef3ab1f911a0e2678c2a4e0c7358e7a3f241793e6823db53cc0e"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "argv_matches_manifest": true,
+    "invocation_count": 1,
+    "process_return_code": 1,
+    "failure_stage": "phase149-raw-p-seed-post-filter-geometry",
+    "failure_status": "rank-deficient",
+    "failure_reason": "pseudorange-geometry-rank-deficient",
+    "failure_epoch_index": 17,
+    "raw_ingress_reached": true,
+    "phase149_stage_reached": true,
+    "bootstrap_selector_enabled": true,
+    "ordinary_mask_restored": true,
+    "raw_clock_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "accuracy_calculated": false,
+    "mat_pdc_used": false,
+    "coordinate_values_interpreted": false,
+    "coordinate_values_published": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false
+  },
+  "bootstrap": {
+    "attempted": true,
+    "accepted": true,
+    "failure_reason": null,
+    "evidence_boundary": "The implementation fail-closes with native-raw-p-bootstrap-rejected if the private pass fails; ordinary epoch 0 was reached and accepted, so the private same-run finite/rank-safe bootstrap contract passed.",
+    "private_native_spp_invocations": 1,
+    "private_position_finite": true,
+    "private_clock_finite": true,
+    "private_minimum_satellite_guard": "passed by accepted bootstrap control flow",
+    "private_rank": "unavailable: private PositionSolution rank is not exported by the Phase149 summary",
+    "private_clock_groups": "unavailable: private PositionSolution clock-group report is not exported by the Phase149 summary",
+    "private_coordinate_values_read": false,
+    "private_coordinate_values_published": false
+  },
+  "coverage": {
+    "input_epoch_count": 3140,
+    "evaluated_epoch_indexes": "0..17 inclusive",
+    "evaluated_epoch_count": 18,
+    "unassessed_epoch_count": 3122,
+    "later_epoch_coverage": "unassessed; first rank-deficient epoch stopped traversal",
+    "accepted_position_count": 17,
+    "finite_clock_count": 17,
+    "finite_velocity_count": 0,
+    "status_counts": {
+      "accepted": 17,
+      "rank-deficient": 1,
+      "not-evaluated": 3122
+    },
+    "reason_counts": {
+      "accepted": 17,
+      "pseudorange-geometry-rank-deficient": 1
+    },
+    "ordinary_iteration_and_convergence": {
+      "accepted_epochs_all_converged": true,
+      "accepted_iteration_distribution": {
+        "1": 1,
+        "3": 16
+      },
+      "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+      "velocity_stage_reached": false
+    },
+    "first_ordinary_epoch": {
+      "input_epoch_index": 0,
+      "status": "accepted",
+      "raw_pseudorange_rows": 31,
+      "raw_pseudorange_satellites": 22,
+      "raw_clock_groups": 4,
+      "corrected_pseudorange_rows": 22,
+      "corrected_clock_groups": 4,
+      "reference_clock_group": "gps",
+      "geometry_rank_status": "full-rank",
+      "geometry_rank": 7,
+      "geometry_rank_rows": 22,
+      "preprocessing_diagnostics_available": true,
+      "preprocessing_input_rows": 33,
+      "preprocessing_accepted_rows": 22,
+      "preprocessing_rejected_rows": 11,
+      "preprocessing_reason_counts": {
+        "accepted": 22,
+        "unsupported-signal": 11
+      },
+      "clock_groups_without_bias_values": {
+        "gps": {
+          "observed": true,
+          "reference": true,
+          "estimate_available": true,
+          "corrected_rows": 8
+        },
+        "glonass": {
+          "observed": true,
+          "reference": false,
+          "estimate_available": true,
+          "corrected_rows": 2
+        },
+        "galileo": {
+          "observed": true,
+          "reference": false,
+          "estimate_available": true,
+          "corrected_rows": 6
+        },
+        "beidou": {
+          "observed": true,
+          "reference": false,
+          "estimate_available": true,
+          "corrected_rows": 6
+        },
+        "qzss": {
+          "observed": false,
+          "reference": false,
+          "estimate_available": false,
+          "corrected_rows": 0
+        },
+        "navic": {
+          "observed": false,
+          "reference": false,
+          "estimate_available": false,
+          "corrected_rows": 0
+        }
+      },
+      "satellites_used": 20,
+      "iterations": 1,
+      "degrees_of_freedom": 13,
+      "converged": true,
+      "position_finite": true,
+      "clock_finite": true,
+      "velocity_finite": false
+    },
+    "first_failure_epoch": {
+      "input_epoch_index": 17,
+      "raw_pseudorange_rows": 30,
+      "raw_pseudorange_satellites": 22,
+      "raw_clock_groups": 4,
+      "corrected_pseudorange_rows": 21,
+      "corrected_clock_groups": "unavailable: clock-group report is populated after the rank gate",
+      "reference_clock_group": "unknown",
+      "geometry_rank_status": "rank-deficient",
+      "geometry_rank": 4,
+      "geometry_rank_rows": 21,
+      "preprocessing_diagnostics_available": true,
+      "preprocessing_input_rows": 31,
+      "preprocessing_accepted_rows": 21,
+      "preprocessing_rejected_rows": 10,
+      "preprocessing_reason_counts": {
+        "accepted": 21,
+        "invalid-pseudorange": 1,
+        "unsupported-signal": 9
+      },
+      "position_finite": false,
+      "clock_finite": false,
+      "velocity_finite": false
+    }
+  },
+  "ordinary_preprocessing_aggregate": {
+    "evaluated_epoch_count": 18,
+    "input_rows": 577,
+    "accepted_rows": 391,
+    "rejected_rows": 186,
+    "row_conservation": "577 = 391 + 186",
+    "reason_counts": {
+      "accepted": 391,
+      "invalid-pseudorange": 9,
+      "unsupported-signal": 177
+    },
+    "no_elevation_rejection_rows_in_evaluated_segment": true
+  },
+  "artifacts": {
+    "native_summary_path": "output/smartphone-r5/phase158-h-raw-p-bootstrap-v1/mtv-h/native_summary.json",
+    "native_summary_bytes": 3714117,
+    "native_summary_sha256": "f7b69dfd2287a79f69868c29dfd90aacf361fe54741dc372fe07887c9cc95909",
+    "stdout_path": "output/smartphone-r5/phase158-h-raw-p-bootstrap-v1/mtv-h/stdout.log",
+    "stdout_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_path": "output/smartphone-r5/phase158-h-raw-p-bootstrap-v1/mtv-h/stderr.log",
+    "stderr_bytes": 77,
+    "stderr_sha256": "588d32dad7713922821f05105285d627564530ce87d7055c534be3a849c28a1f",
+    "stderr_message": "Phase149 raw-P seed stage failed closed: pseudorange-geometry-rank-deficient"
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 1,
+    "broadcast_navigation_reads": 1,
+    "raw_phone_imu_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_phase149_stage_invocations": 1,
+    "native_spp_private_bootstrap_epoch_calls": 1,
+    "native_spp_ordinary_preprocess_invocations": 18,
+    "native_spp_ordinary_epoch_calls": 18,
+    "native_spp_epoch_calls_total": 19,
+    "native_fgo_invocations": 0,
+    "summary_structural_read": 1,
+    "solution_coordinate_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "verification": {
+    "manifest_json_validated_before_commit": true,
+    "authorization_json_validated_before_run": true,
+    "help_selector_check_before_run": true,
+    "synthetic_no_input_parse_check_before_run": true,
+    "phase157_raw_p_seed_tests_before_run": "19/19 passed",
+    "actual_executable_built_from_pinned_implementation": true,
+    "summary_json_valid": true,
+    "summary_extraction_selected_no_coordinate_values": true,
+    "phase156_summary_or_logs_overwritten": false
+  },
+  "interpretation_boundary": {
+    "structural_observation": "With the opt-in same-run bootstrap, the ordinary pass accepted 17 epochs and retained 22 corrected rows in its first epoch; the later first failure was rank deficiency rather than the prior first-epoch insufficient-geometry failure.",
+    "accuracy_claim": false,
+    "coordinate_claim": false,
+    "all_route_epochs_claim": false,
+    "bootstrap_private_rank_and_clock_groups": "not available in the immutable Phase149 summary; no values are inferred or substituted",
+    "next_blocker": "The first failing evaluated epoch has rank 4 over 21 corrected rows; its post-rank clock-group report is unavailable. Later 3122 epochs remain unassessed. Any follow-up must diagnose this rank failure separately; do not rerun or relax gates from this result."
+  }
+}

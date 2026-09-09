@@ -1,0 +1,52 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-raw-utc-key-artifact-seal.v1",
+  "candidate_id": "native-fgo-android-gnss-first-vel2rpy-combined-imu-raw-utc-keys-v1",
+  "status": "truth-free-artifacts-sealed-before-evaluation",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_native_fgo_android_raw_utc_key_contract_freeze_v1.json",
+    "sha256": "029054dfd4c100961a9847c66956d3ab97edae11149ab533778f2bf11bb32dfc"
+  },
+  "truth_policy": {
+    "truth_open_count_at_seal": 0,
+    "fresh_validation_open": false,
+    "holdout_open": false,
+    "post_truth_regeneration_or_tuning": false,
+    "external_mutation": false,
+    "next_action": "one permitted development-train truth evaluation only"
+  },
+  "input_hashes": {
+    "device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "artifact_hashes": {
+    "submission.csv": "7ec90e4d9c20da7d7a4e441ddfe4019bc6ede7933cb311e5e15eca9c4f5391b4",
+    "summary.json": "083decf3861ae8a5d571e0d0653c84a6bdba513d5415466978e4037a1961e563",
+    "run.log": "e67eecaff041b53a220f4b21bcb2b100ccc5b90f6a6949948f8c446bffe65759",
+    "release_binary": "5a8d49c232e8c852fdf28f766a6755afe7eaa537d5d73c97c4f1562c455b1228"
+  },
+  "key_contract_evidence": {
+    "header": "phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees",
+    "raw_epoch_keys": 1384,
+    "warmup_excluded": true,
+    "target_keys": 1383,
+    "first_target_utc_time_millis": 1684960018999,
+    "last_target_utc_time_millis": 1684961400999,
+    "exact_solution_epochs": 1096,
+    "interpolated_epochs": 287,
+    "edge_hold_epochs": 0,
+    "unresolved_epochs": 0,
+    "max_interpolation_gap_ms": 49000,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_coordinate_fallbacks": 0,
+    "device_wls_coordinates_used": false
+  },
+  "runtime": {
+    "wall_seconds": 58.36,
+    "max_rss_kib": 116980,
+    "solver_rerun_after_seal": false
+  }
+}

@@ -1,0 +1,149 @@
+{
+  "schema_version": "rtk-spp-cache-prepost.v2",
+  "variant": "broadcast-spp-state-ephemeris-cache",
+  "role": "development-only",
+  "decision": "rtk-prepost-verified",
+  "reason": "The separate Release baseline/candidate builds produced byte-identical RTK POS output and identical fixed/accuracy/ratio diagnostics. The cache improves the SPP seed path used by normal RTK epochs; it is not limited to fallback epochs.",
+  "build": {
+    "source_root": "/tmp/rtk-cache-audit.v5TljK",
+    "baseline_source": "/tmp/rtk-cache-audit.v5TljK/baseline-src",
+    "candidate_source": "/tmp/rtk-cache-audit.v5TljK/candidate-src",
+    "baseline_binary": "/tmp/rtk-cache-audit.v5TljK/baseline-build/apps/gnss_solve",
+    "candidate_binary": "/tmp/rtk-cache-audit.v5TljK/candidate-build/apps/gnss_solve",
+    "build_type": "Release",
+    "compiler": "/usr/bin/c++",
+    "optimization": "-O3 -DNDEBUG",
+    "baseline_spp_sha256": "50db6055c1e15c2d094344020f6c2105b6241117b1437a880f533f175050606d",
+    "candidate_spp_sha256": "edf9b6c8d5980a2cbbddd8911efddf0c23185240921a32f56b8a6be9b7173c2f",
+    "baseline_binary_sha256": "d6375d9dba6b4c515e378efcdeb03d52079f317306b0c43742b208d9f9df2421",
+    "candidate_binary_sha256": "d2cf46ae785a1545be041843110fc88c8dd0cca4a637e81ba8114ee553be2fe9"
+  },
+  "input": {
+    "dataset": "PPC-Dataset/tokyo/run1",
+    "rover_obs_sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+    "base_obs_sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+    "base_nav_sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+    "reference_csv_sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+    "epochs": 120,
+    "command": "gnss_solve --rover rover.obs --base base.obs --nav base.nav --no-kml --max-epochs 120 --out solution.pos --timing-csv epoch_timing.csv"
+  },
+  "measurement": {
+    "warmup_runs_excluded": 1,
+    "measured_runs_per_variant": 10,
+    "run_order": "runs 01-05 baseline then candidate; runs 06-10 candidate then baseline",
+    "cpu_affinity": "taskset -c 0",
+    "host": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz, 8 CPUs",
+    "holdout_used": false,
+    "aggregate_artifact": "output/rtk-cache-audit/aggregate.json",
+    "aggregate_artifact_sha256": "0c65de25133a4cbaafe96074bc9d1c9db62a500924cd01335784f1b2bfc06d2c",
+    "stage_artifact": "output/rtk-cache-audit/stage/summary.json",
+    "stage_artifact_sha256": "82476cec875a1ed5c55591d7b62ae77907d2600be964b98d667d6514a43d433a",
+    "stage_timing_scope": "Telemetry-only timing around SPP, satellite collection, filter initialization/reset, bias update, KF update, ambiguity resolution, and velocity solve. reset_position includes nested SPP; stage_spp is inclusive of all SPP calls."
+  },
+  "results_median": {
+    "baseline": {
+      "external_wall_s": 1.48,
+      "external_wall_p95_across_runs_s": 1.6975,
+      "solver_wall_s": 1.4098465,
+      "solver_wall_p95_across_runs_s": 1.61660265,
+      "epoch_mean_ms": 11.7487215,
+      "epoch_p50_ms": 11.728235,
+      "epoch_p95_ms": 13.204182,
+      "realtime_factor": 16.883946,
+      "peak_rss_kb": 30444,
+      "valid_epochs": 120,
+      "fixed_epochs": 116,
+      "fix_rate_pct": 96.666667,
+      "wrong_fix_epochs": 0,
+      "horizontal_median_m": 0.045861,
+      "horizontal_p95_m": 0.128737,
+      "vertical_p95_abs_m": 0.037212,
+      "ratio_p50": 21.875584,
+      "ratio_p95": 63.085008,
+      "ppc_local_score_pct": 0.286866
+    },
+    "candidate": {
+      "external_wall_s": 1.395,
+      "external_wall_p95_across_runs_s": 1.84,
+      "solver_wall_s": 1.3217735,
+      "solver_wall_p95_across_runs_s": 1.7385141,
+      "epoch_mean_ms": 11.0147775,
+      "epoch_p50_ms": 11.030901,
+      "epoch_p95_ms": 12.3482985,
+      "realtime_factor": 18.006122,
+      "peak_rss_kb": 30448,
+      "valid_epochs": 120,
+      "fixed_epochs": 116,
+      "fix_rate_pct": 96.666667,
+      "wrong_fix_epochs": 0,
+      "horizontal_median_m": 0.045861,
+      "horizontal_p95_m": 0.128737,
+      "vertical_p95_abs_m": 0.037212,
+      "ratio_p50": 21.875584,
+      "ratio_p95": 63.085008,
+      "ppc_local_score_pct": 0.286866
+    },
+    "candidate_minus_baseline": {
+      "solver_wall_s": -0.088073,
+      "solver_wall_relative_pct": -6.246992,
+      "external_wall_s": -0.085,
+      "external_wall_relative_pct": -5.743243,
+      "epoch_mean_ms": -0.733944,
+      "epoch_p50_ms": -0.697334,
+      "epoch_p95_ms": -0.855884,
+      "realtime_factor": 1.122176,
+      "peak_rss_kb": 4,
+      "fix_rate_pct": 0.0,
+      "horizontal_median_m": 0.0,
+      "horizontal_p95_m": 0.0,
+      "vertical_p95_abs_m": 0.0,
+      "ppc_local_score_pct": 0.0
+    }
+  },
+  "position_output": {
+    "baseline_and_candidate_sha256": "bae93b2cec6d273e30fba54bf3709c2bc69e1eccfdf9ba35cf44887b4b6e2bdd",
+    "within_variant_byte_identical": true,
+    "cross_variant_byte_identical": true,
+    "status_histogram": {
+      "FLOAT": 4,
+      "FIXED": 116
+    },
+    "mean_satellites": 29.983333,
+    "ratio_nonzero_epochs": 116,
+    "ratio_below_3_epochs": 0
+  },
+  "stage_median_mean_ms": {
+    "baseline": {
+      "stage_spp_ms": 9.4147645,
+      "stage_reset_position_ms": 4.633943,
+      "stage_filter_update_ms": 1.221656,
+      "stage_velocity_ms": 0.201782,
+      "stage_ambiguity_ms": 0.18495,
+      "stage_satellite_collection_ms": 0.143755,
+      "stage_initialize_filter_ms": 0.082385,
+      "stage_bias_update_ms": 0.0391475
+    },
+    "candidate": {
+      "stage_spp_ms": 8.6278955,
+      "stage_reset_position_ms": 4.2398005,
+      "stage_filter_update_ms": 1.2380125,
+      "stage_velocity_ms": 0.216147,
+      "stage_ambiguity_ms": 0.188722,
+      "stage_satellite_collection_ms": 0.1501675,
+      "stage_initialize_filter_ms": 0.080803,
+      "stage_bias_update_ms": 0.0407295
+    }
+  },
+  "interpretation": {
+    "dominant_bottleneck": "SPP stage; it accounts for about 80% of measured epoch work in baseline. reset_position is the next largest inclusive stage because it calls SPP again.",
+    "cache_scope": "RTKProcessor::processRTKEpochInternal invokes SPP for the current SPP/gating seed and resetPositionToSPP invokes SPP again in the dynamic mode. The cache therefore affects the normal RTK seed path as well as fallback behavior.",
+    "next_priority": "Expose/reuse one epoch's SPP result between current_spp and resetPositionToSPP only after a state/order/byte-identity experiment; otherwise profile KF update (about 1.22-1.24 ms) as the next independent RTK optimization target.",
+    "p95_note": "The candidate p95 across-run external/solver wall is higher because of run-to-run scheduling/thermal outliers; per-epoch P95 and the median are lower. No accuracy or FIX regression was observed.",
+    "kaggle_primary_metric": "not used; official competition metric is not part of this RTK PPC signoff"
+  },
+  "tests": {
+    "release_build": "passed for current build and both isolated Release builds",
+    "python_fixture": "24/24 related unittest cases passed",
+    "ctest": "82/82 passed with existing LD_LIBRARY_PATH preserved and /home/sasaki/.local/lib appended"
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "schema_version": "smartphone-r5-phase138-affine-tdcp-structural-pre-raw.v1",
+  "phase": 138,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-zero-read",
+  "authorization_commit": null,
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "runs_per_route": 1,
+  "pins": {
+    "audit_commit": "739b940dc870e21de42deba6ba911c17a93f0526",
+    "audit_sha256": "5cd012e87b3d2d2fecd5b0d5897b1252d99a979166108de244e92aaf8b4545fe",
+    "design_freeze_commit": "49be79247b4d82bf7a64c7b63e542c5a6dfff2c0",
+    "structural_freeze_commit": "f1f5fef2ae0ccdcbae94be86e6af813b65ec499b",
+    "structural_freeze_sha256": "4a6491631e19ddb7d838f8311c7eabfc8da1a0dc6e8a5ba2bb5e302bda32b1d8",
+    "implementation_commit": "c5783d7e323b0c4593958a4e210284cf9f9fc726",
+    "phase135_corrected_source_commit": "f9a1fc9403e7072435a30d9e06aa8ea59493cdc5",
+    "runner_manifest_tests_commit": "a2a80f44385c01787097e1a70e95c8bda58bc075",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase138_affine_tdcp_structural_manifest_v1.json",
+    "manifest_sha256": "f93fd9fc6f4fddefa0f267307a5bc2238e519c16da50f8207f6d97a7d81dda0a",
+    "runner_path": "apps/commands/benchmarks/gnss_smartphone_phase138_affine_tdcp_structural.py",
+    "runner_sha256": "cf14981e58250e362d1e2d77a0c32cd7b7bf3c9cd9cde4663646924d00e8af80",
+    "focused_tests_path": "tests/test_smartphone_phase138_affine_tdcp_structural.py",
+    "focused_tests_sha256": "6b16547ffa910cf23f9693b2991f9a7cd9fcf366db6af5b948508887515b9054",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "eff11f69f3fbe36e0e71aa52682c7f46f6aca072c179d6a3d75129301c725e24"
+  },
+  "qualification": {
+    "launch_free_validator": "pass",
+    "focused_structural_python": "5/5 passed",
+    "python_compile": "pass",
+    "target_binary_invoked": false,
+    "raw_payloads_materialized": false,
+    "solution_rows_opened": false,
+    "truth_evaluated": false,
+    "accuracy_evaluation": false,
+    "cpp_suite": {
+      "tests": 1187,
+      "passed": 1129,
+      "skipped": 58,
+      "failed": 0,
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib build/tests/run_tests --gtest_color=no"
+    }
+  },
+  "read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "policy": {
+    "raw_execution_authorized": false,
+    "truth_accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "opaque_solution_only": true,
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "PDC",
+      "precomputed coordinates",
+      "accuracy evaluator",
+      "Kaggle",
+      "token resource"
+    ],
+    "failure_policy": "fail closed; no raw rerun/fallback/repair/sweep"
+  },
+  "next_authorization_boundary": {
+    "required_artifact": "independent raw authorization commit",
+    "pin_pre_raw_after_this_commit": true,
+    "materialize_inputs_after_authorization_only": true,
+    "allowed_solver_inputs": [
+      "raw phone GNSS",
+      "raw phone IMU",
+      "broadcast navigation",
+      "sealed raw-base RINEX"
+    ],
+    "route_order_fixed": true,
+    "exactly_one_solver_per_route_max": true,
+    "raw_result_commit_separate": true,
+    "truth_authorization_required_separately": true,
+    "solution_content_or_coordinate_read_authorized": false
+  }
+}

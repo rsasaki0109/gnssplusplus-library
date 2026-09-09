@@ -1,0 +1,150 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-alignment-v1.4-existing-comparison.v1",
+  "status": "sealed-comparison-no-fresh-validation",
+  "sealed_at": "2026-08-30",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_alignment_v1_4_selection.json",
+    "sha256": "5029e6e872b7b12296056365d38812bfab62cda3ff052cdc3528dea34f4be35b"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "payload_access": "existing sealed train/validation materializations only"
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only_for_selection": true
+  },
+  "alignment_contract": {
+    "previous_tolerance_ms": 1,
+    "candidate_tolerance_ms": 10,
+    "absolute_delta_rule": "abs(source_timestamp-target_timestamp) <= 10 ms passes; 11 ms fails",
+    "tie_rule": "equal absolute deltas select the earlier source timestamp deterministically",
+    "extrapolation": "forbidden",
+    "candidate_methods_unchanged": true,
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb"
+  },
+  "existing_results": {
+    "train": {
+      "aggregate_1ms": {
+        "availability": 1.0,
+        "coverage": 1.0,
+        "horizontal_p50_m": 1.9393644910862842,
+        "horizontal_p95_m": 3.7250241453191024,
+        "vertical_p95_m": 6.391218603605969,
+        "mean_diagnostic_m": 2.8333630333429167
+      },
+      "aggregate_10ms": {
+        "availability": 1.0,
+        "coverage": 1.0,
+        "horizontal_p50_m": 1.9393644910862842,
+        "horizontal_p95_m": 3.7250241453191024,
+        "vertical_p95_m": 6.391218603605969,
+        "mean_diagnostic_m": 2.8333630333429167
+      },
+      "diagnostics_1ms": {
+        "wgs84_vincenty__linear_n_minus_1": 2.8321941553090907,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.8350383804819948,
+        "haversine_sphere__linear_n_minus_1": 2.8319863014542744,
+        "haversine_sphere__nearest_rank_ceiling": 2.834233049545506
+      },
+      "diagnostics_10ms": {
+        "wgs84_vincenty__linear_n_minus_1": 2.8321941553090907,
+        "wgs84_vincenty__nearest_rank_ceiling": 2.8350383804819948,
+        "haversine_sphere__linear_n_minus_1": 2.8319863014542744,
+        "haversine_sphere__nearest_rank_ceiling": 2.834233049545506
+      },
+      "routes": [
+        {
+          "route": "2021-01-04-22-40-us-ca-mtv-a",
+          "phones": ["mi8", "pixel5"],
+          "target_epoch_count": 3709,
+          "phone_count_histogram": {"1": 3709},
+          "missing_phone_observations": 3709,
+          "max_abs_alignment_offset_ms": 0.0,
+          "one_ms_submission_sha256": "011ce7ca8a0f4035b4d19d885e2312f4944c41565d7285f189517af862120e0a",
+          "ten_ms_submission_sha256": "011ce7ca8a0f4035b4d19d885e2312f4944c41565d7285f189517af862120e0a",
+          "artifact_equal": true
+        },
+        {
+          "route": "2022-01-26-20-02-us-ca-mtv-pe1",
+          "phones": ["mi8", "pixel5"],
+          "target_epoch_count": 3395,
+          "phone_count_histogram": {"1": 3395},
+          "missing_phone_observations": 3395,
+          "max_abs_alignment_offset_ms": 0.0,
+          "one_ms_submission_sha256": "45f6ecfde9c7bcad117add5751402c6f4973b52e1d18119103ee255dbeb40c43",
+          "ten_ms_submission_sha256": "45f6ecfde9c7bcad117add5751402c6f4973b52e1d18119103ee255dbeb40c43",
+          "artifact_equal": true
+        }
+      ]
+    },
+    "validation": {
+      "route": "2022-05-13-20-57-us-ca-mtv-pe1",
+      "phones": ["pixel6pro", "sm-g988b"],
+      "aggregate_1ms": {
+        "availability": 1.0,
+        "coverage": 0.9915138648922366,
+        "horizontal_p50_m": 3.154594781839649,
+        "horizontal_p95_m": 5.120038425990846,
+        "vertical_p95_m": 5.77731586016918,
+        "mean_diagnostic_m": 4.140480486187539
+      },
+      "aggregate_10ms": {
+        "availability": 1.0,
+        "coverage": 0.9915138648922366,
+        "horizontal_p50_m": 3.154594781839649,
+        "horizontal_p95_m": 5.120038425990846,
+        "vertical_p95_m": 5.77731586016918,
+        "mean_diagnostic_m": 4.140480486187539
+      },
+      "diagnostics_1ms": {
+        "wgs84_vincenty__linear_n_minus_1": 4.137316603915247,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.13713512479511,
+        "haversine_sphere__linear_n_minus_1": 4.143739005960613,
+        "haversine_sphere__nearest_rank_ceiling": 4.143731210079188
+      },
+      "diagnostics_10ms": {
+        "wgs84_vincenty__linear_n_minus_1": 4.137316603915247,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.13713512479511,
+        "haversine_sphere__linear_n_minus_1": 4.143739005960613,
+        "haversine_sphere__nearest_rank_ceiling": 4.143731210079188
+      },
+      "target_epoch_count": 4360,
+      "phone_count_histogram": {"1": 2, "2": 4358},
+      "missing_phone_observations": 2,
+      "max_abs_alignment_offset_ms": 1.0,
+      "one_ms_submission_sha256": "75c46b15176eb2131691a84bae3a20e8ecc7d0b79934fbbea93c588d95780952",
+      "ten_ms_submission_sha256": "75c46b15176eb2131691a84bae3a20e8ecc7d0b79934fbbea93c588d95780952",
+      "artifact_equal": true
+    }
+  },
+  "non_regression": {
+    "train": true,
+    "validation": true,
+    "all_four_official_diagnostics_non_worse": true,
+    "horizontal_and_vertical_non_worse": true,
+    "availability_and_coverage_non_worse": true,
+    "extrapolation_used": false
+  },
+  "fresh_validation": {
+    "available_after_exclusion": false,
+    "selection_record": "docs/use_cases/records/smartphone_r5_wls_multi_phone_alignment_v1_4_selection.json",
+    "truth_open_count": 0,
+    "freeze_created": false,
+    "holdout_materialization_permitted": false
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "d0b82d27e1bde9cda2c0c2510fc26fc0d608498d8a05ba3ac4babecca4f9bf2e",
+    "tests/test_smartphone_wls_multi_phone_ensemble.py": "9e7d3f7be972bb7f2bb0f0246237daf80cfe6a03eb0329bd540e8006fd9e0932",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7"
+  },
+  "release_binaries": {
+    "gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+  },
+  "decision": "no-go-no-fresh-multi-phone-route",
+  "production_rtk_spp_default_changed": false,
+  "post_validation_tuning": false
+}

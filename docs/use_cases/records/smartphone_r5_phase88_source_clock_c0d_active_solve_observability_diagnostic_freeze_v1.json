@@ -1,0 +1,212 @@
+{
+  "schema_version": "smartphone-r5-phase88-source-clock-c0d-active-solve-observability-diagnostic-freeze.v1",
+  "phase": 88,
+  "status": "frozen-before-implementation",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Authorize exactly one source-aligned raw-only diagnostic implementation to expose the GTSAM C0/D active-solve termination branch and conditioning observability after the Phase87 audit.",
+  "decision_boundary": {
+    "candidate_count": 1,
+    "candidate_selection": "fixed-single-candidate",
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "phase85_phase86_no_go_preserved": true,
+    "implementation_before_execution": true,
+    "meter_valued_clock_state_parity_authorized": false,
+    "source_sigma_tuning_authorized": false
+  },
+  "parent_evidence": {
+    "phase87_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase87_source_clock_c0d_zero_iteration_root_cause_audit_v1.md",
+      "sha256": "108f294062ea8d6eb73244062121c1cc708179e126453b88f6d1b020baa0cbf2"
+    },
+    "phase86_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase86_phase85_source_clock_c0d_reclassification_freeze_v1.json",
+      "sha256": "9b13d6a5118c734521e69d350c9478f0844c5bbf9047c5e057bf4f5a427ace46"
+    },
+    "phase86_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase86_phase85_source_clock_c0d_reclassification_result_v1.json",
+      "sha256": "603b3fe3cf6cecd751f9240673a335ee884b711bc923f08acc3ab0fcb7134503",
+      "status": "no-go-phase86-phase85-source-clock-c0d-active-solve-gates"
+    },
+    "phase85_v2_aggregate": {
+      "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2/phase85_source_clock_c0d_structural_result.json",
+      "sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a6",
+      "historical_freeze_pin": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a",
+      "historical_pin_is_exact": false,
+      "historical_pin_failure_preserved": true
+    }
+  },
+  "candidate": {
+    "id": "phase88_source_clock_c0d_active_solve_observability_conditioning_diagnostic",
+    "kind": "active-solve-observability-conditioning-diagnostic",
+    "implementation_status_at_freeze": "not-implemented",
+    "new_cli_flag": "--native-source-clock-c0d-active-solve-diagnostic",
+    "source_aligned": true,
+    "raw_only": true,
+    "exactly_one_candidate": true,
+    "diagnostic_only": true,
+    "baseline_recipe": {
+      "backend": "GTSAM Pose3+IMU batch backend",
+      "required_existing_flags": [
+        "--android-gnss",
+        "--android-imu",
+        "--nav",
+        "--all-epochs",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-gnss-first-velocity-only-handoff",
+        "--native-source-clock-c0d-active-solve-diagnostic"
+      ],
+      "base_rinex": false,
+      "raw_inputs": ["Android GNSS log", "Android IMU log", "broadcast navigation"],
+      "routes": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+      ],
+      "route_repetitions": 1
+    },
+    "authorized_change": {
+      "scope": "instrumentation around the existing active GTSAM LM solve only",
+      "required_telemetry": [
+        "active_solve_attempted",
+        "initial_cost",
+        "final_cost",
+        "accepted_outer_iterations",
+        "total_inner_lambda_attempts",
+        "initial_lambda",
+        "maximum_lambda",
+        "final_lambda",
+        "indeterminate_linear_solve_count",
+        "unsuccessful_model_step_count",
+        "small_cost_change_stop_count",
+        "maximum_lambda_stop_count",
+        "finite_costs",
+        "C0D_factor_count",
+        "C0D_whitened_clock_column_norm",
+        "C0D_whitened_drift_column_norm",
+        "C0D_conditioning_proxy"
+      ],
+      "required_branch_reason": "Every solve must identify the observed LM termination path; an unavailable reason is a diagnostic failure.",
+      "output_is_diagnostic": true
+    },
+    "must_preserve": {
+      "source_clock_factor_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT)) in the current seconds/m/s adaptation",
+      "source_clock_factor_jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "source_clock_sigma_m": 0.1,
+      "current_seconds_noise_conversion": "0.1/C_LIGHT",
+      "direct_raw_p_and_d_quality_contract": true,
+      "C0D_legacy_scalar_between_factor": false,
+      "raw_measurement_factors_unchanged": true,
+      "optimizer_algorithm_unchanged": true
+    },
+    "handoff_contract": {
+      "native_pdc_state_bridge": false,
+      "gnss_first_position_clock_copy": false,
+      "native_gnss_first_velocity_only_handoff": true,
+      "raw_spp_position_and_clock_seed": "permitted; derived in the same raw run",
+      "gnss_first_velocity_handoff": "permitted",
+      "precomputed_coordinates": false,
+      "coordinate_bridge_or_copy": false,
+      "coordinate_values_in_diagnostic": false
+    },
+    "post_implementation_gates": {
+      "diagnostic_emitted_for_each_active_solve": true,
+      "finite_initial_and_final_cost": true,
+      "graph_iterations_at_least_one": true,
+      "final_cost_strictly_less_than_initial_cost": true,
+      "termination_branch_reason_present": true,
+      "C0D_equation_jacobian_units_sigma_unchanged": true,
+      "no_pdc_bridge_or_coordinate_copy": true,
+      "raw_only_inputs_and_provenance": true,
+      "accuracy_not_scored": true
+    }
+  },
+  "forbidden_in_this_candidate": [
+    "source sigma tuning",
+    "meter-valued clock-state parity or any state-unit rewrite",
+    "PDC state bridge",
+    "GNSS-first position or clock coordinate copying",
+    "precomputed or stored coordinate inputs",
+    "Phase82 coordinate reads",
+    "truth, MAT, validation-holdout, or Kaggle/token access",
+    "accuracy scoring or route selection",
+    "raw/native execution before the implementation is separately sealed"
+  ],
+  "implementation_authorization": {
+    "authorized": true,
+    "authorized_change_count": 1,
+    "authorized_change": "the single diagnostic candidate above",
+    "execution_authorized_at_freeze": false,
+    "followup_execution_manifest_required": true,
+    "followup_result_record_required": true,
+    "failure_action": "fail closed; do not tune sigma, change units, read accuracy artifacts, or add a second candidate"
+  },
+  "official_source_pins": {
+    "fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": ["102-114", "169-186", "189-218", "252-277", "325-340"]
+    },
+    "parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": ["46-47", "130-133"]
+    },
+    "clock_factor_ccdd_h": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc",
+      "lines": ["16-20", "32-63"]
+    },
+    "pseudorange_factor_xc_h": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/PseudorangeFactor_XC.h",
+      "sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415"
+    },
+    "doppler_factor_vd_h": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/DopplerFactor_VD.h",
+      "sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1"
+    },
+    "gtsam_lm_optimizer_cpp": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtOptimizer.cpp",
+      "sha256": "834f732ac4ad4130b2a719a3181e5dfcd2ecdf584ece6f0c76bdf5f390e10cbc"
+    },
+    "gtsam_nonlinear_optimizer_cpp": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizer.cpp",
+      "sha256": "594fd9bf3d48199f00d05794913df6c84d300664458d609fcdf0fb6ed3215a35"
+    },
+    "gtsam_lm_state_h": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/internal/LevenbergMarquardtState.h",
+      "sha256": "16964863621ca3aaadf6413c86adf202d566a4548a1a5a01a66b2aae286e7287"
+    }
+  },
+  "repository_source_pins": {
+    "src/algorithms/fgo_gtsam_backend.cpp": "4075156d10189f7f16df8e3f570106c73e0635fa2a99ef084f34295fda88afbd",
+    "src/algorithms/fgo_gtsam_internal.hpp": "90db67fe9dd8d032c3d28d37de6c161966eb3cd5ca8fb873d98a47fa6181859b",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "89688fc5ce16402c66a15c6f373185fbcc3e4a1b1c6d9b7e7b691bf95b051189",
+    "src/algorithms/fgo.cpp": "dbf2e9e08cb160f5f650d2fc78f2e99771878266d356d2d7147c6ce1afa091f5",
+    "src/algorithms/fgo_problems.cpp": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+    "src/io/android_raw_gnss.cpp": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+    "tests/test_fgo_gtsam_backend.cpp": "3472805572b42c8f3bd65ed32c822bd80c142a8c6100a4e6dd99e5e67d727f35"
+  },
+  "read_accounting": {
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false,
+    "sealed_artifact_only": true,
+    "additional_phase88_route_artifact_reads": 0
+  }
+}

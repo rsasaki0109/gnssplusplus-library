@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-train-score-authorization.v1",
+  "status": "authorized-single-development-train-read",
+  "created_at_utc": "2026-08-31T06:10:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_freeze_v1.json",
+  "freeze_record_sha256": "6e9004384b604c4f311aa56b3f6edcecef8af40bb7d0fa1e6e8b9e62cbd9f2ae",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_freeze_manifest.json",
+  "purpose": "Permit one accuracy evaluation of the already sealed raw-only native GNSS/PDC artifact on its declared development train route.",
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "keyed_output_sha256": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+    "summary_sha256": "dd3d6011ca23deffdb1ccc6f165c5ac85198f888d8d56e9085d12d669e104cf0",
+    "source_and_binary_hashes_reverified": true
+  },
+  "truth": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "allowed_read_count": 1,
+    "read_count_before_authorization": 0,
+    "read_count_after_authorization": "one evaluator read only",
+    "sha256_before_after_must_match": true,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_open_count": 0
+  },
+  "evaluation": {
+    "evaluator": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+    "evaluator_sha256": "1b0a978bf89dc2adeb8c61a7b5d0c204cd91aafadb721a75075d85d7da9d30ce",
+    "evaluator_manifest_adapter_test_sha256": "afbb99d15249295d4d1dc2cca011503a57f572f4306bd8dd83526825a1d32a0d",
+    "diagnostics": [
+      "wgs84_vincenty/linear_n_minus_1",
+      "wgs84_vincenty/nearest_rank_ceiling",
+      "haversine_sphere/linear_n_minus_1",
+      "haversine_sphere/nearest_rank_ceiling"
+    ],
+    "reported_metrics": [
+      "horizontal P50",
+      "horizontal P95",
+      "availability",
+      "truth coverage",
+      "factor residual telemetry",
+      "wall time and peak RSS"
+    ],
+    "selection_or_tuning": false,
+    "gate": "report-only; do not change candidate or parameters after this read"
+  },
+  "policy": {
+    "leaderboard_used_for_tuning": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "future_validation_or_holdout_authorized": false,
+    "no_post_score_tuning": true
+  },
+  "result_record": "created after this single scoring read; pass/fail must be recorded without rerun"
+}

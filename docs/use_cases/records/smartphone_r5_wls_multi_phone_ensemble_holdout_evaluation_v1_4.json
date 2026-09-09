@@ -1,0 +1,328 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation-record.v1.4",
+  "status": "sealed-completed-one-shot-promote-development-only",
+  "sealed_at": "2026-08-30",
+  "scope": "v1.4 truth-free 10 ms input alignment with coordinate-wise ECEF median",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4.json",
+      "sha256": "f154f638a992765b0b350aac0e8e63abfb2d7257335dcc0d907b5e576f42c7f3"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4_manifest.json",
+      "sha256": "0a7a643663856d521728bbde6e62efd110a1db2092dff35b7618302d4cbb4613"
+    },
+    "selection_record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+      "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+    },
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "profile_sha256_before_holdout": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7"
+  },
+  "route": "2022-10-06-21-51-us-ca-mtv-n",
+  "phones": [
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a325f"
+  ],
+  "fresh_unused_multi_phone_route_count": 0,
+  "algorithm": {
+    "selected_lane": "coordinate_wise_ecef_median",
+    "baseline_lane": "single_phone_wls",
+    "candidate_methods_unchanged": true,
+    "coordinate_median_unchanged": true,
+    "numeric_parameters_unchanged": true,
+    "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "alignment_tolerance_ms": 10,
+    "previous_alignment_tolerance_ms": 1,
+    "alignment_change_scope": "truth-free cross-phone input matching only",
+    "alignment_pass_rule": "absolute source-target timestamp delta <= 10 ms",
+    "alignment_reject_rule": "absolute source-target timestamp delta >= 11 ms",
+    "tie_rule": "equal nearest deltas choose earlier source timestamp",
+    "interpolation_or_extrapolation": false,
+    "sparse_gap_contract": "individual >1500 ms gaps diagnostic-only under sealed multi-phone authorization; target epoch must still be covered by a finite source"
+  },
+  "truth_free_phase": {
+    "device_materialized_count": 3,
+    "device_inputs_reused": true,
+    "truth_open_count_before_artifact_seal": 0,
+    "all_wls_lanes_generated": true,
+    "all_submission_artifacts_generated": true,
+    "all_lane_artifacts_hash_fixed_before_truth": true,
+    "selected_submission_hash_fixed_before_truth": true,
+    "truth_materialized_after_seal_only": true,
+    "no_post_holdout_tuning": true,
+    "rerun_permitted": false
+  },
+  "alignment_and_fallback": {
+    "selected_method": "coordinate_wise_ecef_median",
+    "phone_count_histogram": {
+      "1": 15,
+      "2": 29,
+      "3": 3618
+    },
+    "fallback_one_phone_observations": 15,
+    "missing_phone_observations": 59,
+    "max_abs_alignment_offset_ms": 6.0,
+    "spread_ecef_m": {
+      "p50_m": 11.760500555293326,
+      "p95_m": 28.413394428774875,
+      "max_m": 136.58388071005618
+    },
+    "target_epoch_count": 3662,
+    "unresolved_target_epoch_count": 0,
+    "all_target_timestamps_covered_by_source": true,
+    "extrapolation_used": false
+  },
+  "phone_metrics": {
+    "baseline_single_phone_wls": {
+      "sm-a205u": {
+        "availability": 1.0,
+        "coverage": 1.0,
+        "h_p50_m": 3.609486468996688,
+        "h_p95_m": 9.473520988190861,
+        "v_p95_m": 22.485898476442028,
+        "diagnostics_m": {
+          "wgs84_vincenty__linear_n_minus_1": 6.541503728593774,
+          "wgs84_vincenty__nearest_rank_ceiling": 6.550483813913944,
+          "haversine_sphere__linear_n_minus_1": 6.545216627046269,
+          "haversine_sphere__nearest_rank_ceiling": 6.5486669810984175
+        }
+      },
+      "sm-a217m": {
+        "availability": 1.0,
+        "coverage": 0.9991803278688525,
+        "h_p50_m": 3.1111727013761157,
+        "h_p95_m": 8.979721597737768,
+        "v_p95_m": 13.530787402742217,
+        "diagnostics_m": {
+          "wgs84_vincenty__linear_n_minus_1": 6.045447149556942,
+          "wgs84_vincenty__nearest_rank_ceiling": 6.055395323517278,
+          "haversine_sphere__linear_n_minus_1": 6.0409200565499805,
+          "haversine_sphere__nearest_rank_ceiling": 6.044916407690307
+        }
+      },
+      "sm-a325f": {
+        "availability": 1.0,
+        "coverage": 1.0,
+        "h_p50_m": 2.757209111668157,
+        "h_p95_m": 7.171282915930434,
+        "v_p95_m": 10.42725674893029,
+        "diagnostics_m": {
+          "wgs84_vincenty__linear_n_minus_1": 4.964246013799295,
+          "wgs84_vincenty__nearest_rank_ceiling": 4.9665982971274625,
+          "haversine_sphere__linear_n_minus_1": 4.963905440990422,
+          "haversine_sphere__nearest_rank_ceiling": 4.96634822699065
+        }
+      }
+    },
+    "selected_coordinate_wise_ecef_median": {
+      "sm-a205u": {
+        "availability": 1.0,
+        "coverage": 1.0,
+        "h_p50_m": 2.75162373512541,
+        "h_p95_m": 7.044039794471464,
+        "v_p95_m": 10.511027527590366,
+        "diagnostics_m": {
+          "wgs84_vincenty__linear_n_minus_1": 4.897831764798437,
+          "wgs84_vincenty__nearest_rank_ceiling": 4.9081989662719625,
+          "haversine_sphere__linear_n_minus_1": 4.892821412643611,
+          "haversine_sphere__nearest_rank_ceiling": 4.904827436957919
+        }
+      },
+      "sm-a217m": {
+        "availability": 1.0,
+        "coverage": 0.9991809991809992,
+        "h_p50_m": 2.762503979435901,
+        "h_p95_m": 7.036867045562519,
+        "v_p95_m": 10.531941356444547,
+        "diagnostics_m": {
+          "wgs84_vincenty__linear_n_minus_1": 4.89968551249921,
+          "wgs84_vincenty__nearest_rank_ceiling": 4.898742869587573,
+          "haversine_sphere__linear_n_minus_1": 4.892189584406013,
+          "haversine_sphere__nearest_rank_ceiling": 4.891747093222024
+        }
+      },
+      "sm-a325f": {
+        "availability": 1.0,
+        "coverage": 1.0,
+        "h_p50_m": 2.7565342000251962,
+        "h_p95_m": 7.119084135511294,
+        "v_p95_m": 10.624185832892834,
+        "diagnostics_m": {
+          "wgs84_vincenty__linear_n_minus_1": 4.937809167768245,
+          "wgs84_vincenty__nearest_rank_ceiling": 4.945614750445451,
+          "haversine_sphere__linear_n_minus_1": 4.93008404414687,
+          "haversine_sphere__nearest_rank_ceiling": 4.938219964527037
+        }
+      }
+    }
+  },
+  "aggregate_metrics": {
+    "baseline_single_phone_wls": {
+      "availability": 1.0,
+      "coverage": 0.9997267759562841,
+      "h_p50_m": 3.159289427346987,
+      "h_p95_m": 8.541508500619688,
+      "v_p95_m": 15.481314209371511,
+      "diagnostics_m": {
+        "wgs84_vincenty__linear_n_minus_1": 5.850398963983338,
+        "wgs84_vincenty__nearest_rank_ceiling": 5.857492478186228,
+        "haversine_sphere__linear_n_minus_1": 5.85001404152889,
+        "haversine_sphere__nearest_rank_ceiling": 5.853310538593125
+      },
+      "diagnostic_mean_m": 5.852804005572896
+    },
+    "selected_coordinate_wise_ecef_median": {
+      "availability": 1.0,
+      "coverage": 0.9997269997269997,
+      "h_p50_m": 2.7568873048621687,
+      "h_p95_m": 7.066663658515092,
+      "v_p95_m": 10.555718238975915,
+      "diagnostics_m": {
+        "wgs84_vincenty__linear_n_minus_1": 4.911775481688631,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.917518862101662,
+        "haversine_sphere__linear_n_minus_1": 4.905031680398832,
+        "haversine_sphere__nearest_rank_ceiling": 4.911598164902327
+      },
+      "diagnostic_mean_m": 4.911481047272863
+    },
+    "selected_minus_baseline": {
+      "h_p50_m": -0.4024021224848183,
+      "h_p95_m": -1.474844842104596,
+      "v_p95_m": -4.925595970395596,
+      "coverage": 2.237707155824047e-7,
+      "diagnostics_m": {
+        "wgs84_vincenty__linear_n_minus_1": -0.938623482294707,
+        "wgs84_vincenty__nearest_rank_ceiling": -0.9399736160845658,
+        "haversine_sphere__linear_n_minus_1": -0.9449823611300587,
+        "haversine_sphere__nearest_rank_ceiling": -0.9417123736907982
+      }
+    }
+  },
+  "promotion_gate": {
+    "passed": true,
+    "all_phone_availability_at_least": 0.98,
+    "all_phone_coverage_at_least": 0.98,
+    "aggregate_h_p50_max_m": 7.0,
+    "aggregate_h_p95_max_m": 25.0,
+    "aggregate_v_p95_max_m": 45.0,
+    "all_four_diagnostics_non_regressed": true,
+    "horizontal_non_regressed": true,
+    "vertical_non_regressed": true,
+    "strict_improvement": true,
+    "decision": "promote-development-only-full-submission-integration-candidate",
+    "production_rtk_spp_default_changed": false
+  },
+  "artifacts": {
+    "output_root": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4",
+    "report": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/wls_multi_phone_ensemble_holdout_report.json",
+      "sha256": "b348ac732db1c1c584fe44992acbf4e000c5577f47b8be762a3d20359fb9a961"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/wls_multi_phone_ensemble_holdout_manifest.json",
+      "sha256": "63ad3247041c098ace95d9d52cf93b5948624fbc279d75d831aad3446b351f37"
+    },
+    "truth_free_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/truth_free_manifest.json",
+      "sha256": "75921a3dfa5e915e56c8a1bd665d13e08fc92cd40859c7fe6bcc71ff4e7778a8"
+    },
+    "route_truth_free_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/2022-10-06-21-51-us-ca-mtv-n/route_truth_free_manifest.json",
+      "sha256": "66a735249103114b587f85ee3bf915d1ff255ad82378a5eb6c781bb35fe4d7f4"
+    },
+    "wls": {
+      "sm-a205u": {
+        "position_sha256": "11d1f74edc72ad94e9ddbcf04c2bd6a88f939c8eb9daf4c1d602b47fd345f136",
+        "summary_sha256": "00e5f54e749e7067c35e8a4fea87b6004b7f376f48e6c08b5b1fb55fab1e1090",
+        "manifest_sha256": "643df566d6589ba162e3ef023dc0098da068c4e5cdf8fd236131687ef7b5b1db"
+      },
+      "sm-a217m": {
+        "position_sha256": "c18edf7dce718176fca81c733cf85a6791a07f2b2cd09ead9ec124bdb2737dde",
+        "summary_sha256": "014fb726a4b2a6d2670d13a94d9c5132025b5a3ea1bb6bf601b90aa2e19b1b17",
+        "manifest_sha256": "619c9fb0df5d333fb6dbeedb267d0862bd3220473ead5d422b706cd28e26fd9f"
+      },
+      "sm-a325f": {
+        "position_sha256": "c5968f3f9c88637664be09e3afc0efee79d1b2d64a531ab87b242b9acf259b3d",
+        "summary_sha256": "f0cf485fc02703231328246016ee7681544666f3576bf99def94852d216f28ea",
+        "manifest_sha256": "8fa620c40389a1bd47b899a0725920219e0599726bc01e6f0164f59548dfa7a2"
+      }
+    },
+    "truth_free_submissions": {
+      "single_phone_wls": {
+        "combined_submission_sha256": "06f97875f19769f8779a4cf7930f79d6729905fc2b847e4bc98fb752f9a425bd",
+        "ensemble_manifest_sha256": "1a3f2040add08ca9acd674806ff3390028cdec259d5196b5ab6a7662497cfcf7",
+        "per_phone_submission_sha256": {
+          "sm-a205u": "1f6d6286b7550bafaac5f6141ed4a92f8e66748d785ab57412088e36f52f35cd",
+          "sm-a217m": "ed0a0013affde64f7eaab34a2d2f94e315f91c77ca03bc3c6aa08a3bd5c63517",
+          "sm-a325f": "bfdce414bf787efa0e089ac6652b368cac35d9d0d69eaba71ceeba6b281e45e3"
+        }
+      },
+      "coordinate_wise_ecef_median": {
+        "combined_submission_sha256": "740369bdd4a0057c229f2841ba323b2349e136048f40eb909fb676f1282c4f38",
+        "ensemble_manifest_sha256": "4b325c36036829ecef3ad6710395ea56cca94ef1cfaa3f8d98be62cb84da72d7",
+        "per_phone_submission_sha256": {
+          "sm-a205u": "c2c31f810b39852f76c4b534196f7e11994836230ac82c525675612325fac863",
+          "sm-a217m": "c6516d57536b8f62bbcdf5b1712062d311277b130aa39e9785f30c4d03651096",
+          "sm-a325f": "252daaaed77562876a6112861b6af4d69376caaa4e020fca201be1f8317431d0"
+        }
+      }
+    }
+  },
+  "truth_evaluation": {
+    "truth_open_count": 3,
+    "evaluation_pass_count": 1,
+    "truth_opened_only_after_truth_free_seal": true,
+    "truth_files": {
+      "sm-a205u": {
+        "sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "rows": 1213
+      },
+      "sm-a217m": {
+        "sha256": "e7f7bda0243cfe5cb1494bb84244cf3606f29eb90c84bd0f68d7b261851b2df9",
+        "rows": 1221
+      },
+      "sm-a325f": {
+        "sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+        "rows": 1230
+      }
+    }
+  },
+  "timing": {
+    "wall_s": 8.290622854983667,
+    "peak_rss_kb": 198092,
+    "rss_unit": "kilobytes from getrusage ru_maxrss"
+  },
+  "source_hashes": {
+    "apps/gnss.py": "c33aefbf0c45d334c49a3501b6868e1f161725f42dfe7ec3e44e4ad0852d20ba",
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "e1527350c19f8de11e9d9e475274e5a4769226403da0ad8b2c981c7008fba7c3",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "82e5f9b985d89ee172566ccbb63993fca95d16f591fc17223a8382809e69f3c5",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "d0b82d27e1bde9cda2c0c2510fc26fc0d608498d8a05ba3ac4babecca4f9bf2e",
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4",
+    "tests/test_smartphone_wls.py": "ed5a1f82c2071729aaf585fd7b1f7b2187505500c12547ef47de709921a022d0",
+    "tests/test_smartphone_wls_multi_phone_ensemble.py": "9e7d3f7be972bb7f2bb0f0246237daf80cfe6a03eb0329bd540e8006fd9e0932",
+    "tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "d32eeb6d3fe0c18bc81d445302ce4e818aa15018452d43b84401f9df022c7d96",
+    "tests/test_smartphone_wls_stability_selector_holdout_eval.py": "4a3f763fea952a9fc3ca3a055764e180570dfcb13b81eb4882e3b9d9fe3c7551"
+  },
+  "release_binaries": {
+    "gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+  },
+  "promotion": {
+    "decision": "promote-development-only-full-submission-integration-candidate",
+    "production_rtk_spp_default_changed": false,
+    "profile_runtime_truth_used": false,
+    "profile_annotation_after_holdout": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "d6e8d95671c59a2aec9ee959f61b8b495a356bd875c28604ed6f955f53aa1117",
+      "metadata_only": true,
+      "algorithm_parameters_changed": false
+    },
+    "post_holdout_tuning": false,
+    "rerun_permitted": false
+  }
+}

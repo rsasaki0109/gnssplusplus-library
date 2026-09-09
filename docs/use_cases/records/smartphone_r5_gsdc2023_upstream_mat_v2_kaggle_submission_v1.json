@@ -1,0 +1,249 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-v2-kaggle-submission.v1",
+  "status": "submitted-and-scored",
+  "observed_at_utc": "2026-08-31T03:06:16.637528Z",
+  "competition": {
+    "slug": "smartphone-decimeter-2023",
+    "id": 60095,
+    "official_api_endpoint": "https://api.kaggle.com"
+  },
+  "authorization": {
+    "user_explicitly_authorized_this_single_submission": true,
+    "authorized_file": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+    "authorized_description": "libgnss++ upstream GNSS IMU MAT v2",
+    "create_submission_api_call_count": 1,
+    "start_submission_upload_call_count": 1,
+    "signed_upload_put_call_count": 1,
+    "resubmission_after_response": false,
+    "no_other_submission_file_submitted": true,
+    "no_retry_after_create": true,
+    "score_used_for_tuning": false
+  },
+  "preflight": {
+    "submission": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+      "sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+      "bytes": 6150020,
+      "row_count": 71936,
+      "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "unique_keys": 71936,
+      "duplicate_keys": 0,
+      "missing_keys": 0,
+      "extra_keys": 0,
+      "nonfinite_coordinates": 0,
+      "coordinates_in_range": true,
+      "timestamp_keys_nonnegative": true
+    },
+    "official_sample_key_contract": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "role": "authoritative header, tripId/UnixTimeMillis key set, and row order only",
+      "rows": 71936,
+      "header_exact": true,
+      "coordinates_used": false,
+      "key_order_matches": true
+    }
+  },
+  "provenance": {
+    "fallback_v2_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_result.json",
+      "sha256": "2c1945fb2d751f6647fadcf7d6f0db79064669cc6d95961786554512e7b6b78c"
+    },
+    "fallback_v2_result_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_result_manifest.json",
+      "sha256": "a487e5dead349fabc49d46e772249d93e2ecbed8bf8cb08ce54a48b54a2438d7"
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.manifest.json",
+      "sha256": "b0a94f8ff2ac42358fda5dcbd11e9c82b9b95abe99a55460d0bd1e6390b1652e"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/fallback_v2_run_manifest.json",
+      "sha256": "c99d2ac3419ac98ac80fa49dbda49ca349b11e28668a8c873c7294f5c6723efa"
+    },
+    "freeze_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze.json",
+      "sha256": "4b815827140e217fe9c05a3b1ab1c086f3c5433fe9a92c47c519c36eb561988a"
+    },
+    "freeze_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze_manifest.json",
+      "sha256": "b5725f94efe9f4bb6d75b69d0de019512385e08628c988d937ed05522b4c4295"
+    },
+    "fallback_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+      "sha256": "a47acae7d12205b984d6b310290d676e6a1d57ae16a070818293c1083584f4a8"
+    },
+    "published_mat_archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+      "role": "public precomputed upstream MAT input; no estimator rerun",
+      "license_caveat": "The archive has no separate license file and remains a local cache; MAT members are not redistributed."
+    },
+    "train_evidence": {
+      "score_path": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_score.json",
+      "score_sha256": "5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1",
+      "primary_lane": "result_gnss_imu.mat",
+      "four_diagnostic_mean_m": 0.5067908808766828,
+      "rounded_four_diagnostic_mean_m": 0.506790881,
+      "truth_routes_scored": 3,
+      "validation_truth_open_count": 0,
+      "holdout_truth_open_count": 0
+    },
+    "source_counts": {
+      "result_gnss_imu_exact": 71334,
+      "result_gnss_imu_edge_hold": 1,
+      "v5_exact": 601,
+      "result_gnss": 0,
+      "approved_wls": 0,
+      "unresolved": 0,
+      "v5_fallback_role": "already sealed truth-free v5 coordinates only; no sample coordinates or test truth"
+    }
+  },
+  "official_protocol": {
+    "client": "official kagglesdk",
+    "kagglesdk_version": "0.1.37",
+    "service": "competitions.CompetitionApiService",
+    "start_upload_method": "StartSubmissionUpload",
+    "signed_upload_method": "single HTTP PUT to returned signed URL",
+    "create_method": "CreateSubmission",
+    "status_method": "GetSubmission",
+    "download_method": "DownloadSubmission",
+    "token_source": "~/.kaggle/access_token",
+    "token_value_recorded": false,
+    "token_value_printed": false,
+    "token_value_in_argv_or_artifact": false,
+    "request_retry_policy": "requests adapters pinned to Retry(total=0); no retry after any create response"
+  },
+  "network": {
+    "start_upload": {
+      "request_timestamp_utc": "2026-08-31T03:05:52.862535Z",
+      "response_timestamp_utc": "2026-08-31T03:05:53.654754Z",
+      "call_count": 1,
+      "content_length": 6150020,
+      "response_received": true,
+      "signed_url_or_blob_token_recorded": false
+    },
+    "signed_upload": {
+      "request_timestamp_utc": "2026-08-31T03:05:53.654826Z",
+      "response_timestamp_utc": "2026-08-31T03:05:55.441151Z",
+      "call_count": 1,
+      "http_status": 200,
+      "bytes_sent": 6150020,
+      "success": true,
+      "no_retry": true
+    },
+    "create_submission": {
+      "request_timestamp_utc": "2026-08-31T03:05:55.441197Z",
+      "response_timestamp_utc": "2026-08-31T03:05:57.048388Z",
+      "call_count": 1,
+      "response_received": true,
+      "no_retry": true
+    }
+  },
+  "submission_result": {
+    "submission_ref": 55905742,
+    "status": "COMPLETE",
+    "server_submission_date_utc": "2026-08-31T03:05:56.093000Z",
+    "description": "libgnss++ upstream GNSS IMU MAT v2",
+    "file_name": "submission.csv",
+    "total_bytes": 6150020,
+    "public_score": "1.235",
+    "private_score": "0.782",
+    "error_description_present": false
+  },
+  "status_poll": {
+    "method": "GetSubmission",
+    "ref": 55905742,
+    "poll_count": 2,
+    "sequence": ["PENDING", "COMPLETE"],
+    "poll_interval_seconds": 15,
+    "terminal_poll_number": 2,
+    "read_only": true,
+    "exact_ref_only": true
+  },
+  "payload_verification": {
+    "method": "DownloadSubmission",
+    "http_status": 200,
+    "downloaded_bytes": 6150020,
+    "downloaded_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "server_payload_matches_local": true,
+    "local_sha256_after": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "local_file_unchanged": true,
+    "read_only": true
+  },
+  "leaderboard_verification": {
+    "read_only": true,
+    "snapshot_frozen_at_observation": true,
+    "score_order": "ascending_lower_is_better",
+    "team_names_recorded": false,
+    "official_rank_asserted": false,
+    "rank_one_achieved_claim": false,
+    "public": {
+      "pages": 3,
+      "entry_count": 280,
+      "score_digest": "ea8ab221bdc10e06e9aab218d7cf39455e58b7464019c0b16113030985417b58",
+      "rank1_score": "0.789",
+      "top10_score_range": {"min": "0.789", "max": "1.453"},
+      "submitted_score": "1.235",
+      "hypothetical_rank_lower": 4,
+      "hypothetical_rank_upper": 4,
+      "hypothetical_only": true,
+      "late_submission_official_rank": false
+    },
+    "private": {
+      "pages": 3,
+      "entry_count": 280,
+      "score_digest": "e1d3478213f3dbd6ffbf7151c3fd8a212390641e7f07576112cbe035dc5dd636",
+      "rank1_score": "0.883",
+      "top10_score_range": {"min": "0.883", "max": "1.832"},
+      "submitted_score": "0.782",
+      "hypothetical_rank_lower": 1,
+      "hypothetical_rank_upper": 1,
+      "hypothetical_only": true,
+      "late_submission_official_rank": false
+    },
+    "interpretation": "These are read-only score-order insertions into the authenticated snapshots. No team names were retained and no official leaderboard rank is asserted."
+  },
+  "prior_submission_comparison": {
+    "prior_v5_ref": 55900482,
+    "prior_v5_description": "libgnss++ native FGO v5",
+    "prior_v5_public_score": "3.952",
+    "prior_v5_private_score": "4.276",
+    "current_minus_prior_v5_public": "-2.717",
+    "current_minus_prior_v5_private": "-3.494",
+    "prior_wls_ref": 55886678,
+    "prior_wls_description": "libgnss++ truth-free WLS v2.1",
+    "prior_wls_public_score": "4.018",
+    "prior_wls_private_score": "4.873",
+    "current_minus_prior_wls_public": "-2.783",
+    "current_minus_prior_wls_private": "-4.091",
+    "comparison_read_only": true,
+    "scores_not_used_for_tuning": true
+  },
+  "policy": {
+    "test_truth_used": false,
+    "test_truth_materialized": false,
+    "test_truth_open_count": 0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "sample_coordinates_used": false,
+    "algorithm_rerun_for_submission": false,
+    "candidate_or_numeric_parameter_changed": false,
+    "production_rtk_spp_default_changed": false,
+    "v5_artifact_changed": false,
+    "external_create_submission_calls": 1,
+    "external_resubmission_calls": 0,
+    "future_submission_authorized": false,
+    "token_access_recorded": false,
+    "rank_one_achieved": false,
+    "no_post_score_tuning": true
+  },
+  "integrity": {
+    "record_manifest_companion": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json",
+    "record_has_no_token_value": true,
+    "submission_hash_checked_before_and_after": true,
+    "download_hash_matches_submission": true,
+    "no_retry_after_create": true,
+    "no_other_submission_file": true
+  }
+}

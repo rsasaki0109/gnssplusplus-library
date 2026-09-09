@@ -1,0 +1,273 @@
+{
+  "authorization_path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_authorization_v1.json",
+  "authorization_sha256": "bd86fd1e35c8cc0cfbcb207d201cb10a0438be775307f0292956d1b7480ea239",
+  "candidate_id": "phase147-known-hu-route-admission-diagnostic-v1",
+  "execution_label": "Luna Max",
+  "phase": 147,
+  "plan_path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_preflight_manifest_v1.json",
+  "plan_sha256": "0044096dca41887e6bdd6201444f70d5ef7d6c7f0b5c717808670a09264a9aab",
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_reads": 2,
+    "kaggle_or_token_access": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "native_process_invocations": 2,
+    "raw_base_rinex_reads": 2,
+    "raw_phone_gnss_reads": 2,
+    "raw_phone_imu_reads": 2,
+    "reruns_fallbacks_repairs_sweeps": 0,
+    "solution_coordinate_reads": 0,
+    "truth_reads": 0
+  },
+  "rerun_or_fallback": false,
+  "route_failure_independence": true,
+  "route_order": [
+    "MTV-H",
+    "MTV-U"
+  ],
+  "routes": [
+    {
+      "execution": {
+        "argv": [
+          "build/apps/gnss_fgo_imu_no_base",
+          "--dataset-id",
+          "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+          "--android-gnss",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+          "--android-imu",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+          "--nav",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+          "--all-epochs",
+          "--android-raw-utc-keys",
+          "--android-raw-clock-only",
+          "--android-utc-wall-clock-fallback",
+          "--native-pdc-imu-tdcp-no-bridge",
+          "--native-source-direct-observable-quality",
+          "--native-source-clock-c0d-factor",
+          "--native-source-clock-c0d-meter-state-parity",
+          "--native-source-clock-c0d-active-solve-diagnostic",
+          "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+          "--native-source-clock-c0d-epoch-vector-parity",
+          "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+          "--native-base-pseudorange-compensation",
+          "--native-base-pseudorange-source-miss-mask",
+          "--native-upstream-position-offset",
+          "--native-phase135-official-affine-measurement-family",
+          "--native-phase138-affine-tdcp-anchor-range-constant",
+          "--native-phase118-official-tdcp-huber-k",
+          "--native-phase143-official-main-lm-termination-budget",
+          "--native-phase144-telemetry-schema",
+          "--native-base-rinex",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+          "--native-base-rinex-sha256",
+          "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+          "--out",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2021-08-24-20-32-us-ca-mtv-h__pixel5/opaque_solution_output.csv",
+          "--summary-json",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2021-08-24-20-32-us-ca-mtv-h__pixel5/native_summary.json"
+        ],
+        "invocation_count": 1,
+        "return_code": -6,
+        "stderr_bytes": 220,
+        "stderr_sha256": "eeaebdbb64dd6a8fd67e5ce6d1b0aacb3304fcd314062fc5cf899fd52fd57099",
+        "stdout_bytes": 0,
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      "failure_message": "Phase143 official main LM budget requires the Phase142/99 meter-state main graph or the unchanged 1000-iteration GNSS-first staging graph",
+      "failure_stage": "main-optimizer-admission",
+      "input_hashes": {
+        "base.obs": {
+          "bytes": 11854125,
+          "expected_bytes": 11854125,
+          "expected_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+          "match": true,
+          "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+          "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150"
+        },
+        "brdc.nav": {
+          "bytes": 10805490,
+          "expected_bytes": 10805490,
+          "expected_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+          "match": true,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+          "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+        },
+        "device_gnss.csv": {
+          "bytes": 74299283,
+          "expected_bytes": 74299283,
+          "expected_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+          "match": true,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+          "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+        },
+        "device_imu.csv": {
+          "bytes": 54271475,
+          "expected_bytes": 54271475,
+          "expected_sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+          "match": true,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+          "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480"
+        }
+      },
+      "input_read_counts": {
+        "base.obs": 1,
+        "brdc.nav": 1,
+        "device_gnss.csv": 1,
+        "device_imu.csv": 1
+      },
+      "native_process_invocations": 1,
+      "opaque_solution": null,
+      "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "status": "fail-closed-missing-native-summary",
+      "summary": {
+        "present": false,
+        "read_count": 0
+      },
+      "target": "MTV-H",
+      "tdcp_huber_threshold_sigma": 0.2,
+      "type": "Street"
+    },
+    {
+      "execution": {
+        "argv": [
+          "build/apps/gnss_fgo_imu_no_base",
+          "--dataset-id",
+          "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+          "--android-gnss",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+          "--android-imu",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv",
+          "--nav",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav",
+          "--all-epochs",
+          "--android-raw-utc-keys",
+          "--android-raw-clock-only",
+          "--android-utc-wall-clock-fallback",
+          "--native-pdc-imu-tdcp-no-bridge",
+          "--native-source-direct-observable-quality",
+          "--native-source-clock-c0d-factor",
+          "--native-source-clock-c0d-meter-state-parity",
+          "--native-source-clock-c0d-active-solve-diagnostic",
+          "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+          "--native-source-clock-c0d-epoch-vector-parity",
+          "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+          "--native-base-pseudorange-compensation",
+          "--native-base-pseudorange-source-miss-mask",
+          "--native-upstream-position-offset",
+          "--native-phase135-official-affine-measurement-family",
+          "--native-phase138-affine-tdcp-anchor-range-constant",
+          "--native-phase118-official-tdcp-huber-k",
+          "--native-phase143-official-main-lm-termination-budget",
+          "--native-phase144-telemetry-schema",
+          "--native-base-rinex",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+          "--native-base-rinex-sha256",
+          "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+          "--out",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/opaque_solution_output.csv",
+          "--summary-json",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/native_summary.json"
+        ],
+        "invocation_count": 1,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 111,
+        "stdout_sha256": "523b82b1a46e308eebed5d49b3f694e00d7b451b5a2486f50984e2eda59e606c"
+      },
+      "failure_message": "native output expected_epoch_coverage=false",
+      "failure_stage": "output-epoch-coverage",
+      "input_hashes": {
+        "base.obs": {
+          "bytes": 5950275,
+          "expected_bytes": 5950275,
+          "expected_sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+          "match": true,
+          "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+          "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6"
+        },
+        "brdc.nav": {
+          "bytes": 11506619,
+          "expected_bytes": 11506619,
+          "expected_sha256": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92",
+          "match": true,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav",
+          "sha256": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+        },
+        "device_gnss.csv": {
+          "bytes": 23385520,
+          "expected_bytes": 23385520,
+          "expected_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+          "match": true,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+          "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+        },
+        "device_imu.csv": {
+          "bytes": 17453338,
+          "expected_bytes": 17453338,
+          "expected_sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+          "match": true,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv",
+          "sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab"
+        }
+      },
+      "input_read_counts": {
+        "base.obs": 1,
+        "brdc.nav": 1,
+        "device_gnss.csv": 1,
+        "device_imu.csv": 1
+      },
+      "native_process_invocations": 1,
+      "opaque_solution": {
+        "bytes": 88134,
+        "content_interpreted": false,
+        "newline_count": 1102,
+        "path": "output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/opaque_solution_output.csv",
+        "sha256": "035af42301063c050b22fb34ad041b4d75c417b568d9d7ec16a5e2c77e60dd50"
+      },
+      "route": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "status": "fail-closed-structural-summary",
+      "summary": {
+        "bytes": 46801,
+        "coordinate_fields_interpreted": false,
+        "duplicate_paths": [],
+        "path": "output/smartphone-r5/phase147-hu-structural-diagnostic-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/native_summary.json",
+        "preserved_native_file": true,
+        "read_count": 1,
+        "sha256": "7ef1c3290ddf7e69201ffd067ee6de67a58ab4d12c2802ee37f306d610793014"
+      },
+      "target": "MTV-U",
+      "tdcp_huber_threshold_sigma": 0.2,
+      "type": "Street"
+    }
+  ],
+  "runs_per_route": 1,
+  "structural_report": {
+    "path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_report_v1.json",
+    "sha256": "094bbd134b2eff58b85e6c3972d471eb917a3277d4786abd011607e42b7d8fd5",
+    "coordinate_fields_interpreted": false
+  },
+  "schema_version": "smartphone-r5-phase147-hu-structural-diagnostic-result.v1",
+  "solution_policy": "opaque hash/bytes/newline seal only; no solution fields parsed",
+  "status": "sealed-hu-structural-diagnostic-no-truth-accuracy",
+  "structural_policy": {
+    "accepted_iterations_authority": "native Phase143 termination reports",
+    "accuracy_evaluation": false,
+    "configured_effective_limits_preserved": true,
+    "fallback": false,
+    "gnss_first_configured_max_iterations": 1000,
+    "gnss_first_effective_max_iterations": 1000,
+    "kaggle_or_token_access": false,
+    "main_configured_max_iterations": 12,
+    "main_effective_max_iterations": 1000,
+    "mat_pdc_precomputed_reads": false,
+    "official_type_h_u": "Street",
+    "pixel5_offset_reapplication": 0,
+    "repair": false,
+    "rerun": false,
+    "solution_coordinate_interpretation": false,
+    "street_tdcp_huber_threshold_sigma": 0.2,
+    "truth_used": false
+  }
+}

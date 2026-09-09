@@ -1,0 +1,106 @@
+{
+  "schema_version": "smartphone-r5-phase14-carrier-code-leveling-freeze.v1",
+  "status": "frozen-before-materialization",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "candidate_id": "native-carrier-code-leveling-e1-v1",
+  "purpose": "Opt-in raw-only carrier-code leveling for the native Phase12 graph. This is a signal/arc preprocessing candidate, not a new free graph state.",
+  "policy": {
+    "mat_read_count_before_freeze": 0,
+    "truth_read_count_before_freeze": 0,
+    "validation_truth_read_count_before_freeze": 0,
+    "holdout_truth_read_count_before_freeze": 0,
+    "test_truth_read_count_before_freeze": 0,
+    "enriched_satellite_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "leaderboard_or_token_access": false,
+    "external_mutation": false,
+    "production_default_changed": false,
+    "phase13_upstream_quality_enabled": false,
+    "post_truth_tuning": false
+  },
+  "archive_inventory": {
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "role_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "role_inventory_sha256": "aa57c85d9befdceb088c6eba75f23560e33d5cdde76bdbfa48a32eadbdbd3c30",
+    "selection_method": "ZIP central-directory metadata and existing role records only; no payload member was opened by this selection"
+  },
+  "split_audit": {
+    "strict_route_disjoint_validation": null,
+    "status": "blocked-no-unused-route-disjoint-validation",
+    "strict_definition": "A route is ineligible when any phone on that route has prior truth evidence or a prior validation/holdout/test role; exact unused identity is insufficient.",
+    "eligible_route_disjoint_candidates": [],
+    "exact_unused_identity_candidates": [
+      "2022-08-04-20-07-us-ca-sjc-q/mi8"
+    ],
+    "structural_smoke_only_identity": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "smoke_reuse_reason": "The exact mi8 identity is absent from the positive truth-use inventory, but the same route has prior pixel5 truth evidence. It is therefore not a fresh validation asset and its truth must not be materialized or scored.",
+    "required_action": "Do not open ground_truth.csv in this phase; a genuinely route-disjoint validation asset is required for any accuracy comparison."
+  },
+  "immutable_baseline": {
+    "phase12_freeze_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json",
+    "phase12_freeze_record_sha256": "416b56c7bc13fa969a4f2397fe70bc01ecb78198612c341e41ecee731ff908fd",
+    "phase12_structural_seal": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_structural_seal_v1.json",
+    "phase12_structural_seal_sha256": "20f76514b1c146d0dcbed4a3eb7a72ff29a738299bb07355c5392ade2640d970",
+    "phase12_wgs84_linear_m": 3.1922489635126103,
+    "phase12_production_default": "unchanged"
+  },
+  "raw_contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_measurements_used": ["RawPseudorangeMeters reconstructed from Android clock", "AccumulatedDeltaRangeMeters", "AccumulatedDeltaRangeState", "HardwareClockDiscontinuityCount", "utcTimeMillis"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv", "sample_submission.csv", "result_gnss*.mat", "device WLS coordinates", "SvPosition*", "SvElevationDegrees", "precomputed trajectories"],
+    "native_only": true,
+    "same_process_graph": true,
+    "atomic_outputs": true
+  },
+  "observability_audit": {
+    "per_arc_pseudorange_bias_state": "rejected before implementation",
+    "bias_state_reason": "A constant per-satellite/signal code bias is confounded with the epoch receiver clock and constellation/signal bias directions. Raw code alone does not identify it; a weak prior would select the gauge rather than measure multipath.",
+    "selected_form": "causal carrier-code leveling; no additional graph state",
+    "observable_quantity": "ADR phase increment within one continuous satellite/signal arc provides relative code change; the first code observation anchors the absolute level.",
+    "limitations": "Leveling cannot recover an absolute code bias and assumes short-arc ionosphere/multipath divergence is bounded. A truth-free innovation report and fail-closed reset contract are required.",
+    "upstream_evidence": {
+      "repository": "https://github.com/taroz/gsdc2023",
+      "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+      "parameters_m": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "parameters_m_sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "android_hatch_reference": "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py:HatchSmoother.update",
+      "reference_formula": "S_t=((N-1)*(S_(t-1)+ADR_t-ADR_(t-1))+P_t)/N"
+    }
+  },
+  "candidate_contract": {
+    "signal_scope": "Galileo E1 only; GPS and secondary signals remain byte-identical to Phase12 input",
+    "key": "(GNSSSystem, PRN, SignalType)",
+    "window_samples": 30,
+    "window_interpretation": "maximum consecutive one-Hz samples, matching the existing frozen Hatch-30 development contract",
+    "formula": "predicted=S_previous+(ADR_current-ADR_previous); S_current=((N-1)*predicted+P_current)/N",
+    "first_or_reset_row": "emit raw pseudorange and start a new arc",
+    "arc_reset_conditions": ["ADR valid bit absent", "ADR reset bit 2", "ADR cycle-slip bit 4", "missing/nonfinite/out-of-range ADR", "non-positive or >1500 ms epoch gap", "HardwareClockDiscontinuityCount changes", "nonfinite/non-positive pseudorange", "loss-of-lock/LLI"],
+    "phase_units": "Android AccumulatedDeltaRangeMeters is already metres; no cycles-to-metres conversion is applied to the increment",
+    "fail_closed": ["input epoch/key mismatch", "nonfinite level or innovation", "negative/implausible finite output", "clock count vector missing in Android mode"],
+    "no_new_factors": true,
+    "no_truth_selection": true,
+    "no_phase13_quality_flag": true
+  },
+  "structural_gate": {
+    "must_hold": ["Phase12 factors/settings unchanged except E1 pseudorange values", "finite all epochs and keyed output", "native raw input only", "nonzero eligible E1 arc/update counts when present", "all reset reasons reported", "no MAT/enriched/truth read", "deterministic byte-identical repeat", "no new >70 m/s isolated transition", "fallback is exact Phase12 input/recipe on contract failure"],
+    "truth_score_authorized": false,
+    "promotion_authorized": false,
+    "failure_action": "record No-Go or structural blocker; do not score overlapping-route truth"
+  },
+  "commands": {
+    "structural_smoke": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <raw/device_gnss.csv> --android-imu <raw/device_imu.csv> --nav <raw/brdc.nav> --out <candidate/submission.csv> --summary-json <candidate/summary.json> --dataset-id 2022-08-04-20-07-us-ca-sjc-q/mi8 --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-carrier-code-leveling",
+    "truth_evaluation": "not authorized: no route-disjoint unused validation asset exists",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "hashes": {
+    "freeze_record_sha256": "computed after apply_patch",
+    "companion_manifest": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1_manifest.json",
+    "candidate_source_hashes": "filled at structural seal",
+    "candidate_binary_hash": "filled at structural seal"
+  }
+}

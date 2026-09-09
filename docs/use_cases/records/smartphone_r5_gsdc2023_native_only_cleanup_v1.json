@@ -1,0 +1,83 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-only-cleanup.v1",
+  "status": "active-native-only-contract",
+  "created_at_utc": "2026-08-31T07:00:00Z",
+  "purpose": "Make the raw Android GNSS/native C++ lane authoritative after rejecting the earlier precomputed-MAT experiment.",
+  "policy": {
+    "mat_file_open_count": 0,
+    "mat_inference": false,
+    "mat_oracle": false,
+    "mat_fixture": false,
+    "allowed_inference_inputs": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv for an explicitly enabled IMU lane",
+      "broadcast RINEX navigation"
+    ],
+    "ground_truth": "ground_truth.csv is permitted only after a frozen truth-free native output for a declared development score",
+    "validation_holdout_test_truth": "not opened by this native GNSS/PDC phase",
+    "kaggle_or_token_access": false,
+    "production_default_changed": false
+  },
+  "authoritative_native_lane": {
+    "raw_loader": "include/libgnss++/io/android_raw_gnss.hpp + src/io/android_raw_gnss.cpp",
+    "solver": "apps/native/gnss_pos_vel_pdc.cpp",
+    "orchestrator": "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py",
+    "preflight": "apps/commands/benchmarks/gnss_smartphone_native_only.py",
+    "score_evaluator": "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc_eval.py",
+    "raw_contract": "any .mat path is rejected before regular-file checks/loaders; result, truth, sample, imported-v5, Python-coordinate, and base/DD paths are rejected",
+    "algorithm": "native raw clock/P/L/D conversion, published raw exobs status/multipath masks, native SPP seed, existing deterministic Eigen P+D+ordinary-TDCP/float-carrier PDC graph",
+    "development_decision": "raw-stage exobs mask candidate is sealed No-Go after one authorized train score; native best remains FGO v5 public/private 3.952/4.276 m",
+    "native_target_0_782_class": "not achieved"
+  },
+  "removed_from_active_runtime": [
+    "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py",
+    "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+    "apps/commands/benchmarks/gnss_smartphone_phone_data_mat.py",
+    "tests/test_smartphone_gsdc2023_upstream_mat.py",
+    "tests/test_smartphone_gsdc2023_upstream_mat_fallback_v2.py",
+    "tests/test_smartphone_native_fgo_v2_mat.py",
+    "tests/test_smartphone_published_solution_reproducibility.py",
+    "docs/use_cases/smartphone_native_fgo_v2_mat_no_base.md"
+  ],
+  "historical_rejected_external_experiment_records": [
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_freeze.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_smoke.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_smoke_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_audit.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_freeze_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_result.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_fallback_v2_result_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_promotion_result_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_promotion_result_v1_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_test_conversion_authorization_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_authorization_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_authorization_v1_manifest.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_gate_correction_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_protocol_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json"
+  ],
+  "historical_record_contract": {
+    "classification": "rejected_external_experiment",
+    "native_inference_evidence": false,
+    "runtime_dependency": false,
+    "score_used_for_native_tuning": false,
+    "records_are_not_rewritten": true,
+    "historical_git_revisions_remain_auditable": true
+  },
+  "verification": {
+    "raw_loader_and_solver_release_build": "passed",
+    "raw_android_unit_tests": "7/7 passed",
+    "native_only_contract_tests": "5/5 passed",
+    "native_gnss_pdc_bridge_tests": "5/5 passed",
+    "native_gnss_pdc_evaluator_tests": "3/3 passed",
+    "kaggle_boundary_tests": "6/6 passed",
+    "no_mat_scan_scope": "source/docs were scanned with data/, output/, build*/ and *.mat payloads excluded; intentional rejection markers remain",
+    "authoritative_gap_matrix": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json",
+    "historical_external_result": "never accepted as native inference or native 0.782-class evidence"
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "schema_version": "smartphone-r5-phase52-android-sv-time-uncertainty-integrity-recovery-manifest.v2",
+  "phase": 52,
+  "status": "evaluator-frozen-before-phase52-truth-read",
+  "reason_for_v2": {
+    "v1_manifest": "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_evaluator_manifest_v1.json",
+    "v1_preflight_issue": "metadata-only reference expected a structural.passed field while the immutable Phase51 output stores evaluator.structural_pass",
+    "v2_action": "accept the exact pinned Phase51 evaluator.structural_pass field; no output, algorithm, accuracy gate, or domain rule changed"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase52_android_sv_time_uncertainty_integrity_recovery_freeze_v1.json",
+    "sha256": "e88de17ba1dff7e915e365b34d9fcdf3da769d8113b38b15b21b8bb7923c41d3"
+  },
+  "phase51_result": {
+    "commit": "9a7def1",
+    "path": "docs/use_cases/records/smartphone_r5_phase51_android_sv_time_uncertainty_sigma_floor_result_v1.json",
+    "sha256": "b8f7ae93af72e147ef10b839e42a3bf52a51196cfecc2a4596dd76b7c55b78f3"
+  },
+  "evaluator": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase52_android_sv_time_uncertainty_integrity_recovery.py",
+      "sha256": "006ded46857459a116ea6218183a245b80094f0645ce505951cb81e510fd7e9d"
+    },
+    "focused_tests": [
+      {
+        "path": "tests/test_smartphone_phase52_android_sv_time_uncertainty_integrity_recovery.py",
+        "sha256": "696bb81ac85d11dea8adf0d8660688a2dbd1c61934bea0e03fac7244ab07d406"
+      }
+    ],
+    "cmake": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "65ef7441867375830a5fc0ddcbdefca497cdd1ba756f4083a910683c295ce493"
+    },
+    "solver_invocation_count": 0,
+    "native_subprocess_invocation_count": 0
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "candidate_run1_read_count": 1,
+  "control_run1_read_count": 1,
+  "truth_read_count_per_route": 1,
+  "input_read_contract": {
+    "phase51_candidate_run1_submission_read_count_per_route": 1,
+    "phase51_control_run1_submission_read_count_per_route": 1,
+    "phase51_candidate_run1_summary_read_count_per_route": 1,
+    "phase51_control_run1_summary_read_count_per_route": 1,
+    "phase51_candidate_run2_reopened": 0,
+    "phase44_truth_read_count_per_route": 1,
+    "single_process_for_truth_and_score": true,
+    "archive_reopen_or_rematerialize": false,
+    "truth_derived_inference_or_tuning": false,
+    "post_score_tuning_or_rerun": false
+  },
+  "truth_policy": {
+    "truth_reads_before_manifest_seal": 0,
+    "truth_reads_before_score": 0,
+    "solver_process_invocations": 0,
+    "solver_rerun": false,
+    "validation_reads": 0,
+    "holdout_reads": 0,
+    "mat_read_or_generated": false,
+    "wls_or_precomputed_coordinates": false,
+    "kaggle_or_token_access": 0
+  },
+  "domain_contract": {
+    "key": "(phone, UnixTimeMillis)",
+    "prediction_domain_coverage": "all prediction keys must match truth exactly; duplicates/extras forbidden",
+    "truth_row_coverage": "informational only",
+    "warmup_missing_counts": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 0,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 0,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1
+    },
+    "missing_key_rule": "missing truth key equals exactly the first chronological truth timestamp and precedes the first prediction timestamp",
+    "interpolation": false,
+    "edge_hold": false,
+    "nearest_match": false
+  },
+  "metric_contract": {
+    "haversine_radius_m": 6371008.8,
+    "percentile": "linear rank (n - 1) * q",
+    "score": "(P50 + P95) / 2"
+  },
+  "forbidden": [
+    "solver/native rerun",
+    "algorithm change",
+    "archive reopen/rematerialization",
+    "validation",
+    "holdout",
+    "MAT",
+    "WLS/device coordinates",
+    "precomputed coordinates",
+    "Kaggle/token"
+  ]
+}

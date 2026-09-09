@@ -1,0 +1,142 @@
+{
+  "schema_version": "smartphone-r5-tdcp-trajectory-evaluation-audit.v1",
+  "status": "sealed-no-go-train-gate",
+  "decision": "no-go-train-gate",
+  "scope": "development-only truth-free Android TDCP/ADR trajectory postprocess",
+  "selection_freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_tdcp_trajectory_selection.json",
+    "sha256": "ccb3f647df0e3fdc96945dd84db9b966b95278c8536e8564d8dd995e4ebad519",
+    "candidate_id": "tdcp_displacement_blend_alpha0p50",
+    "frozen_before_truth_evaluation": true,
+    "numeric_parameters_changed_after_freeze": false
+  },
+  "implementation": {
+    "trajectory_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_tdcp_trajectory.py",
+      "sha256": "a3d6a606b4e94e767c73af0a4d079b9c36f609b4c149231c7d6fe8a2f1fa49b8"
+    },
+    "evaluator_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_tdcp_trajectory_eval.py",
+      "sha256": "4e465f53908ff6d3a2f9f6750388668a33092feb5c33802495d9cf802abd7275"
+    },
+    "test_source": {
+      "path": "tests/test_smartphone_tdcp_trajectory.py",
+      "sha256": "b174f83ce1ec8742efe0f4b46e8839255d1affad35e0de109a1717152cb0c8e8"
+    },
+    "evaluation_test_source": {
+      "path": "tests/test_smartphone_tdcp_trajectory_eval.py",
+      "sha256": "342660ac5f4c1b50e28a892e345b88012c88d1e7db30940ecd63dcd41268180e"
+    },
+    "truth_free_cli": "python3 apps/gnss.py smartphone-tdcp-trajectory --base-position <native-hatch30.pos> --device-gnss <device_gnss.csv> --output-dir <output>",
+    "evaluation_cli": "python3 apps/gnss.py smartphone-tdcp-trajectory-eval --selection-record docs/use_cases/records/smartphone_r5_tdcp_trajectory_selection.json --output-dir output/smartphone-r5/tdcp-trajectory-evaluation",
+    "production_default_changed": false
+  },
+  "train_evaluation": {
+    "record": {
+      "path": "output/smartphone-r5/tdcp-trajectory-evaluation/tdcp_train_evaluation.json",
+      "sha256": "2ed2b712b8cc2754f3434db1f4ecc135bd7b8eea5634eec1dd0142f5f3bdcc75"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/tdcp-trajectory-evaluation/tdcp_train_evaluation_manifest.json",
+      "sha256": "6aef5e55c22764bc3b4c9b2466b1f936cb86fe55483df4e473d7fde8b48343b7"
+    },
+    "truth_open_count": 3,
+    "truth_free_artifacts_sealed_before_each_truth_read": true,
+    "public_private_kaggle_scores_used_for_tuning": false,
+    "fresh_validation_opened": false,
+    "unused_holdout_materialized": false,
+    "unused_holdout_truth_opened": false,
+    "routes": [
+      {
+        "dataset_id": "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+        "base": {
+          "availability_ratio": 0.9995004995004995,
+          "truth_coverage_ratio": 0.9995004995004995,
+          "horizontal_wgs84_p50_m": 1.876996943577505,
+          "horizontal_wgs84_p95_m": 5.400121208395055,
+          "vertical_p95_abs_m": 9.18346747792097,
+          "diagnostic_mean_m": 3.639937088635751
+        },
+        "tdcp_blend": {
+          "availability_ratio": 0.9995004995004995,
+          "truth_coverage_ratio": 0.9995004995004995,
+          "horizontal_wgs84_p50_m": 3.2586307982585945,
+          "horizontal_wgs84_p95_m": 6.863764867384851,
+          "vertical_p95_abs_m": 6.639305242186289,
+          "diagnostic_mean_m": 5.061419330370836
+        },
+        "gate_failures": ["horizontal_p50_regression", "horizontal_p95_regression", "four_diagnostic_regressions"]
+      },
+      {
+        "dataset_id": "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+        "base": {
+          "availability_ratio": 0.9993103448275862,
+          "truth_coverage_ratio": 0.9862068965517241,
+          "horizontal_wgs84_p50_m": 3.500419361767846,
+          "horizontal_wgs84_p95_m": 9.946888692400321,
+          "vertical_p95_abs_m": 18.7323026147595,
+          "diagnostic_mean_m": 6.723753739068323
+        },
+        "tdcp_blend": {
+          "availability_ratio": 0.9993103448275862,
+          "truth_coverage_ratio": 0.9862068965517241,
+          "horizontal_wgs84_p50_m": 3.808105152013627,
+          "horizontal_wgs84_p95_m": 8.865485740962638,
+          "vertical_p95_abs_m": 14.117750926788688,
+          "diagnostic_mean_m": 6.341625868458937
+        },
+        "gate_failures": ["horizontal_p50_regression"]
+      },
+      {
+        "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+        "base": {
+          "availability_ratio": 0.9992774566473989,
+          "truth_coverage_ratio": 0.9992774566473989,
+          "horizontal_wgs84_p50_m": 3.2142607094436784,
+          "horizontal_wgs84_p95_m": 7.943556294558911,
+          "vertical_p95_abs_m": 20.19201316727292,
+          "diagnostic_mean_m": 5.579769086634116
+        },
+        "tdcp_blend": {
+          "availability_ratio": 0.9992774566473989,
+          "truth_coverage_ratio": 0.9992774566473989,
+          "horizontal_wgs84_p50_m": 3.808056980446071,
+          "horizontal_wgs84_p95_m": 7.73968215831526,
+          "vertical_p95_abs_m": 14.03728752373046,
+          "diagnostic_mean_m": 5.77532402806664
+        },
+        "gate_failures": ["horizontal_p50_regression", "four_diagnostic_regressions"]
+      }
+    ],
+    "aggregate": {
+      "base_horizontal_wgs84_p50_m": 2.86389233826301,
+      "candidate_horizontal_wgs84_p50_m": 3.624930976906098,
+      "base_horizontal_wgs84_p95_m": 7.763522065118096,
+      "candidate_horizontal_wgs84_p95_m": 7.822977588887583,
+      "base_vertical_p95_abs_m": 16.035927753317797,
+      "candidate_vertical_p95_abs_m": 11.598114564235146,
+      "base_diagnostic_mean_m": 5.31448663811273,
+      "candidate_diagnostic_mean_m": 5.726123075632138,
+      "availability_non_regressed": true,
+      "coverage_non_regressed": true,
+      "strict_horizontal_p95_improvement": false,
+      "strict_diagnostic_mean_improvement": false
+    }
+  },
+  "artifacts": {
+    "mi8_manifest_sha256": "3866f4bf0e5814a59466f16b504fd6544c311c168dc7db1248ca7f54c8caa092",
+    "mi8_position_sha256": "885fb144be8e6f28e7d49c48e1cb338075c1378484b4362793221b2dfeaf370c",
+    "pixel5_manifest_sha256": "513f2ff79fc33ed99127a6861ee0cdbd251823f5bec55da2cdecd8f12c94f33a",
+    "pixel5_position_sha256": "47f0756d1c60b2ab39a11f928b4fa3133cecd15a67f6f616dd130e93bbe41f26",
+    "pixel7pro_manifest_sha256": "53b84325d2ec04face34bfdf937bf2f6b71d29ba768d5af9f7a159e21706edde",
+    "pixel7pro_position_sha256": "80c7b1ba7209e686488d5767c458704cd5587ca7c82ab33b8e3b4860f34bc129"
+  },
+  "no_go_reason": "The fixed train gate requires no per-route regression and strict aggregate horizontal P95 plus four-diagnostic improvement. The TDCP blend regressed horizontal median on all three routes, regressed horizontal P95 and all four diagnostics on mi8, regressed the four diagnostics on Pixel7Pro, and failed both aggregate strict-improvement requirements.",
+  "sealed_data_policy": {
+    "fresh_validation": "not opened because train gate failed",
+    "unused_holdout": "not materialized or opened",
+    "holdout_truth_open_count": 0,
+    "post_holdout_tuning": false,
+    "external_mutation": false
+  }
+}

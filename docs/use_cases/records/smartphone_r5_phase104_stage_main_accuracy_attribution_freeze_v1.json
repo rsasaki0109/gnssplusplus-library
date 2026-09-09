@@ -1,0 +1,277 @@
+{
+  "schema_version": "smartphone-r5-phase104-stage-main-accuracy-attribution-freeze.v1",
+  "phase": 104,
+  "status": "frozen-before-phase104-implementation-raw-and-truth-execution",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one default-off evaluation-only stage-vs-main export for later fresh Phase101 raw-only runs; this record is not raw, solver, truth, accuracy, release, or Kaggle authorization.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase104_stage_main_accuracy_attribution_audit_v1.md",
+      "commit": "b209a7ed74ed773976b59d261b6f1c0dbbd549cc",
+      "sha256": "2b9ceb6d69517932333034160604d2d393277af394e04bcd7f2669dbebef75a9"
+    },
+    "phase101_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "commit": "59a60fb",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a",
+      "use": "selector, route, retained-epoch, and expected-output authority only; no withheld solution reuse"
+    },
+    "phase101_source_parity_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_source_parity_accuracy_regression_freeze_v1.json",
+      "commit": "48aa18f",
+      "use": "fresh Phase101 pipeline and raw-only C/ISB/D/handoff boundary"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873",
+      "use": "same-route metric and baseline aggregate only"
+    },
+    "phase100_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7",
+      "use": "sealed QR comparison aggregate only"
+    },
+    "phase103_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_result_v1.json",
+      "commit": "3b9ca8c",
+      "sha256": "1a909a9b91ea90517fac3f138faa363fd5a601e33e4361b2017e4873e8873688",
+      "use": "sealed corrected final-main comparison aggregate only"
+    },
+    "official_gnss_source": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+    },
+    "official_gnss_imu_source": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "native_staging_source": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "72269b057073c0b0134b069a7436c8c3979504807b94ec7b477b7c4fa6f99339"
+    }
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase104-evaluation-only-gnss-first-stage-export-v1",
+    "selector": "new default-off evaluation-only stage-export selector",
+    "selector_default_off": true,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_order_fixed": true,
+    "runs_per_route": 1,
+    "fresh_phase101_pipeline_required": true,
+    "phase101_selector_on": true,
+    "phase99_qr_main_selector_unchanged": true,
+    "stage_observation_boundary": "After existing Phase101 exact-key C/D/position/velocity in-memory handoff has completed, take one read-only copy of the still-in-scope GNSS-first result; then continue the unchanged main initialization/solver path.",
+    "copy_only": true,
+    "stage_copy_may_feed_solver": false,
+    "stage_copy_may_replace_handoff": false,
+    "stage_copy_may_be_used_for_initialization": false,
+    "stage_copy_may_be_used_for_tuning": false,
+    "stage_copy_may_be_used_for_route_selection": false,
+    "native_input_or_intermediate_mutation": false,
+    "legacy_default_unchanged": true,
+    "no_fallback_or_rerun": true
+  },
+  "raw_only_boundary": {
+    "future_native_inputs_exact": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "future_native_input_roles": {
+      "device_gnss.csv": "raw Android GNSS observations",
+      "device_imu.csv": "raw Android IMU observations",
+      "brdc.nav": "broadcast navigation only"
+    },
+    "path_source": "Phase95 sealed raw-input materialization, resolved by a later manifest-pinned runner without content copying or transformation",
+    "raw_content_copy_or_transform": false,
+    "forbidden_native_inputs": [
+      "truth or evaluator data",
+      "MAT or MAT-derived state",
+      "base RINEX or pseudorange correction",
+      "PDC/WLS/precomputed coordinate or trajectory",
+      "Kaggle data or token"
+    ]
+  },
+  "stage_sidecar_contract": {
+    "private_evaluation_only": true,
+    "suggested_relative_path": "<route-output>/gnss_first_stage_solution.csv",
+    "not_the_main_solution_path": true,
+    "header_exact": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "source": "same-run gnss_first_result.solution.solutions after Phase101 handoff validation",
+    "coordinate_conversion": "the same existing ECEF-to-geodetic conversion used for native output; no filtering, smoothing, interpolation, extrapolation, or offset correction is introduced",
+    "key": "(phone, UnixTimeMillis)",
+    "retained_key_contract": "exact retained EpochSeed source/UTC order; key equality is required and row position is not a substitute",
+    "alignment": "reuse the existing raw UTC output-key mapping; only exact finite stage epochs are accepted",
+    "interpolation_allowed": false,
+    "edge_hold_allowed": false,
+    "unresolved_allowed": false,
+    "duplicate_keys_allowed": false,
+    "expected_rows": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "problem_epochs": 2159,
+        "stage_domain_rows": 2158,
+        "leading_warmup_exclusion": 1
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "problem_epochs": 1466,
+        "stage_domain_rows": 1465,
+        "leading_warmup_exclusion": 0
+      }
+    },
+    "required_preseal_checks": [
+      "stage sidecar exists only after successful exact-key handoff validation",
+      "route identity and exact header",
+      "expected row/domain count",
+      "strict integer timestamp order",
+      "no duplicate or extra keys",
+      "all positions finite and Earth-valid",
+      "stage sidecar hash and byte count recorded after the copy",
+      "no solution/truth rows embedded in a result artifact"
+    ],
+    "write_failure_policy": "fail closed; no fallback, repair, rerun, or solver re-entry"
+  },
+  "main_displacement_diagnostic_contract": {
+    "source": "same-run main result.solution.solutions after unchanged main optimization",
+    "copy_only": true,
+    "coordinate_rows_exported": false,
+    "units": {
+      "displacement": "metres",
+      "delta_time": "seconds",
+      "speed": "metres_per_second"
+    },
+    "transition_definition": "For consecutive exact retained main solutions, displacement_m = norm(ECEF_i - ECEF_(i-1)); delta_time_s is the exact retained timestamp difference; speed_mps = displacement_m / delta_time_s.",
+    "scalar_fields": [
+      "transition_count",
+      "finite_transition_count",
+      "nonfinite_transition_count",
+      "p50_displacement_m",
+      "p95_displacement_m",
+      "max_displacement_m",
+      "max_speed_mps",
+      "over_70_mps_count"
+    ],
+    "stats_are_not_solver_inputs": true,
+    "stats_are_not_accuracy_predictions": true,
+    "stats_write_failure_policy": "fail closed for the diagnostic candidate; do not alter or rerun main"
+  },
+  "unchanged_solver_boundary": {
+    "gnss_first_graph": true,
+    "main_graph": true,
+    "factors": true,
+    "values_and_initialization": true,
+    "handoff": "existing C/D/position/velocity handoff is read, not replaced",
+    "equations_and_units": true,
+    "sigmas_and_robust_loss": true,
+    "filters_and_epoch_retention": true,
+    "LM_schedule_and_max_iterations": true,
+    "linear_solver_and_ordering": true,
+    "fallback_policy": "existing fail-closed Phase101 behavior; no fallback is added",
+    "default_legacy_path": "bit-for-bit at the solver/configuration boundary when the new selector is off"
+  },
+  "truth_only_attribution_contract": {
+    "native_solution_generation_precedes_truth_open": true,
+    "truth_process": "one isolated evaluator subprocess only",
+    "truth_reads_per_route": 1,
+    "truth_open_after": [
+      "main solution hash/metadata seal",
+      "stage sidecar hash/metadata seal",
+      "stage and main schema/alignment/finite/Earth-valid preflight"
+    ],
+    "truth_in_native_argv_or_environment": false,
+    "truth_bytes_in_native_process": false,
+    "candidate_and_stage_scored_with_identical_metric": true,
+    "metric_reference": "Phase82 exact metric/alignment contract",
+    "metric": {
+      "key": "(phone, UnixTimeMillis)",
+      "timestamp_type": "exact integer",
+      "matching": "exact key intersection only",
+      "prediction_domain_coverage": "matched prediction keys / prediction keys, exactly 1.0",
+      "missing_truth_policy": "only the route-pinned leading warm-up truth key may be absent",
+      "distance": "spherical Haversine per row",
+      "earth_radius_m": 6371008.8,
+      "percentile": "linear interpolation at rank (n - 1) * q",
+      "route_scalar": "(P50 + P95) / 2 in metres",
+      "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+      "continuity": "over_70_mps_count must equal 0",
+      "finite_and_earth_valid": true
+    },
+    "attribution_fields": [
+      "stage_score_m",
+      "main_score_m",
+      "stage_minus_main_m",
+      "stage_delta_vs_phase82_m",
+      "main_delta_vs_phase82_m",
+      "stage_already_regressed_vs_phase82",
+      "main_added_or_amplified_regression_vs_stage",
+      "stage_to_main_improved",
+      "attribution_class"
+    ],
+    "attribution_classification": {
+      "stage_already_regressed": "stage_score_m > sealed same-route Phase82 score",
+      "main_added_or_amplified_regression": "main_score_m > stage_score_m",
+      "main_improved_after_stage": "main_score_m < stage_score_m",
+      "stage_and_main_regressed": "stage_score_m > Phase82 and main_score_m > Phase82",
+      "no_regression_detected": "stage_score_m <= Phase82 and main_score_m <= Phase82",
+      "ties": "record exact equality without inventing a causal label"
+    },
+    "no_new_promotion_threshold": true,
+    "truth_read_or_metric_failure": "fail closed; preserve sealed artifacts and do not rerun or tune"
+  },
+  "future_run_matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "native_solver_invocations": 2,
+    "stage_sidecar_seals": 2,
+    "main_solution_seals": 2,
+    "truth_reads": 2,
+    "reruns": 0,
+    "fallbacks": 0,
+    "accuracy_calculations": 2,
+    "solution_rows_in_sealed_result": false
+  },
+  "read_accounting_for_this_freeze": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "Phase82_100_103_coordinate_or_truth_payload_reads": 0,
+    "Phase82_100_103_sealed_aggregate_metadata_reads": 3,
+    "MAT_reads_or_generation": 0,
+    "base_reads": 0,
+    "PDC_or_precomputed_coordinate_reads": 0,
+    "Kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "reruns_or_tuning": 0
+  },
+  "authorization_boundary": {
+    "implementation_authorized_by_this_record": false,
+    "raw_execution_authorized_by_this_record": false,
+    "truth_evaluation_authorized_by_this_record": false,
+    "solution_publication_authorized": false,
+    "release_or_validation_authorized": false,
+    "Kaggle_submission_authorized": false,
+    "required_next_artifacts": [
+      "freeze-compliant implementation/evaluator tests, if implementation is separately authorized",
+      "pre-raw manifest and evaluator contract",
+      "independent one-shot raw authorization",
+      "sealed fresh two-route run with main/stage hashes",
+      "separate truth-only attribution evaluator and result seal"
+    ]
+  }
+}

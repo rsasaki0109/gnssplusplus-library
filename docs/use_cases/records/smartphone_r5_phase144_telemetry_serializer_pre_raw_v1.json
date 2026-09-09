@@ -1,0 +1,79 @@
+{
+  "schema_version": "smartphone-r5-phase144-telemetry-serializer-pre-raw-accounting.v1",
+  "phase": 144,
+  "status": "launch-free-pre-raw-sealed",
+  "execution_label": "Luna Max",
+  "manifest_commit": "phase144-runner-manifest-v1",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_manifest_v1.json",
+    "commit": "59f72761afaa6bd926f97d4c13acfbd720f36f9e",
+    "sha256": "d27a655d0000d7dc6909c1169c9b355b9f0677b51235a1cb07b7b41c0e8a7bd4"
+  },
+  "audit": {
+    "commit": "0f49224d2ca79f2f24b8b28b20abb0937879753f",
+    "sha256": "135f57eff3afaa27eb55e7f26cdf42f5983b279236bfad0f259a5b5baf616a87"
+  },
+  "freeze": {
+    "commit": "84742b216c262f6c22e22a668810712dc7427f8b",
+    "sha256": "e9ec77b84e541085dd11eb6b06cf68dda052a199830a8cda8b8f9a91aa28b6dd"
+  },
+  "implementation": {
+    "commit": "9a8226c7db46baa503c1ba886450fe1a77775d02",
+    "source_sha256": "4fc11b81e8ffcdc375d243782fa7261a40ffefdf01226023cf889abceb3c9bfc",
+    "binary_sha256": "6f154ba2f8bc65fcfaad11d5dd46a366aa057fefc9b84f7e961c3c290658b645"
+  },
+  "runner": {
+    "commit": "59f72761afaa6bd926f97d4c13acfbd720f36f9e",
+    "sha256": "4fd6012c03b3a128dce5f804324e20f8403f07119ec2e982fa2646e5056c635c"
+  },
+  "focused_tests": {
+    "commit": "59f72761afaa6bd926f97d4c13acfbd720f36f9e",
+    "sha256": "cb5a793b392693cb02e2c19c982826cbe533bce03b5e0c0dbbc8f7df0bfcfb97"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "wrapper_payload_reads": 0,
+    "native_summary_reads": 0,
+    "recursive_duplicate_fixture_reads": 0
+  },
+  "qualification": {
+    "runner_status": "launch-free-qualified",
+    "focused_python_tests": "9 passed, 4 subtests passed",
+    "synthetic_native_summary_only": true,
+    "duplicate_paths_enumerated_recursively": true,
+    "complete_schema_validator": true,
+    "native_summary_immutable": true,
+    "wrapper_inference": false,
+    "native_summary_overwrite": false,
+    "historical_phase143_result_changed": false
+  },
+  "authorization_boundary": {
+    "new_independent_authorization_required": true,
+    "required_before_any_raw_or_solver": true,
+    "solution_publication": false,
+    "truth_authorization_separate": true,
+    "no_rerun_fallback_repair_sweep": true
+  },
+  "prohibited": [
+    "raw GNSS/IMU/navigation/base payload reads",
+    "native solver execution",
+    "solution/truth/MAT/PDC/precomputed-coordinate reads",
+    "accuracy evaluation",
+    "Kaggle access",
+    "rerun/fallback/repair/sweep",
+    "solution coordinate serialization"
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-train-score-authorization-manifest.v1",
+  "authorization_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_authorization_v1.json",
+  "authorization_record_sha256": "a9fd02a8d2344f60208147bc8887524901c7a20c471232524831ea662159c23c",
+  "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c",
+  "truth_free_manifest_sha256": "3388972b96e39125f3525f91a1d9df0ca16f4490f65daa821791213d363413e2",
+  "truth_free_outputs_verified": true,
+  "truth_policy": {
+    "truth_materialization_before_this_manifest": false,
+    "matching_train_truth_only": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "one_scoring_process_read_per_route": true,
+    "no_post_truth_source_or_parameter_change": true
+  },
+  "routes": [
+    {
+      "trip_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "truth_member": "dataset_2023/train/2021-03-10-23-13-us-ca-mtv-h/pixel5/ground_truth.csv",
+      "truth_member_crc32": "0xccf592bd",
+      "truth_member_size": 142119,
+      "gnss_prediction_sha256": "cbb04f83b5b0a6531f7ec558c907c391956417a98fe516cf8b7c2b85c493bcc6",
+      "gnss_imu_prediction_sha256": "a7be1265e55c60b7604fd0e85eca7612a6da0c8706410acfbaceb16e09687c95"
+    },
+    {
+      "trip_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "truth_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+      "truth_member_crc32": "0xfe212a4d",
+      "truth_member_size": 305432,
+      "gnss_prediction_sha256": "4fb7e2411ddbeab7e716428e80093936017747f68f0a7b4380d8bc5062904cfc",
+      "gnss_imu_prediction_sha256": "0588ce7906a3944f102f8fdf1205fcbfd03d8a60575f548eb2153cd3cb8063c9"
+    },
+    {
+      "trip_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "truth_member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+      "truth_member_crc32": "0x49b239b2",
+      "truth_member_size": 143441,
+      "gnss_prediction_sha256": "b49ecfeee2a9f0a2284fb4b6eeafb02f5e58bd9e4340f53c030d3f01675ad522",
+      "gnss_imu_prediction_sha256": "a697887f585ccf54fd6dab0a4b1a1ea37bdc4600d3a3bcd03c145a855d7db491"
+    }
+  ],
+  "score_command": "python3 - <<'PY' ... single-process combined GNSS/GNSS+IMU train scorer ... PY",
+  "authorization": "This manifest permits exactly one truth read per listed matching train route. It does not authorize validation, holdout, test truth, Kaggle access, or external mutation."
+}

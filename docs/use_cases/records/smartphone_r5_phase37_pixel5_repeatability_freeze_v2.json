@@ -1,0 +1,136 @@
+{
+  "schema_version": "smartphone-r5-phase37-pixel5-repeatability-freeze.v2",
+  "phase": 37,
+  "status": "frozen-before-phase37-materialization-and-solver",
+  "amendment": {
+    "supersedes": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v1.json",
+      "sha256": "629689a206e59655c7cafbc59b6011553fa1953381df74d644bfd567708be8fd"
+    },
+    "reason": "Make the cross-route identifiability gate numerically predeclared and deterministic before any Phase37 materialization, solver run, or truth read.",
+    "inheritance": "All archive, source, binary, input, flag, truth-budget, structural-safety, exclusion, and fail-closed fields from v1 remain unchanged unless explicitly amended below."
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "evaluation_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "existing_phase36_identity": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "added_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "fresh_validation_remains_sealed": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout_remains_sealed": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5"
+  },
+  "identifiability": {
+    "purpose": "Identification evidence only; no common constant is fitted, learned, applied, or promoted in Phase37.",
+    "route_vector": "For each route, the fixed-ENU component-wise median of prediction-minus-truth east and north residuals.",
+    "common_median_vector": "Component-wise median of the four route median vectors, in evaluation_routes order; even-cardinality median is the arithmetic mean of the two sorted middle values.",
+    "geometric_center": {
+      "algorithm": "Use common_median_vector as the geometric center. This is the predeclared component-median simplification; no iterative Weiszfeld fit is allowed.",
+      "tie_rule": "No ordering or floating-point iteration tie exists; route order is fixed by evaluation_routes and component medians sort numerically with stable route-order tie retention.",
+      "distance": "Euclidean norm in metres from each route median vector to common_median_vector."
+    },
+    "cross_route_agreement": {
+      "logic": "All six conditions below are required simultaneously (logical AND). One failed condition makes phone-common constant_identifiable=false and is a no-go.",
+      "conditions": [
+        {
+          "id": "finite_route_median_vectors",
+          "criterion": "All four route median vectors have finite east and north components.",
+          "threshold": null
+        },
+        {
+          "id": "component_route_median_mad",
+          "criterion": "Component-wise MAD across the four route median vectors is at most 0.50 m for east and at most 0.50 m for north.",
+          "threshold_m": {
+            "east": 0.5,
+            "north": 0.5
+          },
+          "mad_definition": "median(abs(component - common_median_vector.component))"
+        },
+        {
+          "id": "geometric_center_radius",
+          "criterion": "The Euclidean distance from common_median_vector to every route median vector is at most 1.00 m.",
+          "threshold_m": 1.0
+        },
+        {
+          "id": "nonzero_common_median",
+          "criterion": "The common median vector norm is at least 2 times sqrt(MAD_E^2 + MAD_N^2), proving a non-zero systematic displacement relative to route dispersion.",
+          "threshold_factor": 2.0,
+          "zero_dispersion_rule": "If both component MAD values are zero, require common median norm > 0.0 m (strictly non-zero)."
+        },
+        {
+          "id": "route_prefix_tail_stability",
+          "criterion": "For every route, prefix-tail median-vector shift is at most max(1.00 m, 2 times sqrt(route MAD_E^2 + route MAD_N^2)).",
+          "threshold_floor_m": 1.0,
+          "threshold_factor": 2.0,
+          "route_mad": "component-wise unscaled MAD over that route's matched residual vectors"
+        },
+        {
+          "id": "raw_orientation_not_a_fit_feature",
+          "criterion": "Orientation diagnostics are reported for evidence only and cannot make the gate pass or authorize a fit; no calibrated pose means body-frame vector_identifiable=false.",
+          "threshold": null
+        }
+      ],
+      "rounding": "No rounding before comparisons; use full binary64 values and exact <= comparisons. JSON serialization is diagnostic only.",
+      "missing_or_nonfinite": "Any missing/nonfinite route metric, zero matched rows, or unavailable required prefix/tail metric fails the relevant condition.",
+      "fit_authorization": false
+    },
+    "residual_definition": {
+      "frame": "Fixed local ENU at first chronological matched truth coordinate; prediction minus truth in ECEF then ECEF-to-ENU rotation.",
+      "components": [
+        "east",
+        "north"
+      ],
+      "up": "Unobservable because native submission has no altitude; never fill from result, sample, MAT, or any other coordinate artifact.",
+      "robust_location": "Component-wise median",
+      "robust_scale": "Component-wise unscaled MAD",
+      "prefix_tail": "Chronologically sorted matched rows; first and last 25 percent, each nonempty.",
+      "orientation": "Nearest preceding raw UncalAccel and UncalMag within 250 ms, coarse gravity-axis/sign and tilt-compensated magnetic heading labels only."
+    },
+    "body_frame": {
+      "calibrated_device_to_antenna_pose_available": false,
+      "identifiable": false,
+      "policy": "Never fit or apply a body-frame vector from coarse raw orientation labels."
+    }
+  },
+  "native_and_data_contract": {
+    "inherited_v1": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v1.json",
+    "native_inputs_only": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "native_flags_unchanged": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "mat_read_or_generated": false,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "truth_read_budget": {
+      "post_structural_seal_one_read_per_route": true,
+      "single_process": true,
+      "total_route_reads": 4
+    },
+    "common_constant_fit_or_application": false,
+    "phase31_champion_mutation": false
+  },
+  "failure_policy": {
+    "missing_or_duplicate_archive_member": "fail-closed; no substitute member or precomputed artifact",
+    "native_solver_failure": "fail-closed; do not read that route's truth, relax flags, or rerun after truth",
+    "structural_nondeterminism": "fail-closed; require byte-identical run1/run2 and preserve Phase31 champion",
+    "identifiability_gate_failure": "publish numerical no-go evidence only; never fit/apply a common constant or open validation/holdout",
+    "body_frame": "always no-go without calibrated pose"
+  }
+}

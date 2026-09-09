@@ -1,0 +1,119 @@
+{
+  "schema_version": "smartphone-r5-phase154-h-multiclock-raw-p-seed-result.v1",
+  "phase": 154,
+  "execution_label": "Luna Max",
+  "status": "raw-ingress-success-stage-failed-closed",
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase154_h_multiclock_raw_p_seed_authorization_v1.json",
+    "commit": "fc85f64c29836a2278501fd2aa2be93896dcc368"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase154_h_multiclock_raw_p_seed_manifest_v1.json",
+    "commit": "338a246cae53f3529cc1a594e6988b9d8edaf056",
+    "sha256": "c885d67ae6ea71f875e2bc40df9b480e59bb18356c0ace1776061cc64fd49267"
+  },
+  "source_and_binary": {
+    "implementation_commit": "94e5832e85a3e06183fabb5cdf89507c6ddab626",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "603d8f81fda4b2ab40e43be6543e6b615dd8cc14fd2937e7306d858493eddb6c",
+    "raw_p_seed_source_sha256": "37f5be1bd4c3d64e4c4a762607b9c45cb0703edc007f46bae0fdecd90a725e10"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "invocation_count": 1,
+    "process_return_code": 1,
+    "failure_stage": "phase149-raw-p-seed-post-filter-geometry",
+    "failure_status": "insufficient-geometry",
+    "failure_reason": "insufficient-corrected-pseudorange-geometry",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "raw_clock_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false,
+    "native_summary_path": "output/smartphone-r5/phase154-h-multiclock-raw-p-seed-v1/mtv-h/native_summary.json",
+    "native_summary_bytes": 2830274,
+    "native_summary_sha256": "bf624c6205ff8a2d713766e46e24da2446fc2b30dd7e0d53960e567926cd765b",
+    "stdout_path": "output/smartphone-r5/phase154-h-multiclock-raw-p-seed-v1/mtv-h/stdout.log",
+    "stdout_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_path": "output/smartphone-r5/phase154-h-multiclock-raw-p-seed-v1/mtv-h/stderr.log",
+    "stderr_bytes": 85,
+    "stderr_sha256": "dfe1f45d4fc6a9168c2fbac30140a572764aafb54e63142e548722bf41d6e0e7",
+    "stderr_message": "Phase149 raw-P seed stage failed closed: insufficient-corrected-pseudorange-geometry"
+  },
+  "coverage": {
+    "input_epoch_count": 3140,
+    "evaluated_epoch_indexes": [0],
+    "not_evaluated_epoch_count": 3139,
+    "later_epoch_coverage": "unassessed; first-epoch failure stopped traversal",
+    "first_epoch": {
+      "raw_pseudorange_rows": 31,
+      "raw_pseudorange_satellites": 22,
+      "raw_clock_groups": 4,
+      "corrected_pseudorange_rows": 2,
+      "geometry_rank_status": "insufficient-rows",
+      "geometry_rank": 0,
+      "geometry_rank_rows": 2,
+      "position_finite": false,
+      "clock_finite": false,
+      "velocity_finite": false
+    },
+    "accepted_position_count": 0,
+    "finite_clock_count": 0,
+    "finite_velocity_count": 0
+  },
+  "clock_and_rank_reporting": {
+    "corrected_clock_groups": "unavailable: stage failed before clock-group report population",
+    "reference_clock_group": "unavailable: stage failed before clock-group report population",
+    "native_group_biases": "unavailable: no accepted epoch",
+    "rank_required_columns": "unavailable: no corrected clock-group report was emitted for the failed epoch",
+    "time_policy_counts": "unavailable: stage failed before velocity evaluation",
+    "velocity_endpoint_policy": "one-sided-endpoints-centered-interior"
+  },
+  "failure_evidence": {
+    "raw_ingress_reached": true,
+    "native_spp_preprocess_attempts": 1,
+    "native_fgo_attempts": 0,
+    "raw_pseudorange_rows_seen": 31,
+    "post_filter_corrected_rows_seen": 2,
+    "coordinate_values_interpreted": false,
+    "coordinate_values_published": false
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 1,
+    "broadcast_navigation_reads": 1,
+    "raw_phone_imu_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_phase149_stage_invocations": 1,
+    "native_spp_epoch_solver_invocations": 1,
+    "native_fgo_invocations": 0,
+    "summary_reads": 1,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "verification": {
+    "raw_p_seed_tests": "12/12 passed before execution",
+    "actual_executable_target_built": true,
+    "argv_help_check": "selectors present; --help returned expected usage error without input reads"
+  },
+  "conclusion_and_next_boundary": {
+    "conclusion": "Corrected raw-clock-only H ingress reaches Phase149 multi-clock preparation, but the first epoch has only two native post-filter corrected rows and fails the position/clock/ISB geometry gate.",
+    "next_blocker": "Source/metadata diagnosis of why native validation/correction retains only two of 31 raw-P rows; do not infer remaining-route behavior from this first-epoch failure.",
+    "algorithmic_accuracy_claim": false,
+    "no_doppler_graph_readiness": "not-assessed",
+    "phase152_artifacts_preserved": true
+  }
+}

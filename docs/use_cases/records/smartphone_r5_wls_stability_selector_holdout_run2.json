@@ -1,0 +1,45 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-evaluation.v1",
+  "status": "sealed-failed-one-shot",
+  "run": 2,
+  "dataset_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze.json",
+    "sha256": "49ec6a07ca770aac764f562abfa2d4823cd74aabbb948163250f7c3b5656783f"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_manifest.json",
+    "sha256": "636465b4d9b14c96b1a96a8d7d1352998aa250b5b3ec4c2f340bdff081dd6848"
+  },
+  "failure_record": {
+    "path": "output/smartphone-r5/wls-stability-selector-holdout-run2-v1/wls_stability_selector_holdout_run2_failure.json",
+    "sha256": "a4e804191315146eae3ffd8ec343dd0a1ca5d1007519f23a1f997e0e32663c3b"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "failure": {
+    "stage": "pre-materialization central-directory contract validation",
+    "reason": "profile/freeze device_gnss hash key mismatch in the one-shot harness",
+    "environment_or_io_failure": false,
+    "code_or_parameter_adjustment_allowed": false,
+    "rerun_allowed": false
+  },
+  "holdout_access": {
+    "central_directory_metadata_opened": true,
+    "device_gnss_payload_materialized": false,
+    "broadcast_nav_payload_materialized": false,
+    "ground_truth_payload_materialized": false,
+    "truth_open_count": 0,
+    "truth_free_lane_completed": false,
+    "selector_generated": false
+  },
+  "post_run_policy": {
+    "post_holdout_tuning": false,
+    "post_holdout_code_change": false,
+    "post_holdout_parameter_change": false,
+    "production_rtk_spp_default_changed": false,
+    "sealed_record_required_despite_failure": true
+  }
+}

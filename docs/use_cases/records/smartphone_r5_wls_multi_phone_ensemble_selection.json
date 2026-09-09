@@ -1,0 +1,303 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-selection.v1",
+  "status": "selection-frozen-before-member-content-read",
+  "selected_at": "2026-08-30",
+  "scope": "truth-free multi-phone handset-WLS trajectory ensemble research",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_directory_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true,
+    "member_content_read": false,
+    "truth_opened": false
+  },
+  "excluded_route_ids": [
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea",
+    "2021-03-16-20-40-us-ca-mtv-b",
+    "2021-07-14-20-50-us-ca-mtv-e",
+    "2022-08-04-20-07-us-ca-sjc-q",
+    "2022-11-15-00-53-us-ca-mtv-a",
+    "2023-03-08-21-34-us-ca-mtv-u",
+    "2023-05-16-19-55-us-ca-mtv-xe1",
+    "2023-05-23-19-56-us-ca-mtv-ie2",
+    "2023-05-24-20-26-us-ca-sjc-ge2",
+    "2023-05-25-19-10-us-ca-sjc-be2",
+    "2023-05-25-20-11-us-ca-sjc-he2",
+    "2023-09-06-22-49-us-ca-routebb1"
+  ],
+  "exclusion_contract": {
+    "all_previously_used_routes_excluded": true,
+    "v3_holdout_route_excluded": "2023-09-06-22-49-us-ca-routebb1",
+    "v4_holdout_route_excluded": "2023-05-25-19-10-us-ca-sjc-be2",
+    "old_holdout_metrics_used_for_ranking": false,
+    "v4_holdout_metrics_used_for_ranking": false,
+    "selection_source": "central_directory_inventory only",
+    "payload_sha256_computed_at_selection": false,
+    "truth_open_count_at_selection": 0
+  },
+  "selection_contract": {
+    "multi_phone_route_requirement": "at least two phones with exactly one device_gnss.csv and ground_truth.csv and one route brdc.nav",
+    "train_route_count": 2,
+    "validation_route_count": 1,
+    "holdout_route_count": 1,
+    "train_phone_count": 4,
+    "validation_phone_count": 2,
+    "holdout_phone_count": 3,
+    "required_files": ["device_gnss.csv", "ground_truth.csv", "brdc.nav"],
+    "ground_truth_same_vehicle_audit": "deferred to train payload only",
+    "same_vehicle_audit_thresholds": {
+      "truth_match_tolerance_ms": 100,
+      "minimum_pairwise_coverage_ratio": 0.95,
+      "maximum_pairwise_horizontal_p95_m": 50.0,
+      "maximum_pairwise_vertical_p95_m": 25.0
+    },
+    "candidate_methods_fixed_before_payload": [
+      "coordinate_wise_ecef_median",
+      "geometric_median_ecef",
+      "trimmed_mean_ecef"
+    ],
+    "candidate_search_after_selection": false,
+    "next_holdout_materialization_forbidden": true,
+    "next_holdout_truth_open_forbidden": true
+  },
+  "train_routes": [
+    {
+      "route": "2021-01-04-22-40-us-ca-mtv-a",
+      "calendar_year": 2021,
+      "region": "mtv",
+      "phones": ["mi8", "pixel5"],
+      "central_directory_broadcast_nav": {
+        "name": "dataset_2023/train/2021-01-04-22-40-us-ca-mtv-a/brdc.nav",
+        "file_size": 9700599,
+        "compressed_size": 971571,
+        "crc32_hex": "ee36f42f"
+      },
+      "records": [
+        {
+          "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/mi8",
+          "device_gnss": {
+            "name": "dataset_2023/train/2021-01-04-22-40-us-ca-mtv-a/mi8/device_gnss.csv",
+            "file_size": 44418140,
+            "compressed_size": 11072085,
+            "crc32_hex": "ee2e664d"
+          },
+          "ground_truth": {
+            "name": "dataset_2023/train/2021-01-04-22-40-us-ca-mtv-a/mi8/ground_truth.csv",
+            "file_size": 180806,
+            "compressed_size": 52856,
+            "crc32_hex": "9ad47f2a"
+          }
+        },
+        {
+          "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+          "device_gnss": {
+            "name": "dataset_2023/train/2021-01-04-22-40-us-ca-mtv-a/pixel5/device_gnss.csv",
+            "file_size": 49559735,
+            "compressed_size": 11644540,
+            "crc32_hex": "2f52e907"
+          },
+          "ground_truth": {
+            "name": "dataset_2023/train/2021-01-04-22-40-us-ca-mtv-a/pixel5/ground_truth.csv",
+            "file_size": 180352,
+            "compressed_size": 52319,
+            "crc32_hex": "bdd96ea5"
+          }
+        }
+      ]
+    },
+    {
+      "route": "2022-01-26-20-02-us-ca-mtv-pe1",
+      "calendar_year": 2022,
+      "region": "mtv",
+      "phones": ["mi8", "pixel5"],
+      "central_directory_broadcast_nav": {
+        "name": "dataset_2023/train/2022-01-26-20-02-us-ca-mtv-pe1/brdc.nav",
+        "file_size": 10798049,
+        "compressed_size": 1057563,
+        "crc32_hex": "ccf97b19"
+      },
+      "records": [
+        {
+          "dataset_id": "2022-01-26-20-02-us-ca-mtv-pe1/mi8",
+          "device_gnss": {
+            "name": "dataset_2023/train/2022-01-26-20-02-us-ca-mtv-pe1/mi8/device_gnss.csv",
+            "file_size": 41826667,
+            "compressed_size": 10423344,
+            "crc32_hex": "06be99f3"
+          },
+          "ground_truth": {
+            "name": "dataset_2023/train/2022-01-26-20-02-us-ca-mtv-pe1/mi8/ground_truth.csv",
+            "file_size": 165156,
+            "compressed_size": 46725,
+            "crc32_hex": "ef320ef1"
+          }
+        },
+        {
+          "dataset_id": "2022-01-26-20-02-us-ca-mtv-pe1/pixel5",
+          "device_gnss": {
+            "name": "dataset_2023/train/2022-01-26-20-02-us-ca-mtv-pe1/pixel5/device_gnss.csv",
+            "file_size": 36064551,
+            "compressed_size": 8376916,
+            "crc32_hex": "bfca07b7"
+          },
+          "ground_truth": {
+            "name": "dataset_2023/train/2022-01-26-20-02-us-ca-mtv-pe1/pixel5/ground_truth.csv",
+            "file_size": 164824,
+            "compressed_size": 45918,
+            "crc32_hex": "6c48be67"
+          }
+        }
+      ]
+    }
+  ],
+  "new_validation": {
+    "route": "2022-05-13-20-57-us-ca-mtv-pe1",
+    "calendar_year": 2022,
+    "region": "mtv",
+    "phones": ["pixel6pro", "sm-g988b"],
+    "central_directory_broadcast_nav": {
+      "name": "dataset_2023/train/2022-05-13-20-57-us-ca-mtv-pe1/brdc.nav",
+      "file_size": 11048056,
+      "compressed_size": 1077490,
+      "crc32_hex": "c13c1430"
+    },
+    "records": [
+      {
+        "dataset_id": "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro/device_gnss.csv",
+          "file_size": 38583051,
+          "compressed_size": 9978155,
+          "crc32_hex": "fa35d3f0"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro/ground_truth.csv",
+          "file_size": 209406,
+          "compressed_size": 57326,
+          "crc32_hex": "b364a0b8"
+        }
+      },
+      {
+        "dataset_id": "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b/device_gnss.csv",
+          "file_size": 49657372,
+          "compressed_size": 12288867,
+          "crc32_hex": "aca9aa80"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b/ground_truth.csv",
+          "file_size": 209449,
+          "compressed_size": 57356,
+          "crc32_hex": "61f7c427"
+        }
+      }
+    ],
+    "role_fixed_before_payload_access": true,
+    "truth_free_generation_allowed": true,
+    "truth_open_count_at_selection": 0
+  },
+  "next_holdout": {
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "calendar_year": 2022,
+    "region": "mtv",
+    "phones": ["sm-a205u", "sm-a217m", "sm-a325f"],
+    "central_directory_broadcast_nav": {
+      "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/brdc.nav",
+      "file_size": 11030006,
+      "compressed_size": 1070199,
+      "crc32_hex": "c27a5d37"
+    },
+    "records": [
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a205u/device_gnss.csv",
+          "file_size": 29692755,
+          "compressed_size": 4007343,
+          "crc32_hex": "101d8a1e"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a205u/ground_truth.csv",
+          "file_size": 118587,
+          "compressed_size": 30125,
+          "crc32_hex": "424ee2f9"
+        }
+      },
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a217m/device_gnss.csv",
+          "file_size": 21854996,
+          "compressed_size": 5438995,
+          "crc32_hex": "e8d27a46"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a217m/ground_truth.csv",
+          "file_size": 119257,
+          "compressed_size": 30152,
+          "crc32_hex": "95104496"
+        }
+      },
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a325f/device_gnss.csv",
+          "file_size": 18266646,
+          "compressed_size": 3864139,
+          "crc32_hex": "98432e4e"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a325f/ground_truth.csv",
+          "file_size": 120524,
+          "compressed_size": 29052,
+          "crc32_hex": "a332185f"
+        }
+      }
+    ],
+    "role_fixed_before_payload_access": true,
+    "materialization_forbidden": true,
+    "truth_open_forbidden": true,
+    "truth_open_count_at_selection": 0
+  },
+  "candidate_method_contract": {
+    "methods": [
+      {
+        "id": "coordinate_wise_ecef_median",
+        "definition": "component-wise median over aligned finite phone ECEF coordinates",
+        "parameters": {"minimum_phones": 2}
+      },
+      {
+        "id": "geometric_median_ecef",
+        "definition": "Weiszfeld geometric median over aligned finite phone ECEF coordinates",
+        "parameters": {"maximum_iterations": 64, "convergence_tolerance_m": 0.000001}
+      },
+      {
+        "id": "trimmed_mean_ecef",
+        "definition": "coordinate-wise 20 percent symmetric trim when at least five phones, otherwise arithmetic mean",
+        "parameters": {"trim_fraction": 0.2, "minimum_phones_for_trim": 5}
+      }
+    ],
+    "selection_metric": "mean per-phone four local Kaggle diagnostic scores over train phone truth",
+    "tie_break": "coordinate_wise_ecef_median, then geometric_median_ecef, then trimmed_mean_ecef",
+    "truth_free_generation": true,
+    "candidate_search_after_record": false
+  },
+  "atomic_contract": {
+    "input_and_output_hashes": true,
+    "aligned_unix_time_millis_exact_or_within_tolerance": true,
+    "alignment_tolerance_ms": 1,
+    "nonfinite_input_fail_closed": true,
+    "missing_phone_fail_closed": false,
+    "per_timestamp_phone_count_and_spread_manifest": true,
+    "fused_position_and_submission_atomic": true,
+    "truth_free_before_validation_truth": true,
+    "next_holdout_never_materialized": true
+  },
+  "production_policy": {
+    "production_rtk_spp_default_changed": false,
+    "development_only_until_validation_gate": true,
+    "old_holdout_and_v4_holdout_used_for_ranking": false
+  }
+}

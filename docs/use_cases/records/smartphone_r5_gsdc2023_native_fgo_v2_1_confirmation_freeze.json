@@ -1,0 +1,138 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-independent-confirmation-freeze.v1",
+  "status": "frozen-before-confirmation-payload-materialization",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v2-1-preserve-v1-tdcp-motion-combined-imu",
+  "purpose": "Independent route/device confirmation of the already scored v2.1 pilot without changing its algorithm, parameters, binary, or interpretation.",
+  "pilot_policy": {
+    "pilot_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_run.json",
+    "pilot_was_no_go": true,
+    "pilot_results_are_closed": true,
+    "pilot_results_used_as_tuning": false,
+    "pilot_reinterpreted_as_pass": false
+  },
+  "external_mutation": false,
+  "token_access": false,
+  "kaggle_submission": false,
+  "validation_or_holdout_access": false,
+  "leaderboard_scores_used_for_tuning": false,
+  "truth_policy": {
+    "selection_metadata_only": true,
+    "confirmation_payload_materialized_before_this_record": false,
+    "confirmation_truth_opened_before_this_record": false,
+    "truth_free_artifacts_first": true,
+    "confirmation_truth_open_once_after_artifact_seal": true,
+    "fresh_validation_materialization_or_truth_open": false,
+    "future_holdout_materialization_or_truth_open": false,
+    "no_post_truth_code_or_parameter_change": true
+  },
+  "split_inventory": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+    "sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+    "selection_basis": "The inventory's unused_metadata_candidates_not_selected list and central-directory availability; no truth contents, scores, or leaderboard values.",
+    "excluded_authoritative_truth_use": true,
+    "selected_confirmation_set": [
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "selected_identities_are_in_inventory_unused_metadata_candidates": true,
+    "selected_identities_never_scored_or_truth_opened_per_inventory": true,
+    "prior_v2_1_pilot_route_excluded": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "fresh_validation_remains_sealed": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout_remains_sealed": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_metadata_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "inspection_method": "ZIP central-directory metadata only; selected member contents are not read until post-freeze payload materialization.",
+    "ground_truth_member_policy": "metadata recorded, never materialize until after both truth-free route artifacts and their hashes are sealed"
+  },
+  "central_directory_metadata": {
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "device_gnss.csv": {"file_size": 33287959, "compressed_size": 7801498, "crc32_hex": "d6b429a3"},
+      "device_imu.csv": {"file_size": 24692485, "compressed_size": 3758591, "crc32_hex": "5d6874cd"},
+      "ground_truth.csv": {"file_size": 142119, "compressed_size": 34487, "crc32_hex": "ccf592bd"},
+      "brdc.nav": {"file_size": 10455822, "compressed_size": 1042648, "crc32_hex": "c6654f36"},
+      "reference_obs": {"member": "dataset_2023/train/2021-03-10-23-13-us-ca-mtv-h/P221_rnx2.obs", "file_size": 6701010, "compressed_size": 1452850, "crc32_hex": "1c539e21"}
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "device_gnss.csv": {"file_size": 33837317, "compressed_size": 7801965, "crc32_hex": "e7b2f43c"},
+      "device_imu.csv": {"file_size": 23649244, "compressed_size": 4105629, "crc32_hex": "638e39cc"},
+      "ground_truth.csv": {"file_size": 143441, "compressed_size": 41011, "crc32_hex": "49b239b2"},
+      "brdc.nav": {"file_size": 10635773, "compressed_size": 1068662, "crc32_hex": "697a650c"},
+      "reference_obs": {"member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/LBCH_rnx2.obs", "file_size": 719969, "compressed_size": 167122, "crc32_hex": "6016f9bb"}
+    }
+  },
+  "materialization_contract": {
+    "post_freeze_members": ["device_gnss.csv", "device_imu.csv", "brdc.nav", "reference_obs"],
+    "ground_truth_materialized_before_score": false,
+    "atomic_publish": true,
+    "path_traversal_rejected": true,
+    "member_size_and_crc_verified": true,
+    "truth_free_adapter": true,
+    "galileo_e1_hatch_window_s": 30,
+    "imu_converter": "existing truth-free v2 converter, nearest accel within 25 ms, no interpolation/extrapolation, raw gyro rad/s converted once to deg/s"
+  },
+  "frozen_v2_1_recipe": {
+    "source_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_preserve_v1_freeze.json",
+    "source_record_sha256": "6c33400e97345cc7f966c3ff5ff7a946b4fb6f89bb4c35cf56bc95654f663eae",
+    "backend": "GTSAM batch Levenberg-Marquardt",
+    "window": {"skip_epochs": 200, "max_epochs": 30, "truth_match_tolerance_ms": 1000},
+    "parameter_contract": "byte/hash identity with source record; no override or retuning",
+    "preserved_factors": ["undifferenced pseudorange", "ordinary TDCP", "position motion", "clock motion", "Huber"],
+    "added_factor": "CombinedImuFactor",
+    "forbidden_factors": ["base", "double-difference", "single-difference Doppler", "single-difference TDCP", "ambiguity", "truth"],
+    "offset_contract": "fixed -0.10..+0.10 s by 0.01 grid, confidence gated; low confidence selects/applies zero offset"
+  },
+  "immutable_source_hashes": {
+    "apps/native/gnss_fgo_imu_v21.cpp": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "src/algorithms/fgo_gtsam_internal.hpp": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "src/algorithms/fgo_gtsam_backend.cpp": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "apps/CMakeLists.txt": "7db14842b85c363c88e93ad1fbd6f719a502b21bc2fd8ed28af3c96b6c1ae81f",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "build/apps/gnss_fgo_imu_v21": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "build/apps/gnss_fgo": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+  },
+  "baseline_contract": {
+    "exact_v1_source": "apps/native/gnss_fgo.cpp",
+    "exact_v1_source_sha256": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "exact_v1_binary": "build/apps/gnss_fgo",
+    "exact_v1_binary_sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+    "baseline_generation": "same adapter inputs, same 200/30 epoch window, frozen v1 recipe; no truth used for initialization",
+    "truth_free_baseline_artifact_before_score": true
+  },
+  "predeclared_confirmation_gate": {
+    "per_route": {
+      "all_four_diagnostic_variants_strict_improvement": true,
+      "diagnostic_mean_strict_improvement": true,
+      "availability_non_regression": true,
+      "truth_coverage_non_regression": true,
+      "vertical_p95_catastrophic_margin_m": 100.0,
+      "vertical_rule": "candidate V P95 must be <= exact-v1 V P95 + 100 m; missing altitude evidence is fail-closed for promotion",
+      "finite_coordinates": true,
+      "continuity_jump_bound_mps": 70.0,
+      "factor_and_convergence_checks": true
+    },
+    "aggregate": {
+      "all_four_diagnostic_variants_strict_improvement": true,
+      "diagnostic_mean_strict_improvement": true,
+      "availability_non_regression": true,
+      "truth_coverage_non_regression": true
+    },
+    "promotion": "Only if every per-route and aggregate gate passes; then fresh validation may be opened once unchanged. Any failure seals final No-Go and leaves validation/holdout untouched."
+  },
+  "commands": {
+    "materialize": "post-freeze, verify archive+central metadata, atomically materialize only four declared truth-free members per selected identity",
+    "adapter": "python3 apps/gnss.py smartphone-gnss-adapter --device-gnss <inputs/device_gnss.csv> --output-dir <adapter> --dataset-id <id> --device-model pixel5 --source-url https://taroz.net/data/dataset_2023.zip --source-terms 'Original GSDC competition terms; local evaluation only' --role development --truth-free --skip-epochs 0 --max-epochs -1 --experimental-galileo-e1 --experimental-galileo-e1-hatch-window-s 30 --broadcast-nav <inputs/brdc.nav>",
+    "candidate": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_v21 --obs <adapter/rover.obs> --nav <inputs/brdc.nav> --imu <inputs/imu_processed.csv> --out <candidate/submission.csv> --summary-json <candidate/run_summary.json> --dataset-id <id> --skip-epochs 200 --max-epochs 30",
+    "baseline": "build/apps/gnss_fgo --obs <adapter/rover.obs> --nav <inputs/brdc.nav> --seed-pos <seed.pos> --out <baseline/fgo.pos> --summary-json <baseline/fgo_summary.json> --preset default --backend eigen --skip-epochs 200 --max-epochs 30 --max-iterations 8 --pseudorange-sigma 3 --pseudorange-elevation-power 1 --motion-sigma 50 --clock-motion-sigma 300 --velocity-prior-sigma 100 --velocity-motion-sigma 0.01 --position-prior-sigma 0 --clock-prior-sigma 0 --tdcp-sigma 0.03 --carrier-phase-sigma 0.01 --pseudorange-huber-threshold 4 --carrier-phase-huber-threshold 4 --tdcp-huber-threshold 4 --max-tdcp-gap 2 --seed-match-tolerance 0.01 --seed-interpolation-max-gap 0 --tdcp-slip-threshold 10 --min-elevation 10 --min-snr 0 --min-satellites-per-epoch 4 --no-dd-factors --ionosphere-model --troposphere-model --quiet",
+    "score_once": "after all route candidate and exact-v1 baseline artifacts are hash sealed, materialize/read only the two declared confirmation ground_truth.csv members once; no rerun or tuning",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "record_integrity": {
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze_manifest.json",
+    "record_hash_pinned_before_materialization": true
+  }
+}

@@ -1,6 +1,18 @@
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/fgo_quality_anchor.hpp>
+#include <libgnss++/algorithms/source_epoch_states.hpp>
+#include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
+#include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
+#include <cstdio>
+#include <libgnss++/algorithms/rejected_residual_summary.hpp>
+#include <libgnss++/algorithms/matched_pseudorange_doppler.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
+#include <libgnss++/algorithms/doppler_contract.hpp>
+#include <libgnss++/algorithms/tdcp_contract.hpp>
+#include <libgnss++/algorithms/tdcp_endpoint_covariance.hpp>
+#include <libgnss++/algorithms/signal_bias_contract.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -16,8 +28,10 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <stdexcept>
 #include <limits>
 #include <map>
 #include <numeric>
@@ -31,12 +45,69 @@
 namespace libgnss {
 
 using namespace fgo_internal;
+namespace upstream = observable_upstream;
 
 FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     const std::vector<ObservationData>& input_epochs,
     const NavigationData& nav) const {
+    if (config_.retain_native_pseudorange_remasking_pool &&
+        (!config_.use_upstream_observable_quality || !config_.use_pseudorange_factors)) {
+        throw std::invalid_argument("Pseudorange re-masking pool requires observable quality and P factors");
+    }
+    if (config_.use_native_tdcp_adr_endpoint_sigma &&
+        (!config_.use_source_tdcp_meter_sigma || config_.use_native_joint_ionosphere ||
+         config_.use_native_tdcp_frequency_residual_states))
+        throw std::invalid_argument("ADR endpoint sigma requires source metre TDCP and no residual-state experiment");
+    if (config_.use_source_tdcp_meter_sigma &&
+        (config_.use_official_tdcp_snr_type_sigma ||
+         config_.use_official_tdcp_huber_k ||
+         config_.use_official_tdcp_resl_atmosphere_cancellation)) {
+        throw std::invalid_argument("Source TDCP metre sigma cannot mix with Phase117/118/120");
+    }
+    if (config_.use_source_tdcp_resl_observable &&
+        config_.use_official_tdcp_resl_atmosphere_cancellation) {
+        throw std::invalid_argument("Source TDCP resL cannot mix with Phase120");
+    }
     FGOProblem problem;
     problem.diagnostics.input_epochs = input_epochs.size();
+    problem.diagnostics.phase127_glonass_channel_provenance_enabled =
+        config_.use_native_phase127_glonass_channel_provenance;
+    problem.diagnostics.phase128_glonass_provenance_parser_admission_enabled =
+        config_.use_native_phase128_glonass_provenance_parser_admission;
+    problem.diagnostics.phase129_glonass_local_miss_mask_enabled =
+        config_.use_native_phase129_glonass_local_miss_mask;
+    problem.diagnostics.phase131_canonical_correction_band_key_enabled =
+        config_.use_native_phase131_canonical_correction_band_key;
+    problem.diagnostics.phase135_official_affine_measurement_family_enabled =
+        config_.use_native_phase135_official_affine_measurement_family;
+    problem.diagnostics.phase128_header_status =
+        glonassFrequencyChannelHeaderStatusName(
+            GlonassFrequencyChannelHeaderStatus::Absent);
+    if (config_.use_native_phase129_glonass_local_miss_mask &&
+        (!config_.use_native_phase126_raw_base_source_complete ||
+         !config_.use_native_phase127_glonass_channel_provenance ||
+         !config_.use_native_phase128_glonass_provenance_parser_admission)) {
+        problem.diagnostics.phase129_configuration_valid = false;
+        problem.diagnostics.phase129_configuration_failure =
+            "Phase129 GLONASS local miss mask requires the composed "
+            "Phase126/127/128 source-complete selectors";
+        problem.diagnostics.phase127_failure =
+            problem.diagnostics.phase129_configuration_failure;
+        return problem;
+    }
+    if (config_.use_native_phase131_canonical_correction_band_key &&
+        (!config_.use_native_phase126_raw_base_source_complete ||
+         !config_.use_native_phase127_glonass_channel_provenance ||
+         !config_.use_native_phase128_glonass_provenance_parser_admission ||
+         !config_.use_native_phase129_glonass_local_miss_mask)) {
+        problem.diagnostics.phase131_configuration_valid = false;
+        problem.diagnostics.phase131_configuration_failure =
+            "Phase131 canonical correction key requires the composed "
+            "Phase126/127/128/129 source-complete selectors";
+        problem.diagnostics.phase127_failure =
+            problem.diagnostics.phase131_configuration_failure;
+        return problem;
+    }
     if (input_epochs.empty()) {
         return problem;
     }
@@ -64,15 +135,261 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     spp_config.apply_atmospheric_corrections =
         config_.use_ionosphere_model || config_.use_troposphere_model;
     spp_config.use_multi_constellation = config_.use_multi_constellation;
+    spp_config.model_intersystem_bias = config_.spp_model_intersystem_bias;
+    spp_config.use_signal_specific_galileo_group_delay =
+        config_.use_signal_specific_galileo_group_delay;
+    spp_config.use_official_no_explicit_code_bias =
+        config_.use_native_phase126_raw_base_source_complete;
 
     SPPProcessor spp_processor(spp_config);
     spp_processor.initialize(spp_processor_config);
 
-    const double min_elevation_rad = config_.min_elevation_deg * M_PI / 180.0;
+    // The historical builder feeds one stateful chronological SPP pass
+    // directly into the graph.  That makes the first poor SPP basin a
+    // persistent initializer even when later raw epochs have much stronger
+    // geometry.  The opt-in quality-anchor contract performs a truth-free
+    // reconnaissance pass, chooses one deterministic raw/nav quality anchor,
+    // and replays the *same* SPP implementation outward from that epoch in
+    // both directions.  No prefix is trimmed and no coordinate is shifted;
+    // this only changes the initial values handed to the unchanged FGO graph.
+    std::vector<PositionSolution> quality_anchor_spp_solutions;
+    bool use_quality_anchor_spp_solutions = false;
+    if (config_.use_quality_anchor_initialization) {
+        problem.diagnostics.quality_anchor_initialization_enabled = true;
+        problem.diagnostics.quality_anchor_recovery_enabled =
+            config_.use_fallback_seed_quality_anchor_recovery;
+        std::vector<PositionSolution> reconnaissance(input_epochs.size());
+        for (std::size_t i = 0; i < input_epochs.size(); ++i) {
+            reconnaissance[i] = spp_processor.processEpoch(input_epochs[i], nav);
+        }
+
+        const double residual_sigma = std::max(1e-6, config_.pseudorange_sigma_m);
+        auto collect_candidates = [&](
+                const std::vector<PositionSolution>& solutions,
+                std::vector<fgo_quality_anchor::Candidate>& candidates) {
+            candidates.clear();
+            candidates.reserve(solutions.size());
+            for (std::size_t i = 0; i < solutions.size(); ++i) {
+                const auto& solution = solutions[i];
+                const double residual_rms =
+                    std::isfinite(solution.spp_pre_qc_residual_rms_m)
+                        ? solution.spp_pre_qc_residual_rms_m
+                        : solution.residual_rms;
+                if (!fgo_quality_anchor::eligible(
+                        solution.isValid(), solution.position_ecef.allFinite(),
+                        solution.position_ecef.norm(), solution.num_satellites,
+                        solution.gdop, residual_rms / residual_sigma)) {
+                    continue;
+                }
+                fgo_quality_anchor::Candidate quality;
+                quality.index = i;
+                quality.satellites = solution.num_satellites;
+                quality.gdop = solution.gdop;
+                quality.normalized_residual = residual_rms / residual_sigma;
+                candidates.push_back(quality);
+            }
+        };
+
+        std::vector<fgo_quality_anchor::Candidate> candidates;
+        collect_candidates(reconnaissance, candidates);
+        problem.diagnostics.quality_anchor_normal_candidates = candidates.size();
+        problem.diagnostics.quality_anchor_candidates = candidates.size();
+        const fgo_quality_anchor::Candidate* anchor =
+            fgo_quality_anchor::choose(candidates);
+        const std::vector<PositionSolution>* anchor_reconnaissance =
+            &reconnaissance;
+        std::vector<PositionSolution> recovery_reconnaissance;
+        std::vector<fgo_quality_anchor::Candidate> recovery_candidates;
+        bool anchor_from_recovery = false;
+
+        // Phase43 recovery is deliberately a second, exclusive stage.  The
+        // normal quality-anchor reconnaissance above must fully complete
+        // before this retry can run.  Only its elevation gate changes; SNR,
+        // health, navigation, geometry, pseudorange, GDOP, and residual gates
+        // all remain the same SPP implementation and candidate ranking.
+        if (anchor == nullptr &&
+            config_.use_fallback_seed_quality_anchor_recovery) {
+            problem.diagnostics.quality_anchor_recovery_triggered = true;
+            spp_processor.reset();
+            ProcessorConfig recovery_processor_config = spp_processor_config;
+            recovery_processor_config.elevation_mask = -90.0;
+            SPPProcessor recovery_processor(spp_config);
+            recovery_processor.initialize(recovery_processor_config);
+            recovery_reconnaissance.resize(input_epochs.size());
+            for (std::size_t i = 0; i < input_epochs.size(); ++i) {
+                recovery_reconnaissance[i] =
+                    recovery_processor.processEpoch(input_epochs[i], nav);
+            }
+            collect_candidates(recovery_reconnaissance, recovery_candidates);
+            problem.diagnostics.quality_anchor_recovery_candidates =
+                recovery_candidates.size();
+            anchor = fgo_quality_anchor::choose(recovery_candidates);
+            if (anchor != nullptr) {
+                anchor_reconnaissance = &recovery_reconnaissance;
+                anchor_from_recovery = true;
+                problem.diagnostics.quality_anchor_recovery_selected = true;
+                problem.diagnostics.quality_anchor_recovery_anchor_index =
+                    anchor->index;
+                problem.diagnostics.quality_anchor_recovery_anchor_satellites =
+                    anchor->satellites;
+                problem.diagnostics.quality_anchor_recovery_anchor_gdop =
+                    anchor->gdop;
+                problem.diagnostics
+                    .quality_anchor_recovery_anchor_normalized_residual_rms =
+                    anchor->normalized_residual;
+                // The common quality-anchor summary describes the selected
+                // anchor, while the separate normal/recovery counts preserve
+                // the stage that produced it.
+                problem.diagnostics.quality_anchor_candidates =
+                    recovery_candidates.size();
+            }
+        }
+
+        if (anchor != nullptr) {
+            const auto& selected_reconnaissance = *anchor_reconnaissance;
+            const std::size_t anchor_index = anchor->index;
+            problem.diagnostics.quality_anchor_selected = true;
+            problem.diagnostics.quality_anchor_index = anchor_index;
+            problem.diagnostics.quality_anchor_satellites = anchor->satellites;
+            problem.diagnostics.quality_anchor_gdop = anchor->gdop;
+            problem.diagnostics.quality_anchor_normalized_residual_rms =
+                anchor->normalized_residual;
+
+            std::vector<PositionSolution> forward(input_epochs.size());
+            std::vector<PositionSolution> backward(input_epochs.size());
+            std::vector<bool> forward_assigned(input_epochs.size(), false);
+            std::vector<bool> backward_assigned(input_epochs.size(), false);
+            auto replay_from_anchor = [&](bool forward_pass,
+                                          std::vector<PositionSolution>& output,
+                                          std::vector<bool>& assigned,
+                                          std::size_t& valid_count) {
+                SPPProcessor replay_processor(spp_config);
+                replay_processor.initialize(spp_processor_config);
+                auto process_index = [&](std::size_t index) {
+                    ObservationData replay_epoch = input_epochs[index];
+                    if (index == anchor_index) {
+                        // The anchor itself is a raw/nav-derived SPP result;
+                        // use it as the first numerical state for this replay.
+                        replay_epoch.receiver_position =
+                            selected_reconnaissance[anchor_index].position_ecef;
+                    }
+                    output[index] = replay_processor.processEpoch(replay_epoch, nav);
+                    assigned[index] = true;
+                    if (output[index].isValid() &&
+                        output[index].position_ecef.allFinite() &&
+                        output[index].position_ecef.norm() > 1e6) {
+                        ++valid_count;
+                    }
+                };
+                for (const std::size_t index : fgo_quality_anchor::outwardOrder(
+                         input_epochs.size(), anchor_index, forward_pass)) {
+                    process_index(index);
+                }
+            };
+            std::size_t forward_valid = 0;
+            std::size_t backward_valid = 0;
+            replay_from_anchor(true, forward, forward_assigned, forward_valid);
+            replay_from_anchor(false, backward, backward_assigned, backward_valid);
+            quality_anchor_spp_solutions.resize(input_epochs.size());
+            for (std::size_t i = 0; i < input_epochs.size(); ++i) {
+                const bool assigned = i < anchor_index ? backward_assigned[i]
+                                                        : forward_assigned[i];
+                quality_anchor_spp_solutions[i] =
+                    i < anchor_index ? backward[i] : forward[i];
+                if (!assigned) {
+                    quality_anchor_spp_solutions[i] = selected_reconnaissance[i];
+                    ++problem.diagnostics.quality_anchor_fallback_epochs;
+                }
+                if (anchor_from_recovery) {
+                    const auto& replay_solution = quality_anchor_spp_solutions[i];
+                    if (replay_solution.isValid() &&
+                        replay_solution.position_ecef.allFinite() &&
+                        replay_solution.position_ecef.norm() > 1e6) {
+                        ++problem.diagnostics.quality_anchor_recovery_replay_valid_epochs;
+                    } else {
+                        ++problem.diagnostics.quality_anchor_recovery_replay_invalid_epochs;
+                    }
+                }
+            }
+            problem.diagnostics.quality_anchor_forward_valid_epochs = forward_valid;
+            problem.diagnostics.quality_anchor_backward_valid_epochs = backward_valid;
+            // The replay arrays are complete for every raw input index.  A
+            // valid anchor plus at least one outward state is sufficient to
+            // select the candidate; individual invalid SPP epochs continue to
+            // use the existing last-valid-seed fail-closed behavior below.
+            use_quality_anchor_spp_solutions =
+                quality_anchor_spp_solutions.size() == input_epochs.size();
+        } else {
+            // The reconnaissance processor has consumed all input epochs.  A
+            // failed quality contract must therefore reset it before the
+            // historical chronological pass is used below.
+            spp_processor.reset();
+        }
+    }
+
+    const double effective_min_elevation_deg =
+        config_.use_upstream_observable_quality
+            ? config_.upstream_min_elevation_deg
+            : config_.min_elevation_deg;
+    const double min_elevation_rad = effective_min_elevation_deg * M_PI / 180.0;
     const double dd_reference_min_snr_dbhz =
         config_.double_difference_reference_min_snr_dbhz >= 0.0
             ? config_.double_difference_reference_min_snr_dbhz
             : config_.min_snr_dbhz;
+    upstream::SnrPercentiles upstream_snr_percentiles;
+    upstream::SnrPercentiles official_tdcp_snr_percentiles;
+    std::vector<upstream::EpochMask> upstream_epoch_masks;
+    if (config_.use_upstream_observable_quality) {
+        upstream_snr_percentiles = upstream::collectSnrPercentiles(
+            input_epochs, config_.upstream_snr_percentile);
+        problem.diagnostics.upstream_snr_l1_dbhz =
+            upstream_snr_percentiles.l1_dbhz;
+        problem.diagnostics.upstream_snr_l5_dbhz =
+            upstream_snr_percentiles.l5_dbhz;
+        upstream::applyAdjacentMasks(
+            input_epochs, config_.upstream_device_model, upstream_epoch_masks,
+            problem.diagnostics.upstream_pd_pair_rejections,
+            problem.diagnostics.upstream_ld_pair_rejections,
+            config_.upstream_max_adjacent_gap_s);
+    }
+    if (config_.use_official_tdcp_snr_type_sigma || config_.use_source_tdcp_meter_sigma) {
+        // Phase117 uses the immutable official p85 SNR base only for the
+        // scalar sigma of existing TDCP factors.  It is intentionally
+        // independent of the configurable Phase80 P/D percentile.
+        official_tdcp_snr_percentiles =
+            upstream::collectOfficialTdcpSnrPercentiles(input_epochs);
+    }
+    const auto finiteMedian = [](std::vector<double> values) {
+        values.erase(std::remove_if(values.begin(), values.end(),
+                                    [](double value) {
+                                        return !std::isfinite(value);
+                                    }),
+                      values.end());
+        if (values.empty()) {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        std::sort(values.begin(), values.end());
+        const std::size_t middle = values.size() / 2U;
+        return (values.size() & 1U) != 0U
+                   ? values[middle]
+                   : 0.5 * (values[middle - 1U] + values[middle]);
+    };
+    double upstream_observation_interval_s =
+        std::numeric_limits<double>::quiet_NaN();
+    if (config_.use_upstream_absolute_doppler_residual_screen) {
+        std::vector<double> intervals;
+        intervals.reserve(input_epochs.size() > 1U ? input_epochs.size() - 1U : 0U);
+        for (std::size_t i = 1; i < input_epochs.size(); ++i) {
+            const double dt = input_epochs[i].time - input_epochs[i - 1U].time;
+            if (std::isfinite(dt) && dt > 0.0) intervals.push_back(dt);
+        }
+        const double median_interval = finiteMedian(std::move(intervals));
+        if (std::isfinite(median_interval) && median_interval > 0.0) {
+            // Match gt.Gtime.estInterval's default two-decimal estimate.
+            upstream_observation_interval_s =
+                std::round(median_interval * 100.0) / 100.0;
+        }
+    }
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
         carrier_by_problem_epoch;
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
@@ -80,6 +397,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
         dd_reference_carrier_by_problem_epoch;
     std::map<SatelliteId, double> previous_gps_pseudorange_by_satellite;
+    const auto signalDiagnostics = [&](SignalType signal)
+        -> FGOProcessor::TdcpSignalDiagnostics* {
+        if (!config_.use_carrier_tdcp_incidence_diagnostic) return nullptr;
+        return &problem.diagnostics.tdcp_signal_diagnostics[signal];
+    };
 
     // Seed continuity across a brief SPP outage (see FGOConfig::use_spp_seed):
     // a tunnel/underpass/urban-canyon gap can drop the rover to near-zero
@@ -96,36 +418,76 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     Vector3d last_valid_seed_position_ecef = Vector3d::Zero();
     double last_valid_seed_clock_bias_m = 0.0;
     bool have_last_valid_seed = false;
+    std::vector<std::size_t> problem_to_input_epoch;
+    // Shadow-only P-D rejected rows; never enter the graph or its medians.
+    struct MaskedCodeShadow {
+        GNSSSystem group; SignalType signal; double residual;
+        bool edge_candidate;
+        std::size_t input_epoch;
+    };
+    std::vector<MaskedCodeShadow> masked_code_shadow;
+    std::vector<std::pair<std::size_t, PseudorangeFactor>> code_edge_factor_shadow;
 
-    for (const auto& epoch : input_epochs) {
+    for (std::size_t input_epoch_index = 0;
+         input_epoch_index < input_epochs.size(); ++input_epoch_index) {
+        const auto& epoch = input_epochs[input_epoch_index];
+        const upstream::EpochMask* upstream_mask =
+            config_.use_upstream_observable_quality &&
+                    input_epoch_index < upstream_epoch_masks.size()
+                ? &upstream_epoch_masks[input_epoch_index]
+                : nullptr;
         EpochSeed seed;
         seed.time = epoch.time;
 
         PositionSolution spp_solution = makeInvalidSolution(epoch.time);
         if (config_.use_spp_seed) {
-            spp_solution = spp_processor.processEpoch(epoch, nav);
+            if (use_quality_anchor_spp_solutions) {
+                spp_solution = quality_anchor_spp_solutions[input_epoch_index];
+            } else {
+                spp_solution = spp_processor.processEpoch(epoch, nav);
+            }
         }
 
         if (spp_solution.isValid()) {
             seed.position_ecef = spp_solution.position_ecef;
             seed.receiver_clock_bias_m = spp_solution.receiver_clock_bias;
+            // SPP's internal/returned clock state is a range bias in metres
+            // (see SPPProcessor::calculatePredictedRange), despite the legacy
+            // PositionSolution field comment saying seconds.  Mark it
+            // explicitly so the opt-in PDC bridge cannot multiply it by c.
+            seed.receiver_clock_bias_is_meters = true;
             seed.fresh_spp_solution = true;
+            seed.last_valid_spp_hold = false;
             last_valid_seed_position_ecef = seed.position_ecef;
             last_valid_seed_clock_bias_m = seed.receiver_clock_bias_m;
             have_last_valid_seed = true;
         } else if (have_last_valid_seed) {
             seed.position_ecef = last_valid_seed_position_ecef;
             seed.receiver_clock_bias_m = last_valid_seed_clock_bias_m;
+            seed.receiver_clock_bias_is_meters = true;
+            seed.last_valid_spp_hold = true;
         } else if (epoch.receiver_position.norm() > 1e6) {
             seed.position_ecef = epoch.receiver_position;
             seed.receiver_clock_bias_m = epoch.receiver_clock_bias * constants::SPEED_OF_LIGHT;
+            seed.receiver_clock_bias_is_meters = true;
+            seed.last_valid_spp_hold = false;
         } else {
             ++problem.diagnostics.skipped_epochs_without_seed;
             continue;
         }
+        seed.receiver_clock_drift_mps = epoch.receiver_clock_drift_mps;
+        // Preserve the immutable raw Android epoch identity through the
+        // builder.  Epochs below the usable-measurement floor may be dropped
+        // later, so retained-vector position is not a valid source key.
+        seed.raw_source_index = epoch.raw_source_index;
+        seed.raw_utc_time_millis = epoch.raw_utc_time_millis;
 
         std::vector<PseudorangeFactor> epoch_factors;
         epoch_factors.reserve(epoch.observations.size());
+        std::vector<UndifferencedDopplerFactor> epoch_doppler_factors;
+        if (config_.use_undifferenced_doppler_factors) {
+            epoch_doppler_factors.reserve(epoch.observations.size());
+        }
         std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation> epoch_carriers;
         std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>
             epoch_dd_pseudorange_observations;
@@ -137,6 +499,31 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         double receiver_lon = 0.0;
         double receiver_height = 0.0;
         ecef2geodetic(seed.position_ecef, receiver_lat, receiver_lon, receiver_height);
+
+        // Do not use the later jump/residual masks to choose transmit time.
+        // The Android parser has already applied its raw code-status mask.
+        // Missing broadcast data is a satellite-local miss; malformed code or
+        // state inputs still throw, and there is no legacy-state fallback.
+        std::map<SatelliteId, std::pair<const Ephemeris*,
+            source_transmission_clock::SelectedEphemerisState>> source_states;
+        if (config_.use_source_rover_epoch_states) {
+            const auto selected = source_transmission_clock::selectNativeEpoch(
+                epoch.observations);
+            for (const auto& [satellite, pseudorange] : selected) {
+                const auto records = nav.ephemeris_data.find(satellite);
+                const auto* eph = records == nav.ephemeris_data.end() ? nullptr :
+                    source_transmission_clock::selectBroadcastMessage(
+                        records->second, satellite, epoch.time);
+                if (!eph) {
+                    ++problem.diagnostics.source_rover_missing_ephemeris_satellite_epochs;
+                    continue;
+                }
+                source_states.emplace(satellite, std::make_pair(eph,
+                    source_transmission_clock::stateFromSelectedEphemeris(
+                        epoch.time, pseudorange.metres, *eph)));
+                ++problem.diagnostics.source_rover_epoch_states_built;
+            }
+        }
 
         for (const auto& observation : epoch.observations) {
             if (!isEligibleFgoSignal(observation.satellite,
@@ -153,7 +540,38 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 observation.pseudorange <= 0.0) {
                 continue;
             }
-            const bool passes_snr_mask = observation.snr >= config_.min_snr_dbhz;
+            const std::pair<SatelliteId, SignalType> observation_key{
+                observation.satellite, observation.signal};
+            const bool upstream_pseudorange_masked =
+                upstream_mask != nullptr &&
+                upstream_mask->pseudorange.count(observation_key) != 0U;
+            const bool upstream_carrier_masked =
+                upstream_mask != nullptr &&
+                upstream_mask->carrier.count(observation_key) != 0U;
+            const upstream::ObservationBand upstream_band =
+                upstream::bandForSignal(observation.signal);
+            const double upstream_pseudorange_sigma =
+                config_.use_upstream_observable_quality
+                    ? upstream::snrPercentileSigma(
+                          observation.signal, observation.snr,
+                          upstream_snr_percentiles, 'P')
+                    : std::numeric_limits<double>::quiet_NaN();
+            const double upstream_doppler_sigma =
+                config_.use_upstream_observable_quality
+                    ? upstream::snrPercentileSigma(
+                          observation.signal, observation.snr,
+                          upstream_snr_percentiles, 'D')
+                    : std::numeric_limits<double>::quiet_NaN();
+            const bool upstream_snr_ok =
+                !config_.use_upstream_observable_quality ||
+                (std::isfinite(observation.snr) &&
+                 observation.snr >= config_.upstream_min_snr_dbhz &&
+                 upstream_band != upstream::ObservationBand::Unknown &&
+                 upstream::finitePositive(upstream_pseudorange_sigma) &&
+                 upstream::finitePositive(upstream_doppler_sigma));
+            const bool passes_snr_mask = config_.use_upstream_observable_quality
+                                             ? upstream_snr_ok
+                                             : observation.snr >= config_.min_snr_dbhz;
             const bool passes_dd_reference_snr_mask =
                 dd_reference_min_snr_dbhz <= 0.0 ||
                 observation.snr >= dd_reference_min_snr_dbhz;
@@ -165,29 +583,57 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
             GNSSTime transmit_time =
                 epoch.time - observation.pseudorange / constants::SPEED_OF_LIGHT;
-            if (!nav.calculateSatelliteState(observation.satellite,
-                                             transmit_time,
-                                             satellite_position,
-                                             satellite_velocity,
-                                             satellite_clock_bias,
-                                             satellite_clock_drift)) {
-                continue;
-            }
+            const Ephemeris* eph = nullptr;
+            if (config_.use_source_rover_epoch_states) {
+                const auto state = source_states.find(observation.satellite);
+                if (state == source_states.end()) continue;
+                eph = state->second.first;
+                const auto& shared = state->second.second;
+                transmit_time = shared.transmit_time;
+                satellite_position = shared.position_ecef;
+                satellite_velocity = shared.velocity_ecef;
+                satellite_clock_bias = shared.clock_seconds;
+                satellite_clock_drift = shared.clock_drift;
+            } else {
+                if (!nav.calculateSatelliteState(observation.satellite,
+                                                 transmit_time,
+                                                 satellite_position,
+                                                 satellite_velocity,
+                                                 satellite_clock_bias,
+                                                 satellite_clock_drift)) {
+                    continue;
+                }
 
-            transmit_time = transmit_time - satellite_clock_bias;
-            if (!nav.calculateSatelliteState(observation.satellite,
-                                             transmit_time,
-                                             satellite_position,
-                                             satellite_velocity,
-                                             satellite_clock_bias,
-                                             satellite_clock_drift)) {
-                continue;
-            }
+                transmit_time = transmit_time - satellite_clock_bias;
+                if (!nav.calculateSatelliteState(observation.satellite,
+                                                 transmit_time,
+                                                 satellite_position,
+                                                 satellite_velocity,
+                                                 satellite_clock_bias,
+                                                 satellite_clock_drift)) {
+                    continue;
+                }
 
-            const Ephemeris* eph = nav.getEphemeris(observation.satellite, transmit_time);
+                eph = nav.getEphemeris(observation.satellite, transmit_time);
+            }
             if (!eph || !isHealthyForPositioning(observation, *eph)) {
                 continue;
             }
+            Observation frequency_observation = observation;
+            if (!annotatePhase127GlonassObservation(
+                    frequency_observation, transmit_time, nav, config_,
+                    &problem.diagnostics)) {
+                if (config_.use_native_phase129_glonass_local_miss_mask &&
+                    observation.satellite.system == GNSSSystem::GLONASS) {
+                    ++problem.diagnostics.phase129_glonass_factor_rows_dropped;
+                }
+                continue;
+            }
+            const double row_frequency_hz =
+                config_.use_native_phase127_glonass_channel_provenance &&
+                        observation.satellite.system == GNSSSystem::GLONASS
+                    ? signalFrequencyHz(frequency_observation)
+                    : signalFrequencyHz(observation.signal, eph);
 
             const Vector3d corrected_satellite_position =
                 earthRotationCorrected(satellite_position, seed.position_ecef);
@@ -207,7 +653,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     nav.ionosphere_model.alpha,
                     nav.ionosphere_model.beta);
 
-                const double frequency_hz = signalFrequencyHz(observation.signal, eph);
+                const double frequency_hz = row_frequency_hz;
                 if (frequency_hz > 0.0) {
                     const double scale = constants::GPS_L1_FREQ / frequency_hz;
                     ionosphere_delay *= scale * scale;
@@ -222,8 +668,33 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
             const double satellite_clock_m =
                 satellite_clock_bias * constants::SPEED_OF_LIGHT;
+            galileo_group_delay::Selection group_delay_selection;
             const double group_delay_m =
-                groupDelayCorrectionMeters(observation, *eph);
+                config_.use_native_phase126_raw_base_source_complete
+                    ? 0.0
+                    : groupDelayCorrectionMeters(
+                          observation, *eph,
+                          config_.use_signal_specific_galileo_group_delay);
+            if (config_.use_signal_specific_galileo_group_delay &&
+                observation.satellite.system == GNSSSystem::Galileo &&
+                observation.signal == SignalType::GAL_E1) {
+                group_delay_selection = galileo_group_delay::select(
+                    observation, *eph, true);
+                if (!group_delay_selection.valid) {
+                    ++problem.diagnostics.galileo_e1_group_delay_invalid_rows;
+                    continue;
+                }
+                if (group_delay_selection.reference ==
+                    galileo_group_delay::Reference::FNavE1E5a) {
+                    ++problem.diagnostics.galileo_e1_fnav_group_delay_rows;
+                } else if (group_delay_selection.reference ==
+                           galileo_group_delay::Reference::INavE1E5b) {
+                    ++problem.diagnostics.galileo_e1_inav_group_delay_rows;
+                } else if (group_delay_selection.reference ==
+                           galileo_group_delay::Reference::Ambiguous) {
+                    ++problem.diagnostics.galileo_e1_group_delay_source_fallback_rows;
+                }
+            }
             const double corrected_pseudorange =
                 observation.pseudorange +
                 satellite_clock_m -
@@ -232,48 +703,146 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 group_delay_m;
 
             const double sin_el = std::max(0.1, std::sin(geometry.elevation));
+            if (config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+                config_.use_upstream_observable_quality && upstream_pseudorange_masked &&
+                passes_snr_mask && passes_elevation_mask &&
+                upstream::finitePositive(upstream_pseudorange_sigma)) {
+                const double residual = corrected_pseudorange -
+                    (corrected_satellite_position - seed.position_ecef).norm() -
+                    seed.receiver_clock_bias_m;
+                masked_code_shadow.push_back({clockBiasGroup(observation.satellite.system),
+                                               observation.signal, residual,
+                                               observation.native_code_edge_diagnostic_candidate,
+                                               input_epoch_index});
+            }
             const double pseudorange_elevation_scale = std::pow(
                 sin_el,
                 std::max(0.0, config_.pseudorange_elevation_sigma_power));
-            if (passes_snr_mask && passes_elevation_mask) {
+            if (passes_snr_mask && passes_elevation_mask &&
+                (!upstream_pseudorange_masked ||
+                 (config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+                  observation.native_code_edge_diagnostic_candidate))) {
                 PseudorangeFactor factor;
                 factor.satellite = observation.satellite;
+                factor.signal = observation.signal;
+                factor.has_glonass_frequency_channel =
+                    observation.satellite.system == GNSSSystem::GLONASS &&
+                    frequency_observation.has_glonass_frequency_channel;
+                factor.glonass_frequency_channel =
+                    factor.has_glonass_frequency_channel
+                        ? frequency_observation.glonass_frequency_channel
+                        : 0;
                 factor.clock_group = clockBiasGroup(observation.satellite.system);
                 factor.satellite_position_ecef = corrected_satellite_position;
+                factor.source_satellite_position_ecef = satellite_position;
+                factor.source_satellite_position_available =
+                    satellite_position.allFinite();
                 factor.corrected_pseudorange_m = corrected_pseudorange;
-                factor.sigma_m =
-                    std::max(1e-3,
-                             config_.pseudorange_sigma_m /
-                                 std::max(1e-6, pseudorange_elevation_scale));
+                factor.sigma_m = config_.use_upstream_observable_quality
+                                     ? upstream_pseudorange_sigma
+                                     : std::max(
+                                           1e-3,
+                                           config_.pseudorange_sigma_m /
+                                               std::max(1e-6,
+                                                        pseudorange_elevation_scale));
+                factor.android_sv_time_uncertainty_available =
+                    observation.has_received_sv_time_uncertainty_m &&
+                    std::isfinite(observation.received_sv_time_uncertainty_m) &&
+                    observation.received_sv_time_uncertainty_m > 0.0;
+                if (factor.android_sv_time_uncertainty_available) {
+                    factor.android_sv_time_uncertainty_floor_m =
+                        observation.received_sv_time_uncertainty_m;
+                    const double existing_sigma = factor.sigma_m;
+                    factor.sigma_m = android_sv_time_uncertainty::sigmaWithFloor(
+                        existing_sigma,
+                        factor.android_sv_time_uncertainty_floor_m,
+                        config_.use_native_android_sv_time_uncertainty_sigma_floor);
+                    factor.android_sv_time_uncertainty_floor_applied =
+                        config_.use_native_android_sv_time_uncertainty_sigma_floor &&
+                        factor.sigma_m > existing_sigma;
+                }
+                if (!upstream::finitePositive(factor.sigma_m)) {
+                    continue;
+                }
+                factor.snr_dbhz = observation.snr;
+                const double seed_range =
+                    (corrected_satellite_position - seed.position_ecef).norm();
+                factor.upstream_seed_residual_m =
+                    corrected_pseudorange - seed_range -
+                    seed.receiver_clock_bias_m;
                 factor.elevation_rad = geometry.elevation;
-                epoch_factors.push_back(factor);
-                if (observation.satellite.system == GNSSSystem::GPS) {
-                    gps_pseudorange_by_satellite[observation.satellite] =
-                        observation.pseudorange;
+                factor.residual_ionosphere_coefficient =
+                    residual_ionosphere::signalCoefficient(
+                        geometry.elevation,
+                        row_frequency_hz);
+                if (config_.use_residual_ionosphere_states && !upstream_pseudorange_masked) {
+                    ++problem.diagnostics.residual_ionosphere_candidate_rows;
+                    if (!residual_ionosphere::finiteCoefficient(
+                            factor.residual_ionosphere_coefficient)) {
+                        ++problem.diagnostics.residual_ionosphere_invalid_coefficients;
+                    }
+                }
+                if (upstream_pseudorange_masked) {
+                    code_edge_factor_shadow.emplace_back(input_epoch_index, factor);
+                } else {
+                    epoch_factors.push_back(factor);
+                    if (config_.use_upstream_observable_quality) {
+                        ++problem.diagnostics.upstream_pseudorange_factors;
+                    }
+                    if (observation.satellite.system == GNSSSystem::GPS) {
+                        gps_pseudorange_by_satellite[observation.satellite] =
+                            observation.pseudorange;
+                    }
                 }
             }
 
             const bool carrier_loss_of_lock =
                 observation.loss_of_lock || ((observation.lli & 0x01U) != 0);
-            double wavelength = signalWavelengthMeters(observation);
+            double wavelength =
+                config_.use_native_phase127_glonass_channel_provenance &&
+                        observation.satellite.system == GNSSSystem::GLONASS
+                    ? signalWavelengthMeters(frequency_observation)
+                    : signalWavelengthMeters(observation);
             const bool has_carrier_phase =
                 observation.has_carrier_phase && observation.carrier_phase != 0.0;
+            auto* signal_diagnostics = signalDiagnostics(observation.signal);
+            if (signal_diagnostics != nullptr) {
+                ++signal_diagnostics->carrier_rows_seen;
+                if (has_carrier_phase) ++signal_diagnostics->carrier_phase_rows;
+            }
             if (wavelength <= 0.0) {
                 wavelength = signalWavelengthMeters(observation.signal, eph);
             }
+            if (signal_diagnostics != nullptr && has_carrier_phase &&
+                (!(wavelength > 0.0) || !std::isfinite(wavelength))) {
+                ++signal_diagnostics->missing_wavelength;
+            }
             const bool usable_carrier = has_carrier_phase && wavelength > 0.0;
+            const double raw_carrier_m =
+                usable_carrier ? observation.carrier_phase * wavelength : 0.0;
             const double corrected_carrier =
                 usable_carrier
-                    ? observation.carrier_phase * wavelength +
-                          satellite_clock_m -
-                          troposphere_delay +
+                    ? raw_carrier_m + satellite_clock_m - troposphere_delay +
                           ionosphere_delay
                     : 0.0;
+            const double tdcp_carrier =
+                (config_.use_official_tdcp_resl_atmosphere_cancellation ||
+                 config_.use_source_tdcp_resl_observable)
+                    ? (usable_carrier
+                           ? tdcp_contract::ordinaryTdcpCarrierMeters(
+                                 raw_carrier_m, satellite_clock_m,
+                                 ionosphere_delay, troposphere_delay, true)
+                           : 0.0)
+                    : corrected_carrier;
+            if (signal_diagnostics != nullptr && has_carrier_phase &&
+                (!std::isfinite(observation.carrier_phase) ||
+                 !std::isfinite(corrected_carrier))) {
+                ++signal_diagnostics->nonfinite_measurements;
+            }
 
             FGOProcessor::ObservationModelDebug model_debug;
             model_debug.raw_pseudorange_m = observation.pseudorange;
-            model_debug.raw_carrier_m =
-                usable_carrier ? observation.carrier_phase * wavelength : 0.0;
+            model_debug.raw_carrier_m = raw_carrier_m;
             model_debug.satellite_clock_m = satellite_clock_m;
             model_debug.ionosphere_delay_m = ionosphere_delay;
             model_debug.troposphere_delay_m = troposphere_delay;
@@ -295,12 +864,21 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             carrier.satellite = observation.satellite;
             carrier.signal = observation.signal;
             carrier.satellite_position_ecef = corrected_satellite_position;
+            carrier.source_satellite_position_ecef = satellite_position;
+            carrier.source_satellite_position_available =
+                satellite_position.allFinite();
             carrier.corrected_pseudorange_m = corrected_pseudorange;
             carrier.corrected_carrier_m = corrected_carrier;
+            carrier.tdcp_carrier_m = tdcp_carrier;
+            carrier.source_adr_uncertainty_m = observation.has_source_adr_uncertainty_m
+                ? observation.source_adr_uncertainty_m : 0.;
             carrier.wavelength_m = wavelength;
+            carrier.snr_dbhz = observation.snr;
             carrier.sigma_m =
                 std::max(1e-4, config_.carrier_phase_sigma_m / sin_el);
             carrier.elevation_rad = geometry.elevation;
+            carrier.residual_ionosphere_coefficient = residual_ionosphere::signalCoefficient(
+                geometry.elevation, row_frequency_hz);
             carrier.loss_of_lock = carrier_loss_of_lock;
             carrier.has_carrier_phase = usable_carrier;
             carrier.los = -corrected_delta / corrected_range;
@@ -309,48 +887,231 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                          config_.single_difference_doppler_sigma_mps /
                              std::sqrt(sin_el));
             if (observation.has_doppler && wavelength > 0.0) {
-                const Vector3d doppler_delta =
-                    satellite_position - seed.position_ecef;
-                const double doppler_range = doppler_delta.norm();
-                if (doppler_range > 0.0) {
-                    const Vector3d ex = doppler_delta / doppler_range;
-                    const double sagnac_rate =
-                        constants::OMEGA_E / constants::SPEED_OF_LIGHT *
-                        (satellite_velocity(1) * seed.position_ecef(0) -
-                         satellite_velocity(0) * seed.position_ecef(1));
-                    const double modeled_range_rate =
-                        satellite_velocity.dot(ex) + sagnac_rate;
+                Vector3d doppler_los = Vector3d::Zero();
+                double modeled_range_rate = 0.0;
+                bool doppler_geometry_valid = false;
+                if (config_.use_corrected_undifferenced_doppler_factors) {
+                    // Android reports an uncorrected pseudorange rate.  Use
+                    // the same transmit-time Earth-rotation correction for
+                    // satellite position and velocity; the receiver clock
+                    // drift is added later as a difference of graph clock
+                    // bias states (see fgo.cpp).
+                    doppler_geometry_valid =
+                        doppler_contract::knownSatelliteRangeRate(
+                            satellite_position, satellite_velocity,
+                            seed.position_ecef, true, doppler_los,
+                            modeled_range_rate);
+                } else {
+                    const Vector3d doppler_delta =
+                        satellite_position - seed.position_ecef;
+                    const double doppler_range = doppler_delta.norm();
+                    if (doppler_range > 0.0 && doppler_delta.allFinite()) {
+                        doppler_los = doppler_delta / doppler_range;
+                        const double sagnac_rate =
+                            constants::OMEGA_E / constants::SPEED_OF_LIGHT *
+                            (satellite_velocity(1) * seed.position_ecef(0) -
+                             satellite_velocity(0) * seed.position_ecef(1));
+                        modeled_range_rate =
+                            satellite_velocity.dot(doppler_los) + sagnac_rate;
+                        doppler_geometry_valid =
+                            std::isfinite(modeled_range_rate);
+                    }
+                }
+                if (doppler_geometry_valid) {
                     const double satellite_clock_drift_mps =
                         satellite_clock_drift * constants::SPEED_OF_LIGHT;
                     const double measured_range_rate =
-                        -observation.doppler * wavelength;
+                        doppler_contract::rinexDopplerToRangeRate(
+                            observation.doppler,
+                            constants::SPEED_OF_LIGHT / wavelength);
                     carrier.doppler_residual_mps =
-                        measured_range_rate -
-                        (modeled_range_rate - satellite_clock_drift_mps);
+                        doppler_contract::receiverOnlyResidual(
+                            measured_range_rate, modeled_range_rate,
+                            satellite_clock_drift);
                     carrier.has_doppler_residual =
-                        std::isfinite(carrier.doppler_residual_mps);
+                        std::isfinite(carrier.doppler_residual_mps) &&
+                        std::isfinite(measured_range_rate);
                     model_debug.has_doppler_residual =
                         carrier.has_doppler_residual;
                     model_debug.doppler_residual_mps =
                         carrier.doppler_residual_mps;
+                    model_debug.doppler_measured_range_rate_mps =
+                        measured_range_rate;
+                    model_debug.doppler_satellite_range_rate_mps =
+                        modeled_range_rate;
+                    model_debug.doppler_satellite_clock_drift_mps =
+                        satellite_clock_drift_mps;
+                    model_debug.doppler_uses_rotated_satellite_state =
+                        config_.use_corrected_undifferenced_doppler_factors;
+                    if (config_.use_corrected_undifferenced_doppler_factors) {
+                        // Keep all receiver-only factors on the corrected
+                        // state geometry.  The legacy branch intentionally
+                        // retains carrier.los from the existing PR geometry.
+                        carrier.los = -doppler_los;
+                    }
                 }
             }
             carrier.model_debug = model_debug;
-            if (passes_dd_reference_snr_mask) {
+            if (config_.use_undifferenced_doppler_factors &&
+                carrier.has_doppler_residual && passes_snr_mask &&
+                passes_elevation_mask) {
+                UndifferencedDopplerFactor factor;
+                factor.satellite = observation.satellite;
+                factor.signal = observation.signal;
+                factor.los = carrier.los;
+                factor.residual_mps = carrier.doppler_residual_mps;
+                factor.sigma_mps = config_.use_upstream_observable_quality
+                                       ? upstream_doppler_sigma
+                                       : std::max(
+                                             1e-4,
+                                             config_.undifferenced_doppler_sigma_mps /
+                                                 std::sqrt(sin_el));
+                if (config_.use_native_cn0_doppler_calibration) {
+                    factor.cn0_doppler_model_sigma_mps =
+                        cn0_doppler_calibration::modelSigmaMps(observation.snr);
+                    factor.cn0_doppler_model_sigma_available =
+                        std::isfinite(factor.cn0_doppler_model_sigma_mps) &&
+                        factor.cn0_doppler_model_sigma_mps > 0.0;
+                    const double existing_sigma = factor.sigma_mps;
+                    factor.sigma_mps = cn0_doppler_calibration::sigmaWithFloor(
+                        existing_sigma, observation.snr, true);
+                    factor.cn0_doppler_sigma_floor_applied =
+                        factor.cn0_doppler_model_sigma_available &&
+                        factor.sigma_mps > existing_sigma;
+                }
+                if (!upstream::finitePositive(factor.sigma_mps)) {
+                    continue;
+                }
+                factor.elevation_rad = carrier.elevation_rad;
+                // Preserve the exact broadcast state (or its paired
+                // Earth-rotation-corrected form) and wavelength used to
+                // prepare this factor.  These provenance fields are
+                // diagnostic-only and do not alter the factor equation.
+                factor.wavelength_m = wavelength;
+                factor.satellite_position_ecef = satellite_position;
+                factor.satellite_velocity_ecef = satellite_velocity;
+                factor.source_satellite_position_ecef = satellite_position;
+                factor.source_satellite_velocity_ecef = satellite_velocity;
+                factor.source_satellite_state_available =
+                    satellite_position.allFinite() && satellite_velocity.allFinite();
+                factor.measured_range_rate_mps =
+                    model_debug.doppler_measured_range_rate_mps;
+                factor.satellite_range_rate_mps =
+                    model_debug.doppler_satellite_range_rate_mps;
+                factor.satellite_clock_drift_mps =
+                    model_debug.doppler_satellite_clock_drift_mps;
+                factor.uses_rotated_satellite_state =
+                    model_debug.doppler_uses_rotated_satellite_state;
+                if (factor.uses_rotated_satellite_state) {
+                    Vector3d corrected_position = Vector3d::Zero();
+                    Vector3d corrected_velocity = Vector3d::Zero();
+                    if (!doppler_contract::earthRotationCorrectedSatelliteState(
+                            satellite_position, satellite_velocity,
+                            seed.position_ecef, corrected_position,
+                            corrected_velocity)) {
+                        continue;
+                    }
+                    factor.satellite_position_ecef = corrected_position;
+                    factor.satellite_velocity_ecef = corrected_velocity;
+                }
+                epoch_doppler_factors.push_back(factor);
+            }
+            if (passes_dd_reference_snr_mask && !upstream_carrier_masked) {
                 epoch_dd_reference_carriers[
                     {observation.satellite, observation.signal}] = carrier;
             }
-            if (passes_snr_mask && passes_elevation_mask) {
+            if (passes_snr_mask && passes_elevation_mask &&
+                !upstream_pseudorange_masked) {
                 epoch_dd_pseudorange_observations[
                     {observation.satellite, observation.signal}] = carrier;
             }
-            if (usable_carrier && passes_snr_mask && passes_elevation_mask) {
+            if (usable_carrier && passes_snr_mask && passes_elevation_mask &&
+                !upstream_carrier_masked) {
                 if (!(config_.reject_rover_carrier_loss_of_lock &&
                       carrier_loss_of_lock)) {
                     epoch_carriers[{observation.satellite, observation.signal}] =
                         carrier;
+                    if (signal_diagnostics != nullptr) {
+                        ++signal_diagnostics->retained_carrier_rows;
+                    }
+                } else if (signal_diagnostics != nullptr) {
+                    ++signal_diagnostics->rejected_loss_of_lock;
                 }
             }
+        }
+
+        if (config_.use_upstream_absolute_doppler_residual_screen) {
+            // The upstream residual pass uses the raw Android receiver clock
+            // drift, not an epoch median proxy.  Keep this candidate isolated
+            // from the broader SNR/ISB quality lane so any score change is
+            // attributable to this one missing rule.
+            problem.diagnostics.upstream_absolute_doppler_candidates +=
+                epoch_doppler_factors.size();
+            std::vector<UndifferencedDopplerFactor> filtered_doppler;
+            filtered_doppler.reserve(epoch_doppler_factors.size());
+            const double dclk_mps =
+                problem.epochs.empty()
+                    ? std::numeric_limits<double>::quiet_NaN()
+                    : epoch.receiver_clock_drift_mps;
+            for (const auto& factor : epoch_doppler_factors) {
+                const double corrected = upstream::dopplerResidualAfterReceiverClock(
+                    factor.residual_mps, dclk_mps,
+                    upstream_observation_interval_s);
+                if (std::isfinite(corrected)) {
+                    problem.diagnostics
+                        .upstream_absolute_doppler_max_abs_corrected_residual =
+                        std::max(problem.diagnostics
+                                     .upstream_absolute_doppler_max_abs_corrected_residual,
+                                 std::abs(corrected));
+                }
+                if (upstream::acceptsAbsoluteDopplerResidual(
+                        factor.residual_mps, dclk_mps,
+                        upstream_observation_interval_s,
+                        config_.upstream_absolute_doppler_residual_threshold_mps)) {
+                    filtered_doppler.push_back(factor);
+                } else {
+                    ++problem.diagnostics.upstream_absolute_doppler_rejections;
+                    if (!std::isfinite(dclk_mps) ||
+                        !(upstream_observation_interval_s > 0.0)) {
+                        ++problem.diagnostics.upstream_absolute_doppler_missing_clock;
+                    }
+                }
+            }
+            epoch_doppler_factors.swap(filtered_doppler);
+            problem.diagnostics.upstream_absolute_doppler_factors +=
+                epoch_doppler_factors.size();
+        } else if (config_.use_upstream_observable_quality) {
+            // exobs_residuals.m removes Doppler rows whose modeled residual
+            // differs from the epoch median by more than 3 m/s.  Apply this
+            // only to the receiver-only D factors; TDCP keeps the frozen
+            // Phase12 0.03 m contract and is screened by its own arc rules.
+            problem.diagnostics.upstream_doppler_candidates +=
+                epoch_doppler_factors.size();
+            const std::vector<double> residuals = [&]() {
+                std::vector<double> values;
+                values.reserve(epoch_doppler_factors.size());
+                for (const auto& factor : epoch_doppler_factors) {
+                    values.push_back(factor.residual_mps);
+                }
+                return values;
+            }();
+            const double median = finiteMedian(residuals);
+            std::vector<UndifferencedDopplerFactor> filtered_doppler;
+            filtered_doppler.reserve(epoch_doppler_factors.size());
+            for (const auto& factor : epoch_doppler_factors) {
+                const double threshold = upstream::residualThreshold(
+                    upstream::bandForSignal(factor.signal), 'D');
+                if (std::isfinite(median) && std::isfinite(threshold) &&
+                    std::isfinite(factor.residual_mps) &&
+                    std::abs(factor.residual_mps - median) <= threshold) {
+                    filtered_doppler.push_back(factor);
+                } else {
+                    ++problem.diagnostics.upstream_doppler_residual_rejections;
+                }
+            }
+            epoch_doppler_factors.swap(filtered_doppler);
+            problem.diagnostics.upstream_doppler_factors +=
+                epoch_doppler_factors.size();
         }
 
         const std::size_t usable_epoch_measurements =
@@ -358,11 +1119,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                                             : epoch_carriers.size();
         if (static_cast<int>(usable_epoch_measurements) <
             config_.min_satellites_per_epoch) {
-            continue;
+            if (!config_.retain_sparse_epochs_for_imu) {
+                continue;
+            }
+            ++problem.diagnostics.sparse_epochs_retained;
+            if (usable_epoch_measurements == 0) {
+                ++problem.diagnostics.sparse_empty_epochs_retained;
+            }
         }
 
         const std::size_t epoch_index = problem.epochs.size();
         problem.epochs.push_back(seed);
+        problem_to_input_epoch.push_back(input_epoch_index);
         bool clock_jump = false;
         double gps_pseudorange_delta_sum = 0.0;
         std::size_t gps_pseudorange_delta_count = 0;
@@ -399,6 +1167,416 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             for (auto& factor : epoch_factors) {
                 factor.epoch_index = epoch_index;
                 problem.pseudorange_factors.push_back(factor);
+                if (config_.use_native_phase129_glonass_local_miss_mask &&
+                    factor.satellite.system == GNSSSystem::GLONASS) {
+                    ++problem.diagnostics.phase129_glonass_factor_rows_retained;
+                }
+            }
+        }
+        for (auto& factor : epoch_doppler_factors) {
+            factor.epoch_index = epoch_index;
+            if (config_.use_corrected_undifferenced_doppler_factors) {
+                if (epoch_index == 0) {
+                    // A single epoch cannot identify receiver clock drift;
+                    // do not silently absorb it into velocity.
+                    continue;
+                }
+                factor.previous_epoch_index = epoch_index - 1;
+                factor.dt_s = problem.epochs[epoch_index].time -
+                              problem.epochs[epoch_index - 1].time;
+                if (!(factor.dt_s > 0.0) ||
+                    (config_.max_tdcp_gap_s > 0.0 &&
+                     factor.dt_s > config_.max_tdcp_gap_s)) {
+                    continue;
+                }
+                factor.includes_receiver_clock_drift = true;
+            }
+            problem.undifferenced_doppler_factors.push_back(factor);
+        }
+    }
+
+    if (config_.use_upstream_observable_quality) {
+        // The published residual mask uses one median per system/frequency
+        // over the whole observation matrix.  Reconstruct the same
+        // truth-free center from native SPP-seed residuals; no enriched
+        // receiver/satellite coordinate is consulted.
+        std::vector<std::size_t> pre_residual_counts(problem.epochs.size(),0);
+        for (const auto& factor : problem.pseudorange_factors) {
+            ++pre_residual_counts.at(factor.epoch_index);
+        }
+        if (config_.retain_native_pseudorange_remasking_pool) {
+            problem.native_pseudorange_remasking_pool = problem.pseudorange_factors;
+        }
+        using ResidualGroup =
+            std::pair<GNSSSystem, upstream::ObservationBand>;
+        std::map<ResidualGroup, std::vector<double>> residuals_by_group;
+        for (const auto& factor : problem.pseudorange_factors) {
+            const ResidualGroup group{
+                factor.clock_group, upstream::bandForSignal(factor.signal)};
+            if (group.second == upstream::ObservationBand::Unknown ||
+                !std::isfinite(factor.upstream_seed_residual_m)) {
+                continue;
+            }
+            residuals_by_group[group].push_back(factor.upstream_seed_residual_m);
+        }
+        std::map<ResidualGroup, double> residual_medians;
+        for (const auto& [group, values] : residuals_by_group) {
+            residual_medians[group] = finiteMedian(values);
+        }
+        problem.diagnostics.upstream_pseudorange_candidates =
+            problem.pseudorange_factors.size();
+        if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+            std::size_t passes = 0, unavailable = 0;
+            std::size_t edge_quality = 0, edge_residual = 0, edge_retained_epoch = 0;
+            const std::set<std::size_t> retained_inputs(problem_to_input_epoch.begin(),
+                                                       problem_to_input_epoch.end());
+            for (const auto& row : masked_code_shadow) {
+                edge_quality += row.edge_candidate;
+                const auto band = upstream::bandForSignal(row.signal);
+                const auto found = residual_medians.find({row.group, band});
+                if (found == residual_medians.end() || !std::isfinite(found->second) ||
+                    !std::isfinite(row.residual)) { ++unavailable; continue; }
+                const bool accepted = upstream::acceptsCenteredPseudorangeResidual(
+                    row.residual, found->second, upstream::residualThreshold(band, 'P'));
+                passes += accepted;
+                edge_residual += row.edge_candidate && accepted;
+                edge_retained_epoch += row.edge_candidate && accepted &&
+                    retained_inputs.count(row.input_epoch) != 0;
+            }
+            std::fprintf(stderr,
+                "[native-code-edge-shadow] geometry_quality_pass=%zu residual_pass=%zu "
+                "retained_epoch_pass=%zu factors_added=0\n",
+                edge_quality, edge_residual, edge_retained_epoch);
+            std::fprintf(stderr,
+                "[native-masked-code-shadow] geometry_quality_pass=%zu baseline_residual_pass=%zu "
+                "residual_unavailable=%zu factors_added=0 median_rows_added=0\n",
+                masked_code_shadow.size(), passes, unavailable);
+        }
+        std::vector<PseudorangeFactor> filtered_pseudorange;
+        filtered_pseudorange.reserve(problem.pseudorange_factors.size());
+        std::vector<RejectedResidualSummary> rejected_residuals(problem.epochs.size());
+        // [retained/rejected][incoming/outgoing]; indices refer to the exact
+        // builder input, not the potentially compressed problem epoch vector.
+        using PdGroups = std::array<std::array<MatchedPseudorangeDopplerSummary, 2>, 2>;
+        std::vector<PdGroups> matched_pd(problem.epochs.size());
+        for (const auto& factor : problem.pseudorange_factors) {
+            const ResidualGroup group{
+                factor.clock_group, upstream::bandForSignal(factor.signal)};
+            const auto median_it = residual_medians.find(group);
+            const double median = median_it == residual_medians.end()
+                                      ? std::numeric_limits<double>::quiet_NaN()
+                                      : median_it->second;
+            const double threshold = upstream::residualThreshold(group.second, 'P');
+            const bool accepted = upstream::acceptsCenteredPseudorangeResidual(
+                    factor.upstream_seed_residual_m, median, threshold);
+            if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+                const auto source = problem_to_input_epoch.at(factor.epoch_index);
+                auto& groups = matched_pd.at(factor.epoch_index)[accepted ? 0 : 1];
+                for (std::size_t direction = 0; direction < 2; ++direction) {
+                    std::optional<double> value;
+                    if ((direction == 0 && source > 0) ||
+                        (direction == 1 && source + 1 < input_epochs.size())) {
+                        const auto before = direction == 0 ? source - 1 : source;
+                        const auto& previous = input_epochs[before];
+                        const auto& current = input_epochs[before + 1];
+                        value = matchedPseudorangeDoppler(previous, current,
+                            factor.satellite, factor.signal, current.time - previous.time);
+                    }
+                    groups[direction].observe(value);
+                }
+            }
+            if (accepted) {
+                filtered_pseudorange.push_back(factor);
+            } else {
+                ++problem.diagnostics.upstream_pseudorange_residual_rejections;
+                rejected_residuals.at(factor.epoch_index).observe(
+                    factor.upstream_seed_residual_m - median);
+            }
+        }
+        problem.pseudorange_factors.swap(filtered_pseudorange);
+        // Use only medians from the original admitted rows and only epochs
+        // retained by the original graph. Shadow factors do not feed either.
+        std::map<std::size_t, std::size_t> input_to_problem;
+        for (std::size_t i = 0; i < problem_to_input_epoch.size(); ++i)
+            input_to_problem.emplace(problem_to_input_epoch[i], i);
+        for (auto& [source_index, factor] : code_edge_factor_shadow) {
+            const auto retained = input_to_problem.find(source_index);
+            if (retained == input_to_problem.end()) continue;
+            const auto band = upstream::bandForSignal(factor.signal);
+            const auto median = residual_medians.find({factor.clock_group, band});
+            if (median == residual_medians.end() ||
+                !upstream::acceptsCenteredPseudorangeResidual(
+                    factor.upstream_seed_residual_m, median->second,
+                    upstream::residualThreshold(band, 'P'))) continue;
+            factor.epoch_index = retained->second;
+            problem.native_code_edge_readmission_pool.push_back(factor);
+        }
+        if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+            std::vector<std::size_t> post_residual_counts(problem.epochs.size(),0);
+            for (const auto& factor : problem.pseudorange_factors) {
+                ++post_residual_counts.at(factor.epoch_index);
+            }
+            for (std::size_t epoch=0; epoch<problem.epochs.size(); ++epoch) {
+                // Topology diagnostic only; threshold does not change admission.
+                if (post_residual_counts[epoch] < 8) {
+                    std::fprintf(stderr,
+                        "[native-p-admission] epoch=%zu before_centered_residual=%zu "
+                        "after_centered_residual=%zu\n",epoch,
+                        pre_residual_counts[epoch],post_residual_counts[epoch]);
+                    const auto& rejected = rejected_residuals[epoch];
+                    std::fprintf(stderr,
+                        "[native-p-rejected] epoch=%zu positive=%zu negative=%zu "
+                        "zero=%zu nonfinite=%zu max_abs_m=%.17g\n",epoch,
+                        rejected.positive,rejected.negative,rejected.zero,
+                        rejected.nonfinite,rejected.max_abs_m);
+                    for (std::size_t population = 0; population < 2; ++population) {
+                        for (std::size_t direction = 0; direction < 2; ++direction) {
+                            const auto& pd = matched_pd[epoch][population][direction];
+                            std::fprintf(stderr,
+                                "[native-p-matched-pd] epoch=%zu population=%s direction=%s "
+                                "missing=%zu positive=%zu negative=%zu zero=%zu max_abs_m=%.17g\n",
+                                epoch, population == 0 ? "retained" : "rejected",
+                                direction == 0 ? "incoming" : "outgoing", pd.missing,
+                                pd.values.positive, pd.values.negative, pd.values.zero,
+                                pd.values.max_abs_m);
+                        }
+                    }
+                }
+            }
+        }
+        problem.diagnostics.upstream_pseudorange_factors =
+            problem.pseudorange_factors.size();
+    }
+
+    if (config_.use_native_android_sv_time_uncertainty_sigma_floor) {
+        problem.diagnostics
+            .native_android_sv_time_uncertainty_sigma_floor_enabled = true;
+        std::vector<double> floors;
+        floors.reserve(problem.pseudorange_factors.size());
+        for (const auto& factor : problem.pseudorange_factors) {
+            if (!factor.android_sv_time_uncertainty_available ||
+                !std::isfinite(factor.android_sv_time_uncertainty_floor_m) ||
+                factor.android_sv_time_uncertainty_floor_m <= 0.0) {
+                ++problem.diagnostics
+                    .native_android_sv_time_uncertainty_rows_fallback;
+                continue;
+            }
+            ++problem.diagnostics.native_android_sv_time_uncertainty_rows_applied;
+            if (factor.android_sv_time_uncertainty_floor_applied) {
+                ++problem.diagnostics
+                    .native_android_sv_time_uncertainty_factors_affected;
+            }
+            floors.push_back(factor.android_sv_time_uncertainty_floor_m);
+        }
+        if (!floors.empty()) {
+            std::sort(floors.begin(), floors.end());
+            const auto percentile = [&](double q) {
+                const double index =
+                    q * static_cast<double>(floors.size() - 1U);
+                const std::size_t lower = static_cast<std::size_t>(index);
+                const std::size_t upper =
+                    std::min(floors.size() - 1U, lower + 1U);
+                const double alpha = index - static_cast<double>(lower);
+                return floors[lower] * (1.0 - alpha) + floors[upper] * alpha;
+            };
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_min_m = floors.front();
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_median_m = percentile(0.5);
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_p95_m = percentile(0.95);
+            problem.diagnostics
+                .native_android_sv_time_uncertainty_floor_max_m = floors.back();
+        }
+    }
+
+    if (config_.use_native_cn0_doppler_calibration) {
+        problem.diagnostics.native_cn0_doppler_calibration_enabled = true;
+        problem.diagnostics.native_cn0_doppler_calibration_alpha_mps =
+            cn0_doppler_calibration::kAlphaMpsAtReference;
+        problem.diagnostics.native_cn0_doppler_calibration_reference_cn0_dbhz =
+            cn0_doppler_calibration::kReferenceCn0DbHz;
+        std::vector<double> model_sigmas;
+        model_sigmas.reserve(problem.undifferenced_doppler_factors.size());
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            ++problem.diagnostics.native_cn0_doppler_calibration_candidate_rows;
+            if (!factor.cn0_doppler_model_sigma_available ||
+                !std::isfinite(factor.cn0_doppler_model_sigma_mps) ||
+                factor.cn0_doppler_model_sigma_mps <= 0.0) {
+                ++problem.diagnostics.native_cn0_doppler_calibration_fallback_rows;
+                continue;
+            }
+            ++problem.diagnostics.native_cn0_doppler_calibration_finite_cn0_rows;
+            if (factor.cn0_doppler_sigma_floor_applied) {
+                ++problem.diagnostics.native_cn0_doppler_calibration_factors_affected;
+            }
+            model_sigmas.push_back(factor.cn0_doppler_model_sigma_mps);
+        }
+        if (!model_sigmas.empty()) {
+            std::sort(model_sigmas.begin(), model_sigmas.end());
+            const auto percentile = [&](double q) {
+                const double index =
+                    q * static_cast<double>(model_sigmas.size() - 1U);
+                const std::size_t lower = static_cast<std::size_t>(index);
+                const std::size_t upper =
+                    std::min(model_sigmas.size() - 1U, lower + 1U);
+                const double alpha = index - static_cast<double>(lower);
+                return model_sigmas[lower] * (1.0 - alpha) +
+                       model_sigmas[upper] * alpha;
+            };
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_min_mps =
+                model_sigmas.front();
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_median_mps =
+                percentile(0.5);
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_p95_mps =
+                percentile(0.95);
+            problem.diagnostics.native_cn0_doppler_calibration_model_sigma_max_mps =
+                model_sigmas.back();
+        }
+    }
+
+    if (config_.use_doppler_velocity_wls_initialization) {
+        // Build the initializer only from the corrected receiver-only rows.
+        // The grouping is deliberately performed after factor construction so
+        // the WLS and graph consume the exact same LOS, known-satellite term,
+        // and uncertainty values.
+        problem.doppler_velocity_wls_estimates.resize(problem.epochs.size());
+        doppler_velocity_wls::Options wls_options;
+        wls_options.min_rows = config_.doppler_velocity_wls_min_rows;
+        wls_options.max_condition_number =
+            config_.doppler_velocity_wls_max_condition_number;
+        wls_options.huber_threshold_sigma =
+            config_.doppler_velocity_wls_huber_threshold_sigma;
+        wls_options.max_irls_iterations =
+            config_.doppler_velocity_wls_max_irls_iterations;
+        wls_options.max_velocity_mps =
+            config_.doppler_velocity_wls_max_velocity_mps;
+        wls_options.max_clock_rate_mps =
+            config_.doppler_velocity_wls_max_clock_rate_mps;
+        wls_options.max_normalized_rms =
+            config_.doppler_velocity_wls_max_normalized_rms;
+        wls_options.max_abs_normalized_residual =
+            config_.doppler_velocity_wls_max_abs_normalized_residual;
+
+        std::vector<std::vector<doppler_velocity_wls::ObservationRow>> rows_by_epoch(
+            problem.epochs.size());
+        for (const auto& factor : problem.undifferenced_doppler_factors) {
+            if (!factor.includes_receiver_clock_drift ||
+                factor.epoch_index >= rows_by_epoch.size()) {
+                continue;
+            }
+            rows_by_epoch[factor.epoch_index].push_back({
+                factor.los, factor.residual_mps, factor.sigma_mps});
+        }
+        for (std::size_t epoch_index = 0;
+             epoch_index < problem.epochs.size(); ++epoch_index) {
+            auto& estimate = problem.doppler_velocity_wls_estimates[epoch_index];
+            if (epoch_index < problem.clock_jumps.size() &&
+                problem.clock_jumps[epoch_index]) {
+                estimate.reset = true;
+                estimate.reason = "clock-discontinuity-reset";
+                continue;
+            }
+            estimate = doppler_velocity_wls::solve(rows_by_epoch[epoch_index],
+                                                   wls_options);
+        }
+
+        // A missing row set is never replaced with zero.  Complete only short
+        // same-lane gaps using already-valid estimates: first try a bounded
+        // two-sided interpolation, then a one-sided constant hold.  A clock
+        // jump or a gap beyond max_tdcp_gap_s blocks both operations.
+        std::vector<GNSSTime> times;
+        times.reserve(problem.epochs.size());
+        for (const auto& epoch : problem.epochs) {
+            times.push_back(epoch.time);
+        }
+        const double max_gap = std::max(0.0, config_.max_tdcp_gap_s);
+        const double edge_hold =
+            std::max(0.0, config_.doppler_velocity_wls_edge_hold_max_s);
+        auto has_clock_jump_between = [&](std::size_t first,
+                                          std::size_t last) {
+            if (first > last) {
+                std::swap(first, last);
+            }
+            for (std::size_t i = first + 1; i <= last &&
+                                             i < problem.clock_jumps.size();
+                 ++i) {
+                if (problem.clock_jumps[i]) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        for (std::size_t i = 0; i < problem.doppler_velocity_wls_estimates.size();
+             ++i) {
+            auto& estimate = problem.doppler_velocity_wls_estimates[i];
+            if (estimate.valid) {
+                continue;
+            }
+            std::size_t previous = i;
+            while (previous > 0) {
+                --previous;
+                if (problem.doppler_velocity_wls_estimates[previous].valid) {
+                    break;
+                }
+            }
+            const bool have_previous =
+                problem.doppler_velocity_wls_estimates[previous].valid;
+            std::size_t next = i;
+            while (next + 1 < problem.doppler_velocity_wls_estimates.size()) {
+                ++next;
+                if (problem.doppler_velocity_wls_estimates[next].valid) {
+                    break;
+                }
+            }
+            const bool have_next =
+                problem.doppler_velocity_wls_estimates[next].valid;
+
+            const double previous_dt =
+                have_previous ? times[i] - times[previous] : 0.0;
+            const double next_dt = have_next ? times[next] - times[i] : 0.0;
+            if (have_previous && have_next && previous < i && i < next &&
+                previous_dt > 0.0 && next_dt > 0.0 &&
+                (max_gap <= 0.0 ||
+                 (previous_dt <= max_gap && next_dt <= max_gap)) &&
+                !has_clock_jump_between(previous, next)) {
+                const auto& before =
+                    problem.doppler_velocity_wls_estimates[previous];
+                const auto& after = problem.doppler_velocity_wls_estimates[next];
+                const double alpha = previous_dt / (previous_dt + next_dt);
+                estimate = before;
+                estimate.direct = false;
+                estimate.propagated = true;
+                estimate.reason = "bounded-interpolation";
+                estimate.velocity_ecef_mps =
+                    (1.0 - alpha) * before.velocity_ecef_mps +
+                    alpha * after.velocity_ecef_mps;
+                estimate.clock_rate_mps =
+                    (1.0 - alpha) * before.clock_rate_mps +
+                    alpha * after.clock_rate_mps;
+                estimate.covariance =
+                    (1.0 - alpha) * before.covariance + alpha * after.covariance;
+                continue;
+            }
+            if (have_previous && previous_dt > 0.0 && previous_dt <= edge_hold &&
+                (max_gap <= 0.0 || previous_dt <= max_gap) &&
+                !has_clock_jump_between(previous, i)) {
+                const auto& before =
+                    problem.doppler_velocity_wls_estimates[previous];
+                estimate = before;
+                estimate.direct = false;
+                estimate.propagated = true;
+                estimate.reason = "bounded-edge-hold";
+                continue;
+            }
+            if (have_next && next_dt > 0.0 && next_dt <= edge_hold &&
+                (max_gap <= 0.0 || next_dt <= max_gap) &&
+                !has_clock_jump_between(i, next)) {
+                const auto& after = problem.doppler_velocity_wls_estimates[next];
+                estimate = after;
+                estimate.direct = false;
+                estimate.propagated = true;
+                estimate.reason = "bounded-edge-hold";
             }
         }
     }
@@ -522,7 +1700,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     }
 
     if (config_.use_tdcp_factors && problem.epochs.size() >= 2) {
-        const double sigma = std::max(1e-4, config_.tdcp_sigma_m);
+        const double legacy_sigma = std::max(1e-4, config_.tdcp_sigma_m);
         const double max_gap = std::max(0.0, config_.max_tdcp_gap_s);
         for (std::size_t epoch_index = 1; epoch_index < problem.epochs.size(); ++epoch_index) {
             const double dt = problem.epochs[epoch_index].time -
@@ -530,6 +1708,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             if (dt <= 0.0 || (max_gap > 0.0 && dt > max_gap)) {
                 problem.diagnostics.tdcp_rejected_gap +=
                     carrier_by_problem_epoch[epoch_index].size();
+                for (const auto& [key, current] :
+                     carrier_by_problem_epoch[epoch_index]) {
+                    (void)current;
+                    auto* signal_diagnostics = signalDiagnostics(key.second);
+                    if (signal_diagnostics != nullptr) {
+                        ++signal_diagnostics->rejected_gap;
+                    }
+                }
                 continue;
             }
 
@@ -539,26 +1725,72 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 const auto previous_it = previous_carriers.find(key);
                 if (previous_it == previous_carriers.end()) {
                     ++problem.diagnostics.tdcp_rejected_missing_previous;
+                    auto* signal_diagnostics = signalDiagnostics(key.second);
+                    if (signal_diagnostics != nullptr) {
+                        ++signal_diagnostics->rejected_missing_previous;
+                    }
                     continue;
                 }
                 const auto& previous = previous_it->second;
                 ++problem.diagnostics.tdcp_candidate_pairs;
-                if (config_.reject_tdcp_loss_of_lock &&
-                    (previous.loss_of_lock || current.loss_of_lock)) {
-                    ++problem.diagnostics.tdcp_rejected_loss_of_lock;
-                    continue;
+                auto* signal_diagnostics = signalDiagnostics(key.second);
+                if (signal_diagnostics != nullptr) {
+                    ++signal_diagnostics->candidate_pairs;
                 }
-
-                const double delta_carrier_m =
+                // Keep the historical prepared-carrier delta as the input to
+                // the existing pair/reject contract.  Phase120 changes only
+                // the measurement carried by an accepted ordinary TDCP
+                // factor; using the source-parity value here would silently
+                // change code-phase-jump admission and factor counts.
+                const double legacy_gate_delta_carrier_m =
                     current.corrected_carrier_m - previous.corrected_carrier_m;
+                const double delta_carrier_m =
+                    current.tdcp_carrier_m - previous.tdcp_carrier_m;
                 const double delta_code_m =
                     current.corrected_pseudorange_m - previous.corrected_pseudorange_m;
-                const double code_phase_jump_m = std::abs(delta_carrier_m - delta_code_m);
-                if (config_.reject_tdcp_code_phase_jump &&
-                    config_.tdcp_code_phase_jump_threshold_m > 0.0 &&
-                    code_phase_jump_m > config_.tdcp_code_phase_jump_threshold_m) {
-                    ++problem.diagnostics.tdcp_rejected_code_phase_jump;
-                    continue;
+                const auto decision = tdcp_contract::evaluateAdjacentPair(
+                    dt, previous.loss_of_lock, current.loss_of_lock,
+                    legacy_gate_delta_carrier_m, delta_code_m, max_gap,
+                    config_.reject_tdcp_loss_of_lock,
+                    config_.reject_tdcp_code_phase_jump,
+                    config_.tdcp_code_phase_jump_threshold_m,
+                    epoch_index > 0 && epoch_index - 1 < problem.clock_jumps.size() &&
+                        problem.clock_jumps[epoch_index - 1],
+                    epoch_index < problem.clock_jumps.size() &&
+                        problem.clock_jumps[epoch_index]);
+                switch (decision.reason) {
+                    case tdcp_contract::PairRejectReason::Accepted:
+                        break;
+                    case tdcp_contract::PairRejectReason::Gap:
+                        ++problem.diagnostics.tdcp_rejected_gap;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_gap;
+                        }
+                        continue;
+                    case tdcp_contract::PairRejectReason::ClockDiscontinuity:
+                        ++problem.diagnostics.tdcp_rejected_clock_discontinuity;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_clock_discontinuity;
+                        }
+                        continue;
+                    case tdcp_contract::PairRejectReason::LossOfLock:
+                        ++problem.diagnostics.tdcp_rejected_loss_of_lock;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_loss_of_lock;
+                        }
+                        continue;
+                    case tdcp_contract::PairRejectReason::NonFiniteMeasurement:
+                        ++problem.diagnostics.tdcp_rejected_invalid_measurement;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_nonfinite;
+                        }
+                        continue;
+                    case tdcp_contract::PairRejectReason::CodePhaseJump:
+                        ++problem.diagnostics.tdcp_rejected_code_phase_jump;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_code_phase_jump;
+                        }
+                        continue;
                 }
 
                 TimeDifferencedCarrierFactor factor;
@@ -568,10 +1800,57 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 factor.signal = current.signal;
                 factor.previous_satellite_position_ecef = previous.satellite_position_ecef;
                 factor.current_satellite_position_ecef = current.satellite_position_ecef;
+                factor.previous_source_satellite_position_ecef =
+                    previous.source_satellite_position_ecef;
+                factor.current_source_satellite_position_ecef =
+                    current.source_satellite_position_ecef;
+                factor.source_satellite_positions_available =
+                    previous.source_satellite_position_available &&
+                    current.source_satellite_position_available;
                 factor.delta_carrier_m = delta_carrier_m;
-                factor.sigma_m = sigma;
+                factor.previous_residual_ionosphere_coefficient =
+                    previous.residual_ionosphere_coefficient;
+                factor.current_residual_ionosphere_coefficient =
+                    current.residual_ionosphere_coefficient;
+                factor.previous_source_adr_uncertainty_m = previous.source_adr_uncertainty_m;
+                factor.current_source_adr_uncertainty_m = current.source_adr_uncertainty_m;
+                if (config_.use_official_tdcp_snr_type_sigma || config_.use_source_tdcp_meter_sigma) {
+                    // The official noise is indexed by the previous
+                    // endpoint, matching noise_sigmas(obserr.(f).L(i,j)).
+                    // No invalid source metadata is substituted with the
+                    // legacy 0.03 m value; this pair is fail-closed instead.
+                    const double official_sigma_m =
+                        config_.use_source_tdcp_meter_sigma
+                        ? upstream::sourceTdcpSigmaMeters(
+                            previous.signal, previous.snr_dbhz,
+                            official_tdcp_snr_percentiles)
+                        : upstream::officialTdcpSigmaMeters(
+                            previous.signal, previous.snr_dbhz,
+                            official_tdcp_snr_percentiles,
+                            previous.wavelength_m);
+                    if (!upstream::finitePositive(official_sigma_m)) {
+                        ++problem.diagnostics.tdcp_rejected_invalid_weight;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_invalid_weight;
+                        }
+                        continue;
+                    }
+                    factor.sigma_m = official_sigma_m;
+                } else {
+                    factor.sigma_m = legacy_sigma;
+                }
                 factor.dt_s = dt;
+                if (config_.use_native_tdcp_adr_endpoint_sigma) {
+                    const auto sigma=tdcp_endpoint_covariance::pairSigma(
+                        factor.previous_source_adr_uncertainty_m,
+                        factor.current_source_adr_uncertainty_m);
+                    if(!sigma) throw std::invalid_argument("Missing/invalid admitted TDCP endpoint ADR uncertainty");
+                    factor.sigma_m=*sigma;
+                }
                 problem.tdcp_factors.push_back(factor);
+                if (signal_diagnostics != nullptr) {
+                    ++signal_diagnostics->accepted_pairs;
+                }
             }
         }
     }
@@ -610,6 +1889,30 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 problem.double_difference_reference_observations.push_back(
                     reference_observation);
             }
+        }
+    }
+
+    if (config_.use_native_phase129_glonass_local_miss_mask) {
+        problem.diagnostics.phase129_glonass_row_count_consistent =
+            phase129_glonass_local_miss::rowLedgerConsistent(
+                problem.diagnostics.phase127_glonass_rows,
+                problem.diagnostics.phase127_accepted_rows,
+                problem.diagnostics.phase129_glonass_local_miss_rows);
+        problem.diagnostics.phase129_glonass_factor_count_consistent =
+            problem.diagnostics.phase129_glonass_factor_rows_dropped ==
+            problem.diagnostics.phase129_glonass_local_miss_rows;
+        if (!problem.diagnostics.phase129_glonass_row_count_consistent) {
+            problem.diagnostics.phase129_configuration_valid = false;
+            problem.diagnostics.phase129_configuration_failure =
+                "Phase129 GLONASS row ledger is inconsistent";
+            problem.diagnostics.phase127_failure =
+                problem.diagnostics.phase129_configuration_failure;
+        } else if (!problem.diagnostics.phase129_glonass_factor_count_consistent) {
+            problem.diagnostics.phase129_configuration_valid = false;
+            problem.diagnostics.phase129_configuration_failure =
+                "Phase129 GLONASS factor ledger is inconsistent";
+            problem.diagnostics.phase127_failure =
+                problem.diagnostics.phase129_configuration_failure;
         }
     }
 

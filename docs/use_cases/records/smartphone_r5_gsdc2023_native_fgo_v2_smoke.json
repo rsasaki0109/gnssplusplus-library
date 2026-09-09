@@ -1,0 +1,209 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-smoke-record.v1",
+  "status": "truth-free-train-smoke-complete-blocked-from-promotion",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v2-imu-preintegration-smoke",
+  "purpose": "Record the bounded new-train smoke for the existing native GTSAM IMU preintegration path.",
+  "policy": {
+    "external_mutation": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "leaderboard_score_used_for_tuning": false,
+    "train_truth_opened": false,
+    "fresh_validation_opened": false,
+    "future_holdout_materialized": false,
+    "future_holdout_truth_open_count": 0,
+    "truth_free_first": true,
+    "production_default_changed": false,
+    "post_holdout_tuning": false
+  },
+  "authoritative_split_and_inventory": {
+    "split_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+    "split_record_sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+    "split_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze_manifest.json",
+    "split_manifest_sha256": "9b0270dd5b7e71185c92c77a27d6a9fd757e8e909998e1116237ddd8a7747b51",
+    "truth_use_inventory_method": "conservative union of positive truth counters/score records and existing ground_truth path names; route excluded when any phone has evidence",
+    "train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "route_disjoint_from_prior_truth_use": true,
+    "selection_was_central_directory_only": true,
+    "selected_payload_or_truth_before_freeze": false
+  },
+  "frozen_candidate": {
+    "candidate_freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_candidate_freeze.json",
+    "candidate_freeze_record_sha256": "7ab9679a7eb691b7bd77a3c66ae8fd522e906de871330b5ab3cb7cfb9f8106d3",
+    "candidate_freeze_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_candidate_freeze_manifest.json",
+    "candidate_freeze_manifest_sha256": "f8a07db90efbefb2366292623d41017e308298f8825f4988b34b0105879ca9ff",
+    "backend": "GTSAM",
+    "factors": [
+      "undifferenced smartphone GNSS adapter input for parity rover",
+      "double-difference pseudorange",
+      "ordinary double-difference TDCP",
+      "Pose3 state",
+      "velocity state",
+      "IMU bias state",
+      "CombinedImuFactor"
+    ],
+    "imu_preprocessing": {
+      "raw_schema": "Android UncalAccel/UncalGyro device_imu.csv",
+      "gyro_anchor": true,
+      "nearest_accel_bound_ms": 25,
+      "no_interpolation_or_extrapolation": true,
+      "accel_units": "m/s^2",
+      "gyro_conversion": "rad/s to deg/s exactly once for loadImuCsv",
+      "axis_convention": "identity, explicitly declared by frozen recipe"
+    },
+    "timestamp_offset": {
+      "observable_only": true,
+      "grid_s": "-0.10..+0.10 by 0.01",
+      "pair_tolerance_s": 0.20,
+      "minimum_pairs": 20,
+      "solver_application": "not applied: gnss_fgo_parity exposes no safe offset argument",
+      "invalid_or_insufficient_policy": "fail-closed to frozen native-fgo-v1"
+    }
+  },
+  "capability_audit": {
+    "native_fgo_problem_api": {
+      "header": "include/libgnss++/algorithms/fgo.hpp",
+      "sha256": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+      "evidence": "FGOProblem::ImuInput and FGODiagnostics::imu_intervals/graph_values/graph_factors are public contracts"
+    },
+    "gtsam_backend": {
+      "source": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "94510bf312f0ec1ee539034ce1d97029e2d32f14ea44e8423c42d790f45384b5",
+      "evidence": "PreintegratedCombinedMeasurements and CombinedImuFactor are inserted between consecutive Pose3 epochs when valid IMU intervals exist"
+    },
+    "existing_parity_harness": {
+      "source": "apps/native/gnss_fgo_parity.cpp",
+      "sha256": "24e1a42d91b4e6e7a961e9dfb3c77bf08e54cc21ec9d17764a7f7bb171e624a2",
+      "evidence": "buildImuInput performs static leveling/course initialization and passes packaged IMU input to the GTSAM Pose3 path"
+    },
+    "raw_android_schema_adapter": {
+      "source": "apps/commands/benchmarks/gnss_smartphone_imu.py",
+      "sha256": "19aac6dfae976fdf29106f2ea12c40cbf774c768d57690e50f24d5e4910a8afe",
+      "evidence": "raw UncalAccel/UncalGyro schema and elapsed/UTC clock auditing were inspected; v2 adds only the frozen GPST metric schema bridge",
+      "axis_limitation": "The archive does not provide a validated per-device mounting calibration in this smoke; identity-to-body-FLU is a frozen contract assumption, so physical attitude/inertial correctness is not promoted from factor counts alone"
+    },
+    "offset_research_reference": {
+      "source": "scripts/search_imu_time_offset.py",
+      "sha256": "d6ac05e8d974833e910f8bc125187228dc1a5b16ddcf280407b5854f36cae269",
+      "evidence": "existing offset-search utility was audited, but its truth-free application path is not used to tune this v2 smoke"
+    },
+    "published_taroz_audit": {
+      "record": "docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_audit.json",
+      "sha256": "ef47e8a7833b261dd7566f2c50ae168a0505bfd03badb6e01cfa1acc69ec72d2",
+      "license_and_api": "public MIT source uses MATLAB GTSAM PreintegratedImuMeasurements/ImuFactor and phone_data.mat; MATLAB/preprocessed wrapper is unavailable here",
+      "audit_unchanged": true
+    },
+    "safe_integration_blocker": {
+      "production_cli": "apps/native/gnss_fgo.cpp has no smartphone --imu wiring",
+      "parity_cli": "requires a base RINEX and emits diagnostic stdout rather than a reusable phone-keyed position stream",
+      "pose3_backend": "does not expose a verified no-base ordinary-TDCP smartphone output path",
+      "imu_mounting": "raw Android axis-to-body-FLU calibration was not independently verified; the smoke retains the frozen identity assumption and cannot establish physical trajectory benefit",
+      "decision": "bounded factor smoke only; no full-route score or fresh validation"
+    }
+  },
+  "truth_free_train_results": {
+    "artifact_root": "output/smartphone-r5/native-fgo-v2-processed",
+    "manifest": "output/smartphone-r5/native-fgo-v2-processed/train_smoke_manifest.json",
+    "manifest_sha256": "8e1cc867c499d3eea63c83f18a1e37ab2a7895804302c48243701c09310b1556",
+    "manifest_sha256_file_sha256": "7d4469ffed2c0e6afa03b32000b1d29db9518f6ca755516f10eaa6192be5cba2",
+    "route_count": 3,
+    "all_route_structural_smoke_passed": true,
+    "route_results": [
+      {
+        "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "adapter_truth_free": true,
+        "imu_samples": 109790,
+        "imu_intervals": 1,
+        "graph_values": 20,
+        "graph_factors": 87,
+        "converged": true,
+        "nonfinite_epochs": 0,
+        "offset_s": 0.03,
+        "offset_pearson_abs": 0.07590769566234662,
+        "offset_paired_samples": 2159,
+        "processed_imu_sha256": "f05abb6f649a3640a237fca2f5c552d1904ab82f865d54538d7c7b577e5b7633",
+        "adapter_wall_s": 7.790615959005663,
+        "parity_wall_s": 0.9708511439966969,
+        "peak_rss_kb": 78040,
+        "route_manifest": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/route_manifest.json",
+        "route_manifest_sha256": "06b0a327a17a3bf2674e36ba1f7dccbd1b763600905e67360f8d2948057e3d3c"
+      },
+      {
+        "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+        "adapter_truth_free": true,
+        "imu_samples": 87373,
+        "imu_intervals": 1,
+        "graph_values": 22,
+        "graph_factors": 94,
+        "converged": true,
+        "nonfinite_epochs": 0,
+        "offset_s": 0.1,
+        "offset_pearson_abs": 0.038840866854597964,
+        "offset_paired_samples": 1677,
+        "processed_imu_sha256": "bb87d4e2223e6d9f8a6d19b82432802c686359089f1379d17c03406b654a5b60",
+        "adapter_wall_s": 7.338122559012845,
+        "parity_wall_s": 0.8216196119901724,
+        "peak_rss_kb": 78040,
+        "route_manifest": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-07-27-19-49-us-ca-mtv-b__pixel4/route_manifest.json",
+        "route_manifest_sha256": "3405e1b45ba1342e9c61bba0502415c2644f56a99b12d2cf2a6b66b6700a9268"
+      },
+      {
+        "dataset_id": "2022-02-24-18-29-us-ca-lax-o/pixel5",
+        "adapter_truth_free": true,
+        "imu_samples": 124143,
+        "imu_intervals": 1,
+        "graph_values": 16,
+        "graph_factors": 63,
+        "converged": true,
+        "nonfinite_epochs": 0,
+        "offset_s": -0.07,
+        "offset_pearson_abs": 0.040740772769560216,
+        "offset_paired_samples": 2438,
+        "processed_imu_sha256": "dbc52f649ef3ec31fc5d73dfa28580208aa4c98f78144052042696f0fcb6e503",
+        "adapter_wall_s": 6.54103093300364,
+        "parity_wall_s": 1.325585026992485,
+        "peak_rss_kb": 85904,
+        "route_manifest": "output/smartphone-r5/native-fgo-v2-processed/routes/2022-02-24-18-29-us-ca-lax-o__pixel5/route_manifest.json",
+        "route_manifest_sha256": "57016f9df7b5879d73238bc143ae555dc138fd54100fe05b540528f3dd1086b1"
+      }
+    ],
+    "structural_gate": {
+      "return_code_zero": true,
+      "imu_samples_positive": true,
+      "imu_intervals_positive": true,
+      "graph_values_positive": true,
+      "graph_factors_positive": true,
+      "converged_yes": true,
+      "nonfinite_epochs_zero": true
+    }
+  },
+  "promotion": {
+    "decision": "blocked-pending-safe-full-route-integration",
+    "reason": "The existing parity executable is a base-assisted diagnostic harness, has no GNSS/IMU offset application option, and does not emit a reusable smartphone position stream. The smoke proves actual factor wiring only; no truth score or validation gate exists.",
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "production_default_changed": false,
+    "next_safe_step": "Implement and independently freeze a no-base smartphone-output adapter with explicit IMU offset application before any truth scoring."
+  },
+  "integrity": {
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_metadata_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "parity_source_sha256": "24e1a42d91b4e6e7a961e9dfb3c77bf08e54cc21ec9d17764a7f7bb171e624a2",
+    "parity_binary_sha256": "3d5505509c78cf632328d93f6f941c9a55790b4b04dd272920cbf2e3e8f550ba",
+    "adapter_source_sha256": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b",
+    "run_script_sha256": "6792bcf5b99bf81d406a25a43580660a31be53618c9d94792e8e8d37f033d304",
+    "truth_csv_contents_read": false
+  },
+  "record_integrity": {
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_smoke_manifest.json",
+    "record_hash_pinned_after_write": true
+  }
+}

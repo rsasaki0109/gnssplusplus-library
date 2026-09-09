@@ -1,0 +1,206 @@
+{
+  "schema_version": "smartphone-r5-phase143-optimizer-termination-structural-freeze.v1",
+  "phase": 143,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-structural-contract",
+  "scope": "Structural qualification only; this artifact authorizes no raw, solver, truth, MAT, PDC, precomputed-coordinate, accuracy, or Kaggle execution.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase143_optimizer_termination_structural_audit_v1.md",
+    "commit": "11911df8f0c791af136c7892c46d547f28dbeee8",
+    "sha256": "05f83e2a22e697616e5d1c53b6e19e518658b9d4fe85abb10ac2c31ab43e3f8a"
+  },
+  "design_freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase143_optimizer_termination_parity_freeze_v1.json",
+    "commit": "03073a14590f0c6316e7a0294f6b575b796b7c11",
+    "sha256": "9d579969bdd2002f251db16c0624d03da6fd2d5d33e751f0d1e0ac5d40b3a33f"
+  },
+  "implementation": {
+    "commit": "f07a80bb7e26fb0502454b3cb8dc291c53545714",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "15ab7b401f16476928643bf41485e168a4a8be28bdb6fd1b2f8f7e26e166ef20"
+  },
+  "candidate": {
+    "count": 1,
+    "id": "phase143-official-main-lm-termination-budget-v1",
+    "selector": "--native-phase143-official-main-lm-termination-budget",
+    "default_off": true,
+    "partial_selector_set_allowed": false,
+    "scope": "Phase142/Phase99 meter-state Pose3+IMU main LM call only",
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "parameter_delta": {
+      "main_configured_max_iterations_off": 12,
+      "main_effective_max_iterations_on": 1000,
+      "gnss_first_configured_max_iterations_off": 1000,
+      "gnss_first_effective_max_iterations_on": 1000,
+      "only_changed_parameter": "main.maxIterations"
+    },
+    "termination_branches": [
+      "maximum_outer_iterations",
+      "outer_convergence_tolerance",
+      "small_cost_change",
+      "maximum_lambda",
+      "no_inner_iteration",
+      "exception",
+      "no_progress_unclassified"
+    ],
+    "maximum_outer_iterations_predicate": "accepted_outer_iterations == effective_max_iterations",
+    "no_inner_iteration_predicate": "attempted_outer_iterations == 0 && accepted_outer_iterations == 0 && rejected_outer_iterations == 0",
+    "required_termination_fields": [
+      "selector_enabled",
+      "stage",
+      "configured_max_iterations",
+      "effective_max_iterations",
+      "attempted",
+      "attempted_outer_iterations",
+      "accepted_outer_iterations",
+      "rejected_outer_iterations",
+      "total_inner_lambda_attempts",
+      "initial_cost",
+      "final_cost",
+      "costs_finite",
+      "strict_cost_decrease",
+      "termination_branch",
+      "relative_error_tolerance",
+      "absolute_error_tolerance",
+      "error_tolerance",
+      "initial_lambda",
+      "final_lambda",
+      "maximum_lambda",
+      "lambda_factor",
+      "lambda_lower_bound",
+      "lambda_upper_bound",
+      "min_model_fidelity",
+      "diagonal_damping",
+      "use_fixed_lambda_factor",
+      "linear_solver",
+      "elimination",
+      "ordering_type",
+      "explicit_ordering_present",
+      "no_fallback",
+      "termination_trace_complete",
+      "configuration_valid"
+    ],
+    "native_authority": "FGOResult.diagnostics.native_phase143_termination and ImuBuildReport.gnss_first_phase143_termination",
+    "wrapper_inference": false,
+    "solution_or_accuracy_fields": false
+  },
+  "recipe": {
+    "on_selectors": [
+      "--native-phase135-official-affine-measurement-family",
+      "--native-phase138-affine-tdcp-anchor-range-constant",
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-phase143-official-main-lm-termination-budget"
+    ],
+    "off_selectors": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase130-shared-ledger-key-local-support",
+      "--native-phase131-canonical-correction-band-key",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "phase107_raw_base_compensation": true,
+    "phase107_raw_base_source_miss_mask": true,
+    "phase118_fixed_tdcp_sigma_m": 0.03,
+    "phase118_highway_huber_k": 0.5,
+    "phase99_main_linear_solver": "MULTIFRONTAL_QR",
+    "phase99_main_elimination": "EliminateQR",
+    "c7_dimension": 7,
+    "c_units": "metres",
+    "d_units": "metres/second",
+    "pixel5_final_offset_applications": 1,
+    "route_type": "Highway",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "timeout_policy": "no artificial timeout shorter than the frozen native contract"
+  },
+  "structural_gates": {
+    "selector_isolation": true,
+    "phase135_all_affine_and_legacy_zero": true,
+    "phase138_range_verified_anchor_applied_affine_count_equal": true,
+    "phase138_same_endpoint_satellite_state_and_sagnac": true,
+    "phase138_exactly_once_and_transactional": true,
+    "raw_base_exactly_once_and_miss_conserved": true,
+    "c7_d_exact_full_finite_alignment": true,
+    "qr_solver": true,
+    "phase143_main_effective_max_iterations_1000": true,
+    "phase143_gnss_first_effective_max_iterations_1000": true,
+    "phase143_native_termination_authority_complete": true,
+    "phase143_cap_branch_reaches_cap": true,
+    "phase143_finite_monotonic_accepted_cost": true,
+    "gnss_first_and_main_accepted_iterations_positive": true,
+    "gnss_first_and_main_finite_strict_cost_decrease": true,
+    "finite_earth_valid_expected_epoch_coverage": true,
+    "pixel5_offset_exactly_once": true,
+    "no_fallback_retry_rerun_or_solution_rows": true
+  },
+  "routes": [
+    {
+      "label": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "planned_solver_invocations": 1
+    },
+    {
+      "label": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "planned_solver_invocations": 1
+    }
+  ],
+  "input_lineage": {
+    "allowed_after_independent_authorization": [
+      "raw phone device_gnss.csv",
+      "raw phone device_imu.csv",
+      "broadcast navigation",
+      "sealed raw-base RINEX and station metadata"
+    ],
+    "forbidden": [
+      "truth or reference coordinates",
+      "MAT",
+      "PDC/precomputed coordinates or corrections",
+      "saved solution rows as solver input",
+      "accuracy evaluator",
+      "Kaggle or token/network dataset access"
+    ],
+    "solution_policy": "opaque hash/row-count seal only; structural validation never opens or interprets coordinates"
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "085cedec22d58158a760a5d06acf63271f82c9d98025a81ed3b93618966bef2a",
+    "include/libgnss++/algorithms/fgo.hpp": "b24ea504dea3a68583659939f74fa4766e10dc5c96f727c1bb3a57d593263d00",
+    "include/libgnss++/algorithms/fgo_config.hpp": "f982cb0468bab27222634a76953cda00a7ece6a360bc38ed4e25308c45e1ca12",
+    "src/algorithms/fgo_gtsam_backend.cpp": "1d1e7819fe20c163d336ac4acc8b0fb6c7fdb3385096962330e894be56b22399",
+    "src/algorithms/fgo_gtsam_internal.hpp": "be61a643c181206c3260549c05407e81b6a7932c81357a82e4de379b5bf560d5"
+  },
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "authorization_boundary": {
+    "independent_raw_authorization_commit_required": true,
+    "materialize_inputs_after_authorization_only": true,
+    "route_order_fixed": true,
+    "exactly_one_solver_per_route_max": true,
+    "raw_result_commit_separate": true,
+    "truth_accuracy_authorization_required_separately": true,
+    "solution_content_or_coordinate_read_authorized": false,
+    "rerun_fallback_repair_sweep": false
+  }
+}

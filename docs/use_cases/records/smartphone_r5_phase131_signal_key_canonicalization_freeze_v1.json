@@ -1,0 +1,318 @@
+{
+  "schema_version": "smartphone-r5-phase131-signal-key-canonicalization-freeze.v1",
+  "phase": 131,
+  "execution_label": "Luna Max",
+  "audit_scope": "read-only sealed-metadata and source audit",
+  "status": "sealed-read-only-source-backed-default-off-contract-candidate",
+  "purpose": "Freeze one source-backed canonical physical-frequency correction join candidate after Phase130 textual descriptor admission rejected every valid rover GLONASS row.",
+  "starting_state": {
+    "head_before_audit": "3d16fe289409d3aa6290d861ec23d51f69941db5",
+    "worktree_before_audit": "clean",
+    "audit_commit": "91ea4291bc287db2be1fd3d862fdb90b64fe362a",
+    "audit_path": "docs/use_cases/records/smartphone_r5_phase131_signal_key_canonicalization_audit_v1.md",
+    "audit_sha256": "cdc0b546df56ac6fdb5a9810e7a6c7d3de33db343fb27edfcbf3dcaa2372c356"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase131-canonical-correction-band-key-v1",
+    "selector": "--native-phase131-canonical-correction-band-key",
+    "source_backed": true,
+    "root_cause_fact": "Phase130 records every valid rover GLONASS row as missing-exact-key before query-time provenance, navigation, stream, or interpolation lookup.",
+    "root_cause_boundary": "Phase130 compares a textual descriptor derived before typed physical-band mapping; it does not seal the distinct rover token set.",
+    "exact_route_rover_tokens_available_in_sealed_metadata": false,
+    "exact_route_satellite_intersections_available_in_sealed_metadata": false,
+    "root_cause_token_example_is_inference_only": true,
+    "default_off": true,
+    "implementation_authorized": false,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false
+  },
+  "sealed_phase130_context": {
+    "result": {
+      "commit": "3d16fe289409d3aa6290d861ec23d51f69941db5",
+      "json_path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_structural_result_v1.json",
+      "json_sha256": "f9cf9226889fc4a4e6141e54f6447bc09998b3f42a7cf45269cc8ed0cb0e0553",
+      "md_path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_structural_result_v1.md",
+      "md_sha256": "46f9a9d56a8ce7afb452c323f2b3c1894a626943cab5575b3069e9a7a90b6a79",
+      "status": "no-go-phase130-shared-ledger-key-local-support-structural",
+      "solver_invocations": 0,
+      "truth_reads": 0,
+      "accuracy_calculations": 0
+    },
+    "contract_audit_commit": "355b6225bcc3bc838dad8a3044bc3aadd34d80f3",
+    "contract_freeze_commit": "94085c90ac33ce987c3b9d29a6462c5d77795e88",
+    "runner_validator_commit": "36b0977e47d9b24eda975ab224e05aadfdc860bb",
+    "manifest_commit": "ab1a6bfa2e1878bb01d784a2f926a1732d34b004",
+    "pre_raw_commit": "e2821f8b5c2c8ebfd6e0a1078cf7cb5fe89ae9b6",
+    "raw_authorization_commit": "787b61b56491027e548689f684bf6a29fb9ba686",
+    "authorized_runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase130_shared_ledger_structural_authorized_execute.py",
+      "commit": "787b61b56491027e548689f684bf6a29fb9ba686",
+      "sha256": "47ca20d4417841a44766c696bfd69e8c1723fd02cfaf667d7cf65b1f332aa1c4",
+      "descriptor_lines": "394-409",
+      "admission_order_lines": "469-509"
+    },
+    "route_metadata": [
+      {
+        "route": "MTV-A",
+        "route_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "valid_rover_glonass_rows": 11832,
+        "rover_missing_exact_key": 11832,
+        "base_glonass_rows": 17199,
+        "base_certified": 9642,
+        "base_miss": 7557,
+        "base_rinex_observation_codes": ["C1C", "L1C", "S1C", "C2P", "L2P", "S2P"],
+        "base_streams": 18,
+        "base_finite_samples": 34398,
+        "base_used_samples": 0,
+        "base_unused_samples": 34398,
+        "retained_exact_keys": 0,
+        "inventory_path": "output/smartphone-r5/phase130-shared-ledger-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/inventory.json",
+        "inventory_sha256": "767e5fb895b707e9bab3a516e1379384d5c5fbbc0e0c9487e7c78855d57615a8",
+        "distinct_rover_tokens_sealed": false
+      },
+      {
+        "route": "LAX-T",
+        "route_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "valid_rover_glonass_rows": 8626,
+        "rover_missing_exact_key": 8626,
+        "base_glonass_rows": 920,
+        "base_certified": 396,
+        "base_miss": 524,
+        "base_rinex_observation_codes": ["C1C", "L1C", "S1C", "C2C", "L2C", "S2C", "C2P", "L2P", "S2P"],
+        "base_streams": 27,
+        "base_finite_samples": 2760,
+        "base_used_samples": 0,
+        "base_unused_samples": 2760,
+        "retained_exact_keys": 0,
+        "inventory_path": "output/smartphone-r5/phase130-shared-ledger-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/inventory.json",
+        "inventory_sha256": "41cdfdc0f6fd5b79579fdfbdafb1803bd1656192b3a5c9ef8621748e22674543",
+        "distinct_rover_tokens_sealed": false
+      }
+    ]
+  },
+  "canonical_key": {
+    "key_id": "GNSSSystem + SatelliteId.prn + PhysicalFrequencyFamily + certified_GLO_FCN_if_GLONASS",
+    "fields": ["constellation", "satellite_prn", "physical_frequency_family", "certified_glonass_fcn_if_glonass"],
+    "physical_frequency_families": ["L1", "L5"],
+    "non_glonass_mapping": "Existing source-defined typed mapping only; unsupported or unknown families are explicit misses.",
+    "glonass_mapping": {
+      "L1": ["GLO_L1CA", "GLO_L1P"],
+      "L2": "Not admitted by the frozen official FGO L1/L5 field contract.",
+      "fcn_required": true,
+      "fcn_range": [-7, 6],
+      "fcn_source": "Phase127/128 exact-query-time certified RINEX header plus selected broadcast geph.frq",
+      "android_carrier_frequency_is_fcn": false
+    },
+    "literal_tracking_code_join": false,
+    "row_index_pairing": false,
+    "time_join": "Exact endpoint or adjacent finite in-domain bracket at the rover GPST query time; no extrapolation, nearest, hold, or row-index pairing."
+  },
+  "mapping_policy": {
+    "official": "sameSat selects common satellite identity, then one selected FTYPE field (L1 or L5) is interpolated at rover time.",
+    "native_current": "Base correction lookup is exact (SatelliteId, SignalType), which preserves CA/P distinctions.",
+    "phase131": "Map Android/RINEX aliases through typed system-and-band policy to the official physical family for correction lookup, while retaining original typed signal and certified FCN provenance for diagnostics and factor use.",
+    "source_precedence": "Use existing source-defined signal priority/selection and tracking-code continuity; do not invent a lexical alias precedence.",
+    "ambiguous_multi_code": "If more than one finite candidate survives for one canonical key and source metadata cannot select one, reject canonical-key-conflict fail-closed.",
+    "glo_l2": "Remain fail-closed unless a separately frozen official field mapping admits it; Phase131 does not extend FGO L1/L5."
+  },
+  "mapping_examples": [
+    {
+      "before": "Android GLO_G1_CA (illustrative; exact route token is not sealed)",
+      "phase130_effect": "signal_descriptor may be None because underscore-bearing alias is tested textually",
+      "after": "(GLONASS, PRN, L1, certified_FCN)",
+      "classification": "source-backed design; route token example is inference only"
+    },
+    {
+      "before": "RINEX R:C1C or L1C/S1C",
+      "phase130_effect": "text descriptor 1C",
+      "after": "(GLONASS, PRN, L1, certified_FCN)",
+      "classification": "source-defined band-family mapping"
+    },
+    {
+      "before": "RINEX R:C1P or L1P/S1P",
+      "phase130_effect": "text descriptor 1P",
+      "after": "(GLONASS, PRN, L1, certified_FCN)",
+      "classification": "same physical family only after source priority or conflict validation"
+    },
+    {
+      "before": "(SatelliteId(R,7), GLO_L1CA) versus (SatelliteId(R,7), GLO_L1P)",
+      "phase130_effect": "distinct exact native keys",
+      "after": "same GLONASS/L1/FCN correction key; typed signals remain separate outside the correction join",
+      "classification": "candidate boundary only"
+    }
+  ],
+  "admission_invariants": {
+    "side_local_conservation": "eligible_s(K) = certified_s(K) + explicit_local_miss_s(K)",
+    "factor_support": "Every retained rover code factor has one certified finite canonical base support at exact endpoint or adjacent in-domain bracket.",
+    "base_unused_allowed": true,
+    "base_unused_accounted": true,
+    "duplicates_fail_closed": true,
+    "ambiguous_multi_code_fail_closed": true,
+    "missing_key_explicit_local_miss": true,
+    "out_of_domain_explicit_local_miss": true,
+    "nonfinite_explicit_local_miss": true,
+    "no_raw_uncorrected": true,
+    "no_zero_correction": true,
+    "no_cross_band_fill": true,
+    "no_nearest_hold_extrapolation": true,
+    "exactly_once_correction": true,
+    "unused_base_rows_are_not_global_failure": true,
+    "all_miss_or_empty_usable_population_fails_before_solver": true,
+    "global_source_complete_failure_aborts": true,
+    "partial_remap_exposed": false,
+    "factor_topology_unchanged": true,
+    "equations_units_sigma_filter_lm_unchanged": true
+  },
+  "scope_and_legacy": {
+    "changes_correction_join_key_only": true,
+    "changes_estimator_signal_identity": false,
+    "adds_factor": false,
+    "adds_state": false,
+    "changes_factor_topology": false,
+    "changes_measurement_equation": false,
+    "changes_sigma_filter_lm": false,
+    "legacy_default_unchanged": true,
+    "phase126_to_phase130_invariants_unchanged": true,
+    "implementation_authorized": false
+  },
+  "required_tests_before_reauthorization": [
+    "Android GLO_G1_CA/GLO_G1C/GLO_L1/L1 accepted aliases collapse to one typed L1 family without using carrier frequency as FCN.",
+    "RINEX R:C1C, R:C1P and declared band-1 variants map by system and band, not literal Android token.",
+    "Certified GLO FCN is mandatory; missing, out-of-range, mismatch, tie, and conflict fail closed.",
+    "Source-defined multi-code priority selects one winner; ambiguous finite duplicates reject without first/last/nearest choice.",
+    "Unequal cadence, epoch count, and row multiplicity use exact endpoint or adjacent in-domain bracket only.",
+    "Missing canonical key, out-of-domain, nonfinite, all-miss, and empty-route predicates are explicit and fail closed.",
+    "Rover/base side-local conservation, factor/miss conservation, unused base accounting, and exactly-once correction hold.",
+    "Non-GLONASS semantics, C7/D/C0D/CCDD, TDCP/IMU, factor count, and topology remain invariant.",
+    "Selector-off byte/semantic legacy regression and transactional no-partial-remap behavior pass."
+  ],
+  "future_reauthorization": {
+    "required_commits": [
+      "implementation plus focused tests",
+      "launch-free runner/validator/manifest",
+      "pre-raw zero-read accounting seal",
+      "independent one-shot raw authorization",
+      "sealed structural result"
+    ],
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "allowed_solver_inputs": ["raw phone GNSS", "raw phone IMU", "broadcast navigation", "sealed raw base RINEX"],
+    "forbidden_inputs": ["truth", "MAT", "PDC", "precomputed coordinates", "accuracy evaluator", "Kaggle"],
+    "pre_solver_gate": "Canonical inventory and provenance must pass before solver launch; a failed route launches zero solver processes.",
+    "output_policy": "Seal opaque solution hash and row count only; no solution coordinate rows are displayed or re-fed.",
+    "failure_policy": "Fail closed; no rerun, fallback, repair, sweep, truth read, accuracy calculation, or publication."
+  },
+  "read_accounting_this_audit": {
+    "official_native_source_text_reads": "read-only",
+    "sealed_phase130_result_metadata_reads": "read-only",
+    "sealed_phase130_inventory_metadata_reads": "read-only",
+    "raw_phone_gnss_imu_navigation_payload_reads": 0,
+    "raw_base_rinex_payload_header_or_bytes_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "truth_coordinate_or_solution_row_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "test_solver_evaluator_executions": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallback_repairs_sweeps": 0,
+    "implementation_or_configuration_changes": 0
+  },
+  "source_pins": [
+    {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "30,72-78,123-148"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "36,85-92,202-218"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+      "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "lines": "5-6,26-34"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "lines": "91-95,158-188,254-316"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/functions/sysfreq2sigtype.m",
+      "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079",
+      "lines": "1-16"
+    },
+    {
+      "path": "include/libgnss++/core/types.hpp",
+      "sha256": "475d524280fec85d3e959e318447f917a614d93314207a04f84501b0f7735ee3",
+      "lines": "28-60,174-194"
+    },
+    {
+      "path": "include/libgnss++/core/signals.hpp",
+      "sha256": "bb8cd20d4a22581ed2beb83f4e1b4ed6d397f28a2d5104d4736778c5b279ba56",
+      "lines": "26-39,116-139"
+    },
+    {
+      "path": "include/libgnss++/core/signal_policy.hpp",
+      "sha256": "d3f8edbdd785f0292c2b8a1596248c00a2b5e9284c09de439e5c7340c1dbca99",
+      "lines": "40-108,110-145,172-235"
+    },
+    {
+      "path": "src/io/android_raw_gnss.cpp",
+      "sha256": "a020ce900db6a9d3a994cc3adb3dcebbe84cbf67c1ff9793991b7a75039529c5",
+      "lines": "202-315,815-935,965-975"
+    },
+    {
+      "path": "src/io/rinex.cpp",
+      "sha256": "308450b371d80105e9d23ff31523a2a7aef32b0cc0a6e69c8b12744c98d0aada",
+      "lines": "149-186,209-274,1586-1715"
+    },
+    {
+      "path": "include/libgnss++/io/android_raw_gnss.hpp",
+      "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+      "lines": "185-205"
+    },
+    {
+      "path": "include/libgnss++/algorithms/base_pseudorange_compensation.hpp",
+      "sha256": "f6e5e9c1436138e9b0ef943d8b8fa68f3deca51bca650bab71526703d3ad0272",
+      "lines": "25-27,125-158"
+    },
+    {
+      "path": "src/algorithms/base_pseudorange_compensation.cpp",
+      "sha256": "b6c6a9b6a2f29c66c4f2abecbe8d7e56c4d7cf81e9c145273c3ea1255da6eb9d",
+      "lines": "137-145,499,536-581,584-621"
+    },
+    {
+      "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+      "sha256": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
+      "lines": "53-181"
+    },
+    {
+      "path": "include/libgnss++/algorithms/phase127_glonass_channel_provenance.hpp",
+      "sha256": "dc1de4ae6de270f306f1c07a54ab1799df26344f8cc6fdd910d7abfaf1914c8b",
+      "lines": "66-104"
+    },
+    {
+      "path": "src/algorithms/phase127_glonass_channel_provenance.cpp",
+      "sha256": "cc8e3105abc8367786b089e8d0492f8217550f0a69473869ae8a89cc01941bb0",
+      "lines": "69-246"
+    },
+    {
+      "path": "include/libgnss++/core/observation.hpp",
+      "sha256": "7a81b4f1c7d36b4af2ed8a11c0f1edcbb998591a22a4d1406d75aeb43641f11b",
+      "lines": "16-35,60-61,105-113"
+    },
+    {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase130_shared_ledger_structural_authorized_execute.py",
+      "sha256": "47ca20d4417841a44766c696bfd69e8c1723fd02cfaf667d7cf65b1f332aa1c4",
+      "lines": "394-409,469-509"
+    }
+  ]
+}

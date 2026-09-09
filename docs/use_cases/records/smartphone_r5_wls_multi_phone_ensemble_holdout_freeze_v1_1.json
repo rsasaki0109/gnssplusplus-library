@@ -1,0 +1,277 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-freeze.v1.1",
+  "status": "frozen-before-holdout-payload-access",
+  "sealed_at": "2026-08-30",
+  "scope": "single sealed multi-phone WLS ensemble holdout evaluation after authorization-only recovery",
+  "selection": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+    "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+  },
+  "selection_record_sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_only_before_freeze": true,
+    "payload_sha256_computed_before_freeze": false
+  },
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true,
+    "member_content_read": false
+  },
+  "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "holdout_route": "2022-10-06-21-51-us-ca-mtv-n",
+  "holdout": {
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "calendar_year": 2022,
+    "region": "mtv",
+    "phones": [
+      "sm-a205u",
+      "sm-a217m",
+      "sm-a325f"
+    ],
+    "central_directory_broadcast_nav": {
+      "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/brdc.nav",
+      "file_size": 11030006,
+      "compressed_size": 1070199,
+      "crc32_hex": "c27a5d37"
+    },
+    "records": [
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a205u/device_gnss.csv",
+          "file_size": 29692755,
+          "compressed_size": 4007343,
+          "crc32_hex": "101d8a1e"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a205u/ground_truth.csv",
+          "file_size": 118587,
+          "compressed_size": 30125,
+          "crc32_hex": "424ee2f9"
+        }
+      },
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a217m/device_gnss.csv",
+          "file_size": 21854996,
+          "compressed_size": 5438995,
+          "crc32_hex": "e8d27a46"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a217m/ground_truth.csv",
+          "file_size": 119257,
+          "compressed_size": 30152,
+          "crc32_hex": "95104496"
+        }
+      },
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a325f/device_gnss.csv",
+          "file_size": 18266646,
+          "compressed_size": 3864139,
+          "crc32_hex": "98432e4e"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a325f/ground_truth.csv",
+          "file_size": 120524,
+          "compressed_size": 29052,
+          "crc32_hex": "a332185f"
+        }
+      }
+    ],
+    "materialization_forbidden_before_freeze": true,
+    "truth_open_forbidden_before_freeze": true,
+    "truth_open_count_at_freeze": 0
+  },
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "contract": {
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "selected_method": "coordinate_wise_ecef_median",
+    "baseline_method": "single_phone_wls",
+    "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "alignment_tolerance_ms": 1,
+    "minimum_aligned_phone_count": 1,
+    "fallback_policy": "when fewer than two phones align, use the target phone's finite raw WLS row; record the one-phone fallback count and never synthesize a missing row",
+    "wls_integrity": {
+      "timestamp_gap_threshold_ms": 1500,
+      "continuous_condition": "elapsed_ms <= 1500",
+      "gap_reset_condition": "elapsed_ms > 1500",
+      "missing_partial_nonfinite_policy": "fail-closed",
+      "all_epoch_rows_consistent": true,
+      "all_selected_rows_finite": true
+    },
+    "atomic_key_contract": {
+      "publish": "fsync temporary file, replace destination, fsync parent directory",
+      "submission_fields": [
+        "phone",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "key": "phone + exact UnixTimeMillis row identity",
+      "combined_sort": "phone, then UnixTimeMillis",
+      "partial_publish": "forbidden on integrity or non-finite failure"
+    },
+    "official_diagnostics": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ],
+    "signoff_thresholds": {
+      "availability_min": 0.98,
+      "truth_coverage_min": 0.98,
+      "horizontal_median_max_m": 7.0,
+      "horizontal_p95_max_m": 25.0,
+      "vertical_p95_max_m": 45.0
+    },
+    "no_post_holdout_tuning": true,
+    "truth_free_before_truth": true,
+    "truth_evaluation_pass_count": 1
+  },
+  "algorithm_parameters": {
+    "selected_method": "coordinate_wise_ecef_median",
+    "baseline_method": "single_phone_wls",
+    "alignment_tolerance_ms": 1,
+    "minimum_aligned_phone_count": 1,
+    "fallback_policy": "when fewer than two phones align, use the target phone's finite raw WLS row; record the one-phone fallback count and never synthesize a missing row",
+    "skip_epochs": 1,
+    "max_epochs": -1,
+    "consistency_tolerance_m": 0.001,
+    "leap_seconds": 18,
+    "timestamp_gap_threshold_ms": 1500
+  },
+  "algorithm_parameter_hash_comparison": {
+    "previous_v1_freeze_had_no_authorization_hash": true,
+    "v1_1_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "candidate_coordinate_median_tolerance_fallback_unchanged": true,
+    "authorization_change_only": true
+  },
+  "holdout_execution_contract": {
+    "authorized": true,
+    "truth_free_phase": true,
+    "no_post_holdout_tuning": true,
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "phone_allowlist": [
+      "sm-a205u",
+      "sm-a217m",
+      "sm-a325f"
+    ],
+    "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "truth_open_count_before_truth_free_artifacts": 0,
+    "truth_evaluation_pass_count": 1,
+    "rerun_or_adjustment_permitted": false
+  },
+  "reused_device_materialization": {
+    "sm-a205u": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a205u/device_gnss.csv",
+      "sha256": "a158d7c9327c6a039816ccb156820bc0785244d6a12011428d85f5262725a46e"
+    },
+    "sm-a217m": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a217m/device_gnss.csv",
+      "sha256": "ee6f9645d0af045e9b4270405700c377b650e62c4b4b9214c86df3323e4756e5"
+    },
+    "sm-a325f": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a325f/device_gnss.csv",
+      "sha256": "376e2d0dd3dc62e568e89706a8cd9bab5a14fa4366555d63ba33c0e08917f557"
+    },
+    "materialized_before_v1_1_freeze": true,
+    "source_was_sealed_by_old_failure_record": true
+  },
+  "source_hashes": {
+    "apps/gnss.py": "c33aefbf0c45d334c49a3501b6868e1f161725f42dfe7ec3e44e4ad0852d20ba",
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "62b346986e7fa658b60f109ae22be25d2710d160879e0b63090bd7ba617c0e4d",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "43ed49d495a30d490b2e62438fab34ed7ea26a1f871b461f5fd4666cc907cdac",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "a1fdeab55f257f48423a9c1bfc19450024ac90ade6a0398978ba1129fe379d5b",
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4",
+    "tests/test_smartphone_wls.py": "47417b743b886cf5be217d794c8f69905a8eea99d6ddec19839760a58d8bf2f0",
+    "tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "5fbac3a61837cbd223bdf1e6ed7b6372dc7fb8012a9089be61d7f0d3e270a43a",
+    "tests/test_smartphone_wls_multi_phone_ensemble.py": "0744ac5fba37b842819add2a6f517cc967d74c4496b2fadec943be27d6021c21"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_spp",
+    "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "release_binaries": {
+    "gnss_spp": {
+      "path": "build/apps/gnss_spp",
+      "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    },
+    "gnss_solve": {
+      "path": "build/apps/gnss_solve",
+      "sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+    }
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7",
+    "production_rtk_spp_default_changed": false
+  },
+  "official_diagnostics": [
+    "wgs84_vincenty__linear_n_minus_1",
+    "wgs84_vincenty__nearest_rank_ceiling",
+    "haversine_sphere__linear_n_minus_1",
+    "haversine_sphere__nearest_rank_ceiling"
+  ],
+  "cli_commands": {
+    "fixture_preflight": "python3 -m unittest -v tests/test_smartphone_wls.py tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py tests/test_smartphone_wls_stability_selector_holdout_eval.py",
+    "central_metadata_preflight": "python3 apps/gnss.py smartphone-wls-multi-phone-ensemble-holdout-eval --archive data/gsdc2023/cache/dataset_2023.zip --inventory output/smartphone-r5/generalization-v6/archive_inventory.json --selection-record docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json --freeze-record docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_1.json --freeze-manifest docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_1_manifest.json --output-dir output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.1",
+    "one_shot_holdout": "python3 apps/gnss.py smartphone-wls-multi-phone-ensemble-holdout-eval --archive data/gsdc2023/cache/dataset_2023.zip --inventory output/smartphone-r5/generalization-v6/archive_inventory.json --selection-record docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json --freeze-record docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_1.json --freeze-manifest docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_1_manifest.json --materialized-input-dir output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs --output-dir output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.1",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j$(nproc) --output-on-failure"
+  },
+  "preflight": {
+    "authorization_fixture_passed": true,
+    "archive_central_metadata_verified": true,
+    "archive_payload_read_before_freeze": false,
+    "holdout_device_materialized_before_freeze": false,
+    "holdout_truth_opened_before_freeze": false,
+    "truth_open_count_before_freeze": 0,
+    "old_failure_truth_open_count": 0,
+    "old_failure_record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_failure.json",
+      "sha256": "73a3be4133876d3538bed7baade26bef5d295f9da2d38a152bb49419a8fc4494"
+    },
+    "reused_device_materialization_hashes_verified": true,
+    "algorithm_parameters_unchanged": true,
+    "candidate_search_after_freeze": false,
+    "no_post_holdout_tuning": true
+  },
+  "truth_free_contract": {
+    "required_before_truth": [
+      "freeze record and manifest hash verification",
+      "route and phone allowlist verification",
+      "algorithm parameter hash verification",
+      "WLS integrity and finite-row verification",
+      "native WLS and coordinate-wise median artifact hash sealing",
+      "atomic submission and key contract verification"
+    ],
+    "truth_open_after_seal_only": true,
+    "truth_evaluation_pass_count": 1,
+    "truth_free_artifact_hashes_are_immutable": true,
+    "truth_open_count_before_artifact_seal": 0,
+    "post_truth_code_or_parameter_change": false
+  },
+  "old_failure": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_failure.json",
+      "sha256": "73a3be4133876d3538bed7baade26bef5d295f9da2d38a152bb49419a8fc4494"
+    },
+    "failure_artifact": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/wls_multi_phone_ensemble_holdout_failure.json",
+      "sha256": "992fc403d6961c853e94f7f6c2a687c80b26fe36db293fa29c58615dd5871abc"
+    },
+    "truth_open_count": 0,
+    "wls_completed": false,
+    "median_completed": false,
+    "submission_completed": false,
+    "cause": "legacy helper rejected role=holdout without a freeze authorization; no algorithm or candidate change"
+  }
+}

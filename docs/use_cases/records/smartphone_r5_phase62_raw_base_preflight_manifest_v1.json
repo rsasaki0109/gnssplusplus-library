@@ -1,0 +1,51 @@
+{
+  "schema_version": "smartphone-r5-phase62-raw-base-preflight-manifest.v1",
+  "status": "sealed-before-phase62-base-preflight",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase62_raw_base_pseudorange_compensation_freeze_v1.json",
+  "freeze_record_sha256": "4f12183845e5d22a3773e698182b3a4e8dc788e0dcfaa59ec0b28afcdf1b59b7",
+  "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_phase62_raw_base_preflight.py",
+  "evaluator_source_sha256": "a392ddeb438399817b13345b6c4b69a30943b4f9d9111536715752f77621f4b5",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "settings": {
+    "member": "dataset_2023/settings_train.csv",
+    "sha256": "cb868652632a90919d9b21decaa9b77627d75d16d75287a5430a92b6cf29e080",
+    "read_count": 1
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "route_contract": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"Base1": "SLAC", "RINEX": "V2", "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/SLAC_rnx2.obs", "bytes": 10708536, "compressed_bytes": 2311786, "crc32_hex": "f85411e1"},
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"Base1": "P221", "RINEX": "V2", "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/P221_rnx2.obs", "bytes": 11854125, "compressed_bytes": 2624020, "crc32_hex": "f0a0cbcd"},
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {"Base1": "LBCH", "RINEX": "V2", "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/LBCH_rnx2.obs", "bytes": 719969, "compressed_bytes": 167122, "crc32_hex": "6016f9bb"},
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"Base1": "P221", "RINEX": "V2", "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/P221_rnx2.obs", "bytes": 5950275, "compressed_bytes": 1374018, "crc32_hex": "087ea99d"}
+  },
+  "read_contract": {
+    "archive_open_count": 1,
+    "settings_member_read_count": 1,
+    "base_member_read_count_per_route": 1,
+    "forbidden_member_read_count": 0,
+    "device_gnss_read_count": 0,
+    "device_imu_read_count": 0,
+    "truth_read_count": 0,
+    "mat_read_count": 0,
+    "nav_read_count": 0,
+    "solver_invocation_count": 0
+  },
+  "preflight_scope": {
+    "materialize": "only the four declared base .obs members, atomically, for header/time verification",
+    "header_fields": ["RINEX VERSION / TYPE", "MARKER NAME", "APPROX POSITION XYZ", "INTERVAL"],
+    "time_overlap": "base body epoch span versus deterministic settings_train Course+Nepoch window; no handset payload read",
+    "forbidden": ["base_position.csv", "base_offset.csv", "ground_truth", "MAT/MATLAB", "device WLS/Sv coordinates", "solver", "Kaggle/token"],
+    "fail_closed": "missing/ambiguous settings, base member, station identity, finite approximate coordinate, epoch span, or overlap is no-go; no substitute is inferred"
+  },
+  "raw_reads_before_manifest": 0,
+  "archive_opened_before_manifest": false
+}

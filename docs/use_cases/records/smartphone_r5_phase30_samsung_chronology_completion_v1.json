@@ -1,0 +1,46 @@
+{
+  "schema_version": "smartphone-r5-phase30-samsung-chronology-completion.v1",
+  "phase": 30,
+  "result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase30_samsung_chronology_result_v1.json",
+    "sha256": "51cd20366b7be42292cccc0c97106ce68e6b4a1fa4de60fd1071c05952ff3db1",
+    "chronology_artifact_sha256": "88c119871002abe1bf67387cb0be9d5a1018e030c061df3a1d17d7561e3ffb15",
+    "chronology_manifest_sha256": "073b58dbaed72354eeec2d5497df8bbb073d50006d75ba7d8b648e28dcd435ef"
+  },
+  "verification": {
+    "truth_free_phase30_tests": {
+      "command": "python3 -m unittest -v tests/test_smartphone_phase30_samsung_chronology.py",
+      "passed": 4,
+      "failed": 0
+    },
+    "release_build": {
+      "command": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --config Release -j2",
+      "passed": true
+    },
+    "full_serial_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build --output-on-failure -j1",
+      "passed": 132,
+      "failed": 0,
+      "total": 132,
+      "wall_seconds": 85.44,
+      "captured_log_sha256": "758df78c92cbb016ac12d4860025ebc48fc366347dc17b19836573e017ee6698"
+    },
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase30_samsung_chronology_freeze_v1.json",
+      "sha256": "7ded663956cf5373cb78e7aff248a5a945b5dcc0ae1eec1824f26386dd2d98aa",
+      "manifest_sha256": "aebd44176c489278c3b4b0c8ebb08e6f45455aa22058f93a101c038e86778a2b"
+    }
+  },
+  "policy": {
+    "phase30_truth_additional_open_count": 1,
+    "phase29_prior_open_count": 1,
+    "pixel_validation_holdout_truth_opened": false,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "solver_rerun": false,
+    "candidate_or_control_changed": false,
+    "postscore_tuning": false,
+    "new_candidate_authorized": false
+  }
+}

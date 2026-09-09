@@ -1,0 +1,108 @@
+{
+  "schema_version": "smartphone-r5-phase22-galileo-tgd-manifest.v1",
+  "status": "truth-free-artifacts-sealed-before-evaluation",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase22_galileo_tgd_freeze_v1.json",
+    "sha256": "6786f6326afb593ea55e5bbd647fd34662ae167dba6fa5b8883294600745a09b"
+  },
+  "candidate_id": "native_raw_galileo_signal_specific_group_delay_v1",
+  "base_commit": "ad09529",
+  "contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv before this seal", "sample_submission.csv", "result coordinates", "device WLS coordinates", "SvPosition*", "SvElevationDegrees", "Kaggle token/leaderboard"],
+    "flag": "--native-signal-specific-galileo-tgd",
+    "default_off": true,
+    "production_default_changed": false,
+    "truth_reads_before_seal": 0,
+    "mat_reads_before_seal": 0,
+    "external_mutation": false,
+    "correction": "Galileo E1 only: F/NAV source bit 256 -> tgd (BGD E1/E5a); I/NAV source bit 512 -> tgd_secondary (BGD E1/E5b); missing/contradictory -> tgd",
+    "other_systems_and_signals": "unchanged"
+  },
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "1eef5a4f5777e2de22a0cc144aafd2a2e7d71b0dbf99aca7b2f795eda05d67c3",
+    "include/libgnss++/algorithms/fgo.hpp": "fae6ced4944e4e91359eef728cae43c6613fc31b87b204f7943f8b9f62c86b67",
+    "include/libgnss++/algorithms/fgo_config.hpp": "9ce8652ba845aa310c4ebe7f3a90d8c1bd61287e6ae0c007a551874306b5937d",
+    "include/libgnss++/algorithms/spp.hpp": "7cc85a34162a28a9913739388dbdcaa7d7ddfe1da3aa40c287699e1bce460e0c",
+    "include/libgnss++/algorithms/galileo_group_delay.hpp": "222066be7861254ae61b2b8201882279ba34a42dae044107bd1ee801bcbfd907",
+    "src/algorithms/fgo_internal.hpp": "7d160de8219d3fb3312a1d8ba6325affb38a406abb5ff324a8b0eaae5915c2cd",
+    "src/algorithms/fgo_problems.cpp": "85173f6f87fc1bd45c4934abb0d889d81a49c6ba8d805549925abafacf3cba6c",
+    "src/algorithms/spp.cpp": "8323bf92a29a1892f1d5b7cd8c30696ccd75c8029cf840e015d98fef7ea95325",
+    "tests/test_galileo_group_delay.cpp": "a1307a1c185dfba7b3af9cac952a994ba4be419b4faed7583b3429807d65ef8f",
+    "tests/CMakeLists.txt": "not-hashed-at-seal; included in source diff",
+    "external/madocalib/src/pntpos.c": "9ab3195abafa29b9526c1baa01c373153228144bfee06416590ead98df5c8382"
+  },
+  "binary_sha256": {
+    "build/apps/gnss_fgo_imu_no_base": "549699d448a3d22ec02b3969395048e6f3d7134df28d41af7d24efd7ec405ed6"
+  },
+  "raw_inputs_sha256": {
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "2022-08-04-20-07-us-ca-sjc-q/mi8/device_gnss.csv": "ccf143cf8b156e507599090e0a5eedc1009244899ea3b1b3b8b01842a35a9ea4",
+    "2022-08-04-20-07-us-ca-sjc-q/mi8/device_imu.csv": "6e32cba3e0086b7a9c34ab5bd34cd86879b0581fe8314c5819214f1e66ec32d3",
+    "2022-08-04-20-07-us-ca-sjc-q/mi8/brdc.nav": "5f2e67a87eca95c77d04f72184fd615a7858ff3c948c2e5a681957791219a4c3"
+  },
+  "truth_free_structural_runs": {
+    "pixel7pro": {
+      "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "control": {
+        "submission": "output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/control/submission.csv",
+        "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+        "summary": "output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/control/summary.json",
+        "summary_sha256": "cf396d5a5840e54d5a888e991beeeb8bca9cb5c638cca4d9fc3093b905480d0e"
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/candidate/submission.csv",
+        "submission_sha256": "7ecfbc110df8e915c57fb8184730577d82055a5871361d6e38e12ea8ae6047af",
+        "summary": "output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/candidate/summary.json",
+        "summary_sha256": "844f36ae85b95d0836b4dbeef6bbe92c47e111f918a2aecd04c4674763a9f70f"
+      },
+      "repeat_submission_sha256": "7ecfbc110df8e915c57fb8184730577d82055a5871361d6e38e12ea8ae6047af",
+      "rows": 1383,
+      "epochs": 1384,
+      "pseudorange_factors": 39539,
+      "tdcp_factors": 23399,
+      "graph_factors": 68476,
+      "graph_values": 6924,
+      "iterations": 12,
+      "converged": true,
+      "galileo_e1_source_rows": {"fnav": 336, "inav": 7052, "fallback": 0, "invalid": 0},
+      "max_adjacent_speed_mps": 19.602022849775878,
+      "finite_in_range_monotonic_keys": true
+    },
+    "mi8": {
+      "route": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+      "control": {
+        "submission": "output/smartphone-r5/phase22-galileo-tgd-v1/mi8/control/submission.csv",
+        "submission_sha256": "1cfb0ac4147a02d4d03e93da1dc906118d7c5258f00462bbc41dd8ce66e75d94",
+        "summary": "output/smartphone-r5/phase22-galileo-tgd-v1/mi8/control/summary.json",
+        "summary_sha256": "a10587db96ea04e21e2ea03f756459c7a4a07eb43bea9240bb904f545b36ad44"
+      },
+      "candidate": {
+        "submission": "output/smartphone-r5/phase22-galileo-tgd-v1/mi8/candidate/submission.csv",
+        "submission_sha256": "eadc62260ceb07d9cd73f4e5c5b353c2a9c18912d5d7651ba8c3237ec3c6140f",
+        "summary": "output/smartphone-r5/phase22-galileo-tgd-v1/mi8/candidate/summary.json",
+        "summary_sha256": "d9ea44c8c9b3fb6c90fb1099ea67c58c47327d02a3f4913eae83691e258079da"
+      },
+      "rows": 1416,
+      "epochs": 1417,
+      "pseudorange_factors": 44588,
+      "tdcp_factors": 27769,
+      "graph_factors": 78027,
+      "graph_values": 7090,
+      "iterations": 12,
+      "converged": true,
+      "galileo_e1_source_rows": {"fnav": 768, "inav": 6858, "fallback": 0, "invalid": 0},
+      "max_adjacent_speed_mps": 35.300352364179524,
+      "finite_in_range_monotonic_keys": true,
+      "wall_clock_fallback": true
+    }
+  },
+  "structural_decision": {
+    "pass": true,
+    "reasons": ["both raw-only lanes finite/in-range", "candidate source counters nonzero", "no invalid/ambiguous source rows", "graphs converged", "candidate repeat submission byte-identical", "no interpolation/edge hold and no >70 m/s adjacent transition"],
+    "truth_read_after_seal": "one development-only evaluator process is permitted; no validation/holdout/test truth",
+    "next_step": "score sealed Pixel7 control and candidate together once against the already-used development ground_truth.csv; no post-score tuning"
+  }
+}

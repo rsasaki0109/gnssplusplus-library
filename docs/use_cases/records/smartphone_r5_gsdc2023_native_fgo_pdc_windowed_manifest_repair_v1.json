@@ -1,0 +1,36 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-manifest-repair.v1",
+  "status": "sealed-orchestration-only-repair",
+  "reason": "The first atomic directory publish retained the staging-directory prefix in nested artifact path references. The bytes and hashes were already sealed; only references were normalized to the final directory.",
+  "scope": {
+    "output_root": "output/smartphone-r5/native-fgo-pdc-windowed-v1",
+    "solver_rerun": false,
+    "algorithm_changed": false,
+    "numeric_parameters_changed": false,
+    "truth_opened": false,
+    "validation_or_holdout_opened": false,
+    "v5_changed": false
+  },
+  "before": {
+    "windowed_manifest_sha256": "ea4eccb197470dc367fac688fa48f31e2c2ff17ea189042804e2de8147652566",
+    "windowed_position_sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+    "candidate_source_sha256": "b2d5600799826b3d3b25b50851a3865e6e8e111f5cf9238e478a58adea5f26d4"
+  },
+  "after": {
+    "windowed_manifest_sha256": "48b019d36e1211caf6040e21b5d10bcf5352742170e7623712b153bb2d0d772f",
+    "windowed_manifest_sha256_file_sha256": "bece1fd39e7cf8cdd1509cadc3480ac151987e1869372c118562302489d03aaf",
+    "windowed_position_sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+    "candidate_source_sha256_after_repair": "97f78a704165b93d2ad0b71a3662078b9fbedff54b75a7f84b96a9786ec04a72"
+  },
+  "verification": {
+    "all_nested_paths_point_to_final_windows": true,
+    "artifact_hashes_unchanged": true,
+    "published_position_bytes_unchanged": true,
+    "repair_command": "GNSSPP_WINDOWED_PDC_NO_TRUTH=1 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed.py --no-truth --repair-manifest-paths"
+  },
+  "freeze_lineage": {
+    "original_freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_freeze_v1.json",
+    "original_freeze_record_sha256": "0514ae2d818ac2b31fade709d08864551a9884ab06fa30a1cb08cd26ede8dc7a",
+    "repair_is_post_run_orchestration_only": true
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": "smartphone-r5-phase14-carrier-code-leveling-freeze-manifest.v1",
+  "candidate_id": "native-carrier-code-leveling-e1-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1.json",
+  "freeze_record_sha256": "a02e721ffd02c465b2b7c5fab2432b95f4c284e03f5edc2bb3b48f2f3e08546b",
+  "binary": "build/apps/gnss_fgo_imu_no_base",
+  "binary_sha256": "df12ae3284949d1b2e8c52879f727858830f731791009278baff23f6f1755a92",
+  "source_hashes": {
+    "include/libgnss++/algorithms/carrier_code_leveling.hpp": "b38bf39389e701c8135f6abdc15eb0747a97127b846194411c0c9100e0eafb3a",
+    "include/libgnss++/io/android_raw_gnss.hpp": "e78fe2096a93c1bae7c76f2195d3307c93e9fe0addf2c9a719580b0959564e52",
+    "src/io/android_raw_gnss.cpp": "790ff71c83482de0dfc9760b4d7c45d4d8adc135082d78f0b75e034bcfd645e8",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "4e17ddfd7d0ad569b2fcfcf7d9ed8ddeecbe1600a91c1de6e31c517f4d07cb5f",
+    "tests/test_carrier_code_leveling.cpp": "ccfbe9489100dbb9b933be1381ac5146b38c6ccc3cfcf28eee7732fcc022cb9f",
+    "tests/test_android_raw_gnss.cpp": "70f3809f9f41b3a68f732bb103645ceaa3e95a3e123ea2fdac29f287fcf692be"
+  },
+  "raw_input_policy": {
+    "allowed": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden": ["*.mat", "ground_truth.csv", "sample_submission.csv", "result_gnss*.mat", "device WLS coordinates", "SvPosition*", "SvElevationDegrees", "precomputed trajectories"],
+    "truth_free_before_materialization": true,
+    "truth_free_after_materialization": true,
+    "token_access": false,
+    "external_mutation": false
+  },
+  "contract": {
+    "signal": "GAL_E1",
+    "window_samples": 30,
+    "max_gap_s": 1.5,
+    "formula": "S_t=((N-1)*(S_(t-1)+(ADR_t-ADR_(t-1)))+P_t)/N",
+    "clock_discontinuity": "reset on HardwareClockDiscontinuityCount change",
+    "new_graph_state": false,
+    "production_default": false,
+    "truth_selection": false
+  },
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_structural_blocker_v1.json",
+  "manifest_sha256": "excluded from self-hash; source/binary hashes are the seal"
+}

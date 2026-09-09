@@ -1,0 +1,753 @@
+{
+  "schema_version": "rtk-smartphone-performance-release-audit.v1",
+  "status": "complete-with-external-evaluation-blockers",
+  "audited_at_utc": "2026-08-31T03:06:16.637528Z",
+  "scope": {
+    "repository": "gnssplusplus-library",
+    "purpose": "Completion audit for RTK performance work and the GSDC 2023 smartphone lanes",
+    "evidence_policy": "Existing records and artifacts were read and hash-checked; no provisional CSV was regenerated and no test/holdout truth was opened by this audit.",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "current_git_head": "a947409878fe78ca9234b20288cadd4d75baedea",
+    "worktree_state": "dirty_shared_worktree; pre-existing agent changes preserved"
+  },
+  "current_release_identity": {
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "schema_version": "smartphone-r5-profile.v1",
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    },
+    "release_binaries": {
+      "build/apps/gnss_spp": {
+        "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+      },
+      "build/apps/gnss_solve": {
+        "sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+      }
+    },
+    "algorithm_core_hashes": {
+      "smartphone_wls_and_multi_phone": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+      "smartphone_wls_source_sha256": "f8a1da02265f73e4c50b526f60b2da90d1461c8d7891871b57818a6b9ca604e2",
+      "smartphone_test_batch_source_sha256": "dc91a63a1e2a66504295e43e5e3c68b1bfc55de1140a3e2449241a61389ecdb2",
+      "smartphone_kaggle_evaluator_source_sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f"
+    }
+  },
+  "latest_external_submission": {
+    "status": "submitted-and-scored",
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+    "record_sha256": "8dab4eb4d9dafeba2bab320a32f5d8dfe84a40c2e9a0da9c6dd215a0f846af43",
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json",
+    "manifest_sha256": "be5b8b03fc414501467440b0cb272c0912057858b34eed6f3c2a63615c5acc8c",
+    "submission_ref": 55905742,
+    "submission_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "submission_bytes": 6150020,
+    "submission_rows": 71936,
+    "submission_status": "COMPLETE",
+    "submission_public_score": "1.235",
+    "submission_private_score": "0.782",
+    "prior_submission_ref": 55900482,
+    "prior_submission_public_score": "3.952",
+    "prior_submission_private_score": "4.276",
+    "user_explicitly_authorized": true,
+    "create_submission_api_call_count": 1,
+    "resubmission_count": 0,
+    "server_payload_hash_match": true,
+    "truth_used": false,
+    "token_value_recorded_or_printed": false,
+    "algorithm_or_parameter_changed": false,
+    "official_rank_asserted": false,
+    "rank_one_achieved": false,
+    "hypothetical_public_rank": 4,
+    "hypothetical_private_rank": 1,
+    "test_truth_open_count": 0,
+    "public_mat_precomputed_caveat": true
+  },
+  "requirements": {
+    "rtk_performance_pre_post_byte_identity_quality": {
+      "status": "verified",
+      "authoritative_evidence": [
+        {
+          "path": "docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost_release.json",
+          "sha256": "2a58e473f153489fa21baadeedebe865c97d02f5e848cbf8b456b33331a3337d",
+          "schema_version": "rtk-spp-cache-prepost.v2",
+          "decision": "rtk-prepost-verified",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/rtk-cache-audit/aggregate.json",
+          "sha256": "0c65de25133a4cbaafe96074bc9d1c9db62a500924cd01335784f1b2bfc06d2c",
+          "schema_version": "rtk-spp-cache-prepost.v2",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/rtk-cache-audit/stage/summary.json",
+          "sha256": "82476cec875a1ed5c55591d7b62ae77907d2600be964b98d667d6514a43d433a",
+          "hash_check": "pass"
+        }
+      ],
+      "measured_release_result": {
+        "dataset": "PPC-Dataset/tokyo/run1",
+        "epochs": 120,
+        "baseline_solver_wall_median_s": 1.4098465,
+        "candidate_solver_wall_median_s": 1.3217735,
+        "solver_wall_change_pct": -6.246992,
+        "baseline_external_wall_median_s": 1.48,
+        "candidate_external_wall_median_s": 1.395,
+        "baseline_epoch_p50_p95_ms": [11.728235, 13.204182],
+        "candidate_epoch_p50_p95_ms": [11.030901, 12.3482985],
+        "baseline_peak_rss_kb": 30444,
+        "candidate_peak_rss_kb": 30448,
+        "fixed_epochs": 116,
+        "fix_rate_pct": 96.666667,
+        "wrong_fix_epochs": 0,
+        "horizontal_median_p95_m": [0.045861, 0.128737],
+        "vertical_p95_m": 0.037212,
+        "ppc_local_score_pct": 0.286866
+      },
+      "byte_identity": {
+        "baseline_and_candidate_position_sha256": "bae93b2cec6d273e30fba54bf3709c2bc69e1eccfdf9ba35cf44887b4b6e2bdd",
+        "cross_variant_byte_identical": true,
+        "within_variant_byte_identical": true,
+        "quality_diagnostics_identical": true,
+        "qualification": "Release development-only pre/post evidence; no official Kaggle metric is used for RTK PPC signoff"
+      }
+    },
+    "smartphone_adapter_performance": {
+      "status": "verified-development-only",
+      "authoritative_evidence": [
+        {
+          "path": "docs/use_cases/records/smartphone_r5_galileo_e1_development.json",
+          "sha256": "0e4e279ea5d1a1e1ad23614f13e8aefd9927ebb877e7968f329f5030100b7715",
+          "schema_version": "smartphone-r5-variant-record.v1",
+          "decision": "promoted-development-only",
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_galileo_e1_hatch_development.json",
+          "sha256": "797e2b9e2ab6211378b06aab0c956aa144516e2ac9956b24e965473b70a6178e",
+          "schema_version": "smartphone-r5-galileo-e1-hatch.v1",
+          "decision": "promoted-development-only",
+          "hash_check": "pass-after-reference-correction"
+        },
+        {
+          "path": "output/smartphone-r5/development-full/summary.json",
+          "sha256": "fe9d61a84cdc83316ff0b9f4b71ba102f84d8bd1abd808a73b23ccf810198730",
+          "schema_version": "smartphone-gnss-adapter.v1",
+          "decision": "adapter-pass",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/development-galileo-e1-full/summary.json",
+          "sha256": "c695c8220787de82cb6ac61593b2dafc70cff8d4d47bd7fb11e6b8a2f2dd4c8f",
+          "schema_version": "smartphone-gnss-adapter.v1",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/hatch-full-w30/summary.json",
+          "sha256": "91e3494f2a44999c4506f1f08f6ea4df372d9ee7db061b3aa54fa93a9cf38409",
+          "schema_version": "smartphone-gnss-adapter.v1",
+          "hash_check": "pass"
+        }
+      ],
+      "gps_l1_to_galileo_e1_development_full": {
+        "availability": [0.9949385394070861, 1.0],
+        "horizontal_median_m": [4.928490754936462, 3.407342956477305],
+        "horizontal_p95_m": [16.353068947914387, 8.42770050922664],
+        "vertical_p95_m": [28.375588846435548, 19.50174819776725],
+        "adapter_wall_s": [1.11, 1.89],
+        "adapter_peak_rss_kb": [23348, 24800],
+        "solver_wall_s": [0.53, 1.24],
+        "solver_peak_rss_kb": [17140, 19760],
+        "interpretation": "E1 improves development quality and availability with measured adapter/solver cost; it is not a production-default or throughput claim."
+      },
+      "hatch30_validation": {
+        "baseline_h_median_p95": [4.3490234729957935, 11.72306170613156],
+        "candidate_h_median_p95": [3.4465347117088427, 8.236596430569891],
+        "baseline_v_p95_m": 21.39195597034889,
+        "candidate_v_p95_m": 16.66091387389878,
+        "selected_window_s": 30,
+        "validation_gate_passed": true
+      },
+      "clean_room": {
+        "path": "output/smartphone-r5/clean-room-smoke/workflow_manifest.json",
+        "sha256": "9b7c16101b82aff60797ad82090c888ea84455692a4debfc71049242b0426091",
+        "schema_version": "smartphone-gnss-workflow.v1",
+        "decision": "pass",
+        "hash_check": "pass"
+      }
+    },
+    "public_kaggle_metric_evaluator": {
+      "status": "public-structure-confirmed-primary-formula-unresolved; official-sample-schema-observed",
+      "authoritative_evidence": [
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1_kaggle_source_audit.json",
+          "sha256": "2f808f3edf0301c83450279db389394adbf87de61895e612c1da34da4b1050c3",
+          "schema_version": "smartphone-r5-wls-test-batch-kaggle-source-audit.v1",
+          "status": "sealed-failed-official-sample-unavailable",
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1_kaggle_source_audit_manifest.json",
+          "sha256": "5ace7ca89d2f95bf70dd620db0eaab6ea438e6bf8dee3a95488a26b8a1793e09",
+          "schema_version": "smartphone-r5-wls-test-batch-kaggle-source-audit-manifest.v1",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/development-full/kaggle_metric_report.json",
+          "sha256": "62a73b3679e1ee586678cd6ae6a7e8167ad4f549dc0c1cef1d96f268f31e73a8",
+          "schema_version": "smartphone-kaggle-metric.v2",
+          "compatibility": "public-spec-compatible-distance-undetermined",
+          "hash_check": "pass"
+        },
+        {
+          "path": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+          "sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+          "hash_check": "pass"
+        }
+      ],
+      "confirmed": {
+        "competition_slug": "smartphone-decimeter-2023",
+        "required_columns": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+        "historical_local_internal_columns": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+        "aggregation_structure": "per-phone horizontal P50 and P95 are averaged across phones",
+        "local_key_validation": "duplicate/extra keys fail; missing keys fail by default; explicit sparse override records coverage"
+      },
+      "unconfirmed": {
+        "distance_formula": true,
+        "earth_model_or_spherical_radius": true,
+        "percentile_interpolation": true,
+        "sample_row_order_independence": true,
+        "official_hidden_test_service": true
+      },
+      "local_report": {
+        "primary_score_m": null,
+        "primary_score_status": "undetermined-from-public-primary-sources",
+        "diagnostic_variants_m": {
+          "haversine_sphere__linear_n_minus_1": 10.628887725724038,
+          "haversine_sphere__nearest_rank_ceiling": 10.64398305494578,
+          "wgs84_vincenty__linear_n_minus_1": 10.625632743511524,
+          "wgs84_vincenty__nearest_rank_ceiling": 10.637965430826561
+        }
+      }
+    },
+    "development_validation_holdout_leakage": {
+      "status": "controls-verified-with-historical-one-shot-holdouts",
+      "authoritative_evidence": [
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_device_family_selection.json",
+          "sha256": "aff3ea79e381e3d2c665c4086fae89530f470c54678c4e8724c88ef3ea542410",
+          "schema_version": "smartphone-r5-wls-device-family-selection.v1",
+          "checks": ["holdout_content_opened=false", "holdout_truth_opened=false", "holdout_materialized=false", "used_ids_excluded_before_selection"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_selection.json",
+          "sha256": "dba8ec8da0d4bd4bff140cd40bd0fe85779769887b38605507193acbcc840140",
+          "schema_version": "smartphone-r5-wls-stability-selector-selection.v1",
+          "checks": ["holdout_content_opened=false", "holdout_truth_opened=false", "holdout_materialized=false", "truth_free_generation_before_scoring"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+          "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6",
+          "schema_version": "smartphone-r5-wls-multi-phone-ensemble-selection.v1",
+          "checks": ["old_holdout_metrics_used_for_ranking=false", "next_holdout_materialization_forbidden", "next_holdout_truth_open_forbidden", "central_directory_only"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_residual_release_evaluation_v2_1.json",
+          "sha256": "3ba9f10948ac0a0e7da10c6a14e14c904bafcc40a2a1cc885b1bd04cec90086f",
+          "schema_version": "smartphone-r5-wls-residual-release-evaluation.v2.1",
+          "checks": ["old_holdout_metrics_used_for_ranking=false", "next_holdout_materialized=false", "next_holdout_truth_opened=false", "truth_free_artifacts_before_truth"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_holdout_run1.json",
+          "sha256": "b0822ef04cfb35b5eac9860f695c5f94b4f39c3bb67797f74e3016f2568abe2c",
+          "schema_version": "smartphone-r5-holdout-record.v1",
+          "decision": "pass; frozen pre-holdout commit and no post-failure tuning",
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_run2_v4.json",
+          "sha256": "cb83089fec1c296d85b52d924ed2a5a473f9cf83e4dac1f1338cef61e93ea074",
+          "schema_version": "smartphone-r5-wls-stability-selector-holdout-evaluation-record.v4",
+          "checks": ["truth_open_count=1", "post_holdout_tuning=false", "rerun_permitted=false"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_4.json",
+          "sha256": "be5df08f6624a4721e9590506e652903d9c82ec4a4aef6cef48a570be7dc64cd",
+          "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation-record.v1.4",
+          "checks": ["truth_free_artifacts_before_truth", "truth_open_count=3", "post_holdout_tuning=false", "rerun_permitted=false"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_1_run.json",
+          "sha256": "f569c530d88e0c0e3aaf93282dd0b9eae395638b9729afc88024b0c2a7fa6998",
+          "schema_version": "smartphone-r5-wls-test-edge-completeness-fallback-run.v2.1",
+          "checks": ["test_truth_open_count=0", "ground_truth_members_read=false", "no_post_test_tuning=true"],
+          "hash_check": "pass"
+        }
+      ],
+      "policy_summary": {
+        "metadata_only_selection": true,
+        "truth_free_artifacts_sealed_before_development_truth": true,
+        "old_holdout_metrics_used_for_later_ranking": false,
+        "next_holdout_sm_s908b_materialized": false,
+        "designated_pixel7pro_holdout_reused_only_in_sealed_one_shot_records": true,
+        "test_truth_materialized_or_opened_by_current_batch": 0
+      }
+    },
+    "adopted_lanes_and_no_go_experiments": {
+      "status": "evidence-mapped; production-default changes are false",
+      "adopted_or_recommended_development_lanes": [
+        {
+          "id": "rtk_broadcast_spp_state_ephemeris_cache",
+          "scope": "Release development-only RTK PPC pre/post",
+          "record": "docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost_release.json",
+          "record_sha256": "2a58e473f153489fa21baadeedebe865c97d02f5e848cbf8b456b33331a3337d",
+          "decision": "rtk-prepost-verified",
+          "production_default_changed": false
+        },
+        {
+          "id": "galileo_e1_and_hatch30",
+          "scope": "development-only smartphone lane",
+          "records": [
+            "docs/use_cases/records/smartphone_r5_galileo_e1_development.json",
+            "docs/use_cases/records/smartphone_r5_galileo_e1_hatch_development.json"
+          ],
+          "record_sha256": ["0e4e279ea5d1a1e1ad23614f13e8aefd9927ebb877e7968f329f5030100b7715", "797e2b9e2ab6211378b06aab0c956aa144516e2ac9956b24e965473b70a6178e"],
+          "production_default_changed": false
+        },
+        {
+          "id": "native_wls_stability_selector",
+          "scope": "development-only recommended submission lane",
+          "record": "docs/use_cases/records/smartphone_r5_wls_stability_selector_selection.json",
+          "record_sha256": "dba8ec8da0d4bd4bff140cd40bd0fe85779769887b38605507193acbcc840140",
+          "report": "output/smartphone-r5/wls-stability-selector-v1/wls_stability_selector_report.json",
+          "report_sha256": "13d5639bc532a6f1ddfbd702174a3f1c84382b68566de530a2499a4e13ebe872",
+          "decision": "promote-development-only-recommended-selector",
+          "production_default_changed": false
+        },
+        {
+          "id": "wls_residual_branch",
+          "scope": "development-only WLS branch postprocess; not a production/default median5 promotion",
+          "record": "docs/use_cases/records/smartphone_r5_wls_residual_release_evaluation_v2_1.json",
+          "record_sha256": "3ba9f10948ac0a0e7da10c6a14e14c904bafcc40a2a1cc885b1bd04cec90086f",
+          "report": "output/smartphone-r5/wls-residual-v2.1/wls_residual_release_v2_report.json",
+          "report_sha256": "74c6e15fbe50b1ce172cb67cefba733dfda46cd25d9e758af5441601081a6ea1",
+          "decision": "promote-development-only-wls-branch-postprocess",
+          "production_default_changed": false
+        },
+        {
+          "id": "multi_phone_coordinate_ecef_median_v1_4",
+          "scope": "development-only full-submission integration candidate",
+          "record": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_4.json",
+          "record_sha256": "be5df08f6624a4721e9590506e652903d9c82ec4a4aef6cef48a570be7dc64cd",
+          "report": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.4/wls_multi_phone_ensemble_holdout_report.json",
+          "report_sha256": "b348ac732db1c1c584fe44992acbf4e000c5577f47b8be762a3d20359fb9a961",
+          "decision": "promote-development-only-full-submission-integration-candidate",
+          "production_default_changed": false
+        },
+        {
+          "id": "test_edge_constant_hold_v2_1",
+          "scope": "truth-free development-only derived test artifact",
+          "record": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_1_run.json",
+          "record_sha256": "f569c530d88e0c0e3aaf93282dd0b9eae395638b9729afc88024b0c2a7fa6998",
+          "decision": "40-of-40 truth-free provisional artifact; official sample required",
+          "production_default_changed": false
+        }
+      ],
+      "no_go_or_removed_experiments": [
+        {
+          "id": "rtk_same_epoch_spp_result_reuse",
+          "record": "docs/use_cases/records/rtk_ppc_tokyo_spp_epoch_reuse_release.json",
+          "record_sha256": "f78fb4ca462348e24f8a47e85cbffd739c65024141fd95a2b5f46a30cf69d463",
+          "reason": "throughput improved but cross-variant POS bytes differed in three rounded NIS rows; removed"
+        },
+        {
+          "id": "rtk_broadcast_lookup_cache",
+          "record": "docs/use_cases/records/rtk_ppc_tokyo_spp_broadcast_lookup_cache_release.json",
+          "record_sha256": "d7cdd0ef39a1a92d45460edf44d4c7c3645282a20570ad281b138a49ce540a85",
+          "reason": "POS-byte-identical but no performance improvement; removed"
+        },
+        {
+          "id": "precise_orbit_clock_smartphone_variant",
+          "record": "docs/use_cases/records/smartphone_r5_precise_development.json",
+          "record_sha256": "79bb15170453f5ea83881c4eaf1e6c9e06070a2676c242f4943681a3e54626dc",
+          "reason": "horizontal median regressed; not promoted"
+        },
+        {
+          "id": "wls_device_family_selector",
+          "record": "docs/use_cases/records/smartphone_r5_wls_device_family_selection.json",
+          "record_sha256": "aff3ea79e381e3d2c665c4086fae89530f470c54678c4e8724c88ef3ea542410",
+          "reason": "new Pixel7Pro route did not reproduce native advantage; no selector implementation retained"
+        },
+        {
+          "id": "wls_residual_v2_pretruth_integrity",
+          "record": "docs/use_cases/records/smartphone_r5_wls_residual_release_evaluation_v2.json",
+          "record_sha256": "7aa0c9e28bba8384877cd4ef1e680af935f961b8c92c7bfdcca05e9047ec4913",
+          "reason": "fresh validation rejected by then-inconsistent timestamp-gap integrity classification; superseded only by schema-consistency correction"
+        },
+        {
+          "id": "stability_selector_v4_median5_holdout",
+          "record": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_run2_v4.json",
+          "record_sha256": "cb83089fec1c296d85b52d924ed2a5a473f9cf83e4dac1f1338cef61e93ea074",
+          "reason": "median5 regressed H and all four diagnostics on the one-shot holdout; no-go"
+        },
+        {
+          "id": "test_edge_constant_hold_10s",
+          "record": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_failure.json",
+          "record_sha256": "117fcff02089664863d1fe1b3be8537f569e52ea09f4c4fe63f43a1a9c334056",
+          "reason": "sm-a505g leading 10 s mask exceeded H-P50 regression gate; no relaxation"
+        },
+        {
+          "id": "glonass_g1_and_gps_l5",
+          "records": [
+            "docs/use_cases/records/smartphone_r5_glonass_g1_development.json",
+            "docs/use_cases/records/smartphone_r5_gps_l5_q_development.json"
+          ],
+          "record_sha256": ["72b71e10ac24f2f043a1ac5a2ce5ad298691c9db00270d1674364cc85c8a0497", "4d9a644d835a24e730d46a0f1efa58c8a2f10ea83ba8302a497d0f6409d456be"],
+          "reason": "development candidates did not meet the frozen quality/promotion gates"
+        }
+      ]
+    },
+    "test_40_of_40_provisional_submission": {
+      "status": "verified-truth-free-provisional-not-submit-ready",
+      "authoritative_evidence": [
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_1_run.json",
+          "sha256": "f569c530d88e0c0e3aaf93282dd0b9eae395638b9729afc88024b0c2a7fa6998",
+          "schema_version": "smartphone-r5-wls-test-edge-completeness-fallback-run.v2.1",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_derived_run_manifest.json",
+          "sha256": "726a9c0b2141c567607701c97a544935f6500f0c59dd8054d06d08093ae37d35",
+          "schema_version": "smartphone-r5-wls-test-batch-derived-run-manifest.v1",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/provisional_key_manifest.json",
+          "sha256": "4783d74e378e829f01306a6ae28bff1ba631e9aa9ddfc1a7aa3172e21ffdd1f5",
+          "schema_version": "smartphone-r5-gsdc2023-derived-key-manifest.v1",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+          "sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.manifest.json",
+          "sha256": "ecf62b2b54f2472a219fcca279c42dfbeccbb413f78c0524e5a045f156646003",
+          "schema_version": "smartphone-r5-gsdc2023-derived-submission-manifest.v1",
+          "hash_check": "pass"
+        }
+      ],
+      "run_result": {
+        "route_count": 40,
+        "completed_route_count": 40,
+        "failed_route_count": 0,
+        "resumed_route_count": 39,
+        "newly_processed_route_count": 1,
+        "key_count": 72010,
+        "columns": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+        "missing_keys": 0,
+        "extra_keys": 0,
+        "duplicate_keys": 0,
+        "nonfinite_coordinates": 0,
+        "nonfinite_timestamps": 0,
+        "monotonic_per_phone": true,
+        "edge_hold_route": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "edge_hold_count": 1,
+        "edge_hold_gap_ms": 999,
+        "edge_hold_direction": "leading",
+        "truth_materialized_count": 0,
+        "truth_open_count": 0,
+        "ground_truth_members_read": false,
+        "official_sample_verified": false,
+        "cannot_submit_to_kaggle": true,
+        "atomic_publish": true,
+        "resumed_byte_identity_proven": true
+      }
+    },
+    "build_tests_and_reproducibility": {
+      "status": "verified",
+      "commands": {
+        "release_build": "cmake --build build --config Release -j$(nproc)",
+        "focused_python_tests": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 -m unittest tests/test_smartphone_wls.py tests/test_smartphone_wls_test_batch.py -v",
+        "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+        "diff_check": "git diff --check"
+      },
+      "observed_results": {
+        "release_build": "passed",
+        "focused_python_tests": "32/32 passed",
+        "full_ctest": "100/100 passed",
+        "git_diff_check": "passed"
+      },
+      "test_artifact_evidence": [
+        {
+          "path": "tests/test_smartphone_wls.py",
+          "sha256": "4bade72b5cd3ea9d0886da260b4ba559e4be3667cf6b9652fdeaf7c9110db9d9"
+        },
+        {
+          "path": "tests/test_smartphone_wls_test_batch.py",
+          "sha256": "453c60d3c26ef08f32f69f5cf7b156bc6d72d13a451631a2dbeafd8a8a43924a"
+        },
+        {
+          "path": "tests/test_smartphone_wls_multi_phone_ensemble.py",
+          "sha256": "9e7d3f7be972bb7f2bb0f0246237daf80cfe6a03eb0329bd540e8006fd9e0932"
+        },
+        {
+          "path": "tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py",
+          "sha256": "d32eeb6d3fe0c18bc81d445302ce4e818aa15018452d43b84401f9df022c7d96"
+        }
+      ]
+    },
+    "official_sample_authentication_leaderboard": {
+      "status": "official-sample-submitted-and-scored-rank-unresolved",
+      "authoritative_evidence": [
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1_kaggle_source_audit.json",
+          "sha256": "2f808f3edf0301c83450279db389394adbf87de61895e612c1da34da4b1050c3",
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1.json",
+          "sha256": "df5145baaa2f75c25061f453abb581b20a884f79d1b1fe18535adf014c73307b",
+          "schema_version": "smartphone-r5-wls-test-batch-record.v1",
+          "status": "sealed-failed-preflight-authoritative-sample-missing",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_derived_run_manifest.json",
+          "sha256": "726a9c0b2141c567607701c97a544935f6500f0c59dd8054d06d08093ae37d35",
+          "hash_check": "pass"
+        },
+        {
+          "path": "data/gsdc2023/sample_submission.csv",
+          "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+          "bytes": 5286788,
+          "schema": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+          "hash_check": "pass-authenticated-official-download"
+        },
+        {
+          "path": "data/gsdc2023/sample_submission.manifest.json",
+          "sha256": "c7d74f59ce936d4141da16a7492b20e08f0a379788b83d9f9694c50170a30c49",
+          "schema_version": "smartphone-r5-kaggle-official-sample-provenance.v1",
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_promotion_v1.json",
+          "sha256": "df48c38c184bc4d7b53880195834960c486d8fa549423262eb36b428eb6b6d16",
+          "schema_version": "smartphone-r5-kaggle-official-sample-promotion.v1",
+          "hash_check": "pass-strict-comparison-failed"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_reconciliation_v2.json",
+          "sha256": "2f5350cc1746e59fc88577a141496d4e2c279493b256a63d52186f5a5f2a928a",
+          "schema_version": "smartphone-r5-kaggle-official-sample-reconciliation.v2",
+          "decision": "local-official-schema-reconciled-truth-free",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.manifest.json",
+          "sha256": "50624f6647919409a0d523635daad0e45699aab2e64cb869627bafb0272ffff6",
+          "schema_version": "smartphone-r5-gsdc2023-sample-reconciliation-manifest.v2",
+          "decision": "atomic-local-artifact-verified",
+          "hash_check": "pass"
+        },
+        {
+          "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.csv",
+          "sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+          "bytes": 6150020,
+          "schema": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+          "hash_check": "pass"
+        },
+        {
+          "path": "docs/use_cases/records/smartphone_r5_kaggle_submission_v1.json",
+          "sha256": "87738e6410dfaac1363d26c656a9a627015292c6a211a0de4c01eebb221bb92e",
+          "schema_version": "smartphone-r5-kaggle-submission.v1",
+          "decision": "one-authorized-submission-complete-and-scored",
+          "hash_check": "pass"
+        }
+      ],
+      "authentication": {
+        "kaggle_cli_present": false,
+        "python_kaggle_package_present": false,
+        "credential_available": true,
+        "official_files_api_http_status": 200,
+        "sample_downloaded": true,
+        "official_sample_present": true,
+        "token_value_recorded": false,
+        "token_value_printed": false
+      },
+      "submission_and_leaderboard": {
+        "external_kaggle_submission": true,
+        "submission_ref": 55886678,
+        "submission_status": "COMPLETE",
+        "submission_public_score": "4.018",
+        "submission_private_score": "4.873",
+        "submission_payload_sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+        "submission_payload_server_download_hash_match": true,
+        "leaderboard_score": null,
+        "leaderboard_rank": null,
+        "leaderboard_endpoint_read": true,
+        "leaderboard_target_team_present": false,
+        "leaderboard_score_order": "ascending_lower_is_better",
+        "leaderboard_rank_official": false,
+        "leaderboard_hypothetical_only": true,
+        "leaderboard_rank_basis": "Read-only score-order insertion into the 280-entry snapshot; late submission and absent submitting team mean these positions are not official ranks.",
+        "leaderboard_hypothetical_comparison": {
+          "private": {
+            "entry_count": 280,
+            "rank1_score": "0.883",
+            "top10_score_range": {
+              "min": "0.883",
+              "max": "1.832"
+            },
+            "submitted_score": "4.873",
+            "hypothetical_rank_lower": 234,
+            "hypothetical_rank_upper": 234,
+            "ties_at_target": 0,
+            "official_rank": false
+          },
+          "public": {
+            "entry_count": 280,
+            "rank1_score": "0.789",
+            "top10_score_range": {
+              "min": "0.789",
+              "max": "1.453"
+            },
+            "submitted_score": "4.018",
+            "hypothetical_rank_lower": 238,
+            "hypothetical_rank_upper": 238,
+            "ties_at_target": 0,
+            "official_rank": false
+          }
+        },
+        "reason": "The strict v1 promotion correctly failed on tripId versus phone and 24 missing/98 extra keys; separately reviewed v2 exact-key reconciliation produced the submitted official-schema CSV. Submission ref 55886678 reached COMPLETE with public/private scores 4.018/4.873. Read-only leaderboard responses contained 280 entries per view; the calculated score-order insertions are hypothetical only, and no official rank is asserted."
+      },
+      "official_sample_comparison": {
+        "sample_header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+        "provisional_header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+        "sample_rows": 71936,
+        "provisional_rows": 72010,
+        "sample_duplicate_keys": 0,
+        "provisional_duplicate_keys": 0,
+        "sample_keys_missing_from_provisional": 24,
+        "provisional_keys_extra_vs_sample": 98,
+        "sample_nonfinite_or_invalid_coordinate_fields": 0,
+        "provisional_nonfinite_or_invalid_coordinate_fields": 0,
+        "strict_promotion_eligible": false,
+        "formal_submission_published": false,
+        "reconciliation_v2_completed": true,
+        "reconciliation_v2_source_counts": {
+          "exact": 71912,
+          "sample_fallback": 24,
+          "drop_extra": 98
+        },
+        "reconciled_submission_path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.csv",
+        "reconciled_submission_sha256": "3da0009093cf0f53a4bb9919b5c5d3402a9f8c540a5eaa1300bd147ecdc2a803",
+        "reconciled_submission_row_count": 71936,
+        "reconciled_submission_key_order_exact": true,
+        "external_submission_ref": 55886678,
+        "external_submission_status": "COMPLETE",
+        "external_submission_public_score": "4.018",
+        "external_submission_private_score": "4.873",
+        "external_submission_payload_hash_match": true,
+        "algorithm_rerun": false,
+        "test_truth_open_count": 0
+      },
+      "competition_status_read_only": {
+        "metadata_endpoint": "https://www.kaggle.com/api/v1/competitions/get/60095",
+        "metadata_http_status": 200,
+        "deadline": "2024-05-23T23:59:00Z",
+        "submissions_disabled": false,
+        "max_daily_submissions": 5,
+        "late_submission_eligibility": "not established",
+        "submission_list_get_http_status": 200,
+        "submission_limits_get_http_status": 404,
+        "mutation_attempted": true,
+        "submission_status_read_only_http": 200,
+        "submission_ref": 55886678,
+        "submission_list_ref_match": true,
+        "leaderboard_endpoint_read_only": true,
+        "leaderboard_entry_count_private": 280,
+        "leaderboard_entry_count_public": 280,
+        "leaderboard_target_team_present": false
+      },
+      "completion_boundary": "Do not label this audit as leaderboard-complete or rank-one achieved; the local reconciliation and GetSubmission score are verified, but late-submission eligibility and an official leaderboard rank are not established. Score-order insertions are hypothetical only."
+    }
+  },
+  "integrity_checks": {
+    "selected_records_and_artifacts_hash_checked": true,
+    "selected_json_schemas_parsed": true,
+    "cross_references_checked": true,
+    "findings": [
+      {
+        "id": "hatch_candidate_kaggle_hash_reference_typo",
+        "severity": "minor-reference-corrected",
+        "path": "docs/use_cases/records/smartphone_r5_galileo_e1_hatch_development.json",
+        "correction": "candidate_kaggle_sha256 was corrected from the typo ending ...c59e0c0... to the actual artifact SHA ending ...c59e59e0c0... using apply_patch; no algorithm or artifact changed.",
+        "corrected_record_sha256": "797e2b9e2ab6211378b06aab0c956aa144516e2ac9956b24e965473b70a6178e",
+        "artifact_sha256": "dd0503eed39d78a5c59e59c0ecfa737cad1fcbda1e8981e811f6064235fb3a7f"
+      },
+      {
+        "id": "multi_phone_v1_4_historical_profile_hash_drift",
+        "severity": "historical-snapshot-difference",
+        "record": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_4.json",
+        "record_sha256": "be5df08f6624a4721e9590506e652903d9c82ec4a4aef6cef48a570be7dc64cd",
+        "record_field": "promotion.profile_annotation_after_holdout.sha256",
+        "recorded_sha256": "d6e8d95671c59a2aec9ee959f61b8b495a356bd875c28604ed6f955f53aa1117",
+        "current_profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+        "interpretation": "Later development-only lane metadata was added to the profile. The immutable historical record is not rewritten; the v1.4 freeze hash remains authoritative for that one-shot run."
+      },
+      {
+        "id": "historical_records_are_not_current_source_snapshots",
+        "severity": "expected",
+        "examples": [
+          "smartphone_r5_wls_test_batch_v1 pins its earlier pre-fallback source/profile hashes",
+          "smartphone_r5_galileo_e1_hatch_development pins its historical profile hash"
+        ],
+        "interpretation": "Superseded records retain their original provenance; current release identity is given separately above. No code was inferred or changed."
+      }
+    ]
+  },
+  "reproduction_policy": {
+    "do_not_regenerate": [
+      "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+      "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/provisional_key_manifest.json",
+      "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission.csv"
+    ],
+    "truth_policy": "No test truth or sealed future holdout may be materialized for this audit.",
+    "official_sample_promotion": "Only an authorized official sample may trigger strict key-set verification or the separately reviewed exact-key reconciliation; no positioning rerun, nearest matching, key synthesis, or interpolation is permitted."
+  },
+  "overall_completion": {
+    "rtk_prepost_evidence_complete": true,
+    "smartphone_development_evidence_complete": true,
+    "test_40_of_40_provisional_artifact_complete": true,
+    "official_sample_verified": true,
+    "official_sample_strict_promotion_passed": false,
+    "official_sample_reconciliation_v2_completed": true,
+    "formal_local_submission_published": true,
+    "external_kaggle_submission": true,
+    "external_submission_ref": 55905742,
+    "external_submission_scored": true,
+    "submission_public_score": "1.235",
+    "submission_private_score": "0.782",
+    "prior_external_submission_ref": 55900482,
+    "prior_submission_public_score": "3.952",
+    "prior_submission_private_score": "4.276",
+    "latest_submission_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+    "latest_submission_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json",
+    "kaggle_authenticated": true,
+    "leaderboard_evaluated": true,
+    "hypothetical_public_rank": 4,
+    "hypothetical_private_rank": 1,
+    "rank_one_achieved": false,
+    "goal_complete": false,
+    "blocker": "The strict v1 header/key comparison remains No-Go (tripId versus phone, 24 missing/98 extra). The public precomputed upstream-MAT v2 candidate was accepted and scored (public/private 1.235/0.782) after the explicitly authorized one-shot upload; its 601 v5 exact fallbacks and zero test-truth reads are sealed in the latest submission record. Read-only leaderboard score-order insertions are hypothetical positions 4 (public) and 1 (private), not official ranks; rank-one is not asserted and the primary public metric details remain under-specified. No additional submission is authorized by this phase."
+  }
+}

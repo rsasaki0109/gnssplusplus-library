@@ -1,0 +1,250 @@
+{
+  "schema_version": "smartphone-r5-phase37-pixel5-repeatability-freeze.v1",
+  "phase": 37,
+  "status": "frozen-before-phase37-materialization-and-solver",
+  "purpose": "Test whether a phone-common systematic horizontal residual is identifiable on a route-disjoint repeated Pixel5 development cohort using the unchanged native Phase31 FGO lane. This is an identification-only experiment; no constant is fitted, learned, applied, or promoted.",
+  "prior_phase36": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_freeze_v1.json",
+      "sha256": "e559f667d5200ac89b8be084b10ab684e770f2c3c437d259f5c79a44c29e102e"
+    },
+    "result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_result_v1.json",
+      "sha256": "d92c8ae16dfc9bfe9726b2c44acec95d1d6778d1fb687b3b4e2dcc21a8d61e71"
+    },
+    "candidate": "phase31_native_fgo_quality_anchor_tdcp_no_bridge",
+    "metadata_only_candidates_reused": true,
+    "phase31_champion_mutation": false
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+      "central_directory_only": true,
+      "member_content_read_before_freeze": false,
+      "member_sha256_computed_before_freeze": false
+    },
+    "member_contract": {
+      "required_members": [
+        "device_gnss.csv",
+        "device_imu.csv",
+        "brdc.nav",
+        "ground_truth.csv"
+      ],
+      "identity": "exact member name plus central file size, compressed size, and CRC32; payload SHA-256 is computed once during post-freeze materialization/read and recorded in the result",
+      "duplicate_or_missing": "fail-closed",
+      "selected_payloads_only": true
+    }
+  },
+  "cohort": {
+    "route_disjoint": true,
+    "phone_model": "pixel5",
+    "existing_phase36_identity": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "added_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "evaluation_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "validation_and_holdout_excluded": true
+  },
+  "selected_archive_members": {
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "device_gnss": {
+        "name": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+        "file_size": 74299283,
+        "compressed_size": 17074167,
+        "crc32_hex": "660121c3"
+      },
+      "device_imu": {
+        "name": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_imu.csv",
+        "file_size": 54271475,
+        "compressed_size": 8413795,
+        "crc32_hex": "47fd8c0c"
+      },
+      "broadcast_nav": {
+        "name": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/brdc.nav",
+        "file_size": 10805490,
+        "compressed_size": 1054711,
+        "crc32_hex": "c6eb708b"
+      },
+      "ground_truth": {
+        "name": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "file_size": 305432,
+        "compressed_size": 65933,
+        "crc32_hex": "fe212a4d"
+      }
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "device_gnss": {
+        "name": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+        "file_size": 33837317,
+        "compressed_size": 7801965,
+        "crc32_hex": "e7b2f43c"
+      },
+      "device_imu": {
+        "name": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_imu.csv",
+        "file_size": 23649244,
+        "compressed_size": 4105629,
+        "crc32_hex": "638e39cc"
+      },
+      "broadcast_nav": {
+        "name": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/brdc.nav",
+        "file_size": 10635773,
+        "compressed_size": 1068662,
+        "crc32_hex": "697a650c"
+      },
+      "ground_truth": {
+        "name": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "file_size": 143441,
+        "compressed_size": 41011,
+        "crc32_hex": "49b239b2"
+      }
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "device_gnss": {
+        "name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+        "file_size": 23385520,
+        "compressed_size": 5457833,
+        "crc32_hex": "17dffb4e"
+      },
+      "device_imu": {
+        "name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_imu.csv",
+        "file_size": 17453338,
+        "compressed_size": 2881126,
+        "crc32_hex": "187bf416"
+      },
+      "broadcast_nav": {
+        "name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/brdc.nav",
+        "file_size": 11506619,
+        "compressed_size": 1103827,
+        "crc32_hex": "c2552e5c"
+      },
+      "ground_truth": {
+        "name": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+        "file_size": 108045,
+        "compressed_size": 30016,
+        "crc32_hex": "bc251725"
+      }
+    }
+  },
+  "sealed_existing_identity": {
+    "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "candidate_submission": {
+      "path": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel5/submission.csv",
+      "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c"
+    },
+    "candidate_summary": {
+      "path": "output/smartphone-r5/phase31-quality-anchor-structural-v1/anchor/pixel5/summary.json",
+      "sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460"
+    },
+    "truth": {
+      "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+      "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+      "source": "already materialized Phase29 development truth reused by Phase36"
+    },
+    "raw_inputs": {
+      "root": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "device_gnss_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "device_imu_sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+      "broadcast_nav_sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+    }
+  },
+  "native_inference": {
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+    },
+    "flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "inputs_only": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "forbidden_inputs": [
+      "ground_truth.csv",
+      "any .mat file",
+      "device-provided WLS coordinates",
+      "precomputed result/submission trajectory coordinates",
+      "validation truth",
+      "future holdout truth",
+      "Kaggle/public/private score"
+    ],
+    "phase31_champion_flags_and_binary_unchanged": true,
+    "coordinate_translation_or_fit": false,
+    "common_constant_learning_or_application": false
+  },
+  "truth_read_budget": {
+    "truth_coordinates_before_structural_seal": 0,
+    "truth_materialization_before_structural_seal": 0,
+    "truth_coordinate_read_count_per_route_after_seal": 1,
+    "truth_coordinate_read_count_total_after_seal": 4,
+    "single_process": true,
+    "truth_used_for_inference_or_selection": false,
+    "truth_rematerialization": false,
+    "post_truth_solver_rerun": false,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "archive_member_hash_only_scan_before_freeze": true,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "structural_seal": {
+    "required_before_truth": true,
+    "all_added_routes_native_return_code_zero": true,
+    "all_added_routes_finite_converged": true,
+    "raw_epoch_keys_exact": true,
+    "no_over_70_mps_transition": true,
+    "repeat_runs_byte_identical": true,
+    "summary_truth_used_false": true,
+    "summary_production_default_changed_false": true,
+    "factor_counts_and_graph_model_match_phase31_contract": true,
+    "failure_handling": "fail-closed; record route/member/solver failure, do not open truth for failed route, do not relax flags or substitute any coordinate artifact, preserve Phase31 champion"
+  },
+  "identifiability": {
+    "residual_frame": "fixed local ENU at first chronological matched truth coordinate; prediction minus truth in ECEF then ECEF-to-ENU rotation",
+    "observable_components": [
+      "east",
+      "north"
+    ],
+    "up": "unobservable because native submission has no altitude; never fill from any result or MAT coordinate",
+    "robust_location": "component-wise median",
+    "robust_scale": "component-wise unscaled MAD",
+    "outlier_rule": "component-wise 3-MAD inlier, exact equality when MAD is zero",
+    "prefix_tail": "chronologically sorted matched rows; first and last 25 percent with at least one row",
+    "cross_route_agreement": "all four exact Pixel5 identities must have finite route medians, stable prefix/tail behavior, and a predeclared bounded pairwise/dispersion criterion; one route or one family member is insufficient",
+    "raw_orientation": "nearest preceding raw UncalAccel and UncalMag within 250 ms; coarse gravity-axis/sign and tilt-compensated magnetic heading groups only",
+    "raw_orientation_independence": "report group coverage and residual median deltas; no truth-derived heading or attitude",
+    "body_frame_vector": "forbidden without calibrated device-to-antenna pose; orientation labels are diagnostic only",
+    "fit_or_application": false,
+    "training_or_validation_application": false
+  },
+  "promotion_policy": {
+    "default": "no-go-unless-source-supported-and-route-disjoint",
+    "identifiability_only": true,
+    "common_constant_fit_allowed": false,
+    "common_constant_native_application_allowed": false,
+    "validation_open_allowed": false,
+    "holdout_open_allowed": false,
+    "kaggle_submission": false,
+    "on_missing_member": "fail-closed-no-substitute",
+    "on_solver_failure": "fail-closed-no-truth-for-failed-route-and-no-parameter-relaxation",
+    "on_identifiability_failure": "publish no-go evidence, preserve Phase31 champion, do not open validation or holdout"
+  }
+}

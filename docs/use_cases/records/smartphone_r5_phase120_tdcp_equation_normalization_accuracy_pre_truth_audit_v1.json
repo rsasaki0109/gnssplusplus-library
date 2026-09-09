@@ -1,0 +1,204 @@
+{
+  "schema_version": "smartphone-r5-phase120-tdcp-equation-normalization-accuracy-pre-truth-audit.v1",
+  "phase": 120,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-before-phase120-truth-authorization",
+  "purpose": "Record the launch-free qualification and read accounting before any independent truth-only authorization.",
+  "candidate": {
+    "id": "phase120-official-tdcp-resl-atmosphere-cancellation-truth-only-accuracy-v1",
+    "source": "sealed Phase120 structural result 6a050b1; opaque metadata only",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_order_fixed": true,
+    "runs_per_route": 1,
+    "candidate_payload_reads": 0,
+    "candidate_coordinate_interpretations": 0,
+    "candidate_files_copied_or_transformed": false,
+    "solution_rows_in_record": false,
+    "solution_output_published": false
+  },
+  "truth_cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "truth_payload_reads": 0,
+    "truth_coordinate_rows_in_record": false,
+    "truth_metadata_only": true,
+    "read_by_solver": false,
+    "read_by_audit": false,
+    "read_by_freeze": false,
+    "read_by_manifest": false,
+    "read_by_evaluator": false
+  },
+  "metric_contract": {
+    "source": "pinned Phase118 evaluator/manifest and Phase82/Phase76 scorer; no semantic change",
+    "schema_and_join": "Phase118 metric contract copied exactly",
+    "distance_and_aggregation": "Phase118 metric contract copied exactly",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "strict_macro_comparator": "candidate_macro_score_m < 0.782",
+    "strict_macro_threshold_m": 0.782,
+    "equality_at_threshold_passes": false,
+    "truth_only_evaluator_process_count": 1
+  },
+  "comparison_baselines": {
+    "phase112_macro_m": 0.8318381724000121,
+    "phase118_macro_m": 0.814198150322117,
+    "phase118_comparison_is_informational_only": true
+  },
+  "authority": {
+    "accuracy_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_accuracy_audit_v1.md",
+      "commit": "dda00518fa9e12a87239ff6fa174eb01e065771f",
+      "sha256": "62b076eaef8977244521fb3da2f51df7e25745edb6ce205334c12cf06880e13b"
+    },
+    "accuracy_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_accuracy_freeze_v1.json",
+      "commit": "e7e11eeb344d6cbb133e26e636b268ef25b5c956",
+      "sha256": "f9b3746477a107d849cc3e957382d340c2a26d1677bf01edf879aef294bb4f2f"
+    },
+    "accuracy_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_accuracy_manifest_v1.json",
+      "commit": "7e91c25e10b53f252b978542d3ec59f57d845a2a",
+      "sha256": "48bcc206060a62f55b8f1094b6f68bf3a43f619aff44b77b25bebf2a05c6856d"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase120_tdcp_equation_normalization_accuracy.py",
+      "commit": "7e91c25e10b53f252b978542d3ec59f57d845a2a",
+      "sha256": "22c0f3eb6c3624d81a3e7662828a1eb299a464c352250c16c101ae64eadab0cf"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase120_tdcp_equation_normalization_accuracy.py",
+      "commit": "7e91c25e10b53f252b978542d3ec59f57d845a2a",
+      "sha256": "d448fa4a58cbc8b3cb6cd3fd6614c232ab397bfd0ad642053e3f8aeed02b019c"
+    },
+    "structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_structural_result_v1.json",
+      "commit": "6a050b1041c29a484aa791a39a0edcd533640f94",
+      "sha256": "4c783ed063cc4f1bb3530826a40607eab6d8aa3c9716a8a8bedc8abebcdb48f5"
+    },
+    "phase118_accuracy_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_accuracy.py",
+      "commit": "c29e1700922260a77f047db8c82692f9d2b13603",
+      "sha256": "a1b2fac0a5615e47a11e7e4b171ced77d12818b66c598a531a4c48d2bf7ff829"
+    },
+    "phase118_accuracy_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_manifest_v1.json",
+      "commit": "c29e1700922260a77f047db8c82692f9d2b13603",
+      "sha256": "b33b276c32bbbb5e2a8778a9259cd9e8daf92d874e67aa01dc27a20fb46b186b"
+    },
+    "phase118_accuracy_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_gate_freeze_v1.json",
+      "commit": "ef8d11bc4fa64e2ed6cd5fface133979655953ff",
+      "sha256": "860a7f382199958f8dd2c43ba697d4c5cde1bc550d5747028e4c6f73be346760"
+    },
+    "phase118_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_result_v1.json",
+      "commit": "6b37f92077a8ede43cb24e7a5cada580feccea5c",
+      "sha256": "918597aab19f462a2aadfff606f461ce47f48f2fdcd997e5fdeb89ab459a0164"
+    },
+    "phase82_metric_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "commit": "be45879297a2a00a8574c77b71be0a5b721ff8c9",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "commit": "be45879297a2a00a8574c77b71be0a5b721ff8c9",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase76_parser_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761"
+    },
+    "phase112_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_accuracy_result_v1.json",
+      "commit": "0151bd070f8029413f8f2a17a28fe982dddb735f",
+      "sha256": "46d8d836758ac1a88b95ec2c1a0c0080cedfb753c12411ed74e4c2501549c57e"
+    }
+  },
+  "read_accounting": {
+    "candidate_paths_materialized": 0,
+    "truth_paths_materialized": 0,
+    "native_solver_invocations": 0,
+    "raw_gnss_imu_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "candidate_solution_payload_reads": 0,
+    "candidate_coordinate_interpretations": 0,
+    "accuracy_calculations": 0,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false,
+    "solution_rows_in_result": false,
+    "solution_output_published": false
+  },
+  "qualification": {
+    "freeze_verified": true,
+    "structural_result_verified": true,
+    "manifest_verified": true,
+    "pre_truth_verification_passed": true,
+    "focused_synthetic_tests": {
+      "test_file": "tests/test_smartphone_phase120_tdcp_equation_normalization_accuracy.py",
+      "tests_run": 8,
+      "tests_passed": 8,
+      "tests_failed": 0,
+      "payload_reads": 0,
+      "truth_reads": 0,
+      "native_solver_invocations": 0
+    }
+  },
+  "authorization_boundary": {
+    "truth_only_authorized": false,
+    "independent_authorization_commit_required": true,
+    "authorization_file": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_accuracy_truth_authorization_v1.json",
+    "authorization_schema": "smartphone-r5-phase120-tdcp-equation-normalization-accuracy-truth-authorization.v1",
+    "authorization_status": "authorized-for-phase120-truth-only-accuracy-evaluation",
+    "candidate_and_truth_paths_materialized_only_after_auth": true,
+    "planned_route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "planned_candidate_reads": 2,
+    "planned_truth_reads": 2,
+    "planned_accuracy_calculations": 2,
+    "native_solver_invocations": 0,
+    "raw_gnss_imu_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repair": false,
+    "solution_publication": false,
+    "release_or_submission": false
+  },
+  "forbidden_lanes": {
+    "native_solver_rerun": false,
+    "raw_or_base_rerun": false,
+    "truth_before_independent_authorization": false,
+    "candidate_payload_before_independent_authorization": false,
+    "mat": false,
+    "precomputed_phone_coordinates": false,
+    "pdc": false,
+    "kaggle_or_token": false,
+    "accuracy_execution": false,
+    "solution_publication": false,
+    "rerun_or_fallback": false
+  },
+  "next_authorization_requirements": [
+    "Create an independent commit containing the exact authorization schema/status and all authority path/hash pins recorded above.",
+    "Verify the authorization and current manifest/evaluator/test hashes before any candidate or truth path is materialized.",
+    "Read exactly one opaque candidate payload and one official truth payload per route, in MTV-A then LAX-T order, in one truth-only evaluator process.",
+    "Run no native solver, raw/base reader, MAT/PDC/precomputed-coordinate lane, Kaggle/token access, repair, fallback, or rerun.",
+    "Emit route metrics and strict macro gate only; omit candidate and truth coordinate rows and keep release/publication unauthorized."
+  ]
+}

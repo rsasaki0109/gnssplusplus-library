@@ -1,0 +1,106 @@
+{
+  "schema_version": "smartphone-r5-phase156-h-preprocess-diagnostic-manifest.v1",
+  "phase": 156,
+  "execution_label": "Luna Max",
+  "status": "pinned-before-execution",
+  "purpose": "One authorized MTV-H Phase149 raw-P preparation invocation using Phase155 source-row preprocessing diagnostics; no FGO, truth, accuracy, or coordinate interpretation.",
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "source_and_binary": {
+    "implementation_commit": "bae73974ac414a126be43d53006508ffa57d9265",
+    "current_head_before_run": "bae73974ac414a126be43d53006508ffa57d9265",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "d7611bd9da30eda931bf719ce60d76e5c7fa7afb6a178f72adebb3bd0e57fd44",
+    "app_source_sha256": "37d7931790600a25a78433507c16f2e4f157ab6c2235d23e7939e5922e545b8f",
+    "raw_p_seed_source_sha256": "b5aa5409ce17a5e9171f8e510930487d4ec28d112ebf6b6d85c62a564f2bece5",
+    "raw_p_seed_header_sha256": "7cb414e7e3925adb8c1064cd201ae132b5a7a9467121b4a3d7096676b281c1ad",
+    "spp_header_sha256": "9de5eed762d14a4266c82b3a18698994c9b3e6a1e25230833d8e811ca02c8f18",
+    "spp_source_sha256": "45b9ace62f33ba6165caaff83bdcfab41b99ba40041d05a037aeb790361c4e12"
+  },
+  "input_integrity": {
+    "device_gnss_csv": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256_pinned_by_phase147": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes_pinned_by_phase147": 74299283,
+      "read_authorized_once": true
+    },
+    "brdc_nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256_pinned_by_phase147": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes_pinned_by_phase147": 10805490,
+      "read_authorized_once": true
+    }
+  },
+  "command": {
+    "working_directory": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "argv": [
+      "build/apps/gnss_fgo_imu_no_base",
+      "--dataset-id",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "--android-gnss",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "--nav",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "--all-epochs",
+      "--android-raw-clock-only",
+      "--summary-json",
+      "output/smartphone-r5/phase156-h-preprocess-diagnostic-v1/mtv-h/native_summary.json",
+      "--native-phase149-raw-p-seed-stage"
+    ],
+    "raw_clock_only_selector_count": 1,
+    "phase149_selector_count": 1,
+    "imu_argument": false,
+    "base_argument": false,
+    "solution_csv_argument": false,
+    "precomputed_seed_argument": false
+  },
+  "execution_contract": {
+    "native_invocations": 1,
+    "phase149_raw_p_stage": true,
+    "same_run_native_spp": true,
+    "preprocessing_diagnostics": true,
+    "doppler_consumed": false,
+    "fgo": false,
+    "truth": false,
+    "accuracy": false,
+    "coordinate_interpretation": false,
+    "coordinate_publication": false,
+    "mat_pdc": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "summary_path_new_and_preserved": true,
+    "output_values_policy": "aggregate statuses/counts/reasons only; no coordinate values or disk seed reuse"
+  },
+  "required_result_fields": [
+    "process_return_code",
+    "native_ingress_and_stage_status",
+    "input_epoch_count",
+    "first_epoch_raw_and_corrected_rows",
+    "first_epoch_preprocessing_input_accepted_rejected_counts",
+    "first_epoch_preprocessing_reason_counts",
+    "first_epoch_clock_groups_reference_and_rank_counts",
+    "evaluated_vs_unassessed_epoch_coverage",
+    "raw_and_navigation_read_accounting",
+    "summary_sha256_or_absence",
+    "coverage_boundary_when_first_epoch_fails"
+  ],
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "navigation_reads": 0,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  }
+}

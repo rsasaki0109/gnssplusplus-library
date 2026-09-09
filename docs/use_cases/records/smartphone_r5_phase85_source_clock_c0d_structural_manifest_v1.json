@@ -1,0 +1,225 @@
+{
+  "schema_version": "smartphone-r5-phase85-source-clock-c0d-structural-manifest.v1",
+  "phase": 85,
+  "status": "frozen-before-phase85-v2-raw-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Authorize one truth-free structural matrix of the implemented default-off source-exact C0/D clock row, composed with the pinned Phase80 direct/no-PDC recipe. No control, route selector, accuracy score, or forbidden input is in scope.",
+  "authority": {
+    "phase83_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase83_native_clock_factor_gap_audit_v1.md",
+      "sha256": "291ee545f5d022f56cfb357ec97c2c62aaec72df6d39c0c3cc82ce41459299fd",
+      "git_commit": "7f48778b86c810b0a1cbfea710c12456a691e8ca"
+    },
+    "phase84_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase84_source_exact_clock_c0d_freeze_v1.json",
+      "sha256": "c20d8849257cf10afdcea9e57d7299ed595c2c045a1b555241a40430e077cca4"
+    },
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase80_structural_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "phase78_structural_result": {
+      "path": "output/smartphone-r5/phase78-phase77-structural-reclassification-v1/phase78_phase77_structural_reclassification_result.json",
+      "sha256": "d3d190d8da951afc0a62abcf82d87498a6b8ff1da68cb2154966ca387e357114"
+    },
+    "official_repository": "taroz/gsdc2023",
+    "official_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5"
+  },
+  "official_source_pins": {
+    "fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": ["102-114", "169-186", "189-218", "252-277"]
+    },
+    "parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": ["46-47", "130-133"]
+    },
+    "clock_factor_ccdd_h": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc",
+      "lines": ["16-20", "32-61"]
+    }
+  },
+  "implementation": {
+    "commit": "f77f0086378b9b5bce0d51a543529343a4e11cb5",
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "0a2f70f2debdc34b47f9e185939cdb02c839b4133c40634c33e6eb77b2c4e3d5"
+    },
+    "backend": "GTSAM/Pose3/IMU path only; Eigen is rejected for this flag",
+    "source_hashes": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": "89688fc5ce16402c66a15c6f373185fbcc3e4a1b1c6d9b7e7b691bf95b051189",
+      "include/libgnss++/algorithms/fgo.hpp": "79048bba9da2edac466a06241df3ac05835b06a39513f394271163183b13425f",
+      "include/libgnss++/algorithms/fgo_config.hpp": "4b66fd4b63b4864f126d0c7d15316b60f957007bae4c4fe123b2b442cf0dc468",
+      "src/algorithms/fgo.cpp": "dbf2e9e08cb160f5f650d2fc78f2e99771878266d356d2d7147c6ce1afa091f5",
+      "src/algorithms/fgo_gtsam_backend.cpp": "4075156d10189f7f16df8e3f570106c73e0635fa2a99ef084f34295fda88afbd",
+      "src/algorithms/fgo_gtsam_internal.hpp": "90db67fe9dd8d032c3d28d37de6c161966eb3cd5ca8fb873d98a47fa6181859b",
+      "tests/test_fgo_gtsam_backend.cpp": "3472805572b42c8f3bd65ed32c822bd80c142a8c6100a4e6dd99e5e67d727f35"
+    }
+  },
+  "candidate": {
+    "flag": "--native-source-clock-c0d-factor",
+    "direct_flag": "--native-source-direct-observable-quality",
+    "default_off": true,
+    "controls": 0,
+    "runs_per_route": 2,
+    "requires": [
+      "--native-source-direct-observable-quality",
+      "--native-pdc-imu-tdcp-no-bridge"
+    ],
+    "inherited_conflicts": [
+      "--native-upstream-quality",
+      "--native-pdc-state-bridge",
+      "implicit PDC bridge when --native-pdc-imu-tdcp lacks --native-pdc-imu-tdcp-no-bridge"
+    ],
+    "phase80_exact_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor",
+      "--native-fallback-seed-quality-anchor-recovery",
+      "--native-signal-bias-states",
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex",
+      "--native-base-rinex-sha256",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-source-direct-observable-quality"
+    ],
+    "preserve_additional_frequency_bands": false,
+    "no_control": true,
+    "no_route_selector": true,
+    "factor": {
+      "parity_scope": "C0/D active-row parity; not full seven-vector",
+      "edge": "adjacent epochs only; 0 < dt < 1.5 seconds; jumps omitted",
+      "clock_units": "seconds",
+      "drift_units": "metres_per_second",
+      "residual_units": "seconds",
+      "equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "jacobian_order": ["c1", "c2", "d1", "d2"],
+      "jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "sigma_seconds": "0.1/C_LIGHT",
+      "jump_noise": "Inf (active C0 factor omitted)",
+      "legacy_scalar_clock_between_factor_count_when_enabled": 0,
+      "static_isb_and_signal_bias_states": "unchanged"
+    }
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "phase80_phase78_domain_rows": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2158,
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3139,
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": 1465,
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1101
+  },
+  "input_hashes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+      "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+      "base.obs": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "device_imu.csv": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+      "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "base.obs": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+      "device_imu.csv": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+      "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+      "base.obs": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+      "device_imu.csv": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+      "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92",
+      "base.obs": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6"
+    }
+  },
+  "matrix": {
+    "candidate_runs_per_route": 2,
+    "candidate_runs_total": 8,
+    "control_runs_per_route": 0,
+    "native_invocations": 8,
+    "raw_device_gnss_reads": 8,
+    "raw_device_imu_reads": 8,
+    "broadcast_nav_reads": 8,
+    "base_rinex_reads": 8,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "new_output_root": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2",
+    "refuse_overwrite": true,
+    "failure_capture_required": true
+  },
+  "structural_gates": {
+    "candidate_only_exact_four_routes": true,
+    "rows_equal_pinned_phase80_phase78_domain": true,
+    "rows_plus_one_equals_summary_epochs_output": true,
+    "repeat_submission_and_summary_byte_identical": true,
+    "converged_finite_earth_valid_speed_le_70": true,
+    "phase80_direct_no_pdc_base_miss_signal_bias_pd_tdcp_invariants": true,
+    "c0d_telemetry_exact_equation_jacobian_units_sigma": true,
+    "c0d_factor_count_positive": true,
+    "c0d_phone_exclusion_zero": true,
+    "c0d_legacy_scalar_between_zero": true,
+    "c0d_factor_plus_all_skips_equals_epochs_minus_one": true,
+    "c0d_dt_range_positive": true,
+    "candidate_flag_once_and_dependencies": true,
+    "truth_free": true,
+    "accuracy_not_scored": true,
+    "all_gates_anded": true
+  },
+  "output_policy": {
+    "refuse_nonempty_output_root": true,
+    "on_failure_status": "fail-closed",
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "preserve_extra_bands": false
+  },
+  "retry": {
+    "reason": "v1 native attempts exposed a GNSS-first initializer config carry-over; the candidate implementation explicitly clears the C0/D flag in that non-Pose3 initializer",
+    "prior_v1_output_root": "output/smartphone-r5/phase85-source-clock-c0d-structural-v1",
+    "prior_v1_failure": {
+      "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v1/phase85_source_clock_c0d_structural_failure.json",
+      "sha256": "c22014dc4b9291f44c0a7ee073cd62212ab6cce366bf1aa3e71e784d97bd7b27",
+      "bytes": 10331
+    },
+    "overwrite_v1_forbidden": true
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase85_source_clock_c0d_structural.py",
+    "sha256": "c89328b06afbcba41e054e6bd3a03813562a9288cc460c63f01df913e8e08608"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase85_source_clock_c0d_structural.py",
+    "sha256": "d049963cdc69123bca941e279527e4ea5e438ac6e8209281a5e86735e416014d"
+  },
+  "cmake": {
+    "path": "tests/CMakeLists.txt",
+    "sha256": "b9c0199e6d04f6ba22c037af8f36b4395f5755c353adee7fc5a4c13cebb101db"
+  },
+  "read_policy": {
+    "pre_matrix_raw_reads": 0,
+    "matrix_truth_reads": 0,
+    "matrix_mat_reads_or_generated": 0,
+    "matrix_precomputed_coordinate_reads": 0,
+    "matrix_kaggle_or_token_access": 0,
+    "accuracy_stage": "not authorized by this structural manifest"
+  }
+}

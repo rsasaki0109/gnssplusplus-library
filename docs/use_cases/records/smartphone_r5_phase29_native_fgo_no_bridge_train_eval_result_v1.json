@@ -1,0 +1,220 @@
+{
+  "schema_version": "smartphone-r5-phase29-native-fgo-no-bridge-train-evaluation-result.v1",
+  "phase": 29,
+  "status": "no-go-train-gate",
+  "decision": "No-Go; do not open fresh validation and keep the future holdout sealed.",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1.json",
+    "record_sha256": "96a9dbded706d25681737d6d569d0bbac2bf893839a08e78973167204a100d5c",
+    "manifest": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_v1_manifest.json",
+    "manifest_sha256": "812c961d9246c32d1f7613bc7e7ba3318c438e6d3c1aee34ff9af45d1a7624d9",
+    "evaluator_freeze": "docs/use_cases/records/smartphone_r5_phase29_train_evaluator_freeze_v1.json",
+    "evaluator_freeze_sha256": "b155dc662ce8e3e429b5a80a9b5a36ad2c41682ad715642f4bb6febd0d4dcd7c",
+    "erratum": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_freeze_erratum_v1.json",
+    "erratum_sha256": "7dc359ac08a8ff27abf8d3d58b47f41b11296f7ac7266a08adde3af2cb7776a8"
+  },
+  "candidate": {
+    "id": "phase28_tdcp_no_bridge",
+    "flags": [
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--android-raw-utc-keys"
+    ],
+    "algorithm_or_parameter_changed_after_freeze": false,
+    "solver_rerun_after_freeze": false
+  },
+  "control": {
+    "id": "phase25_raw_clock_no_bridge_control",
+    "algorithm_or_parameter_changed_after_freeze": false
+  },
+  "truth_access": {
+    "materialized_routes": 3,
+    "parsed_routes": 3,
+    "truth_open_count": 3,
+    "truth_read_count_per_route": 1,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "future_holdout_materialized": false,
+    "test_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "truth_files": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-27-19-49-us-ca-mtv-b/pixel4/ground_truth.csv",
+        "sha256": "cc7598498eb55937e9644ccf991b5ab478533363e732b3fb44c447fff6a566cd",
+        "bytes": 164681
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+        "sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+        "bytes": 113328
+      }
+    }
+  },
+  "route_results": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "truth_rows": 2159,
+      "shared_scored_rows": 2158,
+      "availability_ratio": 0.999536822603057,
+      "control": {
+        "wgs84_p50_m": 1.9279852190052058,
+        "wgs84_p95_m": 5.308664473786657,
+        "diagnostic_mean_m": 3.623237450367587,
+        "variants_m": {
+          "haversine_sphere__linear_n_minus_1": 3.618761501374059,
+          "haversine_sphere__nearest_rank_ceiling": 3.628415032973695,
+          "wgs84_vincenty__linear_n_minus_1": 3.6183248463959314,
+          "wgs84_vincenty__nearest_rank_ceiling": 3.6274484207266617
+        },
+        "max_transition_speed_mps": 44.309275105252446,
+        "over_70_mps_count": 0
+      },
+      "candidate": {
+        "wgs84_p50_m": 1.2941746825035914,
+        "wgs84_p95_m": 2.9449529584055973,
+        "diagnostic_mean_m": 2.1199216954176747,
+        "variants_m": {
+          "haversine_sphere__linear_n_minus_1": 2.1200062765249656,
+          "haversine_sphere__nearest_rank_ceiling": 2.120366445648783,
+          "wgs84_vincenty__linear_n_minus_1": 2.1195638204545943,
+          "wgs84_vincenty__nearest_rank_ceiling": 2.1197502390423555
+        },
+        "max_transition_speed_mps": 44.329234970139126,
+        "over_70_mps_count": 0
+      },
+      "vertical_p95_m": null,
+      "vertical_status": "not-evaluable-submission-has-no-height-column",
+      "gate": {"passed": false, "failures": ["vertical_metric_unavailable"]}
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "truth_rows": 1677,
+      "shared_scored_rows": 1677,
+      "availability_ratio": 1.0,
+      "control": {
+        "wgs84_p50_m": 4.582008010506937,
+        "wgs84_p95_m": 33.63569754398368,
+        "diagnostic_mean_m": 19.161062762996735,
+        "variants_m": {
+          "haversine_sphere__linear_n_minus_1": 19.137676430963968,
+          "haversine_sphere__nearest_rank_ceiling": 19.20656741403847,
+          "wgs84_vincenty__linear_n_minus_1": 19.10885277724531,
+          "wgs84_vincenty__nearest_rank_ceiling": 19.191154429739186
+        },
+        "max_transition_speed_mps": 36.59361855181499,
+        "over_70_mps_count": 0
+      },
+      "candidate": {
+        "wgs84_p50_m": 1.1785830444062984,
+        "wgs84_p95_m": 2.3508015936526294,
+        "diagnostic_mean_m": 1.7641413859975887,
+        "variants_m": {
+          "haversine_sphere__linear_n_minus_1": 1.7630719676089086,
+          "haversine_sphere__nearest_rank_ceiling": 1.7636161792642513,
+          "wgs84_vincenty__linear_n_minus_1": 1.7646923190294639,
+          "wgs84_vincenty__nearest_rank_ceiling": 1.765185078087731
+        },
+        "max_transition_speed_mps": 36.31727166197797,
+        "over_70_mps_count": 0
+      },
+      "vertical_p95_m": null,
+      "vertical_status": "not-evaluable-submission-has-no-height-column",
+      "gate": {"passed": false, "failures": ["vertical_metric_unavailable"]}
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "truth_rows": 1165,
+      "shared_scored_rows": 1164,
+      "availability_ratio": 0.9991416309012876,
+      "control": {
+        "wgs84_p50_m": 10.560798163062175,
+        "wgs84_p95_m": 669.1213888263778,
+        "diagnostic_mean_m": 339.5885606092836,
+        "variants_m": {
+          "haversine_sphere__linear_n_minus_1": 339.37212726690535,
+          "haversine_sphere__nearest_rank_ceiling": 339.3362094842627,
+          "wgs84_vincenty__linear_n_minus_1": 339.84109349472,
+          "wgs84_vincenty__nearest_rank_ceiling": 339.8048121912464
+        },
+        "max_transition_speed_mps": 151.0075587572342,
+        "over_70_mps_count": 3
+      },
+      "candidate": {
+        "wgs84_p50_m": 5.845914313178431,
+        "wgs84_p95_m": 669.3244847566549,
+        "diagnostic_mean_m": 337.35850601168374,
+        "variants_m": {
+          "haversine_sphere__linear_n_minus_1": 337.1135910127684,
+          "haversine_sphere__nearest_rank_ceiling": 337.13158023745416,
+          "wgs84_vincenty__linear_n_minus_1": 337.5851995349167,
+          "wgs84_vincenty__nearest_rank_ceiling": 337.60365326159575
+        },
+        "max_transition_speed_mps": 174.0838913634314,
+        "over_70_mps_count": 4
+      },
+      "vertical_p95_m": null,
+      "vertical_status": "not-evaluable-submission-has-no-height-column",
+      "gate": {"passed": false, "failures": ["h_p95_regression", "vertical_metric_unavailable", "continuity_regression"]}
+    }
+  },
+  "aggregate": {
+    "control": {
+      "mean_availability_ratio": 0.9995594845014483,
+      "mean_truth_coverage_ratio": 0.9995594845014483,
+      "mean_wgs84_p50_m": 5.690263797524772,
+      "mean_wgs84_p95_m": 236.02191694804938,
+      "mean_diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 120.70952173308113,
+        "haversine_sphere__nearest_rank_ceiling": 120.7237306437583,
+        "wgs84_vincenty__linear_n_minus_1": 120.85609037278708,
+        "wgs84_vincenty__nearest_rank_ceiling": 120.87447168057075
+      }
+    },
+    "candidate": {
+      "mean_availability_ratio": 0.9995594845014483,
+      "mean_truth_coverage_ratio": 0.9995594845014483,
+      "mean_wgs84_p50_m": 2.7728906800294406,
+      "mean_wgs84_p95_m": 224.87341310290438,
+      "mean_diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 113.66555641896741,
+        "haversine_sphere__nearest_rank_ceiling": 113.67185428745573,
+        "wgs84_vincenty__linear_n_minus_1": 113.82315189146692,
+        "wgs84_vincenty__nearest_rank_ceiling": 113.82952952624196
+      }
+    },
+    "gate": {
+      "passed": false,
+      "failures": ["vertical_metric_unavailable"],
+      "horizontal_aggregate_improved": true,
+      "all_four_aggregate_variants_improved": true,
+      "availability_non_regressed": true
+    }
+  },
+  "artifacts": {
+    "truth_materialization": {
+      "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth_materialization.json",
+      "sha256": "dcc474f928f9295daa36913f458157f00fe5f088cfcc2397387a0f06555346e5"
+    },
+    "score_report": {
+      "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/train_evaluation.json",
+      "sha256": "17b04e752cc988a6278a05c9beac7918ff753c6dfcc3feb6a6855c0eb9eff792"
+    },
+    "score_manifest": {
+      "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/train_evaluation.manifest.json",
+      "sha256": "d5044867b12ab670b63c08279ad6955fcdb8d1d02e69c60b444105802f9f87fc"
+    }
+  },
+  "policy": {
+    "truth_free_artifacts_verified_before_truth": true,
+    "same_truth_matched_key_set": true,
+    "no_post_score_tuning": true,
+    "fresh_validation_not_opened_because_train_gate_failed": true,
+    "future_holdout_remains_sealed": true,
+    "development_only": true
+  }
+}

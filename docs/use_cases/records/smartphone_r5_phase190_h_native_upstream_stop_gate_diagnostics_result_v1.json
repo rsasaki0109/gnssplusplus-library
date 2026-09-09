@@ -1,0 +1,153 @@
+{
+  "schema_version": "smartphone-r5-phase190-h-native-upstream-stop-gate-diagnostics-result.v1",
+  "phase": 190,
+  "execution_label": "Luna Max",
+  "status": "completed-structural-diagnostic-no-accuracy",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase190_h_native_upstream_stop_gate_diagnostics_manifest_v1.json",
+    "sha256": "3154a96cce0be9d1914b75467d561ea7a6aff3adedc5de308091a2045825ebba",
+    "commit": "7198fffdb1156c44d8ebfa1beadcd2f402a52cf1"
+  },
+  "implementation": {
+    "commit": "db3e3aaac51346dc40bbb18cb9923fb6e24f009c",
+    "binary_sha256": "882d3cc3fe80921953fd4c657990cd067b447a2d4eefc4ff2fad46e343c93828",
+    "binary_bytes": 4053672
+  },
+  "execution": {
+    "launcher_session": "55247",
+    "native_pid": 2283590,
+    "native_return_code": 0,
+    "authorized_native_invocations": 1,
+    "stdout_path": "output/smartphone-r5/phase190-h-native-upstream-stop-gate-diagnostics-v1/mtv-h/stdout.log",
+    "stdout_sha256": "99aa9cd3f9468179d17238552c5a3821b83ec66ad73268520130bc40d1b80905",
+    "stdout_bytes": 115,
+    "stderr_path": "output/smartphone-r5/phase190-h-native-upstream-stop-gate-diagnostics-v1/mtv-h/stderr.log",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_bytes": 0,
+    "launcher_status_path": "output/smartphone-r5/phase190-h-native-upstream-stop-gate-diagnostics-v1/mtv-h/launcher_status.json",
+    "launcher_status_sha256": "7ea97af06ea8440ba3887ee2ba1eaf62adf2afa0263e62c3aff1185b35b2963b"
+  },
+  "read_accounting": {
+    "android_gnss_file_opens": 3,
+    "android_imu_file_opens": 1,
+    "navigation_file_opens": 1,
+    "truth_payload_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "base_input_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "candidate_coordinate_interpretation": false
+  },
+  "recipe": {
+    "phase184_source_tdcp_huber_k": false,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "upstream_stop_constraints": true,
+    "upstream_stop_window_samples": 500,
+    "upstream_stop_velocity_threshold_mps": 0.5,
+    "utc_wall_clock_fallback": true,
+    "generic_doppler_factors": false,
+    "raw_clock_only": true,
+    "pixel5_offset_reapplication": false,
+    "factor_recipe_changed": false,
+    "threshold_changed": false
+  },
+  "coverage": {
+    "raw_gnss_rows": 112833,
+    "selected_gnss_rows": 109747,
+    "modeled_epochs": 3140,
+    "gnss_first_epochs": 3140,
+    "main_epochs": 3140,
+    "aligned_epochs": 3140,
+    "positions_clocks_copied": 3140,
+    "velocity_states_exported": 3140,
+    "published_solution_rows": 3139,
+    "warmup_epoch_excluded": true,
+    "interpolated_epochs": 0,
+    "edge_hold_epochs": 0,
+    "unresolved_epochs": 0,
+    "output_finite_coordinates": true,
+    "earth_validity": "not independently evaluated; coordinate rows remain opaque"
+  },
+  "factors": {
+    "pseudorange": 101916,
+    "tdcp": 69270,
+    "generic_doppler": 0,
+    "imu_intervals": 3139,
+    "graph_factors": 180607,
+    "graph_values": 15700
+  },
+  "upstream_stop": {
+    "enabled": true,
+    "imu_samples": 166502,
+    "detected_epochs": 987,
+    "velocity_key_missing_epochs": 0,
+    "seed_unavailable_epochs": 0,
+    "seed_nonfinite_epochs": 0,
+    "graph_velocity_fallback_epochs": 0,
+    "graph_velocity_nonfinite_epochs": 0,
+    "speed_nonfinite_epochs": 0,
+    "speed_evaluated_epochs": 987,
+    "speed_gate_accepted_epochs": 0,
+    "speed_gate_rejected_epochs": 987,
+    "speed_min_mps": 25.84063007117719,
+    "speed_max_mps": 74.2934284528598,
+    "velocity_factors": 0,
+    "pose_factors": 0,
+    "acceleration_std_threshold_mps2": 0.19153515922114067,
+    "gyro_std_threshold_radps": 0.006209299998094784,
+    "detection_source": "aligned raw IMU acceleration/gyro only",
+    "epoch_mapping": "nearest with endpoint hold"
+  },
+  "termination": {
+    "gnss_first": {
+      "configured_max_iterations": 1000,
+      "effective_max_iterations": 1000,
+      "accepted_outer_iterations": 39,
+      "native_inner_iterations": 73,
+      "parsed_trial_count": 73,
+      "expected_trial_count": 73,
+      "termination_branch": "outer_convergence_tolerance",
+      "termination_trace_complete": true,
+      "configuration_valid": true,
+      "initial_cost": 747638145.6652989,
+      "final_cost": 22778.834445780776
+    },
+    "main": {
+      "configured_max_iterations": 12,
+      "effective_max_iterations": 1000,
+      "accepted_outer_iterations": 19,
+      "native_inner_iterations": 33,
+      "parsed_trial_count": 33,
+      "expected_trial_count": 33,
+      "termination_branch": "outer_convergence_tolerance",
+      "termination_trace_complete": true,
+      "configuration_valid": true,
+      "initial_cost": 49652930.7022713,
+      "final_cost": 24071.459190543694
+    }
+  },
+  "output": {
+    "opaque_solution_path": "output/smartphone-r5/phase190-h-native-upstream-stop-gate-diagnostics-v1/mtv-h/opaque_solution_output.csv",
+    "opaque_solution_sha256": "f40d93300075d99844fc3d74b66bd3558376ac6f247fc22731d917467ecf5873",
+    "opaque_solution_bytes": 251174,
+    "opaque_solution_lines_including_header": 3140,
+    "published_data_rows": 3139,
+    "header_verified": "phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees",
+    "byte_identical_to_phase182_candidate": true,
+    "coordinate_values_published_in_record": false,
+    "candidate_output_reused_as_solver_input": false
+  },
+  "interpretation": {
+    "proven_counter_cause": "All 987 detected candidates had finite exact same-run stop seeds and finite graph velocity states; every evaluated seed speed was >= 0.5 m/s, so the unchanged speed gate rejected all 987.",
+    "not_proven": "This aggregate does not explain why the optimized same-run velocities are 25.84063007117719–74.2934284528598 m/s, and it does not assert a trajectory or accuracy cause.",
+    "accuracy_evaluated": false,
+    "truth_read": false
+  },
+  "limitations": [
+    "Earth-validity was not independently computed because coordinate rows remain opaque.",
+    "The Phase190 candidate is byte-identical to Phase182; no accuracy evaluator or truth payload was opened.",
+    "The next source task is to diagnose the source/units of the exported same-run velocity values without changing the 0.5 m/s gate or reading truth/MAT/trajectory payloads."
+  ]
+}

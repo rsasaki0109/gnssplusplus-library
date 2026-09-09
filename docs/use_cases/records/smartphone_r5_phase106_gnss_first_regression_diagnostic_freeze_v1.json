@@ -1,0 +1,170 @@
+{
+  "schema_version": "smartphone-r5-phase106-gnss-first-regression-diagnostic-freeze.v1",
+  "phase": 106,
+  "status": "frozen-read-only-before-diagnostic-run",
+  "created_at_utc": "2026-09-03T01:02:54Z",
+  "execution_label": "Luna Max",
+  "purpose": "Observe the same-run raw SPP seed to optimized GNSS-first stage change and factor-family residual aggregates after the Phase105 stage regression, without changing inference.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase106_gnss_first_regression_audit_v1.md",
+    "commit": "97e7f2b",
+    "sha256": "ed8997df27e8c4b481f678a4824685db20295c8a214d7940a76c9423c2860e7c"
+  },
+  "sealed_evidence": {
+    "phase82_aggregate": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873",
+      "use": "historical sealed scalar reference only"
+    },
+    "phase105_raw_structural_seal": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_raw_execution_seal_v1.json",
+      "sha256": "45e194fa59c25fa94cfac8e4a8b9b0d17747ae239497d8785b39f113afa74272",
+      "use": "structural and handoff evidence only"
+    },
+    "phase105_attribution_aggregate": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_truth_only_attribution_result_v1.json",
+      "sha256": "d4a1f4c05c00a65abe38f900279c6bd3a9cc9c1e0c4d0eb571608929c0da381c",
+      "use": "sealed aggregate scalar comparison only; no truth payload read"
+    }
+  },
+  "source_pins": {
+    "official": [
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+      }
+    ],
+    "native": [
+      {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "c81381b0a8fa8cea5c101fc5d54e6364173c0e8cffb83f02eac18c8b6cafde5b"
+      },
+      {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "e7607ce8f0fe27fd382a01b5b6f147b027b7bf51453e920eae458c86ddac0c17"
+      },
+      {
+        "path": "src/algorithms/spp.cpp",
+        "sha256": "dee40bacfab037c0fc49488af8e5c137deb1005596e7da402153c2e7c1687b76"
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_backend.cpp",
+        "sha256": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa"
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_internal.hpp",
+        "sha256": "cc6327e36800afa8217e5a834260adc81c0a74a5aefbfc956bb4679c8d86105f"
+      },
+      {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "3cc60abe514ef8900012064accb17f27d3927d0b8a8776ad76ce6aefa83ce32c"
+      }
+    ]
+  },
+  "decision": {
+    "unique_algorithmic_fix_identified": false,
+    "frozen_candidate_id": "phase106-gnss-first-raw-spp-seed-stage-factor-residual-observation-v1",
+    "candidate_type": "opt-in-read-only-diagnostic",
+    "reason": "Sealed stage/main attribution proves a stage regression but does not distinguish pseudorange correction, Doppler/velocity, quality membership/weighting, C7/C0D initialization, or timing causes.",
+    "alternatives_considered": [
+      {
+        "id": "raw-spp-to-pseudorange-model-parity",
+        "status": "not-frozen",
+        "reason": "Correction/sign/timing equivalence is not established by aggregate evidence."
+      },
+      {
+        "id": "doppler-velocity-stage-initialization",
+        "status": "not-frozen",
+        "reason": "Dedicated Doppler WLS is disabled in the sealed Phase105 recipe, but causality is not established."
+      },
+      {
+        "id": "quality-and-clock-topology-balance",
+        "status": "not-frozen",
+        "reason": "Filter/weight/C7/C0D differences are visible in source, but no family residual breakdown is sealed."
+      }
+    ],
+    "no_base_correction": true
+  },
+  "candidate_contract": {
+    "default_off": true,
+    "copy_only_after_same_run_handoff": true,
+    "graph_unchanged": true,
+    "values_unchanged": true,
+    "equations_unchanged": true,
+    "units_unchanged": true,
+    "sigma_unchanged": true,
+    "filter_and_robust_loss_unchanged": true,
+    "lm_ordering_and_iterations_unchanged": true,
+    "initialization_unchanged": true,
+    "no_fallback": true,
+    "no_solution_publication": true,
+    "no_accuracy_output": true,
+    "compact_aggregate_only": true,
+    "telemetry": [
+      "raw SPP position/clock seed finite and earth-valid count",
+      "same-run raw seed to optimized-stage displacement scalar summaries",
+      "optimized-stage displacement scalar summaries",
+      "pseudorange/code, Doppler, C0D, motion, and prior factor counts",
+      "finite and normalized residual scalar summaries by factor family",
+      "satellite-clock, earth-rotation, ionosphere, troposphere, and group-delay correction counts",
+      "exact retained epoch key/time alignment",
+      "C7 constellation/component mapping counts",
+      "D initialization source and dedicated Doppler-WLS-disabled flag"
+    ],
+    "forbidden_telemetry": [
+      "coordinate rows",
+      "truth rows",
+      "MAT payload",
+      "external or precomputed coordinates",
+      "Kaggle output"
+    ]
+  },
+  "run_contract": {
+    "routes": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "raw_inputs_only": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "broadcast navigation"
+    ],
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "base RINEX or base correction",
+      "PDC",
+      "precomputed coordinates",
+      "external coordinates",
+      "Kaggle"
+    ],
+    "rerun": false,
+    "fallback": false,
+    "solver_runs_at_freeze": 0,
+    "raw_reads_at_freeze": 0,
+    "truth_reads_at_freeze": 0,
+    "accuracy_evaluation_at_freeze": false
+  },
+  "authorization_boundary": {
+    "raw_execution_authorized": false,
+    "diagnostic_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solver_change_authorized": false,
+    "algorithm_change_authorized": false,
+    "base_correction_authorized": false,
+    "kaggle_submission_authorized": false
+  },
+  "read_accounting": {
+    "raw_gnss_rows": 0,
+    "raw_imu_rows": 0,
+    "broadcast_nav_rows": 0,
+    "truth_payloads": 0,
+    "mat_payloads": 0,
+    "base_payloads": 0,
+    "precomputed_coordinate_payloads": 0,
+    "solver_invocations": 0,
+    "new_solution_files": 0
+  }
+}

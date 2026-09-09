@@ -1,0 +1,19 @@
+{
+  "phase": 333,
+  "freeze_commit": "7f2bb28d",
+  "exit_code": 0,
+  "stderr_bytes": 0,
+  "base_epochs": 3500,
+  "fit_epochs": 3500,
+  "rank_or_count_misses": 0,
+  "common_rows": 23564,
+  "frequency_squared_ratio": 1.7932703213610588,
+  "neutral_combination_displacement_norm_median_m": 5.040080966014585,
+  "neutral_combination_post_fit_rms_median_m": 1.8952987266161494,
+  "dispersive_l1_equivalent_displacement_norm_median_m": 2.857295306302563,
+  "l1_displacement_norm_median_m": 2.8105363824492557,
+  "l5_displacement_norm_median_m": 3.304143437582394,
+  "truth_reads": 0,
+  "phone_reads": 0,
+  "inference_feedback": false
+}

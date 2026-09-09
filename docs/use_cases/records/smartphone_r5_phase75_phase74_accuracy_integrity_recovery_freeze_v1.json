@@ -1,0 +1,169 @@
+{
+  "schema_version": "smartphone-r5-phase75-phase74-accuracy-integrity-recovery-freeze.v1",
+  "phase": 75,
+  "status": "frozen-before-phase75-truth-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Recover only the Phase74 truth-parser schema defect using immutable Phase73 structural artifacts and the unchanged Phase74 accuracy gates; no native rerun or algorithm change.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase74_failure_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_failure_v1.json",
+      "sha256": "aa03f91742e480727d7f52a45c697afeb20750b71f6cb45212da6aeec9e6cec9",
+      "truth_reads": 1,
+      "accuracy_observed": false
+    },
+    "phase74_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json",
+      "sha256": "8308f15a491d1ef1daae0542efd1d7ac96562738e51e6c90ea04fd9f81aba8d9"
+    },
+    "phase74_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_manifest_v1.json",
+      "sha256": "6a80232cf380ab85eee531d07654563173d8dfb7808f457870c9464e7ed91373"
+    },
+    "phase74_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761"
+    },
+    "phase73_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json",
+      "sha256": "8493d16b3d2c5ce8b09b65ab0dada6903fcbac01257fb8db7977cb41c85577fd"
+    }
+  },
+  "recovery_scope": {
+    "allowed_change": "truth parser field-name handling only",
+    "forbidden_change": "metric, gates, artifact paths/hashes, candidate/control data, native algorithm, solver, or input cohort",
+    "prior_phase74_output_reuse": false,
+    "phase73_artifact_reuse": "immutable Phase73 structural run1 candidate/control artifacts by SHA only",
+    "new_output_root": "output/smartphone-r5/phase75-phase74-accuracy-integrity-recovery-v1"
+  },
+  "truth_parser_contract": {
+    "encoding": "UTF-8 with optional BOM",
+    "reader": "CSV DictReader over header names",
+    "required_fields": ["UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "optional_fields": ["phone"],
+    "additional_header_fields": "allowed; all data cells must remain mapped (no unnamed extra columns)",
+    "phone_policy": "if phone column exists it must equal the declared route; if absent assign the declared route",
+    "key": "(phone, UnixTimeMillis)",
+    "duplicates": "fail closed",
+    "no_truth_payload_retained_after_parse": true,
+    "reason": "matches the sealed Phase44/59 truth parser contract and fixes only Phase74's exact-header assumption"
+  },
+  "cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "truth_source": "same four existing materialized Phase44 development truth files; no archive reopen/rematerialization",
+    "truths": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_key": ["2021-03-16-18-59-us-ca-mtv-a/pixel5", 1615921153434]
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+        "bytes": 305432,
+        "rows": 3139,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_key": null
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_key": null
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+        "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+        "bytes": 108045,
+        "rows": 1102,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_key": ["2023-03-08-21-34-us-ca-mtv-u/pixel5", 1678311290448]
+      }
+    }
+  },
+  "phase73_artifact_pins": {
+    "source": "Phase73 structural run1 candidate/control artifacts; inherited from sealed Phase74 freeze without modification",
+    "candidate_and_control_reads_per_route": 1,
+    "control_must_match_phase43_exact": true,
+    "artifact_paths_and_hashes_inherited_from": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json",
+    "inherited_freeze_sha256": "8308f15a491d1ef1daae0542efd1d7ac96562738e51e6c90ea04fd9f81aba8d9"
+  },
+  "metric_contract": {
+    "unchanged_from_phase74": true,
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "score": "(P50 + P95) / 2",
+    "prediction_domain_coverage": 1.0,
+    "truth_row_coverage": "informational only; exact pinned warm-up exclusion only"
+  },
+  "accuracy_gates": {
+    "unchanged_from_phase74": true,
+    "candidate_improves_each_route_by_at_least_m": 0.05,
+    "candidate_no_route_regression": true,
+    "candidate_macro_improvement_at_least_m": 0.1,
+    "candidate_mtv_h_improvement_at_least_m": 0.1,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_mtv_h_p95_max_m": 5.0,
+    "candidate_all_finite": true,
+    "candidate_over_70_mps_count": 0,
+    "stretch_0_782": "report only; no validation/Kaggle",
+    "fresh_validation": "not permitted in Phase75"
+  },
+  "read_policy": {
+    "truth_reads_before_freeze": 0,
+    "truth_reads_before_manifest": 0,
+    "truth_reads_after_manifest": 4,
+    "truth_reads_per_route": 1,
+    "candidate_artifact_reads": 8,
+    "control_artifact_reads": 8,
+    "single_scorer_process": true,
+    "native_or_solver_subprocess": false,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": false,
+    "post_truth_tuning": false,
+    "solver_rerun_after_truth": false
+  },
+  "fail_closed": {
+    "freeze_or_manifest_hash_mismatch": true,
+    "phase74_artifact_hash_or_bytes_or_rows_mismatch": true,
+    "truth_hash_or_bytes_or_rows_mismatch": true,
+    "required_truth_field_missing": true,
+    "duplicate_or_extra_prediction_key": true,
+    "prediction_domain_not_one": true,
+    "unexpected_missing_truth_key": true,
+    "second_truth_read": true,
+    "native_or_solver_subprocess": true,
+    "validation_or_holdout_access": true,
+    "post_truth_tuning": true,
+    "unexpected_exception": true
+  },
+  "read_accounting_at_freeze": {
+    "candidate_artifact_reads": 0,
+    "control_artifact_reads": 0,
+    "truth_reads": 0,
+    "raw_gnss": 0,
+    "raw_imu": 0,
+    "navigation": 0,
+    "native_or_solver_subprocess": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "archive_reopen": 0
+  }
+}

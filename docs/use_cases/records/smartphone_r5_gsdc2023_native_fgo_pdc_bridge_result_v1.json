@@ -1,0 +1,193 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-bridge-result.v1",
+  "status": "no-go-train-gate",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": {
+    "id": "native-fgo-pdc-bridge-v1",
+    "description": "Existing native no-base P/ordinary-TDCP/float-carrier/motion graph plus an explicit undifferenced raw-Doppler factor.",
+    "truth_free_generation": true,
+    "production_default_changed": false,
+    "fallback": "Only an explicitly hash-authorized caller-provided artifact; no silent truth or seed fallback."
+  },
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_access": false,
+    "leaderboard_used_for_tuning": false,
+    "fresh_validation_opened": false,
+    "holdout_opened": false,
+    "test_truth_opened": false,
+    "no_post_score_parameter_tuning": true,
+    "historical_development_truth_reuse": true,
+    "historical_truth_read_count": 3
+  },
+  "frozen_split": {
+    "train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "selection_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_v1.json",
+      "sha256": "a1d37b055951267c6a99fef771aeb0736ced70d09dbd2f1c098e60815aa2dbf0"
+    },
+    "inventory_correction": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_correction_v1.json",
+      "sha256": "5dd01bc047ade22246d7fd919e7cedfd09fc2b689b55fb0a3126acf3d454e420",
+      "corrected_truth_use_inventory_sha256": "fc90e3a6e4182276cbfebc635085d367c18fe10d3f0c982ee8d2cfcc9eb1f3d4"
+    }
+  },
+  "recipe": {
+    "backend": "eigen",
+    "preset": "default",
+    "max_iterations": 8,
+    "pseudorange": true,
+    "undifferenced_doppler": true,
+    "ordinary_tdcp": true,
+    "float_carrier_phase": true,
+    "velocity_states": true,
+    "velocity_motion_factors": true,
+    "position_clock_motion": true,
+    "ambiguity_between_factors": true,
+    "base_or_double_difference_factors": false,
+    "integer_ambiguity_fixing": false,
+    "numeric_parameters_unchanged_after_freeze": true,
+    "undifferenced_doppler_sigma_mps": 0.2,
+    "gap_and_slip_contract": "frozen native FGO max TDCP gap 2 s, slip threshold 10 cycles; no candidate-specific truth thresholds"
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "e3bbc0d767eb4f76725fcefc87b3da4ba534e17f86c101f83b100da9980f8c1b",
+    "include/libgnss++/algorithms/fgo.hpp": "9825a296073087a38a15ca3f0aa6615ebfe8da9eaa801243a4ae0b41ad2ba2f8",
+    "include/libgnss++/algorithms/fgo_config.hpp": "0f5cba87642bc5bfb287e7eb21424f260094c97c105c1f5a8768d799f214c640",
+    "src/algorithms/fgo.cpp": "bf93c75a4d59279b7332d93a06397c2cff3f1c520f2b07b403326326eaf261b8",
+    "src/algorithms/fgo_problems.cpp": "7e45b706641bf41fa340d4db5221d1cc65562b61eac9d3f94b83b033dad7ba2c",
+    "bridge": "8fe4ff7fd11505b68c80cc2f13f4a865624b72206c17cdb58c2ef42cc1890cdd",
+    "score_evaluator": "830d794422d52070fa3d62a98503a49f9cbe4cf6739dde64bd533d3c5f1969c1",
+    "release_binary_build/apps/gnss_fgo": "1ffe44faf7b5f1a988c1283409c634b5de86acd124fb6599439cb329254fe83c",
+    "archive_data/gsdc2023/cache/dataset_2023.zip": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "profile": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "upstream_evidence": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "license_sha256": "f5b3bcb0ce8267e076b4dad74c67c02efab4161efd6c5ba208402a0f51fbea1b",
+    "files": {
+      "fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    }
+  },
+  "artifacts": {
+    "candidate_root": "output/smartphone-r5/native-fgo-pdc-bridge-v1",
+    "baseline_root": "output/smartphone-r5/native-fgo-pdc-bridge-v1-baseline",
+    "candidate_run_manifests": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "707b952f0391a3ad00ea2bb15ba6f3e72c6da1f7642c5918628f53c975bc72c9",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": "d3315ef58fd143b48ac529d32589fe40866275fa57d97013599aa463b757234b",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": "4d71ff2da3bf02213456499190a5ce0d7ab68076b06d117c3544e1d3f91f9dc7"
+    },
+    "baseline_run_manifests": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "3fc88217872aa099e1cb3cf34ae068f417f91197b3afe7f1e46ad10c51c50dde",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": "b4ac6de44c5cb2278f4694df2fbae0deb0e304b7270464edf27f0d2541814a11",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": "ce4cefcf5c1fc8f6c4c27c4b6ba47ad70b0aecef297df8345dc68451d3cde259"
+    },
+    "candidate_artifacts_truth_opened": false,
+    "baseline_artifacts_truth_opened": false,
+    "candidate_route_runtime_and_factor_coverage": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "wall_seconds": 6.731484232994262,
+        "child_max_rss_kib": 188896,
+        "input_epochs": 2159,
+        "pseudorange_factors": 32730,
+        "undifferenced_doppler_factors": 32730,
+        "ordinary_tdcp_factors": 23737,
+        "carrier_phase_factors": 26349,
+        "ambiguity_states": 1108,
+        "motion_factors": 2158,
+        "graph_factors": 120971,
+        "max_iterations": 8,
+        "converged": false
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "wall_seconds": 6.297360124008264,
+        "child_max_rss_kib": 207340,
+        "input_epochs": 1678,
+        "pseudorange_factors": 26268,
+        "undifferenced_doppler_factors": 26268,
+        "ordinary_tdcp_factors": 21268,
+        "carrier_phase_factors": 23393,
+        "ambiguity_states": 634,
+        "motion_factors": 1677,
+        "graph_factors": 101186,
+        "max_iterations": 8,
+        "converged": false
+      },
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+        "wall_seconds": 5.671035409002798,
+        "child_max_rss_kib": 173488,
+        "input_epochs": 2439,
+        "pseudorange_factors": 29024,
+        "undifferenced_doppler_factors": 29024,
+        "ordinary_tdcp_factors": 20835,
+        "carrier_phase_factors": 23880,
+        "ambiguity_states": 927,
+        "motion_factors": 2438,
+        "graph_factors": 108567,
+        "max_iterations": 8,
+        "converged": false
+      }
+    }
+  },
+  "score": {
+    "report": "output/smartphone-r5/native-fgo-pdc-bridge-v1/train_evaluation.json",
+    "report_sha256": "b48a9c2b750f5f57955f8bc7ca648a7664095b3078437e11ce77be6c7a87b1af",
+    "manifest": "output/smartphone-r5/native-fgo-pdc-bridge-v1/train_evaluation.manifest.json",
+    "manifest_sha256": "4b8fba16ba66287066cb9163f5d0409c420356125eac728fa60d0e4eb919f830",
+    "truth_read_count": 3,
+    "route_and_aggregate_gate": "failed",
+    "baseline_aggregate": {
+      "horizontal_p50_m": 2.3472812676,
+      "horizontal_p95_m": 5.5824964698,
+      "vertical_p95_m": 19.3689297953,
+      "four_diagnostic_mean_m": 3.9748891779,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9996646828
+    },
+    "candidate_aggregate": {
+      "horizontal_p50_m": 46985.0355497867,
+      "horizontal_p95_m": 129232.6543592568,
+      "vertical_p95_m": 121009.3068053194,
+      "four_diagnostic_mean_m": 88069.0022051404,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9996646828,
+      "additional_over_70mps_transitions": true,
+      "converged_within_max_iterations": false
+    },
+    "four_diagnostic_variants": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ],
+    "per_route_and_aggregate_all_variants_strictly_better": false
+  },
+  "decision": {
+    "promotion": "no-go",
+    "reason": "All three fixed development routes failed horizontal/vertical and four-diagnostic strict-improvement gates; candidate also added physical continuity violations.",
+    "fresh_validation_authorized": false,
+    "future_holdout_authorized": false,
+    "test_batch_authorized": false,
+    "production_lane_changed": false,
+    "v5_submission_bytes_or_hash_changed": false,
+    "score_not_used_for_tuning": true
+  },
+  "reproduction": {
+    "score_command": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge_train_score.py --gate-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_train_gate_v1.json",
+    "truth_free_bridge_command": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge.py --route <fixed-train-id> --max-epochs 0",
+    "required_environment": "LD_LIBRARY_PATH=/home/sasaki/.local/lib for Release native execution",
+    "score_evaluation_read_policy": "Three historical development truth files were each read once after all truth-free artifact hashes were verified; validation/holdout/test truth were not read."
+  }
+}

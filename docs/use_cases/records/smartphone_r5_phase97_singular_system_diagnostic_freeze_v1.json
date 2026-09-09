@@ -1,0 +1,316 @@
+{
+  "schema_version": "smartphone-r5-phase97-singular-system-diagnostic-freeze.v1",
+  "phase": 97,
+  "execution_label": "Luna Max",
+  "status": "frozen-diagnostic-only-not-implemented",
+  "decision": {
+    "unique_algorithmic_correction_established": false,
+    "exactly_one_candidate_frozen": true,
+    "candidate_count": 1,
+    "summary": "Freeze only read-only key, incidence, connectivity, rank-revealing, and solver-nearby-key telemetry for the existing Phase96 main graph. Do not change the graph, solve, or release policy."
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase97_singular_system_root_cause_audit_v1.md",
+    "sha256": "458ed80ebd515cd41b3bea02f7a491af8eb5b909c7970bf34551e6b090017bcd",
+    "commit": "23ea59a72fd91212ce4010654a7d46e26dfa8b43"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_scope_meaning": "Routes whose sealed Phase96 GNSS-first C0/D solve completed finite strict progress and exact retained-key optimized-D handoff; their main solve still failed closed with zero accepted outer steps.",
+    "excluded_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "excluded_route_reason": "MTV-H fails before GNSS-first solve with no retained undifferenced Doppler factors; MTV-U has an independent earth-validity failure. Neither is mixed into this singular-system audit.",
+    "route_selection_by_score_or_truth": false
+  },
+  "candidate": {
+    "id": "phase97_main_c0d_singular_system_key_connectivity_rank_diagnostic",
+    "kind": "source-aligned-observability-only",
+    "implemented": false,
+    "default_enabled": false,
+    "activation": "Future explicit opt-in only, under a separate execution authorization. This freeze itself authorizes no raw run.",
+    "raw_execution_authorized": false,
+    "solver_rerun_authorized": false,
+    "purpose": "Distinguish key namespace/type errors, missing or isolated variables, weak or zero columns, rank/conditioning symptoms, and the actual pinned LM nearby detection key without changing the existing main solve.",
+    "algorithmic_effect": "None. Existing graph construction, factor equations, values, ordering, filters, priors, noise models, LM parameters, acceptance branches, fallback policy, and fail-closed gates remain authoritative.",
+    "graph_snapshot": {
+      "capture_point": "The already-built main NonlinearFactorGraph and initial Values immediately before the existing optimizer call.",
+      "values": {
+        "fields": [
+          "key_symbol_character",
+          "key_symbol_index",
+          "concrete_value_type",
+          "value_dimension",
+          "values_size",
+          "values_dim"
+        ],
+        "values_dim_source": "Pinned Values::dim() over existing values; no state value or coordinate publication.",
+        "duplicate_insert_attempt_count_and_keys": true,
+        "missing_factor_key_count_and_keys": true,
+        "value_type_or_dimension_mismatch_count_and_keys": true,
+        "raw_state_vector_publication": false
+      },
+      "factors": {
+        "factor_key_list_exact": true,
+        "factor_family_labels": [
+          "gnss_code",
+          "gnss_doppler",
+          "imu_preintegration_bias",
+          "priors",
+          "clock_ccdd",
+          "motion",
+          "other"
+        ],
+        "fields": [
+          "graph_index",
+          "concrete_factor_type",
+          "family",
+          "exact_key_character_and_index_list",
+          "factor_dimension",
+          "finite_error_status"
+        ],
+        "factor_count_reconciliation_required": true,
+        "unknown_factor_types_must_remain_visible": true,
+        "raw_residual_publication": false
+      },
+      "incidence_and_components": {
+        "per_key_total_degree": true,
+        "per_key_family_degree": true,
+        "per_factor_key_degree": true,
+        "connected_component_count": true,
+        "component_key_membership_by_symbol_only": true,
+        "isolated_value_keys": true,
+        "factor_missing_key_and_empty_factor_detection": true,
+        "union_find_or_equivalent_read_only_accounting": true,
+        "counterfactual_graph_or_factor_removal": false
+      }
+    },
+    "prior_and_gauge": {
+      "keyed_anchor_labels": true,
+      "required_labels": [
+        "first_pose_or_position_prior",
+        "first_velocity_prior",
+        "first_imu_bias_prior",
+        "broad_velocity_prior",
+        "broad_clock_drift_prior",
+        "explicit_clock_C_prior",
+        "explicit_global_ISB_prior",
+        "other_prior_or_gauge_factor"
+      ],
+      "absent_anchor_must_be_reported": true,
+      "prior_equations_or_state_values_published": false
+    },
+    "linearized_rank_observation": {
+      "one_existing_initial_linearization_only": true,
+      "additional_optimizer_or_linear_solver": false,
+      "additional_graph_error_evaluation": false,
+      "keyed_jacobian_column_summary": true,
+      "keyed_normal_diagonal_summary": true,
+      "family_by_key_cross_tabulation": true,
+      "aggregate_zero_bucket": {
+        "exact_zero_predicate": "normal_diagonal == 0",
+        "near_zero_reporting_predicate": "0 < normal_diagonal <= declared diagnostic bucket boundary",
+        "threshold_affects_solver": false,
+        "boundary_must_be_recorded": true
+      },
+      "rank_revealing_summary": {
+        "permitted": true,
+        "source": "The copied/read-only existing linearized graph or its sparse Jacobian/Hessian representation.",
+        "report": [
+          "finite_status",
+          "row_count",
+          "column_count",
+          "structural_rank_or_rank_status_when_available",
+          "zero_columns",
+          "near_zero_columns",
+          "rank_revealing_failure_or_unavailable_reason"
+        ],
+        "no_mat_file_or_external_solver": true,
+        "no_matrix_modification": true
+      }
+    },
+    "nearby_variable": {
+      "capture_source": "The actual pinned IndeterminantLinearSystemException::nearbyVariable() at the linear-system solve catch boundary, if that exception object is available at the diagnostic integration boundary.",
+      "key_character_and_index_required": true,
+      "unavailable_status_required": "nearby_variable_unavailable",
+      "nearby_key_is_origin_claim": false,
+      "ordering_context_required": true,
+      "do_not_invent_key": true
+    },
+    "lm_trial_observation": {
+      "source_boundary": "The existing pinned GTSAM LevenbergMarquardtOptimizer::tryLambda path.",
+      "max_trials_recorded": 10,
+      "existing_trials_only": true,
+      "fields": [
+        "trial_index",
+        "outer_iteration",
+        "lambda",
+        "old_linearized_cost_when_defined",
+        "new_linearized_cost_when_defined",
+        "predicted_reduction_when_defined",
+        "candidate_nonlinear_cost_when_defined",
+        "actual_reduction_when_defined",
+        "model_fidelity_when_defined",
+        "linear_system_status",
+        "finite_status_by_quantity",
+        "rejection_or_termination_reason",
+        "nearby_variable_status"
+      ],
+      "source_reason_categories": [
+        "accepted_outer_step",
+        "indeterminate_linear_system",
+        "negative_linearized_reduction",
+        "nonfinite_linearized_or_nonlinear_quantity",
+        "non_decreasing_nonlinear_cost",
+        "model_fidelity_below_threshold",
+        "relative_cost_change_stop",
+        "maximum_lambda_stop",
+        "other_exception",
+        "unknown_unpublished"
+      ],
+      "reason_must_follow_pinned_control_flow": true,
+      "no_lambda_retry_added": true,
+      "no_trial_rejection_changed": true,
+      "no_second_solve": true
+    },
+    "exception_observation": {
+      "stages": [
+        "initial_graph_error",
+        "initial_linearization",
+        "damped_linear_system_build",
+        "linear_system_solve",
+        "value_retract",
+        "tentative_nonlinear_graph_error"
+      ],
+      "classes": [
+        "finite",
+        "nonfinite_nan",
+        "nonfinite_inf",
+        "IndeterminantLinearSystemException",
+        "std_exception",
+        "unknown_exception"
+      ],
+      "type_and_message_when_exception": true,
+      "nearby_key_when_available": true,
+      "solution_values_excluded": true,
+      "publish_on_early_failure": true
+    },
+    "failure_artifact": {
+      "diagnostic_sidecar_required_on_failure": true,
+      "must_not_turn_failure_into_pass": true,
+      "solution_rows": false,
+      "coordinates": false,
+      "accuracy": false,
+      "raw_observations": false,
+      "truth": false
+    }
+  },
+  "source_and_algorithm_invariants": {
+    "official_ccdd_equation": "(C2-C1)-((D1+D2)*dt/2)",
+    "official_ccdd_jacobian_order": "[-1,+1,-dt/2,-dt/2] for [C1,C2,D1,D2]",
+    "meter_state_units": {
+      "clock_C": "metres",
+      "clock_ISB": "metres",
+      "drift_D": "metres_per_second",
+      "dt": "seconds",
+      "residual": "metres"
+    },
+    "ordinary_ccdd_sigma_m": 0.1,
+    "equation_unchanged": true,
+    "jacobian_order_unchanged": true,
+    "units_unchanged": true,
+    "sigma_unchanged": true,
+    "filters_unchanged": true,
+    "priors_unchanged": true,
+    "lm_parameters_unchanged": true,
+    "factor_ordering_unchanged": true,
+    "legacy_default_unchanged": true,
+    "no_pdc_or_external_coordinate_input": true,
+    "no_fallback_or_bridge": true
+  },
+  "publication_and_execution_policy": {
+    "diagnostic_payload_only": true,
+    "raw_observations_excluded": true,
+    "coordinates_excluded": true,
+    "solution_rows_excluded": true,
+    "truth_excluded": true,
+    "mat_excluded": true,
+    "kaggle_or_token_excluded": true,
+    "accuracy_excluded": true,
+    "native_solver_invocations_at_freeze": 0,
+    "raw_execution_authorized": false,
+    "separate_future_raw_authorization_required": true,
+    "fail_closed_preserved": true
+  },
+  "rejected_alternatives_not_frozen": [
+    "Remove or disable C0/D or restore the Phase80 variable/factor set; this changes the experiment and cannot isolate the Phase96 mechanism.",
+    "Change C0/D sigma, LM damping/limits/tolerances, priors, filters, solver, or add retry/fallback/PDC; no causal evidence and outside this read-only boundary.",
+    "Use raw reruns, truth/MAT/Kaggle data, external rank solvers, or publish solution/accuracy output; prohibited."
+  ],
+  "authority": {
+    "phase96_result": {
+      "commit": "6039aa35b948bfd8f73c1398ce592dc7c9914360",
+      "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_diagnostic_structural_result_v1.json",
+      "sha256": "e51628fceba06be72026fdef358f60f183a7a837b4b78b3851f934a62f4d7955"
+    },
+    "phase96_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_diagnostic_telemetry_freeze_v1.json",
+      "sha256": "9605f3ce32ad08ae3f17254834df50a65cd93918cee593b487a02ad7b97ebc65"
+    },
+    "phase80_source_commit": "f28aebaf1b41df3ee5e363a8ad94987247321048",
+    "phase80_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "native_backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "077afd8df8745fe0c01fc52d35c33ac5908b44185e27d55cdb8c19eac7f6cdc7"
+    },
+    "native_internal": {
+      "path": "src/algorithms/fgo_gtsam_internal.hpp",
+      "sha256": "7691fa988b6236c14152cd7d9d66aba66fc2879df2861174a5cbe87b3bbef1cb"
+    },
+    "public_fgo_result": {
+      "path": "include/libgnss++/algorithms/fgo.hpp",
+      "sha256": "623dc927266bc82e944b2e9965f3dfa35a2b749c892beeae9ae39fd71d83feef"
+    },
+    "pinned_lm": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtOptimizer.cpp",
+      "sha256": "834f732ac4ad4130b2a719a3181e5dfcd2ecdf584ece6f0c76bdf5f390e10cbc"
+    },
+    "pinned_exception": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/linear/linearExceptions.h",
+      "sha256": "15d3c2e1ae816f688e2d90cd37212cb7559330862cf6dd061462e967a2ffa418"
+    },
+    "pinned_symbol": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/inference/Symbol.h",
+      "sha256": "a0ad984b092195e51a62cd2ea994cedb9698d8a1750ab6086fe9ec0ae438faaa"
+    },
+    "pinned_values": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/Values.cpp",
+      "sha256": "ab72606c6545bdaf017cf09c6748dfc3d7e530068ab72e4002cc1c681da40dee"
+    },
+    "official_ccdd": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc"
+    }
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "kaggle_or_token_access": 0,
+    "base_rinex_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "route_reruns": 0,
+    "fallbacks": 0
+  }
+}

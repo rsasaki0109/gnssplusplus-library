@@ -1,0 +1,17 @@
+{
+  "schema_version": "smartphone-r5-phase12-residual-ionosphere-score-manifest.v1",
+  "score_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_score_result_v1.json",
+  "score_record_sha256": "999e3c5c7361d55d313377e1c0aa898cc95030a3339db4e87a0187682546f44d",
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_structural_seal_v1.json",
+  "structural_seal_sha256": "20f76514b1c146d0dcbed4a3eb7a72ff29a738299bb07355c5392ade2640d970",
+  "candidate_submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+  "candidate_summary_sha256": "ce209dfd0a7b3662f8dff9512b3947acf5e3af840c94467ba84fccd132669cda",
+  "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+  "truth_read_count": 1,
+  "candidate_id": "native-residual-ionosphere-gtsam-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "post_score_tuning": false,
+  "validation_holdout_test_opened": false,
+  "kaggle_or_token_access": false,
+  "manifest_sha256": "computed after apply_patch"
+}

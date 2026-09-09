@@ -1,0 +1,183 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation.v1.3",
+  "status": "sealed-failed-one-shot",
+  "sealed_at": "2026-08-30",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_3.json",
+      "sha256": "ec4dafb215fcc9c47b5ae373677fdd0f4850dbc0c5555b29bfd65bbc21f50389"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_3_manifest.json",
+      "sha256": "c5392c1b9015bc7dad318a0c0c092d24f37a743b5e31ee1f05111e341cef9945"
+    }
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+    "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_metadata_verified": true,
+    "payload_materialized_by_command": false
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "route": "2022-10-06-21-51-us-ca-mtv-n",
+  "phones": [
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a325f"
+  ],
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_parameters_unchanged": true,
+  "candidate_method": "coordinate_wise_ecef_median",
+  "alignment_contract": {
+    "tolerance_ms": 1,
+    "minimum_source_phones": 1,
+    "target_timestamp_coverage_required": true,
+    "all_phone_unresolved": "fail-closed",
+    "extrapolation": "forbidden"
+  },
+  "failure": {
+    "error": "alignment unresolved: all phones are missing WLS at sm-a205u/1665093125997",
+    "failure_artifact": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/wls_multi_phone_ensemble_holdout_failure.json",
+      "sha256": "b420ad26007d46bb40a1ede789f3909722a100a3d29994ef512984c8504f5647"
+    },
+    "selected_median_generated": false,
+    "selected_submission_generated": false,
+    "truth_evaluation_performed": false,
+    "reason_classification": "all-phone timestamp coverage unresolved; fail-closed as frozen"
+  },
+  "truth_free_phase": {
+    "truth_free": true,
+    "truth_open_count": 0,
+    "truth_materialized": false,
+    "device_materialized_count": 3,
+    "device_materialization_reused": true,
+    "all_generated_artifacts_hash_fixed": true,
+    "post_holdout_tuning": false,
+    "rerun_permitted": false
+  },
+  "wls_integrity": {
+    "sm-a205u": {
+      "position": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/wls.pos",
+        "sha256": "11d1f74edc72ad94e9ddbcf04c2bd6a88f939c8eb9daf4c1d602b47fd345f136"
+      },
+      "geodetic": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/receiver_wls.csv",
+        "sha256": "0722e43458613d8a23b044fe70ac4cb682843990f74f70be4ea180ab4ad209e9"
+      },
+      "manifest": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/wls_manifest.json",
+        "sha256": "ffa990287a1b8ef6828a4c882acb5f6bfdc9bf4e27378e2bcca4ce1b31b1a6e9"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a205u/wls_summary.json",
+        "sha256": "22ad2e969826b7b747b2d4aed916b18733f9255cc098831ccbe147288093f91e"
+      },
+      "input_epochs": 1213,
+      "selected_epochs": 1209,
+      "blank_wls_row_count": 128,
+      "sparse_omitted_epoch_count": 4,
+      "timestamp_gap_count_gt_1500ms": 1,
+      "max_timestamp_gap_s": 2.001,
+      "timestamp_gap_allowed_as_diagnostic": true
+    },
+    "sm-a217m": {
+      "position": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/wls.pos",
+        "sha256": "c18edf7dce718176fca81c733cf85a6791a07f2b2cd09ead9ec124bdb2737dde"
+      },
+      "geodetic": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/receiver_wls.csv",
+        "sha256": "5d3d9c8006926a3ee0aa79df9ee7628b84fd2ecb8c82096843d2b3be6ec53c9d"
+      },
+      "manifest": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/wls_manifest.json",
+        "sha256": "e2536f1640989283f14b9fc02439c327f531611d73012e374e114728ee49bdc6"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a217m/wls_summary.json",
+        "sha256": "4c1228256a055c5a6a1475e730e4978ae6da403da53b9691a2229cd4cdd7af75"
+      },
+      "input_epochs": 1222,
+      "selected_epochs": 1220,
+      "blank_wls_row_count": 42,
+      "sparse_omitted_epoch_count": 2,
+      "timestamp_gap_count_gt_1500ms": 0,
+      "max_timestamp_gap_s": 1.014,
+      "timestamp_gap_allowed_as_diagnostic": true
+    },
+    "sm-a325f": {
+      "position": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/wls.pos",
+        "sha256": "c5968f3f9c88637664be09e3afc0efee79d1b2d64a531ab87b242b9acf259b3d"
+      },
+      "geodetic": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/receiver_wls.csv",
+        "sha256": "9cf8cfe2e743c669f1661d57e0c5a562d1630def5dcbe3e6fa50f999a6d901fe"
+      },
+      "manifest": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/wls_manifest.json",
+        "sha256": "28a81dec052fb4743f5afc1c399cc9b8c19a92d0a89ab82213ec7c3e3724f54"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/wls/sm-a325f/wls_summary.json",
+        "sha256": "aab37150922d0dbe07ebca7af81f8570ab46bfcb2708bc8e1a3c331b8ff571dc"
+      },
+      "input_epochs": 1230,
+      "selected_epochs": 1229,
+      "blank_wls_row_count": 0,
+      "sparse_omitted_epoch_count": 0,
+      "timestamp_gap_count_gt_1500ms": 0,
+      "max_timestamp_gap_s": 1.499,
+      "timestamp_gap_allowed_as_diagnostic": true
+    }
+  },
+  "truth_free_baseline_artifacts": {
+    "combined_submission": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/methods/single_phone_wls/submission.csv",
+      "sha256": "06f97875f19769f8779a4cf7930f79d6729905fc2b847e4bc98fb752f9a425bd"
+    },
+    "ensemble_manifest": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.3/2022-10-06-21-51-us-ca-mtv-n/methods/single_phone_wls/ensemble_manifest.json",
+      "sha256": "0c24c7ef3d38966ff0d6dacdab277679b56cc5c39885874bf702719c50aeb142"
+    },
+    "truth_used": false,
+    "metrics": null
+  },
+  "metrics": {
+    "horizontal_p50_m": null,
+    "horizontal_p95_m": null,
+    "vertical_p95_m": null,
+    "availability": null,
+    "coverage": null,
+    "official_diagnostics": null,
+    "selected_lane": null,
+    "baseline_comparison": null
+  },
+  "timing": {
+    "wall_s": null,
+    "peak_rss_kb": null,
+    "note": "failure occurred before evaluator report sealing; no truth scoring was attempted"
+  },
+  "promotion": {
+    "decision": "no-go-holdout-gate",
+    "development_only_candidate": false,
+    "production_rtk_spp_default_changed": false,
+    "post_holdout_tuning": false,
+    "rerun_permitted": false
+  },
+  "v1_2_failure_reference": {
+    "record_sha256": "5b90f47e703c17e112c0f61347032d7b4d5f6e702aff2cfb5fd108a68b230d68",
+    "truth_open_count": 0,
+    "algorithm_core_hash_same": true
+  }
+}

@@ -1,0 +1,177 @@
+{
+  "schema_version": "smartphone-r5-phase56-pixel5-bias-uncertainty-dedup-result.v1",
+  "phase": 56,
+  "execution_label": "Luna Max",
+  "status": "phase56-no-go-bias-uncertainty-duplicate-common-mode",
+  "operation": "sealed Phase46 evidence-map/dedup audit; no new raw read",
+  "objective": "Determine whether Android BiasUncertaintyNanos is a new geometry-bearing factor after the sealed Phase46 receiver-clock common-mode no-go, without reopening raw or truth inputs.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase56_pixel5_bias_uncertainty_dedup_freeze_v1.json",
+    "sha256": "b6242ed176fbe124b523d635575572f12d25494082f5c57c837d3c3c5fe35567",
+    "seal_commit": "297d1de"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase56_bias_uncertainty_dedup_manifest_v1.json",
+    "sha256": "81f29b12964236a07fc30a6c3de4512988f8213b2abd001a0575b76610932efc",
+    "seal_commit": "41d6364"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase56_bias_uncertainty_dedup.py",
+    "sha256": "69fb57e0bd8ca924cc4c96374f9daa3f4ff89b2bc15bd92d892eb375d6fd0cc4",
+    "test_path": "tests/test_smartphone_phase56_bias_uncertainty_dedup.py",
+    "test_sha256": "195d2d27cad353e87488bd4e91db0c567a7880442bc9ecd8ef825b75947c6fef",
+    "cmake_path": "tests/CMakeLists.txt",
+    "cmake_sha256": "ec0469d56aa85d4a0227c9eff7b56ad4a4f6c438fbf8121f11143ad37d752794",
+    "one_shot": true,
+    "single_process": true,
+    "operation_is_static_only": true
+  },
+  "phase46_pins": {
+    "freeze_sha256": "b847826017ae7683d9fa91de7225301af682d778add210acd6f04fcce52e5196",
+    "evaluator_manifest_sha256": "54694dc6a3f389dd389c145e548c97db5fc859ffd8f619eaf6c6c31f57cd537f",
+    "result_record_sha256": "d183bc8630a06545c4cb46dd4d061bb4d819fc48414b9557c5dfcad097e3e5c1",
+    "output_manifest_sha256": "df0425fb8f1e334cc6dd2d0f52d2c2ff5705617ef3490fe4316c6be501db3a06",
+    "output_result_sha256": "98e77fee8ff0f3135f7ba0bdbefdd97709085c8ba26a2e1d5f54837cdae23eba",
+    "output_routes_sha256": "7e83aea173369019de9660392dbfcab87a619bf65b7fb71e56b7db2cd48c7b69",
+    "output_events_sha256": "8b887add559ebc1a47d3ce7fb5e3f5873098dad610355f7e810054180b44c00e"
+  },
+  "factor_considered": {
+    "field": "BiasUncertaintyNanos",
+    "units": "nanoseconds",
+    "owner": "Android GnssClock receiver clock",
+    "physical_role": "receiver-clock bias uncertainty, not a per-satellite observable",
+    "phase46_dedup_rule": "Treat as the Phase46 receiver-clock common-mode lane; no new raw audit",
+    "phase46_output_limitation": "Same-epoch BiasUncertaintyNanos dispersion was not separately serialized; dedup is source-semantic plus sealed receiver-clock evidence."
+  },
+  "phase46_evidence": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "bias_uncertainty_count_by_route": [87705, 112833, 51243, 35810],
+    "bias_uncertainty_median_ns_by_route": [15.780498870299198, 17.20421641948633, 19.740919015021063, 18.550337699707597],
+    "bias_uncertainty_p95_abs_ns_by_route": [22.86995731992647, 25.01974449842237, 34.437445719959214, 27.501059867063045],
+    "same_epoch_receiver_clock_spread_max_m_by_route": [0.0, 0.0, 0.0, 0.0],
+    "same_epoch_signal_group_spread_max_ms_by_route": [0.0, 0.0, 0.0, 0.0],
+    "geometry_changing_noncommon_tow_effect_max_m_by_route": [0.0, 0.0, 0.0, 0.0],
+    "phase46_status": "no-go-clock-correction-common-mode-only"
+  },
+  "source_evidence": {
+    "source_hashes": {
+      "android_raw_gnss_cpp": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+      "android_raw_gnss_header": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c",
+      "observation_header": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c",
+      "fgo_problems_cpp": "41c0fa5db6a745562342061c9cd6bcf08f74e02038580869a09294a325f05ca1",
+      "fgo_config_header": "627fbc8585d6f6a384d9ea10b2670e4a9889dc20ba89a3427ed735eb61a6a358",
+      "gnss_fgo_cli": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c",
+      "doppler_contract": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d"
+    },
+    "adapter": {
+      "parses_pseudorange_rate_mps": true,
+      "parses_pseudorange_rate_uncertainty_mps": false,
+      "parses_bias_uncertainty_nanos": true,
+      "retains_bias_uncertainty_in_observation": false,
+      "header_declares_rate_uncertainty": false
+    },
+    "observation": {
+      "retains_pseudorange_rate_mps": true,
+      "retains_pseudorange_rate_uncertainty_mps": false,
+      "retains_bias_uncertainty_nanos": false
+    },
+    "fgo": {
+      "consumes_raw_rate_uncertainty": false,
+      "uses_fixed_undifferenced_doppler_sigma": true,
+      "uses_fixed_single_difference_doppler_sigma": true,
+      "uses_snr_derived_upstream_doppler_sigma": true
+    },
+    "config": {
+      "fixed_undifferenced_doppler_sigma_mps": true,
+      "fixed_single_difference_doppler_sigma_mps": true
+    },
+    "cli": {
+      "raw_rate_uncertainty_option": false,
+      "fixed_doppler_sigma_option": true
+    },
+    "doppler_contract": {
+      "android_rate_to_doppler_sign": true
+    }
+  },
+  "next_factor": {
+    "field": "PseudorangeRateUncertaintyMetersPerSecond",
+    "units": "meters per second",
+    "source": "Android GnssMeasurement per-satellite/per-signal measurement field",
+    "candidate": "opt-in native FGO Doppler sigma floor max(existing_doppler_sigma_mps, raw_rate_uncertainty_mps), coefficient 1, no cap",
+    "implementation_phase56": false,
+    "source_reference": "https://developer.android.com/reference/android/location/GnssMeasurement#getPseudorangeRateUncertaintyMetersPerSecond()"
+  },
+  "gates": {
+    "all_passed": true,
+    "observed": {
+      "phase46_artifact_hashes_exact": true,
+      "phase46_clock_no_go_status_exact": true,
+      "phase46_bias_uncertainty_evidence_all_routes": true,
+      "phase46_same_epoch_clock_spread_zero": true,
+      "phase46_same_epoch_signal_spread_zero": true,
+      "phase46_geometry_changing_noncommon_effect_zero": true,
+      "bias_uncertainty_semantic_receiver_common": true,
+      "bias_uncertainty_new_raw_audit_deduplicated": true,
+      "source_next_factor_is_nonduplicate": true
+    }
+  },
+  "decision": {
+    "bias_uncertainty_audit": "no-go-without-raw-deduplicated",
+    "bias_uncertainty_is_new_geometry_factor": false,
+    "native_correction_authorized": false,
+    "new_raw_audit_authorized": false,
+    "next_single_nonduplicate_factor": "PseudorangeRateUncertaintyMetersPerSecond",
+    "next_factor_mechanism": "opt-in native FGO Doppler sigma floor using source-exact rate uncertainty in m/s; no Phase56 implementation",
+    "phase43_champion_preserved": true,
+    "phase51_experimental_preserved": true,
+    "zero_point_782": "not evaluated without truth"
+  },
+  "read_accounting": {
+    "single_process": true,
+    "phase56_new_raw_device_gnss_reads": 0,
+    "phase56_new_truth_reads": 0,
+    "phase56_new_navigation_reads": 0,
+    "phase56_new_solver_invocations": 0,
+    "phase56_new_coordinate_inputs": 0,
+    "phase56_new_imu_reads": 0,
+    "phase46_sealed_artifact_reads": {
+      "phase46_freeze": 1,
+      "phase46_evaluator_manifest": 1,
+      "phase46_result_record": 1,
+      "phase46_output_manifest": 1,
+      "phase46_output_result": 1,
+      "phase46_output_routes": 1,
+      "phase46_output_events": 1,
+      "phase55_policy_result": 1
+    },
+    "phase46_raw_device_gnss_rereads": 0,
+    "archive_reopens": 0,
+    "rematerialization": 0,
+    "validation_holdout": 0,
+    "MAT": 0,
+    "Kaggle_token": 0
+  },
+  "output_artifacts": {
+    "result": {
+      "path": "output/smartphone-r5/phase56-pixel5-bias-uncertainty-dedup-v1/phase56_bias_uncertainty_dedup.json",
+      "bytes": 6029,
+      "sha256": "321e775fbc9e03d8001a38dd3ba1c9d31d0d54cead0cabe0bb77e923190d3467"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/phase56-pixel5-bias-uncertainty-dedup-v1/phase56_bias_uncertainty_dedup.manifest.json",
+      "bytes": 1353,
+      "sha256": "01ba15ebfb58d49e095c201e8577071e0bc07e95cfb455d89b8b7a104a787334"
+    }
+  },
+  "tests": {
+    "focused_python": "4 passed",
+    "py_compile": true,
+    "verify_freeze_without_raw_or_truth_reads": true,
+    "registered_ctest": "python_smartphone_phase56_bias_uncertainty_dedup_tests"
+  }
+}

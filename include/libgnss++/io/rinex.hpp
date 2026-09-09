@@ -2,10 +2,12 @@
 
 #include <string>
 #include <vector>
+#include <cstddef>
 #include <fstream>
 #include <memory>
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
+#include "../core/glonass_provenance.hpp"
 #include "rinex4.hpp"
 
 namespace libgnss {
@@ -48,12 +50,29 @@ public:
         std::string receiver_version;
         std::string antenna_number;
         std::string antenna_type;
-        Vector3d approximate_position;
-        Vector3d antenna_delta;
+        // Keep explicit presence bits: an omitted optional header line must
+        // not be confused with a valid zero vector by source-complete raw
+        // reference admission.
+        Vector3d approximate_position = Vector3d::Zero();
+        Vector3d antenna_delta = Vector3d::Zero();
+        bool has_approximate_position = false;
+        bool has_antenna_delta = false;
         std::vector<std::string> observation_types;
         // RINEX 3/4: per-system observation types (key = system char, e.g. "G", "R", "E")
         std::map<char, std::vector<std::string>> system_obs_types;
         std::map<SatelliteId, int> glonass_frequency_channels;
+        // Keep the uncollapsed header ledger for strict opt-in GLONASS FCN
+        // provenance.  The map above remains the legacy/default API.
+        std::vector<GlonassFrequencyChannelEntry>
+            glonass_frequency_channel_entries;
+        std::size_t glonass_frequency_channel_malformed_entries = 0U;
+        // Preserve the fixed-label state independently of the legacy map.
+        // Absent and valid-empty labels are both eligible for broadcast-geph
+        // fallback under Phase128; malformed labels remain fail-closed.
+        GlonassFrequencyChannelHeaderStatus
+            glonass_frequency_channel_header_status =
+                GlonassFrequencyChannelHeaderStatus::Absent;
+        std::size_t glonass_frequency_channel_header_label_lines = 0U;
         double interval = 0.0;
         GNSSTime first_obs;
         GNSSTime last_obs;
@@ -100,6 +119,12 @@ public:
 
     bool preservesAdditionalFrequencyBands() const {
         return preserve_additional_frequency_bands_;
+    }
+
+    // RINEX 3 only: filter to fixed MALIB default header-selected codes.
+    // Does not expand the native supported-band emission policy.
+    void setSourceHeaderTrackingFilter(bool enabled) {
+        source_header_tracking_filter_ = enabled;
     }
     
     /**
@@ -181,6 +206,7 @@ private:
     bool qzss_prefer_l1l_ = false;
     bool qzss_prefer_l5_secondary_ = false;
     bool preserve_additional_frequency_bands_ = false;
+    bool source_header_tracking_filter_ = false;
     bool last_rinex4_epoch_was_event_ = false;
     rinex4::SystemData rinex4_system_data_;
 

@@ -1,0 +1,97 @@
+{
+  "schema_version": "smartphone-r5-phase104-stage-main-attribution-truth-only-authorization.v1",
+  "phase": 104,
+  "phase105_linkage_phase": 105,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-phase104-truth-only-attribution-evaluation",
+  "purpose": "Authorize one isolated evaluator read of official truth for the already sealed Phase105 raw-only stage/main artifacts; native rerun and publication remain forbidden.",
+  "authority": {
+    "phase104_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase104_stage_main_accuracy_attribution_freeze_v1.json",
+      "sha256": "0d441945897c01899c9ed6cbf0659ee0382c778c35a8e2056315168a27d526dd"
+    },
+    "phase104_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_manifest_v1.json",
+      "sha256": "0c63d7696416dd4e8d8c92ebea16b3820acefb9efc2bb8fd4a84acb19201de51"
+    },
+    "phase104_raw_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_raw_execution_authorization_v1.json",
+      "sha256": "750bf20a9e5b8aacddca7471019d0a1facf6b16acd1c682742df7912c2d92b1f"
+    },
+    "phase104_raw_execution_seal": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_raw_execution_seal_v1.json",
+      "sha256": "45e194fa59c25fa94cfac8e4a8b9b0d17747ae239497d8785b39f113afa74272"
+    },
+    "phase104_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase105_runtime_linkage_attribution.py",
+      "sha256": "07baa52c30cf5bdc68517d716060ee1f5a866b59627785239dba05f197cd5b3d"
+    },
+    "phase105_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_freeze_v1.json",
+      "sha256": "3d44e1d9109be7e5d4cf5aba6f579976be2b71f5083c915b0d893567f002f36d"
+    }
+  },
+  "candidate": {
+    "id": "phase104-evaluation-only-gnss-first-stage-export-v1",
+    "candidate_count": 1,
+    "runs_per_route": 1,
+    "truth_reads_per_route": 1,
+    "native_solver_invocations": 0,
+    "truth_only": true,
+    "solution_or_stage_reinput": false,
+    "metric_unchanged": true,
+    "kaggle_submission": false,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "truth_files": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "rows": 2159,
+        "allowed_missing_key": ["2021-03-16-18-59-us-ca-mtv-a/pixel5", 1615921153434],
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "rows": 1465,
+        "allowed_missing_key": null,
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8"
+      }
+    },
+    "metric": {
+      "key": "(phone, UnixTimeMillis)",
+      "matching": "exact integer key intersection only",
+      "distance": "spherical Haversine per row",
+      "earth_radius_m": 6371008.8,
+      "percentile": "linear interpolation at rank (n - 1) * q",
+      "route_scalar": "(P50 + P95) / 2 in metres",
+      "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+      "continuity": "over_70_mps_count must equal 0",
+      "stage_conversion": "ECEF metres to WGS84 latitude/longitude in evaluator memory only"
+    }
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "evaluation_policy": {
+    "truth_process_only": true,
+    "truth_open_after_solution_hash_seal": true,
+    "truth_open_after_stage_hash_seal": true,
+    "truth_open_after_schema_alignment_finite_preflight": true,
+    "truth_reads_exactly_once_per_route": true,
+    "native_rerun": false,
+    "fallback": false,
+    "tuning": false,
+    "solution_publication": false,
+    "Kaggle_submission": false,
+    "result_contains_coordinate_rows": false,
+    "phase82_same_route_baseline_only": true
+  },
+  "release_boundary": {
+    "truth_evaluation_authorized": true,
+    "native_rerun_authorized": false,
+    "accuracy_promotion_authorized": false,
+    "solution_publication_authorized": false,
+    "Kaggle_submission_authorized": false
+  }
+}

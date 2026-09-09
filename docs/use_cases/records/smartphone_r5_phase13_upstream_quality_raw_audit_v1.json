@@ -1,0 +1,124 @@
+{
+  "schema_version": "smartphone-r5-phase13-upstream-quality-raw-audit.v1",
+  "status": "truth-free-structural-audit-before-score",
+  "candidate_id": "native-upstream-observable-quality-gtsam-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "purpose": "Port only the raw-observable SNR and adjacent residual portions of the pinned upstream preprocessing into the opt-in native FGO graph.",
+  "source": {
+    "device_gnss": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+    "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv",
+    "device_imu_sha256": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "broadcast_nav": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+    "broadcast_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "raw_columns_used": [
+      "utcTimeMillis",
+      "TimeNanos",
+      "ChipsetElapsedRealtimeNanos",
+      "Svid",
+      "ConstellationType",
+      "SignalType",
+      "RawPseudorangeMeters",
+      "RawPseudorangeUncertaintyMeters",
+      "PseudorangeRateMetersPerSecond",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "CarrierFrequencyHz",
+      "Cn0DbHz",
+      "AccumulatedDeltaRangeMeters",
+      "AccumulatedDeltaRangeState",
+      "FullInterSignalBiasNanos",
+      "FullInterSignalBiasUncertaintyNanos"
+    ],
+    "raw_only_geometry": "Satellite position, velocity, and elevation are computed from broadcast navigation and native seed geometry. SvPosition*, SvElevationDegrees, receiver/WLS coordinates, and any precomputed trajectory are ignored.",
+    "forbidden_inputs": [
+      "ground_truth.csv",
+      "*.mat",
+      "sample_submission.csv",
+      "SvPosition*",
+      "SvElevationDegrees",
+      "device WLS coordinates",
+      "precomputed trajectories",
+      "previous submission coordinates",
+      "leaderboard scores",
+      "token"
+    ]
+  },
+  "upstream_spec_sources": {
+    "exobs_residuals.m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m",
+      "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+      "lines": "14-79, 82-111",
+      "ported": "elevation/D residual, two-sided adjacent dDP/dDL masks, global system residual center, and fixed thresholds",
+      "not_ported": "base-observation compensation and MATLAB table/state objects"
+    },
+    "obserrmodel.m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/obserrmodel.m",
+      "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+      "lines": "5-37",
+      "ported": "midpoint MATLAB percentile p85, sn_den=20, signal factors, P=scale*factor and D=scale/12",
+      "not_ported": "upstream L sigma because Phase12 ordinary TDCP sigma is frozen at 0.03 m"
+    },
+    "parameters.m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": "phone preset and observation-mask parameter definitions",
+      "ported": "p85, denominator, 5 degree elevation, P/D/L thresholds and 1.5 second continuity",
+      "note": "This audit reads .m source as specification only; no MATLAB .mat is opened or generated."
+    }
+  },
+  "truth_policy": {
+    "ground_truth_read_count": 0,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_read_count": 0,
+    "leaderboard_or_token_access": false,
+    "truth_used_for_candidate_parameters": false,
+    "enriched_coordinate_or_elevation_columns_read": false,
+    "post_score_change_permitted": false
+  },
+  "fixed_observable_contract": {
+    "snr_percentile": 85.0,
+    "snr_percentile_convention": "MATLAB prctile midpoint rank 0.5+n*p/100 with endpoint clipping",
+    "snr_denominator_db": 20.0,
+    "minimum_snr_dbhz": 20.0,
+    "minimum_elevation_deg": 5.0,
+    "device_model": "empty; no device-specific quality selection",
+    "signal_type_factors": {
+      "GPS_L1CA": 0.8,
+      "GAL_E1": 0.8,
+      "GPS_L5": 0.5,
+      "GAL_E5A": 0.5
+    },
+    "sigma": {
+      "pseudorange": "10^(-(S-p85)/20)*signal_type_factor",
+      "doppler": "10^(-(S-p85)/20)/12",
+      "carrier_tdcp": "Phase12 frozen 0.03 m; no upstream L reweighting"
+    },
+    "adjacent_masks": {
+      "maximum_gap_s": 1.5,
+      "pseudorange_doppler_expression": "-(D_previous+D_current)*lambda*dt/2-(P_current-P_previous)",
+      "carrier_doppler_expression": "-(D_previous+D_current)*lambda*dt/2-(L_current-L_previous)*lambda-device_offset",
+      "pseudorange_threshold_m": {"L1": 40.0, "L5": 20.0},
+      "carrier_threshold_m": 1.5,
+      "two_sided_epoch_mask": true,
+      "invalid_or_gap_pair": "not eligible; no cross-gap comparison",
+      "device_offsets": "upstream carrier offsets are applied only by the existing raw carrier helper; this pixel7pro recipe has empty device model"
+    },
+    "residual_masks": {
+      "doppler": "per-epoch median native receiver-only residual; reject abs(residual-median)>3 m/s",
+      "pseudorange": "global (clock group,band) median of native SPP-seed residual; reject abs(residual-median)>20 m (L1) or 15 m (L5)",
+      "center_provenance": "raw/nav-only native SPP seed; this is explicitly not a truth-fitted or upstream-MAT center"
+    },
+    "base_compensation": "not used; required base observation is outside the raw Android GNSS+nav contract",
+    "graph_application": "P/D masks and sigmas are applied before final problem factor creation; candidate-quality receiver-only D rows are also inserted into the IMU velocity+clock-drift graph."
+  },
+  "raw_observable_descriptives": {
+    "selected_epochs": 1384,
+    "raw_rows": 48000,
+    "finite_l1_p85_dbhz": 40.392819213867185,
+    "finite_l5_p85_dbhz": 37.244502067565918,
+    "note": "These are truth-free raw CN0 descriptives, not a fitted threshold."
+  },
+  "audit_record_hash": "excluded from self-hash; the companion freeze manifest fixes this file SHA256"
+}

@@ -1,0 +1,20 @@
+{
+  "phase": 305,
+  "implementation_head": "b50aba39",
+  "binary": "build/native_base_state_inventory",
+  "binary_sha256": "e9bb59bc37d9c52aa7939f6f3f7c789994f98f0e2b57f8a0a1d17c2460a431e7",
+  "source": "scripts/native_base_state_inventory.cpp",
+  "source_sha256": "ddf217c070343bafb246ee385cc3f33d8c53fad24b2f217be52916f501b31ca0",
+  "raw_base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "raw_base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "preserve_additional_frequency_bands": true,
+  "raw_reads": "one hash scan per input, one native pass per input",
+  "output": "aggregate counts only",
+  "solver_calls": 0,
+  "truth_reads": 0,
+  "completion_gate": "native epoch count equals independent epoch-marker count; investigate rather than treating early EOF as completion",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "expected_epochs": 3500,
+  "mode": "source"
+}

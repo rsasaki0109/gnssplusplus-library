@@ -1,0 +1,18 @@
+{
+  "schema_version": "smartphone-r5-phase13-upstream-quality-score-manifest.v1",
+  "score_record": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_score_result_v1.json",
+  "score_record_sha256": "9b216ea542aef39fc769682ef9e615a9af911863a71a72edc7a3b67a638406d7",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json",
+  "freeze_record_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f",
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_structural_seal_v1.json",
+  "structural_seal_sha256": "6cfbdb90be4d6ceb81e6a14554769b0f051d5c8c3cee520169a0c45be5ff0dbb",
+  "score": "output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/train_score.json",
+  "score_sha256": "0bdc7c93ecfc4799b2e62cbd248d2a9dd51304b53ea751706b991e937be4f7ad",
+  "ground_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+  "status": "sealed-development-no-go; no validation or holdout follow-up",
+  "truth_read_count": 1,
+  "mat_read_count": 0,
+  "token_or_kaggle_access": false,
+  "post_score_tuning": false,
+  "manifest_sha256": "excluded from self-hash"
+}

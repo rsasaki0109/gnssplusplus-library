@@ -1,0 +1,263 @@
+{
+  "algorithm_core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+  "algorithm_parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+  "archive": {
+    "central_directory_only_before_freeze": true,
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "atomic_contract": {
+    "no_silent_wls_fallback": true,
+    "nonfinite_or_invalid": "fail-closed with a sealed failure artifact",
+    "truth_content_hash": "omitted after the single scoring read to avoid a second truth open",
+    "truth_free_manifest_hash": true,
+    "truth_free_outputs": "adapter, SPP, FGO, factor diagnostics, child logs, route manifest and truth-free manifest are published through same-filesystem temporary rename",
+    "truth_member": "not materialized until every truth-free artifact hash is sealed"
+  },
+  "candidate_id": "native_fgo_pseudorange_tdcp_motion_v1",
+  "central_directory_inventory": {
+    "member_content_read": false,
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "commands": {
+    "freeze_verify": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_holdout_eval.py freeze-verify --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze.json --freeze-manifest docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_manifest.json",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "materialize_and_adapter_truth_free": "the holdout evaluator materializes only the frozen device_gnss.csv and brdc.nav central-directory members, then invokes apps/gnss.py smartphone-gnss-adapter with --role holdout --truth-free --experimental-galileo-e1 and this freeze record",
+    "native_fgo_truth_free": "existing Release build/apps/gnss_fgo with the exact frozen native-FGO recipe: Eigen/default, 8 iterations, WLS/SPP seed, pseudorange + ordinary TDCP + position/clock motion, Huber enabled, no SD/DD/carrier ambiguity/velocity factors",
+    "recovery_freeze_verify": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_holdout_eval.py freeze-verify --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery.json --freeze-manifest docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery_manifest.json",
+    "recovery_v2_freeze_verify": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_holdout_eval.py freeze-verify --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery_v2.json --freeze-manifest docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery_v2_manifest.json",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "score_once": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_holdout_eval.py score --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze.json --freeze-manifest docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_manifest.json",
+    "spp_truth_free": "build/apps/gnss_spp --obs <adapter/rover.obs> --nav <inputs/brdc.nav> --out <spp/libgnsspp_spp.pos> --summary-json <spp/libgnsspp_spp_summary.json> --clock-csv <spp/libgnsspp_spp_clock.csv> --timing-csv <spp/libgnsspp_spp_timing.csv> --quiet"
+  },
+  "created_at_utc": "2026-08-30T00:00:00Z",
+  "diagnostics": {
+    "gate": "candidate H P50/H P95/V P95/availability/truth coverage and every official diagnostic must not regress versus exact SPP/WLS seed; H P95 and four-diagnostic mean must improve strictly",
+    "go_decision": "development-only native-FGO lane and 40-test batch are permitted only if every frozen holdout gate passes",
+    "no_go_decision": "any gate failure seals No-Go and forbids test-batch generation",
+    "official_methods": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ]
+  },
+  "evidence": {
+    "evaluation_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_evaluation_manifest.json",
+      "sha256": "fa20ad08b32fbcb29fdddfe40a06385e67a9f2ba4c4ea9b0f0be7e180158812d"
+    },
+    "evaluation_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_evaluation.json",
+      "sha256": "114c0357f33fe5d7355d43f26cf7b8ea2540d7f84703d523d658eef5c4b6726b"
+    },
+    "train_manifest": {
+      "path": "output/smartphone-r5/native-fgo-v1/train_evaluation.manifest.json",
+      "sha256": "8529b59b0cde919591e23f924488dcfe928f548a548da35586a1f77a64a49aee"
+    },
+    "train_report": {
+      "path": "output/smartphone-r5/native-fgo-v1/train_evaluation.json",
+      "sha256": "a9fdc3bcad3dd1207bd138f78756c4c9cdeab08a75d39143b92c7d7d3fdaf61f"
+    },
+    "validation_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_validation.json",
+      "sha256": "ff70a6d2e90f2937efc94d227faaaa7eedbee4ad69882c00aab79196db9d633d"
+    },
+    "validation_manifest": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation/validation_evaluation.manifest.json",
+      "sha256": "4506edd44cd2af4302190b73e9199800f7af741f29a5385581f542f75c508e8c"
+    },
+    "validation_report": {
+      "path": "output/smartphone-r5/native-fgo-v1/validation/validation_evaluation.json",
+      "sha256": "05e9cccbdb43aa0db323dda38a446ee1ffc286b38ab443dd9e8f3ef8c3efc133"
+    }
+  },
+  "frozen_recipe": {
+    "absolute_cost_convergence_threshold": 0.0,
+    "backend": "eigen",
+    "carrier_phase_huber_threshold_sigma": 4.0,
+    "carrier_phase_sigma_m": 0.01,
+    "clock_motion_sigma_m": 300.0,
+    "clock_prior_sigma_m": 0.0,
+    "exclude_glonass_qzss_sbas": false,
+    "max_epochs": 0,
+    "max_iterations": 8,
+    "max_tdcp_gap_s": 2.0,
+    "min_elevation_deg": 10.0,
+    "min_satellites_per_epoch": 4,
+    "min_snr_dbhz": 0.0,
+    "motion_sigma_m": 50.0,
+    "no_motion_factors": false,
+    "no_pseudorange_factors": false,
+    "no_spp_seed": false,
+    "no_tdcp_factors": false,
+    "no_tdcp_slip_reject": false,
+    "position_prior_sigma_m": 0.0,
+    "preset": "default",
+    "pseudorange_elevation_sigma_power": 1.0,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "pseudorange_sigma_m": 3.0,
+    "reject_rover_carrier_lli": false,
+    "relative_cost_convergence_threshold": 0.0,
+    "seed_interpolation_max_gap_s": 0.0,
+    "seed_match_tolerance_s": 0.01,
+    "skip_epochs": 0,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "tdcp_sigma_m": 0.03,
+    "tdcp_slip_threshold_m": 10.0,
+    "use_ambiguity_between_factors": false,
+    "use_ambiguity_priors": true,
+    "use_carrier_phase_factors": false,
+    "use_clock_motion_factors": true,
+    "use_double_difference_factors": false,
+    "use_ionosphere_model": true,
+    "use_ordinary_tdcp_factors": true,
+    "use_position_motion_factors": true,
+    "use_pseudorange_factors": true,
+    "use_robust_loss": true,
+    "use_single_difference_doppler_factors": false,
+    "use_single_difference_tdcp_factors": false,
+    "use_spp_seed": true,
+    "use_troposphere_model": true,
+    "use_velocity_motion_factors": false,
+    "use_velocity_states": false,
+    "velocity_motion_sigma_m": 0.01,
+    "velocity_prior_sigma_mps": 100.0
+  },
+  "holdout": {
+    "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "materialization_forbidden_before_freeze": true,
+    "members": {
+      "broadcast_nav": {
+        "compressed_size": 1091266,
+        "crc32_hex": "af42659d",
+        "file_size": 11431617,
+        "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/brdc.nav"
+      },
+      "device_gnss": {
+        "compressed_size": 10843003,
+        "crc32_hex": "b2e75362",
+        "file_size": 45443395,
+        "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/device_gnss.csv"
+      },
+      "ground_truth": {
+        "compressed_size": 39994,
+        "crc32_hex": "36edc5d4",
+        "file_size": 160373,
+        "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/ground_truth.csv"
+      }
+    },
+    "phone": "pixel6pro",
+    "phone_allowlist": [
+      "pixel6pro"
+    ],
+    "route": "2023-09-06-00-01-us-ca-routen",
+    "truth_open_forbidden_before_freeze": true
+  },
+  "holdout_execution_contract": {
+    "algorithm_core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+    "algorithm_parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+    "authorized": true,
+    "fgo_fallback": "none; a failed native-FGO candidate is a sealed No-Go and does not silently fall back",
+    "no_post_holdout_tuning": true,
+    "one_shot_authorization": true,
+    "phone_allowlist": [
+      "pixel6pro"
+    ],
+    "route": "2023-09-06-00-01-us-ca-routen",
+    "test_batch_authorization": "only after a passing holdout gate; no batch is part of the holdout run",
+    "truth_evaluation_pass_count": 1,
+    "truth_free_phase": true
+  },
+  "policy": {
+    "external_mutation": false,
+    "future_holdout_payload_materialized_before_freeze": false,
+    "future_holdout_truth_open_count_before_freeze": 0,
+    "leaderboard_scores_used_for_tuning": false,
+    "no_post_holdout_tuning": true,
+    "no_rerun_after_truth_evaluation": true,
+    "production_default_changed": false,
+    "test_batch_only_if_holdout_gate_passes": true,
+    "token_access": false,
+    "truth_free_before_truth": true
+  },
+  "purpose": "One authorized future-holdout evaluation of the already validation-passed native Eigen FGO lane.",
+  "recovery": {
+    "base_freeze_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery_manifest.json",
+      "sha256": "5e2de7388ca0b0919d9a216d2fdc612f7b928ac89560c3bd65312c045e1bbee8"
+    },
+    "base_freeze_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery.json",
+      "sha256": "bd0ab5e42b7e506b2dcf65e4b7b1509d2a03008cd02eef88b226143801cece76"
+    },
+    "failure_artifact": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout.failure/failure.json",
+      "sha256": "d241284091827084f54c127bfeb6fa85f7953d97036a29afd23548c3da219503"
+    },
+    "payload_materialized_during_failed_attempt": true,
+    "reason": "The sealed truth-free output used basename-only FGO log paths. Recovery v2 corrects only this manifest path/orchestration contract and accepts the already-sealed spelling; solver, recipe, binary, and inputs are unchanged.",
+    "reuse_existing_device_nav_artifacts": true,
+    "truth_free_manifest_verification_failure": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout/truth_free_manifest.json",
+      "sha256": "1dc2e881d50463f8c2e2e8f0255602461e0c935cde38dc4c62c5748154af328c"
+    },
+    "truth_open_count_before_recovery": 0
+  },
+  "recovery_materialized_inputs": {
+    "broadcast_nav": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout.failure/inputs/brdc.nav",
+      "sha256": "21236469a4048817d53bac9faaab04bd87558d100c56ebf8fec25740edc7f696"
+    },
+    "device_gnss": {
+      "path": "output/smartphone-r5/native-fgo-v1/holdout.failure/inputs/device_gnss.csv",
+      "sha256": "3a73d6b668b68be754515141c89700e24c4ec136a00d78e6b13ef52118e02c42"
+    }
+  },
+  "release_binaries": {
+    "gnss_fgo": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+    },
+    "gnss_spp": {
+      "path": "build/apps/gnss_spp",
+      "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    }
+  },
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-holdout-freeze.v1",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json",
+    "sha256": "9a31c3341a0c8a0d7ce8ea25ba787d917a20f25c30895044664c6bf9a79b6f92"
+  },
+  "source_files": {
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": {
+      "sha256": "09602e127f1e353a51f6a85f9ec3d9057bfe36c09bced7305be5e15a33fe5789"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py": {
+      "sha256": "688c56f015ebfe54dfc2358c470f3b57acb98a5fcd2bd1ea81d5166c11a0494b"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_holdout_eval.py": {
+      "sha256": "5ad3f7876a298bea49dd3588f96325818460020e567466009c19248d90fa3c4d"
+    },
+    "apps/native/gnss_fgo.cpp": {
+      "sha256": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32"
+    },
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": {
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    },
+    "include/libgnss++/algorithms/fgo.hpp": {
+      "sha256": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307"
+    },
+    "src/algorithms/fgo.cpp": {
+      "sha256": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2"
+    }
+  },
+  "status": "recovery-freeze-before-truth-access",
+  "truth_access_before_freeze": {
+    "fresh_validation_truth_open_count": 1,
+    "future_holdout_materialized": false,
+    "future_holdout_truth_open_count": 0,
+    "train_truth_open_count": 3
+  }
+}

@@ -1,0 +1,114 @@
+{
+  "schema_version": "smartphone-r5-kaggle-metric-primary-source-audit.v1",
+  "audited_at_utc": "2026-08-31T03:34:03Z",
+  "scope": {
+    "competition": "smartphone-decimeter-2023",
+    "mode": "read-only primary-source research",
+    "submission_or_token_access": false,
+    "truth_access": false,
+    "score_tuning": false
+  },
+  "primary_sources": [
+    {
+      "kind": "official-kaggle-competition-page",
+      "url": "https://www.kaggle.com/competitions/smartphone-decimeter-2023",
+      "retrieved_utc": "2026-08-31T03:29:00Z",
+      "direct_html_shell_sha256": "702221d4f2a95ca562f3910c3057f3027017aee943481e28f66a6ae8140d8727",
+      "evidence_sections": ["Evaluation", "Submission File"],
+      "short_excerpts": [
+        "The 50th and 95th percentile errors are then averaged for each phone.",
+        "Lastly, the mean of these averaged values is calculated across all phones in the test set."
+      ],
+      "direct_html_note": "The public page is client-rendered; the unauthenticated HTML shell carries metadata, while the public rendered Evaluation text is indexed by the official page."
+    },
+    {
+      "kind": "official-kaggle-competition-api-metadata",
+      "url": "https://www.kaggle.com/api/v1/competitions/get/60095",
+      "retrieved_utc": "2026-08-31T03:30:00Z",
+      "http_status": 200,
+      "response_sha256": "8e21306dfa354d9465d45f7b56a631127dabba54781b0383a9c297a8592702fd",
+      "confirmed_fields": {
+        "id": 60095,
+        "hostName": "Google",
+        "evaluationMetric": "SmartphoneDecimeter",
+        "deadline": "2024-05-23T23:59:00Z",
+        "submissionsDisabled": false
+      },
+      "metric_code_present": false
+    },
+    {
+      "kind": "official-kaggle-data-api-probe",
+      "url": "https://www.kaggle.com/api/v1/competitions/data/list/smartphone-decimeter-2023",
+      "retrieved_utc": "2026-08-31T03:31:00Z",
+      "http_status_without_credentials": 401,
+      "response_bytes_without_credentials": 40,
+      "interpretation": "No unauthenticated competition file list or evaluator source was exposed by this probe. The previously authenticated sample download is separately sealed in the repository; no credential was accessed in this audit."
+    },
+    {
+      "kind": "official-google-ion-organizer-workshop",
+      "url": "https://www.ion.org/gnss/upload/Smartphone-Decimeter-Challenge-2023-2024.pdf",
+      "retrieved_utc": "2026-08-31T03:30:00Z",
+      "bytes": 6780065,
+      "sha256": "e75c4685b905023f2ea11f5901ac46c51f257069a45d6362d496655fabbe1a65",
+      "page_reference": 7,
+      "short_excerpts": [
+        "Score = mean(50%, 95%)",
+        "mean of 50% and 95% distribution of horizontal (2d) errors"
+      ],
+      "confirmed": "The organizer material corroborates the single score and horizontal two-dimensional P50/P95 semantics, but does not publish the numerical distance or percentile implementation."
+    }
+  ],
+  "secondary_corroboration": {
+    "repository_url": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license_path": "output/reproducibility-cache/gsdc2023/LICENSE",
+    "license_sha256": "f5b3bcb0ce8267e076b4dad74c67c02efab4161efd6c5ba208402a0f51fbea1b",
+    "score_path": "output/reproducibility-cache/gsdc2023/functions/score.m",
+    "score_sha256": "4c88f3f775e4f8caca22bb8c5f5747309f32b190df230346179381feb1f572c4",
+    "earth_constant_path": "output/reproducibility-cache/MatRTKLIB/+gt/C.m",
+    "earth_constant_sha256": "42cfdc2abb408159494de4e20bc2c2ba78c6e8267c459d42432fa374b070067a",
+    "semantics_observed": "Haversine using WGS84 semimajor-axis constant 6378137.0, MATLAB prctile, then mean(P50,P95)",
+    "authority": "secondary open-source corroboration; not evidence that Kaggle uses the same hidden implementation"
+  },
+  "archive_check": {
+    "archive_path": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_member_count": 1048,
+    "evaluator_like_members": [],
+    "read_mode": "central-directory names only; no truth member opened"
+  },
+  "determination": {
+    "per_phone_distribution": "confirmed: horizontal distance once per second forms a distribution per phone",
+    "percentiles": "confirmed semantically as P50/P95; interpolation/rank algorithm unspecified",
+    "per_phone_vs_global": "confirmed: average P50/P95-derived phone scores first, then mean across phones",
+    "distance_formula": "unspecified by official primary sources",
+    "earth_model_or_radius": "unspecified by official primary sources",
+    "missing_key_behavior": "sample key obligation is explicit; server handling of omitted rows is not fully specified",
+    "final_averaging": "confirmed arithmetic mean across phone-level values",
+    "official_primary": null,
+    "irreducible_limit": "The hidden server's distance and percentile implementation cannot be proved bit-exact from the public primary materials or unauthenticated API metadata."
+  },
+  "declared_reproducibility_convention": {
+    "semantic_specification_reproducible": true,
+    "server_bit_exact_reproducible": false,
+    "local_evaluator": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+    "local_evaluator_sha256_before_audit": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "convention": "Keep official_primary unset; publish explicit WGS84/Vincenty and spherical/Haversine sensitivity variants with linear-(n-1) and nearest-rank percentile variants."
+  },
+  "parity_fixtures": {
+    "path": "tests/fixtures/smartphone_kaggle_metric_parity.json",
+    "sha256": "b4e016cba89271207b9e65f123f872f5de9bd654949ea7a0b79b7ba09e5ea91e",
+    "test_path": "tests/test_smartphone_kaggle.py",
+    "test_sha256": "0cc0de67707a92aa9d1a084c83d17a4b9185f503aee46a48266ade67f20a415a",
+    "coverage": ["hand-computed Haversine values", "MATLAB score.m radius/mean semantics", "NumPy linear percentile parity"],
+    "matlab_runtime_available": false,
+    "matlab_parity_basis": "pinned score.m/C.m source semantics and independent hand-computed values; no claim of executing MATLAB"
+  },
+  "conclusion": {
+    "official_metric_semantics_documented": true,
+    "official_metric_exactness_claimed": false,
+    "official_primary_implemented": false,
+    "limitation_is_irreducible": true,
+    "reproducible_as_specified_under_declared_convention": true
+  }
+}

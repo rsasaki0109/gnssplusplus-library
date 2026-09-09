@@ -1,0 +1,128 @@
+{
+  "schema_version": "smartphone-r5-phase152-h-raw-p-seed-diagnostic-authorization.v1",
+  "phase": 152,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-one-shot-corrected-mtv-h-prep",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase151_h_raw_p_seed_ingress_correction_manifest_v1.json",
+    "sha256": "33b6a5bf768e46e80f5ec7db610a156f61fff6233affefb545ad29a38dd93eec"
+  },
+  "source_and_binary": {
+    "implementation_commit": "7f090b8be3b8c19e2fdd10a8edb6f9b98cb72817",
+    "current_head_before_run": "8c3cdc9f65a01d782937d5bd5fabf272db1234af",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "900eeedc6c56f635fb5c923d4d7c83e37ad8ae7445d2cf96e3e1f01a111438c3",
+    "app_source_sha256": "7e6d4d80f4c854657ce433b38cf866d6d68fc7f1b6ce720e60af6188e45a1012",
+    "raw_p_seed_source_sha256": "7936a62d00d311d92a7f0f80a12917f524ea16f861950280eee5148c2f73f0e6"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street",
+    "runs": 1,
+    "failure_is_final": true
+  },
+  "corrected_command": {
+    "working_directory": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "argv": [
+      "build/apps/gnss_fgo_imu_no_base",
+      "--dataset-id",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "--android-gnss",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "--nav",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "--all-epochs",
+      "--android-raw-clock-only",
+      "--summary-json",
+      "output/smartphone-r5/phase152-h-raw-p-seed-v1/mtv-h/native_summary.json",
+      "--native-phase149-raw-p-seed-stage"
+    ],
+    "argv_matches_phase151_corrected_command_except_output": true,
+    "raw_clock_only_count": 1,
+    "phase149_selector_count": 1,
+    "imu_argument": false,
+    "base_argument": false,
+    "solution_csv_argument": false
+  },
+  "input_integrity": {
+    "device_gnss.csv": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256_pinned_by_phase147": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes_pinned_by_phase147": 74299283,
+      "path_present_without_payload_read": true,
+      "authorized_native_read_count": 1
+    },
+    "brdc.nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256_pinned_by_phase147": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes_pinned_by_phase147": 10805490,
+      "path_present_without_payload_read": true,
+      "authorized_native_read_count": 1
+    }
+  },
+  "authorization": {
+    "raw_device_gnss": true,
+    "broadcast_navigation": true,
+    "phase149_raw_p_seed_stage": true,
+    "same_run_native_spp": true,
+    "fgo": false,
+    "imu": false,
+    "base_rinex": false,
+    "truth": false,
+    "accuracy": false,
+    "solution_coordinate_interpretation": false,
+    "solution_coordinate_publication": false,
+    "precomputed_position_or_seed": false,
+    "mat_pdc": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "sweep": false
+  },
+  "execution_policy": {
+    "native_invocations": 1,
+    "native_spp_invocations": 1,
+    "raw_gnss_reads": 1,
+    "navigation_reads": 1,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "summary_path_new": true,
+    "summary_preserve_and_no_overwrite": true,
+    "summary_structural_fields_only": true,
+    "coordinate_values_not_read": true,
+    "coordinate_values_not_published": true,
+    "route_failure_does_not_trigger_rerun": true
+  },
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "required_result_fields": [
+    "process_return_code",
+    "native_stage_entry",
+    "input_epoch_count",
+    "accepted_position_count",
+    "finite_clock_count",
+    "finite_velocity_count",
+    "failure_reason_counts",
+    "unsupported_clock_group_counts",
+    "geometry_rank_counts",
+    "time_policy_counts",
+    "velocity_endpoint_policy",
+    "raw_read_accounting",
+    "summary_sha256_or_absence"
+  ]
+}

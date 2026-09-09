@@ -1,0 +1,71 @@
+{
+  "schema_version": "smartphone-r5-phase126-raw-base-compound-structural-pre-raw-accounting.v1",
+  "phase": 126,
+  "execution_label": "Luna Max",
+  "status": "sealed-pre-raw-no-payload-activity",
+  "contract": {
+    "design_freeze_commit": "583a6c7a4788f82373a4e71436d2953703bc764c",
+    "implementation_commit": "9e9972667ee009e1bcd0dd1ea4732ae45415c3ce",
+    "freeze_commit": "5d00daf56afb6fe6b6e1f01b4a1213c287f671db",
+    "freeze_sha256": "196a9ffd1ecc909f8a34bbf8b9107be216a32bbd128fa54c94ed8a588ec7cc7b",
+    "runner_validator_manifest_commit": "40f1d93c0b7dbf9b92353df9e283cd0ad03de9b4",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_structural_manifest_v1.json",
+    "manifest_sha256": "661fe5cb7103939858a661e28fa6cb9000178a3fbe5f931738746dc1981a3963",
+    "selector": "--native-phase126-raw-base-source-complete",
+    "phase118_selector": "--native-phase118-official-tdcp-huber-k",
+    "phase117_dynamic_sigma": false,
+    "phase120_selector": false,
+    "additional_frequency_selector": false,
+    "matrix": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false,
+    "solution_output_published": false
+  },
+  "tests": {
+    "focused_python": {
+      "command": "python3 tests/test_smartphone_phase126_raw_base_compound_structural.py",
+      "tests": 9,
+      "failures": 0
+    },
+    "python_compile": {
+      "files": [
+        "apps/commands/benchmarks/gnss_smartphone_phase126_raw_base_compound_structural.py",
+        "apps/commands/benchmarks/gnss_smartphone_phase126_raw_base_compound_structural_execute.py",
+        "tests/test_smartphone_phase126_raw_base_compound_structural.py"
+      ],
+      "failures": 0
+    },
+    "payload_activity": 0
+  },
+  "authorization": {
+    "raw_materialization_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false,
+    "next_step": "independent authorization commit after this accounting seal"
+  }
+}

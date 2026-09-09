@@ -1,0 +1,296 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-freeze.v4",
+  "status": "frozen-before-holdout-evaluation-v4",
+  "freeze_id": "smartphone-r5-wls-stability-selector-release-freeze-2026-08-30-v4",
+  "frozen_at": "2026-08-30",
+  "source_revision": "a947409878fe78ca9234b20288cadd4d75baedea",
+  "source_status": "working tree contains pre-existing user changes; listed source hashes are the protected v4 evaluation contract",
+  "source_files": {
+    "apps/gnss.py": {
+      "sha256": "348dcd346a4bd622226c01a9473756946241676eb7db11fb91a103e3a52fe83d"
+    },
+    "CMakeLists.txt": {
+      "sha256": "3af1f167256ade28e949bdf2496b02fcb6f0e4379bd3f52050ae940e1042870f"
+    },
+    "apps/CMakeLists.txt": {
+      "sha256": "4136d966b68c5c766a2711b43ce27d3fe76f654906c95ea8944ce59ca1ebb28f"
+    },
+    "tests/CMakeLists.txt": {
+      "sha256": "582b9e2afda82b24e0490a2d1d03243c022a4ff3fcbe5b40456ec6b692a9003f"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_generalization.py": {
+      "sha256": "ed6111efe9321281ee0ba49df3082e4464ed105675e12d05cfb477fcbc37fc93"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": {
+      "sha256": "e740d42a5a3232775fef013c5f734a004f3aa4952add7415c1bcca0716ccaad0"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": {
+      "sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_reacquisition_eval.py": {
+      "sha256": "7880101df1ce416292be2af109ab374087c0dee068cacc6c268d3846d408c87e"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_segment_stability.py": {
+      "sha256": "446aac858b6a9d5163d121645eb8cc4f6567c1a454632b87ac379aa24d8bafe9"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": {
+      "sha256": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": {
+      "sha256": "9fac3b562d8b43c4fdfaab19a871fee1c1d710199b27bfdcdbb1c090fab5007a"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_residual.py": {
+      "sha256": "33c7d6fb831e7a559d2ccf051d2109e4c3c3a1d947f33f132b31872ee6d2a175"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_residual_eval.py": {
+      "sha256": "fafc995900625e6cd6097cb45bd7f7b2568d8f7a124ff74e8d330b7f0be87db5"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_residual_v2_eval.py": {
+      "sha256": "fb4c9edc2fdc0fc388f5a4d45e381c21d0ec12b5a6391e53fcef657bbb608197"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector.py": {
+      "sha256": "0a9a7e50bd8bee78460eb57929aa690c75de0ce81af5e07215c1845ee6136cb2"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_eval.py": {
+      "sha256": "235ade902fb7339f994f765efec7e0b52814d825d0551cb95cced92cb10ad72d"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_stability_selector_holdout_eval.py": {
+      "sha256": "cc726bb97ab5f7e5457ba57a8cbb70b736822ac113287a7736ba481494ca6d51"
+    },
+    "tests/test_smartphone_wls.py": {
+      "sha256": "686fe6ccd8469e8b1d1c2fb2859ad4d3b9a91fd503a5c32c8c01a66d22bf2ef5"
+    },
+    "tests/test_smartphone_wls_residual_v2.py": {
+      "sha256": "bf3f766c32bd79366782b0c3c975acf35eff816965c4896b047b7206457141dc"
+    },
+    "tests/test_smartphone_wls_stability_selector_holdout_eval.py": {
+      "sha256": "4a3f763fea952a9fc3ca3a055764e180570dfcb13b81eb4882e3b9d9fe3c7551"
+    }
+  },
+  "release_build": {
+    "build_type": "Release",
+    "compiler": "/usr/bin/c++",
+    "binary": "build/apps/gnss_spp",
+    "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_directory_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only_before_preflight": true,
+    "member_content_read_before_preflight": false
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "ed50bb5f8a661c566e4cada09b0debefc44a9d4ba65460a87d214c646470db8e",
+    "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+    "old_profile_holdout_not_used_for_v4": true
+  },
+  "holdout": {
+    "id": "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "role": "holdout",
+    "device_model": "sm-s908b",
+    "skip_epochs": 1,
+    "central_directory_members": {
+      "device_gnss": {
+        "name": "dataset_2023/train/2023-05-25-19-10-us-ca-sjc-be2/sm-s908b/device_gnss.csv",
+        "file_size": 41270203,
+        "compressed_size": 9386392,
+        "crc32_hex": "2c3681dc"
+      },
+      "broadcast_nav": {
+        "name": "dataset_2023/train/2023-05-25-19-10-us-ca-sjc-be2/brdc.nav",
+        "file_size": 12040709,
+        "compressed_size": 1135227,
+        "crc32_hex": "49c3c738"
+      },
+      "ground_truth": {
+        "name": "dataset_2023/train/2023-05-25-19-10-us-ca-sjc-be2/sm-s908b/ground_truth.csv",
+        "file_size": 136035,
+        "compressed_size": 36454,
+        "crc32_hex": "df378389"
+      }
+    },
+    "payload_sha256_deferred_until_materialization": true,
+    "payload_opened_before_freeze": false,
+    "truth_opened_before_freeze": false,
+    "truth_open_count_before_freeze": 0
+  },
+  "parameters": {
+    "galileo_e1": {
+      "broadcast_navigation_max_nearest_record_age_s": 14400,
+      "carrier_frequency_hz": 1575420000,
+      "constellation_type": "6",
+      "enabled": true,
+      "missing_prn_policy": "fail-closed; no synthesis",
+      "prn_range": [1, 36],
+      "rinex_observation_types": ["C1C", "L1C", "D1C", "S1C"],
+      "rinex_system": "E",
+      "signal": "GAL_E1_C_P",
+      "source_code_type_policy": "empty-only"
+    },
+    "hatch": {
+      "adr_units": "AccumulatedDeltaRangeMeters in meters",
+      "algorithm": "S_t=((N-1)*(S_(t-1)+ADR_t-ADR_(t-1))+P_t)/N",
+      "clock_discontinuity_resets": true,
+      "cycle_slip_bit": 4,
+      "enabled": true,
+      "gap_reset_threshold_ms": 1500,
+      "reset_bit": 2,
+      "reset_row_emits": "raw pseudorange",
+      "state_key": "RINEX system + PRN + SignalType",
+      "valid_bit": 1,
+      "window_s": 30
+    },
+    "segment_stability": {
+      "max_consecutive_rejects_r": 15,
+      "max_prediction_duration_d_s": 15.0,
+      "reject_fraction_max": null,
+      "decision": "retain RTS output iff every segment is stable; otherwise replace all segment coordinates with canonical raw/Hatch POS",
+      "truth_used": false
+    },
+    "stability_selector": {
+      "rule": "all native Galileo E1/Hatch30 segments stable selects native stable POS; one or more unstable segments selects raw handset WLS POS",
+      "runtime_inputs": ["native segment-stability report", "WLS integrity manifest", "exact device epoch keys"],
+      "device_model_used": false,
+      "truth_used": false,
+      "key_mismatch_policy": "fail-closed",
+      "nonfinite_policy": "fail-closed",
+      "wls_manifest_mismatch_policy": "fail-closed",
+      "selected_pos_and_submission": "atomic publish"
+    },
+    "time": {
+      "gps_utc_leap_seconds": 18,
+      "position_timestamp_tolerance_ms": 1,
+      "skip_epochs": 1
+    },
+    "trajectory": {
+      "state": "ENU position and ENU velocity",
+      "algorithm": "constant-velocity Kalman filter plus per-segment RTS smoother",
+      "measurement_floor_m": 1.0,
+      "outlier_gate_sigma": 5.0,
+      "process_noise_q": 1.0,
+      "segment_gap_s": 10.0,
+      "truth_used": false
+    },
+    "wls_integrity": {
+      "fields": ["WlsPositionXEcefMeters", "WlsPositionYEcefMeters", "WlsPositionZEcefMeters"],
+      "consistency_tolerance_m": 0.001,
+      "ecef_component_abs_max_m": 7500000.0,
+      "ecef_norm_range_m": [6000000.0, 7500000.0],
+      "clock_policy": "constant within epoch and monotonic across epochs",
+      "missing_epoch_policy": "fail-closed",
+      "partial_epoch_policy": "fail-closed",
+      "nonfinite_policy": "fail-closed",
+      "truth_used": false
+    }
+  },
+  "algorithm_parameter_hash_comparison": {
+    "canonicalization": "json.dumps(parameters, sort_keys=True, separators=(',', ':')) SHA256",
+    "v3_parameters_sha256": "c82fba6130c7d16c207213ab1e2ac542e02280db194949a300c68bebd412ca7e",
+    "v4_v3_pipeline_parameters_unchanged": true,
+    "changed_fields": []
+  },
+  "wls_residual_postprocess": {
+    "candidate_id": "median5_shift_0",
+    "branch": "truth-free selector-selected raw WLS only",
+    "robust_estimator": "component-wise centered median",
+    "robust_window_epochs": 5,
+    "along_track_shift_m": 0.0,
+    "candidate_search_after_freeze": false,
+    "candidate_source": "apps/commands/benchmarks/gnss_smartphone_wls_residual.py",
+    "timestamp_gap_threshold_ms": 1500,
+    "production_rtk_spp_default_changed": false
+  },
+  "v2_1_promotion_gate_frozen_before_truth": {
+    "selection_and_ranking_truth_free": true,
+    "diagnostics": {
+      "maximum_allowed_regression_m": 0.000001,
+      "all_four_variants_non_regression": true
+    },
+    "horizontal_p95": {
+      "strict_improvement": true
+    },
+    "horizontal_p50": {
+      "maximum_allowed_regression_m": 0.01
+    },
+    "availability": {
+      "non_regression": true
+    },
+    "truth_coverage": {
+      "non_regression": true
+    },
+    "vertical_p95": {
+      "profile_threshold_m": 45.0,
+      "major_regression_tolerance_m": 5.0,
+      "no_major_regression": true
+    },
+    "selector_branch_required": "wls_raw",
+    "postprocess_required": "median5_shift_0"
+  },
+  "kaggle_diagnostics": {
+    "variants": [
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling",
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling"
+    ],
+    "official_like_horizontal_comparison": "wgs84_vincenty__linear_n_minus_1",
+    "primary_leaderboard_score": "not inferred from local diagnostics"
+  },
+  "signoff_thresholds": {
+    "availability_min": 0.98,
+    "truth_coverage_min": 0.98,
+    "horizontal_median_max_m": 7.0,
+    "horizontal_p95_max_m": 25.0,
+    "vertical_p95_max_m": 45.0,
+    "max_solution_gap_s": 10.0
+  },
+  "truth_free_atomic_contract": {
+    "archive_hash_verified_before_member_open": true,
+    "central_directory_metadata_verified_before_member_open": true,
+    "pre_truth_members": ["device_gnss.csv", "brdc.nav"],
+    "ground_truth_deferred": true,
+    "truth_free_lane_order": ["native Galileo E1/Hatch30", "WLS integrity", "stability selector", "median5 iff WLS branch"],
+    "truth_opened_only_after_selector_and_postprocess_artifact_hashes": true,
+    "truth_read_count": 1,
+    "selected_pos_atomic": true,
+    "selected_submission_atomic": true,
+    "manifest_hashes_inputs_outputs_decision_segment_stats": true,
+    "partial_invalid_nonfinite_key_mismatch_policy": "fail-closed"
+  },
+  "preflight_contract": {
+    "mode": "central metadata and schema guard only",
+    "fixture_truth_open_count": 0,
+    "actual_preflight_truth_open_count": 0,
+    "actual_preflight_payload_materialization_count": 0,
+    "adapter_and_wls_authorization": "exact full repository-relative source key mapped to required basename",
+    "holdout_payload_access_before_preflight": false
+  },
+  "cli_commands": {
+    "preflight": "python3 apps/gnss.py smartphone-wls-stability-selector-holdout-eval --archive data/gsdc2023/cache/dataset_2023.zip --profile configs/benchmarks/smartphone_r5_gsdc2023.json --freeze docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4.json --freeze-manifest docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4_manifest.json --preflight-only",
+    "one_shot_holdout_entrypoint": "python3 apps/gnss.py smartphone-wls-stability-selector-holdout-eval --archive data/gsdc2023/cache/dataset_2023.zip --profile configs/benchmarks/smartphone_r5_gsdc2023.json --freeze docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4.json --freeze-manifest docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze_v4_manifest.json --output-dir output/smartphone-r5/wls-stability-selector-holdout-run2-v4",
+    "truth_free_native": "smartphone-gnss-adapter truth-free holdout Galileo E1 Hatch30 -> gnss spp -> timestamp canonicalization -> segment stability r15/d15",
+    "truth_free_wls": "wls.extract_to_directory holdout with consistency 0.001 m, ECEF range guard, and timestamp gap <=1500 ms continuous",
+    "selector": "selector.select_and_publish native-stable/WLS + manifests/submission atomically",
+    "wls_postprocess": "median5_shift_0 only when selector decision is wls_raw",
+    "truth": "open designated ground_truth.csv exactly once after all truth-free artifact hashes"
+  },
+  "holdout_execution_contract": {
+    "authorized": true,
+    "one_shot_run_number": 2,
+    "rerun_after_failure": false,
+    "same_artifact_verification_restart_only": true,
+    "no_post_holdout_tuning": true,
+    "no_code_changes_after_holdout_open": true,
+    "no_parameter_changes_after_holdout_open": true,
+    "production_rtk_spp_default_changed": false,
+    "development_only_recommended_lane": true,
+    "pass_or_fail_must_emit_sealed_run_record": true
+  },
+  "self_hash_policy": {
+    "record_hash_is_not_embedded_in_this_record": true,
+    "record_hash_must_be_fixed_in_separate_manifest": true
+  }
+}

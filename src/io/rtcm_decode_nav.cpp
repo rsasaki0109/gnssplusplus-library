@@ -161,6 +161,7 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
         eph.satellite = SatelliteId(GNSSSystem::GLONASS, prn);
         eph.glonass_frequency_channel = static_cast<int>(
             readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 5)) - 7;
+        eph.glonass_frequency_channel_present = true;
         bit_pos += 5;
         bit_pos += 4;
         const double tk_h = static_cast<double>(

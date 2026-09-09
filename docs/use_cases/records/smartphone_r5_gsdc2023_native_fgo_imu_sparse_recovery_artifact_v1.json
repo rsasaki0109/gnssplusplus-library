@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-imu-sparse-recovery-artifact.v1",
+  "status": "sealed-truth-free",
+  "candidate": "fgo_imu_sparse_recovery",
+  "classification": "coverage-recovery-candidate",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_imu_sparse_recovery_freeze_v1.json",
+  "freeze_record_sha256": "b852c28124e397c1a9a5f303e2d5655ba85e463a1fceb35528004c7b6ff80879",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2",
+  "device": "pixel7pro",
+  "truth_used": false,
+  "truth_open_count": 0,
+  "forbidden_inputs_opened": false,
+  "input_sha256_verified_against_freeze": true,
+  "raw_output": {
+    "problem_epochs": 1384,
+    "output_epochs": 1384,
+    "target_epochs": 1383,
+    "exact_solution_epochs": 1383,
+    "interpolated_epochs": 0,
+    "edge_hold_epochs": 0,
+    "unresolved_epochs": 0,
+    "sparse_epochs_retained": 190,
+    "sparse_empty_epochs_retained": 0,
+    "pseudorange_factors": 6432,
+    "gnss_first_undifferenced_doppler_factors": 6426,
+    "imu_intervals": 1383,
+    "graph_factors": 10584,
+    "graph_values": 5538,
+    "fallback": false,
+    "converged": true,
+    "nonfinite_rows": 0,
+    "duplicate_keys": 0,
+    "max_adjacent_horizontal_speed_mps": 183.46771107830838,
+    "continuity_note": "Finite Earth-bounded output is structurally valid; the 70 m/s physical witness reports one or more transitions above its diagnostic bound and is not silently repaired."
+  },
+  "runtime": {
+    "wall_seconds": 80.00,
+    "maximum_rss_kb": 121996,
+    "exit_status": 0
+  },
+  "artifact_sha256": {
+    "output/smartphone-r5/phase9-fgo-imu-sparse-recovery-v1/submission.csv": "5c81fc01f7f4c734be5fe491d03d571ac89332c31cf874f24a5d87fe8eabfd13",
+    "output/smartphone-r5/phase9-fgo-imu-sparse-recovery-v1/summary.json": "1ecf4b904233d5605f898c4d2fb752888289fc5e10c331c18c4a2eb8c95a801c",
+    "output/smartphone-r5/phase9-fgo-imu-sparse-recovery-v1/run.stdout": "2b2a518cfbc8893e8fe88305cf4a62b19efae59db8d3a3c714b1c7cbad233ffe",
+    "output/smartphone-r5/phase9-fgo-imu-sparse-recovery-v1/run.stderr": "a429065cc0d9443b1cd6cf3dead1481c6744fe439089b2af2275de7b639268ba"
+  },
+  "candidate_integrity": {
+    "uses_native_pdc_solver_state": false,
+    "uses_native_fgo_problem_builder": true,
+    "uses_native_gtsam_imu_graph": true,
+    "uses_device_wls_coordinates": false,
+    "uses_precomputed_trajectory": false,
+    "uses_mat": false,
+    "production_default_changed": false
+  },
+  "truth_access_policy": "This file seals the raw-only candidate before the single permitted development-truth read; no validation, holdout, Kaggle, token, or score-driven tuning is authorized."
+}

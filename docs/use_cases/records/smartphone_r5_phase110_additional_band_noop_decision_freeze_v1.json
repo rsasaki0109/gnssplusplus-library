@@ -1,0 +1,270 @@
+{
+  "schema_version": "smartphone-r5-phase110-additional-band-noop-decision-freeze.v1",
+  "phase": 110,
+  "execution_label": "Luna Max",
+  "status": "frozen-read-only-no-op-after-phase109-solution-hash-comparison",
+  "purpose": "Decide whether Phase109 additional-frequency-band admission warrants a new accuracy evaluation, using only sealed structural artifacts and opaque solution output metadata.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase110_additional_band_noop_decision_audit_v1.md",
+    "commit": "0b1ab4b0df811a6f419c08f633232d60aa9cf417",
+    "sha256": "2b134217568797aeeaee85f1d2836202702b89222c4950f133dbde3c6a0fbb05"
+  },
+  "sealed_evidence": {
+    "phase107_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_result_v1.json",
+      "sha256": "e7eb3f1d2670672414744a100dc1e2fc3e0b019ae7efc0dbfef1518300ce8d6"
+    },
+    "phase108_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_result_v1.json",
+      "sha256": "9f9a2528745c06ba06e774139f56892bcea0ef208a3d064e4b70042e48f29a9d"
+    },
+    "phase109_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase109_raw_base_frequency_parity_result_v1.json",
+      "sha256": "b443c2fcd1ed3b067094b47bf0b81f7fa404ed20547e7234d1c174dcf9ca2225"
+    },
+    "phase107_summaries": {
+      "mtv_a": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "sha256": "3399cdb0d17bdd137c2d11b8fd5ff7995c26aad74b5bedacb9de198f00442a8a"
+      },
+      "lax_t": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "sha256": "bf90eb608f0315550650c4d4510e6bab4e00632b0d86106fb654dc328be1114f"
+      }
+    },
+    "phase109_summaries": {
+      "mtv_a": {
+        "path": "output/smartphone-r5/phase109-raw-base-frequency-parity-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "sha256": "a4b7fd2725a66eff695249ca24856a203f9adcc371f428490aa31fadb94486e3"
+      },
+      "lax_t": {
+        "path": "output/smartphone-r5/phase109-raw-base-frequency-parity-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "sha256": "b111620e03411dadc6c7f2df48a561386d21ece87e40913a05c95c0356e507dd"
+      }
+    },
+    "phase107_solution_opaque": {
+      "mtv_a": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "sha256": "b401156e76d5a1a1cfc948aa666d69d292fe4ba43ea3e3f4580cde7e5f0339f8",
+        "bytes": 172694,
+        "rows": 2158,
+        "field_interpretation": false
+      },
+      "lax_t": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "sha256": "6e85865825a250628db4d6aa842fc5992ebdc63aa51ffaf7f1dd513c1fe600d8",
+        "bytes": 117254,
+        "rows": 1465,
+        "field_interpretation": false
+      }
+    },
+    "phase109_solution_opaque": {
+      "mtv_a": {
+        "path": "output/smartphone-r5/phase109-raw-base-frequency-parity-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "sha256": "b401156e76d5a1a1cfc948aa666d69d292fe4ba43ea3e3f4580cde7e5f0339f8",
+        "bytes": 172694,
+        "rows": 2158,
+        "field_interpretation": false
+      },
+      "lax_t": {
+        "path": "output/smartphone-r5/phase109-raw-base-frequency-parity-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "sha256": "6e85865825a250628db4d6aa842fc5992ebdc63aa51ffaf7f1dd513c1fe600d8",
+        "bytes": 117254,
+        "rows": 1465,
+        "field_interpretation": false
+      }
+    }
+  },
+  "decision": {
+    "decision_type": "no-op",
+    "candidate_count": 1,
+    "candidate_id": "phase110-phase109-additional-band-no-op-seal-v1",
+    "solution_hashes_identical_by_route": true,
+    "solution_bytes_identical_by_route": true,
+    "solution_rows_identical_by_route": true,
+    "base_observation_selection_changed": true,
+    "base_correction_aggregate_changed": false,
+    "retained_rover_factor_vector_changed": false,
+    "gnss_first_or_main_graph_changed": false,
+    "truth_re_evaluation_required": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "next_candidate": {
+      "id": "phase110-follow-up-exact-stream-key-taxonomy-audit-v1",
+      "status": "unfrozen-read-only-audit-only",
+      "implementation_authorized": false,
+      "raw_base_read_authorized": false,
+      "solver_authorized": false,
+      "truth_authorized": false
+    }
+  },
+  "comparison": {
+    "routes": ["MTV-A", "LAX-T"],
+    "runs_compared": {
+      "phase107": 2,
+      "phase109": 2
+    },
+    "base_selection_deltas": {
+      "MTV-A": {
+        "selected_rows": {
+          "phase107": 121673,
+          "phase109": 167020,
+          "delta": 45347
+        },
+        "selected_streams": {
+          "phase107": 58,
+          "phase109": 69,
+          "delta": 11
+        },
+        "new_signal_rows": {
+          "GAL_E5B": 35266,
+          "GPS_L5": 10081
+        },
+        "new_signal_streams": {
+          "GAL_E5B": 7,
+          "GPS_L5": 4
+        }
+      },
+      "LAX-T": {
+        "selected_rows": {
+          "phase107": 6342,
+          "phase109": 10332,
+          "delta": 3990
+        },
+        "selected_streams": {
+          "phase107": 61,
+          "phase109": 85,
+          "delta": 24
+        },
+        "new_signal_rows": {
+          "GAL_E5B": 2368,
+          "GAL_E6": 1182,
+          "GPS_L5": 440
+        },
+        "new_signal_streams": {
+          "GAL_E5B": 10,
+          "GAL_E6": 11,
+          "GPS_L5": 3
+        }
+      }
+    },
+    "correction_aggregate_unchanged": true,
+    "solver_graph_numeric_fields_unchanged": true,
+    "summary_hashes_differ_due_to_new_telemetry": true,
+    "phase109_correction_exactly_once": true,
+    "phase109_route_outcomes": {
+      "MTV-A": {
+        "gnss_first_iterations": 218,
+        "gnss_first_initial_cost": 4516236.0222890135,
+        "gnss_first_final_cost": 16097.714277915162,
+        "main_iterations": 12,
+        "main_initial_cost": 130723525.58263575,
+        "main_final_cost": 29729.5954122218,
+        "main_factors": 106071,
+        "main_values": 10795,
+        "output_epochs": 2159,
+        "expected_epochs": 2159
+      },
+      "LAX-T": {
+        "gnss_first_iterations": 234,
+        "gnss_first_initial_cost": 6412859.293244721,
+        "gnss_first_final_cost": 12298.593335217001,
+        "main_iterations": 12,
+        "main_initial_cost": 162184507.52202186,
+        "main_final_cost": 19851.9725625441,
+        "main_factors": 60948,
+        "main_values": 7330,
+        "output_epochs": 1466,
+        "expected_epochs": 1466
+      }
+    }
+  },
+  "mtv_a_exact_stream_miss_taxonomy": {
+    "total_missing_exact_stream": 12894,
+    "rows": [
+      {
+        "signal": "BDS_B1I",
+        "band": "B1",
+        "original_rows": 12849,
+        "exact_stream_matched": 0,
+        "retained_or_corrected": 0,
+        "missing_exact_stream": 12849,
+        "out_of_domain": 0,
+        "nonfinite": 0
+      },
+      {
+        "signal": "GLO_L1CA",
+        "band": "G1",
+        "original_rows": 9379,
+        "exact_stream_matched": 9334,
+        "retained_or_corrected": 9334,
+        "missing_exact_stream": 45,
+        "out_of_domain": 0,
+        "nonfinite": 0
+      },
+      {
+        "signal": "GPS_L1CA",
+        "band": "L1",
+        "original_rows": 21434,
+        "exact_stream_matched": 21434,
+        "retained_or_corrected": 20306,
+        "missing_exact_stream": 0,
+        "out_of_domain": 1128,
+        "nonfinite": 0
+      },
+      {
+        "signal": "GAL_E1",
+        "band": "E1",
+        "original_rows": 13619,
+        "exact_stream_matched": 13619,
+        "retained_or_corrected": 13619,
+        "missing_exact_stream": 0,
+        "out_of_domain": 0,
+        "nonfinite": 0
+      }
+    ],
+    "source_key": "(SatelliteId, SignalType)",
+    "missing_predicate": "!hasStream(satellite, signal) -> dropped_missing_exact_stream before correctionAt",
+    "bds_b1i_reason": "No corresponding B1I stream appears in the sealed Phase109 selected base-band map.",
+    "glo_l1ca_reason": "45 retained rover rows lack an exact (SatelliteId, GLO_L1CA) stream although 9334 rows match; individual IDs and payload-versus-mapping cause are not present in sealed metadata.",
+    "gps_l1ca_reason": "1128 rows have an exact stream but are outside its time domain; they are not exact-key misses.",
+    "unresolved_key_identity": true,
+    "base_bytes_reopened": false
+  },
+  "phase109_invariants": {
+    "preserve_additional_frequency_bands": true,
+    "c7_dimension": 7,
+    "d_handoff_full_finite": true,
+    "c7_handoff_full_finite": true,
+    "exact_key_handoff": true,
+    "global_isb_state_count": 0,
+    "main_solver": "MULTIFRONTAL_QR",
+    "main_elimination": "EliminateQR",
+    "fallback": false,
+    "rerun": false
+  },
+  "read_accounting_phase110": {
+    "sealed_result_and_summary_metadata_reads": "nonzero",
+    "source_code_reads": "nonzero_source_only",
+    "opaque_solution_hash_and_line_count_reads": 4,
+    "solution_coordinate_fields_interpreted": 0,
+    "raw_phone_gnss_imu_navigation_payload_reads": 0,
+    "raw_base_rinex_byte_header_stat_hash_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_publication": 0
+  },
+  "authorization_boundary": {
+    "phase110_execution": false,
+    "truth_only_evaluation": false,
+    "accuracy": false,
+    "new_candidate_implementation": false,
+    "raw_or_base_read": false
+  }
+}

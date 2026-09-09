@@ -1,0 +1,135 @@
+{
+  "schema_version": "smartphone-r5-phase172-h-native-raw-p-no-doppler-imu-main-manifest.v1",
+  "phase": 172,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-single-authorized-run",
+  "purpose": "one-shot offline MTV-H raw GNSS+IMU native same-run Phase165/167 GNSS-first to Phase171 Pose3/IMU main diagnostic",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "official_type": "Street",
+  "implementation_commit": "af5f17ae1b33b662d3a8926d1859b95f1e5fecd7",
+  "historical_input_sources": {
+    "phase170_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase170_h_native_raw_p_no_doppler_1000_manifest_v1.json",
+      "sha256": "01377a8650bf7faa9c36e03566cc3471afc2745544da462d04a0bbcf1f09be19"
+    },
+    "phase147_preflight_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_preflight_manifest_v1.json",
+      "sha256": "0044096dca41887e6bdd6201444f70d5ef7d6c7f0b5c717808670a09264a9aab"
+    },
+    "phase147_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_authorization_v1.json",
+      "sha256": "bd86fd1e35c8cc0cfbcb207d201cb10a0438be775307f0292956d1b7480ea239"
+    }
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "7b4ccb09e9402c08f7065bfc2844c7081168f1272ac62aa1a5cec3ad90da867c",
+    "bytes": 4036168
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "350c654bfc1dec368071422ef1e48ad90744e48b94ba08d50d5c9c3c5aee39b7",
+    "include/libgnss++/algorithms/fgo.hpp": "cd276238bbaf18eb1d0fd5e0f756bcf1e5157375b19babd33b555632e19c26fe",
+    "include/libgnss++/algorithms/fgo_config.hpp": "b025b782420c43ab7b59b9d1b74b004dbc50d7b177634d0558b681fc546523b3",
+    "src/algorithms/fgo.cpp": "4d0a7edcce0e0f1878674be2be7b9ee4ccd55c8a74a493fc43dc8c846c2a662c",
+    "src/algorithms/fgo_gtsam_backend.cpp": "14ab3f1ae3caeccade599165f63b1cdbe15e057c9bae1f88c0f278ff3ca98f4a",
+    "src/algorithms/fgo_gtsam_internal.hpp": "5a129417cff22bf27fa3826cd6eedb5f5e9445da5fc70b366d2166f17fb731bf",
+    "tests/test_fgo_gtsam_backend.cpp": "177e3d73b74e4cce3bc025b26b87a43a6c0a81a66dfa940f4337f90730e96686"
+  },
+  "inputs": {
+    "android_gnss": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes": 74299283,
+      "provenance": "Phase170 pinned H GNSS input; Phase147 unchanged hash"
+    },
+    "android_imu": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+      "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+      "bytes": 54271475,
+      "provenance": "Phase147 H raw IMU input; same route/device and unchanged hash"
+    },
+    "nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes": 10805490,
+      "provenance": "Phase170 pinned H navigation input; Phase147 unchanged hash"
+    }
+  },
+  "environment": {
+    "working_directory": "gnssplusplus-library",
+    "ld_library_path_prefix": "/home/sasaki/.local/lib",
+    "help_and_synthetic_argv_validation": true,
+    "source_and_binary_validation_before_launch": true
+  },
+  "argv": [
+    "build/apps/gnss_fgo_imu_no_base",
+    "--dataset-id", "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "--android-gnss", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+    "--android-imu", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+    "--nav", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+    "--all-epochs",
+    "--android-raw-utc-keys",
+    "--android-raw-clock-only",
+    "--native-pdc-imu-tdcp-no-bridge",
+    "--native-source-direct-observable-quality",
+    "--native-source-clock-c0d-factor",
+    "--native-source-clock-c0d-meter-state-parity",
+    "--native-source-clock-c0d-active-solve-diagnostic",
+    "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "--native-source-clock-c0d-epoch-vector-parity",
+    "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+    "--native-phase157-raw-p-bootstrap",
+    "--native-phase165-raw-p-no-doppler-graph",
+    "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+    "--native-phase171-raw-p-no-doppler-imu-main",
+    "--out", "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+    "--summary-json", "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json"
+  ],
+  "selector_contract": {
+    "phase157_bootstrap": true,
+    "phase159_collect_all_epochs": false,
+    "phase165_graph": true,
+    "phase167_budget": true,
+    "phase171_same_run_imu_main": true,
+    "gnss_first_configured_max_iterations": 1000,
+    "gnss_first_effective_max_iterations": 1000,
+    "main_configured_max_iterations": 12,
+    "main_effective_max_iterations": 1000,
+    "raw_clock_only": true,
+    "raw_utc_keys": true,
+    "all_epochs": true,
+    "source_c0d_c7_handoff": true,
+    "source_c0d_d_handoff": true,
+    "generic_doppler_factors": false,
+    "tdcp_family": true,
+    "base": false,
+    "truth": false,
+    "mat": false,
+    "precomputed_seed_files": false,
+    "kaggle": false,
+    "velocity_derivation": true,
+    "pixel5_offset_reapplication": false
+  },
+  "output_policy": {
+    "summary_path": "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json",
+    "opaque_solution_path": "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+    "fresh_output_only": true,
+    "candidate_output_reused_as_solver_input": false,
+    "public_result_coordinate_values": false,
+    "aggregate_telemetry_only": true,
+    "preserve_phase170_and_phase147_artifacts": true
+  },
+  "execution_policy": {
+    "authorized_native_invocations": 1,
+    "authorized_gnss_reads": 1,
+    "authorized_imu_reads": 1,
+    "authorized_nav_reads": 1,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "rerun_fallback_repair": false,
+    "failure_is_final_for_this_record": true,
+    "no_coordinate_interpretation": true
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "schema_version": "smartphone-r5-phase25-raw-clock-audit.v1",
+  "status": "truth-free-preflight",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json",
+    "sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889"
+  },
+  "truth_open_count": 0,
+  "mat_open_count": 0,
+  "input_policy": {
+    "fields_read": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "FullBiasNanos",
+      "BiasNanos",
+      "TimeOffsetNanos",
+      "ReceivedSvTimeNanos",
+      "State",
+      "HardwareClockDiscontinuityCount",
+      "ConstellationType",
+      "Svid",
+      "SignalType",
+      "CarrierFrequencyHz",
+      "BiasUncertaintyNanos"
+    ],
+    "derived_columns_read": [],
+    "pseudorange_source": "raw Android clock fields only; long-double integer subtraction",
+    "formula": "segment_base = first valid FullBiasNanos, reset only after successive TimeNanos gap > 1 s; week=floor((TimeNanos-segment_base)/1e9/604800); receiver TOW subtracts BiasNanos and per-signal TimeOffsetNanos; GLONASS day-of-week/-3h/+18s, BeiDou +14s, nearest +/- week; P=(tow_rx-tow_tx)*c",
+    "status_contract": "GPS/Galileo/BeiDou/GLONASS supported by raw constellation/frequency; QZSS/SBAS/IRNSS excluded as specified by gnsslog2obs.m; State and HardwareClockDiscontinuityCount are status diagnostics/gates"
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "raw_rows": 87705,
+      "first_supported_finite_raw_row": {
+        "utcTimeMillis": "1615921153434",
+        "TimeNanos": "7086580000000",
+        "FullBiasNanos": "-1299949284854215274",
+        "BiasNanos": "-0.28925037384033203",
+        "TimeOffsetNanos": "0.0",
+        "ReceivedSvTimeNanos": "241171363308530",
+        "State": "16399",
+        "HardwareClockDiscontinuityCount": "1",
+        "ConstellationType": "1",
+        "Svid": "7",
+        "SignalType": "GPS_L1_CA"
+      },
+      "systems": {"GPS": 31415, "GLONASS": 12068, "BeiDou": 13551, "Galileo": 27234},
+      "signals": {"GPS_L1_CA": 22649, "GPS_L5_Q": 8598, "GLO_G1_CA": 11832, "BDS_B1_I": 13498, "GAL_E1_C_P": 13771, "GAL_E5A_Q": 13260, "unmapped_frequency": 660},
+      "invalid_timing_rows": 0,
+      "invalid_bias_uncertainty_rows": 0,
+      "unsupported_signal_rows": 3437,
+      "nonfinite_or_nonpositive_pseudorange_rows": 0,
+      "time_jumps_strictly_gt_1s": 0,
+      "hardware_clock_discontinuity_changes": 0,
+      "pseudorange_m": {"count": 84268, "min": 20049030.478873014, "p05": 20392630.457607068, "median": 23556695.81072674, "p95": 26939019.395770866, "max": 27437561.916941226, "in_code_mask_range": 84268}
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "raw_rows": 50201,
+      "first_supported_finite_raw_row": {
+        "utcTimeMillis": "1626295841999",
+        "TimeNanos": "4851764000000",
+        "FullBiasNanos": "-1310326208235655136",
+        "BiasNanos": "0.0",
+        "TimeOffsetNanos": "0.0",
+        "ReceivedSvTimeNanos": "334259925499973",
+        "State": "16431",
+        "HardwareClockDiscontinuityCount": "55",
+        "ConstellationType": "1",
+        "Svid": "5",
+        "SignalType": "GPS_L1_CA"
+      },
+      "systems": {"GPS": 15997, "GLONASS": 4620, "BeiDou": 9320, "Galileo": 18226},
+      "signals": {"GPS_L1_CA": 11616, "GPS_L5_Q": 1861, "GLO_G1_CA": 4333, "BDS_B1_I": 7715, "GAL_E1_C_P": 7330, "GAL_E5A_Q": 4985, "unmapped_frequency": 10323},
+      "invalid_timing_rows": 40,
+      "invalid_bias_uncertainty_rows": 0,
+      "unsupported_signal_rows": 1998,
+      "nonfinite_or_nonpositive_pseudorange_rows": 0,
+      "time_jumps_strictly_gt_1s": 1,
+      "hardware_clock_discontinuity_changes": 0,
+      "pseudorange_m": {"count": 48163, "min": 19757534.89588525, "p05": 20661720.292571217, "median": 23833545.831683148, "p95": 28590750.24134168, "max": 41701143.044524156, "in_code_mask_range": 46998}
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "raw_rows": 74387,
+      "first_supported_finite_raw_row": {
+        "utcTimeMillis": "1627415396439",
+        "TimeNanos": "8268809000000",
+        "FullBiasNanos": "-1311442345630072926",
+        "BiasNanos": "-0.8714785575866699",
+        "TimeOffsetNanos": "0.0",
+        "ReceivedSvTimeNanos": "244214365932314",
+        "State": "16399",
+        "HardwareClockDiscontinuityCount": "669",
+        "ConstellationType": "1",
+        "Svid": "5",
+        "SignalType": "GPS_L1_CA"
+      },
+      "systems": {"GPS": 24485, "GLONASS": 12515, "BeiDou": 9671, "Galileo": 25483},
+      "signals": {"GPS_L1_CA": 16764, "GPS_L5_Q": 7645, "GLO_G1_CA": 12420, "BDS_B1_I": 9628, "GAL_E1_C_P": 14402, "GAL_E5A_Q": 10854, "unmapped_frequency": 441},
+      "invalid_timing_rows": 0,
+      "invalid_bias_uncertainty_rows": 0,
+      "unsupported_signal_rows": 2233,
+      "nonfinite_or_nonpositive_pseudorange_rows": 0,
+      "time_jumps_strictly_gt_1s": 0,
+      "hardware_clock_discontinuity_changes": 0,
+      "pseudorange_m": {"count": 72154, "min": 19802329.4041455, "p05": 20584530.59850277, "median": 23797943.91053832, "p95": 27902820.21693271, "max": 28896740.60862692, "in_code_mask_range": 72154}
+    }
+  },
+  "source_evidence": {
+    "upstream_gnsslog2obs": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m:103-121,158-188,246-252; SHA256 665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+    "android_clock_semantics": "TimeNanos/FullBiasNanos/BiasNanos are retained as the Android raw receiver clock; LeapSecond is not inserted into the GPST pseudorange equation",
+    "legacy_failure": "Phase24 truth-free logs failed before solver input because strict enriched RawPseudorangeMeters consistency was incorrectly applied to a segment-base clock equation",
+    "phase25_action": "explicit raw-clock-only mode ignores RawPseudorangeMeters text and records that it was not used; strict mode remains default"
+  }
+}

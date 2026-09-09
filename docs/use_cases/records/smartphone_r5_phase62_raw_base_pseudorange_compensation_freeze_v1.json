@@ -1,0 +1,83 @@
+{
+  "schema_version": "smartphone-r5-phase62-raw-base-pseudorange-compensation-freeze.v1",
+  "status": "source-only-frozen-before-raw-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "purpose": "Freeze one non-overlapping raw-source candidate: the published taroz/gsdc2023 base-station pseudorange compensation path.",
+  "phase": 62,
+  "source_contract": {
+    "repository_url": "https://github.com/taroz/gsdc2023",
+    "repository_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "function": "functions/correct_pseudorange.m",
+    "function_sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+    "moving_mean": {
+      "base_interval_1s_samples": 151,
+      "base_interval_15s_samples": 11,
+      "selection": "exact source dt equality: 1.0 s -> 151, 15.0 s -> 11"
+    },
+    "matching": "same satellite and same frequency before residual correction; no cross-frequency or cross-satellite fill",
+    "base_residual": "source modeled base pseudorange residual after satellite geometry/clock modeling at the fixed base coordinate",
+    "interpolation": "linear interpolation of the smoothed base residual at each rover observation time; no extrapolation, endpoint hold, or nearest-time fill",
+    "sign": "the correction is subtracted: P_rover_corrected = P_rover - pc_f(t_rover); this is the source operation obsr.(f).resPc = obsr.(f).resPc-pc",
+    "units": "pseudorange and residual correction in metres; timestamps in the source observation time contract"
+  },
+  "allowed_inputs": {
+    "rover": "raw Android device_gnss.csv only for the later separately authorized audit/implementation",
+    "base": "raw base-station RINEX observation member only, subject to the preflight below",
+    "navigation": "the route's already-declared broadcast navigation only in a later separately authorized stage",
+    "base_coordinate": "finite published base-station coordinate or finite RINEX header APPROX POSITION XYZ; its provenance must be recorded",
+    "forbidden": [
+      "MAT/MATLAB data products including phone_data.mat or gt.mat",
+      "base_position.csv or base_offset.csv as an unpinned/precomputed substitute",
+      "handset ground truth, WLS/SvPosition/SvElevation, precomputed inference coordinates",
+      "validation/holdout/Kaggle/token data",
+      "solver or trajectory rerun during this source-only phase"
+    ]
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "base_input_preflight": {
+    "status_now": "availability_and_station_role_not_read in Phase62 freeze stage",
+    "required_before_any_raw_audit": [
+      "one exact, hash-pinned base RINEX member per route",
+      "RINEX header or independently published station coordinate is finite and station provenance is explicit",
+      "base epochs have valid source time and overlap the rover time domain",
+      "the member is a surveyed/reference base station, not handset truth or a derived coordinate"
+    ],
+    "fail_closed": "if any route lacks a verified base RINEX, coordinate, time overlap, or station role, do not read a substitute and do not implement/score this candidate"
+  },
+  "fixed_future_gates": {
+    "route_count": 4,
+    "same_satellite_frequency_match": "all correction keys must retain original satellite+frequency identity; duplicates and cross-key fills are zero",
+    "prediction_domain_coverage_per_route": 1.0,
+    "finite_correction_fraction_per_route_min": 0.99,
+    "matched_current_adopted_pseudorange_factor_fraction_per_route_min": 0.80,
+    "raw_only_materiality": "median absolute pc >= 0.10 m and p95 absolute pc >= 0.30 m on every route",
+    "raw_only_closure_effect": "a predeclared same-satellite code-rate/adjacent innovation statistic must improve by >=5% on every route, with no route worsening >5%; this is diagnostic only and uses no truth",
+    "loo_stability": "the fixed source formula has no fitted parameter; three-route leave-one-route-out audit must preserve correction direction and the materiality/closure decision on the held route",
+    "sign_check": "synthetic positive-pc fixture must reduce the rover modeled residual by subtraction; opposite sign fails closed",
+    "integrity": "raw input hashes/bytes, monotonic timestamps, duplicate keys, finite fields, read count, and artifact hashes are sealed before any result"
+  },
+  "read_accounting_at_freeze": {
+    "raw_device_gnss": 0,
+    "raw_base_rinex": 0,
+    "broadcast_nav": 0,
+    "truth": 0,
+    "imu": 0,
+    "mat": 0,
+    "archive_reopen": 0,
+    "solver_invocation": 0,
+    "validation_holdout_kaggle_token": 0
+  },
+  "non_overlap_and_scope": {
+    "phase43": "preserved no-base native champion; no comparison or rerun in this freeze",
+    "phase51": "not combined with the Android SV-time sigma-floor experiment",
+    "phase58": "not combined with the Cn0 Doppler sigma experiment",
+    "phase61": "not combined with Cn0 pseudorange residual calibration",
+    "native_status": "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp explicitly omits correct_pseudorange.m base compensation; no implementation is authorized by this record",
+    "accuracy": "0.782 reachability is not evaluated in Phase62; any accuracy phase requires a new immutable freeze after the raw-only gates pass"
+  }
+}

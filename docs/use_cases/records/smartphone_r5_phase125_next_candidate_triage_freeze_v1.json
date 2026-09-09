@@ -1,0 +1,178 @@
+{
+  "schema_version": "smartphone-r5-phase125-next-candidate-triage-freeze.v1",
+  "phase": 125,
+  "execution_label": "Luna Max",
+  "status": "sealed-no-candidate-read-only",
+  "purpose": "Freeze the Phase125 source-only next-candidate triage without authorizing implementation or execution.",
+  "starting_state": {
+    "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "head_before_audit": "11df5c17ef79279f5f36f348a1549915bbb800fd",
+    "worktree_before_audit": "clean",
+    "official_source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5"
+  },
+  "decision": {
+    "candidate_count": 0,
+    "decision": "no-candidate",
+    "source_backed_single_variable_candidate": false,
+    "default_off_candidate_frozen": false,
+    "factor_topology_preserving_candidate": false,
+    "factor_admission_preserving_candidate": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "raw-base-station-reference-diverges-official-table-plus-enu-offset-vs-rinex-approx-position",
+      "official-gt-Gsat-base-residual-and-native-explicit-operator-not-proven-equivalent",
+      "station-clock-geometry-atmosphere-smoothing-interpolation-are-one-compound-port",
+      "single-term-change-can-alter-source-miss-mask-and-factor-population",
+      "satellite-clock-tgd-order-already-closed-by-phase122-no-candidate",
+      "clock-isb-tdcp-handoff-output-and-motion-already-audited-or-frozen",
+      "no-topology-and-admission-invariant-one-variable-candidate-remains"
+    ]
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase125_next_candidate_triage_audit_v1.md",
+    "commit": "4ddfb4b757a44a9ef6864cb964ed5b65eb1f33a6",
+    "sha256": "d6870577f2bec97dc4debdc194bff86d593af63668ed46bc4617a04de6586d3f"
+  },
+  "sealed_accuracy_aggregates": {
+    "promotion_comparator": "candidate_macro_score_m < 0.782",
+    "phase112": {
+      "commit": "0151bd070f8029413f8f2a17a28fe982dddb735f",
+      "md_sha256": "d098f643925b4107620485c8bd0a482643e88555a2a07dfe6c4470bfd7cf114e",
+      "json_sha256": "46d8d836758ac1a88b95ec2c1a0c0080cedfb753c12411ed74e4c2501549c57e",
+      "mtv_a_m": 0.997685253035948,
+      "lax_t_m": 0.6659910917640763,
+      "macro_m": 0.8318381724000121
+    },
+    "phase118": {
+      "commit": "6b37f92077a8ede43cb24e7a5cada580feccea5c",
+      "md_sha256": "698381199eaedc981172745bd42dc70c9c3afb8341401b1fc4c1783910aff5d6",
+      "json_sha256": "918597aab19f462a2aadfff606f461ce47f48f2fdcd997e5fdeb89ab459a0164",
+      "mtv_a_m": 1.002826677831249,
+      "lax_t_m": 0.6255696228129851,
+      "macro_m": 0.814198150322117
+    },
+    "phase120": {
+      "commit": "7553328e90a80d2127f95b6d0c0bab02b1b78a3f",
+      "md_sha256": "d0007f446d89cc101dbfffa1ba6b2cbed9aced1220d05f0105778ae4b7d39acb",
+      "json_sha256": "608e5a1711c458240d4be7e481e93d8ba76d4d7677720f76033c9262d92a1dc2",
+      "mtv_a_m": 1.0080567510569665,
+      "lax_t_m": 0.6260079250519545,
+      "macro_m": 0.8170323380544604
+    }
+  },
+  "prior_audits_and_freezes": {
+    "phase121": {
+      "audit_commit": "f824879696920ab065fb3afab88f8cd8e2c93495",
+      "audit_sha256": "f8f9f1fa59cca62303ebea738d69d4af5c73f247fefcf5d6b6c0a8bccbb42212",
+      "freeze_commit": "801db5381a6ed476fc83145db4358a0c5bdf2ce4",
+      "freeze_sha256": "aee8018adafe82249014d9b3e59e92e25699794ce15116bc0eda974f183a2424",
+      "decision": "no-candidate-tdcp-geometry"
+    },
+    "phase122": {
+      "audit_commit": "4480b05a2686353a72b523ea0b32cf9d4142296d",
+      "audit_sha256": "26a05cb3a2f4b98c1f9bec9740dcd70e63c49c7f8c56c342703dca0800473906",
+      "freeze_commit": "310b529d325b09d83a71214bff602db363d3c745",
+      "freeze_sha256": "1687c5980acf62d4966798f5dc457a67d9ec1dc8d16485f470ca01538c75a4e3",
+      "decision": "no-candidate-pseudorange-weighting-and-tgd-order"
+    },
+    "phase123": {
+      "audit_commit": "db4e23255529b6212f86f37409a1931d60641fcc",
+      "audit_sha256": "1a0c5afdbccdda64e9c238d8d1966af101a4ffdf899570d699bd5f9fefe5ffb7",
+      "freeze_commit": "e1642294c53176326fd9d277cd5fa6172b49857d",
+      "freeze_sha256": "982b56655eeeb004663b5ca5b894f99a5be57be76e4ab9dd4e9ab778c9b8e948",
+      "decision": "no-candidate-doppler-velocity"
+    },
+    "phase124": {
+      "audit_commit": "b0a0c161ef39791321429464d2dc6ac6f5968da2",
+      "audit_sha256": "36d3aaf0ac752422930df4e2e10c9f3a43419346e8f26af29c55b9aa085adb8b",
+      "freeze_commit": "59586b424341ec0e36c52c3b28a349a473b837f2",
+      "freeze_sha256": "607d28eaa4d66183f09f21bb65bf6e19a61e03b8c5b175fe862a19a36c7572b2",
+      "decision": "no-candidate-imu-factor"
+    },
+    "phase125_motion": {
+      "audit_commit": "33487ba2587e4b7fee790a1af10b85e5124440b0",
+      "audit_sha256": "41a5ba257c004b60747e39abaa20b90c0d96c098b1b803776d19d642b1becf40",
+      "freeze_commit": "11df5c17ef79279f5f36f348a1549915bbb800fd",
+      "freeze_sha256": "b9e382c228bea02c886e2c823b60de240d3457c57f5631289e83d0252d62b98f",
+      "decision": "no-candidate-motion-factor"
+    }
+  },
+  "candidate_inventory": [
+    {
+      "id": "phase125-raw-base-rinex-antenna-reference-v1",
+      "status": "rejected",
+      "source_backed": false,
+      "reason": "The official offset is applied after base residual construction, while native parses but does not consume the RINEX antenna delta. Applying it is not proven equivalent and may double-count the reference or change the miss mask."
+    },
+    {
+      "id": "phase125-raw-base-official-residual-operator-v1",
+      "status": "rejected-compound-port",
+      "source_backed": true,
+      "reason": "Station provenance, satellite-state timing, Earth rotation, atmosphere, group-delay policy, smoothing, interpolation, and miss accounting must be ported/proven jointly."
+    },
+    {
+      "id": "phase125-satellite-clock-tgd-order-v1",
+      "status": "rejected-prior-overlap",
+      "source_backed": true,
+      "reason": "Phase122 already froze this as no-candidate; native rover/base group-delay and GNSS-first use make a local ordering edit non-independent."
+    }
+  ],
+  "required_next_compound_port": {
+    "status": "not-frozen-for-implementation",
+    "components": [
+      "raw-RINEX-header station reference and explicitly proven antenna convention",
+      "official Gsat/Gobs resPc satellite clock, transmit-time, Earth-rotation, ionosphere, and troposphere semantics",
+      "same-satellite/same-signal smoothing, in-domain interpolation, and exact miss-mask conservation",
+      "exactly-once application to raw code factors in GNSS-first and main while retaining Phase101 C7/D and QR"
+    ],
+    "forbidden_inputs": [
+      "base_position.csv",
+      "base_offset.csv",
+      "phone coordinates",
+      "result coordinates",
+      "PDC",
+      "precomputed corrections",
+      "MAT",
+      "truth",
+      "Kaggle"
+    ],
+    "required_before_execution": [
+      "source-complete audit and implementation freeze",
+      "synthetic/source regression for measurement and admission conservation",
+      "new structural manifest and independent one-shot authorization"
+    ]
+  },
+  "fixed_invariants": {
+    "legacy_default_unchanged": true,
+    "phase101_c7_d_handoff_unchanged": true,
+    "ccdd_equation_units_sigma_unchanged": true,
+    "phase99_multifrontal_qr_unchanged": true,
+    "imu_carrier_tdcp_motion_topology_and_gates_unchanged": true,
+    "raw_base_current_exactly_once_policy_unchanged": true,
+    "lm_filter_initialization_noise_unchanged": true,
+    "output_alignment_and_truth_separation_unchanged": true
+  },
+  "read_accounting": {
+    "official_native_source_text": "read-only",
+    "sealed_record_metadata": "aggregate/state metadata only",
+    "raw_phone_gnss_imu_navigation_payload": 0,
+    "raw_base_bytes_or_headers": 0,
+    "truth_payload_or_coordinate_rows": 0,
+    "solution_coordinate_rows": 0,
+    "mat_data": 0,
+    "precomputed_coordinates": 0,
+    "pdc_or_kaggle_access": 0,
+    "solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "reruns_fallbacks_repairs": 0,
+    "parameter_or_weight_sweeps": 0,
+    "code_or_configuration_changes": 0
+  }
+}

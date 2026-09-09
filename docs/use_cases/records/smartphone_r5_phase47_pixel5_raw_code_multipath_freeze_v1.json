@@ -1,0 +1,298 @@
+{
+  "schema_version": "smartphone-r5-phase47-pixel5-raw-code-multipath-freeze.v1",
+  "status": "frozen-before-phase47-raw-read",
+  "phase": 47,
+  "execution_label": "Luna Max",
+  "purpose": "Truth-free audit of the single raw physical factor selected by Phase46: satellite-specific raw code propagation/multipath residual. The audit uses only the four pinned Pixel5 device_gnss.csv payloads and immutable Android raw measurement semantics; it does not fit or apply a correction.",
+  "objective": {
+    "factor": "satellite-specific raw code propagation/multipath residual",
+    "route_count_required": 4,
+    "geometry_free_first": true,
+    "audit_only": true,
+    "solver_rerun": false,
+    "correction_fit_or_application": false,
+    "truth_free": true,
+    "zero_point_782_evaluation": false
+  },
+  "supersedes": {
+    "phase46_policy": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json",
+      "sha256": "d183bc8630a06545c4cb46dd4d061bb4d819fc48414b9557c5dfcad097e3e5c1",
+      "use": "policy-only next-factor pin; Phase46 payload is not a Phase47 diagnostic input"
+    }
+  },
+  "authority_pins": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase44_commit": "a323eb6",
+    "phase46_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_freeze_v1.json",
+      "sha256": "b847826017ae7683d9fa91de7225301af682d778add210acd6f04fcce52e5196",
+      "use": "policy/route provenance only"
+    },
+    "phase46_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json",
+      "sha256": "d183bc8630a06545c4cb46dd4d061bb4d819fc48414b9557c5dfcad097e3e5c1",
+      "use": "policy-only next-factor pin; values are not read as observations"
+    },
+    "phase25_raw_clock_contract": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json",
+      "sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889",
+      "use": "source-supported long-double raw pseudorange reconstruction contract"
+    },
+    "phase43_static_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_result_v1.json",
+      "sha256": "441c65ed8630ca2c48c329f440e8b54a772c0c062329cc5d89b297180bce2a22",
+      "use": "policy/static adoption context only; no candidate or trajectory payload"
+    },
+    "phase13_upstream_quality_no_go": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json",
+      "freeze_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f",
+      "result_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_score_result_v1.json",
+      "result_sha256": "9b216ea542aef39fc769682ef9e615a9af911863a71a72edc7a3b67a638406d7",
+      "policy": "the single-route Pixel7pro upstream quality candidate regressed and is not re-proposed"
+    },
+    "source_contracts": {
+      "android_raw_gnss_cpp": {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390"
+      },
+      "android_raw_gnss_header": {
+        "path": "include/libgnss++/io/android_raw_gnss.hpp",
+        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+      },
+      "observable_upstream_preprocessing": {
+        "path": "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp",
+        "sha256": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54"
+      },
+      "fgo_problems_cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "5fb1dec8e7f23652eefecc9d8684586a66fecac07e109489792c8590aac76a03"
+      }
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ]
+  },
+  "exact_raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "file_size": 57715495,
+      "compressed_size": 13575292,
+      "crc32_hex": "6e27b3b6",
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "materialization_record": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/materialization_manifest.json"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+      "file_size": 74299283,
+      "compressed_size": 17074167,
+      "crc32_hex": "660121c3",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "materialization_record": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_raw_materialization.json"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+      "file_size": 33837317,
+      "compressed_size": 7801965,
+      "crc32_hex": "e7b2f43c",
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+      "materialization_record": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_raw_materialization.json"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+      "file_size": 23385520,
+      "compressed_size": 5457833,
+      "crc32_hex": "17dffb4e",
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+      "materialization_record": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_raw_materialization.json"
+    }
+  },
+  "input_policy": {
+    "raw_device_gnss_read_count_per_route": 1,
+    "single_evaluator_process": true,
+    "truth_read_count": 0,
+    "phase45_truth_payload_used": false,
+    "phase46_payload_used": false,
+    "brdc_nav_used": false,
+    "archive_reopen_count": 0,
+    "rematerialization_count": 0,
+    "solver_rerun": false,
+    "correction_fit_or_application": false,
+    "validation_holdout_access": false,
+    "kaggle_or_token_access": false,
+    "mat_read_or_generated": false,
+    "device_wls_coordinates_used": false,
+    "SvPosition_or_SvElevation_used": false,
+    "precomputed_inference_coordinates_used": false,
+    "atomic_output_publish": true
+  },
+  "raw_schema": {
+    "required_for_raw_pseudorange": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "FullBiasNanos",
+      "BiasNanos",
+      "ReceivedSvTimeNanos",
+      "Svid",
+      "ConstellationType",
+      "SignalType",
+      "CarrierFrequencyHz"
+    ],
+    "required_for_cmc_when_present": [
+      "AccumulatedDeltaRangeMeters",
+      "AccumulatedDeltaRangeState"
+    ],
+    "optional_if_present": [
+      "TimeOffsetNanos",
+      "HardwareClockDiscontinuityCount",
+      "State",
+      "MultipathIndicator",
+      "ReceivedSvTimeUncertaintyNanos",
+      "Cn0DbHz",
+      "PseudorangeRateMetersPerSecond",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "BiasUncertaintyNanos",
+      "DriftNanosPerSecond",
+      "DriftUncertaintyNanosPerSecond",
+      "TimeUncertaintyNanos"
+    ],
+    "row_filter": "Only MessageType=Raw rows are eligible; every other row is counted and excluded from measurement diagnostics. No column carrying coordinates is parsed.",
+    "missing_optional_rule": "Missing optional Android fields remain an explicit missing bucket and cannot be synthesized. A missing HCDC is represented by an invariant segment sentinel only for diagnostics; it cannot create a boundary. Missing ADR or signal fields exclude only that metric, never the raw input row."
+  },
+  "fixed_raw_equations": {
+    "receiver_tow_ns": "integer(TimeNanos) - integer(segment_base_FullBiasNanos) - Decimal(BiasNanos) - Decimal(TimeOffsetNanos)",
+    "raw_pseudorange": "long-double-equivalent ((receiver_tow_ns - constellation_transmit_tow_ns) * 299792458 / 1e9), with integer/Decimal arithmetic retained until final reporting",
+    "transmit_time": "ReceivedSvTimeNanos in its constellation time scale; GPS/Galileo/BeiDou week-TOW normalization and GLONASS day mapping follow the pinned Phase25 raw contract. No nav, satellite position, elevation, or truth is used.",
+    "pair_code_difference": "P_primary - P_secondary for the same first-seen utcTimeMillis epoch, constellation, and SVID; GPS L1CA-L5Q, Galileo E1-E5a, BeiDou B1I-B2A only when both signals are present. Receiver-clock and geometry common terms cancel to first order.",
+    "frequency_squared_ionosphere": "(P_primary - P_secondary) / (1 - (f_primary/f_secondary)^2); reported as a diagnostic and marked ionosphere-confounded, never used as a correction.",
+    "carrier_minus_code": "CMC = P - signed AccumulatedDeltaRangeMeters; ADR sign is the pinned adapter convention. Each (route, constellation, SVID, signal, arc) is median-centered before jump/drift summaries.",
+    "arc_reset": "Reset CMC arc on HCDC change, TimeNanos gap >1.5 s, ADR cycle-slip bits, ADR validity loss, missing ADR, or missing raw P.",
+    "same_epoch_noncommon": "Within one epoch, compare pair residuals across satellites after route/system median centering; this is evidence only and cannot introduce geometry.",
+    "integer_float_risk": "No float64 subtraction of TimeNanos and FullBiasNanos is used to form P; any float64 comparison is a reported risk metric only."
+  },
+  "signal_pairs": {
+    "GPS": ["GPS_L1CA", "GPS_L5"],
+    "GALILEO": ["GAL_E1", "GAL_E5A"],
+    "BEIDOU": ["BDS_B1I", "BDS_B2A"],
+    "minimum_dual_frequency_satellites_per_route": 3,
+    "minimum_pair_epochs_per_route": 100,
+    "coverage_definition": "A pair epoch is one same-epoch, same-system, same-SVID pair with finite in-contract P values; duplicate signal rows are conflicts and never silently counted twice."
+  },
+  "existing_adapter_masks": {
+    "source": "src/io/android_raw_gnss.cpp",
+    "source_sha256": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390",
+    "multipath": "MultipathIndicator == 1",
+    "low_cnr": "Cn0DbHz present and <20 dB-Hz",
+    "invalid_state": "State lacks code-lock bit (1<<0) or constellation transmit-time bits: GLONASS (1<<7)|(1<<15), other systems (1<<3)|(1<<14)",
+    "code_range": "P < 1e7 m or P > 4e7 m",
+    "existing_gate_rule": "Report all raw and post-existing-gate populations; do not add a new exclusion, weighting, or correction in Phase47."
+  },
+  "fixed_buckets": {
+    "cn0_db_hz": ["missing", "<20", "20_to_30", ">=30"],
+    "multipath_indicator": ["missing", "0", "1", "other"],
+    "android_state": ["missing", "valid", "invalid"],
+    "received_sv_time_uncertainty_ns": ["missing", "<=10", "10_to_100", ">100"],
+    "pseudorange_rate_uncertainty_mps": ["missing", "<=0.5", "0.5_to_2", ">2"],
+    "adr_state": ["missing", "valid", "cycle_slip", "invalid"]
+  },
+  "diagnostics": {
+    "route_system_signal_satellite": true,
+    "median_mad_p95_max": true,
+    "adjacent_code_jump_and_drift": true,
+    "route_disjoint_consistency": true,
+    "pair_outlier_persistence": true,
+    "same_epoch_noncommon_mode": true,
+    "coverage_separation": ["raw_row_coverage", "pair_epoch_coverage", "clean_after_existing_mask_retention"],
+    "fgo_signal_adoption_static_audit": true,
+    "phase13_candidate_regression_policy_pin": true
+  },
+  "numeric_gates": {
+    "route_count": {
+      "required": 4,
+      "criterion": "All and only the four pinned Pixel5 routes are read exactly once."
+    },
+    "raw_input_identity": {
+      "required": true,
+      "criterion": "Each read byte count and SHA-256 exactly equals exact_raw_inputs; no archive or rematerialization read is allowed."
+    },
+    "raw_domain_finite_and_exact": {
+      "required": true,
+      "criterion": "All eligible raw timing/measurement values used by a metric are finite and every eligible row is counted exactly once; missing optional fields are explicit, not imputed."
+    },
+    "dual_frequency_coverage": {
+      "min_satellites_per_route": 3,
+      "min_pair_epochs_per_route": 100,
+      "criterion": "Every route has at least three dual-frequency satellites and 100 valid pair epochs in the declared pair map."
+    },
+    "route_metric_direction": {
+      "same_direction_all_routes": true,
+      "minimum_absolute_route_median_m": 0.5,
+      "criterion": "A proposed raw factor metric must have finite non-zero route medians with the same sign in all four routes; otherwise no-go."
+    },
+    "route_center_dispersion": {
+      "max_route_median_mad_m": 2.0,
+      "criterion": "Route medians must not collapse to a single uninformative gauge; dispersion and route-disjoint summaries are reported."
+    },
+    "flagged_vs_clean": {
+      "flagged_p95_min_m": 2.0,
+      "flagged_to_clean_p95_ratio_min": 1.5,
+      "clean_retention_min": 0.8,
+      "criterion": "Any flagged raw-only group must be materially worse than clean in all routes while retaining at least 80% of eligible pair/CMC rows as clean."
+    },
+    "loo_stability": {
+      "all_leave_one_route_out_same_decision": true,
+      "bucket_rule_must_be_stable": true,
+      "criterion": "The threshold/bucket decision and route-median direction remain unchanged in every leave-one-route-out diagnostic fold."
+    },
+    "current_fgo_impact": {
+      "required": true,
+      "criterion": "The implicated signal group is statically adopted by the current FGO observation path and has eligible post-existing-mask rows in every route; an unused signal cannot pass as a cause."
+    },
+    "noncommon_not_gauge_or_iono": {
+      "same_epoch_noncommon_spread_min_m": 0.1,
+      "require_route_and_satellite_dispersion": true,
+      "require_leave_one_route_and_satellite_stability": true,
+      "criterion": "Evidence must be satellite-specific/non-common-mode and route/satellite stable, not a constant receiver gauge or an ionosphere-only combination."
+    },
+    "signal_bias_stability": {
+      "route_median_range_min_m": 0.5,
+      "leave_one_satellite_out_stable": true,
+      "criterion": "If a signal-bias explanation is proposed, its route and satellite dispersion plus leave-one-route/satellite-out direction are stable; no truth-derived bias is permitted."
+    },
+    "truth_target": {
+      "reachability_0_782": "not evaluated in truth-free Phase47"
+    },
+    "logic": "AND; all thresholds and decision roles are immutable after this freeze and before raw reads."
+  },
+  "decision_policy": {
+    "go": "Only if every hard gate passes and a source-supported raw-only satellite-specific code propagation/multipath mechanism is identifiable, geometry-changing, and represented by signals actually adopted by current FGO.",
+    "no_go": "If any hard gate fails, the strongest structure is common-mode/gauge or ionosphere-confounded, the flagged group is not materially worse, clean retention/coverage fails, or the signal is not used by FGO.",
+    "correction_status": "Audit only. No exclusion, weighting, bias, correction, or solver change is implemented in Phase47.",
+    "next_factor_rule": "On no-go, name exactly one next source-supported raw physical factor and do not duplicate an existing MultipathIndicator mask or Phase13 upstream-quality no-go."
+  },
+  "pre_read_assertions": {
+    "raw_payload_opened": false,
+    "truth_opened": false,
+    "phase45_truth_payload_used": false,
+    "phase46_payload_used": false,
+    "solver_rerun": false,
+    "correction_implemented": false,
+    "archive_reopened": false,
+    "rematerialization": false,
+    "validation_holdout_access": false,
+    "nav_opened": false,
+    "output_published": false
+  }
+}

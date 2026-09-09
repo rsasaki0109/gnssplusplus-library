@@ -1,0 +1,165 @@
+{
+  "schema_version": "rtk-spp-broadcast-lookup-cache.v1",
+  "variant": "same-epoch-broadcast-lookup-cache",
+  "role": "development-only",
+  "decision": "no-go-removed",
+  "status": "implementation-cli-telemetry-tests-removed",
+  "reason": "The lookup-only candidate preserved every SPP call, state transition, iteration order, and QC decision and was POS-byte-identical. It did not improve performance: five-run Release median solver work increased by 0.171% and external wall median was unchanged. The experiment, CLI, dedicated telemetry, and dedicated tests were removed after the audit; no production or holdout evaluation was performed.",
+  "root_cause_audit": {
+    "full_spp_result_reuse": "Skipping the second SPP call also skipped stateful iterative/QC side effects, including estimated position, receiver clock, system-bias, and last-valid state updates. The changed seed propagated into three rounded RTKUpdateNIS fields and the unrounded ratio stream.",
+    "lookup_only_candidate": "The candidate kept both SPP calls and shared only ordinary broadcast ephemeris selection/satellite-state lookup results. The route's eligible state-lookup counter stayed at zero, so the added guard and lookup bookkeeping had no measured benefit."
+  },
+  "implementation_removed": {
+    "former_config_field": "RTKProcessor::RTKConfig::reuse_broadcast_satellite_state_within_epoch",
+    "former_cli_flag": "--reuse-rtk-broadcast-state-epoch",
+    "former_scope": "one processRTKEpochInternal() call",
+    "former_guards": [
+      "rover object/time/content identity",
+      "navigation object/revision/shape",
+      "complete SPP and processor options",
+      "product populations and Galileo I/NAV override"
+    ],
+    "former_fail_closed_conditions": [
+      "revision-zero navigation",
+      "precise products",
+      "SSR",
+      "literal MRTKLIB IFLC path",
+      "standalone smartphone SPP"
+    ],
+    "retained_optimization": "The process-internal BroadcastMeasurementCache in SPP solvePositionLS remains; no cross-call RTK cache remains."
+  },
+  "build": {
+    "build_type": "Release",
+    "compiler": "/usr/bin/c++",
+    "optimization": "-O3 -DNDEBUG",
+    "source_revision": "a947409878fe78ca9234b20288cadd4d75baedea",
+    "binary_sha256_before_removal": "f7a82c0df549eb915f503fcf2ec9e7ee3cfecb905939d6053699c7cbe0d7473f",
+    "host": "11th Gen Intel(R) Core(TM) i5-1145G7 @ 2.60GHz, 8 CPUs",
+    "cpu_affinity": "taskset -c 0"
+  },
+  "input": {
+    "dataset": "PPC-Dataset/tokyo/run1",
+    "epochs": 120,
+    "rover_obs_sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+    "base_obs_sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+    "base_nav_sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+    "reference_csv_sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+    "command_off_before_removal": "gnss_solve --rover rover.obs --base base.obs --nav base.nav --no-kml --max-epochs 120 --out solution.pos --timing-csv epoch_timing.csv",
+    "command_on_before_removal": "gnss_solve --rover rover.obs --base base.obs --nav base.nav --no-kml --max-epochs 120 --reuse-rtk-broadcast-state-epoch --out solution.pos --timing-csv epoch_timing.csv"
+  },
+  "measurement": {
+    "warmup_runs_excluded_per_variant": 1,
+    "measured_runs_per_variant": 5,
+    "run_ids": [3, 4, 5, 6, 7],
+    "holdout_used": false,
+    "run_order": "paired Release runs on the same 120-epoch input; CPU 0 pinned",
+    "external_wall_s": {
+      "off": [1.31, 1.31, 1.34, 1.29, 1.31],
+      "on": [1.30, 1.31, 1.33, 1.29, 1.41]
+    },
+    "solver_sum_s": {
+      "off": [1.233815, 1.243631, 1.271559, 1.226207, 1.245012],
+      "on": [1.237548, 1.245755, 1.259123, 1.224529, 1.336486]
+    },
+    "stage_mean_ms_per_run": {
+      "off": {
+        "stage_spp_ms": [8.08975, 8.15036, 8.332196, 8.032027, 8.169108],
+        "stage_reset_position_ms": [3.952076, 4.027714, 4.121371, 3.931745, 4.037027],
+        "stage_filter_update_ms": [1.152542, 1.169252, 1.196193, 1.146859, 1.16877]
+      },
+      "on": {
+        "stage_spp_ms": [8.118302, 8.166015, 8.267692, 8.022991, 8.833437],
+        "stage_reset_position_ms": [3.991181, 3.993462, 4.057882, 3.958132, 4.353045],
+        "stage_filter_update_ms": [1.151478, 1.156706, 1.166354, 1.14336, 1.1935]
+      }
+    },
+    "peak_rss_kb": {
+      "off": [30496, 30388, 30360, 30484, 30528],
+      "on": [30528, 30476, 30512, 30416, 30364]
+    },
+    "cache_counters_per_run": {
+      "off": {
+        "state_hits": [0, 0, 0, 0, 0],
+        "state_misses": [0, 0, 0, 0, 0],
+        "ephemeris_hits": [0, 0, 0, 0, 0],
+        "ephemeris_misses": [0, 0, 0, 0, 0]
+      },
+      "on": {
+        "state_hits": [0, 0, 0, 0, 0],
+        "state_misses": [0, 0, 0, 0, 0],
+        "ephemeris_hits": [240049, 240049, 240049, 240049, 240049],
+        "ephemeris_misses": [8302, 8302, 8302, 8302, 8302]
+      }
+    },
+    "summary_median": {
+      "off": {
+        "external_wall_s": 1.31,
+        "external_wall_p95_across_runs_s": 1.334,
+        "solver_sum_s": 1.243631,
+        "solver_sum_p95_across_runs_s": 1.26625,
+        "epoch_mean_ms": 10.363593,
+        "epoch_p50_ms": 10.373217,
+        "epoch_p95_ms": 11.744345,
+        "stage_spp_mean_ms": 8.15036,
+        "stage_reset_position_mean_ms": 4.027714,
+        "stage_filter_update_mean_ms": 1.16877,
+        "peak_rss_kb": 30484
+      },
+      "on": {
+        "external_wall_s": 1.31,
+        "external_wall_p95_across_runs_s": 1.394,
+        "solver_sum_s": 1.245755,
+        "solver_sum_p95_across_runs_s": 1.321013,
+        "epoch_mean_ms": 10.381295,
+        "epoch_p50_ms": 10.350418,
+        "epoch_p95_ms": 11.687635,
+        "stage_spp_mean_ms": 8.166015,
+        "stage_reset_position_mean_ms": 3.993462,
+        "stage_filter_update_mean_ms": 1.156706,
+        "peak_rss_kb": 30476
+      },
+      "on_minus_off": {
+        "solver_sum_relative_pct": 0.171,
+        "external_wall_relative_pct": 0.0,
+        "peak_rss_kb": -8
+      }
+    }
+  },
+  "quality_signoff": {
+    "pos_output_sha256": {
+      "off": "bae93b2cec6d273e30fba54bf3709c2bc69e1eccfdf9ba35cf44887b4b6e2bdd",
+      "on": "bae93b2cec6d273e30fba54bf3709c2bc69e1eccfdf9ba35cf44887b4b6e2bdd"
+    },
+    "cross_variant_byte_identical": true,
+    "valid_epochs": 120,
+    "fixed_epochs": 116,
+    "fix_rate_pct": 96.666667,
+    "wrong_fix_epochs": 0,
+    "horizontal_median_m": 0.045861,
+    "horizontal_p95_m": 0.128737,
+    "vertical_p95_abs_m": 0.037212,
+    "ratio_p50": 21.875584,
+    "ratio_p95": 63.085008,
+    "local_ppc_distance_score_pct": 0.286866,
+    "observation_count_changed": false,
+    "status_changed": false
+  },
+  "artifacts": {
+    "representative_off_timing": "output/rtk-broadcast-cache/runs/off3.timing.csv",
+    "representative_off_timing_sha256": "435b4734e7f380f02c6547ec1f10ca91c61514f2319a37cf527ebb3f318961d6",
+    "representative_on_timing": "output/rtk-broadcast-cache/runs/on3.timing.csv",
+    "representative_on_timing_sha256": "9ffd05570add14f997678610ac151cca5e4c8356acd12d4c96c746d95db038f2",
+    "representative_off_report": "output/rtk-broadcast-cache/runs/off3.report.json",
+    "representative_off_report_sha256": "e462575a81227b71fc92b75ed3174c933f8c534b0d6c7297c359a6bfeec6ae52",
+    "representative_on_report": "output/rtk-broadcast-cache/runs/on3.report.json",
+    "representative_on_report_sha256": "162f17715e8b4110e5cf531cd76cfa5156e4328bb7507bcfa64b672a224a818b"
+  },
+  "tests": {
+    "rtk_lookup_cache_gtest_before_removal": "passed (dedicated experiment suite)",
+    "performance_report_unittest_before_removal": "passed (including legacy counter parsing)",
+    "release_build_before_removal": "passed",
+    "current_release_build": "passed (gnss_solve and gnss_run_tests targets)",
+    "current_full_ctest": "82/82 passed with /opt/ros/jazzy/lib and /home/sasaki/.local/lib in LD_LIBRARY_PATH"
+  },
+  "next_priority": "Retain only the process-internal SPP measurement cache and useful RTK stage timing; profile the independent KF update stage for the next byte-identity-gated optimization."
+}

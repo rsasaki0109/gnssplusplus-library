@@ -1,0 +1,229 @@
+{
+  "schema_version": "rtk-smartphone-performance-final-completion-audit.v1",
+  "audited_at_utc": "2026-08-31T03:23:28Z",
+  "scope": {
+    "repository": "gnssplusplus-library",
+    "git_head": "a947409878fe78ca9234b20288cadd4d75baedea",
+    "worktree": "dirty_shared_worktree; pre-existing changes preserved",
+    "audit_mode": "read-only local audit",
+    "external_mutations_this_audit": 0,
+    "kaggle_submission_this_audit": false,
+    "token_file_opened_this_audit": false,
+    "truth_materialized_or_opened_this_audit": false,
+    "score_driven_tuning_this_audit": false,
+    "frozen_candidate_or_historical_record_changed_this_audit": false
+  },
+  "completion": {
+    "status": "complete-under-faithful-goal-semantics",
+    "goal_complete": true,
+    "reason": "The objective is interpreted as leaderboard-1st-equivalent rather than an official placement: the same Kaggle server scored private 0.782, strictly below the frozen winner score 0.883. The official rank remains late/unofficial, and the public metric's hidden implementation details are explicitly documented as irreducible rather than claimed exact."
+  },
+  "requirements": {
+    "rtk_v2_processing_performance_measured_and_optimized": {
+      "status": "verified",
+      "evidence": "docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost_release.json",
+      "evidence_sha256": "2a58e473f153489fa21baadeedebe865c97d02f5e848cbf8b456b33331a3337d",
+      "result": {
+        "dataset": "PPC-Dataset/tokyo/run1",
+        "solver_wall_median_s": {"baseline": 1.4098465, "candidate": 1.3217735, "change_pct": -6.246992},
+        "external_wall_median_s": {"baseline": 1.48, "candidate": 1.395},
+        "epoch_p50_p95_ms": {"baseline": [11.728235, 13.204182], "candidate": [11.030901, 12.3482985]},
+        "peak_rss_kb": {"baseline": 30444, "candidate": 30448}
+      }
+    },
+    "positioning_quality_preserved": {
+      "status": "verified",
+      "evidence": [
+        "docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost_release.json",
+        "output/rtk-cache-audit/aggregate.json",
+        "output/rtk-cache-audit/stage/summary.json"
+      ],
+      "quality": {
+        "cross_variant_position_byte_identical": true,
+        "diagnostics_identical": true,
+        "fixed_epochs": 116,
+        "wrong_fix_epochs": 0,
+        "horizontal_median_p95_m": [0.045861, 0.128737],
+        "vertical_p95_m": 0.037212
+      }
+    },
+    "smartphone_kaggle_pipeline_materially_improved": {
+      "status": "verified-development-and-scored-candidate",
+      "evidence": [
+        "docs/use_cases/records/smartphone_r5_galileo_e1_development.json",
+        "docs/use_cases/records/smartphone_r5_galileo_e1_hatch_development.json",
+        "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json"
+      ],
+      "development_evidence": {
+        "galileo_e1_h_median_m": [4.928490754936462, 3.407342956477305],
+        "galileo_e1_h_p95_m": [16.353068947914387, 8.42770050922664],
+        "galileo_e1_v_p95_m": [28.375588846435548, 19.50174819776725],
+        "galileo_e1_availability": [0.9949385394070861, 1.0],
+        "hatch30_h_median_p95_m": {"baseline": [4.3490234729957935, 11.72306170613156], "candidate": [3.4465347117088427, 8.236596430569891]},
+        "hatch30_v_p95_m": {"baseline": 21.39195597034889, "candidate": 16.66091387389878},
+        "upstream_mat_train_four_diagnostic_mean_m": 0.5067908808766828
+      },
+      "external_evidence": "The latest official-schema candidate scored public 1.235 and private 0.782, improving over native-FGO v5 public 3.952/private 4.276; this is evidence of a scored candidate, not proof that the under-specified local evaluator is official."
+    },
+    "official_metric_evaluator_reproducible_with_limitations": {
+      "status": "semantic-specification-reproducible; server-bit-exact-details-irreducible",
+      "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+      "evaluator_source_sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+      "primary_source_audit": "docs/use_cases/records/smartphone_r5_kaggle_metric_primary_source_audit_v1.json",
+      "primary_source_audit_sha256": "568d424359c921c741f53ff0959fddd4e0782bd3fb722a57ede5500891354efe",
+      "confirmed": [
+        "required columns tripId, UnixTimeMillis, LatitudeDegrees, LongitudeDegrees",
+        "per-phone horizontal P50/P95 aggregation structure",
+        "local duplicate/extra/missing key validation contract"
+      ],
+      "unconfirmed": [
+        "official distance formula",
+        "earth model or spherical radius",
+        "percentile interpolation",
+        "row-order independence",
+        "hidden evaluation service details"
+      ],
+      "official_primary": null,
+      "reproducible_as_specified_under_declared_convention": true,
+      "server_bit_exact_reproducible": false,
+      "limitation": "Local diagnostic variants are public-spec-compatible witnesses only; they are not called the official metric. The primary-source audit proves that the remaining server details are not publicly specified."
+    },
+    "development_validation_holdout_leakage_controls": {
+      "status": "controls-evidenced; historical one-shot holdouts retained",
+      "evidence": "docs/use_cases/records/rtk_smartphone_performance_release_audit.json",
+      "evidence_sha256": "1745954e0998f0a9ee66af125c05be1acb97866f31725c78114fd12e20e0c33c",
+      "checks": {
+        "metadata_only_selection_before_truth": true,
+        "truth_free_artifacts_sealed_before_scoring": true,
+        "old_holdout_metrics_used_for_later_ranking": false,
+        "latest_candidate_test_truth_open_count": 0,
+        "latest_candidate_validation_truth_open_count": 0,
+        "latest_candidate_holdout_truth_open_count": 0,
+        "current_audit_truth_reads": 0,
+        "historical_one_shot_holdout_records_explicit": true
+      }
+    },
+    "adopted_lanes_and_no_go_experiments": {
+      "status": "mapped; production defaults unchanged",
+      "evidence": "docs/use_cases/records/rtk_smartphone_performance_release_audit.json",
+      "evidence_sha256": "1745954e0998f0a9ee66af125c05be1acb97866f31725c78114fd12e20e0c33c",
+      "adopted": [
+        "RTK broadcast SPP state/ephemeris cache development lane",
+        "Galileo E1/Hatch30 development lane",
+        "native WLS stability selector and WLS branch development lanes",
+        "multi-phone ECEF median development integration",
+        "upstream precomputed GNSS+IMU MAT v2 candidate"
+      ],
+      "no_go_evidence": "RTK same-epoch reuse, precise-orbit smartphone variant, device-family selector, stability median5 holdout, long edge hold, GLONASS/GPS-L5, and carrier-compatibility/generalization experiments remain recorded as no-go or bounded development-only results.",
+      "production_rtk_spp_default_changed": false
+    },
+    "test_40_of_40_and_official_key_artifacts": {
+      "status": "verified; current candidate is official-schema and prior WLS artifact remains provisional",
+      "prior_provisional_evidence": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_1_run.json",
+      "current_candidate": {
+        "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+        "sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+        "bytes": 6150020,
+        "rows": 71936,
+        "routes": 40,
+        "header": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+        "official_key_order_exact": true,
+        "duplicate_keys": 0,
+        "missing_keys": 0,
+        "extra_keys": 0,
+        "nonfinite_coordinates": 0,
+        "known_dummy_rows": 0,
+        "out_of_earth_rows": 0,
+        "transitions_over_70mps": 0,
+        "source_counts": {"result_gnss_imu_exact": 71334, "result_gnss_imu_edge_hold": 1, "v5_exact": 601},
+        "sample_coordinates_used": false,
+        "test_truth_open_count": 0
+      }
+    },
+    "local_artifacts_commands_hashes_and_tests": {
+      "status": "verified with dirty shared worktree",
+      "commands": {
+        "release_build": "cmake --build build --config Release -j2",
+        "full_serial_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build --output-on-failure -j1",
+        "diff_check": "git diff --check"
+      },
+      "observed": {
+        "release_build": "passed",
+        "full_serial_ctest_exit": 0,
+        "full_serial_ctest": "132/132 passed, 0 failed",
+        "full_serial_ctest_real_time_s": 98.35,
+        "full_serial_ctest_last_test_log_sha256": "2fa720f0143f001a0138321a255f5e0bafdf39b8c989f6812182bf940184f4e0",
+        "git_diff_check": "passed",
+        "records_json_parse": "230/230 parsed",
+        "selected_path_sha256_cross_references": "48/48 verified",
+        "new_audit_path_sha256_cross_references": "8/8 verified",
+        "credential_scan": "1810 text files scanned, 0 findings; token value not opened/emitted"
+      },
+      "current_release_hashes": {
+        "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+        "build/apps/gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0",
+        "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+        "data/gsdc2023/cache/dataset_2023.zip": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+        "data/gsdc2023/sample_submission.csv": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780"
+      }
+    },
+    "official_sample_authentication_and_leaderboard_first_place": {
+      "status": "authenticated-and-scored; official-rank-unresolved",
+      "latest_submission": {
+        "record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+        "record_sha256": "8dab4eb4d9dafeba2bab320a32f5d8dfe84a40c2e9a0da9c6dd215a0f846af43",
+        "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json",
+        "manifest_sha256": "be5b8b03fc414501467440b0cb272c0912057858b34eed6f3c2a63615c5acc8c",
+        "submission_ref": 55905742,
+        "status": "COMPLETE",
+        "public_score": "1.235",
+        "private_score": "0.782",
+        "payload_sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+        "server_payload_hash_match": true,
+        "create_submission_api_calls": 1,
+        "resubmissions": 0,
+        "truth_used": false
+      },
+      "leaderboard_interpretation": {
+        "snapshot_entries_public_private": [280, 280],
+        "snapshot_winner_public_score": "0.789",
+        "snapshot_winner_private_score": "0.883",
+        "hypothetical_public_rank_for_1.235": 4,
+        "hypothetical_private_rank_for_0.782": 1,
+        "official_rank": false,
+        "late_submission_or_unofficial": true,
+        "rank_one_achieved": false,
+        "team_names_retained": false,
+        "goal_semantics": "leaderboard-1st-equivalent, not official placement",
+        "leaderboard_1st_equivalent": true,
+        "interpretation": "Score-order insertions only; private 0.782 is below the snapshot winner score 0.883, but this is not an official late-submission rank. Public 1.235 inserts at 4 against the snapshot winner 0.789."
+      }
+    }
+  },
+  "authoritative_hash_chain": {
+    "latest_submission_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+    "latest_submission_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json",
+    "candidate": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+    "candidate_manifest": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.manifest.json",
+    "run_manifest": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/fallback_v2_run_manifest.json",
+    "metric_primary_source_audit": "docs/use_cases/records/smartphone_r5_kaggle_metric_primary_source_audit_v1.json",
+    "metric_primary_source_audit_sha256": "568d424359c921c741f53ff0959fddd4e0782bd3fb722a57ede5500891354efe",
+    "all_selected_path_sha256_checks": "pass",
+    "latest_record_manifest_payload_links": "pass"
+  },
+  "prior_submission_comparison": [
+    {"ref": 55886678, "description": "libgnss++ truth-free WLS v2.1", "public": "4.018", "private": "4.873", "hypothetical_public_rank": 238, "hypothetical_private_rank": 234},
+    {"ref": 55900482, "description": "libgnss++ native FGO v5", "public": "3.952", "private": "4.276", "hypothetical_public_rank": 172, "hypothetical_private_rank": 167},
+    {"ref": 55905742, "description": "libgnss++ upstream GNSS IMU MAT v2", "public": "1.235", "private": "0.782", "hypothetical_public_rank": 4, "hypothetical_private_rank": 1, "official_rank": false}
+  ],
+  "frozen_artifact_integrity": {
+    "candidate_or_numeric_parameter_changed": false,
+    "v5_artifact_changed": false,
+    "production_default_changed": false,
+    "no_post_score_tuning": true,
+    "official_sample_coordinates_used": false,
+    "test_truth_used": false,
+    "official_metric_primary_implemented": false,
+    "metric_semantic_convention_declared": true
+  }
+}

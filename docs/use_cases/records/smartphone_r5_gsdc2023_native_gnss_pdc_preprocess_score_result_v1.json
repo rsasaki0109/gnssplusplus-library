@@ -1,0 +1,93 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-preprocess-score-result.v1",
+  "status": "no-go-development-route",
+  "created_at_utc": "2026-08-31T06:30:00Z",
+  "candidate": {
+    "id": "native-gnss-pdc-preprocess-v1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_preprocess_freeze_v1.json",
+    "freeze_record_sha256": "94d407c3913449e4061dea1e0a324481ff4ffac765b3c8ec23cf2214ac482b63",
+    "run_manifest_sha256": "7013910d7c75b835f3b0dd9bf006254cc407917e0f2663137fbb4a5b7020521e",
+    "keyed_output_sha256": "dc279b30445e32132fbc8ee75410af61be023759701cdd99cdbed9ba37c2e3d4",
+    "solver_rerun_after_freeze": false,
+    "numeric_parameters_changed_after_freeze": false
+  },
+  "truth_access": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "role": "development-train",
+    "opened_after_freeze": true,
+    "mat_inputs_used": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "note": "The route truth had earlier documented schema-recovery reads; this candidate's score used the same fixed recovery adapter and is not used for tuning."
+  },
+  "score_report": {
+    "path": "output/smartphone-r5/native-gnss-pdc-preprocess-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score_recovery.json",
+    "sha256": "d1645255a11c4be473218c3c49b8ee2fd66a420d72f30ab619861453b37ca34c",
+    "recovery_authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_preprocess_score_recovery_authorization_v1.json",
+    "recovery_authorization_sha256": "f589124f7f98a52edfd23c1b38d6ff0702d10d878079e65a2882ce506f323fac",
+    "evaluator_sha256": "2992d29d4dd77c49e319b9b86bc4580ab90b8a39864a4931782bbacc57f0852c",
+    "test_sha256": "3c9e4a8f48e74005a32715cae7e45da89e68caff16daf5067d9e6d5ce8ea62dc",
+    "timestamp_delta_ms": {"min": 999, "median": 999, "max": 999},
+    "prediction_rows": 1384,
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "unmatched_prediction_rows": 1,
+    "four_diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 93.61970290639135,
+      "wgs84_vincenty__nearest_rank_ceiling": 93.61990410473567,
+      "haversine_sphere__linear_n_minus_1": 93.78911143919379,
+      "haversine_sphere__nearest_rank_ceiling": 93.78931294379151
+    },
+    "horizontal_p50_p95_m": {
+      "wgs84_vincenty": [6.441936940033818, 180.79746887274888],
+      "haversine_sphere": [6.435394650658294, 181.1428282277293]
+    },
+    "official_metric_m": null,
+    "official_metric_status": "undetermined-from-public-primary-sources"
+  },
+  "comparison_to_prior_raw_bridge": {
+    "prior_candidate": "native-gnss-pdc-direct-v1",
+    "prior_keyed_output_sha256": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+    "prior_wgs84_vincenty_linear_score_m": 93.50510102387848,
+    "prior_wgs84_vincenty_p50_p95_m": [6.513265251712395, 180.49693679604457],
+    "candidate_wgs84_vincenty_linear_score_m": 93.61970290639135,
+    "candidate_wgs84_vincenty_p50_p95_m": [6.441936940033818, 180.79746887274888],
+    "interpretation": "P50 decreased slightly but P95 and combined score worsened; the exact mask port is not promoted on this route."
+  },
+  "factor_trace": {
+    "factor_csv_sha256": "0f4f0ed3e8d8b0943f66b57ebdb8d987b22ae46c47b72631825ff9b2f94e3e33",
+    "families": {
+      "P": {"count": 15704, "rms_m": 73.49127868765804, "mean_abs_m": 36.78985397257839, "max_abs_m": 203.27542184229856},
+      "D": {"count": 15704, "rms_m": 1.1503351299987234, "mean_abs_m": 0.08545032942313568, "max_abs_m": 135.06511804589218},
+      "C": {"count": 13464, "rms_m": 0.6125630930487226, "mean_abs_m": 0.022599446111574287, "max_abs_m": 67.56396638200385}
+    },
+    "initial_cost": 48673624.51968581,
+    "final_cost": 197242.58642495953,
+    "iterations": 162,
+    "converged": true,
+    "wall_seconds": 6.571060239017243,
+    "child_max_rss_kib": 78960
+  },
+  "decision": {
+    "promotion": "no-go",
+    "reason": "The upstream exobs raw status/multipath port is structurally correct and deterministic, but the only authorized development score has a worse horizontal P95 and combined score than the prior raw bridge. Retain the implementation as an opt-in documented experiment; do not promote it or tune thresholds from this result.",
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false,
+    "test_batch_authorized": false,
+    "production_default_changed": false,
+    "native_0_782_class_achieved": false,
+    "upstream_result_oracle_used": false,
+    "score_used_for_tuning": false,
+    "external_mutation": false
+  },
+  "no_mat_policy": {
+    "any_mat_file_opened": false,
+    "mat_inference": false,
+    "mat_oracle_comparison": false,
+    "mat_fixture": false,
+    "historical_imported_experiment": "rejected from native evidence and runtime"
+  }
+}

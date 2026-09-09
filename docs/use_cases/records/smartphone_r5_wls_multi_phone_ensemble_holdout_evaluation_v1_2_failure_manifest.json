@@ -1,0 +1,30 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation-manifest.v1.2",
+  "sealed": true,
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_evaluation_v1_2_failure.json",
+    "sha256": "5b90f47e703c17e112c0f61347032d7b4d5f6e702aff2cfb5fd108a68b230d68"
+  },
+  "failure_artifact": {
+    "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1.2/wls_multi_phone_ensemble_holdout_failure.json",
+    "sha256": "3c5c41d2e054508a08786aa540955fa38df4dcfd7d95baffdb268f92fe53173f"
+  },
+  "freeze_record_sha256": "7541b2483f44e1a8e7a9c95b252d842d917934b66470fee6a7a95b56a4145953",
+  "freeze_manifest_sha256": "94434131bec8067963a2a7f3d5f42f08eda7023deb8a180360fa80f7b087de7c",
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "route": "2022-10-06-21-51-us-ca-mtv-n",
+  "phones": [
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a325f"
+  ],
+  "truth_open_count": 0,
+  "evaluation_pass_count": 0,
+  "post_holdout_tuning": false,
+  "rerun_permitted": false,
+  "sparse_wls_artifacts_generated": true,
+  "median_and_submission_generated": false,
+  "candidate_parameters_unchanged": true,
+  "promotion": "no-go-holdout-wls-integrity-gap"
+}

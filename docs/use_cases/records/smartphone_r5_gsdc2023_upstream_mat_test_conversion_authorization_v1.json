@@ -1,0 +1,52 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-test-conversion-authorization.v1",
+  "status": "authorized-after-train-gate-correction",
+  "purpose": "One truth-free conversion of the 40 public precomputed result_gnss_imu.mat test members into official sample-key order; no test ground truth is materialized or opened.",
+  "train_evidence": {
+    "score": "output/smartphone-r5/gsdc2023-upstream-mat-v1/train/train_score.json",
+    "score_sha256": "5a3dbedef378d1889b886bf7ccad09eb7089701c4f947f24806a59a2dc53e8a1",
+    "score_manifest_sha256": "fb2e56cae77a8e1ceb447ed2b57d855c30f3853d06258b420e0b99bbb892ad9b",
+    "gate_correction": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_gate_correction_v1.json",
+    "gate_correction_sha256": "d6cef523e038905b1ecea2aa6a247a9f6f26066627ea36aeb8df73dd592dc9ac",
+    "primary_result": "result_gnss_imu.mat",
+    "aggregate_four_diagnostic_mean_m": 0.5067908808766828,
+    "fixed_top_solution_scale_limit_m": 1.8,
+    "truth_key_coverage": "100% on all three declared train routes; raw leading initialization row is projected out by official-key semantics"
+  },
+  "frozen_inputs": {
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_freeze_v1.json",
+    "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory": "output/smartphone-r5/gsdc2023-upstream-mat-v1/mat_inventory.json",
+    "inventory_sha256": "a54d54305442bfc826a34a5e59debe12ebcb55caf03d6235fdf0e125c5bd609c",
+    "converter": "apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py",
+    "converter_sha256": "d26fdb9f639d198b708a6162fd9bd7328ed9019f5fc7ed5469af3e4bcc3852a4",
+    "dispatcher_sha256": "220af767912eaadebb4ae16eda601ff62af42ce4803527bc70c17851357f91d1",
+    "release_binary": "build/apps/gnss_fgo",
+    "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c",
+    "sample": "data/gsdc2023/sample_submission.csv",
+    "sample_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780"
+  },
+  "test_scope": {
+    "route_count": 40,
+    "lane": "result_gnss_imu.mat",
+    "epoch_source": "phone_data.mat obs.utcms, matching upstream submission.m",
+    "sample_authority": "tripId/UnixTimeMillis header and row order only; sample coordinates are never read",
+    "expected_submission_rows": 71936,
+    "test_truth_materialized": false,
+    "test_truth_open_count": 0,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0
+  },
+  "bounded_rules": {
+    "exact_result_rows": "finite gt.Gpos.llh only",
+    "interpolation": "same-trip latitude/longitude/height linear interpolation only when bracket gap <=10000 ms",
+    "edge_hold": "same-trip constant finite endpoint only when one-sided gap <=1000 ms",
+    "continuity": "WGS84 ECEF transition speed <=70 m/s; otherwise fail closed",
+    "dummy_coordinate": "known sample dummy never emitted",
+    "unresolved": "fail closed; no sample coordinate, truth, v5, nearest remap, or estimator rerun"
+  },
+  "command": "python3 apps/commands/benchmarks/gnss_smartphone_gsdc2023_upstream_mat.py test-batch --archive data/gsdc2023/cache/dataset_2023.zip --sample data/gsdc2023/sample_submission.csv --output-dir output/smartphone-r5/gsdc2023-upstream-mat-v1/test-batch",
+  "authorization": "Run once after this record is hash-checked. Preserve all route artifacts and publish either exact 71936-key submission or a failure manifest. No test truth, Kaggle/token access, external mutation, algorithm change, or post-score tuning is authorized."
+}

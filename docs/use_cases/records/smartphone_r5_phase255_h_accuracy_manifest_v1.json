@@ -1,0 +1,96 @@
+{
+  "phase": 255,
+  "execution_label": "primary agent",
+  "status": "frozen-before-truth-read",
+  "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "role": "development/train; not heldout or leaderboard proof",
+  "baseline_m": 1.0769392017393964,
+  "candidate": {
+    "path": "output/smartphone-r5/phase254-h-native-phase253-affine-geometry-v1/mtv-h/opaque_solution_output.csv",
+    "sha256": "3ba1b99646d93c3bda8accdebd559ce2cede85e506f09c7ff280b21abdf0e289",
+    "bytes": 251174,
+    "rows": 3139
+  },
+  "truth": {
+    "source": "Historical Phase183/186/199-pinned H development truth metadata; official archive provenance",
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "bytes": 305432,
+    "rows": 3139,
+    "archive_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "archive_crc32": "fe212a4d",
+    "role": "development/train; not heldout or leaderboard proof"
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "authority": {
+    "phase199_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py",
+      "sha256": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4"
+    },
+    "phase196_thin_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py",
+      "sha256": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a"
+    },
+    "phase189_kernel": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py",
+      "sha256": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+      "commit": "5f456010c78cbb80cf5614f421d5c8b0d38aee3a"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "phase203_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca"
+    },
+    "phase203_tests": {
+      "path": "tests/test_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "74975757b952346b2fc51a17bfb64b3bec4b4caf3aef946f2df504912f416696"
+    },
+    "evaluator": {
+      "path": "scripts/evaluate_phase255_affine_geometry.py",
+      "sha256": "1f1e3cbb3bd05726bb690837d516255a084a29adb3a0178a8850c5e99d524942"
+    },
+    "tests": {
+      "path": "tests/test_smartphone_phase255_affine_geometry_evaluation.py",
+      "sha256": "a7f7f58db4e17c89ca446d0390b95ff23ef1b46be10c1b9ffa2afc284b96e8df"
+    },
+    "phase203_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase203_phase202_h_accuracy_manifest_v1.json",
+      "sha256": "6e7a7a9d12b10fbaa7452ff4e8bcc2a47aa42e9dc4146ff18fe6c8c0c8e2b98d"
+    },
+    "phase254_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase254_h_native_phase253_affine_geometry_result_v1.json",
+      "sha256": "64043b06650aaddba340e13259628468d40600fb07a1350838dffc36dbda7ac9"
+    },
+    "phase254_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase254_h_native_phase253_affine_geometry_manifest_v1.json",
+      "sha256": "9797a6e170aaca47ffc19e65e69aed47d3d3710270f54704324f59b6fca6a301"
+    }
+  },
+  "execution_policy": {
+    "native_invocations": 0,
+    "candidate_reads": 1,
+    "truth_reads": 1,
+    "scores": 1,
+    "mat_reads": 0,
+    "raw_reads": 0,
+    "no_retry": true,
+    "submission": false
+  }
+}

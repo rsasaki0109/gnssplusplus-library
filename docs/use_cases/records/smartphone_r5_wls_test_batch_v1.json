@@ -1,0 +1,172 @@
+{
+  "schema_version": "smartphone-r5-wls-test-batch-record.v1",
+  "status": "sealed-failed-preflight-authoritative-sample-missing",
+  "scope": "truth-free GSDC 2023 full-test submission integration",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_entry_count": 1048,
+    "test_entry_count": 467,
+    "central_directory_only_before_authorization": true,
+    "truth_payload_opened": false
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+    "sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "schema_version": "smartphone-r5-gsdc2023-test-central-inventory.v1",
+    "test_route_count": 40,
+    "test_route_phone_count": 40,
+    "device_gnss_unique_count": 40,
+    "brdc_nav_unique_count": 40,
+    "truth_members_materialized": 0,
+    "truth_payload_opened": false
+  },
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4.json",
+    "record_sha256": "f154f638a992765b0b350aac0e8e63abfb2d7257335dcc0d907b5e576f42c7f3",
+    "manifest": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_v1_4_manifest.json",
+    "manifest_sha256": "0a7a643663856d521728bbde6e62efd110a1db2092dff35b7618302d4cbb4613",
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "alignment_tolerance_ms": 10,
+    "candidate": "coordinate_wise_ecef_median",
+    "single_phone_lane": "raw WLS",
+    "native_fallback": "exact-key frozen Galileo E1/Hatch30+segment-stability output only",
+    "interpolation": "forbidden",
+    "extrapolation": "forbidden"
+  },
+  "authorization": {
+    "record": "output/smartphone-r5/wls-test-batch-v1/test_authorization.json",
+    "record_sha256": "4909ab56803d2bb35b809d96f5ae2d9e87edeae7929f54417a77e8b9480dd456",
+    "manifest": "output/smartphone-r5/wls-test-batch-v1/test_authorization_manifest.json",
+    "manifest_sha256": "47e13135cc9fd222421273e39bbb7808360d45c7a933b168769a6dcf01289bad",
+    "truth_free": true,
+    "truth_open_count": 0,
+    "dataset_allowlist_count": 40
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "2b94f4988aa587d4996ab1d2f68c205e6bd0cff7f47575514505233f4d680380",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "d0b82d27e1bde9cda2c0c2510fc26fc0d608498d8a05ba3ac4babecca4f9bf2e",
+    "apps/commands/benchmarks/gnss_smartphone_wls_test_batch.py": "6348214eb6efbddf100a4c28035c42c8dccb1550f2eecfaf3c0f06b484bdfc06",
+    "apps/gnss.py": "52f478c6869597a81b4845208e9862aa92317288a4f22b4098fd60e1937e7997",
+    "tests/test_smartphone_wls_test_batch.py": "0e881ee0610bf78fe161798693490086d0073bdf04ab838a2b70a21c91372aba",
+    "tests/CMakeLists.txt": "92ecccbb87954333f945e7b22c175a37ad5577ddc49cb8d539d89748d8706080",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "da87daf8f280c9ddc17b01744cdf1ec173b98dfe84e83075298e00bafd6c065d"
+  },
+  "release_binaries": {
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "build/apps/gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+  },
+  "sample_submission": {
+    "required": true,
+    "authoritative_key_order": true,
+    "archive_candidate_count": 0,
+    "local_path": "data/gsdc2023/sample_submission.csv",
+    "present": false,
+    "failure": "sample submission is missing; no inferred key order is permitted"
+  },
+  "official_source_audit": {
+    "record": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1_kaggle_source_audit.json",
+    "record_sha256": "2f808f3edf0301c83450279db389394adbf87de61895e612c1da34da4b1050c3",
+    "manifest": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1_kaggle_source_audit_manifest.json",
+    "manifest_sha256": "5ace7ca89d2f95bf70dd620db0eaab6ea438e6bf8dee3a95488a26b8a1793e09",
+    "kaggle_cli_present": false,
+    "credential_available": false,
+    "files_api_http_status": 401,
+    "sample_downloaded": false,
+    "row_order_requirement": "not_explicitly_specified",
+    "derived_key_order_generated": false,
+    "truth_open_count": 0
+  },
+  "failure": {
+    "record": "output/smartphone-r5/wls-test-batch-v1/test_batch_failure.json",
+    "record_sha256": "60dca554c2cbcc2f2126746a342b572af6f35ee7ed3586efb62798e0e61251e5",
+    "manifest": "output/smartphone-r5/wls-test-batch-v1/test_batch_failure_manifest.json",
+    "manifest_sha256": "bc37bcea76d04fe34cd9d23b1f99c75ec36b371f88434b551cdfdf72bb4eaba5",
+    "truth_open_count": 0,
+    "truth_materialized_count": 0,
+    "route_attempt_count": 0,
+    "post_failure_tuning": false,
+    "kaggle_external_submission": false
+  },
+  "derived_unverified_run": {
+    "status": "sealed-failed-3-of-40-routes-no-complete-provisional-submission",
+    "command": "python3 apps/gnss.py smartphone-wls-test-batch --archive data/gsdc2023/cache/dataset_2023.zip --inventory output/smartphone-r5/wls-test-batch-v1/test_inventory.json --output-dir output/smartphone-r5/wls-test-batch-derived-unverified-v1 --allow-derived-unverified-key-order",
+    "output_root": "output/smartphone-r5/wls-test-batch-derived-unverified-v1",
+    "run_manifest": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_batch_derived_run_manifest.json",
+    "run_manifest_sha256": "a89c5c3ac816289b6c6e5958d77fbc034f601869c3e64bd5191d87808fe74822",
+    "authorization_record": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_authorization.json",
+    "authorization_record_sha256": "a9e5c6e9943f623b3dd9c21e48364d36913a1f60d0fc7b54e956a93c70cadd36",
+    "authorization_manifest": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_authorization_manifest.json",
+    "authorization_manifest_sha256": "0f11dea691ed5714a76898a5e10d86f9388ca6c628e558e94ac742a42a5600af",
+    "failure_record": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_batch_failure.json",
+    "failure_record_sha256": "479185f27eca9e49a4060c2730c231a10ed8fbb43cfe9dfe717a1db436a1eeae",
+    "failure_manifest": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_batch_failure_manifest.json",
+    "failure_manifest_sha256": "296b430ec01d88fdc417d3930b26ea366fccf2654936fc8cb029a90f10f3a9eb",
+    "test_route_phone_count": 40,
+    "completed_route_count": 37,
+    "failed_route_count": 3,
+    "route_manifest_count": 37,
+    "cache_directory_count": 40,
+    "provisional_key_manifest_published": false,
+    "provisional_submission_published": false,
+    "official_sample_verified": false,
+    "cannot_submit_to_kaggle": true,
+    "canonical_phone_format": "ASCII route/phone dataset ID",
+    "timestamp_source": "device_gnss.csv utcTimeMillis Raw epochs after frozen skip_epochs=1",
+    "key_order": "bytewise ASCII phone ascending then numeric UnixTimeMillis ascending",
+    "single_phone_policy": "all 40 inventory routes had one phone; frozen raw WLS lane only",
+    "multi_phone_policy": "not applicable; multi-phone fusion was not invoked",
+    "failures": [
+      {
+        "route": "2021-11-30-20-59-us-ca-mtv-m",
+        "phone": "mi8",
+        "reason": "row 662: WLS ECEF norm is outside earth range",
+        "native_fallback_available": false
+      },
+      {
+        "route": "2022-06-22-20-12-us-ca-lax-hh",
+        "phone": "samsunga325g",
+        "reason": "all-phone WLS unresolved and exact native fallback is unavailable at samsunga325g/1655930158999",
+        "native_fallback_available": false
+      },
+      {
+        "route": "2022-10-06-20-46-us-ca-sjc-r",
+        "phone": "sm-a205u",
+        "reason": "all-phone WLS unresolved and exact native fallback is unavailable at sm-a205u/1665089221001",
+        "native_fallback_available": false
+      }
+    ],
+    "truth_policy": {
+      "truth_materialized_count": 0,
+      "truth_open_count": 0,
+      "ground_truth_members_read": false
+    },
+    "algorithm_policy": {
+      "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+      "candidate_changed": false,
+      "numeric_parameters_changed": false,
+      "native_lane_generated": false,
+      "interpolation": "forbidden",
+      "extrapolation": "forbidden",
+      "post_failure_tuning": false
+    },
+    "execution_provenance": {
+      "profile_sha256_at_run": "071dfd05c11737803361aa827c555d2f4532684b56a2f3acb5d3908a69064300",
+      "profile_current_sha256": "da87daf8f280c9ddc17b01744cdf1ec173b98dfe84e83075298e00bafd6c065d",
+      "profile_change_after_run": "metadata-only registration of this derived lane; algorithm parameters unchanged",
+      "batch_source_sha256": "6348214eb6efbddf100a4c28035c42c8dccb1550f2eecfaf3c0f06b484bdfc06",
+      "test_source_sha256": "760097eac4e6ee13726b74ccc63f14effa337dc06a7a3b4fc83a694f2e4e920a"
+    },
+    "promotion_command": "python3 apps/gnss.py smartphone-wls-test-batch --output-dir output/smartphone-r5/wls-test-batch-derived-unverified-v1 --sample-submission <official-sample.csv> --promote-derived-with-sample",
+    "promotion_policy": "strict key-set compare and sample-order reorder only; no WLS/native rerun"
+  },
+  "commands": {
+    "inventory": "python3 apps/gnss.py smartphone-wls-test-batch --inventory-only",
+    "batch": "python3 apps/gnss.py smartphone-wls-test-batch --archive data/gsdc2023/cache/dataset_2023.zip --inventory output/smartphone-r5/wls-test-batch-v1/test_inventory.json --sample-submission data/gsdc2023/sample_submission.csv --output-dir output/smartphone-r5/wls-test-batch-v1"
+  },
+  "production_policy": {
+    "production_rtk_spp_default_changed": false,
+    "external_kaggle_submission": false,
+    "no_inferred_sample_order": true
+  }
+}

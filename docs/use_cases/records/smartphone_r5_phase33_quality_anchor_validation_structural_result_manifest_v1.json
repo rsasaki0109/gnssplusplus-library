@@ -1,0 +1,35 @@
+{
+  "schema_version": "smartphone-r5-phase33-quality-anchor-validation-structural-result-manifest.v1",
+  "phase": 33,
+  "status": "sealed-truth-free-structural-no-go",
+  "result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_structural_result_v1.json",
+    "sha256": "f71a20abf5705e7f47d2288f8c1a8a1f56bf01f7b6ac5e7b1bb26e7929504b69"
+  },
+  "truth_free_artifacts": {
+    "raw_materialization_sha256": "24ebc000ae8f266a799ea4f354f1b3cac3b591fd98914ab8bdc3cb5d27dd4fb9",
+    "run_sha256": "44f5d1f98ebccf88297cbf3e4a7e5088458982843eff9737652506591b439d6a",
+    "seal_sha256": "e6d9750c5005d12d11cdb0f91003a2720a85644e4159e67c3c44482c5473d171",
+    "truth_open_count": 0
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase33_quality_anchor_validation_evaluator_manifest_v2.json",
+    "sha256": "731d8c992ea70cdf4fea3bf977f051931745d3abe090b68bd642ede4ef4a722a"
+  },
+  "decision": {
+    "structural_gate": "failed",
+    "reason": "unchanged control had three >70 m/s transitions; both lanes were required to pass before validation truth access",
+    "validation_truth_materialized": false,
+    "validation_truth_open_count": 0,
+    "future_holdout_remains_sealed": true,
+    "no_accuracy_claim": true
+  },
+  "policy": {
+    "solver_rerun_for_seal_correction": false,
+    "candidate_control_changed": false,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "post_score_tuning": false,
+    "atomic_publish": true
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "schema_version": "smartphone-r5-phase21-upstream-position-offset-score-result.v1",
+  "status": "development-only-go",
+  "candidate_id": "native-fgo-upstream-position-offset-v1",
+  "decision": "development-only promotion; native 0.782-class target remains unachieved",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase21_position_offset_freeze_v1.json",
+    "sha256": "aeff90b9ddda713ab4cce9f4564f0418c3f1d269bf9d0c32aea0e78d622c4928"
+  },
+  "truth_free_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase21_position_offset_manifest_v1.json",
+    "sha256": "b0a01002b4414660e991f8958b044a2713bf4a430b63202a97850418541672b7"
+  },
+  "policy": {
+    "mat_read_count_this_phase": 0,
+    "truth_read_count_this_phase": 1,
+    "truth_read_scope": "already-used Pixel7 development ground_truth.csv; one evaluator process read it once after both raw artifacts were sealed",
+    "cumulative_pixel7_truth_read_count": 5,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "enriched_satellite_columns_used": false,
+    "device_wls_or_precomputed_coordinates_used": false,
+    "leaderboard_or_token_access": false,
+    "external_mutation": false,
+    "post_score_tuning": false,
+    "candidate_changed_after_score": false,
+    "score_used_for_parameter_selection": false
+  },
+  "evaluation": {
+    "evaluator": "apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py",
+    "report": "output/smartphone-r5/phase21-upstream-position-offset-v1/pixel7pro/phase21_score.json",
+    "report_sha256": "3327cb5ee0c0713dd35884077c9843509e2df0abed3b7d61a29cc5ed33f717c1",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "coverage": 1.0,
+    "matched_key_set_sha256": "7bffc3887021a0379e2c56e1529bbd5d8d1fe02277636f28ea4287961ec28f9a",
+    "control_submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26",
+    "candidate_submission_sha256": "ff5fbbc4ed03e2bcd43e69679f7fe8fff61fe16a1949a842e6eeda5624fc804a",
+    "control_summary_sha256": "b51785dd3b223e4b0d0e51dde696465552dfa2f6ba8dd56e83612c6e19376eb9",
+    "candidate_summary_sha256": "bb4df27aef780f295136947f753c6a0aefda895b14c16a456826a2c2b08b818f",
+    "candidate_repeat_submission_sha256": "ff5fbbc4ed03e2bcd43e69679f7fe8fff61fe16a1949a842e6eeda5624fc804a",
+    "candidate_repeat_summary_sha256": "bb4df27aef780f295136947f753c6a0aefda895b14c16a456826a2c2b08b818f",
+    "candidate_repeat_byte_identical": true,
+    "score_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": {
+        "control": 3.1922489635126103,
+        "candidate": 3.138544251001533,
+        "delta_candidate_minus_control": -0.053704712511077446
+      },
+      "wgs84_vincenty__nearest_rank_ceiling": {
+        "control": 3.192568555787111,
+        "candidate": 3.1389810689794793,
+        "delta_candidate_minus_control": -0.05358748680763181
+      },
+      "haversine_sphere__linear_n_minus_1": {
+        "control": 3.19550488592491,
+        "candidate": 3.1421605817812295,
+        "delta_candidate_minus_control": -0.05334430414368052
+      },
+      "haversine_sphere__nearest_rank_ceiling": {
+        "control": 3.195826163862037,
+        "candidate": 3.14260247465675,
+        "delta_candidate_minus_control": -0.053223689205287084
+      }
+    },
+    "p50_p95_m": {
+      "wgs84_vincenty__linear_n_minus_1": {
+        "control_p50": 2.3701343323397306,
+        "candidate_p50": 2.2428357307593765,
+        "control_p95": 4.0143635946854905,
+        "candidate_p95": 4.034252771243689
+      },
+      "haversine_sphere__linear_n_minus_1": {
+        "control_p50": 2.3722609551237244,
+        "candidate_p50": 2.246350189726134,
+        "control_p95": 4.018748816726095,
+        "candidate_p95": 4.037970973836325
+      }
+    },
+    "all_four_score_variants_strictly_improved": true,
+    "coverage_equal": true,
+    "p95_note": "H P50 improved, but H P95 increased slightly; the frozen Phase21 gate was four aggregate diagnostic scores plus coverage/safety, so this remains development-only and is not a claim of uniform tail improvement."
+  },
+  "structural_evidence": {
+    "pixel7_target_keys": 1383,
+    "pixel7_interpolated_epochs": 0,
+    "pixel7_edge_hold_epochs": 0,
+    "pixel7_corrected_native_epochs": 1384,
+    "pixel7_max_offset_enu_m": 0.22360679774997905,
+    "pixel7_graph_converged": true,
+    "pixel7_graph_factors": 68476,
+    "mi8_target_keys": 1416,
+    "mi8_interpolated_epochs": 0,
+    "mi8_edge_hold_epochs": 0,
+    "mi8_corrected_native_epochs": 1417,
+    "mi8_max_offset_enu_m": 0.43011626335213143,
+    "mi8_graph_converged": true,
+    "no_new_solver_or_parameter_change": true,
+    "default_off_byte_compatibility": "Pixel baseline remained byte-identical to the frozen Phase 12 submission"
+  },
+  "commands": {
+    "truth_free_pixel": "build/apps/gnss_fgo_imu_no_base --android-gnss <pixel7/device_gnss.csv> --android-imu <pixel7/device_imu.csv> --nav <route/brdc.nav> --out <submission.csv> --summary-json <summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere [--native-upstream-position-offset]",
+    "score_once": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py --truth <declared development ground_truth.csv> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --submission baseline=<sealed baseline.csv> --submission candidate=<sealed candidate.csv> --output <phase21_score.json>"
+  },
+  "promotion_limits": {
+    "scope": "development-only",
+    "production_default_changed": false,
+    "validation_or_holdout_generalization": false,
+    "native_0_782_class_achieved": false,
+    "kaggle_submission": false,
+    "next_step": "Any future validation must use a separately frozen route and cannot tune this candidate from this development score."
+  },
+  "verification": {
+    "release_build": "cmake --build build --config Release --parallel 2 passed",
+    "release_native_fgo_imu_binary_sha256": "d517a2c0825d2faf7b351720333d0cabf063d7b1b075800feffe5dd1516f130e",
+    "focused_gtest": "132/132 passed in the full native run; targeted Phase21/stop/factor filter 14/14 passed",
+    "historical_source_pin_test": "python_smartphone_native_fgo_pdc_factor_hypotheses_tests passed after recording the Phase21-compatible shared gnss_fgo Release hash",
+    "full_serial_ctest": {
+      "total": 131,
+      "passed": 130,
+      "failed": 1,
+      "known_failure": "python_cli_tests QZSS L6 PTY fixture: frames=0/discarded=244; unrelated to Phase21",
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure"
+    },
+    "diff_check": "git diff --check passed",
+    "json_parse": "freeze, manifest, and score records parse as JSON",
+    "credential_and_forbidden_input_scan": "no token values; no .mat/truth/enriched/WLS input in candidate commands"
+  },
+  "record_sha256": "excluded-from-self-hash; compute from the committed file"
+}

@@ -1,0 +1,27 @@
+{
+  "phase": 334,
+  "implementation_head": "ff368db605a5e246cb74b24163d1d33728aede8d",
+  "source": "scripts/native_base_residual_geometry_audit.cpp",
+  "binary": "build/native_base_residual_geometry_audit",
+  "base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "expected_epochs": 3500,
+  "configuration": "unsmoothed common raw GPS L1/L5 observations; shared receive-time selected satellite state; zero explicit group delay; native Sagnac/Klobuchar/Saastamoinen; healthy and >=15deg; rank4 QR",
+  "output": "aggregate apparent displacement norms/clock magnitude/residual RMS only; no coordinate payload",
+  "interpretation": "raw simultaneous residual decomposition removes frequency smoothing-history confound; diagnostic only, no calibration",
+  "raw_passes_per_input": 1,
+  "hash_scans_per_input": 1,
+  "truth_reads": 0,
+  "phone_reads": 0,
+  "inference_feedback": false,
+  "source_sha256": "a913526968be74ad73be2bfa3bda06b45acb0199afe267704ad46eb789da0e4e",
+  "binary_sha256": "dbf41dd0be3c628b1bf6f6fb137a0ce70582e4431bb2f38cd8ff71cdadcf7166",
+  "extra_argv": [
+    "raw-paired-frequency"
+  ],
+  "synthetic_self_test": "known common and inverse-frequency-squared components recovered within 1e-10; invalid fit checks passed",
+  "decomposition": "gamma=(GPS_L1_FREQ/GPS_L5_FREQ)^2; neutral=(gamma*L1-L5)/(gamma-1); dispersive_L1=(L5-L1)/(gamma-1)",
+  "base_model_builds": 0
+}

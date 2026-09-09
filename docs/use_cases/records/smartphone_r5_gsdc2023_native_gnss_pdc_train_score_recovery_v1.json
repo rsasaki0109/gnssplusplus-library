@@ -1,0 +1,53 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-recovery.v1",
+  "status": "authorized-evaluation-recovery",
+  "created_at_utc": "2026-08-31T06:14:16Z",
+  "purpose": "Recover the one permitted development score after the exact-key evaluator rejected a sealed raw route because the Android output and ground-truth exports use adjacent 1 Hz millisecond phases.",
+  "prior_authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_authorization_v1.json",
+    "sha256": "aef2c25059befe05d85108569f6e57aea0dbbd69a6956be63e254bb1cc42f150",
+    "freeze_record_sha256": "6e9004384b604c4f311aa56b3f6edcecef8af40bb7d0fa1e6e8b9e62cbd9f2ae"
+  },
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "solver_rerun": false,
+    "candidate_unchanged": true
+  },
+  "exact_failure": {
+    "evaluator": "apps/commands/benchmarks/gnss_smartphone_kaggle.py",
+    "error": "submission contains 1384 keys absent from ground truth; first extra key is ('2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro', 1684960018000)",
+    "truth_first_timestamp_ms": 1684960018999,
+    "observed_native_first_timestamp_ms": 1684960018000,
+    "interpretation": "schema/time-phase mismatch, not an estimator change",
+    "truth_open_count_before_failure": 1,
+    "metric_report_published": false
+  },
+  "contract": {
+    "candidate_unchanged": true,
+    "algorithm_or_numeric_parameter_change": false,
+    "parameter_selection": false,
+    "solver_rerun": false,
+    "mat_inputs_used": false,
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "external_mutation": false,
+    "timestamp_alignment": "deterministic one-to-one nearest ground-truth timestamp with absolute delta <= 1000 ms; equal-distance ties fail closed; no interpolation or coordinate modification",
+    "reason": "The existing GNSS sign-off already uses nearest timestamp matching; the fixed 1000 ms bound covers the observed 999 ms export phase and is applied only for report-time pairing."
+  },
+  "recovery_evaluator": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc_eval.py",
+    "source_sha256": "899ef6d0d30cda448f1d31c16a96f3bb207401ec037b1bbb06e02003839af9b4",
+    "test": "tests/test_smartphone_native_gnss_pdc_eval.py",
+    "test_sha256": "df43876bbcc952f6c2cfac90b14197c7f899c3898b141835ad4bddbfcfcefb9d",
+    "schema": "smartphone-r5-native-gnss-pdc-train-score.v1",
+    "truth_read_method": "single-open-bytes-parse-and-hash",
+    "four_variants": true,
+    "official_score_claim": false
+  },
+  "allowed_action": "Read the same declared development ground_truth.csv once with the fixed recovery adapter, publish a result regardless of pass/fail, and then make no candidate or parameter changes."
+}

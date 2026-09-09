@@ -1,0 +1,98 @@
+{
+  "schema_version": "smartphone-r5-phase68-base-matching-taxonomy-freeze.v1",
+  "phase": 68,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-phase68-raw-base-read",
+  "purpose": "Truth-free diagnosis of Phase67 base-correction misses. Distinguish exact SignalType matching from canonical same-frequency matching, out-of-domain time, missing satellite/frequency streams, and duplicate base observations without changing the frozen coverage gate or implementing a correction.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "7f0b869",
+    "phase67_failure_record": "docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_failure_v1.json",
+    "phase67_failure_record_sha256": "291efc6619fb68cd724c4f81f3a73535b13ef79606177be9bb98ce5c31e9d46a",
+    "phase65_source_commit": "f8cdf3b",
+    "phase65_runner_sha256": "6be7dd346a1ff219c15036fcf194861ebeda700678d52e3d93b2f3c2b96a16ae",
+    "native_base_source_sha256": "55b7a1fbb96b5e3d6599c311c229870d7c319163d43322c01a3881d85dcb25aa",
+    "android_loader_source_sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+    "rinex_loader_source_sha256": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533",
+    "signal_policy_source_sha256": "d3f8edbdd785f0292c2b8a1596248c00a2b5e9284c09de439e5c7340c1dbca99"
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "device_gnss.csv": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "base_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "bytes": 10708536,
+      "observed_interval_s": 1.0
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+      "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+      "bytes": 11854125,
+      "observed_interval_s": 1.0
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "bytes": 719969,
+      "observed_interval_s": 15.0
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+      "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+      "bytes": 5950275,
+      "observed_interval_s": 1.0
+    }
+  },
+  "source_matching_contract": {
+    "raw_adopted_proxy": "MessageType=Raw; source timing finite; supported Android signal/frequency; valid positive raw-clock pseudorange; existing code/Cn0/multipath/state masks; one selected row per (epoch,satellite,SignalType)",
+    "raw_time": "long-double (TimeNanos-first FullBiasNanos)/1e9 minus BiasNanos/1e9 and TimeOffsetNanos/1e9, with route epoch week unwrap",
+    "base_signal": "RINEX observation band mapped by source signal_policy to SignalType; only finite positive code observations are considered",
+    "exact_key": "(GNSS system, SVID, source SignalType)",
+    "canonical_frequency_key": "(GNSS system, SVID, physical carrier frequency/band; GLONASS channel retained)",
+    "time_domain": "raw GPST epoch must lie within the first/last finite base sample for the same key; no extrapolation, endpoint hold, nearest fill, or gap repair",
+    "classification_precedence": [
+      "exact SignalType stream exists: in_domain_exact or out_of_domain_time",
+      "canonical same-frequency stream exists but exact SignalType does not: in_domain_frequency_variant or out_of_domain_time",
+      "satellite has base streams but no canonical frequency: missing_frequency_stream",
+      "satellite has no base stream: missing_satellite_stream"
+    ],
+    "duplicate_definition": "at one base epoch, same satellite and canonical frequency has two or more finite code observations (including distinct RINEX tracking-code variants); report only, no arbitrary selection"
+  },
+  "read_contract": {
+    "single_process": true,
+    "raw_device_gnss_reads": 4,
+    "base_rinex_reads": 4,
+    "nav_reads": 0,
+    "imu_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "solver_invocations": 0,
+    "old_phase65_or_phase66_output_reuse": false
+  },
+  "decision_policy": "Diagnostic counts are descriptive and cannot relax the Phase67 >=0.99 finite-correction or >=0.80 matched-factor policy. No canonicalization, interpolation change, base imputation, native implementation, solver run, or accuracy truth is authorized by this freeze. Any parser ambiguity, malformed input, hash mismatch, or nonfinite accounting fails closed."
+}

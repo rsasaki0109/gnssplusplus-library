@@ -1,0 +1,295 @@
+{
+  "schema_version": "smartphone-r5-phase45-pixel5-residual-diagnostic-freeze.v2",
+  "phase": 45,
+  "status": "frozen-before-phase45-truth-read",
+  "supersedes": {
+    "path": "docs/use_cases/records/smartphone_r5_phase45_pixel5_residual_diagnostic_freeze_v1.json",
+    "sha256": "d99ce86eeb499d4a08746f9f913eeef7ae1b5f7bcfb0e1fe906fdc453b982d6",
+    "reason": "v1 exact-model gate incorrectly required truth-row coverage 1.0, which would make the known raw-UTC warm-up exclusions fail closed. v2 separates prediction-domain matched-key coverage from complete pinned truth-row coverage and retains every threshold unchanged."
+  },
+  "purpose": "Determine whether the sealed Phase44 four-route Pixel5 development cohort resolves the Phase36 constant-identifiability failure. This is a residual diagnostic only: no truth-derived correction is fitted, applied, selected, or deployed.",
+  "objective": {
+    "candidate_id": "native_fallback_seed_quality_anchor_recovery_v1",
+    "candidate_source": "Phase44 sealed candidate bytes from the Phase43 structural seal run1 artifacts",
+    "exact_model": "pixel5",
+    "route_count_required": 4,
+    "development_truth_only": true,
+    "solver_rerun": false,
+    "correction_fit_or_application": false,
+    "native_candidate_mutation": false
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase44_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_freeze_v1.json",
+      "sha256": "95c0990af0015b7cb5fcf736aefbcff6fc97356093edcf03094b31b4083b28bc"
+    },
+    "phase44_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_evaluator_manifest_v1.json",
+      "sha256": "9b63607a9c8a7581cbe94868aabb21f235698e6f54cd8a879268245e327a6f1e"
+    },
+    "phase44_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase44_pixel5_development_accuracy_result_v1.json",
+      "sha256": "9e441c78f7c2bf8b3cf2cf9a7c9fe7e447fb2ff8eb6324fa5ef138c3b419e48a"
+    },
+    "phase44_result_output": {
+      "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/phase44_pixel5_development_accuracy.json",
+      "sha256": "a191e5910315337ebd0d752f61eaddcdaa77f61fe5c691f5858981bea39cfa32"
+    },
+    "phase44_result_manifest_output": {
+      "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/phase44_pixel5_development_accuracy.manifest.json",
+      "sha256": "5a3cd5d167063e7b1727efc67868fd6e25d26464ccc043b3969e31c9ffccb1e9"
+    },
+    "phase44_truth_materialization": {
+      "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth_materialization.json",
+      "sha256": "1de76b17f728e239cdf0416aafbdf59e07497c2bc00a1de88d808f7044f7a3bc"
+    },
+    "phase43_structural_seal": {
+      "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.json",
+      "sha256": "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d"
+    },
+    "phase37_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v2.json",
+      "sha256": "61f46ac734d0c712bc317603570a0630234ee67ab642d12368eb5e3bf3962a3e"
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "fresh_validation": {
+      "id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+      "opened": false,
+      "remains_sealed": true
+    },
+    "future_holdout": {
+      "id": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+      "opened": false,
+      "remains_sealed": true
+    }
+  },
+  "sealed_inputs": {
+    "candidate_submissions": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2021-03-16-18-59-us-ca-mtv-a/pixel5/run1/submission.csv",
+        "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "rows": 2158
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2021-08-24-20-32-us-ca-mtv-h/pixel5/run1/submission.csv",
+        "sha256": "3cfe97750927fa268f71bbe7393754ce7a1eb39d937e085b177c50a71eec10ae",
+        "rows": 3139
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2022-04-01-18-22-us-ca-lax-t/pixel5/run1/submission.csv",
+        "sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+        "rows": 1465
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/candidate/2023-03-08-21-34-us-ca-mtv-u/pixel5/run1/submission.csv",
+        "sha256": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+        "rows": 1101
+      }
+    },
+    "truth": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "source": "Phase29 materialization reused by Phase44",
+        "phase44_materialized": false
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+        "bytes": 305432,
+        "rows": 3139,
+        "source": "Phase44 materialization",
+        "phase44_materialized": true
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "source": "Phase44 materialization",
+        "phase44_materialized": true
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+        "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+        "bytes": 108045,
+        "rows": 1102,
+        "source": "Phase44 materialization",
+        "phase44_materialized": true
+      }
+    },
+    "raw_imu": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+        "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+        "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+        "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv",
+        "sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab"
+      }
+    }
+  },
+  "read_contract": {
+    "single_process": true,
+    "truth_read_count_per_route": 1,
+    "candidate_read_count_per_route": 1,
+    "raw_imu_read_count_per_route": 1,
+    "phase44_materialized_truth_reused": true,
+    "archive_open": false,
+    "archive_materialization": false,
+    "truth_rematerialization": false,
+    "solver_rerun": false,
+    "candidate_regeneration": false,
+    "truth_derived_correction_fit": false,
+    "truth_derived_correction_application": false,
+    "post_truth_tuning": false,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "kaggle_or_token_access": false,
+    "mat_read_or_generated": false,
+    "device_wls_coordinates_used": false,
+    "precomputed_inference_coordinates_used": false,
+    "atomic_result_publish": true
+  },
+  "warmup_contract": {
+    "source": "Phase43 raw_utc_key_contract",
+    "warmup_epoch_excluded": true,
+    "matching": "warmup keys absent from sealed candidate remain unmatched; no interpolation, edge hold, nearest match, or fill",
+    "expected": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "truth_rows": 2159,
+        "expected_unmatched_truth_rows": 1,
+        "expected_matched_key_coverage": "2158/2159"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "truth_rows": 1102,
+        "expected_unmatched_truth_rows": 1,
+        "expected_matched_key_coverage": "1101/1102"
+      }
+    },
+    "coverage_reporting": {
+      "matched_key_coverage": "exact matched candidate/truth keys divided by truth rows; this is the prediction/raw-UTC evaluation-domain coverage gate",
+      "truth_row_coverage": "truth rows read from the pinned Phase44 materialization divided by freeze-pinned truth rows; this must be 1.0 and is separate from matched-key coverage",
+      "prediction_domain_coverage": "all finite, strictly ordered candidate keys are exact matched keys; no candidate key may be extra"
+    }
+  },
+  "residual_contract": {
+    "key": "(phone, UnixTimeMillis)",
+    "alignment": "exact integer key intersection only",
+    "frame": "fixed local ENU at first chronological matched truth coordinate; prediction minus truth ECEF difference rotated at that origin",
+    "components": ["east", "north"],
+    "up": "null/unobservable because sealed candidate submission has no altitude; never filled from truth, result, sample, MAT, WLS, or any other coordinate artifact",
+    "prediction_altitude_projection": "truth altitude is used for both predicted and truth ECEF calls only to project horizontal latitude/longitude error; no up residual is produced",
+    "robust_location": "component-wise median",
+    "robust_scale": "component-wise unscaled MAD",
+    "covariance": "ordinary unbiased covariance and component-wise 3-MAD inlier covariance",
+    "prefix_tail": "chronologically sorted matched rows; first and last ceil(25 percent), each nonempty",
+    "quartiles": "chronologically contiguous four equal-index quartiles using floor boundaries",
+    "linear_time_drift": "ordinary least-squares east/north residual slope against normalized matched time in [0,1]; endpoint drift is the slope vector",
+    "route_median_pairwise_distance": "Euclidean horizontal distance in metres between route median ENU vectors",
+    "speed_bins": {
+      "source": "sealed candidate consecutive-row Haversine speed only; truth speed is forbidden",
+      "bins_mps": ["unavailable", "<=1", ">1<=5", ">5<=15", ">15"]
+    },
+    "orientation": {
+      "source": "raw device_imu.csv only",
+      "streams": ["UncalAccel", "UncalMag"],
+      "match": "nearest preceding sample within 250 ms",
+      "labels": ["gravity_axis_sign", "gravity_quality", "tilt_compensated_magnetic_heading_octant"],
+      "calibrated_pose": false
+    },
+    "loo_common_median": {
+      "training_estimator": "component-wise median of the three non-held route median ENU vectors",
+      "correction": "diagnostic residual minus training common median; no corrected coordinates are written and no native inference consumes it",
+      "held_route_score": "(P50 + P95) / 2 over corrected fixed-ENU horizontal norms, linear percentile rank (n - 1) * q",
+      "baseline_score": "same fixed-ENU horizontal norm score before correction",
+      "diagnostic_only": true
+    }
+  },
+  "identifiability_gates": {
+    "logic": "All gates are predeclared and ANDed. A failed or untestable gate means no-go; no threshold may be relaxed after truth is read.",
+    "exact_model_route_count": {
+      "minimum": 4,
+      "criterion": "All four route identities are exact Pixel5 model routes with finite exact-key residuals, all candidate keys inside the prediction/raw-UTC evaluation domain exactly matched, no extra/duplicate keys, and truth_row_coverage 1.0. Known raw-UTC warm-up truth rows may remain unmatched and are reported separately.",
+      "prediction_domain_coverage_required": true,
+      "truth_row_coverage_required": 1.0
+    },
+    "route_median_center_dispersion": {
+      "component_mad_max_m": {"east": 0.5, "north": 0.5},
+      "center_radius_max_m": 1.0,
+      "criterion": "Component-wise MAD across the four route median vectors is <=0.50 m in each horizontal component and every route median is <=1.00 m from the component-wise common median."
+    },
+    "prefix_tail_stability": {
+      "absolute_floor_m": 1.0,
+      "route_mad_factor": 2.0,
+      "criterion": "Every route prefix-tail median-vector shift is <= max(1.00 m, 2.0 * sqrt(MAD_E^2 + MAD_N^2))."
+    },
+    "orientation_independence": {
+      "dimensions": ["gravity_axis_sign", "tilt_compensated_magnetic_heading_octant"],
+      "minimum_rows_per_group": 20,
+      "minimum_comparable_route_dimension_cases_per_dimension": 2,
+      "max_group_median_delta_m": 0.75,
+      "criterion": "For each required dimension, at least two route/dimension cases have at least two groups with >=20 matched rows, and every comparable group median is <=0.75 m from its route overall median. Orientation labels are raw-only diagnostics and never fit features."
+    },
+    "loo_all_route_improvement": {
+      "minimum_score_improvement_m": 0.05,
+      "criterion": "Every held route's diagnostic LOO common-median score improves by at least 0.05 m versus its uncorrected fixed-ENU score."
+    },
+    "loo_macro_improvement": {
+      "minimum_macro_improvement_m": 0.05,
+      "criterion": "The arithmetic mean of four held-route LOO scores improves by at least 0.05 m versus the arithmetic mean baseline score."
+    },
+    "individual_worsening_limit": {
+      "maximum_score_worsening_m": 0.10,
+      "criterion": "No held-route LOO diagnostic score may worsen by more than 0.10 m."
+    },
+    "stretch_0_782_reachability": {
+      "full_cohort_common_median_macro_max_m": 0.782,
+      "full_cohort_target_route_max_m": 0.782,
+      "criterion": "Applying the single full-cohort common median only as an offline diagnostic must produce both macro and target-route fixed-ENU scores <=0.782 m; no corrected coordinate or native candidate is created."
+    }
+  },
+  "forbidden_actions": [
+    "rerun solver or native binary",
+    "fit, apply, select, or deploy a truth-derived correction",
+    "rewrite or tune the sealed candidate",
+    "reopen or rematerialize the Phase44 archive",
+    "read any archive member",
+    "open validation or holdout truth",
+    "read or create MATLAB .mat",
+    "use device WLS, precomputed result/submission coordinates, or inferred coordinates as inference inputs",
+    "use truth speed, truth-derived heading, or truth-derived attitude",
+    "access Kaggle or tokens"
+  ],
+  "execution_order": [
+    "commit and push this v2 freeze JSON before any Phase45 truth read",
+    "commit and push evaluator source, focused tests, and evaluator manifest with this v2 freeze hash",
+    "verify Phase44 freeze/result/materialization, Phase43 seal, and every candidate/raw/truth hash",
+    "in one process read each pinned candidate, Phase44 materialized truth, and raw IMU exactly once; never open archive",
+    "compute fixed ENU residual diagnostics, orientation/speed bins, and diagnostic-only LOO common-median scores",
+    "publish atomic output result and manifest, then checked-in result/docs/README",
+    "run focused tests and leave worktree clean",
+    "do not open validation or holdout in Phase45"
+  ],
+  "decision_rule": "The frozen route cohort, residual frame, speed/orientation labels, LOO estimator, numeric gates, and 0.782 reachability rule are immutable before truth reads. This phase never authorizes native correction or validation; a no-go records the strongest residual structure and exactly one next source-supported raw physical factor, while a diagnostic-go only authorizes planning of that raw-only mechanism for a later phase."
+}

@@ -1,0 +1,94 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-wls-train-result.v1",
+  "status": "no-go-train-gate",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-pdc-doppler-velocity-wls-v1",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_freeze_v1.json",
+    "sha256": "1569035091e5283f241ca8e921af74c81520bc7960d943fcc3335fd96ab65da5"
+  },
+  "train_gate_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_train_gate_v1.json",
+    "sha256": "9aaa7830f09a1ecce999377948e3a7e42184679f731bcd9e9a9e7e235b072045"
+  },
+  "sealed_score": {
+    "report": "output/smartphone-r5/native-fgo-pdc-wls-v1/train_evaluation.json",
+    "report_sha256": "2ebb511ca4cb0092cc3c2f15f05a6239a03b0d993ea3530c6537db0caf8f9421",
+    "manifest": "output/smartphone-r5/native-fgo-pdc-wls-v1/train_evaluation.manifest.json",
+    "manifest_sha256": "dcf8a1003b9030f4ca3167be588a332c4a920c20e047bf204f4365d669e82963",
+    "truth_free_artifacts_verified_before_truth": true,
+    "truth_read_count": 3,
+    "truth_read_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0
+  },
+  "aggregate_metrics_m": {
+    "baseline_native_fgo_v1": {
+      "horizontal_p50": 2.347281267579819,
+      "horizontal_p95": 5.5824964698364,
+      "vertical_p95": 19.368929795263224,
+      "availability": 1.0,
+      "truth_coverage": 0.9996646827811148,
+      "diagnostic_mean": 3.9748891779020603,
+      "diagnostics": {
+        "haversine_sphere__linear_n_minus_1": 3.966872073430881,
+        "haversine_sphere__nearest_rank_ceiling": 3.9849010359205974,
+        "wgs84_vincenty__linear_n_minus_1": 3.9648888687081087,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.982894733548655
+      }
+    },
+    "candidate_native_fgo_pdc_doppler_velocity_wls_v1": {
+      "horizontal_p50": 22254.39283349506,
+      "horizontal_p95": 41536.82321283095,
+      "vertical_p95": 46533.60484609078,
+      "availability": 1.0,
+      "truth_coverage": 0.9996646827811148,
+      "diagnostic_mean": 31892.9483013086,
+      "diagnostics": {
+        "haversine_sphere__linear_n_minus_1": 31889.935288637727,
+        "haversine_sphere__nearest_rank_ceiling": 31889.97159409734,
+        "wgs84_vincenty__linear_n_minus_1": 31895.608023163004,
+        "wgs84_vincenty__nearest_rank_ceiling": 31896.278299336325
+      }
+    }
+  },
+  "route_gate": {
+    "passed": false,
+    "failures": [
+      "all_three_routes_horizontal_p50_regression",
+      "all_three_routes_horizontal_p95_regression",
+      "all_three_routes_vertical_p95_regression",
+      "all_four_diagnostic_variants_regressed",
+      "new_over_70_mps_transitions"
+    ],
+    "continuity_over_70mps": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2,
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": 477,
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": 15
+    }
+  },
+  "decision": {
+    "promoted": false,
+    "production_default_changed": false,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "test_opened": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "post_score_tuning": false,
+    "reason": "The truth-free structural gate passed, but the predeclared development-train gate failed by large route-level and aggregate regressions. Seal this lane without validation or holdout."
+  },
+  "evaluator_note": "The reused generic score evaluator emits its historical candidate label native-fgo-pdc-bridge-v1 in the report envelope; route metrics and candidate manifest hashes are the authoritative WLS identifiers in this record. No evaluator/code rerun or result-driven change was made.",
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0",
+    "src/algorithms/fgo.cpp": "df098a258f4bcdbc9802f8b89617425b0521851a76a888ea0c9edd1cd3e9b1e2",
+    "src/algorithms/fgo_problems.cpp": "d24c88c331439b20f3a54580f584254d823d81332657c1a90996b620f32f6033",
+    "build/apps/gnss_fgo": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+  }
+}

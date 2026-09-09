@@ -1,0 +1,307 @@
+{
+  "schema_version": "smartphone-r5-phase134-native-phase131-zero-telemetry-forensic-freeze.v1",
+  "phase": 134,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-single-native-telemetry-candidate",
+  "scope": "Native Phase131 zero-telemetry forensic audit and one summary-diagnostics wiring candidate; no raw, solver, truth, MAT, PDC, precomputed-coordinate, accuracy, solution-row, or Kaggle execution",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase134_native_phase131_zero_telemetry_forensic_audit_v1.md",
+    "commit": "28301f56afb3a418b89252aa2106d2ffb329f61d",
+    "sha256": "b248f70e4fe93cd5f1ffbf244a323337f333d1c1251c97f6244a4e36ea1f48f8"
+  },
+  "starting_state": {
+    "phase133_result_commit": "e95c000245a74e550e1989334e51c726f456e93f",
+    "phase133_authorization_commit": "2b5f3633d20457ee5a335c2d6d447c727374a26b",
+    "phase133_runner_commit": "c69ed14c96a13fefbd9c40f783051c98e5483a4a",
+    "phase133_target_binary_sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e",
+    "worktree_before_audit": "clean",
+    "raw_reads_during_audit": 0,
+    "solver_invocations_during_audit": 0,
+    "truth_reads_during_audit": 0
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase134-native-phase131-summary-diagnostics-bridge-v1",
+    "candidate_class": "native summary diagnostics wiring correction",
+    "source_backed": true,
+    "root_cause_class": "native BasePseudorangeCompensationReport to FGOProblemDiagnostics aggregation omission",
+    "root_cause_proven": true,
+    "native_phase131_flag_lost": false,
+    "native_apply_canonical_branch_bypassed": false,
+    "native_resolver_bypassed": false,
+    "native_phase131_counters_missing_from_top_level_summary": true,
+    "route_data_root_cause_determined": false,
+    "implementation_authorized": false,
+    "default_off": true,
+    "partial_selector_set_allowed": false,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_coordinate_read_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "fallback_or_rerun_allowed": false
+  },
+  "authoritative_evidence": {
+    "phase133_result": {
+      "commit": "e95c000245a74e550e1989334e51c726f456e93f",
+      "json_path": "docs/use_cases/records/smartphone_r5_phase133_runner_native_selector_boundary_structural_result_v1.json",
+      "json_sha256": "e786da3c84b0577b3963b340724f39e1a750040a0f30adcc1dbf25a0925cc17c",
+      "md_path": "docs/use_cases/records/smartphone_r5_phase133_runner_native_selector_boundary_structural_result_v1.md",
+      "md_sha256": "4c662f7082966e7f8263c0009f1deabc335dc6f84a79d29eb54feeee98a992c5",
+      "status": "no-go-phase133-runner-native-selector-boundary-structural",
+      "native_return_codes": {
+        "MTV-A": 0,
+        "LAX-T": 0
+      },
+      "top_level_native_phase131_canonical_rows": 0,
+      "top_level_native_phase131_selected_streams": 0,
+      "sealed_native_resolver_call_count": 0,
+      "sealed_solution_coordinate_reads": 0,
+      "sealed_truth_reads": 0
+    },
+    "phase133_runner": {
+      "commit": "c69ed14c96a13fefbd9c40f783051c98e5483a4a",
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase133_runner_native_selector_boundary_authorized_execute.py",
+      "sha256": "ca5f0d3c0a8ec8b2c0f380cda3f1d7ed37b7a0525a04073a9019b87600b85be7",
+      "native_summary_read_before_normalization": true,
+      "native_summary_path_overwritten_by_normalized_summary": true,
+      "top_level_phase131_object_used_by_gate": true,
+      "nested_base_phase131_counters_retained_by_normalizer": false
+    },
+    "source": {
+      "native_app": {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "6fcee581af70535b8af09a674a234352abaaf83a34b722d4e91577abaf352170"
+      },
+      "fgo_problem_builder": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "9f75eda838a6a885657fb78d038733d6e1e027794c869c7a26b2dd610ff96aaa"
+      },
+      "base_model": {
+        "path": "src/algorithms/base_pseudorange_compensation.cpp",
+        "sha256": "5ec8c119a55a8e974394531a7585a6ce094756c127b048d61fba330991b48ba2"
+      },
+      "base_model_header": {
+        "path": "include/libgnss++/algorithms/base_pseudorange_compensation.hpp",
+        "sha256": "67b52a4625a778fd015685aab651d9e07c80c958fa7382ae8d0c145b8969cf45"
+      },
+      "fgo_header": {
+        "path": "include/libgnss++/algorithms/fgo.hpp",
+        "sha256": "df00ad9cc968f12525d4e7da16e8b6b9a41f75857d583ccefb244a8d089c2908"
+      },
+      "miss_mask": {
+        "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+        "sha256": "53f08f651e81f7feafc02f3d6a05490781fa4efc45014b72e262961e921ec363"
+      },
+      "canonical_key_header": {
+        "path": "include/libgnss++/algorithms/phase131_canonical_correction_key.hpp",
+        "sha256": "b9e464d16551e547f9b1bc298b7c6a90f91f5b0038d97b46625ff56cdf497123"
+      }
+    },
+    "target_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e",
+      "inspection": "hash and static strings only; no launch during audit"
+    }
+  },
+  "call_graph": [
+    {
+      "stage": "argv",
+      "source": "apps/commands/benchmarks/gnss_smartphone_phase133_runner_native_selector_boundary.py:240-262",
+      "fact": "Phase131 selector appears once and Phase130 is absent"
+    },
+    {
+      "stage": "native_parse",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:563-574",
+      "fact": "Phase131 argv sets Options::native_phase131_canonical_correction_band_key"
+    },
+    {
+      "stage": "native_config",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:8571-8576",
+      "fact": "Options value is copied to FGOConfig::use_native_phase131_canonical_correction_band_key"
+    },
+    {
+      "stage": "raw_base_config",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:8019-8030,8125-8162",
+      "fact": "same option is copied to base_config.use_phase131_canonical_correction_band_key"
+    },
+    {
+      "stage": "raw_base_model",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:8163-8169",
+      "fact": "base_pseudorange_model.build(base_series, nav, base_config) runs before graph construction"
+    },
+    {
+      "stage": "canonical_resolver",
+      "source": "src/algorithms/base_pseudorange_compensation.cpp:418-437,542-545,611-701",
+      "fact": "typed rows are canonicalized, canonical candidates/streams are built, and zero selected streams hard-fails"
+    },
+    {
+      "stage": "model_to_base_report",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:8175-8268",
+      "fact": "all Phase131 model counters are copied into BasePseudorangeCompensationReport"
+    },
+    {
+      "stage": "factor_application",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:8682-8721",
+      "fact": "option-true branch calls source_pseudorange_miss_mask::applyCanonical, not legacy apply"
+    },
+    {
+      "stage": "base_accounting",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:8738-8821",
+      "fact": "finite correction/conservation/exactly-once and Phase126 A/B/C markers are recorded"
+    },
+    {
+      "stage": "summary",
+      "source": "apps/native/gnss_fgo_imu_no_base.cpp:6083-6142,7232-7266",
+      "fact": "nested base_report and top-level problem.diagnostics are separate Phase131 objects"
+    },
+    {
+      "stage": "runner_gate",
+      "source": "apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural_authorized_execute.py:809-862",
+      "fact": "gate reads only top-level phase131; resolver count is canonical_rows plus canonical_rejected_rows"
+    }
+  ],
+  "sealed_route_evidence": {
+    "MTV-A": {
+      "native_return_code": 0,
+      "gnss_first_initial_cost": 5009591.0291709,
+      "gnss_first_final_cost": 16104.433292069118,
+      "main_initial_cost": 122809034.24737301,
+      "main_final_cost": 28266.35349384695,
+      "main_iterations": 12,
+      "base_matched_factor_rows": 44350,
+      "base_finite_correction_rows": 43244,
+      "base_correction_passes": 1,
+      "base_correction_exactly_once": true,
+      "phase126_atomic_a_b_c": true,
+      "base_phase131_enabled": true,
+      "base_phase131_configuration_valid": true,
+      "top_level_phase131_canonical_rows": 0,
+      "top_level_phase131_selected_streams": 0
+    },
+    "LAX-T": {
+      "native_return_code": 0,
+      "gnss_first_initial_cost": 6466234.225070638,
+      "gnss_first_final_cost": 12279.574633102011,
+      "main_initial_cost": 143982373.9341658,
+      "main_final_cost": 17995.990758732205,
+      "main_iterations": 12,
+      "base_matched_factor_rows": 30789,
+      "base_finite_correction_rows": 30653,
+      "base_correction_passes": 1,
+      "base_correction_exactly_once": true,
+      "phase126_atomic_a_b_c": true,
+      "base_phase131_enabled": true,
+      "base_phase131_configuration_valid": true,
+      "top_level_phase131_canonical_rows": 0,
+      "top_level_phase131_selected_streams": 0
+    }
+  },
+  "root_cause": {
+    "fact": "BasePseudorangeCompensationModel::Diagnostics Phase131 fields are copied to BasePseudorangeCompensationReport but never copied to FGOProblemDiagnostics; the native top-level writer reads the latter",
+    "proof_points": [
+      "src/algorithms/fgo_problems.cpp:54-55 initializes only the Phase131 enabled boolean; source search finds no counter/map assignments in that builder",
+      "apps/native/gnss_fgo_imu_no_base.cpp:8246-8268 copies every Phase131 model counter/map to base_report",
+      "apps/native/gnss_fgo_imu_no_base.cpp:7244-7261 serializes untouched problem.diagnostics counters as the top-level Phase131 object",
+      "Phase133 native return is 0 for both routes, while model build hard-fails on zero selected canonical streams and source-complete correction accounting is positive/exactly once"
+    ],
+    "not_root_causes": [
+      "Phase131 flag loss between argv and config",
+      "applyCanonical conditional bypass",
+      "canonical resolver bypass due to precomputed coordinates or legacy stream path",
+      "route data mismatch, which remains unproven because the original native nested counters were overwritten and raw payloads are forbidden"
+    ],
+    "artifact_limitation": "Phase133 normalizes and overwrites structural_summary.json after parsing native output; its selected base_correction fields omit nested Phase131 row/stream counters, so exact native counter values are unavailable in sealed output"
+  },
+  "candidate_contract": {
+    "id": "phase134-native-phase131-summary-diagnostics-bridge-v1",
+    "implementation_scope": "One native summary-boundary synchronization from BasePseudorangeCompensationReport to FGOProblemDiagnostics before makeSummary",
+    "source_fields": [
+      "phase131_enabled",
+      "phase131_configuration_valid",
+      "phase131_configuration_failure",
+      "phase131_canonical_rows",
+      "phase131_canonical_rejected_rows",
+      "phase131_unknown_band_rows",
+      "phase131_canonical_key_conflicts",
+      "phase131_canonical_duplicate_rows",
+      "phase131_canonical_streams",
+      "phase131_canonical_selected_streams",
+      "phase131_canonical_merged_streams",
+      "phase131_failure_counts"
+    ],
+    "destination": "FGOProblemDiagnostics phase131 fields used by the top-level native summary",
+    "timing": "after existing base model/report population and before makeSummary; exactly one telemetry synchronization",
+    "selector_off": "disabled/zero legacy diagnostics remain unchanged; no positive counter may be fabricated from the flag alone",
+    "gate_policy": "existing canonical_rows>0 and canonical_selected_streams>0 predicate remains; no gate relaxation",
+    "native_algorithm_change": false,
+    "factor_topology_change": false,
+    "observation_or_correction_change": false,
+    "equation_or_unit_change": false,
+    "sigma_filter_robust_change": false,
+    "solver_qr_lm_change": false,
+    "initialization_or_handoff_change": false,
+    "legacy_default_change": false,
+    "runner_raw_read_change": false,
+    "solution_publication_change": false,
+    "partial_selector_or_fallback_allowed": false
+  },
+  "rejected_alternatives": [
+    {
+      "candidate": "relax the Phase133 native admission gate using base corrected rows",
+      "reason": "would convert missing evidence into admission and is not a root-cause fix"
+    },
+    {
+      "candidate": "change Phase131 key/family/FCN or source-base correction logic",
+      "reason": "no source or sealed evidence shows the resolver logic is wrong; the path is already active"
+    },
+    {
+      "candidate": "make the runner read nested base_report counters only",
+      "reason": "would hide the native top-level diagnostic defect and leave native telemetry misleading"
+    }
+  ],
+  "focused_tests_required_if_implemented": [
+    "synthetic exact copy of every Phase131 field/map from base report to FGO problem diagnostics",
+    "selector-off disabled/zero legacy diagnostics and unchanged graph/config values",
+    "nested and top-level summary Phase131 counters agree for accepted/rejected/conflict synthetic reports",
+    "empty/invalid canonical build remains fail-closed without fabricated positive counters",
+    "existing runner derives resolver attempts from bridged top-level counters without opening solution rows",
+    "static regression that factors, correction passes, Phase126 A/B/C, C7/D/QR, IMU/TDCP, sigma, LM, and output are untouched"
+  ],
+  "future_authorization": {
+    "implementation_and_tests_required": true,
+    "new_binary_hash_required": true,
+    "launch_free_qualification_required": true,
+    "pre_raw_zero_read_seal_required": true,
+    "new_independent_authorization_required": true,
+    "old_phase133_authorization_reusable": false,
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "allowed_solver_inputs": ["raw phone GNSS", "raw phone IMU", "broadcast navigation", "sealed raw base RINEX"],
+    "forbidden_inputs": ["truth", "MAT", "PDC", "precomputed coordinates", "accuracy evaluator", "Kaggle"],
+    "solution_policy": "opaque hash/row metadata only",
+    "failure_policy": "fail closed; no rerun, fallback, repair, sweep, truth, accuracy, or publication"
+  },
+  "read_accounting": {
+    "sealed_result_and_ignored_metadata_logs": "read-only metadata",
+    "native_source_and_runner_text": "read-only source",
+    "compiled_cli": "hash/static strings only",
+    "raw_phone_gnss_payload_reads": 0,
+    "raw_phone_imu_payload_reads": 0,
+    "broadcast_navigation_payload_reads": 0,
+    "raw_base_rinex_payload_or_header_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "native_solver_invocations": 0,
+    "solution_coordinate_rows_opened_or_interpreted": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "schema_version": "smartphone-r5-phase58-pixel5-cn0-doppler-calibration-result.v1",
+  "phase": 58,
+  "execution_label": "Luna Max",
+  "status": "go-cn0-doppler-calibration-audit",
+  "operation": "truth-free raw Android Cn0DbHz/Doppler residual calibration audit",
+  "objective": "Test a source-supported monotonic C/N0 scale against the raw code/rate closure residual across four route-disjoint Pixel5 recordings, then authorize only a separately frozen native implementation stage.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_freeze_v1.json",
+    "sha256": "8bd52f165d69279b4eb92dac82e9b470d4656de639ccdf327ae0613df7137448",
+    "seal_commit": "3f44cc0"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_evaluator_manifest_v1.json",
+    "sha256": "0443cc607f2f1b6836e192baeef2290a46c586f5d229b33fb39be67838f80225",
+    "seal_commit": "e3c226c"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase58_pixel5_cn0_doppler_calibration.py",
+    "sha256": "31dd5d3a05dfa6b647434c71e2a73900a1398007d7b7eb388972767882c2ead1",
+    "one_shot": true,
+    "single_process": true,
+    "raw_parser": "Phase25 reviewed raw P reconstruction and Phase41 rate sign; no metric payload input"
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "raw_device_gnss_reads_per_route": 1
+  },
+  "fixed_observable": {
+    "field": "Cn0DbHz",
+    "units": "dB-Hz",
+    "pair_relation": "pair_mean_Cn0=(Cn0_previous+Cn0_current)/2",
+    "closure": "e=(P_current-P_previous)-0.5*(PseudorangeRate_previous+PseudorangeRate_current)*dt_seconds; subtract same utcTimeMillis/HardwareClockDiscontinuityCount median",
+    "candidate_shape": "sigma_candidate_mps=alpha_mps*10^(-(Cn0DbHz-40)/20)",
+    "candidate_floor": "max(existing_champion_doppler_sigma_mps, sigma_candidate_mps)",
+    "existing_champion_sigma_mps": 0.2,
+    "coefficient": 1.0,
+    "upper_clip": false,
+    "scope_if_implemented": "all adopted Android raw FGO Doppler factors only; no SPP",
+    "existing_p85_over_12_model_reimplemented": false
+  },
+  "route_summary": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"transitions": 13431, "satellites": 7, "median_abs_centered_rate_residual_mps": 1.3461344093084335, "spearman": -0.4535779841585065, "loo_alpha_mps_at_40_dbhz": 0.7726573316542686},
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"transitions": 15630, "satellites": 7, "median_abs_centered_rate_residual_mps": 1.3880830090492964, "spearman": -0.47313474165492486, "loo_alpha_mps_at_40_dbhz": 0.7720231442247758},
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {"transitions": 11732, "satellites": 11, "median_abs_centered_rate_residual_mps": 1.8418421931564808, "spearman": -0.4941186814195516, "loo_alpha_mps_at_40_dbhz": 0.7416064915523163},
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"transitions": 9612, "satellites": 11, "median_abs_centered_rate_residual_mps": 1.7463475596159697, "spearman": -0.512975367163457, "loo_alpha_mps_at_40_dbhz": 0.7453335259209156}
+  },
+  "aggregate": {
+    "route_count": 4,
+    "aggregate_median_abs_centered_rate_residual_mps": 1.567215284332633,
+    "route_median_mad_mps": 0.20010657515376806,
+    "min_transitions": 9612,
+    "min_satellites": 7,
+    "min_populated_cn0_bins": 5,
+    "min_bin_count": 679,
+    "min_pair_cn0_fraction": 1.0,
+    "pairwise_route_median_distances_mps": [0.041948599740862846, 0.49570778384804726, 0.4002131503075361, 0.4537591841071844, 0.3582645505666733, 0.09549463354051113]
+  },
+  "loo": {
+    "pooled_alpha_mps_at_40_dbhz": 0.7586783350728457,
+    "alpha_method": "median of the four sealed leave-one-route-out fitted alpha values; no manual rounding",
+    "alpha_max_over_min": 1.0418696983584346,
+    "alpha_cv": 0.019127548634479036,
+    "heldout_normalized_median": [0.9290611820872052, 0.9372654021523983, 1.088612115974498, 1.0885090713341046],
+    "heldout_normalized_le_one_fraction": [0.5259474350383442, 0.5204094689699296, 0.47033753835663145, 0.4733666250520183],
+    "heldout_candidate_sigma_excess_p95_mps": [4.349743675085951, 4.784600079813583, 4.756481878583907, 4.839073078640095]
+  },
+  "gates": {
+    "all_passed": true,
+    "route_count": true,
+    "raw_input_integrity": true,
+    "source_contract": true,
+    "coverage": true,
+    "routewise_monotonicity": true,
+    "loo_calibration": true,
+    "per_satellite_non_common_mode": true,
+    "per_signal_non_common_mode": true,
+    "current_factor_impact": true,
+    "presentation_integrity": true
+  },
+  "decision": {
+    "audit_only": true,
+    "implementation_stage_authorized": true,
+    "native_correction_authorized_in_audit": false,
+    "native_implementation_contract": "separately frozen opt-in only; max(existing_sigma_mps, 0.7586783350728457*10^(-(Cn0DbHz-40)/20)), FGO Doppler only, no SPP, no cap",
+    "phase43_champion_preserved": true,
+    "phase51_experimental_preserved": true,
+    "zero_point_782": "not evaluated without truth"
+  },
+  "read_accounting": {
+    "single_process": true,
+    "raw_device_gnss_read_count_total": 4,
+    "raw_device_gnss_reads": {"2021-03-16-18-59-us-ca-mtv-a/pixel5": 1, "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1, "2022-04-01-18-22-us-ca-lax-t/pixel5": 1, "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1},
+    "raw_device_imu_reads": 0,
+    "truth_reads": 0,
+    "navigation_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "coordinate_or_wls_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "phase57_metric_payload_reads": 0,
+    "kaggle_token_access": 0,
+    "correction_implementation_reads": 0
+  },
+  "output_artifacts": {
+    "result": {"path": "output/smartphone-r5/phase58-pixel5-cn0-doppler-calibration-v1/phase58_pixel5_cn0_doppler_calibration.json", "sha256": "7c3a1caf506dbfa28f2ed759fe7a35ceb40ad94e9c5d805745460b075c04cba4"},
+    "routes": {"path": "output/smartphone-r5/phase58-pixel5-cn0-doppler-calibration-v1/phase58_pixel5_cn0_doppler_calibration.routes.json", "sha256": "4a015a216ed16a3e8765042bb260429790dae999239c1a05406e1c2bb34f6c31"},
+    "events": {"path": "output/smartphone-r5/phase58-pixel5-cn0-doppler-calibration-v1/phase58_pixel5_cn0_doppler_calibration.events.json", "sha256": "46fd734b67d72946119c5a513ea390707e7e7bb0897015dad3c359bc21a59992"},
+    "manifest": {"path": "output/smartphone-r5/phase58-pixel5-cn0-doppler-calibration-v1/phase58_pixel5_cn0_doppler_calibration.manifest.json", "sha256": "0443cc607f2f1b6836e192baeef2290a46c586f5d229b33fb39be67838f80225"}
+  },
+  "tests": {"focused_python": "7 passed before raw audit", "py_compile": true, "verify_freeze_before_raw": true, "registered_ctest": "python_smartphone_phase58_pixel5_cn0_doppler_calibration_tests"}
+}

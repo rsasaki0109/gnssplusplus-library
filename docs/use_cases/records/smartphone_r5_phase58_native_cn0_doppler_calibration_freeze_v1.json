@@ -1,0 +1,172 @@
+{
+  "schema_version": "smartphone-r5-phase58-native-cn0-doppler-calibration-freeze.v1",
+  "phase": 58,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-native-code-and-structural-matrix",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "8da76f0",
+    "phase58_audit_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_result_v1.json",
+      "sha256": "3ee3c9d538813d7d8a99f4f1d43f1bdc3ce9cbcecbc073ced7ac783a0d764fa8",
+      "metric_input": true,
+      "raw_reread_for_freeze": false
+    },
+    "phase58_audit_output": {
+      "result_path": "output/smartphone-r5/phase58-pixel5-cn0-doppler-calibration-v1/phase58_pixel5_cn0_doppler_calibration.json",
+      "result_sha256": "7c3a1caf506dbfa28f2ed759fe7a35ceb40ad94e9c5d805745460b075c04cba4",
+      "routes_sha256": "4a015a216ed16a3e8765042bb260429790dae999239c1a05406e1c2bb34f6c31",
+      "events_sha256": "46fd734b67d72946119c5a513ea390707e7e7bb0897015dad3c359bc21a59992",
+      "manifest_sha256": "0443cc607f2f1b6836e192baeef2290a46c586f5d229b33fb39be67838f80225",
+      "raw_reads": 4,
+      "truth_reads": 0,
+      "solver_runs": 0
+    },
+    "phase58_audit_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_evaluator_manifest_v1.json",
+      "sha256": "c39a010e32fce1c0dd88804da4cb4a7b12f5928236911bd7cc252978d61d3719",
+      "seal_commit": "e3c226c"
+    },
+    "phase43_champion_summary_sha256": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": "23f409e5708dc547bc86b156e07a6fb305732cb9ce8eb3da57f26fd487e4404e",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "f4fb3bc2b09d44700ee83772d4b23ad93b68d07eff6743b9525626f805264eb8",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": "eeb4f60e352ea00277604516b432673317ab035daa601135c6e9f989cb118926"
+    },
+    "pre_code_source_sha256": {
+      "include/libgnss++/algorithms/fgo.hpp": "c732c6b3e5396da6753e547ef8c49c5f14ddc32bae52e4634f7facb8e6b6a221",
+      "include/libgnss++/algorithms/fgo_config.hpp": "627fbc8585d6f6a384d9ea10b2670e4a9889dc20ba89a3427ed735eb61a6a358",
+      "src/algorithms/fgo_problems.cpp": "41c0fa5db6a745562342061c9cd6bcf08f74e02038580869a09294a325f05ca1",
+      "src/algorithms/fgo.cpp": "be5d6710a32bbb5037a93f20d14c6ba1c2f1a318eb859c865a7b027fe717ef38",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "547939e34c989ac90559aa3d2339fc0eed548a44afc3db4ad7cd615b5a85a563",
+      "include/libgnss++/core/observation.hpp": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c",
+      "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54",
+      "tests/test_fgo.cpp": "dc2879db1ea494812b4f6a26fb548c6a9e7eec268b0aaf067d47d758588b02c0",
+      "tests/CMakeLists.txt": "3eff18d0758d255636c46299d7b1f8fb05b5057cc8b29a310969334a7cedd523"
+    }
+  },
+  "amendment": {
+    "kind": "pre-matrix-reseal",
+    "reason": "Phase43 champion run1 summaries use the existing fallback seed quality-anchor recovery flag; the structural base recipe is corrected to include that already-sealed flag so the flag-off control is the exact champion recipe.",
+    "supersedes_previous_freeze_sha256": "b2d420b660a2c0e3fd040776354bc0490013eb47d7d6da9ed28db2a2c8d2d89d",
+    "formula_and_thresholds_unchanged": true,
+    "native_source_commit_already_sealed": "c47a67d",
+    "new_structural_raw_reads_before_reseal": 0,
+    "new_truth_reads_before_reseal": 0,
+    "structural_runs_before_reseal": 0,
+    "note": "This is an explicit pre-matrix contract reseal. The prior Phase58 raw-only audit had its separately recorded four raw reads; no new raw/truth read or structural process occurred before this correction, and the native formula, alpha, gates, and thresholds were not changed."
+  },
+  "objective": {
+    "factor": "raw Android per-satellite Cn0DbHz/Doppler residual calibration",
+    "stage": "native opt-in implementation after all Phase58 truth-free audit gates passed",
+    "truth_free": true,
+    "no_solver_rerun_after_truth": true,
+    "phase43_champion_and_phase51_experimental_preserved": true
+  },
+  "fixed_model": {
+    "source_field": "Observation::snr populated from Android Cn0DbHz",
+    "reference_cn0_dbhz": 40.0,
+    "alpha_mps_at_reference": 0.7586783350728457,
+    "alpha_derivation": "exact median of the four sealed Phase58 LOO alpha_mps_at_40_dbhz values; no manual rounding, sweep, or post-read tuning",
+    "shape": "sigma_model_mps=0.7586783350728457*10^(-(Cn0DbHz-40.0)/20.0)",
+    "floor": "sigma_final_mps=max(existing_doppler_sigma_mps,sigma_model_mps)",
+    "coefficient": 1.0,
+    "upper_clip": false,
+    "missing_or_nonfinite_cn0": "retain existing sigma exactly",
+    "invalid_existing_sigma": "retain existing value and let the existing factor validity gate fail closed",
+    "scope": "all adopted Android raw undifferenced FGO Doppler factors",
+    "spp_applied": false,
+    "tdcp_applied": false,
+    "single_difference_doppler_applied": false,
+    "existing_p85_over_12_path": "untouched; do not reimplement or mutate observable_upstream_preprocessing",
+    "source_exact_exponent": "10^(-(c-c_ref)/20), matching the existing source-supported SNR denominator"
+  },
+  "runtime_contract": {
+    "opt_in_flag": "--native-cn0-doppler-calibration",
+    "config_default": false,
+    "flag_off": "byte-identical graph/output contract; no new summary section",
+    "candidate_factor_population": "problem.undifferenced_doppler_factors after all existing eligibility, state, elevation, C/N0, and upstream masks",
+    "no_new_rows": true,
+    "no_new_mask": true,
+    "no_new_coordinates": true,
+    "telemetry": {
+      "enabled": true,
+      "fields": ["alpha_mps", "reference_cn0_dbhz", "candidate_rows", "candidate_rows_with_finite_cn0", "fallback_rows", "factors_affected", "model_sigma_min_mps", "model_sigma_median_mps", "model_sigma_p95_mps", "model_sigma_max_mps"],
+      "population": "final adopted FGO undifferenced Doppler factors only",
+      "summary_conditional_on_flag": true
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "input_hashes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+        "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "device_imu.csv": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+        "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_imu.csv": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+        "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "device_imu.csv": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+        "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+      }
+    }
+  },
+  "structural_matrix": {
+    "base_flags": ["--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-quality-anchor", "--native-fallback-seed-quality-anchor-recovery"],
+    "control": "base_flags only; candidate flag absent",
+    "candidate": "base_flags plus --native-cn0-doppler-calibration",
+    "candidate_runs_per_route": 2,
+    "control_runs_per_route": 1,
+    "raw_gnss_reads_expected": 12,
+    "raw_imu_reads_expected": 12,
+    "navigation_reads_expected": 12,
+    "truth_reads": 0,
+    "solver_invocations": 12,
+    "candidate_repeat_identity": "candidate run1 and run2 submission keyed rows and structural summary fields byte-identical after excluding timing-only fields explicitly listed by runner",
+    "flag_off_identity": "control output and summary retain Phase43 flag-off semantics; no calibration telemetry section and no candidate flag",
+    "projected_identity": "all existing non-calibration fields and factor counts are unchanged between control and candidate; only Doppler sigma telemetry/expected sigma composition may differ",
+    "required": ["finite output", "Earth-valid coordinates", "raw UTC key exactness", "converged graph", "TDCP built=inserted", "over_70_mps=0", "candidate repeat identity", "flag-off identity", "projected identity"]
+  },
+  "test_and_build_contract": {
+    "focused_cpp": "gnss_run_tests --gtest_filter=*Cn0DopplerCalibration*",
+    "focused_python": "tests/test_smartphone_phase58_native_cn0_doppler_calibration.py",
+    "build_target": "gnss_fgo_imu_no_base",
+    "static_checks": ["config default false", "CLI requires Android raw input", "formula exact", "missing/nonfinite fallback", "no cap", "FGO Doppler-only", "p85/12 source untouched", "telemetry conditional"],
+    "truth_or_accuracy_evaluation": "not authorized in this stage"
+  },
+  "input_policy": {
+    "raw_device_gnss": "structural matrix only; each process reads one pinned route file once",
+    "raw_device_imu": "structural matrix only; each process reads one pinned route file once",
+    "broadcast_navigation": "structural matrix only; each process reads one pinned route file once",
+    "truth_reads": 0,
+    "validation_holdout_reads": 0,
+    "mat_reads_or_generated": 0,
+    "coordinate_or_wls_inputs": 0,
+    "kaggle_or_token_access": 0,
+    "post_truth_tuning": false,
+    "solver_rerun_after_truth": false
+  },
+  "decision_rule": "Implement only this fixed opt-in model. Any source drift, default mutation, nonfinite factor, missing telemetry, structural nonconvergence, repeat mismatch, flag-off mutation, or projected-identity failure is fail-closed; stop before any truth or accuracy read.",
+  "phase43_and_phase51_policy": {
+    "phase43_champion": "preserve exactly; no default or flag-off mutation",
+    "phase51_experimental": "preserve exactly; no interaction unless explicitly supplied by caller",
+    "zero_point_782": "not evaluated before separately authorized accuracy phase"
+  }
+}

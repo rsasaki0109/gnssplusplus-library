@@ -66,8 +66,13 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
                     has_doppler_continuity_position_
                 ? doppler_continuity_position_ecef_
                 : solution.position_ecef;
+        const auto velocity_started = std::chrono::steady_clock::now();
         const auto velocity_result = spp_velocity::solveVelocityFromObservations(
             rover_obs, nav, velocity_linearization_position, doppler_velocity_sigma_mps_);
+        debug_telemetry_.stage_velocity_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - velocity_started)
+                .count();
         if (velocity_result.ok) {
             solution.velocity_ecef = velocity_result.velocity_ecef;
             solution.velocity_covariance = velocity_result.velocity_covariance;
@@ -131,7 +136,12 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             setBasePosition(base_obs.receiver_position);
         }
         if (!base_position_known_) {
+            const auto spp_started = std::chrono::steady_clock::now();
             auto spp = spp_processor_.processEpoch(rover_obs, nav);
+            debug_telemetry_.stage_spp_ms +=
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - spp_started)
+                    .count();
             rememberSolution(spp);
             consecutive_fix_count_ = 0;
             consecutive_float_count_ = 0;
@@ -142,7 +152,12 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             return spp;
         }
 
+        const auto spp_started = std::chrono::steady_clock::now();
         auto current_spp = spp_processor_.processEpoch(rover_obs, nav);
+        debug_telemetry_.stage_spp_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - spp_started)
+                .count();
         auto fallback_spp = [&]() {
             last_ar_ratio_ = 0.0;
             last_num_fixed_ambiguities_ = 0;
@@ -195,20 +210,41 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         };
 
         if (!filter_initialized_) {
+            const auto collect_started = std::chrono::steady_clock::now();
             auto init_sat = collectSatelliteData(rover_obs, base_obs, nav);
+            debug_telemetry_.stage_satellite_collection_ms +=
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - collect_started)
+                    .count();
             if (init_sat.size() < 4) {
                 return fallback_spp();
             }
-            if (!initializeFilter(rover_obs, base_obs, nav)) {
+            const auto initialize_started = std::chrono::steady_clock::now();
+            const bool initialized = initializeFilter(rover_obs, base_obs, nav);
+            debug_telemetry_.stage_initialize_filter_ms +=
+                std::chrono::duration<double, std::milli>(
+                    std::chrono::steady_clock::now() - initialize_started)
+                    .count();
+            if (!initialized) {
                 return fallback_spp();
             }
         }
 
+        const auto reset_started = std::chrono::steady_clock::now();
         resetPositionToSPP(rover_obs, nav);
+        debug_telemetry_.stage_reset_position_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - reset_started)
+                .count();
 
         handleConsecutiveFloatReset(rover_obs, nav);
 
+        const auto collect_started = std::chrono::steady_clock::now();
         auto sat_data = collectSatelliteData(rover_obs, base_obs, nav);
+        debug_telemetry_.stage_satellite_collection_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - collect_started)
+                .count();
         if (sat_data.size() < 4) {
             return fallback_spp();
         }
@@ -247,7 +283,12 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         SatelliteId new_ref = selectReferenceSatellite(sat_data);
         handleReferenceSatelliteChange(new_ref, sat_data);
         current_sat_data_ = sat_data;
+        const auto bias_started = std::chrono::steady_clock::now();
         updateBias(sat_data, state_dt);
+        debug_telemetry_.stage_bias_update_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - bias_started)
+                .count();
 
         // Iterative KF update
         bool filter_ok = false;
@@ -256,6 +297,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             has_last_solution_position_ && max_kf_iterations > 2) {
             max_kf_iterations = 2;
         }
+        const auto filter_started = std::chrono::steady_clock::now();
         for (int iter = 0; iter < max_kf_iterations; ++iter) {
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
             filter_ok = updateFilter(sat_data);
@@ -269,6 +311,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 }
             }
         }
+        debug_telemetry_.stage_filter_update_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - filter_started)
+                .count();
 
         if (filter_ok) {
             incrementLockCounts(sat_data);
@@ -446,9 +492,14 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 has_fixed_solution_ = false;
                 last_ar_ratio_ = 0.0;
                 last_num_fixed_ambiguities_ = 0;
+                const auto ambiguity_started = std::chrono::steady_clock::now();
                 const bool resolved =
                     (prebuilt_pairs ? resolveAmbiguities(*prebuilt_pairs) : resolveAmbiguities()) &&
                     has_fixed_solution_;
+                debug_telemetry_.stage_ambiguity_ms +=
+                    std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - ambiguity_started)
+                        .count();
                 ARCandidate candidate;
                 if (resolved) {
                     updateIndependentFailureBudgetTelemetry();
@@ -505,8 +556,16 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     last_ar_ratio_ = 0.0;
                     last_num_fixed_ambiguities_ = 0;
                 }
-            } else if (resolveAmbiguities() && has_fixed_solution_) {
-                have_fix_candidate = true;
+            } else {
+                const auto ambiguity_started = std::chrono::steady_clock::now();
+                const bool resolved = resolveAmbiguities() && has_fixed_solution_;
+                debug_telemetry_.stage_ambiguity_ms +=
+                    std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - ambiguity_started)
+                        .count();
+                if (resolved) {
+                    have_fix_candidate = true;
+                }
             }
 
             // A declaration-time independent-budget gate must run before
@@ -671,7 +730,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 updateStatistics(SolutionStatus::FLOAT);
                 consecutive_fix_count_ = 0;
                 if (reset_after_high_float) {
-                    resetAmbiguityStatesForReacquisition(rover_obs, nav);
+                    resetAmbiguityStatesForReacquisition(rover_obs, nav, false);
                 } else {
                     recordFloatEpoch(rover_obs, nav);
                     if (fixed_prefit_quarantine) {
@@ -685,7 +744,12 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         }
     } catch (const std::exception& e) {
         std::cerr << "RTK exception: " << e.what() << std::endl;
+        const auto spp_started = std::chrono::steady_clock::now();
         auto spp = spp_processor_.processEpoch(rover_obs, nav);
+        debug_telemetry_.stage_spp_ms +=
+            std::chrono::duration<double, std::milli>(
+                std::chrono::steady_clock::now() - spp_started)
+                .count();
         if (!spp.isValid()) {
             spp = makeSafeFloatContinuity(rover_obs.time);
         }

@@ -1,0 +1,321 @@
+{
+  "schema_version": "smartphone-r5-phase95-raw-input-path-availability-freeze.v1",
+  "phase": 95,
+  "status": "frozen-after-read-only-raw-input-path-audit",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze one wrapper-only path-resolution correction after proving that Phase94's missing raw paths are a runner regression while the Phase93/Phase91 raw artifacts remain present. This freeze authorizes no raw execution.",
+  "authority": {
+    "phase95_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_availability_audit_v1.md",
+      "sha256": "c17442ae9349bbc9b97f844623ecb06bf9a6e69d1b7f671e6e9480877f2eac64",
+      "commit": "906def48155c64f1a9e2002e098e40ad90ce43dd",
+      "status": "sealed-read-only-path-source-manifest-log-audit"
+    },
+    "phase91_inherited_raw_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988",
+      "role": "sealed route-to-actual-raw-path and SHA provenance; not read by this audit beyond JSON metadata"
+    },
+    "phase93_runner": {
+      "commit": "b2a5d47a847e1a1a5b63ac2d2a910bad313d0096",
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase93_source_staging_clock_state_handoff_execute.py",
+      "sha256": "96f841081788de1c3b7aea1b7983ff5f77bbf04a6cc69e63264e822791d9a920"
+    },
+    "phase93_execution_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_execution_manifest_v1.json",
+      "sha256": "f5ef7cc946e1ef875a30546f32cee9d04a2aa82471f92767ab4935652cec4277"
+    },
+    "phase93_sealed_result": {
+      "commit": "71f05e4",
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_structural_result_v1.json",
+      "sha256": "cc5eb2a56ee4239a9e25eca04d4573fd8fcfc0cc071f0cb3a507f33ba7f1ca59",
+      "status": "sealed-no-go-structural-result-with-successful-raw-input-reads"
+    },
+    "phase94_pre_raw_matrix": {
+      "commit": "4c663870ae9defc4400b64e48a29365e0d3888fc",
+      "path": "docs/use_cases/records/smartphone_r5_phase94_source_clock_c0d_stage_diagnostics_execution_manifest_v1.json",
+      "sha256": "4a36a4871c305f66c419db6a80ca4c2a932a37e0522cf8dc688fd2792df7d3ed"
+    },
+    "phase94_path_handling_pin": {
+      "commit": "42f17dc8a10db5afe2ac43539ca87551272d515f"
+    },
+    "phase94_unavailable_stage_pin": {
+      "commit": "89fc48f4e998f892f01d06ca9be4e2fdc8750752",
+      "wrapper_sha256": "fa124b79f9119c20b7396977c3feecefa3e0410d64dfa4b0ec5212ac5d55194d"
+    },
+    "phase94_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase94_source_clock_c0d_stage_diagnostics_execution_manifest_v1.json",
+      "sha256": "4a36a4871c305f66c419db6a80ca4c2a932a37e0522cf8dc688fd2792df7d3ed",
+      "schema_version": "smartphone-r5-phase94-source-clock-c0d-stage-diagnostics-execution-manifest.v1"
+    },
+    "phase94_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase94_source_clock_c0d_stage_diagnostics.py",
+      "sha256": "5648892866e94e3c62a8ec96e2148d7b4e3634d4272702c39ca40c94837f5b77"
+    },
+    "phase94_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase94_source_clock_c0d_stage_diagnostics_execute.py",
+      "sha256": "fa124b79f9119c20b7396977c3feecefa3e0410d64dfa4b0ec5212ac5d55194d"
+    },
+    "phase94_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase94_source_clock_c0d_stage_diagnostics_raw_execution_authorization_v1.json",
+      "sha256": "11773c8c471a790cdea6cfc756eed3e008f034ed57ef6a6e2cffd6eaeb5f8382",
+      "status": "authorized-for-exact-four-route-phase94-diagnostic-execution"
+    },
+    "phase94_sealed_result": {
+      "commit": "6f9fd4d209a7b4280f4d12f0aacc1c988e627a89",
+      "path": "docs/use_cases/records/smartphone_r5_phase94_source_clock_c0d_stage_diagnostics_structural_result_v1.json",
+      "sha256": "c02afcd0129072209ae8bfc14765f1bfce87defc40358974e7f3b37535e07ba9",
+      "status": "sealed-no-go-input-conversion-failure"
+    }
+  },
+  "audit_boundary": {
+    "filesystem_mode": "read-only metadata/source/manifest/log inspection",
+    "raw_byte_reads": 0,
+    "raw_hashes_computed": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "base_rinex_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "raw_namespace_mutations": 0,
+    "stat_only_for_raw_files": true
+  },
+  "finding": {
+    "classification": "data_present_phase94_runner_path_regression",
+    "repo_root": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "root_expression_in_both_wrappers": "Path(__file__).resolve().parents[3]",
+    "phase94_expected_root": "raw/phase93",
+    "phase94_expected_root_exists": false,
+    "phase93_actual_roots": [
+      "output/smartphone-r5/phase25-raw-clock-eval-v1/raw",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes"
+    ],
+    "all_phase93_actual_files_stat_regular": true,
+    "all_phase94_expected_files_stat_regular": false,
+    "phase93_sealed_raw_read_accounting": {
+      "raw_device_gnss_reads": 4,
+      "raw_device_imu_reads": 4,
+      "broadcast_navigation_reads": 4,
+      "native_solver_invocations": 4,
+      "raw_input_hash_reads": 0
+    },
+    "phase94_sealed_input_accounting": {
+      "raw_device_gnss_route_arguments": 4,
+      "raw_device_imu_route_arguments": 4,
+      "broadcast_navigation_route_arguments": 4,
+      "runner_raw_byte_reads": 0,
+      "native_solver_invocations": 4,
+      "summary_outputs": 0
+    },
+    "path_regression_proven": true,
+    "raw_body_content_rehashed_by_this_audit": false
+  },
+  "path_resolution_comparison": {
+    "phase93": {
+      "manifest_schema": "smartphone-r5-phase93-source-staging-clock-state-handoff-execution-manifest.v1",
+      "manifest_raw_paths": "role-only raw/phase93/<route>/pixel5/<name> placeholders",
+      "runtime_data_manifest": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "runtime_data_manifest_sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988",
+      "resolver": "load_raw_inputs reads Phase91 JSON, validates safe route/name/SHA pins, resolves ROOT/path, and stat-checks actual files",
+      "argv_materialization": "materialize_command validates each Phase93 placeholder then replaces --android-gnss, --android-imu, and --nav with Phase91 actual paths",
+      "subprocess_cwd": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library"
+    },
+    "phase94": {
+      "manifest_schema": "smartphone-r5-phase94-source-clock-c0d-stage-diagnostics-execution-manifest.v1",
+      "manifest_raw_paths": "role-only raw/phase93/<route>/pixel5/<name> placeholders",
+      "runtime_data_manifest": null,
+      "resolver": "_raw_input_metadata computes ROOT/Path(record raw path) and records is_file only; no inherited manifest is loaded",
+      "argv_materialization": "materialize_command validates the manifest command and returns the unchanged command list",
+      "subprocess_cwd": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+      "native_input_failure": "failed to open raw Android GNSS CSV at the unchanged raw/phase93 placeholder"
+    },
+    "source_line_evidence": {
+      "phase93_runner": [
+        "INHERITED_MANIFEST at line 33",
+        "load_raw_inputs at lines 309-340",
+        "placeholder substitution at lines 343-373",
+        "subprocess cwd=ROOT at lines 400-403"
+      ],
+      "phase94_wrapper": [
+        "_raw_input_metadata at lines 214-237",
+        "unchanged materialize_command return at lines 240-253",
+        "subprocess cwd=ROOT at lines 286-295"
+      ],
+      "phase94_evaluator": [
+        "_validate_command requires command raw token equal to manifest raw_inputs path at lines 191-217"
+      ]
+    }
+  },
+  "route_path_audit": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "domain_rows": 2158,
+      "phase94_expected_raw": {
+        "device_gnss.csv": {"path": "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv", "stat": "missing"},
+        "device_imu.csv": {"path": "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv", "stat": "missing"},
+        "brdc.nav": {"path": "raw/phase93/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav", "stat": "missing"}
+      },
+      "phase93_actual_raw": {
+        "device_gnss.csv": {"path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv", "stat": "regular-file", "bytes": 57715495, "sealed_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"},
+        "device_imu.csv": {"path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv", "stat": "regular-file", "bytes": 34393802, "sealed_sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"},
+        "brdc.nav": {"path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav", "stat": "regular-file", "bytes": 9955040, "sealed_sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"}
+      }
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "domain_rows": 3139,
+      "phase94_expected_raw": {
+        "device_gnss.csv": {"path": "raw/phase93/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv", "stat": "missing"},
+        "device_imu.csv": {"path": "raw/phase93/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_imu.csv", "stat": "missing"},
+        "brdc.nav": {"path": "raw/phase93/2021-08-24-20-32-us-ca-mtv-h/pixel5/brdc.nav", "stat": "missing"}
+      },
+      "phase93_actual_raw": {
+        "device_gnss.csv": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv", "stat": "regular-file", "bytes": 74299283, "sealed_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"},
+        "device_imu.csv": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv", "stat": "regular-file", "bytes": 54271475, "sealed_sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480"},
+        "brdc.nav": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav", "stat": "regular-file", "bytes": 10805490, "sealed_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"}
+      }
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "domain_rows": 1465,
+      "phase94_expected_raw": {
+        "device_gnss.csv": {"path": "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv", "stat": "missing"},
+        "device_imu.csv": {"path": "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/device_imu.csv", "stat": "missing"},
+        "brdc.nav": {"path": "raw/phase93/2022-04-01-18-22-us-ca-lax-t/pixel5/brdc.nav", "stat": "missing"}
+      },
+      "phase93_actual_raw": {
+        "device_gnss.csv": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv", "stat": "regular-file", "bytes": 33837317, "sealed_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"},
+        "device_imu.csv": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv", "stat": "regular-file", "bytes": 23649244, "sealed_sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5"},
+        "brdc.nav": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav", "stat": "regular-file", "bytes": 10635773, "sealed_sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"}
+      }
+    },
+    {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "domain_rows": 1101,
+      "phase94_expected_raw": {
+        "device_gnss.csv": {"path": "raw/phase93/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv", "stat": "missing"},
+        "device_imu.csv": {"path": "raw/phase93/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_imu.csv", "stat": "missing"},
+        "brdc.nav": {"path": "raw/phase93/2023-03-08-21-34-us-ca-mtv-u/pixel5/brdc.nav", "stat": "missing"}
+      },
+      "phase93_actual_raw": {
+        "device_gnss.csv": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv", "stat": "regular-file", "bytes": 23385520, "sealed_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"},
+        "device_imu.csv": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv", "stat": "regular-file", "bytes": 17453338, "sealed_sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab"},
+        "brdc.nav": {"path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav", "stat": "regular-file", "bytes": 11506619, "sealed_sha256": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"}
+      }
+    }
+  ],
+  "sealed_log_result_facts": {
+    "phase94_return_codes_in_route_order": [1, 1, 1, 1],
+    "phase94_summary_present_in_route_order": [false, false, false, false],
+    "phase94_native_error": "failed to convert raw Android GNSS: failed to open raw Android GNSS CSV: raw/phase93/<route>/pixel5/device_gnss.csv",
+    "phase94_failure_stage": "input conversion before problem build/GNSS-first/main telemetry",
+    "phase93_no_go_reason": "structural optimizer gates after successful raw input conversion, not missing input paths"
+  },
+  "candidates_considered": [
+    {
+      "id": "phase95_phase94_wrapper_inherit_phase91_raw_paths_and_materialize_exact_route_inputs",
+      "decision": "freeze",
+      "reason": "It reuses the already successful Phase93 resolver, fixes the exact observed regression, and preserves Phase94's native command/evaluator contract without changing the algorithm."
+    },
+    {
+      "id": "stage_raw_phase93_symlinks_or_copies",
+      "decision": "reject",
+      "reason": "It mutates the data namespace, is not a runner fix, and would conceal the unresolved path contract."
+    },
+    {
+      "id": "replace_phase94_manifest_placeholders_with_hardcoded_output_paths",
+      "decision": "reject",
+      "reason": "It duplicates the sealed Phase91 route map and requires a broader evaluator/manifest contract rewrite instead of reusing the proven resolver."
+    }
+  ],
+  "candidate": {
+    "exactly_one": true,
+    "id": "phase95_phase94_wrapper_inherit_phase91_raw_paths_and_materialize_exact_route_inputs",
+    "kind": "wrapper-path-resolution-only",
+    "status": "frozen-not-implemented",
+    "default_off": true,
+    "implementation_authorized_for_next_separate_change": true,
+    "raw_execution_authorized": false,
+    "native_algorithm_change": false,
+    "solver_filter_lm_change": false,
+    "fallback_or_symlink_staging": false,
+    "required_behavior": {
+      "inherit_manifest": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "inherit_manifest_sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988",
+      "route_order": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+      ],
+      "raw_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+      "path_policy": "safe relative paths resolved as ROOT/path; stat existence before native launch; no raw byte read or hash by wrapper",
+      "argv_policy": "validate existing Phase94 placeholders, then replace only --android-gnss/--android-imu/--nav values with inherited actual paths",
+      "cwd": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+      "preserve_native_flags": true,
+      "preserve_phase94_evaluator_contract": true,
+      "no_raw_copy_or_symlink": true,
+      "fresh_output_root_required": true
+    },
+    "forbidden": [
+      "Kaggle download",
+      "truth or MAT input",
+      "precomputed coordinates",
+      "base RINEX",
+      "accuracy scoring",
+      "solver/filter/LM tuning",
+      "guard bypass",
+      "fallback",
+      "authorization reuse"
+    ],
+    "required_next_artifacts": [
+      "corrected wrapper implementation commit",
+      "focused path-materialization regression test",
+      "new evaluator/manifest/hash validation or explicit unchanged evaluator pin",
+      "new raw authorization",
+      "fresh route output root"
+    ]
+  },
+  "existing_phase94_authorization_reuse": {
+    "allowed": false,
+    "status": "no-go",
+    "reasons": [
+      "commands_source is exact route commands in the pinned Phase94 manifest and those commands contain missing raw/phase93 placeholders",
+      "wrapper SHA is pinned to fa124b79f9119c20b7396977c3feecefa3e0410d64dfa4b0ec5212ac5d55194d; a corrected resolver would be a different artifact",
+      "manifest SHA is pinned to 4a36a4871c305f66c419db6a80ca4c2a932a37e0522cf8dc688fd2792df7d3ed",
+      "policy no_rerun=true, one invocation per route, and stop_after_four_routes=true",
+      "all four authorized invocations have already been consumed and sealed in the Phase94 result"
+    ],
+    "new_authorization_required": true
+  },
+  "execution_boundary": {
+    "this_freeze_is_pre_raw": true,
+    "raw_execution_authorized": false,
+    "raw_execution_performed": false,
+    "accuracy_evaluation_authorized": false,
+    "truth_evaluation_authorized": false,
+    "submission_release_authorized": false,
+    "promotion_authorized": false,
+    "next_boundary": "separate implementation and focused tests, then a newly pinned manifest and explicit raw authorization if requested"
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "raw_input_hash_reads": 0,
+    "source_text_reads": true,
+    "sealed_artifact_reads": true,
+    "raw_files_stat_only": true
+  }
+}

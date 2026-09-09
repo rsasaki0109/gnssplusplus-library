@@ -1,0 +1,85 @@
+{
+  "phase": 508,
+  "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "role": "development/train; not heldout or leaderboard proof",
+  "truth": {
+    "source": "Historical Phase183/186/199-pinned H development truth metadata; official archive provenance",
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "bytes": 305432,
+    "rows": 3139,
+    "archive_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "archive_crc32": "fe212a4d",
+    "role": "development/train; not heldout or leaderboard proof"
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "baseline_m": 1.0769392017393964,
+  "authority": {
+    "phase199_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py",
+      "sha256": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4"
+    },
+    "phase196_thin_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py",
+      "sha256": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a"
+    },
+    "phase189_kernel": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py",
+      "sha256": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+      "commit": "5f456010c78cbb80cf5614f421d5c8b0d38aee3a"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "phase203_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca"
+    },
+    "phase203_tests": {
+      "path": "tests/test_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "74975757b952346b2fc51a17bfb64b3bec4b4caf3aef946f2df504912f416696"
+    },
+    "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/manifest.json": {
+      "path": "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/manifest.json",
+      "sha256": "42bf01e7c57c239c44d88611bfcd1f49d6a834ad46ca374de1cdae5233f79cab"
+    },
+    "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/completed.json": {
+      "path": "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/completed.json",
+      "sha256": "c7e73efa65c5e701aff5a36da0050af10c3e5ae768d562f7f2410d30455041e2"
+    },
+    "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/native_summary.json": {
+      "path": "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/native_summary.json",
+      "sha256": "dfebc2fd76e168523ba24ea51b2f8492c55c8fb09dc4b4a3b2147469d3b112b0"
+    },
+    "scripts/verify_phase507_readmission.py": {
+      "path": "scripts/verify_phase507_readmission.py",
+      "sha256": "d3118c038dd3d7fe9fc7fd8483aa756895f68663b1b5b4987f123d124b5aebcc"
+    },
+    "scripts/evaluate_phase508_readmission.py": {
+      "path": "scripts/evaluate_phase508_readmission.py",
+      "sha256": "55b7e54efbe7482fd176d6648f39de92e8965af9c8f7256690e4930a98e32866"
+    }
+  },
+  "candidate": {
+    "path": "output/smartphone-r5/phase507-h-code-monitor-v1/mtv-h/opaque_solution_output.csv",
+    "sha256": "f8996b81b9880b4c34f3949d397cb5072188c5a3882a01202158be68e0a7c59c",
+    "bytes": 251174,
+    "rows": 3139
+  },
+  "policy": "one evaluation of frozen candidate; no solver, no tuning or retry"
+}

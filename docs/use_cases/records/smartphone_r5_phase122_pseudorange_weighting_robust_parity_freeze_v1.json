@@ -1,0 +1,294 @@
+{
+  "schema_version": "smartphone-r5-phase122-pseudorange-weighting-robust-parity-freeze.v1",
+  "phase": 122,
+  "execution_label": "Luna Max",
+  "status": "sealed-no-candidate-read-only",
+  "purpose": "Freeze the read-only official/native pseudorange weighting and robust-loss parity audit. No implementation, raw run, solver run, truth evaluation, accuracy calculation, solution release, or Kaggle action is authorized.",
+  "decision": {
+    "candidate_count": 0,
+    "decision": "no-candidate",
+    "source_backed_independent_candidate": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "phase112-118-direct-p-quality-already-implements-official-p85-sigma",
+      "phase112-118-direct-p-quality-already-implements-official-p-huber-type-map",
+      "native-tgd-bgd-difference-is-coupled-to-frozen-base-and-gnss-first",
+      "official-affine-los-versus-native-range-is-geometry-equation-difference",
+      "residual-mask-center-and-order-difference-changes-factor-admission",
+      "no-safe-geometry-free-weight-or-robust-delta-remains"
+    ]
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase122_pseudorange_weighting_robust_parity_audit_v1.md",
+    "commit": "4480b05a2686353a72b523ea0b32cf9d4142296d",
+    "sha256": "26a05cb3a2f4b98c1f9bec9740dcd70e63c49c7f8c56c342703dca0800473906"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "official_source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "baseline_phase80_direct_p_quality_freeze": "57cf7698c36256a535ac388cbc45dd93afecc9bb",
+    "baseline_phase112_structural_result": "dfa9c3a186c9d8633dc572192b513b584f18800",
+    "baseline_phase118_source_freeze": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+    "baseline_phase118_structural_contract": "25f3bada02c4073175054b5d668de02020761208",
+    "read_only": true,
+    "new_raw_read": false,
+    "new_base_read": false,
+    "truth_read": false,
+    "solution_row_read": false,
+    "mat_read": false,
+    "precomputed_coordinate_read": false,
+    "solver_run": false,
+    "accuracy_read_or_calculation": false,
+    "pdc_access": false,
+    "kaggle_access": false
+  },
+  "baseline_recipe": {
+    "native_direct_observable_quality": true,
+    "native_pdc_bridge": false,
+    "upstream_snr_percentile": 85.0,
+    "upstream_snr_denominator_db": 20.0,
+    "upstream_min_snr_dbhz": 20.0,
+    "upstream_min_elevation_deg": 5.0,
+    "pseudorange_sigma": "10^(-(snr_dbhz-p85_band_dbhz)/20) * signal_type_factor",
+    "official_pseudorange_signal_factor_order": [
+      "GPS_L1",
+      "GLO_L1",
+      "GAL_E1",
+      "BDS_B1",
+      "GPS_L5",
+      "GAL_E5A",
+      "BDS_B2A"
+    ],
+    "official_pseudorange_signal_factors": [
+      0.8,
+      1.5,
+      0.8,
+      0.8,
+      0.5,
+      0.5,
+      0.5
+    ],
+    "official_p_huber_k": {
+      "Street": 0.1,
+      "Mix": 0.1,
+      "Highway": 0.2,
+      "other": 0.2
+    },
+    "target_route_type": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "Highway",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "Highway"
+    },
+    "target_route_p_huber_k": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0.2,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.2
+    },
+    "phase117_dynamic_tdcp_sigma": false,
+    "phase118_fixed_tdcp_sigma_m": 0.03,
+    "c7_d_c0d_handoff": true,
+    "multifrontal_qr_main": true,
+    "raw_base_correction": true,
+    "pixel5_final_offset": true,
+    "imu_filter_initialization_lm_unchanged": true
+  },
+  "equations": {
+    "official_raw_pseudorange_m": "P=(tow_rx-tow_tx)*c",
+    "official_res_pseudorange": "resP=P-(range-dts)",
+    "official_res_pseudorange_atmospheric": "resPc=P-(range-dts+ionosphere+troposphere)",
+    "official_base_operation": "resPc= resPc - interpolated smoothed base resPc",
+    "native_corrected_pseudorange_m": "P+satellite_clock_m-ionosphere_m-troposphere_m-group_delay_m",
+    "native_base_operation": "corrected native P - existing in-domain native base correction exactly once",
+    "official_pseudorange_factor": "los'*(X-initial_X)+h'*C-resPc",
+    "native_source_clock_pseudorange_factor": "plain_range(receiver,satellite)+h_C7'*C-corrected_P_native",
+    "official_c7_slots": "L1 GPS/GLO/GAL/BDS=0/1/2/3; L5 GPS/GAL/BDS=4/5/6",
+    "native_c7_slots": "GPS L1=0; GLONASS L1=1; Galileo E1=2; BeiDou B1=3; GPS L5=4; Galileo E5a=5; BeiDou B2a=6",
+    "official_geometry": "fixed initial LOS affine Vector-X factor",
+    "native_geometry": "relinearized plain Euclidean range over native Point3 or Pose3/lever-arm state"
+  },
+  "term_classification": {
+    "raw_pseudorange_representation_and_metre_unit": "equivalent",
+    "corrected_pseudorange_formula": "divergent",
+    "satellite_clock_sign_and_unit": "equivalent",
+    "ionosphere_troposphere_sign": "equivalent",
+    "broadcast_tgd_bgd_group_delay": "divergent",
+    "snr_percentile_and_exponent": "equivalent",
+    "signal_frequency_constellation_sigma_factor": "equivalent",
+    "elevation_dependent_sigma_weighting": "equivalent",
+    "elevation_gate_threshold": "equivalent_threshold_geometry_divergent",
+    "cn0_gate_threshold": "equivalent_threshold_missing_value_unresolved",
+    "raw_status_multipath_p_range_gate": "equivalent_for_supported_android_fields",
+    "p_d_and_residual_outlier_masks": "divergent",
+    "common_satellite_signal_key": "equivalent_key_identity",
+    "c7_constellation_slot": "exact",
+    "sigma_unit_and_whitening": "equivalent",
+    "robust_loss_kind_and_p_huber_k": "exact_for_target_routes",
+    "robust_application_point": "equivalent",
+    "linearization_geometry": "divergent"
+  },
+  "candidate_assessment": {
+    "candidate_count": 0,
+    "candidates": [
+      {
+        "id": "phase122-official-p-snr-or-huber-remap-v1",
+        "status": "rejected-duplicate-existing-contract",
+        "source_difference": false,
+        "reason": "Phase80/112/118 direct quality already ports p85 SNR sigma, signal factors, and official Type Huber mapping; changing it would be tuning or a duplicate selector."
+      },
+      {
+        "id": "phase122-remove-native-pseudorange-tgd-bgd-v1",
+        "status": "rejected-not-independent-under-frozen-boundary",
+        "source_difference": true,
+        "reason": "Official satpos/Gobs omits explicit code-bias correction while native preparation includes it, but the native term is shared by rover/base correction and GNSS-first SPP initialization. Removing it would alter the frozen base/measurement contract or create an asymmetric path."
+      },
+      {
+        "id": "phase122-official-fixed-los-pseudorange-factor-v1",
+        "status": "rejected-geometry-equation-change",
+        "source_difference": true,
+        "reason": "Replacing native relinearized range with PseudorangeFactor_XC changes geometry, key/value topology, and factor equation; it is not an isolated weight or robust correction."
+      }
+    ],
+    "unpromoted_admission_difference": {
+      "status": "documented-only",
+      "reason": "Official residual masks use clk/ISB centers grouped by source system; native masks use SPP-seed residuals grouped by native clock group and band. Changing this alters factor population and is outside the frozen boundary."
+    }
+  },
+  "source_pins": {
+    "official": {
+      "fgo_gnss.m": {
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "50-70,123-151"
+      },
+      "fgo_gnss_imu.m": {
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "lines": "63-106,202-221"
+      },
+      "gnsslog2obs.m": {
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "lines": "152-184"
+      },
+      "exobs.m": {
+        "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+        "lines": "30-51"
+      },
+      "exobs_residuals.m": {
+        "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+        "lines": "1-80"
+      },
+      "obserrmodel.m": {
+        "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+        "lines": "1-37"
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "22-44,77-83"
+      },
+      "correct_pseudorange.m": {
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+        "lines": "1-34"
+      },
+      "sysfreq2sigtype.m": {
+        "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079",
+        "lines": "1-17"
+      },
+      "Gobs.m": {
+        "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+        "lines": "1151-1165"
+      },
+      "Gsat.m": {
+        "sha256": "a56c3236646606c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+        "lines": "259-306"
+      },
+      "satpos.m": {
+        "sha256": "20b7fd78065a22d9d2e02b0f394aabef2437e991ed2c63b04c65194a96827f5e",
+        "lines": "20-28"
+      },
+      "PseudorangeFactor_XC.h": {
+        "sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415",
+        "lines": "15-64"
+      },
+      "geodist.c": {
+        "sha256": "3929ec3d57575634a921a81957ce91f2dce9314457694e3bd7e00bd82ec765c4",
+        "lines": "50-80"
+      }
+    },
+    "native": {
+      "gnss_fgo_imu_no_base.cpp": {
+        "sha256": "df77ab6556f90d6d9a8464d360e85d2a49a50d6fc04ef396833f354f821a1176",
+        "lines": "369-411,7679-7712"
+      },
+      "android_raw_gnss.cpp": {
+        "sha256": "a020ce900db6a9d3a994cc3adb3dcebbe84cbf67c1ff9793991b7a75039529c5",
+        "lines": "880-985"
+      },
+      "observable_upstream_preprocessing.hpp": {
+        "sha256": "4e20a30730aeca9c93d7108e4edeb7dbe18d05d2f5842d3a4326e29c61f4b60f",
+        "lines": "27-199,300-390"
+      },
+      "fgo_problems.cpp": {
+        "sha256": "5675e82fc595933da4e7c14ad468ae69437dc04bac79a7ef55f1edfa03e098da",
+        "lines": "430-638,1019-1063"
+      },
+      "fgo_internal.hpp": {
+        "sha256": "ee3a2bed13971c9bce52d043a293990703b92a2bc9d916376a896eadbf385ca7",
+        "lines": "224-268"
+      },
+      "fgo_gtsam_internal.hpp": {
+        "sha256": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd",
+        "lines": "1304-1340,2330-2478"
+      },
+      "fgo_gtsam_backend.cpp": {
+        "sha256": "c0da12d7a1d5eeb9492b02ad80f0e9868cbda32e452bbdd9c3f90cc57b4db0fa",
+        "lines": "957-984"
+      },
+      "fgo.cpp": {
+        "sha256": "145ffa3958d3a867ba53d962f07d346f9efa36e72140ad03d7a404ffdd3b5023",
+        "lines": "705-746"
+      },
+      "base_pseudorange_compensation.cpp": {
+        "sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817",
+        "lines": "235-252"
+      },
+      "fgo_config.hpp": {
+        "sha256": "e864b31ab04dc0f8f0f4764b4e89406282349012283944ed64e88c01ee8163e6",
+        "lines": "42-50,330-333,490-493"
+      }
+    }
+  },
+  "sealed_baseline_provenance": {
+    "phase80_freeze_sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e",
+    "phase112_structural_result_sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0",
+    "phase118_source_freeze_sha256": "c6f4fda2abe170417610d4fd1a4ae8a1a618d07096ff0432669081ab06a1cf77",
+    "phase118_structural_contract_sha256": "267a2f51dea06f7d29d5b27be1f7ffd84febac1c72a9fbe2676c5f5a2649f81b",
+    "metadata_only": true,
+    "coordinate_rows_opened": false,
+    "truth_values_opened": false,
+    "accuracy_values_used": false
+  },
+  "read_accounting": {
+    "official_native_source_text": "permitted source-only",
+    "sealed_phase80_phase112_phase118_metadata": "permitted metadata-only",
+    "raw_phone_gnss_imu_nav_payload_reads": 0,
+    "raw_base_payload_or_header_reads": 0,
+    "truth_payload_or_coordinate_row_reads": 0,
+    "solution_row_reads": 0,
+    "mat_reads_or_generation": 0,
+    "precomputed_phone_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_calculations_or_score_reads": 0,
+    "kaggle_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "parameter_or_weight_sweeps": 0,
+    "implementation_changes": 0
+  },
+  "next_boundary": "Do not implement or execute a Phase122 candidate. Retain the Phase112/118 pseudorange quality and robust contract. Any future correction must be a separately audited source-backed dimension that preserves graph, equation, admission, C7/D/C0D, base, QR, IMU, Pixel5 offset, initialization, filtering, and LM."
+}

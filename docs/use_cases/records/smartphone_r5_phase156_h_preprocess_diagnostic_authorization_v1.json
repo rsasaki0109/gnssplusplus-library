@@ -1,0 +1,79 @@
+{
+  "schema_version": "smartphone-r5-phase156-h-preprocess-diagnostic-authorization.v1",
+  "phase": 156,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-one-shot-mtv-h-preprocessing-diagnostic",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase156_h_preprocess_diagnostic_manifest_v1.json",
+    "commit": "d962cfa",
+    "sha256": "8e29711f616b826fb303a8317d543e3a8b64545aec357257db68526e8f55e5f3"
+  },
+  "source_and_binary": {
+    "implementation_commit": "bae73974ac414a126be43d53006508ffa57d9265",
+    "manifest_commit": "d962cfa",
+    "current_head_before_raw_reads": "d962cfa",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "d7611bd9da30eda931bf719ce60d76e5c7fa7afb6a178f72adebb3bd0e57fd44"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street",
+    "invocations": 1,
+    "failure_is_final": true
+  },
+  "authorization": {
+    "device_gnss": true,
+    "broadcast_navigation": true,
+    "phase149_raw_p_seed_stage": true,
+    "phase155_preprocessing_diagnostics": true,
+    "native_spp": true,
+    "raw_clock_only": true,
+    "imu": false,
+    "base_rinex": false,
+    "fgo": false,
+    "truth": false,
+    "accuracy": false,
+    "solution_coordinate_interpretation": false,
+    "solution_coordinate_publication": false,
+    "precomputed_position_or_seed": false,
+    "mat_pdc": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "sweep": false
+  },
+  "input_read_policy": {
+    "raw_gnss_reads": 1,
+    "navigation_reads": 1,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "input_paths_and_hashes": "exactly those pinned in the manifest; no payload inspection before launch",
+    "derived_or_precomputed_coordinate_inputs": 0
+  },
+  "result_policy": {
+    "preserve_phase154_artifacts": true,
+    "fresh_summary_path": "output/smartphone-r5/phase156-h-preprocess-diagnostic-v1/mtv-h/native_summary.json",
+    "aggregate_statuses_counts_reasons_only": true,
+    "coordinate_values_read_or_published": false,
+    "disk_seed_reuse": false,
+    "record_first_epoch_row_conservation": true,
+    "record_evaluated_vs_unassessed_coverage": true,
+    "no_rerun_fallback_or_repair": true
+  },
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "navigation_reads": 0,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  }
+}

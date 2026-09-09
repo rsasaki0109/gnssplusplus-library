@@ -1,0 +1,79 @@
+{
+  "schema_version": "smartphone-r5-phase187-upstream-stop-constraints.v1",
+  "phase": 187,
+  "purpose": "Source-backed detector parity and same-run Phase171 stop-constraint integration validation.",
+  "scope": {
+    "raw_gnss_payload_read": false,
+    "raw_imu_payload_read": false,
+    "nav_payload_read": false,
+    "truth_payload_read": false,
+    "mat_payload_read": false,
+    "native_route_solver_run": false,
+    "accuracy_claim": false,
+    "phase188_run": false
+  },
+  "source_evidence": {
+    "cached_parameters": "output/reproducibility-cache/gsdc2023/parameters.m",
+    "cached_parameters_sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+    "cached_graph": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+    "cached_graph_sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "official_movstd_reference": "https://www.mathworks.com/help/matlab/ref/movstd.html",
+    "contract": {
+      "stop_window_samples": 500,
+      "acceleration_std_offset_mps2": 0.08,
+      "gyro_std_offset_radps": 0.005,
+      "gyro_norm_max_radps": 0.05,
+      "velocity_threshold_mps": 0.5,
+      "velocity_sigma_mps": 0.01,
+      "pose_sigma": "[0.1deg x3, 0.02m x3]",
+      "robust_huber_k_sigma": 0.5,
+      "even_window_rule": "centered MATLAB movstd extra sample is previous/current side: left=k/2, right=(k-1)/2",
+      "singleton_window_rule": "sample-standard-deviation singleton is zero; empty window remains invalid",
+      "tie_policy": "preceding sample is an explicit native deterministic policy; MATLAB tie equivalence is not claimed"
+    }
+  },
+  "implementation": {
+    "detector": "include/libgnss++/algorithms/upstream_stop_constraints.hpp",
+    "app_cli_guard": "apps/native/gnss_fgo_imu_no_base.cpp:1339",
+    "app_fix": "The legacy Phase93 frozen-recipe rejection of upstream stop constraints now applies only when Phase171 is not selected; Phase171 staging remains raw-P-only and the stop selector is consumed by the Pose3+IMU main config.",
+    "default_preserved": true,
+    "noise_parameters_changed": false,
+    "detector_stop_mask_may_change": true,
+    "raw_d_or_serialized_seed_fallback": false
+  },
+  "synthetic_validation": {
+    "detector_tests": "UpstreamStopConstraints.*",
+    "handoff_test": "FGOGtsamPhase171NoDopplerImuMainTest.SameRunC7DHandOffAdmitsEmptyDopplerAndGaugesAbsentClockSlots",
+    "coverage": [
+      "stop selector off control with slow same-run handoff",
+      "quiet IMU plus optimized slow (<0.5 m/s) stage seed inserts 2 velocity and 1 pose stop factors",
+      "optimized fast stage seed suppresses stop factors",
+      "moving gyro suppresses stop epochs/factors",
+      "nonfinite IMU fails closed before graph admission",
+      "missing/nonfinite C7/D handoff remains fail-closed",
+      "even-window asymmetric impulses at k=2,4,500 and odd-window regression",
+      "singleton endpoint standard deviation is zero"
+    ],
+    "cli_source_test": "tests/test_smartphone_phase187_upstream_stop_cli.py (2 tests; no payloads opened)"
+  },
+  "verification": {
+    "focused_gtsam_and_detector": "17/17 PASS",
+    "cli_source_ctest": "1/1 PASS",
+    "gnss_fgo_imu_no_base_build": "PASS",
+    "cli_admission_probe": {
+      "argv": "metadata-derived Phase182 selector composition plus --native-upstream-stop-constraints; all input/output paths replaced with nonexistent temporary paths",
+      "return_code": 1,
+      "terminal": "failed to convert raw Android GNSS at the missing GNSS CSV open boundary",
+      "payloads_opened": false,
+      "solver_entered": false,
+      "invocations": 1
+    },
+    "broader_parent_regression": "76/76 PASS (independently verified by parent agent)",
+    "raw_route_execution": "not run"
+  },
+  "limitations": [
+    "The synthetic handoff proves factor admission and fail-closed behavior, not Android parser coverage or route accuracy.",
+    "The detector preceding-sample exact-tie mapping remains an explicit native policy; no MATLAB tie behavior is asserted.",
+    "No Phase188 H run is authorized by this record."
+  ]
+}

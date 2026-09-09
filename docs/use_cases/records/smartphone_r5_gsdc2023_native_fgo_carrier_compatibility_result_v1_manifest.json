@@ -1,0 +1,81 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-carrier-compatibility-result-manifest.v1",
+  "status": "sealed-no-go-train-gate",
+  "result_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_result_v1.json",
+    "sha256": "8ce1de1e436d8e79d234fb65e9fc7583291a0802a6e0e78690f48f3c53366924"
+  },
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1.json",
+      "sha256": "031e43d0fa478213d2a90e214668c4bae582e83309ee570a7c057568683fa123"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1_manifest.json",
+      "sha256": "d7b68a6d1abd747d9d9af01851b1604984e98723042c392c4c19a992f8514e82"
+    },
+    "role_inventory": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_role_inventory_v1.json",
+      "sha256": "dc41e76bf4fa956d589af4675a44fee1be1c8bf54fdfe52cf437b02e07866cd1"
+    }
+  },
+  "truth_free": {
+    "manifest": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/truth_free_manifest.json",
+      "sha256": "00b8eb49c7f215c68efa050ec460aaf460f5e659c85fb3492adb69509adc3a88"
+    },
+    "seal_sha256": "985e44c225ae075d6672699f800ffe3b35dc0f22a55a478cb63a884e10732941",
+    "route_count": 8,
+    "truth_open_count": 0,
+    "solver_rerun_during_scoring_recovery": false
+  },
+  "score_recovery": {
+    "report": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_score_recovery.json",
+      "sha256": "78f2395e30af419bf4c4cf25ac1fd7866a60ca5f2113a3a0a318df4952c4fe3b"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_score_recovery.manifest.json",
+      "sha256": "b9c6adb3b429880635d4062bd49feb1378139f487c9a0a41ec84e9a1738ac9ab"
+    },
+    "authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_score_recovery_authorization_v1.json",
+      "sha256": "c709a1819d050dcefa319f119d2250ae2ed4d6451a7dc2d6e316860a95ce0c08"
+    },
+    "prior_failed_truth_open_count": 8,
+    "recovery_truth_read_count": 8,
+    "truth_hashes_unchanged": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "candidate_or_parameter_changed": false,
+    "post_truth_tuning": false
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_eval.py": "d132f2b6863e00dba128985a22c3db70da4b668aff725106e195a783d5465939",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_score_recovery.py": "8feef866b387d6c986b7ffde1ae9d8e259d7ca1e9a05c1958b8c616ac70f1081",
+    "docs/use_cases/smartphone_native_fgo_carrier_compatibility_result.md": "6689585ffff210549e6a1f1544a569ab02081fc8c4099686eedec83bc906e219",
+    "tests/test_smartphone_native_fgo_carrier_compatibility_score_recovery.py": "da65a0aa0c518cfc3a91eda5b787eee459f23f0d1933d83aba7292b85ffb63f6"
+  },
+  "cv": {
+    "route_identity_count": 8,
+    "verified_unique_route_group_count": 7,
+    "phone_family_count": 3,
+    "folds": ["leave_one_route_group_out", "leave_one_phone_family_out"],
+    "selector_truth_free_features_only": true
+  },
+  "policy": {
+    "all_device_carrier_no_go_preserved": true,
+    "production_rtk_spp_default_changed": false,
+    "v5_submission_changed": false,
+    "validation_or_holdout_reused": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "promotion": "No-Go; require a genuinely new validation asset"
+  },
+  "integrity": {
+    "this_manifest_has_no_self_hash": true,
+    "hashes_are_sha256_of_current_files": true,
+    "atomic_truth_free_and_score_outputs": true
+  }
+}

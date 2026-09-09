@@ -1,0 +1,57 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-continuity-manifest.v1",
+  "status": "sealed-truth-free-continuity-recovery",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_v1.json",
+    "sha256": "ee4f6b080baa2fbaf66a95ab5e6eb2de0b16fff62eac877d0364fd5ac791feae"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_freeze_v1.json",
+    "sha256": "d622c6662b3244254b03b565f56f989ba33d565e58046d50e88b2696513234c1"
+  },
+  "artifacts": {
+    "v3_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.csv",
+      "sha256": "8581cf40a4e8ae81448df4e87b381431dce4c290b6b738fc5e6b9c03c3c41a29"
+    },
+    "submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/submission.csv",
+      "sha256": "64b85bd5946ad33d77e522bf7456d5dc0c4e4870cd7b65756faedd9f18ca1af8"
+    },
+    "continuity_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_manifest.json",
+      "sha256": "e2c309d200d4cecca26fcf59e721b7d43349db192a4be25e90b27cab8f535bd3"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_run_manifest.json",
+      "sha256": "2345909b4e237791a713a2c845be8718f5b49dfcbf91d6cde2bd9e9f1d52622d"
+    }
+  },
+  "source_hashes": {
+    "continuity_script": "fdfaaa5f5a448d7e6ac2077c2b86c44f42d6018d84a17a8917c5e88fe48e15f0",
+    "release_binary": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f",
+    "receiver_speed_bound_evidence": "7f4587851c9e9fbd5e5a1af46af54eac3ee8a96230dec5414f9a7a87c6d73ee9",
+    "freeze_record": "d622c6662b3244254b03b565f56f989ba33d565e58046d50e88b2696513234c1"
+  },
+  "verification": {
+    "header_exact": true,
+    "key_order_exact": true,
+    "row_count": 71936,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_coordinate_fallback_rows": 0,
+    "known_dummy_rows": 0,
+    "out_of_earth_rows": 0,
+    "isolated_two_sided_spike_points": 0,
+    "truth_open_count": 0,
+    "atomic_publish": true
+  },
+  "publication_policy": {
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "token_access": false,
+    "no_post_generation_tuning": true
+  }
+}

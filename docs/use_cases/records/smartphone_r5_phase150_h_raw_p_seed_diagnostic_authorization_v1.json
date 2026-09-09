@@ -1,0 +1,76 @@
+{
+  "schema_version": "smartphone-r5-phase150-h-raw-p-seed-diagnostic-authorization.v1",
+  "phase": 150,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-one-shot-mtv-h-prep",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase150_h_raw_p_seed_diagnostic_manifest_v1.json",
+    "sha256": "8f9831f8686e27dbcb4896984db19a9a5db795d4266cd2dbdf14abc136827433"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "runs": 1,
+    "route_failure_does_not_trigger_rerun": true
+  },
+  "authorization": {
+    "raw_device_gnss_read": true,
+    "broadcast_navigation_read": true,
+    "native_phase149_prep_invocation": true,
+    "same_run_spp": true,
+    "fgo": false,
+    "imu": false,
+    "base_rinex": false,
+    "truth": false,
+    "accuracy": false,
+    "solution_coordinate_interpretation": false,
+    "solution_coordinate_publication": false,
+    "mat_pdc_precomputed": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "sweep": false
+  },
+  "execution_policy": {
+    "device_gnss_reads": 1,
+    "navigation_reads": 1,
+    "native_invocations": 1,
+    "input_paths_exactly_manifest_pinned": true,
+    "native_summary_path_is_new": true,
+    "native_summary_not_overwritten": true,
+    "output_coordinates_not_read": true,
+    "output_coordinates_not_published": true,
+    "opaque_solution_output": "not-requested-by-prep-cli",
+    "failure_is_final": true,
+    "no_fallback_or_repair": true
+  },
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "base_reads": 0,
+    "native_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "required_result_fields": [
+    "process_return_code",
+    "input_epoch_count",
+    "accepted_p_position_count",
+    "finite_clock_count",
+    "finite_velocity_count",
+    "rejection_reasons",
+    "time_gap_duplicate_and_monotonicity_counts",
+    "clock_group_counts",
+    "geometry_rank_counts",
+    "velocity_endpoint_policy",
+    "native_summary_sha256",
+    "raw_read_accounting"
+  ]
+}

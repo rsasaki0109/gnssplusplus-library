@@ -1,0 +1,39 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-preprocess-freeze-manifest.v1",
+  "status": "sealed-before-truth",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_preprocess_freeze_v1.json",
+    "sha256": "94d407c3913449e4061dea1e0a324481ff4ffac765b3c8ec23cf2214ac482b63"
+  },
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_sha256": "dc279b30445e32132fbc8ee75410af61be023759701cdd99cdbed9ba37c2e3d4",
+    "factor_sha256": "0f4f0ed3e8d8b0943f66b57ebdb8d987b22ae46c47b72631825ff9b2f94e3e33",
+    "run_manifest_sha256": "7013910d7c75b835f3b0dd9bf006254cc407917e0f2663137fbb4a5b7020521e"
+  },
+  "source_hashes": {
+    "binary": "b79b2ae25aca2725f88d8990443243b923bf6a511aa3354fa1b9b92bd9ed82b0",
+    "raw_loader": "7cd94d0f7607c1672705354e0e4e0eddfcbc830481c0becb6bb13ecdc79db6a3",
+    "solver": "14ac3b8450f1d776170d3568e1fa9a1f3d80d763f093ee0a5c58f7f3bf115fd4",
+    "wrapper": "09e7ab071ad6d1bb2f6a9b146cfed69e19f7739c25b308521fb099a57c38386d",
+    "gap_matrix": "541535e616bb3b995acb3c772899beb876093c9a454b2a5ecde43382898ccc04"
+  },
+  "truth_boundary": {
+    "truth_read_before_freeze": false,
+    "mat_open_count": 0,
+    "validation_read_count": 0,
+    "holdout_read_count": 0,
+    "test_read_count": 0,
+    "score_authorized": "one recovery-evaluator read of the declared development ground_truth.csv after this hash seal",
+    "no_post_truth_tuning": true
+  },
+  "input_policy": {
+    "approved": ["raw device_gnss.csv", "broadcast brdc.nav"],
+    "forbidden": ["any MAT path/file", "result coordinates", "ground truth during inference", "sample/submission coordinates", "v5 imported output", "base/double-difference factors"],
+    "forbidden_rejection_before_open": true
+  },
+  "promotion": {
+    "status": "not_promoted",
+    "reason": "Truth-free structural success is necessary but not sufficient; the one fixed development score determines whether this raw-stage port is retained."
+  }
+}

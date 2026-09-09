@@ -1,0 +1,298 @@
+{
+  "schema_version": "smartphone-r5-phase80-source-exact-direct-p-quality-freeze.v1",
+  "phase": 80,
+  "status": "frozen-before-phase80-raw-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze one opt-in source-exact direct/no-PDC pseudorange-quality candidate composed with the sealed Phase78 structural recipe. This record authorizes only a truth-free four-route structural matrix; it makes no accuracy, validation, holdout, 0.782, or Kaggle claim.",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase78_structural_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase78_phase77_structural_reclassification_freeze_v1.json",
+      "sha256": "0214783abba6584383085c00824a3c227d7e17fdc041e369fcdd369e48baf897"
+    },
+    "phase78_structural_result": {
+      "path": "output/smartphone-r5/phase78-phase77-structural-reclassification-v1/phase78_phase77_structural_reclassification_result.json",
+      "sha256": "d3d190d8da951afc0a62abcf82d87498a6b8ff1da68cb2154966ca387e357114"
+    },
+    "phase78_composition": {
+      "inherits": [
+        "Phase78 source-exact finite-pc pseudorange retention/miss-mask behavior",
+        "Phase78 opt-in receiver secondary-signal bias states",
+        "Phase78 four-route Pixel5 raw/IMU/navigation cohort and repeat policy"
+      ],
+      "phase78_artifacts_are_provenance_only": true,
+      "new_candidate_is_rerun_from_pinned_raw_inputs": true
+    },
+    "official_source": {
+      "repository": "https://github.com/taroz/gsdc2023",
+      "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+      "commit_short": "29923f9"
+    }
+  },
+  "candidate": {
+    "id": "source-exact-direct-no-pdc-p-quality-plus-phase78",
+    "opt_in": true,
+    "default_off": true,
+    "direct_no_pdc": true,
+    "pdc_state_bridge": false,
+    "pdc_factors": false,
+    "quality_path": "direct source P-quality label for the whole source observable-quality contract on undifferenced P and D factors; no PDC state initializer or PDC-derived coordinate is used",
+    "composition": "sealed Phase78 candidate recipe plus this direct/no-PDC source P-quality path",
+    "source_quality_flag": "--native-source-direct-observable-quality",
+    "legacy_upstream_quality_flag": "--native-upstream-quality",
+    "direct_flag_conflicts_with_legacy": true,
+    "direct_flag_requires": ["--native-pdc-imu-tdcp-no-bridge"],
+    "phase78_flags_preserved": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor",
+      "--native-fallback-seed-quality-anchor-recovery",
+      "--native-signal-bias-states",
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex",
+      "--native-base-rinex-sha256",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "phase78_candidate_not_reclassified": true,
+    "no_post_freeze_algorithm_or_parameter_change": true
+  },
+  "source_quality_contract": {
+    "snr_field": "Cn0DbHz",
+    "snr_units": "dB-Hz",
+    "snr_percentile": 85.0,
+    "snr_percentile_name": "p85",
+    "snr_denominator_db": 20.0,
+    "minimum_snr_dbhz": 20.0,
+    "minimum_elevation_deg": 5.0,
+    "pseudorange_sigma_model": "snr_scale * signal_type_factor",
+    "snr_scale": "10^(-(Cn0DbHz - p85_band_dbhz) / 20)",
+    "sigma_times_signal": true,
+    "signal_type_factor_is_source_defined": true,
+    "pseudorange_residual_screens_m": {
+      "L1": 20.0,
+      "L5": 15.0
+    },
+    "pseudorange_residual_screen_name": "Pmask_res",
+    "pseudorange_residual_threshold_l1_m": 20.0,
+    "pseudorange_residual_threshold_l5_m": 15.0,
+    "residual_screen_interpretation": "source preprocessing Pmask_res is applied before direct pseudorange factor creation; these L1/L5 values are not applyAdjacentMasks thresholds; no fill, extrapolation, nearest-time substitution, or post-read threshold sweep",
+    "upstream_quality_contract_scope_decision": "include the coherent whole existing source upstream-quality contract",
+    "existing_adjacent_p_d_mask": {
+      "included": true,
+      "source_operation": "applyAdjacentMasks",
+      "source_masks": ["Pmask_dDP", "Lmask_dDL"],
+      "policy": "retain the existing source P-D/L-D adjacent masks unchanged; no new threshold, route-specific setting, or separate selector is introduced",
+      "l1_l5_values_are_pmask_res": true
+    },
+    "doppler_model": "SNR",
+    "doppler_snr_percentile": 85.0,
+    "doppler_snr_denominator_db": 20.0,
+    "doppler_sigma_model": "snr_scale / 12",
+    "D_sn_ratio": "1/12",
+    "Dmask_res_mps": 3.0,
+    "doppler_residual_screen_name": "Dmask_res",
+    "doppler_residual_screen_applies_to_initialization": false,
+    "doppler_residual_screen_scope": "direct receiver-only D factors after geometry; never a PDC/initializer screen",
+    "carrier_tdcp_sigma_m_unchanged": 0.03,
+    "whole_contract_includes_p_and_d": true,
+    "elevation_interpretation": "source geometry elevation gate; observations below 5 degrees are rejected from this opt-in quality path",
+    "quality_is_not_pdc": true,
+    "quality_is_not_truth_tuned": true
+  },
+  "public_settings_huber": {
+    "source": "pinned public settings_train.csv route/environment settings",
+    "units": "Huber sigma threshold",
+    "route_mapping_fixed_before_read": true,
+    "by_route": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "environment": "Highway",
+        "huber_threshold_sigma": 0.2,
+        "pseudorange_huber_threshold_sigma": 0.2,
+        "doppler_huber_threshold_sigma": 0.8
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "environment": "Street",
+        "huber_threshold_sigma": 0.1,
+        "pseudorange_huber_threshold_sigma": 0.1,
+        "doppler_huber_threshold_sigma": 0.4
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "environment": "Highway",
+        "huber_threshold_sigma": 0.2,
+        "pseudorange_huber_threshold_sigma": 0.2,
+        "doppler_huber_threshold_sigma": 0.8
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "environment": "Street",
+        "huber_threshold_sigma": 0.1,
+        "pseudorange_huber_threshold_sigma": 0.1,
+        "doppler_huber_threshold_sigma": 0.4
+      }
+    },
+    "pseudorange_by_environment": {
+      "Street": 0.1,
+      "Highway": 0.2
+    },
+    "doppler_by_environment": {
+      "Street": 0.4,
+      "Mix": 0.4,
+      "Highway": 0.8
+    },
+    "pseudorange_huber_is_route_mapping": true,
+    "doppler_huber_is_route_mapping": true,
+    "route_score_selector": false,
+    "route_score_or_truth_selection": false,
+    "no_route_specific_parameter_search": true
+  },
+  "source_pins": {
+    "dataset_zip": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "settings_train_csv": {
+      "member": "dataset_2023/settings_train.csv",
+      "sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39"
+    },
+    "obserrmodel_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/obserrmodel.m",
+      "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef"
+    },
+    "parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_count": 4,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_order_frozen_before_read": true,
+    "no_route_score_selector": true
+  },
+  "truth_free_structural_contract": {
+    "truth_free": true,
+    "truth_reads_allowed": 0,
+    "accuracy_scoring": false,
+    "validation_or_holdout": false,
+    "candidate_repeat_count": 2,
+    "candidate_repeat_submission_and_summary_byte_identical": true,
+    "candidate_prediction_domain_coverage": 1.0,
+    "candidate_all_coordinates_finite_and_earth_valid": true,
+    "candidate_converged": true,
+    "over_70_mps_count": 0,
+    "source_hashes_exact": true,
+    "phase78_composition_identity": true,
+    "direct_no_pdc_identity": true,
+    "p85_snr_sigma_times_signal_identity": true,
+    "whole_p_and_d_quality_contract_identity": true,
+    "doppler_snr_sigma_divide_12_identity": true,
+    "doppler_Dmask_res_3mps_non_initializer_identity": true,
+    "minimum_snr_and_elevation_identity": true,
+    "pseudorange_residual_screen_identity": true,
+    "existing_adjacent_p_d_mask_identity": true,
+    "public_settings_huber_identity": true,
+    "no_route_specific_selection": true,
+    "all_gates_anded": true
+  },
+  "structural_matrix": {
+    "candidate_runs_per_route": 2,
+    "candidate_runs_total": 8,
+    "native_solver_invocations": 8,
+    "raw_device_gnss_reads": 8,
+    "raw_device_imu_reads": 8,
+    "broadcast_nav_reads": 8,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "new_output_root_required": true,
+    "failure_capture_required": true,
+    "candidate_artifacts_not_reused_as_raw_inputs": true
+  },
+  "forbidden_inputs": [
+    "ground_truth.csv",
+    "validation or holdout truth",
+    "MAT/MATLAB products or generated .mat files",
+    "device WLS coordinates",
+    "SvPosition or SvElevation fields",
+    "precomputed coordinates or trajectories",
+    "precomputed route outputs",
+    "Kaggle data, leaderboard scores, or tokens",
+    "route-score selector or truth-selected route parameters",
+    "PDC state bridge or PDC-derived seed"
+  ],
+  "nonduplication": {
+    "phase13": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_freeze_v1.json",
+      "same_candidate": false,
+      "artifact_or_score_reuse": false,
+      "relationship": "Phase13 is the historical p85 upstream-quality policy reference; Phase80 is a separately frozen direct/no-PDC path composed with Phase78 and does not reuse Phase13 output, score, route, or truth selection.",
+      "shared_public_source_semantics_only": true
+    },
+    "phase61": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase61_pixel5_cn0_pseudorange_calibration_freeze_v1.json",
+      "same_candidate": false,
+      "artifact_or_score_reuse": false,
+      "relationship": "Phase61 audited raw CMC/Cn0 arc-centered calibration; Phase80 uses the pinned source p85 sigma-times-signal and Pmask_res pseudorange residual screen, with no CMC fit, alpha calibration, or Phase61 result input.",
+      "phase61_cmc_or_alpha_fit": false
+    },
+    "phase78": {
+      "composition_is_intended": true,
+      "phase78_identity_preserved": true,
+      "phase78_result_is_not_an_accuracy_selector": true
+    }
+  },
+  "read_policy_at_freeze": {
+    "source_metadata_archive_reads_before_freeze": 1,
+    "raw_archive_member_reads_before_freeze": 0,
+    "archive_rematerialize": 0,
+    "archive_reopen": 0,
+    "raw_device_gnss": 0,
+    "raw_device_imu": 0,
+    "broadcast_nav": 0,
+    "truth": 0,
+    "mat": 0,
+    "precomputed_coordinates": 0,
+    "validation_holdout": 0,
+    "kaggle_token": 0,
+    "native_solver_invocations": 0,
+    "post_truth_tuning": false,
+    "route_score_selection": false
+  },
+  "fail_closed": {
+    "source_or_phase78_hash_mismatch": true,
+    "any_forbidden_input": true,
+    "truth_read": true,
+    "mat_or_precomputed_input": true,
+    "kaggle_or_token_access": true,
+    "pdc_state_bridge_enabled": true,
+    "route_score_selector_used": true,
+    "candidate_repeat_mismatch": true,
+    "candidate_nonfinite_or_out_of_earth": true,
+    "prediction_domain_not_exactly_one": true,
+    "any_over_70_mps": true,
+    "public_settings_huber_mismatch": true,
+    "residual_mask_or_quality_contract_mismatch": true,
+    "unexpected_exception": true
+  },
+  "next_stage": {
+    "if_all_structural_gates_pass": "seal the structural artifacts and request a separately frozen accuracy phase; do not read truth in Phase80",
+    "if_any_structural_gate_fails": "stop without truth, preserve Phase43/Phase78 authorities, and do not select a replacement by route score",
+    "validation_or_kaggle": false,
+    "zero_point_782": "not evaluated"
+  }
+}

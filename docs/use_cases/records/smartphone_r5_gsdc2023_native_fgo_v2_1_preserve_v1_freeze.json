@@ -1,0 +1,160 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-preserve-v1-freeze.v1",
+  "status": "frozen-before-v2-1-truth-scoring",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v2-1-preserve-v1-tdcp-motion-combined-imu",
+  "purpose": "Extend the already frozen no-base smartphone FGO path with the exact v1 ordinary TDCP and position/clock motion graph while retaining Pose3/velocity/bias CombinedImuFactor coupling.",
+  "external_mutation": false,
+  "token_access": false,
+  "leaderboard_scores_used_for_tuning": false,
+  "truth_policy": {
+    "truth_free_graph_smoke_first": true,
+    "train_truth_allowed_only_after_truth_free_artifact_seal": true,
+    "validation_materialization_or_truth_open": false,
+    "holdout_materialization_or_truth_open": false,
+    "no_post_holdout_tuning": true,
+    "production_default_changed": false
+  },
+  "split": {
+    "structural_smoke": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "permitted_train_comparison": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "window": {
+      "skip_epochs": 200,
+      "max_epochs": 30,
+      "truth_match_tolerance_ms": 1000
+    },
+    "validation_and_holdout": "sealed; not materialized or opened in this phase"
+  },
+  "graph_contract": {
+    "backend": "GTSAM batch Levenberg-Marquardt",
+    "state": "Pose3 body-in-local-ENU + Vector3 velocity + imuBias.ConstantBias per epoch, per-epoch receiver clock, global inter-system bias when required",
+    "preserved_v1_factors": [
+      "undifferenced pseudorange",
+      "ordinary time-differenced carrier phase",
+      "position motion between consecutive epochs",
+      "clock motion between consecutive epochs",
+      "existing Huber robust loss"
+    ],
+    "added_factor": "gtsam::CombinedImuFactor for every valid consecutive IMU interval",
+    "forbidden": [
+      "base observations",
+      "double-difference factors",
+      "single-difference Doppler factors",
+      "single-difference TDCP factors",
+      "carrier-phase ambiguity states",
+      "truth-dependent factors"
+    ],
+    "ordinary_tdcp_model": "current_range + c*current_clock - previous_range - c*previous_clock - observed_delta_carrier, with the same sigma and Huber threshold as v1; Pose3 antenna position uses the existing lever-arm contract",
+    "motion_model": "zero relative position and zero receiver-clock random walk, sigma motion_sigma_m and clock_motion_sigma_m exactly as v1; Pose3 rotation rows remain the existing loose gauge rows"
+  },
+  "numeric_parameters": {
+    "max_iterations": 8,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_sigma_power": 1.0,
+    "motion_sigma_m": 50.0,
+    "clock_motion_sigma_m": 300.0,
+    "tdcp_sigma_m": 0.03,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "max_tdcp_gap_s": 2.0,
+    "min_elevation_deg": 10.0,
+    "min_snr_dbhz": 0.0,
+    "min_satellites_per_epoch": 4,
+    "use_ionosphere_model": true,
+    "use_troposphere_model": true,
+    "use_inter_system_biases": true,
+    "pose3_lever_arm_body_m": [0.0, 0.0, 0.0],
+    "imu_noise": {
+      "accel_noise_sigma_mps2_sqrt_hz": 0.025,
+      "gyro_noise_sigma_radps_sqrt_hz": 0.0005,
+      "accel_bias_rw_sigma_mps3_sqrt_hz": 0.00025,
+      "gyro_bias_rw_sigma_radps2_sqrt_hz": 0.0000005,
+      "integration_sigma": 0.05,
+      "gravity_mps2": 9.80665
+    },
+    "imu_priors": {
+      "initial_attitude_sigma_roll_pitch_rad": 0.05,
+      "initial_attitude_sigma_yaw_rad": 0.08726646259971647,
+      "initial_velocity_sigma_mps": 0.5,
+      "initial_accel_bias_sigma_mps2": 0.1,
+      "initial_gyro_bias_sigma_radps": 0.01
+    },
+    "leveling_and_heading": {
+      "stationary_samples": 250,
+      "gravity_norm_bounds_fraction": [0.7, 1.3],
+      "gravity_norm_std_max_mps2": 1.5,
+      "course_window_epochs": 25,
+      "course_speed_mps": [2.0, 50.0],
+      "course_vertical_speed_abs_max_mps": 3.0,
+      "course_consistency_deg": 20.0,
+      "required_consistent_windows": 3
+    }
+  },
+  "observable_offset_estimator": {
+    "definition": "truth-free GNSS seed speed versus IMU motion-activity correlation",
+    "aligned_imu_time": "raw_imu_time + selected_offset_seconds",
+    "grid_seconds": {
+      "minimum": -0.1,
+      "maximum": 0.1,
+      "step": 0.01
+    },
+    "window_seconds": 0.1,
+    "activity": "sqrt((||accel||-gravity)^2 + (2*||gyro||)^2)",
+    "score": "Pearson correlation of demeaned GNSS speed and window-mean activity",
+    "confidence_gate": {
+      "minimum_pairs": 20,
+      "minimum_best_absolute_score": 0.4,
+      "minimum_best_vs_runner_up_margin": 0.05,
+      "edge_candidate_rejected": true
+    },
+    "failure_action": "apply zero offset and retain the same IMU graph; invalid/nonfinite/low-confidence estimates fail closed",
+    "truth_free": true
+  },
+  "input_and_frame_contract": {
+    "mat_source": "existing deterministic phone_data.mat converter and sealed GPST IMU CSV",
+    "android_units": "accelerometer m/s^2; gyroscope rad/s in source MAT; converter emits loader-compatible degrees/s once",
+    "axis": "identity raw-axis selection followed by explicit frozen taroz RzRyRx mounting [-85,178,-94] degrees",
+    "nav_frame": "local ENU, Z-up, gravity -Z",
+    "time": "UTC milliseconds converted to GPST with +18 s; no truth-derived runtime offset"
+  },
+  "gates_frozen_before_truth": {
+    "structural": [
+      "30 epochs",
+      "pseudorange_factors > 0",
+      "ordinary_tdcp_factors_built > 0",
+      "ordinary_tdcp_factors_inserted == ordinary_tdcp_factors_built",
+      "motion factor pairs > 0",
+      "combined_imu_factors > 0",
+      "double_difference_factors == 0",
+      "single_difference_doppler_factors == 0",
+      "single_difference_tdcp_factors == 0",
+      "finite states and coordinates",
+      "solver converged"
+    ],
+    "train_short_window": {
+      "candidate_h_p50_m": "not yet read",
+      "candidate_h_p95_m": "not yet read",
+      "candidate_v_p95_m": "not available in four-column output",
+      "availability_and_truth_coverage": "non-regression versus exact v1 window",
+      "decision": "strict route-level non-regression and strict H P95 improvement required; otherwise No-Go"
+    },
+    "promotion": "development-only research result; production defaults unchanged; no validation opening on train-gate failure"
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo_imu_v21.cpp": "filled after implementation and before truth scoring",
+    "src/algorithms/fgo_gtsam_internal.hpp": "filled after implementation and before truth scoring",
+    "src/algorithms/fgo_gtsam_backend.cpp": "filled after implementation and before truth scoring",
+    "apps/CMakeLists.txt": "filled after implementation and before truth scoring",
+    "tests/test_smartphone_native_fgo_v2_1_contract.py": "551ed2961d079d2c6612ee9bed37b2493edbd74fbab241b4f00ac2544518efef",
+    "tests/CMakeLists.txt": "46c02359ba264ef406142629cd831e8eff06326443cfb06456ba62310c5754ff",
+    "release_binary": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483"
+  },
+  "commands": {
+    "release_build": "cmake --build build --config Release -j2",
+    "structural_smoke": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_v21 --obs <rover.obs> --nav <brdc.nav> --imu <imu_processed.csv> --out <submission.csv> --summary-json <summary.json> --dataset-id <id> --skip-epochs 200 --max-epochs 30",
+    "train_score": "read the already permitted train truth only after the truth-free v2.1 artifacts and hashes are sealed; do not modify candidate",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "hash_status": "Source and Release binary hashes are pinned before the single permitted train truth comparison; the record SHA256 is pinned in the companion run manifest."
+}

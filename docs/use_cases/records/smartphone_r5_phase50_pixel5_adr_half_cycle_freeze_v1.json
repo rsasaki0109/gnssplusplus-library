@@ -1,0 +1,263 @@
+{
+  "schema_version": "smartphone-r5-phase50-pixel5-adr-half-cycle-freeze.v1",
+  "status": "frozen-before-phase50-raw-read",
+  "phase": 50,
+  "execution_label": "Luna Max",
+  "purpose": "Truth-free audit of Android per-satellite carrier-phase ADR half-cycle ambiguity/resolution state transitions. Phase49 values are not an input; only its factor-selection metadata is pinned.",
+  "objective": {
+    "factor": "raw Android per-satellite carrier-phase half-cycle ambiguity/resolution residual",
+    "route_count_required": 4,
+    "truth_free": true,
+    "audit_only": true,
+    "solver_rerun": false,
+    "correction_fit_or_application": false,
+    "zero_point_782_evaluation": false,
+    "past_truth_payload_reuse": false,
+    "phase49_metric_reuse": false
+  },
+  "authority_pins": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase44_commit": "a323eb6",
+    "phase49_result_metadata": {
+      "path": "docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_result_v1.json",
+      "sha256": "120e339bcfd60c892a643787b2ab8edb2ef070e153bd6c3983580ea6d925c9dc",
+      "payload_used_as_input": false,
+      "use": "factor-selection/policy metadata only; no Phase49 metric field is opened"
+    },
+    "phase49_evaluator_manifest_metadata": {
+      "path": "docs/use_cases/records/smartphone_r5_phase49_pixel5_adr_cycle_slip_lock_loss_evaluator_manifest_v1.json",
+      "sha256": "13547a0bb486d1a923f3cfb4f83e7d5e8a6d0867ed87b97c8e112c67186e7843",
+      "commit": "0221c2e",
+      "payload_used_as_input": false
+    },
+    "phase41_sign_unit_contract": {
+      "freeze_sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758",
+      "result_sha256": "2061e8608b42da263fe992b2a36a4b42235cd2425c864a8aa465c23bc5e9d05b",
+      "contract": "Android PseudorangeRateMetersPerSecond is direct range-rate m/s; adapter D=-raw_rate/wavelength"
+    },
+    "phase13_threshold_policy": {
+      "freeze_sha256": "a7891d8cec1b34372de9501e65683888eaed1994e84d1ea2b75492a3be9fa85f",
+      "carrier_residual_threshold_m": 1.5,
+      "use": "policy context only; no Phase13 candidate is reproduced"
+    },
+    "source_contracts": {
+      "android_raw_gnss_cpp": {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "84b6864475c3d86c34c6740ec28ef7a54846aecf5c6c297d644e6deb1dad4390"
+      },
+      "android_raw_gnss_header": {
+        "path": "include/libgnss++/io/android_raw_gnss.hpp",
+        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+      },
+      "observation_header": {
+        "path": "include/libgnss++/core/observation.hpp",
+        "sha256": "d95f2bedca553b6474a4bc4e4600c91152d45fcaf350e31fce20fbfa65714419"
+      },
+      "fgo_problems_cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "5fb1dec8e7f23652eefecc9d8684586a66fecac07e109489792c8590aac76a03"
+      },
+      "tdcp_contract_header": {
+        "path": "include/libgnss++/algorithms/tdcp_contract.hpp",
+        "sha256": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf"
+      },
+      "carrier_code_leveling_header": {
+        "path": "include/libgnss++/algorithms/carrier_code_leveling.hpp",
+        "sha256": "31f97f7c6a96a5e6064ddaad9cc3b3e3f76c1dde40a14dcbb58025d3d1d817a4"
+      },
+      "fgo_config_header": {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "c95229caf21cd9f1325791fa8b8ac8e17300fb0c9af05fee0e12bca1e9703072"
+      },
+      "fgo_header": {
+        "path": "include/libgnss++/algorithms/fgo.hpp",
+        "sha256": "092e228a03800d1dc3e7b1c5c0b6cf4c7b18b8f4485ee99dfe27e3484ba2bdfc"
+      },
+      "observable_upstream_header": {
+        "path": "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp",
+        "sha256": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54"
+      }
+    }
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_disjoint": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ]
+  },
+  "exact_raw_inputs": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "file_size": 57715495,
+      "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/device_gnss.csv",
+      "file_size": 74299283,
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/pixel5/device_gnss.csv",
+      "file_size": 33837317,
+      "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+      "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/pixel5/device_gnss.csv",
+      "file_size": 23385520,
+      "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+    }
+  },
+  "raw_schema": {
+    "required_columns": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "FullBiasNanos",
+      "BiasNanos",
+      "ReceivedSvTimeNanos",
+      "Svid",
+      "ConstellationType",
+      "SignalType",
+      "CarrierFrequencyHz",
+      "PseudorangeRateMetersPerSecond",
+      "AccumulatedDeltaRangeState",
+      "AccumulatedDeltaRangeMeters"
+    ],
+    "optional_columns": [
+      "TimeOffsetNanos",
+      "HardwareClockDiscontinuityCount",
+      "State",
+      "MultipathIndicator",
+      "Cn0DbHz",
+      "PseudorangeRateUncertaintyMetersPerSecond",
+      "BiasUncertaintyNanos",
+      "TimeUncertaintyNanos",
+      "DriftNanosPerSecond"
+    ],
+    "row_filter": "Only MessageType=Raw rows are parsed; no truth, navigation, coordinate, or enriched trajectory fields are parsed."
+  },
+  "adr_state_contract": {
+    "valid_bit": 1,
+    "reset_bit": 2,
+    "cycle_slip_bit": 4,
+    "half_cycle_resolved_bit": 8,
+    "half_cycle_reported_bit": 16,
+    "ordinary_unflagged": "valid bit set and reset/cycle-slip bits clear; resolved/reported bits remain diagnostic state",
+    "pair_classes": [
+      "resolved_to_resolved",
+      "unresolved_reported_stable",
+      "resolved_toggle",
+      "reported_toggle",
+      "resolved_and_reported_toggle"
+    ],
+    "adapter_contract_to_audit": "current adapter carrier mask and LLI/loss_of_lock use reset/cycle-slip and valid bits only; half-cycle bits are not included in those gates or in TDCP arc reset"
+  },
+  "fixed_equations": {
+    "raw_pseudorange": "Phase25 integer/Decimal segment-base P reconstruction with constellation time mapping and nearest-week unwrap; no coordinate or navigation input",
+    "signed_adr": "signed_ADR_m = -AccumulatedDeltaRangeMeters only for the adapter's five published sign-correction device models; Pixel5 preserves raw ADR sign",
+    "ordinary_transition": "same system/SVID/signal adjacent Raw rows, 0<dt<=1.5 s, unchanged HCDC, finite in-range P, existing code/CN0/multipath masks clear, valid ADR and reset/cycle-slip bits clear",
+    "adr_rate_residual": "r_k=(signed_ADR_k-signed_ADR_prev)-0.5*(PseudorangeRateMetersPerSecond_prev+PseudorangeRateMetersPerSecond_k)*dt_seconds",
+    "clock_center": "for each endpoint utcTimeMillis+HCDC group, subtract the median raw ADR/rate residual over ordinary comparable pairs; retain raw and centered residual",
+    "half_cycle_normalized": "half_cycle_units = centered_residual_m / (0.5*c/CarrierFrequencyHz); an implicated toggle is clustered when distance to the nearest integer half-cycle is <=0.15",
+    "implicated": "any ordinary pair with a resolved or reported state transition; state-stable ordinary pairs are clean comparators",
+    "persistence": "toggle pair remains an ordinary pair with ordinary same-key predecessor and successor when both exist; adjacency is reported, not used to fit a threshold"
+  },
+  "diagnostics": {
+    "same_satellite_signal_adr_arcs": true,
+    "resolved_to_resolved_and_unresolved_reported_stable_classes": true,
+    "resolved_and_reported_toggle_classes": true,
+    "existing_invalid_reset_slip_gap_hcdc_excluded_buckets": true,
+    "phase41_sign_unit_and_wavelength": true,
+    "raw_adr_increment_minus_trapezoidal_rate": true,
+    "epoch_hcdc_median_common_mode_center": true,
+    "half_wavelength_normalized_residual": true,
+    "toggle_persistence_and_arc_lengths": true,
+    "route_signal_satellite_distributions": true,
+    "current_tdcp_overlap_proxy_and_static_loader_audit": true,
+    "truth_past_truth_phase49_metrics_navigation_solver_coordinates": false,
+    "zero_point_782_reachability": "not evaluated without truth"
+  },
+  "numeric_gates": {
+    "route_count": {"required": 4},
+    "ordinary_tdcp_coverage": {
+      "min_eligible_pairs_per_route": 3000,
+      "min_satellites_per_route": 5,
+      "valid_unflagged_coverage_required": true
+    },
+    "state_class_population": {
+      "resolved_stable_min_pairs_per_route": 100,
+      "unresolved_or_toggle_min_pairs_per_route": 100,
+      "implicated_fraction_min_per_route": 0.001,
+      "implicated_fraction_max_per_route": 0.20
+    },
+    "toggle_materiality": {
+      "toggle_p95_excess_over_clean_min_m": 0.03,
+      "toggle_to_clean_p95_ratio_min": 1.5,
+      "all_routes": true
+    },
+    "half_cycle_cluster": {
+      "nearest_integer_half_cycle_tolerance": 0.15,
+      "minimum_toggle_cluster_fraction": 0.60,
+      "all_routes": true
+    },
+    "clean_retention": {"min_fraction": 0.80},
+    "route_direction": {"same_direction_all_routes": true},
+    "loo_class_rule": {"fixed_class_decision_stable": true},
+    "current_tdcp_used_pair_impact": {"required": true, "ordinary_overlap_min_count": 1},
+    "presentation_integrity": {
+      "pair_reason_counts_sum": true,
+      "state_class_counts_sum": true,
+      "signal_group_counts_sum": true,
+      "satellite_group_counts_sum": true,
+      "four_route_medians_retained": true,
+      "aggregate_recomputed_exact": true,
+      "event_count_exact": true
+    },
+    "logic": "AND; every threshold and class rule is immutable after this freeze and before the first Phase50 raw read"
+  },
+  "input_policy": {
+    "single_process": true,
+    "raw_device_gnss_read_count_per_route": 1,
+    "truth_read_count": 0,
+    "past_truth_payload_reads": 0,
+    "phase49_metric_payload_reads": 0,
+    "brdc_nav_reads": 0,
+    "solver_reruns": 0,
+    "trajectory_reruns": 0,
+    "correction_fit_or_application": false,
+    "validation_holdout_access": false,
+    "archive_reopens": 0,
+    "rematerialization_count": 0,
+    "kaggle_or_token_access": false,
+    "mat_reads_or_generated": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "SvPosition_or_SvElevation": false,
+    "atomic_output_publish": true
+  },
+  "source_decision_policy": {
+    "if_all_pass": "Authorize only an opt-in TDCP arc reset/exclusion on a half-cycle status transition; do not implement it in Phase50. Excluding all unresolved rows requires separate evidence and is not authorized by this freeze.",
+    "if_any_fail": "No correction, mask, weighting, or arc reset. Name exactly one next raw physical factor supported by the source and observed raw-only structure.",
+    "phase49_reuse": "Phase49 result is metadata-only; no Phase49 metric is used as an input.",
+    "zero_point_782": "not evaluated without truth"
+  },
+  "pre_read_assertions": {
+    "raw_payload_opened": false,
+    "truth_opened": false,
+    "past_truth_payload_opened": false,
+    "phase49_metric_payload_opened": false,
+    "nav_opened": false,
+    "solver_rerun": false,
+    "trajectory_rerun": false,
+    "correction_implemented": false,
+    "archive_reopened": false,
+    "output_published": false
+  }
+}

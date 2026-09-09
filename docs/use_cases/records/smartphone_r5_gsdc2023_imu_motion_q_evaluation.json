@@ -1,0 +1,194 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-imu-motion-q-evaluation.v1",
+  "status": "sealed-no-go-train-gate",
+  "decision": "no-go-train-gate",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_imu_motion_q_selection.json",
+    "sha256": "72735d45939eca465cc039fd56bfc5bb6a661be70b3bffb803943ea77f6b3efb",
+    "candidate_id": "causal_imu_motion_adaptive_q_v1",
+    "frozen_before_new_truth": true,
+    "public_private_scores_used_for_tuning": false
+  },
+  "candidate": {
+    "id": "causal_imu_motion_adaptive_q_v1",
+    "description": "Causal gyro vector norm and robust acceleration-norm dynamics adjust only the process-noise multiplier of the existing constant-velocity Kalman/RTS smoother.",
+    "not_claimed": [
+      "not a tightly coupled GNSS/INS factor graph",
+      "does not estimate GNSS/IMU timestamp offset",
+      "does not integrate absolute acceleration",
+      "does not estimate orientation or lever arm"
+    ],
+    "parameters": {
+      "smoother_process_noise": 1.0,
+      "measurement_floor_m": 1.0,
+      "outlier_gate_sigma": 5.0,
+      "segment_gap_s": 10.0,
+      "motion_window_s": 1.0,
+      "motion_max_sample_gap_s": 0.25,
+      "motion_max_sample_age_s": 0.25,
+      "motion_gyro_threshold": 0.25,
+      "motion_accel_dynamic_threshold": 1.0,
+      "motion_q_multiplier": 2.0,
+      "skip_epochs": 1,
+      "route_internal_reset_indices": []
+    },
+    "truth_free": true,
+    "production_default_changed": false
+  },
+  "implementation_sources": {
+    "imu": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_imu.py",
+      "sha256": "19aac6dfae976fdf29106f2ea12c40cbf774c768d57690e50f24d5e4910a8afe"
+    },
+    "smoother": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py",
+      "sha256": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_imu_motion_q_eval.py",
+      "sha256": "9ad8c04a385d9a6bfb7536257f0271f4a1e34bdcfa88eeb501a57b24bf0a398a"
+    },
+    "unit_test": {
+      "path": "tests/test_smartphone_imu_motion_q_eval.py",
+      "sha256": "8013d66c1c52d415926d5626675e110bbb4329f9f78131dfad1461c43a1b2ae9",
+      "result": "4/4 passed"
+    },
+    "existing_imu_test": {
+      "path": "tests/test_smartphone_trajectory_imu.py",
+      "sha256": "0cafba12ad7cac1610702709c442035910846437dade73775f813036921ce828"
+    }
+  },
+  "frozen_split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "future_holdout_materialized": false,
+    "future_holdout_truth_open_count": 0,
+    "old_holdout_or_public_score_used_for_ranking": false
+  },
+  "train_evaluation": {
+    "record": {
+      "path": "output/smartphone-r5/imu-motion-q-v1/train_evaluation.json",
+      "sha256": "5f29d7ed649d8148aca93ee5fc6687805050d9f88ea4cd412b9deb746340d0cc"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/imu-motion-q-v1/train_evaluation_manifest.json",
+      "sha256": "4696b6a48dfc56636bc249e57a4f1ecba2db9e5bbb7b91efa518dc04fe4ecdfd"
+    },
+    "truth_free_artifacts_sealed_before_truth": true,
+    "truth_open_unique_files": 3,
+    "truth_open_file_events": 5,
+    "orchestration_note": "One initial process failed after opening the first two train truths because the third truth path was stale in the route specification. The final process reran the same frozen artifact comparison with the corrected existing archive path; no algorithm, parameter, route, or score was changed.",
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "aggregate": {
+      "baseline": {
+        "h_wgs84_p50_m": 2.2299220407451776,
+        "h_wgs84_p95_m": 6.163939915284951,
+        "v_p95_m": 12.544379358932755,
+        "diagnostic_mean_m": 4.196697069253391,
+        "availability_ratio": 1.0,
+        "truth_coverage_ratio": 0.9960686943927167
+      },
+      "candidate": {
+        "h_wgs84_p50_m": 2.268764390205266,
+        "h_wgs84_p95_m": 6.188652464792091,
+        "v_p95_m": 12.08855302762451,
+        "diagnostic_mean_m": 4.229644527864573,
+        "availability_ratio": 1.0,
+        "truth_coverage_ratio": 0.9960686943927167
+      },
+      "gate_failures": [
+        "aggregate_diagnostic_mean_not_strictly_improved",
+        "aggregate_h_p95_not_strictly_improved",
+        "h_p50_regression",
+        "h_p95_regression",
+        "haversine_sphere__linear_n_minus_1_regression",
+        "haversine_sphere__nearest_rank_ceiling_regression",
+        "wgs84_vincenty__linear_n_minus_1_regression",
+        "wgs84_vincenty__nearest_rank_ceiling_regression"
+      ]
+    },
+    "route_results": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "baseline_h_p50_p95_m": [1.234014313725439, 3.613436718767217],
+        "candidate_h_p50_p95_m": [1.11878657244298, 3.74687460416924],
+        "baseline_v_p95_m": 4.879892511673077,
+        "candidate_v_p95_m": 3.156387967148163,
+        "baseline_diagnostic_mean_m": 2.4257416501342783,
+        "candidate_diagnostic_mean_m": 2.433344016594612,
+        "gate_failures": ["h_p95_regression", "all_four_diagnostics_regression"]
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "baseline_h_p50_p95_m": [2.4203117144206683, 4.633770694508588],
+        "candidate_h_p50_p95_m": [2.477415464058555, 5.444316133817937],
+        "baseline_v_p95_m": 5.765415482470003,
+        "candidate_v_p95_m": 4.918374767258868,
+        "baseline_diagnostic_mean_m": 3.522593744061491,
+        "candidate_diagnostic_mean_m": 3.9584475189659662,
+        "gate_failures": ["h_p50_regression", "h_p95_regression", "all_four_diagnostics_regression"]
+      },
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+        "baseline_h_p50_p95_m": [3.6757994464760917, 8.489272645027556],
+        "candidate_h_p50_p95_m": [3.6526500459861952, 7.945861409038281],
+        "baseline_v_p95_m": 14.218083134899894,
+        "candidate_v_p95_m": 13.470193891677693,
+        "baseline_diagnostic_mean_m": 6.080022836418812,
+        "candidate_diagnostic_mean_m": 5.795726465677399,
+        "gate_failures": []
+      }
+    }
+  },
+  "truth_free_artifacts": {
+    "root": "output/smartphone-r5/imu-motion-q-v1/train",
+    "routes": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "smoother_manifest_sha256": "65d1a85a4b4fe6c45bdf611627c51ffd115076dd8a8e04deacbe7f77616f34e4",
+        "smoothed_pos_sha256": "d24ae3771d1a70316124d187be25f53d9bc8cb34804581223f3d4894e44cc573",
+        "trajectory_sha256": "d48603e539d47732a5c560853cab5bfefdadd0475f35f122f7bb996fbe33a9fb",
+        "motion_profile_sha256": "6d23f81cbdecbc6c8828b865602c5e92389cf8521af5acd15bd9787962efb501",
+        "imu_samples_used": 0,
+        "fallback_epochs": 2001
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "smoother_manifest_sha256": "bc5bd8d359c0e95e5dd6e02e08cb00045254b3ccdac42537f9ca7ce0431df022",
+        "smoothed_pos_sha256": "92e5e15f0742b0a00bc962b10a6bbfb0e2acac99913414639266248f46e933c9",
+        "trajectory_sha256": "06944debec146fddc0ec2e088a3b1ba1213237074707a175e8be0d36db9f8ad1",
+        "motion_profile_sha256": "eca8059c595f6a2272d6212803ceca37f626c323580149f530f84b9ae13fc2b2",
+        "imu_samples_used": 0,
+        "fallback_epochs": 1449
+      },
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+        "smoother_manifest_sha256": "bad40cf9a9c43aa501c45265a7a26a35e3ca41c152ac9abe5f2334376ca38864",
+        "smoothed_pos_sha256": "73f380d18928e2f5a4fb514ad5f64aeffa69d6f8094d54ff59686a68f6a0af31",
+        "trajectory_sha256": "d87e9e5500c887b13da642c2e307fe1857798951a918b0712c7618c20df16e3c",
+        "motion_profile_sha256": "bc14f0032d428d42c8bf4c1038d530cfc87e3a86d80565d3fd0882289b410c37",
+        "imu_samples_used": 166369,
+        "fallback_epochs": 1,
+        "dynamic_epochs": 424
+      }
+    }
+  },
+  "sealed_data_policy": {
+    "fresh_validation": "not opened because train gate failed",
+    "future_holdout": "not materialized or opened",
+    "no_post_holdout_tuning": true,
+    "external_mutation": false,
+    "production_default_changed": false
+  },
+  "limitations": [
+    "The older mi8 and Pixel 5 IMU files contained unsupported/incomplete elapsed-clock rows, so the candidate safely fell back to baseline process noise on every epoch.",
+    "The Pixel 7 Pro IMU signal was usable, but the route-disjoint aggregate and Pixel 5 route failed the predeclared horizontal/diagnostic gate.",
+    "No fresh validation or holdout result exists for this candidate."
+  ],
+  "verification": {
+    "unit_test": "4/4 evaluator tests passed; existing IMU and smoother test suites passed",
+    "release_build": "passed",
+    "full_ctest": "105/105 passed",
+    "git_diff_check": "passed after final Release/CTest verification"
+  }
+}

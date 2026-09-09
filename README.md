@@ -95,6 +95,32 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.121% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
+| Smartphone GNSS/IMU | Raw-only native FGO | 1.077 m H-route development score; not a leaderboard result |
+
+### Smartphone GNSS/IMU
+
+Native C++ FGO achieved **1.077 m** on the H-route development dataset
+(`(P50 + P95) / 2`, 3,139 matched predictions), accepted for this work.
+Inference uses raw GNSS, IMU and broadcast navigation only—no MAT files or
+precomputed positions. This is not a held-out or Kaggle leaderboard score;
+experimental weighting options remain default-off.
+See the [results and limitations](docs/use_cases/records/smartphone_r5_phase580_closeout_v1.md).
+
+### RTK runtime
+
+The Release RTK broadcast-state cache preserves the position stream and
+reduces measured solver wall time. The paired run used 120 valid epochs, 116
+fixed epochs, and zero wrong fixes in both variants; the complete evidence is
+in the [RTK cache record](docs/use_cases/records/rtk_ppc_tokyo_spp_cache_prepost_release.json).
+
+| RTK metric | Baseline | Optimized |
+|---|---:|---:|
+| Solver wall (s) | 1.4098465 | **1.3217735 (-6.246992%)** |
+| Epoch P50 (ms) | 11.728235 | **11.030901** |
+| Epoch P95 (ms) | 13.204182 | **12.3482985** |
+| Valid / fixed | 120 / 116 | 120 / 116 |
+| Wrong fixes | 0 | 0 |
+| Position output | byte-identical reference | byte-identical reference |
 
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 

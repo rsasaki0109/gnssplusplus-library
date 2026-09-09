@@ -1,0 +1,20 @@
+{
+  "phase": 424,
+  "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+  "raw": {
+    "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+    "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+    "bytes": 33837317
+  },
+  "candidates": [
+    {
+      "path": "output/smartphone-r5/phase423-lax-t-robust-diagnostic-v1/lax-t/opaque_solution_output.csv",
+      "sha256": "58ecf000b36df8df7bd884158115b7565d040c1ddde42536d576b9f1631bd4e3",
+      "bytes": 117334,
+      "rows": 1466,
+      "output_name": "frequency.csv"
+    }
+  ],
+  "output_directory": "output/smartphone-r5/phase424-lax-t-evaluation-projection-v1",
+  "policy": "exclude only first raw epoch from both outputs; no truth; no inference reuse; no retry"
+}

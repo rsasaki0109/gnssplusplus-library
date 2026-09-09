@@ -1,0 +1,86 @@
+{
+  "schema_version": "smartphone-r5-phase168-h-native-raw-p-no-doppler-1000-result.v1",
+  "phase": 168,
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "route": "MTV-H",
+  "manifest": "docs/use_cases/records/smartphone_r5_phase168_h_native_raw_p_no_doppler_1000_manifest_v1.json",
+  "authorization": "docs/use_cases/records/smartphone_r5_phase168_h_native_raw_p_no_doppler_1000_authorization_v1.json",
+  "implementation_commit": "a9c4927d63bf96ef828ab0465bd69720a329b345",
+  "binary_sha256": "d883c54c7f2aa9da88c9220dacb08a1b45447f1d2a9db93b56dd0efbc1412021",
+  "native_summary": {
+    "path": "output/smartphone-r5/phase168-h-native-raw-p-no-doppler-1000-v1/mtv-h/native_summary.json",
+    "sha256": "b6e3b81163399b71ce9714ddcdea54d20ede7bade6fc50a75e572a52c99096ae",
+    "schema_version": "smartphone-r5-phase167-raw-p-no-doppler-graph.v1"
+  },
+  "execution": {
+    "argv_pinned": true,
+    "native_invocations": 1,
+    "process_session": "35707",
+    "process_id": 1865778,
+    "return_code": 1,
+    "raw_gnss_reads": 1,
+    "nav_reads": 1,
+    "truth_reads": 0,
+    "mat_reads": 0,
+    "kaggle_reads": 0,
+    "solver_reruns": 0,
+    "fallback_or_repair": false
+  },
+  "raw_p_seed": {
+    "input_epochs": 3140,
+    "evaluated_epochs": 3140,
+    "accepted_epochs": 3140,
+    "rejected_epochs": 0,
+    "unassessed_epochs": 0,
+    "result_ok": true,
+    "failure_status": "accepted",
+    "failure_reason": "",
+    "failed_epoch_present": false,
+    "supported_c7_rows": 108722,
+    "unsupported_c7_rows_explicitly_excluded": 0,
+    "same_run_velocity_derivation_actual": true,
+    "same_run_velocity_derivation_source": "Phase149 raw-P same-run position gradient; Phase165 adapter consumed the in-memory finite velocity handoff"
+  },
+  "graph": {
+    "adapter_ok": true,
+    "graph_compatible": true,
+    "retained_epochs": 3140,
+    "pseudorange_factors": 108722,
+    "tdcp_factors": 69426,
+    "undifferenced_doppler_factors": 0,
+    "fgo_attempted": true,
+    "fgo_returned": false,
+    "main_imu_graph_entered": false,
+    "graph_result_available": false
+  },
+  "solver": {
+    "configured_max_iterations": 1000,
+    "effective_max_iterations": 1000,
+    "reported_converged": false,
+    "iterations": null,
+    "initial_cost": null,
+    "final_cost": null,
+    "costs_finite": null,
+    "termination_criterion_proven": false,
+    "termination_branch": null,
+    "termination_trace_complete": false,
+    "termination_sidecar_available": false,
+    "failure_reason": "Phase143 termination telemetry failed closed: native termination trace is incomplete",
+    "interpretation": "The native optimizer result was discarded at the Phase143 validation boundary before FGOResult was returned. Summary zero/default result fields therefore do not mean zero iterations, zero cost, or zero graph factors. The raw seed and retained graph aggregate was completed; solver terminal counts are unavailable."
+  },
+  "evidence_and_limits": {
+    "source_validation": "Phase143 validation requires termination_trace_complete=true; the Phase168 run failed closed at that check. Native trace token/counter mismatch is not proven by this summary.",
+    "observed_source_boundary": "src/algorithms/fgo_gtsam_internal.hpp validates the parsed trial count against optimizer inner iterations and a small-cost-change terminal retry; the exception path returns no FGOResult telemetry to the app serializer.",
+    "next_minimal_diagnostic": "Preserve the native termination telemetry at the exception boundary (including parsed trial count, inner-iteration counter, terminal branch, and trace-complete failure) and reproduce with synthetic telemetry before changing any completeness gate or rerunning raw data.",
+    "accuracy_evaluated": false,
+    "coordinates_or_truth_read": false,
+    "algorithmic_or_accuracy_go": false,
+    "coordinate_values_published": false
+  },
+  "interpretation": {
+    "structural_run_status": "raw-P seed and graph construction completed; dedicated 1000-iteration solver diagnostic failed closed before a returned result",
+    "failure_is_diagnostic": true,
+    "raw_run_rerun": false,
+    "phase162_and_phase166_artifacts_immutable": true
+  }
+}

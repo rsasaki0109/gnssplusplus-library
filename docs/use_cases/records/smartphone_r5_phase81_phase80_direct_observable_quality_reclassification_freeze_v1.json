@@ -1,0 +1,122 @@
+{
+  "schema_version": "smartphone-r5-phase81-phase80-direct-observable-quality-reclassification-freeze.v1",
+  "status": "frozen-before-phase81-sealed-artifact-read",
+  "phase": 81,
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "no_native_rerun": true,
+    "no_raw_input_read": true,
+    "no_accuracy_truth": true,
+    "no_mat": true,
+    "no_kaggle": true,
+    "candidate_csvs_are_current_artifacts_only": true,
+    "phase78_input_is_route_row_counts_only": true
+  },
+  "authority": {
+    "phase80_v2_failure": {
+      "path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/phase80_direct_observable_quality_structural_failure.json",
+      "sha256": "767ef5f7089e535063ec6cbe4e9dc3e6d061bdab62eb521f794c3fab0b171903",
+      "bytes": 600598,
+      "status": "fail-closed",
+      "legacy_evaluator": {
+        "path": "apps/commands/benchmarks/gnss_smartphone_phase80_direct_observable_quality_structural.py",
+        "sha256": "482355ce6f1c3b6a87aafbce73d4e3c3508c0151f2926d682814ecf509a277c3"
+      }
+    },
+    "phase78_result": {
+      "path": "output/smartphone-r5/phase78-phase77-structural-reclassification-v1/phase78_phase77_structural_reclassification_result.json",
+      "sha256": "d3d190d8da951afc0a62abcf82d87498a6b8ff1da68cb2154966ca387e357114",
+      "route_rows": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2158,
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3139,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 1465,
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1101
+      }
+    }
+  },
+  "candidate_artifact_pins": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "candidate_run1": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run1/submission.csv", "sha256": "13bff74921ef897bdadefc3d9966eee677420d8fde86a22754b242a01ffa8d1b", "bytes": 172694},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run1/summary.json", "sha256": "ff0e1be40bd12f5fabd9fa8e0571e61049e1e23c34c347618e35f9b68a5f5181", "bytes": 20179}
+      },
+      "candidate_run2": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run2/submission.csv", "sha256": "13bff74921ef897bdadefc3d9966eee677420d8fde86a22754b242a01ffa8d1b", "bytes": 172694},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run2/summary.json", "sha256": "ff0e1be40bd12f5fabd9fa8e0571e61049e1e23c34c347618e35f9b68a5f5181", "bytes": 20179}
+      }
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "candidate_run1": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate/run1/submission.csv", "sha256": "3fe235942886bb933c2635fd6c187b6956a9fd749b7a86f1d121634a8fd9db33", "bytes": 251174},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate/run1/summary.json", "sha256": "1541328091cc97225344dde5119d36abd7ebcd4afb345eabfff7aaaef814f81c", "bytes": 20238}
+      },
+      "candidate_run2": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate/run2/submission.csv", "sha256": "3fe235942886bb933c2635fd6c187b6956a9fd749b7a86f1d121634a8fd9db33", "bytes": 251174},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate/run2/summary.json", "sha256": "1541328091cc97225344dde5119d36abd7ebcd4afb345eabfff7aaaef814f81c", "bytes": 20238}
+      }
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "candidate_run1": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2022-04-01-18-22-us-ca-lax-t/pixel5/candidate/run1/submission.csv", "sha256": "8f662b490d3cac200ba8d8b3e0159b7155090ca93bc8889ae8926e3b7b0b65bf", "bytes": 117254},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2022-04-01-18-22-us-ca-lax-t/pixel5/candidate/run1/summary.json", "sha256": "599a399debe0800ed4fc794b3b39ffb31e384b233a3fe08338a60f4176b21a9a", "bytes": 20249}
+      },
+      "candidate_run2": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2022-04-01-18-22-us-ca-lax-t/pixel5/candidate/run2/submission.csv", "sha256": "8f662b490d3cac200ba8d8b3e0159b7155090ca93bc8889ae8926e3b7b0b65bf", "bytes": 117254},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2022-04-01-18-22-us-ca-lax-t/pixel5/candidate/run2/summary.json", "sha256": "599a399debe0800ed4fc794b3b39ffb31e384b233a3fe08338a60f4176b21a9a", "bytes": 20249}
+      }
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "candidate_run1": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate/run1/submission.csv", "sha256": "abff1459b96d9a16688bc4c5fe04c65fd466672f2210f7f5994a4711ea5c370e", "bytes": 88134},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate/run1/summary.json", "sha256": "4335cf9a5054f6756d617f85523a0911b8c9c7c57b55735b8696315508bcddd5", "bytes": 20197}
+      },
+      "candidate_run2": {
+        "submission": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate/run2/submission.csv", "sha256": "abff1459b96d9a16688bc4c5fe04c65fd466672f2210f7f5994a4711ea5c370e", "bytes": 88134},
+        "summary": {"path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate/run2/summary.json", "sha256": "4335cf9a5054f6756d617f85523a0911b8c9c7c57b55735b8696315508bcddd5", "bytes": 20197}
+      }
+    }
+  },
+  "fixed_reclassification_gates": {
+    "legacy_failure_is_immutable_diagnostic": true,
+    "legacy_only_false_gate_is_prediction_domain": true,
+    "candidate_artifact_hashes_exact": true,
+    "candidate_repeat_submission_and_summary_hash_identity": true,
+    "candidate_prediction_domain_coverage": 1.0,
+    "rows_plus_warmup_equals_summary_output_epochs": true,
+    "candidate_coordinates_finite_and_earth_valid": true,
+    "candidate_speed_finite_and_over_70_zero": true,
+    "candidate_converged": true,
+    "direct_quality_object_and_counts": true,
+    "direct_no_pdc": true,
+    "base_phase78_frequency_policy": true,
+    "miss_mask_contract": true,
+    "signal_bias_material_and_finite": true,
+    "tdcp_built_equals_inserted_and_finite": true,
+    "raw_utc_warmup_contract": true,
+    "truth_free": true,
+    "all_gates_anded": true
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss": 0,
+    "raw_device_imu": 0,
+    "broadcast_nav": 0,
+    "base_rinex": 0,
+    "precomputed_coordinates": 0,
+    "truth": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "kaggle": 0,
+    "token": 0,
+    "archive_reopens": 0
+  },
+  "next_stage": {
+    "accuracy_authorization": "only after this independent structural reclassification; no accuracy score is computed here",
+    "phase80_v2_failure_rewritten": false
+  }
+}

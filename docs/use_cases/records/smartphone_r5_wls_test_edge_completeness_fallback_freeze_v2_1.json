@@ -1,0 +1,123 @@
+{
+  "schema_version": "smartphone-r5-wls-test-edge-completeness-fallback-freeze.v2.1",
+  "status": "frozen-before-test-payload-access",
+  "freeze_variant": "edge_constant_hold_max_1000ms",
+  "supersedes": {
+    "v2_no_go_record": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_failure.json",
+    "v2_no_go_record_sha256": "117fcff02089664863d1fe1b3be8537f569e52ea09f4c4fe63f43a1a9c334056"
+  },
+  "parent_v1_freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_wls_test_completeness_fallback_freeze_v1.json",
+    "record_sha256": "ab8a86eb2d211a58289aaedaf6adc329ba25abedc8993f9da14b3bd128ab0bcd",
+    "manifest": "docs/use_cases/records/smartphone_r5_wls_test_completeness_fallback_freeze_v1_manifest.json",
+    "manifest_sha256": "a8f29bb88d8b96dfe2935a7e69863d15c21d2afbc8809da0e134bf8950d18ab9"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+    "sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "route_phone_count": 40
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "release_binaries": {
+    "build/apps/gnss_spp": {
+      "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    },
+    "build/apps/gnss_solve": {
+      "sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+    }
+  },
+  "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": {
+      "sha256": "f8a1da02265f73e4c50b526f60b2da90d1461c8d7891871b57818a6b9ca604e2"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_test_batch.py": {
+      "sha256": "ae6ecfd832f8e7ba76002178e3d366befe7c2940895832263bc720ad5984b909"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_wls_test_edge_completeness_fallback_eval.py": {
+      "sha256": "9d1dd33f876c6711f73d29a7dc66b4d576310546bffd08213348901bad719917"
+    }
+  },
+  "truth_free_evaluation": {
+    "path": "output/smartphone-r5/wls-test-edge-completeness-fallback-v2/evaluation/evaluation.json",
+    "sha256": "e633c665dc80b287a32fb98af356b0bd7c60913fd1b45e96f313e694d318ef0e",
+    "truth_free_manifest": "output/smartphone-r5/wls-test-edge-completeness-fallback-v2/evaluation/truth_free_artifacts_manifest.json",
+    "truth_free_manifest_sha256": "9644a4e684c37cb05f12669daec9614c5ddbb82bb4313bbeb683969d62fe3797"
+  },
+  "test_edge_completeness_fallback_contract": {
+    "authorized": true,
+    "truth_free_phase": true,
+    "no_post_test_tuning": true,
+    "fallback_policy": {
+      "base_contract": {
+        "allow_out_of_range_wls_epochs_as_omission": true,
+        "out_of_range_policy": "finite out-of-earth-range epoch omission only",
+        "partial_coordinate_triplet_policy": "fail-closed",
+        "nonfinite_coordinate_policy": "fail-closed",
+        "inconsistent_coordinate_policy": "fail-closed",
+        "native_fallback": "nearest native Galileo E1/Hatch30 stable position",
+        "native_tolerance_ms": 10,
+        "tie_rule": "equal-distance native timestamps choose earlier timestamp",
+        "interpolation": "ECEF linear interpolation only between valid selected-source positions",
+        "interpolation_max_gap_ms": 10000,
+        "edge_extrapolation": "forbidden",
+        "long_gap_policy": "fail-closed"
+      },
+      "edge_hold": "constant nearest finite selected-source ECEF; no velocity extrapolation",
+      "edge_scope": "leading or trailing unresolved target keys only",
+      "edge_max_gap_ms": 1000,
+      "edge_gap_reference": "nearest valid selected-source timestamp",
+      "edge_continuity": "target-to-source epochs must share HardwareClockDiscontinuityCount segment; clock transitions fail-closed",
+      "edge_segment_identity": "HardwareClockDiscontinuityCount constant across the edge span",
+      "edge_source": "finite valid selected-source WLS ECEF",
+      "edge_no_valid_source": "fail-closed",
+      "edge_long_gap": "fail-closed when nearest valid source is more than 1 s away",
+      "velocity_extrapolation": "forbidden"
+    }
+  },
+  "development_evidence": {
+    "predeclared_one_second_mask_gate": {
+      "source_evaluation": "output/smartphone-r5/wls-test-edge-completeness-fallback-v2/evaluation/evaluation.json",
+      "all_three_routes_all_signoff_pass": true,
+      "scenario_names": [
+        "leading_mask_1s",
+        "trailing_mask_1s"
+      ],
+      "route_count": 3,
+      "truth_free_artifacts_hashed_before_truth": true,
+      "development_truth_open_count": 3
+    },
+    "ten_second_candidate_no_go": {
+      "record": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_v2_failure.json",
+      "h_p50_failure": "sm-a505g leading_mask_10s regression +0.01863731305262228 m > +0.01 m"
+    }
+  },
+  "test_execution_contract": {
+    "dataset_allowlist_source": "sealed central inventory only",
+    "target_failure_scope": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u only",
+    "resume_source": "output/smartphone-r5/wls-test-batch-completeness-fallback-v1/test_batch_derived_run_manifest.json",
+    "resume_source_sha256": "be7676cea97b7839d62954b7f9c77afdd83eee46953fb387e2037f689a6fcff9",
+    "resume_completed_route_count": 39,
+    "required_byte_identity_for_resumed_routes": true,
+    "edge_hold_max_gap_ms": 1000,
+    "truth_free_phase": true,
+    "truth_access_forbidden": true,
+    "no_post_test_tuning": true,
+    "output_contract": "phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees exact fields; self-derived key set; atomic publish",
+    "official_sample_verified": false,
+    "external_kaggle_submission": false
+  },
+  "production_policy": {
+    "production_rtk_spp_default_changed": false,
+    "development_only": true,
+    "official_sample_required_before_submission": true
+  }
+}

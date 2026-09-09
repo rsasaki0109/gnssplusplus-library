@@ -1,0 +1,81 @@
+{
+  "schema_version": "smartphone-r5-phase141-telemetry-schema-pre-raw-accounting.v1",
+  "phase": 141,
+  "status": "launch-free-pre-raw-sealed",
+  "execution_label": "Luna Max",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_manifest_v1.json",
+    "commit": "b629ef164f35a7783f2acc1902921d6e76136c70",
+    "sha256": "7030d95825c6f499b25d839ced90b7fc08ac998ef2c414023266731051027a14"
+  },
+  "audit": {
+    "commit": "de71c39",
+    "sha256": "a040f2076da254f2f11e8041edbc3c23112f65bdb12b8f0665e8de927212f092"
+  },
+  "freeze": {
+    "commit": "d105e0a",
+    "sha256": "c6a8b18f52e1469ae746e1b0b3295fea067d58fa41e1b43e1cfd2797d6823793"
+  },
+  "implementation": {
+    "base_commit": "0cbc988",
+    "schema_completion_commit": "6c752c2264c7444da6eb4833ddbbb28ee43ce62a",
+    "binary_sha256": "aa2180cfe4a36018b98307c3bdf87bfabd229d32a1dacaaada817c257a9280a6"
+  },
+  "runner": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase141_telemetry_schema_structural.py",
+    "sha256": "d99174f8d9a5fa4b93f8ac2fd1335cf4e357db6a50fefcc357abe788c16b33de"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase141_telemetry_schema.py",
+    "sha256": "07cee77e45b5cc6a7496a967ea99b730593e7498817372c29e4c4b1a0693aa22"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "raw_or_solver_execution": {
+    "authorized": false,
+    "native_invocations": 0,
+    "raw_materialization": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "wrapper_payload_reads": 0
+  },
+  "validation": {
+    "runner_status": "launch-free-qualified",
+    "synthetic_summary_rows": 0,
+    "native_summary_reads": 0,
+    "solution_content_interpreted": false,
+    "wrapper_inference": false,
+    "native_summary_overwrite": false,
+    "historical_phase139_result_changed": false
+  },
+  "authorization_boundary": {
+    "new_independent_authorization_required": true,
+    "required_before_any_raw_or_solver": true,
+    "truth_authorization_separate": true,
+    "solution_publication": false
+  },
+  "prohibited": [
+    "raw GNSS/IMU/navigation/base payload reads",
+    "native solver execution",
+    "truth/MAT/PDC/precomputed-coordinate reads",
+    "accuracy evaluation",
+    "Kaggle access",
+    "rerun/fallback/repair/sweep",
+    "solution coordinate serialization"
+  ]
+}

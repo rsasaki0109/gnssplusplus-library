@@ -1,0 +1,215 @@
+{
+  "schema_version": "smartphone-r5-phase141-telemetry-schema-raw-authorization.v1",
+  "phase": 141,
+  "execution_label": "Luna Max",
+  "status": "independent-one-shot-structural-raw-authorized",
+  "authorization": {
+    "implementation": true,
+    "contract": true,
+    "raw_materialization": true,
+    "raw_structural_execution": true,
+    "solver": true,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "sweep": false
+  },
+  "authorization_scope": {
+    "candidate_id": "phase141-native-authoritative-telemetry-schema-v1",
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0,
+    "solver_invocation_policy": "one only after that route raw hash preflight passes",
+    "solution_policy": "opaque SHA-256/byte/newline metadata only; no coordinate interpretation"
+  },
+  "pins": {
+    "phase141_audit_commit": "de71c394cafc955fe5b2296a2d91afb382e80c50",
+    "phase141_freeze_commit": "d105e0a826c967ec6ccb978a2860d3a1557f54ff",
+    "phase141_implementation_base_commit": "0cbc988006a9a52817af74fd8add141914563119",
+    "phase141_equation_fix_commit": "cbb1f4e48c439270264ec18904b0ef23ce8b8111",
+    "phase141_authority_fix_commit": "6c752c2264c7444da6eb4833ddbbb28ee43ce62a",
+    "phase141_final_runner_manifest_commit": "b629ef164f35a7783f2acc1902921d6e76136c70",
+    "phase141_pre_raw_commit": "6d55e2b9a963e9b2b598ac77d8861aeb5b7e0bb0",
+    "phase141_audit_sha256": "a040f2076da254f2f11e8041edbc3c23112f65bdb12b8f0665e8de927212f092",
+    "phase141_freeze_sha256": "c6a8b18f52e1469ae746e1b0b3295fea067d58fa41e1b43e1cfd2797d6823793",
+    "phase141_manifest_sha256": "7030d95825c6f499b25d839ced90b7fc08ac998ef2c414023266731051027a14",
+    "phase141_pre_raw_sha256": "e5a4583ffced6d91ddea352fb2f234fdfaf8acbb0c76f1ce576ea2678a2d9eb5",
+    "phase141_focused_tests_sha256": "07cee77e45b5cc6a7496a967ea99b730593e7498817372c29e4c4b1a0693aa22",
+    "focused_tests_sha256": "07cee77e45b5cc6a7496a967ea99b730593e7498817372c29e4c4b1a0693aa22",
+    "target_binary_sha256": "aa2180cfe4a36018b98307c3bdf87bfabd229d32a1dacaaada817c257a9280a6",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase141_telemetry_schema_authorized_execute.py",
+    "authorized_runner_sha256": "4502adc1400bfcad3637a6ff45bd7785049501b591bb36ee95751374fb21dbec",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base"
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "912b8f6cfca175bf5a91ab63d1d4803f33a1acbc89438c785b42fec469957181",
+    "include/libgnss++/algorithms/fgo.hpp": "da16e074a70bd5a813146ff0a32ee3b8706856807f828af2b1806b474de0c85f",
+    "src/algorithms/fgo_gtsam_backend.cpp": "fdf1e9b19300c52edcd50f363e96f3b9df5515c82b8a1e23a1718cc978626a23",
+    "build/apps/gnss_fgo_imu_no_base": "aa2180cfe4a36018b98307c3bdf87bfabd229d32a1dacaaada817c257a9280a6"
+  },
+  "recipe": {
+    "phase135_official_affine_measurement_family": true,
+    "phase138_affine_tdcp_anchor_range_constant": true,
+    "phase118_official_tdcp_huber_k": true,
+    "phase141_telemetry_schema": true,
+    "phase117_dynamic_tdcp_sigma": false,
+    "phase120_official_tdcp_resl_atmosphere_cancellation": false,
+    "phase126_raw_base_source_complete": false,
+    "phase127_glonass_channel_provenance": false,
+    "phase128_glonass_provenance_parser_admission": false,
+    "phase129_glonass_local_miss_mask": false,
+    "phase130_shared_ledger_key_local_support": false,
+    "phase131_canonical_correction_band_key": false,
+    "phase132_typed_canonical_preflight": false,
+    "phase133_runner_native_selector_boundary": false,
+    "phase134_native_summary_bridge": false,
+    "phase107_raw_base_compensation": true,
+    "phase107_raw_base_source_miss_mask": true,
+    "phase107_preserve_additional_frequency_bands": false,
+    "phase118_fixed_tdcp_sigma_m": 0.03,
+    "phase118_highway_huber_k": 0.5,
+    "main_linear_solver": "MULTIFRONTAL_QR",
+    "main_elimination": "EliminateQR",
+    "c7_dimension": 7,
+    "c_units": "metres",
+    "d_units": "metres/second",
+    "pixel5_offset_applications": 1,
+    "native_pdc_imu_tdcp_no_bridge": true,
+    "pdc_input": false,
+    "truth_input": false,
+    "mat_input": false,
+    "precomputed_coordinate_input": false,
+    "native_summary_authority": "native phase141_telemetry object only",
+    "solution_rows_interpreted": false
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "bytes": 10708536,
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "interval_s": 1.0,
+        "moving_mean_samples": 151,
+        "source": "raw base RINEX; station coordinate from header only",
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "output_directory": "output/smartphone-r5/phase141-telemetry-schema-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5"
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "bytes": 719969,
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "interval_s": 15.0,
+        "moving_mean_samples": 11,
+        "source": "raw base RINEX; station coordinate from header only",
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "output_directory": "output/smartphone-r5/phase141-telemetry-schema-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5"
+    }
+  ],
+  "pre_authorization_read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "forbidden": {
+    "truth": true,
+    "MAT": true,
+    "PDC": true,
+    "precomputed_coordinates": true,
+    "accuracy": true,
+    "Kaggle": true,
+    "solution_publication": true
+  },
+  "post_authorization_policy": {
+    "raw_hash_read_per_route": 1,
+    "native_solver_invocations_per_route": 1,
+    "route_order": "MTV-A then LAX-T",
+    "copy_or_transform": false,
+    "truth_reads": 0,
+    "solution_coordinate_interpretation": false,
+    "failure_policy": "fail closed; no rerun/fallback/repair/sweep"
+  }
+}

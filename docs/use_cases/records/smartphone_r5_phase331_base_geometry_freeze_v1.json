@@ -1,0 +1,21 @@
+{
+  "phase": 331,
+  "implementation_head": "8ce9f86cf8bb50e7fd47cba3ef02f991d26498be",
+  "source": "scripts/native_base_residual_geometry_audit.cpp",
+  "binary": "build/native_base_residual_geometry_audit",
+  "base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "expected_epochs": 3500,
+  "configuration": "dense source base residual; raw header XYZ; zero antenna; 151 moving mean; GPS L1 only; healthy and elevation >=15deg; unweighted QR rank4 fit [-LOS,1]",
+  "output": "aggregate apparent displacement norms/clock magnitude/residual RMS only; no coordinate payload",
+  "interpretation": "stationary-base consistency diagnostic, not a station-coordinate calibration; orbit/atmosphere/multipath biases can project onto displacement",
+  "raw_passes_per_input": 1,
+  "hash_scans_per_input": 1,
+  "truth_reads": 0,
+  "phone_reads": 0,
+  "inference_feedback": false,
+  "source_sha256": "1dee082347a2414e005857b4a060d1d5294a211002cc3c24486bda15de80c5d9",
+  "binary_sha256": "b05cc54707da0dcb4274ebcbe4fa52405d2db390c3ed1045e95e0dcbc28380c8"
+}

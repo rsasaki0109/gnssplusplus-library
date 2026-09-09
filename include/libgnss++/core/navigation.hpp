@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include <cstdint>
 #include "types.hpp"
 
 namespace libgnss {
@@ -113,6 +114,16 @@ struct Ephemeris {
     Vector3d glonass_velocity = Vector3d::Zero();
     Vector3d glonass_acceleration = Vector3d::Zero();
     int glonass_frequency_channel = 0;
+    // A zero FCN is a valid GLONASS channel.  Keep an explicit source
+    // presence bit so strict provenance adapters do not confuse an omitted
+    // RINEX/RTCM field with a genuine channel zero.
+    bool glonass_frequency_channel_present = false;
+    // Phase128 parser provenance.  This is metadata only and defaults to
+    // valid for programmatically constructed/non-RINEX ephemerides so the
+    // legacy path is unchanged.  The RINEX reader sets it false when the
+    // canonical fifteen-field GLONASS record cannot be admitted.
+    bool glonass_canonical_geph_data_valid = true;
+    int glonass_canonical_geph_reject_reason = 0;
     int glonass_age = 0;
     
     // Status and accuracy
@@ -218,6 +229,18 @@ public:
     TroposphereModel troposphere_model;
 
     NavigationData();
+
+    /**
+     * @brief Monotonic revision for supported navigation-data mutations.
+     *
+     * Consumers that retain a navigation-dependent result for a bounded
+     * operation (for example, one synchronous RTK epoch) can use this value
+     * together with object identity to fail closed when the navigation
+     * container has been replaced or updated.  Direct writes to the public
+     * containers are not revisioned; such callers should use addEphemeris(),
+     * clear(), or otherwise avoid retaining dependent results.
+     */
+    std::uint64_t getRevision() const { return revision_; }
     /**
      * @brief Add ephemeris data
      */
@@ -380,6 +403,7 @@ private:
 
     mutable std::map<SatelliteStateCacheKey, SatelliteStateCacheValue>
         satellite_state_cache_;
+    std::uint64_t revision_ = 0;
 };
 
 /**

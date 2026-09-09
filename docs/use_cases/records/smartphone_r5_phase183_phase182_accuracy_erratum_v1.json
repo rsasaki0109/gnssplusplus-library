@@ -1,0 +1,38 @@
+{
+  "schema_version": "smartphone-r5-phase183-phase182-accuracy-erratum.v1",
+  "phase": 183,
+  "execution_label": "Luna Max",
+  "status": "metadata-clarification-no-recompute",
+  "original_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase183_phase182_accuracy_result_v1.json",
+    "commit": "3449e8850a7f8b2dbd6f87b9a3298ac4e7fd3e4d",
+    "sha256": "b6dc71f2591e036cad9242834f707657c152ba7c99cc034f4f3f66221cd79898"
+  },
+  "clarification": {
+    "inherited_reference_contract": "The exact Phase142/Phase82/Phase76 parser, join, Haversine, percentile, and per-route scalar semantics were reused unchanged.",
+    "inherited_macro_wording_not_applied": "The inherited metric_contract macro text names the historical MTV-A then LAX-T cohort; Phase183 evaluated one H route and did not apply that cross-route macro.",
+    "inherited_strict_gate_field_names_not_applied": "The inherited candidate_macro_score_m label is retained as reference schema wording only; Phase183 compared the single H route scalar directly against 0.782 m.",
+    "actual_phase183_aggregation": "single H-route scalar = (P50 + P95) / 2",
+    "actual_phase183_scalar_m": 1.2874762859947766,
+    "actual_phase183_comparator": "H route scalar < 0.782",
+    "actual_phase183_gate_passed": false,
+    "cross_cohort_baseline_claim": false,
+    "historical_phase118_and_phase142_values_comparable_to_h": false
+  },
+  "unchanged_evidence": {
+    "p50_m": 0.7343719019948375,
+    "p95_m": 1.8405806699947156,
+    "matched_rows": 3139,
+    "prediction_rows": 3139,
+    "truth_rows": 3139,
+    "missing_rows": 0,
+    "numeric_results_recomputed": false,
+    "frozen_scorer_modified": false,
+    "candidate_payload_reopened": false,
+    "truth_payload_reopened": false,
+    "additional_truth_reads": 0,
+    "additional_candidate_reads": 0,
+    "additional_accuracy_calculations": 0
+  },
+  "decision": "Phase183 remains development/train-route accuracy evidence only; no heldout, leaderboard, or submission claim is authorized."
+}

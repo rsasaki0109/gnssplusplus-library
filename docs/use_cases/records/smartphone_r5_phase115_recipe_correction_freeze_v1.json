@@ -1,0 +1,120 @@
+{
+  "schema_version": "smartphone-r5-phase115-recipe-correction-freeze.v1",
+  "phase": 115,
+  "execution_label": "Luna Max",
+  "status": "frozen-one-selector-recipe-correction-before-execution",
+  "purpose": "Admit exactly one source-backed argv correction for the Phase114 direct-seed structural run; this freeze is not raw, solver, truth, accuracy, or solution authorization.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase115_recipe_correction_audit_v1.md",
+    "commit": "c43ec28",
+    "sha256": "7a5593e9b1ccdba996c1cafdc550e00eb15a666b6604b0d99fa0d04b9a859c81"
+  },
+  "sealed_evidence": {
+    "phase110_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase110_additional_band_noop_decision_audit_v1.md",
+      "commit": "0b1ab4b0df811a6f419c08f633232d60aa9cf417",
+      "sha256": "2b134217568797aeeaee85f1d2836202702b89222c4950f133dbde3c6a0fbb05"
+    },
+    "phase110_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase110_additional_band_noop_decision_freeze_v1.json",
+      "commit": "52d09034175d039b6acc0bace31c822061d4c947",
+      "sha256": "91064f377228a506951599c946cbaaf6acf5fb7c5feb33a27dad8a6ba0172033"
+    },
+    "phase114_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase114_direct_seed_main_fgo_structural_result_v1.json",
+      "commit": "5335a2bdb7c6e7e88d39f249b33064da966d280c",
+      "sha256": "fc2674dde4c7641f393dd7ad1fb7f06660e5bdedc4c008b667ef1448bf01275b"
+    },
+    "phase114_implementation": {
+      "commit": "44771ef6b52eddb0df6193b8b9d9f1b52b7fcea5",
+      "app_sha256": "301265974631f20781ff4460e1ede4032165e11c79ef59d0510a273aebb1a59e",
+      "binary_sha256": "96374063aa91aea6ea72fd1402b6c4895cb5f004a506e57e10c620234fa0bd69"
+    },
+    "phase114_authorization": {
+      "commit": "272b9a8d9bc204145695f7da05a396643c0b3d87",
+      "sha256": "5753b2cdaa01e591c7f7ba69ba8d039f52044402b97211f80b48ad6b6aa3a0a4"
+    }
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase115-direct-seed-phase107-base-recipe-v1",
+    "source_backed": true,
+    "reason": "Phase114 direct selector forbids GNSS-first while generic parser rejects miss-mask plus additional-band without GNSS-first; Phase110 proves additional-band is a solution no-op.",
+    "only_change": "remove --native-base-pseudorange-preserve-additional-frequency-bands from argv",
+    "algorithm_or_binary_change": false,
+    "graph_factor_value_change": false,
+    "c7_d_qr_offset_change": false,
+    "equation_unit_sigma_filter_lm_change": false,
+    "legacy_default_changed": false,
+    "gnss_first_stage_changed": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false
+  },
+  "candidate": {
+    "id": "phase115-direct-seed-phase107-base-recipe-v1",
+    "opt_in": true,
+    "default_off": true,
+    "direct_selector": "--native-direct-wls-ephemeral-c7d-main-seed",
+    "gnss_first_stage": "bypassed by design",
+    "base_selectors_exact": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "removed_selector": "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "phase99_qr": "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+    "c7_selector": "--native-source-clock-c0d-epoch-vector-parity",
+    "final_offset_selector": "--native-upstream-position-offset",
+    "same_run_ephemeral_c7_d_velocity": true,
+    "raw_base_existing_path": "Phase107 native base correction and exact-stream miss-mask",
+    "raw_base_correction_exactly_once": true,
+    "pixel5_offset_exactly_once": true,
+    "no_fallback": true,
+    "no_zero_fill_or_velocity_synthesis": true,
+    "runs_per_route": 1
+  },
+  "exact_route_matrix": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "order": "MTV-A then LAX-T, sequentially",
+    "route_count": 2,
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "native_invocations_planned": 2,
+    "truth_reads_planned": 0,
+    "accuracy_calculations_planned": 0,
+    "solution_rows_authorized": false
+  },
+  "structural_gates": {
+    "direct_seed_full_finite_exact_position_c7_d_velocity_keys": true,
+    "main_qr_accepted_iteration_strict_cost_decrease": true,
+    "main_meter_c0d_units_sigma_factor": true,
+    "phase107_base_correction_active_exactly_once": true,
+    "final_pixel5_offset_exactly_once": true,
+    "finite_earth_valid_expected_output_coverage": true,
+    "gnss_first_bypass_is_exact_and_no_fallback": true
+  },
+  "input_policy": {
+    "allowed": ["raw phone device_gnss.csv", "raw phone device_imu.csv", "broadcast brdc.nav", "sealed raw base RINEX base.obs"],
+    "content_copy_or_transform": false,
+    "truth_mat_pdc_precomputed_phone_coordinate_base_coordinate_input_kaggle": false,
+    "base_coordinate_source": "raw base RINEX header APPROX POSITION XYZ in existing native reader",
+    "solution": "withheld and unread"
+  },
+  "read_accounting_at_freeze": {
+    "raw_phone_payload_reads": 0,
+    "raw_base_payload_or_header_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_or_fallbacks": 0
+  }
+}

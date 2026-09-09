@@ -1,0 +1,166 @@
+{
+  "schema_version": "smartphone-r5-phase88-source-clock-c0d-active-solve-diagnostic-execution-manifest.v1",
+  "phase": 88,
+  "status": "sealed-before-raw-execution",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Pin the implemented single Phase88 C0/D active-solve diagnostic and its four-route raw-only matrix without authorizing raw execution.",
+  "implementation": {
+    "commit": "bd14626",
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase88_source_clock_c0d_active_solve_observability_diagnostic_freeze_v1.json",
+      "sha256": "e03cc2327557fe9f5c5189b7a315dd02c50edec9bf4e38284e1a8c6c3271059e"
+    },
+    "candidate_id": "phase88_source_clock_c0d_active_solve_observability_conditioning_diagnostic",
+    "new_cli_flag": "--native-source-clock-c0d-active-solve-diagnostic",
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "d20167300615cdba5fa1b81ee5fb6efdea7c97b42bc5ca340fc4b7abbaf5f8d9"
+    },
+    "gtsam_runtime": {
+      "path": "/home/sasaki/.local/lib/libgtsam.so.4.3a2",
+      "sha256": "0bb5858e396250a1afecc990c766bde5255fecc38b22b22bd9964775dc9e47a3"
+    }
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "a8511d42148dbff1d3833efd7ca3ff95aa575e955ea9da71e5db28b4aa59a6d3",
+    "include/libgnss++/algorithms/fgo.hpp": "438e0ed049c9c43c68af4b9b9b79e7b08fa18f38307f758821deff79be81ca52",
+    "include/libgnss++/algorithms/fgo_config.hpp": "aaba7db7b0d3d9917ae0f90168547e1178efca37c21e3d73827c985648a2c25d",
+    "src/algorithms/fgo.cpp": "dbf2e9e08cb160f5f650d2fc78f2e99771878266d356d2d7147c6ce1afa091f5",
+    "src/algorithms/fgo_gtsam_backend.cpp": "3935f1efa9a7fda4700188a3c57c0d466fc808f61c13d467e1954fe385990f7d",
+    "src/algorithms/fgo_gtsam_internal.hpp": "7221aaa53360a81aeea3f44ee293e7e1b08d30d368ac18cd7b839fbeb34c6beb",
+    "tests/test_fgo_gtsam_backend.cpp": "c903e4bd0f6870fbe6cf566d952c94d473e54f682d5ce9f389bdccf7ab3cb0f4"
+  },
+  "evaluator_pin": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase86_phase85_source_clock_c0d_reclassification.py",
+    "sha256": "18192466e80b3a17c5f93808da584535db8dac5959d59563469fdebfdcf017c1",
+    "role": "active-solve finite-cost, iteration, strict-decrease, and sealed-artifact gate evaluator",
+    "accuracy_scoring": false
+  },
+  "candidate_contract": {
+    "candidate_count": 1,
+    "diagnostic_only": true,
+    "raw_only": true,
+    "source_aligned": true,
+    "required_flags": [
+      "--android-gnss <per-route raw Android GNSS input>",
+      "--android-imu <per-route raw Android IMU input>",
+      "--nav <per-route broadcast navigation input>",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-gnss-first-velocity-only-handoff",
+      "--native-source-clock-c0d-active-solve-diagnostic"
+    ],
+    "forbidden_flags": [
+      "--native-pdc-state-bridge",
+      "--native-direct-doppler-wls-handoff",
+      "--native-base-rinex",
+      "--native-upstream-quality"
+    ],
+    "coordinate_contract": {
+      "pdc_state_bridge": false,
+      "gnss_first_position_clock_copy": false,
+      "velocity_only_handoff": true,
+      "precomputed_coordinate_input": false,
+      "coordinate_output_used_for_selection": false
+    },
+    "preserved_source_contract": {
+      "c0d_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "c0d_jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "c0d_sigma_m": 0.1,
+      "optimizer_algorithm_changed": false,
+      "measurement_factors_changed": false,
+      "source_sigma_tuning": false,
+      "meter_state_parity": false
+    },
+    "required_diagnostic_fields": [
+      "active_solve_attempted",
+      "active_solve_initial_cost",
+      "active_solve_final_cost",
+      "accepted_outer_iterations",
+      "total_inner_lambda_attempts",
+      "initial_lambda",
+      "maximum_lambda",
+      "final_lambda",
+      "indeterminate_linear_solve_count",
+      "unsuccessful_model_step_count",
+      "small_cost_change_stop_count",
+      "maximum_lambda_stop_count",
+      "active_solve_finite_costs",
+      "termination_trace_complete",
+      "termination_branch_reason",
+      "max_whitened_clock_column_norm",
+      "max_whitened_drift_column_norm",
+      "conditioning_proxy"
+    ],
+    "required_gates": {
+      "active_solve_attempted": true,
+      "finite_initial_and_final_cost": true,
+      "graph_iterations_at_least_one": true,
+      "final_cost_strictly_less_than_initial_cost": true,
+      "termination_branch_reason_present": true,
+      "termination_trace_complete": true,
+      "c0d_equation_jacobian_units_sigma_unchanged": true,
+      "no_bridge_or_coordinate_copy": true,
+      "raw_only_provenance": true,
+      "accuracy_not_scored": true
+    }
+  },
+  "allowed_route_matrix": {
+    "route_count": 4,
+    "repetitions_per_route": 1,
+    "route_selection": false,
+    "routes": [
+      {
+        "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "allowed": true,
+        "diagnostic_only": true
+      },
+      {
+        "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "allowed": true,
+        "diagnostic_only": true
+      },
+      {
+        "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "allowed": true,
+        "diagnostic_only": true
+      },
+      {
+        "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+        "allowed": true,
+        "diagnostic_only": true
+      }
+    ]
+  },
+  "execution_authorization": {
+    "before_raw_execution": true,
+    "raw_execution_authorized": false,
+    "native_route_rerun_performed": false,
+    "release_required": "parent approval and a separately sealed post-execution result record",
+    "stop_now_before_raw_execution": true
+  },
+  "read_accounting_at_manifest_creation": {
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "focused_validation_before_manifest": {
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:build/lib build/tests/run_tests --gtest_filter=FGOGtsamSourceClockC0DFactorTest.*:FGOGtsamActiveSolveDiagnosticTest.*",
+    "result": "5 passed",
+    "phase86_evaluator_tests": "1 passed",
+    "raw_execution": false
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-only-cleanup-manifest.v1",
+  "status": "sealed",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_only_cleanup_v1.json",
+    "sha256": "3222a631bb2e15e609bb017d7080ea50d5b8c96e86e728958069b347a0391eb8"
+  },
+  "native_contract_sources": {
+    "apps/native/gnss_smartphone_fgo.cpp": "74eeb603c7a826877ce94ff37f9222a4010681458f78e085512f511275661c80",
+    "apps/native/gnss_pos_vel_pdc.cpp": "d3485a28b5d0a4412d48c1c419220f078449ae8c11cee462356b80d918332da5",
+    "apps/commands/benchmarks/gnss_smartphone_native_only.py": "c649c4d1b40b61a26a88cb38c49e7f5671a714ad33fff4b26d4c96c703790561",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "09e7ab071ad6d1bb2f6a9b146cfed69e19f7739c25b308521fb099a57c38386d",
+    "tests/test_smartphone_native_gnss_pdc_bridge.py": "561c0d8353f4649a8fa6164dd355a5a811c7efd516bd7a648f74e75a0f6c1099",
+    "tests/test_android_raw_gnss.cpp": "577463653e6a48a5d721ff6253dd9ee946f4652a087f715fa867a456fcec920c",
+    "tests/CMakeLists.txt": "514acf8b1e4c773f6bc1f8b616807bb0b27ddf42a890158b6dd06ba39ed4dde2"
+  },
+  "replacement_gap_matrix": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json",
+    "sha256": "541535e616bb3b995acb3c772899beb876093c9a454b2a5ecde43382898ccc04"
+  },
+  "mat_policy": {
+    "path_guard_before_open": true,
+    "native_fgo_binary_test": "passed",
+    "native_pdc_binary_test": "passed",
+    "python_preflight_test": "passed",
+    "no_mat_payload_read": true
+  }
+}

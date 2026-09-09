@@ -1,0 +1,49 @@
+{
+  "schema_version": "smartphone-r5-phase63-settings-integrity-recovery-manifest.v1",
+  "status": "sealed-before-phase63-base-preflight",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_freeze_v1.json",
+  "freeze_record_sha256": "41f0218caf540ff4fb81efcc78f048de62e3a3953f1e16a8a04a838303c40bca",
+  "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_phase63_settings_integrity_recovery.py",
+  "evaluator_source_sha256": "9c777fab72c64350cdec02c7563db4703a3a9da7892b8a74788ecffab9916d5b",
+  "reused_evaluator": "apps/commands/benchmarks/gnss_smartphone_phase62_raw_base_preflight.py",
+  "reused_evaluator_sha256": "a392ddeb438399817b13345b6c4b69a30943b4f9d9111536715752f77621f4b5",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "settings_member": "dataset_2023/settings_train.csv",
+    "settings_sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39"
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "base_members": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"Base1": "SLAC", "RINEX": "V2", "member": "dataset_2023/train/2021-03-16-18-59-us-ca-mtv-a/SLAC_rnx2.obs", "bytes": 10708536, "compressed_bytes": 2311786, "crc32_hex": "f85411e1"},
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"Base1": "P221", "RINEX": "V2", "member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/P221_rnx2.obs", "bytes": 11854125, "compressed_bytes": 2624020, "crc32_hex": "f0a0cbcd"},
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {"Base1": "LBCH", "RINEX": "V2", "member": "dataset_2023/train/2022-04-01-18-22-us-ca-lax-t/LBCH_rnx2.obs", "bytes": 719969, "compressed_bytes": 167122, "crc32_hex": "6016f9bb"},
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"Base1": "P221", "RINEX": "V2", "member": "dataset_2023/train/2023-03-08-21-34-us-ca-mtv-u/P221_rnx2.obs", "bytes": 5950275, "compressed_bytes": 1374018, "crc32_hex": "087ea99d"}
+  },
+  "read_contract": {
+    "archive_open_count": 1,
+    "settings_member_read_count": 1,
+    "base_member_read_count_per_route": 1,
+    "forbidden_member_read_count": 0,
+    "device_gnss_read_count": 0,
+    "device_imu_read_count": 0,
+    "truth_read_count": 0,
+    "mat_read_count": 0,
+    "nav_read_count": 0,
+    "solver_invocation_count": 0,
+    "base_position_csv_read_count": 0,
+    "base_offset_csv_read_count": 0,
+    "archive_reopen_count": 0
+  },
+  "pre_read_assertions": {
+    "phase63_archive_opened": false,
+    "phase63_base_member_opened": false,
+    "phase62_result_changed": false
+  }
+}

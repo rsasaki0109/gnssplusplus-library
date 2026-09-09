@@ -1,0 +1,190 @@
+{
+  "schema_version": "smartphone-r5-phase121-tdcp-geometry-linearization-parity-freeze.v1",
+  "phase": 121,
+  "execution_label": "Luna Max",
+  "status": "sealed-no-candidate",
+  "purpose": "Freeze the read-only conclusion that an official frozen-LOS ordinary TDCP factor is not safely isolatable from the native Phase118 Pose3 endpoint-range factor.",
+  "decision": {
+    "candidate_count": 0,
+    "decision": "no-candidate",
+    "source_backed_single_candidate": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "official-factor-is-fixed-initial-los-affine",
+      "native-factor-is-relinearized-two-end-nonlinear-range",
+      "pose3-lever-arm-and-enu-ecef-mapping-not-isolatable",
+      "official-and-native-sagnac-representations-are-coupled",
+      "frozen-los-choice-is-initial-point-dependent",
+      "replacement-or-parallel-factor-changes-equation-or-information"
+    ]
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase121_tdcp_geometry_linearization_parity_audit_v1.md",
+    "commit": "f824879696920ab065fb3afab88f8cd8e2c93495",
+    "sha256": "f8f9f1fa59cca62303ebea738d69d4af5c73f247fefcf5d6b6c0a8bccbb42212"
+  },
+  "baseline_phase118": {
+    "source_parity_freeze_commit": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+    "structural_contract_commit": "25f3bada02c4073175054b5d668de02020761208",
+    "structural_result_commit": "b4ea80d96d7156f9fd62cc554f2deeedcc550cb0",
+    "accuracy_freeze_commit": "ef8d11bc4fa64e2ed6cd5fface133979655953ff",
+    "source_parity_freeze_sha256": "c6f4fda2abe170417610d4fd1a4ae8a1a618d07096ff0432669081ab06a1cf77",
+    "structural_contract_sha256": "267a2f51dea06f7d29d5b27be1f7ffd84febac1c72a9fbe2676c5f5a2649f81b",
+    "structural_result_sha256": "88e8799050fd396eeb14e83d4f5923339279f46d0219a385e303d3cb50731538",
+    "accuracy_freeze_sha256": "860a7f382199958f8dd2c43ba697d4c5cde1bc550d5747028e4c6f73be346760",
+    "recipe": {
+      "tdcp_sigma_m": 0.03,
+      "tdcp_measurement": "legacy corrected_carrier_m difference; Phase120 atmosphere-cancellation selector off",
+      "official_huber_type_mapping": {
+        "Highway": 0.5,
+        "Street": 0.2,
+        "Mix": 0.2,
+        "other": 0.5
+      },
+      "target_routes": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5"
+      ],
+      "state_and_solver": "C7/D/C0D source-meter handoff, MULTIFRONTAL_QR main",
+      "preserved": [
+        "same-satellite/same-signal adjacent pair key",
+        "existing gap/clock/loss-of-lock/nonfinite/code-phase gates",
+        "raw-base correction",
+        "Pixel5 final output offset",
+        "IMU/filter/LM/initialization"
+      ]
+    }
+  },
+  "equations": {
+    "official_measurement": "m_off = resL_2-resL_1, resL_i = z_i-(rho_i_initial-d_i), with z_i=L_i*lambda_i and rho_i_initial from Sagnac-inclusive geodist",
+    "official_factor": "e_off = losvec'((X2-orgX2)-(X1-orgX1)) + h'(C2-C1) - m_off; h(0)=1",
+    "official_jacobian": "[-losvec,+losvec,-h,+h]",
+    "official_key_order": ["X1", "X2", "C1", "C2"],
+    "native_phase118_measurement": "m_nat = tdcp_carrier_2-tdcp_carrier_1; tdcp_carrier_i=corrected_carrier_i",
+    "native_corrected_carrier": "raw_carrier_m + satellite_clock_m - troposphere_m + ionosphere_m",
+    "native_factor": "e_nat = ||a(P2)-s2_rot|| + h'C2 - ||a(P1)-s1_rot|| - h'C1 - m_nat",
+    "native_jacobian": "endpoint plainRange gradients are recomputed at each Pose3 state and mapped through LeverArm::antennaPoseJacobian; clock rows are -h,+h",
+    "native_key_order": ["previous Pose3", "previous clock", "current Pose3", "current clock"],
+    "native_clock_role": "source-meter epoch-local Vector C0; official XXDD D branch is not the Pixel5 XXCC branch",
+    "linearization_relation": "native first-order expansion can equal official only if endpoint gradients, state/frame mapping, measurement, and Sagnac representation all coincide; higher-order terms and native relinearization remain different",
+    "sagnac_relation": "official geodist is documented Sagnac-inclusive; native TDCP uses build-time earth-rotation-corrected satellite points and plain Euclidean range to avoid double correction"
+  },
+  "candidate_considered_but_rejected": {
+    "id": "phase121-official-frozen-los-linear-tdcp-v1",
+    "default_off_if_implemented": true,
+    "status": "rejected-before-implementation",
+    "change_scope_claimed": "replace or add ordinary native TDCP with official TDCPFactor_XXCC frozen-LOS equation",
+    "rejection": [
+      "requires ENU Vector-X to native Pose3/antenna and ecef_T_nav mapping",
+      "requires a single initial LOS where native has two endpoint LOS/Jacobians",
+      "couples satellite motion and lever-arm terms to the factor equation",
+      "cannot mix official geodist Sagnac with native rotated-satellite/plain-norm path safely",
+      "parallel insertion changes factor count and objective information",
+      "replacement changes the Phase118 native equation and relinearization behavior"
+    ],
+    "no_code_or_runtime_change": true
+  },
+  "source_pins": {
+    "official_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "official": {
+      "fgo_gnss.m": {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "50-70,89-120,154-200"
+      },
+      "fgo_gnss_imu.m": {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "lines": "63-83,102-106,263-323"
+      },
+      "gnsslog2obs.m": {
+        "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "lines": "152-188"
+      },
+      "Gobs.m": {
+        "path": "output/reproducibility-cache/MatRTKLIB/+gt/Gobs.m",
+        "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+        "lines": "1151-1165"
+      },
+      "Gsat.m": {
+        "path": "output/reproducibility-cache/MatRTKLIB/+gt/Gsat.m",
+        "sha256": "a56c3236646606c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+        "lines": "259-306"
+      },
+      "geodist.m": {
+        "path": "output/reproducibility-cache/MatRTKLIB/+rtklib/geodist.m",
+        "sha256": "4ddced92aea78defd7eb8b2040dd23b1b0575eb0c1ac719a128c8db62ab4a91f",
+        "lines": "1-20"
+      },
+      "geodist.c": {
+        "path": "output/reproducibility-cache/MatRTKLIB/src/mex/geodist.c",
+        "sha256": "3929ec3d57575634a921a81957ce91f2dce9314457694e3bd7e00bd82ec765c4",
+        "lines": "1-7,50-80"
+      },
+      "TDCPFactor_XXCC.h": {
+        "path": "output/reproducibility-cache/gtsam_gnss/src/TDCPFactor_XXCC.h",
+        "sha256": "cc8f5acabd43db25b5b4aca48f6c8ae6a0e2a399820fb950de9004555c9cd4b2",
+        "lines": "15-46,50-90"
+      },
+      "TDCPFactor_XXDD.h": {
+        "path": "output/reproducibility-cache/gtsam_gnss/src/TDCPFactor_XXDD.h",
+        "sha256": "dc6b92e824f439df56286b2c2f81c0acb744f698c45648baaf5da67d6b239aed",
+        "lines": "15-49,53-88"
+      }
+    },
+    "native": {
+      "fgo_problems.cpp": {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "5675e82fc595933da4e7c14ad468ae69437dc04bac79a7ef55f1edfa03e098da",
+        "lines": "485-512,641-715,1416-1535"
+      },
+      "fgo_gtsam_internal.hpp": {
+        "path": "src/algorithms/fgo_gtsam_internal.hpp",
+        "sha256": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd",
+        "lines": "1278-1340,2330-2352,3342-3502"
+      },
+      "fgo_gtsam_backend.cpp": {
+        "path": "src/algorithms/fgo_gtsam_backend.cpp",
+        "sha256": "c0da12d7a1d5eeb9492b02ad80f0e9868cbda32e452bbdd9c3f90cc57b4db0fa",
+        "lines": "263-268,455-464,503-515,1206-1252"
+      },
+      "fgo.cpp": {
+        "path": "src/algorithms/fgo.cpp",
+        "sha256": "145ffa3958d3a867ba53d962f07d346f9efa36e72140ad03d7a404ffdd3b5023",
+        "lines": "942-1008"
+      },
+      "fgo_internal.hpp": {
+        "path": "src/algorithms/fgo_internal.hpp",
+        "sha256": "ee3a2bed13971c9bce52d043a293990703b92a2bc9d916376a896eadbf385ca7",
+        "lines": "279-290"
+      }
+    }
+  },
+  "read_accounting": {
+    "official_native_source_text": "permitted source-only",
+    "sealed_phase118_metadata": "permitted metadata-only",
+    "raw_phone_gnss_imu_nav_payload_reads": 0,
+    "raw_base_payload_or_header_reads": 0,
+    "truth_payload_or_coordinate_row_reads": 0,
+    "solution_row_reads": 0,
+    "mat_reads_or_generation": 0,
+    "precomputed_phone_coordinate_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_calculations_or_score_reads": 0,
+    "pdc_reads": 0,
+    "kaggle_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "parameter_sweeps": 0,
+    "code_implementation": 0
+  },
+  "next_boundary": "Do not implement or execute a Phase121 frozen-LOS candidate. Retain Phase118 native nonlinear TDCP; any future geometry change needs a separately scoped audit resolving the complete frame, lever-arm, endpoint satellite-time, and Sagnac contract."
+}
+

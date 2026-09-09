@@ -1,0 +1,113 @@
+{
+  "schema_version": "smartphone-r5-phase22-measurement-model-gap-audit.v1",
+  "status": "truth-free-audit-before-candidate-implementation",
+  "base_commit": "7d48344",
+  "scope": "Remaining raw-only GNSS measurement-model differences between the pinned GSDC MATLAB specification and the native libgnss++ phone FGO path.",
+  "data_policy": {
+    "allowed_for_this_audit": ["MATLAB .m source as specification", "raw device_gnss.csv metadata/observables", "broadcast RINEX brdc.nav"],
+    "forbidden": ["all .mat files", "ground_truth.csv", "sample_submission.csv", "result coordinates", "device WLS coordinates", "leaderboard scores", "Kaggle token"],
+    "mat_read_count": 0,
+    "truth_read_count": 0,
+    "enriched_satellite_or_receiver_columns_used": false,
+    "external_mutation": false
+  },
+  "source_hashes": {
+    "upstream_spec": {
+      "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "output/reproducibility-cache/gsdc2023/functions/exobs.m": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+      "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+      "output/reproducibility-cache/gsdc2023/functions/obserrmodel.m": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+      "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "output/reproducibility-cache/gsdc2023/fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "output/reproducibility-cache/gsdc2023/parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "output/reproducibility-cache/MatRTKLIB/+gt/Gsat.m": "a56c3236646606c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+      "external/madocalib/src/pntpos.c": "9ab3195abafa29b9526c1baa01c373153228144bfee06416590ead98df5c8382",
+      "external/madocalib/src/ephemeris.c": "a80049dc0d17f5c82a990bebbf7c58d187c270007c8953e8e8b00455b6dceeb6"
+    },
+    "native_at_base": {
+      "src/io/android_raw_gnss.cpp": "790ff71c83482de0dfc9760b4d7c45d4d8adc135082d78f0b75e034bcfd645e8",
+      "include/libgnss++/io/android_raw_gnss.hpp": "e78fe2096a93c1bae7c76f2195d3307c93e9fe0addf2c9a719580b0959564e52",
+      "src/algorithms/fgo_problems.cpp": "3452d2b252d1a38624011f4af968809594d2b03b6a410c5b16b2675f74461dd8",
+      "src/algorithms/fgo_internal.hpp": "1d4c5bbd7912bfc57a7b1ce5d1131ec853c1df3213a3fb6bbab066e447cf35e0",
+      "src/algorithms/spp.cpp": "13a06c1ac432efb7dce261b2bfd0fa619b01f5669339844e1b8cb6334a43c202",
+      "src/core/navigation.cpp": "f876803d2e61fa62f370419f4ee4db16afb6b12b2d7ab00cd8b613af6f2649d3",
+      "src/core/navigation_internal.hpp": "1d922769774bed46a7cdd9cdc513ff63391768f13fd7e6c708af49c4c977a56e",
+      "include/libgnss++/core/navigation.hpp": "578aca8779f7e2bbc891f8a5936ca1eeaa51eef28c85b9172d3700f5ae1f4bed",
+      "include/libgnss++/algorithms/fgo_config.hpp": "fa76822c8519ff935f69ce720908f91e0e2a75cfa13ece615537b1c5433f9eca",
+      "include/libgnss++/algorithms/spp.hpp": "efec0c0e44ff0433f26ac34b7ff88d168cecb65267c4e087ea3a141223d6b485"
+    }
+  },
+  "gap_matrix": [
+    {
+      "component": "Android raw observable conversion",
+      "upstream_evidence": "gnsslog2obs.m:38-121; P is receive-minus-transmit time times c, L is ADR/lambda, D is negative pseudorange-rate/lambda, and elapsedns/utcms are retained",
+      "native_evidence": "src/io/android_raw_gnss.cpp Android raw loader and include/libgnss++/io/android_raw_gnss.hpp",
+      "status": "implemented-for-raw-phone-lane",
+      "risk": "medium"
+    },
+    {
+      "component": "Broadcast satellite position/clock/relativity",
+      "upstream_evidence": "MatRTKLIB/+gt/Gsat.m:144-172; external/madocalib/src/ephemeris.c:224-293",
+      "native_evidence": "src/core/navigation_internal.hpp:841-920 and src/core/navigation.cpp:21-56 include broadcast clock polynomial and relativity",
+      "status": "implemented; no raw-only correction gap selected",
+      "risk": "low-to-medium"
+    },
+    {
+      "component": "Earth rotation / Sagnac",
+      "upstream_evidence": "MatRTKLIB/+gt/Gsat.m:259-262,304-306; external/madocalib/src/rtkcmn.c:3882-3892",
+      "native_evidence": "src/algorithms/fgo_internal.hpp:263-281 pre-rotates the satellite and the GTSAM backend uses plain range to avoid double correction",
+      "status": "implemented under an intentional native single-rotation contract",
+      "risk": "low; changing it would risk double correction"
+    },
+    {
+      "component": "Ionosphere/troposphere",
+      "upstream_evidence": "MatRTKLIB/+gt/Gsat.m:264-273 and Gobs.m:1160-1165",
+      "native_evidence": "src/algorithms/fgo_problems.cpp:255-321 applies Klobuchar frequency scaling and Saastamoinen",
+      "status": "implemented; residual-ionosphere extension is separately sealed and not retuned here",
+      "risk": "medium"
+    },
+    {
+      "component": "Satellite clock and code group delay",
+      "upstream_evidence": "external/madocalib/src/pntpos.c:147-158 selects Galileo E1 BGD(E1/E5a) for F/NAV and BGD(E1/E5b) for I/NAV; lines 121-132 apply the corresponding dual-frequency relation",
+      "native_evidence": "src/algorithms/fgo_internal.hpp:241-246 and src/algorithms/spp.cpp:158-179 return Galileo eph.tgd for every Galileo signal; src/io/rinex.cpp:1899-1932 retains data_source_code and tgd_secondary",
+      "status": "specific raw-only gap selected for Phase22",
+      "risk": "high; route nav audit contains I/NAV and F/NAV with a raw broadcast BGD difference up to 0.419 m"
+    },
+    {
+      "component": "Receiver inter-system and inter-frequency bias",
+      "upstream_evidence": "fgo_gnss.m:89-120 has seven clock components and one drift; correct_pseudorange.m:1-34 uses a base-station compensation that is unavailable under native raw-only inference",
+      "native_evidence": "native FGO has clock-group states and opt-in signal-bias states; base compensation is intentionally not admitted",
+      "status": "partially implemented; unavailable base correction is an explicit gap",
+      "risk": "high but not safely solvable by a source-only raw correction in this phase"
+    },
+    {
+      "component": "Outlier masks and measurement weights",
+      "upstream_evidence": "exobs.m:1-121, exobs_residuals.m:1-78, obserrmodel.m:7-37",
+      "native_evidence": "observable_upstream_preprocessing.hpp and fgo_problems.cpp opt-in raw SNR/adjacent masks; defaults remain unchanged",
+      "status": "ported as opt-in quality lane; not selected because it is already evaluated separately",
+      "risk": "medium"
+    }
+  ],
+  "raw_route_audit": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "brdc_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "raw_signal_rows": {"GPS_L1_CA": 11007, "GPS_L5_Q": 4005, "GAL_E1_C_P": 8750, "GAL_E5A_Q": 8085, "GLO_G1_CA": 10218},
+    "nav_galileo_records": 11407,
+    "nav_data_source_code_counts": {"258_FNAV": 2864, "513_INAV": 2839, "516_INAV": 2839, "517_INAV": 2865},
+    "inav_bgd_difference_m_min": -0.418805226,
+    "inav_bgd_difference_m_max": 0.349004355,
+    "inav_bgd_difference_m_rms": 0.181257939,
+    "source": "RINEX central text fields and raw timing/observable/signal columns only; enriched SvPosition/SvElevation/Wls columns were not read"
+  },
+  "selection": {
+    "candidate_id": "native_raw_galileo_signal_specific_group_delay_v1",
+    "contract": "For Galileo E1 only, select eph.tgd_secondary when the RINEX data-source clock bit 9 identifies I/NAV (E5b-referenced clock), eph.tgd when bit 8 identifies F/NAV (E5a-referenced clock), and preserve eph.tgd when source bits are absent or ambiguous. GPS/QZSS/BeiDou/other signals are unchanged.",
+    "why": "This is the smallest demonstrable source-level physical mismatch: the parser already retains both Galileo BGD fields and source bits, while the measurement helpers currently discard the source distinction. It is raw/nav-derived, bounded, testable, and avoids the prohibited base compensation.",
+    "not_selected": ["base observation compensation: requires prohibited base assets", "new atmospheric/robust thresholds: already sealed lanes or truth-sensitive", "Sagnac rewrite: native single-rotation contract is already explicit", "Galileo E5a correction: direct single-frequency RTKLIB contract is not established by the pinned source and will not be guessed"],
+    "truth_or_leaderboard_used_for_selection": false,
+    "production_default_changed": false,
+    "implementation_must_be_opt_in": true
+  },
+  "freeze_link": "smartphone_r5_phase22_galileo_tgd_freeze_v1.json"
+}

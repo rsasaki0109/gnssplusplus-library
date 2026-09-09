@@ -1,0 +1,49 @@
+{
+  "schema_version": "gnss-fgo-gtsam-backend-parity-recovery.v1",
+  "status": "fixed-attributable-current-diff",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Diagnose and correct the two reproducible GTSAM parity failures without weakening tests or changing the sealed v3 candidate.",
+  "baseline": {
+    "commit": "a947409",
+    "worktree": "/tmp/gnssplusplus-baseline-gtsam",
+    "source_hashes": {
+      "src/algorithms/fgo_gtsam_backend.cpp": "94510bf312f0ec1ee539034ce1d97029e2d32f14ea44e8423c42d790f45384b5",
+      "src/algorithms/fgo_gtsam_internal.hpp": "69f104b3e2e6aea3bd97821dfd4625c98cc1a94fd2b3f6d034531cde566fca7c"
+    },
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ./build-baseline/tests/run_tests --gtest_filter=FGOGtsamBackendTest.FloatSolutionMatchesEigenBackendOnDoubleDifferenceProblem:FGOGtsamBackendTest.GtsamBackendRecoversFloatAmbiguitiesNearIntegers --gtest_color=no",
+    "result": "2/2 passed; parity max=0.00221519 m, RMS=0.00221207 m"
+  },
+  "current_before_fix": {
+    "backend_sha256": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "internal_header_sha256": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "result": "both tests failed; parity max=14.76482132280678 m, RMS=14.764821320646401 m, DD pseudorange RMS=8.7279074314755238 m, DD carrier RMS=8.6730679514964528 m, ambiguity cycles=100.4..104.4",
+    "controlled_difference": "The only backend source additions relative to HEAD were ordinary Pose3 TDCP support and clock-motion support; the failing DD-only test does not use TDCP."
+  },
+  "root_cause": {
+    "condition": "The newly added GTSAM clock-motion block created a clock-state chain whenever motion/clock-motion defaults were enabled, even when need_clock_states was false because the DD-only problem had no undifferenced pseudorange/carrier factors.",
+    "failure_mechanism": "This injected an unanchored clock gauge into the DD-only factor graph and changed the LM solution, producing the observed position/residual/ambiguity failures.",
+    "evidence": "A single condition change requiring need_clock_states restored the clean-HEAD parity result; no test threshold or test fixture was changed."
+  },
+  "fix": {
+    "path": "src/algorithms/fgo_gtsam_backend.cpp",
+    "change": "Require need_clock_states && use_motion_factors && use_clock_motion_factors before adding clock BetweenFactor<double> rows.",
+    "source_sha256_after": "7512b7fcb84a13960a800426b201aa2c325beff38db5784814d16e35cf2c24ef",
+    "internal_header_sha256_after": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621"
+  },
+  "post_fix": {
+    "command": "cmake --build build --target run_tests -j2 && LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ./build/tests/run_tests --gtest_filter=FGOGtsamBackendTest.FloatSolutionMatchesEigenBackendOnDoubleDifferenceProblem:FGOGtsamBackendTest.GtsamBackendRecoversFloatAmbiguitiesNearIntegers --gtest_color=no",
+    "result": "2/2 passed; parity max=0.00221519 m, RMS=0.00221207 m; ambiguity recovery passed",
+    "tests_weakened": false,
+    "candidate_solver_rerun": false
+  },
+  "sealed_candidate_preservation": {
+    "v3_source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+    "v3_release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+    "v5_submission_touched": false,
+    "v3_binary_relinked_after_fix": false,
+    "note": "The backend fix is a separate current-tree correctness repair; the already sealed v3 executable bytes were not rebuilt or changed."
+  },
+  "validation_or_holdout_access": false,
+  "external_mutation": false,
+  "no_post_fix_tuning": true
+}

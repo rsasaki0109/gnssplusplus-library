@@ -1,0 +1,182 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-float-carrier-freeze.v1",
+  "status": "frozen-before-float-carrier-materialization",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v1-float-carrier-no-base-v1",
+  "purpose": "Freeze a development-only no-base float carrier-phase lane. The exact native-FGO v1 pseudorange, ordinary TDCP, position/clock motion graph, initialization, robust loss, and numeric settings are retained; only the already implemented undifferenced carrier-phase factors and per-arc float ambiguity states are enabled.",
+  "policy": {
+    "external_mutation": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "leaderboard_scores_used_for_tuning": false,
+    "validation_or_holdout_materialized": false,
+    "validation_or_holdout_truth_opened": false,
+    "production_default_changed": false,
+    "no_integer_fixing": true,
+    "no_base_or_double_difference": true,
+    "no_post_truth_tuning": true
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "selection_method": "ZIP central-directory names, sizes, compressed sizes, and CRC32 only; no new member payload was opened before this freeze"
+  },
+  "truth_use_inventory": {
+    "source": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "source_sha256": "aa57c85d9befdceb088c6eba75f23560e33d5cdde76bdbfa48a32eadbdbd3c30",
+    "known_truth_opened_or_used_count_before_this_phase": 32,
+    "known_truth_free_only_or_referenced_count": 5,
+    "convergence_selector_train_truth_additions": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "method": "union of the prior authoritative inventory with the two later convergence-selector train truth reads and materialized truth members; no leaderboard score was used"
+  },
+  "split_audit": {
+    "status": "blocked-no-strict-unused-three-way-split",
+    "strict_definition": "An identity is eligible only when absent from every known truth-use identity, every prior train/validation/holdout role, and every previously materialized truth-free candidate output; route overlap is not silently treated as new.",
+    "archive_train_identity_count": 41,
+    "strict_unused_identity_candidates": [
+      "2022-08-04-20-07-us-ca-sjc-q/mi8"
+    ],
+    "strict_unused_candidate_count": 1,
+    "required_new_train_count": 3,
+    "device_diversity_required": true,
+    "fresh_validation": null,
+    "future_holdout": null,
+    "blocker": "The archive has only one exact route/device identity that is absent from all truth-use, prior role, and prior materialization records. Choosing three would reuse an earlier split or a sealed validation/holdout, so no train truth is opened and no validation/holdout is assigned in this phase.",
+    "truth_free_structural_smoke_only": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "smoke_reuse_reason": "These three have prior truth-free materializations only and are used solely for structural verification; they are not eligible for a new truth score or promotion gate."
+  },
+  "algorithm_contract": {
+    "backend": "Eigen native FGO",
+    "baseline": "exact native-FGO v1 undifferenced pseudorange + ordinary TDCP + position/clock motion with the frozen v1 initialization and parameters",
+    "candidate_delta": "enable use_carrier_phase_factors and reject_rover_carrier_loss_of_lock through the existing CLI; no C++ estimator source or production default change",
+    "carrier_factor": "undifferenced carrier phase in meters with a separate float ambiguity state per (SatelliteId, SignalType, continuous arc)",
+    "arc_identity": "(constellation, PRN, signal); a new ambiguity state starts at first observation, non-positive time, a gap greater than max_tdcp_gap_s, ADR loss/LLI, or adapter hardware-clock discontinuity",
+    "wavelength": "signalWavelengthMeters for each GPS L1 or Galileo E1 observation; invalid/non-positive wavelength is not a carrier factor",
+    "adr_contract": "adapter emits carrier only for finite Android ADR with the valid state bit; E1 uses frozen Hatch-30 truth-free smoothing; reset, cycle-slip, invalid ADR, missing ADR, epoch gap, or hardware clock discontinuity starts a new arc and emits raw code for that row",
+    "clock_contract": "HardwareClockDiscontinuityCount is monotonic and is checked truth-free; a discontinuity or a non-finite/common pseudorange clock-jump diagnostic fails the candidate closed",
+    "gap_contract": "max_tdcp_gap_s=2.0 seconds, inherited from v1; ordinary TDCP gap and code/phase-jump rejection stay enabled",
+    "robust_loss": "existing Huber loss with carrier threshold 4 sigma",
+    "float_only": "fix_ambiguities=false, use_lambda_ambiguity_fix=true but no fixing is requested; fixed_solution and fixed_ambiguities must remain zero",
+    "forbidden": [
+      "base observations",
+      "double_difference_pseudorange_factors",
+      "double_difference_carrier_factors",
+      "single_difference_doppler_factors",
+      "single_difference_tdcp_factors",
+      "ambiguity_between_factors",
+      "integer ambiguity fixing",
+      "truth-dependent filtering or postprocessing"
+    ]
+  },
+  "numeric_parameters": {
+    "max_iterations": 8,
+    "relative_cost_convergence_threshold": 0.0,
+    "absolute_cost_convergence_threshold": 0.0,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_sigma_power": 1.0,
+    "tdcp_sigma_m": 0.03,
+    "carrier_phase_sigma_m": 0.01,
+    "ambiguity_prior_sigma_m": 1000.0,
+    "motion_sigma_m": 50.0,
+    "clock_motion_sigma_m": 300.0,
+    "pseudorange_huber_threshold_sigma": 4.0,
+    "tdcp_huber_threshold_sigma": 4.0,
+    "carrier_phase_huber_threshold_sigma": 4.0,
+    "max_tdcp_gap_s": 2.0,
+    "tdcp_slip_threshold_m": 10.0,
+    "min_elevation_deg": 10.0,
+    "min_snr_dbhz": 0.0,
+    "min_satellites_per_epoch": 4,
+    "use_ionosphere_model": true,
+    "use_troposphere_model": true,
+    "use_robust_loss": true,
+    "use_ambiguity_priors": true,
+    "use_position_motion_factors": true,
+    "use_clock_motion_factors": true
+  },
+  "truth_free_structural_gate": {
+    "required_positive": [
+      "pseudorange_factors",
+      "tdcp_factors",
+      "motion_factors",
+      "carrier_phase_factors",
+      "ambiguity_states",
+      "graph_factors",
+      "graph_values",
+      "valid_solutions"
+    ],
+    "required_equalities": [
+      "tdcp_factors_inserted == tdcp_factors",
+      "double_difference_pseudorange_factors == 0",
+      "double_difference_carrier_factors == 0",
+      "single_difference_doppler_factors == 0",
+      "single_difference_tdcp_factors == 0",
+      "ambiguity_between_factors == 0",
+      "fixed_ambiguities == 0",
+      "fixed_solution == false"
+    ],
+    "required": [
+      "backend == eigen",
+      "finite summary, cost trace, covariance/coordinates, and keyed output",
+      "cost trace finite and non-increasing",
+      "converged == true",
+      "no hardware-clock discontinuity or clock jump",
+      "no physical transition above 70 m/s"
+    ],
+    "failure_action": "publish exact baseline v1 output as fallback for any route and record the reason; this phase has no promotion because the strict new split is unavailable"
+  },
+  "train_gate_frozen_before_truth": {
+    "all_four_official_diagnostic_variants_and_mean_strictly_improve_routewise_and_aggregate": true,
+    "availability_and_truth_coverage_non_regression": true,
+    "vertical_p95_within_fixed_physical_margin_m": 0.25,
+    "continuity_no_new_above_70mps_isolated_spikes": true,
+    "truth_free_artifacts_sealed_before_train_truth": true,
+    "validation_allowed_only_after_every_train_gate_passes": true,
+    "future_holdout_remains_sealed": true,
+    "development_only_on_success": true
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo.cpp": "2d9e53485c427d1e0d43b07dd611aaf3644e2cd51d5e175c2977038ca05e3e32",
+    "src/algorithms/fgo.cpp": "4805a30741e3bcc53a2a29d832429924a3cc46c0fac5aa530446cedd224af3b2",
+    "include/libgnss++/algorithms/fgo.hpp": "67845f6365eb1f621afed19c52b82ad48d00ac1623e99b3bf7b96cd944263307",
+    "include/libgnss++/algorithms/fgo_config.hpp": "8a9390e6709f4c4a55ca4f9d4d43fd451465234d1aa55cd4dd662b06f0872d80",
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b",
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "binary_hashes": {
+    "build/apps/gnss_fgo": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "upstream_evidence": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "source_audit": "docs/use_cases/records/smartphone_r5_gsdc2023_published_solution_reproducibility_audit.json",
+    "source_audit_sha256": "ef47e8a7833b261dd7566f2c50ae168a0505bfd03badb6e01cfa1acc69ec72d2",
+    "method_evidence": "official ION abstract describes tightly coupled GNSS/INS and timestamp adjustment; official third-place abstract describes raw pseudorange, Doppler, carrier phase, and TDCP validation; these justify investigation only and are not parameter tuning evidence",
+    "local_support_decision": "existing libgnss++ Eigen no-base carrier/ambiguity path is sufficient; no external source copied"
+  },
+  "commands": {
+    "candidate": "PYTHONHASHSEED=0 LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_float_carrier_eval.py structural-smoke",
+    "train_score": "blocked until a new metadata-only three-identity split is available; no truth member may be opened by this freeze",
+    "validation": "not authorized",
+    "holdout": "not authorized",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "integrity": {
+    "freeze_record_sha256": "filled after apply_patch",
+    "companion_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_float_carrier_freeze_v1_manifest.json",
+    "candidate_source_or_parameter_change_after_freeze": false
+  }
+}

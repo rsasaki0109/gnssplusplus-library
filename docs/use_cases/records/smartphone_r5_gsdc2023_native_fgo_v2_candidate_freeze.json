@@ -1,0 +1,143 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-candidate-freeze.v1",
+  "status": "frozen-before-new-train-payload-materialization",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v2-imu-preintegration-smoke",
+  "purpose": "Exercise the existing native GTSAM Pose3 CombinedImuFactor path on a new route-disjoint train split without truth-driven tuning or a production-default change.",
+  "external_mutation": false,
+  "token_access": false,
+  "leaderboard_scores_used_for_tuning": false,
+  "truth_policy": {
+    "truth_free_generation_first": true,
+    "train_truth_allowed_only_after_truth_free_artifact_seal": true,
+    "fresh_validation_allowed_only_after_all_train_gates_pass": true,
+    "future_holdout_materialization_or_truth_open": false,
+    "new_split_truth_open_before_this_record": 0,
+    "no_post_holdout_tuning": true
+  },
+  "split_freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+    "sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+    "train": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "future_holdout_payload_or_truth_read": false,
+    "route_disjoint_from_authoritative_truth_use_inventory": true
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_metadata_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "selection_method": "ZIP central-directory metadata only before this freeze"
+  },
+  "source_files": {
+    "apps/native/gnss_fgo_parity.cpp": {
+      "sha256": "24e1a42d91b4e6e7a961e9dfb3c77bf08e54cc21ec9d17764a7f7bb171e624a2"
+    },
+    "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": {
+      "sha256": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b"
+    },
+    "configs/benchmarks/smartphone_r5_gsdc2023.json": {
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    }
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_parity",
+    "sha256": "3d5505509c78cf632328d93f6f941c9a55790b4b04dd272920cbf2e3e8f550ba",
+    "build_type": "Release"
+  },
+  "recipe": {
+    "backend": "gtsam",
+    "pose3_state": true,
+    "combined_imu_factor": true,
+    "pseudorange_factors": true,
+    "ordinary_tdcp_factors": true,
+    "double_difference_factors": true,
+    "carrier_phase_factors": false,
+    "single_difference_doppler_factors": false,
+    "robust_loss": true,
+    "float_only_smoke": true,
+    "lever_arm_body_flu_m": [0.31, 0.0, 0.55],
+    "imu_axis_convention": "identity; source is already body FLU",
+    "imu_input_contract": {
+      "source": "Android device_imu.csv with UncalAccel and UncalGyro rows",
+      "timestamp": "utcTimeMillis converted to GPST with the frozen 18-second leap offset",
+      "anchor_stream": "UncalGyro",
+      "nearest_accel_max_abs_offset_ms": 25,
+      "nearest_tie_break": "earlier UTC timestamp",
+      "resampling": "each gyro sample is paired with one nearest finite acceleration sample; no interpolation or extrapolation",
+      "units": "UncalAccel m/s^2; UncalGyro rad/s converted once to degrees/s for loadImuCsv",
+      "output_schema": "GPS TOW (s),GPS Week,Acc X (m/s^2),Acc Y (m/s^2),Acc Z (m/s^2),Ang Rate X (deg/s),Ang Rate Y (deg/s),Ang Rate Z (deg/s)",
+      "missing_pair_policy": "omit the gyro sample and report the count; zero paired samples is fail-closed",
+      "truth_free": true
+    },
+    "imu_noise": {
+      "accel_noise_sigma_mps2_sqrt_hz": 0.02,
+      "gyro_noise_sigma_radps_sqrt_hz": 0.002,
+      "accel_bias_rw_sigma_mps3_sqrt_hz": 0.003,
+      "gyro_bias_rw_sigma_radps2_sqrt_hz": 0.0003,
+      "integration_sigma": 0.001,
+      "gravity_mps2": 9.80665,
+      "initial_attitude_sigma_roll_pitch_rad": 0.05,
+      "initial_attitude_sigma_yaw_rad_heading_latched": 0.15,
+      "initial_attitude_sigma_yaw_rad_unlatched": 3.0,
+      "initial_velocity_sigma_mps": 0.5,
+      "initial_accel_bias_sigma_mps2": 0.1,
+      "initial_gyro_bias_sigma_radps": 0.01
+    },
+    "initialization": {
+      "static_leveling_samples": 250,
+      "course_window_epochs": 25,
+      "course_speed_bounds_mps": [2.0, 50.0],
+      "course_vertical_speed_abs_max_mps": 3.0,
+      "course_heading_consistency_deg": 20.0,
+      "course_latch_count": 3
+    },
+    "smoke_window": {
+      "max_epochs": 2,
+      "start_epoch": 0,
+      "max_iterations": 12,
+      "reference_truth_used": false
+    }
+  },
+  "timestamp_alignment": {
+    "method": "truth-free observable GNSS-WLS speed/IMU activity correlation plus UTC/GPST timestamp consistency",
+    "candidate_offsets_seconds": {
+      "minimum": -0.1,
+      "maximum": 0.1,
+      "step": 0.01
+    },
+    "physical_bound_abs_seconds": 0.1,
+    "minimum_paired_samples": 20,
+    "tie_break": "smallest absolute offset, then smallest signed offset",
+    "application": "not applied to the existing parity binary because it exposes no offset option; any invalid/low-confidence estimate fails closed to the frozen native-FGO-v1 path",
+    "truth_free": true
+  },
+  "gates": {
+    "each_smoke": [
+      "return_code_zero",
+      "imu_samples_positive",
+      "imu_intervals_positive",
+      "graph_values_positive",
+      "graph_factors_positive",
+      "converged_yes",
+      "nonfinite_epochs_zero",
+      "no_truth_reference_argument"
+    ],
+    "train_promotion": "not defined by this bounded smoke; a full no-base smartphone output integration and unchanged train truth score are required before any validation opening",
+    "production_default_changed": false
+  },
+  "fallback": {
+    "name": "frozen-native-fgo-v1",
+    "trigger": "offset outside physical bound, insufficient observable pairs, invalid timestamps, or parity API cannot apply the estimate",
+    "no_numeric_tuning": true
+  },
+  "record_integrity": {
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_candidate_freeze_manifest.json",
+    "hash_pinned_after_record_write": true
+  }
+}

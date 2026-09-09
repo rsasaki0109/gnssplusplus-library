@@ -1,0 +1,216 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-doppler-position-evaluation.v1",
+  "status": "sealed-no-go-train-gate",
+  "decision": "no-go-train-gate",
+  "scope": "development-only truth-free Doppler receiver-velocity position update for GSDC 2023 handset WLS",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_top_solution_feasibility_audit.json",
+    "sha256": "8bc2e4a3965fb266652def07b91c17f58de5845cfaf84fd0e64c938b46144470",
+    "status_at_freeze": "selection-frozen-before-new-implementation",
+    "candidate_id": "doppler_position_update_v1",
+    "public_private_scores_used_for_tuning": false
+  },
+  "primary_source_boundary": {
+    "official_and_author_sources_recorded_in_selection": true,
+    "exact_evidence": [
+      "official ION abstracts describe tightly coupled GNSS/INS, timing adjustment, adaptive weighting, and Doppler/TDCP updates",
+      "the local archive exposes pseudorange rate, satellite ECEF state, WLS position, clock discontinuity, ADR, IMU, and broadcast navigation fields"
+    ],
+    "inference_not_claimed_as_evidence": [
+      "a Doppler-only postprocess is not the published full winning estimator",
+      "the local diagnostics are not the hidden Kaggle score",
+      "reported public/private scores were context only and did not select parameters"
+    ]
+  },
+  "frozen_contract": {
+    "split": {
+      "train": [
+        "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+        "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+        "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+      ],
+      "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+      "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+      "selection_basis": "route-disjoint central-directory metadata only",
+      "fresh_validation_materialized": false,
+      "fresh_validation_truth_open_count": 0,
+      "future_holdout_materialized": false,
+      "future_holdout_truth_open_count": 0,
+      "previous_holdouts_used": false
+    },
+    "algorithm_parameters": {
+      "minimum_satellites": 4,
+      "robust_passes": 2,
+      "robust_residual_gate_mps": 3.0,
+      "maximum_fit_rms_mps": 3.0,
+      "maximum_receiver_speed_mps": 70.0,
+      "maximum_dt_s": 1.5,
+      "innovation_gate_m": 30.0,
+      "position_measurement_floor_m": 1.0,
+      "velocity_process_floor_mps": 1.0,
+      "uncertainty_floor_mps": 0.10,
+      "skip_epochs": 1,
+      "no_parameter_search_after_freeze": true
+    },
+    "observation_equation": "PseudorangeRate = LOS dot (satellite_velocity - receiver_velocity) + receiver_clock_range_rate; A=[-LOS,1], b=PseudorangeRate-LOS dot satellite_velocity",
+    "update": "one-step ECEF prediction from the previous selected finite WLS position followed by covariance-derived scalar update toward the current WLS position",
+    "fail_closed": "invalid Doppler, rank deficiency, excessive speed or fit RMS, clock transition, non-positive or long timestamp gap, nonfinite covariance/gain, or innovation above 30 m publishes exact WLS and resets",
+    "inputs": "device_gnss.csv observable fields and exact WLS POS only",
+    "truth_free_generation": true,
+    "production_default_changed": false
+  },
+  "implementation": {
+    "source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_doppler_position.py",
+      "sha256_after_consensus_fix": "5a42f786a8be6c75da78d177ebab562c4e7e2e9ca555def83884895192d51c3b"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_doppler_position_eval.py",
+      "sha256": "9549e249830f329e5fb7c4e215764d714f190d0ee4155a509ec5a4ffb0e0518d"
+    },
+    "unit_test": {
+      "path": "tests/test_smartphone_doppler_position.py",
+      "sha256": "01014704d5e5ca44892aac57aaf72eb8336019d08b388aaf405571f253a16ba4",
+      "result": "4/4 passed"
+    },
+    "dispatcher": {
+      "path": "apps/gnss.py",
+      "sha256": "d48b52e55ab7e30514e5af1e5692626facbdc3523243c46ce14b6650460dd907"
+    },
+    "ctest_registration": {
+      "path": "tests/CMakeLists.txt",
+      "sha256": "53aa7cd644e965b9ec0ef258642c3f950198613209ae4a8c78ff9dd0b4f303ce"
+    }
+  },
+  "train_evaluation": {
+    "evaluation_source_snapshot": "The initial train score was produced before the later deterministic leave-one-out consensus fix; no pre-fix source snapshot was committed.",
+    "record": {
+      "path": "output/smartphone-r5/doppler-position-v1/train_evaluation.json",
+      "sha256": "fd16544afb61d648c2e218a75550fcc5cd69ddf266570e27cc8586e04d16bf8b"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/doppler-position-v1/train_evaluation_manifest.json",
+      "sha256": "29e81ee14fb38043986b690ec4537e75b48b8ffeee27d89e2e3d4da988443175"
+    },
+    "truth_open_count": 3,
+    "truth_free_artifacts_preceded_truth": true,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "holdout_opened": false,
+    "public_private_scores_used_for_tuning": false,
+    "aggregate": {
+      "baseline": {
+        "h_wgs84_p50_m": 2.2299220407451776,
+        "h_wgs84_p95_m": 6.163939915284951,
+        "v_p95_m": 12.544379358932755,
+        "diagnostic_mean_m": 4.196697069253391,
+        "availability_ratio": 1.0,
+        "truth_coverage_ratio": 0.9960686943927167
+      },
+      "candidate": {
+        "h_wgs84_p50_m": 2.1081807559885384,
+        "h_wgs84_p95_m": 7.4473393564550445,
+        "v_p95_m": 11.39219764950561,
+        "diagnostic_mean_m": 4.776046880643175,
+        "availability_ratio": 1.0,
+        "truth_coverage_ratio": 0.9960686943927167
+      },
+      "strict_gate_failures": [
+        "aggregate_h_p95_not_strictly_improved",
+        "aggregate_diagnostic_mean_not_strictly_improved",
+        "h_p95_regression",
+        "haversine_sphere__linear_n_minus_1_regression",
+        "haversine_sphere__nearest_rank_ceiling_regression",
+        "wgs84_vincenty__linear_n_minus_1_regression",
+        "wgs84_vincenty__nearest_rank_ceiling_regression"
+      ]
+    },
+    "route_gate_failures": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": [],
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": [
+        "h_p50_regression",
+        "h_p95_regression",
+        "all_four_diagnostics_regression"
+      ],
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": [
+        "h_p50_regression",
+        "all_four_diagnostics_regression"
+      ]
+    }
+  },
+  "post_score_correction_history": {
+    "reason": "A synthetic six-satellite unit fixture exposed that a single gross pseudorange-rate row could leave fewer than four inliers in the fixed robust screen.",
+    "change": "Added deterministic leave-one-out consensus recovery for that observable-only failure mode.",
+    "numeric_parameters_changed": false,
+    "truth_or_leaderboard_used": false,
+    "truth_rescored_after_change": false,
+    "post_fix_truth_free_rerun": {
+      "root": "output/smartphone-r5/doppler-position-v1-post-consensus-fix/train",
+      "route_manifests": {
+        "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": "1431e06a765a94b1f151239e6619462f4c7cf8166274cfd4524c046c3e603c4c",
+        "2022-08-04-20-07-us-ca-sjc-q/pixel5": "95a70b55df41ff787a2556f4afc299aaa70be6e9012366c9a3d843f2406ce1c0",
+        "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": "a8688a80bf4a2bd6bc0357cc9ba6f9094201e097f1ec94cbcb086e45836735cf"
+      },
+      "position_hashes": {
+        "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": "4da859fe469954043840d7a449fe54948bc33ee49fa762c0e4430a98fab3984c",
+        "2022-08-04-20-07-us-ca-sjc-q/pixel5": "52104e6b3a37747a654a873708c31f271a6ee368eab3c2c1b6b49f748a979c91",
+        "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": "4e7ade4bb0d9708bb59712743353a96543adb5377333cd620b110681680713b7"
+      },
+      "position_byte_identity_vs_scored_artifacts": true,
+      "trajectory_byte_identity_vs_scored_artifacts": true,
+      "summary_hashes_changed_only_because_runtime_observation_counts_were_added": true
+    }
+  },
+  "alternative_audit": {
+    "gnss_imu_timing_adaptive_weighting": {
+      "rank": 2,
+      "status": "deferred-blocked",
+      "reason": "raw IMU is present, but no truth-free orientation/lever-arm/timestamp-offset estimator and no validated tightly coupled GNSS/INS solver are available locally; the existing causal IMU q lane is a different development-only smoother and cannot be relabeled as the winning coupled method",
+      "next_safe_step": "freeze and validate a route-disjoint observable timing-offset estimator before changing any position lane"
+    },
+    "raw_measurement_quality_filtering": {
+      "rank": 3,
+      "status": "deferred",
+      "reason": "the existing adapter/WLS integrity path already enforces finite, timestamp, clock, ADR, and consistency contracts; a new raw solver would be a separate candidate requiring a new frozen train gate"
+    },
+    "road_map_matching": {
+      "rank": 5,
+      "status": "blocked",
+      "reason": "no versioned local road graph, map tile, or route geometry asset exists; fetching OSM would violate the sealed local reproducibility contract"
+    }
+  },
+  "sealed_data_policy": {
+    "fresh_validation": "not opened because the train gate failed",
+    "future_holdout": "not materialized or opened",
+    "old_holdouts_used": false,
+    "no_post_holdout_tuning": true,
+    "external_mutation": false,
+    "kaggle_token_access": false,
+    "production_default_changed": false
+  },
+  "commands": {
+    "unit_test": "PYTHONPATH=apps/commands python3 tests/test_smartphone_doppler_position.py -v",
+    "truth_free_route": "python3 apps/gnss.py smartphone-doppler-position --position <wls.pos> --device-gnss <device_gnss.csv> --output-dir <output> --dataset-id <id> --phone <phone>",
+    "train_evaluation": "python3 apps/gnss.py smartphone-doppler-position-eval --selection-record docs/use_cases/records/smartphone_r5_gsdc2023_top_solution_feasibility_audit.json --role train --route <three frozen route specs> --output-json output/smartphone-r5/doppler-position-v1/train_evaluation.json",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "verification": {
+    "release_build": {
+      "command": "cmake --build build --config Release -j$(nproc)",
+      "result": "passed"
+    },
+    "full_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+      "result": "104/104 passed"
+    },
+    "git_diff_check": "passed",
+    "truth_free_unit_test": "4/4 passed"
+  },
+  "limitations": [
+    "the first Doppler train score was a No-Go despite one route improving; no fresh validation or holdout score exists",
+    "the post-consensus source fix was not rescored against truth, so it is not evidence of promotion",
+    "the candidate is not integrated into production RTK/SPP defaults and no Kaggle submission was made in this phase"
+  ]
+}

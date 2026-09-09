@@ -1,0 +1,158 @@
+{
+  "schema_version": "smartphone-r5-phase37-pixel5-repeatability-structural-failure.v1",
+  "phase": 37,
+  "status": "fail-closed-before-truth",
+  "decision": "no-go-no-truth-no-calibration",
+  "freeze": {
+    "v1": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v1.json",
+      "sha256": "629689a206e59655c7cafbc59b6011553fa1953381df74d644bfd567708be8fd"
+    },
+    "v2_authority": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_freeze_v2.json",
+      "sha256": "61f46ac734d0c712bc317603570a0630234ee67ab642d12368eb5e3bf3962a3e"
+    },
+    "evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase37_pixel5_repeatability_evaluator_manifest_v1.json",
+      "sha256": "42e17e555fd4d249721fe64ba00fe2c6d68469b30b88ef532b44f73e76d7e4c1"
+    }
+  },
+  "failure": {
+    "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "stage": "native run1",
+    "return_code": 1,
+    "error": "failed to align output to raw UTC keys: native solution has non-finite or out-of-Earth ECEF position",
+    "run2_started": false,
+    "policy": "fail-closed; no flag relaxation, coordinate substitution, solver rerun, or truth read"
+  },
+  "native": {
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd"
+    },
+    "flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "inference_inputs_only": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "ground_truth_used_for_inference": false,
+    "precomputed_result_coordinates_used_for_inference": false,
+    "phase31_champion_mutated": false,
+    "production_default_changed": false,
+    "mat_read_or_generated": false
+  },
+  "materialization": {
+    "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/phase37_raw_materialization.json",
+    "sha256": "4db95d2d3c6180d9855e596fd516b04644099c0c71b13eeb47af8a85cefbb6ac",
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "selected_members": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "ground_truth_member_opened": false,
+    "truth_materialized": false,
+    "truth_open_count": 0,
+    "routes": {
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "device_imu_sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+        "broadcast_nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+        "truth_materialized": false
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_imu_sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+        "broadcast_nav_sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+        "truth_materialized": false
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "device_imu_sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+        "broadcast_nav_sha256": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92",
+        "truth_materialized": false
+      }
+    }
+  },
+  "structural_attempts": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "source": "sealed Phase31 existing",
+      "run1_submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+      "run1_summary_sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460",
+      "repeat_byte_identical": true,
+      "rows": 2158,
+      "graph_converged": true,
+      "pseudorange_factors": 61754,
+      "tdcp_factors": 31488,
+      "imu_intervals": 2158,
+      "over_70_mps_count": 0,
+      "max_speed_mps": 44.32917374026698
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "run1_started": true,
+      "run1_return_code": 1,
+      "run1_output_published": false,
+      "run2_started": false,
+      "structural_status": "failed-closed"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "run1_submission_sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+      "run1_summary_sha256": "2c85fd545ecf6b1bc815c7c4c42a139424a722787b2b58da6ae48b412188a542",
+      "run2_submission_sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+      "run2_summary_sha256": "2c85fd545ecf6b1bc815c7c4c42a139424a722787b2b58da6ae48b412188a542",
+      "repeat_byte_identical": true,
+      "rows": 1465,
+      "graph_converged": true,
+      "pseudorange_factors": 34319,
+      "tdcp_factors": 14062,
+      "imu_intervals": 1465,
+      "over_70_mps_count": 0,
+      "max_speed_mps": 35.94786540988618
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "run1_submission_sha256": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+      "run1_summary_sha256": "84b354751b617258db6499cf5ab477f520e3463ae73ec8b73dd3f3b438d45f31",
+      "run2_submission_sha256": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+      "run2_summary_sha256": "84b354751b617258db6499cf5ab477f520e3463ae73ec8b73dd3f3b438d45f31",
+      "repeat_byte_identical": true,
+      "rows": 1101,
+      "graph_converged": true,
+      "pseudorange_factors": 24395,
+      "tdcp_factors": 10368,
+      "imu_intervals": 1101,
+      "over_70_mps_count": 0,
+      "max_speed_mps": 29.183212276868236
+    }
+  },
+  "truth_access": {
+    "truth_open_count": 0,
+    "truth_open_count_per_route": 0,
+    "truth_materialized_count": 0,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "solver_rerun_after_truth": false,
+    "post_truth_tuning": false,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false
+  },
+  "promotion": {
+    "common_constant_fit": false,
+    "common_constant_applied": false,
+    "body_frame_fit": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "kaggle_submission": false,
+    "phase31_champion_preserved": true
+  }
+}

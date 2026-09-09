@@ -1,0 +1,74 @@
+{
+  "schema_version": "smartphone-r5-phase175-h-native-raw-p-no-doppler-imu-main-result.v1",
+  "phase": 175,
+  "execution_label": "Luna Max",
+  "status": "sealed-native-admission-failure",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase175_h_native_raw_p_no_doppler_imu_main_manifest_v1.json",
+    "sha256": "7ecc4890749174811b9d18da6e734d78e7642ef9e2510c01f5d6f9bde3059175",
+    "commit": "e899196ea97ca93c192a16f96dc69f0063790014"
+  },
+  "implementation_commit": "d2525ce56d9fe106d5db8c66e08c2554215020f6",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "execution": {
+    "launcher_session": 30793,
+    "launcher_pid": 1960394,
+    "native_pid": 1960419,
+    "invocation_count": 1,
+    "return_code": -6,
+    "signal": "SIGABRT",
+    "native_optimizer_result": "unavailable",
+    "native_summary_emitted": false,
+    "payload_read_counts": "unavailable; the native process emitted no summary",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "failure_boundary": "native GNSS-first Phase164 graph admission before a result was serialized"
+  },
+  "source_diagnosis": {
+    "evidence_level": "source-proven",
+    "backend_guard": "src/algorithms/fgo_gtsam_backend.cpp:126-154 requires use_velocity_motion_factors=true, source C0/D parity, no generic Doppler, and the complete Point3/V/C7/D recipe",
+    "staged_config": "apps/native/gnss_fgo_imu_no_base.cpp:11280-11317 sets the Phase171 GNSS-first recipe including use_velocity_motion_factors=true",
+    "overwriting_assignment": "apps/native/gnss_fgo_imu_no_base.cpp:11349-11350 unconditionally assigns gnss_first_config.use_velocity_motion_factors=false after the Phase171 branch",
+    "resulting_mismatch": "the final staged config presented to the Phase164 backend fails its complete-recipe guard; this is an application configuration overwrite, not a numerical solver result",
+    "not_proven": "raw seed acceptance counts, graph factor counts, optimizer iterations, costs, convergence, and output cardinality are unavailable because the process aborted before summary serialization"
+  },
+  "native_artifacts": {
+    "stderr": {
+      "path": "output/smartphone-r5/phase175-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stderr.log",
+      "sha256": "969376cab5f0aa3fce0e234b678f7378f620b4f9a37c04b2ea8128b7d1f63337",
+      "bytes": 182,
+      "exact_failure": "terminate called after throwing an instance of 'std::invalid_argument'\n  what():  Phase164 requires the complete Point3/V/C7/D raw-P graph recipe and an empty generic Doppler family\n"
+    },
+    "stdout": {
+      "path": "output/smartphone-r5/phase175-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase175-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json",
+      "present": false,
+      "coordinate_values_read": false
+    },
+    "opaque_solution_output": {
+      "path": "output/smartphone-r5/phase175-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+      "present": false,
+      "coordinate_values_read": false
+    }
+  },
+  "read_accounting": {
+    "manifest_input_hash_preflight_reads": {
+      "android_gnss": 1,
+      "android_imu": 1,
+      "nav": 1
+    },
+    "native_payload_read_counts": "unavailable",
+    "truth_reads": 0,
+    "base_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_coordinate_interpretation": 0
+  },
+  "next_boundary": "Phase176 must preserve the Phase171 GNSS-first recipe's velocity-motion-factor setting through final staging, add a regression for the final application config, rebuild and repin before any new raw invocation."
+}

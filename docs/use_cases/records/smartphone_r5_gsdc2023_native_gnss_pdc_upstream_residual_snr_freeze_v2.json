@@ -1,0 +1,84 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-freeze.v2",
+  "status": "frozen-before-development-train-score",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Correct the raw-only upstream residual/SNR candidate so pseudorange ISB centers follow MATLAB splitapply column-group semantics; keep the earlier per-epoch candidate immutable as historical proxy evidence.",
+  "candidate": {
+    "id": "native-gnss-pdc-upstream-residual-snr-global-isb-v2",
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "raw_gnss": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+    "raw_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "broadcast_nav": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+    "broadcast_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "device_model": "pixel7pro",
+    "output_root": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro"
+  },
+  "source_hashes": {
+    "apps/native/gnss_pos_vel_pdc.cpp": "ec80a40d0d5c3fe228b4b81bbb011d111325124293c559b512eb43a8763ecf97",
+    "apps/native/observable_upstream_preprocessing.hpp": "9e0e4f3a042ebf05066008643292b9b2fa69409bc7b6a1222d5caabc08cc747c",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "428ca551e3c743f5367548f08fde1ecf67b1378082c52da3825ec0bb15ddebde",
+    "apps/commands/benchmarks/gnss_smartphone_wls_test_batch.py": "67056a8a844de0a7482481c1577102087adfa53b870e187e9b35118dd6059017",
+    "include/libgnss++/io/android_raw_gnss.hpp": "d9166dc871f2ed7fca0e8b501c62bd27012dd26b1991b8be9ec961076968f9cc",
+    "src/io/android_raw_gnss.cpp": "7cd94d0f7607c1672705354e0e4e0eddfcbc830481c0becb6bb13ecdc79db6a3",
+    "build/apps/gnss_pos_vel_pdc": "c204689ad3ea7636fd3349202ae62cbf0401630a62e8cbdd805466cacb25378e"
+  },
+  "historical_proxy": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v1.json",
+    "record_sha256": "0b08e620f36cb56e33c8742a4506e82bba75f8d8a09486ba3cf9bb010e014a65",
+    "pseudorange_center": "per-epoch clock-group and band median; not exact MATLAB splitapply semantics",
+    "status": "superseded-before-v2-score; retained as historical scored artifact"
+  },
+  "upstream_spec": {
+    "repository": "taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "exobs_residuals": "functions/exobs_residuals.m:12,65-68; splitapply(medianall,resPc-clk,findgroups(obs.sys))",
+    "obserrmodel": "functions/obserrmodel.m:14-31; MATLAB prctile midpoint interpolation and SNR weights",
+    "splitapply_primary_semantics": "MathWorks splitapply documentation: matrix X plus row-vector G groups columns; therefore each system median is over all retained epochs in this frequency loop",
+    "splitapply_documentation_url": "https://www.mathworks.com/help/matlab/ref/splitapply.html",
+    "base_compensation": "correct_pseudorange.m requires base observations and is not ported"
+  },
+  "parameters": {
+    "snr_percentile": 85,
+    "snr_percentile_interpolation": "MATLAB midpoint rank 0.5+n*p/100, endpoint clipped",
+    "snr_denominator_db": 20,
+    "signal_factor": {"GPS_L1": 0.8, "GLO_L1": 1.5, "GAL_E1": 0.8, "BDS_B1": 0.8, "GPS_L5": 0.5, "GAL_E5": 0.5, "BDS_B2A": 0.5},
+    "snr_sigma_ratios": {"pseudorange": 1.0, "doppler": 0.08333333333333333, "carrier": 0.0025},
+    "minimum_snr_dbhz": 20.0,
+    "minimum_elevation_deg": 5.0,
+    "pseudorange_doppler_pair_threshold_m": {"L1": 40.0, "L5": 20.0},
+    "doppler_residual_threshold_mps": {"L1": 3.0, "L5": 3.0},
+    "carrier_doppler_pair_threshold_m": {"L1": 1.5, "L5": 1.5},
+    "carrier_offset_m": 0.0,
+    "pair_dt_max_s": 1.5,
+    "pseudorange_residual_center": "global over all epochs by system and frequency; exact column-group equivalent of upstream splitapply",
+    "doppler_residual_center": "per-epoch finite median as raw-observable receiver-clock center proxy; exact upstream dclk unavailable without prohibited precomputed state",
+    "legacy_numeric_solver_parameters_unchanged": true
+  },
+  "algorithm_contract": {
+    "mode": "raw Android GNSS + broadcast navigation",
+    "opt_in_flag": "--upstream-residual-snr",
+    "factors": ["pseudorange", "undifferenced Doppler", "ordinary TDCP/ADR", "position/clock/velocity/drift priors", "temporal motion"],
+    "forbidden_factors": ["base", "single-difference", "double-difference"],
+    "native_spp_seed": true,
+    "mat_inputs_used": false,
+    "truth_used_before_freeze": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "production_default_changed": false,
+    "base_pseudorange_compensation": "not applied; unavailable under raw+nav-only contract",
+    "post_freeze_tuning": false
+  },
+  "commands": {
+    "build": "cmake --build build --config Release --target gnss_pos_vel_pdc run_tests -j2",
+    "truth_free": "python3 apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py --android-raw data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv --nav data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav --trip-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --device-model pixel7pro --upstream-residual-snr --output-dir output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-global-isb-v2/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro",
+    "score_after_freeze": "python3 apps/gnss.py smartphone-native-gnss-pdc-evaluate --candidate <sealed keyed.csv> --run-manifest <sealed run_manifest.json> --ground-truth <development ground_truth.csv> --recovery-authorization <v2 authorization> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --output-json <score.json>"
+  },
+  "gate": {
+    "baseline_score_m": 93.50510102387848,
+    "score_is_report_only": true,
+    "promotion_requires": "no worse horizontal score/P95 and no availability/vertical/continuity regression versus frozen native raw bridge; no post-score parameter tuning",
+    "native_target_0_782_class": "not achieved by this freeze"
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-freeze-manifest.v1",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_freeze_v1.json",
+    "sha256": "6e9004384b604c4f311aa56b3f6edcecef8af40bb7d0fa1e6e8b9e62cbd9f2ae"
+  },
+  "gap_matrix": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json",
+    "sha256": "9f5e9caa74d3232c10f4a93103613fa239f2f834cf94eb0618c52e8db0d7c97f"
+  },
+  "algorithm_sources": {
+    "apps/native/gnss_pos_vel_pdc.cpp": "22c794c7c32923003f3d5e3b2f0a92d5ee7f266b634ebbc6fcaacde61f1ce0c5",
+    "apps/native/observable_measurement_helpers.hpp": "a23ffd70ac2c3a5da4900044d1f55ae5a2812c9e02b7892db58e9800b93d5625",
+    "include/libgnss++/io/android_raw_gnss.hpp": "117c7f81c3052f2ae95ec683a60290b03c0703c3a57f1487338930f4e3902a22",
+    "src/io/android_raw_gnss.cpp": "262d1e289b4dccdf6356b1ea07af92731b8df4600de52a9059b29f5bee31dda9",
+    "apps/commands/benchmarks/gnss_smartphone_native_only.py": "c649c4d1b40b61a26a88cb38c49e7f5671a714ad33fff4b26d4c96c703790561",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "09e7ab071ad6d1bb2f6a9b146cfed69e19f7739c25b308521fb099a57c38386d",
+    "apps/gnss.py": "0cd27d1afc4520cf0825dc97c17deb0d29f83e60626d36114e65680597815396",
+    "tests/test_android_raw_gnss.cpp": "af7ea7802875dae2aef9c604352048357234703cf8153640ec939a703bdf4d0d",
+    "tests/test_smartphone_native_only.py": "1e2028205eca27418967faee71a77179b6e12bc5b401c84c3196bcf31e68d7da",
+    "tests/test_smartphone_native_gnss_pdc_bridge.py": "99df89e73f1d01530416183ac28aaae3b843939b64241d0953ac15433215622e"
+  },
+  "inputs": {
+    "device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "broadcast_nav_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "archive_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_pos_vel_pdc",
+    "sha256": "5f43e5f542323a44e379e9fbf6e544ae07d6680afe5f32f305e28de393180ff0"
+  },
+  "truth_boundary": {
+    "truth_free_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "ground_truth_read_before_freeze": false,
+    "ground_truth_read_after_freeze": "not yet performed; one declared development score is permitted",
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_open_count": 0
+  },
+  "seal_contract": {
+    "source_and_binary_hashes_verified_before_score": true,
+    "no_post_score_tuning": true,
+    "no_external_mutation": true,
+    "production_default_changed": false
+  }
+}

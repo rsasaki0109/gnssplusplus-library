@@ -1,0 +1,209 @@
+{
+  "schema_version": "smartphone-r5-phase112-main-fgo-source-parity-freeze.v1",
+  "phase": 112,
+  "execution_label": "Luna Max",
+  "status": "frozen-source-backed-default-off-candidate-no-execution",
+  "purpose": "Freeze exactly one raw-only, output-boundary source-parity candidate for the remaining Phase101/107/109 main-FGO discrepancy after C7, raw D, QR, and raw-base parity.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase112_main_fgo_source_parity_audit_v1.md",
+    "commit": "065f5d83c4deb93df172c5c17566af795a7c86b4",
+    "sha256": "95fbfac8aad1d434cbfa50773cad2ef7ee5bfde62420d3354e96d7cd08212292"
+  },
+  "scope": {
+    "routes": ["MTV-A", "LAX-T"],
+    "phone": "pixel5",
+    "comparison": "official fgo_gnss_imu.m and preprocessing source versus native Phase101/107/109 source and sealed aggregate metadata",
+    "new_raw_or_solver_execution": false,
+    "official_mat_data_read": false,
+    "truth_or_accuracy_read": false
+  },
+  "sealed_evidence": {
+    "phase101_structural_result": {
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a",
+      "interpretation": "GNSS-first and QR main have strict finite progress with complete C7/D handoff on both routes."
+    },
+    "phase105_attribution_result": {
+      "sha256": "d4a1f4c05c00a65abe38f900279c6bd3a9cc9c1e0c4d0eb571608929c0da381c",
+      "route_scalars_m": {
+        "MTV-A": {"stage": 3.334004080470148, "main": 1.139793072101309},
+        "LAX-T": {"stage": 5.782811093104809, "main": 3.310820065300743}
+      }
+    },
+    "phase108_accuracy_result": {
+      "sha256": "9f9a2528745c06ba06e774139f56892bcea0ef208a3d064e4b70042e48f29a9d",
+      "route_scalars_m": {
+        "MTV-A": 1.1396560717187856,
+        "LAX-T": 0.8241679860216076
+      },
+      "macro_m": 0.9819120288701966,
+      "strict_gate_m": 0.782,
+      "causal_claim_authorized": false
+    },
+    "phase109_structural_result": {
+      "sha256": "b443c2fcd1ed3b067094b47bf0b81f7fa404ed20547e7234d1c174dcf9ca2225",
+      "interpretation": "Existing raw-base and additional-frequency path passed its sealed structural gates; this freeze does not alter it."
+    },
+    "phase21_helper_evidence": {
+      "freeze_sha256": "aeff90b9ddda713ab4cce9f4564f0418c3f1d269bf9d0c32aea0e78d622c4928",
+      "result_sha256": "d6c9fda6aa35f13b001bf48ae1a26d7673069948ce407f85af973a74f80c8df7",
+      "interpretation": "Historical structural metadata shows the existing helper is bounded and does not change graph factors; it is not a Phase112 accuracy claim."
+    }
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase112-main-output-upstream-position-offset-v1",
+    "status": "frozen-default-off-source-backed-contract",
+    "source_backed": true,
+    "raw_only": true,
+    "selector": "--native-upstream-position-offset",
+    "default_off": true,
+    "hypothesis": "The official fixed Pixel5 phone-to-position offset, omitted from the native Phase101/107/109 public main output, accounts for a bounded 0.2--0.4 m component of the remaining error.",
+    "not_a_causal_proof": true,
+    "official_pixel5_offset": {
+      "offset_rl_m": -0.1,
+      "offset_ud_m": -0.3,
+      "local_vector_order": "[offsetUD, offsetRL, 0]",
+      "rotation_preserving_norm_m": 0.31622776601683794,
+      "source": "output/reproducibility-cache/gsdc2023/functions/add_position_offset.m:10-38"
+    }
+  },
+  "operation_contract": {
+    "stage": "after finite optimized same-run Phase101/107/109 main Pose3 result and before existing raw UTC-key alignment/output",
+    "attitude": "same-run optimized Pose3 Rot3::rpy(); no external or precomputed attitude",
+    "formula": "ENU displacement = Rx*Ry*Rz(rpy-[0,0,pi]) * [offsetUD,offsetRL,0]",
+    "position_conversion": "Apply displacement through the existing finite navigation origin ENU-to-ECEF conversion and recompute geodetic fields.",
+    "row_contract": "No timestamp, velocity, C7, D, clock, factor, row-order, interpolation, or key changes; retain exact raw UTC-key alignment after the correction.",
+    "coverage_contract": "Every finite expected output epoch must be corrected exactly once; unknown phone, nonfinite attitude/origin/position, out-of-Earth result, missing/duplicate/misaligned key, or fallback fails closed.",
+    "stage_handoff_unchanged": true,
+    "main_graph_unchanged": true
+  },
+  "composed_recipe_invariants": {
+    "c7_epoch_local_state_and_handoff": "unchanged",
+    "raw_d_initialization_and_handoff": "unchanged",
+    "ccdd_equation_units_sigma_m": "unchanged; official 0.1 m CCDD remains pinned where already selected",
+    "qr_solver_and_ordering": "unchanged; Phase99 MULTIFRONTAL_QR/EliminateQR remains selected",
+    "raw_base_correction": "unchanged and exactly once when the existing Phase107/109 raw-base selector is composed",
+    "additional_frequency_admission": "unchanged; Phase109 selector/guards remain required when composed",
+    "imu_graph_and_preintegration": "unchanged",
+    "gnss_factors_filter_and_initialization": "unchanged",
+    "sigma_lm_schedule_and_iterations": "unchanged",
+    "pdc_precomputed_coordinates_mat_truth_kaggle": false,
+    "legacy_selector_off": true
+  },
+  "guard_only_admission": {
+    "current_source_boundary": "The existing helper is implemented and fail-closed, but the strict Phase101 C7/D/QR optional-switch guard currently rejects native_upstream_position_offset.",
+    "permitted_future_change": "Remove only this candidate from the exact Phase101/107/109 recipe mutual-exclusion predicate after qualification; preserve all other forbidden-switch, input-lineage, selector, finite, coverage, and fail-closed checks.",
+    "forbidden_changes": [
+      "no graph or factor construction change",
+      "no C7/D topology or state change",
+      "no CCDD equation, meter unit, sigma, filter, or LM change",
+      "no IMU axis, gravity, Coriolis, bias, synchronization, or preintegration change",
+      "no base correction formula, mapping, or second application",
+      "no solution/truth/accuracy output publication in structural qualification"
+    ]
+  },
+  "qualification_gates": [
+    "selector off is legacy semantic/byte-equivalent for all existing outputs",
+    "selector on uses only the same-run optimized Pose3 and fixed official Pixel5 table",
+    "declared Pixel5 offset norm is exactly 0.31622776601683794 m",
+    "all expected output epochs are finite, Earth-valid, corrected exactly once, and remain exact raw-UTC aligned",
+    "C7 and raw D handoff remain full, finite, and exact-key aligned",
+    "Phase99 QR branch remains selected with no solver fallback",
+    "composed Phase107/109 raw-base correction remains exactly once with unchanged miss accounting",
+    "legacy/default and candidate-off regressions pass",
+    "no raw rerun, fallback, tuning, truth read, or solution publication"
+  ],
+  "authorization_boundary": {
+    "implementation_authorized": false,
+    "structural_raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_promotion_authorized": false,
+    "solution_publication_authorized": false,
+    "one_shot_authorization_required": true,
+    "future_structural_inputs": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "broadcast navigation"
+    ],
+    "raw_base_passthrough": "Only an independently authorized existing Phase107/109 raw-base contract may be composed; no new base payload or phone coordinate input is admitted.",
+    "next_boundary": "Implement and test the guard-only admission, then create separate pre-raw contract and independent one-shot authorization before any structural raw run."
+  },
+  "rejected_alternatives": [
+    {
+      "id": "native-static-bias-to-official-zero-bias",
+      "reason": "Real source difference, but it changes preintegrated residuals and graph linearization; no sealed route-level impact evidence."
+    },
+    {
+      "id": "matlab-inclusive-extrapolated-imu-synchronization",
+      "reason": "Real time-policy difference, but it changes all IMU factors and gap handling and is not a bounded output correction."
+    },
+    {
+      "id": "official-stop-height-or-per-epoch-prior-factors",
+      "reason": "Changes the graph; height/reference data would cross the forbidden MAT/reference-data boundary."
+    },
+    {
+      "id": "residual-time-offset-or-sigma-lm-tuning",
+      "reason": "No source-backed fixed mismatch or sealed telemetry authorizes tuning."
+    }
+  ],
+  "read_accounting": {
+    "official_source_text_reads": 8,
+    "native_gtsam_source_header_reads": "source text only",
+    "sealed_aggregate_metadata_reads": "Phase101, Phase105, Phase108, Phase109, historical Phase21",
+    "raw_device_gnss_imu_navigation_reads": 0,
+    "raw_base_bytes_headers_metadata_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_payload_reads": 0,
+    "solver_invocations": 0,
+    "new_accuracy_calculations": 0,
+    "pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallback_tuning": 0
+  },
+  "source_pins": {
+    "official_fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "official_fgo_gnss_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+    },
+    "official_preprocessing_m": {
+      "path": "output/reproducibility-cache/gsdc2023/preprocessing.m",
+      "sha256": "976629d187e7fab5868eb8e5676a4d40520eb23db1254f7320d3b4270d7dffcf"
+    },
+    "official_imuprocessing_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/imuprocessing.m",
+      "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae"
+    },
+    "official_deviceimu2imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/deviceimu2imu.m",
+      "sha256": "9aff2984b0aa1709bbb1b397b48216ab46c213a1e3cbcfa99c0546a48a6df632"
+    },
+    "official_add_position_offset_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/add_position_offset.m",
+      "sha256": "2308b612b6aab9816ddcf3c1efef621b8ebe15a1bdae5d167df2783e6c831797"
+    },
+    "official_eul2rotm_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/eul2rotm.m",
+      "sha256": "0214826c3a1dd662330acb034ab25756ea772961f0063092c887e535013c3da8"
+    },
+    "official_parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "native_application_cpp": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "be643811cfaf82304f9434bc969796b2a14cd0f6e5a2c8b46b043af7b326c5c2"
+    },
+    "native_backend_cpp": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa"
+    },
+    "native_existing_offset_helper": {
+      "path": "include/libgnss++/algorithms/upstream_position_offset.hpp",
+      "sha256": "a37fc5d93f2f32cf9e9c6d684b38d9ce855db3acaca743d765d870530ebb2fce"
+    }
+  }
+}

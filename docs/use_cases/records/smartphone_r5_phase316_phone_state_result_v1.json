@@ -1,0 +1,17 @@
+{
+  "phase": 316,
+  "freeze_commit": "39fad907",
+  "exit_code": 0,
+  "stdout_lines": 1,
+  "stderr_bytes": 0,
+  "input_epochs": 3140,
+  "states_built": 74339,
+  "missing_nav_satellite_epochs": 0,
+  "skipped_epochs_without_seed": 0,
+  "pseudorange_factors": 101888,
+  "expected_input_epoch_count_matches": true,
+  "raw_passes_per_input": 1,
+  "hash_scans_per_input": 1,
+  "optimizer_calls": 0,
+  "truth_reads": 0
+}

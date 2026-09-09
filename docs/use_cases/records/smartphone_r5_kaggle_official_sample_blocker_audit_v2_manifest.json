@@ -1,0 +1,20 @@
+{
+  "schema_version": "smartphone-r5-kaggle-official-sample-blocker-audit-manifest.v2",
+  "status": "sealed-failed-authentication-required",
+  "record": "docs/use_cases/records/smartphone_r5_kaggle_official_sample_blocker_audit_v2.json",
+  "record_sha256": "7646fc89ac331907763a50630d3939424c453fa75e6f0653bbcf57c34345dc86",
+  "competition_slug": "smartphone-decimeter-2023",
+  "official_files_list_http_status": 401,
+  "official_sample_download_http_status": 401,
+  "official_sample_downloaded": false,
+  "official_sample_sha256": null,
+  "anonymous_api_error": "Unauthenticated",
+  "local_kaggle_credentials_available": false,
+  "derived_submission_reused_without_regeneration": true,
+  "derived_submission_sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+  "strict_promotion": "not_run",
+  "truth_open_count": 0,
+  "algorithm_or_candidate_changed": false,
+  "leaderboard_evaluated": false,
+  "rank_one_claim_permitted": false
+}

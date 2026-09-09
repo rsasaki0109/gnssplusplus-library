@@ -1,0 +1,136 @@
+{
+  "schema_version": "smartphone-r5-phase30-samsung-chronology-freeze.v1",
+  "phase": 30,
+  "status": "frozen-before-phase30-samsung-truth-reopen",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+  "purpose": "Diagnose the sealed Phase29 Samsung horizontal-error tail by joining one post-freeze truth chronology with raw-only structural signals. This record authorizes no estimator, parameter, artifact, or lane change.",
+  "parent_phase29_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase29_native_fgo_no_bridge_train_eval_result_v1.json",
+    "sha256": "88d2cf8b91460e098873872cbcd1d0be8df2a15adf1d3a43749c7301e1533536"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_metadata_only_for_prior_materialization": true,
+    "phase30_does_not_extract_archive": true
+  },
+  "truth_contract": {
+    "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+    "sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+    "bytes": 113328,
+    "already_materialized_by_phase29": true,
+    "phase29_cumulative_open_count_before_phase30": 1,
+    "phase30_authorized_additional_open_count": 1,
+    "phase30_truth_read_is_postfreeze_only": true,
+    "truth_used_for_inference_or_candidate_selection": false,
+    "truth_read_method": "one payload read; hash and parse from the same bytes; no second truth read"
+  },
+  "exclusions": {
+    "pixel_truth_opened": false,
+    "fresh_validation_truth_opened": false,
+    "future_holdout_truth_opened": false,
+    "test_truth_opened": false,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "solver_rerun": false,
+    "candidate_or_control_regenerated": false,
+    "candidate_or_control_changed": false
+  },
+  "sealed_artifacts": {
+    "control_submission": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/submission.csv",
+      "sha256": "d5df038f18978be78e1b03d07bf32c4643923baf0dafa4778709f15801bb76e2"
+    },
+    "control_summary": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/no_bridge/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/summary.json",
+      "sha256": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3"
+    },
+    "candidate_submission": {
+      "path": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/smg988b/submission.csv",
+      "sha256": "1cfb9f3204934499fa9edf9e8073564897cf3660818e9a14afa5ddcb9c65f507"
+    },
+    "candidate_summary": {
+      "path": "output/smartphone-r5/phase28-native-fgo-no-bridge-structural-v1/tdcp_no_bridge/smg988b/summary.json",
+      "sha256": "28a0ffd472e68f79e59fd9032acc5b70a7bdec4afe1b8fcf5b60f1da8cd60f81"
+    }
+  },
+  "raw_inputs": {
+    "device_gnss": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_gnss.csv",
+      "sha256": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+      "used_fields_only": [
+        "MessageType",
+        "utcTimeMillis",
+        "TimeNanos",
+        "HardwareClockDiscontinuityCount",
+        "State",
+        "Svid",
+        "SignalType",
+        "PseudorangeRateMetersPerSecond",
+        "AccumulatedDeltaRangeState",
+        "Cn0DbHz"
+      ],
+      "enriched_coordinate_fields_used": []
+    },
+    "device_imu": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/device_imu.csv",
+      "sha256": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+      "read_by_phase30": false
+    },
+    "broadcast_nav": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/brdc.nav",
+      "sha256": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440",
+      "read_by_phase30": false
+    },
+    "raw_materialization_manifest": {
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/materialization_manifest.json",
+      "sha256": "1adf676b5301dd9f7c425d29cebfc5ce90b4bae542cba4444042cba2e55f8196"
+    }
+  },
+  "diagnostic_contract": {
+    "one_process": true,
+    "one_phase30_truth_payload_read": true,
+    "truth_is_scoring_chronology_only": true,
+    "structural_signals": [
+      "HardwareClockDiscontinuityCount",
+      "raw-clock segment transitions",
+      "raw UTC/time-nanos gaps",
+      "sealed exact/interpolated key counts",
+      "per-key source-lane inference",
+      "FGO epoch/factor/convergence coverage from sealed summaries",
+      "control/candidate transition speeds",
+      "raw status/Doppler/carrier/CN0 row counts"
+    ],
+    "source_lane_rule": "Use sealed native raw_utc_key_contract exact/interpolated counts as authoritative; infer per-key interpolation only when both sealed lanes have fixed-tolerance ECEF linearity, and label inference explicitly because no solver timestamp sidecar is stored.",
+    "source_linearity_tolerance_m": 0.01,
+    "continuity_bound_mps": 70.0,
+    "large_error_threshold_m": 100.0,
+    "tail_error_threshold_m": 500.0,
+    "raw_clock_gap_threshold_ms": 1000.0,
+    "tail_is_diagnostic_only": true,
+    "no_truth_coordinate_fitting": true,
+    "no_postscore_tuning": true,
+    "no_new_lane_authorization": true
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_phase30_samsung_chronology.py": "9e496ec3a901ca679c888e31438bb0ff4ab8e978c17b174ec0d9d6079c35dc5d",
+    "tests/test_smartphone_phase30_samsung_chronology.py": "2964a43531bf24b27a6a2dd4b02364a506a5fc3df985ec98b6ccc35c71a9329c",
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": "1b0a978bf89dc2adeb8c61a7b5d0c204cd91aafadb721a75075d85d7da9d30ce"
+  },
+  "commands": {
+    "truth_free_unit_tests": "python3 -m unittest -v tests/test_smartphone_phase30_samsung_chronology.py",
+    "single_authorized_read": "python3 apps/commands/benchmarks/gnss_smartphone_phase30_samsung_chronology.py score",
+    "future_validation": "forbidden",
+    "future_holdout": "forbidden"
+  },
+  "integrity": {
+    "freeze_record_hash": "computed after commit and pinned by the companion manifest",
+    "sealed_candidate_and_control_hashes_verified_before_truth": true,
+    "raw_input_hashes_verified_before_truth": true,
+    "truth_hash_verified_from_single_payload": true,
+    "result_and_manifest_atomic_publish": true,
+    "phase29_no_go_result_immutable": true
+  }
+}

@@ -1,0 +1,243 @@
+{
+  "schema_version": "smartphone-r5-phase100-phase99-qr-accuracy-manifest.v1",
+  "phase": 100,
+  "status": "sealed-before-phase100-raw-and-truth-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Pre-raw contract for exactly one fresh Phase99 QR solution per MTV-A and LAX-T followed by one isolated evaluator subprocess.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_gate_freeze_v1.json",
+    "sha256": "de2d4f5626782297b5535767ff1f867e29538c74edafff337504b763dbfc0ff9",
+    "commit": "2fb699a",
+    "execution_authorized_before_manifest": false
+  },
+  "pre_raw_evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase100_phase99_qr_accuracy.py",
+    "sha256": "85d72342e34f83d3edcd9e3d0efc5d03c2aac10b243e40958e575f74fdbd1928"
+  },
+  "execution_wrapper": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase100_phase99_qr_accuracy_execute.py",
+    "sha256": "326b679500b25808ad32c2ea07db8e22313c4e181d70b4aa5267c554287fda82"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase100_phase99_qr_accuracy.py",
+    "sha256": "4d2e2f1ec10d5c736584a48296526d09b3686588b746d2f72667ec90f067a9e1"
+  },
+  "candidate": {
+    "id": "phase100-phase99-main-multifrontal-qr-accuracy-v1",
+    "source_candidate": "phase99-main-meter-state-multifrontal-qr-branch-only",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "route_order_fixed": true,
+    "raw_only": true,
+    "fresh_solution_required": true,
+    "phase99_withheld_solution_reuse": false,
+    "diagnostic_withholding_selectors_absent": true,
+    "no_solver_filter_or_lm_change": true,
+    "no_equation_unit_sigma_change": true,
+    "no_fallback_or_rerun": true,
+    "solution_publication": false,
+    "truth_evaluation_in_native": false,
+    "input_names_exact": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "solver_branch": {
+      "selected_main_solver_type": "MULTIFRONTAL_QR",
+      "selected_main_elimination_function": "EliminateQR",
+      "selected_main_branch": "multifrontal",
+      "ordering_type": "COLAMD",
+      "explicit_ordering_present": false,
+      "gnss_first_solver_type": "MULTIFRONTAL_CHOLESKY",
+      "legacy_solver_type": "MULTIFRONTAL_CHOLESKY"
+    },
+    "solution_mode_note": "The Phase94/96/97/98 diagnostic selectors are intentionally absent because those native modes withhold the solution; this changes no solver graph, equation, unit, sigma, filter, initialization, or LM setting. Phase99 QR and Phase93 handoff selectors remain enabled."
+  },
+  "raw_input_contract": {
+    "path_source": "Phase95 sealed raw-input materialization",
+    "materialization": "metadata-only path resolution/stat followed by exact substitution of three paths; no copy or transform",
+    "input_names_exact": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "device_gnss_only": true,
+    "device_imu_only": true,
+    "broadcast_navigation_only": true,
+    "truth_mat_base_pdc_precomputed_coordinate_kaggle": false,
+    "copy_or_transform": false,
+    "runner_raw_byte_reads": 0,
+    "runner_raw_hash_reads": 0
+  },
+  "routes": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "domain_rows": 2158,
+      "problem_epochs": 2159,
+      "diagnostic_only": false,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "__PHASE95_RAW_DEVICE_GNSS__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "device_imu.csv": {
+          "path": "__PHASE95_RAW_DEVICE_IMU__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "brdc.nav": {
+          "path": "__PHASE95_RAW_BROADCAST_NAV__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        }
+      },
+      "planned_output": {
+        "solution": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "solution_metadata": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution_metadata.json",
+        "run_metadata": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/run_metadata.json"
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "--android-gnss",
+        "__PHASE95_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE95_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE95_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--out",
+        "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json"
+      ]
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "domain_rows": 1465,
+      "problem_epochs": 1466,
+      "diagnostic_only": false,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "__PHASE95_RAW_DEVICE_GNSS__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "device_imu.csv": {
+          "path": "__PHASE95_RAW_DEVICE_IMU__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "brdc.nav": {
+          "path": "__PHASE95_RAW_BROADCAST_NAV__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        }
+      },
+      "planned_output": {
+        "solution": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "solution_metadata": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution_metadata.json",
+        "run_metadata": "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/run_metadata.json"
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "--android-gnss",
+        "__PHASE95_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE95_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE95_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--out",
+        "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase100-phase99-qr-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json"
+      ]
+    }
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations_planned": 2,
+    "controls_in_native": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_reads_in_native": 0,
+    "truth_reads_in_evaluator_planned": 2,
+    "mat_reads_or_generated": 0,
+    "base_rinex_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "solution_rows_published": false,
+    "route_score_selection": false
+  },
+  "read_policy_before_execution": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "base_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_outputs_generated": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "execution_authorization": {
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "stop_after_two_native_routes": true,
+    "truth_must_be_opened_only_by_evaluator_subprocess": true
+  },
+  "phase82_metric_reference": {
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_freeze_v1.json",
+    "freeze_sha256": "33bbfc4051af20cd3f39fbf8620ea4d277c4acc5dbe5d8d1621452a657eebf6b",
+    "manifest_sha256": "77f3cc6f82b4953e3fd0a240eff149fdc6c96b9335cc5058c962010b985500a0",
+    "route_scalar": "(P50 + P95) / 2",
+    "macro": "unweighted mean over exactly MTV-A and LAX-T",
+    "phase82_four_route_macro_direct_comparison": false
+  }
+}

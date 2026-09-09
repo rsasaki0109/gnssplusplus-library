@@ -1,0 +1,18 @@
+{
+  "phase": 316,
+  "implementation_head": "8dfb92aa7f85b0d86b65e5004ef60e4ae919416a",
+  "binary": "build/native_phone_fgo_state_inventory",
+  "binary_sha256": "271c8a8f9f6cca331d2cfe20036b8dbb339117fe2e7433eb82225f1be287238e",
+  "source": "scripts/native_phone_fgo_state_inventory.cpp",
+  "source_sha256": "939630e5489548f8a09562b0c379e1062f10375c40c155d1b2e6b081650df88c",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "phone": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+  "phone_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+  "expected_input_epochs": 3140,
+  "config": "default FGOConfig plus source rover epoch states, multi constellation, multi frequency DD, upstream observable quality enabled; default raw config except enriched P verification disabled",
+  "scope": "admission diagnostic only; raw SPP seeds in memory; no optimizer, IMU, base correction, truth, MAT or saved positioning input",
+  "runs": 1,
+  "output": "aggregate counts only",
+  "phone_time": "raw parser epoch time without operational CLI UTC adjustment"
+}

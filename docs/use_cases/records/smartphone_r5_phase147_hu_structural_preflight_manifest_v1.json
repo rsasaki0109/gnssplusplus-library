@@ -1,0 +1,268 @@
+{
+  "schema_version": "smartphone-r5-phase147-hu-structural-preflight-manifest.v1",
+  "phase": 147,
+  "execution_label": "Luna Max",
+  "status": "sealed-preflight-for-future-diagnostic-only-run",
+  "purpose": "Admit only the two already recognized MTV-H and MTV-U Pixel5 route IDs to the frozen Phase144/143/135 recipe for a later structural raw run; this is not an accuracy or algorithm-success claim.",
+  "routes": [
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "candidate": {
+    "id": "phase147-known-hu-route-admission-diagnostic-v1",
+    "diagnostic_only": true,
+    "algorithm_or_solver_change": false,
+    "new_selector": false,
+    "known_route_allowlist": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "planned_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "unknown_or_non_pixel5_rejected": true,
+    "doppler_empty_state_synthesis": false,
+    "velocity_fallback_or_synthesis": false,
+    "guard_removal": false,
+    "numerical_settings_changed": false,
+    "solution_rows_published": false
+  },
+  "recipe": {
+    "source": "Phase146 Phase144 champion recipe, carried unchanged",
+    "selectors_on": [
+      "--native-phase144-telemetry-schema",
+      "--native-phase143-official-main-lm-termination-budget",
+      "--native-phase135-official-affine-measurement-family",
+      "--native-phase138-affine-tdcp-anchor-range-constant",
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "selectors_off": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase131-canonical-correction-band-key",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "raw_input_contract": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-meter-state-parity",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-upstream-position-offset"
+    ],
+    "phase107_raw_base": true,
+    "phase107_source_miss_mask": true,
+    "main_configured_max_iterations": 12,
+    "main_effective_max_iterations": 1000,
+    "gnss_first_configured_max_iterations": 1000,
+    "gnss_first_effective_max_iterations": 1000,
+    "accepted_iteration_contract": "native reports must satisfy 0 < accepted_outer_iterations <= effective_max_iterations; no solver result is asserted by this plan",
+    "main_solver": "MULTIFRONTAL_QR / EliminateQR",
+    "official_type_mapping": {
+      "MTV-H": "Street",
+      "MTV-U": "Street",
+      "street_tdcp_huber_threshold_sigma": 0.2,
+      "highway_tdcp_huber_threshold_sigma": 0.5,
+      "source": "native directObservableQualitySettingsForDataset and fgo_config resolver"
+    },
+    "pixel5_offset_eligibility": {
+      "required": true,
+      "source": "phoneFromDatasetId plus upstream_position_offset::phoneOffset Pixel5 branch",
+      "reapplication": false
+    }
+  },
+  "phase144_reference": {
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_manifest_v1.json",
+      "sha256": "d27a655d0000d7dc6909c1169c9b355b9f0677b51235a1cb07b7b41c0e8a7bd4"
+    },
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_freeze_v1.json",
+      "sha256": "e9ec77b84e541085dd11eb6b06cf68dda052a199830a8cda8b8f9a91aa28b6dd"
+    },
+    "result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_raw_result_v1.json",
+      "sha256": "86fa44a595d71ed7f8bf400001a30060e61f343815bac92e76f9e4d3fefc50ee",
+      "historical_result_unchanged": true
+    },
+    "phase146_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase146_phase144_accuracy_result_v1.json",
+      "historical_accuracy_result_not_reopened": true
+    }
+  },
+  "phase113_raw_provenance": {
+    "source_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase113_remaining_routes_diagnostic_manifest_v1.json",
+      "sha256": "8e28446ca36997fda97be04af69f8a311bc4f94af6f72e4a88e1b86da24f4ad9",
+      "metadata_only_reuse": true
+    },
+    "routes": {
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "label": "MTV-H",
+        "domain_rows": 3139,
+        "expected_problem_epochs": 3140,
+        "raw_inputs": {
+          "device_gnss.csv": {
+            "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+            "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+            "bytes": 74299283
+          },
+          "device_imu.csv": {
+            "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+            "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+            "bytes": 54271475
+          },
+          "brdc.nav": {
+            "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+            "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+            "bytes": 10805490
+          }
+        },
+        "base_input": {
+          "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+          "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+          "bytes": 11854125,
+          "observed_dt_s": 1.0,
+          "moving_mean_samples": 151
+        }
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "label": "MTV-U",
+        "domain_rows": 1101,
+        "expected_problem_epochs": 1102,
+        "raw_inputs": {
+          "device_gnss.csv": {
+            "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+            "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+            "bytes": 23385520
+          },
+          "device_imu.csv": {
+            "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv",
+            "sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+            "bytes": 17453338
+          },
+          "brdc.nav": {
+            "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav",
+            "sha256": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92",
+            "bytes": 11506619
+          }
+        },
+        "base_input": {
+          "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+          "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+          "bytes": 5950275,
+          "observed_dt_s": 1.0,
+          "moving_mean_samples": 151
+        }
+      }
+    },
+    "raw_payload_reads_at_manifest_creation": 0,
+    "base_payload_reads_at_manifest_creation": 0,
+    "coordinate_values_copied": false
+  },
+  "current_source_and_binary_pins": {
+    "source_change_commit_pending": true,
+    "apps/native/gnss_fgo_imu_no_base.cpp": {
+      "sha256": "03ca5ed97034f7b26ae5a324a64f1bdf1bae2bd316dc79786c1fcd1f3be82a5b",
+      "route_allowlist_locations": ["1844-1853", "1928-1937"]
+    },
+    "include/libgnss++/algorithms/fgo.hpp": {
+      "sha256": "b24ea504dea3a68583659939f74fa4766e10dc5c96f727c1bb3a57d593263d00"
+    },
+    "include/libgnss++/algorithms/fgo_config.hpp": {
+      "sha256": "f982cb0468bab27222634a76953cda00a7ece6a360bc38ed4e25308c45e1ca12"
+    },
+    "include/libgnss++/algorithms/upstream_position_offset.hpp": {
+      "sha256": "a37fc5d93f2f32cf9e9c6d684b38d9ce855db3acaca743d765d870530ebb2fce"
+    },
+    "src/algorithms/fgo_gtsam_backend.cpp": {
+      "sha256": "1d1e7819fe20c163d336ac4acc8b0fb6c7fdb3385096962330e894be56b22399"
+    },
+    "src/algorithms/fgo_gtsam_internal.hpp": {
+      "sha256": "be61a643c181206c3260549c05407e81b6a7932c81357a82e4de379b5bf560d5"
+    },
+    "src/algorithms/fgo_problems.cpp": {
+      "sha256": "6443b13d9df54e627bc73270b7d28df9c5d309043e2e194ba2b6b5c1b274bc25"
+    },
+    "src/algorithms/base_pseudorange_compensation.cpp": {
+      "sha256": "5ec8c119a55a8e974394531a7585a6ce094756c127b048d61fba330991b48ba2"
+    },
+    "build/apps/gnss_fgo_imu_no_base": {
+      "sha256": "cd55b29f8230346ede12f357c04c82ef15f2be4279a973c2d5a8418ca964d3fb",
+      "built_after_allowlist_change": true,
+      "binary_payload_executed": false
+    }
+  },
+  "structural_gates": {
+    "exact_known_route_allowlist": true,
+    "unknown_route_fail_closed": true,
+    "non_pixel5_fail_closed": true,
+    "official_type_h_u_street": true,
+    "street_tdcp_huber_k_0_2": true,
+    "pixel5_offset_boundary_retained": true,
+    "c0d_doppler_empty_guard_retained": true,
+    "u_epoch_coverage_must_be_reported_by_future_run": true,
+    "configured_effective_termination_fields_required": true,
+    "main_configured_12_effective_1000": true,
+    "gnss_first_configured_1000_effective_1000": true,
+    "accepted_iterations_bounded_by_effective": true,
+    "all_native_summary_structural_gates": true,
+    "no_truth_or_accuracy": true
+  },
+  "historical_only_evidence": {
+    "source_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase113_remaining_routes_diagnostic_result_v1.json",
+      "sha256": "fa80a3480162b73faa4a8f778fe2aa4dac28510ee2d3b1d4e8351c34faba14d1"
+    },
+    "MTV-H": {
+      "doppler_state_creation": "historical Phase95 telemetry retained_undifferenced_doppler_factor_count=0 and C0/D admission rejected; not a current Phase147 run result",
+      "historical_only": true,
+      "current_run_inferred": false
+    },
+    "MTV-U": {
+      "epoch_coverage": "historical Phase95 telemetry observed_problem_epochs=720 of expected 1102; main solution coverage was fail-closed; not a current Phase147 run result",
+      "historical_only": true,
+      "current_run_inferred": false
+    }
+  },
+  "execution_boundary": {
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "mat_pdc_precomputed_reads_authorized": false,
+    "kaggle_or_token_authorized": false,
+    "runs_per_route_now": 0,
+    "future_authorization_required": true,
+    "future_run_scope": "one diagnostic raw H/U run per route only after independent authorization; no rerun/fallback/repair/tuning"
+  },
+  "read_accounting_before_authorization": {
+    "raw_gnss_imu_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "next_execution_boundary": "Create a separate Phase147 raw-execution authorization only after this source/binary pin is accepted; then run exactly the frozen H/U command with the sealed Phase113 raw/base paths, preserving fail-closed Doppler and epoch/coverage telemetry. No truth or accuracy lane is part of that authorization."
+}

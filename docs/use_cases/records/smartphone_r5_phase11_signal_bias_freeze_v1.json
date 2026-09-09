@@ -1,0 +1,106 @@
+{
+  "schema_version": "smartphone-r5-phase11-signal-bias-freeze.v1",
+  "status": "frozen-before-truth-score",
+  "candidate_id": "native-signal-bias-gtsam-v1",
+  "purpose": "Raw-only opt-in receiver inter-frequency code-bias states for secondary GPS L5 and Galileo E5a pseudorange factors; the Phase10 PR/D/TDCP/IMU graph and all production defaults remain unchanged.",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "selection_basis": {
+    "truth_free": true,
+    "raw_rows": 48000,
+    "raw_epochs": 1384,
+    "gps_l1_rows": 11007,
+    "gps_l5_rows": 4005,
+    "galileo_e1_rows": 8750,
+    "galileo_e5a_rows": 8085,
+    "gps_l1_l5_same_epoch_pairs": 3877,
+    "galileo_e1_e5a_same_epoch_pairs": 7717,
+    "gps_pair_pseudorange_difference_median": 160.0891725718975,
+    "galileo_pair_pseudorange_difference_median": 161.2883424051106,
+    "gps_clean_adr_pairs": 2194,
+    "galileo_clean_adr_pairs": 4673,
+    "interpretation": "Stable approximately 160 m code separation is observable in raw paired signals. A model-corrected ionosphere-free combination without a receiver IFB state would amplify this separation; therefore this freeze selects an explicit global secondary-signal bias state rather than an uncorrected IF combination."
+  },
+  "truth_free_contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["ground_truth.csv", "*.mat", "sample_submission.csv", "device WLS coordinates", "precomputed result coordinates", "previous submission coordinates", "leaderboard scores"],
+    "truth_opened_before_freeze": false,
+    "truth_used_for_selection": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "kaggle_or_token_access": false,
+    "production_default_changed": false,
+    "atomic_output_required": true,
+    "post_truth_parameter_tuning": false
+  },
+  "algorithm_contract": {
+    "backend": "GTSAM batch Levenberg-Marquardt",
+    "base_recipe": "Phase10 native raw PDC+IMU+ordinary TDCP graph, unchanged",
+    "signal_bias_states": "one static meter-valued receiver bias per eligible (system, secondary signal), relative to the primary signal; GPS L5 and Galileo E5a are eligible on this route",
+    "factor_model": "range + c*(epoch clock + constellation ISB) + signal bias - corrected pseudorange",
+    "bias_sign": "positive state increases predicted secondary-code range; the observed primary-minus-secondary raw separation therefore initializes toward a negative secondary bias",
+    "bias_prior": "zero-mean weak gauge prior with sigma 1000 m; fixed before any truth read, not a truth-trained correction",
+    "pair_handling": "No observations are dropped or combined; unpaired and primary observations retain the Phase10 factor. Signal bias states are only attached to eligible secondary factors.",
+    "ionosphere": "Existing per-signal Klobuchar correction remains unchanged; this candidate does not claim a first-order IFLC combination and adds no second TGD correction.",
+    "tdcp_arcs": "Signal-specific (satellite, signal) ADR arcs and Phase10 gates remain unchanged.",
+    "fallback": "The candidate is opt-in; disabled mode must be byte-equivalent to Phase10. Nonfinite or unsupported signal-bias state construction fails closed.",
+    "gate_before_truth": [
+      "all raw target keys finite and complete",
+      "all signal-bias states and graph residuals finite",
+      "graph cost decreases and GTSAM reports convergence",
+      "no base, double-difference, MAT, WLS, or precomputed-coordinate input",
+      "GPS/Galileo signal-bias factor counts are nonzero and deterministic",
+      "no new isolated >70 m/s output transition"
+    ],
+    "promotion_gate": "After truth-free artifact seal, WGS84 linear must be < 3.913768483524376 m and all four existing diagnostic variants must be non-regressive; otherwise No-Go. A passing development route does not authorize validation, holdout, or submission."
+  },
+  "numeric_parameters": {
+    "signal_bias_prior_sigma_m": 1000.0,
+    "fgo_max_iterations": 12,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_sigma_power": 1.0,
+    "min_elevation_deg": 0.0,
+    "min_snr_dbhz": 0.0,
+    "use_ionosphere_model": true,
+    "use_troposphere_model": true,
+    "use_inter_system_biases": true,
+    "use_corrected_undifferenced_doppler_factors": true,
+    "use_tdcp_factors": true,
+    "tdcp_sigma_m": 0.03,
+    "max_tdcp_gap_s": 2.0,
+    "tdcp_code_phase_jump_threshold_m": 10.0,
+    "pdc_max_iterations": 1000,
+    "pdc_pseudorange_huber_threshold_sigma": 1.234,
+    "pdc_doppler_huber_threshold_sigma": 1.234,
+    "imu_sync_coefficient": 0.5,
+    "mounting_rotation_deg": [-85.0, 178.0, -94.0],
+    "physical_max_velocity_mps": 70.0
+  },
+  "source_sha256_before_implementation": {
+    "src/algorithms/fgo_problems.cpp": "430908f5ed66fd8b1d8689578b340048e4a1ddcc2b71d786cb29cc5bbcfa4365",
+    "include/libgnss++/algorithms/fgo.hpp": "af86945de6051d2aeb073570dc209c0168daf47ee2abf33ed3354a7bc6a6f0a1",
+    "include/libgnss++/algorithms/fgo_config.hpp": "cc9497f5a1d5e4779c15dc011660e33be9275220e2019363961a27dc40db8a6d",
+    "src/algorithms/fgo_gtsam_internal.hpp": "c9be5de4160fcf048f4102a2abe1ed155e00e72fe79de19892e2982b78e7e2cd",
+    "src/algorithms/fgo_gtsam_backend.cpp": "e02d7df55c1b42ed3e9601e7f282a2ffa1c16344e04610aaad7cc6bc51175854",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "5ce23173cbac8b2fd592a881941ba323fefbabba053ea54f4d60a74c1ff697c9"
+  },
+  "input_sha256": {
+    "device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "baseline_artifact": {
+    "phase10_summary": "output/smartphone-r5/phase10-native-pdc-imu-tdcp-v1-clock-gate/summary.json",
+    "phase10_summary_sha256": "ca832e9f57f62f3d87db1c82e5c4ac206639823f9f963f56a991b9b28cc8074d",
+    "phase10_submission_sha256": "5a367a306123a4557f42e2b59a4760bc4eb2edfd1d36492bcab6ab2c88e240bb",
+    "phase10_wgs84_linear_m": 3.913768483524376
+  },
+  "evaluation_protocol": {
+    "truth_read": "none before this freeze record and its separately hashed manifest",
+    "development_route": "one already-declared development route only",
+    "metrics": ["WGS84/Vincenty linear", "WGS84 nearest-rank", "Haversine linear", "Haversine nearest-rank"],
+    "no_post_score_tuning": true
+  },
+  "status_if_structural_failure": "No-Go; retain this record as an immutable experiment and do not open truth",
+  "freeze_record_hash": "computed after apply_patch and recorded in the companion manifest"
+}

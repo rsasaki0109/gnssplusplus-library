@@ -1,0 +1,428 @@
+{
+  "schema_version": "smartphone-r5-phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-result.v1",
+  "phase": 91,
+  "execution_label": "Luna Max",
+  "status": "no-go-phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-gates",
+  "decision": "NO-GO: the exact four-route raw-only diagnostic matrix was attempted once per route. MTV-a and LAX-t reached the implemented main graph but both terminated with iterations=0 and initial_cost==final_cost; MTV-h and MTV-u failed closed before summary publication because retained epoch counts were not identical. No accuracy or submission release is authorized.",
+  "truth_free": true,
+  "accuracy_scored": false,
+  "promotion_authorized": false,
+  "submission_released": false,
+  "contract": {
+    "implementation_commit": "0b9c4ebc5704428421f0bfc1cad569d834690b6d",
+    "pre_raw_commit": "b31fdc8",
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_freeze_v1.json",
+      "sha256": "456634b0a41da74de557185620bcb4d8c7b0572ebb7f3f1e415d8b8c82aa6fa4"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer.py",
+      "sha256": "070edf1a4267ae9ff4b706c24ca5dd334bdf971c97193454638ed20d775b26c2",
+      "return_code": 2,
+      "failure": "Phase91 active-solve telemetry incomplete: 2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "aggregate_result_published": false
+    },
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "df3d3c1fe49a7866f98b283ec28be79b0840a8728b821b13996f94da4b482660"
+    },
+    "candidate": {
+      "id": "phase91_source_clock_c0d_gnss_first_in_memory_raw_drift_d_initializer",
+      "selector": "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer",
+      "diagnostic_only": true,
+      "raw_only": true,
+      "no_pdc_or_coordinate_bridge": true,
+      "accuracy_scored": false
+    }
+  },
+  "authorized_matrix": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "domain_rows": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2158,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3139,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1465,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1101
+    },
+    "runs_per_route": 1,
+    "authorized_route_attempts": 4,
+    "controls": 0,
+    "raw_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["base RINEX", "truth", "MAT", "Kaggle", "tokens", "Phase82", "precomputed coordinates"],
+    "required_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer"
+    ],
+    "forbidden_flags": ["--obs", "--native-gnss-first-velocity-only-handoff", "--native-direct-doppler-wls-handoff", "--native-pdc-state-bridge", "--native-upstream-quality", "--native-base-rinex", "--native-base-pseudorange-compensation"]
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "authorized_run": 1,
+      "return_code": 0,
+      "summary_published": true,
+      "submission_published": true,
+      "native_log": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/native.log",
+        "sha256": "5b0257d2ec8e1c54cf99f4d0e0c5b383a7e21cdd654fc43f055f9b40b24c179a",
+        "bytes": 115,
+        "text": "native no-base FGO: epochs=2159 output=2158 imu_intervals=2158 graph_factors=120093 graph_values=10798 fallback=no"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "sha256": "b5150055b9c82c42b2cc93ab6f3d7de41b1eafbaaae9bb00b833d5d30b06af1f",
+        "bytes": 18814
+      },
+      "submission": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/submission.csv",
+        "sha256": "7a3f1c61e65af80c9cb771974bfdf9e3862b1b6c34cfe68f7238e37ad53c0346",
+        "bytes": 172694,
+        "rows": 2158,
+        "finite_coordinates": true,
+        "max_speed_mps": 46.89077972241819,
+        "over_70_mps": 0
+      },
+      "epochs": {
+        "problem": 2159,
+        "output": 2159,
+        "imu_intervals": 2158,
+        "gnss_first_epochs": 2159,
+        "gnss_first_solution_epochs": 2159
+      },
+      "gnss_first_handoff": {
+        "mode": "gnss-first-in-memory-position-clock-velocity",
+        "position_clock_source": "same-run-gnss-first-optimizer-result",
+        "velocity_source": "same-run-gnss-first-optimizer-result",
+        "epoch_identity_alignment_valid": true,
+        "main_epoch_count": 2159,
+        "gnss_first_epoch_count": 2159,
+        "solution_epoch_count": 2159,
+        "raw_epoch_count": 2159,
+        "raw_utc_key_count": 2159,
+        "aligned_epoch_count": 2159,
+        "all_mismatch_counts_zero": true,
+        "positions_clocks_copied": 2159
+      },
+      "raw_d_initializer": {
+        "enabled": true,
+        "attempted": true,
+        "coverage_valid": true,
+        "source_field": "EpochSeed.receiver_clock_drift_mps",
+        "units": "metres_per_second",
+        "epoch_count": 2159,
+        "finite_count": 2159,
+        "nonfinite_count": 0,
+        "min_mps": -28.379243850708011,
+        "max_mps": -0.68522566556930542,
+        "fallback": "none"
+      },
+      "c0d": {
+        "factor_count": 2158,
+        "clock_jump_skips": 0,
+        "gap_skips": 0,
+        "invalid_dt_skips": 0,
+        "phone_exclusion_skips": 0,
+        "dt_min_s": 0.99999999903957359,
+        "dt_max_s": 1.0000000009604264,
+        "equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+        "jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+        "sigma_seconds": 3.3356409519815207e-10,
+        "direct_quality": true,
+        "no_pdc": true
+      },
+      "active_solve": {
+        "diagnostic_enabled": true,
+        "attempted": true,
+        "finite_costs": true,
+        "termination_trace_complete": false,
+        "termination_branch_reason": "no_progress_unclassified",
+        "accepted_outer_iterations": 0,
+        "total_inner_lambda_attempts": 10,
+        "initial_lambda": 0.000010000000000000001,
+        "maximum_lambda": 100000,
+        "final_lambda": 100000,
+        "max_whitened_clock_column_norm": 2997924580,
+        "max_whitened_drift_column_norm": 5.000000004802132,
+        "conditioning_proxy": 599584915.42414284,
+        "initial_cost": 162235823.07086429,
+        "final_cost": 162235823.07086429,
+        "graph_iterations": 0,
+        "graph_converged": true
+      },
+      "failed_gates": [
+        "active_solve_telemetry_complete",
+        "exact_terminal_reason_and_counter_consistency",
+        "graph_iterations_at_least_one",
+        "final_cost_strictly_less_than_initial_cost"
+      ]
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "authorized_run": 1,
+      "return_code": 1,
+      "summary_published": false,
+      "submission_published": false,
+      "native_log": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2021-08-24-20-32-us-ca-mtv-h__pixel5/native.log",
+        "sha256": "86809f68031af39aab9918c6e3444b483a2975443352268ea3b75ec26b55d2ae",
+        "bytes": 133,
+        "text": "GNSS-first initialization unavailable: retained epoch counts are not identical\nnative GNSS-first velocity-only handoff failed closed"
+      },
+      "stage": "GNSS-first exact retained-epoch handoff",
+      "error": "retained epoch counts are not identical",
+      "active_c0d_solve_invocations": 0,
+      "failed_gates": [
+        "same_run_gnss_first_handoff",
+        "raw_drift_d_initializer_coverage",
+        "active_solve_telemetry_complete",
+        "exact_terminal_reason_and_counter_consistency",
+        "finite_initial_and_final_cost",
+        "graph_iterations_at_least_one",
+        "final_cost_strictly_less_than_initial_cost",
+        "c0d_equation_jacobian_units_sigma_unchanged",
+        "c0d_factor_and_skip_invariants",
+        "raw_utc_rows_and_domain",
+        "finite_coordinates_and_speed_only",
+        "no_pdc_bridge_or_coordinate_copy"
+      ]
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "authorized_run": 1,
+      "return_code": 0,
+      "summary_published": true,
+      "submission_published": true,
+      "native_log": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/native.log",
+        "sha256": "1d64eddaee4629306207a45bd68c4ef1e26cf9e30ae4762d305919fac171182c",
+        "bytes": 113,
+        "text": "native no-base FGO: epochs=1466 output=1465 imu_intervals=1465 graph_factors=61082 graph_values=7332 fallback=no"
+      },
+      "summary": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "sha256": "b0c30d14ad523fd7267366534618cc2765f639d6b6855c20f4d93e8af6782cea",
+        "bytes": 18862
+      },
+      "submission": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/submission.csv",
+        "sha256": "c142a16006f0bf6ac09755348c3061619989237547983f027c4583c418cc855e",
+        "bytes": 117254,
+        "rows": 1465,
+        "finite_coordinates": true,
+        "max_speed_mps": 68.3967770648268,
+        "over_70_mps": 0
+      },
+      "epochs": {
+        "problem": 1466,
+        "output": 1466,
+        "imu_intervals": 1465,
+        "gnss_first_epochs": 1466,
+        "gnss_first_solution_epochs": 1466
+      },
+      "gnss_first_handoff": {
+        "mode": "gnss-first-in-memory-position-clock-velocity",
+        "position_clock_source": "same-run-gnss-first-optimizer-result",
+        "velocity_source": "same-run-gnss-first-optimizer-result",
+        "epoch_identity_alignment_valid": true,
+        "main_epoch_count": 1466,
+        "gnss_first_epoch_count": 1466,
+        "solution_epoch_count": 1466,
+        "raw_epoch_count": 1466,
+        "raw_utc_key_count": 1466,
+        "aligned_epoch_count": 1466,
+        "all_mismatch_counts_zero": true,
+        "positions_clocks_copied": 1466
+      },
+      "raw_d_initializer": {
+        "enabled": true,
+        "attempted": true,
+        "coverage_valid": true,
+        "source_field": "EpochSeed.receiver_clock_drift_mps",
+        "units": "metres_per_second",
+        "epoch_count": 1466,
+        "finite_count": 1466,
+        "nonfinite_count": 0,
+        "min_mps": -9.870448112487793,
+        "max_mps": 8.2797584533691424,
+        "fallback": "none"
+      },
+      "c0d": {
+        "factor_count": 1465,
+        "clock_jump_skips": 0,
+        "gap_skips": 0,
+        "invalid_dt_skips": 0,
+        "phone_exclusion_skips": 0,
+        "dt_min_s": 0.99999999901046976,
+        "dt_max_s": 1.0000000009895302,
+        "equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+        "jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+        "sigma_seconds": 3.3356409519815207e-10,
+        "direct_quality": true,
+        "no_pdc": true
+      },
+      "active_solve": {
+        "diagnostic_enabled": true,
+        "attempted": true,
+        "finite_costs": true,
+        "termination_trace_complete": false,
+        "termination_branch_reason": "no_progress_unclassified",
+        "accepted_outer_iterations": 0,
+        "total_inner_lambda_attempts": 10,
+        "initial_lambda": 0.000010000000000000001,
+        "maximum_lambda": 100000,
+        "final_lambda": 100000,
+        "max_whitened_clock_column_norm": 2997924580,
+        "max_whitened_drift_column_norm": 5.0000000049476512,
+        "conditioning_proxy": 599584915.40669262,
+        "initial_cost": 284569697.45147896,
+        "final_cost": 284569697.45147896,
+        "graph_iterations": 0,
+        "graph_converged": true
+      },
+      "failed_gates": [
+        "active_solve_telemetry_complete",
+        "exact_terminal_reason_and_counter_consistency",
+        "graph_iterations_at_least_one",
+        "final_cost_strictly_less_than_initial_cost"
+      ]
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "authorized_run": 1,
+      "return_code": 1,
+      "summary_published": false,
+      "submission_published": false,
+      "native_log": {
+        "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/2023-03-08-21-34-us-ca-mtv-u__pixel5/native.log",
+        "sha256": "86809f68031af39aab9918c6e3444b483a2975443352268ea3b75ec26b55d2ae",
+        "bytes": 133,
+        "text": "GNSS-first initialization unavailable: retained epoch counts are not identical\nnative GNSS-first velocity-only handoff failed closed"
+      },
+      "stage": "GNSS-first exact retained-epoch handoff",
+      "error": "retained epoch counts are not identical",
+      "active_c0d_solve_invocations": 0,
+      "failed_gates": [
+        "same_run_gnss_first_handoff",
+        "raw_drift_d_initializer_coverage",
+        "active_solve_telemetry_complete",
+        "exact_terminal_reason_and_counter_consistency",
+        "finite_initial_and_final_cost",
+        "graph_iterations_at_least_one",
+        "final_cost_strictly_less_than_initial_cost",
+        "c0d_equation_jacobian_units_sigma_unchanged",
+        "c0d_factor_and_skip_invariants",
+        "raw_utc_rows_and_domain",
+        "finite_coordinates_and_speed_only",
+        "no_pdc_bridge_or_coordinate_copy"
+      ]
+    }
+  },
+  "gates": {
+    "implementation_and_binary_pins": true,
+    "exactly_four_routes_one_run_each": true,
+    "raw_only_command_and_provenance": true,
+    "same_run_gnss_first_handoff": false,
+    "raw_drift_d_initializer_coverage": false,
+    "active_solve_telemetry_complete": false,
+    "exact_terminal_reason_and_counter_consistency": false,
+    "finite_initial_and_final_cost": false,
+    "graph_iterations_at_least_one": false,
+    "final_cost_strictly_less_than_initial_cost": false,
+    "c0d_equation_jacobian_units_sigma_unchanged": false,
+    "c0d_factor_and_skip_invariants": false,
+    "raw_utc_rows_and_domain": false,
+    "finite_coordinates_and_speed_only": false,
+    "no_pdc_bridge_or_coordinate_copy": false,
+    "accuracy_not_scored": true,
+    "all_gates_anded": false,
+    "all_passed": false
+  },
+  "failed_gates": {
+    "names": [
+      "same_run_gnss_first_handoff",
+      "raw_drift_d_initializer_coverage",
+      "active_solve_telemetry_complete",
+      "exact_terminal_reason_and_counter_consistency",
+      "finite_initial_and_final_cost",
+      "graph_iterations_at_least_one",
+      "final_cost_strictly_less_than_initial_cost",
+      "c0d_equation_jacobian_units_sigma_unchanged",
+      "c0d_factor_and_skip_invariants",
+      "raw_utc_rows_and_domain",
+      "finite_coordinates_and_speed_only",
+      "no_pdc_bridge_or_coordinate_copy",
+      "all_gates_anded"
+    ],
+    "material_route_instances": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5:termination_trace_complete=false",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5:graph.iterations=0",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5:graph.initial_cost==graph.final_cost==162235823.07086429",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5:retained epoch counts are not identical",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5:termination_trace_complete=false",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5:graph.iterations=0",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5:graph.initial_cost==graph.final_cost==284569697.45147896",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5:retained epoch counts are not identical"
+    ]
+  },
+  "read_accounting": {
+    "authorized_route_attempts": 4,
+    "native_solver_invocations": 4,
+    "gnss_first_optimizer_invocations": 4,
+    "active_c0d_solve_invocations": 2,
+    "raw_device_gnss_reads": 4,
+    "raw_device_imu_reads": 4,
+    "broadcast_navigation_reads": 4,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "route_score_selection": false,
+    "submission_or_upload": false,
+    "published_summary_reads_for_evidence": 2,
+    "published_submission_reads_for_evidence": 2,
+    "native_log_reads_for_evidence": 4,
+    "evaluator_raw_input_reads": 0,
+    "evaluator_truth_reads": 0,
+    "evaluator_summary_reads_before_fail_closed": 1,
+    "evaluator_submission_reads_before_fail_closed": 0,
+    "evaluator_accuracy_calculations": 0,
+    "preflight_raw_reads": 0
+  },
+  "output": {
+    "root": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1",
+    "published_route_summaries": 2,
+    "published_route_submissions": 2,
+    "fail_closed_route_logs": 2,
+    "evaluator_log": {
+      "path": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1/evaluator.log",
+      "sha256": "fb6126bc5fbbadb6d8d64112914d89f20aaa871d246f905219664f27b06013f0",
+      "bytes": 111
+    },
+    "formal_result_record": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_result_v1.json",
+    "accuracy_or_submission_release": false
+  },
+  "preserved_evidence": {
+    "published_runs_have_complete_raw_d_and_epoch_handoff": true,
+    "published_runs_have_c0d_factor_skip_and_direct_no_pdc_invariants": true,
+    "published_runs_main_graph_zero_progress": true,
+    "failed_runs_stopped_before_main_graph": true,
+    "no_synthetic_or_precomputed_coordinates_substituted": true,
+    "candidate_changed_during_execution": false,
+    "raw_execution_complete": true
+  }
+}

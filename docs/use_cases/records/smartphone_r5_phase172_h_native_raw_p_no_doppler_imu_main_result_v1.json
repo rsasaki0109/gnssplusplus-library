@@ -1,0 +1,120 @@
+{
+  "schema_version": "smartphone-r5-phase172-h-native-raw-p-no-doppler-imu-main-result.v1",
+  "phase": 172,
+  "execution_label": "Luna Max",
+  "status": "sealed-fail-closed-single-run",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase172_h_native_raw_p_no_doppler_imu_main_manifest_v1.json",
+    "sha256": "9782575ab956ebb834a2c775e3a7f09492f05e5850bf0e23f10ac30ce7ae7f0a",
+    "commit": "92ed904d70e79138bc1383a0b51d4a90b613d8d1"
+  },
+  "implementation_commit": "af5f17ae1b33b662d3a8926d1859b95f1e5fecd7",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "official_type": "Street",
+  "execution": {
+    "invocation_count": 1,
+    "return_code": 1,
+    "process_session": "45204",
+    "command_pins_unchanged": true,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false
+  },
+  "inputs": {
+    "android_gnss": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "native_ingress_reads": 1,
+      "prelaunch_hash_reads": 1
+    },
+    "android_imu": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+      "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+      "native_ingress_reads": 1,
+      "prelaunch_hash_reads": 1
+    },
+    "nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "native_ingress_reads": 1,
+      "prelaunch_hash_reads": 1
+    }
+  },
+  "native_artifacts": {
+    "summary": {
+      "path": "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json",
+      "sha256": "7044b539fcb3b8c99c55620aeeb04db115380e6633b80b44e524ff97f7fcb5aa",
+      "bytes": 913,
+      "metadata_reads": 1,
+      "coordinate_fields_interpreted": false
+    },
+    "stderr": {
+      "path": "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stderr.log",
+      "sha256": "4bed09f7c498775abdf47ad9b3d35e707748f5d2d60b63a90373622d90def20e",
+      "bytes": 85,
+      "exact_failure": "Phase165 raw-P graph handoff failed closed: retained-epoch-source-identity-not-found"
+    },
+    "stdout": {
+      "path": "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "opaque_solution_output": {
+      "path": "output/smartphone-r5/phase172-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+      "present": false,
+      "coordinate_values_read": false
+    }
+  },
+  "summary_aggregates": {
+    "summary_schema_version": "smartphone-r5-phase167-raw-p-no-doppler-graph.v1",
+    "reported_phase": 167,
+    "reported_status": "failed-closed",
+    "failure_reason": "retained-epoch-source-identity-not-found",
+    "same_run_raw_p_only": true,
+    "imported_seed_files": false,
+    "truth_used": false,
+    "mat_used": false,
+    "imu_or_main_graph_entered": false,
+    "adapter_ok": false,
+    "adapter_graph_compatible": false,
+    "adapter_input_epochs": 0,
+    "adapter_accepted_epochs": 0,
+    "adapter_rejected_epochs": 0,
+    "raw_result_present": false,
+    "retained_epochs": 2294,
+    "retained_pseudorange_factors": 4,
+    "retained_tdcp_factors": 4799,
+    "retained_undifferenced_doppler_factors": 0,
+    "fgo_attempted": false,
+    "fgo_returned": false,
+    "phase167_termination": null
+  },
+  "source_backed_cause": {
+    "location": "apps/native/gnss_fgo_imu_no_base.cpp:10140-10142 at the Phase172 source revision",
+    "condition": "raw-P adapter initialization was guarded by native_phase165_raw_p_no_doppler_graph && !native_phase171_raw_p_no_doppler_imu_main",
+    "effect": "Phase171 skipped raw_p_seed::solve and adaptSameRunNoDopplerSeeds, then the later shared re-key path searched an empty adapter",
+    "unchanged_guard": "the retained epoch identity check correctly failed closed; no identity tolerance or fallback is authorized",
+    "next_fix": "execute shared raw-P seed initialization once for Phase171 and suppress only the terminal Phase165 GNSS-only optimize/return branch"
+  },
+  "read_accounting": {
+    "native_solver_invocations": 0,
+    "raw_p_seed_invocations": 0,
+    "gnss_ingress_reads": 1,
+    "imu_ingress_reads": 1,
+    "nav_ingress_reads": 1,
+    "truth_reads": 0,
+    "base_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_coordinate_interpretation": 0
+  },
+  "interpretation_boundary": {
+    "raw_seed_readiness": "unassessed because the branch skipped raw_p_seed::solve",
+    "gnss_first_result": "unavailable",
+    "main_imu_result": "unavailable",
+    "accuracy_or_leaderboard_claim": false,
+    "no_coordinate_values_published": true
+  }
+}

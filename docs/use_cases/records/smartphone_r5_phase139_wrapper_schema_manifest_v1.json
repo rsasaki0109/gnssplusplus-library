@@ -1,0 +1,115 @@
+{
+  "schema_version": "smartphone-r5-phase139-wrapper-schema-manifest.v1",
+  "phase": 139,
+  "execution_label": "Luna Max",
+  "status": "launch-free",
+  "freeze_path": "docs/use_cases/records/smartphone_r5_phase139_wrapper_schema_freeze_v1.json",
+  "freeze_sha256": "e3d516a6bb620ef8b0b0a70555059f887a76855d96db2fbf6795cbe7e29bd20c",
+  "audit_commit": "5b1d03e",
+  "audit_sha256": "a1f6db77375194f54efd2b1564544601868e687943e776c9ca900494b05a501f",
+  "freeze_commit": "e20e389",
+  "implementation_commit": "7c2634821b0584ef3f6a9f2847c69b9201938275",
+  "historical_phase138_manifest_sha256": "f93fd9fc6f4fddefa0f267307a5bc2238e519c16da50f8207f6d97a7d81dda0a",
+  "wrapper": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase138_affine_tdcp_structural_authorized_execute.py",
+    "sha256": "5ac690c15261d6e7c11dde0075963eee2e0d6098249f924c027b1d95a8bd590b"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase139_wrapper_schema.py",
+    "sha256": "ce4a912f5eb225ff349cf550d31d97a0504e4ea889c52848cfa18a5216a2a988",
+    "cases": [
+      "flat-valid",
+      "nested-invalid",
+      "missing-key",
+      "wrong-type",
+      "absolute-path",
+      "dot-and-dotdot-traversal",
+      "unknown-key",
+      "duplicate-json-key",
+      "schema-version",
+      "selector-isolation"
+    ]
+  },
+  "input_schema": {
+    "authorization_schema_version": "smartphone-r5-phase138-affine-tdcp-structural-raw-authorization.v1",
+    "route_count": 2,
+    "route_order": ["MTV-A", "LAX-T"],
+    "route_keys_exact": [
+      "base_input",
+      "dataset_id",
+      "output_directory",
+      "raw_inputs",
+      "runs",
+      "target"
+    ],
+    "raw_input_keys_exact": ["brdc.nav", "device_gnss.csv", "device_imu.csv"],
+    "raw_metadata_keys_exact": [
+      "bytes",
+      "copy_or_transform",
+      "path",
+      "read_before_authorization",
+      "sha256",
+      "source"
+    ],
+    "base_metadata_keys_exact": [
+      "bytes",
+      "copy_or_transform",
+      "hash_read_before_authorization",
+      "interval_s",
+      "moving_mean_samples",
+      "path",
+      "read_before_authorization",
+      "sha256",
+      "source"
+    ],
+    "flat_metadata_values_are_direct": true,
+    "base_obs_separate_from_raw_inputs": true,
+    "relative_path_and_basename_checks": true,
+    "dot_traversal_and_absolute_path_rejection": true,
+    "duplicate_key_rejection": true
+  },
+  "preserved_recipe": {
+    "source_algorithm": "Phase135/Phase138 unchanged",
+    "command_snapshot": "Phase138 unchanged",
+    "selectors": "Phase138 unchanged",
+    "solver": "Phase138 unchanged",
+    "raw_hash_check_after_authorization": "unchanged",
+    "solution_content_interpretation": false
+  },
+  "policy": {
+    "raw_execution_authorized": false,
+    "truth_used": false,
+    "mat_used": false,
+    "pdc_used": false,
+    "precomputed_coordinates_used": false,
+    "accuracy_evaluation": false,
+    "kaggle_access": false,
+    "solution_publication": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "sweep": false,
+    "opaque_solution_only": true
+  },
+  "pre_raw_read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0
+  },
+  "authorization_boundary": {
+    "new_independent_raw_authorization_required": true,
+    "old_phase138_authorization_reuse_forbidden": true,
+    "materialize_inputs_after_authorization_only": true,
+    "new_manifest_and_wrapper_hashes_must_be_pinned": true,
+    "raw_result_commit_separate": true,
+    "truth_accuracy_authorization": false,
+    "rerun_fallback_repair_sweep": false
+  }
+}

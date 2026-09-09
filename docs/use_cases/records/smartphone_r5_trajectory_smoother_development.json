@@ -1,0 +1,213 @@
+{
+  "schema_version": "smartphone-r5-trajectory-smoother-development.v1",
+  "decision": "promote-development-only",
+  "role": "development",
+  "holdout_used": false,
+  "competition_primary_score": "undetermined; official distance and percentile details are not asserted",
+  "scope": {
+    "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "phone": "pixel7pro",
+    "lane": "Galileo E1 + Hatch30 POS -> truth-free CV Kalman + per-segment RTS",
+    "implementation": [
+      "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py",
+      "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother_eval.py",
+      "apps/gnss.py"
+    ],
+    "cli_flags": [
+      "--experimental-truth-free-kalman-rts",
+      "--experimental-trajectory-selection"
+    ]
+  },
+  "contract": {
+    "truth_passed_to_smoother": false,
+    "truth_read_by_selector_for_development_gate_only": true,
+    "submission_generation_truth_free": true,
+    "raw_device_epoch_key_source": "device_gnss.csv MessageType=Raw utcTimeMillis exact unique epoch keys",
+    "output_key_policy": "emit every selected device key in strict timestamp order",
+    "missing_position_policy": "internal missing keys are RTS/interpolation output with source=interpolated",
+    "outlier_policy": "Mahalanobis position innovation gate; rejected input is predicted and source=outlier_rejected",
+    "covariance_policy": "PDOP/satellite-count solver quality proxy plus declared measurement floor; no label-derived covariance",
+    "frame_policy": "WGS84 ECEF -> local ENU with polar safeguards -> WGS84 ECEF/LLH",
+    "segment_policy": "automatic reset after >10 s device gap and explicit reset at split index",
+    "publish_policy": "POS, CSV, summaries, manifests, and optional submission use atomic publish"
+  },
+  "inputs": {
+    "position": {
+      "path": "output/smartphone-r5/hatch-full-w30/libgnsspp_spp.pos",
+      "sha256": "6db761dd446b82fa978b8c4b6be3b04b8330ddcd3362aeea6c74729a63484ab7"
+    },
+    "device_gnss": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv",
+      "sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42"
+    },
+    "ground_truth": {
+      "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+      "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "fce1af1f6bf5bec10448b4131ea3fb130a1399a91caa6be30de30389f841de8e",
+      "role": "development"
+    }
+  },
+  "split": {
+    "selected_device_epochs": 1383,
+    "train_epochs": 830,
+    "validation_epochs": 553,
+    "boundary": "chronological index 830",
+    "state_reset": "filter covariance, velocity, and RTS state reset at index 830",
+    "holdout": "not opened"
+  },
+  "candidate_policy": {
+    "fixed_candidates": [
+      {"id": "q0p01_floor0p5", "process_noise": 0.01, "measurement_floor_m": 0.5},
+      {"id": "q0p01_floor1p0", "process_noise": 0.01, "measurement_floor_m": 1.0},
+      {"id": "q0p10_floor0p5", "process_noise": 0.1, "measurement_floor_m": 0.5},
+      {"id": "q0p10_floor1p0", "process_noise": 0.1, "measurement_floor_m": 1.0},
+      {"id": "q1p00_floor1p0", "process_noise": 1.0, "measurement_floor_m": 1.0}
+    ],
+    "selected": {
+      "id": "q1p00_floor1p0",
+      "process_noise": 1.0,
+      "measurement_floor_m": 1.0,
+      "outlier_gate_sigma": 5.0,
+      "segment_gap_s": 10.0,
+      "explicit_reset_indices": [830]
+    },
+    "train_rank": "WGS84 H median, H P95, V P95, then mean of four local diagnostics",
+    "validation_gate": "availability, H median, H P95, V P95, and each local diagnostic non-inferior, with at least one strict improvement"
+  },
+  "metrics_m": {
+    "baseline": {
+      "train": {
+        "epochs": 830,
+        "availability": 1.0,
+        "h_wgs84_median": 3.0527750671042906,
+        "h_wgs84_p95": 7.789698386839392,
+        "v_p95": 22.35570926143798,
+        "kaggle_diagnostic_mean": 5.431792772781326,
+        "kaggle_diagnostics": [5.4231742871687505, 5.445297982159751, 5.421236726971841, 5.437462094824961]
+      },
+      "validation": {
+        "epochs": 553,
+        "availability": 1.0,
+        "h_wgs84_median": 3.4493713750190462,
+        "h_wgs84_p95": 8.24514153047127,
+        "v_p95": 16.353999999729155,
+        "kaggle_diagnostic_mean": 5.8507054176252495,
+        "kaggle_diagnostics": [5.834376336305937, 5.854114079286485, 5.8472564527451585, 5.86707480216342]
+      },
+      "full_development": {
+        "epochs": 1383,
+        "availability": 1.0,
+        "h_wgs84_median": 3.2142607094436784,
+        "h_wgs84_p95": 7.943556294558911,
+        "v_p95": 20.19201316727292,
+        "kaggle_diagnostic_mean": 5.579769086634116,
+        "kaggle_diagnostics": [5.579926456430132, 5.580951299089783, 5.578908502001294, 5.579290089015254]
+      }
+    },
+    "selected": {
+      "train": {
+        "epochs": 830,
+        "availability": 1.0,
+        "h_wgs84_median": 2.5291573483941114,
+        "h_wgs84_p95": 6.061572778914028,
+        "v_p95": 23.38185375235043,
+        "kaggle_diagnostic_mean": 4.2957239329251315,
+        "kaggle_diagnostics": [4.293541024324013, 4.293064193489286, 4.29536506365407, 4.300925450233159],
+        "source_counts": {"measured": 576, "outlier_rejected": 254}
+      },
+      "validation": {
+        "epochs": 553,
+        "availability": 1.0,
+        "h_wgs84_median": 3.1660829440821514,
+        "h_wgs84_p95": 6.573294737793264,
+        "v_p95": 14.392752851173277,
+        "kaggle_diagnostic_mean": 4.879042459015952,
+        "kaggle_diagnostics": [4.866701319493284, 4.884387639040814, 4.869688840937707, 4.895392036592002],
+        "source_counts": {"measured": 439, "outlier_rejected": 114},
+        "validation_gate": {"passed": true, "failures": []}
+      },
+      "full_development": {
+        "epochs": 1383,
+        "availability": 1.0,
+        "h_wgs84_median": 2.7477092028307726,
+        "h_wgs84_p95": 6.173092685041757,
+        "v_p95": 20.096175805106732,
+        "kaggle_diagnostic_mean": 4.458390820016608,
+        "kaggle_diagnostics": [4.456131288661419, 4.456440480818724, 4.460400943936265, 4.460590566650024],
+        "source_counts": {"measured": 1015, "outlier_rejected": 368},
+        "segments": 2,
+        "numerical_fallbacks": 0
+      }
+    }
+  },
+  "performance": {
+    "evaluation_wall_s": 2.52,
+    "evaluation_peak_rss_kb": 44120,
+    "selected_smoothing_wall_s": 0.1217290119966492,
+    "comparison_repeats": 1,
+    "note": "development selection run; not a throughput claim"
+  },
+  "artifacts": {
+    "evaluation_report": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/evaluation_report.json",
+      "sha256": "297afe2eb437cbfc4d142fc000f09fc6034c7aa13f03a03c9e72582221916fb5"
+    },
+    "selected_smoothed_pos": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/selected/smoothed.pos",
+      "bytes": 180958,
+      "sha256": "ebbc4cd24542ff11b7af8c31be7b6861f49a6de2a288c6bd59808872235eded5"
+    },
+    "selected_trajectory_csv": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/selected/trajectory.csv",
+      "bytes": 212905,
+      "sha256": "7db14275b36d742f8457d0047d0e3a5aadb5a08be4d434c1fa116fcea594b8a7"
+    },
+    "selected_summary": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/selected/smoother_summary.json",
+      "bytes": 1681,
+      "sha256": "9ebec8544175a2d3704076e5b746f44039c0f7a368d876fbc807c8361b58894b"
+    },
+    "selected_manifest": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/selected/smoother_manifest.json",
+      "bytes": 6402,
+      "sha256": "7e02dfa4317a6de0c7ced407159cc162ec049601ca1833cf4b0d5c739c105825"
+    },
+    "submission": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/submission.csv",
+      "bytes": 71663,
+      "sha256": "26794bbb42757dfb4e137749eb38a6999e5433f8e68aa9ef8a70f309243ecb3c"
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/trajectory-smoother-development/submission.csv.manifest.json",
+      "sha256": "b0dffc90355efb72096abddf0edd79284cb0fda8f79e32dad5e11967d9a6acba"
+    }
+  },
+  "gap_contract_smoke": {
+    "position_path": "output/smartphone-r5/development-full/libgnsspp_spp.pos",
+    "input_position_epochs": 1376,
+    "selected_device_epochs": 1383,
+    "synthesized_epochs": 7,
+    "source_counts": {"interpolated": 7, "measured": 1029, "outlier_rejected": 347},
+    "availability": 1.0,
+    "max_position_input_gap_s": 8.0,
+    "max_output_gap_s": 1.0,
+    "numerical_fallbacks": 0,
+    "artifacts": {
+      "smoothed_pos_sha256": "dacda5805de897c81a18d916b7d4578bc05d188ba75d3030d04bd3f16d395c2e",
+      "trajectory_csv_sha256": "63a0e6f39f33e7503f1fb883bfd9a84fc3638f6747d44da8baeec8a6b4d0a1a8",
+      "summary_sha256": "a06d6be72bfc10116a1cf92880aaddc43fb6ecc8fcfc55e8932ae1f50834e7e9",
+      "manifest_sha256": "ad40fd43b924a0062d54694379336ff92fad22e3d2045ce439f041dd1ea84676"
+    },
+    "note": "contract smoke only; pre-Hatch POS and no accuracy claim"
+  },
+  "verification": {
+    "unit_test": "tests/test_smartphone_trajectory_smoother.py (3 tests passed; CTest test 40 passed)",
+    "python_compile": "trajectory smoother and evaluator compiled successfully",
+    "release_build": "cmake configure and gnss_solve/gnss_run_tests targets passed",
+    "full_ctest": "83/83 passed with ROS and GTSAM runtime paths appended",
+    "git_diff_check": "passed"
+  }
+}

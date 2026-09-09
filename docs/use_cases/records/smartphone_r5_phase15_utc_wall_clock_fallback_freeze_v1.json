@@ -1,0 +1,106 @@
+{
+  "schema_version": "smartphone-r5-phase15-utc-wall-clock-fallback-freeze.v1",
+  "status": "frozen-before-phase15-implementation-and-scoring",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "candidate_id": "native-android-utc-wall-clock-anchor-v1",
+  "purpose": "Recover raw Android IMU timing only when elapsedRealtimeNanos is absent but a raw-GNSS hardware-GPS-to-UTC affine witness is physically consistent; then run the already frozen Phase14 E1 leveling candidate.",
+  "policy": {
+    "local_only": true,
+    "external_mutation": false,
+    "token_or_kaggle_access": false,
+    "matlab_container_read": false,
+    "matlab_container_generated": false,
+    "matlab_source_specification_only": true,
+    "truth_read_before_freeze": 0,
+    "truth_read_for_phase15": 0,
+    "validation_or_holdout_touched": false,
+    "test_truth_touched": false,
+    "enriched_satellite_or_receiver_columns_used": false,
+    "device_wls_or_precomputed_coordinates_used": false,
+    "production_default_changed": false,
+    "phase13_upstream_quality": false,
+    "phase14_hatch_parameters_changed": false,
+    "post_score_tuning": false
+  },
+  "base_and_immutable_recipe": {
+    "base_commit": "ee85c47",
+    "phase12_baseline_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json",
+    "phase12_baseline_sha256": "416b56c7bc13fa969a4f2397fe70bc01ecb78198612c341e41ecee731ff908fd",
+    "phase12_wgs84_linear_m": 3.1922489635126103,
+    "phase14_leveling_record": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1.json",
+    "phase14_leveling_sha256": "a02e721ffd02c465b2b7c5fab2432b95f4c284e03f5edc2bb3b48f2f3e08546b",
+    "phase14_recipe": "Galileo E1 only, causal Hatch-30, maximum arc gap 1.5 s, reset on ADR/LLI/loss/clock count change, no new graph state",
+    "phase14_production_default": "unchanged"
+  },
+  "archive_and_route": {
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "structural_smoke_identity": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "structural_smoke_role": "exact phone unused in positive truth inventory, but route overlaps prior pixel5 truth; no truth score permitted",
+    "route_disjoint_validation": false,
+    "raw_member_paths": [
+      "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/mi8/device_gnss.csv",
+      "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/mi8/device_imu.csv",
+      "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/brdc.nav"
+    ],
+    "materialized_input_hashes": {
+      "device_gnss.csv": "ccf143cf8b156e507599090e0a5eedc1009244899ea3b1b3b8b01842a35a9ea4",
+      "device_imu.csv": "6e32cba3e0086b7a9c34ab5bd34cd86879b0581fe8314c5819214f1e66ec32d3",
+      "brdc.nav": "5f2e67a87eca95c77d04f72184fd615a7858ff3c948c2e5a681957791219a4c3"
+    }
+  },
+  "raw_timing_audit": {
+    "gnss_source_fields": ["MessageType=Raw", "utcTimeMillis", "TimeNanos", "FullBiasNanos", "BiasNanos", "HardwareClockDiscontinuityCount"],
+    "imu_source_fields": ["MessageType=UncalAccel/UncalGyro", "utcTimeMillis", "MeasurementX/Y/Z", "BiasX/Y/Z"],
+    "gnss_unique_utc_epochs": 1417,
+    "gnss_utc_interval_ms": {"min": 1000, "median": 1000, "max": 1000},
+    "gnss_hardware_clock_counts": [0],
+    "gnss_raw_hardware_gps_utc_affine": {
+      "slope_ns_per_ns": 1.0000000592492937,
+      "drift_ppm": 0.05924929369349741,
+      "max_fit_residual_ms": 0.00384,
+      "p95_fit_residual_ms": 0.00384
+    },
+    "imu_unique_rows": {"UncalAccel": 95807, "UncalGyro": 70904},
+    "imu_elapsed_realtime_nonempty_rows": 0,
+    "imu_utc_monotonic": true,
+    "arrival_time_nanos_since_gps_epoch": "observed but enriched/derived and forbidden as an inference input",
+    "physical_interpretation": "Raw GNSS TimeNanos-FullBiasNanos is GPS hardware time; utcTimeMillis is Unix UTC wall time; the affine fit is a raw-clock consistency witness. IMU utcTimeMillis can be mapped to GPST only in this explicit fallback and only under the fixed gates below."
+  },
+  "utc_fallback_contract": {
+    "cli_flag": "--android-utc-wall-clock-fallback",
+    "default": false,
+    "required_raw_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv", "sample_submission.csv", "ArrivalTimeNanosSinceGpsEpoch", "SvPosition*", "SvElevationDegrees", "device WLS coordinates", "precomputed trajectories"],
+    "mapping": "Fit GPS_nanos = intercept + slope * utcTimeMillis from unique raw GNSS epochs using TimeNanos-FullBiasNanos-BiasNanos; use the fitted affine only to map IMU utcTimeMillis into GPST.",
+    "minimum_unique_gnss_epochs": 3,
+    "maximum_anchor_gap_ms": 5000,
+    "maximum_absolute_drift_ppm": 1000,
+    "maximum_fit_residual_ms": 2,
+    "hardware_clock_discontinuity": "if the raw field is present, one constant count is required; any change fails closed",
+    "utc_monotonicity": "GNSS and supported IMU utcTimeMillis must be non-negative and strictly increasing after per-stream unique selection",
+    "pairing_clock": "utcTimeMillis converted to integer nanoseconds for accel/gyro pairing; original elapsedRealtimeNanos remains absent (-1) and is never fabricated",
+    "failure": "missing mapping, insufficient anchors, gap/drift/residual/count/monotonicity violation, mixed elapsed/blank rows, nonfinite mapped GPST, or pair bound violation fails closed",
+    "no_parameter_search": true
+  },
+  "evaluation_protocol": {
+    "mi8": "truth-free structural smoke only; no score because route is not disjoint",
+    "pixel7_development": "reuse existing development identity 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro; freeze Phase12 baseline and Phase15 candidate artifacts first, then one permitted reread of its already-used ground_truth.csv in one evaluator process",
+    "validation": "untouched and not claimed",
+    "holdout": "untouched",
+    "gate_before_truth": ["finite/converged native graph", "Phase14 E1 counts and resets reported", "exact raw UTC keys and no fallback beyond declared timing mapping", "deterministic byte identity", "no new >70 m/s isolated transition"],
+    "accuracy_gate": "WGS84 linear candidate < Phase12 3.1922489635126103 m, all four local diagnostics non-regress, coverage/nonfinite/vertical/safety non-regress",
+    "post_truth": "No code, parameter, or source change and no rerun based on the result"
+  },
+  "source_and_binary_hashes": "sealed in companion manifest after implementation and Release build",
+  "commands": {
+    "mapping_smoke": "build/tests/run_tests --gtest_filter='AndroidUtcGpsMappingTest.*:AndroidImuCsvTest.UtcWallClockFallback*'",
+    "mi8_structural": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/apps/gnss_fgo_imu_no_base --android-gnss <mi8/device_gnss.csv> --android-imu <mi8/device_imu.csv> --nav <mi8/brdc.nav> --out <mi8/candidate/submission.csv> --summary-json <mi8/candidate/summary.json> --dataset-id 2022-08-04-20-07-us-ca-sjc-q/mi8 --all-epochs --android-raw-utc-keys --android-utc-wall-clock-fallback --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-carrier-code-leveling",
+    "pixel7_evaluation": "same frozen Phase12 flags on 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro; truth is read only after both truth-free artifacts are hash-sealed",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "companion_manifest": "docs/use_cases/records/smartphone_r5_phase15_utc_wall_clock_fallback_freeze_v1_manifest.json",
+  "freeze_record_sha256": "excluded from self-hash; companion manifest pins this record"
+}

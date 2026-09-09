@@ -1,0 +1,104 @@
+{
+  "schema_version": "smartphone-r5-phase14-carrier-code-leveling-structural-blocker.v1",
+  "status": "sealed-structural-no-go-before-truth",
+  "candidate_id": "native-carrier-code-leveling-e1-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1.json",
+  "freeze_record_sha256": "a02e721ffd02c465b2b7c5fab2432b95f4c284e03f5edc2bb3b48f2f3e08546b",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase14_carrier_code_leveling_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "f4d6eefc5a5f5b501fe10066708a5fb0e38b6b51dcea6c6f5456d251b82787de",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+  },
+  "identity": {
+    "route": "2022-08-04-20-07-us-ca-sjc-q",
+    "phone": "mi8",
+    "role": "structural-smoke-only",
+    "route_disjoint_validation": false,
+    "reason": "The exact phone identity has no prior positive truth-use entry, but another phone on this route has prior truth evidence; no truth comparison is permitted."
+  },
+  "materialized_inputs": [
+    {
+      "member": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/mi8/device_gnss.csv",
+      "path": "output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/inputs/device_gnss.csv",
+      "bytes": 35332947,
+      "sha256": "ccf143cf8b156e507599090e0a5eedc1009244899ea3b1b3b8b01842a35a9ea4"
+    },
+    {
+      "member": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/mi8/device_imu.csv",
+      "path": "output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/inputs/device_imu.csv",
+      "bytes": 14842430,
+      "sha256": "6e32cba3e0086b7a9c34ab5bd34cd86879b0581fe8314c5819214f1e66ec32d3"
+    },
+    {
+      "member": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/brdc.nav",
+      "path": "output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/inputs/brdc.nav",
+      "bytes": 11114406,
+      "sha256": "5f2e67a87eca95c77d04f72184fd615a7858ff3c948c2e5a681957791219a4c3"
+    }
+  ],
+  "forbidden_materialization": {
+    "ground_truth_csv": false,
+    "validation_truth": false,
+    "holdout_truth": false,
+    "test_truth": false,
+    "mat_files": false,
+    "sample_submission": false,
+    "enriched_sv_position_or_elevation": false,
+    "device_wls_or_precomputed_coordinates": false,
+    "token_or_kaggle": false
+  },
+  "candidate": {
+    "recipe": "E1-only causal 30-sample Hatch carrier-code leveling before the unchanged Phase12 native graph",
+    "max_gap_s": 1.5,
+    "clock_discontinuity_contract": "HardwareClockDiscontinuityCount must remain constant within an arc",
+    "new_graph_state": false,
+    "production_default": "unchanged",
+    "source_hashes": {
+      "include/libgnss++/algorithms/carrier_code_leveling.hpp": "b38bf39389e701c8135f6abdc15eb0747a97127b846194411c0c9100e0eafb3a",
+      "include/libgnss++/io/android_raw_gnss.hpp": "e78fe2096a93c1bae7c76f2195d3307c93e9fe0addf2c9a719580b0959564e52",
+      "src/io/android_raw_gnss.cpp": "790ff71c83482de0dfc9760b4d7c45d4d8adc135082d78f0b75e034bcfd645e8",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "4e17ddfd7d0ad569b2fcfcf7d9ed8ddeecbe1600a91c1de6e31c517f4d07cb5f",
+      "tests/test_carrier_code_leveling.cpp": "ccfbe9489100dbb9b933be1381ac5146b38c6ccc3cfcf28eee7732fcc022cb9f",
+      "tests/test_android_raw_gnss.cpp": "70f3809f9f41b3a68f732bb103645ceaa3e95a3e123ea2fdac29f287fcf692be"
+    },
+    "release_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "df12ae3284949d1b2e8c52879f727858830f731791009278baff23f6f1755a92"
+    }
+  },
+  "structural_attempt": {
+    "truth_free": true,
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:${LD_LIBRARY_PATH} /usr/bin/time -v build/apps/gnss_fgo_imu_no_base --android-gnss output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/inputs/device_gnss.csv --android-imu output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/inputs/device_imu.csv --nav output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/inputs/brdc.nav --out output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/candidate/submission.csv --summary-json output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/candidate/summary.json --dataset-id 2022-08-04-20-07-us-ca-sjc-q/mi8 --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-carrier-code-leveling",
+    "run_log": "output/smartphone-r5/phase14-carrier-code-leveling-e1-v1/candidate/run.log",
+    "run_log_sha256": "e5a63d18cbf68b50f60db7e0b24b40669cd14a30e9982719200af6973e225a33",
+    "wall_seconds": 9.99,
+    "maximum_rss_kb": 172992,
+    "stage_reached": "raw Android GNSS conversion and navigation input setup; FGO problem was not constructed",
+    "failure": {
+      "class": "missing-required-GNSS-IMU-time-anchor",
+      "message": "failed to load GNSS elapsed-time anchors: raw Android GNSS anchor row 2: timestamps must be non-negative integers",
+      "field": "ChipsetElapsedRealtimeNanos",
+      "observed": "blank in the raw CSV at the first anchor row inspected",
+      "fallbacks_not_used": ["ArrivalTimeNanosSinceGpsEpoch", "direct raw UTC timing", "enriched coordinates/elevation", "device WLS"]
+    },
+    "adapter_observation": "Non-positive raw-clock pseudorange rows were dropped individually at the upstream exobs P<1e7 quality-mask boundary; no value was synthesized. This adapter correction is covered by a regression fixture."
+  },
+  "focused_tests": {
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/tests/run_tests --gtest_filter='CarrierCodeLevelingTest.*:AndroidRawGnssTest.*'",
+    "passed": 15,
+    "failed": 0,
+    "result": "pass"
+  },
+  "decision": {
+    "status": "No-Go-blocked",
+    "accuracy_score": null,
+    "truth_read_count": 0,
+    "mat_read_count": 0,
+    "promotion": false,
+    "reason": "The only metadata-eligible exact-unused identity is not route-disjoint and the raw GNSS input lacks the mandatory elapsedRealtime anchor; changing to a prohibited timestamp fallback would invalidate the frozen native contract.",
+    "next_action": "Acquire a genuinely route-disjoint raw identity with a valid GNSS elapsedRealtime anchor before any truth comparison; do not tune or reuse overlapping-route truth."
+  },
+  "report_sha256": "excluded from self-hash; this report seals the failed structural attempt"
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": "gnss-fgo-gtsam-backend-parity-recovery-manifest.v1",
+  "status": "fixed-attributable-current-diff",
+  "record": "docs/use_cases/records/gnss_fgo_gtsam_backend_parity_recovery.json",
+  "record_sha256": "5d0bae2d1d78f7c7ff7200f91b3ea13a2a38a541188d165cc4147b8a89ec0efe",
+  "head_commit": "a947409",
+  "backend_sha256_before_fix": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+  "backend_sha256_after_fix": "7512b7fcb84a13960a800426b201aa2c325beff38db5784814d16e35cf2c24ef",
+  "clean_head_parity": "pass",
+  "current_post_fix_parity": "pass",
+  "current_v3_source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+  "current_v3_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+  "tests_weakened": false,
+  "v3_solver_rerun": false,
+  "v5_touched": false,
+  "validation_or_holdout_access": false,
+  "external_mutation": false
+}

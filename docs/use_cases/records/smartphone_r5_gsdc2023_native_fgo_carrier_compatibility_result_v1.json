@@ -1,0 +1,149 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-carrier-compatibility-result.v1",
+  "status": "sealed-no-go-train-gate",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-v1-carrier-compatibility-selector-v1",
+  "decision": "No-Go; retain exact native-FGO v1 for all routes and do not open a new validation asset",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1.json",
+    "record_sha256": "031e43d0fa478213d2a90e214668c4bae582e83309ee570a7c057568683fa123",
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_freeze_v1_manifest.json",
+    "manifest_sha256": "d7b68a6d1abd747d9d9af01851b1604984e98723042c392c4c19a992f8514e82",
+    "role_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_role_inventory_v1.json",
+    "role_inventory_sha256": "dc41e76bf4fa956d589af4675a44fee1be1c8bf54fdfe52cf437b02e07866cd1"
+  },
+  "truth_free_artifacts": {
+    "root": "output/smartphone-r5/native-fgo-carrier-compatibility-v1",
+    "manifest": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/truth_free_manifest.json",
+    "manifest_sha256": "00b8eb49c7f215c68efa050ec460aaf460f5e659c85fb3492adb69509adc3a88",
+    "seal_sha256": "985e44c225ae075d6672699f800ffe3b35dc0f22a55a478cb63a884e10732941",
+    "truth_open_count": 0,
+    "route_manifest_sha256": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": "24b1b13474c937f016ed3ba7395b98650077a89cdf55b9e74f2b6946ff3abc24",
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5": "bcc47cdcdf470cc0ea536018a75db80999fcbb2abc4791dcf931ceecb06f3f16",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "9d7a49a91e92d4fc8027d5f26155b4b7281485b593b3030c08e0b30b02d3b042",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": "688be511ff82ce3c1314bb2b9be9527af6efd445c658acbfade75f3606329183",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": "c3abe626e3bcdc1106bc9a7624e359d61c600506b826bb4b0df21d8e7931f123",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": "cb70d45ca9443b07e02b164c819095db76e4c06f704a6c1cc71f59ba490dad4d",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": "e85316e9a47c2f7cd3e051d684da948a8ad150554bf6581182baf4d422d81259",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "2a11d458c143274a5b63a8d6015fe342d6a019c962cde3694b9f53d52730b61f"
+    },
+    "candidate_or_parameter_changed_after_freeze": false,
+    "solver_rerun_during_scoring_recovery": false
+  },
+  "adapter_diagnosis": {
+    "old_all_device_float_carrier_no_go_preserved": true,
+    "affected_high_rms_devices": {
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "old_structural_carrier_rms_m": 214.34784470814608,
+        "sanitized_truth_free_carrier_rms_m": 0.01971127549840882,
+        "sanitized_boundary_rows": 14075
+      },
+      "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+        "old_structural_carrier_rms_m": 254.040620948967,
+        "sanitized_truth_free_carrier_rms_m": 0.011286314157197564,
+        "sanitized_boundary_rows": 18325
+      }
+    },
+    "cause": "ADR state 16 lacks the valid bit and carries a zero ADR, while the original adapter omitted RINEX LLI/arc reset; the native >2 s gap rule then joined unrelated arcs at the 2 s boundary",
+    "sign_unit_audit": "ADR derivative versus pseudorange-rate correlation was >=0.999999 on the affected routes; no sign/unit correction was justified",
+    "fix_scope": "compatibility-lane RINEX boundary sanitizer only; original adapter/source and old artifact hashes unchanged"
+  },
+  "route_results": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {"selected_lane": "baseline8", "candidate_truth_free_rejection": ["physical_continuity_violation"], "baseline_diagnostic_mean_m": 1.814393625872722, "candidate_diagnostic_mean_m": 2.5367542494752167, "selected_diagnostic_mean_m": 1.814393625872722},
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {"selected_lane": "baseline8", "candidate_truth_free_rejection": ["physical_continuity_violation"], "baseline_diagnostic_mean_m": 4.940093201680489, "candidate_diagnostic_mean_m": 6.163486078497465, "selected_diagnostic_mean_m": 4.940093201680489},
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"selected_lane": "carrier_float50", "candidate_truth_free_rejection": [], "baseline_diagnostic_mean_m": 2.4846555843369607, "candidate_diagnostic_mean_m": 3.648924359627391, "selected_diagnostic_mean_m": 3.648924359627391},
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {"selected_lane": "carrier_float50", "candidate_truth_free_rejection": [], "baseline_diagnostic_mean_m": 2.6710633608284207, "candidate_diagnostic_mean_m": 3.147898096321139, "selected_diagnostic_mean_m": 3.147898096321139},
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {"selected_lane": "baseline8", "candidate_truth_free_rejection": ["cost_trace_not_monotonic_or_converged"], "baseline_diagnostic_mean_m": 2.1913258448990645, "candidate_diagnostic_mean_m": 3.1137443118870274, "selected_diagnostic_mean_m": 2.1913258448990645},
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"selected_lane": "carrier_float50", "candidate_truth_free_rejection": [], "baseline_diagnostic_mean_m": 3.918869286260022, "candidate_diagnostic_mean_m": 3.7694481144663903, "selected_diagnostic_mean_m": 3.7694481144663903},
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {"selected_lane": "baseline8", "candidate_truth_free_rejection": ["physical_continuity_violation"], "baseline_diagnostic_mean_m": 7.248686104470157, "candidate_diagnostic_mean_m": 6.700772425737612, "selected_diagnostic_mean_m": 7.248686104470157},
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {"selected_lane": "baseline8", "candidate_truth_free_rejection": ["physical_continuity_violation"], "baseline_diagnostic_mean_m": 3.9678711047111292, "candidate_diagnostic_mean_m": 6.170690110991936, "selected_diagnostic_mean_m": 3.9678711047111292}
+  },
+  "aggregate_metrics": {
+    "baseline8": {
+      "horizontal_wgs84_p50_m": 2.4153352656675096,
+      "horizontal_wgs84_p95_m": 4.887412372054541,
+      "vertical_p95_abs_m": 10.732462189333372,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9996014193011874,
+      "diagnostic_mean_m": 3.6546197641323706,
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 3.650371515646108,
+        "haversine_sphere__nearest_rank_ceiling": 3.6578471168760203,
+        "wgs84_vincenty__linear_n_minus_1": 3.651373818861025,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.6588866051463294
+      }
+    },
+    "carrier_float50": {
+      "horizontal_wgs84_p50_m": 2.4488405318718303,
+      "horizontal_wgs84_p95_m": 6.357267552654737,
+      "vertical_p95_abs_m": 13.299610412514541,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9996014193011874,
+      "diagnostic_mean_m": 4.406464718375522
+    },
+    "selected": {
+      "horizontal_wgs84_p50_m": 2.3849062831980556,
+      "horizontal_wgs84_p95_m": 5.293438492279369,
+      "vertical_p95_abs_m": 10.877347963738295,
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9996014193011874,
+      "diagnostic_mean_m": 3.84108005650606,
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 3.83687828175471,
+        "haversine_sphere__nearest_rank_ceiling": 3.842969583018448,
+        "wgs84_vincenty__linear_n_minus_1": 3.8391723877387127,
+        "wgs84_vincenty__nearest_rank_ceiling": 3.845299973512371
+      }
+    }
+  },
+  "truth_access": {
+    "prior_failed_evaluation_truth_open_count": 8,
+    "recovery_truth_read_count": 8,
+    "truth_read_operations_total": 16,
+    "truth_materialized_during_recovery": false,
+    "truth_hashes_unchanged_before_after_recovery": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "recovery_authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_score_recovery_authorization_v1.json",
+    "recovery_authorization_sha256": "c709a1819d050dcefa319f119d2250ae2ed4d6451a7dc2d6e316860a95ce0c08"
+  },
+  "gate": {
+    "all_four_diagnostics_and_mean_strictly_improve_routewise": false,
+    "all_leave_one_route_group_out_folds_strictly_improve": false,
+    "all_leave_one_phone_family_out_folds_strictly_improve": false,
+    "aggregate_all_four_diagnostics_strictly_improve": false,
+    "aggregate_diagnostic_mean_strictly_improve": false,
+    "availability_non_regression": true,
+    "vertical_continuity_safety": false,
+    "passed": false,
+    "failure_reasons": [
+      "only one of eight routes passed the selected-lane strict diagnostic gate",
+      "selected aggregate diagnostic mean regressed from 3.6546197641323706 m to 3.84108005650606 m",
+      "candidate produced >70 m/s transitions on four routes and was fail-closed there",
+      "candidate cost trace was non-monotonic on pixel4"
+    ]
+  },
+  "policy": {
+    "truth_free_selector_features_only": true,
+    "leaderboard_used_for_tuning": false,
+    "prior_validation_or_holdout_used": false,
+    "post_truth_tuning": false,
+    "new_validation_opened": false,
+    "new_holdout_opened": false,
+    "kaggle_submission": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false,
+    "v5_submission_changed": false,
+    "promotion": "No-Go; retain exact native-FGO v1 and require a genuinely new validation asset for any future independent candidate"
+  },
+  "artifacts": {
+    "score_recovery_report": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_score_recovery.json",
+    "score_recovery_report_sha256": "78f2395e30af419bf4c4cf25ac1fd7866a60ca5f2113a3a0a318df4952c4fe3b",
+    "score_recovery_manifest": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_score_recovery.manifest.json",
+    "score_recovery_manifest_sha256": "b9c6adb3b429880635d4062bd49feb1378139f487c9a0a41ec84e9a1738ac9ab",
+    "score_recovery_source": "apps/commands/benchmarks/gnss_smartphone_native_fgo_carrier_compatibility_score_recovery.py",
+    "score_recovery_source_sha256": "8feef866b387d6c986b7ffde1ae9d8e259d7ca1e9a05c1958b8c616ac70f1081"
+  }
+}

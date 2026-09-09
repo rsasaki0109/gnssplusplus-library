@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -21,6 +22,7 @@ struct Options {
     std::string out_path;
     std::string summary_json_path;
     std::string clock_csv_path;
+    std::string timing_csv_path;
     std::string sp3_path;
     std::string clk_path;
     std::string ssr_path;
@@ -73,6 +75,15 @@ struct RunSummary {
     double sum_residual_rms_m = 0.0;
     double max_residual_rms_m = 0.0;
     std::map<std::string, int> rejected_satellites;
+    double total_epoch_elapsed_ms = 0.0;
+    double max_epoch_elapsed_ms = 0.0;
+    int timing_rows = 0;
+
+    void addTiming(double elapsed_ms) {
+        total_epoch_elapsed_ms += elapsed_ms;
+        max_epoch_elapsed_ms = std::max(max_epoch_elapsed_ms, elapsed_ms);
+        ++timing_rows;
+    }
 
     void addSolution(const libgnss::PositionSolution& solution) {
         spp_pre_qc_measurements += solution.spp_pre_qc_measurements;
@@ -177,6 +188,7 @@ void printUsage(const char* program_name) {
         << "  --out <solution.pos>              Output position file\n"
         << "  --summary-json <summary.json>     Write machine-readable run summary\n"
         << "  --clock-csv <clock.csv>           Write SPP receiver clock bias/drift telemetry\n"
+        << "  --timing-csv <timing.csv>         Write per-epoch SPP processing timing telemetry\n"
         << "  --max-epochs <n>                  Stop after n epochs\n"
         << "  --elevation-mask-deg <deg>        Elevation mask in degrees (default: 15)\n"
         << "  --snr-mask <dbhz>                 Minimum SNR/CN0 threshold (default: 0)\n"
@@ -240,6 +252,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.summary_json_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--clock-csv") {
             options.clock_csv_path = requireValue(arg, i, argc, argv);
+        } else if (arg == "--timing-csv") {
+            options.timing_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--max-epochs") {
             options.max_epochs = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--elevation-mask-deg" || arg == "--elevation-mask") {
@@ -481,6 +495,8 @@ bool writeSummaryJson(const std::string& path,
            << options.spp_config.max_position_jump_min_m << ",\n";
     output << "    \"ionosphere_free\": "
            << (options.spp_config.use_ionosphere_free_combination ? "true" : "false") << ",\n";
+    output << "    \"model_intersystem_bias\": "
+           << (options.spp_config.model_intersystem_bias ? "true" : "false") << ",\n";
     output << "    \"precise_products\": "
            << (options.spp_config.use_precise_products ? "true" : "false") << ",\n";
     output << "    \"ssr_corrections\": "
@@ -489,6 +505,26 @@ bool writeSummaryJson(const std::string& path,
            << (options.spp_config.use_ionex_corrections ? "true" : "false") << ",\n";
     output << "    \"dcb_corrections\": "
            << (options.spp_config.use_dcb_corrections ? "true" : "false") << "\n";
+    output << "  },\n";
+    output << "  \"performance\": {\n";
+    output << "    \"schema_version\": \"spp-epoch-timing.v1\",\n";
+    output << "    \"scope\": \"processor.processEpoch calls only\",\n";
+    output << "    \"timing_csv\": "
+           << (options.timing_csv_path.empty()
+                   ? "null"
+                   : ("\"" + jsonEscape(options.timing_csv_path) + "\""))
+           << ",\n";
+    output << "    \"timing_rows\": " << summary.timing_rows << ",\n";
+    output << "    \"total_epoch_processing_ms\": "
+           << summary.total_epoch_elapsed_ms << ",\n";
+    output << "    \"mean_epoch_processing_ms\": "
+           << (summary.timing_rows > 0
+                   ? summary.total_epoch_elapsed_ms /
+                         static_cast<double>(summary.timing_rows)
+                   : 0.0)
+           << ",\n";
+    output << "    \"max_epoch_processing_ms\": "
+           << summary.max_epoch_elapsed_ms << "\n";
     output << "  },\n";
     output << "  \"spp_qc\": {\n";
     output << "    \"pre_qc_measurements\": " << summary.spp_pre_qc_measurements << ",\n";
@@ -628,6 +664,20 @@ int main(int argc, char* argv[]) {
                    "receiver_clock_bias_s,receiver_clock_drift_sps,status,satellites,pdop\n";
             clock_csv << std::setprecision(17);
         }
+        std::ofstream timing_csv;
+        if (!options.timing_csv_path.empty()) {
+            timing_csv.open(options.timing_csv_path);
+            if (!timing_csv.is_open()) {
+                std::cerr << "Error: failed to open timing CSV: "
+                          << options.timing_csv_path << "\n";
+                return 1;
+            }
+            timing_csv
+                << "epoch_index,gps_week,gps_tow_s,elapsed_ms,"
+                   "processor_time_ms,status,valid,num_satellites,iterations,"
+                   "residual_rms_m\n";
+            timing_csv << std::fixed << std::setprecision(9);
+        }
         while (obs_reader.readObservationEpoch(obs)) {
             if (options.max_epochs > 0 && summary.processed_epochs >= options.max_epochs) {
                 break;
@@ -635,8 +685,29 @@ int main(int argc, char* argv[]) {
             if (obs_header.approximate_position.norm() > 0.0) {
                 obs.receiver_position = obs_header.approximate_position;
             }
+            const bool timing_enabled = timing_csv.is_open();
+            const auto epoch_start = timing_enabled
+                                         ? std::chrono::steady_clock::now()
+                                         : std::chrono::steady_clock::time_point{};
             const auto epoch_solution = processor.processEpoch(obs, nav_data);
             summary.addSolution(epoch_solution);
+            if (timing_enabled) {
+                const double elapsed_ms =
+                    std::chrono::duration<double, std::milli>(
+                        std::chrono::steady_clock::now() - epoch_start)
+                        .count();
+                summary.addTiming(elapsed_ms);
+                timing_csv << summary.processed_epochs << ','
+                           << epoch_solution.time.week << ','
+                           << epoch_solution.time.tow << ','
+                           << elapsed_ms << ','
+                           << epoch_solution.processing_time_ms << ','
+                           << static_cast<int>(epoch_solution.status) << ','
+                           << (epoch_solution.isValid() ? 1 : 0) << ','
+                           << epoch_solution.num_satellites << ','
+                           << epoch_solution.iterations << ','
+                           << epoch_solution.residual_rms << '\n';
+            }
             if (epoch_solution.isValid()) {
                 solution.addSolution(epoch_solution);
                 if (clock_csv.is_open()) {

@@ -6,7 +6,9 @@
 
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/models/troposphere.hpp>
+#include <string>
 
 namespace libgnss {
 namespace rtk_internal {

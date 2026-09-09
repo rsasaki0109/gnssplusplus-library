@@ -1,0 +1,148 @@
+{
+  "schema_version": "smartphone-r5-phase42-doppler-row-attrition-freeze.v1",
+  "phase": 42,
+  "status": "frozen-before-implementation-and-audit",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "1f187c3",
+    "phase41_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_result_v2.json",
+      "sha256": "2061e8608b42da263fe992b2a36a4b42235cd2425c864a8aa465c23bc5e9d05b"
+    },
+    "phase41_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase41_doppler_measurement_contract_audit_freeze_v1.json",
+      "sha256": "5622099a9d7d37ee1e4de43385369e70c342acb515f8f83cf301964fc3c64758"
+    },
+    "phase41_freeze_is_immutable": true
+  },
+  "objective": {
+    "question": "Which first exclusive row-selection reason accounts for raw Android Doppler rows that do not reach unchanged corrected undifferenced FGO Doppler factors?",
+    "candidate_id": "doppler_row_attrition_audit_v1",
+    "target_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "structural_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_order_is_fixed": true,
+    "truth_free": true,
+    "allowed_result": "diagnosis-no-go unless one generalizable source bug is proven by frozen-raw row identities and code"
+  },
+  "input_contract": {
+    "raw_only": true,
+    "source_roots": {
+      "phase25_train3": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw",
+      "phase37_target_and_safe2": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes"
+    },
+    "sha256": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "device_gnss.csv": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "brdc.nav": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+        "brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+      }
+    },
+    "opened_inputs": ["device_gnss.csv", "brdc.nav"],
+    "forbidden_inputs": [
+      "device_imu.csv",
+      "ground_truth.csv",
+      "validation",
+      "holdout",
+      "MAT files",
+      "precomputed coordinates",
+      "device WLS coordinates",
+      "Kaggle",
+      "tokens"
+    ]
+  },
+  "pipeline_contract": {
+    "same_first_solvable_epoch": true,
+    "raw_row_definition": "Every selected Observation row at each raw UTC epoch with its raw key retained; first-solvable report uses the epoch mapped to the unchanged FGO first epoch.",
+    "stage_order": [
+      "raw_row",
+      "valid_and_doppler",
+      "snr_and_multipath_mask",
+      "supported_constellation_signal_frequency",
+      "raw_pseudorange_validity",
+      "transmit_time",
+      "nav_state_call1",
+      "nav_state_call2",
+      "ephemeris_present_and_healthy",
+      "snr_and_elevation_masks",
+      "clock_jump_and_dt",
+      "includes_receiver_clock_drift",
+      "final_corrected_undifferenced_doppler_factor"
+    ],
+    "first_reason_is_exclusive": true,
+    "required_row_identity": [
+      "dataset_id",
+      "raw_epoch_index",
+      "utc_time_millis",
+      "gps_week",
+      "gps_tow",
+      "satellite",
+      "signal"
+    ],
+    "time_mapping": "Retain loader integer UTC epoch key and compare it to GPST week/TOW using the existing raw-clock conversion; no reconstructed coordinate or truth is used.",
+    "fgo_factor_definition": "Row key is present in unchanged FGOProblem::undifferenced_doppler_factors with corrected state enabled and receiver clock drift included.",
+    "route_aggregate": "Count every selected raw row and every first-exclusive stage outcome over all selected raw epochs; report final factor count from the unchanged FGO problem."
+  },
+  "candidate_policy": {
+    "correction_allowed_only_if": [
+      "a generalizable source bug is located",
+      "the bug is demonstrated on frozen raw row identities and numerical stage counts",
+      "a separate explicit opt-in candidate and focused tests are used",
+      "production default and Phase41 behavior remain unchanged"
+    ],
+    "correction_forbidden_if": [
+      "evidence is only an implausible velocity or clock rate",
+      "a threshold or mask is relaxed",
+      "a coordinate or truth source is substituted",
+      "the cause is route-specific or unresolved",
+      "broadcast navigation is missing or genuinely unhealthy"
+    ],
+    "default_unchanged": true,
+    "phase41_result_retained": true
+  },
+  "execution_order": [
+    "commit and push this freeze JSON",
+    "commit and push evaluator/source/tests and manifest before raw audit",
+    "run MTV-h target and record every first-solvable-epoch row with first-exclusive reason",
+    "verify UTC/GPS week/TOW row mapping and clock-jump/dt/receiver-drift stages",
+    "run the other five frozen raw routes for structural aggregate",
+    "publish immutable result and documentation; keep freeze unchanged"
+  ],
+  "truth_accounting": {
+    "allowed_truth_reads": 0,
+    "ground_truth_materialized": 0,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_coordinates_used": 0,
+    "device_wls_coordinates_used": 0,
+    "imu_open_count": 0,
+    "kaggle_or_token_access": 0
+  },
+  "decision_rule": "No correction or gate change is allowed unless one generalizable bug is proven by source and frozen-raw row-level numerical evidence; otherwise diagnosis is No-Go."
+}

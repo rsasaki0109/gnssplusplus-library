@@ -1,0 +1,21 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gnss-first-multipass-freeze-manifest.v1",
+  "freeze_record": "smartphone_r5_native_fgo_android_imu_gnss_first_multipass_freeze_v1.json",
+  "freeze_record_sha256": "55d389de48284b5ef482daaa72bcbba403a878465528fc43e57167dd90d55e3f",
+  "record_hash_is_sealed_before_truth": true,
+  "artifact_hashes": {
+    "short_submission_sha256": "abe45c4f29b1e99171de938f3d55558f8e4b03e09106c6dd96808690314c2893",
+    "short_summary_sha256": "91c7bdc6a19dd2f63b06d8a40a415c313fae2a785ecbac522d8b8b7c4c3eb244",
+    "full_submission_sha256": "740d896087822c07b44df7b8c2c1a87a61953765c4845495b14423ae42685f4b",
+    "full_summary_sha256": "eb60f945bda8c9e004fbc8224fa43a99f4c825aecc99fb2a158fc66325fe472e",
+    "release_binary_sha256": "e7028175ece727738ddd3b6b3b25efa3a4737ebfd35358849bf6dd966138e5cf"
+  },
+  "truth_policy": {
+    "truth_free_artifacts_sealed": true,
+    "truth_open_count_before_manifest": 0,
+    "permitted_next_read": "one evaluation read of the declared development-train ground_truth.csv after this manifest is verified",
+    "fresh_validation_open": false,
+    "holdout_open": false,
+    "no_post_freeze_tuning": true
+  }
+}

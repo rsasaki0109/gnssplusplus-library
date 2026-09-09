@@ -1,0 +1,207 @@
+{
+  "schema_version": "smartphone-r5-phase43-native-fallback-seed-quality-anchor-recovery-freeze.v1",
+  "phase": 43,
+  "status": "frozen-before-implementation-and-matrix",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "7ac6d25",
+    "phase42_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_freeze_v1.json",
+      "sha256": "f80865dc9db3d87c310e064df1afe687833225a1b0d1b6027dac6435492f8123"
+    },
+    "phase42_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase42_doppler_row_attrition_result_v1.json",
+      "sha256": "e95520e3149760073d626029eb831dc543cfa63ca5114c8221661a62c8b9a94b"
+    },
+    "phase42_freeze_is_immutable": true,
+    "starting_source": {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "unbuilt-at-freeze"
+    }
+  },
+  "objective": {
+    "question": "Can an opt-in raw/nav-only reconnaissance at an unrestricted elevation gate recover a deterministic quality anchor when normal elevation-gated quality-anchor reconnaissance has no eligible candidate?",
+    "candidate_id": "native_fallback_seed_quality_anchor_recovery_v1",
+    "candidate_flag": "--native-fallback-seed-quality-anchor-recovery",
+    "target_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "structural_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_order_is_fixed": true,
+    "truth_free": true
+  },
+  "input_contract": {
+    "raw_only": true,
+    "source_roots": {
+      "phase25_train3": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw",
+      "phase37_target_and_safe2": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes"
+    },
+    "sha256": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+        "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "device_gnss.csv": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "device_imu.csv": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8",
+        "brdc.nav": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+        "device_imu.csv": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+        "brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "device_imu.csv": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+        "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_imu.csv": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+        "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "device_imu.csv": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+        "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+      }
+    },
+    "opened_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": [
+      "ground_truth.csv",
+      "validation",
+      "holdout",
+      "MAT files",
+      "precomputed coordinates",
+      "device WLS coordinates",
+      "Kaggle",
+      "tokens"
+    ]
+  },
+  "base_recipe": {
+    "flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "candidate_addition": "--native-fallback-seed-quality-anchor-recovery",
+    "flag_off_default_unchanged": true,
+    "phase31_champion_unchanged": true
+  },
+  "algorithm_contract": {
+    "normal_reconnaissance_first": "Run the existing quality-anchor SPP reconnaissance first with the configured normal elevation gate and unchanged SNR, broadcast-navigation, health, geometry, and residual quality gates.",
+    "recovery_trigger": "Only when normal quality-anchor reconnaissance produces no eligible candidate; no recovery reconnaissance is permitted after a normal candidate is selected.",
+    "recovery_reconnaissance": "Re-run the same raw pseudorange plus broadcast-navigation SPP reconnaissance with only the elevation gate set to -90 degrees. Preserve all SNR, health, ephemeris, navigation, finite-geometry, pseudorange, GDOP, residual, and satellite-count eligibility gates.",
+    "ranking": "Use the existing deterministic quality-anchor candidate ranking unchanged: maximum satellites, then minimum GDOP, then minimum normalized residual RMS, then lowest input index.",
+    "replay": "When recovery selects an eligible anchor, use its raw/nav-derived ECEF position and clock state as the first state at the anchor index, then return to the ordinary elevation=0 degree forward/backward replay. The factor builder remains on the ordinary elevation=0 degree path.",
+    "failure_policy": "Recovery disabled, untriggered, or unsuccessful remains fail-closed. Keep the candidate-specific seed unavailable and do not apply a sentinel factor-level global bypass or any elevation-mask bypass in factor construction.",
+    "default": "Flag-off and all existing flags retain production/default behavior and the Phase31 quality-anchor path byte-for-byte.",
+    "summary_visibility": "Expose normal and recovery candidate counts, recovery trigger, selected anchor index/satellite count/GDOP/normalized residual, replay validity, and sentinel factor bypass=false. Existing candidate-specific fields are omitted from other five routes after the declared comparison projection."
+  },
+  "summary_contract": {
+    "required_fields": [
+      "native_fallback_seed_quality_anchor_recovery",
+      "quality_anchor_initialization",
+      "normal_quality_anchor_candidates",
+      "recovery_quality_anchor_candidates",
+      "recovery_trigger",
+      "recovery_anchor_selected",
+      "recovery_anchor_index",
+      "recovery_anchor_satellites",
+      "recovery_anchor_gdop",
+      "recovery_anchor_normalized_residual_rms",
+      "recovery_replay_valid_epochs",
+      "recovery_replay_invalid_epochs",
+      "sentinel_factor_bypass"
+    ],
+    "sentinel_factor_bypass_must_be": false,
+    "normal_candidate_fields": [
+      "quality_anchor_selected",
+      "quality_anchor_index",
+      "quality_anchor_satellites",
+      "quality_anchor_gdop",
+      "quality_anchor_normalized_residual_rms"
+    ],
+    "recovery_candidate_fields": [
+      "recovery_anchor_selected",
+      "recovery_anchor_index",
+      "recovery_anchor_satellites",
+      "recovery_anchor_gdop",
+      "recovery_anchor_normalized_residual_rms"
+    ],
+    "other_route_projection": "For the other five routes, compare flag-on and flag-off submission/summary after excluding the existing normal quality-anchor fields and all declared recovery candidate-specific fields; the projected artifacts must be byte-identical."
+  },
+  "predeclared_numeric_gates": {
+    "target": {
+      "recovery_trigger": true,
+      "anchor_selected": true,
+      "anchor_position_finite": true,
+      "anchor_position_earth_valid": true,
+      "replay_valid_epochs_positive": true,
+      "output_finite": true,
+      "output_converged": true,
+      "raw_key_exact": true,
+      "tdcp_factors_built_positive": true,
+      "tdcp_factors_inserted_equals_built": true,
+      "tdcp_inserted_positive": true,
+      "over_70_mps_count": 0
+    },
+    "other_routes": {
+      "recovery_trigger": false,
+      "flag_on_submission_and_summary_projected_identity": true
+    },
+    "all_routes": {
+      "repeat_runs": 2,
+      "byte_identical_submission_and_summary": true,
+      "sentinel_factor_bypass": false
+    }
+  },
+  "flag_off_identity_contract": {
+    "scope": "Run the frozen base recipe before and after candidate build on all six structural routes.",
+    "expected_baselines": "Existing Phase31/Phase37 frozen flag-off artifacts remain authoritative; no baseline bytes may change.",
+    "production_default_changed": false
+  },
+  "execution_order": [
+    "freeze JSON commit and push",
+    "candidate source and focused tests plus evaluator manifest commit and push",
+    "build candidate binary",
+    "run MTV-h target and the other five frozen raw routes twice with candidate flag",
+    "run flag-off baseline identity and projected other-route identity checks",
+    "run relevant CTest and structural matrix",
+    "publish truth-free structural result and documentation",
+    "do not open truth in Phase43 regardless of structural outcome"
+  ],
+  "forbidden_actions": [
+    "open or materialize ground_truth.csv",
+    "open validation or holdout truth",
+    "read or create any MATLAB .mat",
+    "use precomputed result/submission coordinates for inference",
+    "use device WLS or validation coordinates",
+    "change normal SPP quality gates or factor-builder elevation",
+    "apply a sentinel factor-level global bypass",
+    "alter the existing deterministic ranking",
+    "change production defaults or the Phase31 champion path",
+    "use Kaggle or tokens"
+  ],
+  "truth_accounting": {
+    "allowed_truth_reads": 0,
+    "ground_truth_materialized": 0,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_coordinates_used": 0,
+    "device_wls_coordinates_used": 0,
+    "kaggle_or_token_access": 0
+  },
+  "decision_rule": "All declared gates are logically ANDed. Any normal/recovery stage-order violation, missing or unhealthy navigation, nonfinite anchor/replay/output, TDCP mismatch, sentinel bypass, flag-off mutation, projected identity failure, or nondeterminism is fail-closed; no truth is opened in Phase43."
+}

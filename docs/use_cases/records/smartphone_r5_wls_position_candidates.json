@@ -1,0 +1,191 @@
+{
+  "schema_version": "smartphone-r5-wls-position-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "development-only truth-free Android handset WLS ECEF lane",
+  "sealed_data_policy": {
+    "designated_holdout_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "holdout_content_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_evaluation_forbidden": true
+  },
+  "fixed_roles": {
+    "candidate_train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5"
+    ],
+    "validation": [
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro"
+    ],
+    "development_main_regression": [
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "additional_truth_opened_audit": [
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+      "2021-07-14-20-50-us-ca-mtv-e/pixel4"
+    ]
+  },
+  "route_source_contract": {
+    "source_policy": "reuse only already materialized/truth-opened development artifacts; do not discover or open new routes",
+    "wls_fields": [
+      "WlsPositionXEcefMeters",
+      "WlsPositionYEcefMeters",
+      "WlsPositionZEcefMeters"
+    ],
+    "epoch_key": "utcTimeMillis",
+    "clock_state": "HardwareClockDiscontinuityCount",
+    "consistency_tolerance_m": 0.001,
+    "ecef_norm_range_m": [6000000.0, 7500000.0]
+  },
+  "candidate_set": [
+    {
+      "id": "wls_segment_r15_d15",
+      "max_consecutive_rejects": 15,
+      "max_prediction_duration_s": 15.0,
+      "reject_fraction_max": null
+    },
+    {
+      "id": "wls_segment_r20_d20",
+      "max_consecutive_rejects": 20,
+      "max_prediction_duration_s": 20.0,
+      "reject_fraction_max": null
+    },
+    {
+      "id": "wls_segment_r30_d30",
+      "max_consecutive_rejects": 30,
+      "max_prediction_duration_s": 30.0,
+      "reject_fraction_max": null
+    }
+  ],
+  "selection_and_gate_rule": {
+    "truth_free_generation": "extract and validate WLS, convert to WGS84/POS, run the shared CV Kalman+RTS and segment fallback before opening truth",
+    "train_selection": "select only among candidates that are non-regressive versus WLS raw on availability, H median, H P95, V P95, and all four local diagnostics; rank aggregate H P95, H median, V P95, diagnostic mean, then candidate ID",
+    "validation_gate": "selected WLS candidate must be non-regressive versus both WLS raw and the fixed native Galileo E1+Hatch30 segment-stability lane on all sign-off metrics",
+    "main_gate": "selected WLS candidate must be non-regressive versus the fixed native Galileo E1+Hatch30 segment-stability lane on all sign-off metrics",
+    "audit_routes": "score Pixel4XL and Pixel4 after train/validation/main decision; they cannot influence selection",
+    "mixed_route_policy": "if WLS wins some routes and loses others, report truth-free integrity features and selector feasibility; do not implement truth-dependent runtime selection",
+    "holdout": "never opened or evaluated",
+    "promotion_scope": "development-only only; no production/default lane change"
+  },
+  "post_evaluation": {
+    "status": "completed",
+    "output_root": "output/smartphone-r5/wls-position-v1",
+    "report": {
+      "path": "output/smartphone-r5/wls-position-v1/wls_position_report.json",
+      "sha256": "bddaab0b8168567bf6d2fcdbef9d8a9624f43f4087c8f9876371542ec7a36820"
+    },
+    "evaluation_manifest": {
+      "path": "output/smartphone-r5/wls-position-v1/wls_position_manifest.json",
+      "hash_note": "manifest contains the selection-record hash and report/route artifact hashes; its own hash is intentionally not embedded here"
+    },
+    "promotion_decision": "no-go-no-eligible-train-candidate",
+    "selected_candidate_id": null,
+    "gates": {
+      "all_six_wls_inputs_complete_and_consistent": true,
+      "train_candidate_non_regression_vs_wls_raw": false,
+      "validation_evaluated_after_train_selection": false,
+      "main_evaluated_after_train_selection": false,
+      "all_candidate_diagnostics_scored_on_validation_and_main": true,
+      "selected_candidate_validation_main_gate": "not_applicable_no_eligible_train_candidate",
+      "production_default_changed": false,
+      "holdout_opened": false
+    },
+    "wls_raw_train_aggregate": {
+      "route_count": 2,
+      "mean_availability_ratio": 1.0,
+      "mean_horizontal_wgs84_p50_m": 1.8271630140730535,
+      "mean_horizontal_wgs84_p95_m": 4.123603706637902,
+      "mean_vertical_p95_abs_m": 5.32265399707154,
+      "mean_kaggle_diagnostic_m": 2.9741676970978848
+    },
+    "candidate_train_aggregate": {
+      "wls_segment_r15_d15": {
+        "mean_horizontal_wgs84_p50_m": 1.798127384189955,
+        "mean_horizontal_wgs84_p95_m": 4.5955970778462385,
+        "mean_vertical_p95_abs_m": 4.03738140192916,
+        "mean_kaggle_diagnostic_m": 3.1959020881703144,
+        "non_regression_vs_wls_raw": false,
+        "failures": [
+          "h_p95_regression",
+          "wgs84_vincenty__linear_n_minus_1_regression",
+          "wgs84_vincenty__nearest_rank_ceiling_regression",
+          "haversine_sphere__linear_n_minus_1_regression",
+          "haversine_sphere__nearest_rank_ceiling_regression"
+        ]
+      },
+      "wls_segment_r20_d20": {
+        "mean_horizontal_wgs84_p50_m": 1.798127384189955,
+        "mean_horizontal_wgs84_p95_m": 4.5955970778462385,
+        "mean_vertical_p95_abs_m": 4.03738140192916,
+        "mean_kaggle_diagnostic_m": 3.1959020881703144,
+        "non_regression_vs_wls_raw": false
+      },
+      "wls_segment_r30_d30": {
+        "mean_horizontal_wgs84_p50_m": 1.798127384189955,
+        "mean_horizontal_wgs84_p95_m": 4.5955970778462385,
+        "mean_vertical_p95_abs_m": 4.03738140192916,
+        "mean_kaggle_diagnostic_m": 3.1959020881703144,
+        "non_regression_vs_wls_raw": false
+      }
+    },
+    "route_raw_wls_metrics": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "h_median_m": 1.234014313725439,
+        "h_p95_m": 3.613436718767217,
+        "v_p95_m": 4.879892511673077,
+        "availability": 1.0,
+        "wls_manifest_sha256": "4091ddde9f68cab32f996ca6539ac136819e2e5f6e2ee1da088cd62b9686e7df"
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "h_median_m": 2.4203117144206683,
+        "h_p95_m": 4.633770694508588,
+        "v_p95_m": 5.765415482470003,
+        "availability": 1.0,
+        "wls_manifest_sha256": "3de0a2519969ae14a8f922bf6c0157fdc58475aa7ead7d578c66538f396c41ff"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+        "h_median_m": 2.4176756477078047,
+        "h_p95_m": 5.162888567386996,
+        "v_p95_m": 14.782238156967281,
+        "availability": 1.0,
+        "wls_manifest_sha256": "86011664c20e7add694c3b10bab81a2a6930576282ec39a648065c50f2261243"
+      },
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": {
+        "h_median_m": 2.390255701973192,
+        "h_p95_m": 4.71529779212022,
+        "v_p95_m": 11.427285424331108,
+        "availability": 1.0,
+        "wls_manifest_sha256": "d9f69cd57ea281d1574a906616c049a4dee1e8ae7d59b65f189c4974981f0e28"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+        "h_median_m": 4.212623719409274,
+        "h_p95_m": 6.1743506052511234,
+        "v_p95_m": 7.281285234932451,
+        "availability": 1.0,
+        "wls_manifest_sha256": "4fa03f61164390eaa61629794f28307f41f13058950c9ee0b0adc36d20717e7d"
+      },
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+        "h_median_m": 3.6757994464760917,
+        "h_p95_m": 8.489272645027556,
+        "v_p95_m": 14.218083134899894,
+        "availability": 1.0,
+        "wls_manifest_sha256": "350a00f63c884b2e59e86a2899d28b6317e42e6ed03fdbf98fa541f6f96f5468"
+      }
+    },
+    "segment_integrity": {
+      "all_routes_zero_missing_nonfinite_or_inconsistent_wls": true,
+      "max_timestamp_gap_s": 1.0,
+      "clock_discontinuity_transition_count_all_routes": 0,
+      "truth_free_selector": "not implemented; integrity-only fail-closed selector is safe, accuracy selector requires calibration"
+    },
+    "mixed_route_outcome": {
+      "wls_better_h_p95_than_native_raw_count": 5,
+      "wls_worse_h_p95_than_native_raw_count": 1,
+      "worse_route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    },
+    "timing": {
+      "total_wall_s": 11.189327483996749,
+      "route_count": 6
+    }
+  }
+}

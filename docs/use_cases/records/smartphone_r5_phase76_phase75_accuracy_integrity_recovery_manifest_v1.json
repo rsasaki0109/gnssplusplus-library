@@ -1,0 +1,62 @@
+{
+  "schema_version": "smartphone-r5-phase76-phase75-accuracy-integrity-recovery-manifest.v1",
+  "phase": 76,
+  "status": "sealed-before-phase76-truth-read",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_freeze_v1.json",
+    "sha256": "6674773e4d988644f205b52bdae5228dcaa0160ac84a58f63d5192035ee121c8"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+    "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+    "single_process": true,
+    "native_or_solver_subprocess": false,
+    "post_truth_tuning": false
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+    "sha256": "d3faf7a0f6a834df3a17612246198f89a8c375d632ae0041ecd1bc507b121ca3",
+    "command": "PYTHONPATH=. python3 -m unittest -v tests/test_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+    "passed": 6
+  },
+  "control_identity": {
+    "source": "Phase74 freeze sealed_phase73_artifacts.routes[route].control",
+    "helper_constant_lookup": false,
+    "focused_test_executes_score_route": true
+  },
+  "read_policy": {
+    "truth_reads_before_freeze": 0,
+    "truth_reads_before_manifest": 0,
+    "truth_reads_after_manifest": 4,
+    "truth_reads_per_route": 1,
+    "candidate_artifact_reads": 8,
+    "control_artifact_reads": 8,
+    "single_scorer_process": true,
+    "native_or_solver_subprocess": false,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": false,
+    "post_truth_tuning": false,
+    "solver_rerun_after_truth": false
+  },
+  "output": {
+    "new_output_root": "output/smartphone-r5/phase76-phase75-accuracy-integrity-recovery-v1",
+    "prior_phase75_output_reuse": false
+  },
+  "truth_read_accounting_at_seal": {
+    "candidate_artifact_reads": 0,
+    "control_artifact_reads": 0,
+    "truth_reads": 0,
+    "raw_gnss": 0,
+    "raw_imu": 0,
+    "navigation": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "archive_reopen": 0,
+    "native_or_solver_subprocess": 0
+  }
+}

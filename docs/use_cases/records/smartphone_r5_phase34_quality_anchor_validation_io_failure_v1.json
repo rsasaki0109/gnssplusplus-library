@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-phase34-quality-anchor-validation-io-failure.v1",
+  "phase": 34,
+  "status": "sealed-before-truth-read",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_freeze_v1.json",
+    "sha256": "18fd075f30699d0213a1cca3a9eac25d24d3765d75df8d770380dfa7fbeeb43b"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_evaluator_manifest_v1.json",
+    "sha256": "8d6c5a7c0a4c98be94042d29e5ba9e98846e7c87a5e3dad041ae283e18c58f67"
+  },
+  "route": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+  "operation": "score",
+  "failure": {
+    "stage": "post-materialization-pre-truth-parser",
+    "error_class": "ValueError",
+    "reason": "relative output-root path was passed to Path.relative_to(absolute repository root) while constructing the materialization report",
+    "truth_read_count": 0,
+    "truth_parser_invoked": false,
+    "solver_rerun": false,
+    "candidate_or_control_mutated": false,
+    "additional_archive_truth_materialization_allowed": false
+  },
+  "materialized_member": {
+    "path": "output/smartphone-r5/phase34-quality-anchor-validation-v1/truth/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/ground_truth.csv",
+    "expected_bytes": 206062,
+    "expected_crc32_hex": "015842bb",
+    "archive_member_open_count": 1,
+    "content_read_for_scoring": false
+  },
+  "recovery_contract": {
+    "reuse_existing_materialized_member": true,
+    "truth_parser_read_count_after_recovery": 1,
+    "same_frozen_artifacts": true,
+    "no_candidate_or_parameter_change": true,
+    "no_post_score_tuning": true,
+    "no_second_archive_materialization": true
+  },
+  "mat_read_or_generated": false,
+  "token_or_kaggle_access": false
+}

@@ -1,0 +1,428 @@
+{
+  "schema_version": "smartphone-r5-phase126-raw-base-compound-port-design-freeze.v1",
+  "phase": 126,
+  "execution_label": "Luna Max",
+  "status": "sealed-design-only-default-off",
+  "purpose": "Freeze one source-complete raw-base compound-port boundary for future implementation without authorizing code execution, raw reads, solver runs, truth, accuracy, or publication.",
+  "starting_state": {
+    "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "head_before_audit": "7d292931e5c70bede47701cf9c7a19a0d04b7e54",
+    "worktree_before_audit": "clean",
+    "official_source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5"
+  },
+  "audit_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_port_design_audit_v1.md",
+    "commit": "88f9af2c585647d261506aa118fc322438281cf7",
+    "sha256": "10b20616a8c910e88d537c348423db4099703aadc26491c9c27262978230d752"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "decision": "freeze-one-compound-source-complete-port",
+    "candidate_id": "phase126-raw-base-source-complete-compound-v1",
+    "selector": "--native-phase126-raw-base-source-complete",
+    "default_off": true,
+    "partial_selectors_allowed": false,
+    "compound_admission_predicate": "atomic_step_a && atomic_step_b && atomic_step_c && all_acceptance_invariants",
+    "source_backed": true,
+    "factor_topology_preserving": true,
+    "factor_admission_preserving_except_explicit_official_code_miss_mask": true,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason": "Station reference, satellite-state timing, Sagnac/geometry, atmosphere, TGD/BGD policy, smoothing, interpolation, and exact code-factor miss population are coupled in the official base operator; no individual knob can establish source parity."
+  },
+  "target_routes": [
+    "MTV-A",
+    "LAX-T"
+  ],
+  "sealed_base_member_metadata": {
+    "source_record": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_audit_v1.md",
+    "payload_read_in_phase126": 0,
+    "MTV-A": {
+      "member": "base.obs",
+      "bytes": 10708536,
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "observed_interval_s": 1.0,
+      "moving_mean_samples": 151,
+      "header_approximate_xyz_m": [
+        -2703115.921,
+        -4291767.2078,
+        3854247.9066
+      ]
+    },
+    "LAX-T": {
+      "member": "base.obs",
+      "bytes": 719969,
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "observed_interval_s": 15.0,
+      "moving_mean_samples": 11,
+      "header_approximate_xyz_m": [
+        -2507798.7984,
+        -4676369.6918,
+        3526890.8008
+      ]
+    }
+  },
+  "fixed_phase112_phase118_recipe": {
+    "phase112_commit": "0151bd070f8029413f8f2a17a28fe982dddb735f",
+    "phase118_commit": "6b37f92077a8ede43cb24e7a5cada580feccea5c",
+    "phase101_epoch_local_c7": true,
+    "receiver_clock_state_unit": "m",
+    "receiver_clock_drift_state_unit": "m/s",
+    "raw_d_initialization_unit": "m/s",
+    "ccdd_state_unit": "m",
+    "ccdd_sigma_m": 0.1,
+    "global_isb_duplicate": false,
+    "phase99_main_solver": "MULTIFRONTAL_QR",
+    "tdcp_sigma_m": 0.03,
+    "tdcp_huber_k": 0.5,
+    "imu_carrier_tdcp_doppler_topology_fixed": true,
+    "filters_noise_lm_initialization_fixed": true,
+    "pixel5_output_offset_exactly_once": true,
+    "only_phase126_delta": "source-complete raw-base correction operator and its explicit official finite-code miss accounting"
+  },
+  "allowed_lineage": {
+    "phone_inputs": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv"
+    ],
+    "navigation_input": "broadcast navigation",
+    "base_input": "caller-declared sealed raw base RINEX member with exact hash",
+    "coordinate_source": "finite Earth-valid raw RINEX header APPROX POSITION XYZ only, subject to antenna-reference proof",
+    "in_memory_only": true,
+    "same_run_only": true
+  },
+  "forbidden_lineage": [
+    "base_position.csv",
+    "base_offset.csv",
+    "phone coordinates",
+    "device-provided WLS position",
+    "saved result coordinates",
+    "precomputed base corrections",
+    "PDC",
+    "MAT",
+    "truth",
+    "Kaggle",
+    "nearest/extrapolated coordinate repair",
+    "fallback seed or alternate correction operator"
+  ],
+  "official_source_evidence": {
+    "source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "files": [
+      {
+        "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+        "lines": "5-6,8-24,26-34",
+        "role": "same-satellite selection, station provenance, base residual, moving mean, rover-time interpolation"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/+gt/Gobs.m",
+        "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+        "lines": "126-220,983-1025,1135-1169",
+        "role": "RINEX parse/header position/GLONASS FCN, frequency/wavelength, sameSat ordering, residual equations"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/+gt/Gsat.m",
+        "sha256": "a56c323664660c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+        "lines": "137-195,237-306",
+        "role": "satellite state/clock, health mask, geodist/LOS/atmosphere, velocity Sagnac"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/+rtklib/satpos.m",
+        "sha256": "20b7fd78065a22d9d02b0f394aabef2437e991ed2c63b04c65194a96827f5e",
+        "lines": "1-28",
+        "role": "transmission-time state, metre-valued clock, no TGD/BGD in satellite clock"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/+rtklib/geodist.m",
+        "sha256": "4ddced92aea78defd7eb8b2040dd23b1b0575eb0c1ac719a128c8db62ab4a91f",
+        "lines": "1-19",
+        "role": "ECEF range/LOS and documented Sagnac inclusion"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "50-82,89-120,123-230",
+        "role": "rover residual, base correction before graph, C7/D state and finite P/D factor admission"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "lines": "63-106,129-187,189-221",
+        "role": "GNSS/IMU residual and fixed graph boundary"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "lines": "38-121,139-218",
+        "role": "official raw-domain time, pseudorange, carrier, Doppler and wavelength provenance"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/preprocessing.m",
+        "sha256": "976629d187e7fab5868eb8e5676a4d40520eb23db1254f7320d3b4270d7dffcf",
+        "lines": "70-95",
+        "role": "base member selection, 180-second margin, overlap and span checks"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "46-55,62-83",
+        "role": "time and base moving-window settings"
+      }
+    ]
+  },
+  "native_source_evidence": {
+    "files": [
+      {
+        "path": "src/io/rinex.cpp",
+        "sha256": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533",
+        "lines": "97-180,207-300,373-401,1102-1112",
+        "role": "header XYZ/antenna delta, signal policy, primary/secondary observation selection and units"
+      },
+      {
+        "path": "src/io/android_raw_gnss.cpp",
+        "sha256": "a020ce900db6a9d3a994cc3adb3dcebbe84cbf67c1ff9793991b7a75039529c5",
+        "lines": "202-315,529-570",
+        "role": "raw signal/frequency admission and raw pseudorange time conversion; optional WLS position is forbidden"
+      },
+      {
+        "path": "src/algorithms/base_pseudorange_compensation.cpp",
+        "sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817",
+        "lines": "132-159,163-257,259-339",
+        "role": "current native base model, two-pass state, explicit rotation/geometry/atmosphere/group delay, stream smoothing/interpolation"
+      },
+      {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "5675e82fc595933da4e7c14ad468ae69437dc04bac79a7ef55f1edfa03e098da",
+        "lines": "365-405,430-640",
+        "role": "native rover seed and corrected pseudorange construction/factor admission"
+      },
+      {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "df77ab6556f90d6d9a8464d360e85d2a49a50d6fc04ef396833f354f821a1176",
+        "lines": "7420-7524,7886-8044",
+        "role": "base RINEX/header read and existing exactly-once correction/miss-mask boundary"
+      },
+      {
+        "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+        "sha256": "ce85e428ac0a7af93ee1ad3eadf082b5361454dff5c920245be7c16c940b6949",
+        "lines": "53-178",
+        "role": "current exact-stream, finite/in-domain miss classification and conservation accounting"
+      }
+    ]
+  },
+  "official_pipeline_contract": {
+    "entry": "official preprocessing selects a base RINEX member and trims it to rover span plus 180 seconds; correct_pseudorange receives rover/base observations and broadcast nav",
+    "station_reference": "official source computes mean base_position.csv XYZ and calls base_offset.csv ENU offset after obsb.residuals(satb); these tables are forbidden in Phase126",
+    "raw_observation_units": {
+      "pseudorange": "m",
+      "carrier_phase": "cycles",
+      "doppler": "Hz",
+      "snr": "dB-Hz",
+      "frequency": "Hz",
+      "wavelength": "m"
+    },
+    "signal_key": "same satellite and exact selected signal/frequency stream; official helper loops L1/L5",
+    "satellite_state": "source-equivalent RTKLIB satposs at signal transmission time; dts is m, ddts is m/s, health is explicit, TGD/BGD is not included in dts",
+    "geometry": "source-equivalent ECEF geodist range and LOS with Sagnac exactly once",
+    "atmosphere": "source-equivalent RTKLIB ionmodel and tropmodel at the base reference and selected signal frequency",
+    "base_residual_formula": "resPc_b = P_b - (rho_b - dts_b + ionosphere_b + troposphere_b) = P_b + dts_b - rho_b - ionosphere_b - troposphere_b",
+    "rover_application_formula": "resPc_r_corrected = resPc_r - pc; pc = linear_in_domain(interpolate(base_time, centered_movmean(resPc_b, window)))",
+    "smoothing": {
+      "one_second": 151,
+      "fifteen_second": 11,
+      "edge_policy": "centered moving mean with source-equivalent finite/NaN edge behavior"
+    },
+    "interpolation": "linear only between finite source samples at rover GPST; outside domain, missing stream, duplicate time, or nonfinite value is a miss",
+    "missing_policy": "official nonfinite resPc does not create a pseudorange factor; no endpoint hold, nearest fill, extrapolation, gap bridge, or repair",
+    "tgd_bgd_policy": "official resPc has no explicit TGD/BGD term; any source-complete native implementation must apply this policy symmetrically to rover and base or fail closed"
+  },
+  "native_difference_summary": [
+    {
+      "component": "station_reference",
+      "official": "station table mean XYZ plus ENU offset call",
+      "native": "RINEX header approximate XYZ is consumed; header antenna delta is parsed but not consumed",
+      "classification": "divergent-unresolved",
+      "compound_requirement": "use only finite Earth-valid header XYZ with proven antenna convention; never substitute tables or apply an unproven delta"
+    },
+    {
+      "component": "observation_and_signal_selection",
+      "official": "readrnxobs/Gobs maps code and GLONASS FCN to frequency/wavelength and sameSat preserves rover satellite order",
+      "native": "RINEX signal policy selects primary/secondary bands; Android parser admits explicit source signal/frequency",
+      "classification": "units-equivalent-selection-unproven",
+      "compound_requirement": "source-vector tests must prove exact allowed signal/FCN key set; additional-band selector is excluded"
+    },
+    {
+      "component": "satellite_state_and_clock",
+      "official": "satposs with receiver-clock-adjusted P, source transmission time, metre-valued dts, no TGD/BGD in dts",
+      "native": "two-pass P/c then satellite-clock time in base and rover",
+      "classification": "control-flow-divergent",
+      "compound_requirement": "choose one source-equivalent state/clock contract and reject mixed or missing state"
+    },
+    {
+      "component": "geometry_and_sagnac",
+      "official": "geodist documents Sagnac-inclusive range/LOS",
+      "native": "explicit satellite rotation followed by calculateGeometry",
+      "classification": "representation-unresolved",
+      "compound_requirement": "prove one Sagnac application with a synthetic source vector; double rotation fails closed"
+    },
+    {
+      "component": "atmosphere",
+      "official": "RTKLIB ionmodel/tropmodel",
+      "native": "native Klobuchar/Saastamoinen implementations",
+      "classification": "equivalence-unproven",
+      "compound_requirement": "prove finite value equivalence for nav/time/elevation/frequency or reject the route"
+    },
+    {
+      "component": "residual_and_code_bias",
+      "official": "P + dts - rho - ionosphere - troposphere; no explicit TGD/BGD in resPc",
+      "native": "P + dts - rho - ionosphere - troposphere - group_delay for rover and base",
+      "classification": "divergent-coupled",
+      "compound_requirement": "port/prove symmetric official no-explicit-TGD/BGD semantics; no rover-only/base-only TGD switch"
+    },
+    {
+      "component": "stream_and_interpolation",
+      "official": "sameSat, centered movmean 151/11, linear interp1 at rover times",
+      "native": "(SatelliteId,SignalType) stream, centered finite mean, strict in-domain correctionAt",
+      "classification": "shape-close-population-unproven",
+      "compound_requirement": "canonical GPST, exact endpoint/gap/NaN semantics, and per-signal conservation proof"
+    },
+    {
+      "component": "application_boundary",
+      "official": "resPc correction is applied before error model and graph factor insertion",
+      "native": "current selector applies to adopted native code factors after problem construction",
+      "classification": "boundary-divergent",
+      "compound_requirement": "one marked correction pass at a source-equivalent pre-factor boundary; duplicate rejected before mutation"
+    }
+  ],
+  "atomic_implementation_steps": [
+    {
+      "id": "atomic_step_a",
+      "name": "raw-ingress-and-reference",
+      "scope": "Hash-bound raw base RINEX/header, raw signal/FCN/frequency/time canonicalization, finite Earth-valid station reference, broadcast-nav availability and route interval/coverage checks.",
+      "partial_selector_exposed": false,
+      "failure": "fail-closed"
+    },
+    {
+      "id": "atomic_step_b",
+      "name": "official-base-correction-stream",
+      "scope": "One source-equivalent satellite-state, clock, Sagnac/geometry, atmosphere, residual, smoothing, exact-stream and in-domain interpolation operator; official TGD/BGD policy is symmetric or the route fails.",
+      "partial_selector_exposed": false,
+      "failure": "fail-closed"
+    },
+    {
+      "id": "atomic_step_c",
+      "name": "exactly-once-application-and-structural-verifier",
+      "scope": "Apply only finite source corrections to raw code factors once, conserve keys/counts, retain all Phase112/118 graph state and solver invariants, and emit opaque structural telemetry only.",
+      "partial_selector_exposed": false,
+      "failure": "fail-closed"
+    }
+  ],
+  "acceptance_invariants": {
+    "lineage": "exactly one raw phone GNSS/IMU, broadcast nav, and declared hash-bound raw base RINEX; no forbidden path/token or side channel",
+    "station": "header XYZ finite and Earth-valid; antenna convention proven; no table, phone, result, PDC, or precomputed coordinate",
+    "observation": "finite metre P, exact satellite/signal key, valid frequency/wavelength/FCN, deterministic tracking selection, canonical GPST",
+    "satellite_state": "finite source-equivalent position/clock and healthy ephemeris at source-equivalent transmission time; one geometry/Sagnac evaluation",
+    "atmosphere_and_units": "clock/range/atmosphere/correction are metres; no hidden seconds conversion; official no-TGD/BGD policy symmetric",
+    "stream": "same-satellite/same-signal only; MTV-A 1 s/151 and LAX-T 15 s/11; source-equivalent centered edge/NaN policy",
+    "interpolation": "finite in-domain linear only; no extrapolation, endpoint hold, nearest fill, gap repair, or adaptive window",
+    "conservation": "original_code_rows = retained_rows + missing_stream_rows + out_of_domain_rows + nonfinite_rows per signal and globally",
+    "exactly_once": "source model build count 1, correction application pass count 1, duplicate marker rejected before mutation",
+    "graph": "P-only measurement correction; no base factor/new variable; C7/D/CCDD units/key order, QR, IMU/carrier/TDCP/Doppler topology, filter/noise/LM/initialization/offset unchanged",
+    "structural_routes": "MTV-A and LAX-T each require GNSS-first/main progress, finite strict cost decrease, full finite exact C7/D handoff, finite earth-valid output coverage, and no fallback"
+  },
+  "fail_closed_predicates": [
+    "selector is not explicitly enabled or compound steps are incomplete",
+    "missing/mismatched base hash, forbidden input path/token, or more than one base correction source",
+    "missing, nonfinite, non-Earth-valid, or antenna-ambiguous header station reference",
+    "unsupported/ambiguous signal, carrier frequency, wavelength, GLONASS FCN, or time scale",
+    "missing/duplicate/non-monotonic epoch, nav state, ephemeris health, source-equivalent satellite clock, geometry, or atmosphere",
+    "TGD/BGD or Sagnac is applied asymmetrically or more than once",
+    "unexplained correction-stream/factor-key/count difference, nonfinite correction, or conservation mismatch",
+    "out-of-domain or missing correction is repaired by hold, nearest, extrapolation, or fallback",
+    "correction was already marked or application/build count is not exactly once",
+    "C7/D/CCDD/QR/factor family/initialization/filter/noise/LM/output invariant changes",
+    "GNSS-first/main structural gate fails, solution content would be exposed, or any request would read truth/accuracy data"
+  ],
+  "planned_implementation_files": [
+    "include/libgnss++/algorithms/base_pseudorange_compensation.hpp or a new phase126_raw_base_compound header",
+    "src/algorithms/base_pseudorange_compensation.cpp or a new phase126_raw_base_compound source",
+    "src/io/rinex.cpp and include/libgnss++/io/rinex.hpp only if exact header antenna/reference or signal/FCN APIs are insufficient",
+    "src/algorithms/fgo_problems.cpp only at an opt-in corrected-P source-equivalent boundary",
+    "src/algorithms/source_pseudorange_miss_mask.cpp and include/libgnss++/algorithms/source_pseudorange_miss_mask.hpp for typed conservation",
+    "apps/native/gnss_fgo_imu_no_base.cpp for one compound selector/preflight/opaque telemetry",
+    "existing focused test target and future source/structural manifest"
+  ],
+  "focused_test_plan": [
+    "official residual sign/unit and no-explicit-TGD/BGD golden vectors",
+    "header XYZ/antenna-reference finite/earth-valid/ambiguity and forbidden-lineage rejection",
+    "RINEX V2/V3 code/carrier/Doppler/SNR, primary/secondary, GLONASS FCN, frequency/wavelength and GPST tests",
+    "satellite transmission-time/clock/health and one-Sagnac geometry source vectors",
+    "atmosphere model finite/nonfinite and source-equivalence tests",
+    "centered 151/11 edge/NaN moving mean and exact in-domain interpolation tests",
+    "same-satellite/same-signal matching, missing/out-of-domain taxonomy and per-signal/global conservation",
+    "exactly-once and duplicate correction rejection without non-code mutation",
+    "selector-off semantic/byte regression and all-or-nothing compound admission",
+    "target build and full C++ suite only after implementation; no raw/solver/truth execution in design phase"
+  ],
+  "unresolved_items": [
+    {
+      "id": "station-reference-equivalence",
+      "impact": "official table/ENU reference is forbidden while raw RINEX header XYZ and antenna delta semantics are separate",
+      "required_resolution": "source proof or synthetic/header contract; otherwise route fails closed"
+    },
+    {
+      "id": "satellite-state-and-sagnac-equivalence",
+      "impact": "official satposs/geodist and native two-pass/rotation paths have different visible control shapes",
+      "required_resolution": "source-vector equality and exactly-one-Sagnac test"
+    },
+    {
+      "id": "tgd-bgd-symmetry",
+      "impact": "official resPc excludes explicit TGD/BGD while native rover/base currently include group delay",
+      "required_resolution": "symmetric official policy inside compound operator; no standalone TGD edit"
+    },
+    {
+      "id": "atmosphere-model-equivalence",
+      "impact": "official RTKLIB ionmodel/tropmodel and native Klobuchar/Saastamoinen call sites are not proven identical",
+      "required_resolution": "finite source-equivalence test for route nav/time/frequency or fail closed"
+    },
+    {
+      "id": "smoothing-nan-and-sampling",
+      "impact": "official obsb.dt/smoothdata behavior versus native observed-median/finite-window implementation",
+      "required_resolution": "fixed 1 s/151 and 15 s/11 source-compatible edge/gap tests"
+    },
+    {
+      "id": "signal-selection-equivalence",
+      "impact": "readrnxobs code/FCN selection and native SignalPolicy selection are not yet proven identical",
+      "required_resolution": "synthetic RINEX/Android signal-key comparison; no additional-band expansion"
+    }
+  ],
+  "read_accounting": {
+    "official_native_source_text": "read-only",
+    "sealed_record_metadata": "aggregate/state/provenance metadata only",
+    "raw_phone_gnss_imu_navigation_payload": 0,
+    "raw_base_bytes_or_headers": 0,
+    "truth_payload_or_coordinate_rows": 0,
+    "solution_coordinate_rows": 0,
+    "mat_data": 0,
+    "precomputed_coordinates_or_corrections": 0,
+    "pdc": 0,
+    "solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "code_configuration_test_changes": 0,
+    "raw_solver_truth_executions": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "authorization_requirements": {
+    "implementation": "new implementation commit must reference this freeze and pass all focused/source tests; default legacy must remain unchanged",
+    "pre_raw": "new manifest must pin source hashes, implementation hash, selector flags, route base hashes, forbidden lineage, and read counts",
+    "raw": "independent one-shot authorization after implementation qualification; MTV-A then LAX-T exactly once, solution opaque only",
+    "truth": "separate later truth-only authorization; not granted by this design freeze"
+  }
+}

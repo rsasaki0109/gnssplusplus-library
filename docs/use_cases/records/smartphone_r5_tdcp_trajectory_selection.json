@@ -1,0 +1,185 @@
+{
+  "schema_version": "smartphone-r5-tdcp-trajectory-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "development-only truth-free Android carrier-phase trajectory constraint",
+  "purpose": "Evaluate a physically derived time-differenced carrier-phase displacement constraint without using any public/private Kaggle score for selection or tuning.",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+      "member_content_read_before_freeze": false
+    }
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "sealed_data_policy": {
+    "designated_profile_holdout": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "previously_opened_holdouts_are_excluded": true,
+    "new_holdout_content_opened": false,
+    "new_holdout_truth_opened": false,
+    "new_holdout_materialized": false,
+    "public_private_kaggle_scores_used_for_selection": false,
+    "post_holdout_tuning_permitted": false
+  },
+  "fixed_roles": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-05-23-07-us-ca-routen/pixel5",
+    "unused_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "metadata_selection_rule": "Choose complete route/phone pairs with a unique brdc.nav from the central directory, excluding all profile and historical route/phone IDs. Fresh validation and holdout use distinct routes and phones and are selected before member payload access."
+  },
+  "selected_metadata_only": {
+    "fresh_validation": {
+      "dataset_id": "2023-09-05-23-07-us-ca-routen/pixel5",
+      "route": "2023-09-05-23-07-us-ca-routen",
+      "phone": "pixel5",
+      "calendar_year": 2023,
+      "route_region": "routen",
+      "required_files_complete": true,
+      "broadcast_nav_present": true,
+      "broadcast_nav_duplicate_count": 0,
+      "central_directory_members": {
+        "device_gnss.csv": {
+          "name": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/pixel5/device_gnss.csv",
+          "file_size": 44495034,
+          "compressed_size": 10329684,
+          "crc32_hex": "f534419a"
+        },
+        "device_imu.csv": {
+          "name": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/pixel5/device_imu.csv",
+          "file_size": 35928010,
+          "compressed_size": 7372060,
+          "crc32_hex": "da095459"
+        },
+        "ground_truth.csv": {
+          "name": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/pixel5/ground_truth.csv",
+          "file_size": 151623,
+          "compressed_size": 38815,
+          "crc32_hex": "52e8eb21"
+        },
+        "brdc.nav": {
+          "name": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/brdc.nav",
+          "file_size": 11434000,
+          "compressed_size": 1084746,
+          "crc32_hex": "ace7b572"
+        }
+      }
+    },
+    "unused_holdout": {
+      "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+      "route": "2023-09-06-00-01-us-ca-routen",
+      "phone": "pixel6pro",
+      "calendar_year": 2023,
+      "route_region": "routen",
+      "required_files_complete": true,
+      "broadcast_nav_present": true,
+      "broadcast_nav_duplicate_count": 0,
+      "central_directory_members": {
+        "device_gnss.csv": {
+          "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/device_gnss.csv",
+          "file_size": 45443395,
+          "compressed_size": 10843003,
+          "crc32_hex": "b2e75362"
+        },
+        "device_imu.csv": {
+          "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/device_imu.csv",
+          "file_size": 39048933,
+          "compressed_size": 7448586,
+          "crc32_hex": "a0efdc6a"
+        },
+        "ground_truth.csv": {
+          "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/pixel6pro/ground_truth.csv",
+          "file_size": 160373,
+          "compressed_size": 39994,
+          "crc32_hex": "36edc5d4"
+        },
+        "brdc.nav": {
+          "name": "dataset_2023/train/2023-09-06-00-01-us-ca-routen/brdc.nav",
+          "file_size": 11431617,
+          "compressed_size": 1091266,
+          "crc32_hex": "af42659d"
+        }
+      }
+    }
+  },
+  "technical_basis": {
+    "observations": "Android AccumulatedDeltaRangeMeters is already a range-scale quantity; satellite ECEF and per-epoch receiver WLS are present in the raw CSV.",
+    "source_signals": ["GPS_L1_CA", "GAL_E1_C_P"],
+    "signal_policy": "At most one highest-CN0 observation per constellation/Svid per epoch; only the two audited signal contracts are eligible.",
+    "adr_state_policy": {
+      "valid_bit": 1,
+      "reset_bit": 2,
+      "cycle_slip_bit": 4,
+      "eligible": "state has valid bit and neither reset nor cycle-slip bit"
+    },
+    "continuity_policy": "Use a pair only when 0 < current utcTimeMillis - previous utcTimeMillis <= 1500 ms and HardwareClockDiscontinuityCount is unchanged.",
+    "observation_equation": "delta_ADR - line_of_sight_previous dot delta_satellite = -line_of_sight_previous dot delta_receiver + receiver_clock_range_change",
+    "support_screen": "Before implementation, read-only probes found finite ADR and dense continuous GPS/E1 pairs with at least four usable satellites on the fixed development routes; route-specific counts are recorded after generation."
+  },
+  "frozen_candidate": {
+    "candidate_id": "tdcp_displacement_blend_alpha0p50",
+    "base_position_lane": "existing native Galileo-E1/Hatch30 POS at exact device epoch keys",
+    "anchor": "first finite base ECEF position",
+    "displacement_solver": "unweighted least squares over [ -line_of_sight_x, -line_of_sight_y, -line_of_sight_z, 1 ] with at least four eligible satellite pairs",
+    "robust_screen": {
+      "residual_gate_m": 0.50,
+      "maximum_robust_passes": 2,
+      "minimum_inliers": 4,
+      "gate_rule": "median absolute residual about the per-epoch median; reject residuals greater than max(0.50 m, 6.0 * 1.4826 * MAD), then solve again"
+    },
+    "quality_gate": {
+      "maximum_solution_rms_m": 0.50,
+      "maximum_displacement_norm_m": 100.0,
+      "maximum_pair_gap_ms": 1500
+    },
+    "blend": {
+      "tdcp_weight": 0.50,
+      "base_position_delta_weight": 0.50,
+      "formula": "candidate_t = candidate_(t-1) + 0.50 * tdcp_delta_t + 0.50 * (base_t - base_(t-1))"
+    },
+    "fallback": "If continuity, state, geometry, inlier, RMS, or displacement gates fail, emit the exact finite base position for that epoch and reset the TDCP chain; never extrapolate or use truth.",
+    "segment_reset": "Reset at the first epoch, any base-position gap, any pair gap over 1500 ms, hardware-clock transition, or invalid TDCP solution.",
+    "candidate_search_after_freeze": false,
+    "numeric_parameters_frozen": true
+  },
+  "evaluation_freeze": {
+    "baseline": "existing native Galileo-E1/Hatch30 POS at exact device keys",
+    "required_metrics": [
+      "availability",
+      "truth_coverage",
+      "horizontal WGS84 P50",
+      "horizontal WGS84 P95",
+      "vertical P95",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling",
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling"
+    ],
+    "train_gate": "Across the three fixed train routes, no aggregate or per-route regression versus baseline on availability, coverage, H P50/P95, V P95, or any diagnostic; require strict aggregate H P95 and diagnostic-mean improvement.",
+    "fresh_validation_gate": "After truth-free artifacts are sealed, require no regression versus baseline on all required metrics and strict H P95 improvement; otherwise do not open the unused holdout.",
+    "unused_holdout_gate": "If fresh validation passes, open the unused holdout once after artifact sealing; require no regression on all required metrics and strict H P95 improvement. No post-holdout tuning or rerun.",
+    "promotion_scope": "development-only recommended trajectory lane; production RTK/SPP defaults remain unchanged",
+    "official_metric": "not asserted; local four public-spec-compatible diagnostics are reported without using the external score",
+    "truth_order": "truth-free generation and hashes precede each permitted truth read"
+  },
+  "commands": {
+    "truth_free": "python3 apps/gnss.py smartphone-tdcp-trajectory --base-position <native-hatch30.pos> --device-gnss <device_gnss.csv> --output-dir <output>",
+    "evaluation": "python3 apps/gnss.py smartphone-tdcp-trajectory-eval --selection-record docs/use_cases/records/smartphone_r5_tdcp_trajectory_selection.json --output-dir <output>",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure"
+  },
+  "integrity": {
+    "truth_used_before_freeze": false,
+    "holdout_used_before_freeze": false,
+    "public_private_score_used_for_tuning": false,
+    "external_mutation": false,
+    "production_default_changed": false
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-freeze-manifest.v2.1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2_1.json",
+  "freeze_record_sha256": "bf035ec5555ed3e9943b972782e4506512689548c1fd6d1cafd54b78d26ba635",
+  "candidate_id": "native-gnss-pdc-upstream-residual-snr-global-isb-v2.1",
+  "raw_only": true,
+  "mat_inputs_used": false,
+  "truth_free_before_score": true,
+  "validation_truth_opened": false,
+  "holdout_truth_opened": false,
+  "test_truth_opened": false,
+  "algorithm_change_scope": "correctness-only receiver clock subtraction in global ISB center; candidate parameters and solver unchanged from v2",
+  "historical_v1_and_v2_unchanged": true,
+  "post_freeze_tuning": false
+}

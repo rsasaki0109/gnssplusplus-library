@@ -1,0 +1,32 @@
+{
+  "schema_version": "smartphone-r5-phase186-phase185-h-accuracy-authorization.v1",
+  "phase": 186,
+  "status": "authorized-before-single-truth-pass",
+  "manifest_schema": "smartphone-r5-phase186-phase185-h-accuracy-manifest.v1",
+  "manifest_path": "docs/use_cases/records/smartphone_r5_phase186_phase185_h_accuracy_manifest_v1.json",
+  "manifest_sha256": "f84f5b4627e15e014501e3888101fd0b257acdf653dc8ae2e49ad8630a1b417c",
+  "candidate_path": "output/smartphone-r5/phase185-h-native-source-tdcp-huber-v1/mtv-h/opaque_solution_output.csv",
+  "candidate_sha256": "d2b0dfd41fc953ee2f3999c17baac754a933fae5e9430c3e38529c289a2f2e00",
+  "truth_path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+  "truth_sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+  "allow_truth_read": true,
+  "read_accounting": {
+    "candidate_reads": 1,
+    "truth_reads": 1,
+    "accuracy_calculations": 1,
+    "native_solver_invocations": 0,
+    "raw_gnss_imu_navigation_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0
+  },
+  "scope": {
+    "development_train_only": true,
+    "heldout_or_leaderboard_proof": false,
+    "solution_publication": false,
+    "coordinate_rows_in_result": false,
+    "pixel5_offset_reapplication": false
+  }
+}

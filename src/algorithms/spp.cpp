@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/algorithms/galileo_group_delay.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
 #include <libgnss++/core/constants.hpp>
@@ -13,6 +14,8 @@
 #include <chrono>
 #include <cmath>
 #include <limits>
+#include <set>
+#include <utility>
 
 namespace libgnss {
 
@@ -155,11 +158,77 @@ GNSSSystem selectReferenceClockGroup(const std::map<GNSSSystem, int>& group_coun
     return best_group;
 }
 
-double groupDelayCorrectionMeters(const Observation& observation, const Ephemeris& eph) {
+void initializePreprocessDiagnostics(const ObservationData& obs,
+                                     SPPProcessor::PreprocessDiagnostics* diagnostics) {
+    if (diagnostics == nullptr) {
+        return;
+    }
+    diagnostics->available = true;
+    diagnostics->ionosphere_free_rows_expanded = false;
+    diagnostics->input_rows = obs.observations.size();
+    diagnostics->accepted_rows = 0;
+    diagnostics->rejected_rows = 0;
+    diagnostics->rows.clear();
+    diagnostics->rows.reserve(obs.observations.size());
+    diagnostics->reason_counts.clear();
+    for (std::size_t i = 0; i < obs.observations.size(); ++i) {
+        SPPProcessor::PreprocessRowDiagnostic row;
+        row.input_row_index = i;
+        row.system = obs.observations[i].satellite.system;
+        diagnostics->rows.push_back(std::move(row));
+    }
+}
+
+void markPreprocessRow(SPPProcessor::PreprocessDiagnostics* diagnostics,
+                       std::size_t input_row_index,
+                       bool accepted,
+                       const char* reason) {
+    if (diagnostics == nullptr || input_row_index >= diagnostics->rows.size()) {
+        return;
+    }
+    auto& row = diagnostics->rows[input_row_index];
+    if (row.terminal) {
+        return;
+    }
+    row.accepted = accepted;
+    row.terminal = true;
+    row.reason = reason != nullptr ? reason : "unknown";
+}
+
+void finalizePreprocessDiagnostics(
+    SPPProcessor::PreprocessDiagnostics* diagnostics) {
+    if (diagnostics == nullptr) {
+        return;
+    }
+    diagnostics->accepted_rows = 0;
+    diagnostics->rejected_rows = 0;
+    diagnostics->reason_counts.clear();
+    for (auto& row : diagnostics->rows) {
+        if (!row.terminal) {
+            row.accepted = false;
+            row.terminal = true;
+            row.reason = "not-used-by-spp-preprocess";
+        }
+        if (row.accepted) {
+            ++diagnostics->accepted_rows;
+        } else {
+            ++diagnostics->rejected_rows;
+        }
+        ++diagnostics->reason_counts[row.reason];
+    }
+}
+
+double groupDelayCorrectionMeters(
+    const Observation& observation,
+    const Ephemeris& eph,
+    bool use_signal_specific_galileo_group_delay) {
+    if (observation.satellite.system == GNSSSystem::Galileo) {
+        return galileo_group_delay::correctionMeters(
+            observation, eph, use_signal_specific_galileo_group_delay);
+    }
     switch (observation.satellite.system) {
         case GNSSSystem::GPS:
         case GNSSSystem::QZSS:
-        case GNSSSystem::Galileo:
             return eph.tgd * constants::SPEED_OF_LIGHT;
         case GNSSSystem::BeiDou:
             switch (observation.signal) {
@@ -385,9 +454,16 @@ double ionosphereDelayMetersFromTecu(SignalType signal,
 }
 
 double elevationMaskRadians(double configured_mask) {
-    if (!std::isfinite(configured_mask) || configured_mask <= 0.0) {
+    if (!std::isfinite(configured_mask)) {
         return 0.0;
     }
+    // Phase43 uses an explicit -90 degree mask for raw/nav reconnaissance so
+    // below-horizon rows can recover an SPP anchor.  Other non-positive masks
+    // retain the historical no-mask meaning.
+    if (configured_mask <= -90.0) {
+        return -M_PI / 2.0;
+    }
+    if (configured_mask <= 0.0) return 0.0;
     // ProcessorConfig documents degrees, but some older examples passed
     // radians. Accept both to avoid surprising existing callers.
     return configured_mask > M_PI / 2.0 ? configured_mask * M_PI / 180.0 : configured_mask;
@@ -477,7 +553,9 @@ bool SPPProcessor::initialize(const ProcessorConfig& config) {
     return true;
 }
 
-PositionSolution SPPProcessor::processEpoch(const ObservationData& obs, const NavigationData& nav) {
+PositionSolution SPPProcessor::processEpoch(
+    const ObservationData& obs,
+    const NavigationData& nav) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
     PositionSolution solution;
@@ -692,6 +770,31 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         bool dcb_applied = false;
     };
 
+    // Broadcast state and ephemeris selection depend on the observation and
+    // epoch, but not on the receiver position, in the ordinary SPP path.
+    // Reusing them across the three/four position iterations avoids repeated
+    // navigation-map lookups while preserving the exact first-iteration
+    // calculation order.  Precise products, SSR orbit corrections, and the
+    // literal MRTKLIB path all have position/selection-dependent branches and
+    // deliberately stay on the uncached path.
+    struct BroadcastMeasurementCache {
+        bool state_attempted = false;
+        bool state_valid = false;
+        Vector3d satellite_position = Vector3d::Zero();
+        Vector3d satellite_velocity = Vector3d::Zero();
+        double satellite_clock_bias = 0.0;
+        double satellite_clock_drift = 0.0;
+        GNSSTime corrected_transmit_time;
+        bool ephemeris_lookup_attempted = false;
+        const Ephemeris* ephemeris = nullptr;
+    };
+
+    const bool cache_broadcast_measurements =
+        !spp_config_.mrtklib_iflc_code_bias &&
+        !(spp_config_.use_precise_products && precise_products_loaded_) &&
+        !(spp_config_.use_ssr_corrections && ssr_products_loaded_);
+    std::vector<BroadcastMeasurementCache> broadcast_cache(valid_obs.size());
+
     auto buildMeasurements = [&](const Vector3d& current_position) {
         std::vector<MeasurementModel> measurements;
         measurements.reserve(valid_obs.size());
@@ -711,7 +814,9 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         double rcv_h = 0.0;
         ecef2geodetic(current_position, rcv_lat, rcv_lon, rcv_h);
 
-        for (const auto& spp_obs : valid_obs) {
+        for (size_t observation_index = 0;
+             observation_index < valid_obs.size(); ++observation_index) {
+            const auto& spp_obs = valid_obs[observation_index];
             const Observation& obs = spp_obs.observation;
             Vector3d sat_pos;
             Vector3d sat_vel;
@@ -839,17 +944,62 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                     continue;
                 }
             } else if (!precise_orbit_clock) {
-                if (!nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                 sat_pos, sat_vel, sat_clk, sat_clk_drift,
-                                                 ssr_orbit_iode)) {
-                    continue;
-                }
+                auto& cached = broadcast_cache[observation_index];
+                if (cache_broadcast_measurements) {
+                    if (!cached.state_attempted) {
+                        cached.state_attempted = true;
+                        cached.state_valid = nav.calculateSatelliteState(
+                            obs.satellite,
+                            tx_time,
+                            sat_pos,
+                            sat_vel,
+                            sat_clk,
+                            sat_clk_drift,
+                            ssr_orbit_iode);
+                        if (cached.state_valid) {
+                            tx_time = tx_time - sat_clk;
+                            cached.state_valid = nav.calculateSatelliteState(
+                                obs.satellite,
+                                tx_time,
+                                sat_pos,
+                                sat_vel,
+                                sat_clk,
+                                sat_clk_drift,
+                                ssr_orbit_iode);
+                            if (cached.state_valid) {
+                                cached.corrected_transmit_time = tx_time;
+                            }
+                        }
+                        cached.satellite_position = sat_pos;
+                        cached.satellite_velocity = sat_vel;
+                        cached.satellite_clock_bias = sat_clk;
+                        cached.satellite_clock_drift = sat_clk_drift;
+                    } else {
+                        if (!cached.state_valid) {
+                            continue;
+                        }
+                        sat_pos = cached.satellite_position;
+                        sat_vel = cached.satellite_velocity;
+                        sat_clk = cached.satellite_clock_bias;
+                        sat_clk_drift = cached.satellite_clock_drift;
+                        tx_time = cached.corrected_transmit_time;
+                    }
+                    if (!cached.state_valid) {
+                        continue;
+                    }
+                } else {
+                    if (!nav.calculateSatelliteState(obs.satellite, tx_time,
+                                                     sat_pos, sat_vel, sat_clk, sat_clk_drift,
+                                                     ssr_orbit_iode)) {
+                        continue;
+                    }
 
-                tx_time = tx_time - sat_clk;
-                if (!nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                 sat_pos, sat_vel, sat_clk, sat_clk_drift,
-                                                 ssr_orbit_iode)) {
-                    continue;
+                    tx_time = tx_time - sat_clk;
+                    if (!nav.calculateSatelliteState(obs.satellite, tx_time,
+                                                     sat_pos, sat_vel, sat_clk, sat_clk_drift,
+                                                     ssr_orbit_iode)) {
+                        continue;
+                    }
                 }
             }
 
@@ -935,7 +1085,17 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 trop_delay = models::tropDelaySaastamoinen(current_position, geom.elevation);
             }
 
-            const Ephemeris* eph = nav.getEphemeris(obs.satellite, tx_time);
+            const Ephemeris* eph = nullptr;
+            if (cache_broadcast_measurements) {
+                auto& cached = broadcast_cache[observation_index];
+                if (!cached.ephemeris_lookup_attempted) {
+                    cached.ephemeris_lookup_attempted = true;
+                    cached.ephemeris = nav.getEphemeris(obs.satellite, tx_time);
+                }
+                eph = cached.ephemeris;
+            } else {
+                eph = nav.getEphemeris(obs.satellite, tx_time);
+            }
             if (!eph) {
                 continue;
             }
@@ -1015,15 +1175,26 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 }
             }
 
-            double group_delay = groupDelayCorrectionMeters(obs, *eph);
+            double group_delay =
+                spp_config_.use_official_no_explicit_code_bias
+                    ? 0.0
+                    : groupDelayCorrectionMeters(
+                          obs, *eph,
+                          spp_config_.use_signal_specific_galileo_group_delay);
             if (spp_obs.ionosphere_free) {
                 Observation primary_obs = obs;
                 primary_obs.signal = spp_obs.primary_signal;
                 Observation secondary_obs = obs;
                 secondary_obs.signal = spp_obs.secondary_signal;
                 group_delay =
-                    spp_obs.primary_coeff * groupDelayCorrectionMeters(primary_obs, *eph) +
-                    spp_obs.secondary_coeff * groupDelayCorrectionMeters(secondary_obs, *eph);
+                    spp_config_.use_official_no_explicit_code_bias
+                        ? 0.0
+                        : spp_obs.primary_coeff * groupDelayCorrectionMeters(
+                              primary_obs, *eph,
+                              spp_config_.use_signal_specific_galileo_group_delay) +
+                              spp_obs.secondary_coeff * groupDelayCorrectionMeters(
+                                  secondary_obs, *eph,
+                                  spp_config_.use_signal_specific_galileo_group_delay);
                 // MRTKLIB prange() forms GPS/QZSS IFLC directly from P1/P2;
                 // broadcast TGD is only removed on its single-frequency
                 // branch. Galileo I/NAV follows the same direct-combination
@@ -1483,7 +1654,8 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             detectOutliers(final_observations, final_residuals, spp_config_.outlier_threshold_sigma);
         if (inlier_observations.size() < final_observations.size() &&
             inlier_observations.size() >= 4U) {
-            auto filtered_solution = solvePositionLS(inlier_observations, nav, time, false);
+            auto filtered_solution = solvePositionLS(
+                inlier_observations, nav, time, false);
             if (filtered_solution.isValid()) {
                 filtered_solution.spp_pre_qc_measurements =
                     static_cast<int>(final_observations.size());
@@ -1520,6 +1692,8 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         std::vector<double> candidate_rms(final_observations.size(),
                                           std::numeric_limits<double>::infinity());
         std::vector<PositionSolution> candidate_solutions(final_observations.size());
+        std::vector<std::map<GNSSSystem, double>> candidate_system_biases(
+            final_observations.size());
 
         const Vector3d saved_position = estimated_position_;
         const double saved_clock_bias = receiver_clock_bias_;
@@ -1540,12 +1714,18 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             estimated_position_ = position;
             receiver_clock_bias_ = clock_bias;
             system_biases_ = saved_system_biases;
-            auto candidate_solution = solvePositionLS(candidate_observations, nav, time, false);
+            auto candidate_solution = solvePositionLS(
+                candidate_observations, nav, time, false);
             ++raim_attempts;
             if (candidate_solution.isValid() &&
                 std::isfinite(candidate_solution.residual_rms)) {
                 candidate_rms[excluded] = candidate_solution.residual_rms;
                 candidate_solutions[excluded] = candidate_solution;
+                // Keep the exact native ISB estimates paired with the
+                // candidate.  solvePositionLS() stores these in the
+                // processor member, but the candidate PositionSolution does
+                // not carry them itself.
+                candidate_system_biases[excluded] = system_biases_;
             }
         }
 
@@ -1570,7 +1750,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 final_observations[static_cast<size_t>(selected)].observation.satellite);
             estimated_position_ = fde_solution.position_ecef;
             receiver_clock_bias_ = fde_solution.receiver_clock_bias;
-            system_biases_.clear();
+            system_biases_ = candidate_system_biases[static_cast<size_t>(selected)];
             return fde_solution;
         }
     }
@@ -1653,10 +1833,21 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     }
 
     for (int i = 0; i < static_cast<int>(final_measurements.size()); ++i) {
+        const auto& measurement = final_measurements[static_cast<std::size_t>(i)];
         solution.satellites_used.push_back(
-            final_measurements[i].spp_observation.observation.satellite);
+            measurement.spp_observation.observation.satellite);
         solution.satellite_elevations.push_back(final_measurements[i].elevation);
         solution.satellite_residuals.push_back(final_residuals(i));
+        SolutionMeasurementIdentity identity;
+        identity.satellite = measurement.spp_observation.observation.satellite;
+        identity.signal = measurement.spp_observation.observation.signal;
+        identity.input_row_index = measurement.spp_observation.input_row_index;
+        identity.secondary_input_row_index =
+            measurement.spp_observation.secondary_input_row_index;
+        identity.ionosphere_free = measurement.spp_observation.ionosphere_free;
+        identity.clock_group = measurement.clock_group;
+        identity.weight = measurement.weight;
+        solution.spp_used_measurements.push_back(identity);
     }
 
     if (spp_config_.max_gdop > 0.0 &&
@@ -1755,33 +1946,84 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::detectOutliers(
 std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
     const ObservationData& obs,
     const NavigationData& nav,
-    const GNSSTime& time) const {
+    const GNSSTime& time,
+    PreprocessDiagnostics* diagnostics) const {
     std::vector<SPPObservation> valid_obs;
     std::map<SatelliteId, std::vector<Observation>> observations_by_satellite;
+    if (diagnostics != nullptr) {
+        diagnostics->ionosphere_free_rows_expanded =
+            spp_config_.use_ionosphere_free_combination;
+    }
 
-    for (const auto& observation : obs.observations) {
+    std::set<std::size_t> assigned_source_rows;
+    const auto sourceIndexFor = [&obs, &assigned_source_rows](
+                                    const Observation& candidate) {
+        for (std::size_t i = 0; i < obs.observations.size(); ++i) {
+            const auto& source = obs.observations[i];
+            if (assigned_source_rows.find(i) != assigned_source_rows.end()) {
+                continue;
+            }
+            if (source.satellite == candidate.satellite &&
+                source.signal == candidate.signal &&
+                source.pseudorange == candidate.pseudorange &&
+                source.snr == candidate.snr &&
+                (candidate.raw_row_index ==
+                     std::numeric_limits<std::size_t>::max() ||
+                 source.raw_row_index == candidate.raw_row_index)) {
+                assigned_source_rows.insert(i);
+                return i;
+            }
+        }
+        return std::numeric_limits<std::size_t>::max();
+    };
+
+    for (std::size_t input_row_index = 0;
+         input_row_index < obs.observations.size(); ++input_row_index) {
+        const auto& observation = obs.observations[input_row_index];
         if (!spp_config_.use_multi_constellation &&
             observation.satellite.system != GNSSSystem::GPS) {
+            markPreprocessRow(diagnostics, input_row_index, false,
+                              "unsupported-system");
             continue;
         }
 
         if (spp_config_.use_ionosphere_free_combination) {
-            if (!isCandidateSPPSignal(observation, spp_config_)) {
+            if (!isSPPSystemEnabled(observation.satellite.system, spp_config_)) {
+                markPreprocessRow(diagnostics, input_row_index, false,
+                                  "unsupported-system");
                 continue;
             }
-        } else if (!isPrimarySPPSignal(observation, spp_config_)) {
-            continue;
+            if (!isCandidateSPPSignal(observation, spp_config_)) {
+                markPreprocessRow(diagnostics, input_row_index, false,
+                                  "unsupported-signal");
+                continue;
+            }
+        } else {
+            if (!isSPPSystemEnabled(observation.satellite.system, spp_config_)) {
+                markPreprocessRow(diagnostics, input_row_index, false,
+                                  "unsupported-system");
+                continue;
+            }
+            if (!isPrimarySPPSignal(observation, spp_config_)) {
+                markPreprocessRow(diagnostics, input_row_index, false,
+                                  "unsupported-signal");
+                continue;
+            }
         }
 
         // Check observation validity first
         if (!observation.valid || !observation.has_pseudorange || observation.pseudorange <= 0.0 ||
             !std::isfinite(observation.pseudorange)) {
+            markPreprocessRow(diagnostics, input_row_index, false,
+                              "invalid-pseudorange");
             continue;
         }
 
         // BeiDou GEO handling still needs tighter validation than the current
         // broadcast model provides. Keep MEO/IGSO enabled and gate GEO for now.
         if (signal_policy::isBeiDouGeoSatellite(observation.satellite)) {
+            markPreprocessRow(diagnostics, input_row_index, false,
+                              "beidou-geostationary");
             continue;
         }
 
@@ -1792,6 +2034,8 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
         // Check if ephemeris is available at the estimated transmission time
         const Ephemeris* eph = nav.getEphemeris(observation.satellite, tx_time);
         if (eph == nullptr) {
+            markPreprocessRow(diagnostics, input_row_index, false,
+                              "missing-ephemeris");
             continue;
         }
 
@@ -1806,17 +2050,22 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
             sv_health &= 0xFE;
         }
         if (sv_health != 0) {
+            markPreprocessRow(diagnostics, input_row_index, false,
+                              "unhealthy-satellite");
             continue;
         }
 
         // Check SNR threshold
         if (observation.snr < config_.snr_mask) {
+            markPreprocessRow(diagnostics, input_row_index, false,
+                              "snr-below-mask");
             continue;
         }
 
         if (!spp_config_.use_ionosphere_free_combination) {
             SPPObservation entry;
             entry.observation = observation;
+            entry.input_row_index = input_row_index;
             entry.primary_signal = observation.signal;
             valid_obs.push_back(entry);
             continue;
@@ -1870,6 +2119,8 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
                 const auto coefficients = spp_utils::ionosphereFreeCoefficients(f1, f2);
                 SPPObservation entry;
                 entry.observation = *primary;
+                entry.input_row_index = sourceIndexFor(*primary);
+                entry.secondary_input_row_index = sourceIndexFor(*secondary);
                 entry.transmit_pseudorange = primary->pseudorange;
                 entry.observation.pseudorange = spp_utils::calculateIonosphereFreePseudorange(
                     primary->pseudorange, secondary->pseudorange, f1, f2);
@@ -1899,6 +2150,7 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
 
         SPPObservation entry;
         entry.observation = *primary;
+        entry.input_row_index = sourceIndexFor(*primary);
         entry.transmit_pseudorange = primary->pseudorange;
         entry.primary_signal = primary->signal;
         valid_obs.push_back(entry);
@@ -1973,18 +2225,16 @@ std::map<SatelliteId, SPPProcessor::SatelliteState> SPPProcessor::calculateSatel
         }
 
         // First: get satellite clock at approximate tx time
-        state.valid = nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                state.position, state.velocity,
-                                                state.clock_bias, state.clock_drift,
-                                                ssr_orbit_iode);
+        state.valid = nav.calculateSatelliteState(
+            obs.satellite, tx_time, state.position, state.velocity,
+            state.clock_bias, state.clock_drift, ssr_orbit_iode);
         if (state.valid) {
             // Correct tx time for satellite clock bias
             tx_time = tx_time - state.clock_bias;
             // Recompute at corrected tx time
-            state.valid = nav.calculateSatelliteState(obs.satellite, tx_time,
-                                                    state.position, state.velocity,
-                                                    state.clock_bias, state.clock_drift,
-                                                    ssr_orbit_iode);
+            state.valid = nav.calculateSatelliteState(
+                obs.satellite, tx_time, state.position, state.velocity,
+                state.clock_bias, state.clock_drift, ssr_orbit_iode);
             if (state.valid && ssr_ok) {
                 if (ssr_products_.orbitCorrectionsAreRac()) {
                     ssr_orbit_correction =
@@ -2259,14 +2509,38 @@ int selectRaimFdeCandidate(double baseline_rms,
 } // namespace spp_utils
 
 std::pair<PositionSolution, std::vector<SPPProcessor::CorrectedMeasurement>>
-SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& nav) {
+SPPProcessor::preprocessEpoch(const ObservationData& obs,
+                              const NavigationData& nav,
+                              PreprocessDiagnostics* diagnostics) {
+    initializePreprocessDiagnostics(obs, diagnostics);
+
     // Run normal SPP processing
     auto solution = processEpoch(obs, nav);
 
     // Re-run measurement construction to extract corrected pseudoranges
     std::vector<CorrectedMeasurement> result;
-    auto valid_obs = validateObservations(obs, nav, obs.time);
-    if (valid_obs.empty()) return {solution, result};
+    auto valid_obs = validateObservations(obs, nav, obs.time, diagnostics);
+    if (valid_obs.empty()) {
+        finalizePreprocessDiagnostics(diagnostics);
+        return {solution, result};
+    }
+
+    const auto markRejected = [diagnostics](const SPPObservation& observation,
+                                             const char* reason) {
+        markPreprocessRow(diagnostics, observation.input_row_index, false, reason);
+        markPreprocessRow(diagnostics,
+                          observation.secondary_input_row_index,
+                          false,
+                          reason);
+    };
+    const auto markAccepted = [diagnostics](const SPPObservation& observation) {
+        markPreprocessRow(diagnostics, observation.input_row_index, true,
+                          "accepted");
+        markPreprocessRow(diagnostics,
+                          observation.secondary_input_row_index,
+                          true,
+                          "accepted");
+    };
 
     auto sat_states = calculateSatelliteStates(valid_obs, nav, obs.time);
     Vector3d position = estimated_position_;
@@ -2274,7 +2548,10 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
     for (const auto& spp_obs : valid_obs) {
         const Observation& o = spp_obs.observation;
         auto it = sat_states.find(o.satellite);
-        if (it == sat_states.end() || !it->second.valid) continue;
+        if (it == sat_states.end() || !it->second.valid) {
+            markRejected(spp_obs, "satellite-state-unavailable");
+            continue;
+        }
 
         const auto& st = it->second;
         Vector3d sat_position = st.position;
@@ -2302,7 +2579,10 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
             spp_config_.elevation_mask_override_deg >= 0.0
                 ? spp_config_.elevation_mask_override_deg
                 : config_.elevation_mask;
-        if (geom.elevation < elevationMaskRadians(configured_elevation_mask)) continue;
+        if (geom.elevation < elevationMaskRadians(configured_elevation_mask)) {
+            markRejected(spp_obs, "below-elevation-mask");
+            continue;
+        }
 
         // Receiver LLH for atmospheric models
         auto rcv_geo = spp_utils::ecefToGeodetic(position);
@@ -2414,15 +2694,25 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
             }
         }
 
-        double group_delay = eph ? groupDelayCorrectionMeters(o, *eph) : 0.0;
+        double group_delay =
+            (eph && !spp_config_.use_official_no_explicit_code_bias)
+                ? groupDelayCorrectionMeters(
+                      o, *eph, spp_config_.use_signal_specific_galileo_group_delay)
+                : 0.0;
         if (eph && spp_obs.ionosphere_free) {
             Observation primary_obs = o;
             primary_obs.signal = spp_obs.primary_signal;
             Observation secondary_obs = o;
             secondary_obs.signal = spp_obs.secondary_signal;
             group_delay =
-                spp_obs.primary_coeff * groupDelayCorrectionMeters(primary_obs, *eph) +
-                spp_obs.secondary_coeff * groupDelayCorrectionMeters(secondary_obs, *eph);
+                spp_config_.use_official_no_explicit_code_bias
+                    ? 0.0
+                    : spp_obs.primary_coeff * groupDelayCorrectionMeters(
+                          primary_obs, *eph,
+                          spp_config_.use_signal_specific_galileo_group_delay) +
+                          spp_obs.secondary_coeff * groupDelayCorrectionMeters(
+                              secondary_obs, *eph,
+                              spp_config_.use_signal_specific_galileo_group_delay);
         }
 
         double corrected_pr = o.pseudorange
@@ -2454,6 +2744,7 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
         }
         variance *= std::max(1.0, spp_obs.variance_scale);
         if (!std::isfinite(variance) || variance <= 0.0) {
+            markRejected(spp_obs, "invalid-correction-variance");
             continue;
         }
 
@@ -2464,20 +2755,37 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs, const NavigationData& 
             case GNSSSystem::Galileo: sys_id = 2; break;
             case GNSSSystem::BeiDou:  sys_id = 3; break;
             case GNSSSystem::QZSS:    sys_id = 4; break;
-            default: continue;
+            default:
+                markRejected(spp_obs, "unsupported-output-system");
+                continue;
         }
 
         CorrectedMeasurement cm;
+        cm.identity.satellite = o.satellite;
+        cm.identity.signal = o.signal;
+        cm.identity.input_row_index = spp_obs.input_row_index;
+        cm.identity.secondary_input_row_index =
+            spp_obs.secondary_input_row_index;
+        cm.identity.ionosphere_free = spp_obs.ionosphere_free;
         cm.satellite_ecef = {corrected_sat_pos.x(), corrected_sat_pos.y(), corrected_sat_pos.z()};
         cm.corrected_pseudorange = corrected_pr;
         cm.weight = 1.0 / variance;
         cm.variance = variance;
         cm.elevation = geom.elevation;
         cm.system_id = sys_id;
+        cm.clock_group =
+            spp_config_.mrtklib_iflc_code_bias &&
+                    o.satellite.system == GNSSSystem::QZSS
+                ? GNSSSystem::QZSS
+                : clockBiasGroup(o.satellite.system);
+        cm.identity.clock_group = cm.clock_group;
+        cm.identity.weight = cm.weight;
         cm.ionosphere_free = spp_obs.ionosphere_free;
         result.push_back(cm);
+        markAccepted(spp_obs);
     }
 
+    finalizePreprocessDiagnostics(diagnostics);
     return {solution, result};
 }
 

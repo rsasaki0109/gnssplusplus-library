@@ -1,0 +1,83 @@
+{
+  "schema_version": "smartphone-r5-phase179-h-native-raw-p-no-doppler-imu-main-result.v1",
+  "phase": 179,
+  "execution_label": "Luna Max",
+  "status": "sealed-raw-ingress-failure",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase179_h_native_raw_p_no_doppler_imu_main_manifest_v1.json",
+    "sha256": "01b5e66503b24152648a5848b1006d379d1a7820d0c6bdd2744e072721b12af2",
+    "commit": "f079ab5815c9228f1460969fb77112058b31a958"
+  },
+  "implementation_commit": "06b144d4e4d9961b2ab03bef374de8647738c322",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "execution": {
+    "launcher_session": 37009,
+    "native_pid": 1976922,
+    "invocation_count": 1,
+    "return_code": 1,
+    "signal": null,
+    "native_optimizer_result": "GNSS-first optimizer returned and passed the application handoff gate; main IMU optimizer not attempted",
+    "native_summary_emitted": false,
+    "payload_read_boundary": "after GNSS-first optimization, raw-P/C7/D handoff validation, and in-memory position/clock copy; later raw Android GNSS elapsed-time anchor parsing, row 2",
+    "payload_read_counts": "unavailable; no summary was emitted",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "failure_boundary": "raw Android GNSS elapsed-time anchor ingress after GNSS-first stage and handoff, before IMU input construction or main Pose3/IMU solve"
+  },
+  "diagnosis": {
+    "evidence_level": "exact runtime parser failure plus source control-flow amendment",
+    "exact_failure": "failed to load GNSS elapsed-time anchors: raw Android GNSS anchor row 2: timestamps must be non-negative integers",
+    "control_flow_evidence": "apps/native/gnss_fgo_imu_no_base.cpp:11466-11469 calls the GNSS-first optimizer; 11470-11644 records and validates its result, exact-key handoff, velocity derivation, and in-memory position/clock/C7/D copy; 11646-11678 then loads elapsed-time anchors and fails at 11674-11676. The emitted error therefore proves the process passed the GNSS-first return/handoff branch, but does not serialize its aggregate values.",
+    "interpretation_limit": "No raw row values, seed counts, graph factors, GNSS-first iteration/cost values, termination class, main optimizer metrics, coverage, or output cardinality were inferred or published.",
+    "next_boundary": "Inspect the pinned raw-clock timestamp contract and parser source only; any correction must preserve authoritative raw clock computation and require a new manifest/build before another run."
+  },
+  "native_artifacts": {
+    "stderr": {
+      "path": "output/smartphone-r5/phase179-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stderr.log",
+      "sha256": "43f6bce69e6fb43069ebfc738e1d6ac04c5db90f61bc2d4c997d90b142e00427",
+      "bytes": 114,
+      "exact_failure": "failed to load GNSS elapsed-time anchors: raw Android GNSS anchor row 2: timestamps must be non-negative integers\n"
+    },
+    "stdout": {
+      "path": "output/smartphone-r5/phase179-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase179-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json",
+      "present": false,
+      "coordinate_values_read": false
+    },
+    "opaque_solution_output": {
+      "path": "output/smartphone-r5/phase179-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+      "present": false,
+      "coordinate_values_read": false
+    }
+  },
+  "read_accounting": {
+    "manifest_input_hash_preflight_reads": {
+      "android_gnss": 1,
+      "android_imu": 1,
+      "nav": 1
+    },
+    "native_payload_read_counts": {
+      "android_gnss": "GNSS-first source path was reached; aggregate count unavailable",
+      "nav": "GNSS-first source path was reached; aggregate count unavailable",
+      "android_imu": 0,
+      "main_optimizer": 0
+    },
+    "truth_reads": 0,
+    "base_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_coordinate_interpretation": 0
+  },
+  "record_amendment": {
+    "amends": "The initial record wording that called this a pre-seed/raw-ingress failure was incorrect.",
+    "reason": "Source control flow and the exact later anchor-load error establish that GNSS-first optimization and handoff validation had already returned before failure.",
+    "preserved": "Original stderr/stdout hashes, invocation count, return code, output absence, no-rerun policy, and no-coordinate interpretation are unchanged."
+  },
+  "next_boundary": "Source-only diagnosis of the raw Android elapsed-time anchor parser and the pinned raw-clock timestamp contract; no rerun or parser relaxation in this sealed record."
+}

@@ -1,0 +1,35 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-holdout-freeze-manifest.v1",
+  "status": "sealed-before-truth-access-recovery",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_recovery.json",
+    "sha256": "bd0ab5e42b7e506b2dcf65e4b7b1509d2a03008cd02eef88b226143801cece76"
+  },
+  "base_freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze.json",
+    "sha256": "2be112670ce6d1c90fe14efb4aca495d3baaab2706251235be80b6f0eda28e01"
+  },
+  "base_freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze_manifest.json",
+    "sha256": "6d33275f8861a5729cf826e5a40a2bc02a72341ea44abb02941d955289b27210"
+  },
+  "failure_artifact": {
+    "path": "output/smartphone-r5/native-fgo-v1/holdout.failure/failure.json",
+    "sha256": "d241284091827084f54c127bfeb6fa85f7953d97036a29afd23548c3da219503",
+    "truth_open_count": 0
+  },
+  "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "algorithm_parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+  "algorithm_core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+  "truth_open_count_before_freeze": 0,
+  "payload_materialized_before_freeze": false,
+  "payload_materialized_before_recovery": true,
+  "truth_open_count_before_recovery": 0,
+  "algorithm_parameters_changed": false,
+  "source_change_scope": "orchestration-only source-files hash mapping representation; no solver/selector/recipe change",
+  "one_shot_truth_evaluation": true,
+  "no_post_holdout_tuning": true,
+  "external_mutation": false
+}

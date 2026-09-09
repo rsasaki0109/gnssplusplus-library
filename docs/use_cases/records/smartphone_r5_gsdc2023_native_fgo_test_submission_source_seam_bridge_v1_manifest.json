@@ -1,0 +1,77 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-source-seam-bridge-manifest.v1",
+  "status": "sealed-no-go-v4-retained-no-v5",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_v1.json",
+    "sha256": "ff90e3f9e2164765503a7a5c4ea2a794851db532e9e89a257b40e9dd6840ca8e"
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_freeze_v1.json",
+    "sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48"
+  },
+  "documentation": {
+    "path": "docs/use_cases/smartphone_raw_gnss.md",
+    "sha256": "9da1ebb17d0aedb80b5768008fd235992f37ce9f8d2319974ad60454510f66a4"
+  },
+  "artifacts": {
+    "v4_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/submission.csv",
+      "sha256": "64b85bd5946ad33d77e522bf7456d5dc0c4e4870cd7b65756faedd9f18ca1af8"
+    },
+    "v4_continuity_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_manifest.json",
+      "sha256": "e2c309d200d4cecca26fcf59e721b7d43349db192a4be25e90b27cab8f535bd3"
+    },
+    "v4_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_run_manifest.json",
+      "sha256": "2345909b4e237791a713a2c845be8718f5b49dfcbf91d6cde2bd9e9f1d52622d"
+    },
+    "native_fgo_target_route_position": {
+      "path": "output/smartphone-r5/native-fgo-test-v2/cache/e45f139a77b7662bf79300f61cc0b28176fcf7adfd88faf60c1b3b5cfb03b951/fgo/fgo.pos",
+      "sha256": "78f06b18e344b3d0c9f332403bca0ef9f064106c18155262680cb6b54e17ea63"
+    },
+    "current_wls_target_route_position": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-02-23-22-35-us-ca-lax-m/outputs/pixel5/selected.pos",
+      "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746"
+    },
+    "prior_wls_target_route_position": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/cache/807a879ac6566c28e2865e6b5b1fcfe49dab89a4c052bcd456e8470a163affe0/wls.pos",
+      "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746"
+    }
+  },
+  "decision": {
+    "v5_generated": false,
+    "v4_retained": true,
+    "eligible_bridge_count": 0,
+    "truth_open_count": 0,
+    "truth_materialized_count": 0,
+    "fgo_wls_rerun": false,
+    "numeric_parameter_change": false,
+    "official_sample_coordinates_read": false,
+    "no_post_decision_tuning": true
+  },
+  "verification": {
+    "target_window_official_key_count": 12,
+    "remaining_transition_count": 19,
+    "v4_header_exact": true,
+    "v4_key_order_exact": true,
+    "v4_row_count": 71936,
+    "v4_duplicate_keys": 0,
+    "v4_missing_keys": 0,
+    "v4_extra_keys": 0,
+    "v4_nonfinite_coordinates": 0,
+    "v4_known_dummy_rows": 0,
+    "v4_sample_coordinate_fallback_rows": 0,
+    "v4_out_of_earth_rows": 0,
+    "v4_isolated_two_sided_spike_points_after": 0,
+    "v5_submission": null,
+    "v5_sha256": null,
+    "atomic_publish": false
+  },
+  "publication_policy": {
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false
+  }
+}

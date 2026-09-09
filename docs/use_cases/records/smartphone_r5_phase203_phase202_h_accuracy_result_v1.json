@@ -1,0 +1,62 @@
+{
+  "candidate": {
+    "bytes": 251174,
+    "path": "output/smartphone-r5/phase202-h-native-phase201-imu-schedule-v1/mtv-h/opaque_solution_output.csv",
+    "read_count": 1,
+    "rows": 3139,
+    "sha256": "1330b5a758d7a4022279cffcc70c02e8fd286658e79e07f4ca36ed4585083a9f"
+  },
+  "comparison_baseline_phase182_h_route_score_m": 1.2874762859947766,
+  "comparison_baseline_phase193_h_route_score_m": 1.2780192442543101,
+  "comparison_baseline_phase199_h_route_score_m": 1.2751561666667786,
+  "coordinate_rows_published": false,
+  "execution_label": "Luna Max",
+  "gates": {
+    "candidate_all_finite_and_earth_valid": true,
+    "candidate_exact_alignment": true,
+    "candidate_prediction_domain_exact": true,
+    "route_score_finite": true,
+    "strict_route_score_less_than_0_782_m": false,
+    "truth_domain_exact": true,
+    "velocity_gate_over_70_mps_zero": true
+  },
+  "manifest": "docs/use_cases/records/smartphone_r5_phase203_phase202_h_accuracy_manifest_v1.json",
+  "metric": {
+    "finite": true,
+    "matched_rows": 3139,
+    "over_70_mps_count": 0,
+    "p50_m": 0.7603729966939161,
+    "p95_m": 1.8353868572619987,
+    "prediction_domain_coverage": 1.0,
+    "route_score_m": 1.2978799269779575,
+    "truth_domain_coverage": 1.0
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "pixel5_offset_reapplication": false,
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)"
+  },
+  "phase": 203,
+  "read_accounting": {
+    "candidate_payload_reads": 1,
+    "edge_hold_epochs": 0,
+    "interpolated_epochs": 0,
+    "pixel5_offset_reapplications": 0,
+    "score_calculations": 1,
+    "truth_payload_reads": 1
+  },
+  "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "schema_version": "smartphone-r5-phase203-phase202-h-accuracy-result.v1",
+  "status": "completed-h-development-accuracy-diagnostic",
+  "truth": {
+    "bytes": 305432,
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "read_count": 1,
+    "rows": 3139,
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249"
+  }
+}

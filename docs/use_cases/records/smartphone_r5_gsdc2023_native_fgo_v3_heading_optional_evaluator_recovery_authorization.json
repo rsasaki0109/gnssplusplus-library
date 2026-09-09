@@ -1,0 +1,87 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-evaluator-recovery-authorization.v1",
+  "status": "authorized-before-scoring-code-change",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Recover the single permitted v3 train score after the first evaluator stopped at a null percentile aggregation; do not rerun the frozen solver or alter the candidate.",
+  "candidate_contract": {
+    "candidate_id": "native-fgo-v3-heading-optional-preserve-v1-tdcp-motion-combined-imu",
+    "source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+    "release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+    "cmake_source_sha256": "7b9bc9ae636afd427cea744c1f6c880924dbd83c143c3d457e10294a69406715",
+    "preserved_v2_1_source_sha256": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "preserved_v2_1_binary_sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "freeze_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze.json",
+      "sha256": "38602200af437fe324ef738b5463cbea379406d2640e1372fb4c595b83e23b9a"
+    },
+    "freeze_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze_manifest.json",
+      "sha256": "c1d61e1875fd2ae9962de686804d79325d2af706c5ef7329b46d7142730f32e1"
+    },
+    "truth_free_run_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_truth_free_run.json",
+      "sha256": "19be2901b8fd3ea4544d0596647be2b8a01f9c3ab356b3e80d0ed205feb8fdfc"
+    },
+    "truth_free_run_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_truth_free_run_manifest.json",
+      "sha256": "330155cfc7fc89eec11d7610e311efc15e3da0d39af69f1355104b7cee00f414"
+    }
+  },
+  "sealed_route_outputs": {
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "candidate_submission_sha256": "41fc0e7facea5530010d3bbeeec7c6e8af53259caa659c746cdfe80a597652dd",
+      "candidate_summary_sha256": "99466d242e6651ee840684b2d99d1e61f5e666b6a15194120c4ec2e1f57bddce",
+      "candidate_detail_sha256": "878f121fd081b623d3cbe435e8b96044a2490392b20a569e0ae298f88ccf7f27",
+      "exact_v1_seed_sha256": "fab38c4d6e68cfa621a0e06f5480402f7bfb0fce47960a319ea664926549a42b",
+      "exact_v1_position_sha256": "e4aeadf414ae15c0fb764bdf855ea27ab5d34a42a2622d33fa66e46138d84c95",
+      "exact_v1_summary_sha256": "f73e90666c86d6ad456b27079b83a5d10e065d038543862efcaf186694227eaa",
+      "materialization_manifest_sha256": "29863e6c48322159a36688a013be953d2b27c50f2883aa044f2ed15dbf0135a0"
+    },
+    "2023-09-05-23-07-us-ca-routen/pixel5": {
+      "candidate_submission_sha256": "539aede76140ffab30181d29d1930acc7c4334fd25228b0f01649eade457322e",
+      "candidate_summary_sha256": "450f4ade40b77ca9e80bfbcf8d337454007723495db55e73363a606202f89b87",
+      "candidate_detail_sha256": "b1eac6080f0a3f16399544f269f9ba21037d3d5e2c38c2e7eab6e9bb46ebc7f8",
+      "exact_v1_seed_sha256": "28072792f61abe55822c479d4d7263597cfe7f0600efb50f66dbb2cce115a1d7",
+      "exact_v1_position_sha256": "c5d448634263b411681e6034d295b0da5ba1ad6b851b97241e5546fad4d6d6b4",
+      "exact_v1_summary_sha256": "b6d7b360e9061d4660c5593fa061f5a5afb3ab20d2780724b44940f5833cfd15",
+      "materialization_manifest_sha256": "f01cf7a933faab2d30fbcdd00eb0f3ef4129359563e19f3dcea729cee30a6122"
+    }
+  },
+  "scoring_code_before_change": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py",
+    "sha256": "688c56f015ebfe54dfc2358c470f3b57acb98a5fcd2bd1ea81d5166c11a0494b",
+    "allowed_change": "null-handling/schema aggregation in the evaluator only; candidate source, binary, recipe, profile, route artifacts, and production defaults are immutable"
+  },
+  "observed_failure": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_train_score_failure.json",
+    "record_sha256": "924ed700b7c393f591d80bead7fc29da2409b3f461bd36cbf7c0b0439c8c5342",
+    "exception": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'",
+    "scope": "scoring/diagnostic aggregation after candidate and exact-v1 artifacts were sealed; no solver output or candidate parameter was changed"
+  },
+  "truth_recovery_policy": {
+    "previous_truth_payload_reads": 2,
+    "recovery_read_is_second_read_per_route": true,
+    "recovery_truth_files": [
+      "output/smartphone-r5/native-fgo-v3-heading-optional-v1/routes/2021-07-19-20-49-us-ca-mtv-a__pixel5/inputs/ground_truth.csv",
+      "output/smartphone-r5/native-fgo-v3-heading-optional-v1/routes/2023-09-05-23-07-us-ca-routen__pixel5/inputs/ground_truth.csv"
+    ],
+    "read_only_after_hash_before_and_after": true,
+    "truth_score_once_after_recovery": true,
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "token_or_external_mutation": false,
+    "post_score_tuning_or_solver_rerun": false
+  },
+  "authorization": {
+    "authorized_operation": "Read and hash the same two already-materialized train truth files a second time, apply only null-safe evaluator handling, then score the already-sealed v3 and exact-v1 artifacts once.",
+    "forbidden_operations": [
+      "change v3 source, binary, numeric parameters, profile, or route outputs",
+      "rerun native FGO or WLS",
+      "open validation or holdout truth",
+      "use leaderboard scores for tuning",
+      "repair truth schema by inference"
+    ],
+    "outcome_must_be_published": true
+  }
+}

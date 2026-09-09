@@ -1,0 +1,131 @@
+{
+  "schema_version": "smartphone-r5-phase130-shared-ledger-key-local-support-structural-pre-raw-accounting.v1",
+  "phase": 130,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-qualified-no-payload-activity",
+  "candidate_id": "phase130-shared-ledger-key-local-support-v1",
+  "route_order": "MTV-A then LAX-T",
+  "route_ids": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "runs_per_route": 1,
+  "pins": {
+    "contract_audit": {
+      "commit": "355b6225bcc3bc838dad8a3044bc3aadd34d80f3",
+      "path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_join_semantics_audit_v1.md",
+      "sha256": "fcde87b6267daaa2da2dba2210bd0e5baec2658daa8266d53b40bd4bd9256912"
+    },
+    "contract_freeze": {
+      "commit": "94085c90ac33ce987c3b9d29a6462c5d77795e88",
+      "path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_join_semantics_freeze_v1.json",
+      "sha256": "ecc34c4c5daff4a77f6e97da3d35f63710a4dc443d5ff372938ab05c823a6a2f"
+    },
+    "implementation_runner_tests": {
+      "commit": "36b0977e47d9b24eda975ab224e05aadfdc860bb",
+      "validator_sha256": "32ead2b3ee0c37ca7363ebc1aff2645b7108302c9b290f369eedfa7f3b65bec1",
+      "runner_sha256": "15989261740a811ce2949073313f91851b230f691c03d156c6750df09470040d",
+      "focused_tests_sha256": "898f21ecfe89cd2ff5bfe11070fad83b2dc5b3b18aea21e1c2d93dd241d754c5"
+    },
+    "structural_manifest": {
+      "commit": "ab1a6bfa2e1878bb01d784a2f926a1732d34b004",
+      "path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_structural_manifest_v1.json",
+      "sha256": "85f0702fb9c09e164aadeb5efdec9a6a013fcc0eb0ba126fc109cbd07f3df097"
+    },
+    "target_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "5c81e9b8f83843e16550553c6add5143fde32ba105cd5f1904b8f4b6cd4b9c4b"
+    }
+  },
+  "qualification": {
+    "focused_python": {
+      "command": "python3 -m unittest -v tests.test_smartphone_phase130_shared_ledger_structural",
+      "passed": 12,
+      "failed": 0,
+      "skipped": 0,
+      "raw_payload_reads": 0,
+      "result": "pass"
+    },
+    "python_compile": {
+      "command": "python3 -m py_compile apps/commands/benchmarks/gnss_smartphone_phase130_shared_ledger_structural.py apps/commands/benchmarks/gnss_smartphone_phase130_shared_ledger_structural_execute.py tests/test_smartphone_phase130_shared_ledger_structural.py",
+      "result": "pass"
+    },
+    "cpp_suite": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib ctest --test-dir build -R '^(run_tests|clas_outage_legacy_kill_switch|madoca_parity_tests|integrity_tests)$' --output-on-failure",
+      "registered_tests": 4,
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "result": "pass",
+      "linkage_note": "The same CTest selection without LD_LIBRARY_PATH failed only because libmetis-gtsam.so and libcephes-gtsam.so were not found through the executable RUNPATH; no source or build artifact was changed."
+    },
+    "static_modes": {
+      "verify_freeze": "pass",
+      "verify_manifest": "pass",
+      "verify_pre_raw": "pass",
+      "raw_or_solver_execution": false
+    }
+  },
+  "selectors": {
+    "phase126_raw_base_source_complete": 1,
+    "phase127_glonass_channel_provenance": 1,
+    "phase128_glonass_provenance_parser_admission": 1,
+    "phase129_glonass_local_miss_mask": 1,
+    "phase130_shared_ledger_key_local_support": 1,
+    "phase118_official_tdcp_huber_k": 1,
+    "phase117_dynamic_sigma": 0,
+    "phase120_atmosphere_cancellation": 0,
+    "additional_frequency_bands": 0,
+    "partial_selector_or_fallback": false
+  },
+  "contract_qualification": {
+    "side_local_conservation": true,
+    "retained_rover_exact_constellation_satellite_signal_key": true,
+    "exact_endpoint_or_adjacent_two_point_finite_in_domain_bracket": true,
+    "unmatched_rover_explicit_factor_miss": true,
+    "unused_base_rows_and_streams_accounted": true,
+    "whole_rover_base_ledger_equality_required": false,
+    "equal_cadence_or_row_count_required": false,
+    "duplicate_or_nonmonotonic_base_time_global_abort": true,
+    "glonass_tie_or_conflict_global_or_typed_fail_closed": true,
+    "all_miss_or_empty_route_fail_closed": true,
+    "no_nearest_hold_extrapolation_raw_zero_or_fallback": true,
+    "phase126_a_b_c_transactional": true,
+    "solver_factor_equation_topology_sigma_lm_unchanged": true
+  },
+  "read_accounting_before_independent_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "authorization_boundary": {
+    "implementation_and_launch_free_contract_authorized": true,
+    "independent_raw_materialization_authorized": false,
+    "raw_inventory_reads_authorized": false,
+    "native_solver_authorized": false,
+    "solution_content_or_coordinate_read_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_or_promotion_authorized": false,
+    "mat_pdc_precomputed_coordinate_or_kaggle_authorized": false,
+    "required_next_step": "A new independent authorization commit must pin this pre-raw seal, then perform one inventory-first pass per route; a route failing local-support or global A/B/C gates must invoke zero solver runs."
+  },
+  "historical_artifacts_unchanged": true,
+  "solution_content": "not generated, opened, interpreted, or published in this qualification"
+}
