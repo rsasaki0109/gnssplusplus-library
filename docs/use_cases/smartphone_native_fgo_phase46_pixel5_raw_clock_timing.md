@@ -70,7 +70,7 @@ large value is a common receiver-clock gauge, while float64 subtraction can
 lose up to 256 ns.
 
 The [machine-readable result record](records/smartphone_r5_phase46_pixel5_raw_clock_timing_result_v1.json)
-and [output manifest](../../output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1/phase46_pixel5_raw_clock_timing.manifest.json)
+and local output manifest `output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1/phase46_pixel5_raw_clock_timing.manifest.json`
 capture all per-route, aggregate, event-table, and read-accounting hashes.
 
 ## Gates and decision

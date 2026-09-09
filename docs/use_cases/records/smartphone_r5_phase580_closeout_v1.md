@@ -36,3 +36,9 @@ research branch (blob `35636510746b92fd89f21c7f7163e928e1905952`).
 Historical links to that raw diagnostic require the local research archive.
 Publication is a consolidated commit on the existing remote PR head;
 the original local research history is not rewritten or deleted.
+
+Phase579 was intentionally terminated on closeout after 301.203 seconds
+(return code -15, pins verified). It has no accuracy result and is not
+accepted or substituted for the baseline. Local CLI UX tests passed 22/22.
+The latest Docs CI identified three old repository-relative links outside
+the docs tree; these are corrected without relaxing strict validation.

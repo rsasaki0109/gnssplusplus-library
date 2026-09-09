@@ -20,4 +20,4 @@ claim. Phase43 remains champion and the Phase77 option remains experimental.
 See the [sealed result record](records/smartphone_r5_phase78_phase77_structural_reclassification_result_v1.json),
 [freeze](records/smartphone_r5_phase78_phase77_structural_reclassification_freeze_v1.json),
 [manifest](records/smartphone_r5_phase78_phase77_structural_reclassification_manifest_v1.json),
-and [runner](../../apps/commands/benchmarks/gnss_smartphone_phase78_phase77_structural_reclassification.py).
+and [runner](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/apps/commands/benchmarks/gnss_smartphone_phase78_phase77_structural_reclassification.py).

@@ -36,4 +36,4 @@ correction or accuracy read.
 See the [freeze](records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json),
 [v4 manifest](records/smartphone_r5_phase64_base_preflight_policy_recovery_manifest_v4.json),
 [sealed result](records/smartphone_r5_phase64_base_preflight_policy_recovery_result_v4.json),
-and [v4 evaluator](../../apps/commands/benchmarks/gnss_smartphone_phase64_base_preflight_policy_recovery_v4.py).
+and [v4 evaluator](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/apps/commands/benchmarks/gnss_smartphone_phase64_base_preflight_policy_recovery_v4.py).
