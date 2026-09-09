@@ -1,0 +1,239 @@
+{
+  "accuracy_scored": false,
+  "authorization": {
+    "independent": true,
+    "path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_authorization_v1.json",
+    "status": "independent-one-shot-inventory-first-structural-raw-authorized"
+  },
+  "candidate": {
+    "additional_frequency_bands": false,
+    "fixed_tdcp_sigma": 0.03,
+    "id": "phase131-canonical-correction-band-key-v1",
+    "main_solver": "MULTIFRONTAL_QR",
+    "official_huber_k": 0.5,
+    "phase117_dynamic_sigma": false,
+    "phase118_huber": true,
+    "phase120_atmosphere": false,
+    "phase126": true,
+    "phase127": true,
+    "phase128": true,
+    "phase129": true,
+    "phase130": true,
+    "phase131": true,
+    "solution_opaque": true
+  },
+  "contract": {
+    "audit_commit": "c5afacef8416aace5e8f713ad8a4b08654666457",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural_authorized_execute.py",
+    "freeze_commit": "322f1278c9b802d3414b1fd275baeb3e731542a9",
+    "implementation_commit": "c3af051e46f3685c0d3406537fa8f7c12eea75f2",
+    "manifest_commit": "41299c13832af3eaefade4c2e50a5ea1bcaebced",
+    "manifest_sha256": "81e02d17a312040e4f94c835d8d4b6f751a4f449006b20ea6189b2212369bf95",
+    "pre_raw_commit": "927b8fe2d4d20be8849f0afb91f3c7454c662603",
+    "target_binary_sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e"
+  },
+  "decision": "Inventory or structural gate failed closed; no rerun, fallback, truth, accuracy, or solution release is permitted.",
+  "execution_label": "Luna Max",
+  "inventory_contract": {
+    "ambiguous_canonical_conflict_fail_closed": true,
+    "canonical_key_conservation": true,
+    "certified_glonass_fcn_required": true,
+    "duplicate_nonmonotonic_base_time_global_abort": true,
+    "empty_all_miss_fail_closed": true,
+    "literal_tracking_code_excluded_from_join": true,
+    "no_nearest_hold_or_extrapolation": true,
+    "no_raw_zero_or_uncorrected_fallback": true,
+    "retained_rover_exact_key_support": true,
+    "same_physical_family_aliases_only": true,
+    "side_local_conservation": true,
+    "solver_zero_on_inventory_failure": true,
+    "unmatched_rover_explicit_factor_miss": true,
+    "unused_base_rows_accounted": true,
+    "whole_ledger_equality_required": false
+  },
+  "inventory_failure_forensics": {
+    "current_run_stage": "post-independent-authorization-pre-solver",
+    "current_run_failure": "all retained rover/base exact-key support is empty",
+    "current_run_canonical_support_rows": 0,
+    "current_run_solver_invocations_after_failure": 0,
+    "current_run_raw_payload_reads_per_route": {
+      "device_gnss.csv": 1,
+      "device_imu.csv": 1,
+      "brdc.nav": 1,
+      "base.obs": 1
+    },
+    "historical_comparable_source": {
+      "path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_structural_result_v1.json",
+      "sha256": "f9cf9226889fc4a4e6141e54f6447bc09998b3f42a7cf45269cc8ed0cb0e0553",
+      "interpretation": "sealed prior inventory metadata only; not a Phase131 rerun"
+    },
+    "historical_route_counters": {
+      "MTV-A": {
+        "rover_input_rows": 12068,
+        "rover_certified_rows": 0,
+        "rover_explicit_local_miss_rows": 12068,
+        "rover_missing_exact_key_rows": 11832,
+        "base_input_rows": 17199,
+        "base_certified_rows": 9642,
+        "base_explicit_local_miss_rows": 7557,
+        "canonical_key_support_rows": 0,
+        "factor_input_rows": 11832,
+        "retained_factor_rows": 0,
+        "factor_missing_exact_stream_rows": 11832,
+        "support_exact_endpoint_rows": 0,
+        "support_adjacent_bracket_rows": 0,
+        "canonical_conflicts": 0,
+        "base_unused_rows_accounted": true
+      },
+      "LAX-T": {
+        "rover_input_rows": 8873,
+        "rover_certified_rows": 0,
+        "rover_explicit_local_miss_rows": 8873,
+        "rover_missing_exact_key_rows": 8626,
+        "base_input_rows": 920,
+        "base_certified_rows": 396,
+        "base_explicit_local_miss_rows": 524,
+        "canonical_key_support_rows": 0,
+        "factor_input_rows": 8626,
+        "retained_factor_rows": 0,
+        "factor_missing_exact_stream_rows": 8626,
+        "support_exact_endpoint_rows": 0,
+        "support_adjacent_bracket_rows": 0,
+        "canonical_conflicts": 0,
+        "base_unused_rows_accounted": true
+      }
+    },
+    "qualification_note": "The reused pre-solver inventory parser raised before returning its detailed ledger; the counters above are explicitly labeled sealed Phase130 comparison metadata and do not claim a second raw read."
+  },
+  "matrix": {
+    "accuracy_calculations": 0,
+    "candidate_count": 1,
+    "controls": 0,
+    "fallbacks": 0,
+    "inventory_reads_per_route": 1,
+    "native_solver_invocations": 0,
+    "reruns": 0,
+    "route_order": [
+      "MTV-A",
+      "LAX-T"
+    ],
+    "runs_per_route": 1,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "phase": 131,
+  "promotion_authorized": false,
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_inventory_reads": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "raw_base_hash_reads": 2,
+    "raw_base_header_inventory_reads": 2,
+    "raw_base_rinex_inventory_reads": 2,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_inventory_reads": 2,
+    "raw_device_imu_inventory_reads": 2,
+    "repairs": 0,
+    "route_reruns": 0,
+    "solution_coordinate_interpretations": 0,
+    "solution_opaque_hash_reads": 0,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_scored": false,
+      "failure": "pre-solver inventory failed closed",
+      "gates": {
+        "base_exactly_once": false,
+        "gnss_first_c7_d_handoff": false,
+        "gnss_first_progress": false,
+        "main_finite_coverage": false,
+        "main_qr_progress": false,
+        "native_process_completed": false,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": false,
+        "phase131_inventory_handoff": false,
+        "summary_present": false
+      },
+      "inventory": {
+        "failure": "all retained rover/base exact-key support is empty",
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "ok": false,
+        "phase131": {
+          "enabled": true,
+          "source_complete_a_b_c": false
+        },
+        "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "solver_invocations": 0,
+        "solver_may_start": false,
+        "stage": "post-independent-authorization-pre-solver"
+      },
+      "raw_content_copied_or_transformed": false,
+      "return_code": null,
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "run_number": 1,
+      "solution_opened": false,
+      "solution_published": false,
+      "solver_launched": false,
+      "truth_used": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_scored": false,
+      "failure": "pre-solver inventory failed closed",
+      "gates": {
+        "base_exactly_once": false,
+        "gnss_first_c7_d_handoff": false,
+        "gnss_first_progress": false,
+        "main_finite_coverage": false,
+        "main_qr_progress": false,
+        "native_process_completed": false,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": false,
+        "phase131_inventory_handoff": false,
+        "summary_present": false
+      },
+      "inventory": {
+        "failure": "all retained rover/base exact-key support is empty",
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "ok": false,
+        "phase131": {
+          "enabled": true,
+          "source_complete_a_b_c": false
+        },
+        "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "solver_invocations": 0,
+        "solver_may_start": false,
+        "stage": "post-independent-authorization-pre-solver"
+      },
+      "raw_content_copied_or_transformed": false,
+      "return_code": null,
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "run_number": 1,
+      "solution_opened": false,
+      "solution_published": false,
+      "solver_launched": false,
+      "truth_used": false
+    }
+  },
+  "schema_version": "smartphone-r5-phase131-canonical-correction-band-structural-result.v1",
+  "solution_output_published": false,
+  "status": "no-go-phase131-canonical-correction-band-structural",
+  "stop_before_truth_accuracy_submission": true,
+  "truth_free": true
+}

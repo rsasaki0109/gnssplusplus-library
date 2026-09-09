@@ -1,0 +1,87 @@
+{
+  "schema_version": "smartphone-r5-phase127-inventory-first-structural-pre-raw-accounting.v1",
+  "phase": 127,
+  "execution_label": "Luna Max",
+  "status": "sealed-pre-raw-no-payload-activity",
+  "contract": {
+    "audit_commit": "d4b28a8dbe85ac67bf8957e28de16f072874d072",
+    "audit_sha256": "b17964512d9b0026209af3fba22f2c0a270ed8ec0381c94d6ef7003bbeff1ff5",
+    "freeze_commit": "5c3e66fc4b62d86b52f8e9ee8aa1f26f4cb2a8a4",
+    "freeze_sha256": "cc4d1a9262cebb5fb257f16735ab008857e087cebe1e736e1cb5466f0259879c",
+    "implementation_commit": "f41d082e5170fe5dcbebbb4526c7d513f9512b60",
+    "runner_manifest_commit": "93ee772e595aac01a5de4e7357becd88581f70ec",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase127_inventory_first_structural_manifest_v1.json",
+    "manifest_sha256": "56f7190bb7cc71d36e4eb829713a05cdeca74dfd73840c2b202c9c89499eae1d",
+    "validator_sha256": "05ca0b47f5b2ce6874ed8f8da50b72e7aa0737ce71175b0126a1b7ccb912e50d",
+    "runner_sha256": "0d98ef477e63cc437bbb269d93bc242e0a40896868331169b03b70c5f142a3ee",
+    "focused_test_sha256": "d3e9c5223f648855bee5a91c8abd2f4c52e11453eed11f3e326954ba226aafed",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "653797970fbe65f199fc98dfe47ddd57ec26da66fadc4df40dff930a6d1c436a",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "raw_input_set": ["device_gnss.csv", "device_imu.csv", "brdc.nav", "sealed raw base RINEX"]
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false,
+    "solution_output_published": false
+  },
+  "launch_free_qualification": {
+    "focused_python_tests": {"passed": 11, "failed": 0, "status": "pass"},
+    "cmake_registered_focused_test": {"passed": 1, "failed": 0, "status": "pass"},
+    "target_build": {"target": "gnss_run_tests", "status": "pass"},
+    "full_cpp_ctest": {"test": "run_tests", "passed": 1, "failed": 0, "status": "pass"},
+    "phase126_historical_hash_test": {
+      "passed": 8,
+      "failed": 0,
+      "errors": 1,
+      "status": "expected-historical-pin-mismatch-retained",
+      "expected_old_app_sha256": "1c9340a6caf05e16262c947c88d1e286baf3715f93f77a65f0ce34f38fefa95a",
+      "current_phase127_app_sha256": "af2d74e23706e354b1b9fd715aaa09df807854787d789b0f46f7ee3efd3b5b73",
+      "action": "do not rewrite sealed Phase126 test or artifact"
+    }
+  },
+  "authorization_boundary": {
+    "raw_materialization_authorized": false,
+    "inventory_reads_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "rerun_or_fallback_authorized": false,
+    "next_required_artifact": "independent authorization commit after review of this seal",
+    "post_authorization_order": "materialize permitted inputs -> inventory header/geph ledger -> solver only for an admitted route"
+  },
+  "inventory_gate_policy": {
+    "header_primary": true,
+    "geph_exact_query_time": true,
+    "geph_validity_seconds": 1800.0,
+    "fcn_domain": [-7, 6],
+    "header_geph_match_required": true,
+    "rover_base_full_coverage_required": true,
+    "duplicate_conflict_missing_ledger_required": true,
+    "inventory_failure_solver_count": 0,
+    "no_fixed_channel_or_external_table": true,
+    "opaque_solution_only": true
+  }
+}

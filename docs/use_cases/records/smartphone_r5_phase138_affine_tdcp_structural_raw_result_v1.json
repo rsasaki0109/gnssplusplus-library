@@ -1,0 +1,101 @@
+{
+  "schema_version": "smartphone-r5-phase138-affine-tdcp-structural-raw-result.v1",
+  "phase": 138,
+  "execution_label": "Luna Max",
+  "status": "sealed-structural-raw-result-fail-closed-no-accuracy",
+  "authorization_path": "docs/use_cases/records/smartphone_r5_phase138_affine_tdcp_structural_raw_authorization_v1.json",
+  "authorization_sha256": "3a2b97ddfbd3290b081cf7501532f2e0d08b9bae22bf263e9d786a2f27d0f0653",
+  "authorization_commit": "2ba739897b511deb129b38f84082341e12a9146b",
+  "candidate_id": "phase138-affine-tdcp-anchor-range-constant-v1",
+  "route_order": [
+    "MTV-A",
+    "LAX-T"
+  ],
+  "runs_per_route": 1,
+  "execution": {
+    "authorized_wrapper_invocations": 1,
+    "native_solver_invocations": 0,
+    "wrapper_return_code": 2,
+    "wrapper_stdout": "PHASE138_RAW_FAIL_CLOSED: raw input/device_gnss.csv: missing",
+    "route_progression": "MTV-A preflight failed closed; LAX-T was not entered",
+    "rerun": false,
+    "fallback": false,
+    "repair": false
+  },
+  "routes": [
+    {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "target": "MTV-A",
+      "status": "fail-closed-input-preflight",
+      "solver_invocations": 0,
+      "input_read_counts": {
+        "device_gnss.csv": 0,
+        "device_imu.csv": 0,
+        "brdc.nav": 0,
+        "base.obs": 0
+      },
+      "input_hashes": {},
+      "failure": "raw input/device_gnss.csv: missing",
+      "structural_metrics": null
+    },
+    {
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "target": "LAX-T",
+      "status": "not-attempted-after-prior-fail-closed",
+      "solver_invocations": 0,
+      "input_read_counts": {
+        "device_gnss.csv": 0,
+        "device_imu.csv": 0,
+        "brdc.nav": 0,
+        "base.obs": 0
+      },
+      "input_hashes": {},
+      "failure": "route order stopped after MTV-A authorization/preflight failure; no rerun permitted",
+      "structural_metrics": null
+    }
+  ],
+  "structural_gate": {
+    "overall": "NO-GO",
+    "reason": "The authorized wrapper failed before raw materialization because its sealed-route metadata resolver looked for a nested device_gnss.csv object instead of the record itself.",
+    "phase135_affine_counts": "not-reached",
+    "phase138_tdcp_correction_counts": "not-reached",
+    "legacy_factor_counts": "not-reached",
+    "geometry_bridge_c7_d_los_sagnac": "not-reached",
+    "raw_base_exactly_once": "not-reached",
+    "qr_lm_progress_cost_coverage": "not-reached"
+  },
+  "policy": {
+    "truth_used": false,
+    "mat_used": false,
+    "pdc_used": false,
+    "precomputed_coordinates_used": false,
+    "accuracy_evaluation": false,
+    "kaggle_access": false,
+    "solution_publication": false,
+    "solution_coordinate_interpretation": false,
+    "raw_payload_content_read": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "sweep": false
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "solution_policy": "No solution was produced or opened; any future output remains opaque and cannot be interpreted under this sealed result.",
+  "result_integrity": {
+    "sealed_without_retry": true,
+    "authorization_and_result_commits_separate": true,
+    "structural_failure_preserved": true
+  }
+}

@@ -1,0 +1,287 @@
+{
+  "schema_version": "smartphone-r5-phase114-direct-seed-main-fgo-freeze.v1",
+  "phase": 114,
+  "execution_label": "Luna Max",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "status": "frozen-detailed-boundary-not-implemented",
+  "purpose": "Freeze exactly one default-off same-run direct-seed hypothesis after a read-only audit; this record is not an implementation, raw-execution, solver, truth, accuracy, or submission authorization.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase114_direct_seed_main_fgo_audit_v1.md",
+    "sha256": "2ece9bcb22eea50b3cdcc82ae27be62bd0006b23aa9c0d27ecb844b48d376804",
+    "commit": "34d307b"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "exactly_one_default_off_candidate": true,
+    "source_backed_hypothesis": true,
+    "implementation_established": false,
+    "c7_raw_initialization_mapping_established": false,
+    "u_full_1101_seed_retention_established": false,
+    "h_direct_wls_available_with_zero_doppler": false,
+    "a_lax_stage_regression_observed": false,
+    "structural_gate_qualified_for_future_candidate_only": true,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_or_promotion_authorized": false,
+    "solution_publication_authorized": false
+  },
+  "candidate": {
+    "id": "phase114-main-direct-wls-ephemeral-c7d-seed-v1",
+    "kind": "same-run-direct-seed-main-meter-state-c7d-initialization",
+    "status": "frozen-not-implemented-detailed-c7-boundary",
+    "implemented": false,
+    "opt_in": true,
+    "default_off": true,
+    "selector": "A future explicit Phase114 selector; no executable selector is introduced by this freeze",
+    "same_process_ephemeral": true,
+    "bypass_gnss_first_for_candidate_only": true,
+    "existing_gnss_first_unchanged": true,
+    "legacy_default_unchanged": true,
+    "seed_components": {
+      "position": "same-run raw EpochSeed SPP position; never a saved, external, PDC, or precomputed coordinate",
+      "velocity": "existing direct Doppler WLS velocity_ecef_mps converted to the main IMU navigation frame",
+      "receiver_clock_bias": "same-run raw EpochSeed scalar receiver_clock_bias_m, with existing explicit unit marker",
+      "epoch_local_c_vector": "required new exact official seven-component initializer; no current direct-WLS implementation",
+      "clock_drift_d": "retained EpochSeed.receiver_clock_drift_mps, exact raw identity/key aligned; do not substitute WLS clock_rate_mps"
+    },
+    "main_recipe_preserved": {
+      "meter_state_c0d_pose3_imu": true,
+      "phase99_multifrontal_qr": true,
+      "phase109_raw_base_code_correction": true,
+      "phase112_pixel5_final_output_offset": true,
+      "official_ccdd_equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "c_and_isb_units": "metres",
+      "d_units": "metres_per_second",
+      "dt_units": "seconds",
+      "ccdd_sigma": "0.1 m",
+      "filter_and_observation_retention": true,
+      "priors": true,
+      "lm_schedule_and_acceptance": true,
+      "ordering": "existing implicit COLAMD",
+      "graph_and_factor_families": true,
+      "no_global_isb_double_state": true,
+      "no_fallback": true
+    },
+    "required_new_boundary": {
+      "direct_wls_output_scope": [
+        "velocity_ecef_mps",
+        "scalar_clock_rate_mps",
+        "finite/row/condition/residual physical gates"
+      ],
+      "not_provided_by_direct_wls": [
+        "position solution",
+        "receiver clock bias solution",
+        "epoch-local seven-component C vector",
+        "Phase91 raw-D exact-key handoff"
+      ],
+      "c7_component_order": [
+        "base_gps_l1",
+        "glo_l1",
+        "gal_l1",
+        "bds_l1",
+        "gps_l5",
+        "gal_l5",
+        "bds_l5"
+      ],
+      "c7_mapping_must_be": "explicit, finite, exact retained epoch/key aligned, and source component mapped without global ISB or zero-fill fallback",
+      "d_mapping_must_be": "EpochSeed.receiver_clock_drift_mps keyed by raw_source_index/raw_utc_time_millis/GPST identity; no nearest, interpolation, padding, truncation, WLS-rate substitution, or inference",
+      "selector_scope": "main meter-state Pose3+IMU invocation only; GNSS-first is not switched to QR by this candidate",
+      "raw_base_scope": "compose only with the already admitted Phase107/109 raw-base path if separately authorized; no base payload was read in Phase114"
+    },
+    "current_source_boundary": {
+      "direct_wls_builder": "src/algorithms/fgo_problems.cpp:1109-1154",
+      "direct_wls_contract": "include/libgnss++/algorithms/doppler_velocity_wls.hpp:24-75,88-105",
+      "direct_wls_validator": "apps/native/gnss_fgo_imu_no_base.cpp:2361-2519",
+      "direct_branch": "apps/native/gnss_fgo_imu_no_base.cpp:7054-7070",
+      "direct_velocity_handoff": "apps/native/gnss_fgo_imu_no_base.cpp:7443-7450",
+      "direct_position_clock_copy_count": 0,
+      "epoch_seed_has_c7": false,
+      "fgo_result_c7_export_source": "optimized source-meter GNSS-first graph only",
+      "phase101_main_requires_full_c7_handoff": true,
+      "direct_wls_and_c0d_cli_recipe_currently_mutually_exclusive": true,
+      "direct_wls_and_phase99_qr_current_combination": "not admitted"
+    },
+    "route_boundaries": {
+      "structural_gate_routes": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5"
+      ],
+      "diagnostic_routes": [
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+      ],
+      "mtv_h": {
+        "retained_epochs": 1247,
+        "raw_d_finite": "1247/1247",
+        "undifferenced_doppler_factors": 0,
+        "direct_wls_admission": "not available; no per-epoch four-row WLS system",
+        "guard_only_removal": "not admitted; it would not create native velocity/D states or a C7 handoff"
+      },
+      "mtv_u": {
+        "phase113_retained_problem_epochs": 720,
+        "phase82_sealed_prediction_rows": 1101,
+        "phase113_expected_output_epochs": 1102,
+        "raw_d_finite": "720/720",
+        "undifferenced_doppler_factors": 4845,
+        "active_c0d_factors": 671,
+        "full_1101_seed_coverage": "unproven; exact direct-WLS validator would reject incomplete retained coverage",
+        "phase113_main_accepted_outer_iterations": 0,
+        "phase113_earth_valid_positions": "564/720"
+      },
+      "mtv_a_lax_t": {
+        "existing_phase99_qr_main_progress": true,
+        "existing_phase112_raw_base_qr_offset_structural_go": true,
+        "direct_seed_effect": "unobserved hypothesis; no direct-seed route run is authorized"
+      }
+    }
+  },
+  "sealed_structural_basis": {
+    "phase80_no_c0d_comparator": {
+      "mtv_a": {
+        "accepted_iterations": 12,
+        "initial_cost": 155976340.16237149,
+        "final_cost": 28128.450524519692
+      },
+      "lax_t": {
+        "accepted_iterations": 12,
+        "initial_cost": 190528071.24200463,
+        "final_cost": 22206.857308543094
+      }
+    },
+    "phase82_sealed_scalar_aggregate": {
+      "mtv_a_score_m": 1.1139384500152307,
+      "mtv_a_prediction_rows": 2158,
+      "lax_t_score_m": 0.9389644134001871,
+      "lax_t_prediction_rows": 1465,
+      "used_for": "sealed comparison only; no Phase114 metric calculation"
+    },
+    "phase85": {
+      "candidate_default_off": true,
+      "phase99_qr_selector_present": false,
+      "ccdd_state_units": "seconds-era contract",
+      "ccdd_sigma": "0.1/C_LIGHT seconds"
+    },
+    "phase92": {
+      "status": "no-go-phase92-source-meter-clock-state-parity-structural-gates",
+      "all_route_gates_passed": false,
+      "phase99_qr_selector_present": false
+    },
+    "phase99_qr": {
+      "mtv_a": {
+        "gnss_first_accepted_iterations": 167,
+        "gnss_first_initial_cost": 5618000.786274777,
+        "gnss_first_final_cost": 21298.114523521894,
+        "main_accepted_iterations": 12,
+        "main_initial_cost": 79358354.39651252,
+        "main_final_cost": 34843.513194108804,
+        "optimized_d": "2159/2159 finite and exact-key aligned"
+      },
+      "lax_t": {
+        "gnss_first_accepted_iterations": 262,
+        "gnss_first_initial_cost": 6419784.856579111,
+        "gnss_first_final_cost": 12818.288538454106,
+        "main_accepted_iterations": 12,
+        "main_initial_cost": 166205998.11910567,
+        "main_final_cost": 20384.75538283932,
+        "optimized_d": "1466/1466 finite and exact-key aligned"
+      }
+    },
+    "phase112_structural": {
+      "mtv_a": {
+        "stage_accepted_iterations": 218,
+        "main_accepted_iterations": 12,
+        "output_epochs": 2159,
+        "base_once_qr_offset_once": true
+      },
+      "lax_t": {
+        "stage_accepted_iterations": 234,
+        "main_accepted_iterations": 12,
+        "output_epochs": 1466,
+        "base_once_qr_offset_once": true
+      }
+    },
+    "phase113_diagnostic": {
+      "mtv_h": {
+        "failure_stage": "gnss-first-optimize",
+        "failure_predicates": [
+          "source_clock_c0d_problem_path_unavailable",
+          "gnss_first_problem.undifferenced_doppler_factors.empty()"
+        ]
+      },
+      "mtv_u": {
+        "gnss_first_strict_progress": true,
+        "main_accepted_iterations": 0,
+        "position_earth_valid": "564/720"
+      }
+    }
+  },
+  "authorities": {
+    "phase80_freeze": {
+      "commit": "57cf7698c36256a535ac388cbc45dd93afecc9bb",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase82_result": {
+      "commit": "0b2b210f371cd1c8246b25ad7d30b86cd9d37478",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase85_manifest": {
+      "commit": "08112a33b9aeee5361aa0dfe547ffdb970197200",
+      "sha256": "20adc2e3388b92d045580739d025106c18aa068fcf26f8d117d48d3d2f5f7058"
+    },
+    "phase92_result": {
+      "commit": "3008b299565346132c76867410a3a2fb6c8d65c6",
+      "sha256": "8488306b3ec61d0360418de73fa1596271597b6971d77de676fcd279d7e1b01c"
+    },
+    "phase99_result": {
+      "commit": "063481c10f5303d371bc3029981c8f8e96bf1fe8",
+      "sha256": "b5a786e87084bc83eed8a2181f2f31c1199e4c833d30449e14f1e42422b741c9"
+    },
+    "phase112_result": {
+      "commit": "dfa9c3a186c9d8633dc572192b513b584f18800a",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0"
+    },
+    "phase113_result": {
+      "commit": "1f64b248b2e998859479587250e8efdb2dea2eed",
+      "sha256": "fa80a3480162b73faa4a8f778fe2aa4dac28510ee2d3b1d4e8351c34faba14d1"
+    },
+    "official_fgo_gnss_m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+    "official_fgo_gnss_imu_m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "native_app": "268bd030496bb677a42d3400e20ec37bc8e36589827fb28fbf57e3e398a1b1be",
+    "native_backend": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa",
+    "native_internal": "cc6327e36800afa8217e5a834260adc81c0a74a5aefbfc956bb4679c8d86105f",
+    "fgo_header": "f13d743225184d5ed4b229f473fb69b290f61aa83398753bdb2d6a95ceeb2e05",
+    "wls_problem_builder": "e7607ce8f0fe27fd382a01b5b6f147b027b7bf51453e920eae458c86ddac0c17",
+    "wls_contract": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0"
+  },
+  "read_accounting": {
+    "sealed_record_or_source_text_reads": true,
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_payload_reads": 0,
+    "raw_base_payload_or_header_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_binary_reads_or_generated": 0,
+    "native_solver_invocations": 0,
+    "truth_evaluator_invocations": 0,
+    "accuracy_recalculations": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns_or_fallbacks": 0,
+    "solution_rows_read_or_published": 0,
+    "new_large_artifacts": 0
+  },
+  "execution_policy": {
+    "this_freeze_authorizes_implementation": false,
+    "this_freeze_authorizes_raw_execution": false,
+    "this_freeze_authorizes_solver_rerun": false,
+    "this_freeze_authorizes_truth_evaluation": false,
+    "required_before_any_future_execution": [
+      "implement exact C7/raw-D direct-seed adapter without changing the graph contract",
+      "focused tests for C7 mapping, raw-key coverage, H zero-D fail-closed, and U retention",
+      "legacy-default and GNSS-first source/diff qualification",
+      "new pre-raw manifest/evaluator and independent one-shot authorization"
+    ],
+    "failure_policy": "fail closed on missing/invalid C7, D, WLS, retained key, QR step, coverage, base/offset exactly-once, or finite-output gate; no direct-WLS fallback, Cholesky fallback, rerun, or solution publication"
+  }
+}

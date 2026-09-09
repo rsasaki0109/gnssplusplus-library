@@ -1,0 +1,236 @@
+{
+  "schema_version": "smartphone-r5-phase130-shared-ledger-key-local-support-structural-authorization.v1",
+  "phase": 130,
+  "execution_label": "Luna Max",
+  "status": "independent-one-shot-inventory-first-structural-raw-authorized",
+  "authorization_scope": {
+    "candidate_id": "phase130-shared-ledger-key-local-support-v1",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "solution_rows": "opaque hash/row metadata only",
+    "truth_accuracy_kaggle": false
+  },
+  "pins": {
+    "audit_commit": "355b6225bcc3bc838dad8a3044bc3aadd34d80f3",
+    "freeze_commit": "94085c90ac33ce987c3b9d29a6462c5d77795e88",
+    "implementation_commit": "36b0977e47d9b24eda975ab224e05aadfdc860bb",
+    "manifest_commit": "ab1a6bfa2e1878bb01d784a2f926a1732d34b004",
+    "pre_raw_accounting_commit": "e2821f8b5c2c8ebfd6e0a1078cf7cb5fe89ae9b6",
+    "phase129_implementation_commit": "05e57d5008320734de93c763ff84ccd31f755805",
+    "authorized_runner_commit": "efe732acd4dd9712b6e6b5ccbe6ef9ffd3ee4267",
+    "audit_sha256": "fcde87b6267daaa2da2dba2210bd0e5baec2658daa8266d53b40bd4bd9256912",
+    "freeze_sha256": "ecc34c4c5daff4a77f6e97da3d35f63710a4dc443d5ff372938ab05c823a6a2f",
+    "manifest_sha256": "85f0702fb9c09e164aadeb5efdec9a6a013fcc0eb0ba126fc109cbd07f3df097",
+    "pre_raw_accounting_sha256": "e583f29ca0b77bd3afc7db87311f299c57bc14c6769f9610a1a34d47eac25a69",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "5c81e9b8f83843e16550553c6add5143fde32ba105cd5f1904b8f4b6cd4b9c4b",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase130_shared_ledger_structural_authorized_execute.py",
+    "authorized_runner_sha256": "47ca20d4417841a44766c696bfd69e8c1723fd02cfaf667d7cf65b1f332aa1c4"
+  },
+  "recipe": {
+    "phase126_selector": "--native-phase126-raw-base-source-complete",
+    "phase127_selector": "--native-phase127-glonass-channel-provenance",
+    "phase128_selector": "--native-phase128-glonass-provenance-parser-admission",
+    "phase129_selector": "--native-phase129-glonass-local-miss-mask",
+    "phase130_selector": "--native-phase130-shared-ledger-key-local-support",
+    "phase130_selector_scope": "runner/contract/validator boundary only; not forwarded to pinned native binary",
+    "phase118_selector": "--native-phase118-official-tdcp-huber-k",
+    "phase117_dynamic_sigma": false,
+    "phase120_selector": false,
+    "additional_frequency_selector": false,
+    "fixed_tdcp_sigma_m": 0.03,
+    "official_tdcp_huber_k": 0.5,
+    "main_solver": "MULTIFRONTAL_QR",
+    "base_correction_exactly_once": true,
+    "pixel5_offset_exactly_once": true,
+    "c7_d_ccdd_imu_tdcp_factor_topology_unchanged": true,
+    "no_pdc_state_bridge": true,
+    "partial_selector_or_fallback": false,
+    "no_rerun": true
+  },
+  "selectors": {
+    "phase126": 1,
+    "phase127": 1,
+    "phase128": 1,
+    "phase129": 1,
+    "phase130_runner_boundary": 1,
+    "phase118": 1,
+    "phase117": 0,
+    "phase120": 0,
+    "additional_frequency": 0
+  },
+  "sealed_input_lineage": {
+    "source": "sealed Phase130 pre-raw route metadata inherited from Phase129 raw authorization",
+    "raw_content_copy_or_transform": false,
+    "phone_coordinates": false,
+    "precomputed_corrections": false,
+    "external_glonass_frequency_table": false,
+    "materialize_after_authorization_only": true
+  },
+  "routes": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "target": "MTV-A",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "source": "sealed Phase129 raw input metadata",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "source": "sealed Phase129 raw input metadata",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "source": "sealed Phase129 raw input metadata",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "bytes": 10708536,
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "observed_interval_s": 1.0,
+        "moving_mean_samples": 151,
+        "source": "sealed Phase129 raw base metadata",
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only",
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      }
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "target": "LAX-T",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "source": "sealed Phase129 raw input metadata",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "source": "sealed Phase129 raw input metadata",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "source": "sealed Phase129 raw input metadata",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "bytes": 719969,
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "observed_interval_s": 15.0,
+        "moving_mean_samples": 11,
+        "source": "sealed Phase129 raw base metadata",
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only",
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      }
+    }
+  ],
+  "inventory_gate_before_solver": {
+    "every_retained_rover_key_is_exact_constellation_satellite_signal": true,
+    "side_local_certified_plus_explicit_miss_equals_input": true,
+    "exact_endpoint_or_adjacent_two_point_finite_in_domain_bracket": true,
+    "unmatched_rover_explicit_factor_miss": true,
+    "unused_base_rows_and_streams_accounted": true,
+    "whole_rover_base_ledger_equality": false,
+    "equal_cadence_or_row_count": false,
+    "duplicate_nonmonotonic_base_time_global_abort": true,
+    "glonass_tie_or_conflict_global_abort": true,
+    "all_miss_or_empty_route_fail_closed": true,
+    "no_raw_uncorrected_zero_nearest_hold_extrapolation_or_fallback": true,
+    "solver_invocations_on_inventory_failure": 0
+  },
+  "structural_gate": {
+    "phase126_atomic_a_b_c_all_success": true,
+    "transactional_no_partial_application": true,
+    "base_correction_exactly_once": true,
+    "row_stream_factor_miss_conservation": true,
+    "c7_d_ccdd_exact_handoff": true,
+    "main_qr_progress_and_strict_cost_decrease": true,
+    "finite_earth_valid_expected_output_coverage": true,
+    "pixel5_offset_exactly_once": true,
+    "solution_opaque_only": true,
+    "truth_mat_pdc_precomputed_accuracy_kaggle_forbidden": true
+  },
+  "authorization": {
+    "implementation": true,
+    "contract": true,
+    "raw_materialization": true,
+    "inventory_stage": true,
+    "raw_structural_execution": true,
+    "solver": true,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false
+  },
+  "pre_authorization_read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_opaque_hash_reads": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "forbidden_activity": [
+    "truth or MAT read",
+    "PDC or precomputed coordinate/correction read",
+    "accuracy calculation",
+    "Kaggle or token access",
+    "solution row interpretation",
+    "fallback, repair, or rerun"
+  ]
+}

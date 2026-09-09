@@ -1,0 +1,613 @@
+{
+  "accuracy_scored": false,
+  "authorization": {
+    "independent": true,
+    "path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_structural_authorization_v1.json",
+    "status": "independent-one-shot-inventory-first-structural-raw-authorized"
+  },
+  "candidate": {
+    "additional_frequency_bands": false,
+    "fixed_tdcp_sigma": 0.03,
+    "id": "phase130-shared-ledger-key-local-support-v1",
+    "main_solver": "MULTIFRONTAL_QR",
+    "official_huber_k": 0.5,
+    "phase117_dynamic_sigma": false,
+    "phase118_huber": true,
+    "phase120_atmosphere": false,
+    "phase126": true,
+    "phase127": true,
+    "phase128": true,
+    "phase129": true,
+    "phase130_runner_boundary": true,
+    "solution_opaque": true
+  },
+  "contract": {
+    "audit_commit": "355b6225bcc3bc838dad8a3044bc3aadd34d80f3",
+    "freeze_commit": "94085c90ac33ce987c3b9d29a6462c5d77795e88",
+    "implementation_commit": "36b0977e47d9b24eda975ab224e05aadfdc860bb",
+    "manifest_commit": "ab1a6bfa2e1878bb01d784a2f926a1732d34b004",
+    "manifest_sha256": "85f0702fb9c09e164aadeb5efdec9a6a013fcc0eb0ba126fc109cbd07f3df097",
+    "phase129_implementation_commit": "05e57d5008320734de93c763ff84ccd31f755805",
+    "pre_raw_commit": "e2821f8b5c2c8ebfd6e0a1078cf7cb5fe89ae9b6",
+    "target_binary_sha256": "5c81e9b8f83843e16550553c6add5143fde32ba105cd5f1904b8f4b6cd4b9c4b"
+  },
+  "decision": "Inventory or structural gate failed closed; no rerun, fallback, truth, accuracy, or solution release is permitted.",
+  "execution_label": "Luna Max",
+  "inventory_contract": {
+    "duplicate_nonmonotonic_base_time_global_abort": true,
+    "empty_all_miss_fail_closed": true,
+    "exact_endpoint_or_adjacent_two_point_bracket": true,
+    "glonass_tie_conflict_global_abort": true,
+    "no_nearest_hold_or_extrapolation": true,
+    "no_raw_zero_or_uncorrected_fallback": true,
+    "retained_rover_exact_key_support": true,
+    "side_local_conservation": true,
+    "solver_zero_on_inventory_failure": true,
+    "unmatched_rover_explicit_factor_miss": true,
+    "unused_base_rows_accounted": true,
+    "whole_ledger_equality_required": false
+  },
+  "matrix": {
+    "accuracy_calculations": 0,
+    "candidate_count": 1,
+    "controls": 0,
+    "fallbacks": 0,
+    "inventory_reads_per_route": 1,
+    "native_solver_invocations": 0,
+    "reruns": 0,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "phase": 130,
+  "promotion_authorized": false,
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_inventory_reads": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "raw_base_hash_reads": 2,
+    "raw_base_header_inventory_reads": 2,
+    "raw_base_rinex_inventory_reads": 2,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_inventory_reads": 2,
+    "raw_device_imu_inventory_reads": 2,
+    "repairs": 0,
+    "route_reruns": 0,
+    "solution_coordinate_interpretations": 0,
+    "solution_opaque_hash_reads": 0,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_scored": false,
+      "failure": "pre-solver inventory failed closed",
+      "gates": {
+        "base_exactly_once": false,
+        "gnss_first_c7_d_handoff": false,
+        "gnss_first_progress": false,
+        "main_finite_coverage": false,
+        "main_qr_progress": false,
+        "native_process_completed": false,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": false,
+        "phase130_inventory_handoff": false,
+        "summary_present": false
+      },
+      "inventory": {
+        "base": {
+          "antenna_semantics_proven": true,
+          "bytes": 10708536,
+          "earth_valid_reference": true,
+          "failure": null,
+          "glonass_rows": 17199,
+          "mapping_failures": [],
+          "observation_codes": {
+            "E": [
+              "C1X",
+              "L1X",
+              "S1X",
+              "C5X",
+              "L5X",
+              "S5X",
+              "C7X",
+              "L7X",
+              "S7X",
+              "C8X",
+              "L8X",
+              "S8X"
+            ],
+            "G": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2X",
+              "L2X",
+              "S2X",
+              "C2W",
+              "L2W",
+              "S2W",
+              "C5X",
+              "L5X",
+              "S5X"
+            ],
+            "R": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2P",
+              "L2P",
+              "S2P"
+            ]
+          },
+          "ok": true
+        },
+        "base_glonass": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 9642,
+          "certified_rows": 9642,
+          "explicit_local_miss_rows": 7557,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 17199,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "query-time-coverage-gap": 7557
+          }
+        },
+        "base_streams": {
+          "all_samples_accounted": true,
+          "duplicate_nonmonotonic_rejected": true,
+          "finite_samples": 34398,
+          "stream_count": 18,
+          "unused_rows": 34398,
+          "unused_streams": 18,
+          "used_samples": 0,
+          "used_streams": 0
+        },
+        "correction": {
+          "application_passes": 1,
+          "exactly_once": true,
+          "factor_input_rows": 11832,
+          "finite_corrected_rows": false,
+          "missing_exact_stream": 11832,
+          "no_duplicate_application": true,
+          "no_endpoint_hold": true,
+          "no_extrapolation": true,
+          "no_nearest_fill": true,
+          "no_raw_fallback": true,
+          "no_zero_fallback": true,
+          "nonfinite": 0,
+          "one_support_result_per_retained_factor": true,
+          "out_of_domain": 0,
+          "retained_corrected_rows": 0,
+          "retained_factors_have_exact_key_support": false,
+          "support": {
+            "adjacent_two_point_bracket": 0,
+            "exact_endpoint": 0,
+            "exact_sample": 0
+          },
+          "unused_base_rows_accounted": true
+        },
+        "coverage": {
+          "all_finite_positive_frequency_wavelength": false,
+          "base_certified_or_local_miss": true,
+          "exact_endpoint_or_adjacent_bracket_only": true,
+          "exact_query_time_records": true,
+          "fixed_channel_or_external_table": false,
+          "header_primary_or_geph_only": true,
+          "rover_certified_or_local_miss": true
+        },
+        "failure": "all retained rover/base exact-key support is empty",
+        "header": {
+          "carrier_frequency_used_as_fcn": false,
+          "conflict_entries": 0,
+          "entries": 0,
+          "label_lines": 1,
+          "malformed_entries": 0,
+          "native_gpst_query_times": true,
+          "status": "valid-empty",
+          "typed_satellite_keys": true
+        },
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "nav": {
+          "accepted_records": 671,
+          "canonical_field_positions": true,
+          "fcn_encoded_gt_128_subtract_256": true,
+          "fcn_field": "data[10]",
+          "records_seen": 1151,
+          "reject_counts": {
+            "native-gpst-toe-invalid": 480
+          },
+          "rejected_records": 480
+        },
+        "ok": false,
+        "phase130": {
+          "enabled": true,
+          "exact_endpoint_or_adjacent_two_point_bracket": false,
+          "native_selector_forwarded": false,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "retained_rover_exact_key_support": false,
+          "selector_boundary_only": true,
+          "side_local_conservation": true,
+          "source_complete_a_b_c": false,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true,
+          "whole_ledger_equality_required": false
+        },
+        "raw_inputs": {
+          "brdc.nav": {
+            "accepted_records": 671,
+            "canonical_field_positions": true,
+            "failure": null,
+            "fcn_encoded_gt_128_subtract_256": true,
+            "fcn_field": "data[10]",
+            "native_gpst_query_and_toe": true,
+            "ok": true,
+            "records_seen": 1151,
+            "reject_counts": {
+              "native-gpst-toe-invalid": 480
+            },
+            "rejected_records": 480,
+            "satellite_count": 14
+          },
+          "device_gnss.csv": {
+            "carrier_frequency_used_as_fcn": false,
+            "failure": null,
+            "glonass_rows": 11832,
+            "invalid_reasons": {
+              "pseudorange-invalid": 236
+            },
+            "invalid_rows": 236,
+            "native_gpst_query_times": true,
+            "ok": true,
+            "rows": 87705,
+            "selected_rows": 12068,
+            "typed_satellite_keys": true
+          },
+          "device_imu.csv": {
+            "failure": null,
+            "ok": true,
+            "rows": 453859
+          }
+        },
+        "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "rover": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 0,
+          "certified_rows": 0,
+          "explicit_local_miss_rows": 12068,
+          "finite_certified_wavelength": false,
+          "header_primary_certified_rows": 0,
+          "input_rows": 12068,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "missing-exact-key": 11832,
+            "pseudorange-invalid": 236
+          }
+        },
+        "shared_ledger": {
+          "cross_side_count_equality_required": false,
+          "cross_side_reason_map_equality_required": false,
+          "exact_endpoint_or_adjacent_two_point_bracket": false,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "retained_exact_key_count": 0,
+          "retained_exact_keys": [],
+          "retained_rover_exact_key_support": false,
+          "side_local_conservation": true,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true,
+          "whole_ledger_equality_required": false
+        },
+        "solver_invocations": 0,
+        "solver_may_start": false,
+        "stage": "post-authorization-pre-solver"
+      },
+      "phase130_selector_forwarded": false,
+      "raw_content_copied_or_transformed": false,
+      "return_code": null,
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "run_number": 1,
+      "solution_opened": false,
+      "solution_published": false,
+      "solver_launched": false,
+      "truth_used": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_scored": false,
+      "failure": "pre-solver inventory failed closed",
+      "gates": {
+        "base_exactly_once": false,
+        "gnss_first_c7_d_handoff": false,
+        "gnss_first_progress": false,
+        "main_finite_coverage": false,
+        "main_qr_progress": false,
+        "native_process_completed": false,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": false,
+        "phase130_inventory_handoff": false,
+        "summary_present": false
+      },
+      "inventory": {
+        "base": {
+          "antenna_semantics_proven": true,
+          "bytes": 719969,
+          "earth_valid_reference": true,
+          "failure": null,
+          "glonass_rows": 920,
+          "mapping_failures": [],
+          "observation_codes": {
+            "E": [
+              "C1X",
+              "L1X",
+              "S1X",
+              "C5X",
+              "L5X",
+              "S5X",
+              "C7X",
+              "L7X",
+              "S7X",
+              "C6X",
+              "L6X",
+              "S6X",
+              "C8X",
+              "L8X",
+              "S8X"
+            ],
+            "G": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2X",
+              "L2X",
+              "S2X",
+              "C2W",
+              "L2W",
+              "S2W",
+              "C5X",
+              "L5X",
+              "S5X"
+            ],
+            "R": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2C",
+              "L2C",
+              "S2C",
+              "C2P",
+              "L2P",
+              "S2P"
+            ],
+            "S": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C5X",
+              "L5X",
+              "S5X"
+            ]
+          },
+          "ok": true
+        },
+        "base_glonass": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 396,
+          "certified_rows": 396,
+          "explicit_local_miss_rows": 524,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 920,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "query-time-coverage-gap": 524
+          }
+        },
+        "base_streams": {
+          "all_samples_accounted": true,
+          "duplicate_nonmonotonic_rejected": true,
+          "finite_samples": 2760,
+          "stream_count": 27,
+          "unused_rows": 2760,
+          "unused_streams": 27,
+          "used_samples": 0,
+          "used_streams": 0
+        },
+        "correction": {
+          "application_passes": 1,
+          "exactly_once": true,
+          "factor_input_rows": 8626,
+          "finite_corrected_rows": false,
+          "missing_exact_stream": 8626,
+          "no_duplicate_application": true,
+          "no_endpoint_hold": true,
+          "no_extrapolation": true,
+          "no_nearest_fill": true,
+          "no_raw_fallback": true,
+          "no_zero_fallback": true,
+          "nonfinite": 0,
+          "one_support_result_per_retained_factor": true,
+          "out_of_domain": 0,
+          "retained_corrected_rows": 0,
+          "retained_factors_have_exact_key_support": false,
+          "support": {
+            "adjacent_two_point_bracket": 0,
+            "exact_endpoint": 0,
+            "exact_sample": 0
+          },
+          "unused_base_rows_accounted": true
+        },
+        "coverage": {
+          "all_finite_positive_frequency_wavelength": false,
+          "base_certified_or_local_miss": true,
+          "exact_endpoint_or_adjacent_bracket_only": true,
+          "exact_query_time_records": true,
+          "fixed_channel_or_external_table": false,
+          "header_primary_or_geph_only": true,
+          "rover_certified_or_local_miss": true
+        },
+        "failure": "all retained rover/base exact-key support is empty",
+        "header": {
+          "carrier_frequency_used_as_fcn": false,
+          "conflict_entries": 0,
+          "entries": 0,
+          "label_lines": 1,
+          "malformed_entries": 0,
+          "native_gpst_query_times": true,
+          "status": "valid-empty",
+          "typed_satellite_keys": true
+        },
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "nav": {
+          "accepted_records": 686,
+          "canonical_field_positions": true,
+          "fcn_encoded_gt_128_subtract_256": true,
+          "fcn_field": "data[10]",
+          "records_seen": 1128,
+          "reject_counts": {
+            "native-gpst-toe-invalid": 442
+          },
+          "rejected_records": 442
+        },
+        "ok": false,
+        "phase130": {
+          "enabled": true,
+          "exact_endpoint_or_adjacent_two_point_bracket": false,
+          "native_selector_forwarded": false,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "retained_rover_exact_key_support": false,
+          "selector_boundary_only": true,
+          "side_local_conservation": true,
+          "source_complete_a_b_c": false,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true,
+          "whole_ledger_equality_required": false
+        },
+        "raw_inputs": {
+          "brdc.nav": {
+            "accepted_records": 686,
+            "canonical_field_positions": true,
+            "failure": null,
+            "fcn_encoded_gt_128_subtract_256": true,
+            "fcn_field": "data[10]",
+            "native_gpst_query_and_toe": true,
+            "ok": true,
+            "records_seen": 1128,
+            "reject_counts": {
+              "native-gpst-toe-invalid": 442
+            },
+            "rejected_records": 442,
+            "satellite_count": 14
+          },
+          "device_gnss.csv": {
+            "carrier_frequency_used_as_fcn": false,
+            "failure": null,
+            "glonass_rows": 8626,
+            "invalid_reasons": {
+              "pseudorange-invalid": 247
+            },
+            "invalid_rows": 247,
+            "native_gpst_query_times": true,
+            "ok": true,
+            "rows": 51243,
+            "selected_rows": 8873,
+            "typed_satellite_keys": true
+          },
+          "device_imu.csv": {
+            "failure": null,
+            "ok": true,
+            "rows": 313144
+          }
+        },
+        "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "rover": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 0,
+          "certified_rows": 0,
+          "explicit_local_miss_rows": 8873,
+          "finite_certified_wavelength": false,
+          "header_primary_certified_rows": 0,
+          "input_rows": 8873,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "missing-exact-key": 8626,
+            "pseudorange-invalid": 247
+          }
+        },
+        "shared_ledger": {
+          "cross_side_count_equality_required": false,
+          "cross_side_reason_map_equality_required": false,
+          "exact_endpoint_or_adjacent_two_point_bracket": false,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "retained_exact_key_count": 0,
+          "retained_exact_keys": [],
+          "retained_rover_exact_key_support": false,
+          "side_local_conservation": true,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true,
+          "whole_ledger_equality_required": false
+        },
+        "solver_invocations": 0,
+        "solver_may_start": false,
+        "stage": "post-authorization-pre-solver"
+      },
+      "phase130_selector_forwarded": false,
+      "raw_content_copied_or_transformed": false,
+      "return_code": null,
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "run_number": 1,
+      "solution_opened": false,
+      "solution_published": false,
+      "solver_launched": false,
+      "truth_used": false
+    }
+  },
+  "schema_version": "smartphone-r5-phase130-shared-ledger-key-local-support-structural-result.v1",
+  "solution_output_published": false,
+  "status": "no-go-phase130-shared-ledger-key-local-support-structural",
+  "stop_before_truth_accuracy_submission": true,
+  "truth_free": true
+}

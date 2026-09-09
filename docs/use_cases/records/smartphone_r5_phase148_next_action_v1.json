@@ -1,0 +1,44 @@
+{
+  "schema": "smartphone-r5-phase148-next-action-v1",
+  "phase": 148,
+  "status": "design_only",
+  "priority": "P0",
+  "next_action": "Implement and test the same-run raw-pseudorange-only seed stage before any no-Doppler graph admission change.",
+  "implementation_status": "unimplemented",
+  "required_order": [
+    "admit only finite, provenance-retained raw-P epoch seeds with valid monotonic time intervals and explicit gap checks",
+    "derive velocity only by the specified finite-difference policy over those intervals",
+    "certify exact finite raw receiver_clock_drift_mps coverage before using the existing D initializer",
+    "only then design the default-off no-D GNSS-first XXVV/CCDD graph contract"
+  ],
+  "current_blockers": [
+    "fgo_gtsam_backend.cpp:64-66 and :97-105 gate GNSS-first velocity states on nonempty Doppler",
+    "fgo_gtsam_backend.cpp:629-633 makes the pinned Phase135 recipe require a nonempty Doppler family",
+    "current GNSS-only GTSAM lacks official MotionFactor_XXVV and a raw-P-only velocity initializer",
+    "H raw P interval and exact raw D coverage were not read or certified in Phase148"
+  ],
+  "future_acceptance": [
+    "synthetic P-only no-D graph proves X/V/C/D key creation, XXVV/CCDD observability, finite export alignment, and fail-closed invalid seed handling",
+    "ordinary-D synthetic regression preserves current factors and Phase143 convergence semantics",
+    "default-off path and Phase135 nonempty-family contract remain explicit"
+  ],
+  "prohibited_in_this_record": [
+    "raw GNSS/IMU/nav/base reads",
+    "solver execution or rebuild",
+    "MAT, truth, solution-coordinate, precomputed-seed, or Kaggle reads",
+    "zero/hold/interpolated/invented D values",
+    "accuracy or leaderboard claims"
+  ],
+  "evidence": [
+    "src/algorithms/fgo_gtsam_backend.cpp:64-66,97-105,629-633,750-806,1877-1903,2175-2200",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp:89-165",
+    "include/libgnss++/algorithms/source_clock_c0d_initializer.hpp:31-70",
+    "output/reproducibility-cache/gsdc2023/fgo_gnss.m:89-121,154-201",
+    "output/reproducibility-cache/gtsam_gnss/src/MotionFactor_XXVV.h:16-63",
+    "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h:16-64",
+    "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_report_v1.json",
+    "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_result_v1.json"
+  ],
+  "accuracy_claim": false,
+  "created": "2026-09-07"
+}

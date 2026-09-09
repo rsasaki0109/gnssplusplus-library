@@ -1,0 +1,295 @@
+{
+  "schema_version": "smartphone-r5-phase109-raw-base-miss-frequency-parity-freeze.v1",
+  "phase": 109,
+  "status": "frozen-read-only-before-phase109-raw-execution",
+  "created_at_utc": "2026-09-03T02:23:04Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze one guard-only admission for the existing native additional-frequency-band raw-base path, after a source/sealed-metadata miss taxonomy audit.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase109_raw_base_miss_frequency_parity_audit_v1.md",
+    "commit": "ea230fbbe1f533d8701646fdfe28e228975f9927",
+    "sha256": "8a533ef4b1afda87869f6727b38d77c6964d04daa0b84979b88a53da175b7b9c"
+  },
+  "pinned_head_before_audit": {
+    "commit": "815ceb4411036905c62a7f788cd038addc031bd8",
+    "working_tree_clean": true,
+    "algorithm_or_solver_source_changed_for_phase109": false
+  },
+  "sealed_evidence": {
+    "phase101_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a",
+      "use": "no-base C7/D and Phase99 QR structural invariants"
+    },
+    "phase101_structural_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_manifest_v1.json",
+      "sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b",
+      "use": "exact Phase101 selector and raw-only input contract"
+    },
+    "phase107_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_result_v1.json",
+      "sha256": "e7eb3f1d2670672414744a100dc1e2fc3e0b019ae7efc0dbfef1518300ce8d6e",
+      "use": "sealed raw-base miss counts, factor retention, and one-pass handoff"
+    },
+    "phase107_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_manifest_v1.json",
+      "sha256": "b46a4bfa23ac1604d9e51487734be18262f027612eede40fdbcba15fa75c2a9c",
+      "use": "sealed route/base lineage and raw-base selectors"
+    },
+    "phase107_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_authorization_v1.json",
+      "sha256": "ba975dd93f11cd64fdaec6cc6d57a080367fc2e6a04ee58513cb3a0b0542eb56",
+      "use": "historical one-shot structural authorization only"
+    },
+    "phase108_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_result_v1.json",
+      "sha256": "9f9a2528745c06ba06e774139f56892bcea0ef208a3d064e4b70042e48f29a9d",
+      "use": "sealed accuracy aggregate context; not re-read for truth or solution payload"
+    }
+  },
+  "sealed_miss_observation": {
+    "phase107_preserve_additional_frequency_bands": false,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "original_adopted_pseudorange_rows": 57281,
+        "retained_finite_corrected_rows": 43259,
+        "dropped_missing_exact_stream_rows": 12894,
+        "dropped_out_of_domain_rows": 1128,
+        "dropped_nonfinite_correction_rows": 0,
+        "total_dropped_rows": 14022,
+        "factor_count_consistent": true
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "original_adopted_pseudorange_rows": 30798,
+        "retained_finite_corrected_rows": 30664,
+        "dropped_missing_exact_stream_rows": 0,
+        "dropped_out_of_domain_rows": 134,
+        "dropped_nonfinite_correction_rows": 0,
+        "total_dropped_rows": 134,
+        "factor_count_consistent": true
+      }
+    },
+    "per_signal_or_band_attribution_sealed": false,
+    "interpretation": "MTV-A has a large exact satellite/signal stream-miss category; LAX-T has only time-domain misses. Additional-band coverage is supported as a testable source hypothesis, not proven to explain a specific row count."
+  },
+  "phase108_accuracy_context": {
+    "mtv_a_score_m": 1.1396560717187856,
+    "lax_t_score_m": 0.8241679860216076,
+    "macro_score_m": 0.9819120288701966,
+    "strict_threshold_m": 0.782,
+    "passed": false,
+    "use": "historical context only; no Phase109 accuracy decision or new truth read"
+  },
+  "source_pins": {
+    "official": [
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/functions/sysfreq2sigtype.m",
+        "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff"
+      }
+    ],
+    "native": [
+      {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "0a14710768f107d025ef2505450ca85c545e3c0a47e52191f685094838a9c51f"
+      },
+      {
+        "path": "src/io/rinex.cpp",
+        "sha256": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533"
+      },
+      {
+        "path": "include/libgnss++/io/rinex.hpp",
+        "sha256": "571ac4e0e3e301e6a8b865ea89caaae3acd40dc8b25f4f1bdb3ede751e9e6e5d"
+      },
+      {
+        "path": "src/algorithms/base_pseudorange_compensation.cpp",
+        "sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817"
+      },
+      {
+        "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+        "sha256": "5f89b471ea4c1753901f396eedb04baeef1b8811d33f270eadb38620fe13094e"
+      }
+    ]
+  },
+  "decision": {
+    "candidate_id": "phase109-phase101-raw-base-existing-additional-frequency-band-guard-v1",
+    "candidate_count": 1,
+    "candidate_type": "opt-in guard-only admission of an existing native reader selector",
+    "support_level": "source-supported admission experiment; quantitative per-band attribution remains unproven",
+    "selected_existing_path": "RINEXReader preserve_additional_frequency_bands plus existing base Model and source miss mask",
+    "why_selected": "The only large sealed non-time miss category is an exact satellite/signal stream miss, and the pinned native reader already has a default-off per-band selection path. No new equation or mapping is needed to test that path.",
+    "alternatives_rejected": [
+      {
+        "candidate": "new or altered constellation/frequency mapping or new band factor",
+        "reason": "per-band evidence is not sealed and this would change signal topology/equation semantics"
+      },
+      {
+        "candidate": "time extrapolation, endpoint hold, smoothing change, or time alignment repair",
+        "reason": "it changes the official/native in-domain interpolation contract and cannot explain exact-stream misses"
+      }
+    ],
+    "raw_execution_authorized_at_freeze": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false
+  },
+  "candidate_contract": {
+    "opt_in": true,
+    "default_off": true,
+    "required_phase101_selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver"
+    ],
+    "required_raw_base_selectors": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-pseudorange-preserve-additional-frequency-bands",
+      "--native-base-rinex <exact sealed Phase107 route member>",
+      "--native-base-rinex-sha256 <exact sealed Phase107 digest>"
+    ],
+    "guard_only_change": {
+      "current_blockers": [
+        "source miss mask and preserve additional bands are mutually rejected by the parser",
+        "Phase101 admission currently requires preserve=false"
+      ],
+      "future_admission_predicate": "Allow preserve=true only when the exact Phase101 selectors, compensation, source miss mask, nonempty sealed base path/digest, and all Phase107 raw-base preflight checks are present; reject every other base combination.",
+      "implementation_not_performed_in_phase109": true
+    },
+    "frequency_contract": {
+      "official_factor_fields": ["L1", "L5"],
+      "native_base_stream_key": "(SatelliteId{system,prn}, SignalType)",
+      "native_reader_behavior": "primary and secondary always selected; preserve=true additionally selects one supported observation per frequency band",
+      "new_signal_or_alias_mapping": false,
+      "raw_tracking_code_identity_substituted": false
+    },
+    "time_contract": {
+      "factor_epoch_key": "retained factor epoch index -> EpochSeed.time",
+      "correction_lookup": "exact satellite/signal stream, in-domain linear interpolation",
+      "extrapolation_or_endpoint_hold": false,
+      "invalid_or_out_of_domain_action": "drop the pseudorange factor under the existing source miss mask"
+    },
+    "correction_contract": {
+      "equation_changed": false,
+      "positive_pc_subtracted_once": true,
+      "correction_scope": "existing undifferenced pseudorange factors only",
+      "source_model_build_count": 1,
+      "correction_application_pass_count": 1,
+      "same_corrected_factor_vector_for_gnss_first_and_main": true,
+      "doppler_tdcp_imu_spp_changed": false,
+      "moving_mean_samples": {
+        "one_hz": 151,
+        "fifteen_hz": 11
+      }
+    },
+    "phase101_invariants": {
+      "clock_vector_dimension": 7,
+      "clock_units": "metres",
+      "drift_units": "metres_per_second",
+      "raw_d_initializer": "retained EpochSeed.receiver_clock_drift_mps",
+      "ccdd_sigma_m": 0.1,
+      "global_isb_state_count": 0,
+      "same_run_position_velocity_handoff": true,
+      "main_solver": "MULTIFRONTAL_QR / EliminateQR",
+      "filter_robust_loss_lm_ordering_iterations_initialization_changed": false
+    },
+    "station_reference": {
+      "allowed_runtime_source": "exact raw base RINEX header APPROX POSITION XYZ",
+      "phone_result_wls_pdc_precomputed_coordinate": false,
+      "official_station_csv_runtime_read": false,
+      "finite_earth_valid_header_reference_required": true
+    },
+    "legacy_and_fail_closed": {
+      "legacy_default_unchanged": true,
+      "fallback": "none",
+      "second_correction_or_copy_specific_reapplication": false,
+      "missing_or_ambiguous_band_telemetry": "fail closed"
+    },
+    "forbidden_inputs": [
+      "MAT",
+      "truth during solver",
+      "phone coordinates",
+      "result/WLS coordinates",
+      "PDC coordinates",
+      "precomputed or external coordinates",
+      "base_position.csv",
+      "base_offset.csv",
+      "Kaggle or token resources"
+    ],
+    "equation_unit_sigma_filter_lm_c7_d_qr_change": false
+  },
+  "required_future_structural_telemetry": [
+    "selected-band observation rows and streams, by native signal",
+    "original, exact-stream-matched, missing-stream, out-of-domain, nonfinite, and retained rows by signal/frequency class",
+    "rover/base exact satellite-signal-time key alignment and retained epoch identity",
+    "source model build count equals one and correction application pass count equals one",
+    "base correction active exactly once with no alternate branch or fallback",
+    "GNSS-first and main accepted iterations, initial/final costs, and strict decrease",
+    "finite full C7/D handoff from same-run GNSS-first to main",
+    "main selected MULTIFRONTAL_QR / EliminateQR",
+    "finite Earth-valid expected output coverage and no solution publication"
+  ],
+  "future_execution_boundary": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "runs_per_route": 1,
+    "required_solver_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav", "exact sealed raw base RINEX"],
+    "raw_execution_authorized": false,
+    "truth_reads": 0,
+    "accuracy_evaluation": false,
+    "mat_reads_or_generated": 0,
+    "phone_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_reads": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "generic_competition_or_test_routes": "not authorized or inferred"
+  },
+  "read_accounting_phase109": {
+    "source_files_read": true,
+    "sealed_json_metadata_read": true,
+    "raw_device_gnss_payloads": 0,
+    "raw_device_imu_payloads": 0,
+    "broadcast_navigation_payloads": 0,
+    "raw_base_rinex_bytes": 0,
+    "raw_base_rinex_headers": 0,
+    "raw_base_files_stat_or_hash": 0,
+    "truth_payloads": 0,
+    "mat_payloads": 0,
+    "phone_result_or_precomputed_coordinate_payloads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_resources": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "authorization_boundary": {
+    "audit_only": true,
+    "phase109_raw_base_execution": false,
+    "solver_execution": false,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "algorithm_or_parameter_change": false,
+    "guard_only_implementation": false,
+    "solution_publication": false,
+    "kaggle_submission": false
+  }
+}

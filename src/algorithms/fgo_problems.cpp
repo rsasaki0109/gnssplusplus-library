@@ -1,11 +1,16 @@
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
+#include <libgnss++/algorithms/source_epoch_states.hpp>
 #include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
 #include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
+#include <cstdio>
+#include <libgnss++/algorithms/rejected_residual_summary.hpp>
+#include <libgnss++/algorithms/matched_pseudorange_doppler.hpp>
 
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/tdcp_contract.hpp>
+#include <libgnss++/algorithms/tdcp_endpoint_covariance.hpp>
 #include <libgnss++/algorithms/signal_bias_contract.hpp>
 #include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include <libgnss++/algorithms/spp.hpp>
@@ -23,8 +28,10 @@
 #endif
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <stdexcept>
 #include <limits>
 #include <map>
 #include <numeric>
@@ -43,8 +50,64 @@ namespace upstream = observable_upstream;
 FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     const std::vector<ObservationData>& input_epochs,
     const NavigationData& nav) const {
+    if (config_.retain_native_pseudorange_remasking_pool &&
+        (!config_.use_upstream_observable_quality || !config_.use_pseudorange_factors)) {
+        throw std::invalid_argument("Pseudorange re-masking pool requires observable quality and P factors");
+    }
+    if (config_.use_native_tdcp_adr_endpoint_sigma &&
+        (!config_.use_source_tdcp_meter_sigma || config_.use_native_joint_ionosphere ||
+         config_.use_native_tdcp_frequency_residual_states))
+        throw std::invalid_argument("ADR endpoint sigma requires source metre TDCP and no residual-state experiment");
+    if (config_.use_source_tdcp_meter_sigma &&
+        (config_.use_official_tdcp_snr_type_sigma ||
+         config_.use_official_tdcp_huber_k ||
+         config_.use_official_tdcp_resl_atmosphere_cancellation)) {
+        throw std::invalid_argument("Source TDCP metre sigma cannot mix with Phase117/118/120");
+    }
+    if (config_.use_source_tdcp_resl_observable &&
+        config_.use_official_tdcp_resl_atmosphere_cancellation) {
+        throw std::invalid_argument("Source TDCP resL cannot mix with Phase120");
+    }
     FGOProblem problem;
     problem.diagnostics.input_epochs = input_epochs.size();
+    problem.diagnostics.phase127_glonass_channel_provenance_enabled =
+        config_.use_native_phase127_glonass_channel_provenance;
+    problem.diagnostics.phase128_glonass_provenance_parser_admission_enabled =
+        config_.use_native_phase128_glonass_provenance_parser_admission;
+    problem.diagnostics.phase129_glonass_local_miss_mask_enabled =
+        config_.use_native_phase129_glonass_local_miss_mask;
+    problem.diagnostics.phase131_canonical_correction_band_key_enabled =
+        config_.use_native_phase131_canonical_correction_band_key;
+    problem.diagnostics.phase135_official_affine_measurement_family_enabled =
+        config_.use_native_phase135_official_affine_measurement_family;
+    problem.diagnostics.phase128_header_status =
+        glonassFrequencyChannelHeaderStatusName(
+            GlonassFrequencyChannelHeaderStatus::Absent);
+    if (config_.use_native_phase129_glonass_local_miss_mask &&
+        (!config_.use_native_phase126_raw_base_source_complete ||
+         !config_.use_native_phase127_glonass_channel_provenance ||
+         !config_.use_native_phase128_glonass_provenance_parser_admission)) {
+        problem.diagnostics.phase129_configuration_valid = false;
+        problem.diagnostics.phase129_configuration_failure =
+            "Phase129 GLONASS local miss mask requires the composed "
+            "Phase126/127/128 source-complete selectors";
+        problem.diagnostics.phase127_failure =
+            problem.diagnostics.phase129_configuration_failure;
+        return problem;
+    }
+    if (config_.use_native_phase131_canonical_correction_band_key &&
+        (!config_.use_native_phase126_raw_base_source_complete ||
+         !config_.use_native_phase127_glonass_channel_provenance ||
+         !config_.use_native_phase128_glonass_provenance_parser_admission ||
+         !config_.use_native_phase129_glonass_local_miss_mask)) {
+        problem.diagnostics.phase131_configuration_valid = false;
+        problem.diagnostics.phase131_configuration_failure =
+            "Phase131 canonical correction key requires the composed "
+            "Phase126/127/128/129 source-complete selectors";
+        problem.diagnostics.phase127_failure =
+            problem.diagnostics.phase131_configuration_failure;
+        return problem;
+    }
     if (input_epochs.empty()) {
         return problem;
     }
@@ -75,6 +138,8 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     spp_config.model_intersystem_bias = config_.spp_model_intersystem_bias;
     spp_config.use_signal_specific_galileo_group_delay =
         config_.use_signal_specific_galileo_group_delay;
+    spp_config.use_official_no_explicit_code_bias =
+        config_.use_native_phase126_raw_base_source_complete;
 
     SPPProcessor spp_processor(spp_config);
     spp_processor.initialize(spp_processor_config);
@@ -272,6 +337,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             ? config_.double_difference_reference_min_snr_dbhz
             : config_.min_snr_dbhz;
     upstream::SnrPercentiles upstream_snr_percentiles;
+    upstream::SnrPercentiles official_tdcp_snr_percentiles;
     std::vector<upstream::EpochMask> upstream_epoch_masks;
     if (config_.use_upstream_observable_quality) {
         upstream_snr_percentiles = upstream::collectSnrPercentiles(
@@ -285,6 +351,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             problem.diagnostics.upstream_pd_pair_rejections,
             problem.diagnostics.upstream_ld_pair_rejections,
             config_.upstream_max_adjacent_gap_s);
+    }
+    if (config_.use_official_tdcp_snr_type_sigma || config_.use_source_tdcp_meter_sigma) {
+        // Phase117 uses the immutable official p85 SNR base only for the
+        // scalar sigma of existing TDCP factors.  It is intentionally
+        // independent of the configurable Phase80 P/D percentile.
+        official_tdcp_snr_percentiles =
+            upstream::collectOfficialTdcpSnrPercentiles(input_epochs);
     }
     const auto finiteMedian = [](std::vector<double> values) {
         values.erase(std::remove_if(values.begin(), values.end(),
@@ -324,6 +397,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     std::vector<std::map<std::pair<SatelliteId, SignalType>, PreparedCarrierObservation>>
         dd_reference_carrier_by_problem_epoch;
     std::map<SatelliteId, double> previous_gps_pseudorange_by_satellite;
+    const auto signalDiagnostics = [&](SignalType signal)
+        -> FGOProcessor::TdcpSignalDiagnostics* {
+        if (!config_.use_carrier_tdcp_incidence_diagnostic) return nullptr;
+        return &problem.diagnostics.tdcp_signal_diagnostics[signal];
+    };
 
     // Seed continuity across a brief SPP outage (see FGOConfig::use_spp_seed):
     // a tunnel/underpass/urban-canyon gap can drop the rover to near-zero
@@ -340,6 +418,15 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     Vector3d last_valid_seed_position_ecef = Vector3d::Zero();
     double last_valid_seed_clock_bias_m = 0.0;
     bool have_last_valid_seed = false;
+    std::vector<std::size_t> problem_to_input_epoch;
+    // Shadow-only P-D rejected rows; never enter the graph or its medians.
+    struct MaskedCodeShadow {
+        GNSSSystem group; SignalType signal; double residual;
+        bool edge_candidate;
+        std::size_t input_epoch;
+    };
+    std::vector<MaskedCodeShadow> masked_code_shadow;
+    std::vector<std::pair<std::size_t, PseudorangeFactor>> code_edge_factor_shadow;
 
     for (std::size_t input_epoch_index = 0;
          input_epoch_index < input_epochs.size(); ++input_epoch_index) {
@@ -389,6 +476,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             continue;
         }
         seed.receiver_clock_drift_mps = epoch.receiver_clock_drift_mps;
+        // Preserve the immutable raw Android epoch identity through the
+        // builder.  Epochs below the usable-measurement floor may be dropped
+        // later, so retained-vector position is not a valid source key.
+        seed.raw_source_index = epoch.raw_source_index;
+        seed.raw_utc_time_millis = epoch.raw_utc_time_millis;
 
         std::vector<PseudorangeFactor> epoch_factors;
         epoch_factors.reserve(epoch.observations.size());
@@ -407,6 +499,31 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         double receiver_lon = 0.0;
         double receiver_height = 0.0;
         ecef2geodetic(seed.position_ecef, receiver_lat, receiver_lon, receiver_height);
+
+        // Do not use the later jump/residual masks to choose transmit time.
+        // The Android parser has already applied its raw code-status mask.
+        // Missing broadcast data is a satellite-local miss; malformed code or
+        // state inputs still throw, and there is no legacy-state fallback.
+        std::map<SatelliteId, std::pair<const Ephemeris*,
+            source_transmission_clock::SelectedEphemerisState>> source_states;
+        if (config_.use_source_rover_epoch_states) {
+            const auto selected = source_transmission_clock::selectNativeEpoch(
+                epoch.observations);
+            for (const auto& [satellite, pseudorange] : selected) {
+                const auto records = nav.ephemeris_data.find(satellite);
+                const auto* eph = records == nav.ephemeris_data.end() ? nullptr :
+                    source_transmission_clock::selectBroadcastMessage(
+                        records->second, satellite, epoch.time);
+                if (!eph) {
+                    ++problem.diagnostics.source_rover_missing_ephemeris_satellite_epochs;
+                    continue;
+                }
+                source_states.emplace(satellite, std::make_pair(eph,
+                    source_transmission_clock::stateFromSelectedEphemeris(
+                        epoch.time, pseudorange.metres, *eph)));
+                ++problem.diagnostics.source_rover_epoch_states_built;
+            }
+        }
 
         for (const auto& observation : epoch.observations) {
             if (!isEligibleFgoSignal(observation.satellite,
@@ -466,29 +583,57 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
             GNSSTime transmit_time =
                 epoch.time - observation.pseudorange / constants::SPEED_OF_LIGHT;
-            if (!nav.calculateSatelliteState(observation.satellite,
-                                             transmit_time,
-                                             satellite_position,
-                                             satellite_velocity,
-                                             satellite_clock_bias,
-                                             satellite_clock_drift)) {
-                continue;
-            }
+            const Ephemeris* eph = nullptr;
+            if (config_.use_source_rover_epoch_states) {
+                const auto state = source_states.find(observation.satellite);
+                if (state == source_states.end()) continue;
+                eph = state->second.first;
+                const auto& shared = state->second.second;
+                transmit_time = shared.transmit_time;
+                satellite_position = shared.position_ecef;
+                satellite_velocity = shared.velocity_ecef;
+                satellite_clock_bias = shared.clock_seconds;
+                satellite_clock_drift = shared.clock_drift;
+            } else {
+                if (!nav.calculateSatelliteState(observation.satellite,
+                                                 transmit_time,
+                                                 satellite_position,
+                                                 satellite_velocity,
+                                                 satellite_clock_bias,
+                                                 satellite_clock_drift)) {
+                    continue;
+                }
 
-            transmit_time = transmit_time - satellite_clock_bias;
-            if (!nav.calculateSatelliteState(observation.satellite,
-                                             transmit_time,
-                                             satellite_position,
-                                             satellite_velocity,
-                                             satellite_clock_bias,
-                                             satellite_clock_drift)) {
-                continue;
-            }
+                transmit_time = transmit_time - satellite_clock_bias;
+                if (!nav.calculateSatelliteState(observation.satellite,
+                                                 transmit_time,
+                                                 satellite_position,
+                                                 satellite_velocity,
+                                                 satellite_clock_bias,
+                                                 satellite_clock_drift)) {
+                    continue;
+                }
 
-            const Ephemeris* eph = nav.getEphemeris(observation.satellite, transmit_time);
+                eph = nav.getEphemeris(observation.satellite, transmit_time);
+            }
             if (!eph || !isHealthyForPositioning(observation, *eph)) {
                 continue;
             }
+            Observation frequency_observation = observation;
+            if (!annotatePhase127GlonassObservation(
+                    frequency_observation, transmit_time, nav, config_,
+                    &problem.diagnostics)) {
+                if (config_.use_native_phase129_glonass_local_miss_mask &&
+                    observation.satellite.system == GNSSSystem::GLONASS) {
+                    ++problem.diagnostics.phase129_glonass_factor_rows_dropped;
+                }
+                continue;
+            }
+            const double row_frequency_hz =
+                config_.use_native_phase127_glonass_channel_provenance &&
+                        observation.satellite.system == GNSSSystem::GLONASS
+                    ? signalFrequencyHz(frequency_observation)
+                    : signalFrequencyHz(observation.signal, eph);
 
             const Vector3d corrected_satellite_position =
                 earthRotationCorrected(satellite_position, seed.position_ecef);
@@ -508,7 +653,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     nav.ionosphere_model.alpha,
                     nav.ionosphere_model.beta);
 
-                const double frequency_hz = signalFrequencyHz(observation.signal, eph);
+                const double frequency_hz = row_frequency_hz;
                 if (frequency_hz > 0.0) {
                     const double scale = constants::GPS_L1_FREQ / frequency_hz;
                     ionosphere_delay *= scale * scale;
@@ -524,9 +669,12 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             const double satellite_clock_m =
                 satellite_clock_bias * constants::SPEED_OF_LIGHT;
             galileo_group_delay::Selection group_delay_selection;
-            const double group_delay_m = groupDelayCorrectionMeters(
-                observation, *eph,
-                config_.use_signal_specific_galileo_group_delay);
+            const double group_delay_m =
+                config_.use_native_phase126_raw_base_source_complete
+                    ? 0.0
+                    : groupDelayCorrectionMeters(
+                          observation, *eph,
+                          config_.use_signal_specific_galileo_group_delay);
             if (config_.use_signal_specific_galileo_group_delay &&
                 observation.satellite.system == GNSSSystem::Galileo &&
                 observation.signal == SignalType::GAL_E1) {
@@ -555,16 +703,40 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 group_delay_m;
 
             const double sin_el = std::max(0.1, std::sin(geometry.elevation));
+            if (config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+                config_.use_upstream_observable_quality && upstream_pseudorange_masked &&
+                passes_snr_mask && passes_elevation_mask &&
+                upstream::finitePositive(upstream_pseudorange_sigma)) {
+                const double residual = corrected_pseudorange -
+                    (corrected_satellite_position - seed.position_ecef).norm() -
+                    seed.receiver_clock_bias_m;
+                masked_code_shadow.push_back({clockBiasGroup(observation.satellite.system),
+                                               observation.signal, residual,
+                                               observation.native_code_edge_diagnostic_candidate,
+                                               input_epoch_index});
+            }
             const double pseudorange_elevation_scale = std::pow(
                 sin_el,
                 std::max(0.0, config_.pseudorange_elevation_sigma_power));
             if (passes_snr_mask && passes_elevation_mask &&
-                !upstream_pseudorange_masked) {
+                (!upstream_pseudorange_masked ||
+                 (config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+                  observation.native_code_edge_diagnostic_candidate))) {
                 PseudorangeFactor factor;
                 factor.satellite = observation.satellite;
                 factor.signal = observation.signal;
+                factor.has_glonass_frequency_channel =
+                    observation.satellite.system == GNSSSystem::GLONASS &&
+                    frequency_observation.has_glonass_frequency_channel;
+                factor.glonass_frequency_channel =
+                    factor.has_glonass_frequency_channel
+                        ? frequency_observation.glonass_frequency_channel
+                        : 0;
                 factor.clock_group = clockBiasGroup(observation.satellite.system);
                 factor.satellite_position_ecef = corrected_satellite_position;
+                factor.source_satellite_position_ecef = satellite_position;
+                factor.source_satellite_position_available =
+                    satellite_position.allFinite();
                 factor.corrected_pseudorange_m = corrected_pseudorange;
                 factor.sigma_m = config_.use_upstream_observable_quality
                                      ? upstream_pseudorange_sigma
@@ -602,45 +774,75 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 factor.residual_ionosphere_coefficient =
                     residual_ionosphere::signalCoefficient(
                         geometry.elevation,
-                        signalFrequencyHz(observation.signal, eph));
-                if (config_.use_residual_ionosphere_states) {
+                        row_frequency_hz);
+                if (config_.use_residual_ionosphere_states && !upstream_pseudorange_masked) {
                     ++problem.diagnostics.residual_ionosphere_candidate_rows;
                     if (!residual_ionosphere::finiteCoefficient(
                             factor.residual_ionosphere_coefficient)) {
                         ++problem.diagnostics.residual_ionosphere_invalid_coefficients;
                     }
                 }
-                epoch_factors.push_back(factor);
-                if (config_.use_upstream_observable_quality) {
-                    ++problem.diagnostics.upstream_pseudorange_factors;
-                }
-                if (observation.satellite.system == GNSSSystem::GPS) {
-                    gps_pseudorange_by_satellite[observation.satellite] =
-                        observation.pseudorange;
+                if (upstream_pseudorange_masked) {
+                    code_edge_factor_shadow.emplace_back(input_epoch_index, factor);
+                } else {
+                    epoch_factors.push_back(factor);
+                    if (config_.use_upstream_observable_quality) {
+                        ++problem.diagnostics.upstream_pseudorange_factors;
+                    }
+                    if (observation.satellite.system == GNSSSystem::GPS) {
+                        gps_pseudorange_by_satellite[observation.satellite] =
+                            observation.pseudorange;
+                    }
                 }
             }
 
             const bool carrier_loss_of_lock =
                 observation.loss_of_lock || ((observation.lli & 0x01U) != 0);
-            double wavelength = signalWavelengthMeters(observation);
+            double wavelength =
+                config_.use_native_phase127_glonass_channel_provenance &&
+                        observation.satellite.system == GNSSSystem::GLONASS
+                    ? signalWavelengthMeters(frequency_observation)
+                    : signalWavelengthMeters(observation);
             const bool has_carrier_phase =
                 observation.has_carrier_phase && observation.carrier_phase != 0.0;
+            auto* signal_diagnostics = signalDiagnostics(observation.signal);
+            if (signal_diagnostics != nullptr) {
+                ++signal_diagnostics->carrier_rows_seen;
+                if (has_carrier_phase) ++signal_diagnostics->carrier_phase_rows;
+            }
             if (wavelength <= 0.0) {
                 wavelength = signalWavelengthMeters(observation.signal, eph);
             }
+            if (signal_diagnostics != nullptr && has_carrier_phase &&
+                (!(wavelength > 0.0) || !std::isfinite(wavelength))) {
+                ++signal_diagnostics->missing_wavelength;
+            }
             const bool usable_carrier = has_carrier_phase && wavelength > 0.0;
+            const double raw_carrier_m =
+                usable_carrier ? observation.carrier_phase * wavelength : 0.0;
             const double corrected_carrier =
                 usable_carrier
-                    ? observation.carrier_phase * wavelength +
-                          satellite_clock_m -
-                          troposphere_delay +
+                    ? raw_carrier_m + satellite_clock_m - troposphere_delay +
                           ionosphere_delay
                     : 0.0;
+            const double tdcp_carrier =
+                (config_.use_official_tdcp_resl_atmosphere_cancellation ||
+                 config_.use_source_tdcp_resl_observable)
+                    ? (usable_carrier
+                           ? tdcp_contract::ordinaryTdcpCarrierMeters(
+                                 raw_carrier_m, satellite_clock_m,
+                                 ionosphere_delay, troposphere_delay, true)
+                           : 0.0)
+                    : corrected_carrier;
+            if (signal_diagnostics != nullptr && has_carrier_phase &&
+                (!std::isfinite(observation.carrier_phase) ||
+                 !std::isfinite(corrected_carrier))) {
+                ++signal_diagnostics->nonfinite_measurements;
+            }
 
             FGOProcessor::ObservationModelDebug model_debug;
             model_debug.raw_pseudorange_m = observation.pseudorange;
-            model_debug.raw_carrier_m =
-                usable_carrier ? observation.carrier_phase * wavelength : 0.0;
+            model_debug.raw_carrier_m = raw_carrier_m;
             model_debug.satellite_clock_m = satellite_clock_m;
             model_debug.ionosphere_delay_m = ionosphere_delay;
             model_debug.troposphere_delay_m = troposphere_delay;
@@ -662,12 +864,21 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             carrier.satellite = observation.satellite;
             carrier.signal = observation.signal;
             carrier.satellite_position_ecef = corrected_satellite_position;
+            carrier.source_satellite_position_ecef = satellite_position;
+            carrier.source_satellite_position_available =
+                satellite_position.allFinite();
             carrier.corrected_pseudorange_m = corrected_pseudorange;
             carrier.corrected_carrier_m = corrected_carrier;
+            carrier.tdcp_carrier_m = tdcp_carrier;
+            carrier.source_adr_uncertainty_m = observation.has_source_adr_uncertainty_m
+                ? observation.source_adr_uncertainty_m : 0.;
             carrier.wavelength_m = wavelength;
+            carrier.snr_dbhz = observation.snr;
             carrier.sigma_m =
                 std::max(1e-4, config_.carrier_phase_sigma_m / sin_el);
             carrier.elevation_rad = geometry.elevation;
+            carrier.residual_ionosphere_coefficient = residual_ionosphere::signalCoefficient(
+                geometry.elevation, row_frequency_hz);
             carrier.loss_of_lock = carrier_loss_of_lock;
             carrier.has_carrier_phase = usable_carrier;
             carrier.los = -corrected_delta / corrected_range;
@@ -779,6 +990,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 factor.wavelength_m = wavelength;
                 factor.satellite_position_ecef = satellite_position;
                 factor.satellite_velocity_ecef = satellite_velocity;
+                factor.source_satellite_position_ecef = satellite_position;
+                factor.source_satellite_velocity_ecef = satellite_velocity;
+                factor.source_satellite_state_available =
+                    satellite_position.allFinite() && satellite_velocity.allFinite();
                 factor.measured_range_rate_mps =
                     model_debug.doppler_measured_range_rate_mps;
                 factor.satellite_range_rate_mps =
@@ -816,6 +1031,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                       carrier_loss_of_lock)) {
                     epoch_carriers[{observation.satellite, observation.signal}] =
                         carrier;
+                    if (signal_diagnostics != nullptr) {
+                        ++signal_diagnostics->retained_carrier_rows;
+                    }
+                } else if (signal_diagnostics != nullptr) {
+                    ++signal_diagnostics->rejected_loss_of_lock;
                 }
             }
         }
@@ -910,6 +1130,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
 
         const std::size_t epoch_index = problem.epochs.size();
         problem.epochs.push_back(seed);
+        problem_to_input_epoch.push_back(input_epoch_index);
         bool clock_jump = false;
         double gps_pseudorange_delta_sum = 0.0;
         std::size_t gps_pseudorange_delta_count = 0;
@@ -946,6 +1167,10 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             for (auto& factor : epoch_factors) {
                 factor.epoch_index = epoch_index;
                 problem.pseudorange_factors.push_back(factor);
+                if (config_.use_native_phase129_glonass_local_miss_mask &&
+                    factor.satellite.system == GNSSSystem::GLONASS) {
+                    ++problem.diagnostics.phase129_glonass_factor_rows_retained;
+                }
             }
         }
         for (auto& factor : epoch_doppler_factors) {
@@ -975,6 +1200,13 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         // over the whole observation matrix.  Reconstruct the same
         // truth-free center from native SPP-seed residuals; no enriched
         // receiver/satellite coordinate is consulted.
+        std::vector<std::size_t> pre_residual_counts(problem.epochs.size(),0);
+        for (const auto& factor : problem.pseudorange_factors) {
+            ++pre_residual_counts.at(factor.epoch_index);
+        }
+        if (config_.retain_native_pseudorange_remasking_pool) {
+            problem.native_pseudorange_remasking_pool = problem.pseudorange_factors;
+        }
         using ResidualGroup =
             std::pair<GNSSSystem, upstream::ObservationBand>;
         std::map<ResidualGroup, std::vector<double>> residuals_by_group;
@@ -993,8 +1225,40 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         }
         problem.diagnostics.upstream_pseudorange_candidates =
             problem.pseudorange_factors.size();
+        if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+            std::size_t passes = 0, unavailable = 0;
+            std::size_t edge_quality = 0, edge_residual = 0, edge_retained_epoch = 0;
+            const std::set<std::size_t> retained_inputs(problem_to_input_epoch.begin(),
+                                                       problem_to_input_epoch.end());
+            for (const auto& row : masked_code_shadow) {
+                edge_quality += row.edge_candidate;
+                const auto band = upstream::bandForSignal(row.signal);
+                const auto found = residual_medians.find({row.group, band});
+                if (found == residual_medians.end() || !std::isfinite(found->second) ||
+                    !std::isfinite(row.residual)) { ++unavailable; continue; }
+                const bool accepted = upstream::acceptsCenteredPseudorangeResidual(
+                    row.residual, found->second, upstream::residualThreshold(band, 'P'));
+                passes += accepted;
+                edge_residual += row.edge_candidate && accepted;
+                edge_retained_epoch += row.edge_candidate && accepted &&
+                    retained_inputs.count(row.input_epoch) != 0;
+            }
+            std::fprintf(stderr,
+                "[native-code-edge-shadow] geometry_quality_pass=%zu residual_pass=%zu "
+                "retained_epoch_pass=%zu factors_added=0\n",
+                edge_quality, edge_residual, edge_retained_epoch);
+            std::fprintf(stderr,
+                "[native-masked-code-shadow] geometry_quality_pass=%zu baseline_residual_pass=%zu "
+                "residual_unavailable=%zu factors_added=0 median_rows_added=0\n",
+                masked_code_shadow.size(), passes, unavailable);
+        }
         std::vector<PseudorangeFactor> filtered_pseudorange;
         filtered_pseudorange.reserve(problem.pseudorange_factors.size());
+        std::vector<RejectedResidualSummary> rejected_residuals(problem.epochs.size());
+        // [retained/rejected][incoming/outgoing]; indices refer to the exact
+        // builder input, not the potentially compressed problem epoch vector.
+        using PdGroups = std::array<std::array<MatchedPseudorangeDopplerSummary, 2>, 2>;
+        std::vector<PdGroups> matched_pd(problem.epochs.size());
         for (const auto& factor : problem.pseudorange_factors) {
             const ResidualGroup group{
                 factor.clock_group, upstream::bandForSignal(factor.signal)};
@@ -1003,15 +1267,83 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                                       ? std::numeric_limits<double>::quiet_NaN()
                                       : median_it->second;
             const double threshold = upstream::residualThreshold(group.second, 'P');
-            if (std::isfinite(median) && std::isfinite(threshold) &&
-                std::isfinite(factor.upstream_seed_residual_m) &&
-                std::abs(factor.upstream_seed_residual_m - median) <= threshold) {
+            const bool accepted = upstream::acceptsCenteredPseudorangeResidual(
+                    factor.upstream_seed_residual_m, median, threshold);
+            if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+                const auto source = problem_to_input_epoch.at(factor.epoch_index);
+                auto& groups = matched_pd.at(factor.epoch_index)[accepted ? 0 : 1];
+                for (std::size_t direction = 0; direction < 2; ++direction) {
+                    std::optional<double> value;
+                    if ((direction == 0 && source > 0) ||
+                        (direction == 1 && source + 1 < input_epochs.size())) {
+                        const auto before = direction == 0 ? source - 1 : source;
+                        const auto& previous = input_epochs[before];
+                        const auto& current = input_epochs[before + 1];
+                        value = matchedPseudorangeDoppler(previous, current,
+                            factor.satellite, factor.signal, current.time - previous.time);
+                    }
+                    groups[direction].observe(value);
+                }
+            }
+            if (accepted) {
                 filtered_pseudorange.push_back(factor);
             } else {
                 ++problem.diagnostics.upstream_pseudorange_residual_rejections;
+                rejected_residuals.at(factor.epoch_index).observe(
+                    factor.upstream_seed_residual_m - median);
             }
         }
         problem.pseudorange_factors.swap(filtered_pseudorange);
+        // Use only medians from the original admitted rows and only epochs
+        // retained by the original graph. Shadow factors do not feed either.
+        std::map<std::size_t, std::size_t> input_to_problem;
+        for (std::size_t i = 0; i < problem_to_input_epoch.size(); ++i)
+            input_to_problem.emplace(problem_to_input_epoch[i], i);
+        for (auto& [source_index, factor] : code_edge_factor_shadow) {
+            const auto retained = input_to_problem.find(source_index);
+            if (retained == input_to_problem.end()) continue;
+            const auto band = upstream::bandForSignal(factor.signal);
+            const auto median = residual_medians.find({factor.clock_group, band});
+            if (median == residual_medians.end() ||
+                !upstream::acceptsCenteredPseudorangeResidual(
+                    factor.upstream_seed_residual_m, median->second,
+                    upstream::residualThreshold(band, 'P'))) continue;
+            factor.epoch_index = retained->second;
+            problem.native_code_edge_readmission_pool.push_back(factor);
+        }
+        if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+            std::vector<std::size_t> post_residual_counts(problem.epochs.size(),0);
+            for (const auto& factor : problem.pseudorange_factors) {
+                ++post_residual_counts.at(factor.epoch_index);
+            }
+            for (std::size_t epoch=0; epoch<problem.epochs.size(); ++epoch) {
+                // Topology diagnostic only; threshold does not change admission.
+                if (post_residual_counts[epoch] < 8) {
+                    std::fprintf(stderr,
+                        "[native-p-admission] epoch=%zu before_centered_residual=%zu "
+                        "after_centered_residual=%zu\n",epoch,
+                        pre_residual_counts[epoch],post_residual_counts[epoch]);
+                    const auto& rejected = rejected_residuals[epoch];
+                    std::fprintf(stderr,
+                        "[native-p-rejected] epoch=%zu positive=%zu negative=%zu "
+                        "zero=%zu nonfinite=%zu max_abs_m=%.17g\n",epoch,
+                        rejected.positive,rejected.negative,rejected.zero,
+                        rejected.nonfinite,rejected.max_abs_m);
+                    for (std::size_t population = 0; population < 2; ++population) {
+                        for (std::size_t direction = 0; direction < 2; ++direction) {
+                            const auto& pd = matched_pd[epoch][population][direction];
+                            std::fprintf(stderr,
+                                "[native-p-matched-pd] epoch=%zu population=%s direction=%s "
+                                "missing=%zu positive=%zu negative=%zu zero=%zu max_abs_m=%.17g\n",
+                                epoch, population == 0 ? "retained" : "rejected",
+                                direction == 0 ? "incoming" : "outgoing", pd.missing,
+                                pd.values.positive, pd.values.negative, pd.values.zero,
+                                pd.values.max_abs_m);
+                        }
+                    }
+                }
+            }
+        }
         problem.diagnostics.upstream_pseudorange_factors =
             problem.pseudorange_factors.size();
     }
@@ -1368,7 +1700,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     }
 
     if (config_.use_tdcp_factors && problem.epochs.size() >= 2) {
-        const double sigma = std::max(1e-4, config_.tdcp_sigma_m);
+        const double legacy_sigma = std::max(1e-4, config_.tdcp_sigma_m);
         const double max_gap = std::max(0.0, config_.max_tdcp_gap_s);
         for (std::size_t epoch_index = 1; epoch_index < problem.epochs.size(); ++epoch_index) {
             const double dt = problem.epochs[epoch_index].time -
@@ -1376,6 +1708,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             if (dt <= 0.0 || (max_gap > 0.0 && dt > max_gap)) {
                 problem.diagnostics.tdcp_rejected_gap +=
                     carrier_by_problem_epoch[epoch_index].size();
+                for (const auto& [key, current] :
+                     carrier_by_problem_epoch[epoch_index]) {
+                    (void)current;
+                    auto* signal_diagnostics = signalDiagnostics(key.second);
+                    if (signal_diagnostics != nullptr) {
+                        ++signal_diagnostics->rejected_gap;
+                    }
+                }
                 continue;
             }
 
@@ -1385,17 +1725,32 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 const auto previous_it = previous_carriers.find(key);
                 if (previous_it == previous_carriers.end()) {
                     ++problem.diagnostics.tdcp_rejected_missing_previous;
+                    auto* signal_diagnostics = signalDiagnostics(key.second);
+                    if (signal_diagnostics != nullptr) {
+                        ++signal_diagnostics->rejected_missing_previous;
+                    }
                     continue;
                 }
                 const auto& previous = previous_it->second;
                 ++problem.diagnostics.tdcp_candidate_pairs;
-                const double delta_carrier_m =
+                auto* signal_diagnostics = signalDiagnostics(key.second);
+                if (signal_diagnostics != nullptr) {
+                    ++signal_diagnostics->candidate_pairs;
+                }
+                // Keep the historical prepared-carrier delta as the input to
+                // the existing pair/reject contract.  Phase120 changes only
+                // the measurement carried by an accepted ordinary TDCP
+                // factor; using the source-parity value here would silently
+                // change code-phase-jump admission and factor counts.
+                const double legacy_gate_delta_carrier_m =
                     current.corrected_carrier_m - previous.corrected_carrier_m;
+                const double delta_carrier_m =
+                    current.tdcp_carrier_m - previous.tdcp_carrier_m;
                 const double delta_code_m =
                     current.corrected_pseudorange_m - previous.corrected_pseudorange_m;
                 const auto decision = tdcp_contract::evaluateAdjacentPair(
                     dt, previous.loss_of_lock, current.loss_of_lock,
-                    delta_carrier_m, delta_code_m, max_gap,
+                    legacy_gate_delta_carrier_m, delta_code_m, max_gap,
                     config_.reject_tdcp_loss_of_lock,
                     config_.reject_tdcp_code_phase_jump,
                     config_.tdcp_code_phase_jump_threshold_m,
@@ -1408,18 +1763,33 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                         break;
                     case tdcp_contract::PairRejectReason::Gap:
                         ++problem.diagnostics.tdcp_rejected_gap;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_gap;
+                        }
                         continue;
                     case tdcp_contract::PairRejectReason::ClockDiscontinuity:
                         ++problem.diagnostics.tdcp_rejected_clock_discontinuity;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_clock_discontinuity;
+                        }
                         continue;
                     case tdcp_contract::PairRejectReason::LossOfLock:
                         ++problem.diagnostics.tdcp_rejected_loss_of_lock;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_loss_of_lock;
+                        }
                         continue;
                     case tdcp_contract::PairRejectReason::NonFiniteMeasurement:
                         ++problem.diagnostics.tdcp_rejected_invalid_measurement;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_nonfinite;
+                        }
                         continue;
                     case tdcp_contract::PairRejectReason::CodePhaseJump:
                         ++problem.diagnostics.tdcp_rejected_code_phase_jump;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_code_phase_jump;
+                        }
                         continue;
                 }
 
@@ -1430,10 +1800,57 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 factor.signal = current.signal;
                 factor.previous_satellite_position_ecef = previous.satellite_position_ecef;
                 factor.current_satellite_position_ecef = current.satellite_position_ecef;
+                factor.previous_source_satellite_position_ecef =
+                    previous.source_satellite_position_ecef;
+                factor.current_source_satellite_position_ecef =
+                    current.source_satellite_position_ecef;
+                factor.source_satellite_positions_available =
+                    previous.source_satellite_position_available &&
+                    current.source_satellite_position_available;
                 factor.delta_carrier_m = delta_carrier_m;
-                factor.sigma_m = sigma;
+                factor.previous_residual_ionosphere_coefficient =
+                    previous.residual_ionosphere_coefficient;
+                factor.current_residual_ionosphere_coefficient =
+                    current.residual_ionosphere_coefficient;
+                factor.previous_source_adr_uncertainty_m = previous.source_adr_uncertainty_m;
+                factor.current_source_adr_uncertainty_m = current.source_adr_uncertainty_m;
+                if (config_.use_official_tdcp_snr_type_sigma || config_.use_source_tdcp_meter_sigma) {
+                    // The official noise is indexed by the previous
+                    // endpoint, matching noise_sigmas(obserr.(f).L(i,j)).
+                    // No invalid source metadata is substituted with the
+                    // legacy 0.03 m value; this pair is fail-closed instead.
+                    const double official_sigma_m =
+                        config_.use_source_tdcp_meter_sigma
+                        ? upstream::sourceTdcpSigmaMeters(
+                            previous.signal, previous.snr_dbhz,
+                            official_tdcp_snr_percentiles)
+                        : upstream::officialTdcpSigmaMeters(
+                            previous.signal, previous.snr_dbhz,
+                            official_tdcp_snr_percentiles,
+                            previous.wavelength_m);
+                    if (!upstream::finitePositive(official_sigma_m)) {
+                        ++problem.diagnostics.tdcp_rejected_invalid_weight;
+                        if (signal_diagnostics != nullptr) {
+                            ++signal_diagnostics->rejected_invalid_weight;
+                        }
+                        continue;
+                    }
+                    factor.sigma_m = official_sigma_m;
+                } else {
+                    factor.sigma_m = legacy_sigma;
+                }
                 factor.dt_s = dt;
+                if (config_.use_native_tdcp_adr_endpoint_sigma) {
+                    const auto sigma=tdcp_endpoint_covariance::pairSigma(
+                        factor.previous_source_adr_uncertainty_m,
+                        factor.current_source_adr_uncertainty_m);
+                    if(!sigma) throw std::invalid_argument("Missing/invalid admitted TDCP endpoint ADR uncertainty");
+                    factor.sigma_m=*sigma;
+                }
                 problem.tdcp_factors.push_back(factor);
+                if (signal_diagnostics != nullptr) {
+                    ++signal_diagnostics->accepted_pairs;
+                }
             }
         }
     }
@@ -1472,6 +1889,30 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 problem.double_difference_reference_observations.push_back(
                     reference_observation);
             }
+        }
+    }
+
+    if (config_.use_native_phase129_glonass_local_miss_mask) {
+        problem.diagnostics.phase129_glonass_row_count_consistent =
+            phase129_glonass_local_miss::rowLedgerConsistent(
+                problem.diagnostics.phase127_glonass_rows,
+                problem.diagnostics.phase127_accepted_rows,
+                problem.diagnostics.phase129_glonass_local_miss_rows);
+        problem.diagnostics.phase129_glonass_factor_count_consistent =
+            problem.diagnostics.phase129_glonass_factor_rows_dropped ==
+            problem.diagnostics.phase129_glonass_local_miss_rows;
+        if (!problem.diagnostics.phase129_glonass_row_count_consistent) {
+            problem.diagnostics.phase129_configuration_valid = false;
+            problem.diagnostics.phase129_configuration_failure =
+                "Phase129 GLONASS row ledger is inconsistent";
+            problem.diagnostics.phase127_failure =
+                problem.diagnostics.phase129_configuration_failure;
+        } else if (!problem.diagnostics.phase129_glonass_factor_count_consistent) {
+            problem.diagnostics.phase129_configuration_valid = false;
+            problem.diagnostics.phase129_configuration_failure =
+                "Phase129 GLONASS factor ledger is inconsistent";
+            problem.diagnostics.phase127_failure =
+                problem.diagnostics.phase129_configuration_failure;
         }
     }
 

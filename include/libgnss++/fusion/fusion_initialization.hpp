@@ -56,6 +56,8 @@ struct VelocityHeadingConfig {
     std::size_t smooth_window = 20;
     double velocity_threshold_mps = 0.5;
     double heading_offset_deg = 180.0;
+    // Opt-in nearest fill for interior gaps; equal distances choose later.
+    bool nearest_fill_interior = false;
 };
 
 struct VelocityHeadingResult {
@@ -69,12 +71,13 @@ struct VelocityHeadingResult {
 };
 
 /**
- * @brief Convert GNSS ENU velocities to upstream-compatible RPY seeds.
+ * @brief Convert GNSS ENU velocities to RPY seeds.
  *
  * Roll and pitch are zero by contract.  Raw `atan2(N,E)` courses are linearly
  * interpolated across interior low-speed samples, nearest-filled only at the
  * endpoints, then offset and wrapped to degrees [-180, 180] before conversion
- * to radians.  Empty/all-low-speed/non-finite input fails closed.
+ * to radians. nearest_fill_interior selects nearest instead of linear interior
+ * fill. Empty/all-low-speed/non-finite input fails closed.
  */
 VelocityHeadingResult velocityToRpy(
     const std::vector<Eigen::Vector3d>& velocities_enu,

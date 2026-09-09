@@ -1,0 +1,61 @@
+{
+  "phase": 311,
+  "support": {
+    "phone_epochs": 3140,
+    "candidates": 108722,
+    "missing_stream": 20172,
+    "unavailable": 1819,
+    "finite": 86731
+  },
+  "breakdown": {
+    "by_system_signal": {
+      "1:0": [
+        25666,
+        0,
+        473,
+        25193
+      ],
+      "1:4": [
+        19962,
+        0,
+        0,
+        19962
+      ],
+      "2:5": [
+        11908,
+        549,
+        0,
+        11359
+      ],
+      "4:10": [
+        15474,
+        0,
+        595,
+        14879
+      ],
+      "4:9": [
+        16089,
+        0,
+        751,
+        15338
+      ],
+      "8:13": [
+        19623,
+        19623,
+        0,
+        0
+      ]
+    }
+  },
+  "base": {
+    "built": true,
+    "epochs": 3500,
+    "states": 68697,
+    "signal_rows": 112050,
+    "excluded_frequency_rows": 74777,
+    "streams": 38,
+    "failure": ""
+  },
+  "matches_phase310": true,
+  "conservation": true
+}

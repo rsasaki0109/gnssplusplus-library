@@ -1,0 +1,51 @@
+{
+  "phase": 265,
+  "execution_label": "primary agent",
+  "manifest_sha256": "49c4098f39d59aa9f88625d0f73231cce8df4742f3798cec6246a2a4c634b71e",
+  "role": "development/train; not heldout or leaderboard proof",
+  "baseline_m": 1.0769392017393964,
+  "delta_m": 0.0,
+  "improved_on_h": false,
+  "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "candidate": {
+    "path": "output/smartphone-r5/phase264-h-native-phase263-bias-prior-v1/mtv-h/opaque_solution_output.csv",
+    "sha256": "038f21188ebddfcec41893801abb294ed22b35db7d1da86fc622038f6d231c1c",
+    "bytes": 251174,
+    "rows": 3139,
+    "read_count": 1
+  },
+  "truth": {
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "bytes": 305432,
+    "rows": 3139,
+    "read_count": 1
+  },
+  "metric": {
+    "p50_m": 0.8369083196573837,
+    "p95_m": 1.3169700838214091,
+    "route_score_m": 1.0769392017393964,
+    "matched_rows": 3139,
+    "prediction_domain_coverage": 1.0,
+    "truth_domain_coverage": 1.0,
+    "over_70_mps_count": 0,
+    "finite": true
+  },
+  "gates": {
+    "candidate_exact_alignment": true,
+    "candidate_prediction_domain_exact": true,
+    "truth_domain_exact": true,
+    "candidate_all_finite_and_earth_valid": true,
+    "velocity_gate_over_70_mps_zero": true,
+    "route_score_finite": true,
+    "strict_route_score_less_than_0_782_m": false
+  },
+  "read_accounting": {
+    "candidate_payload_reads": 1,
+    "truth_payload_reads": 1,
+    "score_calculations": 1,
+    "interpolated_epochs": 0,
+    "edge_hold_epochs": 0,
+    "pixel5_offset_reapplications": 0
+  }
+}

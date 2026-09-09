@@ -95,6 +95,7 @@ set(GNSS_SOURCES
     src/io/madoca_l6d.cpp
     src/core/solution.cpp
     src/core/types.cpp
+    src/core/glonass_provenance.cpp
     src/fusion/attitude.cpp
     src/fusion/mechanization.cpp
     src/fusion/preintegration.cpp
@@ -170,6 +171,7 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ar_validate.cpp
     src/algorithms/spp.cpp
     src/algorithms/spp_velocity.cpp
+    src/algorithms/raw_p_seed.cpp
     src/algorithms/lambda.cpp
     src/core/navigation.cpp
     src/core/precise_products.cpp
@@ -185,6 +187,9 @@ set(GNSS_SOLVER_SOURCES
     src/algorithms/fgo.cpp
     src/algorithms/fgo_problems.cpp
     src/algorithms/base_pseudorange_compensation.cpp
+    src/algorithms/phase126_raw_base_compound.cpp
+    src/algorithms/phase127_glonass_channel_provenance.cpp
+    src/algorithms/phase128_glonass_provenance.cpp
     src/algorithms/source_pseudorange_miss_mask.cpp
     src/algorithms/fgo_shadows.cpp
     src/algorithms/pdc_state_bridge.cpp

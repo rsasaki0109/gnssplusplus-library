@@ -27,6 +27,25 @@ std::vector<libgnss::ImuSample> stationarySamples(std::size_t count = 600) {
     return samples;
 }
 
+void expectCenteredImpulseWindow(std::size_t window_samples,
+                                 std::size_t impulse_index,
+                                 std::size_t inspected_index,
+                                 std::size_t sample_count) {
+    auto samples = stationarySamples(sample_count);
+    samples[impulse_index].accel_raw.x() = 20.0;
+    libgnss::upstream_stop::Config config;
+    config.window_samples = window_samples;
+    const auto result = libgnss::upstream_stop::detect(
+        samples,
+        {{2200, 100.0 + 0.01 * static_cast<double>(inspected_index)}},
+        config);
+    ASSERT_TRUE(result.ok) << result.error;
+    // The impulse is just outside the MATLAB centered window at the
+    // inspected sample.  A right-shifted even window would include it.
+    ASSERT_LT(inspected_index, result.imu_stop.size());
+    EXPECT_TRUE(result.imu_stop[inspected_index]);
+}
+
 }  // namespace
 
 TEST(UpstreamStopConstraints, MirrorsGlobalMinimumWindowThresholds) {
@@ -65,6 +84,31 @@ TEST(UpstreamStopConstraints, NearestMappingUsesPreviousAtExactTie) {
         altered, {{2200, 100.5}}, config);
     ASSERT_TRUE(result.ok) << result.error;
     EXPECT_FALSE(result.epoch_stop[0]);
+}
+
+TEST(UpstreamStopConstraints, EvenWindowsUsePreviousSideAndSingletonIsZero) {
+    // These asymmetric impulses distinguish MATLAB's even centered windows
+    // from a one-sample-right implementation at the pinned production sizes.
+    expectCenteredImpulseWindow(2, 3, 2, 5);
+    expectCenteredImpulseWindow(4, 4, 2, 8);
+    expectCenteredImpulseWindow(500, 500, 250, 600);
+
+    // k=2 at the first endpoint is a singleton.  MATLAB's sample-normalized
+    // movstd returns zero there, so a stationary sample remains a stop.
+    auto samples = stationarySamples(2);
+    libgnss::upstream_stop::Config config;
+    config.window_samples = 2;
+    const auto result = libgnss::upstream_stop::detect(
+        samples, {{2200, 100.0}}, config);
+    ASSERT_TRUE(result.ok) << result.error;
+    ASSERT_EQ(result.imu_stop.size(), 2U);
+    EXPECT_TRUE(result.imu_stop.front());
+}
+
+TEST(UpstreamStopConstraints, OddWindowRemainsSymmetric) {
+    // k=3 is unchanged by the even-window correction: sample 4 is outside
+    // the centered window around sample 2.
+    expectCenteredImpulseWindow(3, 4, 2, 8);
 }
 
 TEST(UpstreamStopConstraints, RejectsNonFiniteAndUnorderedInputs) {

@@ -1,0 +1,17 @@
+{
+  "phase": 331,
+  "freeze_commit": "0c03a6fd",
+  "exit_code": 0,
+  "stderr_bytes": 0,
+  "base_epochs": 3500,
+  "fit_epochs": 3500,
+  "rank_or_count_misses": 0,
+  "rows": 24212,
+  "apparent_displacement_norm_median_m": 2.764934258432287,
+  "post_fit_rms_median_m": 0.9922099606100028,
+  "absolute_clock_median_m": 1.3798841277800709,
+  "half_mean_displacement_difference_norm_m": 1.071621332450647,
+  "truth_reads": 0,
+  "phone_reads": 0,
+  "inference_feedback": false
+}

@@ -224,6 +224,12 @@ struct AndroidImuCsvConfig {
     // AndroidGnssUtcGpsMapping is supplied.  The native entrypoint keeps this
     // false by default, so missing elapsed clocks remain fail-closed.
     bool allow_utc_wall_clock_fallback = false;
+    // Optional source-compatible correction for the all-blank UTC fallback
+    // branch.  This shifts only the UTC value passed through the validated
+    // UTC->GPS affine mapping; raw UTC keys and accel/gyro pairing clocks are
+    // never changed.  The native Phase197 lane supplies -20 ms.
+    bool apply_utc_wall_clock_fallback_offset = false;
+    std::int64_t utc_wall_clock_fallback_offset_ms = 0;
     double imu_sync_coefficient = 0.5;
 };
 
@@ -267,6 +273,12 @@ struct AndroidImuCsvLoadResult {
     bool gnss_elapsed_anchor_applied = false;
     // True only for the explicit raw-GNSS hardware-GPS/UTC affine fallback.
     bool utc_wall_clock_fallback_applied = false;
+    bool utc_wall_clock_fallback_offset_requested = false;
+    bool utc_wall_clock_fallback_offset_applied = false;
+    // Configured value is retained even when an elapsed-anchor path wins;
+    // effective value is zero unless the wall-clock fallback branch applies.
+    std::int64_t utc_wall_clock_fallback_offset_ms = 0;
+    std::int64_t utc_wall_clock_fallback_effective_offset_ms = 0;
     std::size_t utc_mapping_anchors = 0;
     double utc_mapping_slope_ns_per_ms = 0.0;
     double utc_mapping_drift_ppm = 0.0;

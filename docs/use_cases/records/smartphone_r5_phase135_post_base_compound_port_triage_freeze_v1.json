@@ -1,0 +1,248 @@
+{
+  "schema_version": "smartphone-r5-phase135-post-base-compound-port-triage-freeze.v1",
+  "phase": 135,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-one-compound-design-candidate",
+  "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+  "branch": "feat/rtk-smartphone-performance-pr",
+  "scope": "Read-only post-Phase126 raw-base compound-port triage; no implementation, raw input, solver, truth, MAT, PDC, precomputed-coordinate, accuracy, solution-row, or Kaggle execution",
+  "starting_state": {
+    "head": "156e650c414b01493c3bc7355448e1bd760b0ebf",
+    "worktree": "clean",
+    "audit_date": "2026-09-04",
+    "raw_phone_gnss_imu_nav_reads": 0,
+    "raw_base_reads": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase135_post_base_compound_port_triage_audit_v1.md",
+    "commit": "8e5fb88667e8c157ecad27e16d230a968760da8a",
+    "sha256": "359eabab3709f622a86779e26e2d1d01b8c6b4b2b1c2a3f4ace89fd5db46de24"
+  },
+  "sealed_context": {
+    "phase118": {
+      "commit": "6b37f92077a8ede43cb24e7a5cada580feccea5c",
+      "mtv_a_score_m": 1.002826677831249,
+      "lax_t_score_m": 0.6255696228129851,
+      "macro_score_m": 0.814198150322117,
+      "md_sha256": "698381199eaedc981172745bd42dc70c9c3afb8341401b1fc4c1783910aff5d6",
+      "json_sha256": "918597aab19f462a2aadfff606f461ce47f48f2fdcd997e5fdeb89ab459a0164"
+    },
+    "phase120": {
+      "commit": "7553328e90a80d2127f95b6d0c0bab02b1b78a3f",
+      "mtv_a_score_m": 1.0080567510569665,
+      "lax_t_score_m": 0.6260079250519545,
+      "macro_score_m": 0.8170323380544604,
+      "md_sha256": "d0007f446d89cc101dbfffa1ba6b2cbed9aced1220d05f0105778ae4b7d39acb",
+      "json_sha256": "608e5a1711c458240d4be7e481e93d8ba76d4d7677720f76033c9262d92a1dc2"
+    },
+    "phase134_structural": {
+      "commit": "f658d52ce666882c1516d9ede8d396885d8adbd6",
+      "json_sha256": "426adb4d951d226a4e99e36813e0873fd0b10ec47a6b62a10f2df4d67327f0fa",
+      "status": "go-phase134-native-summary-bridge-structural",
+      "route_order": ["MTV-A", "LAX-T"],
+      "native_return_codes": {"MTV-A": 0, "LAX-T": 0},
+      "main_iterations": {"MTV-A": 12, "LAX-T": 12}
+    },
+    "phase134_accuracy": {
+      "commit": "156e650c414b01493c3bc7355448e1bd760b0ebf",
+      "status": "no-go-phase134-truth-only-accuracy",
+      "mtv_a_score_m": 1.0130009613234514,
+      "lax_t_score_m": 0.6188718940067218,
+      "macro_score_m": 0.8159364276650867,
+      "strict_promotion_gate": "macro_score_m < 0.782",
+      "candidate_rows_interpreted_in_audit": 0,
+      "truth_rows_interpreted_in_audit": 0
+    }
+  },
+  "prior_audit_chain": [
+    {
+      "phase": 121,
+      "audit_commit": "f824879696920ab065fb3afab88f8cd8e2c93495",
+      "freeze_commit": "801db5381a6ed476fc83145db4358a0c5bdf2ce4",
+      "disposition": "NO-CANDIDATE for fixed-LOS TDCP alone; geometry, key, and Sagnac are coupled"
+    },
+    {
+      "phase": 122,
+      "audit_commit": "4480b05a2686353a72b523ea0b32cf9d4142296d",
+      "freeze_commit": "310b529d325b09d83a71214bff602db363d3c745",
+      "disposition": "NO-CANDIDATE for independent pseudorange weighting/robust change"
+    },
+    {
+      "phase": 123,
+      "audit_commit": "db4e23255529b6212f86f37409a1931d60641fcc",
+      "freeze_commit": "e1642294c53176326fd9d277cd5fa6172b49857d",
+      "disposition": "NO-CANDIDATE for Doppler-only parity; prepared geometry/Sagnac is coupled"
+    },
+    {
+      "phase": 124,
+      "audit_commit": "b0a0c161ef39791321429464d2dc6ac6f5968da2",
+      "freeze_commit": "59586b424341ec0e36c52c3b28a349a473b837f2",
+      "disposition": "NO-CANDIDATE for official ImuFactor/bias topology under the fixed native graph"
+    },
+    {
+      "phase": 125,
+      "audit_commit": "4ddfb4b757a44a9ef6864cb964ed5b65eb1f33a6",
+      "freeze_commit": "7d292931e5c70bede47701cf9c7a19a0d04b7e54",
+      "disposition": "NO-CANDIDATE for official motion topology; Phase126 raw-base compound boundary followed"
+    },
+    {
+      "phase": 126,
+      "audit_commit": "88f9af2c585647d261506aa118fc322438281cf7",
+      "freeze_commit": "583a6c7a4788f82373a4e71436d2953703bc764c",
+      "implementation_commit": "9e9972667ee009e1bcd0dd1ea4732ae45415c3ce",
+      "disposition": "source-complete raw-base compound operator; fixed prerequisite for this triage"
+    },
+    {
+      "phase": 132,
+      "audit_commit": "3b3c785f5a641bc3f2f49ff4e704f80b41a7ea06",
+      "implementation_commit": "4f546734771ac56d8342aadb88d6c36f454540fa",
+      "disposition": "typed canonical preflight and native resolver evidence boundary"
+    },
+    {
+      "phase": 133,
+      "audit_commit": "52d397880baea7854919d00bb69c39900af5b48d",
+      "freeze_commit": "8b1f75be0aaaadaedfffc5671be706dab1106043",
+      "implementation_commit": "f32e0132aa144cd583a93799f320779c9e399a76",
+      "disposition": "native selector ownership; unsupported Phase130 native argv excluded"
+    },
+    {
+      "phase": 134,
+      "audit_commit": "28301f56afb3a418b89252aa2106d2ffb329f61d",
+      "freeze_commit": "41a9fa8dd52878cd7992313f151014dc9cca0fd8",
+      "implementation_commit": "130a7f8f12e191cc12ebd0ff66ad591d732775f7",
+      "disposition": "native Phase131 summary diagnostics bridge only; no algorithm change"
+    }
+  ],
+  "candidate": {
+    "count": 1,
+    "id": "phase135-official-affine-measurement-family-sagnac-key-order-transactional-v1",
+    "selector": "--native-phase135-official-affine-measurement-family",
+    "status": "design-only-selected",
+    "source_backed": true,
+    "default_off": true,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "partial_selector_or_family_allowed": false,
+    "fallback_retry_rerun_allowed": false,
+    "selection_reason": "Official factor headers and scripts define the remaining coupled P/D/TDCP affine equations, keys, Jacobians, and Sagnac convention; current native P/TDCP are nonlinear endpoint factors and native Doppler geometry is prepared differently. The other requested candidates repeat closed NO-CANDIDATE findings or change output/priors without a source-complete attribution boundary.",
+    "scope": {
+      "routes_for_future_authorized_qualification": ["MTV-A", "LAX-T"],
+      "families": ["pseudorange", "ordinary_doppler", "ordinary_tdcp"],
+      "graphs": ["GNSS-first vector graph", "main Pose3+IMU graph"],
+      "geometry": "one immutable source-equivalent initial LOS/range/range-rate representation with exactly one Sagnac convention",
+      "measurement_inputs": "existing Phase118 measurement values and Phase126 raw-base/canonical correction ledgers remain unchanged",
+      "pixel5_tdcp_branch": "TDCPFactor_XXCC only; no D synthesis or ambiguity/DD state"
+    },
+    "equations": {
+      "pseudorange": {
+        "keys": ["X_i", "C_i"],
+        "state_dimensions": [3, 7],
+        "residual": "ell_i^T (x_i - x0_i) + h_s^T c_i - resPc_i",
+        "jacobian": "[ell_i^T, h_s^T]",
+        "units": "metres; C is metre-valued"
+      },
+      "doppler": {
+        "keys": ["V_i", "D_i"],
+        "state_dimensions": [3, 1],
+        "residual": "ell_i^T (v_i - v0_i) + d_i - resD_i",
+        "jacobian": "[ell_i^T, 1]",
+        "units": "metres/second; D is metre/second"
+      },
+      "ordinary_tdcp_xxcc": {
+        "keys": ["X_i", "X_i+1", "C_i", "C_i+1"],
+        "state_dimensions": [3, 3, 7, 7],
+        "residual": "ell_i^T ((x_i+1-x0_i+1) - (x_i-x0_i)) + h_0^T (c_i+1-c_i) - tdcp_i",
+        "jacobian": "[-ell_i^T, +ell_i^T, -h_0^T, +h_0^T]",
+        "units": "metres; tdcp is the existing fixed-sigma metre measurement"
+      }
+    },
+    "state_and_key_boundary": {
+      "gnss_first": "reuse in-memory X/V/C/D states and same-run initial values",
+      "main": "materialize official auxiliary X vector per epoch, bind Pose3 p to X with Pose3Point3Factor_PX, bind P/TDCP to X/C and D to existing V/D",
+      "clock_mapping": "reuse source C7 h mapping with C[0] plus mapped constellation component; no global ISB duplicate",
+      "handoff": "same-run position/velocity/C/D only; no saved or external coordinates"
+    },
+    "sagnac_boundary": {
+      "official": "geodist includes Sagnac for range; Gsat range-rate includes the explicit first-order term",
+      "native_current": "satellite state is earth-rotation corrected at build time and plainRange is used in factors",
+      "candidate_rule": "select exactly one source-equivalent representation in the candidate-local geometry adapter; never rotate and then add an unproved second Sagnac term"
+    },
+    "transactional_steps": [
+      {
+        "step": 1,
+        "name": "source_geometry_adapter",
+        "requirements": ["finite normalized LOS", "finite range/range-rate", "health/signal/time checks", "single Sagnac representation"]
+      },
+      {
+        "step": 2,
+        "name": "factor_key_adapter",
+        "requirements": ["insert complete P/D/TDCP family", "exact official key order/dimensions", "C7 mapping", "Pose3-X bridge", "one-to-one row/factor counts"]
+      },
+      {
+        "step": 3,
+        "name": "atomic_graph_admission",
+        "requirements": ["validate all family ledgers before optimizer", "validate fixed config and handoff", "expose no partial graph", "reject without native fallback"]
+      }
+    ],
+    "fixed_settings": [
+      "legacy/default and selector-off graph/factors/values are unchanged",
+      "Phase126/131/134 raw-base correction, canonical physical-band/GLONASS provenance, local miss, shared-ledger, and exactly-once rules",
+      "Phase118 fixed TDCP sigma 0.03 m and Highway Huber k 0.5; Phase117 dynamic sigma and Phase120 measurement toggle off",
+      "C7 seven-component metres, D metres/second, source CCDD equation and sigma 0.1 m",
+      "Phase99 MULTIFRONTAL_QR main solver; GNSS-first solver, ordering, LM schedule/damping/iterations, filters, and initialization",
+      "IMU/CombinedImuFactor, bias, motion, TDCP pair/slip/gap gates, output alignment, and Pixel5 final offset exactly once",
+      "no new global ISB, ambiguity/DD state, D synthesis, factor duplication, or route-specific tuning"
+    ],
+    "fail_closed": [
+      "missing or unsupported signal/C7 mapping",
+      "duplicate, reordered, dimension-mismatched, or nonfinite keys/values",
+      "zero/nonfinite range or LOS, unnormalized LOS, or unproven/double Sagnac",
+      "factor-family count or retained-row ledger mismatch",
+      "TDCP pair/order mismatch or unsupported Pixel5 XXCC mapping",
+      "Phase126 raw-base ledger drift, forbidden input lineage, solver/config/LM/QR drift",
+      "any partial family admission, native fallback, repair, retry, or rerun"
+    ]
+  },
+  "source_pins": {
+    "official_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "official": {
+      "fgo_gnss.m": {"sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3", "lines": "50-70,89-120,123-200"},
+      "fgo_gnss_imu.m": {"sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3", "lines": "63-106,129-143,169-221,252-323"},
+      "Gsat.m": {"sha256": "a56c323664660c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6", "lines": "259-306"},
+      "Gobs.m": {"sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88", "lines": "1151-1165"},
+      "geodist.m": {"sha256": "4ddced92aea78defd7eb8b2040dd23b1b0575eb0c1ac719a128c8db62ab4a91f", "lines": "1-20"},
+      "PseudorangeFactor_XC.h": {"sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415", "lines": "15-64"},
+      "DopplerFactor_VD.h": {"sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1", "lines": "15-54"},
+      "TDCPFactor_XXCC.h": {"sha256": "cc8f5acabd43db25b5b4aca48f6c8ae6a0e2a399820fb950de9004555c9cd4b2", "lines": "15-76"},
+      "Pose3Point3Factor_PX.h": {"sha256": "3893b16fe226fc253eafda16d634c0e229cb593373113f4de63cc66f47a1cb13", "lines": "17-47"}
+    },
+    "native": {
+      "fgo_gtsam_internal.hpp": {"sha256": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd", "lines": "2330-2352,2437-2477,2831-2875,3429-3500,3647-3679"},
+      "fgo_gtsam_backend.cpp": {"sha256": "c0da12d7a1d5eeb9492b02ad80f0e9868cbda32e452bbdd9c3f90cc57b4db0fa", "lines": "930-1000,1128-1252,1374-1516"},
+      "fgo_problems.cpp": {"sha256": "9f75eda838a6a885657fb78d038733d6e1e027794c869c7a26b2dd610ff96aaa", "lines": "518-567,624-781,790-842,1487-1615"},
+      "gnss_fgo_imu_no_base.cpp": {"sha256": "efddfed4104d71db3df13a9b4cd0240bd603e4c78a3be313750dfe96c9273769", "lines": "Phase126-134 selector/configuration and summary bridge boundary"}
+    }
+  },
+  "qualification_plan": {
+    "implementation_commit_required": true,
+    "focused_tests_required": ["factor equations/Jacobians/units/key order", "single-Sagnac geometry", "GNSS-first and Pose3-X bridge", "C7/D handoff", "factor-row conservation", "atomic failure/no fallback", "selector-off legacy invariance", "forbidden lineage"],
+    "target_build_required": true,
+    "launch_free_manifest_required": true,
+    "independent_raw_authorization_required": true,
+    "future_route_order": ["MTV-A", "LAX-T"],
+    "future_route_repetitions": 1,
+    "solution_policy": "opaque hash/row metadata only; no coordinate interpretation before a separate truth authorization",
+    "current_authorization": "none"
+  }
+}

@@ -1,12 +1,57 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/fusion/fusion_initialization.hpp>
+#include <libgnss++/fusion/relative_height_pairs.hpp>
 
 #include <cmath>
 #include <limits>
 
 namespace libgnss {
 namespace {
+
+TEST(RelativeHeightPairsTest, StrictBoundariesStopsAndSourceSamplingConvention) {
+    using namespace fusion_initialization;
+    std::vector<RelativeHeightSeed> seeds;
+    for (int i = 0; i < 12; ++i)
+        seeds.push_back({GNSSTime(2100, 500.0 + i * 0.5),
+                         Eigen::Vector3d(6378137, 0, 0),
+                         Eigen::Vector3d(10, 0, 0), false});
+    const auto pairs = selectSourceSampleSumRelativeHeightPairs(seeds);
+    ASSERT_EQ(pairs.size(), 1u);
+    EXPECT_EQ(pairs.front(), std::make_pair(std::size_t(0), std::size_t(11)));
+    // 110 speed-samples, only 55 metres under constant-speed integration.
+    seeds[11].time = GNSSTime(2100, 520.0);
+    EXPECT_EQ(selectSourceSampleSumRelativeHeightPairs(seeds), pairs);
+    seeds[11].position_ecef.y() = 15.0;
+    EXPECT_TRUE(selectSourceSampleSumRelativeHeightPairs(seeds).empty());
+    seeds[11].position_ecef.y() = 14.999;
+    EXPECT_EQ(selectSourceSampleSumRelativeHeightPairs(seeds), pairs);
+    seeds[0].stopped = true;
+    EXPECT_TRUE(selectSourceSampleSumRelativeHeightPairs(seeds).empty());
+    seeds[0].stopped = false;
+    seeds[11].stopped = true;
+    EXPECT_TRUE(selectSourceSampleSumRelativeHeightPairs(seeds).empty());
+}
+
+TEST(RelativeHeightPairsTest, RejectsInvalidInputsAndKeepsDeterministicUniqueOrder) {
+    using namespace fusion_initialization;
+    std::vector<RelativeHeightSeed> seeds;
+    EXPECT_TRUE(selectSourceSampleSumRelativeHeightPairs(seeds).empty());
+    for (int i = 0; i < 3; ++i)
+        seeds.push_back({GNSSTime(2100, 500.0 + i), Eigen::Vector3d::Zero(),
+                         Eigen::Vector3d(101, 0, 0), false});
+    const std::vector<std::pair<std::size_t, std::size_t>> expected{{0,1},{0,2},{1,2}};
+    EXPECT_EQ(selectSourceSampleSumRelativeHeightPairs(seeds), expected);
+    EXPECT_THROW(selectSourceSampleSumRelativeHeightPairs(seeds, 0), std::invalid_argument);
+    seeds[1].time = seeds[0].time;
+    EXPECT_THROW(selectSourceSampleSumRelativeHeightPairs(seeds), std::invalid_argument);
+    seeds[1].time = GNSSTime(2100, 501.0);
+    seeds[2].velocity_nav.x() = std::numeric_limits<double>::infinity();
+    EXPECT_THROW(selectSourceSampleSumRelativeHeightPairs(seeds), std::invalid_argument);
+    seeds[2].velocity_nav.setZero();
+    seeds[2].position_ecef.z() = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_THROW(selectSourceSampleSumRelativeHeightPairs(seeds), std::invalid_argument);
+}
 
 std::vector<ImuSample> makeStationaryWindow(const Eigen::Vector3d& up_body_true,
                                             const Eigen::Vector3d& accel_bias_true,
@@ -153,6 +198,27 @@ TEST(FusionInitializationTest, VelocityToRpyLinearFillsInteriorAndNearestFillsEn
     EXPECT_NEAR(result.rpy_rad[0].z(), M_PI, 1e-12);
     EXPECT_NEAR(result.rpy_rad[2].z(), -3.0 * M_PI / 4.0, 1e-12);
     EXPECT_NEAR(result.rpy_rad[4].z(), -M_PI / 2.0, 1e-12);
+}
+
+TEST(FusionInitializationTest, VelocityToRpyNearestInteriorIsExplicitAndKeepsLegacyDefault) {
+    fusion_initialization::VelocityHeadingConfig config;
+    config.smooth_window = 1;
+    EXPECT_FALSE(config.nearest_fill_interior);
+    config.nearest_fill_interior = true;
+    const std::vector<Eigen::Vector3d> velocities = {
+        Eigen::Vector3d(2.0, 0.0, 0.0), Eigen::Vector3d::Zero(),
+        Eigen::Vector3d::Zero(), Eigen::Vector3d(0.0, 2.0, 0.0)};
+    const auto result = fusion_initialization::velocityToRpy(velocities, config);
+    ASSERT_TRUE(result.ok);
+    EXPECT_EQ(result.nearest_fill_count, 2U);
+    EXPECT_EQ(result.linear_fill_count, 0U);
+    EXPECT_NEAR(result.rpy_rad[1].z(), M_PI, 1e-12);
+    EXPECT_NEAR(result.rpy_rad[2].z(), -M_PI / 2.0, 1e-12);
+    config.nearest_fill_interior = false;
+    const auto legacy = fusion_initialization::velocityToRpy(velocities, config);
+    ASSERT_TRUE(legacy.ok);
+    EXPECT_EQ(legacy.linear_fill_count, 2U);
+    EXPECT_NEAR(legacy.rpy_rad[1].z(), -5.0 * M_PI / 6.0, 1e-12);
 }
 
 TEST(FusionInitializationTest, VelocityToRpyInterpolatesRawCourseAcrossBranchBeforeWrap) {

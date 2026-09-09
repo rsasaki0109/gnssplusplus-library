@@ -22,6 +22,10 @@
 namespace libgnss::io {
 
 struct AndroidRawGnssConfig {
+    // Research paired-TDCP lane: enforce zero explicit TimeOffsetNanos and
+    // common receiver clock fields within GPS/Galileo satellite/UTC groups.
+    // Default OFF does not change legacy ingestion or measurement selection.
+    bool require_frequency_pair_timing = false;
     /// Optional device name used only for the published ADR sign correction.
     std::string device_model;
     /// Retain the L1 observations used by taroz's FGO mapping when true.
@@ -180,7 +184,8 @@ bool alignAndroidRawGnssSolutionsToUtcKeys(
     const std::vector<AndroidRawGnssSolutionPoint>& solutions,
     double solution_time_tolerance_ms,
     AndroidRawGnssEpochAlignment& alignment,
-    std::string& error);
+    std::string& error,
+    bool include_first_native_epoch = false);
 
 /**
  * @brief Load raw Android ``device_gnss.csv`` rows.

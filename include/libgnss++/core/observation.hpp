@@ -30,6 +30,10 @@ struct Observation {
     // source-exact one-sigma range uncertainty [m].  Non-Android/RINEX rows
     // and missing/non-finite/non-positive source values leave this unset.
     double received_sv_time_uncertainty_m = 0.0;
+    // Optional Android ADR uncertainty in metres, retained verbatim when
+    // finite and positive. Metadata only; does not change admission/weights.
+    // Availability does not imply a valid, continuous or slip-free carrier.
+    double source_adr_uncertainty_m = 0.0;
     double snr = 0.0;               ///< Signal-to-noise ratio in dB-Hz
     std::string pseudorange_observation_type;   ///< RINEX code observation type, e.g. C1C
     std::string carrier_phase_observation_type; ///< RINEX carrier observation type, e.g. L1C
@@ -41,6 +45,7 @@ struct Observation {
     bool has_pseudorange_rate_mps = false; ///< Source raw-rate diagnostic
     bool has_source_carrier_frequency_hz = false; ///< Source frequency diagnostic
     bool has_received_sv_time_uncertainty_m = false;
+    bool has_source_adr_uncertainty_m = false;
 
     // Raw Android quality provenance retained for truth-free row-attrition
     // audits.  These fields are metadata only; estimator code continues to
@@ -48,6 +53,8 @@ struct Observation {
     std::size_t raw_row_index = std::numeric_limits<std::size_t>::max();
     bool raw_snr_masked = false;
     bool raw_multipath_masked = false;
+    // Same-invocation temporal diagnostic only; never an admission flag.
+    bool native_code_edge_diagnostic_candidate = false;
     bool raw_code_masked = false;
     bool raw_doppler_masked = false;
 
@@ -92,6 +99,13 @@ public:
     // coordinate or silently treating a bias [s] as a drift [m/s].
     double receiver_clock_drift_mps =
         std::numeric_limits<double>::quiet_NaN();
+    // Immutable identity assigned by the raw Android staging boundary.  These
+    // fields are deliberately metadata, not estimator inputs: they let a
+    // retained FGO epoch point back to the exact source UTC row after normal
+    // seed/measurement filtering.  Non-Android/RINEX callers leave the
+    // sentinel values in place.
+    std::size_t raw_source_index = std::numeric_limits<std::size_t>::max();
+    std::int64_t raw_utc_time_millis = -1;
     
     std::vector<Observation> observations;
 
@@ -222,6 +236,8 @@ public:
         receiver_position.setZero();
         receiver_clock_bias = 0.0;
         receiver_clock_drift_mps = std::numeric_limits<double>::quiet_NaN();
+        raw_source_index = std::numeric_limits<std::size_t>::max();
+        raw_utc_time_millis = -1;
     }
     
     /**

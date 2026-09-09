@@ -1,0 +1,204 @@
+{
+  "schema_version": "smartphone-r5-phase138-affine-tdcp-structural-raw-authorization.v1",
+  "phase": 138,
+  "phase139_wrapper_schema": true,
+  "execution_label": "Luna Max",
+  "status": "independent-one-shot-structural-raw-authorized",
+  "authorization": {
+    "implementation": true,
+    "contract": true,
+    "raw_materialization": true,
+    "raw_structural_execution": true,
+    "solver": true,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "sweep": false
+  },
+  "authorization_scope": {
+    "candidate_id": "phase138-affine-tdcp-anchor-range-constant-v1",
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0,
+    "solver_invocation_policy": "one only after that route raw hash preflight passes",
+    "solution_policy": "opaque SHA-256/byte/newline metadata only; no coordinate interpretation"
+  },
+  "pins": {
+    "phase139_audit_commit": "5b1d03ea255f24a57208e1bd9f17f50e345483de",
+    "phase139_freeze_commit": "e20e3891d68dcadc2ef3f2b2ac5e9a315de73eb8",
+    "phase139_implementation_commit": "7c2634821b0584ef3f6a9f2847c69b9201938275",
+    "phase139_manifest_commit": "13eb9cb2db98518836e2e52cc6699c0e3f57d95e",
+    "phase139_pre_raw_commit": "ff7762799e6f74aeb2e4e0c008b87547cc29f7ac",
+    "phase138_implementation_commit": "c5783d7e323b0c4593958a4e210284cf9f9fc726",
+    "phase139_audit_sha256": "a1f6db77375194f54efd2b1564544601868e687943e776c9ca900494b05a501f",
+    "phase139_freeze_sha256": "e3d516a6bb620ef8b0b0a70555059f887a76855d96db2fbf6795cbe7e29bd20c",
+    "phase139_manifest_sha256": "cfe647d3d49ba103ef9334946547de5d1cbba5270eb57be045ee64cfa31b6e42",
+    "phase139_pre_raw_sha256": "1dd4fdd9be9e1e88d52eea8060ebf38539ac8fd6a4bd3890e60935f743d46347",
+    "phase139_wrapper_path": "apps/commands/benchmarks/gnss_smartphone_phase138_affine_tdcp_structural_authorized_execute.py",
+    "phase139_wrapper_sha256": "5ac690c15261d6e7c11dde0075963eee2e0d6098249f924c027b1d95a8bd590b",
+    "phase139_focused_test_path": "tests/test_smartphone_phase139_wrapper_schema.py",
+    "phase139_focused_test_sha256": "ce4a912f5eb225ff349cf550d31d97a0504e4ea889c52848cfa18a5216a2a988",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase139_affine_tdcp_structural_authorized_execute.py",
+    "authorized_runner_sha256": "486a3f00d89ac031a3e483d956e2b76e52b347a0d59abd7ba13a0bc5c87ce6ce",
+    "phase138_target_binary_sha256": "eff11f69f3fbe36e0e71aa52682c7f46f6aca072c179d6a3d75129301c725e24"
+  },
+  "recipe": {
+    "phase135_official_affine_measurement_family": true,
+    "phase138_affine_tdcp_anchor_range_constant": true,
+    "phase118_official_tdcp_huber_k": true,
+    "phase117_dynamic_tdcp_sigma": false,
+    "phase120_official_tdcp_resl_atmosphere_cancellation": false,
+    "phase126_raw_base_source_complete": false,
+    "phase127_glonass_channel_provenance": false,
+    "phase128_glonass_provenance_parser_admission": false,
+    "phase129_glonass_local_miss_mask": false,
+    "phase130_shared_ledger_key_local_support": false,
+    "phase131_canonical_correction_band_key": false,
+    "phase132_typed_canonical_preflight": false,
+    "phase133_runner_native_selector_boundary": false,
+    "phase134_native_summary_bridge": false,
+    "phase107_raw_base_compensation": true,
+    "phase107_raw_base_source_miss_mask": true,
+    "phase107_preserve_additional_frequency_bands": false,
+    "phase118_fixed_tdcp_sigma_m": 0.03,
+    "phase118_highway_huber_k": 0.5,
+    "main_linear_solver": "MULTIFRONTAL_QR",
+    "main_elimination": "EliminateQR",
+    "c7_dimension": 7,
+    "c_units": "metres",
+    "d_units": "metres/second",
+    "pixel5_offset_applications": 1
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "bytes": 10708536,
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "interval_s": 1.0,
+        "moving_mean_samples": 151,
+        "source": "raw base RINEX; station coordinate from header only",
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "output_directory": "output/smartphone-r5/phase138-affine-tdcp-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5"
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "source": "sealed raw-only input lineage",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "bytes": 719969,
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "interval_s": 15.0,
+        "moving_mean_samples": 11,
+        "source": "raw base RINEX; station coordinate from header only",
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "output_directory": "output/smartphone-r5/phase138-affine-tdcp-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5"
+    }
+  ],
+  "pre_authorization_read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "native_command_constructions": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "forbidden": {
+    "truth": true,
+    "MAT": true,
+    "PDC": true,
+    "precomputed_coordinates": true,
+    "accuracy": true,
+    "Kaggle": true,
+    "solution_publication": true
+  },
+  "post_authorization_policy": {
+    "raw_hash_read_per_route": 1,
+    "native_solver_invocations_per_route": 1,
+    "route_order": "MTV-A then LAX-T",
+    "copy_or_transform": false,
+    "truth_reads": 0,
+    "solution_coordinate_interpretation": false,
+    "failure_policy": "fail closed; no rerun/fallback/repair/sweep"
+  }
+}

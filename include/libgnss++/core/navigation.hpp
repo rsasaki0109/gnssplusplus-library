@@ -114,6 +114,16 @@ struct Ephemeris {
     Vector3d glonass_velocity = Vector3d::Zero();
     Vector3d glonass_acceleration = Vector3d::Zero();
     int glonass_frequency_channel = 0;
+    // A zero FCN is a valid GLONASS channel.  Keep an explicit source
+    // presence bit so strict provenance adapters do not confuse an omitted
+    // RINEX/RTCM field with a genuine channel zero.
+    bool glonass_frequency_channel_present = false;
+    // Phase128 parser provenance.  This is metadata only and defaults to
+    // valid for programmatically constructed/non-RINEX ephemerides so the
+    // legacy path is unchanged.  The RINEX reader sets it false when the
+    // canonical fifteen-field GLONASS record cannot be admitted.
+    bool glonass_canonical_geph_data_valid = true;
+    int glonass_canonical_geph_reject_reason = 0;
     int glonass_age = 0;
     
     // Status and accuracy

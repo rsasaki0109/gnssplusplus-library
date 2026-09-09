@@ -1,0 +1,117 @@
+{
+  "schema_version": "smartphone-r5-phase144-telemetry-serializer-freeze.v1",
+  "phase": 144,
+  "execution_label": "Luna Max",
+  "status": "sealed-telemetry-only-candidate",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_audit_v1.md",
+    "commit": "0f49224d2ca79f2f24b8b28b20abb0937879753f",
+    "sha256": "135f57eff3afaa27eb55e7f26cdf42f5983b279236bfad0f259a5b5baf616a87"
+  },
+  "candidate": {
+    "count": 1,
+    "id": "phase144-telemetry-serializer-canonical-summary-v1",
+    "selector": "--native-phase144-telemetry-schema",
+    "default_off": true,
+    "partial_selector_set_allowed": false,
+    "telemetry_only": true,
+    "algorithm_changed": false,
+    "graph_changed": false,
+    "factor_topology_changed": false,
+    "equation_evaluation_changed": false,
+    "unit_sigma_filter_lm_changed": false,
+    "initialization_changed": false,
+    "output_solution_rows_changed": false,
+    "solution_or_accuracy_fields": false,
+    "historical_result_mutated": false
+  },
+  "required_recipe": {
+    "phase135_official_affine_measurement_family": true,
+    "phase138_affine_tdcp_anchor_range_constant": true,
+    "phase118_official_tdcp_huber_k": true,
+    "phase143_official_main_lm_termination_budget": true,
+    "phase107_raw_base_compensation": true,
+    "phase107_raw_base_source_miss_mask": true,
+    "phase117_dynamic_tdcp_sigma": false,
+    "phase120_official_tdcp_resl_atmosphere_cancellation": false,
+    "phase126_through_phase134": false,
+    "phase107_preserve_additional_frequency_bands": false
+  },
+  "canonical_equation": {
+    "semantic_id": "phase138-affine-tdcp-anchor-range-constant-v1",
+    "representation": "full-assignment",
+    "display_expression": "tdcp_phase138 = tdcp_native - (rho_current_initial - rho_previous_initial)",
+    "ast": {
+      "kind": "assign",
+      "lhs": "tdcp_phase138",
+      "rhs": {
+        "kind": "sub",
+        "left": "tdcp_native",
+        "right": {
+          "kind": "sub",
+          "left": "rho_current_initial",
+          "right": "rho_previous_initial"
+        }
+      }
+    },
+    "token_tuple": [
+      "ASSIGN",
+      "tdcp_phase138",
+      "SUB",
+      "GROUP_OPEN",
+      "tdcp_native",
+      "SUB",
+      "GROUP_OPEN",
+      "rho_current_initial",
+      "SUB",
+      "rho_previous_initial",
+      "GROUP_CLOSE",
+      "GROUP_CLOSE"
+    ],
+    "rhs_only_token_tuple": [
+      "tdcp_native",
+      "SUB",
+      "GROUP_OPEN",
+      "rho_current_initial",
+      "SUB",
+      "rho_previous_initial",
+      "GROUP_CLOSE"
+    ],
+    "whitespace_normalization_only": true
+  },
+  "authoritative_fields": {
+    "failure_policy": "one failure plus optional handoff_failure per object; no duplicate key",
+    "gnss_first_and_main_attempted_accepted": true,
+    "gnss_first_and_main_costs": true,
+    "solver_and_elimination": true,
+    "factor_family_counts": true,
+    "bridge_and_c7_d": true,
+    "base_and_offset": true,
+    "phase143_termination_sidecar": true,
+    "all_values_copied_once_from_native_reports": true,
+    "wrapper_inference": false,
+    "wrapper_overwrite": false
+  },
+  "failure_closed": {
+    "duplicate_json_key": true,
+    "missing_required_field": true,
+    "misnamed_required_field": true,
+    "wrong_equation_display": true,
+    "wrong_equation_ast": true,
+    "wrong_equation_tokens": true,
+    "nonfinite_numeric_telemetry": true,
+    "solution_or_accuracy_field": true
+  },
+  "authorization_boundary": {
+    "implementation_commit_before_runner": true,
+    "launch_free_qualification_required": true,
+    "new_independent_raw_authorization_required": true,
+    "raw_reads_before_authorization": 0,
+    "solver_invocations_before_authorization": 0,
+    "truth_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_evaluation": false,
+    "kaggle_access": false,
+    "rerun_fallback_repair": false
+  }
+}

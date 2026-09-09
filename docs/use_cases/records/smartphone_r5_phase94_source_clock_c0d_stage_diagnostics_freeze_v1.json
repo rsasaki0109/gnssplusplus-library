@@ -1,0 +1,248 @@
+{
+  "schema_version": "smartphone-r5-phase94-source-clock-c0d-stage-diagnostics-freeze.v1",
+  "phase": 94,
+  "status": "frozen-after-read-only-root-cause-audit",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one source-aligned diagnostic candidate after the Phase94 read-only audit. The candidate exposes the first failing stage and each structural subpredicate without changing the C0/D graph, observation admission, solver settings, or fallback policy.",
+  "authority": {
+    "phase94_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase94_source_clock_c0d_root_cause_audit_v1.md",
+      "sha256": "97d1900da9ac202737b35dd94254ae0797275105c13d9ce7302e9e08ff718393",
+      "commit": "e2c9b7b",
+      "status": "sealed-read-only-source-and-artifact-audit"
+    },
+    "phase93_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_structural_result_v1.json",
+      "sha256": "cc5eb2a56ee4239a9e25eca04d4573fd8fcfc0cc071f0cb3a507f33ba7f1ca59",
+      "commit": "71f05e4",
+      "status": "sealed-no-go-structural-result"
+    },
+    "phase93_runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase93_source_staging_clock_state_handoff_execute.py",
+      "sha256": "96f841081788de1c3b7aea1b7983ff5f77bbf04a6cc69e63264e822791d9a920",
+      "commit": "b2a5d47"
+    },
+    "phase93_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase93_source_staging_clock_state_handoff.py",
+      "sha256": "0bf2113fc484a72e7bcea2765381ded93fa8df930c5f95e1585fc03c2185f3ed"
+    },
+    "phase93_implementation": {
+      "commit": "2613adb12fba80c468f8c6945ba360a126129f58",
+      "binary_sha256": "99bdb24a06f6056eebd4dd0ceb969e4d7e14095ff7d9802c89676221a2232a82"
+    },
+    "phase93_source_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_freeze_v1.json",
+      "sha256": "34ca3a2c6beecdb912aed81c469eca8a45d32e80bad69e9fc5fa12ea1b49ab88"
+    },
+    "phase93_execution_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_execution_freeze_v1.json",
+      "sha256": "6893bf21496b2ecf3afbe43ad94fc4cde81a84a2ac03b47fb08ef30a13047f55"
+    },
+    "phase93_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_execution_manifest_v1.json",
+      "sha256": "f5ef7cc946e1ef875a30546f32cee9d04a2aa82471f92767ab4935652cec4277"
+    },
+    "phase93_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_raw_execution_authorization_v1.json",
+      "sha256": "9fa6862a61f36760b7ccedaf993ce7409c88439eb7de6e7ec5f8b88e2c0523e0"
+    },
+    "phase92_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_structural_result_v1.json",
+      "sha256": "8488306b3ec61d0360418de73fa1596271597b6971d77de676fcd279d7e1b01c",
+      "status": "sealed-no-go-input"
+    },
+    "phase92_alignment_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_phase91_alignment_and_clock_isb_unit_audit_v1.md",
+      "sha256": "45b15439063eaa823f786df15155c83b92e65939812e1d18698cf1812d0f5271"
+    },
+    "phase80_structural_evidence": {
+      "path": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/phase80_direct_observable_quality_structural_failure.json",
+      "sha256": "767ef5f7089e535063ec6cbe4e9dc3e6d061bdab62eb521f794c3fab0b171903",
+      "status": "sealed-historical-structural-evidence-only"
+    }
+  },
+  "audit_conclusions": {
+    "route2": {
+      "observed": "runtime C0/D backend admission exception with return code -6",
+      "first_optimizer_stage": "GNSS-first Point3 plus velocity call",
+      "static_configuration_rejected": false,
+      "remaining_data_dependent_guard_disjuncts": [
+        "gnss_first_problem.undifferenced_doppler_factors.empty()",
+        "gnss_first_problem.epochs.size() < 2"
+      ],
+      "exact_disjunct_published": false,
+      "leading_hypothesis": "empty retained undifferenced-D population after direct-quality/geometry/epoch filtering",
+      "hypothesis_status": "not-proven; no raw reopen authorized"
+    },
+    "routes_1_3_4": {
+      "observed": "main Phase93 optimized-D/progress fail-closed line",
+      "gnss_first_handoff_reached": true,
+      "gnss_first_handoff_basis": "later line is unreachable when exact-key validation, GNSS-first C0/D strict progress, optimized-D export, or velocity derivation fails",
+      "main_result_reached": true,
+      "main_result_basis": "later line is unreachable when result is empty, non-converged, or has zero IMU intervals",
+      "known_first_failure": "main accepted_outer_iterations == 0 and final_cost == initial_cost",
+      "route4_position_clock_inner_disjunct": "not distinguishable from sealed failure line"
+    },
+    "telemetry": {
+      "all_routes_n_a_reason": "route2 throws before FGOResult/report serialization; routes1/3/4 return before output and makeSummary; runner parses summaries only after zero return",
+      "summary_publication_reached": false
+    }
+  },
+  "candidates_considered": [
+    {
+      "id": "phase94_source_clock_c0d_stage_admission_and_failure_telemetry",
+      "decision": "freeze",
+      "reason": "Directly resolves the sealed evidence gap while preserving the graph and fail-closed semantics."
+    },
+    {
+      "id": "phase94_sparse_epoch_or_direct_d_screen_change",
+      "decision": "reject",
+      "reason": "Changes observation admission before the exact route2 guard disjunct is known; no sealed proof supports it as the source-exact fix."
+    },
+    {
+      "id": "phase94_solver_sigma_lambda_or_fallback_change",
+      "decision": "reject",
+      "reason": "No evidence supports tuning or a bypass; it conflicts with the frozen no-tuning, no-PDC, and fail-closed contract."
+    }
+  ],
+  "candidate": {
+    "exactly_one": true,
+    "id": "phase94_source_clock_c0d_stage_admission_and_failure_telemetry",
+    "kind": "source-aligned-diagnostic-only",
+    "status": "frozen-not-implemented",
+    "selector": "--native-source-clock-c0d-phase94-stage-diagnostics",
+    "selector_implemented": false,
+    "requires_phase93_selector": "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "default_off": true,
+    "implementation_authorized_for_next_separate_change": true,
+    "implementation_started_at_freeze": false,
+    "raw_execution_authorized": false,
+    "native_solver_invocations_at_freeze": 0,
+    "accuracy_scored": false,
+    "promotion_authorized": false,
+    "submission_release_authorized": false,
+    "controls": 0,
+    "runs_per_route": 1,
+    "legacy": {
+      "selector_absent_behavior": "unchanged",
+      "default_graph_unchanged": true,
+      "default_observation_admission_unchanged": true,
+      "default_optimizer_unchanged": true
+    },
+    "diagnostic_scope": {
+      "stage_order": ["problem-build", "gnss-first-preflight", "gnss-first-optimize", "exact-key-handoff", "imu-build", "main-preflight", "main-optimize", "coverage-contract"],
+      "gnss_first_preflight": [
+        "retained_problem_epoch_count",
+        "retained_undifferenced_doppler_factor_count",
+        "num_epochs_ge_two",
+        "direct_quality_enabled",
+        "undifferenced_doppler_enabled",
+        "motion_factors_enabled",
+        "clock_motion_factors_enabled",
+        "pdc_bridge_disabled",
+        "fixed_lag_disabled",
+        "phone_identity_present",
+        "backend_configuration_allowed",
+        "source_clock_c0d_problem_path"
+      ],
+      "runtime_guard_reporting": {
+        "catch_only_gnss_first_backend_exception": true,
+        "record_exception_type_and_message": true,
+        "classify_only_known_guard_disjuncts": true,
+        "unknown_guard_reason_is_fail_closed": true,
+        "fallback_or_guard_bypass": false,
+        "main_optimizer_called_after_gnss_first_guard_failure": false
+      },
+      "gnss_first_telemetry": [
+        "converged",
+        "epochs",
+        "undifferenced_doppler_factors",
+        "iterations",
+        "initial_cost",
+        "final_cost",
+        "c0d_factor_count",
+        "c0d_accepted_outer_iterations",
+        "c0d_active_solve_finite_costs",
+        "optimized_D_epoch_count",
+        "optimized_D_finite_count",
+        "optimized_D_nonfinite_count",
+        "exact_retained_key_alignment"
+      ],
+      "main_subpredicates": [
+        "optimized_D_size_matches_problem_epochs",
+        "optimized_D_all_finite",
+        "solution_size_matches_problem_epochs",
+        "all_positions_earth_valid",
+        "all_receiver_clocks_finite",
+        "velocity_size_matches_problem_epochs",
+        "all_velocities_finite",
+        "c0d_factor_enabled",
+        "meter_state_parity_enabled",
+        "c0d_factor_count_positive",
+        "active_solve_attempted",
+        "accepted_outer_iterations_positive",
+        "active_solve_costs_finite",
+        "final_cost_strictly_less_than_initial"
+      ],
+      "failure_artifact": {
+        "raw_free": true,
+        "stage_local": true,
+        "published_on_fail_closed": true,
+        "does_not_publish_submission_output_on_failed_contract": true,
+        "does_not_read_or_hash_forbidden_artifacts": true
+      }
+    },
+    "source_contract_unchanged": {
+      "c0d_equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "c0d_jacobian_order": ["C1", "C2", "D1", "D2"],
+      "c0d_jacobian": "[-1,+1,-dt/2,-dt/2]",
+      "clock_C_and_isb_unit": "metres",
+      "drift_D_unit": "metres_per_second",
+      "dt_unit": "seconds",
+      "residual_unit": "metres",
+      "ordinary_sigma_m": 0.1,
+      "sigma_tuning": false,
+      "lm_tuning": false,
+      "observation_filter_change": false,
+      "sparse_epoch_retention_change": false,
+      "pdc_or_external_coordinate_bridge": false,
+      "raw_or_zero_D_fallback": false,
+      "interpolation_or_padding": false
+    },
+    "required_future_qualification": {
+      "synthetic_preflight_tests": true,
+      "synthetic_exception_branch_tests": true,
+      "synthetic_main_coverage_subpredicate_tests": true,
+      "legacy_selector_off_regression": true,
+      "no_forbidden_input_or_accuracy_lane_test": true,
+      "full_cpp_suite_before_any_raw_authorization": true,
+      "separate_raw_authorization_required": true
+    }
+  },
+  "execution_boundary": {
+    "this_freeze_is_pre_raw": true,
+    "raw_execution_authorized": false,
+    "raw_execution_performed": false,
+    "accuracy_evaluation_authorized": false,
+    "truth_evaluation_authorized": false,
+    "submission_release_authorized": false,
+    "next_boundary": "separate implementation commit, focused/synthetic tests, and a new explicit raw authorization if execution is later requested"
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "raw_input_hash_reads": 0,
+    "source_text_reads": true,
+    "sealed_artifact_reads": true
+  }
+}

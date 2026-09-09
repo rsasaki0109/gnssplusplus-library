@@ -1,12 +1,35 @@
 #pragma once
 
 #include <vector>
+#include <cstddef>
 #include <string>
 #include <chrono>
 #include <limits>
 #include "types.hpp"
 
 namespace libgnss {
+
+/**
+ * @brief Source identity for one native SPP measurement row.
+ *
+ * This is metadata only.  It lets downstream diagnostics distinguish
+ * repeated satellite observations (for example separate signals or an
+ * ionosphere-free pair) when native quality control returns a reduced row
+ * set.
+ */
+struct SolutionMeasurementIdentity {
+    SatelliteId satellite;
+    SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+    std::size_t input_row_index = std::numeric_limits<std::size_t>::max();
+    std::size_t secondary_input_row_index =
+        std::numeric_limits<std::size_t>::max();
+    bool ionosphere_free = false;
+    // Native SPP's actual design-column group and base inverse variance for
+    // this final row.  These remain metadata only; robust iteration factors
+    // are intentionally not implied by this base weight.
+    GNSSSystem clock_group = GNSSSystem::UNKNOWN;
+    double weight = std::numeric_limits<double>::quiet_NaN();
+};
 
 /**
  * @brief Single position solution
@@ -106,6 +129,10 @@ struct PositionSolution {
     std::vector<SatelliteId> satellites_used;
     std::vector<double> satellite_elevations;
     std::vector<double> satellite_residuals;
+    // Exact source identity for the rows represented by satellites_used.
+    // Unlike satellites_used alone, this remains unambiguous when repeated
+    // satellite observations/signals are present.
+    std::vector<SolutionMeasurementIdentity> spp_used_measurements;
     
     /**
      * @brief Check if solution is valid

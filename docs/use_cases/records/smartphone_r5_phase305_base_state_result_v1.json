@@ -1,0 +1,9 @@
+{
+  "epochs": 3500,
+  "successful_epochs": 3500,
+  "states_in_successful_epochs": 68697,
+  "nonzero_health_states": 0,
+  "failures": {},
+  "phase": 305,
+  "complete_epoch_count": true
+}

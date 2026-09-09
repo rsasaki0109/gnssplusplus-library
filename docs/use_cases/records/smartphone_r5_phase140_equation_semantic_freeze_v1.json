@@ -1,0 +1,184 @@
+{
+  "schema_version": "smartphone-r5-phase140-equation-semantic-freeze.v1",
+  "phase": 140,
+  "execution_label": "Luna Max",
+  "status": "sealed-metadata-only-revalidation-design",
+  "scope": "Read-only semantic equation audit and post-run structural revalidation design; no algorithm, configuration, raw input, solver, truth, solution-coordinate, MAT/PDC/precomputed-coordinate, accuracy, or Kaggle execution is authorized.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase140_equation_semantic_audit_v1.md",
+    "commit": "5bcd50a25d9b45612805a78b6a54f09719394fff",
+    "sha256": "2c9a0c066ea0b5944b801d14fed0b4ea4fe845724f58e6829b11ad3de97ca19a"
+  },
+  "sealed_result": {
+    "commit": "02b3c3042e131e0c08403be738e76050f8b887c4",
+    "json_path": "docs/use_cases/records/smartphone_r5_phase139_affine_tdcp_structural_raw_result_v1.json",
+    "json_sha256": "a772fe23935376cddb95f4e0c6cc1ec8954bf9c875f5577504ed84179004a748",
+    "sidecar_path": "docs/use_cases/records/smartphone_r5_phase139_affine_tdcp_structural_raw_result_v1.md",
+    "sidecar_sha256": "8533f455888f8a09a1129aca6df1a0efcf03e127709db9bbe0834413b978a153",
+    "historical_status": "NO-GO; immutable; no re-run or repair",
+    "native_summary_sha256": {
+      "MTV-A": "7a84d6aa4ea25faf1560f15813c894db3e75c858fde36b0588ae851129540ec6",
+      "LAX-T": "4c6f6f4a221ccbcd9146cc6236d2c20491e03daad01338c4a5268d051d6ba727"
+    }
+  },
+  "source_pins": {
+    "phase138_freeze_commit": "f1f5fef2ae0ccdcbae94be86e6af813b65ec499b",
+    "phase138_implementation_commit": "c5783d7e323b0c4593958a4e210284cf9f9fc726",
+    "phase139_validator_fix_commit": "7c2634821b0584ef3f6a9f2847c69b9201938275",
+    "tdcp_contract_path": "include/libgnss++/algorithms/tdcp_contract.hpp",
+    "tdcp_contract_sha256": "f4423e1944fd58f28ad779fa6a6ba87919e358360cdf1ddda59b0af20a954d57",
+    "native_fgo_path": "src/algorithms/fgo.cpp",
+    "native_fgo_sha256": "231f57ccfa21dc19d1c2f65addce182da453626cba92587471a85f2ded198173",
+    "native_backend_path": "src/algorithms/fgo_gtsam_backend.cpp",
+    "native_backend_sha256": "7f13cbd722b93842f0923abfc45affe60015aae3d9639c6813e496935cede945",
+    "structural_validator_path": "apps/commands/benchmarks/gnss_smartphone_phase138_affine_tdcp_structural.py",
+    "structural_validator_sha256": "cf14981e58250e362d1e2d77a0c32cd7b7bf3c9cd9cde4663646924d00e8af80"
+  },
+  "candidate": {
+    "count": 1,
+    "id": "phase140-metadata-only-semantic-equation-revalidation-v1",
+    "default_off": true,
+    "algorithm_change": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "rerun_fallback_repair_sweep_authorized": false,
+    "reads_only_sealed_summaries_and_hashes": true
+  },
+  "semantic_equation": {
+    "id": "phase138-affine-tdcp-anchor-range-constant-v1",
+    "lhs_symbol": "tdcp_phase138",
+    "full_frozen_text": "tdcp_phase138 = tdcp_native - (rho_current_initial - rho_previous_initial)",
+    "native_emitted_text": "tdcp_native-(rho_current_initial-rho_previous_initial)",
+    "native_field": "phase138_measurement_equation",
+    "native_representation": "rhs-only-native-diagnostic",
+    "ast": {
+      "kind": "assign",
+      "lhs": "tdcp_phase138",
+      "rhs": {
+        "kind": "sub",
+        "left": "tdcp_native",
+        "right": {
+          "kind": "sub",
+          "left": "rho_current_initial",
+          "right": "rho_previous_initial"
+        }
+      }
+    },
+    "full_token_tuple": [
+      "ASSIGN",
+      "tdcp_phase138",
+      "SUB",
+      "GROUP_OPEN",
+      "tdcp_native",
+      "SUB",
+      "GROUP_OPEN",
+      "rho_current_initial",
+      "SUB",
+      "rho_previous_initial",
+      "GROUP_CLOSE",
+      "GROUP_CLOSE"
+    ],
+    "rhs_only_token_tuple": [
+      "tdcp_native",
+      "SUB",
+      "GROUP_OPEN",
+      "rho_current_initial",
+      "SUB",
+      "rho_previous_initial",
+      "GROUP_CLOSE"
+    ],
+    "normalization": {
+      "allowed": ["remove ASCII whitespace only", "parse declared full-assignment or rhs-only representation"],
+      "forbidden": ["operator commutation", "algebraic simplification", "sign rewriting", "identifier aliasing", "term insertion or deletion"]
+    },
+    "semantic_match": true,
+    "match_classification": "lhs-label-and-whitespace-only-representation-difference",
+    "proof": {
+      "range_delta": "rho_current_initial - rho_previous_initial",
+      "measurement": "tdcp_native - range_delta",
+      "source_lines": [
+        "include/libgnss++/algorithms/tdcp_contract.hpp:35-36",
+        "src/algorithms/fgo_gtsam_backend.cpp:1582-1607"
+      ],
+      "no_rhs_mutation": true,
+      "current_minus_previous_preserved": true,
+      "outer_subtraction_preserved": true,
+      "extra_or_missing_terms": false,
+      "geometry_endpoint_and_sagnac_path_preserved": true
+    },
+    "reject": {
+      "commuted_range_terms": true,
+      "wrong_sign": true,
+      "missing_term_or_group": true,
+      "extra_term": true,
+      "wrong_lhs": true,
+      "unknown_identifier": true,
+      "undeclared_representation": true
+    }
+  },
+  "revalidation_policy": {
+    "mode": "post-run metadata-only",
+    "route_order": ["MTV-A", "LAX-T"],
+    "candidate_reads": 0,
+    "raw_reads": 0,
+    "solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "required_integrity": {
+      "sealed_result_json_hash_match": true,
+      "sealed_sidecar_hash_match": true,
+      "native_summary_hash_match": true,
+      "unique_route_records": true,
+      "no_coordinate_fields_interpreted": true
+    },
+    "equation_acceptance": {
+      "full_assignment": "accept only full_token_tuple with representation=full-assignment",
+      "native_rhs": "accept only rhs_only_token_tuple at phase138_measurement_equation with representation=rhs-only-native-diagnostic",
+      "semantic_id": "must equal phase138-affine-tdcp-anchor-range-constant-v1",
+      "missing_or_ambiguous_representation": "fail-closed"
+    },
+    "structural_gates": {
+      "selector_isolation": true,
+      "phase135_all_affine_and_legacy_zero": true,
+      "phase138_equation_ast_and_token_semantics": true,
+      "phase138_range_adjustment_factor_count_exactly_once": true,
+      "phase138_endpoint_satellite_state_single_sagnac_finite": true,
+      "raw_base_exactly_once_and_miss_conservation": true,
+      "c7_d_exact_full_finite_alignment": true,
+      "qr_solver_and_no_fallback": true,
+      "gnss_first_and_main_accepted_iterations_positive": true,
+      "gnss_first_and_main_finite_strict_cost_decrease": true,
+      "finite_earth_valid_expected_epoch_coverage": true,
+      "pixel5_offset_exactly_once": true,
+      "forbidden_read_accounting_zero": true
+    },
+    "missing_field_policy": "Any required scalar, accepted-iteration count, finite flag, route/hash binding, or equation representation field absent or non-finite is NO-GO; no inference from return code, cost decrease, or opaque row count.",
+    "immutable_result": {
+      "eligible_for_reclassification": true,
+      "current_reclassification": "NO-GO",
+      "current_reason": "historical validator rejected the textual representation, and the sealed native summary lacks a main accepted-iteration field; semantic equivalence does not permit inferring that missing gate",
+      "future_go_condition": "all structural_gates and integrity checks pass from sealed scalar metadata only"
+    }
+  },
+  "required_tests_before_any_validator_execution": [
+    "full and declared rhs-only forms accept",
+    "optional ASCII whitespace accepts",
+    "commuted, wrong-sign, missing/extra-term, wrong-LHS, malformed-group, unknown-identifier, and representation-mismatch forms reject",
+    "AST/token tuple and semantic-ID serialization is deterministic",
+    "sealed route/hash binding, duplicate route, missing-field, non-finite, and altered-summary checks fail closed",
+    "legacy/default selector isolation remains unchanged",
+    "validator opens no raw, solver, solution-coordinate, truth, MAT/PDC/precomputed, accuracy, or Kaggle path"
+  ],
+  "authorization_boundary": {
+    "new_independent_authorization_required": true,
+    "implementation_or_validator_change_requires_new_authorization": true,
+    "raw_or_solver_execution_authorized": false,
+    "truth_accuracy_authorized": false,
+    "historical_phase139_result_must_remain_unchanged": true
+  }
+}

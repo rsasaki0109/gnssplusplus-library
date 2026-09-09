@@ -32,6 +32,14 @@ enum class ObservationBand {
     Unknown,
 };
 
+// Frozen values from parameters.m/obserrmodel.m.  Keeping these constants
+// beside the raw-observable port makes the source-to-native unit crosswalk
+// explicit and prevents a future weighting selector from turning them into
+// route/configuration tuning knobs.
+inline constexpr double kOfficialSnrPercentile = 85.0;
+inline constexpr double kOfficialSnrDenominatorDb = 20.0;
+inline constexpr double kOfficialCarrierPhaseSnrRatio = 1.0 / 400.0;
+
 inline ObservationBand bandForSignal(libgnss::SignalType signal) {
     switch (signal) {
         case libgnss::SignalType::GPS_L1CA:
@@ -112,7 +120,12 @@ inline double snrScale(double snr_dbhz, double percentile85_dbhz) {
     if (!std::isfinite(snr_dbhz) || !std::isfinite(percentile85_dbhz)) {
         return std::numeric_limits<double>::quiet_NaN();
     }
-    return std::pow(10.0, -(snr_dbhz - percentile85_dbhz) / 20.0);
+    return std::pow(10.0, -(snr_dbhz - percentile85_dbhz) /
+                              kOfficialSnrDenominatorDb);
+}
+
+inline bool finitePositive(double value) {
+    return std::isfinite(value) && value > 0.0;
 }
 
 struct SnrPercentiles {
@@ -128,7 +141,7 @@ struct SnrPercentiles {
 
 inline SnrPercentiles collectSnrPercentiles(
     const std::vector<libgnss::ObservationData>& epochs,
-    double percentile = 85.0) {
+    double percentile = kOfficialSnrPercentile) {
     std::vector<double> l1;
     std::vector<double> l5;
     for (const auto& epoch : epochs) {
@@ -145,6 +158,31 @@ inline SnrPercentiles collectSnrPercentiles(
             linearPercentile(std::move(l5), percentile)};
 }
 
+/**
+ * Collect the official TDCP SNR bases from observations with usable SNR
+ * metadata.  The native Observation default is zero when Android did not
+ * provide C/N0; unlike the historical P/D quality lane, the Phase117
+ * weighting lane must not let that sentinel alter the global percentile.
+ */
+inline SnrPercentiles collectOfficialTdcpSnrPercentiles(
+    const std::vector<libgnss::ObservationData>& epochs) {
+    std::vector<double> l1;
+    std::vector<double> l5;
+    for (const auto& epoch : epochs) {
+        for (const auto& observation : epoch.observations) {
+            if (!finitePositive(observation.snr)) continue;
+            const ObservationBand band = bandForSignal(observation.signal);
+            if (band == ObservationBand::L1) {
+                l1.push_back(observation.snr);
+            } else if (band == ObservationBand::L5) {
+                l5.push_back(observation.snr);
+            }
+        }
+    }
+    return {linearPercentile(std::move(l1), kOfficialSnrPercentile),
+            linearPercentile(std::move(l5), kOfficialSnrPercentile)};
+}
+
 inline double snrPercentileSigma(libgnss::SignalType signal,
                                  double snr_dbhz,
                                  const SnrPercentiles& percentiles,
@@ -155,13 +193,56 @@ inline double snrPercentileSigma(libgnss::SignalType signal,
     switch (observable) {
         case 'P': return scale * factor;       // P_sn_ratio = 1
         case 'D': return scale / 12.0;         // D_sn_ratio = 1/12
-        case 'L': return scale * factor / 400.0;  // L_sn_ratio = 1/400
+        case 'L': return scale * factor * kOfficialCarrierPhaseSnrRatio;
         default: return std::numeric_limits<double>::quiet_NaN();
     }
 }
 
-inline bool finitePositive(double value) {
-    return std::isfinite(value) && value > 0.0;
+/**
+ * Official ``obserr.L`` converted to the native TDCP factor's metres.
+ *
+ * ``gnsslog2obs.m`` represents ADR ``L`` in cycles and ``obserrmodel.m``
+ * applies ``L_sn_ratio`` to that source-domain carrier observable.  The
+ * native ordinary TDCP residual is already a metre-valued corrected-carrier
+ * difference, so its one-sigma value must be multiplied by the retained
+ * observation wavelength exactly once.  Missing/nonfinite SNR, percentile,
+ * signal type, or wavelength returns NaN: the caller must reject the pair
+ * and may not fall back to the frozen 0.03 m value.
+ */
+inline double officialTdcpSigmaMeters(
+    libgnss::SignalType signal,
+    double snr_dbhz,
+    const SnrPercentiles& percentiles,
+    double wavelength_m) {
+    if (!finitePositive(snr_dbhz) || !finitePositive(wavelength_m) ||
+        !finitePositive(signalTypeFactor(signal)) ||
+        !finitePositive(percentiles.forBand(bandForSignal(signal)))) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double sigma_cycles =
+        snrPercentileSigma(signal, snr_dbhz, percentiles, 'L');
+    if (!finitePositive(sigma_cycles)) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double sigma_m = sigma_cycles * wavelength_m;
+    return finitePositive(sigma_m)
+               ? sigma_m
+               : std::numeric_limits<double>::quiet_NaN();
+}
+
+/** Source resL/XXCC likelihood sigma is already metres (Phase230 audit).
+ * No wavelength parameter: raw L storage units do not set residual noise units.
+ * Kept separate from the historical Phase117 conversion for explicit migration.
+ */
+inline double sourceTdcpSigmaMeters(
+    libgnss::SignalType signal, double snr_dbhz,
+    const SnrPercentiles& percentiles) {
+    if (!finitePositive(snr_dbhz) || !finitePositive(signalTypeFactor(signal)) ||
+        !finitePositive(percentiles.forBand(bandForSignal(signal)))) {
+        return std::numeric_limits<double>::quiet_NaN();
+    }
+    const double sigma_m = snrPercentileSigma(signal, snr_dbhz, percentiles, 'L');
+    return finitePositive(sigma_m) ? sigma_m : std::numeric_limits<double>::quiet_NaN();
 }
 
 /** Exact dDP expression in exobs_residuals.m, with D in cycles/second. */
@@ -188,6 +269,14 @@ inline double carrierDopplerDifference(double previous_carrier_cycles,
                wavelength_m * 0.5 * dt_s -
            (current_carrier_cycles - previous_carrier_cycles) * wavelength_m -
            carrier_offset_m;
+}
+
+inline bool acceptsCenteredPseudorangeResidual(double residual_m,
+                                              double group_median_m,
+                                              double threshold_m) {
+    return std::isfinite(group_median_m) && std::isfinite(threshold_m) &&
+           std::isfinite(residual_m) &&
+           std::abs(residual_m - group_median_m) <= threshold_m;
 }
 
 inline double residualThreshold(ObservationBand band, char observable) {

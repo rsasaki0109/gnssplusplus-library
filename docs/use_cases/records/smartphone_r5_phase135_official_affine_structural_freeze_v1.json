@@ -1,0 +1,204 @@
+{
+  "schema_version": "smartphone-r5-phase135-official-affine-structural-freeze.v1",
+  "phase": 135,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-structural-contract",
+  "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+  "branch": "feat/rtk-smartphone-performance-pr",
+  "design_freeze": {
+    "commit": "bfafa340803f2dd1b5528c918b5be60f6e0e5c14",
+    "implementation_commit": "48b13f098a75da87e52bcb15f66e3434c950baf7",
+    "doppler_source_parity_audit_commit": "01b7b68a37c668422c7ca396cfe56edab706f819",
+    "doppler_source_parity_correction_commit": "f9a1fc9403e707243a30d9e06aa8ea59493cdc5"
+  },
+  "scope": "Structural qualification only; no raw, truth, MAT, PDC, precomputed-coordinate, accuracy, solution-row, or Kaggle execution",
+  "route_order": [
+    {
+      "id": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "planned_invocations": 1
+    },
+    {
+      "id": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "planned_invocations": 1
+    }
+  ],
+  "recipe": {
+    "phase135_official_affine_measurement_family": true,
+    "phase118_official_tdcp_huber_k": true,
+    "phase117_dynamic_tdcp_sigma": false,
+    "phase120_official_tdcp_resl_atmosphere_cancellation": false,
+    "phase126_raw_base_source_complete": false,
+    "phase127_glonass_channel_provenance": false,
+    "phase128_glonass_provenance_parser_admission": false,
+    "phase129_glonass_local_miss_mask": false,
+    "phase130_shared_ledger_key_local_support": false,
+    "phase131_canonical_correction_band_key": false,
+    "phase132_typed_canonical_preflight": false,
+    "phase133_native_selector_boundary": false,
+    "phase134_summary_bridge": false,
+    "phase107_raw_base_compensation": true,
+    "phase107_raw_base_source_miss_mask": true,
+    "phase107_preserve_additional_frequency_bands": false,
+    "phase118_fixed_tdcp_sigma_m": 0.03,
+    "phase118_highway_huber_threshold_sigma": 0.8,
+    "source_clock_c0d_factor": true,
+    "source_clock_c0d_meter_state_parity": true,
+    "source_clock_c0d_epoch_vector_parity": true,
+    "source_clock_c0d_gnss_first_meter_state_handoff": true,
+    "source_clock_c0d_active_solve_diagnostic": true,
+    "phase99_main_multifrontal_qr": true,
+    "direct_observable_quality": true,
+    "pdc_imu_tdcp_no_bridge": true,
+    "upstream_position_offset": true,
+    "android_raw_utc_key_contract": true,
+    "android_raw_clock_only": true,
+    "android_utc_wall_clock_fallback": true,
+    "all_epochs": true,
+    "skip_epochs": 0,
+    "corrected_undifferenced_doppler_factors": true
+  },
+  "input_lineage": {
+    "allowed": [
+      "raw phone device_gnss.csv",
+      "raw phone device_imu.csv",
+      "broadcast navigation",
+      "sealed raw-base RINEX and its station metadata"
+    ],
+    "forbidden": [
+      "truth or reference coordinates",
+      "MAT files",
+      "PDC/precomputed phone coordinates or corrections",
+      "saved candidate solution rows as solver input",
+      "Kaggle or network dataset access"
+    ],
+    "base_materialization": "Phase107 native raw-base path only; materialize after independent authorization",
+    "solution_policy": "opaque hash/row-count seal only; solution coordinate content is never displayed or read by the structural validator"
+  },
+  "official_doppler_contract": {
+    "los": "-e, where e=(satellite_transmit-receiver)/|satellite_transmit-receiver|",
+    "range_m": "|satellite_transmit-receiver| + OMEGA_E/CLIGHT*(sat_x*receiver_y-sat_y*receiver_x)",
+    "known_rate_mps": "(sat_velocity-receiver_velocity)^T*e + OMEGA_E/CLIGHT*(sat_velocity_y*receiver_x + sat_y*receiver_velocity_x - sat_velocity_x*receiver_y - sat_x*receiver_velocity_y)",
+    "resD_mps": "measured_range_rate_mps - (known_rate_mps - satellite_clock_drift_mps)",
+    "receiver_velocity_frame": "ECEF for Gsat preparation; same-run graph V seed is converted from ENU exactly once",
+    "sagnac_evaluation": "one explicit unrotated-transmit-state term; rotated-state plus explicit term is forbidden",
+    "provenance_required": [
+      "source satellite position",
+      "source satellite velocity",
+      "measured range rate",
+      "satellite clock drift in metres/second",
+      "finite same-run initial receiver velocity"
+    ],
+    "missing_or_nonfinite_policy": "fail closed before affine graph admission"
+  },
+  "affine_family": {
+    "pseudorange": {
+      "keys": ["X_i", "C_i"],
+      "dimensions": [3, 7],
+      "residual": "los^T*(X_i-X0_i)+h_signal^T*C_i-resPc_i",
+      "factor_count_invariant": true
+    },
+    "doppler": {
+      "keys": ["V_i", "D_i"],
+      "dimensions": [3, 1],
+      "residual": "los^T*(V_i-V0_i)+D_i-resD_i",
+      "factor_count_invariant": true
+    },
+    "ordinary_tdcp": {
+      "keys": ["X_i", "X_i+1", "C_i", "C_i+1"],
+      "dimensions": [3, 3, 7, 7],
+      "residual": "los_i^T*((X_i+1-X0_i+1)-(X_i-X0_i))+h_0^T*(C_i+1-C_i)-tdcp_i",
+      "factor_count_invariant": true
+    },
+    "pose3_x_bridge": {
+      "keys": ["x_i", "X_i"],
+      "dimensions": [6, 3],
+      "constraint": "Pose3 translation equals auxiliary X exactly",
+      "transactional": true
+    },
+    "legacy_family_count": 0
+  },
+  "structural_gates": {
+    "selector_isolation": [
+      "Phase135 is active exactly once",
+      "Phase118 is active exactly once",
+      "Phase117, Phase120, Phase126-134, and additional-frequency selectors are false",
+      "Phase107 raw-base compensation and source miss mask are active; preserve-additional is false"
+    ],
+    "raw_base": [
+      "base correction is applied exactly once",
+      "Phase107 source/miss ledger is conserved",
+      "no raw/zero/nearest/extrapolated/fallback correction is admitted"
+    ],
+    "source_geometry": [
+      "all admitted P/D/TDCP rows have finite source geometry and normalized fixed-initial LOS",
+      "D source provenance is complete and finite",
+      "factor LOS is official -e",
+      "range and D rate use one Sagnac convention",
+      "analytic Jacobian and key order match the frozen affine family"
+    ],
+    "family_conservation": [
+      "inserted affine P rows equal admitted P rows",
+      "inserted affine D rows equal admitted D rows",
+      "inserted affine ordinary TDCP rows equal admitted TDCP rows",
+      "Pose3-X bridge keys are exact and complete",
+      "legacy/non-affine P/D/TDCP family counts are zero",
+      "no mixed or partial graph is exposed to the optimizer"
+    ],
+    "clock_and_solver": [
+      "C is seven-component metre-valued epoch-local state with frozen source mapping",
+      "D is metre/second and CCDD uses the existing frozen factor",
+      "main solver is MULTIFRONTAL_QR / EliminateQR",
+      "GNSS-first/main accepted iterations are greater than zero",
+      "initial and final costs are finite and final is strictly lower",
+      "no fallback, retry, rerun, or alternate solver branch"
+    ],
+    "output": [
+      "expected route epoch coverage is finite and exactly aligned",
+      "earth-valid/speed/finite guards pass",
+      "Pixel5 final position offset is applied exactly once",
+      "solution content remains opaque and is represented only by hash/row seal"
+    ]
+  },
+  "authorization_boundary": {
+    "pre_raw_authorized": false,
+    "independent_raw_authorization_required": true,
+    "raw_materialization_only_after_authorization": true,
+    "route_order_fixed": true,
+    "one_shot_per_route": true,
+    "solver_invocations_per_route_max": 1,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "rerun_fallback_repair_sweep_allowed": false
+  },
+  "source_pins": {
+    "fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+    "fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "Gsat.m": "a56c3236646606c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+    "Gobs.m": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+    "geodist.c": "3929ec3d57575634a921a81957ce91f2dce9314457694e3bd7e00bd82ec765c4",
+    "DopplerFactor_VD.h": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1"
+  },
+  "implementation_source_pins_after_correction": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "4ce95d3ef322c83fca2aa5327e9150ee2d2890fe012d6cc4d3b80d439939656e",
+    "include/libgnss++/algorithms/fgo_config.hpp": "996ef13544ed7e426c7cc2f86192d592bbacd70b1309e89fdd15bc057e2a8e3e",
+    "src/algorithms/fgo.cpp": "1e65f3bc044b79c2cda9f0b4ef8707d3a95ae5fa95a3191bf17cbbb1fdb6d1b8",
+    "src/algorithms/fgo_gtsam_internal.hpp": "e20d9eb7d3da77277cf89f4d080ad5d260d71f98f054394d8d327f682e063ff0",
+    "src/algorithms/fgo_gtsam_backend.cpp": "c6e2e41eccafcf37bdcaf371b3a7b2d84de945706cc6d520efd47f50ff042903"
+  },
+  "pre_raw_read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_nav_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0
+  }
+}

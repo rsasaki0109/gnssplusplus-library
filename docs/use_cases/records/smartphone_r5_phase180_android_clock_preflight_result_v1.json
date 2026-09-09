@@ -1,0 +1,89 @@
+{
+  "schema_version": "smartphone-r5-phase180-android-clock-preflight-result.v1",
+  "phase": 180,
+  "execution_label": "Luna Max",
+  "status": "sealed-clock-preflight-go",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase180_android_clock_preflight_manifest_v1.json",
+    "sha256": "22061f8a225c773401643477da75f567a93a91e6a8e61277a0a70223c2356496",
+    "implementation_commit": "cac17187a0b56c5e776387ba3b624c457dc2e19e"
+  },
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "execution": {
+    "invocation_count": 1,
+    "return_code": 0,
+    "native_pid": null,
+    "native_solver_entered": false,
+    "native_observation_conversion": false,
+    "navigation_read": false,
+    "summary_path": "output/smartphone-r5/phase180-h-android-clock-preflight-v1/mtv-h/native_clock_preflight.json",
+    "summary_sha256": "ac52ce12d02e510cd21b9620d2329c7ed827ff73f1671f6cafb42b02bd630d20",
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "timestamp_column_aggregate": {
+    "android_gnss_raw_rows": 112833,
+    "android_gnss_utc_integer_rows": 112833,
+    "android_gnss_chipset_elapsed_blank_rows": 112833,
+    "android_gnss_chipset_elapsed_integer_rows": 0,
+    "android_gnss_time_nanos_integer_rows": 112833,
+    "android_gnss_full_bias_nanos_integer_rows": 112833,
+    "android_gnss_bias_nanos_numeric_rows": 112833,
+    "android_imu_rows": 721651,
+    "android_imu_uncal_accel_rows": 243457,
+    "android_imu_uncal_gyro_rows": 166502,
+    "android_imu_utc_integer_rows": 721651,
+    "android_imu_elapsed_blank_rows": 721651,
+    "android_imu_elapsed_integer_rows": 0
+  },
+  "clock_contract": {
+    "strict_elapsed_anchor_loader_ok": false,
+    "strict_elapsed_anchor_error": "raw Android GNSS anchor row 2: timestamps must be non-negative integers",
+    "explicit_utc_gps_mapping_attempted": true,
+    "explicit_utc_gps_mapping_ok": true,
+    "utc_gps_mapping_input_rows": 112833,
+    "utc_gps_mapping_raw_rows": 112833,
+    "utc_gps_mapping_unique_anchors": 3140,
+    "hardware_clock_count_field_present": true,
+    "hardware_clock_count_constant": true,
+    "slope_ns_per_ms": 1000000.0026718708,
+    "drift_ppm": 0.0026718708051164802,
+    "maximum_fit_residual_ms": 0.004991516141295433,
+    "maximum_anchor_gap_ms": 1000
+  },
+  "imu_timestamp_load": {
+    "ok": true,
+    "total_rows": 721651,
+    "accel_rows": 243457,
+    "gyro_rows": 166502,
+    "paired_rows": 166502,
+    "omitted_rows": 0,
+    "loaded_imu_samples": 166502,
+    "elapsed_clock_preserved": false,
+    "gnss_elapsed_anchor_applied": false,
+    "utc_wall_clock_fallback_applied": true,
+    "utc_mapping_anchors": 3140,
+    "utc_mapping_drift_ppm": 0.0026718708051164802,
+    "utc_mapping_max_fit_residual_ms": 0.004991516141295433
+  },
+  "read_accounting": {
+    "android_gnss": 2,
+    "android_imu": 1,
+    "nav": 0,
+    "truth": 0,
+    "base": 0,
+    "mat_pdc_precomputed": 0,
+    "kaggle_or_token": 0,
+    "accuracy": 0,
+    "coordinate_values_published": false
+  },
+  "tests_and_build": {
+    "phase180_static_anchor_telemetry_tests": "2/2 passed",
+    "android_utc_gps_mapping_gtests": "3/3 passed",
+    "gnss_fgo_imu_no_base_build": "passed",
+    "gnss_run_tests_build": "passed",
+    "binary_sha256": "68fce936081c91e0bf5f83bceea71634f2b4f7fc80eafb95c3b2616d44b6616c"
+  },
+  "interpretation_limit": "This proves the pinned all-blank elapsed-clock route satisfies the existing explicit UTC/GPS-to-UTC IMU timestamp contract. It does not prove GNSS/FGO convergence, IMU graph handoff, solution coverage, accuracy, or any coordinate result.",
+  "next_boundary": "A future full H run may add --android-utc-wall-clock-fallback to the pinned Phase171 recipe; no implicit fallback or parser relaxation is admitted. Include the existing Phase94 stage-diagnostics selector if late IMU ingress failure telemetry is required."
+}

@@ -1,0 +1,135 @@
+{
+  "schema_version": "smartphone-r5-phase108-phase107-solution-accuracy-manifest.v1",
+  "phase": 108,
+  "status": "sealed-before-phase108-truth-only-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "authority": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_freeze_v1.json",
+      "sha256": "e503dac7508f6b6466173c5f0c651a04fa9dc24222aa3ce5ae22332fbb16dde1"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase108_phase107_solution_accuracy.py",
+      "sha256": "0edc59c837ef0aff56ced22f9334b0ce56bdf7b7b36195cbf7602223f81a51bf"
+    },
+    "wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase108_phase107_solution_accuracy_execute.py",
+      "sha256": "a5e07cf2c2663a62c185f486c3303d7fb73e49576c8bffc7caf1f001295c3591"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase108_phase107_solution_accuracy.py",
+      "sha256": "82c0f3dc52d356c0a7e721845d194c70563e3aed87170e793f518906091e45ec"
+    },
+    "phase107_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_result_v1.json",
+      "sha256": "e7eb3f1d2670672414744a100dc1e2fc3e0b019ae7efc0dbfef1518300ce8d6e"
+    }
+  },
+  "candidate": {
+    "id": "phase108-phase107-withheld-solution-truth-only-accuracy-v1",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "metadata_hash_seal_precedes_truth": true,
+    "metadata_is_opaque_bytes_only": true,
+    "csv_parse_deferred_to_authorized_evaluator": true,
+    "route_metadata": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "bytes": 172694,
+        "sha256": "b401156e76d5a1a1cfc948aa666d69d292fe4ba43ea3e3f4580cde7e5f0339f8",
+        "expected_prediction_rows": 2158,
+        "expected_problem_epochs": 2159,
+        "opaque_metadata_seal": true
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "bytes": 117254,
+        "sha256": "6e85865825a250628db4d6aa842fc5992ebdc63aa51ffaf7f1dd513c1fe600d8",
+        "expected_prediction_rows": 1465,
+        "expected_problem_epochs": 1466,
+        "opaque_metadata_seal": true
+      }
+    },
+    "solution_publication": false,
+    "solver_rerun": false,
+    "raw_or_base_rerun": false
+  },
+  "truth_cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "read_by_solver": false,
+    "read_by_manifest": false,
+    "read_by_evaluator_only": true,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_truth_key": ["2021-03-16-18-59-us-ca-mtv-a/pixel5", 1615921153434]
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_truth_key": null
+      }
+    }
+  },
+  "metric_contract_source": {
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_freeze_v1.json",
+    "freeze_sha256": "e503dac7508f6b6466173c5f0c651a04fa9dc24222aa3ce5ae22332fbb16dde1",
+    "phase82_evaluator_sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+  },
+  "truth_evaluator_boundary": {
+    "evaluator_process_count": 1,
+    "candidate_metadata_hash_seal_precedes_truth": true,
+    "candidate_parse_precedes_truth": true,
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "native_after_truth": false,
+    "result_content": "metrics, gate booleans, sealed hashes, and accounting only; no solution or truth coordinate rows"
+  },
+  "read_accounting": {
+    "pre_truth": {
+      "native_solver_invocations": 0,
+      "raw_gnss_imu_navigation_reads": 0,
+      "base_rinex_reads": 0,
+      "truth_reads": 0,
+      "accuracy_calculations": 0,
+      "mat_precomputed_phone_coordinate_pdc_reads": 0,
+      "kaggle_or_token_access": 0
+    },
+    "planned_truth_evaluation": {
+      "native_solver_invocations": 0,
+      "raw_gnss_imu_navigation_reads": 0,
+      "base_rinex_reads": 0,
+      "candidate_solution_reads_for_hash_and_parse": 2,
+      "truth_reads": 2,
+      "truth_reads_per_route": 1,
+      "accuracy_calculations": 2,
+      "reruns": 0,
+      "fallbacks": 0,
+      "mat_precomputed_phone_coordinate_pdc_reads": 0,
+      "kaggle_or_token_access": 0
+    }
+  },
+  "forbidden_lanes": {
+    "solver_raw_base_rerun": false,
+    "mat": false,
+    "precomputed_phone_coordinates": false,
+    "pdc": false,
+    "kaggle_or_token": false,
+    "solution_publication": false,
+    "failure_policy": "fail closed; preserve artifacts; no repair, retry, fallback, rerun, or publication"
+  }
+}

@@ -754,6 +754,15 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
         result.error = "invalid Android IMU synchronization coefficient";
         return result;
     }
+    if (!config.apply_utc_wall_clock_fallback_offset &&
+        config.utc_wall_clock_fallback_offset_ms != 0) {
+        result.error = "UTC wall-clock fallback offset requires its explicit selector";
+        return result;
+    }
+    result.utc_wall_clock_fallback_offset_requested =
+        config.apply_utc_wall_clock_fallback_offset;
+    result.utc_wall_clock_fallback_offset_ms =
+        config.utc_wall_clock_fallback_offset_ms;
     if (config.require_gnss_elapsed_anchor &&
         config.imu_sync_coefficient != 0.5) {
         result.error = "raw Android IMU anchor contract fixes sync coefficient at 0.5";
@@ -1082,8 +1091,34 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
             synchronized_gps_time = androidUtcToGpsTime(
                 synchronized_utc_ms, config.gps_utc_leap_seconds);
         } else if (use_utc_wall_clock_fallback) {
+            std::int64_t mapped_utc_time_ms = gyro_sample.utc_time_ms;
+            if (config.apply_utc_wall_clock_fallback_offset &&
+                config.utc_wall_clock_fallback_offset_ms != 0) {
+                const std::int64_t offset_ms =
+                    config.utc_wall_clock_fallback_offset_ms;
+                if ((offset_ms > 0 &&
+                     mapped_utc_time_ms >
+                         std::numeric_limits<std::int64_t>::max() - offset_ms) ||
+                    (offset_ms < 0 &&
+                     mapped_utc_time_ms <
+                         std::numeric_limits<std::int64_t>::min() - offset_ms)) {
+                    result.error =
+                        "Android UTC wall-clock fallback offset overflows timestamp";
+                    out.samples.clear();
+                    return result;
+                }
+                mapped_utc_time_ms += offset_ms;
+                if (mapped_utc_time_ms < 0) {
+                    result.error =
+                        "Android UTC wall-clock fallback offset underflows timestamp";
+                    out.samples.clear();
+                    return result;
+                }
+                result.utc_wall_clock_fallback_offset_applied = true;
+                result.utc_wall_clock_fallback_effective_offset_ms = offset_ms;
+            }
             const long double mapped_gps_nanos =
-                utc_gps_mapping->gpsNanosAtUtc(gyro_sample.utc_time_ms);
+                utc_gps_mapping->gpsNanosAtUtc(mapped_utc_time_ms);
             synchronized_gps_time = gpsNanosToGpsTime(mapped_gps_nanos);
         } else {
             synchronized_gps_time = androidUtcToGpsTime(

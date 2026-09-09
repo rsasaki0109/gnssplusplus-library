@@ -2,6 +2,7 @@
 
 #include <libgnss++/algorithms/fgo_config.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
+#include <libgnss++/algorithms/raw_p_seed.hpp>
 #include <libgnss++/algorithms/observable_upstream_preprocessing.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
@@ -33,6 +34,13 @@ public:
     // the alias preserves the historical FGOProcessor::FGOConfig spelling.
     using FGOConfig = fgo::Config;
 
+    // Official source-parity receiver clock state.  Components are ordered
+    // exactly as sysfreq2sigtype.m: C[0] shared base/GPS-L1 clock, C[1..3]
+    // GLO/GAL/BDS L1, and C[4..6] GPS/GAL/BDS L5-class components.  All
+    // entries are metres; D remains metres/second.
+    using EpochClockBiasComponentsM = std::array<double, 7>;
+    static constexpr std::size_t kEpochClockBiasComponentCount = 7;
+
     struct EpochSeed {
         GNSSTime time;
         Vector3d position_ecef = Vector3d::Zero();
@@ -47,6 +55,12 @@ public:
         // coordinate for an upstream residual-screen candidate.
         double receiver_clock_drift_mps =
             std::numeric_limits<double>::quiet_NaN();
+        // Exact source identity copied from ObservationData before an epoch
+        // can be filtered out of the retained problem.  The source-meter
+        // clock-state candidate uses these fields for a strict raw-D lookup;
+        // it never matches by nearest time or by retained-vector position.
+        std::size_t raw_source_index = std::numeric_limits<std::size_t>::max();
+        std::int64_t raw_utc_time_millis = -1;
         // True only when position_ecef came from a valid SPP solve at this
         // epoch; false for last-valid/header fallbacks.
         bool fresh_spp_solution = false;
@@ -87,6 +101,13 @@ public:
         SignalType signal = SignalType::GPS_L1CA;
         GNSSSystem clock_group = GNSSSystem::GPS;
         Vector3d satellite_position_ecef = Vector3d::Zero();
+        // Unrotated broadcast state at the source transmit-time query.  The
+        // historical factor consumes satellite_position_ecef (already
+        // earth-rotation corrected); Phase135 uses this provenance field to
+        // form the official single-Sagnac fixed-LOS geometry.  It is never
+        // consulted when the Phase135 selector is disabled.
+        Vector3d source_satellite_position_ecef = Vector3d::Zero();
+        bool source_satellite_position_available = false;
         double corrected_pseudorange_m = 0.0;
         double sigma_m = 1.0;
         // Raw CN0/SNR carried with the factor for truth-free quality
@@ -110,6 +131,16 @@ public:
         double android_sv_time_uncertainty_floor_m = 0.0;
         bool android_sv_time_uncertainty_available = false;
         bool android_sv_time_uncertainty_floor_applied = false;
+        // Truth-free provenance guard for the opt-in native raw-base
+        // pseudorange correction.  It is not consumed by any factor or
+        // solver; the source miss-mask uses it only to reject a second
+        // correction pass on an already corrected factor vector.
+        bool native_base_pseudorange_correction_applied = false;
+        // Phase131 correction-join provenance.  The typed estimator signal is
+        // retained; these fields carry only the exact Phase127/128-certified
+        // GLONASS channel needed by the canonical base stream key.
+        bool has_glonass_frequency_channel = false;
+        int glonass_frequency_channel = 0;
     };
 
     struct TimeDifferencedCarrierFactor {
@@ -119,9 +150,19 @@ public:
         SignalType signal = SignalType::GPS_L1CA;
         Vector3d previous_satellite_position_ecef = Vector3d::Zero();
         Vector3d current_satellite_position_ecef = Vector3d::Zero();
+        Vector3d previous_source_satellite_position_ecef = Vector3d::Zero();
+        Vector3d current_source_satellite_position_ecef = Vector3d::Zero();
+        bool source_satellite_positions_available = false;
         double delta_carrier_m = 0.0;
         double sigma_m = 0.03;
         double dt_s = 0.0;
+        // Same-run carrier geometry, not a lookup in accepted code factors.
+        // Zero indicates unavailable in legacy/DD builders. No solver uses
+        // these until an explicit joint residual-ionosphere lane is enabled.
+        double previous_residual_ionosphere_coefficient = 0.0;
+        double current_residual_ionosphere_coefficient = 0.0;
+        double previous_source_adr_uncertainty_m = 0.0;
+        double current_source_adr_uncertainty_m = 0.0;
     };
 
     struct SingleDifferenceDopplerFactor {
@@ -160,6 +201,9 @@ public:
         // only LOS, residual, and the known range-rate/clock terms below.
         Vector3d satellite_position_ecef = Vector3d::Zero();
         Vector3d satellite_velocity_ecef = Vector3d::Zero();
+        Vector3d source_satellite_position_ecef = Vector3d::Zero();
+        Vector3d source_satellite_velocity_ecef = Vector3d::Zero();
+        bool source_satellite_state_available = false;
         double wavelength_m = 0.0;
         double measured_range_rate_mps = 0.0;
         double satellite_range_rate_mps = 0.0;
@@ -278,7 +322,165 @@ public:
         double sigma_m = 0.001;
     };
 
+    // Phase116 read-only ordinary-TDCP incidence accounting.  These counters
+    // are populated only when FGOConfig::use_carrier_tdcp_incidence_diagnostic
+    // is enabled.  They describe the existing same-satellite/same-signal
+    // factor builder and never add a factor or an ambiguity state.
+    struct TdcpSignalDiagnostics {
+        std::size_t carrier_rows_seen = 0;
+        std::size_t carrier_phase_rows = 0;
+        std::size_t retained_carrier_rows = 0;
+        std::size_t missing_wavelength = 0;
+        std::size_t nonfinite_measurements = 0;
+        std::size_t candidate_pairs = 0;
+        std::size_t accepted_pairs = 0;
+        std::size_t rejected_gap = 0;
+        std::size_t rejected_clock_discontinuity = 0;
+        std::size_t rejected_missing_previous = 0;
+        std::size_t rejected_loss_of_lock = 0;
+        std::size_t rejected_nonfinite = 0;
+        std::size_t rejected_code_phase_jump = 0;
+        // Phase117-only fail-closed weighting metadata rejection.  This is
+        // post-admission and therefore does not alter the native pair
+        // predicate; valid source metadata keeps the factor count unchanged.
+        std::size_t rejected_invalid_weight = 0;
+    };
+
     struct FGOProblemDiagnostics {
+        // A summary-boundary snapshot used by the native application to copy
+        // the already-computed Phase131 base-report telemetry into the
+        // top-level FGO diagnostics object.  This is deliberately a plain
+        // value object: it has no estimator authority and must not be used
+        // while constructing observations, factors, values, or solver
+        // settings.
+        struct Phase131DiagnosticsSnapshot {
+            bool enabled = false;
+            bool configuration_valid = true;
+            std::string configuration_failure;
+            std::size_t canonical_rows = 0U;
+            std::size_t canonical_rejected_rows = 0U;
+            std::size_t unknown_band_rows = 0U;
+            std::size_t canonical_key_conflicts = 0U;
+            std::size_t canonical_duplicate_rows = 0U;
+            std::size_t canonical_streams = 0U;
+            std::size_t canonical_selected_streams = 0U;
+            std::size_t canonical_merged_streams = 0U;
+            std::map<std::string, std::size_t> failure_counts;
+
+            // The native report does not have a separate resolver counter;
+            // canonical rows plus rejected rows is its exact attempt
+            // accounting.  Keep the derived value explicit so the wrapper
+            // does not have to reconstruct it from a second object.
+            std::size_t canonicalization_attempt_rows = 0U;
+            std::size_t resolver_call_count = 0U;
+
+            // Source-exact correction/miss conservation copied from the
+            // same base report.  These fields are diagnostic only and do not
+            // authorize a second correction pass.
+            bool source_miss_mask_enabled = false;
+            bool source_miss_mask_canonical_key_mode = false;
+            std::string source_miss_mask_matching_key = "(satellite,signal)";
+            std::size_t original_adopted_pseudorange_rows = 0U;
+            std::size_t retained_finite_pc_pseudorange_rows = 0U;
+            std::size_t dropped_missing_exact_stream_rows = 0U;
+            std::size_t dropped_out_of_domain_rows = 0U;
+            std::size_t dropped_nonfinite_correction_rows = 0U;
+            std::size_t matched_factor_rows = 0U;
+            std::size_t finite_correction_rows_among_matched = 0U;
+            std::size_t source_model_build_count = 0U;
+            std::size_t correction_application_pass_count = 0U;
+            std::size_t corrected_rows = 0U;
+            bool pseudorange_factor_count_consistent = false;
+            bool signal_count_consistent = false;
+            bool applied = false;
+            bool correction_applied_exactly_once = false;
+            bool duplicate_correction_rejected = false;
+        };
+
+        // Copy, rather than accumulate, the one native base-report snapshot.
+        // The monotonic count makes an accidental second synchronization
+        // fail closed and gives the summary a directly testable exactly-once
+        // invariant.  Selector-off callers leave this count at zero, so the
+        // historical summary remains byte/field compatible.
+        bool synchronizePhase131Diagnostics(
+            const Phase131DiagnosticsSnapshot& snapshot) {
+            if (phase131_diagnostics_bridge_sync_count != 0U) {
+                return false;
+            }
+            phase131_canonical_correction_band_key_enabled = snapshot.enabled;
+            phase131_configuration_valid = snapshot.configuration_valid;
+            phase131_configuration_failure = snapshot.configuration_failure;
+            phase131_canonical_rows = snapshot.canonical_rows;
+            phase131_canonical_rejected_rows = snapshot.canonical_rejected_rows;
+            phase131_unknown_band_rows = snapshot.unknown_band_rows;
+            phase131_canonical_key_conflicts = snapshot.canonical_key_conflicts;
+            phase131_canonical_duplicate_rows = snapshot.canonical_duplicate_rows;
+            phase131_canonical_streams = snapshot.canonical_streams;
+            phase131_canonical_selected_streams =
+                snapshot.canonical_selected_streams;
+            phase131_canonical_merged_streams = snapshot.canonical_merged_streams;
+            phase131_failure_counts = snapshot.failure_counts;
+            phase131_canonicalization_attempt_rows =
+                snapshot.canonicalization_attempt_rows;
+            phase131_resolver_call_count = snapshot.resolver_call_count;
+            phase131_source_miss_mask_enabled =
+                snapshot.source_miss_mask_enabled;
+            phase131_source_miss_mask_canonical_key_mode =
+                snapshot.source_miss_mask_canonical_key_mode;
+            phase131_source_miss_mask_matching_key =
+                snapshot.source_miss_mask_matching_key;
+            phase131_original_adopted_pseudorange_rows =
+                snapshot.original_adopted_pseudorange_rows;
+            phase131_retained_finite_pc_pseudorange_rows =
+                snapshot.retained_finite_pc_pseudorange_rows;
+            phase131_dropped_missing_exact_stream_rows =
+                snapshot.dropped_missing_exact_stream_rows;
+            phase131_dropped_out_of_domain_rows =
+                snapshot.dropped_out_of_domain_rows;
+            phase131_dropped_nonfinite_correction_rows =
+                snapshot.dropped_nonfinite_correction_rows;
+            phase131_matched_factor_rows = snapshot.matched_factor_rows;
+            phase131_finite_correction_rows_among_matched =
+                snapshot.finite_correction_rows_among_matched;
+            phase131_source_model_build_count = snapshot.source_model_build_count;
+            phase131_correction_application_pass_count =
+                snapshot.correction_application_pass_count;
+            phase131_corrected_rows = snapshot.corrected_rows;
+            phase131_pseudorange_factor_count_consistent =
+                snapshot.pseudorange_factor_count_consistent;
+            phase131_signal_count_consistent = snapshot.signal_count_consistent;
+            phase131_applied = snapshot.applied;
+            phase131_correction_applied_exactly_once =
+                snapshot.correction_applied_exactly_once;
+            phase131_duplicate_correction_rejected =
+                snapshot.duplicate_correction_rejected;
+            phase131_diagnostics_bridge_sync_count = 1U;
+            return true;
+        }
+
+        std::size_t phase131_diagnostics_bridge_sync_count = 0U;
+        std::size_t phase131_canonicalization_attempt_rows = 0U;
+        std::size_t phase131_resolver_call_count = 0U;
+        bool phase131_source_miss_mask_enabled = false;
+        bool phase131_source_miss_mask_canonical_key_mode = false;
+        std::string phase131_source_miss_mask_matching_key =
+            "(satellite,signal)";
+        std::size_t phase131_original_adopted_pseudorange_rows = 0U;
+        std::size_t phase131_retained_finite_pc_pseudorange_rows = 0U;
+        std::size_t phase131_dropped_missing_exact_stream_rows = 0U;
+        std::size_t phase131_dropped_out_of_domain_rows = 0U;
+        std::size_t phase131_dropped_nonfinite_correction_rows = 0U;
+        std::size_t phase131_matched_factor_rows = 0U;
+        std::size_t phase131_finite_correction_rows_among_matched = 0U;
+        std::size_t phase131_source_model_build_count = 0U;
+        std::size_t phase131_correction_application_pass_count = 0U;
+        std::size_t phase131_corrected_rows = 0U;
+        bool phase131_pseudorange_factor_count_consistent = false;
+        bool phase131_signal_count_consistent = false;
+        bool phase131_applied = false;
+        bool phase131_correction_applied_exactly_once = false;
+        bool phase131_duplicate_correction_rejected = false;
+
         std::size_t input_epochs = 0;
         std::size_t seeded_epochs = 0;
         std::size_t skipped_epochs_without_seed = 0;
@@ -316,6 +518,68 @@ public:
         // Deliberately fixed false: recovery is an initializer only and does
         // not bypass factor-level elevation/geometry selection globally.
         bool sentinel_factor_bypass = false;
+        // Phase127 strict GLONASS FCN provenance telemetry.  These fields are
+        // admission metadata only: a failed source proof stops the selector-on
+        // build before its row reaches a factor or correction stream, except
+        // for the Phase129 explicit local-miss overlay; default remains
+        // untouched.
+        bool phase127_glonass_channel_provenance_enabled = false;
+        bool phase128_glonass_provenance_parser_admission_enabled = false;
+        // Phase129 keeps the same exact-query provenance ledger, but changes
+        // only an uncertified GLONASS row's local admission decision.  It
+        // never retains raw/zero-corrected data or changes graph topology.
+        bool phase129_glonass_local_miss_mask_enabled = false;
+        bool phase129_configuration_valid = true;
+        std::string phase129_configuration_failure;
+        std::string phase128_header_status = "absent";
+        std::size_t phase128_canonical_records = 0;
+        std::size_t phase128_canonical_rejected_records = 0;
+        std::size_t phase127_glonass_rows = 0;
+        std::size_t phase127_accepted_rows = 0;
+        std::size_t phase127_header_primary_rows = 0;
+        std::size_t phase127_ephemeris_fallback_rows = 0;
+        std::size_t phase127_header_entries_seen = 0;
+        std::size_t phase127_header_duplicate_entries = 0;
+        std::size_t phase127_header_conflict_entries = 0;
+        std::size_t phase127_header_malformed_entries = 0;
+        std::size_t phase127_ephemeris_candidates = 0;
+        std::size_t phase127_ephemeris_ties = 0;
+        std::size_t phase127_ephemeris_duplicate_entries = 0;
+        std::size_t phase127_ephemeris_conflict_entries = 0;
+        std::size_t phase127_query_time_coverage_gaps = 0;
+        std::size_t phase127_invalid_channels = 0;
+        std::map<std::string, std::size_t> phase127_failure_counts;
+        std::string phase127_failure;
+        // Phase129 local-miss and shared-vector conservation telemetry.  The
+        // counters describe the existing pseudorange factor population only;
+        // no additional factor/state is created.
+        std::size_t phase129_glonass_local_miss_rows = 0;
+        std::map<std::string, std::size_t> phase129_glonass_local_miss_counts;
+        std::size_t phase129_glonass_factor_rows_dropped = 0;
+        std::size_t phase129_glonass_factor_rows_retained = 0;
+        bool phase129_glonass_factor_count_consistent = true;
+        bool phase129_glonass_row_count_consistent = true;
+        // Phase131 physical-frequency correction-key telemetry.  This is an
+        // opt-in admission boundary and must not alter graph topology,
+        // factors, equations, units, or solver settings.
+        bool phase131_canonical_correction_band_key_enabled = false;
+        bool phase131_configuration_valid = true;
+        std::string phase131_configuration_failure;
+        std::size_t phase131_canonical_rows = 0;
+        std::size_t phase131_canonical_rejected_rows = 0;
+        std::size_t phase131_unknown_band_rows = 0;
+        std::size_t phase131_canonical_key_conflicts = 0;
+        std::size_t phase131_canonical_duplicate_rows = 0;
+        std::size_t phase131_canonical_streams = 0;
+        std::size_t phase131_canonical_selected_streams = 0;
+        std::size_t phase131_canonical_merged_streams = 0;
+        std::map<std::string, std::size_t> phase131_failure_counts;
+        // Phase135 compound fixed-initial-geometry affine-family admission
+        // witness. This is diagnostic-only and leaves the legacy problem
+        // builder unchanged when the selector is disabled.
+        bool phase135_official_affine_measurement_family_enabled = false;
+        bool phase135_configuration_valid = true;
+        std::string phase135_configuration_failure;
         std::size_t sparse_epochs_retained = 0;
         std::size_t sparse_empty_epochs_retained = 0;
         std::size_t double_difference_matched_base_epochs = 0;
@@ -330,7 +594,15 @@ public:
         std::size_t tdcp_rejected_loss_of_lock = 0;
         std::size_t tdcp_rejected_invalid_measurement = 0;
         std::size_t tdcp_rejected_code_phase_jump = 0;
+        // Phase117 official SNR/type sigma could not be formed in native
+        // metres (missing/nonfinite SNR, percentile, type, or wavelength).
+        // No legacy sigma fallback is allowed when this candidate is on.
+        std::size_t tdcp_rejected_invalid_weight = 0;
+        std::map<SignalType, TdcpSignalDiagnostics>
+            tdcp_signal_diagnostics;
         std::size_t residual_ionosphere_invalid_coefficients = 0;
+        std::size_t source_rover_epoch_states_built = 0;
+        std::size_t source_rover_missing_ephemeris_satellite_epochs = 0;
         std::size_t residual_ionosphere_candidate_rows = 0;
         std::size_t code_minus_carrier_jump_resets = 0;       ///< CMC screening: arc breaks forced
         std::size_t geometry_free_cycle_slip_resets = 0;      ///< confirmed geometry-free band resets
@@ -425,6 +697,10 @@ public:
         // Initial navigation state (first epoch), nav = ENU frame. Attitude is
         // the body->nav rotation from Stage-1 static leveling + heading align.
         Matrix3d init_attitude_body_to_nav = Matrix3d::Identity();
+        // Same-run native heading seeds, keyed to the exact problem epochs.
+        // No serialized positioning input; consumed only by explicit selector.
+        std::vector<Matrix3d> epoch_heading_attitudes_body_to_nav;
+        std::vector<GNSSTime> epoch_heading_attitude_times;
         Vector3d init_velocity_nav = Vector3d::Zero();
         // Optional raw GNSS-first ENU velocity sequence used by the upstream
         // stationary-stop gate.  It is populated only by the Android
@@ -487,8 +763,17 @@ public:
         std::vector<double> gps_common_pseudorange_delta_m;
         std::vector<int> gps_common_pseudorange_delta_satellites;
         std::vector<PseudorangeFactor> pseudorange_factors;
+        // Ephemeral, pre-residual-mask population. No serialization/input
+        // interface; created only by the explicitly selected raw builder.
+        std::vector<PseudorangeFactor> native_pseudorange_remasking_pool;
+        // Complete same-run factors passing temporal-candidate and baseline
+        // residual gates, excluded from ordinary graph and median estimation.
+        std::vector<PseudorangeFactor> native_code_edge_readmission_pool;
         std::vector<TimeDifferencedCarrierFactor> tdcp_factors;
         std::vector<UndifferencedDopplerFactor> undifferenced_doppler_factors;
+        // Same-run corrected ECEF D rows, explicitly remapped to these
+        // epochs. Never populate from optimized or saved velocity results.
+        std::vector<UndifferencedDopplerFactor> native_phase213_main_doppler_rows;
         std::vector<doppler_velocity_wls::Estimate>
             doppler_velocity_wls_estimates;
         std::vector<SingleDifferenceDopplerFactor> single_difference_doppler_factors;
@@ -518,6 +803,34 @@ public:
         // Optional in-memory PDC state bridge.  Empty unless a caller has
         // explicitly enabled and populated the research-only bridge.
         std::vector<NativePdcStateSeed> native_pdc_state_seeds;
+        // Phase164 dedicated GNSS-only handoff. Entries are produced by the
+        // same-run raw-P adapter; no serialized seed is valid here.
+        std::vector<raw_p_seed::RawPNoDopplerSeed>
+            native_raw_p_no_doppler_seeds;
+        // Phase93 same-run GNSS-first clock-drift handoff.  When the
+        // source-meter C0D handoff selector is active for the main graph, this
+        // contains exactly one optimized GNSS-first D_i [m/s] per retained
+        // epoch.  It is an initializer only; the main graph still owns the
+        // C0/D factors and must fail closed when coverage is missing/nonfinite.
+        std::vector<double>
+            native_source_clock_c0d_gnss_first_d_handoff_mps;
+        // Phase101 same-run handoff of the complete optimized official C_i
+        // vector.  Entries are exact retained-epoch order and metres; an
+        // active candidate must reject missing, nonfinite, or misaligned
+        // coverage rather than falling back to scalar/global ISB states.
+        std::vector<EpochClockBiasComponentsM>
+            native_source_clock_c0d_gnss_first_c_handoff_m;
+        // Phase114 same-run direct-WLS main seed.  These vectors are populated
+        // only by the explicit raw entry-point adapter after exact retained
+        // source-key validation.  Position/scalar-clock remain in `epochs`;
+        // C7 and D are copied here so the backend cannot accidentally select
+        // the GNSS-first result, a global ISB, or a raw/zero fallback.
+        std::vector<Vector3d>
+            native_direct_wls_ephemeral_velocity_ecef_mps;
+        std::vector<double>
+            native_direct_wls_ephemeral_d_handoff_mps;
+        std::vector<EpochClockBiasComponentsM>
+            native_direct_wls_ephemeral_c_handoff_m;
         FGOProblemDiagnostics diagnostics;
     };
 
@@ -643,6 +956,315 @@ public:
         bool quarantine_candidate = false;
     };
 
+    // Phase96 read-only root-cause telemetry.  These records deliberately
+    // describe the graph and the already-pinned LM trial surface only; they
+    // do not expose a solution and are empty unless the explicit opt-in
+    // configuration flag is enabled.
+    struct FGOPhase96FactorFamilyDiagnostics {
+        std::string family;
+        std::size_t factor_count = 0;
+        std::size_t finite_factor_count = 0;
+        std::size_t nonfinite_factor_count = 0;
+        double initial_cost = 0.0;
+    };
+
+    struct FGOPhase96VariableFamilyNormDiagnostics {
+        std::string family;
+        std::string variable_bucket;
+        std::size_t contribution_count = 0;
+        std::size_t finite_contribution_count = 0;
+        std::size_t nonfinite_contribution_count = 0;
+        double gradient_l2_norm = 0.0;
+        double normal_diagonal_l2_norm = 0.0;
+        double normal_diagonal_min =
+            std::numeric_limits<double>::quiet_NaN();
+        double normal_diagonal_max =
+            std::numeric_limits<double>::quiet_NaN();
+    };
+
+    struct FGOPhase96LmTrialDiagnostics {
+        std::size_t trial_index = 0;
+        std::size_t outer_iteration = 0;
+        double lambda = std::numeric_limits<double>::quiet_NaN();
+        double old_linearized_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double new_linearized_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double predicted_reduction =
+            std::numeric_limits<double>::quiet_NaN();
+        double candidate_nonlinear_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double actual_reduction =
+            std::numeric_limits<double>::quiet_NaN();
+        double model_fidelity = std::numeric_limits<double>::quiet_NaN();
+        bool candidate_finite = false;
+        bool linear_system_solved = false;
+        std::string linear_system_status;
+        std::string rejection_reason;
+    };
+
+    struct FGOPhase96ExceptionDiagnostics {
+        std::string stage;
+        std::string classification;
+        std::string type;
+        std::string message;
+        std::size_t count = 1;
+    };
+
+    struct FGOPhase96MainDiagnostics {
+        bool enabled = false;
+        bool attempted = false;
+        bool graph_observed = false;
+        bool initial_linearization_observed = false;
+        bool trial_trace_complete = false;
+        std::size_t trial_limit = 10;
+        std::size_t graph_factor_count = 0;
+        std::size_t graph_value_count = 0;
+        double graph_initial_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double initial_cost = std::numeric_limits<double>::quiet_NaN();
+        double final_cost = std::numeric_limits<double>::quiet_NaN();
+        std::size_t accepted_outer_iterations = 0;
+        std::string terminal_branch;
+        double factor_family_cost_sum =
+            std::numeric_limits<double>::quiet_NaN();
+        std::vector<FGOPhase96FactorFamilyDiagnostics> factor_families;
+        std::vector<FGOPhase96VariableFamilyNormDiagnostics>
+            variable_family_norms;
+        std::vector<FGOPhase96LmTrialDiagnostics> lm_trials;
+        std::vector<FGOPhase96ExceptionDiagnostics> exceptions;
+    };
+
+    // Phase97 read-only singular-system telemetry.  Key references retain the
+    // exact GTSAM integer key and its Symbol decomposition; no coordinate or
+    // optimized-state value is carried in these records.
+    struct FGOPhase97KeyReference {
+        std::uint64_t numeric_key = 0;
+        char symbol_character = 0;
+        std::uint64_t symbol_index = 0;
+    };
+
+    struct FGOPhase97FamilyDegreeDiagnostics {
+        std::string family;
+        std::size_t factor_degree = 0;
+    };
+
+    struct FGOPhase97KeyDiagnostics {
+        FGOPhase97KeyReference key;
+        std::string variable_bucket;
+        std::string value_type;
+        std::size_t value_dimension = 0;
+        bool value_present = false;
+        std::size_t factor_degree = 0;
+        std::size_t prior_factor_degree = 0;
+        std::size_t component_id = std::numeric_limits<std::size_t>::max();
+        std::size_t linearized_contribution_count = 0;
+        std::size_t finite_linearized_contribution_count = 0;
+        std::size_t nonfinite_linearized_contribution_count = 0;
+        double gradient_l2_norm = std::numeric_limits<double>::quiet_NaN();
+        double normal_diagonal_l2_norm =
+            std::numeric_limits<double>::quiet_NaN();
+        double normal_diagonal_min = std::numeric_limits<double>::quiet_NaN();
+        double normal_diagonal_max = std::numeric_limits<double>::quiet_NaN();
+        std::size_t exact_zero_normal_diagonal_count = 0;
+        std::size_t near_zero_normal_diagonal_count = 0;
+        bool exact_zero_column = false;
+        bool near_zero_column = false;
+        // Aggregate keyed linearized vectors.  These contain Jacobian-derived
+        // gradient/normal entries only, never a state estimate.
+        std::vector<double> gradient;
+        std::vector<double> normal_diagonal;
+        std::vector<FGOPhase97FamilyDegreeDiagnostics> family_degrees;
+    };
+
+    struct FGOPhase97FactorDiagnostics {
+        std::size_t graph_index = 0;
+        std::string concrete_factor_type;
+        std::string family;
+        std::size_t factor_dimension = 0;
+        bool finite_error = false;
+        bool is_prior_or_anchor = false;
+        std::vector<FGOPhase97KeyReference> keys;
+    };
+
+    struct FGOPhase97ComponentDiagnostics {
+        std::size_t component_id = 0;
+        std::size_t key_count = 0;
+        std::size_t factor_count = 0;
+        bool anchored = false;
+        std::vector<FGOPhase97KeyReference> keys;
+    };
+
+    struct FGOPhase97RankDiagnostics {
+        bool attempted = false;
+        bool rank_known = false;
+        bool nullity_known = false;
+        bool finite = true;
+        std::size_t row_count = 0;
+        std::size_t column_count = 0;
+        std::size_t rank = 0;
+        std::size_t nullity = 0;
+        std::string method;
+        std::string status;
+        double threshold = std::numeric_limits<double>::quiet_NaN();
+        std::vector<FGOPhase97KeyReference> nullspace_attribution;
+    };
+
+    struct FGOPhase97LmTrialDiagnostics {
+        std::size_t trial_index = 0;
+        std::size_t outer_iteration = 0;
+        double lambda = std::numeric_limits<double>::quiet_NaN();
+        double old_linearized_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double new_linearized_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double predicted_reduction =
+            std::numeric_limits<double>::quiet_NaN();
+        double candidate_nonlinear_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double actual_reduction = std::numeric_limits<double>::quiet_NaN();
+        double model_fidelity = std::numeric_limits<double>::quiet_NaN();
+        bool candidate_finite = false;
+        bool linear_system_solved = false;
+        std::string linear_system_status;
+        std::string rejection_reason;
+        bool nearby_variable_available = false;
+        FGOPhase97KeyReference nearby_variable;
+        std::string nearby_variable_status;
+    };
+
+    struct FGOPhase97MainDiagnostics {
+        bool enabled = false;
+        bool attempted = false;
+        bool graph_observed = false;
+        bool initial_linearization_observed = false;
+        bool diagnostic_complete = false;
+        std::size_t graph_factor_count = 0;
+        std::size_t graph_value_count = 0;
+        std::size_t graph_value_dimension = 0;
+        double graph_initial_cost =
+            std::numeric_limits<double>::quiet_NaN();
+        double initial_cost = std::numeric_limits<double>::quiet_NaN();
+        double final_cost = std::numeric_limits<double>::quiet_NaN();
+        std::size_t accepted_outer_iterations = 0;
+        std::size_t trial_limit = 10;
+        bool trial_trace_complete = false;
+        std::string terminal_branch;
+        std::size_t missing_factor_key_count = 0;
+        std::size_t duplicate_key_reference_count = 0;
+        std::size_t value_type_mismatch_count = 0;
+        std::size_t empty_factor_count = 0;
+        std::size_t isolated_value_key_count = 0;
+        std::size_t connected_component_count = 0;
+        std::size_t exact_zero_column_count = 0;
+        std::size_t near_zero_column_count = 0;
+        double near_zero_threshold = 1.0e-12;
+        std::string nearby_variable_capture_status =
+            "not-observed";
+        std::vector<FGOPhase97KeyReference> nearby_variables;
+        std::vector<FGOPhase97KeyReference> missing_factor_keys;
+        std::vector<FGOPhase97KeyReference> duplicate_key_reference_keys;
+        std::vector<FGOPhase97KeyReference> value_type_mismatch_keys;
+        std::string ordering_context = "initial Values::keys() ascending";
+        std::vector<FGOPhase97KeyDiagnostics> keys;
+        std::vector<FGOPhase97FactorDiagnostics> factors;
+        std::vector<FGOPhase97ComponentDiagnostics> components;
+        std::vector<FGOPhase97RankDiagnostics> rank_decompositions;
+        std::vector<FGOPhase97LmTrialDiagnostics> lm_trials;
+        std::vector<FGOPhase96ExceptionDiagnostics> exceptions;
+    };
+
+    // Phase98 read-only solver-boundary telemetry.  This compact sidecar
+    // records only metadata from the existing pinned LM invocation and an
+    // actual IndeterminantLinearSystemException when that exception reaches
+    // the integration boundary.  It intentionally carries no Values,
+    // coordinates, residuals, or solution rows.
+    struct FGOPhase98IndeterminateExceptionDiagnostics {
+        std::string stage;
+        double lambda = std::numeric_limits<double>::quiet_NaN();
+        std::string solver_type;
+        std::string solver_branch;
+        std::string elimination_function;
+        std::string ordering_type;
+        bool explicit_ordering_present = false;
+        std::size_t ordering_size = 0;
+        std::string ordering_digest;
+        bool diagonal_damping = false;
+        bool nearby_variable_available = false;
+        FGOPhase97KeyReference nearby_variable;
+        std::string nearby_variable_status = "nearby_variable_unavailable";
+        std::string exception_type;
+        std::string exception_message;
+    };
+
+    struct FGOPhase98SolverDiagnostics {
+        bool enabled = false;
+        bool attempted = false;
+        bool exception_captured = false;
+        std::string solver_type;
+        std::string solver_branch;
+        std::string elimination_function;
+        std::string ordering_type;
+        bool explicit_ordering_present = false;
+        std::size_t ordering_size = 0;
+        std::string ordering_digest;
+        bool diagonal_damping = false;
+        std::size_t existing_lm_trial_limit = 10;
+        std::vector<FGOPhase98IndeterminateExceptionDiagnostics>
+            indeterminate_exceptions;
+    };
+
+    // Phase143 native-authoritative termination telemetry.  This object is a
+    // scalar sidecar for one unchanged GTSAM LM call; it deliberately carries
+    // no Values, residual rows, coordinates, or solution output.  The
+    // termination_branch is an enum-valued string from the frozen set rather
+    // than a free-form wrapper interpretation.
+    struct FGOPhase143TerminationDiagnostics {
+        bool selector_enabled = false;
+        std::string stage = "disabled";
+        std::size_t configured_max_iterations = 0;
+        std::size_t effective_max_iterations = 0;
+        bool attempted = false;
+        std::size_t attempted_outer_iterations = 0;
+        std::size_t accepted_outer_iterations = 0;
+        std::size_t rejected_outer_iterations = 0;
+        std::size_t total_inner_lambda_attempts = 0;
+        // Native trace accounting is retained even when the strict
+        // completeness contract rejects the solve.  These are diagnostic
+        // counters only; they never reconstruct or promote a solution.
+        std::size_t parsed_trial_count = 0;
+        std::size_t native_inner_iterations = 0;
+        std::size_t expected_trial_count = 0;
+        double initial_cost = std::numeric_limits<double>::quiet_NaN();
+        double final_cost = std::numeric_limits<double>::quiet_NaN();
+        bool costs_finite = false;
+        bool strict_cost_decrease = false;
+        std::string termination_branch;
+        double relative_error_tolerance =
+            std::numeric_limits<double>::quiet_NaN();
+        double absolute_error_tolerance =
+            std::numeric_limits<double>::quiet_NaN();
+        double error_tolerance = std::numeric_limits<double>::quiet_NaN();
+        double initial_lambda = std::numeric_limits<double>::quiet_NaN();
+        double final_lambda = std::numeric_limits<double>::quiet_NaN();
+        double maximum_lambda = std::numeric_limits<double>::quiet_NaN();
+        double lambda_factor = std::numeric_limits<double>::quiet_NaN();
+        double lambda_lower_bound = std::numeric_limits<double>::quiet_NaN();
+        double lambda_upper_bound = std::numeric_limits<double>::quiet_NaN();
+        double min_model_fidelity =
+            std::numeric_limits<double>::quiet_NaN();
+        bool diagonal_damping = false;
+        bool use_fixed_lambda_factor = false;
+        std::string linear_solver;
+        std::string elimination;
+        std::string ordering_type;
+        bool explicit_ordering_present = false;
+        bool no_fallback = true;
+        bool termination_trace_complete = false;
+        bool configuration_valid = true;
+        std::string configuration_failure;
+    };
+
     struct FGODiagnostics {
         int iterations = 0;
         bool converged = false;
@@ -664,6 +1286,86 @@ public:
         std::size_t tdcp_factors = 0;
         /// TDCP residual rows/factors actually inserted by the selected backend.
         std::size_t tdcp_factors_inserted = 0;
+        std::size_t tdcp_only_affine_factors_inserted = 0;
+        std::size_t epoch_heading_attitude_seeds_inserted = 0;
+        std::size_t first_imu_bias_priors_inserted = 0;
+        std::size_t first_imu_bias_priors_omitted = 0;
+        std::size_t first_imu_velocity_priors_inserted = 0;
+        std::size_t first_imu_velocity_priors_omitted = 0;
+        std::size_t relative_height_pairs_selected = 0;
+        std::size_t relative_height_factors_inserted = 0;
+        // Phase118 official route-Type Huber-k metadata.  These fields are
+        // provenance only; the selected threshold is applied only to ordinary
+        // TDCP factors and never changes sigma, equations, admission, or any
+        // other robust kernel.
+        bool official_tdcp_huber_k_enabled = false;
+        std::string official_tdcp_setting_type;
+        double official_tdcp_huber_threshold_sigma = 4.0;
+        // Phase184 dedicated Phase171 source Type mapping.  This is kept
+        // separate from the Phase118 provenance fields above.
+        bool native_phase184_source_tdcp_huber_k_enabled = false;
+        std::string native_phase184_tdcp_setting_type;
+        // Phase120 source-parity metadata.  This flag reports only the
+        // ordinary TDCP measurement preparation selector; it does not imply
+        // that standalone carrier, pseudorange, or double-difference values
+        // were changed.
+        bool official_tdcp_resl_atmosphere_cancellation_enabled = false;
+        // Phase143 native-authoritative LM termination report.  It is
+        // populated only when the Phase143 selector is enabled; selector-off
+        // diagnostics retain the historical schema and values.
+        FGOPhase143TerminationDiagnostics
+            native_phase143_termination;
+        // Phase135 compound fixed-initial-geometry affine-family witness.
+        // These counters are populated only by the opt-in GTSAM adapter;
+        // selector-off diagnostics retain their historical values.
+        bool phase135_official_affine_measurement_family_enabled = false;
+        bool phase135_configuration_valid = true;
+        std::string phase135_configuration_failure;
+        std::size_t phase135_pseudorange_factors_inserted = 0;
+        std::size_t phase135_doppler_factors_inserted = 0;
+        std::size_t phase135_tdcp_factors_inserted = 0;
+        std::size_t phase135_pose3_x_bridge_factors = 0;
+        std::size_t phase135_geometry_rows_validated = 0;
+        std::string phase135_geometry_representation = "disabled";
+        // Phase141 native-authoritative schema witnesses.  These are
+        // populated by the already-selected affine insertion transaction;
+        // they do not participate in factor construction or optimization.
+        bool phase135_transactional = false;
+        bool phase135_fixed_initial_geometry = false;
+        bool phase135_finite_jacobians = false;
+        bool phase135_single_sagnac_representation = false;
+        bool phase135_pseudorange_key_order_exact = false;
+        bool phase135_pseudorange_finite_values = false;
+        bool phase135_pseudorange_source_geometry_same_path = false;
+        bool phase135_doppler_key_order_exact = false;
+        bool phase135_doppler_finite_values = false;
+        bool phase135_doppler_source_geometry_same_path = false;
+        bool phase135_tdcp_key_order_exact = false;
+        bool phase135_tdcp_finite_values = false;
+        bool phase135_tdcp_source_geometry_same_path = false;
+        std::size_t phase135_legacy_pseudorange_factor_count = 0;
+        std::size_t phase135_legacy_doppler_factor_count = 0;
+        std::size_t phase135_legacy_tdcp_factor_count = 0;
+        bool phase135_pose3_x_bridge_keys_exact = false;
+        // Phase138 ordinary-TDCP measurement-constant witness.  The
+        // correction is populated only by the opt-in Phase135 adapter; it
+        // never changes the TDCP pair ledger, factor Jacobians, or count.
+        bool phase138_affine_tdcp_anchor_range_constant_enabled = false;
+        bool phase138_configuration_valid = true;
+        std::string phase138_configuration_failure;
+        std::size_t phase138_tdcp_range_constants_validated = 0;
+        std::size_t phase138_tdcp_measurements_adjusted = 0;
+        std::size_t phase138_adjustment_application_passes = 0;
+        bool phase138_adjusted_exactly_once = false;
+        bool phase138_factor_count_unchanged = true;
+        std::string phase138_measurement_equation = "disabled";
+        std::string phase138_geometry_representation = "disabled";
+        bool phase138_same_endpoint_epoch_and_satellite_state = false;
+        bool phase138_same_satellite_state = false;
+        bool phase138_finite_adjusted_measurements = false;
+        bool phase138_no_raw_or_zero_fallback = false;
+        bool phase138_transactional = false;
+        std::size_t phase138_legacy_tdcp_factor_count = 0;
         std::size_t undifferenced_doppler_factors = 0;
         /// Undifferenced Doppler rows actually inserted by the selected backend.
         /// This can differ from undifferenced_doppler_factors when a backend
@@ -738,6 +1440,131 @@ public:
         std::size_t double_difference_rejected_no_base_epoch = 0;
         std::size_t double_difference_rejected_no_reference = 0;
         std::size_t motion_factors = 0;
+        // Source-exact ClockFactor_CCDD C0/D telemetry.  These counters are
+        // populated by the GTSAM Pose3+IMU candidate and remain zero when the
+        // candidate is disabled.  The parity scope is one active C0/D row,
+        // not the full seven-component source clock vector.
+        bool native_source_clock_c0d_factor_enabled = false;
+        // Phase164 dedicated no-D graph numerical-gauge provenance.  These
+        // fields never imply that an unobserved C7 component was measured.
+        bool native_raw_p_no_doppler_graph_enabled = false;
+        double native_raw_p_no_doppler_unobserved_clock_gauge_sigma_m =
+            std::numeric_limits<double>::quiet_NaN();
+        std::size_t native_raw_p_no_doppler_unobserved_clock_gauge_components =
+            0;
+        // Phase171 GNSS-first raw-P+D staging provenance.  The velocity and
+        // Doppler LOS rows remain ECEF in this Point3 graph; the main IMU
+        // graph has a separate ENU handoff and keeps generic D empty.
+        bool native_raw_p_ecef_doppler_gnss_first_enabled = false;
+        std::size_t native_raw_p_ecef_doppler_unobserved_clock_gauge_components =
+            0;
+        // Phase171 reuses the same explicit weak numerical gauge for C7
+        // components absent from the retained P rows in the Pose3+IMU main
+        // graph.  It is a numerical gauge, never a measured ISB observation.
+        bool native_phase171_no_doppler_imu_main_enabled = false;
+        double native_phase171_unobserved_clock_gauge_sigma_m =
+            std::numeric_limits<double>::quiet_NaN();
+        std::size_t native_phase171_unobserved_clock_gauge_components = 0;
+        // Phase201 source-inclusive-forward IMU schedule telemetry.  These
+        // fields are populated only by the dedicated Phase171 opt-in branch;
+        // the legacy preceding-delta/tail schedule does not write them.
+        bool native_phase201_source_inclusive_forward_imu_schedule_enabled =
+            false;
+        bool native_phase201_source_inclusive_forward_imu_schedule_attempted =
+            false;
+        bool native_phase201_source_inclusive_forward_imu_schedule_configuration_valid =
+            true;
+        std::size_t native_phase201_intervals = 0;
+        std::size_t native_phase201_intervals_with_samples = 0;
+        std::size_t native_phase201_inserted_samples = 0;
+        std::size_t native_phase201_invalid_sample_count = 0;
+        std::size_t native_phase201_nonfinite_dt_count = 0;
+        std::size_t native_phase201_nonpositive_dt_count = 0;
+        std::size_t native_phase201_empty_interval_count = 0;
+        double native_phase201_integrated_duration_min_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_phase201_integrated_duration_max_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_phase201_gnss_interval_duration_min_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_phase201_gnss_interval_duration_max_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_phase201_duration_error_min_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_phase201_duration_error_max_s =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_phase201_duration_error_max_abs_s =
+            std::numeric_limits<double>::quiet_NaN();
+        std::string native_phase201_configuration_failure;
+        bool native_phase205_bias_density_enabled = false;
+        bool native_phase209_separate_imu_enabled = false;
+        bool native_phase213_main_doppler_enabled = false;
+        bool native_phase217_main_motion_enabled = false;
+        std::size_t native_phase217_main_motion_factors = 0;
+        std::size_t native_phase217_main_motion_gap_skips = 0;
+        std::size_t native_phase213_main_doppler_factors = 0;
+        std::size_t native_phase209_motion_factors = 0;
+        std::size_t native_phase209_bias_factors = 0;
+        std::size_t native_phase209_inclusive_samples = 0;
+        std::size_t native_phase205_bias_density_intervals = 0;
+        std::size_t native_phase205_bias_density_samples = 0;
+        double native_phase205_bias_density_scale_min = 0.0;
+        double native_phase205_bias_density_scale_max = 0.0;
+        // Phase92 opt-in state-unit parity.  C_i and global ISB_i are metres
+        // inside the active GTSAM batch graph; D_i remains metres/second.
+        // Public PositionSolution::receiver_clock_bias remains seconds after
+        // one explicit division by C_LIGHT at the output boundary.
+        bool native_source_clock_c0d_meter_state_parity_enabled = false;
+        // Phase101 official epoch-local C-vector topology witness.  The
+        // candidate uses seven metre components per retained epoch and never
+        // inserts the legacy global `i` ISB keys.
+        bool native_source_clock_c0d_epoch_vector_parity_enabled = false;
+        std::size_t native_source_clock_c0d_epoch_vector_dimension = 0;
+        std::size_t native_source_clock_c0d_epoch_vector_state_count = 0;
+        std::size_t native_source_clock_c0d_epoch_vector_handoff_count = 0;
+        std::size_t native_source_clock_c0d_global_isb_state_count = 0;
+        std::size_t native_source_clock_c0d_factor_count = 0;
+        // Phase88 active-solve diagnostics. These fields remain at their
+        // defaults unless the opt-in diagnostic flag is enabled alongside
+        // the source C0/D factor.
+        bool native_source_clock_c0d_active_solve_diagnostic_enabled = false;
+        bool native_source_clock_c0d_active_solve_attempted = false;
+        std::size_t native_source_clock_c0d_accepted_outer_iterations = 0;
+        std::size_t native_source_clock_c0d_total_inner_lambda_attempts = 0;
+        std::size_t native_source_clock_c0d_indeterminate_linear_solve_count = 0;
+        std::size_t native_source_clock_c0d_unsuccessful_model_step_count = 0;
+        std::size_t native_source_clock_c0d_small_cost_change_stop_count = 0;
+        std::size_t native_source_clock_c0d_maximum_lambda_stop_count = 0;
+        double native_source_clock_c0d_initial_lambda = 0.0;
+        double native_source_clock_c0d_maximum_lambda = 0.0;
+        double native_source_clock_c0d_final_lambda = 0.0;
+        double native_source_clock_c0d_max_whitened_clock_column_norm = 0.0;
+        double native_source_clock_c0d_max_whitened_drift_column_norm = 0.0;
+        double native_source_clock_c0d_conditioning_proxy = 0.0;
+        bool native_source_clock_c0d_active_solve_finite_costs = false;
+        bool native_source_clock_c0d_termination_trace_complete = false;
+        std::string native_source_clock_c0d_termination_branch_reason;
+        // Phase91 raw Android receiver-clock-drift D_i initializer. These
+        // fields cover only the finite retained EpochSeed sequence; exact
+        // cross-stream epoch identity is reported by the native entry point.
+        bool native_source_clock_c0d_raw_drift_d_initializer_enabled = false;
+        bool native_source_clock_c0d_raw_drift_d_initializer_attempted = false;
+        bool native_source_clock_c0d_raw_drift_d_initializer_coverage_valid = false;
+        std::size_t native_source_clock_c0d_raw_drift_d_initializer_epoch_count = 0;
+        std::size_t native_source_clock_c0d_raw_drift_d_initializer_finite_count = 0;
+        std::size_t native_source_clock_c0d_raw_drift_d_initializer_nonfinite_count = 0;
+        double native_source_clock_c0d_raw_drift_d_initializer_min_mps =
+            std::numeric_limits<double>::quiet_NaN();
+        double native_source_clock_c0d_raw_drift_d_initializer_max_mps =
+            std::numeric_limits<double>::quiet_NaN();
+        std::string native_source_clock_c0d_raw_drift_d_initializer_failure;
+        std::size_t native_source_clock_c0d_clock_jump_skips = 0;
+        std::size_t native_source_clock_c0d_gap_skips = 0;
+        std::size_t native_source_clock_c0d_invalid_dt_skips = 0;
+        std::size_t native_source_clock_c0d_phone_exclusion_skips = 0;
+        double native_source_clock_c0d_dt_min_s = 0.0;
+        double native_source_clock_c0d_dt_max_s = 0.0;
+        std::size_t native_source_clock_c0d_legacy_between_factor_count = 0;
         std::size_t ambiguity_between_factors = 0;
         std::size_t robust_pseudorange_factors = 0;
         std::size_t robust_carrier_phase_factors = 0;
@@ -777,6 +1604,22 @@ public:
         std::size_t upstream_stop_velocity_factors = 0;
         std::size_t upstream_stop_pose_factors = 0;
         std::size_t upstream_stop_imu_samples = 0;
+        // Per-detected-epoch accounting for the upstream stop gate.  These
+        // counters are scalar diagnostics only; they do not alter the gate
+        // or provide a fallback factor/seed.  In particular, a graph
+        // velocity is counted as a fallback only when the exact same-run
+        // stop-seed vector is unavailable or nonfinite for that epoch.
+        std::size_t upstream_stop_velocity_key_missing_epochs = 0;
+        std::size_t upstream_stop_seed_unavailable_epochs = 0;
+        std::size_t upstream_stop_seed_nonfinite_epochs = 0;
+        std::size_t upstream_stop_graph_velocity_fallback_epochs = 0;
+        std::size_t upstream_stop_graph_velocity_nonfinite_epochs = 0;
+        std::size_t upstream_stop_speed_nonfinite_epochs = 0;
+        std::size_t upstream_stop_speed_evaluated_epochs = 0;
+        std::size_t upstream_stop_speed_gate_accepted_epochs = 0;
+        std::size_t upstream_stop_speed_gate_rejected_epochs = 0;
+        double upstream_stop_speed_min_mps = 0.0;
+        double upstream_stop_speed_max_mps = 0.0;
         double upstream_stop_acceleration_std_threshold_mps2 = 0.0;
         double upstream_stop_gyro_std_threshold_radps = 0.0;
         std::size_t ambiguity_hold_epochs = 0;  ///< 2e: epochs FIXED via held (not fresh) integers
@@ -842,6 +1685,29 @@ public:
         bool partial_lambda_ambiguity_fix_used = false;
         double initial_cost = 0.0;
         double final_cost = 0.0;
+        // Phase96 main-graph diagnostics are opt-in and remain empty for the
+        // legacy/default path.  No solution or accuracy fields are included.
+        FGOPhase96MainDiagnostics native_source_clock_c0d_phase96_main;
+        // Phase97 singular-system diagnostics are independently opt-in.  The
+        // sidecar contains graph structure and read-only linearization data,
+        // never a solution or accuracy estimate.
+        FGOPhase97MainDiagnostics
+            native_source_clock_c0d_phase97_singular_system;
+        // Phase98 solver-boundary metadata is independently opt-in.  The
+        // default remains disabled and this sidecar never exposes a
+        // solution or changes the solver path.
+        FGOPhase98SolverDiagnostics
+            native_source_clock_c0d_phase98_solver_rank;
+        // Phase99 solver selection is an opt-in branch witness.  The strings
+        // describe the exact solver selected for the GTSAM batch invocation;
+        // they do not expose Values, solution rows, or accuracy.
+        bool native_source_clock_c0d_phase99_main_multifrontal_qr_solver_requested =
+            false;
+        bool native_source_clock_c0d_phase99_main_multifrontal_qr_solver_selected =
+            false;
+        std::string selected_linear_solver_type = "not-applicable";
+        std::string selected_solver_branch = "not-applicable";
+        std::string selected_elimination_function = "not-applicable";
         double processing_time_ms = 0.0;
         double epoch_lambda_processing_time_ms = 0.0;
         double epoch_lambda_setup_time_ms = 0.0;
@@ -855,6 +1721,15 @@ public:
         double last_update_norm_m = 0.0;
         double residual_rms_m = 0.0;
         double tdcp_residual_rms_m = 0.0;
+        std::size_t tdcp_frequency_residual_states = 0;
+        std::size_t tdcp_frequency_residual_factors = 0;
+        std::size_t tdcp_frequency_residual_priors = 0;
+        std::size_t optimized_imu_bias_count = 0;
+        std::size_t nominal_p_information_epochs = 0;
+        std::size_t nominal_p_information_rank_deficient_epochs = 0;
+        double nominal_p_information_min_eigenvalue_per_m2 = 0.0;
+        double optimized_accel_bias_max_norm_mps2 = 0.0;
+        double optimized_gyro_bias_max_norm_radps = 0.0;
         double undifferenced_doppler_residual_rms_mps = 0.0;
         double single_difference_doppler_residual_rms_mps = 0.0;
         double single_difference_tdcp_residual_rms_m = 0.0;
@@ -1283,6 +2158,17 @@ public:
     };
 
     struct FGOResult {
+        struct TdcpFrequencyCorrection {
+            std::size_t previous_epoch_index = 0;
+            std::size_t current_epoch_index = 0;
+            SatelliteId satellite;
+            SignalType signal = SignalType::GPS_L1CA;
+            // Subtract from prediction-minus-measurement residual [m].
+            double alpha_slant_change_m = 0.0;
+        };
+        // Same-run diagnostic handoff only; empty when disabled. Never an
+        // input to a later solver invocation or serialized seed trajectory.
+        std::vector<TdcpFrequencyCorrection> tdcp_frequency_corrections;
         Solution solution;
         FGODiagnostics diagnostics;
         std::vector<AmbiguityEstimate> ambiguity_estimates;
@@ -1290,6 +2176,16 @@ public:
         std::vector<std::set<SatelliteId>> ambiguity_reference_satellites_by_epoch;
         std::vector<std::map<SatelliteId, double>> ambiguity_estimate_cycles_by_epoch;
         std::vector<Vector3d> epoch_velocities_ecef_mps;
+        // Phase93 optimized receiver clock-drift states [m/s], exported in
+        // retained GNSS-first/source order when the source-meter C0D graph is
+        // active.  Missing or nonfinite state export is a fail-closed result;
+        // no raw/zero/WLS/interpolated fallback is permitted by that selector.
+        std::vector<double> epoch_clock_drift_mps;
+        // Phase101 optimized official seven-component receiver C_i vectors
+        // [m], exported in exact retained epoch order.  Empty on legacy and
+        // scalar-C paths; no CSV/accuracy output is implied by this field.
+        std::vector<EpochClockBiasComponentsM>
+            epoch_clock_bias_components_m;
         // Static receiver secondary-signal code-bias estimates [m], populated
         // only by the opt-in signal-bias backend path.
         std::map<std::pair<GNSSSystem, SignalType>, double>

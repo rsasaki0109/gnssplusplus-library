@@ -6,7 +6,12 @@
 
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/galileo_group_delay.hpp>
+#include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
+#include <libgnss++/algorithms/tdcp_contract.hpp>
+#include <libgnss++/algorithms/phase127_glonass_channel_provenance.hpp>
+#include <libgnss++/algorithms/phase128_glonass_provenance.hpp>
+#include <libgnss++/algorithms/phase129_glonass_local_miss.hpp>
 
 namespace libgnss {
 
@@ -21,6 +26,100 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
 #endif
 
 namespace fgo_internal {
+
+inline void recordPhase127GlonassProvenance(
+    FGOProcessor::FGOProblemDiagnostics& diagnostics,
+    const phase127_glonass::Result& result,
+    bool allow_local_miss = false) {
+    const auto& source = result.diagnostics;
+    diagnostics.phase127_glonass_channel_provenance_enabled = true;
+    ++diagnostics.phase127_glonass_rows;
+    diagnostics.phase127_header_entries_seen += source.header_entries_seen;
+    diagnostics.phase127_header_duplicate_entries +=
+        source.header_duplicate_entries;
+    diagnostics.phase127_header_conflict_entries +=
+        source.header_conflict_entries;
+    diagnostics.phase127_header_malformed_entries +=
+        source.header_malformed_entries;
+    diagnostics.phase127_ephemeris_candidates += source.ephemeris_candidates;
+    diagnostics.phase127_ephemeris_ties += source.ephemeris_ties;
+    diagnostics.phase127_ephemeris_duplicate_entries +=
+        source.ephemeris_duplicate_entries;
+    diagnostics.phase127_ephemeris_conflict_entries +=
+        source.ephemeris_conflict_entries;
+    diagnostics.phase127_query_time_coverage_gaps +=
+        source.query_time_coverage_gaps;
+    diagnostics.phase127_invalid_channels += source.invalid_channel_entries;
+    if (result.accepted) {
+        ++diagnostics.phase127_accepted_rows;
+        if (result.source == phase127_glonass::ChannelSource::Header) {
+            ++diagnostics.phase127_header_primary_rows;
+        } else if (result.source ==
+                   phase127_glonass::ChannelSource::BroadcastEphemeris) {
+            ++diagnostics.phase127_ephemeris_fallback_rows;
+        }
+        return;
+    }
+    const auto classification = phase129_glonass_local_miss::classify(
+        result, allow_local_miss);
+    ++diagnostics.phase127_failure_counts[classification.reason_code];
+    if (classification.local_miss) {
+        // Phase129 is a local admission overlay.  Keep the exact Phase127
+        // reason code, but do not poison the route-global failure field: the
+        // caller will omit this row from the existing shared factor vector.
+        diagnostics.phase129_glonass_local_miss_mask_enabled = true;
+        ++diagnostics.phase129_glonass_local_miss_rows;
+        ++diagnostics.phase129_glonass_local_miss_counts[
+            classification.reason_code];
+        return;
+    }
+    diagnostics.phase127_failure =
+        source.failure.empty() ? classification.reason_code : source.failure;
+}
+
+/**
+ * Apply the Phase127 FCN provenance gate to a local observation copy at the
+ * existing selected-ephemeris/transmit-time boundary.  The app supplies the
+ * RINEX header ledger to the Phase126 base operator; rover observations have
+ * no such header in the Android raw contract, so the exact time-valid
+ * broadcast FCN is the only admissible source here.
+ */
+inline bool annotatePhase127GlonassObservation(
+    Observation& observation,
+    const GNSSTime& query_time,
+    const NavigationData& navigation,
+    const FGOProcessor::FGOConfig& config,
+    FGOProcessor::FGOProblemDiagnostics* diagnostics = nullptr) {
+    if ((!config.use_native_phase127_glonass_channel_provenance &&
+         !config.use_native_phase128_glonass_provenance_parser_admission) ||
+        observation.satellite.system != GNSSSystem::GLONASS) {
+        return true;
+    }
+    phase127_glonass::Result result;
+    if (config.use_native_phase128_glonass_provenance_parser_admission) {
+        // Android observations do not carry a RINEX header.  Phase128 must
+        // therefore use the explicit absent-header state and continue to the
+        // exact native GPST broadcast-geph resolver; it never derives FCN
+        // from carrierFrequencyHz.
+        result = phase128_glonass::resolveAndAnnotate(
+            observation, query_time, navigation,
+            GlonassFrequencyChannelHeaderStatus::Absent);
+        if (diagnostics != nullptr) {
+            diagnostics->phase128_canonical_records += result.accepted ? 1U : 0U;
+            diagnostics->phase128_canonical_rejected_records +=
+                result.accepted ? 0U : 1U;
+        }
+    } else {
+        result = phase127_glonass::resolveAndAnnotate(
+            observation, query_time, navigation);
+    }
+    if (diagnostics != nullptr) {
+        recordPhase127GlonassProvenance(
+            *diagnostics, result,
+            config.use_native_phase129_glonass_local_miss_mask);
+    }
+    return result.accepted;
+}
 
 inline bool isPrimaryFgoSignal(SignalType signal, bool use_multi_constellation) {
     if (!use_multi_constellation) {
@@ -438,11 +537,27 @@ struct PreparedCarrierObservation {
     SatelliteId satellite;
     SignalType signal = SignalType::GPS_L1CA;
     Vector3d satellite_position_ecef = Vector3d::Zero();
+    // Broadcast state at the source transmit-time query, before the
+    // historical earth-rotation rotation used for satellite_position_ecef.
+    // Phase135 consumes this only in its opt-in source-affine geometry
+    // adapter; all existing carrier/DD preparation remains unchanged.
+    Vector3d source_satellite_position_ecef = Vector3d::Zero();
+    bool source_satellite_position_available = false;
     double corrected_pseudorange_m = 0.0;
     double corrected_carrier_m = 0.0;
+    // Ordinary TDCP-only measurement preparation.  Keep this separate from
+    // corrected_carrier_m so standalone carrier, ambiguity, and DD paths are
+    // unaffected by Phase120's source-parity selector.
+    double tdcp_carrier_m = 0.0;
+    double source_adr_uncertainty_m = 0.0;
     double wavelength_m = 0.0;
+    // Raw observation SNR/CN0 [dB-Hz].  NaN is intentional for a missing
+    // source field so the Phase117 weighting selector can fail closed rather
+    // than treating Observation's legacy zero default as metadata.
+    double snr_dbhz = std::numeric_limits<double>::quiet_NaN();
     double sigma_m = 0.01;
     double elevation_rad = 0.0;
+    double residual_ionosphere_coefficient = 0.0;
     bool loss_of_lock = false;
     bool has_carrier_phase = true;
     bool has_doppler_residual = false;
@@ -646,6 +761,16 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
         if (!eph || !isHealthyForPositioning(observation, *eph)) {
             continue;
         }
+        Observation frequency_observation = observation;
+        if (!annotatePhase127GlonassObservation(
+                frequency_observation, transmit_time, nav, config)) {
+            continue;
+        }
+        const double row_frequency_hz =
+            config.use_native_phase127_glonass_channel_provenance &&
+                    observation.satellite.system == GNSSSystem::GLONASS
+                ? signalFrequencyHz(frequency_observation)
+                : signalFrequencyHz(observation.signal, eph);
 
         const Vector3d corrected_satellite_position =
             earthRotationCorrected(satellite_position, receiver_position);
@@ -666,7 +791,7 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
                 nav.ionosphere_model.alpha,
                 nav.ionosphere_model.beta);
 
-            const double frequency_hz = signalFrequencyHz(observation.signal, eph);
+            const double frequency_hz = row_frequency_hz;
             if (frequency_hz > 0.0) {
                 const double scale = constants::GPS_L1_FREQ / frequency_hz;
                 ionosphere_delay *= scale * scale;
@@ -679,7 +804,11 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
                 models::tropDelaySaastamoinen(receiver_position, geometry.elevation);
         }
 
-        double wavelength = signalWavelengthMeters(observation);
+        double wavelength =
+            config.use_native_phase127_glonass_channel_provenance &&
+                    observation.satellite.system == GNSSSystem::GLONASS
+                ? signalWavelengthMeters(frequency_observation)
+                : signalWavelengthMeters(observation);
         if (wavelength <= 0.0) {
             wavelength = signalWavelengthMeters(observation.signal, eph);
         }
@@ -690,27 +819,37 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
 
         const double satellite_clock_m =
             satellite_clock_bias * constants::SPEED_OF_LIGHT;
-        const double group_delay_m = groupDelayCorrectionMeters(
-            observation, *eph,
-            config.use_signal_specific_galileo_group_delay);
+        const double group_delay_m =
+            config.use_native_phase126_raw_base_source_complete
+                ? 0.0
+                : groupDelayCorrectionMeters(
+                      observation, *eph,
+                      config.use_signal_specific_galileo_group_delay);
         const double corrected_pseudorange =
             observation.pseudorange +
             satellite_clock_m -
             ionosphere_delay -
             troposphere_delay -
             group_delay_m;
+        const double raw_carrier_m =
+            usable_carrier ? observation.carrier_phase * wavelength : 0.0;
         const double corrected_carrier =
             usable_carrier
-                ? observation.carrier_phase * wavelength +
-                      satellite_clock_m -
-                      troposphere_delay +
+                ? raw_carrier_m + satellite_clock_m - troposphere_delay +
                       ionosphere_delay
                 : 0.0;
+        const double tdcp_carrier =
+            config.use_official_tdcp_resl_atmosphere_cancellation
+                ? (usable_carrier
+                       ? tdcp_contract::ordinaryTdcpCarrierMeters(
+                             raw_carrier_m, satellite_clock_m,
+                             ionosphere_delay, troposphere_delay, true)
+                       : 0.0)
+                : corrected_carrier;
 
         FGOProcessor::ObservationModelDebug model_debug;
         model_debug.raw_pseudorange_m = observation.pseudorange;
-        model_debug.raw_carrier_m =
-            usable_carrier ? observation.carrier_phase * wavelength : 0.0;
+        model_debug.raw_carrier_m = raw_carrier_m;
         model_debug.satellite_clock_m = satellite_clock_m;
         model_debug.ionosphere_delay_m = ionosphere_delay;
         model_debug.troposphere_delay_m = troposphere_delay;
@@ -735,9 +874,15 @@ inline std::map<CarrierKey, PreparedCarrierObservation> prepareCarrierObservatio
         carrier.satellite_position_ecef = corrected_satellite_position;
         carrier.corrected_pseudorange_m = corrected_pseudorange;
         carrier.corrected_carrier_m = corrected_carrier;
+        carrier.tdcp_carrier_m = tdcp_carrier;
+        carrier.source_adr_uncertainty_m = observation.has_source_adr_uncertainty_m
+            ? observation.source_adr_uncertainty_m : 0.;
         carrier.wavelength_m = wavelength;
+        carrier.snr_dbhz = observation.snr;
         carrier.sigma_m = std::max(1e-4, config.carrier_phase_sigma_m / sin_el);
         carrier.elevation_rad = geometry.elevation;
+        carrier.residual_ionosphere_coefficient = residual_ionosphere::signalCoefficient(
+            geometry.elevation, row_frequency_hz);
         carrier.loss_of_lock =
             observation.loss_of_lock || ((observation.lli & 0x01U) != 0);
         carrier.has_carrier_phase = usable_carrier;

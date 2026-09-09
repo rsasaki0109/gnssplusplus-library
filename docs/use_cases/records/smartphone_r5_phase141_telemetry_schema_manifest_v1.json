@@ -1,0 +1,97 @@
+{
+  "schema_version": "smartphone-r5-phase141-telemetry-schema-manifest.v1",
+  "phase": 141,
+  "status": "launch-free",
+  "execution_label": "Luna Max",
+  "audit_commit": "de71c39",
+  "freeze_commit": "d105e0a",
+  "freeze_sha256": "c6a8b18f52e1469ae746e1b0b3295fea067d58fa41e1b43e1cfd2797d6823793",
+  "implementation_commit": "6c752c2264c7444da6eb4833ddbbb28ee43ce62a",
+  "implementation_base_commit": "0cbc988",
+  "target_binary_sha256": "aa2180cfe4a36018b98307c3bdf87bfabd229d32a1dacaaada817c257a9280a6",
+  "native_schema_version": "smartphone-r5-native-fgo-phase141-telemetry.v1",
+  "audit_path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_audit_v1.md",
+  "freeze_path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_freeze_v1.json",
+  "pre_raw_path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_pre_raw_v1.json",
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "recipe": {
+    "native_phase141_selector": "--native-phase141-telemetry-schema",
+    "native_phase135_selector": "--native-phase135-official-affine-measurement-family",
+    "native_phase138_selector": "--native-phase138-affine-tdcp-anchor-range-constant",
+    "native_phase118_selector": "--native-phase118-official-tdcp-huber-k",
+    "native_phase99_solver": "MULTIFRONTAL_QR",
+    "native_phase99_elimination": "EliminateQR",
+    "phase141_default_off": true,
+    "wrapper_inference": false,
+    "native_summary_overwrite": false,
+    "equation_semantic_id": "phase138-affine-tdcp-anchor-range-constant-v1",
+    "equation_display_preserved": "tdcp_native-(rho_current_initial-rho_previous_initial)",
+    "accepted_iteration_authority": "native active C0/D stage reports",
+    "solution_rows_serialized": false
+  },
+  "policy": {
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_used": false,
+    "solution_coordinate_reads": false,
+    "mat_pdc_precomputed_reads": false,
+    "accuracy_evaluation": false,
+    "kaggle_access": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "historical_phase139_result_reopened": false
+  },
+  "artifacts": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_audit_v1.md",
+      "sha256": "a040f2076da254f2f11e8041edbc3c23112f65bdb12b8f0665e8de927212f092"
+    },
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_freeze_v1.json",
+      "sha256": "c6a8b18f52e1469ae746e1b0b3295fea067d58fa41e1b43e1cfd2797d6823793"
+    },
+    "runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase141_telemetry_schema_structural.py",
+      "sha256": "d99174f8d9a5fa4b93f8ac2fd1335cf4e357db6a50fefcc357abe788c16b33de"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase141_telemetry_schema.py",
+      "sha256": "07cee77e45b5cc6a7496a967ea99b730593e7498817372c29e4c4b1a0693aa22"
+    },
+    "target_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "aa2180cfe4a36018b98307c3bdf87bfabd229d32a1dacaaada817c257a9280a6"
+    }
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "912b8f6cfca175bf5a91ab63d1d4803f33a1acbc89438c785b42fec469957181",
+    "include/libgnss++/algorithms/fgo.hpp": "da16e074a70bd5a813146ff0a32ee3b8706856807f828af2b1806b474de0c85f",
+    "src/algorithms/fgo_gtsam_backend.cpp": "fdf1e9b19300c52edcd50f363e96f3b9df5515c82b8a1e23a1718cc978626a23",
+    "build/apps/gnss_fgo_imu_no_base": "aa2180cfe4a36018b98307c3bdf87bfabd229d32a1dacaaada817c257a9280a6"
+  },
+  "pre_raw_read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "qualification": {
+    "focused_python_tests": 8,
+    "synthetic_native_summary_only": true,
+    "native_summary_immutable": true,
+    "wrapper_only_validation": true,
+    "full_cpp_suite_required": true,
+    "new_independent_authorization_required_before_raw_or_solver": true
+  }
+}

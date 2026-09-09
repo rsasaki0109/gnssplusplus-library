@@ -1,0 +1,138 @@
+{
+  "schema_version": "smartphone-r5-phase156-h-preprocess-diagnostic-result.v1",
+  "phase": 156,
+  "execution_label": "Luna Max",
+  "status": "raw-ingress-success-stage-failed-closed",
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase156_h_preprocess_diagnostic_authorization_v1.json",
+    "commit": "c73f314",
+    "sha256": "8a1553ea9b4a71d7ccb0ee2bb8e37fc9c1b2bcbab5e60c33d8bc46aeed3d7f02"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase156_h_preprocess_diagnostic_manifest_v1.json",
+    "commit": "d962cfa",
+    "sha256": "8e29711f616b826fb303a8317d543e3a8b64545aec357257db68526e8f55e5f3"
+  },
+  "source_and_binary": {
+    "implementation_commit": "bae73974ac414a126be43d53006508ffa57d9265",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "d7611bd9da30eda931bf719ce60d76e5c7fa7afb6a178f72adebb3bd0e57fd44"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "invocation_count": 1,
+    "process_return_code": 1,
+    "failure_stage": "phase149-raw-p-seed-post-filter-geometry",
+    "failure_status": "insufficient-geometry",
+    "failure_reason": "insufficient-corrected-pseudorange-geometry",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "raw_clock_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false,
+    "accuracy_calculated": false,
+    "coordinate_values_interpreted": false,
+    "coordinate_values_published": false,
+    "native_summary_path": "output/smartphone-r5/phase156-h-preprocess-diagnostic-v1/mtv-h/native_summary.json",
+    "native_summary_bytes": 3637680,
+    "native_summary_sha256": "520f24a575ccbc89d2fbd8621de934cab1d16284871c5e7072e2007d0ac84bf5",
+    "stdout_path": "output/smartphone-r5/phase156-h-preprocess-diagnostic-v1/mtv-h/stdout.log",
+    "stdout_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_path": "output/smartphone-r5/phase156-h-preprocess-diagnostic-v1/mtv-h/stderr.log",
+    "stderr_bytes": 85,
+    "stderr_sha256": "dfe1f45d4fc6a9168c2fbac30140a572764aafb54e63142e548722bf41d6e0e7",
+    "stderr_message": "Phase149 raw-P seed stage failed closed: insufficient-corrected-pseudorange-geometry"
+  },
+  "coverage": {
+    "input_epoch_count": 3140,
+    "evaluated_epoch_indexes": [0],
+    "not_evaluated_epoch_count": 3139,
+    "later_epoch_coverage": "unassessed; first-epoch failure stopped traversal",
+    "first_epoch": {
+      "raw_pseudorange_rows": 31,
+      "raw_pseudorange_satellites": 22,
+      "raw_clock_groups": 4,
+      "corrected_pseudorange_rows": 2,
+      "corrected_clock_groups": 0,
+      "reference_clock_group": "unknown",
+      "geometry_rank_status": "insufficient-rows",
+      "geometry_rank": 0,
+      "geometry_rank_rows": 2,
+      "position_finite": false,
+      "clock_finite": false,
+      "velocity_finite": false,
+      "preprocessing_diagnostics_available": true,
+      "preprocessing_input_rows": 33,
+      "preprocessing_accepted_rows": 2,
+      "preprocessing_rejected_rows": 31,
+      "preprocessing_row_conservation": "33 = 2 + 31",
+      "preprocessing_reason_counts": {
+        "accepted": 2,
+        "below-elevation-mask": 20,
+        "unsupported-signal": 11
+      },
+      "preprocessing_system_reason_counts": {
+        "gps/accepted": 1,
+        "gps/below-elevation-mask": 7,
+        "gps/unsupported-signal": 6,
+        "glonass/below-elevation-mask": 2,
+        "galileo/accepted": 1,
+        "galileo/below-elevation-mask": 5,
+        "galileo/unsupported-signal": 5,
+        "beidou/below-elevation-mask": 6
+      },
+      "accepted_source_row_indexes": [9, 17]
+    },
+    "accepted_position_count": 0,
+    "finite_clock_count": 0,
+    "finite_velocity_count": 0
+  },
+  "interpretation_boundary": {
+    "raw_pseudorange_rows_definition": "31 finite valid pseudorange rows counted by the raw-P precheck",
+    "preprocessing_input_rows_definition": "33 source observation rows passed through the private Doppler-cleared SPP copy; this includes rows rejected before valid-P counting",
+    "observed_preprocessing_rejections": "20 below the unchanged elevation mask and 11 unsupported signals",
+    "unobserved_rejection_reasons_in_this_epoch": "no missing-ephemeris, invalid-pseudorange, unhealthy-satellite, SNR, satellite-state, correction-variance, or output-system terminal rows were emitted",
+    "root_cause_claim": "not established; counts identify native terminal gates but do not prove why the source observations fell below elevation or signal admission",
+    "coordinate_policy": "no coordinate values read, interpreted, published, or reused"
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 1,
+    "broadcast_navigation_reads": 1,
+    "raw_phone_imu_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_phase149_stage_invocations": 1,
+    "native_spp_epoch_solver_invocations": 1,
+    "native_spp_preprocess_invocations": 1,
+    "native_fgo_invocations": 0,
+    "summary_reads": 1,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "verification": {
+    "phase155_raw_p_seed_tests": "15/15 passed before execution",
+    "binary_help_check": "expected usage response; required selectors present; no input reads",
+    "actual_executable_target_built": true,
+    "native_summary_json_valid": true
+  },
+  "conclusion_and_next_boundary": {
+    "conclusion": "The Phase155 diagnostic path reached native SPP preprocessing on H and records a conserved 33-row terminal disposition: 2 corrected rows accepted, 20 rows below the elevation mask, and 11 rows rejected for unsupported signal. The existing post-filter geometry gate still fails closed.",
+    "next_blocker": "If further diagnosis is needed, source-level review or a separately authorized run must determine whether the observed elevation and signal admissions are expected for this recipe; do not relax gates from this result alone.",
+    "algorithmic_accuracy_claim": false,
+    "no_doppler_graph_readiness": "not-assessed",
+    "phase154_artifacts_preserved": true
+  }
+}

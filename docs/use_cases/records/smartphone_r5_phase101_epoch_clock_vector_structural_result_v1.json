@@ -1,0 +1,489 @@
+{
+  "accuracy_scored": false,
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_raw_execution_authorization_v1.json",
+    "sha256": "a5858b2ab51c5ed781e0a0fcc311d867b8b0e13db4fde77ede5de20a4195ee62",
+    "status": "authorized-for-exact-two-route-phase101-epoch-clock-vector-structural-execution"
+  },
+  "candidate": {
+    "default_off": true,
+    "diagnostic_only": true,
+    "id": "phase101-raw-only-native-source-parity-epoch-c-isb-v1",
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver"
+    ]
+  },
+  "decision": "Structural gates passed; solution and accuracy lanes remain unauthorized.",
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase101_epoch_clock_vector.py",
+    "sha256": "03b2ba22ebe9bcc223a88a56ca92eea87a18e50d1c89c19c4978f71a5b34cf1d"
+  },
+  "execution_label": "Luna Max",
+  "execution_wrapper": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase101_epoch_clock_vector_execute.py",
+    "sha256": "a86bdccc22ac9ae455204ef9d481c85acf6cb5709bdfdd77c00c46901bc2f8c1"
+  },
+  "failed_gates": {},
+  "forbidden_lanes": {
+    "Cholesky_comparison": false,
+    "Kaggle_or_token": false,
+    "MAT": false,
+    "accuracy": false,
+    "base": false,
+    "precomputed_coordinates": false,
+    "solution_rows": false,
+    "truth": false
+  },
+  "freeze": {
+    "commit": "48aa18fe8311757383e9b7a383dd9b83f737e75c",
+    "path": "docs/use_cases/records/smartphone_r5_phase101_source_parity_accuracy_regression_freeze_v1.json",
+    "sha256": "092a12fd6801ab42fcdbd9e8a0df4264ad2f3fbe6ea4ead1f5306dddcd7339ff"
+  },
+  "gates": {
+    "all_structural_gates_passed": true,
+    "failed_routes": {},
+    "route_order_exact": true
+  },
+  "implementation": {
+    "backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa"
+    },
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "45ab71ca416a5c9947a75f2c9e7bc996678b59c2b88ac52c04362d0ccf5dae77"
+    },
+    "candidate_id": "phase101-raw-only-native-source-parity-epoch-c-isb-v1",
+    "commit": "d88c9fde97a818c6279d8ae35f1a1a70e06a8ce4",
+    "config": {
+      "path": "include/libgnss++/algorithms/fgo_config.hpp",
+      "sha256": "3cc60abe514ef8900012064accb17f27d3927d0b8a8776ad76ce6aefa83ce32c"
+    },
+    "equation_units_sigma_changed": false,
+    "fallback_or_guard_bypass": false,
+    "fgo_result": {
+      "path": "include/libgnss++/algorithms/fgo.hpp",
+      "sha256": "5a26994bda96c4bf50f436b1368bc1df5b192c38ef13a2a882ebd8e15bf5103d"
+    },
+    "implementation_scope": "opt-in official epoch-local seven-vector C/ISB and same-run C/D handoff; Phase99 QR selector already pinned",
+    "key_helpers": {
+      "path": "src/algorithms/fgo_gtsam_internal.hpp",
+      "sha256": "cc6327e36800afa8217e5a834260adc81c0a74a5aefbfc956bb4679c8d86105f"
+    },
+    "legacy_default_unchanged": true,
+    "solver_filter_lm_changed": false,
+    "source": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "72269b057073c0b0134b069a7436c8c3979504807b94ec7b477b7c4fa6f99339"
+    }
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_manifest_v1.json",
+    "sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b"
+  },
+  "matrix": {
+    "accuracy_calculations": 0,
+    "base_rinex_reads": 0,
+    "broadcast_navigation_reads": 2,
+    "candidate_count": 1,
+    "controls": 0,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 2,
+    "precomputed_coordinate_reads": 0,
+    "raw_device_gnss_reads": 2,
+    "raw_device_imu_reads": 2,
+    "raw_input_hash_reads": 0,
+    "reruns": 0,
+    "routes": 2,
+    "runner_raw_byte_reads": 0,
+    "runs_per_route": 1,
+    "solution_rows_published": false,
+    "truth_reads": 0
+  },
+  "phase": 101,
+  "promotion_authorized": false,
+  "raw_input_provenance": {
+    "copy_or_transform": false,
+    "names_exact": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "path_source": "Phase95 sealed result raw_inputs.path",
+    "roles": {
+      "brdc.nav": "broadcast navigation only",
+      "device_gnss.csv": "raw Android GNSS only",
+      "device_imu.csv": "raw Android IMU only"
+    },
+    "wrapper_path_resolution": "metadata-only stat then exact path substitution",
+    "wrapper_raw_byte_reads": 0,
+    "wrapper_raw_hash_reads": 0
+  },
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "accuracy_scored": false,
+    "base_rinex_reads": 0,
+    "broadcast_navigation_reads": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "logs_and_partial_results_preserved": true,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 2,
+    "precomputed_coordinate_reads": 0,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_reads": 2,
+    "raw_device_imu_reads": 2,
+    "route_reruns": 0,
+    "runner_raw_input_byte_reads": 0,
+    "runner_raw_input_hash_reads": 0,
+    "solution_output_published": false,
+    "truth_reads": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_output_published": false,
+      "base_used": false,
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "expected_output": {
+        "coverage_basis": "native summary epoch counts and native output validation; withheld CSV never opened",
+        "domain_rows": 2158,
+        "problem_epochs": 2159,
+        "solution_rows_published": false,
+        "summary": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "withheld_solution_output": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv"
+      },
+      "forbidden_summary_keys": [],
+      "gates": {
+        "finite_structural_summary": true,
+        "gnss_first_accepted_iterations_and_strict_cost_decrease": true,
+        "gnss_first_full_finite_c7_d_exact_handoff": true,
+        "main_accepted_iterations_and_strict_cost_decrease": true,
+        "main_finite_earth_valid_expected_output_coverage": true,
+        "main_selected_multifrontal_qr": true,
+        "native_process_completed": true,
+        "no_fallback_or_solution_publication": true,
+        "no_global_isb_double_state": true,
+        "summary_present": true
+      },
+      "kaggle_or_token_accessed": false,
+      "logs": {
+        "stderr": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/stderr.log",
+        "stdout": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/stdout.log"
+      },
+      "mat_used": false,
+      "precomputed_coordinates_used": false,
+      "raw_content_copied_or_transformed": false,
+      "raw_inputs": {
+        "brdc.nav": {
+          "bytes": 9955040,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_runner": false,
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "read_by_runner": false,
+          "sealed_bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+        },
+        "device_gnss.csv": {
+          "bytes": 57715495,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_runner": false,
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "read_by_runner": false,
+          "sealed_bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+        },
+        "device_imu.csv": {
+          "bytes": 34393802,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_runner": false,
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "read_by_runner": false,
+          "sealed_bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+        }
+      },
+      "return_code": 0,
+      "run_number": 1,
+      "runner_read_raw_bytes": false,
+      "runner_read_raw_hashes": false,
+      "runner_read_truth_mat_base_coordinate_kaggle": false,
+      "solution_output_published": false,
+      "summary_present": true,
+      "summary_schema": "smartphone-r5-native-fgo-android-imu-no-base-run.v3",
+      "summary_sha256": "14041ae5e65e1616cbf893aecdcddf1d2780ed7050e006dd9e62930330213ce5",
+      "summary_status": "imu-combined-factor",
+      "telemetry": {
+        "gates": {
+          "C7_handoff": true,
+          "D_handoff": true,
+          "gnss_first_progress": true,
+          "main_progress": true,
+          "no_global_ISB": true,
+          "no_publication": true,
+          "output_coverage": true
+        },
+        "gnss_first": {
+          "attempted": true,
+          "c0d_accepted_outer_iterations": 157,
+          "c0d_active_solve_finite_costs": true,
+          "c0d_factor_count": 2158,
+          "converged": true,
+          "epoch_identity_alignment_valid": true,
+          "epochs": 2159,
+          "final_cost": 21298.112661390598,
+          "handoff_mode": "gnss-first-in-memory-meter-clock-state",
+          "initial_cost": 5618000.786274777,
+          "iterations": 157,
+          "optimized_c_dimension": 7,
+          "optimized_c_epoch_count": 2159,
+          "optimized_c_export_valid": true,
+          "optimized_c_finite_component_count": 15113,
+          "optimized_c_nonfinite_component_count": 0,
+          "optimized_c_vector_parity_enabled": true,
+          "optimized_d_epoch_count": 2159,
+          "optimized_d_export_valid": true,
+          "optimized_d_finite_count": 2159,
+          "optimized_d_nonfinite_count": 0
+        },
+        "main": {
+          "accepted_outer_iterations": 12,
+          "active_solve_attempted": true,
+          "active_solve_final_cost": 34843.23540741533,
+          "active_solve_finite_costs": true,
+          "active_solve_initial_cost": 76503985.97055085,
+          "clock_c0d_enabled": true,
+          "clock_c0d_factor_count": 2158,
+          "conditioning_proxy": 1.9999999980791472,
+          "converged": true,
+          "epoch_vector_dimension": 7,
+          "epoch_vector_handoff_count": 2159,
+          "epoch_vector_parity_enabled": true,
+          "epoch_vector_state_count": 2159,
+          "factors": 120093,
+          "final_cost": 34843.23540741533,
+          "final_lambda": 1.0000000000000003e-09,
+          "global_isb_state_count": 0,
+          "imu_intervals": 2158,
+          "initial_cost": 76503985.97055085,
+          "initial_lambda": 1e-05,
+          "internal_clock_state_unit": "metres",
+          "internal_drift_state_unit": "metres_per_second",
+          "internal_isb_state_unit": "metres",
+          "iterations": 12,
+          "maximum_lambda": 1e-05,
+          "meter_state_parity_enabled": true,
+          "termination_branch_reason": "maximum_outer_iterations",
+          "total_inner_lambda_attempts": 20,
+          "values": 10795
+        },
+        "output": {
+          "double_difference_carrier_factors": 0,
+          "double_difference_pseudorange_factors": 0,
+          "output": 2159,
+          "problem": 2159,
+          "pseudorange_factors": 57281,
+          "tdcp_factors_built": 31269
+        },
+        "solver": {
+          "native_source_clock_c0d_phase99_main_multifrontal_qr_solver_enabled": true,
+          "native_source_clock_c0d_phase99_main_multifrontal_qr_solver_selected": true,
+          "selected_elimination_function": "EliminateQR",
+          "selected_linear_solver_type": "MULTIFRONTAL_QR",
+          "selected_solver_branch": "multifrontal"
+        },
+        "units_and_policy": {
+          "ISB": "metres",
+          "ccdd_sigma_m": 0.1,
+          "clock": "metres",
+          "drift_D": "metres_per_second",
+          "dt": "seconds",
+          "fallback": "none",
+          "global_ISB_state_count": 0,
+          "raw_D_source": "retained EpochSeed.receiver_clock_drift_mps"
+        }
+      },
+      "truth_used": false,
+      "withheld_solution_output_present": true
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_output_published": false,
+      "base_used": false,
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "expected_output": {
+        "coverage_basis": "native summary epoch counts and native output validation; withheld CSV never opened",
+        "domain_rows": 1465,
+        "problem_epochs": 1466,
+        "solution_rows_published": false,
+        "summary": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "withheld_solution_output": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv"
+      },
+      "forbidden_summary_keys": [],
+      "gates": {
+        "finite_structural_summary": true,
+        "gnss_first_accepted_iterations_and_strict_cost_decrease": true,
+        "gnss_first_full_finite_c7_d_exact_handoff": true,
+        "main_accepted_iterations_and_strict_cost_decrease": true,
+        "main_finite_earth_valid_expected_output_coverage": true,
+        "main_selected_multifrontal_qr": true,
+        "native_process_completed": true,
+        "no_fallback_or_solution_publication": true,
+        "no_global_isb_double_state": true,
+        "summary_present": true
+      },
+      "kaggle_or_token_accessed": false,
+      "logs": {
+        "stderr": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/stderr.log",
+        "stdout": "output/smartphone-r5/phase101-epoch-clock-vector-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/stdout.log"
+      },
+      "mat_used": false,
+      "precomputed_coordinates_used": false,
+      "raw_content_copied_or_transformed": false,
+      "raw_inputs": {
+        "brdc.nav": {
+          "bytes": 10635773,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_runner": false,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "read_by_runner": false,
+          "sealed_bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+        },
+        "device_gnss.csv": {
+          "bytes": 33837317,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_runner": false,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "read_by_runner": false,
+          "sealed_bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+        },
+        "device_imu.csv": {
+          "bytes": 23649244,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_runner": false,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "read_by_runner": false,
+          "sealed_bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5"
+        }
+      },
+      "return_code": 0,
+      "run_number": 1,
+      "runner_read_raw_bytes": false,
+      "runner_read_raw_hashes": false,
+      "runner_read_truth_mat_base_coordinate_kaggle": false,
+      "solution_output_published": false,
+      "summary_present": true,
+      "summary_schema": "smartphone-r5-native-fgo-android-imu-no-base-run.v3",
+      "summary_sha256": "c7ba119120667f53b69421d3ce5fffb779eb5877a728ee1c3d3007b1275ca557",
+      "summary_status": "imu-combined-factor",
+      "telemetry": {
+        "gates": {
+          "C7_handoff": true,
+          "D_handoff": true,
+          "gnss_first_progress": true,
+          "main_progress": true,
+          "no_global_ISB": true,
+          "no_publication": true,
+          "output_coverage": true
+        },
+        "gnss_first": {
+          "attempted": true,
+          "c0d_accepted_outer_iterations": 270,
+          "c0d_active_solve_finite_costs": true,
+          "c0d_factor_count": 1465,
+          "converged": true,
+          "epoch_identity_alignment_valid": true,
+          "epochs": 1466,
+          "final_cost": 12818.289257688237,
+          "handoff_mode": "gnss-first-in-memory-meter-clock-state",
+          "initial_cost": 6419784.856579111,
+          "iterations": 270,
+          "optimized_c_dimension": 7,
+          "optimized_c_epoch_count": 1466,
+          "optimized_c_export_valid": true,
+          "optimized_c_finite_component_count": 10262,
+          "optimized_c_nonfinite_component_count": 0,
+          "optimized_c_vector_parity_enabled": true,
+          "optimized_d_epoch_count": 1466,
+          "optimized_d_export_valid": true,
+          "optimized_d_finite_count": 1466,
+          "optimized_d_nonfinite_count": 0
+        },
+        "main": {
+          "accepted_outer_iterations": 12,
+          "active_solve_attempted": true,
+          "active_solve_final_cost": 20386.026617946976,
+          "active_solve_finite_costs": true,
+          "active_solve_initial_cost": 164902215.22814512,
+          "clock_c0d_enabled": true,
+          "clock_c0d_factor_count": 1465,
+          "conditioning_proxy": 1.9999999980209395,
+          "converged": true,
+          "epoch_vector_dimension": 7,
+          "epoch_vector_handoff_count": 1466,
+          "epoch_vector_parity_enabled": true,
+          "epoch_vector_state_count": 1466,
+          "factors": 61082,
+          "final_cost": 20386.026617946976,
+          "final_lambda": 1.0000000000000003e-09,
+          "global_isb_state_count": 0,
+          "imu_intervals": 1465,
+          "initial_cost": 164902215.22814512,
+          "initial_lambda": 1e-05,
+          "internal_clock_state_unit": "metres",
+          "internal_drift_state_unit": "metres_per_second",
+          "internal_isb_state_unit": "metres",
+          "iterations": 12,
+          "maximum_lambda": 1e-05,
+          "meter_state_parity_enabled": true,
+          "termination_branch_reason": "maximum_outer_iterations",
+          "total_inner_lambda_attempts": 20,
+          "values": 7330
+        },
+        "output": {
+          "double_difference_carrier_factors": 0,
+          "double_difference_pseudorange_factors": 0,
+          "output": 1466,
+          "problem": 1466,
+          "pseudorange_factors": 30798,
+          "tdcp_factors_built": 14012
+        },
+        "solver": {
+          "native_source_clock_c0d_phase99_main_multifrontal_qr_solver_enabled": true,
+          "native_source_clock_c0d_phase99_main_multifrontal_qr_solver_selected": true,
+          "selected_elimination_function": "EliminateQR",
+          "selected_linear_solver_type": "MULTIFRONTAL_QR",
+          "selected_solver_branch": "multifrontal"
+        },
+        "units_and_policy": {
+          "ISB": "metres",
+          "ccdd_sigma_m": 0.1,
+          "clock": "metres",
+          "drift_D": "metres_per_second",
+          "dt": "seconds",
+          "fallback": "none",
+          "global_ISB_state_count": 0,
+          "raw_D_source": "retained EpochSeed.receiver_clock_drift_mps"
+        }
+      },
+      "truth_used": false,
+      "withheld_solution_output_present": true
+    }
+  },
+  "schema_version": "smartphone-r5-phase101-epoch-clock-vector-structural-result.v1",
+  "solution_output_published": false,
+  "status": "go-phase101-epoch-clock-vector-structural",
+  "stop_before_truth_accuracy_submission": true,
+  "truth_free": true
+}

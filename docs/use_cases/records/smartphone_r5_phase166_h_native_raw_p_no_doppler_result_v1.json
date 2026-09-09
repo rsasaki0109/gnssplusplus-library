@@ -1,0 +1,95 @@
+{
+  "schema_version": "smartphone-r5-phase166-h-native-raw-p-no-doppler-result.v1",
+  "phase": 166,
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "route": "MTV-H",
+  "manifest": "docs/use_cases/records/smartphone_r5_phase166_h_native_raw_p_no_doppler_manifest_v1.json",
+  "authorization": "docs/use_cases/records/smartphone_r5_phase166_h_native_raw_p_no_doppler_authorization_v1.json",
+  "implementation_commit": "60d2d0a341779ba9719223e95e2b6ee448c1310a",
+  "binary_sha256": "dd8707d42d09613659345315a7b3f52ffe6c702289492448e83489cbae5d0285",
+  "native_summary": {
+    "path": "output/smartphone-r5/phase166-h-native-raw-p-no-doppler-v1/mtv-h/native_summary.json",
+    "sha256": "c6a143504b55efd9bb30b2554a2b9429aa5eea42d7f3985d80a8d464cb087013",
+    "schema_version": "smartphone-r5-phase165-raw-p-no-doppler-graph.v1"
+  },
+  "execution": {
+    "argv_pinned": true,
+    "native_invocations": 1,
+    "process_session": "80059",
+    "process_id": 1839743,
+    "return_code": 0,
+    "raw_gnss_reads": 1,
+    "nav_reads": 1,
+    "truth_reads": 0,
+    "mat_reads": 0,
+    "kaggle_reads": 0,
+    "solver_reruns": 0,
+    "fallback_or_repair": false
+  },
+  "raw_p_seed": {
+    "input_epochs": 3140,
+    "evaluated_epochs": 3140,
+    "accepted_epochs": 3140,
+    "rejected_epochs": 0,
+    "unassessed_epochs": 0,
+    "result_ok": true,
+    "failure_status": "accepted",
+    "failure_reason": "",
+    "failed_epoch_present": false,
+    "supported_c7_rows": 108722,
+    "unsupported_c7_rows_explicitly_excluded": 0,
+    "same_run_velocity_derivation_actual": true,
+    "same_run_velocity_derivation_source": "raw_p_seed Config::derive_velocity default true; Phase165 adapter requires finite same-run position-gradient velocity"
+  },
+  "graph": {
+    "adapter_ok": true,
+    "graph_compatible": true,
+    "retained_epochs": 3140,
+    "pseudorange_factors": 108722,
+    "tdcp_factors": 69426,
+    "undifferenced_doppler_factors": 0,
+    "motion_factors": 3139,
+    "c0d_factors": 3139,
+    "unobserved_clock_gauge_components": 1,
+    "graph_factors": 193846,
+    "graph_values": 12560
+  },
+  "solver": {
+    "fgo_attempted": true,
+    "fgo_returned": true,
+    "reported_converged": true,
+    "iterations": 12,
+    "configured_max_iterations": 12,
+    "initial_cost": 838750590.06104231,
+    "final_cost": 146412.36551525723,
+    "costs_finite": true,
+    "termination_criterion_proven": false,
+    "termination_note": "The dedicated Phase165 config uses the source app's configured 12-iteration cap and does not enable the Phase143 termination sidecar; reported convergence is a successful native result flag, not proof of early tolerance convergence when iterations equals the cap."
+  },
+  "outputs": {
+    "solution_cardinality": 3140,
+    "finite_position_count": 3140,
+    "earth_valid_position_count": 3140,
+    "finite_clock_count": 3140,
+    "velocity_cardinality": 3140,
+    "finite_velocity_count": 3140,
+    "c7_cardinality": 3140,
+    "finite_c7_count": 3140,
+    "clock_drift_cardinality": 3140,
+    "finite_clock_drift_count": 3140,
+    "coordinate_values_published": false
+  },
+  "manifest_correction": {
+    "field": "selector_contract.velocity_derivation",
+    "pinned_manifest_value": false,
+    "observed_actual_mode": true,
+    "correction": "Phase165 seed_config leaves derive_velocity at its default true; the run's finite velocity cardinality confirms the actual same-run gradient path. The original manifest remains immutable and this result records the discrepancy."
+  },
+  "interpretation": {
+    "structural_run_status": "completed",
+    "accuracy_evaluated": false,
+    "coordinates_or_truth_read": false,
+    "algorithmic_or_accuracy_go": false,
+    "next_boundary": "If desired, add dedicated no-D termination telemetry and evaluate a 1000-iteration GNSS-first recipe before any main IMU integration; no claim is made here about accuracy or leaderboard performance."
+  }
+}

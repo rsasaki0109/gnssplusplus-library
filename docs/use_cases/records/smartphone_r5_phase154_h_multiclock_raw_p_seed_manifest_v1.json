@@ -1,0 +1,104 @@
+{
+  "schema_version": "smartphone-r5-phase154-h-multiclock-raw-p-seed-manifest.v1",
+  "phase": 154,
+  "execution_label": "Luna Max",
+  "status": "pinned-before-execution",
+  "purpose": "One authorized MTV-H Phase149 raw-P preparatory invocation using the Phase153 native multi-clock implementation; no FGO, truth, accuracy, or coordinate interpretation.",
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "source_and_binary": {
+    "implementation_commit": "94e5832e85a3e06183fabb5cdf89507c6ddab626",
+    "current_head_before_run": "94e5832e85a3e06183fabb5cdf89507c6ddab626",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "603d8f81fda4b2ab40e43be6543e6b615dd8cc14fd2937e7306d858493eddb6c",
+    "app_source_sha256": "ff67d144b11645055992b464915312e4c3475ef683a7ea9fad8ff37146cab064",
+    "raw_p_seed_source_sha256": "37f5be1bd4c3d64e4c4a762607b9c45cb0703edc007f46bae0fdecd90a725e10",
+    "raw_p_seed_header_sha256": "b67dd4dc56ad5f1f721793da685a57de9d3701b81648c52a3accddb0710e6c97",
+    "spp_header_sha256": "03a6845dbed06f24ff35033e7cc90cf877cd728f6fb6efe91b4ac11cc1697d10",
+    "spp_source_sha256": "0563bfbe09063af0ab974750406a68398f76f4cd9b2cb66ea6f6fb98ba9d0ac7"
+  },
+  "input_integrity": {
+    "device_gnss_csv": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256_pinned_by_phase147": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes_pinned_by_phase147": 74299283,
+      "read_authorized_once": true
+    },
+    "brdc_nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256_pinned_by_phase147": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes_pinned_by_phase147": 10805490,
+      "read_authorized_once": true
+    }
+  },
+  "command": {
+    "working_directory": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "argv": [
+      "build/apps/gnss_fgo_imu_no_base",
+      "--dataset-id",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "--android-gnss",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "--nav",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "--all-epochs",
+      "--android-raw-clock-only",
+      "--summary-json",
+      "output/smartphone-r5/phase154-h-multiclock-raw-p-seed-v1/mtv-h/native_summary.json",
+      "--native-phase149-raw-p-seed-stage"
+    ],
+    "raw_clock_only_selector_count": 1,
+    "phase149_selector_count": 1,
+    "imu_argument": false,
+    "base_argument": false,
+    "solution_csv_argument": false,
+    "precomputed_seed_argument": false
+  },
+  "execution_contract": {
+    "native_invocations": 1,
+    "phase149_raw_p_stage": true,
+    "same_run_native_spp": true,
+    "doppler_consumed": false,
+    "fgo": false,
+    "truth": false,
+    "accuracy": false,
+    "coordinate_interpretation": false,
+    "coordinate_publication": false,
+    "mat_pdc": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "summary_path_new_and_preserved": true,
+    "output_values_policy": "aggregate statuses/counts/reasons only; no coordinate values or disk seed reuse"
+  },
+  "required_result_fields": [
+    "process_return_code",
+    "native_ingress_and_stage_status",
+    "input_epoch_count",
+    "accepted_position_clock_velocity_counts",
+    "corrected_clock_group_reference_and_rank_counts",
+    "failure_reason_counts",
+    "time_policy_and_velocity_endpoint_policy",
+    "raw_and_navigation_read_accounting",
+    "summary_sha256_or_absence",
+    "coverage_boundary_when_first_epoch_fails"
+  ],
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "navigation_reads": 0,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  }
+}

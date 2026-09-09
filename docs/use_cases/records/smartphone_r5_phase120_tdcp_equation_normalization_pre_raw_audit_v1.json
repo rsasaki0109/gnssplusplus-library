@@ -1,0 +1,112 @@
+{
+  "schema_version": "smartphone-r5-phase120-tdcp-equation-normalization-pre-raw-audit.v1",
+  "phase": 120,
+  "execution_label": "Luna Max",
+  "status": "pre-raw-verified-no-payload-activity",
+  "contract": {
+    "freeze_commit": "fd5dd1f03c08e650909473b9a77bb188b1d992e0",
+    "freeze_sha256": "930235662b5dfffadb8957e450f20fb135495a8d380a5c692854d688cdeb9d7e",
+    "audit_commit": "cc3cb416d52579c49ca7039cdc4928f52745a2b4",
+    "audit_sha256": "c393899dcbfe2052973038c12f1bfa25d8bff49b14d1100a53e1b8e62fa03a82",
+    "implementation_commit": "3ea6b2caf5c6f5be78c18e388e49301b961d3036",
+    "runner_validator_manifest_tests_commit": "1c6c8720a6d6d778dfef9caa60adb85f85d6a9ac",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_structural_manifest_v1.json",
+    "manifest_sha256": "96642215b1c78f35a294a866171871094342791780ca34df1b295b5749e23bfd",
+    "validator_path": "apps/commands/benchmarks/gnss_smartphone_phase120_tdcp_equation_normalization.py",
+    "validator_sha256": "5b72b4bba3263d0ccf6e538e1a98bc7af8c99b073f16b4c6f912073566bc2b7a",
+    "runner_path": "apps/commands/benchmarks/gnss_smartphone_phase120_tdcp_equation_normalization_structural_execute.py",
+    "runner_sha256": "6a892882240030dbcb67051dfc698ed8ac584199296262c02a25fb0616635fec",
+    "focused_tests_path": "tests/test_smartphone_phase120_tdcp_equation_normalization_structural_execution.py",
+    "focused_tests_sha256": "4dfd10bd4a720af58d525fd968bcecf21fada7856b0cf0da0d02d023c0fe467b",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "10e29f3f86ba2ae3f6e9f7231dac21a4e465680a778c9f87145356378c03a4f0"
+  },
+  "verification": {
+    "validator_verify_freeze": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase120_tdcp_equation_normalization.py --verify-freeze",
+      "return_code": 0,
+      "payload_activity": false
+    },
+    "validator_verify_manifest": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase120_tdcp_equation_normalization.py --verify-manifest",
+      "return_code": 0,
+      "payload_activity": false
+    },
+    "runner_verify_pre_raw": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase120_tdcp_equation_normalization_structural_execute.py --verify-pre-raw",
+      "return_code": 0,
+      "payload_activity": false
+    },
+    "focused_structural_tests": {
+      "command": "python3 -B -m unittest tests/test_smartphone_phase120_tdcp_equation_normalization_structural_execution.py",
+      "return_code": 0,
+      "tests_run": 6,
+      "tests_failed": 0,
+      "payload_activity": false
+    },
+    "source_implementation_focused_tests": {
+      "command": "python3 -B -m unittest tests/test_smartphone_phase120_tdcp_equation_normalization.py",
+      "return_code": 0,
+      "tests_run": 5,
+      "tests_failed": 0,
+      "payload_activity": false
+    }
+  },
+  "read_accounting": {
+    "raw_phone_device_gnss_csv_reads": 0,
+    "raw_phone_device_imu_csv_reads": 0,
+    "broadcast_brdc_nav_reads": 0,
+    "sealed_raw_base_rinex_reads": 0,
+    "sealed_raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "route_order": "MTV-A then LAX-T",
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "metadata_activity": {
+    "tracked_source_and_sealed_metadata_read": true,
+    "source_hashes_checked": true,
+    "target_binary_hash_checked": true,
+    "raw_payload_members_touched": false,
+    "solution_payload_members_touched": false,
+    "truth_payload_touched": false,
+    "purpose": "verify Phase120 structural pins and pre-authorization zero accounting only"
+  },
+  "independent_authorization_requirements": {
+    "new_authorization_commit_required": true,
+    "must_pin_freeze_audit_implementation_manifest_validator_runner_tests_binary": true,
+    "must_materialize_only_sealed_raw_phone_nav_and_base_paths_after_authorization": true,
+    "must_use_phase118_huber_selector_once_and_phase120_selector_once": true,
+    "must_forbid_phase117_dynamic_sigma_and_all_alternate_lanes": true,
+    "must_run_mtv_a_then_lax_t_sequentially_once": true,
+    "must_gate_tdcp_count_reject_invariance_and_finite_source_measurement": true,
+    "must_gate_gnss_first_and_main_progress_cost_coverage_and_exact_handoff": true,
+    "must_stop_on_any_failure_without_rerun_fallback_or_repair": true,
+    "solution_must_remain_opaque_and_truth_is_separate": true
+  }
+}

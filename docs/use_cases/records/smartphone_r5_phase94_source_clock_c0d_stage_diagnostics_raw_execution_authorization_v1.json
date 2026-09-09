@@ -1,0 +1,172 @@
+{
+  "schema_version": "smartphone-r5-phase94-source-clock-c0d-stage-diagnostics-raw-execution-authorization.v1",
+  "phase": 94,
+  "status": "authorized-for-exact-four-route-phase94-diagnostic-execution",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Authorize exactly one diagnostic-only native execution for each frozen route. The lane records source-clock C0/D stage telemetry and never evaluates accuracy or publishes solution coordinates.",
+  "authority": {
+    "phase94_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase94_source_clock_c0d_stage_diagnostics_freeze_v1.json",
+      "sha256": "9b0b61dee17be33b595ddccbf0edddaf7844b664de3defa8e1e7139e36f0b4b9",
+      "commit": "a6c18530938ff403e9e5b93e093ea98f39990248"
+    },
+    "implementation_commit": "24f3329841f29d18b0b92c5476887464d8bf8be6",
+    "implementation_source_sha256": "524a8c0e4703a0ea533a21a4775e82719abaab2d2229a725ccf272cf2ab5430a",
+    "evaluator_path": "apps/commands/benchmarks/gnss_smartphone_phase94_source_clock_c0d_stage_diagnostics.py",
+    "evaluator_sha256": "5648892866e94e3c62a8ec96e2148d7b4e3634d4272702c39ca40c94837f5b77",
+    "wrapper_path": "apps/commands/benchmarks/gnss_smartphone_phase94_source_clock_c0d_stage_diagnostics_execute.py",
+    "wrapper_sha256": "fa124b79f9119c20b7396977c3feecefa3e0410d64dfa4b0ec5212ac5d55194d",
+    "focused_tests_path": "tests/test_smartphone_phase94_source_clock_c0d_stage_diagnostics.py",
+    "focused_tests_sha256": "c04ae1ab49f7fc77ef542b65aefb39c6f933604e296349c3949636cb4b266794"
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase94_source_clock_c0d_stage_admission_and_failure_telemetry",
+    "selector": "--native-source-clock-c0d-phase94-stage-diagnostics",
+    "phase93_selector": "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "default_off_outside_this_explicit_command": true,
+    "diagnostic_only": true,
+    "runs_per_route": 1,
+    "controls": 0,
+    "native_binary": "build/apps/gnss_fgo_imu_no_base",
+    "raw_input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_input_roles": {
+      "device_gnss.csv": "Android raw GNSS only",
+      "device_imu.csv": "Android raw IMU only",
+      "brdc.nav": "broadcast navigation only"
+    },
+    "forbidden_inputs_and_lanes": [
+      "truth",
+      "MAT",
+      "Kaggle/token",
+      "base RINEX",
+      "precomputed coordinates",
+      "external coordinates",
+      "PDC state bridge",
+      "direct Doppler WLS handoff",
+      "velocity-only handoff",
+      "Phase91 raw-D-only initializer",
+      "accuracy scoring",
+      "submission release"
+    ],
+    "truth_mat_coordinate_base_kaggle_accuracy": false
+  },
+  "routes": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "domain_rows": 2158,
+      "expected_output_rows": 2158
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "runs": 1,
+      "domain_rows": 3139,
+      "expected_output_rows": 3139
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "domain_rows": 1465,
+      "expected_output_rows": 1465
+    },
+    {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "runs": 1,
+      "domain_rows": 1101,
+      "expected_output_rows": 1101
+    }
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 4,
+    "runs_per_route": 1,
+    "native_invocations": 4,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "raw_device_gnss_reads_max": 4,
+    "raw_device_imu_reads_max": 4,
+    "broadcast_navigation_reads_max": 4,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "base_rinex_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_score_selection": false
+  },
+  "structural_gates": {
+    "required_before_stop": true,
+    "gnss_first_guard_predicate_and_counts": true,
+    "gnss_first_progress_or_fail_closed_telemetry": true,
+    "main_validation_predicates": true,
+    "accepted_cost_lambda_terminal_telemetry": true,
+    "finite_earth_valid_and_no_solution_publication": true,
+    "gnss_first": {
+      "guard_predicate_and_counts": true,
+      "accepted_outer_iterations_min_exclusive": 0,
+      "finite_initial_and_final_cost": true,
+      "strict_final_cost_lt_initial_cost": true,
+      "optimized_D_finite_full_exact_key_coverage": true
+    },
+    "main": {
+      "validation_subpredicates": true,
+      "accepted_outer_iterations_min_exclusive": 0,
+      "finite_initial_and_final_cost": true,
+      "strict_final_cost_lt_initial_cost": true,
+      "finite_earth_valid_C_D_velocity": true
+    },
+    "c0d_contract": {
+      "clock_C_and_ISB_unit": "metres",
+      "drift_D_unit": "metres_per_second",
+      "dt_unit": "seconds",
+      "residual_unit": "metres",
+      "ordinary_sigma_m": 0.1,
+      "equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "jacobian": "[-1,+1,-dt/2,-dt/2]",
+      "official_gap_phone_jump_skip_telemetry": true,
+      "no_sigma_or_lm_tuning": true
+    },
+    "handoff": {
+      "exact_retained_key_alignment": true,
+      "same_run_position_velocity_C_D": true,
+      "no_interpolation_padding_or_fallback": true,
+      "fail_closed": true
+    }
+  },
+  "execution_policy": {
+    "authorized": true,
+    "commands_source": "exact route commands from the pinned Phase94 execution manifest",
+    "order": "sequential route order in manifest",
+    "one_invocation_per_route": true,
+    "no_rerun": true,
+    "on_route_failure": "record fail-closed diagnostics and continue each remaining authorized route once; no fallback",
+    "stop_after_four_routes": true,
+    "outputs": "stage-local structural diagnostics only; never publish or score accuracy",
+    "raw_input_hashes": "not requested before or outside native route reads",
+    "solver_filter_lm_changes": false,
+    "fallback_or_guard_bypass": false
+  },
+  "read_accounting_before_execution": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_score_selection": false
+  },
+  "release_boundary": {
+    "raw_execution_authorized": true,
+    "structural_result_authorized": true,
+    "truth_or_accuracy_evaluation_authorized": false,
+    "submission_release_authorized": false,
+    "promotion_authorized": false
+  }
+}

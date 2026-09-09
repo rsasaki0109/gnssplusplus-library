@@ -1,0 +1,46 @@
+{
+  "schema_version": "smartphone-r5-phase184-phase171-tdcp-source-parity.v1",
+  "phase": 184,
+  "purpose": "Source-only parity correction for the dedicated Phase171 raw-P no-Doppler GNSS-first plus Pose3/IMU lane.",
+  "scope": {
+    "source_payloads_read": false,
+    "truth_payloads_read": false,
+    "mat_payloads_read": false,
+    "trajectory_or_solution_payloads_read": false,
+    "native_solver_run": false,
+    "raw_route_run": false,
+    "accuracy_claim": false
+  },
+  "source_evidence": {
+    "cached_parameters": "output/reproducibility-cache/gsdc2023/parameters.m",
+    "cached_parameters_sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+    "cached_graph": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+    "cached_graph_sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "source_contract": {
+      "parameters_m": "Street/Mix selects L_robust_prm=0.2; Highway selects 0.5; prm.L_kernel=huber(prm.L_robust_prm)",
+      "fgo_gnss_imu_m": "ordinary TDCP rows use noise_robust(prm.L_kernel, noise) with fixed source sigma input",
+      "native_before": "ordinary native TDCP default tdcp_huber_threshold_sigma=4.0; Phase182 used no source Type selector",
+      "native_after": "dedicated Phase184 selector resolves the exact Type mapping only for Phase171 staging and main graphs"
+    }
+  },
+  "implementation": {
+    "selector": "--native-phase184-source-tdcp-huber-k",
+    "default_off": true,
+    "requires": "--native-phase171-raw-p-no-doppler-imu-main",
+    "staging_and_main": "same config field is copied into the in-memory Phase165/167 staging config and retained by the Phase171 Pose3/IMU main config",
+    "mapping": "Street/Mix=0.2; Highway=0.5; unknown=fail-closed",
+    "fixed_tdcp_sigma_m": 0.03,
+    "legacy_preserved": "Phase118 selector, normal-D paths, and selector-off Phase171 retain their existing threshold/default behavior",
+    "conflicts_rejected": ["Phase117 dynamic TDCP sigma", "Phase118 official TDCP selector"]
+  },
+  "validation": {
+    "synthetic_mapping": "FGOTdcpRobustKTest.Phase184SourceMappingIsSeparateFromPhase118",
+    "synthetic_two_stage": "FGOGtsamPhase171NoDopplerImuMainTest.SameRunC7DHandOffAdmitsEmptyDopplerAndGaugesAbsentClockSlots runs selector-off (4.0) and selector-on Street (0.2), including in-memory staging-to-main handoff",
+    "python_source_contract": "tests/test_smartphone_phase184_phase171_tdcp_parity.py (4 tests)",
+    "actual_binary": "build/tests/run_tests and build/apps/gnss_fgo_imu_no_base built with GTSAM"
+  },
+  "limitations": [
+    "No native route rerun was authorized in this phase; Phase182 H structural/accuracy records remain unchanged.",
+    "This corrects only the source TDCP robust threshold. It does not assert that the Phase183 H accuracy scalar improves."
+  ]
+}

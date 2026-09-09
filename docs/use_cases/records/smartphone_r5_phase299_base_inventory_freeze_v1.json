@@ -1,0 +1,17 @@
+{
+  "phase": 299,
+  "implementation_head": "229a2bee4634ed7cec9a9d459fedd9d4deacfda8",
+  "binary": "build/native_base_tracking_inventory",
+  "binary_sha256": "f9ad10eae256bc30d872160c032b6fda66393bb2205f4b798b56b8e6b118e0cd",
+  "source": "scripts/native_base_tracking_inventory.cpp",
+  "source_sha256": "b070d470f4245da64aa8b9cd19ca297d7c3c419f0eb92b8e2d04da2c7514ff8e",
+  "raw_base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "raw_base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "modes": ["default", "source"],
+  "preserve_additional_frequency_bands": true,
+  "raw_reads": "one hash/epoch-marker scan plus one native read per mode",
+  "output": "aggregate counts only",
+  "solver_calls": 0,
+  "truth_reads": 0,
+  "completion_gate": "native epoch count equals independent epoch-marker count; investigate rather than treating early EOF as completion"
+}

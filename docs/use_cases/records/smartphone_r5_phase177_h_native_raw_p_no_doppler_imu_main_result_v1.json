@@ -1,0 +1,69 @@
+{
+  "schema_version": "smartphone-r5-phase177-h-native-raw-p-no-doppler-imu-main-result.v1",
+  "phase": 177,
+  "execution_label": "Luna Max",
+  "status": "sealed-native-handoff-admission-failure",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase177_h_native_raw_p_no_doppler_imu_main_manifest_v1.json",
+    "sha256": "7fa487e5c18d951b9a83eee44694e75b152b083ee821c32690fd6245f9571a0b",
+    "commit": "0cc4ac21fdff3e0c8b29748e0012557c4530507a"
+  },
+  "implementation_commit": "e298618c202616dae4b15a476eb686aa63ffa3eb",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "execution": {
+    "launcher_session": 1083,
+    "invocation_count": 1,
+    "return_code": -6,
+    "signal": "SIGABRT",
+    "native_optimizer_result": "unavailable",
+    "native_summary_emitted": false,
+    "payload_read_counts": "unavailable; the native process emitted no summary",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "failure_boundary": "native source-clock GNSS-first meter-state handoff admission before a result was serialized"
+  },
+  "diagnosis": {
+    "evidence_level": "exact runtime failure; source attribution pending bounded review",
+    "exact_failure": "native source GNSS-first meter-state handoff requires either the staged Point3/velocity raw-D initializer or the main Pose3+IMU optimized-D handoff",
+    "interpretation_limit": "The prior Phase176 velocity-motion-factor overwrite is no longer the emitted failure. No seed counts, graph counts, optimizer iterations, costs, convergence, coverage, or output cardinality may be inferred from this run."
+  },
+  "native_artifacts": {
+    "stderr": {
+      "path": "output/smartphone-r5/phase177-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stderr.log",
+      "sha256": "51d7b392c20ca182ad2f16613017c4ed7d54e2614d3fa08fe30dff11056e46ea",
+      "bytes": 230,
+      "exact_failure": "terminate called after throwing an instance of 'std::invalid_argument'\n  what():  native source GNSS-first meter-state handoff requires either the staged Point3/velocity raw-D initializer or the main Pose3+IMU optimized-D handoff\n"
+    },
+    "stdout": {
+      "path": "output/smartphone-r5/phase177-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "summary": {
+      "path": "output/smartphone-r5/phase177-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json",
+      "present": false,
+      "coordinate_values_read": false
+    },
+    "opaque_solution_output": {
+      "path": "output/smartphone-r5/phase177-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+      "present": false,
+      "coordinate_values_read": false
+    }
+  },
+  "read_accounting": {
+    "manifest_input_hash_preflight_reads": {
+      "android_gnss": 1,
+      "android_imu": 1,
+      "nav": 1
+    },
+    "native_payload_read_counts": "unavailable",
+    "truth_reads": 0,
+    "base_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_coordinate_interpretation": 0
+  },
+  "next_boundary": "Inspect the exact source handoff predicate and final staged/main configuration, then make only a source-backed selector fix with a synthetic routing regression before any new raw invocation."
+}

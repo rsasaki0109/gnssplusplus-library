@@ -1,0 +1,286 @@
+{
+  "schema_version": "smartphone-r5-phase84-source-exact-clock-c0d-freeze.v1",
+  "phase": 84,
+  "status": "implementation-freeze-before-code-or-raw-execution",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze one default-off source-exact C0/D active-clock-row candidate for the Phase80 direct/no-PDC GTSAM/Pose3 path. After this freeze, implementation of this contract is authorized; raw execution, truth read, MAT read, scoring, Kaggle access, and any default change remain unauthorized until separately frozen.",
+  "decision": {
+    "candidate": "select for implementation under this freeze and a separately authorized structural test",
+    "plausible_horizontal_mechanism_without_route_tuning": true,
+    "basis": "The existing per-epoch Doppler drift state is currently disconnected from scalar receiver-clock continuity; exact midpoint C0/D coupling can change P/D clock-versus-position allocation.",
+    "evidence_limit": "Plausibility is a source-level hypothesis. No accuracy result is claimed.",
+    "parity_label": "C0/D active-row parity",
+    "full_seven_vector_parity": false,
+    "promotion": "not authorized; default remains unchanged"
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase83_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase83_native_clock_factor_gap_audit_v1.md",
+      "sha256": "291ee545f5d022f56cfb357ec97c2c62aaec72df6d39c0c3cc82ce41459299fd",
+      "git_commit": "7f48778b86c810b0a1cbfea710c12456a691e8ca"
+    },
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase80_structural_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "official_repository": "taroz/gsdc2023",
+    "official_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5"
+  },
+  "official_source_pins": {
+    "read_as_specification_only": true,
+    "fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": ["102-114", "169-186", "189-218", "252-277"],
+      "facts": [
+        "c is a seven-element vector and d is a one-element state per epoch",
+        "PseudorangeFactor_XC receives c and DopplerFactor_VD receives d",
+        "ClockFactor_CCDD receives c1,c2,d1,d2 and raw dtgps",
+        "noise_clk is [sigma_motion_clk; zeros(6,1)] and noise_clkjump is [Inf; zeros(6,1)]",
+        "the factor is gated by dtgps < time_diff_th and the source phone exclusion list"
+      ]
+    },
+    "parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": ["46-47", "130-133"],
+      "facts": ["time_diff_th is 1.5 seconds", "sigma_motion_clk is 0.1 metres"]
+    },
+    "clock_factor_ccdd_h": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc",
+      "lines": ["16-20", "32-61"],
+      "facts": [
+        "the factor has Vector c1, Vector c2, scalar-vector d1 and d2 inputs",
+        "error is c2-c1 with only row 0 reduced by (d1[0]+d2[0])*dt/2",
+        "Hc1=-I and Hc2=+I; both drift Jacobians are zero except row 0=-dt/2",
+        "rows 1 through 6 are c2-c1 with no drift term and remain exact under the source zero-sigma rows"
+      ]
+    }
+  },
+  "phase80_source_pins": {
+    "entrypoint": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "f75eaf3bb9b1b138396fbb550ef04925cfd2b68cd306f8e01a43147354028cfe",
+      "lines": ["88-90", "187-191", "338-350", "415-425", "535-560", "3698-3719", "3803-3824"],
+      "facts": [
+        "the Phase80 entrypoint selects GTSAM, Pose3 and IMU",
+        "direct observable quality is a separate opt-in P/D quality contract",
+        "direct quality conflicts with legacy upstream quality and requires no-bridge mode",
+        "the new clock flag is not present in this pinned implementation and is frozen here only"
+      ]
+    },
+    "fgo_config_hpp": {
+      "path": "include/libgnss++/algorithms/fgo_config.hpp",
+      "sha256": "5bf6a54be423a283e42256df2adbd50f4b30083c317bfc6b46cda6a54efd0423",
+      "lines": ["84-90", "166-180", "286-300", "850-860"],
+      "facts": [
+        "clock motion is enabled by default with clock_motion_sigma_m=300",
+        "corrected undifferenced Doppler is an independent opt-in path",
+        "fixed-lag smoothing is default off, so Phase80 uses the batch GTSAM path"
+      ]
+    },
+    "fgo_gtsam_backend_cpp": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "c48c1452a4f31058965bf1e22d9ed41ee54e2f52c5ea5cf22cd14f1b2d8d4dfb",
+      "lines": ["206-261", "442-475", "673-700", "914-933"],
+      "facts": [
+        "per-epoch dopplerClockDriftKey states are initialized and used by receiver-only D rows",
+        "clockKey is scalar seconds and non-GPS ISBs are global/static scalars",
+        "the current clock row is BetweenFactor<double>(previous,current,0) over adjacent epochs",
+        "the current row has no dt, d1/d2 coupling, seven-vector, or 1.5-second edge gate"
+      ]
+    },
+    "fgo_gtsam_internal_hpp": {
+      "path": "src/algorithms/fgo_gtsam_internal.hpp",
+      "sha256": "b0ee9f5659d701a658e8f88992e46aebd5ef9e5ca084c136cae4a6029659084b",
+      "lines": ["361-388"],
+      "facts": [
+        "c is one per-epoch scalar base clock in seconds",
+        "i is one global inter-system-bias scalar per non-GPS constellation",
+        "d is an independent per-epoch receiver clock range-rate state"
+      ]
+    },
+    "phase80_sealed_build_pin": {
+      "source_commit": "f28aebaf1b41df3ee5e363a8ad94987247321048",
+      "binary_path": "build/apps/gnss_fgo_imu_no_base",
+      "binary_sha256": "a9498b7aab4a1432af993cd1f3fe45873cf008cf165a6c245993ac77d0fe239c"
+    }
+  },
+  "candidate_contract": {
+    "flag": "--native-source-clock-c0d-factor",
+    "default_off": true,
+    "implementation_status_at_freeze": "not implemented",
+    "requires": [
+      "--native-source-direct-observable-quality",
+      "--native-pdc-imu-tdcp-no-bridge"
+    ],
+    "inherited_conflicts": [
+      "--native-upstream-quality",
+      "--native-pdc-state-bridge",
+      "the implicit PDC bridge path when --native-pdc-imu-tdcp is used without --native-pdc-imu-tdcp-no-bridge"
+    ],
+    "composition": "Phase80 direct/no-PDC source-quality composition and sealed Phase78 route/settings composition remain unchanged",
+    "backend_scope": {
+      "selected": "GTSAM/Pose3/IMU path only",
+      "gnss_fgo_imu_no_base_entrypoint": "GTSAM/Pose3/IMU at apps/native/gnss_fgo_imu_no_base.cpp:3698-3702",
+      "eigen_policy": "The flag must be rejected outside this GTSAM/Pose3 path. Eigen exact parity is not claimed or implemented; it would require a separate freeze."
+    },
+    "edge_gate": {
+      "scope": "adjacent epochs only",
+      "dt_condition": "0 < dt < 1.5 seconds",
+      "source_excluded_phones": ["sm-a205u", "sm-a505u", "samsunga325g"],
+      "pixel5_result": "Pixel5 is not source-excluded, so eligible non-jump edges are active",
+      "invalid_dt": "non-finite or dt <= 0; omit",
+      "gap_dt": "dt >= 1.5 seconds; omit",
+      "clock_jump": "omit active C0 factor, equivalent to the source Inf-noise C0 row"
+    },
+    "factor": {
+      "parity_scope": "C0/D active-row parity, not full seven-vector parity",
+      "clock_state_units": "c1,c2 in seconds",
+      "drift_state_units": "d1,d2 in metres per second",
+      "dt_units": "seconds",
+      "residual_units": "seconds",
+      "speed_of_light_mps": 299792458.0,
+      "residual_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "jacobian_order": ["c1", "c2", "d1", "d2"],
+      "jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "regular_sigma_seconds": "0.1/C_LIGHT",
+      "jump_sigma_seconds": "Inf (implemented by omission)",
+      "state_and_factor_mapping": "Use the existing scalar clockKey and existing per-epoch dopplerClockDriftKey; do not introduce a second clock row or a new PDC state.",
+      "replacement_rule": "Under the flag replace the current scalar clock BetweenFactor row; never add C0/D and the old scalar clock BetweenFactor for the same edge.",
+      "static_states": "Existing global/static ISB states and static receiver signal-bias states remain unchanged.",
+      "seven_vector_disclaimer": "The source C[1..6] exact continuity rows are not added by this C0/D-only candidate; no full taroz seven-component claim is permitted."
+    }
+  },
+  "required_diagnostics": {
+    "labels_and_values": [
+      "clock_c0d_enabled",
+      "clock_c0d_factor_count",
+      "clock_c0d_clock_jump_skips",
+      "clock_c0d_gap_skips",
+      "clock_c0d_invalid_dt_skips",
+      "clock_c0d_phone_exclusion_skips",
+      "clock_c0d_dt_min_s",
+      "clock_c0d_dt_max_s",
+      "clock_c0d_equation",
+      "clock_c0d_jacobian_order",
+      "clock_c0d_units",
+      "clock_c0d_sigma_seconds",
+      "legacy_scalar_clock_between_factor_count"
+    ],
+    "requirements": {
+      "enabled": "true only when the new flag is active; otherwise false",
+      "factor_count": "count of inserted non-jump edges satisfying the edge gate",
+      "skip_accounting": "invalid, gap, phone-exclusion, and clock-jump skips are mutually accounted for and never converted into a factor",
+      "dt_range": "min/max finite positive dt observed for candidate edge accounting",
+      "equation_and_units": "must reproduce candidate_contract.factor verbatim",
+      "legacy_scalar_clock_between_factor_count_when_enabled": 0
+    }
+  },
+  "structural_plan": {
+    "implementation_authorized_after_freeze": true,
+    "route_execution_authorized_by_this_freeze": false,
+    "raw_execution_requires_new_structural_manifest_or_freeze": true,
+    "focused_synthetic_tests_required_before_routes": [
+      "residual and four Jacobian entries for non-unit dt with c in seconds and d in metres per second",
+      "regular sigma equals 0.1/C_LIGHT seconds",
+      "clock-jump edge omits C0/D and reports a jump skip",
+      "dt <= 0 and non-finite dt report invalid skips",
+      "dt >= 1.5 seconds reports a gap skip; dt just below 1.5 is eligible",
+      "Pixel5 is eligible and each source-excluded phone is skipped",
+      "the old scalar clock BetweenFactor count is zero whenever the candidate is enabled",
+      "static ISB and signal-bias key spaces remain present and unchanged"
+    ],
+    "route_matrix": {
+      "route_order_frozen": true,
+      "phone_model": "pixel5",
+      "routes": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+      ],
+      "runs_per_route": 2,
+      "total_runs": 8,
+      "route_score_selector": false,
+      "future_inputs_planned_only": ["raw device GNSS", "raw device IMU", "broadcast navigation"],
+      "future_inputs_not_read_at_freeze": true,
+      "future_truth_reads": 0,
+      "future_mat_reads_or_generated": 0,
+      "future_kaggle_or_token_access": 0,
+      "future_precomputed_coordinate_reads": 0,
+      "structural_failure": "fail closed; no accuracy stage"
+    },
+    "structural_gates": [
+      "source and inherited Phase80 hashes match the freeze",
+      "candidate is default-off and dependency/conflict checks are enforced",
+      "all required diagnostics are present and internally consistent",
+      "new C0/D factor count equals eligible non-jump edge count",
+      "legacy scalar clock BetweenFactor count is zero under the candidate",
+      "finite, converged, earth-valid keyed output with zero over-70-m/s transitions",
+      "two repeats per route are byte-identical",
+      "all eight planned runs complete without forbidden input or route selection"
+    ]
+  },
+  "accuracy_after_structural_go_only": {
+    "separate_freeze_required": true,
+    "authorized_by_this_record": false,
+    "phase82_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_freeze_v1.json",
+      "sha256": "33bbfc4051af20cd3f39fbf8620ea4d277c4acc5dbe5d8d1621452a657eebf6b"
+    },
+    "phase82_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_manifest_v1.json",
+      "sha256": "77f3cc6f82b4953e3fd0a240eff149fdc6c96b9335cc5058c962010b985500a0"
+    },
+    "metric": "exact integer (phone,UnixTimeMillis) matching; spherical Haversine per row; score=(P50+P95)/2",
+    "gates": {
+      "all_routes": true,
+      "each_route_improvement_at_least_m": 0.05,
+      "no_route_regression": true,
+      "macro_improvement_at_least_m": 0.1,
+      "mtv_h_improvement_at_least_m": 0.1,
+      "prediction_domain_coverage": 1.0,
+      "macro_score_max_m": 2.0,
+      "route_score_max_m": 3.0,
+      "mtv_h_p95_max_m": 5.0,
+      "all_finite": true,
+      "over_70_mps_count": 0,
+      "strict_macro_score_max_m": 0.782,
+      "strict_macro_improvement_vs_phase78": "strictly positive",
+      "logic": "all gates are ANDed; any failure is no-go"
+    },
+    "policy": "Only after a structural GO and a new accuracy freeze may one authorized development-train read per route occur; no validation, holdout, Kaggle, post-truth solver rerun, route tuning, or route-score selection."
+  },
+  "read_accounting_at_freeze": {
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "native_solver_invocations": 0,
+    "ground_truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "code_changed": false,
+    "parameters_changed": false,
+    "route_execution": false,
+    "post_truth_tuning": false
+  },
+  "forbidden_inputs": [
+    "ground_truth.csv",
+    "validation or holdout truth",
+    "MAT/MATLAB products or generated .mat files",
+    "Phase82 candidate coordinates or any precomputed trajectory",
+    "Kaggle data, leaderboard, or token",
+    "route-score selector or truth-selected parameters",
+    "PDC bridge or PDC-derived state"
+  ]
+}

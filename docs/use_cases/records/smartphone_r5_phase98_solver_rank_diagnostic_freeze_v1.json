@@ -1,0 +1,208 @@
+{
+  "schema_version": "smartphone-r5-phase98-solver-rank-diagnostic-freeze.v1",
+  "phase": 98,
+  "execution_label": "Luna Max",
+  "status": "frozen-read-only-not-implemented",
+  "decision": {
+    "unique_algorithmic_correction_established": false,
+    "exactly_one_candidate_frozen": true,
+    "candidate_count": 1,
+    "summary": "Freeze only source-preserving observation of the existing LM solver path, ordering, damping, rank-status metadata, and naturally exposed indeterminate-system exception boundary. Do not switch factorization or invoke another elimination."
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase98_solver_rank_audit_v1.md",
+    "sha256": "f0c970a8ddc0f0a9ec5a9ab4fd8ea80d91eff9e37db91599e9336ffd7d7f8919",
+    "commit": "8517380eb205a6fb30bfb88bccf7de3dc6f87847"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "comparison": [
+      "sealed Phase80 active-main no-C0D summaries",
+      "sealed Phase97 singular-main keyed diagnostic result"
+    ],
+    "excluded": [
+      "new raw execution",
+      "truth, MAT, Kaggle, token, base, precomputed coordinates, and accuracy",
+      "exact-incidence artifact duplication"
+    ],
+    "phase97_result_reused_without_copy": true,
+    "phase97_result_bytes": 173215107
+  },
+  "candidate": {
+    "id": "phase98_existing_lm_solver_ordering_damping_exception_boundary_read_only_diagnostic",
+    "kind": "source-preserving-observability-only",
+    "implemented": false,
+    "default_enabled": false,
+    "raw_execution_authorized": false,
+    "solver_rerun_authorized": false,
+    "purpose": "Record which pinned solver branch actually receives the existing main graph, preserve the first ten existing LM trial outcomes, and capture a real nearby variable only when the exception object is available at the existing integration boundary.",
+    "algorithmic_effect": "None",
+    "graph_and_values": {
+      "graph_construction_unchanged": true,
+      "factor_equations_unchanged": true,
+      "factor_weights_and_sigma_unchanged": true,
+      "values_unchanged": true,
+      "ordering_unchanged": true,
+      "lm_acceptance_and_termination_unchanged": true,
+      "rank_observation": {
+        "reuse_existing_initial_linearization_only": true,
+        "reuse_phase97_keyed_zero_near_zero_summary": true,
+        "reuse_phase97_rank_status": true,
+        "additional_rank_decomposition": false,
+        "additional_dense_or_external_matrix": false,
+        "exact_incidence_reemission": false
+      }
+    },
+    "solver_path_observation": {
+      "record_effective_linear_solver_type": true,
+      "record_multifrontal_or_sequential_branch": true,
+      "record_elimination_function": true,
+      "expected_default_linear_solver_type": "MULTIFRONTAL_CHOLESKY",
+      "expected_default_elimination_function": "EliminatePreferCholesky",
+      "record_ordering_type": true,
+      "expected_default_ordering_type": "COLAMD",
+      "record_explicit_ordering_present": true,
+      "record_ordering_count_and_compact_digest_only": true,
+      "exact_ordering_key_list_publication": false,
+      "alternative_solver_types_selected": false
+    },
+    "lm_observation": {
+      "record_lambda_initial": true,
+      "record_lambda_factor": true,
+      "record_lambda_lower_bound": true,
+      "record_lambda_upper_bound": true,
+      "record_min_model_fidelity": true,
+      "record_diagonal_damping": true,
+      "expected_main_max_iterations": 12,
+      "expected_lambda_initial": 1e-05,
+      "expected_lambda_factor": 10.0,
+      "expected_lambda_lower_bound": 0.0,
+      "expected_lambda_upper_bound": 100000.0,
+      "existing_trials_only": true,
+      "maximum_trials_recorded": 10,
+      "additional_lambda_retry": false,
+      "trial_acceptance_policy_changed": false
+    },
+    "exception_observation": {
+      "record_stage": true,
+      "record_exception_class_and_message": true,
+      "record_nearby_variable_symbol_and_index_when_bound": true,
+      "nearby_variable_unavailable_status": "nearby_variable_unavailable",
+      "do_not_invent_nearby_key": true,
+      "nearby_key_is_detection_location_not_origin": true,
+      "additional_sparse_elimination": false,
+      "additional_linear_solver": false
+    },
+    "source_invariants": {
+      "official_ccdd_equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "official_ccdd_jacobian_order": "[-1,+1,-dt/2,-dt/2] for [C1,C2,D1,D2]",
+      "clock_C_units": "metres",
+      "clock_ISB_units": "metres",
+      "drift_D_units": "metres_per_second",
+      "dt_units": "seconds",
+      "ccdd_sigma_m": 0.1,
+      "filters_unchanged": true,
+      "priors_unchanged": true,
+      "legacy_default_unchanged": true,
+      "no_pdc_or_external_coordinate_input": true,
+      "no_fallback": true,
+      "fail_closed": true
+    },
+    "publication_policy": {
+      "diagnostic_metadata_only": true,
+      "raw_observations": false,
+      "state_vectors": false,
+      "coordinates": false,
+      "solution_rows": false,
+      "truth": false,
+      "mat": false,
+      "kaggle_or_token": false,
+      "accuracy": false
+    }
+  },
+  "rejected_alternatives_not_frozen": [
+    {
+      "id": "switch_to_multifrontal_or_sequential_qr",
+      "reason": "MULTIFRONTAL_QR and SEQUENTIAL_QR are supported pinned solver settings, but selecting either changes the linear factorization and/or elimination traversal and can change LM acceptance."
+    },
+    {
+      "id": "second_sparse_cholesky_or_qr_elimination",
+      "reason": "The public eliminateMultifrontal/eliminateSequential API can expose IndeterminantLinearSystemException::nearbyVariable(), but a second elimination is a solver run rather than passive observation and is forbidden here."
+    },
+    {
+      "id": "sigma_lm_prior_filter_or_factor_change",
+      "reason": "No sealed evidence authorizes an algorithm or tuning change; CCDD equation, units, sigma, graph, and fail-closed policy remain fixed."
+    }
+  ],
+  "authority": {
+    "phase80_source_commit": "f28aebaf1b41df3ee5e363a8ad94987247321048",
+    "phase80_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "phase97_implementation_commit": "e912d4571ba684453a0bc6fa73cdd0b99d9ffc86",
+    "phase97_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase97_singular_system_diagnostic_freeze_v1.json",
+      "sha256": "07723240dc56ae80c3d21e25b783fb086c5e9ea4af47e62cd56fc5b81980d174",
+      "commit": "587ef8db667b47ec539aba9d0a76d43698d8bc53"
+    },
+    "phase97_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase97_singular_system_diagnostic_structural_result_v1.json",
+      "sha256": "abf4027bec33d51b54fcfa2c3def55ff9ea22568fca7eeeb83049271cf2efecc",
+      "commit": "dd32a32ecc2960322511ecf6753431bda64c603a"
+    },
+    "pinned_gtsam": {
+      "nonlinear_optimizer_params": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizerParams.h",
+        "sha256": "0cf55b15a4d04aa1364b63bdae659fc65f568a8e08898a104a28d7fdc6ca07a5"
+      },
+      "nonlinear_optimizer": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizer.cpp",
+        "sha256": "594fd9bf3d48199f00d05794913df6c84d300664458d609fcdf0fb6ed3215a35"
+      },
+      "lm": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtOptimizer.cpp",
+        "sha256": "834f732ac4ad4130b2a719a3181e5dfcd2ecdf584ece6f0c76bdf5f390e10cbc"
+      },
+      "lm_params": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtParams.h",
+        "sha256": "dd9348c08a96f0dffb2cf6b6f24eab18d4d32280a21e333a1e38725b254ec3f2"
+      },
+      "ordering": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/inference/Ordering.h",
+        "sha256": "7ab402edf858426a05dcd122914f9d380609d34f95d92ceefc843c36ecf5766c"
+      },
+      "elimination_dispatch": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/inference/EliminateableFactorGraph-inst.h",
+        "sha256": "e652ffda77bb22c58ef55607bb566296f97060d694db449dafacb1bdbafe7845"
+      },
+      "linear_exception": {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/linear/linearExceptions.h",
+        "sha256": "15d3c2e1ae816f688e2d90cd37212cb7559330862cf6dd061462e967a2ffa418"
+      }
+    }
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "kaggle_or_token_access": 0,
+    "base_rinex_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "new_large_artifacts": 0
+  },
+  "execution_policy": {
+    "this_freeze_authorizes_raw_execution": false,
+    "this_freeze_authorizes_solver_rerun": false,
+    "separate_future_implementation_required": true,
+    "separate_future_authorization_required": true,
+    "fail_closed_on_missing_or_unavailable_telemetry": true
+  }
+}

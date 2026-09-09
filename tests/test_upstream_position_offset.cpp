@@ -24,6 +24,27 @@ TEST(UpstreamPositionOffset, MatchesPinnedPhoneBranches) {
     EXPECT_DOUBLE_EQ(offset.offset_ud_m, -0.25);
 }
 
+TEST(UpstreamPositionOffset, Phase112PinsOfficialPixel5Vector) {
+    libgnss::upstream_position_offset::PhoneOffset offset;
+    ASSERT_TRUE(libgnss::upstream_position_offset::phoneOffset(
+        "pixel5", offset));
+    EXPECT_DOUBLE_EQ(offset.offset_rl_m, -0.10);
+    EXPECT_DOUBLE_EQ(offset.offset_ud_m, -0.30);
+
+    // The historical helper intentionally preserves the upstream contains()
+    // branches.  The Phase112 exact-device narrowing is enforced at the
+    // native recipe gate, without changing these legacy helper branches.
+    EXPECT_TRUE(libgnss::upstream_position_offset::phoneOffset(
+        "pixel5pro", offset));
+
+    const auto result = libgnss::upstream_position_offset::offsetFromRpy(
+        "pixel5", Eigen::Vector3d::Zero());
+    ASSERT_TRUE(result.ok);
+    EXPECT_TRUE(result.offset_enu_m.isApprox(Eigen::Vector3d(0.30, 0.10, 0.0),
+                                             1.0e-15));
+    EXPECT_NEAR(result.offset_enu_m.norm(), 0.31622776601683794, 1.0e-15);
+}
+
 TEST(UpstreamPositionOffset, UnknownPhoneFailsClosed) {
     libgnss::upstream_position_offset::PhoneOffset offset;
     EXPECT_FALSE(libgnss::upstream_position_offset::phoneOffset(

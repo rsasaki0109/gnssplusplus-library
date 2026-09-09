@@ -1,0 +1,218 @@
+{
+  "schema_version": "smartphone-r5-phase126-raw-base-compound-structural-contract-freeze.v1",
+  "phase": 126,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-phase126-raw-execution",
+  "contract_audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_structural_contract_audit_v1.md",
+    "commit": "ea083e3eb8ecf01a1d99ddd6f6ef852483da13ca",
+    "sha256": "8ad6fcedc7a3b23c8f13b82968f67bada2fbe039d90f919c104e9a910f71f4ee"
+  },
+  "design_freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_port_design_freeze_v1.json",
+    "commit": "583a6c7a4788f82373a4e71436d2953703bc764c",
+    "sha256": "96dd275d08057e7848ee988c0cf613c2cfec80b5a1ed65b062f33ccfaf044e88"
+  },
+  "implementation": {
+    "commit": "9e9972667ee009e1bcd0dd1ea4732ae45415c3ce",
+    "candidate_id": "phase126-raw-base-source-complete-compound-v1",
+    "selector": "--native-phase126-raw-base-source-complete",
+    "default_off": true,
+    "partial_selectors_allowed": false,
+    "legacy_default_unchanged": true,
+    "source_sha256": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": "1c9340a6caf05e16262c947c88d1e286baf3715f93f77a65f0ce34f38fefa95a",
+      "include/libgnss++/algorithms/fgo_config.hpp": "a50ccbce9b9fdd5b9129edc8e8612286af83697e2d6eeef0d24fb2cd16c3bb96",
+      "include/libgnss++/algorithms/fgo.hpp": "b2224fd4cbe6958eed491ae0551485c4cdb86ef8cd5c5a03f5572f1c41400b86",
+      "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "7f867e549d554230a2fe8c9a46e129ca3db69361ab14ea9b662ca9a3e79f4900",
+      "include/libgnss++/algorithms/phase126_raw_base_compound.hpp": "8e7c18260905cd8c36149cb55d97cd4aa40c6bae2649202f57a5693f728e6f62",
+      "src/algorithms/base_pseudorange_compensation.cpp": "4add96387d9fc2277b57da78cc7a0623ec97d3f4f6cd6d10a97c2f97beb95c49",
+      "src/algorithms/phase126_raw_base_compound.cpp": "5bbb276c2c22b2d9d2a27d90746cbb2451b26d8cf87b339a36c50a7fe7dc513d",
+      "src/algorithms/source_pseudorange_miss_mask.cpp": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
+      "src/algorithms/fgo_problems.cpp": "1c1c24699e82945b7ee71f036e4cf969b0bd303ab49205d998ec5338b09714b4"
+    },
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "5dc5a336ff605e418d42be957f3ec5ce5663744da77999b5acbf12f3ef440e70"
+    }
+  },
+  "target_routes": [
+    "MTV-A",
+    "LAX-T"
+  ],
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "order": "MTV-A then LAX-T",
+    "native_solver_invocations_planned": 2,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_rows_authorized": false,
+    "solution_content_reads_planned": 0,
+    "truth_reads_planned": 0,
+    "accuracy_calculations_planned": 0
+  },
+  "fixed_phase118_recipe": {
+    "phase118_commit": "6b37f92077a8ede43cb24e7a5cada580feccea5c",
+    "phase112_commit": "0151bd070f8029413f8f2a17a28fe982dddb735f",
+    "phase118_selector": "--native-phase118-official-tdcp-huber-k",
+    "phase117_dynamic_sigma": false,
+    "phase120_atmosphere_selector": false,
+    "phase109_additional_frequency_selector": false,
+    "fixed_tdcp_sigma_m": 0.03,
+    "official_route_type": "Highway",
+    "official_tdcp_huber_k": 0.5,
+    "main_solver": "MULTIFRONTAL_QR",
+    "c7_epoch_local": true,
+    "receiver_clock_unit": "m",
+    "receiver_clock_drift_unit": "m/s",
+    "ccdd_unit": "m",
+    "ccdd_sigma_m": 0.1,
+    "global_isb_duplicate": false,
+    "pixel5_offset_exactly_once": true,
+    "factor_topology_unchanged": true,
+    "filter_noise_lm_initialization_unchanged": true
+  },
+  "phase126_contract": {
+    "source_complete_atomic_steps": [
+      "A: raw RINEX/header/signal and finite source-domain satellite-state ingress",
+      "B: official correction streams, atmosphere, geometry/Sagnac, smoothing/interpolation and miss conservation",
+      "C: exactly-once rover code application with invariant commit"
+    ],
+    "admission": "atomic_step_a && atomic_step_b && atomic_step_c && all_acceptance_invariants",
+    "transactional_no_partial_application": true,
+    "no_fallback": true,
+    "no_rerun": true,
+    "station_reference": {
+      "source": "finite Earth-valid raw RINEX APPROX POSITION XYZ",
+      "antenna_semantics": "must be proven by post-authorization header inventory",
+      "unknown_or_missing": "fail-closed"
+    },
+    "signal_contract": {
+      "mapping": "exact selected signal to finite frequency and wavelength",
+      "glonass_channel": "finite channel/frequency required when GLONASS is present",
+      "unknown_or_missing": "fail-closed"
+    },
+    "satellite_and_atmosphere": {
+      "state": "source-equivalent transmission-time satellite state and clock",
+      "geometry": "ECEF geodist with exactly one Sagnac representation",
+      "atmosphere": "finite in-domain ionosphere and troposphere",
+      "explicit_tgd_bgd": "none; official symmetric resPc policy",
+      "unknown_or_nonfinite_or_out_of_domain": "fail-closed"
+    },
+    "resPc_m": "P_base_m + satellite_clock_m - geometric_range_m - ionosphere_m - troposphere_m",
+    "application_m": "corrected_rover_pseudorange_m = rover_pseudorange_m - interpolated_smoothed_base_resPc_m",
+    "moving_mean_samples": {
+      "MTV-A": 151,
+      "LAX-T": 11
+    },
+    "interpolation": "exact stream key and in-domain only; no nearest, endpoint hold, or extrapolation",
+    "conservation": "retained = corrected + exact_stream_miss + out_of_domain_miss + invalid_source_miss",
+    "exactly_once_marker": "phase126_compound_admitted only after A/B/C commit"
+  },
+  "sealed_base_member_metadata": {
+    "source_record": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_audit_v1.md",
+    "payload_read_in_phase126_pre_raw": 0,
+    "MTV-A": {
+      "member": "base.obs",
+      "bytes": 10708536,
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "observed_interval_s": 1.0,
+      "moving_mean_samples": 151,
+      "header_approximate_xyz_m": [-2703115.921, -4291767.2078, 3854247.9066]
+    },
+    "LAX-T": {
+      "member": "base.obs",
+      "bytes": 719969,
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "observed_interval_s": 15.0,
+      "moving_mean_samples": 11,
+      "header_approximate_xyz_m": [-2507798.7984, -4676369.6918, 3526890.8008]
+    }
+  },
+  "allowed_runtime_lineage": {
+    "phone": ["raw device_gnss.csv", "raw device_imu.csv"],
+    "navigation": "broadcast navigation",
+    "base": "sealed raw base RINEX and its declared hash",
+    "coordinates": "raw RINEX header only, in-memory and same-run",
+    "raw_content_copy_or_transform": false
+  },
+  "forbidden_lineage": [
+    "MAT",
+    "truth",
+    "PDC",
+    "Kaggle",
+    "base_position.csv",
+    "base_offset.csv",
+    "phone coordinates",
+    "saved result coordinates",
+    "precomputed corrections",
+    "fallback seed",
+    "alternate correction operator"
+  ],
+  "structural_gates": {
+    "option_active_exactly_once": true,
+    "phase118_huber_active_exactly_once": true,
+    "phase117_dynamic_sigma_off": true,
+    "phase120_atmosphere_off": true,
+    "phase109_additional_frequency_off": true,
+    "fixed_tdcp_sigma_0_03_m": true,
+    "highway_huber_k_0_5": true,
+    "complete_signal_mapping": true,
+    "glonass_channel_frequency_when_present": true,
+    "finite_in_domain_satellite_state_atmosphere": true,
+    "official_resPc_equation": true,
+    "movmean_151_or_11_exact": true,
+    "in_domain_interpolation": true,
+    "stream_miss_conservation": true,
+    "atomic_a_b_c": true,
+    "transactional_no_partial_application": true,
+    "base_correction_exactly_once": true,
+    "gnss_first_progress_and_strict_cost_decrease": true,
+    "full_finite_c7_d_exact_handoff": true,
+    "main_qr_progress_and_strict_cost_decrease": true,
+    "finite_earth_valid_expected_coverage": true,
+    "pixel5_offset_exactly_once": true,
+    "no_solution_content_read": true,
+    "no_truth_mat_pdc_precomputed_coordinate_accuracy_kaggle": true,
+    "no_solver_fallback": true
+  },
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "raw_content_copied_or_transformed": false,
+    "route_reruns": 0,
+    "fallbacks": 0
+  },
+  "authorization": {
+    "implementation_authorized": true,
+    "raw_materialization_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false,
+    "rerun_or_fallback_authorized": false,
+    "next_boundary": "independent authorization commit after launch-free validator and pre-raw accounting pass"
+  }
+}

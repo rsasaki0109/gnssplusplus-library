@@ -1,0 +1,97 @@
+{
+  "schema_version": "smartphone-r5-phase104-stage-main-attribution-raw-failure-result.v1",
+  "phase": 104,
+  "execution_label": "Luna Max",
+  "status": "fail-closed-native-launch-before-application",
+  "decision": "NO-GO: both authorized native invocations terminated in the dynamic loader before application startup; no candidate artifact exists for truth evaluation.",
+  "authorization": {
+    "commit": "49ac25868d67250309097c514f0f19a398b802f4",
+    "status": "authorized-for-exact-two-route-phase104-stage-main-raw-execution",
+    "candidate": "phase104-evaluation-only-gnss-first-stage-export-v1",
+    "rerun_authorized": false
+  },
+  "failure": {
+    "class": "native_dynamic_loader_missing_library",
+    "loader_error_digest": "b7459f3d85a3e29e3a5e62c3e2c42f57ff06cb1310e185f932e179ac0ef5951e",
+    "loader_error": "libmetis-gtsam.so: cannot open shared object file: No such file or directory",
+    "application_main_entered": false,
+    "solver_entered": false,
+    "gnss_first_entered": false,
+    "stage_sidecar_attempted": false,
+    "truth_evaluator_started": false
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations": 2,
+    "return_codes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 127,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 127
+    },
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "order": 1,
+      "return_code": 127,
+      "native_log": {
+        "path": "output/smartphone-r5/phase104-stage-main-attribution-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/native.log",
+        "bytes": 148,
+        "sha256": "b7459f3d85a3e29e3a5e62c3e2c42f57ff06cb1310e185f932e179ac0ef5951e"
+      },
+      "run_metadata_sha256": "dde709da0ea1ce486f2c6ac64547c3fe4bcca01689d5fb2a498527e1e226da5a",
+      "solution_present": false,
+      "stage_present": false,
+      "displacement_stats_present": false,
+      "summary_present": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "order": 2,
+      "return_code": 127,
+      "native_log": {
+        "path": "output/smartphone-r5/phase104-stage-main-attribution-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/native.log",
+        "bytes": 148,
+        "sha256": "b7459f3d85a3e29e3a5e62c3e2c42f57ff06cb1310e185f932e179ac0ef5951e"
+      },
+      "run_metadata_sha256": "5ccc9e5503cb937d8ee0ef5865021d4828dd53b8f2124e92b3ff27f6353e073c",
+      "solution_present": false,
+      "stage_present": false,
+      "displacement_stats_present": false,
+      "summary_present": false
+    }
+  },
+  "read_accounting": {
+    "raw_device_gnss_reads_by_wrapper": 0,
+    "raw_device_imu_reads_by_wrapper": 0,
+    "broadcast_navigation_reads_by_wrapper": 0,
+    "raw_content_copied_or_transformed": false,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_reads_or_generated": 0,
+    "base_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "stage_or_main_reinput": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_rows_in_result": false
+  },
+  "truth_boundary": {
+    "truth_only_authorization_created": false,
+    "truth_evaluation_performed": false,
+    "accuracy_promotion": false,
+    "solution_publication": false,
+    "kaggle_submission": false
+  },
+  "execution_metadata": {
+    "path": "output/smartphone-r5/phase104-stage-main-attribution-v1/execution_metadata.json",
+    "sha256": "0cbf836d90e85eda6da405e662eaa5dd1a02642a56004697a86c80acfd6d4f21"
+  },
+  "preservation": {
+    "logs_and_partial_metadata_preserved": true,
+    "next_step_requires_new_independent_authorization": true,
+    "automatic_rerun": false
+  }
+}

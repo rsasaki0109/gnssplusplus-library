@@ -1,0 +1,134 @@
+{
+  "schema_version": "smartphone-r5-phase100-phase99-qr-accuracy-raw-evaluation-authorization.v1",
+  "phase": 100,
+  "status": "authorized-for-exact-two-route-phase100-qr-raw-and-isolated-truth-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Authorize one fresh raw-only Phase99 QR solution per MTV-A and LAX-T, then one separate evaluator subprocess with one official truth read per route.",
+  "authority": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_gate_freeze_v1.json",
+      "sha256": "de2d4f5626782297b5535767ff1f867e29538c74edafff337504b763dbfc0ff9"
+    },
+    "freeze_commit": "2fb699a",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_manifest_v1.json",
+      "sha256": "e31e959347aa4ca8d4f3bce3b5d66955c2abf8336fa3c965b59da199e7eb7729"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase100_phase99_qr_accuracy.py",
+      "sha256": "85d72342e34f83d3edcd9e3d0efc5d03c2aac10b243e40958e575f74fdbd1928"
+    },
+    "wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase100_phase99_qr_accuracy_execute.py",
+      "sha256": "326b679500b25808ad32c2ea07db8e22313c4e181d70b4aa5267c554287fda82"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase100_phase99_qr_accuracy.py",
+      "sha256": "4d2e2f1ec10d5c736584a48296526d09b3686588b746d2f72667ec90f067a9e1"
+    },
+    "phase99_contract": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase99_main_multifrontal_qr.py",
+      "sha256": "582f6b9a4485f5d8efb16ce4daad62c2673c19d08e724c263374fc66febf3e89"
+    },
+    "phase95_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase95_raw_input_path_corrected_execute.py",
+      "sha256": "5ac858cf156555652f6feae60c71a4237269d4b4c2cb70c1adf5a9e08f10e883"
+    },
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281"
+    },
+    "phase82_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_freeze_v1.json",
+      "sha256": "33bbfc4051af20cd3f39fbf8620ea4d277c4acc5dbe5d8d1621452a657eebf6b"
+    },
+    "phase82_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_manifest_v1.json",
+      "sha256": "77f3cc6f82b4953e3fd0a240eff149fdc6c96b9335cc5058c962010b985500a0"
+    },
+    "phase82_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase43_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_freeze_v1.json",
+      "sha256": "9278a835a21e3a19027aefd3675aba45d8f1f9e19183cbc5590850b776722400"
+    },
+    "phase43_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json",
+      "sha256": "1433249a9ddd1809a00535b33fc67e3267a8cab29e28f773dd148f0962c44d1a"
+    }
+  },
+  "candidate": {
+    "id": "phase100-phase99-main-multifrontal-qr-accuracy-v1",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "raw_only": true,
+    "raw_input_names_exact": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "phase99_qr_selector": "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+    "phase93_handoff_selector": "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "truth_mat_base_pdc_precomputed_kaggle": false,
+    "no_fallback_or_rerun": true,
+    "solution_publication": false,
+    "phase99_withheld_solution_reuse": false,
+    "diagnostic_withholding_selectors_absent": true
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "matrix": {
+    "route_count": 2,
+    "native_invocations": 2,
+    "runs_per_route": 1,
+    "controls_in_native": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_reads_in_native": 0,
+    "truth_reads_in_evaluator": 2,
+    "truth_reads_per_route": 1,
+    "mat_reads_or_generated": 0,
+    "base_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "solution_publication": false
+  },
+  "execution_policy": {
+    "raw_execution_authorized": true,
+    "truth_evaluation_authorized": true,
+    "one_native_invocation_per_route": true,
+    "sequential_route_order": "MTV-A then LAX-T",
+    "stop_after_two_routes": true,
+    "native_truth_path_or_env": false,
+    "native_mat_base_pdc_precomputed_coordinate": false,
+    "native_fallback_or_rerun": false,
+    "solution_hash_and_metadata_sealed_after_native_exit": true,
+    "truth_open_only_by_separate_evaluator_subprocess": true,
+    "truth_open_after_solution_preflight": true,
+    "truth_open_after_native_exit": true,
+    "post_truth_native_invocation": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "accuracy_gate_failure_policy": "seal the unmodified result and stop; no retry, tuning, fallback, or publication"
+  },
+  "release_boundary": {
+    "solution_csv_release": false,
+    "validation": false,
+    "kaggle_submission": false,
+    "promotion": false
+  }
+}

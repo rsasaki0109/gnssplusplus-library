@@ -1,0 +1,1278 @@
+{
+  "accuracy_scored": false,
+  "authorization": {
+    "commit": "2b5f3633d20457ee5a335c2d6d447c727374a26b",
+    "independent": true,
+    "path": "docs/use_cases/records/smartphone_r5_phase133_runner_native_selector_boundary_raw_authorization_v1.json",
+    "sha256": "029300f689fd738365e6707a66dd175b4cf642e0e9e5fce5e4c8673d5ca9f524",
+    "status": "independent-one-shot-inventory-first-structural-raw-authorized"
+  },
+  "candidate": {
+    "additional_frequency_bands": false,
+    "fixed_tdcp_sigma": 0.03,
+    "id": "phase133-runner-native-selector-boundary-v1",
+    "main_solver": "MULTIFRONTAL_QR",
+    "official_huber_k": 0.5,
+    "phase117_dynamic_sigma": false,
+    "phase118": true,
+    "phase120_atmosphere": false,
+    "phase126": true,
+    "phase127": true,
+    "phase128": true,
+    "phase129": true,
+    "phase130_native_argv": false,
+    "phase131": true,
+    "solution_opaque": true
+  },
+  "contract": {
+    "audit_commit": "52d397880baea7854919d00bb69c39900af5b48d",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase133_runner_native_selector_boundary_authorized_execute.py",
+    "candidate_id": "phase133-runner-native-selector-boundary-v1",
+    "freeze_commit": "8b1f75be0aaaadaedfffc5671be706dabd1106043",
+    "implementation_commit": "f32e0132aa144cd583a93799f320779c9e399a76",
+    "manifest_commit": "2ff98c1d1b751b1405fcc4c83e7f9893650672a4",
+    "manifest_sha256": "ca90d461759589c8cab7df6a328f9ac6f450f77edb6ec85fda6bbaae90161a2f",
+    "pre_raw_commit": "3e086ac6907e049c760071919e3a5533d336cec1",
+    "qualification_commit": "7e3e7b17fd7366a622daae46325f5e9dc9758bde",
+    "authorized_runner_commit": "c69ed14c96a13fefbd9c40f783051c98e5483a4a",
+    "authorized_runner_sha256": "ca5f0d3c0a8ec8b2c0f380cda3f1d7ed37b7a0525a04073a9019b87600b85be7",
+    "target_binary_sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e",
+    "tests_commit": "8a20e02b1625315c12ad6bc578a253801c1a759a"
+  },
+  "decision": "Inventory or structural gate failed closed; no rerun, fallback, truth, accuracy, or solution release is permitted.",
+  "execution_evidence": {
+    "native_command_construction_routes": 2,
+    "native_resolver_call_count": 0,
+    "native_resolver_evidence_source": "native-summary-only",
+    "native_resolver_reached_routes": 0,
+    "native_selector_counts_per_passing_route": {
+      "--native-phase118-official-tdcp-huber-k": 1,
+      "--native-phase126-raw-base-source-complete": 1,
+      "--native-phase127-glonass-channel-provenance": 1,
+      "--native-phase128-glonass-provenance-parser-admission": 1,
+      "--native-phase129-glonass-local-miss-mask": 1,
+      "--native-phase131-canonical-correction-band-key": 1
+    },
+    "native_solver_invocation_routes": 2,
+    "off_selector_counts_per_route": {
+      "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+      "--native-phase117-tdcp-snr-type-sigma": 0,
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+    },
+    "old_literal_phase130_preflight_calls": 0,
+    "phase130_native_argv_count": 0,
+    "typed_preflight_routes": 2
+  },
+  "execution_label": "Luna Max",
+  "matrix": {
+    "accuracy_calculations": 0,
+    "candidate_count": 1,
+    "controls": 0,
+    "fallbacks": 0,
+    "native_solver_invocations": 2,
+    "reruns": 0,
+    "route_order": [
+      "MTV-A",
+      "LAX-T"
+    ],
+    "runs_per_route": 1,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "phase": 133,
+  "promotion_authorized": false,
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_inventory_reads": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_command_constructions": 2,
+    "native_solver_invocations": 2,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "raw_base_hash_reads": 2,
+    "raw_base_header_inventory_reads": 2,
+    "raw_base_rinex_inventory_reads": 2,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_inventory_reads": 2,
+    "raw_device_imu_inventory_reads": 2,
+    "repairs": 0,
+    "route_reruns": 0,
+    "solution_coordinate_interpretations": 0,
+    "solution_opaque_hash_reads": 2,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_scored": false,
+      "gates": {
+        "base_exactly_once": true,
+        "gnss_first_c7_d_handoff": true,
+        "gnss_first_progress": true,
+        "main_finite_coverage": true,
+        "main_qr_progress": true,
+        "native_phase131_resolver_reached": false,
+        "native_process_completed": true,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": true,
+        "phase131_inventory_handoff": true,
+        "phase131_native_admission": false,
+        "phase133_inventory_handoff": true,
+        "phase133_phase130_argv_absent": true,
+        "summary_present": true
+      },
+      "inventory": {
+        "base": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 9642,
+          "canonical": {
+            "all_rows_accounted": true,
+            "canonical_distinct_keys": 6,
+            "certified_rows": 9642,
+            "different_family_rejected": true,
+            "explicit_local_miss_rows": 7557,
+            "fcn_certification_fail_closed": true,
+            "input_rows": 17199,
+            "literal_tracking_code_in_join": false,
+            "original_signal_provenance_retained": true,
+            "same_family_alias_rows": 2,
+            "same_physical_family_aliases_only": true,
+            "unknown_band_explicit_miss": true
+          },
+          "canonical_key_accounted": true,
+          "certified_rows": 9642,
+          "explicit_local_miss_rows": 7557,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 17199,
+          "literal_provenance_retained": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "query-time-coverage-gap": 7557
+          }
+        },
+        "base_metadata": {
+          "antenna_semantics_proven": true,
+          "bytes": 10708536,
+          "earth_valid_reference": true,
+          "failure": null,
+          "glonass_rows": 17199,
+          "mapping_failures": [],
+          "observation_codes": {
+            "E": [
+              "C1X",
+              "L1X",
+              "S1X",
+              "C5X",
+              "L5X",
+              "S5X",
+              "C7X",
+              "L7X",
+              "S7X",
+              "C8X",
+              "L8X",
+              "S8X"
+            ],
+            "G": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2X",
+              "L2X",
+              "S2X",
+              "C2W",
+              "L2W",
+              "S2W",
+              "C5X",
+              "L5X",
+              "S5X"
+            ],
+            "R": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2P",
+              "L2P",
+              "S2P"
+            ]
+          },
+          "ok": true
+        },
+        "base_side": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 9642,
+          "canonical": {
+            "all_rows_accounted": true,
+            "canonical_distinct_keys": 6,
+            "certified_rows": 9642,
+            "different_family_rejected": true,
+            "explicit_local_miss_rows": 7557,
+            "fcn_certification_fail_closed": true,
+            "input_rows": 17199,
+            "literal_tracking_code_in_join": false,
+            "original_signal_provenance_retained": true,
+            "same_family_alias_rows": 2,
+            "same_physical_family_aliases_only": true,
+            "unknown_band_explicit_miss": true
+          },
+          "canonical_key_accounted": true,
+          "certified_rows": 9642,
+          "explicit_local_miss_rows": 7557,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 17199,
+          "literal_provenance_retained": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "query-time-coverage-gap": 7557
+          }
+        },
+        "base_streams": {
+          "all_samples_accounted": true,
+          "canonical_key_streams_accounted": true,
+          "duplicate_nonmonotonic_rejected": true,
+          "finite_samples": 9642,
+          "stream_count": 6,
+          "unused_rows": 2743,
+          "unused_streams": 2,
+          "used_rows": 6899
+        },
+        "correction": {
+          "application_passes": 1,
+          "canonical_key_mode": true,
+          "exactly_once": true,
+          "factor_input_rows": 11832,
+          "factor_topology_changed": false,
+          "finite_corrected_rows": true,
+          "missing_exact_stream": 5035,
+          "no_duplicate_application": true,
+          "no_endpoint_hold": true,
+          "no_extrapolation": true,
+          "no_nearest_fill": true,
+          "no_raw_fallback": true,
+          "no_zero_fallback": true,
+          "nonfinite": 0,
+          "one_support_result_per_retained_factor": true,
+          "out_of_domain": 0,
+          "retained_corrected_rows": 6797,
+          "retained_factors_have_exact_key_support": true,
+          "support": {
+            "adjacent_two_point_bracket_rows": 6797,
+            "exact_endpoint_rows": 0,
+            "exact_interior_sample_rows": 0
+          },
+          "unused_base_rows_accounted": true
+        },
+        "failure": null,
+        "header": {
+          "carrier_frequency_used_as_fcn": false,
+          "conflict_entries": 0,
+          "entries": 0,
+          "label_lines": 1,
+          "malformed_entries": 0,
+          "native_gpst_query_times": true,
+          "status": "valid-empty",
+          "typed_satellite_keys": true
+        },
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "nav": {
+          "accepted_records": 671,
+          "canonical_field_positions": true,
+          "fcn_encoded_gt_128_subtract_256": true,
+          "fcn_field": "data[10]",
+          "records_seen": 1151,
+          "reject_counts": {
+            "native-gpst-toe-invalid": 480
+          },
+          "rejected_records": 480
+        },
+        "ok": true,
+        "phase131": {
+          "canonical_key": "GNSSSystem,PRN,physical-frequency-family[,certified-GLO-FCN]",
+          "canonical_key_conservation": true,
+          "canonical_key_count": 6,
+          "canonical_key_examples": [
+            "GLONASS:12:L1:fcn=-1",
+            "GLONASS:14:L1:fcn=-7",
+            "GLONASS:1:L1:fcn=1",
+            "GLONASS:23:L1:fcn=3",
+            "GLONASS:2:L1:fcn=-4",
+            "GLONASS:3:L1:fcn=5"
+          ],
+          "canonical_key_set_sha256": "b4247fb7345f7b887c7daf197ebaf8e11643c9c780773f45d7694f1d1fe99d60",
+          "enabled": true,
+          "literal_tracking_code_in_join": false,
+          "native_binary_invocation_attempted": true,
+          "native_canonicalization_attempt_rows": 0,
+          "native_command_constructed": true,
+          "native_resolver_call_count": 0,
+          "native_resolver_evidence_source": "native-summary",
+          "native_resolver_executed": false,
+          "native_selector_forwarded": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "original_signal_provenance_retained": true,
+          "python_base_canonical_sample_rows": 9642,
+          "python_base_family_mapped_codes": 3,
+          "python_base_observation_codes_considered": 6,
+          "python_preflight_call_count": 1,
+          "python_preflight_executed": true,
+          "python_preflight_started": true,
+          "python_rover_canonicalization_attempt_rows": 6858,
+          "python_rover_family_mapped_rows": 11832,
+          "python_rover_rows_considered": 11832,
+          "retained_rover_exact_key_support": true,
+          "selector": "--native-phase131-canonical-correction-band-key",
+          "side_local_conservation": true,
+          "source_complete_a_b_c": true,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true
+        },
+        "phase133": {
+          "candidate_id": "phase133-runner-native-selector-boundary-v1",
+          "native_binary_invocation_attempted": true,
+          "native_command_constructed": true,
+          "native_command_construction_count": 1,
+          "native_resolver_call_count": 0,
+          "native_resolver_evidence_source": "native-summary",
+          "native_resolver_executed": false,
+          "native_selector_counts": {
+            "--native-phase118-official-tdcp-huber-k": 1,
+            "--native-phase126-raw-base-source-complete": 1,
+            "--native-phase127-glonass-channel-provenance": 1,
+            "--native-phase128-glonass-provenance-parser-admission": 1,
+            "--native-phase129-glonass-local-miss-mask": 1,
+            "--native-phase131-canonical-correction-band-key": 1
+          },
+          "native_selector_forwarded": true,
+          "native_selector_forwarding_count": 1,
+          "native_solver_invocations": 1,
+          "off_selector_counts": {
+            "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+            "--native-phase117-tdcp-snr-type-sigma": 0,
+            "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+          },
+          "old_literal_phase130_preflight_call_count": 0,
+          "phase130_argv_count": 0,
+          "typed_preflight_call_count": 1
+        },
+        "raw_inputs": {
+          "brdc.nav": {
+            "accepted_records": 671,
+            "canonical_field_positions": true,
+            "failure": null,
+            "fcn_encoded_gt_128_subtract_256": true,
+            "fcn_field": "data[10]",
+            "native_gpst_query_and_toe": true,
+            "ok": true,
+            "records_seen": 1151,
+            "reject_counts": {
+              "native-gpst-toe-invalid": 480
+            },
+            "rejected_records": 480,
+            "satellite_count": 14
+          },
+          "device_gnss.csv": {
+            "carrier_frequency_used_as_fcn": false,
+            "failure": null,
+            "glonass_rows": 11832,
+            "invalid_reasons": {
+              "pseudorange-invalid": 236
+            },
+            "invalid_rows": 236,
+            "native_gpst_query_times": true,
+            "ok": true,
+            "rows": 87705,
+            "selected_rows": 12068,
+            "typed_satellite_keys": true
+          },
+          "device_imu.csv": {
+            "failure": null,
+            "ok": true,
+            "rows": 453859
+          }
+        },
+        "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "rover": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 6797,
+          "canonical": {
+            "all_rows_accounted": true,
+            "canonical_distinct_keys": 4,
+            "certified_rows": 6797,
+            "different_family_rejected": true,
+            "explicit_local_miss_rows": 5271,
+            "fcn_certification_fail_closed": true,
+            "input_rows": 12068,
+            "literal_tracking_code_in_join": false,
+            "original_signal_provenance_retained": true,
+            "same_family_alias_rows": 0,
+            "same_physical_family_aliases_only": true,
+            "unknown_band_explicit_miss": true
+          },
+          "canonical_key_accounted": true,
+          "certified_rows": 6797,
+          "explicit_local_miss_rows": 5271,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 12068,
+          "literal_provenance_retained": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "missing-exact-stream": 61,
+            "pseudorange-invalid": 236,
+            "query-time-coverage-gap": 4974
+          }
+        },
+        "shared_ledger": {
+          "ambiguous_multi_code_fail_closed": true,
+          "canonical_alias_rows": 2,
+          "canonical_key_conservation": true,
+          "canonical_key_count": 6,
+          "canonical_key_set_sha256": "b4247fb7345f7b887c7daf197ebaf8e11643c9c780773f45d7694f1d1fe99d60",
+          "canonical_mapping_reason_counts": {
+            "unknown-physical-frequency-family": 3
+          },
+          "certified_glonass_fcn_only": true,
+          "cross_side_count_equality_required": false,
+          "different_physical_band_rejected": true,
+          "duplicate_conflict_fail_closed": true,
+          "exact_endpoint_or_adjacent_two_point_bracket": true,
+          "literal_tracking_code_in_join": false,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "original_signal_provenance_retained": true,
+          "retained_exact_key_count": 4,
+          "retained_exact_keys": [
+            "GLONASS:12:L1:fcn=-1",
+            "GLONASS:23:L1:fcn=3",
+            "GLONASS:2:L1:fcn=-4",
+            "GLONASS:3:L1:fcn=5"
+          ],
+          "retained_rover_exact_key_support": true,
+          "same_physical_family_aliases_only": true,
+          "side_local_conservation": true,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true,
+          "whole_ledger_equality_required": false
+        },
+        "solver_invocations": 0,
+        "solver_may_start": true,
+        "stage": "post-independent-authorization-pre-solver"
+      },
+      "launch_error": "",
+      "raw_content_copied_or_transformed": false,
+      "return_code": 0,
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "run_number": 1,
+      "solution_hash_only": true,
+      "solution_hash_sealed": "3eb52c5ea57734f70646316f38c4bf12a905ddd4208c89a7c58b62127da241f6",
+      "solution_opened": false,
+      "solution_present": true,
+      "solution_published": false,
+      "solution_rows_sealed": 2159,
+      "solver_launched": true,
+      "structural_telemetry": {
+        "base_correction": {
+          "base_rinex_read_count": 1,
+          "correction_application_pass_count": 1,
+          "correction_applied_exactly_once": true,
+          "failure": "",
+          "finite_correction_rows_among_matched": 43244,
+          "interpolation_misses": 13954,
+          "matched_factor_rows": 44350,
+          "phase126_atomic_step_a_raw_ingress_verified": true,
+          "phase126_atomic_step_b_source_stream_verified": true,
+          "phase126_atomic_step_c_application_committed": true,
+          "phase126_compound_admitted": true,
+          "phase127_glonass_channel_provenance": true,
+          "phase128_glonass_provenance_parser_admission": true,
+          "phase129_glonass_local_miss_mask": true,
+          "phase131_canonical_correction_band_key": true,
+          "phase131_configuration_valid": true
+        },
+        "epochs": {
+          "expected_output": 2158,
+          "raw_exact_solution": 2158,
+          "raw_target": 2158,
+          "unresolved": 0
+        },
+        "execution_evidence": {
+          "native_binary_invocation_attempted": true,
+          "native_command_constructed": true,
+          "native_resolver_call_count": 0,
+          "native_resolver_call_count_semantics": "canonical rows plus rejected canonical rows in native summary; zero means no canonicalizer row reached, not a claim about non-canonical rows",
+          "native_resolver_executed": false,
+          "native_selector_counts": {
+            "--native-phase118-official-tdcp-huber-k": 1,
+            "--native-phase126-raw-base-source-complete": 1,
+            "--native-phase127-glonass-channel-provenance": 1,
+            "--native-phase128-glonass-provenance-parser-admission": 1,
+            "--native-phase129-glonass-local-miss-mask": 1,
+            "--native-phase131-canonical-correction-band-key": 1
+          },
+          "native_selector_forwarded": true,
+          "off_selector_counts": {
+            "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+            "--native-phase117-tdcp-snr-type-sigma": 0,
+            "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+          },
+          "phase130_argv_count": 0,
+          "python_preflight_executed": true,
+          "selector": "--native-phase131-canonical-correction-band-key"
+        },
+        "gates": {
+          "base_exactly_once": true,
+          "gnss_first_c7_d_handoff": true,
+          "gnss_first_progress": true,
+          "main_finite_coverage": true,
+          "main_qr_progress": true,
+          "native_phase131_resolver_reached": false,
+          "native_process_completed": true,
+          "no_fallback_or_publication": true,
+          "phase126_atomic_a_b_c": true,
+          "phase131_inventory_handoff": true,
+          "phase131_native_admission": false,
+          "phase133_inventory_handoff": true,
+          "phase133_phase130_argv_absent": true,
+          "summary_present": true
+        },
+        "gnss_first": {
+          "c0d_accepted_outer_iterations": 232,
+          "c0d_factor_count": 2158,
+          "epoch_identity_alignment_valid": true,
+          "failure": "",
+          "final_cost": 16104.433292069118,
+          "initial_cost": 5009591.0291709,
+          "iterations": 232,
+          "optimized_c_epoch_count": 2159,
+          "optimized_c_export_valid": true,
+          "optimized_c_finite_component_count": 15113,
+          "optimized_d_epoch_count": 2159,
+          "optimized_d_export_valid": true,
+          "optimized_d_finite_count": 2159
+        },
+        "main": {
+          "converged": true,
+          "factors": 106055,
+          "final_cost": 28266.35349384695,
+          "imu_intervals": 2158,
+          "initial_cost": 122809034.24737301,
+          "iterations": 12,
+          "values": 10795
+        },
+        "miss_mask": {
+          "correction_application_pass_count": 1,
+          "correction_applied_exactly_once": true,
+          "dropped_missing_exact_stream_rows": 12848,
+          "dropped_nonfinite_correction_rows": 0,
+          "dropped_out_of_domain_rows": 1106,
+          "duplicate_correction_rejected": false,
+          "failure": "",
+          "original_adopted_pseudorange_rows": 57198,
+          "pseudorange_factor_count_consistent": true,
+          "pseudorange_factors_inserted": 43244,
+          "retained_finite_pc_pseudorange_rows": 43244
+        },
+        "opaque_solution": {
+          "content_interpreted": false,
+          "opaque_hash_read": true,
+          "opened": false,
+          "present": true,
+          "rows": 2159,
+          "sha256": "3eb52c5ea57734f70646316f38c4bf12a905ddd4208c89a7c58b62127da241f6"
+        },
+        "phase129": {
+          "configuration_failure": "",
+          "configuration_valid": true,
+          "enabled": true,
+          "factor_count_consistent": true,
+          "glonass_factor_rows_dropped": 0,
+          "glonass_factor_rows_retained": 10526,
+          "glonass_local_miss_rows": 0,
+          "row_count_consistent": true
+        },
+        "phase131": {
+          "canonical_duplicate_rows": 0,
+          "canonical_key_conflicts": 0,
+          "canonical_merged_streams": 0,
+          "canonical_rejected_rows": 0,
+          "canonical_rows": 0,
+          "canonical_selected_streams": 0,
+          "canonical_streams": 0,
+          "configuration_failure": "",
+          "configuration_valid": true,
+          "enabled": true,
+          "factor_topology_changed": false,
+          "failure_counts": {},
+          "join_key": "GNSSSystem,PRN,physical-frequency-family[,certified-GLO-FCN]",
+          "literal_tracking_code_in_join": false,
+          "raw_or_zero_correction_fallback": false,
+          "unknown_band_rows": 0
+        },
+        "phase133": {
+          "candidate_id": "phase133-runner-native-selector-boundary-v1",
+          "native_binary_invocation_attempted": true,
+          "native_command_constructed": true,
+          "native_command_construction_count": 1,
+          "native_resolver_call_count": 0,
+          "native_resolver_evidence_source": "native-summary",
+          "native_resolver_executed": false,
+          "native_selector_counts": {
+            "--native-phase118-official-tdcp-huber-k": 1,
+            "--native-phase126-raw-base-source-complete": 1,
+            "--native-phase127-glonass-channel-provenance": 1,
+            "--native-phase128-glonass-provenance-parser-admission": 1,
+            "--native-phase129-glonass-local-miss-mask": 1,
+            "--native-phase131-canonical-correction-band-key": 1
+          },
+          "native_selector_forwarded": true,
+          "native_selector_forwarding_count": 1,
+          "native_solver_invocations": 1,
+          "off_selector_counts": {
+            "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+            "--native-phase117-tdcp-snr-type-sigma": 0,
+            "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+          },
+          "old_literal_phase130_preflight_call_count": 0,
+          "phase130_argv_count": 0,
+          "typed_preflight_call_count": 1
+        },
+        "return_code": 0,
+        "solver": {
+          "native_source_clock_c0d_phase99_main_multifrontal_qr_solver_selected": true,
+          "selected_elimination_function": "EliminateQR",
+          "selected_linear_solver_type": "MULTIFRONTAL_QR",
+          "selected_solver_branch": "multifrontal"
+        }
+      },
+      "summary_present": true,
+      "summary_schema": "smartphone-r5-phase131-canonical-correction-band-structural-summary.v1",
+      "summary_status": "imu-combined-factor",
+      "truth_used": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_scored": false,
+      "gates": {
+        "base_exactly_once": true,
+        "gnss_first_c7_d_handoff": true,
+        "gnss_first_progress": true,
+        "main_finite_coverage": true,
+        "main_qr_progress": true,
+        "native_phase131_resolver_reached": false,
+        "native_process_completed": true,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": true,
+        "phase131_inventory_handoff": true,
+        "phase131_native_admission": false,
+        "phase133_inventory_handoff": true,
+        "phase133_phase130_argv_absent": true,
+        "summary_present": true
+      },
+      "inventory": {
+        "base": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 396,
+          "canonical": {
+            "all_rows_accounted": true,
+            "canonical_distinct_keys": 4,
+            "certified_rows": 396,
+            "different_family_rejected": true,
+            "explicit_local_miss_rows": 524,
+            "fcn_certification_fail_closed": true,
+            "input_rows": 920,
+            "literal_tracking_code_in_join": false,
+            "original_signal_provenance_retained": true,
+            "same_family_alias_rows": 2,
+            "same_physical_family_aliases_only": true,
+            "unknown_band_explicit_miss": true
+          },
+          "canonical_key_accounted": true,
+          "certified_rows": 396,
+          "explicit_local_miss_rows": 524,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 920,
+          "literal_provenance_retained": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "query-time-coverage-gap": 524
+          }
+        },
+        "base_metadata": {
+          "antenna_semantics_proven": true,
+          "bytes": 719969,
+          "earth_valid_reference": true,
+          "failure": null,
+          "glonass_rows": 920,
+          "mapping_failures": [],
+          "observation_codes": {
+            "E": [
+              "C1X",
+              "L1X",
+              "S1X",
+              "C5X",
+              "L5X",
+              "S5X",
+              "C7X",
+              "L7X",
+              "S7X",
+              "C6X",
+              "L6X",
+              "S6X",
+              "C8X",
+              "L8X",
+              "S8X"
+            ],
+            "G": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2X",
+              "L2X",
+              "S2X",
+              "C2W",
+              "L2W",
+              "S2W",
+              "C5X",
+              "L5X",
+              "S5X"
+            ],
+            "R": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C2C",
+              "L2C",
+              "S2C",
+              "C2P",
+              "L2P",
+              "S2P"
+            ],
+            "S": [
+              "C1C",
+              "L1C",
+              "S1C",
+              "C5X",
+              "L5X",
+              "S5X"
+            ]
+          },
+          "ok": true
+        },
+        "base_side": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 396,
+          "canonical": {
+            "all_rows_accounted": true,
+            "canonical_distinct_keys": 4,
+            "certified_rows": 396,
+            "different_family_rejected": true,
+            "explicit_local_miss_rows": 524,
+            "fcn_certification_fail_closed": true,
+            "input_rows": 920,
+            "literal_tracking_code_in_join": false,
+            "original_signal_provenance_retained": true,
+            "same_family_alias_rows": 2,
+            "same_physical_family_aliases_only": true,
+            "unknown_band_explicit_miss": true
+          },
+          "canonical_key_accounted": true,
+          "certified_rows": 396,
+          "explicit_local_miss_rows": 524,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 920,
+          "literal_provenance_retained": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "query-time-coverage-gap": 524
+          }
+        },
+        "base_streams": {
+          "all_samples_accounted": true,
+          "canonical_key_streams_accounted": true,
+          "duplicate_nonmonotonic_rejected": true,
+          "finite_samples": 396,
+          "stream_count": 4,
+          "unused_rows": 104,
+          "unused_streams": 1,
+          "used_rows": 292
+        },
+        "correction": {
+          "application_passes": 1,
+          "canonical_key_mode": true,
+          "exactly_once": true,
+          "factor_input_rows": 8626,
+          "factor_topology_changed": false,
+          "finite_corrected_rows": true,
+          "missing_exact_stream": 4568,
+          "no_duplicate_application": true,
+          "no_endpoint_hold": true,
+          "no_extrapolation": true,
+          "no_nearest_fill": true,
+          "no_raw_fallback": true,
+          "no_zero_fallback": true,
+          "nonfinite": 0,
+          "one_support_result_per_retained_factor": true,
+          "out_of_domain": 0,
+          "retained_corrected_rows": 4058,
+          "retained_factors_have_exact_key_support": true,
+          "support": {
+            "adjacent_two_point_bracket_rows": 4058,
+            "exact_endpoint_rows": 0,
+            "exact_interior_sample_rows": 0
+          },
+          "unused_base_rows_accounted": true
+        },
+        "failure": null,
+        "header": {
+          "carrier_frequency_used_as_fcn": false,
+          "conflict_entries": 0,
+          "entries": 0,
+          "label_lines": 1,
+          "malformed_entries": 0,
+          "native_gpst_query_times": true,
+          "status": "valid-empty",
+          "typed_satellite_keys": true
+        },
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "nav": {
+          "accepted_records": 686,
+          "canonical_field_positions": true,
+          "fcn_encoded_gt_128_subtract_256": true,
+          "fcn_field": "data[10]",
+          "records_seen": 1128,
+          "reject_counts": {
+            "native-gpst-toe-invalid": 442
+          },
+          "rejected_records": 442
+        },
+        "ok": true,
+        "phase131": {
+          "canonical_key": "GNSSSystem,PRN,physical-frequency-family[,certified-GLO-FCN]",
+          "canonical_key_conservation": true,
+          "canonical_key_count": 4,
+          "canonical_key_examples": [
+            "GLONASS:12:L1:fcn=-1",
+            "GLONASS:1:L1:fcn=1",
+            "GLONASS:2:L1:fcn=-4",
+            "GLONASS:9:L1:fcn=-2"
+          ],
+          "canonical_key_set_sha256": "b1226b4556cbcd64ee6feb89f5850e6471958cca7d6d1b0fc6fd382ed9393649",
+          "enabled": true,
+          "literal_tracking_code_in_join": false,
+          "native_binary_invocation_attempted": true,
+          "native_canonicalization_attempt_rows": 0,
+          "native_command_constructed": true,
+          "native_resolver_call_count": 0,
+          "native_resolver_evidence_source": "native-summary",
+          "native_resolver_executed": false,
+          "native_selector_forwarded": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "original_signal_provenance_retained": true,
+          "python_base_canonical_sample_rows": 396,
+          "python_base_family_mapped_codes": 3,
+          "python_base_observation_codes_considered": 9,
+          "python_preflight_call_count": 1,
+          "python_preflight_executed": true,
+          "python_preflight_started": true,
+          "python_rover_canonicalization_attempt_rows": 4058,
+          "python_rover_family_mapped_rows": 8626,
+          "python_rover_rows_considered": 8626,
+          "retained_rover_exact_key_support": true,
+          "selector": "--native-phase131-canonical-correction-band-key",
+          "side_local_conservation": true,
+          "source_complete_a_b_c": true,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true
+        },
+        "phase133": {
+          "candidate_id": "phase133-runner-native-selector-boundary-v1",
+          "native_binary_invocation_attempted": true,
+          "native_command_constructed": true,
+          "native_command_construction_count": 1,
+          "native_resolver_call_count": 0,
+          "native_resolver_evidence_source": "native-summary",
+          "native_resolver_executed": false,
+          "native_selector_counts": {
+            "--native-phase118-official-tdcp-huber-k": 1,
+            "--native-phase126-raw-base-source-complete": 1,
+            "--native-phase127-glonass-channel-provenance": 1,
+            "--native-phase128-glonass-provenance-parser-admission": 1,
+            "--native-phase129-glonass-local-miss-mask": 1,
+            "--native-phase131-canonical-correction-band-key": 1
+          },
+          "native_selector_forwarded": true,
+          "native_selector_forwarding_count": 1,
+          "native_solver_invocations": 1,
+          "off_selector_counts": {
+            "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+            "--native-phase117-tdcp-snr-type-sigma": 0,
+            "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+          },
+          "old_literal_phase130_preflight_call_count": 0,
+          "phase130_argv_count": 0,
+          "typed_preflight_call_count": 1
+        },
+        "raw_inputs": {
+          "brdc.nav": {
+            "accepted_records": 686,
+            "canonical_field_positions": true,
+            "failure": null,
+            "fcn_encoded_gt_128_subtract_256": true,
+            "fcn_field": "data[10]",
+            "native_gpst_query_and_toe": true,
+            "ok": true,
+            "records_seen": 1128,
+            "reject_counts": {
+              "native-gpst-toe-invalid": 442
+            },
+            "rejected_records": 442,
+            "satellite_count": 14
+          },
+          "device_gnss.csv": {
+            "carrier_frequency_used_as_fcn": false,
+            "failure": null,
+            "glonass_rows": 8626,
+            "invalid_reasons": {
+              "pseudorange-invalid": 247
+            },
+            "invalid_rows": 247,
+            "native_gpst_query_times": true,
+            "ok": true,
+            "rows": 51243,
+            "selected_rows": 8873,
+            "typed_satellite_keys": true
+          },
+          "device_imu.csv": {
+            "failure": null,
+            "ok": true,
+            "rows": 313144
+          }
+        },
+        "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "rover": {
+          "all_rows_classified": true,
+          "broadcast_geph_certified_rows": 4058,
+          "canonical": {
+            "all_rows_accounted": true,
+            "canonical_distinct_keys": 3,
+            "certified_rows": 4058,
+            "different_family_rejected": true,
+            "explicit_local_miss_rows": 4815,
+            "fcn_certification_fail_closed": true,
+            "input_rows": 8873,
+            "literal_tracking_code_in_join": false,
+            "original_signal_provenance_retained": true,
+            "same_family_alias_rows": 0,
+            "same_physical_family_aliases_only": true,
+            "unknown_band_explicit_miss": true
+          },
+          "canonical_key_accounted": true,
+          "certified_rows": 4058,
+          "explicit_local_miss_rows": 4815,
+          "finite_certified_wavelength": true,
+          "header_primary_certified_rows": 0,
+          "input_rows": 8873,
+          "literal_provenance_retained": true,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "reason_counts": {
+            "pseudorange-invalid": 247,
+            "query-time-coverage-gap": 4568
+          }
+        },
+        "shared_ledger": {
+          "ambiguous_multi_code_fail_closed": true,
+          "canonical_alias_rows": 2,
+          "canonical_key_conservation": true,
+          "canonical_key_count": 4,
+          "canonical_key_set_sha256": "b1226b4556cbcd64ee6feb89f5850e6471958cca7d6d1b0fc6fd382ed9393649",
+          "canonical_mapping_reason_counts": {
+            "unknown-physical-frequency-family": 6
+          },
+          "certified_glonass_fcn_only": true,
+          "cross_side_count_equality_required": false,
+          "different_physical_band_rejected": true,
+          "duplicate_conflict_fail_closed": true,
+          "exact_endpoint_or_adjacent_two_point_bracket": true,
+          "literal_tracking_code_in_join": false,
+          "no_extrapolation": true,
+          "no_fallback": true,
+          "no_raw_uncorrected": true,
+          "no_zero_correction": true,
+          "original_signal_provenance_retained": true,
+          "retained_exact_key_count": 3,
+          "retained_exact_keys": [
+            "GLONASS:12:L1:fcn=-1",
+            "GLONASS:1:L1:fcn=1",
+            "GLONASS:2:L1:fcn=-4"
+          ],
+          "retained_rover_exact_key_support": true,
+          "same_physical_family_aliases_only": true,
+          "side_local_conservation": true,
+          "unmatched_rover_explicit_factor_miss": true,
+          "unused_base_rows_accounted": true,
+          "whole_ledger_equality_required": false
+        },
+        "solver_invocations": 0,
+        "solver_may_start": true,
+        "stage": "post-independent-authorization-pre-solver"
+      },
+      "launch_error": "",
+      "raw_content_copied_or_transformed": false,
+      "return_code": 0,
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "run_number": 1,
+      "solution_hash_only": true,
+      "solution_hash_sealed": "1143b6f19c2c9d37c2c957a9c011a3ba66830a083aa6afa9f1188cc615ea6395",
+      "solution_opened": false,
+      "solution_present": true,
+      "solution_published": false,
+      "solution_rows_sealed": 1466,
+      "solver_launched": true,
+      "structural_telemetry": {
+        "base_correction": {
+          "base_rinex_read_count": 1,
+          "correction_application_pass_count": 1,
+          "correction_applied_exactly_once": true,
+          "failure": "",
+          "finite_correction_rows_among_matched": 30653,
+          "interpolation_misses": 136,
+          "matched_factor_rows": 30789,
+          "phase126_atomic_step_a_raw_ingress_verified": true,
+          "phase126_atomic_step_b_source_stream_verified": true,
+          "phase126_atomic_step_c_application_committed": true,
+          "phase126_compound_admitted": true,
+          "phase127_glonass_channel_provenance": true,
+          "phase128_glonass_provenance_parser_admission": true,
+          "phase129_glonass_local_miss_mask": true,
+          "phase131_canonical_correction_band_key": true,
+          "phase131_configuration_valid": true
+        },
+        "epochs": {
+          "expected_output": 1465,
+          "raw_exact_solution": 1465,
+          "raw_target": 1465,
+          "unresolved": 0
+        },
+        "execution_evidence": {
+          "native_binary_invocation_attempted": true,
+          "native_command_constructed": true,
+          "native_resolver_call_count": 0,
+          "native_resolver_call_count_semantics": "canonical rows plus rejected canonical rows in native summary; zero means no canonicalizer row reached, not a claim about non-canonical rows",
+          "native_resolver_executed": false,
+          "native_selector_counts": {
+            "--native-phase118-official-tdcp-huber-k": 1,
+            "--native-phase126-raw-base-source-complete": 1,
+            "--native-phase127-glonass-channel-provenance": 1,
+            "--native-phase128-glonass-provenance-parser-admission": 1,
+            "--native-phase129-glonass-local-miss-mask": 1,
+            "--native-phase131-canonical-correction-band-key": 1
+          },
+          "native_selector_forwarded": true,
+          "off_selector_counts": {
+            "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+            "--native-phase117-tdcp-snr-type-sigma": 0,
+            "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+          },
+          "phase130_argv_count": 0,
+          "python_preflight_executed": true,
+          "selector": "--native-phase131-canonical-correction-band-key"
+        },
+        "gates": {
+          "base_exactly_once": true,
+          "gnss_first_c7_d_handoff": true,
+          "gnss_first_progress": true,
+          "main_finite_coverage": true,
+          "main_qr_progress": true,
+          "native_phase131_resolver_reached": false,
+          "native_process_completed": true,
+          "no_fallback_or_publication": true,
+          "phase126_atomic_a_b_c": true,
+          "phase131_inventory_handoff": true,
+          "phase131_native_admission": false,
+          "phase133_inventory_handoff": true,
+          "phase133_phase130_argv_absent": true,
+          "summary_present": true
+        },
+        "gnss_first": {
+          "c0d_accepted_outer_iterations": 223,
+          "c0d_factor_count": 1465,
+          "epoch_identity_alignment_valid": true,
+          "failure": "",
+          "final_cost": 12279.574633102011,
+          "initial_cost": 6466234.225070638,
+          "iterations": 223,
+          "optimized_c_epoch_count": 1466,
+          "optimized_c_export_valid": true,
+          "optimized_c_finite_component_count": 10262,
+          "optimized_d_epoch_count": 1466,
+          "optimized_d_export_valid": true,
+          "optimized_d_finite_count": 1466
+        },
+        "main": {
+          "converged": true,
+          "factors": 60937,
+          "final_cost": 17995.990758732205,
+          "imu_intervals": 1465,
+          "initial_cost": 143982373.9341658,
+          "iterations": 12,
+          "values": 7330
+        },
+        "miss_mask": {
+          "correction_application_pass_count": 1,
+          "correction_applied_exactly_once": true,
+          "dropped_missing_exact_stream_rows": 0,
+          "dropped_nonfinite_correction_rows": 0,
+          "dropped_out_of_domain_rows": 136,
+          "duplicate_correction_rejected": false,
+          "failure": "",
+          "original_adopted_pseudorange_rows": 30789,
+          "pseudorange_factor_count_consistent": true,
+          "pseudorange_factors_inserted": 30653,
+          "retained_finite_pc_pseudorange_rows": 30653
+        },
+        "opaque_solution": {
+          "content_interpreted": false,
+          "opaque_hash_read": true,
+          "opened": false,
+          "present": true,
+          "rows": 1466,
+          "sha256": "1143b6f19c2c9d37c2c957a9c011a3ba66830a083aa6afa9f1188cc615ea6395"
+        },
+        "phase129": {
+          "configuration_failure": "",
+          "configuration_valid": true,
+          "enabled": true,
+          "factor_count_consistent": true,
+          "glonass_factor_rows_dropped": 0,
+          "glonass_factor_rows_retained": 7542,
+          "glonass_local_miss_rows": 0,
+          "row_count_consistent": true
+        },
+        "phase131": {
+          "canonical_duplicate_rows": 0,
+          "canonical_key_conflicts": 0,
+          "canonical_merged_streams": 0,
+          "canonical_rejected_rows": 0,
+          "canonical_rows": 0,
+          "canonical_selected_streams": 0,
+          "canonical_streams": 0,
+          "configuration_failure": "",
+          "configuration_valid": true,
+          "enabled": true,
+          "factor_topology_changed": false,
+          "failure_counts": {},
+          "join_key": "GNSSSystem,PRN,physical-frequency-family[,certified-GLO-FCN]",
+          "literal_tracking_code_in_join": false,
+          "raw_or_zero_correction_fallback": false,
+          "unknown_band_rows": 0
+        },
+        "phase133": {
+          "candidate_id": "phase133-runner-native-selector-boundary-v1",
+          "native_binary_invocation_attempted": true,
+          "native_command_constructed": true,
+          "native_command_construction_count": 1,
+          "native_resolver_call_count": 0,
+          "native_resolver_evidence_source": "native-summary",
+          "native_resolver_executed": false,
+          "native_selector_counts": {
+            "--native-phase118-official-tdcp-huber-k": 1,
+            "--native-phase126-raw-base-source-complete": 1,
+            "--native-phase127-glonass-channel-provenance": 1,
+            "--native-phase128-glonass-provenance-parser-admission": 1,
+            "--native-phase129-glonass-local-miss-mask": 1,
+            "--native-phase131-canonical-correction-band-key": 1
+          },
+          "native_selector_forwarded": true,
+          "native_selector_forwarding_count": 1,
+          "native_solver_invocations": 1,
+          "off_selector_counts": {
+            "--native-base-pseudorange-preserve-additional-frequency-bands": 0,
+            "--native-phase117-tdcp-snr-type-sigma": 0,
+            "--native-phase120-official-tdcp-resl-atmosphere-cancellation": 0
+          },
+          "old_literal_phase130_preflight_call_count": 0,
+          "phase130_argv_count": 0,
+          "typed_preflight_call_count": 1
+        },
+        "return_code": 0,
+        "solver": {
+          "native_source_clock_c0d_phase99_main_multifrontal_qr_solver_selected": true,
+          "selected_elimination_function": "EliminateQR",
+          "selected_linear_solver_type": "MULTIFRONTAL_QR",
+          "selected_solver_branch": "multifrontal"
+        }
+      },
+      "summary_present": true,
+      "summary_schema": "smartphone-r5-phase131-canonical-correction-band-structural-summary.v1",
+      "summary_status": "imu-combined-factor",
+      "truth_used": false
+    }
+  },
+  "schema_version": "smartphone-r5-phase133-runner-native-selector-boundary-structural-result.v1",
+  "selector_ownership": {
+    "native_exactly_once": [
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase131-canonical-correction-band-key"
+    ],
+    "off": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "other_forbidden": [
+      "--native-direct-wls-ephemeral-c7d-main-seed",
+      "--native-pdc-state-bridge"
+    ],
+    "runner_only": [
+      "--native-phase130-shared-ledger-key-local-support"
+    ]
+  },
+  "solution_output_published": false,
+  "status": "no-go-phase133-runner-native-selector-boundary-structural",
+  "stop_before_truth_accuracy_submission": true,
+  "truth_free": true
+}

@@ -1,0 +1,241 @@
+{
+  "schema_version": "smartphone-r5-phase162-h-raw-p-collect-all-result.v1",
+  "phase": 162,
+  "execution_label": "Luna Max",
+  "status": "one-shot-complete-structural-prep",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase162_h_raw_p_collect_all_manifest_v1.json",
+    "commit": "36d983afb27b6ae10afd25561de57d388be534f6",
+    "sha256": "4e02e6403ad41eabf39cd6ab6bd4d4ed0a0561aead022f38b2d5a29cb4a17aee"
+  },
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase162_h_raw_p_collect_all_authorization_v1.json",
+    "commit": "f635f2a4b3ffbee6f4a0e765c7ac09f63390705f",
+    "sha256": "d2d99fd36d08d9b00a89d883bd2ac148f4dc2790f41bf9d1600295c04fb2b33e"
+  },
+  "source_and_binary": {
+    "implementation_commit": "7d7dc572602d4c8fda76fc04027562815ae6f324",
+    "execution_manifest_commit": "36d983afb27b6ae10afd25561de57d388be534f6",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "473161260db72ac489baa37184c395227eef4eec3737386e7baa311b92f3c707",
+    "app_source_sha256": "47cd3cb98c27bebbec391fc1cd63607871e4041d186e2a2b5ce67d5950643cfe",
+    "raw_p_seed_header_sha256": "12d6d1cd5619c04c09dec4defe1ebda17343a55cb658fe66bc0b873cdc34e76c",
+    "raw_p_seed_source_sha256": "d40976ac70a0d9801c7fc78a99b38ef212be3e49b33b2f98675a26da6223a711",
+    "spp_header_sha256": "1e28d5e4a7d0da38b9b847f79e66d00dade5e0be16166aa0baa03fc3674b05cd",
+    "solution_header_sha256": "1af45865b3e5d717ea17eb426fdeaf3ecdb46836913b2746234ae1d7a0893f6c",
+    "spp_source_sha256": "8faaf340af8d9fdab3f55185b32b1412579596d155ae0c20dc55356f883a673c"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "argv_matches_manifest": true,
+    "invocation_count": 1,
+    "process_return_code": 0,
+    "failure_stage": null,
+    "failure_status": "accepted",
+    "failure_reason": "",
+    "collection_completed": true,
+    "input_epoch_count": 3140,
+    "evaluated_epoch_count": 3140,
+    "unassessed_epoch_count": 0,
+    "accepted_epoch_count": 3140,
+    "rejected_epoch_count": 0,
+    "accepted_percent": 100.0,
+    "rejected_percent": 0.0,
+    "collect_all_epochs_for_diagnostics": true,
+    "velocity_diagnostics_disabled": true,
+    "raw_pseudorange_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false,
+    "coordinate_values_read": false,
+    "coordinate_values_published": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false
+  },
+  "bootstrap": {
+    "enabled": true,
+    "attempted_epoch_count": 3140,
+    "accepted_epoch_count": 3140,
+    "rejected_epoch_count": 0,
+    "direct_bootstrap_fields_serialized": false,
+    "evidence": "The pinned source path performs the private bootstrap before ordinary preprocessing for each collect-all epoch. No epoch has native-raw-p-bootstrap-rejected or solver-rejected status, so all 3,140 bootstrap paths passed according to the fail-closed control flow; per-bootstrap rank/clock values are unavailable in the app serializer."
+  },
+  "status_and_reason_distribution": {
+    "epoch_status": {
+      "accepted": 3140
+    },
+    "epoch_reason": {
+      "accepted": 3140
+    },
+    "native_spp_status": {
+      "spp": 3140
+    },
+    "geometry_status": {
+      "full-rank": 3140
+    }
+  },
+  "rank_vs_required_rank_distribution": {
+    "rows_are_native_final_identity_selected_rows": true,
+    "distribution": [
+      {
+        "rank_status": "full-rank",
+        "rank": 6,
+        "required_rank": 6,
+        "count": 118
+      },
+      {
+        "rank_status": "full-rank",
+        "rank": 7,
+        "required_rank": 7,
+        "count": 3022
+      }
+    ],
+    "geometry_rank_rows_match_native_used_rows_epochs": 3140,
+    "rank_deficient_epochs": 0,
+    "rows": {
+      "corrected_pseudorange_rows_total": 73286,
+      "native_used_pseudorange_rows_total": 66290,
+      "corrected_min": 12,
+      "corrected_max": 27,
+      "native_used_min": 11,
+      "native_used_max": 27,
+      "epochs_with_native_subset_smaller_than_corrected": 2915
+    },
+    "mapping": "Native clockBiasGroup columns: GPS reference (GPS and ordinary QZSS share GPS), with separate observed GLONASS/Galileo/BeiDou columns; literal MRTKLIB IFLC QZSS separation is not asserted for this recipe.",
+    "weights": "The exact native base inverse variance is carried with each native identity in memory and used for rank; robust iteration factors are not inferred or serialized."
+  },
+  "native_final_identity_and_weight_coverage": {
+    "accepted_epochs": 3140,
+    "exact_identity_selection_success_epochs": 3140,
+    "identity_selection_fail_closed_epochs": 0,
+    "native_used_rows_validated_by_identity": 66290,
+    "base_weights_validated_finite_positive_by_identity": 66290,
+    "direct_identity_rows_serialized": false,
+    "evidence": "A valid native solution with a nonempty corrected set must pass the Phase161 exact satellite/signal/primary-row/secondary-row/IFLC identity match, clock-group match, and finite-positive-weight check or be rejected as native-used-measurement-provenance-unavailable. All epochs were accepted and no such rejection occurred."
+  },
+  "clock_group_availability": {
+    "missing_estimate_for_observed_group_epochs": 0,
+    "groups": {
+      "gps": {
+        "observed_epochs": 3140,
+        "reference_epochs": 3140,
+        "estimate_available_epochs": 3140,
+        "absent_epochs": 0,
+        "native_rows_min": 3,
+        "native_rows_max": 10
+      },
+      "galileo": {
+        "observed_epochs": 3140,
+        "reference_epochs": 0,
+        "estimate_available_epochs": 3140,
+        "absent_epochs": 0,
+        "native_rows_min": 2,
+        "native_rows_max": 6
+      },
+      "glonass": {
+        "observed_epochs": 3103,
+        "reference_epochs": 0,
+        "estimate_available_epochs": 3103,
+        "absent_epochs": 37,
+        "native_rows_min": 0,
+        "native_rows_max": 6
+      },
+      "beidou": {
+        "observed_epochs": 3059,
+        "reference_epochs": 0,
+        "estimate_available_epochs": 3059,
+        "absent_epochs": 81,
+        "native_rows_min": 0,
+        "native_rows_max": 7
+      },
+      "qzss": {
+        "observed_epochs": 0,
+        "reference_epochs": 0,
+        "estimate_available_epochs": 0,
+        "absent_epochs": 3140
+      },
+      "navic": {
+        "observed_epochs": 0,
+        "reference_epochs": 0,
+        "estimate_available_epochs": 0,
+        "absent_epochs": 3140
+      }
+    },
+    "corrected_group_distribution": {
+      "gps_reference_three_groups": 118,
+      "gps_reference_four_groups": 3022
+    }
+  },
+  "preprocessing_and_quality_counts": {
+    "preprocessing_input_rows": 109747,
+    "preprocessing_accepted_rows": 73286,
+    "preprocessing_rejected_rows": 36461,
+    "preprocessing_conservation_violations": 0,
+    "preprocessing_reason_counts": {
+      "accepted": 73286,
+      "invalid-pseudorange": 1014,
+      "unsupported-signal": 35447
+    },
+    "raw_pseudorange_rows_total": 108722,
+    "raw_pseudorange_satellites_min": 14,
+    "raw_pseudorange_satellites_max": 28
+  },
+  "termination_and_time": {
+    "accepted_iteration_distribution": {
+      "1": 3108,
+      "2": 4,
+      "3": 28
+    },
+    "accepted_epochs_converged": 3140,
+    "velocity_finite_epoch_count": 0,
+    "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+    "time_rejection_statuses": {
+      "nonfinite": 0,
+      "duplicate": 0,
+      "nonmonotonic": 0,
+      "over_gap": 0
+    },
+    "finite_flags_only": {
+      "position_finite_epochs": 3140,
+      "clock_finite_epochs": 3140,
+      "velocity_finite_epochs": 0
+    }
+  },
+  "comparison_to_phase160": {
+    "phase160_accepted_epochs": 1199,
+    "phase160_rank_deficient_epochs": 1931,
+    "phase160_missing_clock_estimate_epochs": 10,
+    "phase162_accepted_epoch_change": 1941,
+    "interpretation": "The structural change removes the prior raw/native rank-reporting mismatch for this pinned H prep path. This is not an accuracy result, coordinate claim, or leaderboard proof."
+  },
+  "read_accounting": {
+    "raw_gnss_reads": 1,
+    "navigation_reads": 1,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 3140,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "artifacts": {
+    "summary_path": "output/smartphone-r5/phase162-h-raw-p-collect-all-v1/mtv-h/native_summary.json",
+    "summary_sha256": "7d644149db8e991c25f04b410e965c5a492aa28564672471c5689e5ddc518a85",
+    "summary_bytes": 19171367,
+    "native_summary_preserved": true,
+    "coordinate_values_not_read_or_published": true
+  },
+  "next_action": "No rerun is authorized or needed. The H prep lane is structurally ready for the separately authorized downstream no-D graph decision; any accuracy evaluation requires its own manifest and authorization."
+}

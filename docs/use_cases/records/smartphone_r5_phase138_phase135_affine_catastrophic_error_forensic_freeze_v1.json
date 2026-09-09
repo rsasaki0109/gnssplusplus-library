@@ -1,0 +1,195 @@
+{
+  "schema_version": "smartphone-r5-phase138-phase135-affine-catastrophic-error-forensic-freeze.v1",
+  "phase": 138,
+  "execution_label": "Luna Max",
+  "status": "frozen-design-only-no-implementation-or-execution-authority",
+  "purpose": "Freeze exactly one source-backed correction after a read-only forensic audit of the Phase135 affine catastrophic-error boundary.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase138_phase135_affine_catastrophic_error_forensic_audit_v1.md",
+      "commit": "6126e7843ea0b0d1054b95ba6398d43b81fb2168",
+      "sha256": "b6a529262cd619d077181e617cf95f59f9a83d2079b94b991fafd720e2cee8be"
+    },
+    "starting_head": "b0c596a76acbeea9cb426c2e12efd304e87d9a5e",
+    "phase136_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase136_official_affine_structural_raw_result_v1.json",
+      "commit": "65b24a939a373421015f07b119fdbec04d5c6ebb",
+      "sha256": "d79dbac9dba4ce352d1d2b23f92d87fa44057221822a67f94c494f41f789c2a7"
+    },
+    "phase137_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase137_phase136_accuracy_result_v1.json",
+      "commit": "b0c596a76acbeea9cb426c2e12efd304e87d9a5e",
+      "sha256": "cd3d57f445a9f5bc07206600edc5e27fd1638f857723f9fa3b2aa7d490caaf5e"
+    },
+    "phase135_affine_implementation": {
+      "commit": "48b13f098a75da87e52bcb15f66e3434c950baf7",
+      "role": "historical Phase135 affine implementation pin; exact source hashes are listed in the audit"
+    },
+    "phase135_doppler_correction": {
+      "commit": "f9a1fc9403e7072435a30d9e06aa8ea59493cdc5",
+      "role": "historical Phase135 Doppler source-parity correction; not changed by Phase138"
+    }
+  },
+  "read_only_audit": {
+    "source_and_sealed_metadata_only": true,
+    "candidate_rows_read": false,
+    "truth_rows_read": false,
+    "raw_phone_gnss_imu_navigation_read": false,
+    "raw_base_read": false,
+    "solver_launched": false,
+    "accuracy_recalculated": false,
+    "mat_pdc_precomputed_coordinate_read": false,
+    "kaggle_or_token_access": false,
+    "rerun_fallback_repair_or_tuning": false,
+    "numeric_legacy_vs_affine_factor_residuals_available": false,
+    "numeric_residual_limit_reason": "Sealed Phase136/137 records contain aggregate structural/accuracy metadata but no factor rows, per-family initial residuals, or Jacobian norms."
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase138-affine-tdcp-anchor-range-constant-v1",
+    "source_backed": true,
+    "separable_from_frame_bridge_solver_and_factor_admission": true,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_promotion_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false,
+    "selection_reason": "Phase135 affine factors subtract the prepared carrier delta as if it were the official residual delta. Official Gobs/TDCP includes the fixed initial geometric-range difference; adding only that constant is a separable correction while preserving Phase118 atmosphere handling.",
+    "not_selected": [
+      "ECEF/ENU los-transpose or Pose3/PX bridge correction: source and native rigid transform are algebraically consistent.",
+      "C7/D unit or sign correction: source-meter C7 and metre-per-second D conventions are consistent.",
+      "full official resL atmosphere replacement: separate Phase120 compound and not silently combined here.",
+      "post-stage P/base re-materialization: source-backed but compound and not a single measurement constant.",
+      "IMU/bias topology or velocity synthesis: separate topology/init change; no unapproved finite-difference or zero fallback."
+    ]
+  },
+  "candidate": {
+    "selector": "--native-phase138-affine-tdcp-anchor-range-constant",
+    "default_off": true,
+    "requires_phase135_affine": true,
+    "applies_to": [
+      "ordinary TDCP Phase135TdcpAffinePointFactor",
+      "ordinary TDCP Phase135TdcpAffineVectorFactor"
+    ],
+    "measurement_contract": {
+      "existing_input": "tdcp_native_i = m_{i+1}-m_i, where m is the already frozen Phase118 prepared carrier/clock/atmosphere measurement",
+      "new_input": "tdcp_phase138_i = tdcp_native_i - (rho_{i+1}^0-rho_i^0)",
+      "rho_definition": "source geometric range at the exact affine initial endpoint, with the source satellite state and exactly one Sagnac convention also used by the affine LOS",
+      "factor_residual": "los_0^T((X_{i+1}-X_{i+1}^0)-(X_i-X_i^0)) + h_0^T(C_{i+1}-C_i) - tdcp_phase138_i",
+      "official_relation": "official resL_{i+1}-resL_i contains (z_{i+1}-z_i)-(rho_{i+1}-rho_i)+(d_{i+1}-d_i); the selected adapter ports only the missing geometric constant into the frozen native measurement",
+      "atmosphere_policy": "Phase118 corrected-carrier atmosphere convention remains unchanged; full official resL substitution is not included"
+    },
+    "fixed": {
+      "pairing_and_gates": "existing same-signal adjacent pair, loss-of-lock, clock, gap, code-phase, finite, and admission predicates",
+      "factor_count": "ordinary TDCP admitted count unchanged; no legacy/affine mixing",
+      "tdcp_sigma_m": 0.03,
+      "tdcp_huber_k": 0.5,
+      "pseudorange_and_doppler": "Phase135 affine P/D conventions unchanged",
+      "c7_clock_state": "seven metre-valued components and existing component mapping unchanged",
+      "d_clock_drift_state": "metre-per-second D state and existing sign unchanged",
+      "ccdd": "existing CCDD equation and sigma unchanged",
+      "coordinate_bridge": "ENU/ECEF rotation, Pose3/PX bridge, and zero Pixel5 lever-arm convention unchanged",
+      "sagnac": "one source-consistent range/LOS convention, no second correction",
+      "qr_lm_imu_filter": "Phase118/135 QR, LM schedule, IMU, filter, and topology unchanged",
+      "raw_base": "existing Phase107 raw-base correction exactly once",
+      "pixel5_output_offset": "existing final output offset exactly once",
+      "other_phase_selectors": "Phase117/120/additional-frequency and Phase126-134 compound selectors remain as the pinned recipe specifies"
+    },
+    "fail_closed": [
+      "missing or nonfinite source range endpoint",
+      "source endpoint key, satellite state, epoch, or Sagnac convention mismatch",
+      "nonfinite prepared TDCP or range difference",
+      "attempted fallback to raw carrier, zero, held, inferred, saved-solution, nearest, or extrapolated range",
+      "attempted mixed legacy and Phase135 affine TDCP family",
+      "factor count or retained pair ledger mismatch"
+    ],
+    "selector_off_invariant": "Phase135-disabled and Phase138-disabled behavior is byte/semantic identical to the pinned legacy/Phase135 implementation."
+  },
+  "coordinate_and_unit_invariants": {
+    "official_position_state": "local ENU X",
+    "native_main_auxiliary_state": "local ENU X with Pose3 translation bridged to ECEF",
+    "native_point_stage_state": "ECEF source state",
+    "ecef_from_enu": "r_ecef = origin + R_enu_to_ecef * x_enu",
+    "los_transform": "los_enu = R_enu_to_ecef^T * los_ecef",
+    "origin_translation_invariance": true,
+    "c7_unit": "metres",
+    "d_unit": "metres_per_second",
+    "clock_export": "divide metre clock by speed of light exactly once",
+    "pixel5_offset": "official -0.10 m right-left and -0.30 m up-down, native final-output application once"
+  },
+  "source_evidence": {
+    "official": [
+      {"path": "fgo_gnss.m", "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3", "lines": "63-70,89-93,179-194"},
+      {"path": "fgo_gnss_imu.m", "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3", "lines": "76-83,102-106,145-149,302-317"},
+      {"path": "Gobs.m", "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88", "lines": "1151-1165"},
+      {"path": "Gsat.m", "sha256": "a56c323664660c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6", "lines": "259-306"},
+      {"path": "geodist.m", "sha256": "4ddced92aea78defd7eb8b2040dd23b1b0575eb0c1ac719a128c8db62ab4a91f", "lines": "1-20"},
+      {"path": "TDCPFactor_XXCC.h", "sha256": "cc8f5acabd43db25b5b4aca48f6c8ae6a0e2a399820fb950de9004555c9cd4b2", "lines": "15-76"},
+      {"path": "Pose3Point3Factor_PX.h", "sha256": "3893b16fe226fc253eafda16d634c0e229cb593373113f4de63cc66f47a1cb13", "lines": "17-47"}
+    ],
+    "native": [
+      {"path": "fgo_problems.cpp", "sha256": "6443b13d9df54e627bc73270b7d28df9c5d309043e2e194ba2b6b5c1b274bc25", "lines": "520-745,1499-1630"},
+      {"path": "fgo_gtsam_backend.cpp", "sha256": "c6e2e41eccafcf37bdcaf371b3a7b2d84de945706cc6d520efd47f50ff042903", "lines": "491-640,831-930,1120-1215,1381-1618"},
+      {"path": "fgo_gtsam_internal.hpp", "sha256": "e20d9eb7d3da77277cf89f4d080ad5d260d71f98f054394d8d327f682e063ff0", "lines": "1245-1400,1439-1703,3696-3855"},
+      {"path": "coordinates.hpp", "sha256": "d90af3973c14704ffed2b8a83ea1d9f3e241cb613c46dc9be0a435b674b2c1fe", "lines": "87-115"},
+      {"path": "gnss_fgo_imu_no_base.cpp", "sha256": "4ce95d3ef322c83fca2aa5327e9150ee2d2890fe012d6cc4d3b80d439939656e", "lines": "8974-9020,9462-9715,10170-10267"}
+    ]
+  },
+  "sealed_structural_facts": {
+    "source_result_commit": "65b24a939a373421015f07b119fdbec04d5c6ebb",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "affine_factor_counts": {"pseudorange": 43259, "doppler": 20748, "tdcp": 31269},
+        "c0d_indeterminate_attempts": 8
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "affine_factor_counts": {"pseudorange": 30664, "doppler": 8942, "tdcp": 14012},
+        "c0d_indeterminate_attempts": 6
+      }
+    },
+    "interpretation": "sealed finite/progress/cost/count facts only; no claim that the measurement semantic is accurate"
+  },
+  "sealed_accuracy_facts": {
+    "source_result_commit": "b0c596a76acbeea9cb426c2e12efd304e87d9a5e",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 335.1005139049,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 197.8309465842
+    },
+    "macro_m": 266.4657302445,
+    "promotion_gate": "not evaluated or promoted by Phase138; sealed historical strict macro < 0.782 m was not met",
+    "candidate_or_truth_rows_read": false
+  },
+  "implementation_tests_required": [
+    "synthetic two-epoch identity: affine initial residual after subtracting delta rho equals the legacy first-order residual under identical source geometry",
+    "official Gobs residual-difference algebra and sign/unit test",
+    "source geodist/Sagnac endpoint-key and finiteness test",
+    "ENU/ECEF origin and rotation invariance, PX bridge, C7/D dimension tests",
+    "pair/factor/ledger conservation and atomic no-mix/fail-closed tests",
+    "selector-off byte/semantic regression with fixed sigma 0.03 m, Huber k 0.5, QR/LM, raw-base, and Pixel5 offset invariants"
+  ],
+  "read_accounting": {
+    "native_official_source_reads": "permitted source-only",
+    "sealed_metadata_reads": "permitted metadata-only",
+    "raw_phone_gnss_imu_navigation_reads": 0,
+    "raw_base_reads": 0,
+    "truth_payload_reads": 0,
+    "candidate_solution_row_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0,
+    "implementation_build_or_test_execution": 0
+  },
+  "next_authorization_boundary": {
+    "implementation_commit_required": true,
+    "focused_tests_and_target_build_required": true,
+    "new_structural_contract_required": true,
+    "independent_raw_authorization_required": true,
+    "raw_inputs_allowed_only_after_authorization": ["phone raw GNSS", "phone raw IMU", "broadcast navigation", "sealed raw base if the pinned recipe requires it"],
+    "truth_accuracy_authorization_required_separately": true,
+    "truth_mat_pdc_precomputed_coordinates_kaggle_forbidden": true,
+    "solution_publication_forbidden": true
+  }
+}

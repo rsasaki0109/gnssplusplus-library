@@ -1,0 +1,198 @@
+{
+  "schema_version": "smartphone-r5-phase133-runner-native-selector-boundary-freeze.v1",
+  "phase": 133,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-boundary-freeze",
+  "scope": "Remove one runner-only Phase130 token from future native argv; preserve the native solver and all Phase118 recipe behavior",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase133_runner_native_selector_boundary_audit_v1.md",
+    "commit": "52d397880baea7854919d00bb69c39900af5b48d",
+    "sha256": "43ba702f45f446e0c2268b6a638fd3972d87e14812ce9adc9409e82b979a6bad"
+  },
+  "starting_state": {
+    "phase132_result_commit": "d28b6a17c85504fb26c5f7b3ecd6982968169643",
+    "phase132_note_commit": "e42d61f23a335562657b926e866e058f69e2c702",
+    "phase132_forensic_freeze_commit": "3b3c785f5a641bc3f2f49ff4e704f80b41a7ea06",
+    "phase132_implementation_commit": "4f546734771ac56d8342aadb88d6c36f454540fa",
+    "worktree_before_freeze": "clean",
+    "raw_reads_before_freeze": 0,
+    "solver_invocations_before_freeze": 0
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase133-runner-native-selector-boundary-v1",
+    "candidate_class": "runner-only argv ownership correction",
+    "source_backed": true,
+    "implementation_authorized": true,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "default_off": true,
+    "partial_selector_set_allowed": false,
+    "fallback_or_rerun_allowed": false
+  },
+  "selector_ownership": {
+    "runner_only": [
+      "--native-phase130-shared-ledger-key-local-support"
+    ],
+    "native_exactly_once": [
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase131-canonical-correction-band-key"
+    ],
+    "native_help_and_parser_must_not_contain": [
+      "--native-phase130-shared-ledger-key-local-support"
+    ],
+    "forbidden_and_off": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "other_forbidden_phase_bridges": [
+      "--native-direct-wls-ephemeral-c7d-main-seed",
+      "--native-pdc-state-bridge"
+    ]
+  },
+  "argv_boundary": {
+    "phase132_snapshot": [
+      "phase118",
+      "phase126",
+      "phase127",
+      "phase128",
+      "phase129",
+      "phase130",
+      "phase131"
+    ],
+    "phase133_snapshot": [
+      "phase118",
+      "phase126",
+      "phase127",
+      "phase128",
+      "phase129",
+      "phase131"
+    ],
+    "removed_token": "--native-phase130-shared-ledger-key-local-support",
+    "removed_token_count": 1,
+    "all_other_recipe_tokens_unchanged": true,
+    "native_source_changed": false,
+    "native_binary_changed": false,
+    "native_command_is_solver_recipe": true
+  },
+  "native_help_cross_check": {
+    "mode": "static-source-and-synthetic-help; no binary launch",
+    "source_path": "apps/native/gnss_fgo_imu_no_base.cpp",
+    "source_sha256": "6fcee581af70535b8af09a674a234352abaaf83a34b722d4e91577abaf352170",
+    "required_usage_tokens": [
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase131-canonical-correction-band-key"
+    ],
+    "required_parser_tokens": [
+      "--native-phase118-official-tdcp-huber-k",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase131-canonical-correction-band-key"
+    ],
+    "phase130_usage_present": false,
+    "phase130_parser_present": false,
+    "real_help_invocation": false
+  },
+  "preserved_native_recipe": {
+    "phase118_official_huber_k": true,
+    "phase117_dynamic_sigma": false,
+    "phase120_atmosphere_cancellation": false,
+    "additional_frequency_bands": false,
+    "fixed_tdcp_sigma_m": 0.03,
+    "main_solver": "MULTIFRONTAL_QR",
+    "c7_d_c0d_ccdd_unchanged": true,
+    "raw_base_source_complete_unchanged": true,
+    "phase126_127_128_129_131_118_each_once": true,
+    "imu_tdcp_lm_filter_unchanged": true,
+    "pixel5_offset_unchanged": true,
+    "legacy_default_unchanged": true,
+    "factor_topology_unchanged": true,
+    "equations_units_sigma_unchanged": true
+  },
+  "evidence_contract": {
+    "typed_preflight_call_count": ">=1 before command construction",
+    "old_literal_phase130_preflight_call_count": 0,
+    "native_command_construction_count": 1,
+    "native_selector_forwarding_count": 1,
+    "native_resolver_reachability": "native-summary-only; never inferred from Python",
+    "phase130_counters": "comparison-only; never an admission predicate",
+    "preflight_failure_command_construction": 0,
+    "preflight_failure_native_invocation": 0,
+    "preflight_failure_solver_invocations": 0,
+    "unknown_native_option": "fail closed before solver/graph evidence"
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "solver_invocations_if_preflight_fails": 0
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "solver_invocations_if_preflight_fails": 0
+    }
+  ],
+  "future_authorization": {
+    "must_be_new_independent_commit": true,
+    "must_pin_phase133_audit_freeze_runner_manifest_pre_raw_binary": true,
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "allowed_solver_inputs": [
+      "raw phone GNSS",
+      "raw phone IMU",
+      "broadcast navigation",
+      "sealed raw-base RINEX"
+    ],
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "PDC",
+      "precomputed coordinates",
+      "accuracy evaluator",
+      "Kaggle",
+      "token resource"
+    ],
+    "solution_policy": "opaque hash and row count only",
+    "failure_policy": "fail closed; no rerun/fallback/repair/sweep"
+  },
+  "read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "native_solver_invocations": 0,
+    "solution_coordinate_row_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "target_binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e",
+    "hash_only_no_execution": true
+  }
+}

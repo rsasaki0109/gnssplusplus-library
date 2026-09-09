@@ -1,0 +1,105 @@
+{
+  "schema_version": "smartphone-r5-phase101-epoch-clock-vector-raw-execution-authorization.v1",
+  "phase": 101,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-exact-two-route-phase101-epoch-clock-vector-structural-execution",
+  "authority": {
+    "phase101_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_source_parity_accuracy_regression_freeze_v1.json",
+      "sha256": "092a12fd6801ab42fcdbd9e8a0df4264ad2f3fbe6ea4ead1f5306dddcd7339ff"
+    },
+    "phase101_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_manifest_v1.json",
+      "sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b"
+    },
+    "phase101_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase101_epoch_clock_vector.py",
+      "sha256": "03b2ba22ebe9bcc223a88a56ca92eea87a18e50d1c89c19c4978f71a5b34cf1d"
+    },
+    "phase101_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase101_epoch_clock_vector_execute.py",
+      "sha256": "a86bdccc22ac9ae455204ef9d481c85acf6cb5709bdfdd77c00c46901bc2f8c1"
+    },
+    "phase101_focused_tests": {
+      "path": "tests/test_smartphone_phase101_epoch_clock_vector.py",
+      "sha256": "3d3f5530ef1fd1d5ebe75a7d7a109ca7685b16f324294eb9ac62262359ede2e1"
+    },
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281"
+    },
+    "phase95_path_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase95_raw_input_path_corrected_execute.py",
+      "sha256": "5ac858cf156555652f6feae60c71a4237269d4b4c2cb70c1adf5a9e08f10e883"
+    },
+    "phase91_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988"
+    },
+    "freeze_commit": "48aa18fe8311757383e9b7a383dd9b83f737e75c",
+    "implementation_commit": "d88c9fde97a818c6279d8ae35f1a1a70e06a8ce4",
+    "implementation_source_sha256": "72269b057073c0b0134b069a7436c8c3979504807b94ec7b477b7c4fa6f99339",
+    "implementation_backend_sha256": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa",
+    "implementation_fgo_result_sha256": "5a26994bda96c4bf50f436b1368bc1df5b192c38ef13a2a882ebd8e15bf5103d",
+    "binary_sha256": "45ab71ca416a5c9947a75f2c9e7bc996678b59c2b88ac52c04362d0ccf5dae77",
+    "manifest_sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b"
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase101-raw-only-native-source-parity-epoch-c-isb-v1",
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver"
+    ],
+    "raw_input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_mat_base_coordinate_kaggle_accuracy": false,
+    "raw_content_copy_or_transform": false,
+    "solution_output_publication": false,
+    "runs_per_route": 1,
+    "controls": 0,
+    "no_global_isb_double_state": true,
+    "no_fallback_or_guard_bypass": true,
+    "cholesky_comparison_rerun": false
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations": 2,
+    "raw_device_gnss_reads_max": 2,
+    "raw_device_imu_reads_max": 2,
+    "broadcast_navigation_reads_max": 2,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "base_rinex_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_rows_authorized": false,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "execution_policy": {
+    "authorized": true,
+    "order": "MTV-A then LAX-T, sequentially",
+    "one_invocation_per_route": true,
+    "no_rerun": true,
+    "stop_after_two_routes": true,
+    "solver_filter_lm_changes": false,
+    "fallback_or_guard_bypass": false,
+    "truth_or_accuracy_evaluation": false,
+    "solution_output": "CLI output path is isolated/withheld and must not be opened, published, or committed"
+  },
+  "release_boundary": {
+    "raw_execution_authorized": true,
+    "diagnostic_structural_result_authorized": true,
+    "truth_or_accuracy_evaluation_authorized": false,
+    "submission_release_authorized": false,
+    "solution_rows_authorized": false
+  }
+}

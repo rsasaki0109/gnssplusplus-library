@@ -46,7 +46,12 @@ inline double timeKey(const GNSSTime& time) {
 inline double sampleStd(const std::vector<double>& values, std::size_t begin,
                         std::size_t end) {
     const std::size_t count = end > begin ? end - begin : 0U;
-    if (count < 2U) return std::numeric_limits<double>::quiet_NaN();
+    // MATLAB movstd's default sample normalization uses N-1, with a
+    // singleton window normalized by one (therefore returning zero).  Keep
+    // an empty window invalid, but do not turn a valid endpoint singleton
+    // into an unexplained failed stop classification.
+    if (count == 0U) return std::numeric_limits<double>::quiet_NaN();
+    if (count == 1U) return 0.0;
     double mean = 0.0;
     for (std::size_t i = begin; i < end; ++i) mean += values[i];
     mean /= static_cast<double>(count);
@@ -117,8 +122,12 @@ inline Detection detect(const std::vector<ImuSample>& samples,
                                            std::numeric_limits<double>::quiet_NaN());
     std::vector<double> gyro_stds(samples.size(),
                                   std::numeric_limits<double>::quiet_NaN());
-    const std::size_t left = (config.window_samples - 1U) / 2U;
-    const std::size_t right = config.window_samples / 2U;
+    // For an even centered window MATLAB includes the current and previous
+    // samples on the extra side (e.g. k=4 => left=2, right=1).  Odd windows
+    // remain symmetric.  This is deliberately explicit because swapping the
+    // two expressions shifts every even-window stop decision by one sample.
+    const std::size_t left = config.window_samples / 2U;
+    const std::size_t right = (config.window_samples - 1U) / 2U;
     for (std::size_t i = 0; i < samples.size(); ++i) {
         const std::size_t begin = i > left ? i - left : 0U;
         const std::size_t end = std::min(samples.size(), i + right + 1U);

@@ -1,0 +1,295 @@
+{
+  "schema_version": "smartphone-r5-phase100-phase99-qr-accuracy-gate-freeze.v1",
+  "phase": 100,
+  "status": "frozen-before-phase100-solution-and-truth-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Evaluate exactly one fresh Phase99 raw-only MULTIFRONTAL_QR candidate on the two Phase99 structural-GO routes under the sealed Phase82 metric contract, against exact same-route Phase43 controls, with official truth readable only by the evaluator.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_gate_audit_v1.md",
+      "commit": "0fed5d6",
+      "sha256": "d37c0e5ccca6b8adf36148fd3aef793067b033cae0aa73ef8e61de2c19bf059d"
+    },
+    "phase99_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase99_main_multifrontal_qr_structural_result_v1.json",
+      "commit": "063481c10f5303d371bc3029981c8f8e96bf1fe8",
+      "sha256": "b5a786e87084bc83eed8a2181f2f31c1199e4c833d30449e14f1e42422b741c9",
+      "status": "go-phase99-main-multifrontal-qr-structural",
+      "accuracy_scored": false,
+      "solution_output_published": false
+    },
+    "phase99_candidate_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase99_main_multifrontal_qr_solver_candidate_freeze_v1.json",
+      "commit": "104ab766fffa9e6a5f4f75d54ba102483a81f4b8",
+      "sha256": "4e9819d172c4c39842f04d6202c815c9631041320f0b785e2cb2d6a67edf4c27"
+    },
+    "phase99_implementation": {
+      "commit": "57c21d1028cac659e97f10e49f35a6ccfe39f999",
+      "solver_branch": "MULTIFRONTAL_QR / EliminateQR for the opt-in main meter-state graph only"
+    },
+    "phase99_raw_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase99_main_multifrontal_qr_solver_execution_manifest_v1.json",
+      "sha256": "1b286e41ce043d8c16cbc208598e7d38bcacaac310d5dceddf7e69a7926f8c4f"
+    },
+    "phase82_metric_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_freeze_v1.json",
+      "sha256": "33bbfc4051af20cd3f39fbf8620ea4d277c4acc5dbe5d8d1621452a657eebf6b"
+    },
+    "phase82_metric_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_manifest_v1.json",
+      "sha256": "77f3cc6f82b4953e3fd0a240eff149fdc6c96b9335cc5058c962010b985500a0"
+    },
+    "phase43_control_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_freeze_v1.json",
+      "sha256": "9278a835a21e3a19027aefd3675aba45d8f1f9e19183cbc5590850b776722400"
+    },
+    "phase43_evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json",
+      "sha256": "1433249a9ddd1809a00535b33fc67e3267a8cab29e28f773dd148f0962c44d1a"
+    },
+    "phase82_evaluator_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb",
+      "use": "metric and parser reference only; no Phase100 execution is authorized by this freeze"
+    }
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase100-phase99-main-multifrontal-qr-accuracy-v1",
+    "source_candidate": "phase99-main-meter-state-multifrontal-qr-branch-only",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_order_fixed": true,
+    "runs_per_route": 1,
+    "fresh_solution_required": true,
+    "phase99_withheld_solution_reuse": false,
+    "raw_only_solution_generation": true,
+    "input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_input_roles": {
+      "device_gnss.csv": "raw device GNSS observations",
+      "device_imu.csv": "raw device IMU observations",
+      "brdc.nav": "broadcast navigation"
+    },
+    "raw_path_source": "Phase95 sealed raw-input materialization, resolved by a future Phase100 runner without copying or transforming content",
+    "no_raw_content_copy_or_transform": true,
+    "solver_selectors": "exact Phase99 QR selectors and route/config values; no new solver, filter, factor, equation, unit, sigma, initialization, or LM setting",
+    "gnss_first_solver_unchanged": true,
+    "legacy_default_unchanged": true,
+    "no_fallback_or_rerun": true,
+    "no_cholesky_comparison_rerun": true
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_set_exact": true,
+    "macro_weighting": "unweighted arithmetic mean over exactly these two route scalars",
+    "phase82_four_route_macro_direct_comparison": false,
+    "control_source": "exact Phase43 run-1 control identity pins resolved through the sealed Phase82 artifact_sources.phase43_control and Phase43 structural seal",
+    "control_read_evaluator_only": true,
+    "truth_pin_source": "sealed Phase82 cohort.truths metadata; official truth bytes are evaluator-only",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "expected_problem_epochs": 2159,
+        "expected_candidate_prediction_rows": 2158,
+        "expected_truth_rows": 2159,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_truth_key": [
+          "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+          1615921153434
+        ],
+        "truth_pin": {
+          "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+          "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+          "bytes": 210009,
+          "rows": 2159,
+          "read_by_solver": false,
+          "read_by_audit": false,
+          "read_by_evaluator_only": true
+        },
+        "control_pin_reference": "phase82_metric_freeze.artifact_sources.phase43_control.routes[2021-03-16-18-59-us-ca-mtv-a/pixel5]"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "expected_problem_epochs": 1466,
+        "expected_candidate_prediction_rows": 1465,
+        "expected_truth_rows": 1465,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_truth_key": null,
+        "truth_pin": {
+          "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+          "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+          "bytes": 143441,
+          "rows": 1465,
+          "read_by_solver": false,
+          "read_by_audit": false,
+          "read_by_evaluator_only": true
+        },
+        "control_pin_reference": "phase82_metric_freeze.artifact_sources.phase43_control.routes[2022-04-01-18-22-us-ca-lax-t/pixel5]"
+      }
+    }
+  },
+  "metric_contract": {
+    "candidate_submission_header": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed",
+    "required_truth_fields": [
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "truth_phone_policy": "if phone column exists it must equal the declared route; if absent assign the declared route",
+    "key": "(phone, UnixTimeMillis)",
+    "timestamp_type": "exact integer",
+    "matching": "exact integer key intersection only",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "truth_row_coverage": "informational only; expected leading warm-up exclusions are pinned per route",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "distance": "spherical Haversine per row",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "macro": "unweighted arithmetic mean of the two route scalars in fixed route order",
+    "macro_comparability": "candidate and Phase43 control must use the identical two-route set, exact keys, parser, weighting, and metric; Phase82's four-route macro is not a Phase100 baseline",
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "finite_and_earth_valid": "all coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]"
+  },
+  "expected_alignment": {
+    "trajectory_key_alignment": "exact (phone, UnixTimeMillis) key alignment; never row-position alignment",
+    "native_problem_epoch_is_not_output_row": true,
+    "candidate_output_rows_must_equal_expected_domain": true,
+    "strict_timestamp_order": true,
+    "no_duplicate_keys": true,
+    "no_prediction_extras": true,
+    "no_interpolation_or_fill": true,
+    "pre_truth_schema_validation": true,
+    "route_expectations": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "problem_epochs": 2159,
+        "domain_rows": 2158,
+        "truth_rows": 2159,
+        "leading_warmup_truth_rows_allowed": 1
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "problem_epochs": 1466,
+        "domain_rows": 1465,
+        "truth_rows": 1465,
+        "leading_warmup_truth_rows_allowed": 0
+      }
+    }
+  },
+  "leakage_guard": {
+    "truth_path_in_native_argv": false,
+    "truth_bytes_in_native_process": false,
+    "truth_path_in_native_environment": false,
+    "truth_open_before_native_exit": false,
+    "native_launch_after_truth_open": false,
+    "truth_read_by_solver": false,
+    "truth_read_by_audit": false,
+    "truth_read_by_evaluator_only": true,
+    "truth_reads_after_future_manifest_and_authorization": 2,
+    "truth_reads_per_route": 1,
+    "native_inputs_only_raw_gnss_imu_broadcast_nav": true,
+    "mat_read_or_generated": false,
+    "base_rinex_read": false,
+    "pdc_or_wls_coordinate_read": false,
+    "precomputed_coordinate_read": false,
+    "archive_reopen_or_rematerialize": false,
+    "kaggle_or_token_access": false,
+    "accuracy_based_route_selection": false,
+    "post_truth_tuning": false,
+    "solution_rows_published": false,
+    "failure_policy": "any leakage, schema, alignment, finite, or metric predicate fails closed; no repair, retry, fallback, or publication"
+  },
+  "promotion_gates": {
+    "all_gates_anded": true,
+    "candidate_runs_per_route": 1,
+    "candidate_route_set_exact": true,
+    "candidate_output_schema_and_alignment": true,
+    "candidate_prediction_domain_coverage": 1.0,
+    "candidate_all_finite_and_earth_valid": true,
+    "candidate_over_70_mps_count": 0,
+    "candidate_improves_each_route_by_at_least_m": 0.05,
+    "candidate_no_route_regression": true,
+    "candidate_macro_improvement_vs_same_route_phase43_at_least_m": 0.1,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_macro_score_strict_max_m": 0.782,
+    "phase82_mtv_h_specific_gate": "not applicable; MTV-H is outside the frozen Phase100 route set",
+    "phase82_phase78_four_route_macro_gate": "not applicable; no direct four-route macro comparison is permitted",
+    "strict_thresholds_are_and_gates": true,
+    "promotion_on_failure": "no-go; preserve candidate/control artifacts and stop",
+    "promotion_on_success": "structural/accuracy GO only; separate authorization is required for any release or submission"
+  },
+  "truth_evaluator_boundary": {
+    "evaluator_process_count": 1,
+    "candidate_generation_precedes_truth_open": true,
+    "pre_truth_checks": [
+      "candidate output header",
+      "route identity",
+      "expected row count",
+      "strict timestamp order",
+      "duplicate and extra key rejection",
+      "finite and Earth-valid coordinates"
+    ],
+    "truth_open": "after future manifest and one-shot authorization only, one official pinned truth file per route",
+    "truth_parser": "Phase82 DictReader contract only",
+    "truth_lifetime": "evaluator-only memory; never passed to native solver",
+    "native_after_truth": false,
+    "control_read": "immutable Phase43 evaluator-side artifact only",
+    "result_content": "seal metrics, gate booleans, accounting, and failure reason; do not include solution coordinate rows",
+    "release_or_submission": false
+  },
+  "read_accounting": {
+    "audit_time": {
+      "native_solver_invocations": 0,
+      "raw_gnss_reads": 0,
+      "raw_imu_reads": 0,
+      "navigation_reads": 0,
+      "truth_reads": 0,
+      "mat_reads_or_generated": 0,
+      "base_reads": 0,
+      "precomputed_coordinate_reads": 0,
+      "accuracy_calculations": 0,
+      "kaggle_or_token_access": 0,
+      "solution_outputs_generated": 0
+    },
+    "planned_future_evaluator": {
+      "truth_reads_after_manifest_and_authorization": 2,
+      "truth_reads_per_route": 1,
+      "native_solver_invocations": 2,
+      "candidate_runs_per_route": 1,
+      "control_solver_invocations": 0,
+      "post_truth_native_invocations": 0,
+      "mat_reads_or_generated": 0,
+      "base_reads": 0,
+      "precomputed_coordinate_reads": 0,
+      "kaggle_or_token_access": 0,
+      "solution_publication": false
+    }
+  },
+  "release_boundary": {
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_promotion_authorized": false,
+    "solution_csv_publication_authorized": false,
+    "validation_authorized": false,
+    "kaggle_submission_authorized": false,
+    "required_next_artifacts": [
+      "Phase100 pre-raw evaluator/manifest",
+      "independent one-shot Phase100 raw/evaluation authorization"
+    ],
+    "historical_phase82_scores_reused": false,
+    "phase99_withheld_solution_reused": false
+  }
+}

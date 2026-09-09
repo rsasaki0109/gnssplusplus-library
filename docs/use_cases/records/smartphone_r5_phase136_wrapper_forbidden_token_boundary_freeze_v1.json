@@ -1,0 +1,154 @@
+{
+  "schema_version": "smartphone-r5-phase136-wrapper-forbidden-token-boundary-freeze.v1",
+  "phase": 136,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-boundary-freeze",
+  "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+  "starting_state": {
+    "head": "49b9db9197f395c6cc302d9ae202c17616afa33e",
+    "worktree": "clean",
+    "phase135_result_commit": "49b9db9197f395c6cc302d9ae202c17616afa33e",
+    "phase135_authorization_commit": "15ea056c9604b4e53a58d85e23d435e97936d8fa",
+    "raw_reads_during_audit": 0,
+    "solver_invocations_during_audit": 0,
+    "truth_reads_during_audit": 0,
+    "solution_coordinate_reads_during_audit": 0,
+    "mat_pdc_precomputed_reads_during_audit": 0,
+    "kaggle_or_token_access_during_audit": 0
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase136_wrapper_forbidden_token_boundary_audit_v1.md",
+    "commit": "5ef049c927dab2a67ba66a97a2a4e44ce98de4f8",
+    "sha256": "05c9ed7378fbf5d3cb696d5513fedb9fa41bf846c1193601e4f1182f2ac0ac54"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase136-typed-argv-path-forbidden-token-boundary-v1",
+    "candidate_class": "authorized-wrapper-only-argv-path-access-classification",
+    "source_backed": true,
+    "root_cause_proven": true,
+    "prior_wrapper_predicate": "substring scan over every argv token",
+    "prior_failure_token": "--native-pdc-imu-tdcp-no-bridge",
+    "prior_failure_class": "authorized-wrapper-preflight-policy-bug",
+    "implementation_authorized": true,
+    "native_algorithm_change_authorized": false,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "default_off": true,
+    "partial_recipe_allowed": false,
+    "fallback_or_rerun_allowed": false
+  },
+  "source_evidence": {
+    "native_cli_path": "apps/native/gnss_fgo_imu_no_base.cpp",
+    "native_cli_sha256": "4ce95d3ef322c83fca2aa5327e9150ee2d2890fe012d6cc4d3b80d439939656e",
+    "required_option": "--native-pdc-imu-tdcp-no-bridge",
+    "usage_approx_lines": "321-323",
+    "parser_approx_lines": "524-525",
+    "option_field": "Options::native_pdc_imu_tdcp_no_bridge",
+    "in_process_recipe_approx_lines": "654-663",
+    "raw_path_options": [
+      "--android-gnss",
+      "--android-imu",
+      "--nav",
+      "--native-base-rinex"
+    ],
+    "native_mat_path_guard": true,
+    "static_runner_required_flag": true,
+    "prior_authorized_wrapper_path": "apps/commands/benchmarks/gnss_smartphone_phase135_official_affine_structural_authorized_execute.py",
+    "prior_authorized_wrapper_sha256": "fd322c928be37d0a1d168a48d02d61f9fee2363046ad7ee8a3db0a649d484ce9"
+  },
+  "boundary": {
+    "option_namespace": {
+      "classification": "exact argv option ownership",
+      "allowed_options": "the exact option tokens emitted by STATIC.command_template(route)",
+      "required_recipe_and_on_selector_count": 1,
+      "off_selector_count": 0,
+      "unknown_option": "fail-closed",
+      "required_pdc_named_algorithm_option": "allowed exactly once; it is a native algorithm selector, not an input path"
+    },
+    "path_value_namespace": {
+      "classification": "input/artifact path or non-option value",
+      "forbidden_terms": [
+        ".mat",
+        "truth",
+        "ground_truth",
+        "pdc",
+        "precomputed",
+        "kaggle",
+        "token"
+      ],
+      "forbidden_path_or_value": "fail-closed",
+      "opaque_output_filename_exception": "opaque_solution_output.csv only, with no content read"
+    },
+    "access_namespace": {
+      "truth": "never opened",
+      "mat": "never opened",
+      "pdc_artifact_or_input": "never opened",
+      "precomputed_coordinates": "never opened",
+      "kaggle_or_token_resource": "never accessed",
+      "raw_payload": "not opened during audit or qualification"
+    },
+    "algorithm_invariants": {
+      "native_source_unchanged": true,
+      "phase135_recipe_unchanged": true,
+      "graph_factors_equations_units_unchanged": true,
+      "solver_lm_filter_initialization_unchanged": true,
+      "legacy_default_unchanged": true
+    }
+  },
+  "qualification_contract": {
+    "mode": "launch-free synthetic argv and static source tests",
+    "required_pass": [
+      "exact required option --native-pdc-imu-tdcp-no-bridge accepted once",
+      "all static required and enabled selector counts exact",
+      "static Phase135 command template remains unchanged",
+      "native usage/parser ownership remains present"
+    ],
+    "required_fail_closed": [
+      "PDC input path/value",
+      "PDC artifact path/value",
+      "truth/MAT/precomputed/Kaggle/token path/value",
+      "unknown selector",
+      "duplicate required option",
+      "off selector or forbidden native bridge selector"
+    ],
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  },
+  "future_authorization_boundary": {
+    "prior_phase135_authorization_reusable": false,
+    "new_qualification_required": true,
+    "new_independent_raw_authorization_required": true,
+    "must_pin_new_wrapper_sha256": true,
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "raw_inputs_only_after_authorization": true,
+    "truth_accuracy_and_publication": false,
+    "rerun_fallback_repair_sweep": false,
+    "failure_policy": "fail closed"
+  },
+  "read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_result_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_coordinate_reads": 0,
+    "truth_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "schema_version": "smartphone-r5-phase102-epoch-clock-vector-raw-evaluation-authorization.v1",
+  "phase": 102,
+  "status": "authorized-for-exact-two-route-phase102-epoch-clock-vector-raw-and-isolated-truth-evaluation",
+  "execution_label": "Luna Max",
+  "authority": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+      "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_manifest_v1.json",
+      "sha256": "3b7b5dc48d6a172dda21c5d27bd4d8b92a64347615768ab87d4716ca17d81cd9"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy.py",
+      "sha256": "576ebf9749d1f295737bd82716275a20eb30a5aeeff3fc3828de10960c2255d8"
+    },
+    "wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy_execute.py",
+      "sha256": "ed3e86f57a2b494aab9156a5f83ede44ab92f3863b7b0098acc81adcb900e389"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase102_epoch_clock_vector_accuracy.py",
+      "sha256": "bfe3486bb67765baab83719eadf75c335e8e6a58d26d46ac3da31b52651ef73a"
+    },
+    "phase101_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a"
+    },
+    "phase101_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_manifest_v1.json",
+      "sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b"
+    },
+    "phase101_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_raw_execution_authorization_v1.json",
+      "sha256": "a5858b2ab51c5ed781e0a0fcc311d867b8b0e13db4fde77ede5de20a4195ee62"
+    },
+    "phase95_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase95_raw_input_path_corrected_execute.py",
+      "sha256": "5ac858cf156555652f6feae60c71a4237269d4b4c2cb70c1adf5a9e08f10e883"
+    },
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281"
+    },
+    "phase82_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_freeze_v1.json",
+      "sha256": "33bbfc4051af20cd3f39fbf8620ea4d277c4acc5dbe5d8d1621452a657eebf6b"
+    },
+    "phase82_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_manifest_v1.json",
+      "sha256": "77f3cc6f82b4953e3fd0a240eff149fdc6c96b9335cc5058c962010b985500a0"
+    },
+    "phase82_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase100_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7"
+    },
+    "phase43_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_freeze_v1.json",
+      "sha256": "9278a835a21e3a19027aefd3675aba45d8f1f9e19183cbc5590850b776722400"
+    },
+    "phase43_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase43_native_fallback_seed_quality_anchor_recovery_evaluator_manifest_v1.json",
+      "sha256": "1433249a9ddd1809a00535b33fc67e3267a8cab29e28f773dd148f0962c44d1a"
+    },
+    "freeze_commit": "2c86aa9",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ]
+  },
+  "candidate": {
+    "id": "phase102-phase101-epoch-clock-vector-accuracy-v1",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "raw_only": true,
+    "raw_input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_mat_base_pdc_precomputed_kaggle": false,
+    "no_fallback_or_rerun": true,
+    "solution_publication": false,
+    "phase101_structural_go_required": true,
+    "phase99_qr_main_required": true
+  },
+  "matrix": {
+    "route_count": 2,
+    "native_invocations": 2,
+    "runs_per_route": 1,
+    "controls_in_native": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_reads_in_native": 0,
+    "truth_reads_in_evaluator": 2,
+    "mat_reads_or_generated": 0,
+    "base_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "solution_publication": false
+  },
+  "execution_policy": {
+    "raw_execution_authorized": true,
+    "truth_evaluation_authorized": true,
+    "one_native_invocation_per_route": true,
+    "sequential_route_order": "MTV-A then LAX-T",
+    "stop_after_two_routes": true,
+    "native_inputs_only": ["raw device_gnss.csv", "raw device_imu.csv", "broadcast brdc.nav"],
+    "native_truth_path_or_env": false,
+    "native_mat_base_pdc_precomputed_coordinate": false,
+    "native_fallback_or_rerun": false,
+    "truth_open_after_native_exit_and_solution_seal": true,
+    "truth_reads_per_route": 1,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "strict_0_782_gate_m": 0.782,
+    "accuracy_gate_failure_policy": "preserve exact result and stop; no threshold change, repair, fallback, or rerun"
+  },
+  "prohibited": {
+    "truth_in_solver_argv": true,
+    "truth_in_solver_environment": true,
+    "mat": true,
+    "base": true,
+    "pdc": true,
+    "precomputed_coordinates": true,
+    "kaggle": true,
+    "tokens": true,
+    "solution_csv_release": true
+  }
+}

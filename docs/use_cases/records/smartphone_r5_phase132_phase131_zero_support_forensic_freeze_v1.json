@@ -1,0 +1,255 @@
+{
+  "schema_version": "smartphone-r5-phase132-phase131-zero-support-forensic-freeze.v1",
+  "phase": 132,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-forensic-single-runner-fix",
+  "scope": "Phase131 zero-support forensic audit; no raw, solver, truth, MAT, PDC, precomputed-coordinate, accuracy, or Kaggle execution",
+  "starting_state": {
+    "head_before_audit": "2e39f7c909d0be2d901ae17ed4b2830f92772f65",
+    "head_after_audit_commit": "7e2d000e38c701ae76a587abfafc1e3534069bd6",
+    "worktree_before_audit": "clean",
+    "worktree_after_audit_commit": "clean",
+    "audit_commit": "7e2d000e38c701ae76a587abfafc1e3534069bd6",
+    "audit_path": "docs/use_cases/records/smartphone_r5_phase132_phase131_zero_support_forensic_audit_v1.md",
+    "audit_sha256": "ce1f7a7d3114e0dc4345d4e141971b2ffd1c9fe342b663fb31ab3b48b33c7386"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase132-runner-canonical-preflight-admission-v1",
+    "candidate_class": "runner-only mapping/instrumentation correction",
+    "source_backed": true,
+    "root_cause_class": "runner-only mapping/instrumentation mismatch",
+    "root_cause_fact": "Phase131 build_inventory delegates to Phase130 literal descriptor admission, which rejects every valid rover GLONASS row before provenance, query-time support, or native launch.",
+    "native_phase131_python_canonical_preflight_executed": false,
+    "native_phase131_cpp_resolver_executed": false,
+    "native_binary_command_constructed": false,
+    "native_binary_invoked": false,
+    "actual_data_root_cause": "undetermined",
+    "distinct_route_rover_key_inventory_sealed": false,
+    "distinct_route_satellite_intersections_sealed": false,
+    "route_key_set_hashes_sealed": false,
+    "route_key_examples_sealed": false,
+    "default_off": true,
+    "implementation_authorized": false,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false
+  },
+  "evidence": {
+    "phase131_result": {
+      "commit": "2e39f7c909d0be2d901ae17ed4b2830f92772f65",
+      "json_path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_result_v1.json",
+      "json_sha256": "2f02879a7b06704e588cacaae92f6c509fc2a4733f0efac4a4d61702defd22d1",
+      "md_path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_result_v1.md",
+      "md_sha256": "e222329977296ae4ee50c3ddd7ec2650fed164a99287d73d9814a435a654b0de",
+      "status": "no-go-phase131-canonical-correction-band-structural",
+      "native_solver_invocations": 0,
+      "truth_reads": 0,
+      "accuracy_calculations": 0
+    },
+    "phase131_authorization": {
+      "commit": "ed746428861699b941384c7ea73cecae33a44d55",
+      "json_path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_authorization_v1.json",
+      "json_sha256": "49392c23f94d88b3c2d6dc7df073ca8960a340fbaf9a4650cc30483c99d8cfac",
+      "authorized_runner_commit": "615a63c54802a5d7a3da725f2e64fc5bd26d64a5",
+      "authorized_runner_sha256": "95e4df869caaf14158a0688c7fd2c548fced7ae9bb23306fe2e09785b8dd6127"
+    },
+    "authorized_runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural_authorized_execute.py",
+      "commit": "615a63c54802a5d7a3da725f2e64fc5bd26d64a5",
+      "sha256": "95e4df869caaf14158a0688c7fd2c548fced7ae9bb23306fe2e09785b8dd6127",
+      "inventory_delegation_lines": "335-340",
+      "command_construction_lines": "468-476,689-709",
+      "matrix_control_lines": "785-859"
+    },
+    "phase131_source": {
+      "implementation_commit": "c3af051e46f3685c0d3406537fa8f7c12eea75f2",
+      "canonical_header": "include/libgnss++/algorithms/phase131_canonical_correction_key.hpp",
+      "canonical_header_sha256": "b9e464d16551e547f9b1bc298b7c6a90f91f5b0038d97b46625ff56cdf497123",
+      "base_model": "src/algorithms/base_pseudorange_compensation.cpp",
+      "base_model_sha256": "5ec8c119a55a8e974394531a7585a6ce094756c127b048d61fba330991b48ba2",
+      "launch_free_contract": "apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural.py",
+      "launch_free_contract_sha256": "dbb2343e3dbd014fc6ac9ade61fdfdd8e3cd8277927f0eb931d025388e1572c6",
+      "synthetic_cpp_test_sha256": "cbcab5a0597cad2d88975e78838664baa6be7d2e8c7368762f487455c2c86f60"
+    },
+    "phase131_current_ignored_metadata": {
+      "MTV-A": {
+        "path": "output/smartphone-r5/phase131-canonical-correction-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/inventory.json",
+        "sha256": "6f51fe4bcdc8682bd7d402b214ff95e2baeb6c60fd7fed0d31b8f98644ee8593",
+        "ok": false,
+        "failure": "all retained rover/base exact-key support is empty",
+        "phase131_enabled_marker": true,
+        "native_solver_invocations": 0,
+        "distinct_keys": null,
+        "key_set_sha256": null
+      },
+      "LAX-T": {
+        "path": "output/smartphone-r5/phase131-canonical-correction-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/inventory.json",
+        "sha256": "40e56a26a4c52a7e5efd0ae67b466ac65dcfd6b8edda452119d2c80b6c9f28c2",
+        "ok": false,
+        "failure": "all retained rover/base exact-key support is empty",
+        "phase131_enabled_marker": true,
+        "native_solver_invocations": 0,
+        "distinct_keys": null,
+        "key_set_sha256": null
+      },
+      "partial_result": {
+        "path": "output/smartphone-r5/phase131-canonical-correction-structural-v1/partial_result.json",
+        "sha256": "616c26daa18fd8506979d7ba66b88a660f87eb1543f679429d7f76d53fde7cb4",
+        "completed_routes": 2,
+        "native_solver_invocations": 0
+      }
+    },
+    "phase130_comparison": {
+      "result_commit": "3d16fe289409d3aa6290d861ec23d51f69941db5",
+      "result_json_sha256": "f9cf9226889fc4a4e6141e54f6447bc09998b3f42a7cf45269cc8ed0cb0e0553",
+      "inventory_metadata_sha256": {
+        "MTV-A": "767e5fb895b707e9bab3a516e1379384d5c5fbbc0e0c9487e7c78855d57615a8",
+        "LAX-T": "41cdfdc0f6fd5b79579fdfbdafb1803bd1656192b3a5c9ef8621748e22674543"
+      },
+      "interpretation": "sealed comparison metadata only; not a Phase131 rerun",
+      "route_counters": {
+        "MTV-A": {
+          "rover_input_rows": 12068,
+          "rover_certified_rows": 0,
+          "rover_explicit_local_miss_rows": 12068,
+          "rover_missing_exact_key_rows": 11832,
+          "base_input_rows": 17199,
+          "base_certified_rows": 9642,
+          "base_explicit_local_miss_rows": 7557,
+          "canonical_key_support_rows": 0,
+          "factor_input_rows": 11832,
+          "retained_factor_rows": 0,
+          "factor_missing_exact_stream_rows": 11832,
+          "base_unused_rows_accounted": true
+        },
+        "LAX-T": {
+          "rover_input_rows": 8873,
+          "rover_certified_rows": 0,
+          "rover_explicit_local_miss_rows": 8873,
+          "rover_missing_exact_key_rows": 8626,
+          "base_input_rows": 920,
+          "base_certified_rows": 396,
+          "base_explicit_local_miss_rows": 524,
+          "canonical_key_support_rows": 0,
+          "factor_input_rows": 8626,
+          "retained_factor_rows": 0,
+          "factor_missing_exact_stream_rows": 8626,
+          "base_unused_rows_accounted": true
+        }
+      }
+    }
+  },
+  "execution_path": {
+    "contract_selector_present": true,
+    "contract_selector": "--native-phase131-canonical-correction-band-key",
+    "selector_forwarding_function_exists": true,
+    "selector_forwarded_to_native_process": false,
+    "reason_not_forwarded": "Phase131 build_inventory raises through the delegated Phase130 build_inventory before execute_one_route/command_for/subprocess.run",
+    "stage1_phase131_python_canonicalization": false,
+    "stage1_phase130_literal_preflight": true,
+    "stage1_phase130_rover_resolver_after_descriptor": false,
+    "stage1_phase130_base_resolver_control_flow_reached": true,
+    "stage1_phase130_base_resolver_call_count_sealed": false,
+    "native_phase131_cpp_resolver": false,
+    "current_phase131_enabled_field_is_execution_evidence": false
+  },
+  "canonical_key_trace": {
+    "native_key": [
+      "GNSSSystem",
+      "SatelliteId.prn",
+      "PhysicalFrequencyFamily",
+      "certified_GLONASS_FCN_if_GLONASS"
+    ],
+    "physical_frequency_families": ["L1", "L5"],
+    "runner_preflight_key": ["R_string", "direct_integer_prn", "literal_descriptor"],
+    "runner_prn_policy": "R? followed by zero padding and integer 1..27",
+    "rtklib_prn_offset_applied_in_audited_boundary": false,
+    "native_satellite_identity": "SatelliteId compares GNSSSystem then direct uint8_t PRN",
+    "literal_tracking_code_in_native_join": false,
+    "query_time_in_key": false,
+    "query_time_policy": "native GPST finite exact endpoint or adjacent finite in-domain bracket",
+    "glonass_fcn_required": true,
+    "glonass_fcn_range": [-7, 6],
+    "glonass_fcn_source": "Phase127/128 exact query-time certified header/geph provenance",
+    "android_carrier_frequency_as_fcn": false,
+    "route_distinct_key_sets": "missing from sealed artifacts; do not infer"
+  },
+  "historical_current_separation": {
+    "current_phase131_support_zero_is": "pre-solver runner failure marker; no native canonical telemetry",
+    "historical_phase130_missing_exact_key_counts_are": "copied sealed comparison metadata only",
+    "current_route_key_set_hashes": null,
+    "current_route_key_examples": null,
+    "source_only_synthetic_key_example": "2:7:L1:fcn=-4",
+    "source_only_example_is_route_data": false
+  },
+  "candidate_contract": {
+    "id": "phase132-runner-canonical-preflight-admission-v1",
+    "scope": "replace only the Phase131 runner's delegated Phase130 literal descriptor admission with Phase131 typed physical-family preflight",
+    "canonical_join": "(GNSSSystem, PRN, PhysicalFrequencyFamily[, certified_GLONASS_FCN])",
+    "system_source": "existing typed parser identity",
+    "prn_source": "existing typed satellite identity; no row index or RTKLIB offset",
+    "family_source": "existing Phase131 signal_policy/family mapping; L1/L5 only",
+    "original_signal_and_tracking_text": "provenance only, not join identity",
+    "glonass_policy": "Phase127/128 exact query-time certified FCN only, range [-7,6]",
+    "alias_policy": "same physical family aliases may collapse; different/unknown family is explicit miss",
+    "conflict_policy": "ambiguous or conflicting finite canonical candidates fail closed",
+    "support_policy": "one finite exact endpoint or adjacent finite in-domain support per retained rover correction",
+    "conservation": "every input row is certified or explicitly missed; unused base streams are accounted locally",
+    "forbidden": ["raw fallback", "zero correction", "uncorrected fallback", "nearest", "hold", "extrapolation", "fixed FCN", "external frequency table", "partial remap"],
+    "empty_gate": "all-miss or empty usable support fails before solver launch",
+    "native_algorithm_change": false,
+    "factor_topology_change": false,
+    "equation_unit_change": false,
+    "sigma_filter_huber_change": false,
+    "qr_imu_tdcp_lm_change": false,
+    "legacy_default_change": false,
+    "new_raw_execution_authorized_by_this_freeze": false
+  },
+  "future_validation": {
+    "focused_synthetic_tests": [
+      "Android aliases and RINEX same-band C1C/C1P map to one family without literal-token equality",
+      "system/PRN identity uses direct typed values with no row-index or RTKLIB-offset join",
+      "GLO FCN missing, out-of-range, mismatch, tie, and conflict fail closed",
+      "source-defined same-family precedence and ambiguous finite duplicate rejection",
+      "exact endpoint and adjacent in-domain bracket with unequal cadence/counts",
+      "missing key, out-of-domain, nonfinite, all-miss, and empty-route gates",
+      "side-local and factor/miss conservation, unused-base accounting, exactly-once correction",
+      "selector-off legacy regression and solver-zero-on-preflight-failure"
+    ],
+    "qualification_required_before_raw": [
+      "implementation plus focused tests",
+      "launch-free runner/validator/manifest",
+      "pre-raw zero-read accounting seal",
+      "new independent authorization pinning changed runner/source/binary"
+    ],
+    "fresh_authorization_required": true,
+    "old_phase131_authorization_reusable": false,
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "allowed_solver_inputs": ["raw phone GNSS", "raw phone IMU", "broadcast navigation", "sealed raw base RINEX"],
+    "forbidden_inputs": ["truth", "MAT", "PDC", "precomputed coordinates", "accuracy evaluator", "Kaggle"],
+    "failure_policy": "fail closed; no rerun, fallback, repair, sweep, truth, accuracy, or publication"
+  },
+  "read_accounting_this_audit": {
+    "sealed_result_and_ignored_metadata_reads": "read-only metadata",
+    "pinned_source_text_reads": "read-only source",
+    "raw_phone_gnss_payload_reads": 0,
+    "raw_phone_imu_payload_reads": 0,
+    "broadcast_navigation_payload_reads": 0,
+    "raw_base_rinex_payload_or_header_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_or_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "schema_version": "smartphone-r5-phase103-phase102-truth-only-evaluator-correction-authorization.v1",
+  "phase": 103,
+  "status": "authorized-for-phase103-truth-only-evaluator-correction",
+  "execution_label": "Luna Max",
+  "authority": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_freeze_v1.json",
+      "sha256": "984fdd26171e8327095cbe9b37ba519c55c71a952dfd150a24938f14f2d0c9d1"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase103_phase102_truth_only_evaluator_correction.py",
+      "sha256": "b12a6779ae7e9256e44732ab549c74a394316ad81329790af42373f45c4c7aa3"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase103_phase102_truth_only_evaluator_correction.py",
+      "sha256": "36ed2f5dc368779e88c424cf4f542d9c0b58462bbc7ced278b39b9953d4088ad"
+    },
+    "phase102_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_result_v1.json",
+      "sha256": "d4fcd2246407ad22f75dbf528ef0bbc41c391af341df66f8958b2eff0c48ada2"
+    },
+    "phase102_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy.py",
+      "sha256": "576ebf9749d1f295737bd82716275a20eb30a5aeeff3fc3828de10960c2255d8"
+    },
+    "phase102_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+      "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1"
+    },
+    "phase102_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_manifest_v1.json",
+      "sha256": "3b7b5dc48d6a172dda21c5d27bd4d8b92a64347615768ab87d4716ca17d81cd9"
+    },
+    "phase102_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_raw_evaluation_authorization_v1.json",
+      "sha256": "403b8feb245786180a12c0430de9a797e1c5c2c5355f1c75c79b11546ddce583"
+    },
+    "freeze_commit": "a0b9f72",
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ]
+  },
+  "candidate": {
+    "id": "phase103-phase102-truth-only-evaluator-correction-v1",
+    "candidate_count": 1,
+    "native_solution_reuse": true,
+    "native_solver_invocations": 0,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "no_fallback_or_rerun": true,
+    "solution_publication": false
+  },
+  "matrix": {
+    "native_invocations": 0,
+    "truth_reads_in_evaluator": 2,
+    "truth_reads_in_native": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_publication": false
+  },
+  "execution_policy": {
+    "truth_only_evaluation_authorized": true,
+    "native_solver_invocations": 0,
+    "native_solution_outputs_reused": 2,
+    "truth_reads_per_route": 1,
+    "native_after_truth": false,
+    "native_rerun": false,
+    "native_truth_path_or_environment": false,
+    "mat_base_pdc_precomputed_reads": 0,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "strict_0_782_gate_m": 0.782,
+    "failure_policy": "fail closed; preserve immutable Phase102 output and do not rerun"
+  },
+  "prohibited": {
+    "native_solver": true,
+    "raw_reads_by_correction": true,
+    "truth_in_native": true,
+    "mat": true,
+    "base": true,
+    "pdc": true,
+    "precomputed_coordinates": true,
+    "kaggle": true,
+    "tokens": true,
+    "solution_csv_release": true
+  }
+}

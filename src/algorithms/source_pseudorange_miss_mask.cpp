@@ -50,12 +50,15 @@ double finitePercentile(std::vector<double> values, double percentile) {
 
 }  // namespace
 
-bool apply(std::vector<FGOProcessor::PseudorangeFactor>& factors,
-           const std::vector<FGOProcessor::EpochSeed>& epochs,
-           const HasStream& has_stream,
-           const CorrectionAt& correction_at,
-           Report& report) {
+static bool applyImpl(
+    std::vector<FGOProcessor::PseudorangeFactor>& factors,
+    const std::vector<FGOProcessor::EpochSeed>& epochs,
+    const CanonicalHasStream& has_stream,
+    const CanonicalCorrectionAt& correction_at,
+    bool canonical_key_mode,
+    Report& report) {
     report = Report{};
+    report.canonical_key_mode = canonical_key_mode;
     report.original_adopted_rows = factors.size();
     report.callback_contract_valid = static_cast<bool>(has_stream) &&
                                      static_cast<bool>(correction_at);
@@ -63,33 +66,60 @@ bool apply(std::vector<FGOProcessor::PseudorangeFactor>& factors,
         report.failure = "source miss-mask callbacks are not both supplied";
         return false;
     }
+    if (std::any_of(
+            factors.begin(), factors.end(),
+            [](const FGOProcessor::PseudorangeFactor& factor) {
+                return factor.native_base_pseudorange_correction_applied;
+            })) {
+        report.correction_already_applied = true;
+        report.failure =
+            "source miss-mask correction was already applied to a factor";
+        return false;
+    }
+    if (!factors.empty()) {
+        report.correction_application_passes = 1U;
+    }
 
     std::vector<FGOProcessor::PseudorangeFactor> retained;
     retained.reserve(factors.size());
     std::vector<double> retained_correction_abs_m;
     retained_correction_abs_m.reserve(factors.size());
-    for (auto& factor : factors) {
-        const bool exact_stream_matched =
-            has_stream(factor.satellite, factor.signal);
+    for (const auto& original_factor : factors) {
+        // Keep all caller-owned factors intact until the final vector swap,
+        // including when a later callback throws after earlier corrections.
+        auto factor = original_factor;
+        auto& signal_counts = report.signal_counts[factor.signal];
+        ++signal_counts.original_adopted_rows;
+        const bool exact_stream_matched = has_stream(
+            factor.satellite, factor.signal,
+            factor.has_glonass_frequency_channel,
+            factor.glonass_frequency_channel);
         if (exact_stream_matched) {
             ++report.matched_exact_stream_rows;
+            ++signal_counts.matched_exact_stream_rows;
         } else {
             ++report.dropped_missing_exact_stream_rows;
+            ++signal_counts.dropped_missing_exact_stream_rows;
             continue;
         }
         if (factor.epoch_index >= epochs.size() ||
             !finiteTime(epochs[factor.epoch_index].time)) {
             ++report.dropped_out_of_domain_rows;
+            ++signal_counts.dropped_out_of_domain_rows;
             continue;
         }
         double correction_m = std::numeric_limits<double>::quiet_NaN();
         if (!correction_at(epochs[factor.epoch_index].time, factor.satellite,
-                           factor.signal, correction_m)) {
+                           factor.signal,
+                           factor.has_glonass_frequency_channel,
+                           factor.glonass_frequency_channel, correction_m)) {
             ++report.dropped_out_of_domain_rows;
+            ++signal_counts.dropped_out_of_domain_rows;
             continue;
         }
         if (!std::isfinite(correction_m)) {
             ++report.dropped_nonfinite_correction_rows;
+            ++signal_counts.dropped_nonfinite_correction_rows;
             continue;
         }
         const double corrected =
@@ -97,24 +127,46 @@ bool apply(std::vector<FGOProcessor::PseudorangeFactor>& factors,
                 factor.corrected_pseudorange_m, correction_m);
         if (!std::isfinite(corrected)) {
             ++report.dropped_nonfinite_correction_rows;
+            ++signal_counts.dropped_nonfinite_correction_rows;
             continue;
         }
         factor.corrected_pseudorange_m = corrected;
+        factor.native_base_pseudorange_correction_applied = true;
         if (exact_stream_matched) {
             ++report.finite_correction_rows_among_matched;
+            ++signal_counts.finite_correction_rows_among_matched;
         }
+        ++signal_counts.corrected_rows;
         retained_correction_abs_m.push_back(std::abs(correction_m));
         retained.push_back(std::move(factor));
     }
 
-    factors.swap(retained);
-    report.retained_finite_pc_rows = factors.size();
+    // Do not mutate the caller's factor vector until every conservation
+    // predicate below has passed.  This is the application half of the
+    // Phase126 compound transaction: a late accounting failure cannot expose
+    // a partially corrected or partially filtered graph.
+    report.retained_finite_pc_rows = retained.size();
+    report.corrected_rows = report.retained_finite_pc_rows;
+    for (auto& [signal, signal_counts] : report.signal_counts) {
+        signal_counts.retained_finite_pc_rows = signal_counts.corrected_rows;
+        signal_counts.factor_count_consistent =
+            signal_counts.original_adopted_rows ==
+            signal_counts.retained_finite_pc_rows +
+                signal_counts.dropped_missing_exact_stream_rows +
+                signal_counts.dropped_out_of_domain_rows +
+                signal_counts.dropped_nonfinite_correction_rows;
+    }
     const std::size_t dropped =
         report.dropped_missing_exact_stream_rows +
         report.dropped_out_of_domain_rows +
         report.dropped_nonfinite_correction_rows;
     report.factor_count_consistent =
         report.original_adopted_rows == report.retained_finite_pc_rows + dropped;
+    report.signal_count_consistent = std::all_of(
+        report.signal_counts.begin(), report.signal_counts.end(),
+        [](const auto& item) { return item.second.factor_count_consistent; });
+    report.factor_count_consistent =
+        report.factor_count_consistent && report.signal_count_consistent;
     if (report.original_adopted_rows > 0U) {
         report.retained_over_original_fraction =
             static_cast<double>(report.retained_finite_pc_rows) /
@@ -136,7 +188,39 @@ bool apply(std::vector<FGOProcessor::PseudorangeFactor>& factors,
         report.failure = "source miss-mask factor accounting mismatch";
         return false;
     }
+    factors.swap(retained);
     return true;
+}
+
+bool apply(std::vector<FGOProcessor::PseudorangeFactor>& factors,
+           const std::vector<FGOProcessor::EpochSeed>& epochs,
+           const HasStream& has_stream,
+           const CorrectionAt& correction_at,
+           Report& report) {
+    CanonicalHasStream canonical_has_stream;
+    if (has_stream) {
+        canonical_has_stream =
+            [has_stream](const SatelliteId& satellite, SignalType signal, bool,
+                         int) { return has_stream(satellite, signal); };
+    }
+    CanonicalCorrectionAt canonical_correction_at;
+    if (correction_at) {
+        canonical_correction_at =
+            [correction_at](const GNSSTime& time, const SatelliteId& satellite,
+                            SignalType signal, bool, int, double& correction_m) {
+                return correction_at(time, satellite, signal, correction_m);
+            };
+    }
+    return applyImpl(factors, epochs, canonical_has_stream,
+                     canonical_correction_at, false, report);
+}
+
+bool applyCanonical(std::vector<FGOProcessor::PseudorangeFactor>& factors,
+                    const std::vector<FGOProcessor::EpochSeed>& epochs,
+                    const CanonicalHasStream& has_stream,
+                    const CanonicalCorrectionAt& correction_at,
+                    Report& report) {
+    return applyImpl(factors, epochs, has_stream, correction_at, true, report);
 }
 
 }  // namespace libgnss::source_pseudorange_miss_mask

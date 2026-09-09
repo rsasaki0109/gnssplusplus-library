@@ -1,0 +1,79 @@
+{
+  "schema_version": "smartphone-r5-phase180-android-clock-preflight-manifest.v1",
+  "phase": 180,
+  "execution_label": "Luna Max",
+  "status": "sealed-after-single-authorized-preflight",
+  "purpose": "validate the pinned Android GNSS/IMU timestamp contract before another GNSS+IMU FGO invocation",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "implementation_commit": "cac17187a0b56c5e776387ba3b624c457dc2e19e",
+  "previous_phase179_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase179_h_native_raw_p_no_doppler_imu_main_result_v1.json",
+    "commit": "455911c28b8feb921f6fca39c13d5672bfdf70bd"
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "68fce936081c91e0bf5f83bceea71634f2b4f7fc80eafb95c3b2616d44b6616c",
+    "bytes": 4045256
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "c0d06b66147e189f6fead59cd52d50d4e40bc80dd7dc61fca27afde0bdd0f01a",
+    "src/io/imu.cpp": "79efa99a4b24cc7895fb8756a59967604c1048a1a297d2662f00cb23b239809a",
+    "include/libgnss++/io/imu.hpp": "154675958cc37c865dd76165ad92d922689c81670206efaf9584ebbb7bd87d8c"
+  },
+  "inputs": {
+    "android_gnss": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes": 74299283
+    },
+    "android_imu": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+      "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+      "bytes": 54271475
+    },
+    "nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes": 10805490,
+      "read": false
+    }
+  },
+  "argv": [
+    "build/apps/gnss_fgo_imu_no_base",
+    "--dataset-id", "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "--android-gnss", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+    "--android-imu", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+    "--all-epochs",
+    "--android-raw-utc-keys",
+    "--android-raw-clock-only",
+    "--android-utc-wall-clock-fallback",
+    "--native-phase180-android-clock-preflight",
+    "--summary-json", "output/smartphone-r5/phase180-h-android-clock-preflight-v1/mtv-h/native_clock_preflight.json"
+  ],
+  "selector_contract": {
+    "strict_elapsed_anchor_parser": true,
+    "explicit_utc_gps_mapping_fallback": true,
+    "gnss_fields_used": ["MessageType", "utcTimeMillis", "TimeNanos", "FullBiasNanos", "BiasNanos", "HardwareClockDiscontinuityCount"],
+    "imu_fields_used_for_pairing": ["MessageType", "utcTimeMillis", "elapsedRealtimeNanos", "MeasurementX", "MeasurementY", "MeasurementZ", "BiasX", "BiasY", "BiasZ"],
+    "raw_observation_conversion": false,
+    "navigation_read": false,
+    "solver_entered": false,
+    "truth": false,
+    "mat": false,
+    "base": false,
+    "kaggle": false,
+    "coordinate_values_published": false
+  },
+  "execution_policy": {
+    "authorized_native_invocations": 1,
+    "authorized_gnss_reads": 2,
+    "authorized_gnss_parser_calls": 2,
+    "authorized_imu_reads": 1,
+    "authorized_nav_reads": 0,
+    "truth_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "rerun_fallback_repair": false
+  },
+  "pinning_note": "Input, source, and binary hashes were validated immediately before the single invocation; this manifest records that preflight authorization and its immutable pins after completion."
+}

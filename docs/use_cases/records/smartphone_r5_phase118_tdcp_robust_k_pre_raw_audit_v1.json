@@ -1,0 +1,103 @@
+{
+  "schema_version": "smartphone-r5-phase118-tdcp-robust-k-pre-raw-audit.v1",
+  "phase": 118,
+  "execution_label": "Luna Max",
+  "status": "pre-raw-verified-no-payload-activity",
+  "contract": {
+    "commit": "8ffc4148e15431aeaa57ee65f730b8449829113d",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_manifest_v1.json",
+    "manifest_sha256": "e0a4a0e879a56d7336fe1e2cbf041e5a72920d8103dd22dfdc9dffddfe62ec1d",
+    "validator_path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k.py",
+    "validator_sha256": "6a7ff88fbee42baecd7bbccabdf76f7d31246ca075ba70cbb2ea3c35707d2201",
+    "runner_path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_structural_execute.py",
+    "runner_sha256": "7c67289274eafd4b8a38bfe18555a82448392b1255ce9febb530b3e1b2d6df89",
+    "focused_tests_path": "tests/test_smartphone_phase118_tdcp_robust_k_structural_execution.py",
+    "focused_tests_sha256": "6d6a08a8efa1d33b8e7d49cb68794f44743a1fb4a164abd904011ab2372eb936",
+    "freeze_commit": "25f3bada02c4073175054b5d668de02020761208",
+    "freeze_sha256": "267a2f51dea06f7d29d5b27be1f7ffd84febac1c72a9fbe2676c5f5a2649f81b",
+    "implementation_commit": "7f339ccc8f0fb58e3dbcb7f3fc24ba2b04acbf40"
+  },
+  "verification": {
+    "validator_verify_freeze": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k.py --verify-freeze",
+      "return_code": 0,
+      "raw_or_solver_activity": false
+    },
+    "validator_verify_manifest": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k.py --verify-manifest",
+      "return_code": 0,
+      "raw_or_solver_activity": false
+    },
+    "validator_verify_pre_raw": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k.py --verify-pre-raw",
+      "return_code": 0,
+      "raw_or_solver_activity": false
+    },
+    "runner_verify_pre_raw": {
+      "command": "python3 -B apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_structural_execute.py --verify-pre-raw",
+      "return_code": 0,
+      "raw_or_solver_activity": false
+    },
+    "focused_structural_tests": {
+      "command": "python3 -B tests/test_smartphone_phase118_tdcp_robust_k_structural_execution.py",
+      "return_code": 0,
+      "tests_run": 6,
+      "tests_failed": 0,
+      "raw_or_solver_activity": false
+    }
+  },
+  "read_accounting": {
+    "raw_phone_device_gnss_csv_reads": 0,
+    "raw_phone_device_imu_csv_reads": 0,
+    "broadcast_brdc_nav_reads": 0,
+    "sealed_raw_base_rinex_reads": 0,
+    "sealed_raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinates_interpreted": 0,
+    "truth_reads": 0,
+    "MAT_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "PDC_reads": 0,
+    "accuracy_calculations": 0,
+    "Kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "metadata_activity": {
+    "tracked_source_and_sealed_metadata_read": true,
+    "source_hashes_checked": true,
+    "target_binary_hash_checked": true,
+    "payload_members_touched": false,
+    "purpose": "source/manifest/freeze pin verification only"
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "independent_authorization_requirements": {
+    "new_authorization_commit_required": true,
+    "must_pin_this_contract_commit": true,
+    "must_pin_manifest_validator_runner_tests_and_binary": true,
+    "must_materialize_only_sealed_raw_phone_and_base_paths": true,
+    "must_use_broadcast_navigation_only": true,
+    "must_not_use_truth_MAT_phone_or_precomputed_coordinates_PDC": true,
+    "must_not_publish_solution_rows": true,
+    "must_run_MTV_A_then_LAX_T_once_sequentially": true,
+    "must_stop_on_failure_without_rerun_or_fallback": true,
+    "truth_authorization_is_separate": true
+  }
+}

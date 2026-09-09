@@ -1,0 +1,280 @@
+{
+  "schema_version": "smartphone-r5-phase113-remaining-routes-freeze.v1",
+  "phase": 113,
+  "execution_label": "Luna Max",
+  "status": "frozen-read-only-diagnostic-no-algorithm-admission",
+  "purpose": "Freeze exactly one source-safe diagnostic boundary after auditing the sealed MTV-H and MTV-U remaining-route failures; do not admit a guard-only C0D change without a valid velocity/D handoff.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase113_remaining_routes_audit_v1.md",
+    "commit": "93702517c4fc38ffc8df190ecff7d6b63b688700",
+    "sha256": "cdc9db5d3c4004c50a1e6dc9f186266a675f8af05d23c73db8e2d0f1b4fa6b4f"
+  },
+  "pinned_head_before_audit": {
+    "commit": "0151bd0",
+    "working_tree_clean": true,
+    "algorithm_or_solver_source_changed_for_phase113": false
+  },
+  "scope": {
+    "routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "historical_four_route_base_provenance_scope": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "source_only_audit": true,
+    "new_raw_execution": false,
+    "new_truth_evaluation": false
+  },
+  "sealed_evidence": {
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281",
+      "use": "H/U retained, C0D, Doppler, handoff, LM, and earth-valid telemetry only"
+    },
+    "phase95_raw_path_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_availability_freeze_v1.json",
+      "sha256": "983761ee5ddeeab1ff9274d0a5aa062d3c5ed59aa55075f558a0af29e3d3f044",
+      "use": "sealed four-route raw role/path lineage; no current raw read"
+    },
+    "phase107_base_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_audit_v1.md",
+      "sha256": "79d1c79510138498c05d4096ed7c3f97b34b1ee16690f3fc7a7b57af3b0192ab",
+      "use": "sealed four-route raw-base member provenance and source-only correction contract"
+    },
+    "phase107_base_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_freeze_v1.json",
+      "sha256": "8c05c89dda9cb3356b4c9bdf1c0ec1f2f41145bb37a7b5aee7ff12978aba9d76",
+      "use": "sealed base member metadata, header-reference policy, and Phase101 admission boundary"
+    },
+    "phase112_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_structural_result_v1.json",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0",
+      "use": "A/LAX structural success; no H/U run in Phase112"
+    },
+    "phase112_source_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_fgo_source_parity_freeze_v1.json",
+      "sha256": "8917b194d46f92943a3fbde7681d961594488fcd3bed0e44ec08a3ba92ae16aa",
+      "use": "current Phase112 selector and source-parity boundary"
+    }
+  },
+  "source_pins": {
+    "official": [
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "evidence": "state initialization 34-48, graph 89-201"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "evidence": "GNSS-first C/D handoff 40-48, Pose3/velocity/bias/IMU graph 169-217,280-299"
+      }
+    ],
+    "native": [
+      {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "268bd030496bb677a42d3400e20ec37bc8e36589827fb28fbf57e3e398a1b1be",
+        "evidence": "GNSS-first configuration 7078-7132, handoff 7234-7357, validation 7592-7638"
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_backend.cpp",
+        "sha256": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa",
+        "evidence": "path predicates 43-58, C0D guard 114-151, state insertion 430-540, factors 672-704,850-1057,1302-1410, priors 1565-1587, exports 2200-2218"
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_internal.hpp",
+        "sha256": "cc6327e36800afa8217e5a834260adc81c0a74a5aefbfc956bb4679c8d86105f",
+        "evidence": "C0D equation/unit and backend admission predicates 1405-1549"
+      },
+      {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "e7607ce8f0fe27fd382a01b5b6f147b027b7bf51453e920eae458c86ddac0c17",
+        "evidence": "raw EpochSeed/D preservation 340-430 and Doppler factor eligibility 683-807"
+      },
+      {
+        "path": "src/algorithms/base_pseudorange_compensation.cpp",
+        "sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817",
+        "evidence": "same-key stream and finite in-domain correction only"
+      }
+    ]
+  },
+  "phase95_route_facts": {
+    "mtv_h": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "retained_epoch_count": 1247,
+      "d_initializer_epoch_count": 1247,
+      "d_initializer_finite_count": 1247,
+      "d_initializer_nonfinite_count": 0,
+      "eligible_c0d_pair_count": 1041,
+      "eligible_c0d_factor_count": 1041,
+      "retained_undifferenced_doppler_factor_count": 0,
+      "source_clock_c0d_problem_path": false,
+      "guard_rejected": true,
+      "guard_failed_predicates": [
+        "source_clock_c0d_problem_path_unavailable",
+        "gnss_first_problem.undifferenced_doppler_factors.empty()"
+      ],
+      "active_c0d_factor_count": 0,
+      "gnss_first_accepted_outer_iterations": 0,
+      "gnss_first_initial_cost": null,
+      "gnss_first_final_cost": null,
+      "terminal_branch": "source-c0d-backend-admission-guard",
+      "main_reached": false,
+      "main_earth_valid_position_count": 0,
+      "main_position_problem_epoch_count": 0
+    },
+    "mtv_u": {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "retained_epoch_count": 720,
+      "d_initializer_epoch_count": 720,
+      "d_initializer_finite_count": 720,
+      "d_initializer_nonfinite_count": 0,
+      "eligible_c0d_pair_count": 671,
+      "eligible_c0d_factor_count": 671,
+      "retained_undifferenced_doppler_factor_count": 4845,
+      "source_clock_c0d_problem_path": true,
+      "guard_rejected": false,
+      "active_c0d_factor_count": 671,
+      "gnss_first_accepted_outer_iterations": 1000,
+      "gnss_first_initial_cost": 23108268994.98668,
+      "gnss_first_final_cost": 82026870.12520209,
+      "gnss_first_strict_cost_decrease": true,
+      "gnss_first_optimized_d_full_finite": true,
+      "gnss_first_exact_key_alignment": true,
+      "main_accepted_outer_iterations": 0,
+      "main_initial_cost": 15619537525702.566,
+      "main_final_cost": 15619537525702.566,
+      "main_strict_cost_decrease": false,
+      "main_inner_lambda_attempts": 10,
+      "main_final_lambda": 100000.0,
+      "main_position_solution_size": 720,
+      "main_problem_epoch_count": 720,
+      "main_position_nonfinite_count": 0,
+      "main_position_out_of_earth_count": 156,
+      "main_earth_valid_position_count": 564,
+      "main_all_positions_earth_valid": false,
+      "main_velocity_size": 720,
+      "main_velocity_finite_count": 720,
+      "main_d_size": 720,
+      "main_d_finite_count": 720,
+      "main_exact_key_alignment": true,
+      "main_terminal_branch": "no_progress_unclassified"
+    }
+  },
+  "raw_base_provenance_sealed_metadata_only": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+      "bytes": 10708536,
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+      "bytes": 11854125,
+      "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+      "bytes": 719969,
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "observed_dt_s": 15.0,
+      "moving_mean_samples": 11
+    },
+    {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+      "bytes": 5950275,
+      "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151
+    }
+  ],
+  "conclusions": {
+    "priority_h_guard_only_candidate": {
+      "source_safe": false,
+      "freeze": false,
+      "reason": "With zero undifferenced Doppler rows, native use_gnss_velocity_states and use_native_source_clock_c0d_gnss_first are false. The actual staging graph therefore has no velocity/D state export, no active C0D factor family, and cannot satisfy exact Phase101 handoff; eligible C0D pair count 1041 is preflight-only."
+    },
+    "h_velocity_handling_candidate": {
+      "source_safe": "not established",
+      "freeze": false,
+      "reason": "Always creating velocity/D states and seeding them from a position gradient would change native graph/state initialization. It is not a guard-only admission and no sealed H factor/residual/rank evidence supports it."
+    },
+    "u_raw_base_earth_validity_candidate": {
+      "source_safe": "not established",
+      "freeze": false,
+      "reason": "Raw base correction changes finite pseudorange values before the shared problem; it does not add C0D/D/velocity factors or an Earth-validity constraint. Existing U telemetry remains 564/720 Earth-valid with zero accepted main steps."
+    }
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "algorithmic_candidate_count": 0,
+    "diagnostic_candidate_count": 1,
+    "id": "phase113-remaining-routes-structural-admission-incidence-diagnostic-v1",
+    "type": "opt-in-read-only-structural-diagnostic",
+    "status": "frozen-default-off",
+    "source_backed": true,
+    "routes": ["MTV-H", "MTV-U"],
+    "purpose": "Observe preflight-versus-active C0D/D/velocity incidence and post-handoff main validation for the two remaining routes without speculative admission or solver changes.",
+    "telemetry": [
+      "retained epoch and finite raw-D initializer counts",
+      "eligible C0D pair/factor count versus active C0D insertion count",
+      "undifferenced Doppler count and exact failed guard predicate",
+      "velocity/D Values, exports, finite coverage, and exact-key alignment",
+      "GNSS-first accepted iterations and strict cost decrease",
+      "main position/clock/velocity/C/D sizes, finite/Earth-valid counts, accepted iterations, cost, lambda, and terminal branch",
+      "if separately authorized later, raw-base exact stream/correction/miss and exactly-once counts"
+    ],
+    "unchanged_contract": {
+      "graph_and_factors": true,
+      "values_and_initialization": true,
+      "c7_d_ccdd_topology": true,
+      "equations_and_units": true,
+      "sigma_and_filter": true,
+      "lm_schedule_ordering_and_damping": true,
+      "legacy_selector_off": true,
+      "no_guard_removal": true,
+      "no_velocity_fallback_or_synthesis": true,
+      "no_fallback": true,
+      "no_solution_coordinate_publication": true
+    }
+  },
+  "execution_boundary": {
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_authorized": false,
+    "base_rinex_read_authorized": false,
+    "truth_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_or_token_authorized": false,
+    "runs_per_route": 0,
+    "rerun": false,
+    "fallback": false
+  },
+  "read_accounting_phase113": {
+    "official_native_source_reads": "nonzero_source_text_only",
+    "sealed_json_md_and_summary_metadata_reads": "nonzero_aggregate_lineage_only",
+    "raw_phone_gnss_imu_navigation_payload_reads": 0,
+    "raw_base_rinex_payload_header_stat_hash_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_payload_reads": 0,
+    "solution_coordinate_field_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_or_accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "raw_reruns": 0,
+    "fallbacks": 0,
+    "solution_publication": 0
+  }
+}

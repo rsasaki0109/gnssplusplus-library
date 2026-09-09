@@ -1,0 +1,32 @@
+{
+  "schema_version": "smartphone-r5-phase203-phase202-h-accuracy-authorization.v1",
+  "phase": 203,
+  "execution_label": "Luna Max",
+  "allow_truth_read": true,
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase203_phase202_h_accuracy_manifest_v1.json",
+    "sha256": "6e7a7a9d12b10fbaa7452ff4e8bcc2a47aa42e9dc4146ff18fe6c8c0c8e2b98d"
+  },
+  "manifest_sha256": "6e7a7a9d12b10fbaa7452ff4e8bcc2a47aa42e9dc4146ff18fe6c8c0c8e2b98d",
+  "candidate": {
+    "path": "output/smartphone-r5/phase202-h-native-phase201-imu-schedule-v1/mtv-h/ground_truth.csv",
+    "sha256": "1330b5a758d7a4022279cffcc70c02e8fd286658e79e07f4ca36ed4585083a9f",
+    "bytes": 251174,
+    "rows": 3139
+  },
+  "candidate_sha256": "1330b5a758d7a4022279cffcc70c02e8fd286658e79e07f4ca36ed4585083a9f",
+  "truth": {
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "bytes": 305432,
+    "rows": 3139
+  },
+  "truth_sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+  "scope": "Exactly one aggregate-only H development/train score for the immutable Phase202 candidate; this is not held-out or leaderboard evidence.",
+  "prohibitions": [
+    "No native solver or raw GNSS/IMU/nav reads.",
+    "No MAT, persisted trajectory, precomputed coordinate, base, or Kaggle reads.",
+    "Do not emit coordinate rows in the result.",
+    "No rerun, interpolation, hold, fill, or Pixel5 offset reapplication."
+  ]
+}

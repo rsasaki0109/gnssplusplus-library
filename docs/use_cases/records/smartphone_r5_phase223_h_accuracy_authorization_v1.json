@@ -1,0 +1,7 @@
+{
+  "phase": 223,
+  "allow_truth_read": true,
+  "manifest_sha256": "4a68a1fa5dc7e1edce1ebcbdd25f3f6ba548d690085a03bf972c649fa548bb6f",
+  "candidate_sha256": "92ce3da63e2ddbb1d1aa9313efc11201b96d1c50b4211ba78f08e47914a134fc",
+  "truth_sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249"
+}

@@ -1,0 +1,14 @@
+{
+  "phase": 490,
+  "rows": 3139,
+  "exact_keys": true,
+  "separation_m": {
+    "mean": 0.00843192148043339,
+    "p50": 0.005408557596357283,
+    "p95": 0.025001738666844447,
+    "maximum": 0.031033846089703197
+  },
+  "truth_reads": 0,
+  "accuracy_evaluations": 0,
+  "inference_input": false
+}

@@ -90,6 +90,35 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
 | Smartphone GSDC 2023 | Galileo E1/Hatch/WLS and native FGO lanes | Native best observed server score 3.952 public / 4.276 private; 0.782-class native target not yet achieved |
 
+### Latest raw-only smartphone development comparison
+
+**Closeout (2026-09-09):** the user accepts the raw-only native FGO H-route
+baseline at **1.076918 m (approximately 1.077 m)** for this work. This is
+not a sub-metre, held-out, or Kaggle leaderboard result. The 0.782-class
+aspiration is not achieved or required for this closeout. The accepted
+recipe does not enable the experimental ADR-endpoint weighting option.
+See the [closeout record](docs/use_cases/records/smartphone_r5_phase580_closeout_v1.md).
+
+These results use native C++ FGO with raw GNSS/IMU/broadcast navigation
+(and raw base RINEX where enabled), without MAT payloads or saved positioning
+inputs. They are **reused H-route development scores**, not Kaggle server
+scores or independent validation. Metric: `(P50 + P95) / 2`, metres, lower
+is better; all five runs have 3,139 exactly matched evaluation rows.
+
+| H-route configuration | Score (m) | Decision / evidence |
+|---|---:|---|
+| Operational base-off baseline | 1.0769 | Retained; [Phase235](docs/use_cases/records/smartphone_r5_phase235_h_accuracy_result_v1.json) |
+| Paired dense base, full correction values | 2.2517 | Rejected; [Phase327](docs/use_cases/records/smartphone_r5_phase327_dense_accuracy_result_v1.json) |
+| Same paired support, zero correction values | 1.1371 | Diagnostic control; [Phase330](docs/use_cases/records/smartphone_r5_phase330_mask_only_accuracy_result_v1.json) |
+| Same support, GPS correction values only | 1.7793 | Rejected; [Phase351](docs/use_cases/records/smartphone_r5_phase351_gps_values_only_accuracy_result_v1.json) |
+| Same support, GPS values minus raw-built stream medians | 1.1631 | Rejected; [Phase354](docs/use_cases/records/smartphone_r5_phase354_gps_centered_accuracy_result_v1.json) |
+
+Centering reduces the GPS-correction regression but does not beat either
+the zero-values control or the operational baseline. These diagnostic
+switches remain default-off; they do not establish accurate base coordinates
+or a deployable improvement. The native 0.782-class and leaderboard goals
+remain unachieved. No submission was made for these experiments.
+
 The Phase 14 native E1 carrier-code-leveling experiment is a raw-only,
 opt-in structural No-Go: the only unused identity available for a smoke lacks
 the GNSS elapsed-time anchor required by the native IMU contract, so no truth

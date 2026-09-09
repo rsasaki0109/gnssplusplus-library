@@ -1,0 +1,125 @@
+{
+  "schema_version": "smartphone-r5-phase139-wrapper-schema-freeze.v1",
+  "phase": 139,
+  "execution_label": "Luna Max",
+  "status": "sealed-wrapper-only-freeze",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase139_wrapper_schema_audit_v1.md",
+    "commit": "5b1d03e",
+    "sha256": "a1f6db77375194f54efd2b1564544601868e687943e776c9ca900494b05a501f"
+  },
+  "historical_phase138": {
+    "authorization_commit": "2ba739897b511deb129b38f84082341e12a9146b",
+    "failed_result_commit": "356c93bb9eb5c741ec1e15cc19de5c58428d0fcf",
+    "historical_artifacts_immutable": true
+  },
+  "candidate": {
+    "count": 1,
+    "id": "phase139-wrapper-flat-route-metadata-schema-v1",
+    "scope": "authorized-wrapper-parser-and-contract-tests-only",
+    "default_off": true,
+    "algorithm_changes_allowed": false,
+    "recipe_changes_allowed": false,
+    "solver_changes_allowed": false,
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "partial_schema_acceptance": false,
+    "nested_flat_ambiguity_allowed": false
+  },
+  "input_schema": {
+    "authorization_schema_version": "smartphone-r5-phase138-affine-tdcp-structural-raw-authorization.v1",
+    "route_count": 2,
+    "route_order": [
+      "MTV-A",
+      "LAX-T"
+    ],
+    "route_required_keys": [
+      "target",
+      "dataset_id",
+      "runs",
+      "raw_inputs",
+      "base_input",
+      "output_directory"
+    ],
+    "raw_input_keys_exact": [
+      "brdc.nav",
+      "device_gnss.csv",
+      "device_imu.csv"
+    ],
+    "raw_metadata_keys_exact": [
+      "bytes",
+      "copy_or_transform",
+      "path",
+      "read_before_authorization",
+      "sha256",
+      "source"
+    ],
+    "base_metadata_keys_exact": [
+      "bytes",
+      "copy_or_transform",
+      "hash_read_before_authorization",
+      "interval_s",
+      "moving_mean_samples",
+      "path",
+      "read_before_authorization",
+      "sha256",
+      "source"
+    ],
+    "raw_source": "sealed raw-only input lineage",
+    "base_source": "raw base RINEX; station coordinate from header only",
+    "path_policy": {
+      "repository_relative": true,
+      "absolute_paths_rejected": true,
+      "dot_and_dotdot_components_rejected": true,
+      "lexical_escape_rejected": true,
+      "nul_rejected": true,
+      "expected_basename_required": true,
+      "forbidden_input_categories_rejected": true
+    },
+    "scalar_policy": {
+      "bytes": "positive integer, bool rejected",
+      "sha256": "lowercase 64-hex string",
+      "interval_s": "finite positive number, bool rejected",
+      "moving_mean_samples": "positive integer, bool rejected",
+      "read_before_authorization": "boolean exactly false",
+      "hash_read_before_authorization": "boolean exactly false",
+      "copy_or_transform": "boolean exactly false"
+    }
+  },
+  "preserved_phase138_boundary": {
+    "selectors_and_command_snapshot": "unchanged",
+    "phase135_phase138_algorithm": "unchanged",
+    "raw_hash_and_size_check": "unchanged after schema preflight",
+    "one_solver_per_route": "unchanged after authorization",
+    "route_order": "MTV-A then LAX-T",
+    "truth_mat_pdc_precomputed_accuracy_kaggle": "forbidden"
+  },
+  "qualification": {
+    "synthetic_cases": [
+      "flat-valid",
+      "nested-invalid",
+      "missing-key",
+      "wrong-type",
+      "absolute-or-traversal-path",
+      "unknown-or-duplicate-key",
+      "selector-isolation"
+    ],
+    "payload_reads": 0,
+    "solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_access": 0
+  },
+  "authorization_boundary": {
+    "new_independent_raw_authorization_required": true,
+    "old_phase138_authorization_reuse_forbidden": true,
+    "new_wrapper_and_manifest_hashes_must_be_pinned": true,
+    "pre_raw_zero_read_seal_required": true,
+    "raw_materialization_after_authorization_only": true,
+    "raw_result_commit_separate": true,
+    "no_rerun_fallback_repair_sweep": true
+  }
+}

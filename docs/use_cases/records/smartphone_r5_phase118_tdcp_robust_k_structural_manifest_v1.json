@@ -1,0 +1,393 @@
+{
+  "schema_version": "smartphone-r5-phase118-tdcp-robust-k-structural-manifest.v1",
+  "phase": 118,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-phase118-raw-execution",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_contract_freeze_v1.json",
+    "sha256": "267a2f51dea06f7d29d5b27be1f7ffd84febac1c72a9fbe2676c5f5a2649f81b",
+    "commit": "25f3bada02c4073175054b5d668de02020761208",
+    "raw_execution_authorized_before_manifest": false
+  },
+  "contract_audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_contract_audit_v1.md",
+    "sha256": "601b3c2dbe3e42e0125d20f70e86a6c9e295e69b46f4c64bff74eb4638bf43bf",
+    "commit": "c7da3d9ab80b13dbc5b1715b27c1b03d9509b974"
+  },
+  "implementation": {
+    "commit": "7f339ccc8f0fb58e3dbcb7f3fc24ba2b04acbf40",
+    "candidate_id": "phase118-official-tdcp-huber-k-mapping-v1",
+    "legacy_default_unchanged": true,
+    "graph_factors_values_equations_units_unchanged": true,
+    "tdcp_sigma_m_fixed": 0.03,
+    "phase117_dynamic_sigma_enabled": false,
+    "solver_branch": "MULTIFRONTAL_QR",
+    "no_fallback": true,
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "fe6c0b501921a8628fb813abe380b84c89824409e731bf7cfd01920d900dea34"
+    },
+    "source_sha256": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": "43e9fbbe8a0043f648b52b02e63be36b8960e412a989d21cfd345c8b8a9312d5",
+      "include/libgnss++/algorithms/fgo.hpp": "efa415e3e09a43f354cba1251e0d92d2fd9c21db70a945bfccf08219773bd90c",
+      "include/libgnss++/algorithms/fgo_config.hpp": "38ae28a5bdb398b0a764f9f09f8456107ddc0168654b1d1791879377cca24748",
+      "src/algorithms/fgo.cpp": "32f83b213f2e30b0d4a8200a8b4a0793eeb86721013693194ba48381db0a28c9",
+      "src/algorithms/fgo_gtsam_backend.cpp": "43b80e75638f1b2d70907f1a9b36f6ee486c070c765ba733d852a022f2a58d2b",
+      "tests/test_fgo.cpp": "da1f92b2ae5565da0ad6382caa780a1195e165c100ba221a2faac7a1a65380ac",
+      "tests/test_smartphone_phase118_tdcp_robust_k.py": "1920b5a7cfac8d71349e43750ae638b676cf85fe82c3b07a8eae2e9fe22fd9c3",
+      "tests/CMakeLists.txt": "e8fd5a9787b1e872ac1fbe42561a89aaac666af0b281237790f02aa814e14f4e"
+    }
+  },
+  "sealed_baselines": {
+    "phase112_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_manifest_v1.json",
+      "sha256": "d8be91f42f07196e07b293558cc6b83dd261226af577c1b26b167eead75902e4"
+    },
+    "phase112_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_structural_result_v1.json",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0"
+    },
+    "phase117_tdcp_count_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_structural_result_v1.json",
+      "sha256": "2517dcc805146dc34e790c78a392caf000c79eaba837fe099b6d522c147e9cf2"
+    }
+  },
+  "artifacts": {
+    "validator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k.py",
+      "sha256": "6a7ff88fbee42baecd7bbccabdf76f7d31246ca075ba70cbb2ea3c35707d2201"
+    },
+    "runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_structural_execute.py",
+      "sha256": "7c67289274eafd4b8a38bfe18555a82448392b1255ce9febb530b3e1b2d6df89"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase118_tdcp_robust_k_structural_execution.py",
+      "sha256": "6d6a08a8efa1d33b8e7d49cb68794f44743a1fb4a164abd904011ab2372eb936"
+    }
+  },
+  "candidate": {
+    "id": "phase118-official-tdcp-huber-k-mapping-v1",
+    "candidate_count": 1,
+    "selector": "--native-phase118-official-tdcp-huber-k",
+    "opt_in": true,
+    "default_off": true,
+    "phase117_dynamic_sigma": false,
+    "fixed_tdcp_sigma_m": 0.03,
+    "official_highway_k": 0.5,
+    "official_street_k": 0.2,
+    "official_mix_k": 0.2,
+    "unknown_type": "fail-closed",
+    "factor_count_invariance": true,
+    "equation_units_key_order_invariance": true,
+    "reject_predicate_invariance": true,
+    "solution_withheld": true,
+    "truth_evaluation": false,
+    "accuracy_scoring": false,
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-upstream-position-offset",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-pseudorange-preserve-additional-frequency-bands",
+      "--native-phase118-official-tdcp-huber-k"
+    ],
+    "required_recipe_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-meter-state-parity",
+      "--native-source-clock-c0d-active-solve-diagnostic"
+    ],
+    "forbidden_selectors": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase116-carrier-tdcp-incidence-diagnostic",
+      "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer",
+      "--native-direct-wls-ephemeral-c7d-main-seed",
+      "--native-gnss-first-velocity-only-handoff",
+      "--native-direct-doppler-wls-handoff",
+      "--native-pdc-state-bridge",
+      "--native-upstream-quality",
+      "--native-source-clock-c0d-phase94-stage-diagnostics",
+      "--native-source-clock-c0d-phase96-main-diagnostics",
+      "--native-source-clock-c0d-phase97-singular-system-diagnostics",
+      "--native-source-clock-c0d-phase98-solver-rank-diagnostic",
+      "--native-phase104-stage-main-attribution",
+      "--native-quality-anchor"
+    ]
+  },
+  "baseline_tdcp_counts": {
+    "source_record": "sealed Phase117 structural result; counts are independent of its dynamic sigma candidate",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "candidate_pairs": 33025,
+      "factors_built": 31269,
+      "factors_inserted": 31269,
+      "finite_residuals": 31269,
+      "rejected_gap": 0,
+      "rejected_code_phase_jump": 1756,
+      "rejected_clock_discontinuity": 0,
+      "rejected_invalid_measurement": 0,
+      "rejected_invalid_weight": 0,
+      "rejected_loss_of_lock": 0,
+      "rejected_missing_previous": 4282
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "candidate_pairs": 14961,
+      "factors_built": 14012,
+      "factors_inserted": 14012,
+      "finite_residuals": 14012,
+      "rejected_gap": 0,
+      "rejected_code_phase_jump": 949,
+      "rejected_clock_discontinuity": 0,
+      "rejected_invalid_measurement": 0,
+      "rejected_invalid_weight": 0,
+      "rejected_loss_of_lock": 0,
+      "rejected_missing_previous": 2373
+    }
+  },
+  "routes": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "official_setting_type": "Highway",
+      "expected_tdcp_huber_k": 0.5,
+      "domain_rows": 2158,
+      "expected_problem_epochs": 2159,
+      "expected_output_epochs": 2159,
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "source_manifest": "sealed Phase112 manifest route raw_inputs.device_gnss.csv",
+          "placeholder": "__PHASE118_RAW_DEVICE_GNSS__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "source_manifest": "sealed Phase112 manifest route raw_inputs.device_imu.csv",
+          "placeholder": "__PHASE118_RAW_DEVICE_IMU__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "source_manifest": "sealed Phase112 manifest route raw_inputs.brdc.nav",
+          "placeholder": "__PHASE118_RAW_BROADCAST_NAV__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "source_manifest": "sealed Phase112 manifest route base_input",
+        "raw_rinex_only": true,
+        "placeholder": "__PHASE118_RAW_BASE_RINEX__",
+        "sha256_placeholder": "__PHASE118_RAW_BASE_SHA256__",
+        "coordinate_source": "raw RINEX header metadata consumed by native process only",
+        "payload_read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "--android-gnss",
+        "__PHASE118_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE118_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE118_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-pseudorange-preserve-additional-frequency-bands",
+        "--native-upstream-position-offset",
+        "--native-phase118-official-tdcp-huber-k",
+        "--native-base-rinex",
+        "__PHASE118_RAW_BASE_RINEX__",
+        "--native-base-rinex-sha256",
+        "__PHASE118_RAW_BASE_SHA256__",
+        "--out",
+        "output/smartphone-r5/phase118-tdcp-robust-k-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase118-tdcp-robust-k-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json"
+      ]
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "official_setting_type": "Highway",
+      "expected_tdcp_huber_k": 0.5,
+      "domain_rows": 1465,
+      "expected_problem_epochs": 1466,
+      "expected_output_epochs": 1466,
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "source_manifest": "sealed Phase112 manifest route raw_inputs.device_gnss.csv",
+          "placeholder": "__PHASE118_RAW_DEVICE_GNSS__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "source_manifest": "sealed Phase112 manifest route raw_inputs.device_imu.csv",
+          "placeholder": "__PHASE118_RAW_DEVICE_IMU__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "source_manifest": "sealed Phase112 manifest route raw_inputs.brdc.nav",
+          "placeholder": "__PHASE118_RAW_BROADCAST_NAV__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "source_manifest": "sealed Phase112 manifest route base_input",
+        "raw_rinex_only": true,
+        "placeholder": "__PHASE118_RAW_BASE_RINEX__",
+        "sha256_placeholder": "__PHASE118_RAW_BASE_SHA256__",
+        "coordinate_source": "raw RINEX header metadata consumed by native process only",
+        "payload_read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "--android-gnss",
+        "__PHASE118_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE118_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE118_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-pseudorange-preserve-additional-frequency-bands",
+        "--native-upstream-position-offset",
+        "--native-phase118-official-tdcp-huber-k",
+        "--native-base-rinex",
+        "__PHASE118_RAW_BASE_RINEX__",
+        "--native-base-rinex-sha256",
+        "__PHASE118_RAW_BASE_SHA256__",
+        "--out",
+        "output/smartphone-r5/phase118-tdcp-robust-k-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase118-tdcp-robust-k-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json"
+      ]
+    }
+  ],
+  "raw_input_contract": {
+    "input_names_exact": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "phone_gnss_only": true,
+    "phone_imu_only": true,
+    "broadcast_navigation_only": true,
+    "sealed_raw_base_rinex_only": true,
+    "raw_paths_materialized_exactly_after_authorization": true,
+    "raw_content_copied_or_transformed": false,
+    "truth_mat_phone_coordinate_precomputed_coordinate_pdc_accuracy_kaggle": false
+  },
+  "structural_gates": {
+    "default_off_legacy_isolation": true,
+    "selector_active_exactly_once": true,
+    "route_type_and_huber_k_exact": true,
+    "fixed_tdcp_sigma_0_03_m": true,
+    "phase117_dynamic_sigma_forbidden": true,
+    "tdcp_factor_equation_units_key_order_unchanged": true,
+    "tdcp_factor_and_reject_counts_unchanged": true,
+    "ordinary_tdcp_only_no_graph_family_change": true,
+    "gnss_first_attempted_and_accepted_progress": true,
+    "gnss_first_finite_strict_cost_decrease": true,
+    "gnss_first_full_finite_c7_d_exact_handoff": true,
+    "main_qr_selected_and_accepted_progress": true,
+    "main_finite_strict_cost_decrease": true,
+    "position_clock_finite_expected_coverage": true,
+    "earth_valid_output_coverage": true,
+    "base_correction_exactly_once": true,
+    "pixel5_offset_exactly_once_final_boundary": true,
+    "no_solver_fallback": true,
+    "no_truth_mat_precomputed_coordinate_pdc_accuracy_kaggle": true,
+    "solution_withheld": true
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "native_solver_invocations_planned": 2,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_reads_planned": 0,
+    "mat_reads_or_generated_planned": 0,
+    "phone_coordinate_reads_planned": 0,
+    "precomputed_coordinate_reads_planned": 0,
+    "pdc_reads_planned": 0,
+    "accuracy_calculations_planned": 0,
+    "solution_rows_authorized": false,
+    "solution_coordinate_interpretation": false
+  },
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "authorization_boundary": {
+    "independent_authorization_required": true,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "structural_result_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false,
+    "failure_policy": "fail closed; seal unchanged telemetry and do not rerun, fallback, inspect truth, or publish coordinates"
+  }
+}

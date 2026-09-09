@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/pseudorange_remasking.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
@@ -18,6 +19,95 @@
 #include <vector>
 
 using namespace libgnss;
+
+TEST(FGORemaskingSelectionTest, RecoversAndRemovesRowsWithoutMutatingInput) {
+    FGOProcessor::FGOProblem p;
+    p.epochs.resize(1);
+    auto& epoch=p.epochs.front();
+    epoch.time=GNSSTime(2300,100.0);
+    epoch.position_ecef=Vector3d(6378137,0,0);
+    epoch.receiver_clock_bias_m=0.0;
+    epoch.receiver_clock_bias_is_meters=true;
+    const std::array<Vector3d,4> directions{
+        Vector3d(1,0,0),Vector3d(0,1,0),Vector3d(0,-1,0),Vector3d(-1,0,0)};
+    for (std::size_t i=0;i<4;++i) {
+        FGOProcessor::PseudorangeFactor row;
+        row.satellite=SatelliteId(GNSSSystem::GPS,static_cast<uint8_t>(i+1));
+        row.satellite_position_ecef=epoch.position_ecef+20000000.0*directions[i];
+        row.corrected_pseudorange_m=20000000.0+(i==3 ? 25.0 : 0.0);
+        p.native_pseudorange_remasking_pool.push_back(row);
+        if (i!=0) p.pseudorange_factors.push_back(row);
+    }
+    const auto result=pseudorange_remasking::select(p);
+    EXPECT_EQ(result.pool_indices,(std::vector<std::size_t>{0,1,2}));
+    EXPECT_EQ(result.recovered,1u);
+    EXPECT_EQ(result.removed,1u);
+    EXPECT_EQ(result.unchanged,2u);
+    EXPECT_EQ(p.pseudorange_factors.front().satellite,SatelliteId(GNSSSystem::GPS,2));
+    EXPECT_DOUBLE_EQ(p.native_pseudorange_remasking_pool.back().corrected_pseudorange_m,20000025.0);
+    p.native_pseudorange_remasking_pool.push_back(p.native_pseudorange_remasking_pool.front());
+    EXPECT_THROW(pseudorange_remasking::select(p),std::invalid_argument);
+}
+
+TEST(FGORemaskingSelectionTest, SeparateBandsOddEvenMediansAndInvalidInputs) {
+    FGOProcessor::FGOProblem p;
+    p.epochs.resize(1);
+    p.epochs[0].time=GNSSTime(2300,100);
+    p.epochs[0].position_ecef=Vector3d(6378137,0,0);
+    p.epochs[0].receiver_clock_bias_is_meters=true;
+    p.epochs[0].receiver_clock_bias_m=0;
+    // L1 even median=20: both boundary rows accepted. L5 odd median=100:
+    // only first two rows accepted. Pool ordering remains deterministic.
+    const std::array<double,5> residuals{0,40,100,100,116};
+    for(std::size_t i=0;i<residuals.size();++i) {
+        FGOProcessor::PseudorangeFactor row;
+        row.satellite=SatelliteId(GNSSSystem::GPS,static_cast<uint8_t>(i+1));
+        row.signal=i<2 ? SignalType::GPS_L1CA : SignalType::GPS_L5;
+        row.satellite_position_ecef=p.epochs[0].position_ecef+Vector3d(20000000,0,0);
+        row.corrected_pseudorange_m=20000000+residuals[i];
+        p.native_pseudorange_remasking_pool.push_back(row);
+    }
+    EXPECT_EQ(pseudorange_remasking::select(p).pool_indices,
+              (std::vector<std::size_t>{0,1,2,3}));
+    for (int field=0;field<3;++field) {
+        auto mutated=p;
+        mutated.pseudorange_factors.push_back(p.native_pseudorange_remasking_pool[0]);
+        auto& row=mutated.pseudorange_factors.front();
+        if (field==0) row.corrected_pseudorange_m+=1;
+        if (field==1) row.sigma_m+=1;
+        if (field==2) row.satellite_position_ecef.x()+=1;
+        EXPECT_THROW(pseudorange_remasking::select(mutated),std::invalid_argument);
+    }
+    auto bad=p;
+    bad.epochs[0].receiver_clock_bias_is_meters=false;
+    EXPECT_THROW(pseudorange_remasking::select(bad),std::invalid_argument);
+    bad=p; bad.epochs[0].time.tow=604800;
+    EXPECT_THROW(pseudorange_remasking::select(bad),std::invalid_argument);
+    bad=p; bad.native_pseudorange_remasking_pool[0].epoch_index=1;
+    EXPECT_THROW(pseudorange_remasking::select(bad),std::invalid_argument);
+    bad=p; bad.native_pseudorange_remasking_pool[0].sigma_m=0;
+    EXPECT_THROW(pseudorange_remasking::select(bad),std::invalid_argument);
+    bad=p; bad.pseudorange_factors.push_back(p.native_pseudorange_remasking_pool[0]);
+    bad.pseudorange_factors[0].satellite=SatelliteId(GNSSSystem::GPS,30);
+    EXPECT_THROW(pseudorange_remasking::select(bad),std::invalid_argument);
+    bad=p; bad.epochs.push_back(bad.epochs[0]);
+    EXPECT_THROW(pseudorange_remasking::select(bad),std::invalid_argument);
+}
+
+TEST(FGORemaskingPoolTest, DefaultOffAndInvalidConfigurationRejected) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.retain_native_pseudorange_remasking_pool);
+    FGOProcessor::FGOProblem problem;
+    EXPECT_TRUE(problem.native_pseudorange_remasking_pool.empty());
+    config.retain_native_pseudorange_remasking_pool = true;
+    config.use_upstream_observable_quality = false;
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem({}, NavigationData{}),
+                 std::invalid_argument);
+    config.use_upstream_observable_quality = true;
+    config.use_pseudorange_factors = false;
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem({}, NavigationData{}),
+                 std::invalid_argument);
+}
 
 TEST(FGOQualityAnchorTest, RankingIsDeterministicAndSatelliteFirst) {
     using fgo_quality_anchor::Candidate;
@@ -78,6 +168,178 @@ TEST(FGOQualityAnchorTest, ConfigIsOptInOnly) {
     FGOProcessor::FGOConfig config;
     EXPECT_FALSE(config.use_quality_anchor_initialization);
     EXPECT_FALSE(config.use_native_android_sv_time_uncertainty_sigma_floor);
+    EXPECT_FALSE(config.use_native_phase143_official_main_lm_termination_budget);
+}
+
+TEST(FGOPhase143Test, SelectorRequiresGtsamAndFrozenConfigurationBoundary) {
+    FGOProcessor::FGOConfig config;
+    config.use_native_phase143_official_main_lm_termination_budget = true;
+    config.backend = FGOBackend::Eigen;
+    EXPECT_THROW(FGOProcessor(config).optimizeProblem(
+                     FGOProcessor::FGOProblem{}),
+                 std::invalid_argument);
+
+    config.backend = FGOBackend::GTSAM;
+    config.max_iterations = 8;
+    // The boundary is checked before any graph work, including in a build
+    // where the requested GTSAM backend is unavailable.
+    EXPECT_THROW(FGOProcessor(config).optimizeProblem(
+                     FGOProcessor::FGOProblem{}),
+                 std::invalid_argument);
+
+    config.max_iterations = 12;
+    EXPECT_THROW(FGOProcessor(config).optimizeProblem(
+                     FGOProcessor::FGOProblem{}),
+                 std::invalid_argument);
+}
+
+TEST(FGOPhase167Test, DedicatedNoDopplerBudgetIsOptInAndFailClosed) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(
+        config.use_native_phase167_raw_p_no_doppler_lm_termination_budget);
+
+    config.use_native_phase167_raw_p_no_doppler_lm_termination_budget = true;
+    config.backend = FGOBackend::Eigen;
+    EXPECT_THROW(FGOProcessor(config).optimizeProblem(
+                     FGOProcessor::FGOProblem{}),
+                 std::invalid_argument);
+
+    config.backend = FGOBackend::GTSAM;
+    config.use_native_raw_p_no_doppler_graph = true;
+    config.use_pose3_state = false;
+    config.use_imu = false;
+    config.use_velocity_states = true;
+    config.max_iterations = 12;
+    EXPECT_THROW(FGOProcessor(config).optimizeProblem(
+                     FGOProcessor::FGOProblem{}),
+                 std::invalid_argument);
+
+    // The dedicated selector's contract is explicit: the caller must carry
+    // the source-backed 1000-iteration configuration into the graph.
+    config.max_iterations = 1000;
+    EXPECT_EQ(config.max_iterations, 1000);
+}
+
+TEST(FGOTdcpRobustKTest, OfficialTypeMappingIsOptInAndFailClosed) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_official_tdcp_huber_k);
+    EXPECT_TRUE(config.official_tdcp_setting_type.empty());
+
+    double threshold = 0.0;
+    EXPECT_TRUE(fgo::resolveOfficialTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, config.tdcp_huber_threshold_sigma);
+
+    config.use_official_tdcp_huber_k = true;
+    config.official_tdcp_setting_type = "Street";
+    EXPECT_TRUE(fgo::resolveOfficialTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, 0.2);
+    config.official_tdcp_setting_type = "Mix";
+    EXPECT_TRUE(fgo::resolveOfficialTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, 0.2);
+    config.official_tdcp_setting_type = "Highway";
+    EXPECT_TRUE(fgo::resolveOfficialTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, 0.5);
+
+    config.official_tdcp_setting_type.clear();
+    EXPECT_FALSE(fgo::resolveOfficialTdcpHuberThresholdSigma(config, threshold));
+    config.official_tdcp_setting_type = "unrecognised";
+    EXPECT_FALSE(fgo::resolveOfficialTdcpHuberThresholdSigma(config, threshold));
+}
+
+TEST(FGOTdcpRobustKTest, Phase184SourceMappingIsSeparateFromPhase118) {
+    FGOProcessor::FGOConfig config;
+    double threshold = 0.0;
+    EXPECT_TRUE(fgo::resolveOrdinaryTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, 4.0);
+
+    config.use_native_phase184_source_tdcp_huber_k = true;
+    config.native_phase184_tdcp_setting_type = "Street";
+    EXPECT_TRUE(fgo::resolveOrdinaryTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, 0.2);
+    EXPECT_FALSE(config.use_official_tdcp_huber_k);
+
+    config.native_phase184_tdcp_setting_type = "Highway";
+    EXPECT_TRUE(fgo::resolveOrdinaryTdcpHuberThresholdSigma(config, threshold));
+    EXPECT_DOUBLE_EQ(threshold, 0.5);
+
+    config.native_phase184_tdcp_setting_type = "unknown";
+    EXPECT_FALSE(fgo::resolveOrdinaryTdcpHuberThresholdSigma(config, threshold));
+
+    config.native_phase184_tdcp_setting_type = "Street";
+    config.use_official_tdcp_huber_k = true;
+    config.official_tdcp_setting_type = "Street";
+    EXPECT_FALSE(fgo::resolveOrdinaryTdcpHuberThresholdSigma(config, threshold));
+}
+
+TEST(FGOTdcpReslNormalizationTest, SelectorIsOptInAndExcludesAtmosphereOnlyWhenOn) {
+    FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_official_tdcp_resl_atmosphere_cancellation);
+
+    constexpr double raw_carrier_m = 123.4;
+    constexpr double satellite_clock_m = -2.5;
+    constexpr double ionosphere_m = 0.75;
+    constexpr double troposphere_m = 2.25;
+
+    const double legacy = tdcp_contract::ordinaryTdcpCarrierMeters(
+        raw_carrier_m, satellite_clock_m, ionosphere_m, troposphere_m,
+        config.use_official_tdcp_resl_atmosphere_cancellation);
+    EXPECT_DOUBLE_EQ(legacy, raw_carrier_m + satellite_clock_m -
+                               troposphere_m + ionosphere_m);
+
+    config.use_official_tdcp_resl_atmosphere_cancellation = true;
+    const double source_parity = tdcp_contract::ordinaryTdcpCarrierMeters(
+        raw_carrier_m, satellite_clock_m, ionosphere_m, troposphere_m,
+        config.use_official_tdcp_resl_atmosphere_cancellation);
+    EXPECT_DOUBLE_EQ(source_parity, raw_carrier_m + satellite_clock_m);
+    EXPECT_NE(source_parity, legacy);
+}
+
+TEST(FGOTdcpReslNormalizationTest, SourceParityIgnoresAtmosphereButRejectsBadCoreTerms) {
+    const double source_parity = tdcp_contract::ordinaryTdcpCarrierMeters(
+        10.0, 2.0, std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(), true);
+    EXPECT_DOUBLE_EQ(source_parity, 12.0);
+
+    const double bad_carrier = tdcp_contract::ordinaryTdcpCarrierMeters(
+        std::numeric_limits<double>::quiet_NaN(), 2.0, 0.0, 0.0, true);
+    EXPECT_TRUE(std::isnan(bad_carrier));
+    const double bad_clock = tdcp_contract::ordinaryTdcpCarrierMeters(
+        10.0, std::numeric_limits<double>::infinity(), 0.0, 0.0, true);
+    EXPECT_TRUE(std::isnan(bad_clock));
+    const double overflow = tdcp_contract::ordinaryTdcpCarrierMeters(
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::max(), 0.0, 0.0, true);
+    EXPECT_TRUE(std::isnan(overflow));
+}
+
+TEST(FGOTdcpReslNormalizationTest, TemporalAtmosphereDifferenceHasSourceResLSign) {
+    // Binary-exact synthetic terms isolate the measurement convention,
+    // independently of positions, truth, robust loss and noise weighting.
+    const auto delta = [](bool source, double ion2, double trop2) {
+        return tdcp_contract::ordinaryTdcpCarrierMeters(
+                   104.0, 2.5, ion2, trop2, source) -
+               tdcp_contract::ordinaryTdcpCarrierMeters(
+                   100.0, 2.0, 1.0, 3.0, source);
+    };
+    const double source = delta(true, 1.75, 3.25);
+    const double legacy = delta(false, 1.75, 3.25);
+    EXPECT_DOUBLE_EQ(source, 4.5);  // delta(raw carrier + satellite clock)
+    EXPECT_DOUBLE_EQ(legacy, 5.0);
+    EXPECT_DOUBLE_EQ(source - legacy, (3.25 - 3.0) - (1.75 - 1.0));
+    EXPECT_DOUBLE_EQ(delta(true, 20.0, 50.0), source);
+    EXPECT_DOUBLE_EQ(delta(false, 1.0, 3.0), source);
+    // For fixed geometry/receiver clocks, residual = prediction - observation.
+    constexpr double prediction = 6.0;
+    EXPECT_DOUBLE_EQ((prediction - source) - (prediction - legacy), 0.5);
+}
+
+TEST(FGOTdcpReslNormalizationTest, DynamicSigmaCompositionFailsClosedAtOptimizerBoundary) {
+    FGOProcessor::FGOConfig config;
+    config.use_official_tdcp_resl_atmosphere_cancellation = true;
+    config.use_official_tdcp_snr_type_sigma = true;
+    FGOProcessor processor(config);
+    FGOProcessor::FGOProblem problem;
+    EXPECT_THROW(processor.optimizeProblem(problem), std::invalid_argument);
 }
 
 TEST(AndroidSvTimeUncertaintyTest, ConvertsNanosecondsWithoutScaleOrClip) {
@@ -1303,6 +1565,298 @@ TEST(FGOTest, TimeDifferencedCarrierFactorsRecoverSyntheticTrajectory) {
 
     const Vector3d expected_second(1113196.5, -4841694.0, 3985349.4);
     EXPECT_LT((result.solution.solutions[1].position_ecef - expected_second).norm(), 1e-3);
+}
+
+TEST(FGOSourceRoverStateTest, BuildsSharedStatesAndKeepsNavigationMissLocal) {
+    auto nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> positions = {
+        Vector3d(1113194.0,-4841695.0,3985350.0),
+        Vector3d(1113196.0,-4841694.0,3985351.0)};
+    auto observations = makeSyntheticDoubleDifferenceObservationEpochs(nav, positions, 0.0);
+    for (auto& epoch : observations) {
+        for (auto& row : epoch.observations) row.pseudorange_observation_type = "C1C";
+    }
+    FGOProcessor::FGOConfig c;
+    EXPECT_FALSE(c.use_source_rover_epoch_states);
+    c.use_source_rover_epoch_states = true;
+    c.use_spp_seed = false;
+    c.use_ionosphere_model = c.use_troposphere_model = false;
+    c.min_elevation_deg = -90;
+    c.min_satellites_per_epoch = 1;
+    const auto complete = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    EXPECT_EQ(complete.diagnostics.source_rover_epoch_states_built, 8U);
+    EXPECT_EQ(complete.diagnostics.source_rover_missing_ephemeris_satellite_epochs, 0U);
+    ASSERT_EQ(complete.pseudorange_factors.size(), 8U);
+    auto dual = observations;
+    auto l5 = dual.front().observations.front();
+    l5.signal = SignalType::GPS_L5;
+    l5.pseudorange_observation_type = "C5I";
+    l5.pseudorange += 300.0;
+    l5.has_carrier_phase = false;
+    dual.front().observations.push_back(l5);
+    c.use_multi_constellation = c.use_multi_frequency_double_difference = true;
+    const auto shared = FGOProcessor(c).buildPseudorangeProblem(dual, nav);
+    EXPECT_EQ(shared.diagnostics.source_rover_epoch_states_built, 8U);
+    ASSERT_EQ(shared.pseudorange_factors.size(), 9U);
+    const FGOProcessor::PseudorangeFactor* first = nullptr;
+    const FGOProcessor::PseudorangeFactor* second = nullptr;
+    for (const auto& factor : shared.pseudorange_factors) {
+        if (factor.epoch_index != 0 || !(factor.satellite == l5.satellite)) continue;
+        if (factor.signal == SignalType::GPS_L1CA) first = &factor;
+        if (factor.signal == SignalType::GPS_L5) second = &factor;
+    }
+    ASSERT_NE(first, nullptr);
+    ASSERT_NE(second, nullptr);
+    EXPECT_TRUE(first->source_satellite_position_ecef.isApprox(
+        second->source_satellite_position_ecef, 0.0));
+    c.use_multi_constellation = c.use_multi_frequency_double_difference = false;
+    nav.ephemeris_data.erase(SatelliteId(GNSSSystem::GPS, 4));
+    const auto partial = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    EXPECT_EQ(partial.diagnostics.source_rover_epoch_states_built, 6U);
+    EXPECT_EQ(partial.diagnostics.source_rover_missing_ephemeris_satellite_epochs, 2U);
+    EXPECT_EQ(partial.pseudorange_factors.size(), 6U);
+    // A malformed code is not a missing-nav event and must not silently drop.
+    observations.front().observations.front().pseudorange_observation_type.clear();
+    EXPECT_THROW(FGOProcessor(c).buildPseudorangeProblem(observations, nav),
+                 std::invalid_argument);
+}
+
+TEST(FGORemaskingPoolTest, BuilderRetainsPreMaskRowsWithoutChangingAcceptedFactors) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> positions = {
+        Vector3d(1113194.0,-4841695.0,3985350.0),
+        Vector3d(1113196.0,-4841694.0,3985351.0)};
+    const auto observations = makeSyntheticDoubleDifferenceObservationEpochs(nav, positions, 0.0);
+    FGOProcessor::FGOConfig c;
+    c.use_spp_seed = false;
+    c.use_ionosphere_model = false;
+    c.use_troposphere_model = false;
+    c.min_elevation_deg = -90.0;
+    c.min_satellites_per_epoch = 1;
+    c.use_upstream_observable_quality = true;
+    const auto baseline = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    c.retain_native_pseudorange_remasking_pool = true;
+    const auto retained = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    EXPECT_TRUE(baseline.native_pseudorange_remasking_pool.empty());
+    ASSERT_FALSE(retained.native_pseudorange_remasking_pool.empty());
+    EXPECT_EQ(retained.native_pseudorange_remasking_pool.size(),
+              retained.diagnostics.upstream_pseudorange_candidates);
+    EXPECT_EQ(retained.native_pseudorange_remasking_pool.size(),
+              retained.pseudorange_factors.size() +
+              retained.diagnostics.upstream_pseudorange_residual_rejections);
+    ASSERT_EQ(baseline.pseudorange_factors.size(),retained.pseudorange_factors.size());
+    for (std::size_t i=0;i<baseline.pseudorange_factors.size();++i) {
+        const auto& a=baseline.pseudorange_factors[i];
+        const auto& b=retained.pseudorange_factors[i];
+        EXPECT_EQ(a.epoch_index,b.epoch_index);
+        EXPECT_EQ(a.satellite,b.satellite);
+        EXPECT_EQ(a.signal,b.signal);
+        EXPECT_DOUBLE_EQ(a.corrected_pseudorange_m,b.corrected_pseudorange_m);
+        EXPECT_DOUBLE_EQ(a.sigma_m,b.sigma_m);
+        EXPECT_DOUBLE_EQ(a.upstream_seed_residual_m,b.upstream_seed_residual_m);
+        EXPECT_TRUE(a.satellite_position_ecef==b.satellite_position_ecef);
+    }
+}
+
+TEST(FGOTest, OfficialTdcpWeightingPreservesAcceptedPairStructure) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> receiver_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113196.0, -4841694.0, 3985351.0)};
+    const auto observations = makeSyntheticDoubleDifferenceObservationEpochs(
+        nav, receiver_positions, 0.0);
+
+    FGOProcessor::FGOConfig legacy_config;
+    legacy_config.use_spp_seed = false;
+    legacy_config.use_motion_factors = false;
+    legacy_config.use_position_motion_factors = false;
+    legacy_config.use_clock_motion_factors = false;
+    legacy_config.use_ionosphere_model = false;
+    legacy_config.use_troposphere_model = false;
+    legacy_config.min_elevation_deg = -90.0;
+    legacy_config.min_snr_dbhz = 0.0;
+    legacy_config.min_satellites_per_epoch = 4;
+    legacy_config.use_carrier_tdcp_incidence_diagnostic = true;
+    legacy_config.tdcp_sigma_m = 0.03;
+
+    FGOProcessor::FGOConfig official_config = legacy_config;
+    official_config.use_official_tdcp_snr_type_sigma = true;
+
+    const auto legacy = FGOProcessor(legacy_config).buildPseudorangeProblem(
+        observations, nav);
+    const auto official = FGOProcessor(official_config).buildPseudorangeProblem(
+        observations, nav);
+    ASSERT_EQ(legacy.tdcp_factors.size(), 4U);
+    ASSERT_EQ(official.tdcp_factors.size(), legacy.tdcp_factors.size());
+    EXPECT_EQ(official.diagnostics.tdcp_candidate_pairs,
+              legacy.diagnostics.tdcp_candidate_pairs);
+    EXPECT_EQ(official.diagnostics.tdcp_rejected_invalid_weight, 0U);
+
+    const double expected_sigma_m =
+        0.8 / 400.0 * constants::GPS_L1_WAVELENGTH;
+    for (std::size_t i = 0; i < legacy.tdcp_factors.size(); ++i) {
+        const auto& before = legacy.tdcp_factors[i];
+        const auto& after = official.tdcp_factors[i];
+        EXPECT_EQ(after.previous_epoch_index, before.previous_epoch_index);
+        EXPECT_EQ(after.current_epoch_index, before.current_epoch_index);
+        EXPECT_EQ(after.satellite, before.satellite);
+        EXPECT_EQ(after.signal, before.signal);
+        EXPECT_DOUBLE_EQ(after.delta_carrier_m, before.delta_carrier_m);
+        EXPECT_DOUBLE_EQ(before.sigma_m, 0.03);
+        EXPECT_NEAR(after.sigma_m, expected_sigma_m, 1e-12);
+    }
+
+    // A missing raw SNR is a weighting-contract failure, not a reason to
+    // silently restore the legacy 0.03 m value for that pair.
+    auto missing_snr_observations = observations;
+    missing_snr_observations.front().observations.front().snr = 0.0;
+    const auto missing_snr =
+        FGOProcessor(official_config).buildPseudorangeProblem(
+            missing_snr_observations, nav);
+    EXPECT_EQ(missing_snr.diagnostics.tdcp_rejected_invalid_weight, 1U);
+    EXPECT_EQ(missing_snr.tdcp_factors.size(), official.tdcp_factors.size() - 1U);
+}
+
+TEST(FGOTest, SourceMeterTdcpWeightingPreservesAcceptedPairStructure) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> receiver_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113196.0, -4841694.0, 3985351.0)};
+    const auto observations = makeSyntheticDoubleDifferenceObservationEpochs(
+        nav, receiver_positions, 0.0);
+
+    FGOProcessor::FGOConfig legacy_config;
+    legacy_config.use_spp_seed = false;
+    legacy_config.use_motion_factors = false;
+    legacy_config.use_position_motion_factors = false;
+    legacy_config.use_clock_motion_factors = false;
+    legacy_config.use_ionosphere_model = false;
+    legacy_config.use_troposphere_model = false;
+    legacy_config.min_elevation_deg = -90.0;
+    legacy_config.min_snr_dbhz = 0.0;
+    legacy_config.min_satellites_per_epoch = 4;
+    legacy_config.use_carrier_tdcp_incidence_diagnostic = true;
+    legacy_config.tdcp_sigma_m = 0.03;
+
+    FGOProcessor::FGOConfig official_config = legacy_config;
+    official_config.use_source_tdcp_meter_sigma = true;
+
+    auto unequal_snr = observations;
+    for (auto& o : unequal_snr.front().observations) o.snr = 40.0;
+    for (auto& o : unequal_snr.back().observations) o.snr = 60.0;
+    const auto previous_endpoint = FGOProcessor(official_config).buildPseudorangeProblem(
+        unequal_snr, nav);
+    ASSERT_EQ(previous_endpoint.tdcp_factors.size(), 4U);
+    // Band p85 is 60 dB-Hz; previous endpoint 40 gives 10 * 0.002 m.
+    // Using the current endpoint would incorrectly give 0.002 m.
+    for (const auto& factor : previous_endpoint.tdcp_factors) {
+        EXPECT_NEAR(factor.sigma_m, 0.02, 1e-12);
+    }
+
+    const auto legacy = FGOProcessor(legacy_config).buildPseudorangeProblem(
+        observations, nav);
+    const auto official = FGOProcessor(official_config).buildPseudorangeProblem(
+        observations, nav);
+    ASSERT_EQ(legacy.tdcp_factors.size(), 4U);
+    ASSERT_EQ(official.tdcp_factors.size(), legacy.tdcp_factors.size());
+    EXPECT_EQ(official.diagnostics.tdcp_candidate_pairs,
+              legacy.diagnostics.tdcp_candidate_pairs);
+    EXPECT_EQ(official.diagnostics.tdcp_rejected_invalid_weight, 0U);
+
+    const double expected_sigma_m =
+        0.8 / 400.0;
+    for (std::size_t i = 0; i < legacy.tdcp_factors.size(); ++i) {
+        const auto& before = legacy.tdcp_factors[i];
+        const auto& after = official.tdcp_factors[i];
+        EXPECT_EQ(after.previous_epoch_index, before.previous_epoch_index);
+        EXPECT_EQ(after.current_epoch_index, before.current_epoch_index);
+        EXPECT_EQ(after.satellite, before.satellite);
+        EXPECT_EQ(after.signal, before.signal);
+        EXPECT_DOUBLE_EQ(after.delta_carrier_m, before.delta_carrier_m);
+        EXPECT_DOUBLE_EQ(before.sigma_m, 0.03);
+        EXPECT_NEAR(after.sigma_m, expected_sigma_m, 1e-12);
+    }
+
+    // A missing raw SNR is a weighting-contract failure, not a reason to
+    // silently restore the legacy 0.03 m value for that pair.
+    auto missing_snr_observations = observations;
+    missing_snr_observations.front().observations.front().snr = 0.0;
+    const auto missing_snr =
+        FGOProcessor(official_config).buildPseudorangeProblem(
+            missing_snr_observations, nav);
+    EXPECT_EQ(missing_snr.diagnostics.tdcp_rejected_invalid_weight, 1U);
+    EXPECT_EQ(missing_snr.tdcp_factors.size(), official.tdcp_factors.size() - 1U);
+}
+
+TEST(FGOTest, SourceReslObservablePreservesPairsAndDynamicSigma) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    // Equatorial surface points keep the atmosphere model's height gate
+    // active; the historical fixture ECEF points are not surface-validated.
+    const std::array<Vector3d, 2> positions = {
+        Vector3d(6378237.0, 0.0, 0.0),
+        Vector3d(6378239.0, 1.0, 1.0)};
+    const auto observations = makeSyntheticDoubleDifferenceObservationEpochs(nav, positions, 0.0);
+    FGOProcessor::FGOConfig c;
+    EXPECT_FALSE(c.use_source_tdcp_resl_observable);
+    c.use_spp_seed = false;
+    c.use_motion_factors = false;
+    c.use_position_motion_factors = false;
+    c.use_clock_motion_factors = false;
+    c.use_ionosphere_model = false;
+    c.use_troposphere_model = true;
+    c.min_elevation_deg = -90.0;
+    c.min_snr_dbhz = 0.0;
+    c.min_satellites_per_epoch = 4;
+    c.use_carrier_tdcp_incidence_diagnostic = true;
+    c.use_source_tdcp_meter_sigma = true;
+    const auto before = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    c.use_source_tdcp_resl_observable = true;
+    const auto after = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    // Independently exercise the existing observable switch as a builder
+    // reference, without its incompatible dynamic-sigma configuration.
+    c.use_source_tdcp_resl_observable = false;
+    c.use_source_tdcp_meter_sigma = false;
+    c.use_official_tdcp_resl_atmosphere_cancellation = true;
+    const auto reference = FGOProcessor(c).buildPseudorangeProblem(observations, nav);
+    ASSERT_EQ(before.tdcp_factors.size(), 4U);
+    ASSERT_EQ(after.tdcp_factors.size(), before.tdcp_factors.size());
+    ASSERT_EQ(reference.tdcp_factors.size(), before.tdcp_factors.size());
+    bool measurement_changed = false;
+    for (std::size_t i = 0; i < before.tdcp_factors.size(); ++i) {
+        const auto& a = after.tdcp_factors[i];
+        const auto& b = before.tdcp_factors[i];
+        EXPECT_EQ(a.previous_epoch_index, b.previous_epoch_index);
+        EXPECT_EQ(a.current_epoch_index, b.current_epoch_index);
+        EXPECT_EQ(a.satellite, b.satellite);
+        EXPECT_EQ(a.signal, b.signal);
+        EXPECT_DOUBLE_EQ(a.sigma_m, b.sigma_m);
+        EXPECT_DOUBLE_EQ(a.delta_carrier_m, reference.tdcp_factors[i].delta_carrier_m);
+        measurement_changed |= a.delta_carrier_m != b.delta_carrier_m;
+    }
+    EXPECT_TRUE(measurement_changed);
+    EXPECT_EQ(after.diagnostics.tdcp_candidate_pairs, before.diagnostics.tdcp_candidate_pairs);
+    c.use_source_tdcp_resl_observable = true;
+    EXPECT_THROW(FGOProcessor(c).buildPseudorangeProblem({}, nav), std::invalid_argument);
+    EXPECT_THROW(FGOProcessor(c).optimizeProblem(FGOProcessor::FGOProblem{}), std::invalid_argument);
+}
+
+TEST(FGOTest, SourceMeterTdcpRejectsMixedSelectors) {
+    for (int mode = 0; mode < 3; ++mode) {
+        FGOProcessor::FGOConfig c;
+        c.use_source_tdcp_meter_sigma = true;
+        c.use_official_tdcp_snr_type_sigma = mode == 0;
+        c.use_official_tdcp_huber_k = mode == 1;
+        c.use_official_tdcp_resl_atmosphere_cancellation = mode == 2;
+        EXPECT_THROW(FGOProcessor(c).buildPseudorangeProblem({}, NavigationData{}), std::invalid_argument);
+        EXPECT_THROW(FGOProcessor(c).optimizeProblem(FGOProcessor::FGOProblem{}), std::invalid_argument);
+    }
+}
+
+TEST(FGOTest, OfficialTdcpWeightingIsDefaultOff) {
+    const FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.use_official_tdcp_snr_type_sigma);
+    EXPECT_FALSE(config.use_source_tdcp_meter_sigma);
+    EXPECT_DOUBLE_EQ(config.tdcp_sigma_m, 0.03);
 }
 
 TEST(FGOTest, SingleDifferenceDopplerAndTdcpFactorsConstrainMotion) {
@@ -3053,4 +3607,40 @@ TEST(FGOTest, LowCountRelaxSurplusQualityIsDefaultOffAndIndependent) {
                  !config.use_low_count_ambiguity_resolution);
     EXPECT_FALSE(config.low_count_require_separation_witness &&
                  !config.use_low_count_ambiguity_resolution);
+}
+
+TEST(FGOTest, RawAndroidEpochIdentityPropagatesIntoRetainedEpochSeeds) {
+    const NavigationData nav = makeSyntheticGpsNavigation(4);
+    const std::array<Vector3d, 2> receiver_positions = {
+        Vector3d(1113194.0, -4841695.0, 3985350.0),
+        Vector3d(1113196.0, -4841694.0, 3985351.0)};
+    auto observations = makeSyntheticDoubleDifferenceObservationEpochs(
+        nav, receiver_positions, 0.0);
+    ASSERT_EQ(observations.size(), 2U);
+    ASSERT_EQ(observations[0].observations.size(), 4U);
+    ASSERT_EQ(observations[1].observations.size(), 4U);
+    observations[0].raw_source_index = 4U;
+    observations[0].raw_utc_time_millis = 1'700'000'004'000LL;
+    observations[1].raw_source_index = 6U;
+    observations[1].raw_utc_time_millis = 1'700'000'006'000LL;
+
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed = false;
+    config.use_multi_constellation = false;
+    config.use_motion_factors = false;
+    config.use_tdcp_factors = false;
+    config.use_carrier_phase_factors = false;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    config.min_elevation_deg = -90.0;
+    config.min_snr_dbhz = 0.0;
+    config.min_satellites_per_epoch = 4;
+    const FGOProcessor processor(config);
+    const FGOProcessor::FGOProblem problem =
+        processor.buildPseudorangeProblem(observations, nav);
+    ASSERT_EQ(problem.epochs.size(), observations.size());
+    EXPECT_EQ(problem.epochs[0].raw_source_index, 4U);
+    EXPECT_EQ(problem.epochs[0].raw_utc_time_millis, 1'700'000'004'000LL);
+    EXPECT_EQ(problem.epochs[1].raw_source_index, 6U);
+    EXPECT_EQ(problem.epochs[1].raw_utc_time_millis, 1'700'000'006'000LL);
 }

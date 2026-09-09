@@ -2,13 +2,16 @@
 #include <libgnss++/io/rinex4.hpp>
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/signal_policy.hpp>
+#include <libgnss++/algorithms/source_tracking_selection.hpp>
 #include <algorithm>
+#include <array>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <iostream>
 #include <cmath>
 #include <cctype>
+#include <limits>
 #include <set>
 #include <utility>
 
@@ -429,6 +432,16 @@ bool RINEXReader::readHeader(RINEXHeader& header) {
     if (!file_.is_open()) {
         return false;
     }
+
+    // The caller may reuse a header object.  Reset only the Phase128 ledger
+    // fields here; all historical header fields retain their existing parse
+    // semantics below.
+    header.glonass_frequency_channel_header_status =
+        GlonassFrequencyChannelHeaderStatus::Absent;
+    header.glonass_frequency_channel_header_label_lines = 0U;
+    header.glonass_frequency_channels.clear();
+    header.glonass_frequency_channel_entries.clear();
+    header.glonass_frequency_channel_malformed_entries = 0U;
     
     std::string line;
     while (readLine(line)) {
@@ -440,6 +453,20 @@ bool RINEXReader::readHeader(RINEXHeader& header) {
             continue; // Skip invalid lines
         }
     }
+
+    if (header.glonass_frequency_channel_header_label_lines == 0U) {
+        header.glonass_frequency_channel_header_status =
+            GlonassFrequencyChannelHeaderStatus::Absent;
+    } else if (header.glonass_frequency_channel_malformed_entries != 0U) {
+        header.glonass_frequency_channel_header_status =
+            GlonassFrequencyChannelHeaderStatus::Malformed;
+    } else if (header.glonass_frequency_channel_entries.empty()) {
+        header.glonass_frequency_channel_header_status =
+            GlonassFrequencyChannelHeaderStatus::ValidEmpty;
+    } else {
+        header.glonass_frequency_channel_header_status =
+            GlonassFrequencyChannelHeaderStatus::Entries;
+    }
     
     header_ = header;
     header_read_ = true;
@@ -447,6 +474,10 @@ bool RINEXReader::readHeader(RINEXHeader& header) {
 }
 
 bool RINEXReader::readObservationEpoch(ObservationData& obs_data) {
+    if (source_header_tracking_filter_ &&
+        (header_.version < 3.0 || header_.version >= 4.0)) {
+        return false;
+    }
     if (!file_.is_open()) {
         return false;
     }
@@ -1071,7 +1102,16 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
 }
 
 bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) {
-    if (line.length() < 60) return false;
+    if (line.length() < 60) {
+        // A shortened line carrying the fixed GLONASS label is malformed,
+        // not an absent header.  Keep the distinction for Phase128 while
+        // retaining the historical ignore-short-line behavior otherwise.
+        if (line.find("GLONASS SLOT / FRQ #") != std::string::npos) {
+            ++header.glonass_frequency_channel_header_label_lines;
+            ++header.glonass_frequency_channel_malformed_entries;
+        }
+        return false;
+    }
     
     std::string label = line.substr(60);
     
@@ -1103,12 +1143,14 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
         header.approximate_position(0) = std::stod(line.substr(0, 14));
         header.approximate_position(1) = std::stod(line.substr(14, 14));
         header.approximate_position(2) = std::stod(line.substr(28, 14));
+        header.has_approximate_position = header.approximate_position.allFinite();
     }
     else if (label.find("ANTENNA: DELTA H/E/N") != std::string::npos) {
         const double height = std::stod(line.substr(0, 14));
         const double east = std::stod(line.substr(14, 14));
         const double north = std::stod(line.substr(28, 14));
         header.antenna_delta = Vector3d(east, north, height);
+        header.has_antenna_delta = header.antenna_delta.allFinite();
     }
     else if (label.find("TIME OF FIRST OBS") != std::string::npos) {
         try {
@@ -1176,24 +1218,55 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
         }
     }
     else if (label.find("GLONASS SLOT / FRQ #") != std::string::npos) {
+        ++header.glonass_frequency_channel_header_label_lines;
         for (int i = 0; i < 8; ++i) {
             const size_t pos = 4 + static_cast<size_t>(i) * 7;
             if (pos + 6 > line.size()) {
+                if (pos < line.size() &&
+                    line.find_first_not_of(" \t\r\n", pos) !=
+                        std::string::npos) {
+                    ++header.glonass_frequency_channel_malformed_entries;
+                }
                 break;
             }
             if (line[pos] != 'R') {
+                // A non-empty slot with another system/designator is not a
+                // valid empty slot.  Do not silently classify it as absent.
+                if (line.find_first_not_of(" \t", pos) != std::string::npos &&
+                    line.find_first_not_of(" \t", pos) < pos + 7U) {
+                    ++header.glonass_frequency_channel_malformed_entries;
+                }
                 continue;
             }
             const std::string prn_text = trimCopy(line.substr(pos + 1, 2));
             const std::string channel_text = trimCopy(line.substr(pos + 4, 3));
             if (prn_text.empty() || channel_text.empty()) {
+                ++header.glonass_frequency_channel_malformed_entries;
                 continue;
             }
             try {
-                const int prn = std::stoi(prn_text);
-                const int channel = std::stoi(channel_text);
-                header.glonass_frequency_channels[SatelliteId(GNSSSystem::GLONASS, prn)] = channel;
+                std::size_t prn_consumed = 0U;
+                std::size_t channel_consumed = 0U;
+                const int prn = std::stoi(prn_text, &prn_consumed);
+                const int channel = std::stoi(channel_text, &channel_consumed);
+                // Keep the historical map assignment for valid integer
+                // prefixes, but preserve strict lexical validity in the
+                // opt-in ledger.  Thus selector-off parsing remains
+                // compatible while selector-on cannot accept "-4x" or a
+                // non-integer FCN as if it were a real channel.
+                const SatelliteId satellite(GNSSSystem::GLONASS,
+                                            static_cast<uint8_t>(prn));
+                header.glonass_frequency_channels[satellite] = channel;
+                if (prn_consumed != prn_text.size() ||
+                    channel_consumed != channel_text.size() || prn < 1 ||
+                    prn > 27) {
+                    ++header.glonass_frequency_channel_malformed_entries;
+                    continue;
+                }
+                header.glonass_frequency_channel_entries.emplace_back(
+                    satellite, channel);
             } catch (...) {
+                ++header.glonass_frequency_channel_malformed_entries;
             }
         }
     }
@@ -1601,8 +1674,21 @@ bool RINEXReader::parseObservationSatelliteRecord(
         }
     }
 
+    std::map<source_transmission_clock::Slot, std::string> source_codes;
+    if (source_header_tracking_filter_) {
+        std::vector<std::string> codes;
+        for (const auto& type : obs_types) {
+            if (type.size() == 3) codes.push_back(type.substr(1));
+        }
+        source_codes = source_transmission_clock::selectHeaderTrackingCodes(system, codes);
+    }
     for (size_t i = 0; i < obs_types.size() && i < obs_values.size(); ++i) {
         const std::string& obs_type = obs_types[i];
+        if (source_header_tracking_filter_) {
+            const auto slot = source_transmission_clock::slotForRinexBand(system, rinexBand(obs_type));
+            if (!slot || !source_codes.count(*slot) || obs_type.size() != 3 ||
+                source_codes.at(*slot) != obs_type.substr(1)) continue;
+        }
         if (obs_values[i] != 0.0 && obs_type.size() >= 3) {
             const std::string tracking_code = obs_type.substr(1);
             auto [it, inserted] = tracking_observations.try_emplace(tracking_code);
@@ -1782,6 +1868,40 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
             }
         };
 
+        // Phase128 keeps the historical permissive parseD() values for the
+        // default path, but also records a strict source-positioned view of a
+        // GLONASS data[0..14] record.  Empty/malformed fields become NaN in
+        // this sidecar only; they are not shifted or replaced with zero.
+        auto parseDStrict = [](const std::string& line, size_t start,
+                               size_t len) -> double {
+            if (start + len > line.length()) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            std::string value = line.substr(start, len);
+            const auto first = value.find_first_not_of(" \t");
+            if (first == std::string::npos) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            value.erase(0, first);
+            const auto last = value.find_last_not_of(" \t\r\n");
+            if (last == std::string::npos) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+            value.erase(last + 1U);
+            std::replace(value.begin(), value.end(), 'D', 'E');
+            std::replace(value.begin(), value.end(), 'd', 'E');
+            try {
+                std::size_t consumed = 0U;
+                const double parsed = std::stod(value, &consumed);
+                if (consumed != value.size() || !std::isfinite(parsed)) {
+                    return std::numeric_limits<double>::quiet_NaN();
+                }
+                return parsed;
+            } catch (...) {
+                return std::numeric_limits<double>::quiet_NaN();
+            }
+        };
+
         if (is_v3 && first_line[0] == 'R') {
             if (lines.size() < 4) {
                 return false;
@@ -1826,11 +1946,64 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
                 parseD(lines[2], c2, 19) * 1e3,
                 parseD(lines[3], c2, 19) * 1e3);
             eph.health = static_cast<uint8_t>(std::max(0.0, parseD(lines[1], c3, 19)));
-            eph.glonass_frequency_channel = static_cast<int>(parseD(lines[2], c3, 19));
-            if (eph.glonass_frequency_channel > 128) {
-                eph.glonass_frequency_channel -= 256;
+            // Preserve whether the broadcast FCN field was actually present.
+            // Channel zero is valid, so the legacy numeric default cannot be
+            // used as a presence sentinel by strict provenance consumers.
+            std::string channel_text;
+            if (c3 < lines[2].size()) {
+                channel_text = lines[2].substr(c3, 19);
+            }
+            channel_text.erase(0, channel_text.find_first_not_of(" \t"));
+            if (channel_text.find_last_not_of(" \t") != std::string::npos) {
+                channel_text.erase(channel_text.find_last_not_of(" \t") + 1);
+            }
+            std::replace(channel_text.begin(), channel_text.end(), 'D', 'E');
+            std::replace(channel_text.begin(), channel_text.end(), 'd', 'E');
+            try {
+                std::size_t consumed = 0U;
+                const double raw_channel =
+                    std::stod(channel_text, &consumed);
+                const double normalized_channel =
+                    raw_channel > 128.0 ? raw_channel - 256.0 : raw_channel;
+                eph.glonass_frequency_channel_present =
+                    consumed == channel_text.size() &&
+                    std::isfinite(raw_channel) &&
+                    std::isfinite(normalized_channel) &&
+                    std::floor(normalized_channel) == normalized_channel &&
+                    normalized_channel >=
+                        static_cast<double>(std::numeric_limits<int>::min()) &&
+                    normalized_channel <=
+                        static_cast<double>(std::numeric_limits<int>::max());
+                if (eph.glonass_frequency_channel_present) {
+                    eph.glonass_frequency_channel =
+                        static_cast<int>(normalized_channel);
+                }
+            } catch (...) {
+                eph.glonass_frequency_channel_present = false;
             }
             eph.glonass_age = static_cast<int>(parseD(lines[3], c3, 19));
+            const std::array<double, 15> canonical_data = {
+                parseDStrict(first_line, af0_col, 19),
+                parseDStrict(first_line, af1_col, 19),
+                parseDStrict(first_line, af2_col, 19),
+                parseDStrict(lines[1], c0, 19),
+                parseDStrict(lines[1], c1, 19),
+                parseDStrict(lines[1], c2, 19),
+                parseDStrict(lines[1], c3, 19),
+                parseDStrict(lines[2], c0, 19),
+                parseDStrict(lines[2], c1, 19),
+                parseDStrict(lines[2], c2, 19),
+                parseDStrict(lines[2], c3, 19),
+                parseDStrict(lines[3], c0, 19),
+                parseDStrict(lines[3], c1, 19),
+                parseDStrict(lines[3], c2, 19),
+                parseDStrict(lines[3], c3, 19),
+            };
+            const auto canonical_result =
+                decodeCanonicalGlonassGeph(canonical_data);
+            eph.glonass_canonical_geph_data_valid = canonical_result.accepted;
+            eph.glonass_canonical_geph_reject_reason =
+                static_cast<int>(canonical_result.reject_reason);
             eph.valid = true;
             return true;
         }

@@ -1,0 +1,203 @@
+{
+  "schema_version": "smartphone-r5-phase134-native-summary-bridge-structural-raw-authorization.v1",
+  "phase": 134,
+  "execution_label": "Luna Max",
+  "status": "independent-one-shot-inventory-first-structural-raw-authorized",
+  "authorization": {
+    "implementation": true,
+    "contract": true,
+    "raw_materialization": true,
+    "inventory_stage": true,
+    "raw_structural_execution": true,
+    "solver": true,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "sweep": false
+  },
+  "authorization_scope": {
+    "candidate_id": "phase134-native-phase131-summary-diagnostics-bridge-v1",
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0,
+    "solver_invocation_policy": "one only after that route inventory and bridge preconditions pass",
+    "solution_policy": "opaque SHA-256 and expected row count only"
+  },
+  "pins": {
+    "audit_commit": "a116556d2437f039f0d6947b2b4b445928d64af8",
+    "freeze_commit": "7d00f6e0a43d1b4a8c504db9705a3fa34e67b4cc",
+    "implementation_commit": "130a7f8f12e191cc12ebd0ff66ad591d732775f7",
+    "manifest_commit": "1ed9d906ae395a4ac1c530d7f446e6ba47ccd7f5",
+    "pre_raw_accounting_commit": "041a36aaf8cac83f36c2e55396a1a6c5fbbf59b7",
+    "audit_sha256": "d5e62de1e4ad4b2c6219428e5c58a19f0f4b12549a8f0e9b8a27c04626aaa1a3",
+    "freeze_sha256": "506c0433556c62f17fdf408e8e34b35238e0b8c579f4dbd796867ffee97e8dbb",
+    "manifest_sha256": "7d0074c8b93955018f4023032c8ac86135bed87a68a1b5841af4cc5388ac5e72",
+    "pre_raw_sha256": "6506f4643e3c3a2eba0b8743e541187765f96e19ea1386f37c9aef05598eac59",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "3965852271023671cd0e9c6ea3e779ab6f67f4e883d724ccacadf28bd8b2fb79",
+    "launch_free_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase134_native_summary_bridge_execute.py",
+    "launch_free_runner_sha256": "4b19e13fae965721895bb34f51554ae7d7b6231426a1ae8a51ec977c1a7e9e47",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase134_native_summary_bridge_authorized_execute.py",
+    "authorized_runner_sha256": "593bccd230d014198b4458beffece74335f18cca0f5903c47e16ad802d6f839e",
+    "authorized_runner_commit": null
+  },
+  "selectors": {
+    "phase118": 1,
+    "phase126": 1,
+    "phase127": 1,
+    "phase128": 1,
+    "phase129": 1,
+    "phase130": 0,
+    "phase131": 1,
+    "phase117": 0,
+    "phase120": 0,
+    "additional_frequency": 0
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "bytes": 10708536,
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "interval": 1.0,
+        "window": 151,
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false,
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only"
+      },
+      "command_template": "manifest-pinned",
+      "summary_artifacts": {
+        "native_view_filename": "native_summary.json",
+        "normalized_view_filename": "structural_summary.json",
+        "native_overwrite_allowed": false,
+        "native_bytes_hash_sealed": true
+      }
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "bytes": 719969,
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "interval": 15.0,
+        "window": 11,
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false,
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only"
+      },
+      "command_template": "manifest-pinned",
+      "summary_artifacts": {
+        "native_view_filename": "native_summary.json",
+        "normalized_view_filename": "structural_summary.json",
+        "native_overwrite_allowed": false,
+        "native_bytes_hash_sealed": true
+      }
+    }
+  ],
+  "read_accounting_before_authorization": {
+    "source_text_reads": "read-only",
+    "sealed_metadata_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "native_command_constructions": 0,
+    "native_solver_invocations": 0,
+    "solution_coordinate_row_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "post_authorization_policy": {
+    "raw_payload_reads_per_route": {
+      "device_gnss.csv": 1,
+      "device_imu.csv": 1,
+      "brdc.nav": 1,
+      "base.obs": 1
+    },
+    "native_process_per_passing_route": 1,
+    "bridge_sync_per_passing_route": 1,
+    "native_summary_overwrite": false,
+    "normalized_summary_distinct": true,
+    "native_selector_forwarding_per_passing_route": 1,
+    "native_phase130_argv_count": 0,
+    "typed_preflight_required_before_native": true,
+    "resolver_attempt_gate": "positive and exact canonical_rows + canonical_rejected_rows",
+    "base_top_level_counter_gate": "exact equality",
+    "solution_policy": "opaque hash and row count only",
+    "structural_failure": "fail closed; no rerun/fallback/repair/sweep"
+  },
+  "forbidden": {
+    "truth": true,
+    "MAT": true,
+    "PDC": true,
+    "precomputed_coordinates": true,
+    "accuracy": true,
+    "Kaggle": true,
+    "solution_publication": true
+  }
+}

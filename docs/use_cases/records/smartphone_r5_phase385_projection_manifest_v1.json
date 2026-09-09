@@ -1,0 +1,27 @@
+{
+  "phase": 385,
+  "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+  "raw": {
+    "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+    "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+    "bytes": 33837317
+  },
+  "candidates": [
+    {
+      "path": "output/smartphone-r5/phase382-lax-t-sparse-baseline-v1/lax-t/opaque_solution_output.csv",
+      "sha256": "d2c619121951d1a322ab39e15fcf16dbf7a6d61d2c651d03a4f68ea357c61e7d",
+      "bytes": 117334,
+      "rows": 1466,
+      "output_name": "baseline.csv"
+    },
+    {
+      "path": "output/smartphone-r5/phase383-lax-t-sparse-code-gate-v1/lax-t/opaque_solution_output.csv",
+      "sha256": "cfad2444053928261621e122ce1059dbc74db8c925a602a291fbbcce992ac2ec",
+      "bytes": 117334,
+      "rows": 1466,
+      "output_name": "code_gate_off.csv"
+    }
+  ],
+  "output_directory": "output/smartphone-r5/phase385-lax-t-evaluation-projection-v1",
+  "policy": "exclude only first raw epoch from both outputs; no truth; no inference reuse; no retry"
+}

@@ -1,0 +1,71 @@
+{
+  "phase": 497,
+  "raw_rows": 112833,
+  "raw_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+  "fields": {
+    "MultipathIndicator": {
+      "finite": 112833,
+      "missing": 0,
+      "nonzero": 0,
+      "minimum": 0.0,
+      "maximum": 0.0
+    },
+    "AgcDb": {
+      "finite": 0,
+      "missing": 112833,
+      "nonzero": 0,
+      "minimum": null,
+      "maximum": null
+    },
+    "BasebandCn0DbHz": {
+      "finite": 0,
+      "missing": 112833,
+      "nonzero": 0,
+      "minimum": null,
+      "maximum": null
+    },
+    "FullInterSignalBiasNanos": {
+      "finite": 0,
+      "missing": 112833,
+      "nonzero": 0,
+      "minimum": null,
+      "maximum": null
+    },
+    "FullInterSignalBiasUncertaintyNanos": {
+      "finite": 0,
+      "missing": 112833,
+      "nonzero": 0,
+      "minimum": null,
+      "maximum": null
+    },
+    "SatelliteInterSignalBiasNanos": {
+      "finite": 0,
+      "missing": 112833,
+      "nonzero": 0,
+      "minimum": null,
+      "maximum": null
+    },
+    "SatelliteInterSignalBiasUncertaintyNanos": {
+      "finite": 0,
+      "missing": 112833,
+      "nonzero": 0,
+      "minimum": null,
+      "maximum": null
+    }
+  },
+  "multipath_counts": {
+    "0.0": 112833
+  },
+  "selected_columns": [
+    "MultipathIndicator",
+    "AgcDb",
+    "BasebandCn0DbHz",
+    "FullInterSignalBiasNanos",
+    "FullInterSignalBiasUncertaintyNanos",
+    "SatelliteInterSignalBiasNanos",
+    "SatelliteInterSignalBiasUncertaintyNanos"
+  ],
+  "truth_reads": 0,
+  "derived_position_columns_used": false,
+  "retained_factor_claim": false
+}

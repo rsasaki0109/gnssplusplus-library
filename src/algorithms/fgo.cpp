@@ -24,6 +24,7 @@
 #include <numeric>
 #include <set>
 #include <string>
+#include <stdexcept>
 #include <tuple>
 
 
@@ -50,10 +51,344 @@ FGOProcessor::FGOResult FGOProcessor::optimize(
 }
 
 FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem) const {
+    if (config_.use_native_joint_ionosphere &&
+        (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+         !config_.use_pose3_state || !problem.imu.valid || config_.use_fixed_lag_smoother ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+         !config_.use_native_source_clock_c0d_gnss_first_meter_state_handoff ||
+         config_.use_residual_ionosphere_states || config_.use_native_tdcp_frequency_residual_states ||
+         config_.use_native_phase135_official_affine_measurement_family ||
+         !std::isfinite(config_.native_joint_ionosphere_anchor_sigma_m) ||
+         config_.native_joint_ionosphere_anchor_sigma_m <= 0 ||
+         !std::isfinite(config_.native_joint_ionosphere_density_m_sqrt_s) ||
+         config_.native_joint_ionosphere_density_m_sqrt_s <= 0 ||
+         !std::isfinite(config_.native_joint_ionosphere_max_gap_s) ||
+         config_.native_joint_ionosphere_max_gap_s <= 0))
+        throw std::invalid_argument("Joint ionosphere requires Phase171 batch main and explicit positive priors");
+    if (config_.use_native_batch_nhc &&
+        (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+         !config_.use_pose3_state || !problem.imu.valid ||
+         config_.use_fixed_lag_smoother ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+         !config_.use_native_source_clock_c0d_gnss_first_meter_state_handoff)) {
+        throw std::invalid_argument("Native batch NHC requires same-run Phase171 GTSAM Pose3 IMU handoff");
+    }
+    if (config_.use_native_lm_lambda_floor &&
+        (config_.backend != FGOBackend::GTSAM ||
+         !config_.use_native_source_clock_c0d_epoch_vector_parity ||
+         !(config_.use_native_raw_p_ecef_doppler_gnss_first ||
+           (config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+            config_.use_native_source_clock_c0d_phase99_main_multifrontal_qr_solver)))) {
+        throw std::invalid_argument("Native LM floor requires raw C7 ECEF-D staging or Phase171 main");
+    }
+    if (config_.use_main_pseudorange_cauchy_loss &&
+        (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+         config_.use_fixed_lag_smoother || !config_.use_robust_loss)) {
+        throw std::invalid_argument("Main P Cauchy requires robust Phase171 batch GTSAM IMU");
+    }
+    if (config_.use_native_relative_height_pairs &&
+        (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+         !config_.use_pose3_state || !config_.use_upstream_stop_constraints ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+         !config_.use_native_source_clock_c0d_gnss_first_meter_state_handoff)) {
+        throw std::invalid_argument("Relative height requires same-run Phase171 GTSAM Pose3 IMU handoff and stop detection");
+    }
+    if (config_.use_native_relative_height_pairs) {
+        if (problem.epochs.empty() ||
+            problem.imu.stop_velocity_seeds_nav.size() != problem.epochs.size())
+            throw std::invalid_argument("Relative height seed coverage mismatch");
+        for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+            if (!problem.epochs[i].position_ecef.allFinite() ||
+                !problem.imu.stop_velocity_seeds_nav[i].allFinite())
+                throw std::invalid_argument("Relative height nonfinite seed");
+        }
+    }
+    if (config_.omit_native_first_imu_velocity_prior &&
+        (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+         !config_.use_pose3_state ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+         !config_.use_native_phase213_main_doppler)) {
+        throw std::invalid_argument("Omitting first velocity prior requires Phase171 GTSAM Pose3 IMU main with Phase213 Doppler");
+    }
+    if (config_.omit_native_first_imu_bias_prior &&
+        (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+         !config_.use_pose3_state ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main)) {
+        throw std::invalid_argument("Omitting first bias prior requires Phase171 GTSAM Pose3 IMU main");
+    }
+    if (config_.use_native_epoch_heading_attitude_seeds) {
+        if (config_.backend != FGOBackend::GTSAM || !config_.use_imu ||
+            !config_.use_pose3_state ||
+            !config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+            throw std::invalid_argument("Epoch heading seeds require Phase171 GTSAM Pose3 IMU main");
+        }
+        const auto& rotations = problem.imu.epoch_heading_attitudes_body_to_nav;
+        const auto& times = problem.imu.epoch_heading_attitude_times;
+        if (problem.epochs.empty() || rotations.size() != problem.epochs.size() ||
+            times.size() != problem.epochs.size()) {
+            throw std::invalid_argument("Epoch heading seed coverage mismatch");
+        }
+        for (std::size_t i = 0; i < rotations.size(); ++i) {
+            const auto& rotation = rotations[i];
+            if ((times[i] - problem.epochs[i].time) != 0.0 ||
+                !rotation.allFinite() ||
+                !(rotation.transpose() * rotation).isApprox(Matrix3d::Identity(), 1e-9) ||
+                std::abs(rotation.determinant() - 1.0) > 1e-9) {
+                throw std::invalid_argument("Invalid epoch heading seed rotation or identity");
+            }
+        }
+    }
+    if (config_.use_native_tdcp_frequency_residual_states &&
+        (config_.backend != FGOBackend::GTSAM ||
+         config_.use_fixed_lag_smoother || !config_.use_imu || !config_.use_pose3_state ||
+         !config_.use_tdcp_factors ||
+         !config_.use_native_source_clock_c0d_epoch_vector_parity ||
+         config_.use_native_tdcp_only_affine_geometry ||
+         config_.use_native_phase135_official_affine_measurement_family ||
+         config_.use_source_tdcp_resl_observable ||
+         config_.use_official_tdcp_resl_atmosphere_cancellation ||
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+         !std::isfinite(config_.native_tdcp_frequency_residual_prior_sigma_m) ||
+         config_.native_tdcp_frequency_residual_prior_sigma_m <= 0.0)) {
+        throw std::invalid_argument("TDCP frequency residual states require native main GTSAM and explicit positive prior");
+    }
+#ifndef GNSSPP_HAS_GTSAM
+    if (config_.use_native_tdcp_frequency_residual_states) {
+        throw std::invalid_argument("TDCP frequency residual states require compiled GTSAM support");
+    }
+#endif
+    if (config_.use_native_tdcp_only_affine_geometry &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "TDCP-only affine geometry requires the GTSAM backend");
+    }
+    if (config_.use_source_tdcp_resl_observable &&
+        config_.use_official_tdcp_resl_atmosphere_cancellation) {
+        throw std::invalid_argument("Source TDCP resL cannot mix with Phase120");
+    }
+    if (config_.use_source_tdcp_meter_sigma &&
+        (config_.use_official_tdcp_snr_type_sigma ||
+         config_.use_official_tdcp_huber_k ||
+         config_.use_official_tdcp_resl_atmosphere_cancellation)) {
+        throw std::invalid_argument("Source TDCP metre sigma cannot mix with Phase117/118/120");
+    }
+    if (config_.use_native_phase138_affine_tdcp_anchor_range_constant &&
+        !config_.use_native_phase135_official_affine_measurement_family) {
+        throw std::invalid_argument(
+            "Phase138 affine TDCP anchor-range correction requires the "
+            "Phase135 official affine measurement family");
+    }
+    if (config_.use_native_phase138_affine_tdcp_anchor_range_constant &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase138 affine TDCP anchor-range correction requires the GTSAM "
+            "Phase135 backend");
+    }
+    if (config_.use_native_phase143_official_main_lm_termination_budget &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase143 official main LM budget requires the GTSAM backend");
+    }
+    if (config_.use_native_phase167_raw_p_no_doppler_lm_termination_budget &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase167 raw-P no-Doppler LM budget requires the GTSAM backend");
+    }
+    if (config_.use_native_phase167_raw_p_no_doppler_lm_termination_budget &&
+        ((!config_.use_native_raw_p_no_doppler_graph &&
+          !config_.use_native_raw_p_ecef_doppler_gnss_first) ||
+         config_.use_pose3_state || config_.use_imu ||
+         !config_.use_velocity_states || config_.max_iterations != 1000)) {
+        throw std::invalid_argument(
+            "Phase167 raw-P GNSS-first LM budget requires the dedicated "
+            "Point3/velocity graph and configured max_iterations=1000");
+    }
+    if (config_.use_native_phase143_official_main_lm_termination_budget &&
+        config_.max_iterations != 12 && config_.max_iterations != 1000) {
+        throw std::invalid_argument(
+            "Phase143 official main LM budget requires the frozen "
+            "configured 12/1000 iteration boundary");
+    }
+    if (config_.use_native_phase135_official_affine_measurement_family &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase135 official affine measurement family requires the GTSAM backend");
+    }
+    if (config_.use_native_phase135_official_affine_measurement_family &&
+        (!config_.use_native_source_clock_c0d_factor ||
+         !config_.use_native_source_clock_c0d_meter_state_parity ||
+         !config_.use_native_source_clock_c0d_epoch_vector_parity ||
+         config_.use_inter_system_biases ||
+         config_.use_receiver_signal_bias_states ||
+         config_.use_residual_ionosphere_states ||
+         config_.use_native_pdc_state_bridge ||
+         !config_.use_official_tdcp_huber_k ||
+         config_.use_official_tdcp_snr_type_sigma ||
+         config_.use_official_tdcp_resl_atmosphere_cancellation ||
+         (!config_.use_native_phase135_phase107_raw_base_recipe &&
+          (!config_.use_native_phase126_raw_base_source_complete ||
+           !config_.use_native_phase127_glonass_channel_provenance ||
+           !config_.use_native_phase128_glonass_provenance_parser_admission ||
+           !config_.use_native_phase129_glonass_local_miss_mask ||
+           !config_.use_native_phase131_canonical_correction_band_key)))) {
+        throw std::invalid_argument(
+            "Phase135 requires the complete source C7/D meter graph, "
+            "Phase118 fixed TDCP Huber, and either the frozen Phase126-131 "
+            "raw provenance chain or the exact Phase107 raw-base recipe "
+            "without global ISB, extra signal/ionosphere states, PDC, or "
+            "TDCP measurement variants");
+    }
+    if (config_.use_native_source_clock_c0d_factor &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "native source ClockFactor_CCDD C0/D is restricted to the GTSAM "
+            "Pose3+IMU backend; Eigen parity is not implemented");
+    }
+    if (config_.use_native_source_clock_c0d_raw_drift_d_initializer &&
+        (config_.backend != FGOBackend::GTSAM ||
+         !config_.use_native_source_clock_c0d_factor)) {
+        throw std::invalid_argument(
+            "native source raw-drift D initializer requires the GTSAM "
+            "source ClockFactor_CCDD Pose3+IMU candidate");
+    }
+    if (config_.use_native_source_clock_c0d_meter_state_parity &&
+        (config_.backend != FGOBackend::GTSAM ||
+         !config_.use_native_source_clock_c0d_factor)) {
+        throw std::invalid_argument(
+            "native source meter clock-state parity requires the GTSAM "
+            "source ClockFactor_CCDD Pose3+IMU candidate");
+    }
+    if (config_.use_native_source_clock_c0d_gnss_first_meter_state_handoff &&
+        (config_.backend != FGOBackend::GTSAM ||
+         !config_.use_native_source_clock_c0d_factor ||
+         !config_.use_native_source_clock_c0d_meter_state_parity)) {
+        throw std::invalid_argument(
+            "native source GNSS-first meter-state handoff requires the GTSAM "
+            "source ClockFactor_CCDD meter-state candidate");
+    }
+    if (config_.use_native_source_clock_c0d_phase96_main_diagnostics &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase96 main diagnostics require the GTSAM source C0/D backend");
+    }
+    if (config_.use_native_source_clock_c0d_phase96_main_diagnostics &&
+        (!config_.use_native_source_clock_c0d_factor ||
+         !config_.use_native_source_clock_c0d_meter_state_parity)) {
+        throw std::invalid_argument(
+            "Phase96 main diagnostics require the metre-valued source C0/D graph");
+    }
+    if (config_.use_native_source_clock_c0d_phase97_singular_system_diagnostics &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase97 singular-system diagnostics require the GTSAM source C0/D backend");
+    }
+    if (config_.use_native_source_clock_c0d_phase97_singular_system_diagnostics &&
+        (!config_.use_native_source_clock_c0d_factor ||
+         !config_.use_native_source_clock_c0d_meter_state_parity)) {
+        throw std::invalid_argument(
+            "Phase97 singular-system diagnostics require the metre-valued source C0/D graph");
+    }
+    if (config_.use_native_source_clock_c0d_phase98_solver_rank_diagnostic &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase98 solver-boundary diagnostics require the GTSAM backend");
+    }
+    if (config_.use_native_source_clock_c0d_phase99_main_multifrontal_qr_solver &&
+        config_.backend != FGOBackend::GTSAM) {
+        throw std::invalid_argument(
+            "Phase99 main multifrontal QR solver requires the GTSAM backend");
+    }
+    if (config_.use_official_tdcp_huber_k &&
+        config_.use_official_tdcp_snr_type_sigma) {
+        throw std::invalid_argument(
+            "Phase118 official TDCP Huber-k mapping cannot be combined with "
+            "the Phase117 dynamic TDCP sigma candidate");
+    }
+    if (config_.use_official_tdcp_resl_atmosphere_cancellation &&
+        config_.use_official_tdcp_snr_type_sigma) {
+        throw std::invalid_argument(
+            "Phase120 official resL TDCP normalization cannot be combined "
+            "with the Phase117 dynamic TDCP sigma candidate");
+    }
+    if (config_.use_native_phase184_source_tdcp_huber_k &&
+        (!config_.use_native_raw_p_ecef_doppler_gnss_first &&
+         !config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+         !config_.use_native_raw_p_no_doppler_graph)) {
+        throw std::invalid_argument(
+            "Phase184 source TDCP Huber-k requires the Phase171 main or "
+            "dedicated raw-P staging lane");
+    }
+    if (config_.use_native_phase184_source_tdcp_huber_k &&
+        config_.use_official_tdcp_huber_k) {
+        throw std::invalid_argument(
+            "Phase184 source TDCP Huber-k cannot be combined with Phase118");
+    }
+    if (config_.use_native_phase184_source_tdcp_huber_k &&
+        config_.use_official_tdcp_snr_type_sigma) {
+        throw std::invalid_argument(
+            "Phase184 source TDCP Huber-k cannot be combined with Phase117");
+    }
+    double ordinary_tdcp_huber_threshold_sigma =
+        config_.tdcp_huber_threshold_sigma;
+    if (!fgo::resolveOrdinaryTdcpHuberThresholdSigma(
+            config_, ordinary_tdcp_huber_threshold_sigma)) {
+        throw std::invalid_argument(
+            "Phase118 official TDCP Huber-k mapping requires a recognised "
+            "source setting.Type");
+    }
+#ifndef GNSSPP_HAS_GTSAM
+    if (config_.use_native_source_clock_c0d_factor ||
+        config_.use_native_source_clock_c0d_phase96_main_diagnostics ||
+        config_.use_native_source_clock_c0d_phase97_singular_system_diagnostics ||
+        config_.use_native_source_clock_c0d_phase98_solver_rank_diagnostic ||
+        config_.use_native_source_clock_c0d_phase99_main_multifrontal_qr_solver ||
+        config_.use_native_phase135_official_affine_measurement_family ||
+        config_.use_native_phase138_affine_tdcp_anchor_range_constant ||
+        config_.use_native_phase143_official_main_lm_termination_budget ||
+        config_.use_native_phase167_raw_p_no_doppler_lm_termination_budget ||
+        config_.use_native_phase171_raw_p_no_doppler_imu_main) {
+        throw std::invalid_argument(
+            "native source ClockFactor_CCDD C0/D requires a GTSAM build");
+    }
+#endif
     const auto optimize_problem_start =
         std::chrono::high_resolution_clock::now();
     FGOResult result;
     result.diagnostics.epochs = problem.epochs.size();
+    result.diagnostics.native_source_clock_c0d_factor_enabled =
+        config_.use_native_source_clock_c0d_factor;
+    result.diagnostics.native_source_clock_c0d_meter_state_parity_enabled =
+        config_.use_native_source_clock_c0d_meter_state_parity;
+    result.diagnostics.native_source_clock_c0d_raw_drift_d_initializer_enabled =
+        config_.use_native_source_clock_c0d_raw_drift_d_initializer;
+    result.diagnostics.official_tdcp_huber_k_enabled =
+        config_.use_official_tdcp_huber_k;
+    result.diagnostics.official_tdcp_setting_type =
+        config_.official_tdcp_setting_type;
+    result.diagnostics.official_tdcp_huber_threshold_sigma =
+        ordinary_tdcp_huber_threshold_sigma;
+    result.diagnostics.native_phase184_source_tdcp_huber_k_enabled =
+        config_.use_native_phase184_source_tdcp_huber_k;
+    result.diagnostics.native_phase184_tdcp_setting_type =
+        config_.native_phase184_tdcp_setting_type;
+    result.diagnostics.official_tdcp_resl_atmosphere_cancellation_enabled =
+        config_.use_official_tdcp_resl_atmosphere_cancellation;
+    result.diagnostics.phase135_official_affine_measurement_family_enabled =
+        config_.use_native_phase135_official_affine_measurement_family;
+    result.diagnostics.phase138_affine_tdcp_anchor_range_constant_enabled =
+        config_.use_native_phase138_affine_tdcp_anchor_range_constant;
+    if (config_.use_native_phase138_affine_tdcp_anchor_range_constant) {
+        result.diagnostics.phase138_measurement_equation =
+            "tdcp_native-(rho_current_initial-rho_previous_initial)";
+        result.diagnostics.phase138_geometry_representation =
+            "RTKLIB-geodist-single-Sagnac-fixed-initial-endpoints";
+    }
+    result.diagnostics.native_source_clock_c0d_phase98_solver_rank.enabled =
+        config_.use_native_source_clock_c0d_phase98_solver_rank_diagnostic;
+    result.diagnostics
+        .native_source_clock_c0d_phase99_main_multifrontal_qr_solver_requested =
+        config_.use_native_source_clock_c0d_phase99_main_multifrontal_qr_solver;
     result.diagnostics.pseudorange_factors = problem.pseudorange_factors.size();
     if (config_.use_receiver_signal_bias_states) {
         std::set<std::pair<GNSSSystem, SignalType>> signal_bias_groups;
@@ -166,6 +501,18 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
          problem.undifferenced_doppler_factors.empty() &&
          problem.single_difference_doppler_factors.empty() &&
          problem.single_difference_tdcp_factors.empty())) {
+        if (config_.use_native_phase143_official_main_lm_termination_budget) {
+            // An enabled selector must never publish a synthetic or partial
+            // termination object when no native LM call took place.
+            throw std::invalid_argument(
+                "Phase143 termination telemetry unavailable: empty FGO problem");
+        }
+        if (config_.use_native_phase138_affine_tdcp_anchor_range_constant) {
+            result.diagnostics.phase138_configuration_valid = false;
+            result.diagnostics.phase138_configuration_failure =
+                "Phase138 requires nonempty epochs and ordinary TDCP factors";
+            result.diagnostics.phase138_factor_count_unchanged = false;
+        }
         return result;
     }
 
@@ -870,7 +1217,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 const double raw_residual = factor.delta_carrier_m - predicted;
                 const double scale =
                     robust_scale(raw_residual / sigma,
-                                 config_.tdcp_huber_threshold_sigma);
+                                 ordinary_tdcp_huber_threshold_sigma);
                 if (scale < 1.0) {
                     ++robust_tdcp_count;
                 }
@@ -971,7 +1318,7 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 const double raw_residual = factor.residual_mps - predicted;
                 const double scale =
                     robust_scale(raw_residual / sigma,
-                                 config_.tdcp_huber_threshold_sigma);
+                                 config_.undifferenced_doppler_huber_threshold_sigma);
                 const double weight = scale / sigma;
 
                 std::vector<std::pair<int, double>> jacobian;

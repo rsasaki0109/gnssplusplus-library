@@ -1,0 +1,329 @@
+{
+  "schema_version": "smartphone-r5-phase128-inventory-first-structural-manifest.v1",
+  "phase": 128,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-inventory-raw-execution",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_contract_freeze_v1.json",
+    "commit": "751dbfff4fe21c1d9642a27c016fcab2cd317afa",
+    "sha256": "467b35e14ed3235244a6403eb5ac1fbcad777f9e675fd1a08db20209781ac385"
+  },
+  "contract_audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_contract_audit_v1.md",
+    "commit": "c2557ac7b99f2fd2827233900fbe88a10a9b1695",
+    "sha256": "58993acacf45107928b10ebd3f406ca1a494102168e46366edb42777369678f7"
+  },
+  "implementation": {
+    "commit": "50357e8f3eabbb2eca672b00a16eb2ce32cc2f16",
+    "candidate_id": "phase128-inventory-first-glonass-parser-admission-structural-v1",
+    "phase126_selector": "--native-phase126-raw-base-source-complete",
+    "phase127_selector": "--native-phase127-glonass-channel-provenance",
+    "phase128_selector": "--native-phase128-glonass-provenance-parser-admission",
+    "phase118_selector": "--native-phase118-official-tdcp-huber-k",
+    "main_solver": "MULTIFRONTAL_QR",
+    "fixed_tdcp_sigma_m": 0.03,
+    "official_tdcp_huber_k": 0.5,
+    "phase117_dynamic_sigma": false,
+    "phase120_selector": false,
+    "additional_frequency_selector": false,
+    "default_off": true,
+    "legacy_default_unchanged": true,
+    "partial_selectors_allowed": false,
+    "no_fallback": true,
+    "source_sha256": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": "898b979c51d8fa4ec98432a3f2aeb8a99ff2603689e8cbe396aecad501985138",
+      "include/libgnss++/algorithms/fgo_config.hpp": "4cbb8fa4b00acbb8a30c82299993a45bf3c1a0d2b71b73af2feac04cc4394008",
+      "include/libgnss++/algorithms/fgo.hpp": "e7e3e76b3d6a37e270212ba980821e0ac6856cba9285ec60d09166938e473179",
+      "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "ecb6b354de926ccb8d479a27cd35db4cd8624da91d367116e21dd065512f1f3d",
+      "include/libgnss++/algorithms/phase126_raw_base_compound.hpp": "8e7c18260905cd8c36149cb55d97cd4aa40c6bae2649202f57a5693f728e6f62",
+      "include/libgnss++/algorithms/phase127_glonass_channel_provenance.hpp": "dc1de4ae6de270f306f1c07a54ab1799df26344f8cc6fdd910d7abfaf1914c8b",
+      "include/libgnss++/algorithms/phase128_glonass_provenance.hpp": "fe743866c3c4815b75e87104523c53d914e4f4e7485fc6f10f5d04b20feade55",
+      "include/libgnss++/core/glonass_provenance.hpp": "f3659dd826f742e381f21f3d6f5ecfbb2cfbbbdf637fa66405bc2073f74b1df6",
+      "include/libgnss++/core/navigation.hpp": "04f39050e220c2f51e78ed9f7a9398309ed51580d1947ab261573b5e101ea87c",
+      "include/libgnss++/io/rinex.hpp": "b08705073aaf944daa5e6e899eebc8856e974d07f09282605dd14461b8e38669",
+      "src/algorithms/base_pseudorange_compensation.cpp": "03459df5505a5e32e4ee356126a30742c693f32fe0d6eccc3bfc243c7fe4cca4",
+      "src/algorithms/fgo_internal.hpp": "f3980a5190ef1cc59aa479665c7ccbe6fe4ec0096e0aef1aa3eb451b53241acb",
+      "src/algorithms/fgo_problems.cpp": "f3f86db94c8cf3f43e25d402e21b5d3f95d9259435e559fbe76e7564af6c3d55",
+      "src/algorithms/phase126_raw_base_compound.cpp": "5bbb276c2c22b2d9d2a27d90746cbb2451b26d8cf87b339a36c50a7fe7dc513d",
+      "src/algorithms/phase127_glonass_channel_provenance.cpp": "cc8e3105abc8367786b089e8d0492f8217550f0a69473869ae8a89cc01941bb0",
+      "src/algorithms/phase128_glonass_provenance.cpp": "5d930d8be16c70c4956de41822160c0c44c1e2761f893a9a491cb9d1a076bbc7",
+      "src/algorithms/source_pseudorange_miss_mask.cpp": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
+      "src/core/glonass_provenance.cpp": "ae1db078adcc8db21db6cbc7a660d24be21a681dc8668d6d29e1eda13b34e1cf",
+      "src/io/rinex.cpp": "308450b371d80105e9d23ff31523a2a7aef32b0cc0a6e69c8b12744c98d0aada",
+      "src/io/rtcm_decode_nav.cpp": "10a45b96830eece70d73feda7d79a8a6fa252c84a5678c3aad22c79d8a4af1a1",
+      "src/io/android_raw_gnss.cpp": "a020ce900db6a9d3a994cc3adb3dcebbe84cbf67c1ff9793991b7a75039529c5"
+    },
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "d823b031d865bde973d3bd6ffcf2957288bccf29d66bf89ade3dea11d108bfe0"
+    }
+  },
+  "artifacts": {
+    "validator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase128_inventory_first_structural.py",
+      "sha256": "6b2ee8101cc03bae2b419da502ad336ed32efcf2f3aee45d905f2593027e1253"
+    },
+    "runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase128_inventory_first_structural_execute.py",
+      "sha256": "654adda4fedf8f9326dcceb02952de21d4ce6459412fcc97320f70dc6d283d77"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase128_inventory_first_structural.py",
+      "sha256": "4293595b6aa90ea8ce5525f01f68c78d10d5495415bcf37df13e96cd8b6ea890"
+    }
+  },
+  "raw_input_contract": {
+    "input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "phone_gnss_only": true,
+    "phone_imu_only": true,
+    "broadcast_navigation_only": true,
+    "sealed_raw_base_rinex_only": true,
+    "materialize_after_authorization": true,
+    "raw_content_copied_or_transformed": false,
+    "solution_content": "opaque hash/row metadata only",
+    "truth_mat_pdc_precomputed_coordinate_phone_coordinate_accuracy_kaggle": false
+  },
+  "inventory_contract": {
+    "stage": "post-independent-authorization-pre-solver",
+    "solver_invocations_on_inventory_failure": 0,
+    "header_statuses": ["absent", "valid-empty", "entries", "malformed"],
+    "header_absent_or_valid_empty_geph_fallback": true,
+    "header_malformed_fail_closed": true,
+    "canonical_fields": "data[0..14]",
+    "fcn_field": "data[10]",
+    "fcn_encoded_gt_128_subtract_256": true,
+    "fcn_min": -7,
+    "fcn_max": 6,
+    "native_gpst_query_and_toe": true,
+    "glonass_validity_seconds": 1800.0,
+    "per_record_reject_counts": true,
+    "unrelated_malformed_record_does_not_poison_valid_record": true,
+    "rover_and_base_full_coverage_required": true,
+    "mismatch_duplicate_tie_missing_out_of_time_range_fail_closed": true,
+    "phone_carrier_frequency_is_fcn_source": false,
+    "fixed_channel_or_external_table": false
+  },
+  "structural_gates": {
+    "phase126_active_exactly_once": true,
+    "phase127_active_exactly_once": true,
+    "phase128_active_exactly_once": true,
+    "phase118_active_exactly_once": true,
+    "phase117_off": true,
+    "phase120_off": true,
+    "additional_frequency_off": true,
+    "header_status_and_per_record_ledger": true,
+    "typed_identity_and_native_gpst_query": true,
+    "canonical_fcn_domain_and_normalization": true,
+    "rover_base_full_glonass_coverage": true,
+    "finite_positive_frequency_wavelength": true,
+    "phase126_atomic_a_b_c": true,
+    "base_correction_exactly_once": true,
+    "gnss_first_accepted_iterations_positive": true,
+    "gnss_first_strict_cost_decrease": true,
+    "main_qr_selected": true,
+    "main_accepted_iterations_positive": true,
+    "main_strict_cost_decrease": true,
+    "full_finite_c7_d_ccdd_exact_handoff": true,
+    "finite_earth_valid_expected_output_coverage": true,
+    "pixel5_offset_exactly_once": true,
+    "no_solution_content_read": true,
+    "no_truth_mat_pdc_precomputed_coordinates_accuracy_kaggle": true,
+    "solver_zero_on_inventory_failure": true,
+    "no_fallback": true,
+    "no_rerun": true
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "official_route_type": "Highway",
+      "expected_tdcp_huber_k": 0.5,
+      "domain_rows": 2158,
+      "expected_problem_epochs": 2159,
+      "expected_output_epochs": 2159,
+      "runs": 1,
+      "phase126_selector_count": 1,
+      "phase127_selector_count": 1,
+      "phase128_selector_count": 1,
+      "phase118_selector_count": 1,
+      "phase117_selector_count": 0,
+      "phase120_selector_count": 0,
+      "additional_frequency_selector_count": 0,
+      "solver_invocations_if_inventory_fails": 0,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "placeholder": "__PHASE128_RAW_DEVICE_GNSS__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "placeholder": "__PHASE128_RAW_DEVICE_IMU__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "placeholder": "__PHASE128_RAW_BROADCAST_NAV__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "placeholder": "__PHASE128_RAW_BASE_RINEX__",
+        "sha256_placeholder": "__PHASE128_RAW_BASE_SHA256__",
+        "raw_rinex_only": true,
+        "header_inventory_after_authorization": true,
+        "canonical_nav_inventory_after_authorization": true,
+        "rover_base_full_coverage_after_authorization": true,
+        "payload_read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "inventory_gate": {
+        "before_solver": true,
+        "fail_closed": true,
+        "rover_full_glonass_coverage": true,
+        "base_full_glonass_coverage": true,
+        "solver_invocations_on_failure": 0
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base", "--dataset-id", "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "--android-gnss", "__PHASE128_RAW_DEVICE_GNSS__",
+        "--android-imu", "__PHASE128_RAW_DEVICE_IMU__",
+        "--nav", "__PHASE128_RAW_BROADCAST_NAV__",
+        "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask",
+        "--native-upstream-position-offset", "--native-phase118-official-tdcp-huber-k",
+        "--native-phase126-raw-base-source-complete", "--native-phase127-glonass-channel-provenance",
+        "--native-phase128-glonass-provenance-parser-admission",
+        "--native-base-rinex", "__PHASE128_RAW_BASE_RINEX__",
+        "--native-base-rinex-sha256", "__PHASE128_RAW_BASE_SHA256__",
+        "--out", "output/smartphone-r5/phase128-inventory-first-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/opaque_solution_output.csv",
+        "--summary-json", "output/smartphone-r5/phase128-inventory-first-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/structural_summary.json"
+      ]
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "official_route_type": "Highway",
+      "expected_tdcp_huber_k": 0.5,
+      "domain_rows": 1465,
+      "expected_problem_epochs": 1466,
+      "expected_output_epochs": 1466,
+      "runs": 1,
+      "phase126_selector_count": 1,
+      "phase127_selector_count": 1,
+      "phase128_selector_count": 1,
+      "phase118_selector_count": 1,
+      "phase117_selector_count": 0,
+      "phase120_selector_count": 0,
+      "additional_frequency_selector_count": 0,
+      "solver_invocations_if_inventory_fails": 0,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "placeholder": "__PHASE128_RAW_DEVICE_GNSS__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "placeholder": "__PHASE128_RAW_DEVICE_IMU__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "placeholder": "__PHASE128_RAW_BROADCAST_NAV__",
+          "payload_read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "placeholder": "__PHASE128_RAW_BASE_RINEX__",
+        "sha256_placeholder": "__PHASE128_RAW_BASE_SHA256__",
+        "raw_rinex_only": true,
+        "header_inventory_after_authorization": true,
+        "canonical_nav_inventory_after_authorization": true,
+        "rover_base_full_coverage_after_authorization": true,
+        "payload_read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false
+      },
+      "inventory_gate": {
+        "before_solver": true,
+        "fail_closed": true,
+        "rover_full_glonass_coverage": true,
+        "base_full_glonass_coverage": true,
+        "solver_invocations_on_failure": 0
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base", "--dataset-id", "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "--android-gnss", "__PHASE128_RAW_DEVICE_GNSS__",
+        "--android-imu", "__PHASE128_RAW_DEVICE_IMU__",
+        "--nav", "__PHASE128_RAW_BROADCAST_NAV__",
+        "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask",
+        "--native-upstream-position-offset", "--native-phase118-official-tdcp-huber-k",
+        "--native-phase126-raw-base-source-complete", "--native-phase127-glonass-channel-provenance",
+        "--native-phase128-glonass-provenance-parser-admission",
+        "--native-base-rinex", "__PHASE128_RAW_BASE_RINEX__",
+        "--native-base-rinex-sha256", "__PHASE128_RAW_BASE_SHA256__",
+        "--out", "output/smartphone-r5/phase128-inventory-first-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/opaque_solution_output.csv",
+        "--summary-json", "output/smartphone-r5/phase128-inventory-first-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/structural_summary.json"
+      ]
+    }
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "order": "MTV-A then LAX-T",
+    "runs_per_route": 1,
+    "controls": 0,
+    "sweeps": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "native_solver_invocations_planned": 2,
+    "solution_rows_authorized": false,
+    "truth_reads_planned": 0,
+    "accuracy_calculations_planned": 0
+  },
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "authorization_boundary": {
+    "independent_authorization_required": true,
+    "raw_materialization_authorized": false,
+    "inventory_reads_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "next_step": "pre-raw accounting seal then independent authorization pinning all source, runner, manifest, binary, and route metadata"
+  }
+}

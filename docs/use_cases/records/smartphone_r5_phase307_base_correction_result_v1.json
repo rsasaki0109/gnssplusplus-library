@@ -1,0 +1,10 @@
+{
+  "built": false,
+  "epochs": 3500,
+  "states": 68697,
+  "signal_rows": 186827,
+  "streams": 39,
+  "failure": "source-complete correction stream has duplicate/non-monotonic time",
+  "phase": 307,
+  "complete_epoch_count": true
+}

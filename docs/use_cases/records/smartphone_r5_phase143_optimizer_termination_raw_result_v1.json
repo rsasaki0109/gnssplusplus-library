@@ -1,0 +1,239 @@
+{
+  "authorization_commit_is_separate": true,
+  "authorization_path": "docs/use_cases/records/smartphone_r5_phase143_optimizer_termination_raw_authorization_v1.json",
+  "authorization_sha256": "7c728df150a1d3ad8baad6eac376ef21ee7875380d078d274e6fa85c225388be",
+  "candidate_id": "phase143-official-main-lm-termination-budget-v1",
+  "execution_label": "Luna Max",
+  "phase": 143,
+  "policy": {
+    "accuracy_evaluation": false,
+    "fallback": false,
+    "kaggle_access": false,
+    "mat_used": false,
+    "pdc_used": false,
+    "precomputed_coordinates_used": false,
+    "repair": false,
+    "rerun": false,
+    "solution_coordinate_interpretation": false,
+    "solution_publication": false,
+    "truth_used": false
+  },
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_reads": 2,
+    "kaggle_or_token_access": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "native_solver_invocations": 2,
+    "raw_base_rinex_reads": 2,
+    "raw_phone_gnss_reads": 2,
+    "raw_phone_imu_reads": 2,
+    "reruns_fallbacks_repairs_sweeps": 0,
+    "solution_coordinate_reads": 0,
+    "truth_reads": 0
+  },
+  "rerun_or_fallback": false,
+  "route_order": [
+    "MTV-A",
+    "LAX-T"
+  ],
+  "routes": [
+    {
+      "execution": {
+        "argv": [
+          "build/apps/gnss_fgo_imu_no_base",
+          "--dataset-id",
+          "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+          "--android-gnss",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "--android-imu",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "--nav",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "--all-epochs",
+          "--android-raw-utc-keys",
+          "--android-raw-clock-only",
+          "--android-utc-wall-clock-fallback",
+          "--native-pdc-imu-tdcp-no-bridge",
+          "--native-source-direct-observable-quality",
+          "--native-source-clock-c0d-factor",
+          "--native-source-clock-c0d-meter-state-parity",
+          "--native-source-clock-c0d-active-solve-diagnostic",
+          "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+          "--native-source-clock-c0d-epoch-vector-parity",
+          "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+          "--native-base-pseudorange-compensation",
+          "--native-base-pseudorange-source-miss-mask",
+          "--native-upstream-position-offset",
+          "--native-phase135-official-affine-measurement-family",
+          "--native-phase138-affine-tdcp-anchor-range-constant",
+          "--native-phase118-official-tdcp-huber-k",
+          "--native-phase143-official-main-lm-termination-budget",
+          "--native-base-rinex",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+          "--native-base-rinex-sha256",
+          "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+          "--out",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase143-optimizer-termination-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/opaque_solution_output.csv",
+          "--summary-json",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase143-optimizer-termination-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/native_summary.json"
+        ],
+        "invocation_count": 1,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 115,
+        "stdout_sha256": "6d6805236b06a0b3a3717f07ec54f19f4641f7970416f6517c1b90d544916df6"
+      },
+      "failure": "duplicate JSON key 'failure'",
+      "input_hashes": {
+        "base.obs": {
+          "bytes": 10708536,
+          "expected_bytes": 10708536,
+          "expected_sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+          "match": true,
+          "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52"
+        },
+        "brdc.nav": {
+          "bytes": 9955040,
+          "expected_bytes": 9955040,
+          "expected_sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "match": true,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+        },
+        "device_gnss.csv": {
+          "bytes": 57715495,
+          "expected_bytes": 57715495,
+          "expected_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "match": true,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+        },
+        "device_imu.csv": {
+          "bytes": 34393802,
+          "expected_bytes": 34393802,
+          "expected_sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "match": true,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+        }
+      },
+      "input_read_counts": {
+        "base.obs": 1,
+        "brdc.nav": 1,
+        "device_gnss.csv": 1,
+        "device_imu.csv": 1
+      },
+      "opaque_solution": {
+        "bytes": 172694,
+        "content_interpreted": false,
+        "newline_count": 2159,
+        "path": "output/smartphone-r5/phase143-optimizer-termination-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/opaque_solution_output.csv",
+        "sha256": "b765951daa5478600f5da1f0ad0a27bdc5cdf265d681df21d91779abf3163b00"
+      },
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "solution_content_read": false,
+      "solver_invocations": 1,
+      "status": "fail-closed-structural-gate",
+      "structural_gate": "fail"
+    },
+    {
+      "execution": {
+        "argv": [
+          "build/apps/gnss_fgo_imu_no_base",
+          "--dataset-id",
+          "2022-04-01-18-22-us-ca-lax-t/pixel5",
+          "--android-gnss",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "--android-imu",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "--nav",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "--all-epochs",
+          "--android-raw-utc-keys",
+          "--android-raw-clock-only",
+          "--android-utc-wall-clock-fallback",
+          "--native-pdc-imu-tdcp-no-bridge",
+          "--native-source-direct-observable-quality",
+          "--native-source-clock-c0d-factor",
+          "--native-source-clock-c0d-meter-state-parity",
+          "--native-source-clock-c0d-active-solve-diagnostic",
+          "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+          "--native-source-clock-c0d-epoch-vector-parity",
+          "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+          "--native-base-pseudorange-compensation",
+          "--native-base-pseudorange-source-miss-mask",
+          "--native-upstream-position-offset",
+          "--native-phase135-official-affine-measurement-family",
+          "--native-phase138-affine-tdcp-anchor-range-constant",
+          "--native-phase118-official-tdcp-huber-k",
+          "--native-phase143-official-main-lm-termination-budget",
+          "--native-base-rinex",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+          "--native-base-rinex-sha256",
+          "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+          "--out",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase143-optimizer-termination-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/opaque_solution_output.csv",
+          "--summary-json",
+          "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library/output/smartphone-r5/phase143-optimizer-termination-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/native_summary.json"
+        ],
+        "invocation_count": 1,
+        "return_code": 0,
+        "stderr_bytes": 0,
+        "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout_bytes": 113,
+        "stdout_sha256": "b12c7f982ff381d4f88b5e5e9502fe61a3fbdead783a0a6f8e63693e513a47ba"
+      },
+      "failure": "duplicate JSON key 'failure'",
+      "input_hashes": {
+        "base.obs": {
+          "bytes": 719969,
+          "expected_bytes": 719969,
+          "expected_sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+          "match": true,
+          "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe"
+        },
+        "brdc.nav": {
+          "bytes": 10635773,
+          "expected_bytes": 10635773,
+          "expected_sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "match": true,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+        },
+        "device_gnss.csv": {
+          "bytes": 33837317,
+          "expected_bytes": 33837317,
+          "expected_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "match": true,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+        },
+        "device_imu.csv": {
+          "bytes": 23649244,
+          "expected_bytes": 23649244,
+          "expected_sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "match": true,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5"
+        }
+      },
+      "input_read_counts": {
+        "base.obs": 1,
+        "brdc.nav": 1,
+        "device_gnss.csv": 1,
+        "device_imu.csv": 1
+      },
+      "opaque_solution": {
+        "bytes": 117254,
+        "content_interpreted": false,
+        "newline_count": 1466,
+        "path": "output/smartphone-r5/phase143-optimizer-termination-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/opaque_solution_output.csv",
+        "sha256": "225d8147249455f4bd39c889d0b44fc1b3e4fbbe0623dfe9d4e550ced749494e"
+      },
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "solution_content_read": false,
+      "solver_invocations": 1,
+      "status": "fail-closed-structural-gate",
+      "structural_gate": "fail"
+    }
+  ],
+  "runs_per_route": 1,
+  "schema_version": "smartphone-r5-phase143-optimizer-termination-raw-result.v1",
+  "solution_policy": "opaque hash/bytes/newline seal only; no coordinate fields read or published",
+  "status": "sealed-structural-raw-result-no-accuracy"
+}

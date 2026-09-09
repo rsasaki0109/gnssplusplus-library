@@ -18,6 +18,7 @@
 #include <sstream>
 #include <string_view>
 #include <utility>
+#include <tuple>
 #include <vector>
 
 namespace libgnss::io {
@@ -337,6 +338,7 @@ struct RawRow {
     bool has_multipath_indicator = false;
     double pseudorange_rate_mps = 0.0;
     double adr_m = std::numeric_limits<double>::quiet_NaN();
+    double adr_uncertainty_m = std::numeric_limits<double>::quiet_NaN();
     double cn0_dbhz = 0.0;
     bool has_cn0_dbhz = false;
     double carrier_frequency_hz = 0.0;
@@ -452,6 +454,15 @@ bool parseRawRow(const std::vector<std::string>& row,
                            output.adr_m, true)) {
         error = "invalid AccumulatedDeltaRangeMeters";
         return false;
+    }
+    if (columns.has("accumulateddeltarangeuncertaintymeters")) {
+        // Previously ignored optional metadata must not change row admission.
+        // Blank, malformed, nonfinite and nonpositive values stay unavailable.
+        const auto token=trim(columns.value(row,"accumulateddeltarangeuncertaintymeters"));
+        char* end=nullptr;
+        const double value=std::strtod(token.c_str(),&end);
+        if(end!=token.c_str() && *end=='\0' && std::isfinite(value) && value>0.)
+            output.adr_uncertainty_m=value;
     }
     if (columns.has("cn0dbhz") &&
         !parseFiniteDouble(columns.value(row, "cn0dbhz"), output.cn0_dbhz, true)) {
@@ -589,6 +600,8 @@ bool appendEpoch(EpochAccumulator& accumulator,
     ObservationData epoch(accumulator.time);
     epoch.receiver_clock_bias = accumulator.clock_bias_seconds;
     epoch.receiver_clock_drift_mps = accumulator.receiver_clock_drift_mps;
+    epoch.raw_source_index = result.observations.epochs.size();
+    epoch.raw_utc_time_millis = accumulator.utc_millis;
     if (accumulator.have_receiver_position) {
         epoch.receiver_position = accumulator.receiver_position;
         ++result.diagnostics.receiver_position_rows;
@@ -684,6 +697,9 @@ bool loadAndroidRawGnssCsv(const std::string& path,
     }
 
     bool have_epoch = false;
+    using FrequencyTimingKey = std::tuple<std::int64_t, int, int>;
+    using FrequencyClock = std::tuple<std::int64_t, std::int64_t, double, int>;
+    std::map<FrequencyTimingKey, FrequencyClock> frequency_clocks;
     EpochAccumulator accumulator;
     std::int64_t base_full_bias_nanos = 0;
     std::int64_t previous_time_nanos = 0;
@@ -715,6 +731,22 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                     std::to_string(result.diagnostics.input_rows + 1U) +
                     ": " + error;
             return false;
+        }
+        if (config.require_frequency_pair_timing &&
+            (raw.constellation == 1 || raw.constellation == 6)) {
+            if (trim(columns.value(row, "timeoffsetnanos")).empty() ||
+                !std::isfinite(raw.time_offset_nanos) || raw.time_offset_nanos != 0.0) {
+                error = "paired TDCP raw timing requires explicit zero TimeOffsetNanos";
+                return false;
+            }
+            const FrequencyTimingKey key{raw.utc_millis,raw.constellation,raw.svid};
+            const FrequencyClock clock{raw.time_nanos,raw.full_bias_nanos,
+                                       raw.bias_nanos,raw.hardware_clock_discontinuity_count};
+            const auto [entry, inserted] = frequency_clocks.emplace(key,clock);
+            if (!inserted && entry->second != clock) {
+                error = "paired TDCP raw timing has inconsistent cross-signal receiver clocks";
+                return false;
+            }
         }
         AndroidRawGnssRowDiagnostic raw_diagnostic;
         raw_diagnostic.raw_row_index = result.raw_row_diagnostics.size();
@@ -940,6 +972,10 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         observation.has_pseudorange_rate_mps =
             std::isfinite(raw.pseudorange_rate_mps);
         observation.source_carrier_frequency_hz = raw.carrier_frequency_hz;
+        observation.has_source_adr_uncertainty_m =
+            std::isfinite(raw.adr_uncertainty_m) && raw.adr_uncertainty_m > 0.;
+        observation.source_adr_uncertainty_m =
+            observation.has_source_adr_uncertainty_m ? raw.adr_uncertainty_m : 0.;
         observation.has_source_carrier_frequency_hz =
             std::isfinite(raw.carrier_frequency_hz) &&
             raw.carrier_frequency_hz > 0.0;
@@ -1063,7 +1099,8 @@ bool alignAndroidRawGnssSolutionsToUtcKeys(
     const std::vector<AndroidRawGnssSolutionPoint>& solutions,
     double solution_time_tolerance_ms,
     AndroidRawGnssEpochAlignment& alignment,
-    std::string& error) {
+    std::string& error,
+    bool include_first_native_epoch) {
     alignment = AndroidRawGnssEpochAlignment{};
     if (raw_epoch_times.size() != epoch_utc_time_millis.size()) {
         error = "raw observation epochs and integer UTC keys are not one-to-one";
@@ -1126,9 +1163,14 @@ bool alignAndroidRawGnssSolutionsToUtcKeys(
         solution_for_raw[raw_cursor] = static_cast<int>(solution_index);
     }
 
-    alignment.target_epochs = raw_epoch_count - 1U;
+    if (include_first_native_epoch && solution_for_raw.front() < 0) {
+        error = "first raw epoch requires an exact native solution";
+        return false;
+    }
+    const std::size_t first_output = include_first_native_epoch ? 0U : 1U;
+    alignment.target_epochs = raw_epoch_count - first_output;
     alignment.epochs.reserve(alignment.target_epochs);
-    for (std::size_t raw_index = 1U; raw_index < raw_epoch_count; ++raw_index) {
+    for (std::size_t raw_index = first_output; raw_index < raw_epoch_count; ++raw_index) {
         AndroidRawGnssAlignedEpoch aligned;
         aligned.utc_time_millis = epoch_utc_time_millis[raw_index];
         const int exact_solution_index = solution_for_raw[raw_index];

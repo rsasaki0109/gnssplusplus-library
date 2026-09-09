@@ -1,0 +1,208 @@
+{
+  "schema_version": "smartphone-r5-phase116-carrier-tdcp-source-parity-freeze.v1",
+  "phase": 116,
+  "execution_label": "Luna Max",
+  "status": "frozen-one-diagnostic-before-execution",
+  "purpose": "Freeze exactly one source-backed, read-only carrier/TDCP incidence diagnostic after the Phase116 official/native parity audit. This record is not raw, solver, truth, accuracy, or solution authorization.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase116_carrier_tdcp_source_parity_audit_v1.md",
+    "commit": "03e5360e2258e0611e8e66c958e1803f5f4fc9c2",
+    "sha256": "50934ccc00ee09edae0065bc2d00ad3b33d5f11dd461d97c31181e1cea143869"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase116-raw-carrier-tdcp-incidence-diagnostic-v1",
+    "source_backed": true,
+    "reason": "Official and native source already support ordinary adjacent same-satellite/same-signal TDCP; sealed Phase107/112 records show it active. No source-backed ambiguity-free base carrier DD/TDCP factor is present: native generic DD creates AmbiguityState and the no-base app rejects DD vectors.",
+    "ordinary_tdcp_enablement": "already active in the explicit no-bridge raw recipe; no-op as a new candidate",
+    "algorithm_or_binary_change": false,
+    "graph_factor_value_key_change": false,
+    "c7_d_qr_base_offset_change": false,
+    "equation_unit_sigma_filter_lm_change": false,
+    "legacy_default_changed": false,
+    "pdc_enabled": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false
+  },
+  "candidate": {
+    "id": "phase116-raw-carrier-tdcp-incidence-diagnostic-v1",
+    "opt_in": true,
+    "default_off": true,
+    "diagnostic_only": true,
+    "raw_only": true,
+    "mode": "copy-only telemetry after existing raw carrier/TDCP admission decisions",
+    "records": [
+      "raw Android carrier rows presented by the parser",
+      "finite exact (SatelliteId,SignalType) carrier rows retained per problem epoch",
+      "adjacent candidate pairs, accepted TDCP pairs, inserted ordinary TDCP factors",
+      "existing TDCP rejection taxonomy: gap, clock discontinuity, loss-of-lock, nonfinite, code-phase jump",
+      "ordinary TDCP, standalone carrier-phase, single-difference TDCP, DD carrier, and DD pseudorange family counts",
+      "existing base-carrier/DD and PDC-bridge requested/admitted/rejected guard state"
+    ],
+    "does_not": [
+      "create or alter carrier, TDCP, DD, ambiguity, C7, D, ISB, prior, or output rows",
+      "reinterpret a rejected row as raw, zero-corrected, endpoint-held, or extrapolated",
+      "change graph topology, values, keys, solver, ordering, damping, LM schedule, sigma, robust loss, or filters",
+      "change raw-base pseudorange correction, C0D/C7/D handoff, Phase99 QR, or final Pixel5 offset",
+      "read or publish solution rows, truth, MAT, precomputed phone coordinates, PDC, or Kaggle data"
+    ],
+    "fail_closed": true,
+    "solution_withheld": true,
+    "accuracy_evaluation": false
+  },
+  "parity_invariants": {
+    "ordinary_tdcp_same_satellite_same_signal": true,
+    "standalone_carrier_phase_factors_remain_disabled": true,
+    "double_difference_factors_remain_disabled_in_no_base_app": true,
+    "ambiguity_state_topology_unchanged": true,
+    "c7_d_exact_keys_units_and_handoff": true,
+    "ccdd_equation_and_sigma": true,
+    "phase99_multifrontal_qr_and_ordering": true,
+    "raw_base_pseudorange_only_scope": true,
+    "pixel5_final_offset": true,
+    "tdcp_sigma_m": 0.03,
+    "tdcp_max_gap_s": 2.0,
+    "tdcp_code_phase_jump_threshold_m": 10.0,
+    "carrier_and_tdcp_masks_unchanged": true,
+    "imu_p_doppler_factors_unchanged": true,
+    "legacy_selector_off": true,
+    "no_fallback_or_rerun": true
+  },
+  "raw_only_viability": {
+    "phone_adjacent_tdcp": {
+      "possible_same_run": true,
+      "ambiguity_free": true,
+      "status": "already implemented from raw Android ADR; no base input required"
+    },
+    "phone_base_generic_dd_carrier": {
+      "possible_same_run_without_mat": true,
+      "ambiguity_free": false,
+      "status": "generic builder creates per-arc AmbiguityState and is not used by the no-base main app"
+    },
+    "phone_base_ambiguity_free_tdcp_dd": {
+      "possible_with_current_source": false,
+      "status": "no official/native factor or selector; adding it would change the observation model/topology"
+    },
+    "official_base_helper": {
+      "carrier_or_tdcp_correction": false,
+      "scope": "pseudorange correction only",
+      "raw_only": false,
+      "reason": "official helper reads base_position.csv and base_offset.csv"
+    }
+  },
+  "sealed_route_evidence": {
+    "phase107_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_result_v1.json",
+      "sha256": "e7eb3f1d2670672414744a100dc1e2fc3e0b019ae7efc0dbfef1518300ce8d6e",
+      "routes": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+          "tdcp_factors_built": 31269,
+          "double_difference_carrier_factors": 0,
+          "double_difference_pseudorange_factors": 0,
+          "selected_solver": "MULTIFRONTAL_QR"
+        },
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+          "tdcp_factors_built": 14012,
+          "double_difference_carrier_factors": 0,
+          "double_difference_pseudorange_factors": 0,
+          "selected_solver": "MULTIFRONTAL_QR"
+        }
+      }
+    },
+    "phase112_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_structural_result_v1.json",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0",
+      "routes": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+          "tdcp_factors_built": 31269,
+          "double_difference_carrier_factors": 0,
+          "double_difference_pseudorange_factors": 0,
+          "base_scope": "adopted undifferenced FGO pseudorange factors only",
+          "base_tdcp_applied": false,
+          "selected_solver": "MULTIFRONTAL_QR"
+        },
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+          "tdcp_factors_built": 14012,
+          "double_difference_carrier_factors": 0,
+          "double_difference_pseudorange_factors": 0,
+          "base_scope": "adopted undifferenced FGO pseudorange factors only",
+          "base_tdcp_applied": false,
+          "selected_solver": "MULTIFRONTAL_QR"
+        }
+      }
+    }
+  },
+  "source_pins": {
+    "official_fgo_gnss_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "23,30,123-148,154-200"
+    },
+    "official_fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "23,36,189-218,252-323"
+    },
+    "official_exobs_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs.m",
+      "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+      "lines": "12-75"
+    },
+    "official_exobs_residuals_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m",
+      "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+      "lines": "82-99"
+    },
+    "official_correct_pseudorange_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+      "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "lines": "1-34"
+    },
+    "native_problem_builder": {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "e7607ce8f0fe27fd382a01b5b6f147b027b7bf51453e920eae458c86ddac0c17",
+      "lines": "628-677,1375-1441,1486-1497,2317-2354"
+    },
+    "native_gtsam_backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "78792c9306abe339228a3004e3d23f1486fac77822d0f1785b69dc07af14f578",
+      "lines": "1193-1232,1276-1337"
+    },
+    "native_app": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "301265974631f20781ff4460e1ede4032165e11c79ef59d0510a273aebb1a59e",
+      "lines": "573-583,688-703,6868-6932,8126-8143"
+    },
+    "tdcp_contract": {
+      "path": "include/libgnss++/algorithms/tdcp_contract.hpp",
+      "sha256": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf",
+      "lines": "7-67"
+    }
+  },
+  "read_accounting_at_freeze": {
+    "official_source_reads": true,
+    "tracked_native_source_reads": true,
+    "sealed_manifest_or_result_reads": 4,
+    "raw_phone_payload_reads": 0,
+    "raw_base_payload_or_header_reads": 0,
+    "raw_or_base_member_hash_reads": 0,
+    "mat_data_reads": 0,
+    "truth_reads": 0,
+    "precomputed_phone_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_evaluations": 0,
+    "solution_rows_opened_or_published": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_or_fallbacks": 0
+  },
+  "authorization_boundary": {
+    "raw_execution_authorized": false,
+    "truth_or_accuracy_authorized": false,
+    "next_allowed_action": "separate implementation/qualification and one-shot authorization may be proposed for this diagnostic only; no algorithmic carrier/DD change is admitted",
+    "solution": "withheld and unread"
+  }
+}

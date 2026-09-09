@@ -1,0 +1,279 @@
+{
+  "schema_version": "smartphone-r5-phase117-tdcp-weighting-source-parity-freeze.v1",
+  "phase": 117,
+  "execution_label": "Luna Max",
+  "status": "frozen-one-source-backed-tdcp-weighting-candidate-before-execution",
+  "purpose": "Freeze one isolated source-parity candidate after a read-only comparison of official TDCP noise, robust loss, and admission behavior with native Phase116. This record is not an implementation, raw execution authorization, solver authorization, truth authorization, accuracy authorization, or solution release.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_source_parity_audit_v1.md",
+    "commit": "c673f0ed422361e8e3ad2f16eb07464e8f51d9a1",
+    "sha256": "8a145d0e894c44ca4333f5c0bc58277d53bf96fb8fc988352d0474b1831b5b7a"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase117-official-tdcp-snr-type-weighting-v1",
+    "source_backed": true,
+    "selected_dimension": "ordinary TDCP scalar noise/weighting only",
+    "official_native_sigma_match": false,
+    "official_native_robust_match": false,
+    "official_native_admission_match": false,
+    "implementation_in_this_freeze": false,
+    "graph_factor_value_key_change_in_this_freeze": false,
+    "legacy_default_changed": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "reason": "The official source directly specifies a per-observation carrier noise value while native Phase116 uses a fixed 0.03 m value. This is an isolated, source-backed weighting mismatch. Robust and jump behavior also differ, but each requires a separate contract and is deliberately not combined with this candidate."
+  },
+  "candidate": {
+    "id": "phase117-official-tdcp-snr-type-weighting-v1",
+    "opt_in": true,
+    "default_off": true,
+    "raw_only": true,
+    "diagnostic_or_algorithm_candidate": "future raw-only algorithm candidate; no code or run is authorized by this freeze",
+    "factor_family": "existing ordinary same-satellite/same-signal adjacent TDCP only",
+    "official_noise_contract": {
+      "model": "SNR",
+      "formula": "sigma_L(i,j)=(1/400)*10^(-(S(i,j)-prctile(S_f,85,all))/20)*sigfactor(system/frequency)",
+      "factor_endpoint": "previous endpoint i, exactly as noise_sigmas(obserr.(f).L(i,j)) in the official graph",
+      "snr_percentile": 85,
+      "snr_denominator": 20,
+      "L_sn_ratio": 0.0025,
+      "signal_factor_order": [
+        "L1",
+        "G1",
+        "E1",
+        "B1",
+        "L5",
+        "E5",
+        "B2a"
+      ],
+      "signal_factors": [
+        0.8,
+        1.5,
+        0.8,
+        0.8,
+        0.5,
+        0.5,
+        0.5
+      ],
+      "source_unit_guard": "The official source snapshot stores ADR-derived L in its source-domain representation and passes obserr.L directly to its custom factor. Native TDCP delta_carrier_m is metre-valued. A future implementation must prove the wavelength/domain conversion before assigning sigma_m; numeric obserr.L copying is forbidden."
+    },
+    "native_current_contract": {
+      "tdcp_sigma_m": 0.03,
+      "max_gap_s": 2.0,
+      "reject_loss_of_lock": true,
+      "reject_code_phase_jump": true,
+      "code_phase_jump_threshold_m": 10.0,
+      "huber_threshold_sigma": 4.0,
+      "pair_key": "(SatelliteId,SignalType)",
+      "pair_reject_order": [
+        "gap",
+        "clock_discontinuity",
+        "loss_of_lock",
+        "nonfinite_measurement",
+        "code_phase_jump"
+      ]
+    },
+    "exact_change_boundary": {
+      "change": "Replace only the scalar sigma attached to each already accepted ordinary TDCP factor with the proven official SNR/signal-type value in the native metre domain.",
+      "preserve_residual_equation": true,
+      "preserve_factor_count_and_insertion": true,
+      "preserve_exact_pair_keys": true,
+      "preserve_pair_reject_predicate": true,
+      "preserve_native_huber_threshold_sigma": 4.0,
+      "preserve_phase99_qr": true,
+      "preserve_c7_d_c0d_handoff": true,
+      "preserve_imu_p_doppler_and_base_scope": true,
+      "preserve_filter_lm_initialization_and_output": true,
+      "missing_or_nonfinite_noise_behavior": "fail closed; no 0.03 fallback, zero fill, average, endpoint substitution, or synthesized wavelength"
+    },
+    "does_not": [
+      "change robust loss or its threshold",
+      "change raw carrier/status/SNR/multipath/cycle/dDL/jump admission",
+      "add or remove TDCP, carrier-phase, DD, ambiguity, C7, D, ISB, prior, or output rows",
+      "change equations, units, key order, solver, ordering, damping, filter, LM schedule, or initialization",
+      "read MAT, PDC, precomputed phone coordinates, truth, or solution rows",
+      "authorize raw, base, solver, truth, accuracy, rerun, fallback, or Kaggle activity"
+    ],
+    "fail_closed": true,
+    "solution_withheld": true,
+    "accuracy_evaluation": false
+  },
+  "rejected_alternatives": {
+    "official_huber_parameter": {
+      "candidate": "Set native tdcp_huber_threshold_sigma to the official 0.2/0.5 value.",
+      "reason_not_selected": "This is a separate robust-loss change, depends on official setting.Type, and would confound the isolated weighting attribution."
+    },
+    "official_jump_pipeline": {
+      "candidate": "Replace the native single 10 m pair predicate with the official carrier status, >2e4-cycle, wavelength-scaled dDL, and clock-jump composition.",
+      "reason_not_selected": "The official behavior is a multi-stage preprocessing composition, not one equivalent threshold; changing only one native predicate would not establish source parity."
+    }
+  },
+  "sealed_evidence": {
+    "phase116_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase116_carrier_tdcp_incidence_structural_result_v1.json",
+      "sha256": "394ce1660ae5f181967b672bffab14d9228ffbe62ec6b748ca3854d30a14876f",
+      "official_tdcp_cost_telemetry_available": false,
+      "native_tdcp_cost_telemetry_available": true,
+      "routes": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+          "tdcp_factors_built": 31269,
+          "tdcp_factors_inserted": 31269,
+          "candidate_pairs": 33025,
+          "rejected_missing_previous": 4282,
+          "rejected_code_phase_jump": 1756,
+          "sigma_m": 0.03,
+          "tdcp_robust_cost_initial": 6081820.758650316,
+          "tdcp_robust_cost_final": 3186.2009960318637,
+          "tdcp_unwhitened_cost_initial": 126783.1092066225,
+          "tdcp_unwhitened_cost_final": 6.2981007939537,
+          "tdcp_whitened_cost_initial": 140870121.3406915,
+          "tdcp_whitened_cost_final": 6997.889771059641,
+          "total_graph_cost_initial": 130723525.58263575,
+          "total_graph_cost_final": 29729.5954122218,
+          "robust_outliers_initial": 29594,
+          "robust_outliers_final": 11
+        },
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+          "tdcp_factors_built": 14012,
+          "tdcp_factors_inserted": 14012,
+          "candidate_pairs": 14961,
+          "rejected_missing_previous": 2373,
+          "rejected_code_phase_jump": 949,
+          "sigma_m": 0.03,
+          "tdcp_robust_cost_initial": 2713558.838696147,
+          "tdcp_robust_cost_final": 1655.092719465339,
+          "tdcp_unwhitened_cost_initial": 59652.584594572116,
+          "tdcp_unwhitened_cost_final": 17.03325281872271,
+          "tdcp_whitened_cost_initial": 66280649.54952459,
+          "tdcp_whitened_cost_final": 18925.83646524745,
+          "total_graph_cost_initial": 162184507.52202186,
+          "total_graph_cost_final": 19851.9725625441,
+          "robust_outliers_initial": 13238,
+          "robust_outliers_final": 2
+        }
+      },
+      "cost_definition": {
+        "robust": "GTSAM Huber loss on whitened residual",
+        "unwhitened": "sum residual_m^2",
+        "whitened": "sum (residual_m/sigma_m)^2"
+      },
+      "truth_free": true,
+      "solution_output_published": false,
+      "accuracy_scored": false
+    },
+    "phase108_aggregate": {
+      "path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_result_v1.json",
+      "sha256": "9f9a2528745c06ba06e774139f56892bcea0ef208a3d064e4b70042e48f29a9d",
+      "mtv_a_score_m": 1.1396560717187856,
+      "lax_t_score_m": 0.8241679860216076,
+      "macro_score_m": 0.9819120288701966,
+      "field_scope": "sealed aggregate score fields only; no truth payload or solution rows reread"
+    },
+    "phase112_aggregate": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_accuracy_result_v1.json",
+      "sha256": "46d8d836758ac1a88b95ec2c1a0c0080cedfb753c12411ed74e4c2501549c57e",
+      "mtv_a_score_m": 0.997685253035948,
+      "lax_t_score_m": 0.6659910917640763,
+      "macro_score_m": 0.8318381724000121,
+      "field_scope": "sealed aggregate score fields only; no truth payload or solution rows reread"
+    }
+  },
+  "source_pins": {
+    "official_fgo_gnss_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "30,154-200"
+    },
+    "official_fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "36,252-321"
+    },
+    "official_parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": "22-44,110-128"
+    },
+    "official_obserrmodel_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/obserrmodel.m",
+      "sha256": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+      "lines": "11-37"
+    },
+    "official_exobs_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs.m",
+      "sha256": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+      "lines": "53-75"
+    },
+    "official_exobs_residuals_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m",
+      "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+      "lines": "82-99"
+    },
+    "official_preprocessing_m": {
+      "path": "output/reproducibility-cache/gsdc2023/preprocessing.m",
+      "sha256": "976629d187e7fab5868eb8e5676a4d40520eb23db1254f7320d3b4270d7dffcf",
+      "lines": "181-195"
+    },
+    "official_gnsslog2obs_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "lines": "139-192"
+    },
+    "native_fgo_problems_cpp": {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "c33f75c94b0fb9145ff4987905e32f4a1955192ee2ad3df10ada7142d45d99b4",
+      "lines": "1399-1496"
+    },
+    "native_fgo_gtsam_backend_cpp": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "78792c9306abe339228a3004e3d23f1486fac77822d0f1785b69dc07af14f578",
+      "lines": "1193-1232"
+    },
+    "native_app_cpp": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "1c5002fb9d9c614e139a7928ad8e0cd28149e82456505b71c4cdfbfba5fcad37",
+      "lines": "7427-7436,2920-2998"
+    },
+    "native_fgo_config_hpp": {
+      "path": "include/libgnss++/algorithms/fgo_config.hpp",
+      "sha256": "a7009ba418601b7b0840c8ce7878aea402c820bb7c95e7114284df54c29db4f0",
+      "lines": "377-384,466-470"
+    },
+    "native_tdcp_contract_hpp": {
+      "path": "include/libgnss++/algorithms/tdcp_contract.hpp",
+      "sha256": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf",
+      "lines": "34-67"
+    }
+  },
+  "read_accounting_at_freeze": {
+    "official_source_code_read": true,
+    "tracked_native_source_code_read": true,
+    "sealed_phase116_aggregate_read": true,
+    "sealed_phase108_aggregate_fields_read": true,
+    "sealed_phase112_aggregate_fields_read": true,
+    "raw_phone_gnss_imu_navigation_payload_reads": 0,
+    "raw_base_payload_or_header_reads": 0,
+    "raw_or_base_member_hash_computation": 0,
+    "mat_data_reads": 0,
+    "truth_payload_reads": 0,
+    "precomputed_phone_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_or_truth_evaluator_invocations": 0,
+    "solution_rows_opened_or_published": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_or_fallbacks": 0
+  },
+  "authorization_boundary": {
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_or_accuracy_authorized": false,
+    "solution": "withheld and unread",
+    "next_allowed_action": "A later implementation contract may prove the official-to-native sigma unit crosswalk and add focused tests; no raw or solver run is allowed under this audit/freeze commit.",
+    "no_sigma_robust_or_jump_tuning_in_audit": true
+  }
+}

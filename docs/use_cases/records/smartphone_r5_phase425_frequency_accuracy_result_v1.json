@@ -1,0 +1,105 @@
+{
+  "role": "development/train; not heldout or leaderboard proof",
+  "manifest_sha256": "b63cabab93e6f9cf57d19ed28445fed37f5f16e3d979f5c9f86f6a39225eaabd",
+  "scores": [
+    {
+      "phase": 422,
+      "score": {
+        "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "candidate": {
+          "path": "output/smartphone-r5/phase422-h-robust-diagnostic-v1/mtv-h/opaque_solution_output.csv",
+          "sha256": "a90df84590a62e520b509a2566b60e7ad594eb38c35c4572a15744b680a82fd2",
+          "bytes": 251174,
+          "rows": 3139,
+          "read_count": 1
+        },
+        "truth": {
+          "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+          "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+          "bytes": 305432,
+          "rows": 3139,
+          "read_count": 1
+        },
+        "metric": {
+          "p50_m": 0.8650472830229551,
+          "p95_m": 1.4310609514963564,
+          "route_score_m": 1.1480541172596557,
+          "matched_rows": 3139,
+          "prediction_domain_coverage": 1.0,
+          "truth_domain_coverage": 1.0,
+          "over_70_mps_count": 0,
+          "finite": true
+        },
+        "gates": {
+          "candidate_exact_alignment": true,
+          "candidate_prediction_domain_exact": true,
+          "truth_domain_exact": true,
+          "candidate_all_finite_and_earth_valid": true,
+          "velocity_gate_over_70_mps_zero": true,
+          "route_score_finite": true,
+          "strict_route_score_less_than_0_782_m": false
+        },
+        "read_accounting": {
+          "candidate_payload_reads": 1,
+          "truth_payload_reads": 1,
+          "score_calculations": 1,
+          "interpolated_epochs": 0,
+          "edge_hold_epochs": 0,
+          "pixel5_offset_reapplications": 0
+        }
+      },
+      "baseline_m": 1.0769392017393964,
+      "delta_m": 0.07111491552025928
+    },
+    {
+      "phase": 423,
+      "score": {
+        "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "candidate": {
+          "path": "output/smartphone-r5/phase424-lax-t-evaluation-projection-v1/frequency.csv",
+          "sha256": "4fe2d5eab1a0629ede1aca58556a073b036a29e50e4363b0ae5d49f1f4239da2",
+          "bytes": 117254,
+          "rows": 1465,
+          "read_count": 1
+        },
+        "truth": {
+          "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+          "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+          "bytes": 143441,
+          "rows": 1465,
+          "read_count": 1
+        },
+        "metric": {
+          "p50_m": 2.903887933199194,
+          "p95_m": 3.3061682816910185,
+          "route_score_m": 3.105028107445106,
+          "matched_rows": 1465,
+          "prediction_domain_coverage": 1.0,
+          "truth_domain_coverage": 1.0,
+          "over_70_mps_count": 0,
+          "finite": true
+        },
+        "gates": {
+          "candidate_exact_alignment": true,
+          "candidate_prediction_domain_exact": true,
+          "truth_domain_exact": true,
+          "candidate_all_finite_and_earth_valid": true,
+          "velocity_gate_over_70_mps_zero": true,
+          "route_score_finite": true,
+          "strict_route_score_less_than_0_782_m": false
+        },
+        "read_accounting": {
+          "candidate_payload_reads": 1,
+          "truth_payload_reads": 1,
+          "score_calculations": 1,
+          "interpolated_epochs": 0,
+          "edge_hold_epochs": 0,
+          "pixel5_offset_reapplications": 0
+        }
+      },
+      "baseline_m": 3.1024422817253834,
+      "delta_m": 0.0025858257197226564
+    }
+  ],
+  "native_invocations": 0
+}

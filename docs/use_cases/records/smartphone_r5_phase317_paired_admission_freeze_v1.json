@@ -1,0 +1,21 @@
+{
+  "phase": 317,
+  "implementation_head": "9bda09ee",
+  "binary": "build/native_phone_fgo_state_inventory",
+  "binary_sha256": "b3d377483c85b7547c06b09a126bde7bccbac1cceaa2e50583f93bf0751a8f0a",
+  "source": "scripts/native_phone_fgo_state_inventory.cpp",
+  "source_sha256": "42d499a6de6a30028d5e64c098a40d73f0d7b54e02ecc48e48c2fd7a87b1a623",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "phone": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+  "phone_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+  "expected_input_epochs": 3140,
+  "config": "Phase316 flags plus use_native_phase126_raw_base_source_complete for zero rover/SPP group delay; base source_complete/source epoch states/source FGO slots; raw header reference with zero antenna; 1s interval,151 moving mean",
+  "scope": "paired raw base/rover correction admission; no optimizer, IMU, truth, MAT or saved positioning input",
+  "runs": 1,
+  "output": "aggregate counts only",
+  "phone_time": "raw parser epoch time without operational CLI UTC adjustment",
+  "base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "expected_base_states": 68697
+}

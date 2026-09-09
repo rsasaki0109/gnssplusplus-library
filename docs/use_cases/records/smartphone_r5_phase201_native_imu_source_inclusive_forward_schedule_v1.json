@@ -1,0 +1,121 @@
+{
+  "schema_version": "smartphone-r5-phase201-native-imu-source-inclusive-forward-schedule.v1",
+  "phase": 201,
+  "execution_label": "Luna Max",
+  "status": "implemented-synthetic-verified-pre-raw",
+  "purpose": "Provide a default-off, fail-closed source-inclusive-forward IMU scheduling lane for the Pixel5 Phase171 ECEF-D GNSS-first to Pose3/IMU main handoff, while preserving the legacy native schedule and all other model choices.",
+  "selector": {
+    "cli": "--native-phase201-source-inclusive-forward-imu-schedule",
+    "config": "use_native_phase201_source_inclusive_forward_imu_schedule",
+    "default": false,
+    "required_composition": [
+      "Phase171 raw-P/no-generic-D Pose3+IMU main",
+      "Phase171 ECEF-D GNSS-first staging",
+      "explicit Android UTC wall-clock fallback",
+      "Pixel5 dataset preset"
+    ],
+    "staging_selector": false,
+    "main_generic_doppler": false
+  },
+  "implementation": {
+    "helper": "src/algorithms/fgo_gtsam_internal.hpp::makeSourceInclusiveForwardImuSchedule",
+    "backend": "src/algorithms/fgo_gtsam_backend.cpp",
+    "app": "apps/native/gnss_fgo_imu_no_base.cpp",
+    "behavior": "The opt-in main-graph branch validates the mapped native IMU stream once, selects samples with an exact finite offset in the inclusive [t0,t1] interval, integrates each selected sample forward to its next stream timestamp, and repeats the final stream delta only for a selected final stream sample. It uses an overlap cursor for adjacent GNSS intervals and never clips to a GNSS boundary or creates a synthetic tail.",
+    "preserved": [
+      "legacy preceding-delta plus boundary-tail loop when selector is false",
+      "CombinedImuFactor family",
+      "IMU initialization and bias random walk",
+      "IMU measurement/integration noise and Phase194 selector",
+      "Phase197 UTC fallback offset selector",
+      "stop-constraint recipe and threshold",
+      "GNSS-first P/TDCP/C7/D handoff and one ECEF-to-ENU conversion"
+    ],
+    "time_basis": "The helper consumes already mapped native timestamps. UTC/GPS affine mapping and its small slope distinction remain in the caller; no fixed offset is substituted by this schedule branch.",
+    "fail_closed": [
+      "non-finite GNSS or IMU timestamps",
+      "non-positive or non-finite stream/selected forward deltas",
+      "non-finite selected accelerometer or gyro samples",
+      "empty/non-positive intervals or integrated duration",
+      "malformed full stream ordering"
+    ]
+  },
+  "diagnostics": {
+    "reported": [
+      "requested/selected/attempted/configuration_valid",
+      "interval and interval-with-sample counts",
+      "inserted sample count",
+      "invalid/nonfinite-dt/nonpositive-dt/empty-interval counts",
+      "integrated and GNSS interval duration min/max",
+      "duration error min/max/max-absolute",
+      "configuration failure text"
+    ],
+    "default_off_shape": "The legacy branch leaves Phase201 counters at their initialized zero/NaN values and does not execute the helper."
+  },
+  "source_evidence": {
+    "phase200_record": "docs/use_cases/records/smartphone_r5_phase200_native_imu_time_indexing_audit_v1.json",
+    "cached_matlab_preprocessing": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/imuprocessing.m",
+      "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+      "lines": "7-20,23-40"
+    },
+    "cached_matlab_graph": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "280-298"
+    },
+    "scope_note": "This implements the audited schedule as a separate native experiment; it does not claim full MATLAB factor/noise parity or physical correctness. Phase200 showed that the inclusive-forward convention can over- or under-integrate a bounded GNSS interval depending on sample placement."
+  },
+  "verification": {
+    "focused_gtest_filter": "GtsamImuTimeIndexingTest.*:FGOGtsamPhase171NoDopplerImuMainTest.*",
+    "focused_gtest_passed": 10,
+    "focused_gtest_failed": 0,
+    "python_contract_tests": {
+      "paths": [
+        "tests/test_smartphone_phase201_source_inclusive_forward_schedule.py",
+        "tests/test_smartphone_phase194_source_utc_fallback_imu_noise.py",
+        "tests/test_smartphone_phase197_source_utc_fallback_imu_offset.py"
+      ],
+      "passed": 12,
+      "failed": 0,
+      "scope": "Source-contract checks; runtime CLI composition was separately probed to the input-open boundary without raw payloads."
+    },
+    "build": {
+      "tests": "cmake --build build --target gnss_run_tests -j2",
+      "app": "cmake --build build --target gnss_run_tests gnss_fgo_imu_no_base -j2",
+      "app_binary": "build/apps/gnss_fgo_imu_no_base",
+      "app_sha256": "c9b7e019028ba2ea02b95cc368c56c9fc619ae4a1cf15cd9fe470b2ee0fbf165",
+      "test_binary": "build/tests/run_tests",
+      "test_sha256": "7e77513bf7376225a120d58fd2dcfcf541ab76b1db0e341a81362bea27d3f4d4"
+    },
+    "synthetic_coverage": [
+      "GTSAM Combined preintegration with time-varying acceleration and gyro-zero controls",
+      "constant-input duration control",
+      "exact inclusive endpoint and final-stream-delta repetition",
+      "between-sample interval with source duration 0.75 s",
+      "adjacent cursor versus independent full-validation schedule",
+      "near-boundary half-microsecond exclusion and GPS-week rollover",
+      "empty, non-finite measurement/delta, non-positive delta, and full-stream malformed-order failures",
+      "actual Phase171 same-run GNSS-first result to Pose3/IMU handoff with selector-off and selector-on paths"
+    ],
+    "production_fixture_scope": "The synthetic Phase171 fixture uses index-derived IMU times and asserts one interval, 11 selected samples, 1.1 s source duration, and 0.1 s duration error for the opt-in branch. It is not a real H run."
+  },
+  "limitations": [
+    "No raw GNSS/IMU/nav execution, candidate/truth read, MAT/PDC/precomputed trajectory read, accuracy evaluation, or Kaggle submission was performed in Phase201.",
+    "The production branch uses native CombinedImuFactor; the cached source's ImuFactor keying and other factor/noise semantics remain separate concerns.",
+    "The synthetic and source-contract tests do not establish real-data accuracy or prove that the source-inclusive schedule is physically preferable.",
+    "The mapped timestamp stream is assumed to have been validated by the existing UTC/GPS loader; this phase does not change UTC fallback, pairing, or offset behavior."
+  ],
+  "read_accounting": {
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "nav_reads": 0,
+    "candidate_payload_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_payload_reads": 0,
+    "raw_native_solver_invocations": 0,
+    "synthetic_gtsam_optimizer_invocations": "unit/integration fixtures only; no production raw-data solve",
+    "accuracy_calculations": 0,
+    "reruns": 0
+  }
+}

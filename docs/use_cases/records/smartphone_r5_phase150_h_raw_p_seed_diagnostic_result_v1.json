@@ -1,0 +1,86 @@
+{
+  "schema_version": "smartphone-r5-phase150-h-raw-p-seed-diagnostic-result.v1",
+  "phase": 150,
+  "execution_label": "Luna Max",
+  "status": "fail-closed-at-raw-gnss-ingress",
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase150_h_raw_p_seed_diagnostic_authorization_v1.json",
+    "sha256": "3be24320d6f7d7ab55aa6c26e9ea5593df743b08c0b6cea0bda3ff8a0086bab1"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase150_h_raw_p_seed_diagnostic_manifest_v1.json",
+    "sha256": "8f9831f8686e27dbcb4896984db19a9a5db795d4266cd2dbdf14abc136827433"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "working_directory": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "argv_matches_manifest": true,
+    "invocation_count": 1,
+    "process_return_code": 1,
+    "native_phase149_stage_invocations": 0,
+    "failure_stage": "android-gnss-ingress",
+    "failure_message": "failed to convert raw Android GNSS: raw-clock pseudorange disagrees with enriched RawPseudorangeMeters",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false
+  },
+  "artifacts": {
+    "summary": {
+      "path": "output/smartphone-r5/phase150-h-raw-p-seed-v1/mtv-h/native_summary.json",
+      "present": false,
+      "read_count": 0,
+      "coordinate_fields_interpreted": false
+    },
+    "stdout": {
+      "path": "output/smartphone-r5/phase150-h-raw-p-seed-v1/mtv-h/stdout.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stderr": {
+      "path": "output/smartphone-r5/phase150-h-raw-p-seed-v1/mtv-h/stderr.log",
+      "bytes": 103,
+      "sha256": "b406f30f9304d5f5aa53d191cf0872b75d7877dde76c5bcd598d4ba73a058cf5"
+    }
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 1,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "input_epoch_count": null,
+    "accepted_p_position_count": null,
+    "finite_clock_count": null,
+    "finite_velocity_count": null,
+    "rejection_reasons": {
+      "raw-gnss-conversion": 1
+    },
+    "time_gap_duplicate_monotonicity_counts": null,
+    "clock_group_counts": null,
+    "geometry_rank_counts": null,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  },
+  "interpretation_boundary": {
+    "raw_pseudorange_stage_entered": false,
+    "position_clock_velocity_fields_unavailable": true,
+    "no_doppler_graph_readiness": "not-assessed",
+    "no_coordinate_payload_read": true,
+    "no_truth_or_accuracy": true,
+    "diagnostic_success_or_failure_is_not_accuracy_or_leaderboard_proof": true
+  },
+  "root_cause_and_next_boundary": {
+    "root_cause": "The frozen H Android GNSS file is rejected by the existing raw-ingress consistency check before navigation loading or Phase149 native SPP begins: its raw-clock pseudorange does not agree with the enriched RawPseudorangeMeters field.",
+    "current_conclusion": "H raw-P seed coverage, rank, clock, velocity, and no-D graph admission remain unverified.",
+    "future_action": "Resolve or separately authorize a source-backed raw-P ingress contract; do not bypass this check, switch to --android-raw-clock-only, rerun, or infer graph readiness from this attempt."
+  }
+}

@@ -1,0 +1,168 @@
+{
+  "schema_version": "smartphone-r5-phase104-stage-main-attribution-raw-execution-authorization.v1",
+  "phase": 104,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-exact-two-route-phase104-stage-main-raw-execution",
+  "purpose": "Authorize one sequential fresh Phase101 native run for MTV-A then LAX-T with the Phase104 copy-only stage observer enabled; this record does not authorize truth scoring, promotion, publication, or rerun.",
+  "authority": {
+    "phase104_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase104_stage_main_accuracy_attribution_freeze_v1.json",
+      "sha256": "0d441945897c01899c9ed6cbf0659ee0382c778c35a8e2056315168a27d526dd"
+    },
+    "phase104_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase104_stage_main_accuracy_attribution_manifest_v1.json",
+      "sha256": "7a6117343ff250195a97468630cf297c3a6da00bb1c03b8d8d87ab5ee8b5fc7e"
+    },
+    "phase104_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase104_stage_main_attribution.py",
+      "sha256": "9ee16257a6fd33ef94e486b740668ae9895aaf06be9eac92b04d270b90c9476e"
+    },
+    "phase104_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase104_stage_main_attribution_execute.py",
+      "sha256": "0028b1a79dc38bd5f26ea25e1815f846e4ae4f93fd1d07261995b67afd339e47"
+    },
+    "phase104_focused_tests": {
+      "path": "tests/test_smartphone_phase104_stage_main_attribution.py",
+      "sha256": "ca265e399d5a222aa580e4db761c72225f12f81d5645b1478338686868cf2d37"
+    },
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281"
+    },
+    "phase95_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase95_raw_input_path_corrected_execute.py",
+      "sha256": "5ac858cf156555652f6feae60c71a4237269d4b4c2cb70c1adf5a9e08f10e883"
+    },
+    "manifest_sha256": "7a6117343ff250195a97468630cf297c3a6da00bb1c03b8d8d87ab5ee8b5fc7e",
+    "implementation_commit": "88f726a02d98e6dddd84e561b427ded43368e61d",
+    "implementation_source_sha256": "c81381b0a8fa8cea5c101fc5d54e6364173c0e8cffb83f02eac18c8b6cafde5b",
+    "implementation_binary_sha256": "6c2fbf9ed119e84383beb3b7db7f11cf1bce8db7a7e64919a38378373784c5c4"
+  },
+  "pre_raw_qualification": {
+    "contract_commit": "a9504e977ad1f9a583be11ab208b0b073223635c",
+    "manifest_status": "sealed-before-phase104-raw-execution",
+    "manifest_verified": true,
+    "focused_tests": "6 passed",
+    "target_build": "gnss_fgo_imu_no_base already built and implementation-pinned",
+    "native_solver_invocations_before_authorization": 0,
+    "raw_reads_before_authorization": 0,
+    "truth_reads_before_authorization": 0,
+    "accuracy_calculations_before_authorization": 0
+  },
+  "candidate": {
+    "id": "phase104-evaluation-only-gnss-first-stage-export-v1",
+    "candidate_count": 1,
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-phase104-stage-main-attribution"
+    ],
+    "selectors_exact": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-phase104-stage-main-attribution"
+    ],
+    "default_off_outside_command": true,
+    "fresh_phase101_pipeline": true,
+    "stage_sidecar_copy_only_after_handoff": true,
+    "stage_sidecar_format": "ECEF metres plus exact retained UnixTimeMillis; evaluator performs geodetic conversion in memory",
+    "stage_sidecar_reinput": false,
+    "main_displacement_stats_coordinate_rows": false,
+    "raw_input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_mat_base_pdc_precomputed_coordinate_kaggle_accuracy": false,
+    "runs_per_route": 1,
+    "controls": 0,
+    "truth_evaluation": false,
+    "accuracy_calculations": 0,
+    "no_solver_filter_lm_equation_unit_sigma_change": true,
+    "no_fallback_or_rerun": true,
+    "solution_output_private": true
+  },
+  "raw_input_contract": {
+    "source": "Phase95 sealed raw_inputs.path metadata, resolved at launch",
+    "names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "roles": {
+      "device_gnss.csv": "raw Android GNSS observations",
+      "device_imu.csv": "raw Android IMU observations",
+      "brdc.nav": "broadcast navigation only"
+    },
+    "wrapper_stat_only": true,
+    "wrapper_byte_reads": 0,
+    "wrapper_hash_reads": 0,
+    "raw_content_copy_or_transform": false,
+    "forbidden_native_inputs": [
+      "truth or evaluator data",
+      "MAT or MAT-derived state",
+      "base RINEX or pseudorange correction",
+      "PDC/WLS/precomputed coordinate or trajectory",
+      "Kaggle data or token"
+    ]
+  },
+  "route_records": [
+    {
+      "order": 1,
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "domain_rows": 2158,
+      "expected_problem_epochs": 2159,
+      "raw_path_authority": "Phase95 result route raw_inputs; no wrapper copy or hash",
+      "native_invocations": 1,
+      "truth_reads": 0,
+      "accuracy_calculations": 0
+    },
+    {
+      "order": 2,
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "domain_rows": 1465,
+      "expected_problem_epochs": 1466,
+      "raw_path_authority": "Phase95 result route raw_inputs; no wrapper copy or hash",
+      "native_invocations": 1,
+      "truth_reads": 0,
+      "accuracy_calculations": 0
+    }
+  ],
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "routes": 2,
+    "runs_per_route": 1,
+    "native_solver_invocations": 2,
+    "raw_device_gnss_reads_by_wrapper": 0,
+    "raw_device_imu_reads_by_wrapper": 0,
+    "broadcast_navigation_reads_by_wrapper": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "stage_sidecar_seals": 2,
+    "main_displacement_stats_seals": 2,
+    "solution_rows_in_result": false
+  },
+  "execution_policy": {
+    "authorized": true,
+    "order": "MTV-A then LAX-T, sequentially",
+    "one_invocation_per_route": true,
+    "stop_after_two_routes": true,
+    "native_child_only_raw_reader": true,
+    "native_child_truth_or_accuracy": false,
+    "stage_or_main_reinput": false,
+    "truth_or_accuracy_evaluation": false,
+    "no_rerun": true,
+    "no_fallback": true,
+    "solver_filter_lm_changes": false,
+    "equation_unit_sigma_changes": false,
+    "fallback_or_guard_bypass": false,
+    "preserve_logs_and_partial_results": true
+  },
+  "release_boundary": {
+    "raw_execution_authorized": true,
+    "truth_evaluation_authorized": false,
+    "accuracy_promotion_authorized": false,
+    "solution_publication_authorized": false,
+    "Kaggle_submission_authorized": false
+  }
+}

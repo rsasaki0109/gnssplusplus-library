@@ -133,20 +133,25 @@ VelocityHeadingResult velocityToRpy(
         if (!valid_heading[i]) {
             const auto upper = std::lower_bound(valid_indices.begin(), valid_indices.end(), i);
             if (upper != valid_indices.begin() && upper != valid_indices.end()) {
-                // The two-stage upstream contract is linear interior fill
-                // followed by nearest endpoint fill.  Do not wrap the course
-                // before interpolation (e.g. +179/-179 must pass through 0).
+                // Preserve historical linear interior filling by default;
+                // nearest filling is explicit. Wrap only after filling.
                 const std::size_t previous = *(upper - 1);
                 const std::size_t next = *upper;
-                const double fraction = static_cast<double>(i - previous) /
-                                        static_cast<double>(next - previous);
-                course_deg = courses_deg[previous] +
-                             fraction * (courses_deg[next] - courses_deg[previous]);
-                ++result.linear_fill_count;
+                if (config.nearest_fill_interior) {
+                    const std::size_t source = i - previous < next - i
+                                                  ? previous : next;
+                    course_deg = courses_deg[source];
+                    ++result.nearest_fill_count;
+                } else {
+                    const double fraction = static_cast<double>(i - previous) /
+                                            static_cast<double>(next - previous);
+                    course_deg = courses_deg[previous] +
+                                 fraction * (courses_deg[next] - courses_deg[previous]);
+                    ++result.linear_fill_count;
+                }
             } else {
                 // Leading/trailing gaps have no pair of brackets and are
-                // filled from the nearest finite course.  A preceding sample
-                // wins only in the (non-endpoint) tie case; endpoints are
+                // filled from the nearest finite course. Endpoints are
                 // unambiguous here.
                 const std::size_t source = upper == valid_indices.end()
                                                ? valid_indices.back()
