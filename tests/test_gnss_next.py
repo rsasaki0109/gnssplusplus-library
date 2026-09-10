@@ -69,7 +69,7 @@ class GnssNextTest(unittest.TestCase):
         self.assertEqual(payload["stage"], "choose-goal")
         self.assertTrue(payload["demo"]["complete"])
         self.assertEqual(payload["recommendation"]["id"], "choose-goal")
-        self.assertEqual(len(payload["available_goals"]), 6)
+        self.assertEqual(len(payload["available_goals"]), 8)
 
     def test_selected_goal_returns_one_actionable_command(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss-next-goal-") as temp_dir:
@@ -231,6 +231,71 @@ class GnssNextTest(unittest.TestCase):
         self.assertEqual(payload["recommendation"]["id"], "open-spp-result")
         self.assertEqual(payload["recommendation"]["kml"], "output/spp_solution.kml")
         self.assertNotIn("pos2kml", payload["recommendation"]["command"])
+
+    def test_urban_continuity_bundle_advances_to_inspection(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss-next-urban-") as temp_dir:
+            workspace = Path(temp_dir)
+            summary = workspace / "output" / "self-contained-demo" / "demo_summary.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text(
+                json.dumps(
+                    {
+                        "processed_epochs": 8,
+                        "valid_solutions": 8,
+                        "demo": {"schema_version": "self-contained-demo.v1"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            bundle_dir = workspace / "output" / "urban_continuity_bundle"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "manifest.json").write_text(
+                json.dumps({"schema_version": "libgnsspp.urban_continuity_bundle.v1"}),
+                encoding="utf-8",
+            )
+            (bundle_dir / "fused.kml").write_text("<kml></kml>\n", encoding="utf-8")
+            result = self.run_next(workspace, "--format", "json")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["stage"], "inspect-result")
+        self.assertEqual(payload["detected_goal"], "urban-continuity")
+        self.assertEqual(
+            payload["recommendation"]["id"], "open-urban-continuity-bundle"
+        )
+
+    def test_trajectory_bundle_without_kml_recommends_web(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss-next-traj-") as temp_dir:
+            workspace = Path(temp_dir)
+            summary = workspace / "output" / "self-contained-demo" / "demo_summary.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text(
+                json.dumps(
+                    {
+                        "processed_epochs": 8,
+                        "valid_solutions": 8,
+                        "demo": {"schema_version": "self-contained-demo.v1"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            bundle_dir = workspace / "output" / "trajectory_bundle"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "manifest.json").write_text(
+                json.dumps({"schema_version": "libgnsspp.trajectory_bundle.v1"}),
+                encoding="utf-8",
+            )
+            result = self.run_next(
+                workspace, "--goal", "trajectory-bundle", "--format", "json"
+            )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["stage"], "inspect-result")
+        self.assertEqual(payload["detected_goal"], "trajectory-bundle")
+        self.assertEqual(
+            payload["recommendation"]["id"], "inspect-trajectory-bundle-bundle"
+        )
 
     def test_source_checkout_uses_platform_python_launcher(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss-next-source-") as temp_dir:

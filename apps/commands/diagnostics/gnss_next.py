@@ -72,6 +72,32 @@ GOALS = {
         "guide": "docs/interfaces.md",
         "inputs": "a configured source build and a C++20 application",
     },
+    "urban-continuity": {
+        "label": "urban RTK/IMU continuity bundle (R1)",
+        "command": (
+            "{cli} urban-continuity-bundle --data-dir <data-dir> "
+            "--output-dir output/urban_continuity_bundle"
+        ),
+        "guide": "docs/use_cases/urban_rtk_imu_field_checklist.md",
+        "inputs": "a PPC-style data dir with rover/base observations and reference.csv",
+        "entrypoint": "urban-continuity-bundle",
+    },
+    "trajectory-bundle": {
+        "label": "reference trajectory bundle (R3)",
+        "command": (
+            "{cli} trajectory-bundle --pos <solution.pos> "
+            "--output-dir output/trajectory_bundle --profile visualization "
+            "--target-frame ENU --lever-arm-m 0,0,0"
+        ),
+        "guide": "docs/use_cases/trajectory_ground_truth.md",
+        "inputs": "a solved .pos file plus target frame and lever arm",
+        "entrypoint": "trajectory-bundle",
+    },
+}
+
+BUNDLE_SCHEMAS = {
+    "urban-continuity": "libgnsspp.urban_continuity_bundle.v1",
+    "trajectory-bundle": "libgnsspp.trajectory_bundle.v1",
 }
 
 
@@ -163,6 +189,61 @@ def completed_result(
     return goal_id, result_path, epochs
 
 
+def manifest_schema_ok(path: Path, schema: str) -> bool:
+    if not path.is_file():
+        return False
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return isinstance(payload, dict) and payload.get("schema_version") == schema
+
+
+def completed_bundle(
+    workspace: Path,
+    goal: str | None,
+) -> tuple[str, Path] | None:
+    """Return the newest valid R1/R3 bundle manifest under output/."""
+    goal_ids = (goal,) if goal is not None else tuple(BUNDLE_SCHEMAS)
+    candidates: list[tuple[int, str, Path]] = []
+    output_root = workspace / "output"
+    if not output_root.is_dir():
+        return None
+    for goal_id in goal_ids:
+        schema = BUNDLE_SCHEMAS.get(goal_id)
+        if schema is None:
+            continue
+        for manifest in sorted(output_root.rglob("manifest.json")):
+            if not manifest_schema_ok(manifest, schema):
+                continue
+            try:
+                modified_ns = manifest.stat().st_mtime_ns
+            except OSError:
+                continue
+            candidates.append((modified_ns, goal_id, manifest))
+    if not candidates:
+        return None
+    _, goal_id, manifest_path = max(candidates)
+    return goal_id, manifest_path
+
+
+def bundle_kml_for(manifest_path: Path, goal_id: str) -> Path | None:
+    """Return the primary viewable KML next to a bundle manifest, if present."""
+    parent = manifest_path.parent
+    names = (
+        ("fused.kml", "raw.kml") if goal_id == "urban-continuity"
+        else ("accepted.kml", "raw.kml")
+    )
+    for name in names:
+        candidate = parent / name
+        try:
+            if candidate.is_file() and candidate.stat().st_size > 0:
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
 def cli_prefix(workspace: Path) -> str:
     if (workspace / "apps" / "gnss.py").is_file():
         if os.name == "nt":
@@ -185,6 +266,11 @@ def build_payload(workspace: Path, goal: str | None) -> dict[str, object]:
     demo_complete = valid_demo_summary(demo_summary)
     cli = cli_prefix(workspace)
     result = completed_result(workspace, goal) if demo_complete else None
+    bundle = (
+        completed_bundle(workspace, goal)
+        if demo_complete and result is None
+        else None
+    )
 
     if not demo_complete:
         recommendation = {
@@ -222,6 +308,32 @@ def build_payload(workspace: Path, goal: str | None) -> dict[str, object]:
                 "epochs": epochs,
             }
         stage = "inspect-result"
+    elif bundle is not None:
+        detected_goal, manifest_path = bundle
+        relative_manifest = manifest_path.relative_to(workspace).as_posix()
+        kml_path = bundle_kml_for(manifest_path, detected_goal)
+        if kml_path is not None:
+            kml_relative = kml_path.relative_to(workspace).as_posix()
+            recommendation = {
+                "id": f"open-{detected_goal}-bundle",
+                "label": f"open the completed {GOALS[detected_goal]['label']} KML",
+                "command": open_command(kml_relative),
+                "guide": GOALS[detected_goal]["guide"],
+                "result": relative_manifest,
+                "kml": kml_relative,
+                "epochs": 0,
+            }
+        else:
+            recommendation = {
+                "id": f"inspect-{detected_goal}-bundle",
+                "label": f"inspect the completed {GOALS[detected_goal]['label']} bundle",
+                "command": f"{cli} web --port 8085",
+                "guide": GOALS[detected_goal]["guide"],
+                "result": relative_manifest,
+                "epochs": 0,
+            }
+        stage = "inspect-result"
+        result = (detected_goal, manifest_path, 0)
     elif goal is None:
         recommendation = {
             "id": "choose-goal",
@@ -292,7 +404,10 @@ def format_text(payload: dict[str, object]) -> str:
     if "inputs" in recommendation:
         lines.append(f"Inputs: {recommendation['inputs']}")
     if "result" in recommendation:
-        lines.append(f"Result: {recommendation['result']} ({recommendation['epochs']} epochs)")
+        if isinstance(recommendation.get("epochs"), int) and recommendation["epochs"] > 0:
+            lines.append(f"Result: {recommendation['result']} ({recommendation['epochs']} epochs)")
+        else:
+            lines.append(f"Result: {recommendation['result']}")
     if recommendation.get("missing_inputs"):
         lines.append("Missing:")
         for relative_path in recommendation["missing_inputs"]:

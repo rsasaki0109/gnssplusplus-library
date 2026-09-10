@@ -23,7 +23,12 @@ same progress decision into another interface. It reports four local stages:
 `output/spp_solution.pos`, `output/rtk_solution.pos`, and
 `output/ppp_solution.pos` files advance to inspection only when they contain at
 least one solution epoch; empty or header-only outputs remain at
-`apply-to-data`. If a documented standard input is not present, the command
+`apply-to-data`. Completed R1/R3 bundles are detected the same way: any
+`output/**/manifest.json` carrying `libgnsspp.urban_continuity_bundle.v1` or
+`libgnsspp.trajectory_bundle.v1` advances to `inspect-result`, opening the
+bundle KML when present and recommending `gnss web` otherwise
+(`--goal urban-continuity` / `--goal trajectory-bundle` constrain the search).
+If a documented standard input is not present, the command
 lists the missing paths and opens focused command help instead of recommending
 a processing command that is guaranteed to fail.
 
