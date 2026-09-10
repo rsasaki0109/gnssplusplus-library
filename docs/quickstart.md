@@ -5,12 +5,14 @@
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-python3 apps/gnss.py doctor
+python3 apps/gnss.py next
 ```
 
-At any point, ask for one concrete next step. Before a successful demo this
-recommends the offline first run; afterwards it offers a route based on the
-kind of data or integration you want to use:
+`gnss next` is the single entry point: it inspects local artifacts and tells
+you the one command to run next. Before a successful demo it recommends the
+offline first run; afterwards it offers a route based on the kind of data or
+integration you want to use. (`gnss doctor` remains available for a full
+environment check when something fails.)
 
 ```bash
 python3 apps/gnss.py next
@@ -23,7 +25,13 @@ same progress decision into another interface. It reports four local stages:
 `output/spp_solution.pos`, `output/rtk_solution.pos`, and
 `output/ppp_solution.pos` files advance to inspection only when they contain at
 least one solution epoch; empty or header-only outputs remain at
-`apply-to-data`. If a documented standard input is not present, the command
+`apply-to-data`. Completed R1/R3 bundles are detected the same way: any
+`output/**/manifest.json` carrying `libgnsspp.urban_continuity_bundle.v1` or
+`libgnsspp.trajectory_bundle.v1` advances to `inspect-result`, opening the
+bundle KML when present, else the bundle trajectory PNG, and recommending
+`gnss web` only when neither exists
+(`--goal urban-continuity` / `--goal trajectory-bundle` constrain the search).
+If a documented standard input is not present, the command
 lists the missing paths and opens focused command help instead of recommending
 a processing command that is guaranteed to fail.
 
