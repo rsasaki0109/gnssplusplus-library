@@ -1,0 +1,213 @@
+{
+  "schema_version": "smartphone-r5-phase101-source-parity-accuracy-regression-freeze-v1",
+  "phase": 101,
+  "execution_label": "Luna Max",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "status": "frozen-for-one-opt-in-implementation-no-execution",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase101_source_parity_accuracy_regression_audit_v1.md",
+    "commit": "0aea938ce3a8864e00bbc641e1b5135e4e860a43",
+    "sha256": "bc92618dbf6ea3a82af7d29aa2b6c8e7b459cdc982761bbf1d0431578d3bd89f"
+  },
+  "purpose": "Freeze exactly one source-parity hypothesis for later implementation and raw-only qualification after the sealed Phase100 LAX-T accuracy regression. This record is not solver, raw, truth, accuracy, release, or Kaggle authorization.",
+  "scope": {
+    "source_only_audit": true,
+    "accuracy_evidence": "sealed Phase82 and Phase100 aggregate/route metadata only",
+    "routes_for_later_structural_qualification": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "future_input_lane": [
+      "same-run raw device_gnss.csv",
+      "same-run raw device_imu.csv",
+      "same-run broadcast navigation"
+    ],
+    "future_input_exclusions": [
+      "MAT or MAT-derived state",
+      "base RINEX or pseudorange correction",
+      "PDC/WLS/precomputed coordinate or trajectory",
+      "truth or evaluator data in solver process",
+      "Kaggle or token access"
+    ]
+  },
+  "exactly_one_candidate": {
+    "candidate_id": "phase101-raw-only-native-source-parity-epoch-c-isb-v1",
+    "selector": "new default-off source-parity selector",
+    "selector_off_contract": "legacy/default behavior is unchanged bit-for-bit at the graph/config boundary",
+    "selector_on_scope": [
+      "GNSS-first Point3+velocity meter-state graph",
+      "same-run Pose3+IMU meter-state main graph"
+    ],
+    "hypothesis": "The official per-epoch seven-component C/ISB state and its vector CCDD coupling are a missing source contract in native scalar-c plus global-ISB construction; preserving that topology may remove the LAX-T source-parity regression.",
+    "not_a_claim": [
+      "not proven to be the sole cause of the Phase82-to-Phase100 LAX-T change",
+      "not a claim that the candidate converges or improves accuracy",
+      "not a claim that official MATLAB uses a graph f state",
+      "not a solver or rank guarantee"
+    ]
+  },
+  "state_contract": {
+    "official": {
+      "position_key": "x_i: Vector3 per retained epoch",
+      "velocity_key": "v_i: Vector3 per retained epoch",
+      "clock_key": "c_i: Vector7 per retained epoch",
+      "clock_components": {
+        "index_0": "base receiver clock",
+        "indices_1_to_6": "official system/frequency clock/ISB component slots selected by sysfreq2sigtype.m",
+        "fallback_code_7": "sentinel for other/unsupported signal in sysfreq2sigtype.m; not an additional asserted C component"
+      },
+      "drift_key": "d_i: Vector1 per retained epoch",
+      "imu_keys": [
+        "p_i: Pose3 per retained epoch",
+        "b_i: ConstantBias per retained epoch"
+      ],
+      "frequency_loop": "f is only the MATLAB loop variable over FTYPE=[L1,L5]; it is not a graph state"
+    },
+    "native_current_to_replace_only_when_selector_on": {
+      "position_key": "x_i or Pose3 position slot per epoch",
+      "velocity_key": "v_i per epoch",
+      "clock_key": "scalar c_i per epoch",
+      "isb_key": "global/time-invariant i per non-GPS clock group",
+      "drift_key": "d_i per epoch",
+      "optional_f_key": "static secondary-signal code-bias f state; remains disabled and is not part of this candidate",
+      "imu_keys": [
+        "p_i per epoch",
+        "b_i per epoch"
+      ]
+    },
+    "candidate_representation": {
+      "clock_key": "C_i: Vector7 per retained epoch",
+      "clock_units": "metres",
+      "drift_key": "D_i: scalar per retained epoch",
+      "drift_units": "metres/second",
+      "initial_C": "[retained EpochSeed.receiver_clock_bias_m, 0, 0, 0, 0, 0, 0] with exact retained-key alignment",
+      "initial_D": "exact retained EpochSeed.receiver_clock_drift_mps; no raw/zero/WLS/interpolated fallback",
+      "optimized_result_surface": "expose optimized per-epoch C components and D in FGOResult in retained source-key order"
+    }
+  },
+  "equation_and_factor_invariants": {
+    "pseudorange": "Use the official per-epoch C selector: base component C[0] plus the mapped system/frequency component; no base correction or PDC input.",
+    "clock_ccdd": {
+      "residual": "(C2-C1) - (D1+D2)*dt/2",
+      "jacobian_order": "[-I, +I, -dt/2, -dt/2] for [C1,C2,D1,D2]",
+      "component_behavior": "D term is applied to C component 0 exactly as the official factor; vector C residual/Jacobian is retained for all components",
+      "dt_units": "seconds",
+      "sigma": "official ordinary clock sigma 0.1 m and existing source vector noise construction; no new or tuned sigma"
+    },
+    "doppler": "Keep existing raw corrected undifferenced Doppler v/D factors, filters, robust loss, and D units unchanged.",
+    "carrier_and_tdcp": "Do not enable or alter carrier/TDCP factors in this candidate.",
+    "imu": "Keep existing Pose3/velocity/CombinedImuFactor, axis/mounting, gravity, preintegration covariance, bias random walk, and attitude/velocity initialization unchanged.",
+    "priors": "Preserve official vector-C initial-prior intent and all current configured priors; do not add a new gauge, anchor, or regularizer.",
+    "solver": "Keep the already selected Phase100 main MULTIFRONTAL_QR branch and GNSS-first Cholesky branch unchanged; this candidate is not a solver experiment.",
+    "lm": "No change to lambda schedule, damping, ordering, tolerances, maximum iterations, acceptance, or terminal branches.",
+    "noise_and_filter": "No change to SNR/elevation/residual filters, measurement sigmas, Huber/robust-loss settings, or epoch retention."
+  },
+  "handoff_contract": {
+    "staging": "GNSS-first solves raw-only C/D and position/velocity in memory, then main receives the same-run optimized C and D plus existing position/velocity.",
+    "alignment_key": "exact retained EpochSeed source index and UTC key; vector index is not accepted as a substitute for key equality",
+    "required_predicates": [
+      "retained epoch key set is nonempty and duplicate-free",
+      "C and D vectors are full-length, finite, and exactly key-aligned in GNSS-first and main problems",
+      "GNSS-first accepted iterations are greater than zero and final cost is strictly below initial cost",
+      "no missing, short, reordered, nonfinite, raw, zero, WLS, or interpolated fallback",
+      "main structural output remains finite, Earth-valid, and exact expected-epoch coverage",
+      "failure is fail-closed with no fallback or solution publication"
+    ],
+    "output_policy": "A later diagnostic or structural run must not publish solution rows; accuracy requires a new isolated evaluator contract."
+  },
+  "candidate_comparison": {
+    "rejected": [
+      {
+        "id": "base-pseudorange-compensation",
+        "reason": "strong historical relevance but forbidden by raw-only/no-base boundary"
+      },
+      {
+        "id": "native-f-signal-bias-states",
+        "reason": "official f is only a frequency-loop variable; enabling native f changes secondary observation population and is not source-faithful"
+      }
+    ],
+    "selected": "phase101-raw-only-native-source-parity-epoch-c-isb-v1"
+  },
+  "authorities": {
+    "official_gnss_source": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+    },
+    "official_gnss_imu_source": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "official_parameters": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "official_signal_mapping": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/sysfreq2sigtype.m",
+      "sha256": "5ec1d299e04b45f604921cbae3b1fac8f78f3f76a0152496d86011a32f1d0079"
+    },
+    "official_ccdd_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc"
+    },
+    "official_pseudorange_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/PseudorangeFactor_XC.h",
+      "sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415"
+    },
+    "native_backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "38c555b82785aee3d1d5fd8a81ff3bde8f63fd0a9910d5f1786a7c68152d7f3f"
+    },
+    "native_key_helpers": {
+      "path": "src/algorithms/fgo_gtsam_internal.hpp",
+      "sha256": "fb9cf4796ab639c8e563ea7ea1bdcbca0b00fec928bb411410168987fd4a8356"
+    },
+    "native_fgo_result": {
+      "path": "include/libgnss++/algorithms/fgo.hpp",
+      "sha256": "97a3fe0788e1c82810647c51ae3213bb7341d328498c0c55c98fa57ce8bb6b6c"
+    },
+    "phase82_sealed_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase100_sealed_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7"
+    },
+    "phase100_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_manifest_v1.json",
+      "sha256": "e31e959347aa4ca8d4f3bce3b5d66955c2abf8336fa3c965b59da199e7eb7729"
+    },
+    "phase100_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_gate_freeze_v1.json",
+      "sha256": "de2d4f5626782297b5535767ff1f867e29538c74edafff337504b763dbfc0ff9"
+    }
+  },
+  "read_policy": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "phase100_solution_payload_reads": 0,
+    "phase100_truth_payload_reads": 0,
+    "new_accuracy_calculations": 0,
+    "mat_reads_or_generation": 0,
+    "base_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_or_tuning": 0,
+    "solution_publication": false,
+    "note": "Only official source text and sealed Phase82/Phase100 aggregate metadata were inspected; official source load() statements were not executed and no MAT payload was opened."
+  },
+  "next_boundary": {
+    "implementation_allowed": true,
+    "implementation_scope": "only the frozen selector-on per-epoch C/ISB state representation and required FGOResult/handoff plumbing",
+    "qualification_required": [
+      "focused synthetic and legacy regression tests",
+      "source/diff audit proving solver, factor, unit, sigma, filter, LM, and default invariants",
+      "new pre-raw manifest/evaluator",
+      "independent one-shot raw authorization before any raw run"
+    ],
+    "raw_execution_authorized_by_this_record": false,
+    "accuracy_or_submission_authorized_by_this_record": false
+  }
+}

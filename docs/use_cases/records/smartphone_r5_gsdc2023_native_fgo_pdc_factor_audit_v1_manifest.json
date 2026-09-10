@@ -1,0 +1,25 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-factor-audit-record-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_v1.json",
+  "record_sha256": "df386286f348c2b843181ebfd1e1585cec35aff62ecdafa0dca14097d990e538",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json",
+  "freeze_record_sha256": "a1d9a6f9d7018cb0bdf9736e9886d19865d3476ae1547281632833da90a3eac2",
+  "audit_artifact": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.json",
+  "audit_artifact_sha256": "b0b18311ef253010240b3cfc7df4854b4f5ca81d79f217ee47522f02b63b0847",
+  "audit_manifest": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.manifest.json",
+  "audit_manifest_sha256": "257744c4cde33612d5d0574531662bb81b95c28749a77b24ddc4d24a15324f8e",
+  "stage_manifest_sha256": {
+    "A_P_only_1": "8131111c72abb8e8e37943ed1c6730a5c218bee2e0e39a0a51bab8d5f457e715",
+    "B_P_D_no_temporal_2": "fc4d5c2796833816d0152f36b6ebe6cae83b5b42107b0012a85d2257f6ad2f9f",
+    "C_P_motion_2": "51bbf715e116b2d013906072e297ab5f4e2fb67116ffb4d801e6c7442c92d44f",
+    "D_P_D_velocity_motion_2": "96d411e0c6ffa0a30dd6ddfd98eff7dda19ff209f25acccb9abc9e6fb1535e5b",
+    "E_P_D_TDCP_2": "44ab1e66b3b42d32157f0a9cbdc4bf14e9422a04c57ac4f120e815e7d7867b58",
+    "F_P_D_TDCP_carrier_2": "b57e7b0333de34cffc568043f65da026533dbcf78600d30b5b3baea1923d84eb",
+    "C_P_motion_30": "35660dba12e50358c635292acd9018530ce499a6ebdeacfb7ea0566d0202834f",
+    "D_P_D_velocity_motion_30": "377dfb90ba1bd0fb1f8ef51f5bab18ef9fc16cdd3472c27fbd63e9dd1e39a907",
+    "E_P_D_TDCP_30": "2a949c3045524ca9b50e50a61a66ae02d1c143726200343738dd35fd1495a97e",
+    "F_P_D_TDCP_carrier_30": "c69e98841bbbf92913f73662ae1615f97d8aeeae226d774bbed4f766a1265501"
+  },
+  "truth_opened": false,
+  "external_mutation": false
+}

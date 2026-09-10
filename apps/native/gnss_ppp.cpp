@@ -1070,6 +1070,10 @@ int main(int argc, char* argv[]) {
             // override retains the exact-0 kill switch for A/B comparisons.
             ppp_config.clas_mrtklib_float_parity =
                 ppp_env_overrides.clas_mrtklib_float_parity;
+            ppp_config.clas_ar_held_minimum_dd_rows =
+                ppp_env_overrides.clas_ar_held_minimum_dd_rows;
+            ppp_config.clas_ar_held_maximum_publication_streak =
+                ppp_env_overrides.clas_ar_held_maximum_publication_streak;
         }
         ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;

@@ -1,0 +1,274 @@
+{
+  "schema_version": "smartphone-r5-phase77-phase73-signal-bias-composition-structural-freeze.v1",
+  "phase": 77,
+  "status": "frozen-before-phase77-raw-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze one source-supported, non-overlapping structural candidate: compose the Phase73 source-exact finite-pc pseudorange miss mask with the existing opt-in receiver secondary-signal bias states.",
+  "selection_basis": {
+    "candidate": "Phase73 finite in-domain base-pc pseudorange retention plus --native-signal-bias-states",
+    "source_gap": "Phase73/76 native summaries have receiver_signal_bias_states=0, while the official fgo_gnss_imu.m passes each signal type to its pseudorange factor and the native backend already has a source-defined static secondary-code bias state path.",
+    "official_source": {
+      "repository": "https://github.com/taroz/gsdc2023",
+      "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+      "fgo_gnss_imu_m_sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "fgo_gnss_imu_evidence": "PseudorangeFactor_XC receives sigtype for each observable; stop/pose and clock alternatives are separate official factors.",
+      "correct_pseudorange_m_sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "parameters_m_sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "native_source_contract": {
+      "signal_bias_header": "include/libgnss++/algorithms/signal_bias_contract.hpp",
+      "signal_bias_header_sha256": "cc54e29fe2c4cd14a243e9a16ec97c2767a9fb6c5ce96c57abebe7ee3b503af4",
+      "signal_policy_header": "include/libgnss++/core/signal_policy.hpp",
+      "signal_policy_header_sha256": "d3f8edbdd785f0292c2b8a1596248c00a2b5e9284c09de439e5c7340c1dbca99",
+      "eligibility": "signal_policy::isSecondarySignal(system, signal); primary code is the clock reference and one static meter-valued state is attached per eligible (system, signal)",
+      "ordinal": "1 + (system << 8) + uint8(signal), independent of observation order",
+      "factor_model": "range + c*(epoch clock + constellation ISB) + static signal bias - corrected pseudorange",
+      "bias_sign": "positive state increases predicted secondary-code range; no raw sign or truth fit is introduced",
+      "prior": "zero-mean static prior sigma 1000 m, fixed in the existing native implementation and treated as a gauge regularizer",
+      "scope": "undifferenced FGO pseudorange factors only; no IFLC, base correction model change, truth coordinate, WLS, or precomputed trajectory"
+    },
+    "non_duplicates": {
+      "phase46_clock": "sealed common receiver-clock gauge/no-go; not reused",
+      "phase60_intersignal_bias": "sealed finite Full/Satellite ISB availability=0; not reused",
+      "phase61_cn0_code_calibration": "sealed raw CMC coverage/direction no-go; not reused",
+      "phase20_stop": "existing raw-IMU stop candidate already scored on one Pixel7pro route; not this pseudorange signal-bias composition",
+      "phase73_miss_mask": "the base-pc finite miss mask remains unchanged and is the control component, not relaxed"
+    },
+    "historical_phase11_reference": {
+      "freeze_path": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1_1.json",
+      "freeze_sha256": "e4ff6aba34240250b55e5ca017809ea5fdca347aa03ab4dab5bc1507ec231e55",
+      "structural_seal_path": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_structural_seal_v1.json",
+      "structural_seal_sha256": "ebc0316a9f84da76a398b87410c5d81a3ca3c3299ccdcbe2533a220de87bbb06",
+      "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "policy": "source/structural provenance only; no Phase11 truth payload or score is an input or route selector"
+    }
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "phase73_source_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_freeze_v1.json",
+      "sha256": "cd38928123f75e0ff71a42c1486e5bb5998bd506f0ccee3b830aa60c2d696b33"
+    },
+    "phase73_structural_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_freeze_v1.json",
+      "sha256": "9d97f1a97bb8559f5f0ede55fcecd109c590b8afb2cf10938b2884d8ffd6d1a0"
+    },
+    "phase73_structural_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json",
+      "sha256": "8493d16b3d2c5ce8b09b65ab0dada6903fcbac01257fb8db7977cb41c85577fd"
+    },
+    "phase76_accuracy_result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_phase76_phase75_accuracy_integrity_recovery_result_v1.json",
+      "sha256": "2f59a5cdb400529c73c496246e5f024046bcacc26b5e821fb80151ac654fddd6",
+      "status": "no-go; candidate structural artifacts are not a Phase77 truth input"
+    },
+    "phase74_control_source": {
+      "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json",
+      "sha256": "8308f15a491d1ef1daae0542efd1d7ac96562738e51e6c90ea04fd9f81aba8d9",
+      "route_control_policy": "Phase74 sealed route control pins are the exact Phase43 identity reference; no retyped hash table"
+    },
+    "source_commit_at_freeze": "8021843b0af5dbfd777976440afa68ab5dfaed9d"
+  },
+  "cohort": {
+    "phone_model": "pixel5",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_disjoint": true,
+    "raw_input_source": "exact Phase65/70/73 Pixel5 raw device_gnss.csv, device_imu.csv, and brdc.nav pins; base.obs is the exact Phase64/65 station artifact",
+    "raw_truth_read_before_freeze": 0
+  },
+  "base_recipe": {
+    "flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor",
+      "--native-fallback-seed-quality-anchor-recovery"
+    ],
+    "phase73_control_flags": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex",
+      "--native-base-rinex-sha256",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "candidate_addition": "--native-signal-bias-states",
+    "candidate_flags": "base_recipe + phase73_control_flags + --native-signal-bias-states",
+    "control_definition": "Phase73 finite-pc miss-mask recipe with signal-bias flag absent",
+    "candidate_preserve_additional_frequency_bands": false,
+    "candidate_no_additional_band_reader": true,
+    "candidate_default_off": true,
+    "implementation_status": "existing native opt-in source path is evaluated; no C++ source mutation is authorized by this freeze"
+  },
+  "candidate_contract": {
+    "operation": "retain Phase73 exact finite in-domain base pc behavior and attach one static meter-valued state to each eligible secondary (system, signal) pseudorange factor",
+    "source_correction": "P_rover_corrected_m=P_rover_raw_m-pc_m, unchanged",
+    "signal_bias_eligibility": "signal_policy::isSecondarySignal only; no canonical-frequency aliasing, no cross-constellation or cross-satellite state",
+    "secondary_families": "all source-supported secondary SignalType values actually parsed by the Android loader; every state/factor key is reported",
+    "pseudorange_population": "Phase73 finite-pc miss mask remains authoritative; no fill/extrapolation/endpoint hold",
+    "tdcp_doppler_imu_spp": "no dedicated change; any secondary TDCP population change caused by the existing opt-in eligibility gate is reported and must be deterministic",
+    "coefficient": 1.0,
+    "tuning": "none after freeze or after any future truth read",
+    "forbidden": ["MAT", "ground truth as inference input", "validation/holdout", "device WLS/SvPosition/SvElevation", "precomputed coordinates", "nav rerun outside the declared native process", "new signal canonicalization", "IFLC", "base position/offset CSV"]
+  },
+  "source_hashes_at_freeze": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "80020ca783ec246bf4844c0c62babf4762d7278dc4d20ee254790aacd5776fd0",
+    "src/algorithms/fgo_gtsam_backend.cpp": "bbd4c808d2e8f6eb1e2934c91c5d450ecc63f517b7190e5e219149194f6c6693",
+    "src/algorithms/fgo_problems.cpp": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+    "include/libgnss++/algorithms/fgo.hpp": "90efe485b2c50eb56535a7eb0709a1b7daa29e4f7a9bd3878acf527dc624ab36",
+    "include/libgnss++/algorithms/fgo_config.hpp": "e7a72c89475d0edf1da3a767ea7d1702d76b8b52dc90a4bd5db225826875ffbe",
+    "include/libgnss++/algorithms/signal_bias_contract.hpp": "cc54e29fe2c4cd14a243e9a16ec97c2767a9fb6c5ce96c57abebe7ee3b503af4",
+    "include/libgnss++/core/signal_policy.hpp": "d3f8edbdd785f0292c2b8a1596248c00a2b5e9284c09de439e5c7340c1dbca99"
+  },
+  "truth_free_structural_gates": {
+    "route_count": 4,
+    "raw_input_hash_and_bytes_exact": true,
+    "base_input_hash_and_bytes_exact": true,
+    "candidate_prediction_domain_coverage": 1.0,
+    "candidate_all_coordinates_finite_and_earth_valid": true,
+    "candidate_converged": true,
+    "candidate_repeat_count": 2,
+    "candidate_repeat_submission_and_summary_byte_identical": true,
+    "control_phase73_run_count": 1,
+    "control_phase43_identity_reference": true,
+    "candidate_signal_bias_states_min_per_route": 1,
+    "candidate_signal_bias_factors_min_per_route": 1,
+    "signal_bias_estimates_all_finite": true,
+    "phase73_miss_mask_telemetry_identity": true,
+    "phase73_miss_mask_identity_definition": "For every route, original_adopted_pseudorange_rows, retained_finite_pc_pseudorange_rows, dropped_missing_exact_stream_rows, dropped_out_of_domain_rows, dropped_nonfinite_correction_rows, retained_over_original_fraction, retained_finite_pc_fraction, correction_abs_p50_m, correction_abs_p95_m, and correction_abs_max_m must equal the sealed Phase73 control values byte-for-byte after the declared JSON numeric serialization. The candidate must not change the Phase73 miss-mask population or correction values.",
+    "phase73_miss_mask_expected_by_route": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "original_adopted_pseudorange_rows": 61754,
+        "retained_finite_pc_pseudorange_rows": 46556,
+        "dropped_missing_exact_stream_rows": 13559,
+        "dropped_out_of_domain_rows": 1639,
+        "dropped_nonfinite_correction_rows": 0,
+        "retained_over_original_fraction": 0.7538944845678013,
+        "retained_finite_pc_fraction": 1.0,
+        "correction_abs_p50_m": 7.093666204009779,
+        "correction_abs_p95_m": 14.90088104925494,
+        "correction_abs_max_m": 15.637516129413319
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "original_adopted_pseudorange_rows": 73286,
+        "retained_finite_pc_pseudorange_rows": 51890,
+        "dropped_missing_exact_stream_rows": 20172,
+        "dropped_out_of_domain_rows": 1224,
+        "dropped_nonfinite_correction_rows": 0,
+        "retained_over_original_fraction": 0.7080479218404606,
+        "retained_finite_pc_fraction": 1.0,
+        "correction_abs_p50_m": 3.9124480425125676,
+        "correction_abs_p95_m": 10.620111099031618,
+        "correction_abs_max_m": 49.64431970213562
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "original_adopted_pseudorange_rows": 34319,
+        "retained_finite_pc_pseudorange_rows": 33552,
+        "dropped_missing_exact_stream_rows": 0,
+        "dropped_out_of_domain_rows": 767,
+        "dropped_nonfinite_correction_rows": 0,
+        "retained_over_original_fraction": 0.9776508639529123,
+        "retained_finite_pc_fraction": 1.0,
+        "correction_abs_p50_m": 6.1548258637075115,
+        "correction_abs_p95_m": 11.184682536881832,
+        "correction_abs_max_m": 49.55040764532433
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "original_adopted_pseudorange_rows": 24395,
+        "retained_finite_pc_pseudorange_rows": 22369,
+        "dropped_missing_exact_stream_rows": 412,
+        "dropped_out_of_domain_rows": 1614,
+        "dropped_nonfinite_correction_rows": 0,
+        "retained_over_original_fraction": 0.9169501947120312,
+        "retained_finite_pc_fraction": 1.0,
+        "correction_abs_p50_m": 2.7449832184598115,
+        "correction_abs_p95_m": 16.10826814840464,
+        "correction_abs_max_m": 18.314306376782138
+      }
+    },
+    "base_matched_adopted_factor_fraction": "informational only; do not re-apply the historical 0.80 gate because the exact Phase73 population is frozen by identity",
+    "base_finite_correction_fraction": "informational only; do not re-apply the historical 0.99 gate because the exact Phase73 population is frozen by identity",
+    "base_retained_finite_pc_fraction": "must equal the sealed Phase73 value per route, not a new threshold",
+    "base_no_extrapolation_or_fill": true,
+    "factor_count_consistency": true,
+    "tdcp_doppler_imu_spp_invariants_reported": true,
+    "over_70_mps_count": 0,
+    "no_forbidden_input": true,
+    "no_unexpected_exception": true,
+    "truth_free": true,
+    "all_gates_anded": true,
+    "accuracy_truth_not_in_this_stage": true
+  },
+  "telemetry_required": {
+    "summary_blocks": ["native_base_pseudorange_compensation", "native_base_pseudorange_source_miss_mask"],
+    "signal_bias_fields": ["receiver_signal_bias_factors", "receiver_signal_bias_states", "receiver_signal_bias_estimates_m"],
+    "miss_mask_fields": ["original_adopted_pseudorange_rows", "retained_finite_pc_pseudorange_rows", "dropped_missing_exact_stream_rows", "dropped_out_of_domain_rows", "dropped_nonfinite_correction_rows", "retained_finite_pc_fraction", "retained_over_original_fraction", "pseudorange_factors_inserted", "pseudorange_factor_count_consistent", "correction_abs_p50_m", "correction_abs_p95_m", "correction_abs_max_m"],
+    "population_invariant_fields": ["pseudorange_factors", "tdcp_factors_built", "tdcp_factors_inserted", "undifferenced_doppler_factors_inserted", "imu_intervals", "output_epochs", "over_70_mps_count"],
+    "state_grouping": "route, GNSS system, SignalType; no presentation collapse"
+  },
+  "matrix": {
+    "output_root": "output/smartphone-r5/phase77-phase73-signal-bias-composition-structural-v1",
+    "single_process_per_invocation": true,
+    "candidate_runs_per_route": 2,
+    "control_runs_per_route": 1,
+    "native_invocations": 12,
+    "raw_device_gnss_reads": 12,
+    "raw_device_imu_reads": 12,
+    "broadcast_nav_reads": 12,
+    "base_rinex_reads": 12,
+    "truth_reads": 0,
+    "solver_rerun_after_truth": false,
+    "candidate_artifacts_not_reused_from_phase73": true,
+    "new_output_root_required": true
+  },
+  "read_policy": {
+    "truth_reads_before_freeze": 0,
+    "truth_reads_before_manifest": 0,
+    "truth_reads_in_structural_stage": 0,
+    "raw_gnss_reads_before_freeze": 0,
+    "raw_imu_reads_before_freeze": 0,
+    "navigation_reads_before_freeze": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": 0,
+    "post_truth_tuning": false,
+    "native_or_solver_subprocess_policy": "native invocation is allowed only in the separately sealed structural runner before any accuracy truth; no subprocess after truth"
+  },
+  "next_stage": {
+    "only_if_structural_all_passed": "create a new accuracy freeze and compare the immutable candidate against the exact Phase43 control and the Phase73 no-bias reference under the unchanged Phase44/76 Haversine metric",
+    "if_structural_fail": "no accuracy truth; preserve Phase43 champion, Phase73/77 opt-in experiments, and name the failed structural gate",
+    "zero_point_782": "not evaluated in this truth-free structural stage",
+    "no_validation_or_kaggle": true
+  },
+  "fail_closed": {
+    "freeze_or_manifest_hash_mismatch": true,
+    "source_or_binary_hash_mismatch": true,
+    "any_forbidden_input": true,
+    "candidate_or_control_nonfinite": true,
+    "missing_signal_bias_telemetry": true,
+    "candidate_signal_bias_states_below_minimum": true,
+    "phase73_miss_mask_identity_failure": true,
+    "repeat_or_default_identity_failure": true,
+    "any_truth_read": "structural result is not scored and phase stops",
+    "unexpected_exception": true
+  },
+  "read_accounting_at_freeze": {
+    "raw_device_gnss": 0,
+    "raw_device_imu": 0,
+    "broadcast_nav": 0,
+    "base_rinex": 0,
+    "truth": 0,
+    "mat": 0,
+    "validation_holdout": 0,
+    "archive_reopen": 0,
+    "native_solver_invocations": 0
+  }
+}

@@ -1,0 +1,154 @@
+{
+  "schema_version": "smartphone-r5-phase131-canonical-correction-structural-pre-raw-accounting.v1",
+  "phase": 131,
+  "execution_label": "Luna Max",
+  "status": "sealed-pre-raw-zero-read",
+  "candidate_id": "phase131-canonical-correction-band-key-v1",
+  "route_order": "MTV-A then LAX-T",
+  "route_ids": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "runs_per_route": 1,
+  "audit_commit": "c5afacef8416aace5e8f713ad8a4b08654666457",
+  "freeze_commit": "322f1278c9b802d3414b1fd275baeb3e731542a9",
+  "implementation_commit": "c3af051e46f3685c0d3406537fa8f7c12eea75f2",
+  "contract_code_commit": "4203fe7551632ec0d6924a96025fbbb148804245",
+  "manifest_pin": {
+    "commit": "41299c13832af3eaefade4c2e50a5ea1bcaebced",
+    "path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_manifest_v1.json",
+    "sha256": "81e02d17a312040e4f94c835d8d4b6f751a4f449006b20ea6189b2212369bf95"
+  },
+  "pins": {
+    "contract_audit": {
+      "commit": "c5afacef8416aace5e8f713ad8a4b08654666457",
+      "path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_contract_audit_v1.md",
+      "sha256": "403c6434629edf6f51bdb4b6f77fa1800f76d9b367fc8b52a42d60f6802c8227"
+    },
+    "contract_freeze": {
+      "commit": "322f1278c9b802d3414b1fd275baeb3e731542a9",
+      "path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_contract_freeze_v1.json",
+      "sha256": "1ac82fad3ebe27b9a3e0592e9d80f6b73dff5bbee20f7ff3dd276ca8cc763200"
+    },
+    "implementation": {
+      "commit": "c3af051e46f3685c0d3406537fa8f7c12eea75f2"
+    },
+    "launch_free_code": {
+      "commit": "4203fe7551632ec0d6924a96025fbbb148804245",
+      "validator_sha256": "dbb2343e3dbd014fc6ac9ade61fdfdd8e3cd8277927f0eb931d025388e1572c6",
+      "runner_sha256": "b7e4af9e422c54b18119daadf8a95da7d90973b1445c61a383e1e724eb3ad434",
+      "focused_tests_sha256": "7f4ccb73aef94c2e0e66d5fb9faf4d62e797b709505ce572155f33a65d19c54d"
+    },
+    "test_registration": {
+      "commit": "10b36a8507dc15c9641392e9ba7d7a5696a6ede6",
+      "path": "tests/CMakeLists.txt",
+      "sha256": "4ce1c1180cb833eeaa3025118ad8e89852f307a59882c20da2b945d6165881a2"
+    },
+    "structural_manifest": {
+      "commit": "41299c13832af3eaefade4c2e50a5ea1bcaebced",
+      "path": "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_manifest_v1.json",
+      "sha256": "81e02d17a312040e4f94c835d8d4b6f751a4f449006b20ea6189b2212369bf95"
+    },
+    "target_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e"
+    }
+  },
+  "qualification": {
+    "focused_python": {
+      "command": "python3 -m unittest -v tests.test_smartphone_phase131_canonical_correction_structural",
+      "planned": true,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "raw_payload_reads": 0,
+      "solver_invocations": 0,
+      "truth_reads": 0,
+      "result": "pass; launch-free synthetic only"
+    },
+    "python_compile": {
+      "command": "python3 -m py_compile apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural.py apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural_execute.py tests/test_smartphone_phase131_canonical_correction_structural.py",
+      "result": "pass"
+    },
+    "cpp_suite": {
+      "tests": 1172,
+      "passed": 1114,
+      "skipped": 58,
+      "failed": 0,
+      "raw_or_solver_execution": false,
+      "result": "pass"
+    },
+    "static_modes": {
+      "verify_freeze": "pass",
+      "verify_manifest": "pass",
+      "verify_pre_raw": "pass"
+    }
+  },
+  "selectors": {
+    "phase126_raw_base_source_complete": 1,
+    "phase127_glonass_channel_provenance": 1,
+    "phase128_glonass_provenance_parser_admission": 1,
+    "phase129_glonass_local_miss_mask": 1,
+    "phase130_shared_ledger_key_local_support": 1,
+    "phase131_canonical_correction_band_key": 1,
+    "phase118_official_tdcp_huber_k": 1,
+    "phase117_dynamic_sigma": 0,
+    "phase120_atmosphere_cancellation": 0,
+    "additional_frequency_bands": 0,
+    "partial_selector_or_fallback": false
+  },
+  "contract_qualification": {
+    "typed_same_family_aliases_allowed": true,
+    "different_family_not_a_match": true,
+    "literal_tracking_code_excluded_from_join": true,
+    "original_signal_provenance_retained": true,
+    "certified_glonass_fcn_only": true,
+    "unknown_band_explicit_miss": true,
+    "ambiguous_multi_code_conflict_fail_closed": true,
+    "side_local_conservation": true,
+    "retained_rover_exact_canonical_support": true,
+    "exact_endpoint_or_adjacent_two_point_bracket": true,
+    "unused_base_rows_and_streams_accounted": true,
+    "whole_rover_base_ledger_equality_required": false,
+    "duplicate_or_nonmonotonic_global_abort": true,
+    "all_miss_or_empty_route_fail_closed": true,
+    "no_nearest_hold_extrapolation_raw_zero_or_fallback": true,
+    "phase126_a_b_c_transactional": true,
+    "factor_equation_topology_sigma_lm_unchanged": true
+  },
+  "authorization_boundary": {
+    "implementation_and_launch_free_contract_authorized": true,
+    "raw_materialization_authorized": false,
+    "raw_execution_authorized": false,
+    "native_solver_authorized": false,
+    "solution_content_or_coordinate_read_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_or_promotion_authorized": false,
+    "mat_pdc_precomputed_coordinate_or_kaggle_authorized": false,
+    "required_next_step": "Create an independent authorization commit pinning this pre-raw seal; only then perform one inventory-first pass per route and launch the native solver on a passing route."
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_coordinate_or_solution_row_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "sweeps": 0
+  },
+  "raw_materialization_authorized": false,
+  "raw_execution_authorized": false,
+  "solution_content": "not generated, opened, interpreted, or published in this qualification",
+  "historical_artifacts_unchanged": true
+}

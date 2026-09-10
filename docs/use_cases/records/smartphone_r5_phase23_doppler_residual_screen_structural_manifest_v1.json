@@ -1,0 +1,36 @@
+{
+  "schema_version": "smartphone-r5-phase23-doppler-residual-screen-structural-manifest.v1",
+  "status": "sealed-truth-free-structural-no-go",
+  "candidate_id": "native-raw-upstream-absolute-doppler-screen-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_freeze_v1.json",
+  "freeze_record_sha256": "5372c92bea8a888365e50557de41a505f13baba34d73ac79cb2f80a6682504eb",
+  "freeze_record_audit_sha256": "3369deaf07ff415c2e4d8704ba54436ea91749aa4321316370ea1b664a3ab297",
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_structural_seal_v1.json",
+  "binary": "build/apps/gnss_fgo_imu_no_base",
+  "binary_sha256": "dec00aff10864f8c3a575fb5e4af1e82102577cce8f0d0a1253c2078a1bbb00e",
+  "artifact_hashes": {
+    "pixel_candidate_submission": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f",
+    "pixel_candidate_summary": "d7dbf813790625c87d21bfb4973cc251aef99489d2bc5aad13dfcbe32a937f05",
+    "pixel_candidate_repeat_submission": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f",
+    "pixel_candidate_repeat_summary": "d7dbf813790625c87d21bfb4973cc251aef99489d2bc5aad13dfcbe32a937f05",
+    "pixel_control_submission": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "mi8_control_submission": "1cfb0ac4147a02d4d03e93da1dc906118d7c5258f00462bbc41dd8ce66e75d94",
+    "mi8_candidate_failure_log": "bc2fbee0301987134a7f6c8c6e060ae3dc07c40934509f10760527531b909657"
+  },
+  "focused_tests": {
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ./build/tests/run_tests --gtest_filter=AndroidRawGnssTest.*:UpstreamObservablePreprocessingTest.*",
+    "result": "17/17 passed",
+    "parser_fixture_source_sha256": "732b5f42977f61c86b3d7fbea0615146350f8e26700323f2a6353bcb4994f776"
+  },
+  "truth_policy": {
+    "truth_free_before_run": true,
+    "ground_truth_read_count": 0,
+    "mat_read_count": 0,
+    "validation_read_count": 0,
+    "holdout_read_count": 0,
+    "kaggle_or_token_access": false,
+    "score_evaluation_skipped_due_to_structural_no_go": true,
+    "post_score_tuning": false
+  },
+  "manifest_sha256": "excluded from self-hash; sealed by the structural-seal record"
+}

@@ -1,0 +1,295 @@
+{
+  "schema_version": "smartphone-r5-phase118-tdcp-robust-k-accuracy-manifest.v1",
+  "phase": 118,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-phase118-truth-only-accuracy-evaluation",
+  "purpose": "Launch-free contract for one isolated truth-only evaluation of the immutable Phase118 MTV-A and LAX-T outputs.",
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_gate_freeze_v1.json",
+    "commit": "ef8d11bc4fa64e2ed6cd5fface133979655953ff",
+    "sha256": "860a7f382199958f8dd2c43ba697d4c5cde1bc550d5747028e4c6f73be346760"
+  },
+  "structural_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_result_v1.json",
+    "commit": "b4ea80d96d7156f9fd62cc554f2deeedcc550cb0",
+    "sha256": "88e8799050fd396eeb14e83d4f5923339279f46d0219a385e303d3cb50731538",
+    "accuracy_scored": false,
+    "solution_output_published": false
+  },
+  "authority": {
+    "accuracy_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_gate_freeze_v1.json",
+      "sha256": "860a7f382199958f8dd2c43ba697d4c5cde1bc550d5747028e4c6f73be346760"
+    },
+    "accuracy_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_gate_audit_v1.md",
+      "sha256": "dc4ae55d365ef743b3958cecbceb54c6cf5d211a72d749059bda709e107532f6"
+    },
+    "phase118_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_result_v1.json",
+      "sha256": "88e8799050fd396eeb14e83d4f5923339279f46d0219a385e303d3cb50731538"
+    },
+    "phase112_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_accuracy_result_v1.json",
+      "sha256": "46d8d836758ac1a88b95ec2c1a0c0080cedfb753c12411ed74e4c2501549c57e"
+    },
+    "phase112_accuracy_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_accuracy_manifest_v1.json",
+      "sha256": "29aac6bd43f56183142c84219a7924d6172733a73385a5725a9e3e3013566768"
+    },
+    "phase112_accuracy_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase112_main_output_offset_accuracy.py",
+      "sha256": "d34c7df1b48be999141013018a78f5b61e70f831afc2977871e0ac756741b6cc"
+    },
+    "phase117_accuracy_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_accuracy_manifest_v1.json",
+      "sha256": "cbba73a941d2cd46c5d9a6cfacfa55404c4e716b4c05191fa5d5e8fd3140789a"
+    },
+    "phase117_accuracy_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase117_tdcp_weighting_accuracy.py",
+      "sha256": "88e8020052a0bdaed3f7262dedc46600f6608a84a7bcdabe82ac009b8db82ebf"
+    },
+    "phase82_metric_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase76_parser_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_accuracy.py",
+      "sha256": "a1b2fac0a5615e47a11e7e4b171ced77d12818b66c598a531a4c48d2bf7ff829"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase118_tdcp_robust_k_accuracy.py",
+      "sha256": "bb6707c4e366afe236c1136675dab846fa90b318a8d9d3e204a18399269aa4b9"
+    }
+  },
+  "candidate": {
+    "id": "phase118-official-tdcp-huber-k-mapping-truth-only-accuracy-v1",
+    "candidate_count": 1,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_order_fixed": true,
+    "runs_per_route": 1,
+    "solver_rerun": false,
+    "raw_or_base_rerun": false,
+    "tdcp_rerun": false,
+    "solution_repaired_or_replaced": false,
+    "solution_publication": false,
+    "metadata_hash_seal_precedes_truth": true,
+    "coordinate_interpretation_before_truth": false,
+    "candidate_files_copied_or_transformed": false,
+    "routes_metadata": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase118-tdcp-robust-k-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "sha256": "aec1ce4f83ad520822f98dcd4d0b0e0cc325d49db470fa2048a0352021496d2f",
+        "bytes": 172694,
+        "expected_prediction_rows": 2158,
+        "expected_problem_epochs": 2159,
+        "opaque_metadata_seal": true
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase118-tdcp-robust-k-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "sha256": "c5217a8f4871194bfffe7912268bbaa27bcf9691cfd399b731d43a2bd976dfdb",
+        "bytes": 117254,
+        "expected_prediction_rows": 1465,
+        "expected_problem_epochs": 1466,
+        "opaque_metadata_seal": true
+      }
+    },
+    "phase118_offset_boundary": {
+      "selector": "--native-upstream-position-offset",
+      "required_already_applied_in_structural_run": true,
+      "structural_evidence": "upstream_position_offset.applied=true; corrected_epochs equals each expected problem epoch",
+      "evaluator_must_not_apply_again": true,
+      "double_application": "fail-closed"
+    }
+  },
+  "truth_cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "read_by_solver": false,
+    "read_by_audit": false,
+    "read_by_freeze": false,
+    "read_by_manifest": false,
+    "read_by_evaluator_only": true,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_truth_key": [
+          "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+          1615921153434
+        ]
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_truth_key": null
+      }
+    }
+  },
+  "metric_contract": {
+    "source": "Phase102/103/112 truth-only contract and pinned Phase82/Phase76 scorer",
+    "candidate_submission_header": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed",
+    "required_truth_fields": [
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "truth_phone_policy": "optional phone must equal declared route; absent phone is assigned the declared route",
+    "key": "(phone, UnixTimeMillis)",
+    "timestamp_type": "exact integer",
+    "matching": "exact integer key intersection only",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "truth_row_coverage": "informational only; pinned warm-up exclusion is enforced",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "distance": "spherical Haversine per row",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "finite_and_earth_valid": "all candidate coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]",
+    "strict_promotion_comparator": "candidate_macro_score_m < 0.782",
+    "strict_promotion_threshold_m": 0.782,
+    "equality_at_threshold": "fails; strict less-than is required"
+  },
+  "comparison_baselines": {
+    "phase112_same_pipeline": {
+      "route_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0.9976852530,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.6659910918
+      },
+      "macro_m": 0.8318381724000121,
+      "result_path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_accuracy_result_v1.json",
+      "result_sha256": "46d8d836758ac1a88b95ec2c1a0c0080cedfb753c12411ed74e4c2501549c57e"
+    },
+    "phase82_same_route": {
+      "macro_m": 1.026451431707709,
+      "result_path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "result_sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    }
+  },
+  "promotion_gates": {
+    "strict_macro_comparator": "candidate_macro_score_m < 0.782",
+    "strict_macro_threshold_m": 0.782,
+    "equality_at_threshold_passes": false,
+    "exact_route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_evaluations": 2,
+    "truth_reads_per_route": 1,
+    "no_repair_or_rerun_or_fallback": true,
+    "pixel5_offset_already_applied_exactly_once": true,
+    "evaluator_must_not_apply_offset": true,
+    "solution_rows_in_result": false,
+    "finite_and_earth_valid": true,
+    "prediction_domain_coverage_exact_1_0": true
+  },
+  "leakage_guard": {
+    "native_solver_rerun": false,
+    "raw_gnss_imu_navigation_rerun": false,
+    "raw_base_rinex_rerun": false,
+    "mat_reads_or_generated": false,
+    "precomputed_phone_coordinate_reads": false,
+    "pdc_reads": false,
+    "kaggle_or_token_access": false,
+    "truth_reads_before_authorization": false,
+    "accuracy_selection_before_truth": false,
+    "post_truth_tuning": false,
+    "solution_publication": false,
+    "offset_reapplication": false,
+    "failure_policy": "any leakage, schema, alignment, finite, speed, metric, offset, or gate failure fails closed; no repair, retry, fallback, rerun, or publication"
+  },
+  "read_accounting_before_authorization": {
+    "candidate_paths_materialized": 0,
+    "truth_paths_materialized": 0,
+    "native_solver_invocations": 0,
+    "raw_gnss_imu_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "candidate_solution_payload_reads": 0,
+    "candidate_coordinate_interpretations": 0,
+    "accuracy_calculations": 0,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "truth_evaluator_boundary": {
+    "authorization_required_before_path_materialization": true,
+    "candidate_metadata_hash_seal_precedes_truth": true,
+    "candidate_parse_precedes_truth": true,
+    "evaluator_process_count": 1,
+    "candidate_solution_reads_for_hash_and_parse": 2,
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "accuracy_calculations": 2,
+    "native_solver_invocations": 0,
+    "native_after_truth": false,
+    "no_solution_rows_in_result": true,
+    "no_truth_coordinate_rows_in_result": true,
+    "result_content": "route metrics, strict gate booleans, opaque candidate/truth hashes, and accounting only",
+    "release_or_submission": false
+  },
+  "authorization_requirements": {
+    "authorization_file": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_accuracy_truth_authorization_v1.json",
+    "schema_version": "smartphone-r5-phase118-tdcp-robust-k-accuracy-truth-authorization.v1",
+    "status": "authorized-for-phase118-truth-only-accuracy-evaluation",
+    "independent_commit_required": true,
+    "candidate_and_truth_paths_materialized_only_after_auth": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "exact_candidate_reads": 2,
+    "exact_truth_reads": 2,
+    "exact_accuracy_calculations": 2,
+    "native_solver_invocations": 0,
+    "raw_reads": 0,
+    "base_reads": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_publication": false,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "kaggle_or_token_access": 0
+  },
+  "release_boundary": {
+    "truth_only_authorized_before_freeze": false,
+    "truth_only_authorized_by_manifest": false,
+    "solution_publication_authorized": false,
+    "validation_authorized": false,
+    "kaggle_submission_authorized": false,
+    "result_rows_allowed": false
+  }
+}

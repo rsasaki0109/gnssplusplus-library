@@ -1,0 +1,141 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-result.v1",
+  "status": "sealed-truth-free-structural-no-go",
+  "candidate": "native_fgo_pdc_independent_window_overlap_v1",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_freeze_v1.json",
+      "sha256": "0514ae2d818ac2b31fade709d08864551a9884ab06fa30a1cb08cd26ede8dc7a"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_freeze_v1_manifest.json",
+      "sha256": "4b8eec06c3319d2c5b31364fd5ba19691a36dae5e33376734ab99ac95892750a"
+    },
+    "candidate_source_sha256": "b2d5600799826b3d3b25b50851a3865e6e8e111f5cf9238e478a58adea5f26d4",
+    "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+  },
+  "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+  "truth_policy": {
+    "truth_free": true,
+    "truth_opened": false,
+    "truth_materialized_count": 0,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_data_used": false,
+    "leaderboard_used": false,
+    "score_run": false
+  },
+  "sealed_artifacts": {
+    "manifest": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v1/windowed_manifest.json",
+      "sha256": "48b019d36e1211caf6040e21b5d10bcf5352742170e7623712b153bb2d0d772f"
+    },
+    "manifest_sha256_file": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v1/windowed_manifest.sha256",
+      "sha256": "bece1fd39e7cf8cdd1509cadc3480ac151987e1869372c118562302489d03aaf"
+    },
+    "windowed_position": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v1/windowed.pos",
+      "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+      "rows": 2159,
+      "byte_identical_to_sealed_fallback": true
+    },
+    "sealed_fallback": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/baseline8/fgo.pos",
+      "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd"
+    }
+  },
+  "execution": {
+    "window_count": 35,
+    "window_epochs": 120,
+    "overlap_epochs": 60,
+    "stride_epochs": 60,
+    "successful_windows": 33,
+    "failed_windows": 2,
+    "failed_windows_detail": [
+      {
+        "window_index": 19,
+        "start_epoch": 1140,
+        "count": 120,
+        "return_code": 1,
+        "reason": "native process returned 1; stderr: FGO produced no valid epochs"
+      },
+      {
+        "window_index": 20,
+        "start_epoch": 1200,
+        "count": 120,
+        "return_code": 1,
+        "reason": "native process returned 1; stderr: FGO produced no valid epochs"
+      }
+    ],
+    "successful_window_summary_ranges": {
+      "iterations": [10, 144],
+      "pseudorange_factors": [1753, 1900],
+      "corrected_undifferenced_doppler_factors": [1738, 1884],
+      "tdcp_factors": [1142, 1438],
+      "float_carrier_factors": [1356, 1566],
+      "ambiguity_states": [37, 108],
+      "doppler_residual_rms_mps": [0.3330326730682909, 3.903001951325271],
+      "tdcp_residual_rms_m": [0.029439363755459552, 2.7582486101603747],
+      "carrier_residual_rms_m": [0.20468603017763531, 4277.908542493406]
+    },
+    "timing": {
+      "wall_seconds": 18.481635175994597,
+      "sum_child_wall_seconds": 17.89148618496256,
+      "max_child_rss_kib": 29668
+    }
+  },
+  "first_structural_blocker": {
+    "type": "unsafe_independent_window_overlap_seam",
+    "transition_index": 809,
+    "before_key": [2149, 241980434],
+    "after_key": [2149, 241981434],
+    "before_source": "windowed_native_fgo",
+    "after_source": "windowed_native_fgo",
+    "before_window": {"index": 12, "start_epoch": 720, "local_offset": 89},
+    "after_window": {"index": 13, "start_epoch": 780, "local_offset": 30},
+    "before_ecef_m": [-2705538.658184, -4288314.033236, 3856150.716369],
+    "after_ecef_m": [-2705631.761458, -4288309.985012, 3856348.403182],
+    "transition_speed_mps": 218.55132985474523,
+    "frozen_bound_mps": 70.0,
+    "decision": "No-Go; do not repair or select with truth. Emit the exact sealed fallback for the entire route."
+  },
+  "gate": {
+    "all_windows_finite_complete_converged": false,
+    "all_required_factor_families_per_window": false,
+    "monotone_cost_required": true,
+    "doppler_rms_ceiling_mps": 4.0,
+    "continuity_bound_mps": 70.0,
+    "continuity_passed": false,
+    "promotion": "not eligible; no development truth score, validation, or holdout may be opened"
+  },
+  "integrity": {
+    "atomic_publish": true,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_or_truth_coordinates_used": false,
+    "algorithm_parameter_changed_after_freeze": false,
+    "production_defaults_changed": false,
+    "v5_changed": false
+  },
+  "post_run_orchestration_repair": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_manifest_repair_v1.json",
+      "sha256": "e51cb485dd5dbe306cf4d91aeeff4fa4cc81793bf148de9fd90a41c9e32c0b75"
+    },
+    "scope": "final-directory artifact path normalization only; no solver, candidate, numeric parameter, truth, or output-position byte change",
+    "candidate_source_sha256_after_repair": "97f78a704165b93d2ad0b71a3662078b9fbedff54b75a7f84b96a9786ec04a72"
+  },
+  "commands": {
+    "run": "GNSSPP_WINDOWED_PDC_NO_TRUTH=1 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed.py --no-truth",
+    "tests": "python3 tests/test_smartphone_native_fgo_pdc_windowed.py",
+    "fallback_policy": "No rerun/tuning; failed windows and unsafe stitch use the already sealed native-FGO route position artifact."
+  },
+  "limitations": [
+    "The independent native invocation does not expose private clock/ambiguity values; factor counts and finite residual telemetry are recorded instead.",
+    "No overlap handoff or true marginalization exists for this no-base Eigen graph; the existing fixed-lag API is IMU+Pose3/DD-only.",
+    "Because the structural gate failed, this candidate was not scored against truth and was not considered for validation or holdout."
+  ]
+}

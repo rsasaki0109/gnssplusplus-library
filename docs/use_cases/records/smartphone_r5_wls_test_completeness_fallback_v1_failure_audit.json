@@ -1,0 +1,117 @@
+{
+  "schema_version": "smartphone-r5-wls-test-completeness-fallback-failure-audit.v1",
+  "status": "sealed-truth-free-input-artifact-audit",
+  "purpose": "Audit the three truth-free failures before enabling the fixed completeness fallback candidate.",
+  "source_run": {
+    "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_batch_derived_run_manifest.json",
+    "sha256": "a89c5c3ac816289b6c6e5958d77fbc034f601869c3e64bd5191d87808fe74822",
+    "failure_manifest_sha256": "296b430ec01d88fdc417d3930b26ea366fccf2654936fc8cb029a90f10f3a9eb",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory_sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "success_route_count": 37,
+    "failure_route_count": 3,
+    "truth_open_count": 0,
+    "test_truth_materialized": false
+  },
+  "fixed_candidate_before_truth": {
+    "out_of_range_wls": "finite out-of-earth-range epoch is omitted only in sealed test sparse mode",
+    "partial_nonfinite_inconsistent": "fail-closed",
+    "native_fallback": "nearest native Galileo E1/Hatch30 stable position",
+    "native_tolerance_ms": 10,
+    "native_tie_rule": "equal distance chooses earlier timestamp",
+    "interpolation": "ECEF linear interpolation between valid selected-source positions",
+    "interpolation_max_gap_s": 10.0,
+    "edge_extrapolation": "forbidden",
+    "long_gap": "fail-closed",
+    "parameter_search_after_audit": false
+  },
+  "failures": [
+    {
+      "dataset_id": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "reason": "finite out-of-earth-range WLS epoch",
+      "input": {
+        "device_gnss": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2021-11-30-20-59-us-ca-mtv-m/inputs/mi8/device_gnss.csv",
+        "device_gnss_sha256": "9af63add3455f995e53b4584c9790a5ff9ffdf9fb11b80042e15223deed580c9",
+        "device_gnss_bytes": 31725741,
+        "broadcast_nav_sha256": "1d01308c6f915b849af9ad197404d79f33d8d091743b6907a534525267ce6142"
+      },
+      "epoch": {
+        "timestamp_ms": 1638306000000,
+        "source_rows": [662, 705],
+        "raw_rows": 44,
+        "invalid_rows": 44,
+        "ecef_norm_m": 5927300.091077761,
+        "valid_source_bracket_timestamps_ms": [1638305999000, 1638306001000],
+        "bracket_offsets_ms": [1000, 1000]
+      },
+      "native_available": false,
+      "native_available_timestamps_ms": [],
+      "native_offsets_ms": []
+    },
+    {
+      "dataset_id": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+      "reason": "all WLS coordinate fields blank at one internal epoch",
+      "input": {
+        "device_gnss": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-06-22-20-12-us-ca-lax-hh/inputs/samsunga325g/device_gnss.csv",
+        "device_gnss_sha256": "c4f6759609acd55d3f964fe0e90ccd4b973ad87cbe58c879f1ef5d4f48d5a3b4",
+        "device_gnss_bytes": 26878046,
+        "broadcast_nav_sha256": "0e9242ca05beee544cc1948052a0d0ae5432b878c55554487553d352609e5cdc"
+      },
+      "epoch": {
+        "timestamp_ms": 1655930158999,
+        "source_rows": [42502, 42519],
+        "raw_rows": 18,
+        "valid_source_bracket_timestamps_ms": [1655930157999, 1655930159999],
+        "bracket_offsets_ms": [1000, 1000],
+        "source_gap_s": 2.0
+      },
+      "native_available": false,
+      "native_available_timestamps_ms": [],
+      "native_offsets_ms": []
+    },
+    {
+      "dataset_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "reason": "two leading WLS epochs are blank; no valid selected-source bracket",
+      "input": {
+        "device_gnss": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-10-06-20-46-us-ca-sjc-r/inputs/sm-a205u/device_gnss.csv",
+        "device_gnss_sha256": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0",
+        "device_gnss_bytes": 43471049,
+        "broadcast_nav_sha256": "8928c254995b9b50c233813df8aefa67c759acc21edfcd53b48d28d3d06fa2c4"
+      },
+      "epochs": [
+        {
+          "timestamp_ms": 1665089219996,
+          "source_rows": [2, 41],
+          "raw_rows": 40,
+          "valid_source_bracket_timestamps_ms": [],
+          "next_valid_selected_timestamp_ms": 1665089222000,
+          "next_offset_ms": 2004
+        },
+        {
+          "timestamp_ms": 1665089221001,
+          "source_rows": [42, 83],
+          "raw_rows": 42,
+          "valid_source_bracket_timestamps_ms": [],
+          "next_valid_selected_timestamp_ms": 1665089222000,
+          "next_offset_ms": 999
+        }
+      ],
+      "native_available": false,
+      "native_available_timestamps_ms": [],
+      "native_offsets_ms": [],
+      "edge_extrapolation_allowed": false
+    }
+  ],
+  "success_artifact_identity": {
+    "success_selected_pos_count": 37,
+    "combined_selected_pos_sha256": "2b3bbf5f3622daadc4ab259d794329eff538b52cc5954dbc04703e4f5d38bbf4",
+    "byte_identity_required_on_resume": true,
+    "resume_scope": "failure three only"
+  },
+  "truth_policy": {
+    "truth_open_count": 0,
+    "truth_materialized_count": 0,
+    "ground_truth_members_read": false,
+    "next_holdout_untouched": true
+  }
+}

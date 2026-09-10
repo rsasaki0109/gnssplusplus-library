@@ -675,6 +675,9 @@ PositionSolution PPPProcessor::processEpochStandard(
                     solution.position_geodetic = GeodeticCoord(latitude, longitude, height);
                 }
                 had_fixed_last_epoch_ = accepted_fixed_solution;
+                clas_reduced_dd_fix_last_epoch_ = false;
+                clas_full_dd_fix_last_epoch_ = false;
+                clas_reduced_dd_publication_streak_ = 0;
                 if (ppp_internal::alwaysRestoreArTrialState(
                         ppp_config_.ar_method)) {
                     // MADOCALIB ppp_ar() receives an xp/Pp working copy.  Keep
@@ -789,6 +792,11 @@ void PPPProcessor::reset() {
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     last_ar_wide_lane_only_ = false;
+    had_fixed_last_epoch_ = false;
+    clas_ar_attempt_used_reduced_dd_floor_ = false;
+    clas_reduced_dd_fix_last_epoch_ = false;
+    clas_full_dd_fix_last_epoch_ = false;
+    clas_reduced_dd_publication_streak_ = 0;
     convergence_telemetry_ = {};
     ar_stage_telemetry_ = {};
     ppp_ar::clearWlnlHoldState(clas_wlnl_hold_);

@@ -1,0 +1,40 @@
+{
+  "schema_version": "smartphone-r5-phase23-doppler-residual-screen-pixel-score-authorization.v1",
+  "status": "authorized-single-development-truth-comparison",
+  "candidate_id": "native-raw-upstream-absolute-doppler-screen-v1",
+  "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "reason": "The two-route truth-free seal is a No-Go because the fixed recipe fails closed on mi8; the latest phase authorization permits one diagnostic Pixel comparison without changing or promoting the candidate.",
+  "structural_seal": {
+    "record": "docs/use_cases/records/smartphone_r5_phase23_doppler_residual_screen_structural_seal_v1.json",
+    "record_sha256": "00793eecdabfd9692f31f1751fa08e6c9cef34887e0af844244890039189109f",
+    "candidate_sha256": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f",
+    "control_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "candidate_repeat_sha256": "2de16cfe2d769d991b2734dca8d1b081bd62dbfdcacaefed8403a1f9b2ecd87f"
+  },
+  "truth": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "role": "already-used development-train truth",
+    "read_count_before_authorization": 0,
+    "single_process_single_open": true,
+    "open_after_truth_free_artifact_seal": true,
+    "validation_read_count": 0,
+    "holdout_read_count": 0,
+    "test_read_count": 0,
+    "mat_read_count": 0
+  },
+  "evaluation_contract": {
+    "tool": "apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py",
+    "submissions_in_one_process": ["control", "candidate"],
+    "truth_intersection_only": false,
+    "expected_exact_key_set": true,
+    "distance_variants": ["wgs84_vincenty", "haversine_sphere"],
+    "percentile_variants": ["linear_n_minus_1", "nearest_rank_ceiling"],
+    "no_interpolation_or_coordinate_change": true,
+    "no_parameter_selection": true,
+    "no_post_score_tuning": true,
+    "external_mutation": false,
+    "kaggle_or_token_access": false
+  },
+  "outcome": "pending-one-process-evaluation",
+  "authorization_sha256": "excluded from self-hash; score record fixes the resulting artifact"
+}

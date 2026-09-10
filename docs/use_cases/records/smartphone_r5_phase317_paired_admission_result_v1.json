@@ -1,0 +1,23 @@
+{
+  "phase": 317,
+  "freeze_commit": "bc60bb22",
+  "exit_code": 0,
+  "stdout_lines": 2,
+  "stderr_bytes": 0,
+  "before_correction": 101536,
+  "corrected": 81161,
+  "missing_stream": 19092,
+  "unavailable": 1283,
+  "nonfinite": 0,
+  "correction_passes": 1,
+  "base_states": 68697,
+  "input_epochs": 3140,
+  "rover_states": 74339,
+  "missing_nav_satellite_epochs": 0,
+  "skipped_epochs_without_seed": 0,
+  "conservation_verified": true,
+  "hash_scans_per_input": 1,
+  "native_passes_per_input": 1,
+  "optimizer_calls": 0,
+  "truth_reads": 0
+}

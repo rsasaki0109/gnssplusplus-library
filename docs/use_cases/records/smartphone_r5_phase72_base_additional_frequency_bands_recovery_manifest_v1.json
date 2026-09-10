@@ -1,0 +1,77 @@
+{
+  "schema_version": "smartphone-r5-phase72-base-additional-frequency-bands-recovery-manifest.v1",
+  "phase": 72,
+  "status": "sealed-before-structural-matrix",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_freeze_v1.json",
+    "sha256": "3acff212c87657ff0cfb610f276b511bf6968178ef8e5794f7a4a9af283e198b"
+  },
+  "source_commit": "1ee721ebb6d8adfd5ab65fa8f2243ad2926ac982",
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "04543eda588739ac3d3c22296e2bef8ed712b177fa4e47474eebd6eb84b4377a"
+  },
+  "prior_phase71": {
+    "failure_record": "docs/use_cases/records/smartphone_r5_phase71_base_additional_frequency_bands_structural_failure_v1.json",
+    "failure_record_sha256": "08429a52313eb0dc48d150a742b3f3a6c3c6968a5af07409180dc65d1f28d122",
+    "partial_output_reused": false,
+    "candidate_runs": 0,
+    "truth_reads": 0
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase72_base_additional_frequency_bands_recovery.py",
+    "sha256": "ff87fcf44b8ee982e8b8bfc4ad05156f5b293d33aedcb89cf8610187f5b45617",
+    "single_process_per_native_case": true,
+    "summary_artifact_key": "summary_artifact",
+    "summary_payload_key": "summary_payload",
+    "unexpected_exception_failure_artifact": true,
+    "truth_free": true
+  },
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "structural_matrix": {
+    "output_root": "output/smartphone-r5/phase72-base-additional-frequency-bands-structural-recovery-v1",
+    "control_runs_per_route": 1,
+    "candidate_runs_per_route": 2,
+    "route_count": 4,
+    "native_solver_invocations": 12,
+    "prediction_domain_coverage_exact": 1.0,
+    "matched_factor_fraction_each_route_min": 0.8,
+    "finite_correction_fraction_among_matched_each_route_min": 0.99,
+    "candidate_repeat_identity": true,
+    "control_phase43_identity": true,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "phase71_partial_output_reuse": false,
+    "fail_closed": true
+  },
+  "read_accounting": {
+    "native_solver_invocations": 12,
+    "raw_device_gnss_process_reads": 12,
+    "raw_device_imu_process_reads": 12,
+    "broadcast_nav_process_reads": 12,
+    "base_rinex_process_reads": 12,
+    "hash_verification_reads_per_input": 4,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "post_truth_tuning": false
+  },
+  "result": null,
+  "all_gates_passed": null
+}

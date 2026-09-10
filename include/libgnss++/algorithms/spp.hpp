@@ -6,6 +6,9 @@
 #include "../core/solution.hpp"
 #include <Eigen/Dense>
 #include <array>
+#include <cstddef>
+#include <limits>
+#include <map>
 #include <mutex>
 #include <string>
 #include <utility>
@@ -58,6 +61,14 @@ public:
         double max_position_jump_min_m = 0.0;         ///< Minimum allowed position step [m]
         bool use_ionosphere_free_combination = false; ///< Use dual-frequency code IFLC when available
         bool mrtklib_iflc_code_bias = false;          ///< Match MRTKLIB prange() IFLC TGD handling
+        // Raw-only opt-in: select Galileo E1 BGD from the RINEX navigation
+        // data-source clock reference (F/NAV -> tgd, I/NAV -> tgd_secondary).
+        // The default keeps the historical tgd-only behavior byte-for-byte.
+        bool use_signal_specific_galileo_group_delay = false;
+        // Phase126's official Gobs.resPc has no explicit TGD/BGD term.  This
+        // opt-in is set only by the source-complete raw-base compound path;
+        // the default native SPP correction remains unchanged.
+        bool use_official_no_explicit_code_bias = false;
         bool mrtklib_clas_snr_mask = false;           ///< Apply the CLAS rover elevation/SNR mask
         bool use_ionex_corrections = true;            ///< Prefer loaded IONEX TEC maps over broadcast ionosphere
         bool use_dcb_corrections = true;              ///< Apply loaded OSB/DCB code-bias products when available
@@ -75,6 +86,7 @@ public:
      * @brief Corrected measurement for external solvers (e.g. particle filter)
      */
     struct CorrectedMeasurement {
+        SolutionMeasurementIdentity identity;     ///< Exact source row identity
         std::array<double, 3> satellite_ecef;    ///< Sagnac-corrected satellite ECEF [m]
         double corrected_pseudorange;            ///< Fully corrected pseudorange [m]
         double weight;                           ///< Inverse measurement variance [1/m^2]
@@ -82,6 +94,39 @@ public:
         double elevation;                        ///< Elevation angle [rad]
         int system_id;                           ///< 0=GPS, 1=GLONASS, 2=Galileo, 3=BeiDou, 4=QZSS
         bool ionosphere_free = false;            ///< True when built from a dual-frequency IFLC
+        // The actual clock column group used by solvePositionLS().  This is
+        // intentionally separate from system_id: GPS and QZSS normally share
+        // the GPS clock, while the MRTKLIB IFLC compatibility path preserves
+        // a QZSS-specific column.
+        GNSSSystem clock_group = GNSSSystem::UNKNOWN;
+    };
+
+    /**
+     * @brief Terminal disposition for one input row during preprocessing.
+     *
+     * This structural provenance contains no measurement or coordinate
+     * values.  `input_row_index` refers to the source order in the supplied
+     * ObservationData epoch.
+     */
+    struct PreprocessRowDiagnostic {
+        std::size_t input_row_index = std::numeric_limits<std::size_t>::max();
+        GNSSSystem system = GNSSSystem::UNKNOWN;
+        bool accepted = false;
+        bool terminal = false;
+        std::string reason;
+    };
+
+    /**
+     * @brief Source-ordered validation/correction accounting for one epoch.
+     */
+    struct PreprocessDiagnostics {
+        bool available = true;
+        bool ionosphere_free_rows_expanded = false;
+        std::size_t input_rows = 0;
+        std::size_t accepted_rows = 0;
+        std::size_t rejected_rows = 0;
+        std::vector<PreprocessRowDiagnostic> rows;
+        std::map<std::string, std::size_t> reason_counts;
     };
 
     SPPProcessor();
@@ -102,7 +147,9 @@ public:
      * Also returns the SPP position solution for reference.
      */
     std::pair<PositionSolution, std::vector<CorrectedMeasurement>>
-    preprocessEpoch(const ObservationData& obs, const NavigationData& nav);
+    preprocessEpoch(const ObservationData& obs,
+                    const NavigationData& nav,
+                    PreprocessDiagnostics* diagnostics = nullptr);
 
     /**
      * @brief Set SPP-specific configuration
@@ -208,6 +255,9 @@ private:
 
     struct SPPObservation {
         Observation observation;
+        std::size_t input_row_index = std::numeric_limits<std::size_t>::max();
+        std::size_t secondary_input_row_index =
+            std::numeric_limits<std::size_t>::max();
         bool ionosphere_free = false;
         SignalType primary_signal = SignalType::SIGNAL_TYPE_COUNT;
         SignalType secondary_signal = SignalType::SIGNAL_TYPE_COUNT;
@@ -275,9 +325,11 @@ private:
     /**
      * @brief Validate observations for SPP processing
      */
-    std::vector<SPPObservation> validateObservations(const ObservationData& obs,
-                                                     const NavigationData& nav,
-                                                     const GNSSTime& time) const;
+    std::vector<SPPObservation> validateObservations(
+        const ObservationData& obs,
+        const NavigationData& nav,
+        const GNSSTime& time,
+        PreprocessDiagnostics* diagnostics = nullptr) const;
     
     /**
      * @brief Initialize position estimate

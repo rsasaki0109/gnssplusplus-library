@@ -1,0 +1,339 @@
+{
+  "accuracy_scored": false,
+  "authorization": {
+    "independent": true,
+    "path": "docs/use_cases/records/smartphone_r5_phase127_inventory_first_structural_authorization_v1.json",
+    "status": "independent-one-shot-inventory-first-structural-raw-authorized"
+  },
+  "candidate": {
+    "additional_frequency_bands": false,
+    "fixed_tdcp_sigma_m": 0.03,
+    "id": "phase127-inventory-first-raw-base-glonass-structural-v1",
+    "main_solver": "MULTIFRONTAL_QR",
+    "official_huber_k": 0.5,
+    "phase117_dynamic_sigma": false,
+    "phase118_huber": true,
+    "phase120_atmosphere": false,
+    "phase126": true,
+    "phase127": true,
+    "solution_opaque": true
+  },
+  "contract": {
+    "audit_commit": "d4b28a8dbe85ac67bf8957e28de16f072874d072",
+    "freeze_commit": "5c3e66fc4b62d86b52f8e9ee8aa1f26f4cb2a8a4",
+    "implementation_commit": "f41d082e5170fe5dcbebbb4526c7d513f9512b60",
+    "manifest_sha256": "56f7190bb7cc71d36e4eb829713a05cdeca74dfd73840c2b202c9c89499eae1d",
+    "pre_raw_commit": "da8d50cb37e9adebcd6b140b2f67a482276323be",
+    "runner_manifest_commit": "93ee772e595aac01a5de4e7357becd88581f70ec",
+    "target_binary_sha256": "653797970fbe65f199fc98dfe47ddd57ec26da66fadc4df40dff930a6d1c436a"
+  },
+  "decision": "Inventory or structural gate failed closed; no rerun, fallback, truth, accuracy, or solution release is permitted.",
+  "execution_label": "Luna Max",
+  "inventory_contract": {
+    "duplicate_conflict_missing_ledger": true,
+    "fcn_range": [
+      -7,
+      6
+    ],
+    "geph_validity_seconds": 1800.0,
+    "header_primary": true,
+    "no_fixed_channel_or_external_table": true,
+    "rover_base_full_coverage_required": true,
+    "selected_geph_exact_query_time": true,
+    "solver_zero_on_inventory_failure": true
+  },
+  "matrix": {
+    "accuracy_calculations": 0,
+    "candidate_count": 1,
+    "controls": 0,
+    "fallbacks": 0,
+    "inventory_reads_per_route": 1,
+    "native_solver_invocations": 0,
+    "reruns": 0,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "phase": 127,
+  "promotion_authorized": false,
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_inventory_reads": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "raw_base_hash_reads": 2,
+    "raw_base_header_inventory_reads": 2,
+    "raw_base_rinex_inventory_reads": 2,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_inventory_reads": 2,
+    "raw_device_imu_inventory_reads": 2,
+    "route_reruns": 0,
+    "solution_coordinate_interpretations": 0,
+    "solution_rows_opened": 0,
+    "truth_reads": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_scored": false,
+      "failure": "pre-solver inventory failed closed",
+      "gates": {
+        "base_exactly_once": false,
+        "gnss_first_c7_d_handoff": false,
+        "gnss_first_progress": false,
+        "main_finite_coverage": false,
+        "main_qr_progress": false,
+        "native_process_completed": false,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": false,
+        "phase127_inventory_handoff": false,
+        "summary_present": false
+      },
+      "inventory": {
+        "base": {
+          "antenna_semantics_proven": true,
+          "bytes": 10708536,
+          "earth_valid_reference": true,
+          "failure": "RINEX GLONASS header ledger is malformed/conflicting",
+          "glonass_rows": 17199,
+          "header_conflicts": 0,
+          "header_entries": 0,
+          "header_malformed": 1,
+          "ok": false
+        },
+        "base_glonass": {
+          "certified_rows": 0,
+          "coverage_gaps": 0,
+          "finite_positive_frequency_wavelength": true,
+          "geph_fallback_rows": 0,
+          "header_primary_rows": 0,
+          "max_age_s": 0.0,
+          "mismatches": 0,
+          "rows": 17199,
+          "ties": 0,
+          "unresolved_rows": 0
+        },
+        "coverage": {
+          "all_finite_positive_frequency_wavelength": true,
+          "base_full": false,
+          "exact_query_time_records": true,
+          "fixed_channel_or_external_table": false,
+          "header_primary_or_geph_fallback_only": true,
+          "rover_full": false
+        },
+        "failure": "device_gnss.csv: GLONASS rows lack finite pseudorange, satellite key, or exact epoch time; brdc.nav: broadcast navigation has no complete finite in-domain GLONASS geph records; base.obs: RINEX GLONASS header ledger is malformed/conflicting; rover GLONASS FCN provenance coverage is incomplete; base GLONASS FCN provenance coverage is incomplete; base header FCN ledger has conflict/malformed entries; broadcast GLONASS geph ledger has malformed/out-of-domain records",
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "ok": false,
+        "phase126": {
+          "base_correction_exactly_once": false,
+          "source_complete": false
+        },
+        "raw_inputs": {
+          "brdc.nav": {
+            "failure": "broadcast navigation has no complete finite in-domain GLONASS geph records",
+            "malformed_records": 480,
+            "ok": false,
+            "record_count": 671,
+            "satellite_count": 14
+          },
+          "device_gnss.csv": {
+            "constellations": [
+              "1",
+              "3",
+              "4",
+              "5",
+              "6"
+            ],
+            "failure": "GLONASS rows lack finite pseudorange, satellite key, or exact epoch time",
+            "glonass_rows": 11832,
+            "invalid_rows": 236,
+            "missing_satellite_rows": 0,
+            "missing_time_rows": 0,
+            "ok": false,
+            "rows": 87705,
+            "selected_rows": 12068,
+            "signals": [
+              "",
+              "BDS_B1_I",
+              "GAL_E1_C_P",
+              "GAL_E5A_Q",
+              "GLO_G1_CA",
+              "GPS_L1_CA",
+              "GPS_L5_Q",
+              "QZS_L1_CA",
+              "QZS_L5_Q"
+            ]
+          },
+          "device_imu.csv": {
+            "failure": null,
+            "ok": true,
+            "rows": 453859
+          }
+        },
+        "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "rover_glonass": {
+          "certified_rows": 0,
+          "coverage_gaps": 0,
+          "finite_positive_frequency_wavelength": true,
+          "geph_fallback_rows": 0,
+          "header_primary_rows": 0,
+          "max_age_s": 0.0,
+          "mismatches": 0,
+          "rows": 11832,
+          "ties": 0,
+          "unresolved_rows": 0
+        },
+        "solver_invocations": 0,
+        "solver_may_start": false,
+        "stage": "post-authorization-pre-solver"
+      },
+      "raw_content_copied_or_transformed": false,
+      "return_code": null,
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "run_number": 1,
+      "solution_opened": false,
+      "solution_published": false,
+      "solver_launched": false,
+      "truth_used": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_scored": false,
+      "failure": "pre-solver inventory failed closed",
+      "gates": {
+        "base_exactly_once": false,
+        "gnss_first_c7_d_handoff": false,
+        "gnss_first_progress": false,
+        "main_finite_coverage": false,
+        "main_qr_progress": false,
+        "native_process_completed": false,
+        "no_fallback_or_publication": true,
+        "phase126_atomic_a_b_c": false,
+        "phase127_inventory_handoff": false,
+        "summary_present": false
+      },
+      "inventory": {
+        "base": {
+          "antenna_semantics_proven": true,
+          "bytes": 719969,
+          "earth_valid_reference": true,
+          "failure": "RINEX GLONASS header ledger is malformed/conflicting",
+          "glonass_rows": 920,
+          "header_conflicts": 0,
+          "header_entries": 0,
+          "header_malformed": 1,
+          "ok": false
+        },
+        "base_glonass": {
+          "certified_rows": 0,
+          "coverage_gaps": 0,
+          "finite_positive_frequency_wavelength": true,
+          "geph_fallback_rows": 0,
+          "header_primary_rows": 0,
+          "max_age_s": 0.0,
+          "mismatches": 0,
+          "rows": 920,
+          "ties": 0,
+          "unresolved_rows": 0
+        },
+        "coverage": {
+          "all_finite_positive_frequency_wavelength": true,
+          "base_full": false,
+          "exact_query_time_records": true,
+          "fixed_channel_or_external_table": false,
+          "header_primary_or_geph_fallback_only": true,
+          "rover_full": false
+        },
+        "failure": "device_gnss.csv: GLONASS rows lack finite pseudorange, satellite key, or exact epoch time; brdc.nav: broadcast navigation has no complete finite in-domain GLONASS geph records; base.obs: RINEX GLONASS header ledger is malformed/conflicting; rover GLONASS FCN provenance coverage is incomplete; base GLONASS FCN provenance coverage is incomplete; base header FCN ledger has conflict/malformed entries; broadcast GLONASS geph ledger has malformed/out-of-domain records",
+        "inventory_reads": {
+          "base.obs": 1,
+          "brdc.nav": 1,
+          "device_gnss.csv": 1,
+          "device_imu.csv": 1
+        },
+        "ok": false,
+        "phase126": {
+          "base_correction_exactly_once": false,
+          "source_complete": false
+        },
+        "raw_inputs": {
+          "brdc.nav": {
+            "failure": "broadcast navigation has no complete finite in-domain GLONASS geph records",
+            "malformed_records": 442,
+            "ok": false,
+            "record_count": 686,
+            "satellite_count": 14
+          },
+          "device_gnss.csv": {
+            "constellations": [
+              "1",
+              "3",
+              "6"
+            ],
+            "failure": "GLONASS rows lack finite pseudorange, satellite key, or exact epoch time",
+            "glonass_rows": 8626,
+            "invalid_rows": 247,
+            "missing_satellite_rows": 0,
+            "missing_time_rows": 0,
+            "ok": false,
+            "rows": 51243,
+            "selected_rows": 8873,
+            "signals": [
+              "",
+              "GAL_E1_C_P",
+              "GAL_E5A_Q",
+              "GLO_G1_CA",
+              "GPS_L1_CA",
+              "GPS_L5_Q"
+            ]
+          },
+          "device_imu.csv": {
+            "failure": null,
+            "ok": true,
+            "rows": 313144
+          }
+        },
+        "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "rover_glonass": {
+          "certified_rows": 0,
+          "coverage_gaps": 0,
+          "finite_positive_frequency_wavelength": true,
+          "geph_fallback_rows": 0,
+          "header_primary_rows": 0,
+          "max_age_s": 0.0,
+          "mismatches": 0,
+          "rows": 8626,
+          "ties": 0,
+          "unresolved_rows": 0
+        },
+        "solver_invocations": 0,
+        "solver_may_start": false,
+        "stage": "post-authorization-pre-solver"
+      },
+      "raw_content_copied_or_transformed": false,
+      "return_code": null,
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "run_number": 1,
+      "solution_opened": false,
+      "solution_published": false,
+      "solver_launched": false,
+      "truth_used": false
+    }
+  },
+  "schema_version": "smartphone-r5-phase127-inventory-first-structural-result.v1",
+  "solution_output_published": false,
+  "status": "no-go-phase127-inventory-first-structural",
+  "stop_before_truth_accuracy_submission": true,
+  "truth_free": true
+}

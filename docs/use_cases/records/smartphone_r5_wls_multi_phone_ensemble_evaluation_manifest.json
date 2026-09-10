@@ -1,0 +1,42 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-evaluation-manifest.v1",
+  "sealed": true,
+  "evaluation_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_evaluation.json",
+    "sha256": "edab0c8b8e54279540576d4c0628b5046fc193ef3a01396d98661d036e911f46"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+    "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true
+  },
+  "sealed_evaluation": {
+    "output_root": "output/smartphone-r5/wls-multi-phone-ensemble-v1-retry",
+    "report_sha256": "2c3e661b2f89057b86a9e33b3b5207cb6186a24ef1c83a1c1417c763e51ab4a8",
+    "run_manifest_sha256": "7cff3819ed24f1de587d9d67c8e17ca8b2dcbef00e7191a778b68a04c967aa3b",
+    "truth_free_validation_manifest_sha256": "8d906737e83b91a3cdadef274d0182384cdfdc56f95f882f65fde7004a353e9e",
+    "validation_route_manifest_sha256": "0bd628e71fba0b0194aca905c42d2169c0f1ca6216c62045c0d1e769ad9c3a8c",
+    "truth_open_count": 2,
+    "evaluation_pass_count": 1,
+    "next_holdout_materialized": false,
+    "next_holdout_truth_opened": false,
+    "old_holdout_v4_ranking_used": false
+  },
+  "contract_proof": {
+    "candidate_method_count": 3,
+    "candidate_search_after_selection": false,
+    "alignment_tolerance_ms": 1,
+    "nonfinite_fail_closed": true,
+    "all_candidate_artifacts_hashed_before_validation_truth": true,
+    "production_rtk_spp_default_changed": false,
+    "post_validation_tuning": false
+  }
+}

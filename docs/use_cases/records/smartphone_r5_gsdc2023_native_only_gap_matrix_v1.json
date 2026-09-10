@@ -1,0 +1,314 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-only-gap-matrix.v1",
+  "status": "audit-and-first-conversion-component",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Machine-readable comparison of the pinned taroz GSDC 2023 MATLAB pipeline and the native libgnss++ smartphone path. This record does not claim native 0.782-class performance.",
+  "native_target": {
+    "target_private_score_class_m": 0.782,
+    "status": "not_achieved",
+    "best_native_server_evidence": {
+      "public_m": 3.952,
+      "private_m": 4.276,
+      "lane": "native libgnss++ FGO v5"
+    },
+    "external_precomputed_oracle_not_native": {
+      "public_m": 1.235,
+      "private_m": 0.782,
+      "source": "public upstream result_gnss_imu.mat import",
+      "allowed_role": "post-generation development oracle only",
+      "inference_input": false
+    }
+  },
+  "policy": {
+    "native_inference_inputs": [
+      "raw device_gnss.csv",
+      "raw phone_data.mat with raw observation and sensor containers",
+      "raw device_imu.csv",
+      "broadcast RINEX navigation"
+    ],
+    "forbidden_inference_inputs": [
+      "result_gnss.mat",
+      "result_gnss_imu.mat",
+      "ground_truth.csv",
+      "gt.mat",
+      "sample submission coordinates",
+      "submission coordinates",
+      "imported v5 output"
+    ],
+    "truth_used_for_component_choice": false,
+    "leaderboard_used_for_component_choice": false,
+    "validation_or_holdout_opened": false,
+    "kaggle_or_token_access": false,
+    "production_default_changed": false,
+    "contract_implementation": "apps/commands/benchmarks/gnss_smartphone_native_only.py",
+    "contract_tests": "tests/test_smartphone_native_only.py"
+  },
+  "upstream": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "cache_root": "output/reproducibility-cache/gsdc2023",
+    "files": {
+      "fgo_gnss.m": {
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "line_ranges": ["18-48", "50-83", "89-121", "123-201", "203-253"]
+      },
+      "fgo_gnss_imu.m": {
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "line_ranges": ["18-60", "63-143", "145-187", "189-249", "252-340", "342-380"]
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "line_ranges": ["22-51", "62-108", "110-128", "130-174", "176-203"]
+      },
+      "functions/gnsslog2obs.m": {
+        "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+        "line_ranges": ["7-36", "38-89", "91-121", "123-155", "158-218"]
+      },
+      "functions/deviceimu2imu.m": {
+        "sha256": "9aff2984b0aa1709bbb1b397b48216ab46c213a1e3cbcfa99c0546a48a6df632",
+        "line_ranges": ["5-39"]
+      },
+      "functions/imuprocessing.m": {
+        "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+        "line_ranges": ["5-40", "42-58"]
+      },
+      "run_fgo.m": {
+        "sha256": "02150849653b2e5c80609e971dbef41b010569de5dcc304782235b7fc96b9065",
+        "line_ranges": ["6-22", "25-71"]
+      },
+      "functions/submission.m": {
+        "sha256": "db97431c1da52b93b8903eb4c604141b3c8d6dfb7ad33b6df237e414a7e8c9ac",
+        "line_ranges": ["8-44", "46-52"]
+      },
+      "functions/score.m": {
+        "sha256": "4c88f3f775e4f8caca22bb8c5f5747309f32b190df230346179381feb1f572c4",
+        "line_ranges": ["5-15"]
+      }
+    }
+  },
+  "native_sources": {
+    "raw_contract": {
+      "python": {
+        "path": "apps/commands/benchmarks/gnss_smartphone_native_only.py",
+        "symbols": ["validate_native_inputs", "inspect_raw_gnss", "inspect_raw_imu", "inspect_phone_data_mat"],
+        "sha256": "f50eda03344e07e5143c35b80c4b3008d7d3cffbc288e120445584ae33e7b72e"
+      },
+      "cpp": {
+        "header": "include/libgnss++/io/android_raw_gnss.hpp",
+        "implementation": "src/io/android_raw_gnss.cpp",
+        "header_sha256": "3aced61499b83c277507a34aae160f0894d1c3e818490e8eb41333b4dad19992",
+        "implementation_sha256": "ad57a4c4997f01a55d9c2464cb76931c600ed0b9b31fd810446fa87ab4934e4e",
+        "symbols": ["loadAndroidRawGnssCsv", "rawClockToGpsTime", "rawPseudorange", "parseSignal"],
+        "contract": "result/truth/sample/v5 coordinate inputs are not accepted; finite device-WLS ECEF columns are only an approximate raw-device seed"
+      },
+      "entrypoint": {
+        "path": "apps/native/gnss_smartphone_fgo.cpp",
+        "symbol": "main",
+        "binary": "build/apps/gnss_smartphone_fgo"
+      }
+    },
+    "estimator": {
+      "problem_builder": "src/algorithms/fgo_problems.cpp:FGOProcessor::buildPseudorangeProblem",
+      "optimizer": "src/algorithms/fgo.cpp:FGOProcessor::optimize/optimizeProblem",
+      "configuration": "include/libgnss++/algorithms/fgo_config.hpp:fgo::Config",
+      "default_recipe": "Eigen backend, P + ordinary TDCP + position/clock motion, max_iterations=8, no Doppler/carrier/DD factors"
+    }
+  },
+  "matrix": [
+    {
+      "area": "preprocessing_and_corrections",
+      "upstream": {
+        "evidence": ["functions/gnsslog2obs.m:19-89", "fgo_gnss.m:50-83", "fgo_gnss_imu.m:63-95"],
+        "contract": "remove invalid rows, compute satellite residuals/LOS, exclude residual outliers, compensate pseudorange using base observation, apply observation error model"
+      },
+      "native": {
+        "evidence": ["src/io/android_raw_gnss.cpp:loadAndroidRawGnssCsv", "src/algorithms/fgo_problems.cpp:101-180", "src/algorithms/fgo_problems.cpp:422-489"],
+        "contract": "raw clock/P/L/D conversion, nav satellite state, SPP or finite device-WLS approximate seed, elevation/SNR/factor eligibility; no upstream base-observation compensation"
+      },
+      "status": "partial",
+      "gap": "The raw boundary now reproduces the deterministic Android clock and observable equations, but the native path does not reproduce the complete upstream exobs/residual/base-compensation sequence.",
+      "impact": "high"
+    },
+    {
+      "area": "signals_and_frequency_coverage",
+      "upstream": {
+        "evidence": ["functions/gnsslog2obs.m:139-218", "fgo_gnss.m:30", "fgo_gnss_imu.m:36"],
+        "contract": "L1/L5 frequency arrays, signal-code mapping, wavelength and per-observation uncertainty; raw GPS/Galileo/other constellation filtering"
+      },
+      "native": {
+        "evidence": ["src/io/android_raw_gnss.cpp:parseSignal", "include/libgnss++/algorithms/fgo_config.hpp:53-91"],
+        "contract": "opt-in raw GPS L1 C/A + Galileo E1 C; FGO multi-constellation policy; unsupported signals are skipped"
+      },
+      "status": "partial",
+      "gap": "L5 and the upstream full signal/code table are not represented by the first native raw converter; no claim of full upstream frequency parity.",
+      "impact": "medium-high"
+    },
+    {
+      "area": "state_vector_order_and_units",
+      "upstream": {
+        "evidence": ["fgo_gnss.m:89-120", "fgo_gnss_imu.m:102-106", "fgo_gnss_imu.m:169-187", "fgo_gnss_imu.m:342-357"],
+        "contract": "ENU x/v, seven-component clock vector c, clock drift d; IMU path adds Pose3 p and ConstantBias b"
+      },
+      "native": {
+        "evidence": ["src/algorithms/fgo.cpp:171-180", "include/libgnss++/algorithms/fgo.hpp:FGOProblem/FGOResult", "src/algorithms/fgo_gtsam_backend.cpp"],
+        "contract": "default Eigen state has four position/clock components per epoch, optional velocity and ambiguity states; GTSAM has separate optional pose/bias paths"
+      },
+      "status": "mismatch",
+      "gap": "Native default state ordering/clock representation is not a literal ENU seven-clock upstream state, and the smartphone entry point does not enable the IMU pose/bias state.",
+      "impact": "high"
+    },
+    {
+      "area": "P_D_C_and_TDCP_factors",
+      "upstream": {
+        "evidence": ["fgo_gnss.m:123-152", "fgo_gnss.m:154-200", "fgo_gnss_imu.m:189-221", "fgo_gnss_imu.m:301-322"],
+        "contract": "robust pseudorange and Doppler factors, motion/clock factors, and ordinary TDCP; IMU version retains all GNSS factors"
+      },
+      "native": {
+        "evidence": ["src/algorithms/fgo_problems.cpp:128-180", "src/algorithms/fgo_problems.cpp:464-489", "apps/native/gnss_smartphone_fgo.cpp:280-293"],
+        "contract": "default smartphone entry point enables pseudorange, ordinary TDCP and position/clock motion; explicitly disables undifferenced Doppler, carrier phase and DD"
+      },
+      "status": "mismatch",
+      "gap": "The highest-impact missing graph family is the upstream no-base Doppler/velocity/clock coupling and full IMU graph. A prior corrected PDC experiment is sealed No-Go, so it must not be replaced by an unproven heuristic.",
+      "impact": "very-high"
+    },
+    {
+      "area": "clock_bias_drift_and_ambiguity_arcs",
+      "upstream": {
+        "evidence": ["fgo_gnss.m:99-101", "fgo_gnss.m:170-177", "fgo_gnss.m:184-195", "functions/gnsslog2obs.m:103-121", "functions/gnsslog2obs.m:189-202"],
+        "contract": "clock jump noise/reset, receiver drift state, phone-specific TDCP offset and ADR sign policy, carrier arcs from LLI/clock/gap"
+      },
+      "native": {
+        "evidence": ["src/io/android_raw_gnss.cpp:rawClockToGpsTime", "src/io/android_raw_gnss.cpp:clock_discontinuities/carrier_loss_rows", "src/algorithms/fgo_problems.cpp:422-489"],
+        "contract": "raw clock discontinuity and LLI are diagnosed; ordinary TDCP/carrier arc handling exists in the general FGO builder, but smartphone default disables carrier factors"
+      },
+      "status": "partial",
+      "gap": "The native raw conversion carries reset metadata but does not yet port upstream multi-frequency arc preprocessing and phone-specific full graph use.",
+      "impact": "high"
+    },
+    {
+      "area": "robust_weights_and_outlier_removal",
+      "upstream": {
+        "evidence": ["parameters.m:57-108", "parameters.m:110-128", "fgo_gnss.m:50-60", "fgo_gnss.m:137-148"],
+        "contract": "Huber kernels with setting/phone-dependent thresholds plus observation/residual masks"
+      },
+      "native": {
+        "evidence": ["include/libgnss++/algorithms/fgo_config.hpp:42-58", "include/libgnss++/algorithms/fgo_config.hpp:pseudorange_huber_threshold_sigma", "src/algorithms/fgo.cpp:1258-1274"],
+        "contract": "fixed native sigma/Huber configuration and factor eligibility; no setting-dependent upstream P/D/L mask parity in the smartphone entry point"
+      },
+      "status": "partial",
+      "gap": "A native robust loss exists, but upstream mask/error-model values and their data-driven residual exclusion are not fully reproduced.",
+      "impact": "high"
+    },
+    {
+      "area": "window_schedule_and_state_handoff",
+      "upstream": {
+        "evidence": ["run_fgo.m:25-56", "fgo_gnss.m:34-48", "fgo_gnss_imu.m:40-60"],
+        "contract": "initial GNSS run, IMU first run, final IMU run from prior result MAT, then per-route saved result and submission"
+      },
+      "native": {
+        "evidence": ["apps/native/gnss_smartphone_fgo.cpp:257-294", "src/algorithms/fgo.cpp:1387-1397"],
+        "contract": "one in-memory full-series optimize call seeded by SPP; no result-MAT handoff and no upstream multi-pass/window schedule"
+      },
+      "status": "mismatch",
+      "gap": "The native-only contract intentionally rejects result MAT, so an exact upstream state-handoff equivalent remains unimplemented and must be designed from raw observations.",
+      "impact": "very-high"
+    },
+    {
+      "area": "initialization",
+      "upstream": {
+        "evidence": ["fgo_gnss.m:34-48", "fgo_gnss_imu.m:40-60", "fgo_gnss_imu.m:145-163"],
+        "contract": "previous GNSS/IMU result or SPP-derived position/velocity, velocity-derived attitude, zero IMU bias and published mounting parameters"
+      },
+      "native": {
+        "evidence": ["src/algorithms/fgo_problems.cpp:101-126", "apps/native/gnss_smartphone_fgo.cpp:280-294"],
+        "contract": "SPP/last-valid seed path, native default FGO initialization; IMU attitude and bias initialization are not wired into this entry point"
+      },
+      "status": "partial",
+      "gap": "Velocity/course and gravity/mounting initialization required by the upstream IMU recipe are absent from the raw native entry point.",
+      "impact": "high"
+    },
+    {
+      "area": "IMU_axes_time_offset_preintegration_noise_attitude_bias",
+      "upstream": {
+        "evidence": ["functions/deviceimu2imu.m:5-39", "functions/imuprocessing.m:5-40", "fgo_gnss_imu.m:129-163", "fgo_gnss_imu.m:280-300", "parameters.m:176-203"],
+        "contract": "elapsed-time synchronization, gyro/acc interpolation, stop detection, gravity/preintegration covariance, mounting transform, Pose3/velocity/bias and bias-between factors"
+      },
+      "native": {
+        "evidence": ["apps/native/gnss_smartphone_fgo.cpp:257-294", "apps/commands/benchmarks/gnss_smartphone_phone_data_mat.py"],
+        "contract": "device_imu is required and hashed by preflight, but the current smartphone FGO executable does not consume IMU samples or add CombinedImu/Imu factors"
+      },
+      "status": "missing",
+      "gap": "This is a major missing component, but wiring it safely requires frame/time/preintegration parity and must follow the frozen no-base upstream contract rather than a smoother heuristic.",
+      "impact": "very-high"
+    },
+    {
+      "area": "optimizer_backend_and_stopping",
+      "upstream": {
+        "evidence": ["fgo_gnss.m:203-218", "fgo_gnss_imu.m:325-340"],
+        "contract": "GTSAM Levenberg-Marquardt, TERMINATION verbosity, maxIterations=1000"
+      },
+      "native": {
+        "evidence": ["include/libgnss++/algorithms/fgo_config.hpp:37-41", "src/algorithms/fgo.cpp:357-377", "apps/native/gnss_smartphone_fgo.cpp:280"],
+        "contract": "Eigen default maxIterations=8 with native convergence threshold; optional GTSAM backend exists elsewhere"
+      },
+      "status": "mismatch",
+      "gap": "Backend, iteration cap and stopping policy differ substantially; prior convergence-selector work was separately closed and cannot be used to tune this conversion.",
+      "impact": "medium-high"
+    },
+    {
+      "area": "postprocessing_and_submission",
+      "upstream": {
+        "evidence": ["fgo_gnss.m:220-253", "fgo_gnss_imu.m:342-380", "functions/submission.m:8-52"],
+        "contract": "ENU to LLH, antenna position offset from attitude, exact sample key assignment, nearest/interpolation/extrapolation for missing result epochs, save result MAT"
+      },
+      "native": {
+        "evidence": ["apps/native/gnss_smartphone_fgo.cpp:299-331", "apps/commands/benchmarks/gnss_smartphone_native_only.py:330-380"],
+        "contract": "finite geodetic CSV keyed by phone/time, atomic output and truth-free provenance; no sample coordinates or result-MAT postprocessing"
+      },
+      "status": "partial-by-design",
+      "gap": "The native-only path intentionally does not implement upstream sample interpolation or antenna offset until raw estimator parity exists; output is suitable for development smoke only.",
+      "impact": "medium"
+    }
+  ],
+  "evidence_for_priority": {
+    "native_best_vs_external_oracle": {
+      "native_private_m": 4.276,
+      "external_import_private_m": 0.782,
+      "interpretation": "The imported precomputed MAT result is an external oracle, not native inference evidence. The gap therefore motivates a complete raw-data parity investigation but cannot identify a single tuned parameter."
+    },
+    "partial_pdc_failure": {
+      "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_corrected_structural_result_v1.json",
+      "status": "no-go-before-truth-structural-gate",
+      "truth_open_count": 0,
+      "observed_doppler_residual_rms_mps": [49.763, 7268.358, 138.842],
+      "observed_seed_divergence_m": [3782.575, 420720.239, 18982.589],
+      "interpretation": "A superficially added Doppler factor path was structurally unstable; it is evidence against another heuristic PDC rewrite, not proof that the upstream factor is ineffective."
+    }
+  },
+  "first_exact_component": {
+    "name": "raw Android clock and P/L/D observable conversion",
+    "reason_for_selection": "It is the earliest deterministic bridge from raw device_gnss.csv to native observations, is directly specified by gnsslog2obs.m lines 103-121 and 158-202, and can be proven without truth or result MAT.",
+    "implementation": {
+      "header": "include/libgnss++/io/android_raw_gnss.hpp",
+      "source": "src/io/android_raw_gnss.cpp",
+      "entrypoint": "apps/native/gnss_smartphone_fgo.cpp",
+      "preflight": "apps/commands/benchmarks/gnss_smartphone_native_only.py"
+    },
+    "equations": {
+      "receiver_time": "week=floor((TimeNanos-baseFullBiasNanos)/1e9/604800); tow_rx=(TimeNanos-baseFullBiasNanos-week*604800e9)/1e9-BiasNanos/1e9",
+      "pseudorange": "(tow_rx-tow_tx)*c after nearest-week unwrap",
+      "carrier": "AccumulatedDeltaRangeMeters/(c/CarrierFrequencyHz), with the five-device published ADR sign correction",
+      "doppler": "-PseudorangeRateMetersPerSecond/(c/CarrierFrequencyHz)"
+    },
+    "safety": [
+      "duplicate supported satellite/signal rows fail closed",
+      "invalid zero/short transmit times are omitted according to upstream filtering",
+      "nonfinite and malformed raw fields fail closed",
+      "result/truth/sample/v5 coordinate columns are never accepted",
+      "result/truth/sample/v5 inputs are rejected before opening"
+    ],
+    "oracle_tests": "tests/test_android_raw_gnss.cpp",
+    "native_target_status": "conversion-and-30-epoch-raw-smoke-only; no score claim"
+  }
+}

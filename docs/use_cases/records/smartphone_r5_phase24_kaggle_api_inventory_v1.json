@@ -1,0 +1,60 @@
+{
+  "schema_version": "smartphone-r5-phase24-kaggle-api-inventory.v1",
+  "status": "read-only-metadata-inventory",
+  "created_at_utc": "2026-09-01T00:00:00Z",
+  "competition": "smartphone-decimeter-2023",
+  "credential_policy": {
+    "credential_file_checked": true,
+    "credential_file_mode": "0600",
+    "credential_value_recorded": false,
+    "credential_value_logged": false,
+    "external_mutation": false
+  },
+  "client_availability": {
+    "kaggle_cli": false,
+    "python_kaggle": false,
+    "python_kagglehub": false,
+    "python_kagglesdk": false,
+    "read_only_https_client": "standard-library HTTPSConnection"
+  },
+  "api_requests": [
+    {
+      "method": "GET",
+      "url": "https://www.kaggle.com/api/v1/competitions/data/list/smartphone-decimeter-2023",
+      "status_code": 200,
+      "response_content_type": "application/json",
+      "response_bytes": 6641,
+      "listed_file_count": 20,
+      "listed_sample": {
+        "name": "sdc2023/sample_submission.csv",
+        "size_bytes": 5286788,
+        "downloaded": false,
+        "opened": false
+      },
+      "train_members_listed": false,
+      "test_members_listed": true
+    },
+    {
+      "method": "GET",
+      "url": "https://www.kaggle.com/api/v1/competitions/view/smartphone-decimeter-2023",
+      "status_code": 404,
+      "response_content_type": "text/html",
+      "response_body_recorded": false
+    }
+  ],
+  "phase24_data_source": {
+    "train_source": "existing local archive only",
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "archive_central_inventory": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "archive_central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "downloaded_from_api": false,
+    "mat_fetched_or_opened": false,
+    "truth_fetched_or_opened_by_api_inventory": false
+  },
+  "limitations": [
+    "The authenticated files endpoint listed the competition sample and test files but did not expose train members in this response.",
+    "The Phase24 split therefore remains anchored to the already hash-pinned local train archive; no sample or train payload was downloaded during this read-only check.",
+    "No Kaggle submission or other external mutation was attempted."
+  ]
+}

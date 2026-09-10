@@ -1,0 +1,77 @@
+{
+  "schema_version": "smartphone-r5-phase74-phase73-source-exact-miss-mask-accuracy-manifest.v1",
+  "phase": 74,
+  "status": "sealed-before-phase74-truth-read",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase74_phase73_miss_mask_accuracy_freeze_v1.json",
+    "sha256": "8308f15a491d1ef1daae0542efd1d7ac96562738e51e6c90ea04fd9f81aba8d9"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+    "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+    "native_or_solver_subprocess": false,
+    "single_process": true
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase74_phase73_miss_mask_accuracy.py",
+    "sha256": "df78d6287cbd7e3302ac4e899360ed2809d2f53db71a07d2051120837110b1c2"
+  },
+  "source_structural_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json",
+    "sha256": "8493d16b3d2c5ce8b09b65ab0dada6903fcbac01257fb8db7977cb41c85577fd"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "read_policy": {
+    "truth_reads": 4,
+    "truth_reads_per_route": 1,
+    "candidate_artifact_reads": 8,
+    "control_artifact_reads": 8,
+    "native_or_solver_subprocess": false,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": false,
+    "post_truth_tuning": false,
+    "solver_rerun_after_truth": false
+  },
+  "metric": {
+    "key": "(phone, UnixTimeMillis)",
+    "matching": "exact integer key intersection only",
+    "prediction_domain_coverage": 1.0,
+    "truth_row_coverage": "informational only; only pinned warm-up key may be missing",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "score": "(P50 + P95) / 2"
+  },
+  "gates": {
+    "candidate_improves_each_route_by_at_least_m": 0.05,
+    "candidate_no_route_regression": true,
+    "candidate_macro_improvement_at_least_m": 0.1,
+    "candidate_mtv_h_improvement_at_least_m": 0.1,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_mtv_h_p95_max_m": 5.0,
+    "candidate_all_finite": true,
+    "candidate_over_70_mps_count": 0,
+    "stretch_0_782": "report only; no promotion or Kaggle action",
+    "fresh_validation": "not permitted in Phase74"
+  },
+  "fail_closed": {
+    "hash_bytes_rows_mismatch": true,
+    "duplicate_or_extra_prediction_key": true,
+    "unexpected_missing_truth_key": true,
+    "prediction_domain_not_exact": true,
+    "second_truth_read": true,
+    "native_or_solver_subprocess": true,
+    "unexpected_exception": true
+  },
+  "truth_reads_before_manifest": 0
+}

@@ -1,0 +1,230 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-optimizer-stop-result.v1",
+  "status": "No-Go",
+  "candidate_id": "native-fgo-v1-optimizer-stop-ceres-defaults",
+  "purpose": "Truth-free comparison of the frozen native-FGO v1 graph with fixed eight iterations versus the installed GTSAM Ceres-default stopping policy.",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_stop_freeze_v1.json",
+    "record_sha256": "30285097322549612555d2dfc99d9c1a5e14613bda1b882dfa94e1e753263860",
+    "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_stop_freeze_v1_manifest.json",
+    "manifest_sha256": "2491450eb6aefd90b136d47837b2920532195f6fbff5ce1a9a82d3a14f502d19",
+    "truth_use_inventory": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_truth_use_inventory_v1.json",
+    "truth_use_inventory_sha256": "da10a5122f68e1ac4bd015949bdf3fa15dbb294e1938ebd6125691508e53eb1c"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992"
+  },
+  "split": {
+    "train": [
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "fresh_validation": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "future_holdout": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "truth_opened_or_materialized_before_freeze": 0,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "future_holdout_materialized": false
+  },
+  "recipe": {
+    "graph": "exact native-FGO v1 pseudorange + ordinary TDCP + position/clock motion",
+    "initialization": "exact v1 SPP seed and receiver clock initialization",
+    "robust_loss_and_measurement_parameters": "exact v1 values",
+    "baseline8": {
+      "max_iterations": 8,
+      "relative_cost_convergence_threshold": 0.0,
+      "absolute_cost_convergence_threshold": 0.0
+    },
+    "candidate50": {
+      "max_iterations": 50,
+      "relative_cost_convergence_threshold": 0.000001,
+      "absolute_cost_convergence_threshold": 0.0,
+      "reference": "installed GTSAM LevenbergMarquardtParams::CeresDefaults (maxIterations=50, relativeErrorTol=1e-6, absoluteErrorTol=0)"
+    },
+    "only_changed_field": "optimizer stopping policy"
+  },
+  "truth_free_artifacts": {
+    "root": "output/smartphone-r5/native-fgo-optimizer-stop-v1",
+    "manifest": "output/smartphone-r5/native-fgo-optimizer-stop-v1/truth_free_manifest.json",
+    "manifest_sha256": "37737b14c243efea56d76a4f5e72f359862b1620c9ec422782c2e14e955ba72c",
+    "truth_open_count": 0,
+    "route_manifest_sha256": {
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5": "6d522417b6acdfaa6b3958407fdefe435f30ce0f27c26c9b38f8acf335408ce3",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": "6f253883ad13945725f1450110422c95fed54d293da7b05a023fdf745aaf5743",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "c3fdfa0851fb563ad0488cb49e95d16e5bc995c205c4fd3bb9af755d846bf06b"
+    },
+    "factor_contract": "all routes have finite PR, ordinary TDCP, and motion factors; forbidden SD/DD/carrier factor counts are zero",
+    "truth_free_generation_before_truth": true,
+    "solver_rerun_during_recovery": false
+  },
+  "evaluation": {
+    "report": "output/smartphone-r5/native-fgo-optimizer-stop-v1/train_evaluation.json",
+    "report_sha256": "d662d97059a2d75a5857071efd558694375282db7cf167c5b019640b245fb7dd",
+    "manifest": "output/smartphone-r5/native-fgo-optimizer-stop-v1/train_evaluation.manifest.json",
+    "manifest_sha256": "334973f0a9d957d0483e78940a063007d3def7c18c07b1191ef1786170028fc2",
+    "status": "no-go-train-gate",
+    "distinct_train_truth_members_materialized": 3,
+    "distinct_train_truth_members_opened": 3,
+    "truth_read_operations_total_including_recovery": 4,
+    "truth_read_operations_in_final_evaluation": 3,
+    "truth_hashes": {
+      "2021-03-10-23-13-us-ca-mtv-h/pixel5": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8"
+    },
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0
+  },
+  "aggregate_metrics": {
+    "baseline8": {
+      "horizontal_wgs84_p50_m": 2.947405165680929,
+      "horizontal_wgs84_p95_m": 5.609450144210585,
+      "vertical_p95_abs_m": 7.001587050379887,
+      "diagnostic_mean_m": 4.275611197550547,
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 4.273665578358957,
+        "haversine_sphere__nearest_rank_ceiling": 4.272728901286478,
+        "wgs84_vincenty__linear_n_minus_1": 4.278427654945757,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.277622655610995
+      },
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9994389355218853
+    },
+    "candidate50": {
+      "horizontal_wgs84_p50_m": 2.9775709344595067,
+      "horizontal_wgs84_p95_m": 5.458285261181016,
+      "vertical_p95_abs_m": 6.947444746998618,
+      "diagnostic_mean_m": 4.217028161002334,
+      "diagnostic_variants_m": {
+        "haversine_sphere__linear_n_minus_1": 4.215486810212469,
+        "haversine_sphere__nearest_rank_ceiling": 4.216279611181625,
+        "wgs84_vincenty__linear_n_minus_1": 4.217928111320261,
+        "wgs84_vincenty__nearest_rank_ceiling": 4.218418111294981
+      },
+      "availability_ratio": 1.0,
+      "truth_coverage_ratio": 0.9994389355218853
+    },
+    "delta_candidate_minus_baseline": {
+      "horizontal_wgs84_p50_m": 0.0301657687785777,
+      "horizontal_wgs84_p95_m": -0.151164883029569,
+      "vertical_p95_abs_m": -0.054142303381269,
+      "diagnostic_mean_m": -0.058583036229213
+    }
+  },
+  "route_gate": {
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "baseline_h_p50_m": 3.465962631360345,
+      "candidate_h_p50_m": 3.484661124910766,
+      "baseline_h_p95_m": 6.4288978887577555,
+      "candidate_h_p95_m": 6.3616677034925795,
+      "baseline_v_p95_m": 8.237268159095658,
+      "candidate_v_p95_m": 8.251175488649611,
+      "diagnostic_variants_all_improved": true,
+      "passed": false,
+      "failures": ["h_p50_regression", "v_p95_regression"]
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "baseline_h_p50_m": 2.4585335562917723,
+      "candidate_h_p50_m": 2.486914309635621,
+      "baseline_h_p95_m": 5.380135261305438,
+      "candidate_h_p95_m": 4.924015699962915,
+      "baseline_v_p95_m": 6.330434775182268,
+      "candidate_v_p95_m": 6.225872263056563,
+      "diagnostic_variants_all_improved": true,
+      "passed": false,
+      "failures": ["h_p50_regression"]
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "baseline_h_p50_m": 2.9177193093906695,
+      "candidate_h_p50_m": 2.9611373688321323,
+      "baseline_h_p95_m": 5.019317282568561,
+      "candidate_h_p95_m": 5.0891724610875535,
+      "baseline_v_p95_m": 6.437058216861737,
+      "candidate_v_p95_m": 6.36528648928968,
+      "diagnostic_variants_all_improved": false,
+      "passed": false,
+      "failures": [
+        "h_p50_regression",
+        "h_p95_regression",
+        "all_four_diagnostic_non_regression"
+      ]
+    }
+  },
+  "convergence_and_runtime": {
+    "baseline_iterations": [8, 8, 8],
+    "candidate_iterations": [29, 50, 34],
+    "candidate_converged": [true, false, true],
+    "candidate_final_cost_lower_on_each_route": true,
+    "fgo_wall_seconds": {
+      "baseline8": [1.8702758360013831, 3.5249814830021933, 2.271192668005824],
+      "candidate50": [2.2211236319853924, 5.9270319450006355, 3.074757699010661]
+    },
+    "fgo_runtime_multiplier_per_route": [1.187600818, 1.681431, 1.353907],
+    "peak_child_rss_kib": [86164, 160864, 160864]
+  },
+  "gate": {
+    "all_four_diagnostics_routewise_and_aggregate": false,
+    "aggregate_diagnostic_mean_strict_improvement": true,
+    "aggregate_horizontal_p95_strict_improvement": true,
+    "horizontal_p50_non_regression": false,
+    "availability_non_regression": true,
+    "truth_coverage_non_regression": true,
+    "vertical_non_regression": false,
+    "convergence_improved": true,
+    "passed": false,
+    "reason": "The candidate's extra stopping improved aggregate H-P95 and diagnostic mean, but regressed aggregate H-P50 and failed route-wise H-P50/V-P95/diagnostic non-regression."
+  },
+  "evaluation_recovery": {
+    "initial_command_failed_before_any_truth": false,
+    "initial_failure": "position output has non-device timestamps because the compatibility scorer removed the first epoch while the frozen command used --skip-epochs 0",
+    "initial_failure_truth_open_count": 1,
+    "recovery_scope": "orchestration manifest path normalization and scorer timestamp-schema handling only",
+    "solver_or_algorithm_rerun": false,
+    "prior_truth_file_reused_without_rematerialization": true,
+    "recovery_truth_read_explicitly_recorded": true
+  },
+  "policy": {
+    "leaderboard_scores_used_for_tuning": false,
+    "old_holdout_used": false,
+    "fresh_validation_opened": false,
+    "future_holdout_materialized_or_opened": false,
+    "kaggle_or_external_mutation": false,
+    "token_access": false,
+    "post_truth_tuning": false,
+    "production_rtk_spp_defaults_changed": false,
+    "candidate_promotion": "No-Go; do not promote or open fresh validation"
+  },
+  "preserved_prior_v5": {
+    "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+    "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "byte_identity_checked_after_experiment": true
+  },
+  "commands": {
+    "truth_free": "env PYTHONHASHSEED=0 LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_optimizer_stop_eval.py truth-free-run --output-root output/smartphone-r5/native-fgo-optimizer-stop-v1",
+    "manifest_recovery": "env PYTHONHASHSEED=0 python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_optimizer_stop_eval.py repair-truth-free-manifests --output-root output/smartphone-r5/native-fgo-optimizer-stop-v1",
+    "train_score_recovery": "env PYTHONHASHSEED=0 LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_optimizer_stop_eval.py train-score-recovery --output-root output/smartphone-r5/native-fgo-optimizer-stop-v1"
+  },
+  "source_and_binary_hashes": {
+    "optimizer_stop_cli_sha256": "86e4f7db8a0b0e5bcf8b30eb02b5f1bce7bc9b86528065803b5c68f0f83b3729",
+    "optimizer_stop_test_sha256": "9b5a9b7019186f434b504e4673f9bfa359ec0eb03f543fc93856df7eb63e07e4",
+    "fgo_binary_sha256": "9190455cb34a9e818b79ed2ed6b023af5711fbef545215d4588bfed87f5c03e4",
+    "spp_binary_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "verification": {
+    "optimizer_stop_unit_tests": "pass: 6",
+    "optimizer_stop_ctest": "pass: python_smartphone_native_fgo_optimizer_stop_tests",
+    "release_build": "pass: cmake --build build --config Release -j2",
+    "full_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build -j1 --output-on-failure",
+      "total": 120,
+      "passed": 120,
+      "failed": []
+    },
+    "git_diff_check": "pass: git diff --check"
+  }
+}

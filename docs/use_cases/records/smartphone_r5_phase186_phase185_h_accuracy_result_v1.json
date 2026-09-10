@@ -1,0 +1,59 @@
+{
+  "candidate": {
+    "bytes": 251174,
+    "path": "output/smartphone-r5/phase185-h-native-source-tdcp-huber-v1/mtv-h/opaque_solution_output.csv",
+    "rows": 3139,
+    "sha256": "d2b0dfd41fc953ee2f3999c17baac754a933fae5e9430c3e38529c289a2f2e00"
+  },
+  "comparison": {
+    "phase183_h_route_score_m": 1.2874762859947766,
+    "role": "H development/train diagnostic; not heldout or leaderboard proof",
+    "target_strict_less_than_m": 0.782
+  },
+  "execution_label": "Luna Max",
+  "gates": {
+    "candidate_all_finite_and_earth_valid": true,
+    "candidate_exact_alignment": true,
+    "candidate_prediction_domain_exact": true,
+    "pixel5_offset_not_reapplied": true,
+    "route_score_finite": true,
+    "strict_score_less_than_0_782": false,
+    "truth_domain_exact": true,
+    "velocity_gate_over_70_mps_zero": true
+  },
+  "manifest": "docs/use_cases/records/smartphone_r5_phase186_phase185_h_accuracy_manifest_v1.json",
+  "metric": {
+    "finite": true,
+    "matched_rows": 3139,
+    "over_70_mps_count": 0,
+    "p50_m": 0.7415623472454844,
+    "p95_m": 2.078006117385388,
+    "prediction_domain_coverage": 1.0,
+    "route": "MTV-H",
+    "score_m": 1.4097842323154361,
+    "truth_domain_coverage": 1.0
+  },
+  "phase": 186,
+  "read_accounting": {
+    "accuracy_calculations": 1,
+    "candidate_reads": 1,
+    "coordinate_rows_in_result": false,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "native_solver_invocations": 0,
+    "raw_reads": 0,
+    "repairs": 0,
+    "reruns": 0,
+    "truth_reads": 1
+  },
+  "schema_version": "smartphone-r5-phase186-phase185-h-accuracy-result.v1",
+  "status": "completed-h-development-accuracy-diagnostic",
+  "truth": {
+    "bytes": 305432,
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "role": "development/train added Pixel5 route; not heldout or leaderboard proof",
+    "rows": 3139,
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249"
+  }
+}

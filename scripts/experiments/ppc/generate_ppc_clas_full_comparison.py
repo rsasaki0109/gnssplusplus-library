@@ -6,6 +6,7 @@ from __future__ import annotations
 from _paths import ANALYSIS_DIR, APPS_DIR, COMMANDS_DIR, PPC_DIR, ROOT_DIR, SCRIPTS_DIR
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -48,6 +49,70 @@ def git_revision(path: Path) -> str | None:
     )
     revision = completed.stdout.strip()
     return revision if completed.returncode == 0 and revision else None
+
+
+def git_worktree_dirty(path: Path) -> bool | None:
+    completed = subprocess.run(
+        ["git", "-C", str(path), "status", "--porcelain", "--untracked-files=all"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    return bool(completed.stdout.strip()) if completed.returncode == 0 else None
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest().upper()
+
+
+def merged_parity_environment(
+    candidate_manifest: dict[str, Any] | None,
+) -> dict[str, str]:
+    environment = dict(scorecard.PARITY_ENV)
+    if candidate_manifest is None:
+        return environment
+    manifest_environment = candidate_manifest.get("parity_environment")
+    if not isinstance(manifest_environment, dict):
+        return environment
+    environment.update(
+        {str(key): str(value) for key, value in manifest_environment.items()}
+    )
+    return environment
+
+
+def portable_candidate_manifest(
+    candidate_manifest: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Keep reproducibility fields while removing machine-local paths."""
+    if candidate_manifest is None:
+        return None
+    portable = {
+        key: candidate_manifest[key]
+        for key in (
+            "gnss_ppp_sha256",
+            "source",
+            "held_min_dd_rows",
+            "held_max_publication_streak",
+            "parity_environment",
+        )
+        if key in candidate_manifest
+    }
+    runs = candidate_manifest.get("runs")
+    if isinstance(runs, dict):
+        portable["runs"] = {
+            str(run_key): {
+                key: run_manifest[key]
+                for key in ("pos_size_bytes", "pos_sha256")
+                if key in run_manifest
+            }
+            for run_key, run_manifest in runs.items()
+            if isinstance(run_manifest, dict)
+        }
+    return portable
 
 
 def validate_coverage(
@@ -159,6 +224,7 @@ def load_run(
     }
     return {
         "key": key,
+        "pos_path": pos_path.resolve(),
         "reference": reference,
         "matched": matched,
         "scored": scored,
@@ -323,9 +389,64 @@ def markdown_value(value: float | None, suffix: str = "") -> str:
     return f"{value:.3f}{suffix}"
 
 
+def evaluate_mrtklib_signoff(runs: list[dict[str, Any]]) -> dict[str, Any]:
+    per_run: dict[str, Any] = {}
+    for run in runs:
+        local = run["metrics"]
+        target = run["mrtklib_v0_4_2"]
+        hard_gates = {
+            "interval_coverage_at_least_99pct": (
+                local["interval_coverage_pct"] >= 100.0 * MIN_INTERVAL_COVERAGE
+            ),
+            "epoch_coverage_at_least_99pct": (
+                local["epoch_coverage_pct"] >= 100.0 * MIN_INTERVAL_COVERAGE
+            ),
+            "fix_rate_at_least_mrtklib": local["fix_pct"] >= target["fix_pct"],
+            "fix_rms2d_at_most_mrtklib": (
+                local["rms2d_fixed_m"] is not None
+                and local["rms2d_fixed_m"] <= target["rms2d_m"]
+            ),
+            "fixed_over_3m_is_zero": local["fixed_over_3m"] == 0,
+        }
+        soft_gates = {
+            "fix_p68_at_most_mrtklib": (
+                local["p68_fixed_m"] is not None
+                and local["p68_fixed_m"] <= target["sigma2d_m"]
+            ),
+            "ttff_at_most_mrtklib": (
+                local["ttff_30_s"] is not None
+                and local["ttff_30_s"] <= target["ttff_s"]
+            ),
+        }
+        per_run[run["key"]] = {
+            "hard_pass": all(hard_gates.values()),
+            "hard_gates": hard_gates,
+            "soft_pass": all(soft_gates.values()),
+            "soft_gates": soft_gates,
+            "delta": {
+                "fix_pct_points": rounded(local["fix_pct"] - target["fix_pct"]),
+                "fix_rms2d_m": rounded(
+                    local["rms2d_fixed_m"] - target["rms2d_m"]
+                ) if local["rms2d_fixed_m"] is not None else None,
+                "fix_p68_m": rounded(
+                    local["p68_fixed_m"] - target["sigma2d_m"]
+                ) if local["p68_fixed_m"] is not None else None,
+                "ttff_s": rounded(
+                    local["ttff_30_s"] - target["ttff_s"]
+                ) if local["ttff_30_s"] is not None else None,
+            },
+        }
+    return {
+        "hard_pass": all(item["hard_pass"] for item in per_run.values()),
+        "soft_pass": all(item["soft_pass"] for item in per_run.values()),
+        "runs": per_run,
+    }
+
+
 def write_markdown_table(
     runs: list[dict[str, Any]],
     aggregate: dict[str, Any],
+    signoff: dict[str, Any],
     output: Path,
     *,
     apply_lever_arm: bool = False,
@@ -380,6 +501,43 @@ def write_markdown_table(
             "† Published MRTKLIB v0.4.2 precision also uses the raw PPC reference point; precision columns use the same reference convention and are directly comparable.",
         ]
     lines.extend(["", *footnotes])
+    lines.extend([
+        "",
+        "## MRTKLIB v0.4.2 sign-off",
+        "",
+        "The hard gate requires every run to retain at least 99% time and epoch "
+        "coverage, meet or exceed MRTKLIB FIX rate, meet or beat MRTKLIB FIX "
+        "RMS2D, and contain zero FIX epochs above 3 m. p68 and TTFF are tracked "
+        "as soft gates.",
+        "",
+        "| Run | Coverage | FIX rate | FIX RMS2D | >3 m FIX | Hard gate | p68 | TTFF | Soft gate |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ])
+    for key, label in RUNS:
+        verdict = signoff["runs"][key]
+        hard = verdict["hard_gates"]
+        soft = verdict["soft_gates"]
+        lines.append(
+            "| " + " | ".join([
+                label,
+                "PASS" if (
+                    hard["interval_coverage_at_least_99pct"] and
+                    hard["epoch_coverage_at_least_99pct"]
+                ) else "FAIL",
+                "PASS" if hard["fix_rate_at_least_mrtklib"] else "FAIL",
+                "PASS" if hard["fix_rms2d_at_most_mrtklib"] else "FAIL",
+                "PASS" if hard["fixed_over_3m_is_zero"] else "FAIL",
+                "**PASS**" if verdict["hard_pass"] else "**FAIL**",
+                "PASS" if soft["fix_p68_at_most_mrtklib"] else "MISS",
+                "PASS" if soft["ttff_at_most_mrtklib"] else "MISS",
+                "PASS" if verdict["soft_pass"] else "PARTIAL",
+            ]) + " |"
+        )
+    lines.extend([
+        "",
+        f"**Overall hard gate: {'PASS' if signoff['hard_pass'] else 'FAIL'}**",
+        f"Overall soft gate: {'PASS' if signoff['soft_pass'] else 'PARTIAL'}",
+    ])
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
@@ -416,6 +574,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    manifest_path = args.results_dir / "candidate_manifest.json"
+    candidate_manifest = None
+    if manifest_path.is_file():
+        candidate_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    parity_environment = merged_parity_environment(candidate_manifest)
+
     runs = [
         load_run(
             args.dataset_root,
@@ -436,6 +600,9 @@ def main() -> int:
         "scoring": {
             "scope": "complete available interval of all six PPC runs",
             "dataset_revision": git_revision(args.dataset_root),
+            "report_generator_revision": git_revision(ROOT_DIR),
+            "report_generator_worktree_dirty": git_worktree_dirty(ROOT_DIR),
+            "candidate_manifest": portable_candidate_manifest(candidate_manifest),
             "solver_profile": [
                 "--kinematic",
                 "--use-dynamics-model",
@@ -448,7 +615,7 @@ def main() -> int:
                 "--clas-osr",
                 "--emit-epoch-time",
             ],
-            "parity_environment": scorecard.PARITY_ENV,
+            "parity_environment": parity_environment,
             "reference": (
                 "PPC vehicle reference transformed to the antenna phase center"
                 if args.apply_lever_arm
@@ -477,6 +644,11 @@ def main() -> int:
             run["key"]: {
                 "libgnssplusplus": run["metrics"],
                 "mrtklib_v0_4_2_article": run["mrtklib_v0_4_2"],
+                "solution_artifact": {
+                    "file": run["pos_path"].name,
+                    "size_bytes": run["pos_path"].stat().st_size,
+                    "sha256": sha256_file(run["pos_path"]),
+                },
             }
             for run in runs
         },
@@ -506,10 +678,15 @@ def main() -> int:
             if len(single_errors) else None,
         },
     }
+    payload["signoff"] = evaluate_mrtklib_signoff(runs)
     args.metrics.parent.mkdir(parents=True, exist_ok=True)
     args.metrics.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     write_markdown_table(
-        runs, payload["aggregate"], args.markdown, apply_lever_arm=args.apply_lever_arm
+        runs,
+        payload["aggregate"],
+        payload["signoff"],
+        args.markdown,
+        apply_lever_arm=args.apply_lever_arm,
     )
     write_trajectory_figure(runs, args.trajectory_figure)
     write_error_figure(runs, args.error_figure)

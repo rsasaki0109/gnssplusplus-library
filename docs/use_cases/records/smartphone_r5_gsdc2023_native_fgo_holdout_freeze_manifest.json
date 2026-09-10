@@ -1,0 +1,23 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-holdout-freeze-manifest.v1",
+  "status": "sealed-before-holdout-payload-access",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_freeze.json",
+    "sha256": "2be112670ce6d1c90fe14efb4aca495d3baaab2706251235be80b6f0eda28e01"
+  },
+  "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+  "route": "2023-09-06-00-01-us-ca-routen",
+  "phone_allowlist": [
+    "pixel6pro"
+  ],
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "algorithm_parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+  "algorithm_core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+  "truth_open_count_before_freeze": 0,
+  "payload_materialized_before_freeze": false,
+  "central_directory_only_verification": true,
+  "one_shot_authorization": true,
+  "no_post_holdout_tuning": true,
+  "external_mutation": false
+}

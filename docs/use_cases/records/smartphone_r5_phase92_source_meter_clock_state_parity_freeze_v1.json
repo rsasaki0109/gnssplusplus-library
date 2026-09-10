@@ -1,0 +1,233 @@
+{
+  "schema_version": "smartphone-r5-phase92-source-meter-clock-state-parity-freeze.v1",
+  "phase": 92,
+  "status": "frozen-before-implementation",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one opt-in source-aligned implementation candidate after the Phase91 alignment and clock/ISB unit audit. Raw execution, accuracy scoring, route selection, and submission are not authorized by this freeze.",
+  "authority": {
+    "phase92_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_phase91_alignment_and_clock_isb_unit_audit_v1.md",
+      "sha256": "45b15439063eaa823f786df15155c83b92e65939812e1d18698cf1812d0f5271",
+      "commit": "772060aae0ec1b99ff685146c1c3bf3706b37453",
+      "status": "sealed-read-only-evidence"
+    },
+    "phase91_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_result_v1.json",
+      "sha256": "9929e285b58b5d9a65350ba1a3d497c736968bb896d72dbe5fb014534b6d58c8",
+      "commit": "e299c2c845396684c43b12207690b78a763f630f",
+      "status": "sealed-no-go-input"
+    },
+    "phase91_implementation": {
+      "commit": "0b9c4ebc5704428421f0bfc1cad569d834690b6d",
+      "status": "sealed-prior-implementation"
+    },
+    "phase91_execution_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_freeze_v1.json",
+      "sha256": "456634b0a41da74de557185620bcb4d8c7b0572ebb7f3f1e415d8b8c82aa6fa4"
+    },
+    "phase91_execution_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988"
+    },
+    "phase85_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase85_source_clock_c0d_structural_manifest_v1.json",
+      "sha256": "20adc2e3388b92d045580739d025106c18aa068fcf26f8d117d48d3d2f5f7058"
+    },
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    }
+  },
+  "decision_boundary": {
+    "candidate_count": 1,
+    "candidate_selection": "fixed-single-candidate",
+    "implementation_authorized": true,
+    "implementation_scope": "focused code, tests, and diagnostics for the candidate below only",
+    "execution_authorized": false,
+    "authorized_route_count_at_freeze": 0,
+    "route_matrix_at_freeze": [],
+    "pre_raw_execution_manifest_required": true,
+    "raw_execution_before_this_freeze": false,
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "promotion_or_submission_authorization": false,
+    "default_legacy_behavior_untouched": true,
+    "retained_key_correction_is_gate_preserving": true,
+    "fail_closed_on_alignment_or_unit_invariant_failure": true,
+    "stop_before_raw_execution": true
+  },
+  "candidate": {
+    "id": "phase92_source_meter_clock_state_parity_with_retained_raw_d_alignment",
+    "status_at_freeze": "not-implemented",
+    "source_aligned": true,
+    "raw_only_when_later_executed": true,
+    "diagnostic_only": true,
+    "default_off": true,
+    "selector": "--native-source-clock-c0d-meter-state-parity",
+    "scope": "opt-in main GTSAM Pose3+IMU batch graph on the existing same-run in-memory GNSS-first raw path",
+    "exactly_one_candidate": true,
+    "handoff_contract": {
+      "raw_staging": "same-run native raw device GNSS plus raw device IMU plus broadcast navigation",
+      "gnss_first": "same retained in-memory raw GNSS problem, optimized before the main GNSS+IMU graph",
+      "position_clock_velocity": "same-run GNSS-first result copied through the existing in-memory handoff",
+      "retained_epoch_identity": "exact source index, integer raw UTC millisecond key, and GNSS week/TOW identity",
+      "velocity_only_handoff": false,
+      "direct_doppler_wls_handoff": false,
+      "coordinate_file_or_pdc_handoff": false,
+      "external_or_precomputed_coordinate_input": false,
+      "nearest_interpolation_padding_truncation": false
+    },
+    "retained_raw_d_alignment": {
+      "required": true,
+      "purpose": "Correct the Phase91 validator's comparison of retained epochs against unfiltered raw vectors without relaxing any coverage gate.",
+      "mapping": "Every retained main EpochSeed and corresponding GNSS-first epoch/solution key maps exactly once, in source order, to its retained raw source index and raw UTC key.",
+      "raw_d_source": "receiver_clock_drift_mps from that exact same-run retained raw epoch/key",
+      "filtered_raw_epochs": "raw epochs filtered out before the retained problem may remain unmatched",
+      "finite_full_retained_coverage": true,
+      "reject_missing_key": true,
+      "reject_duplicate_key": true,
+      "reject_reordered_key": true,
+      "reject_time_or_week_tow_mismatch": true,
+      "reject_nearest_time_match": true,
+      "reject_interpolation": true,
+      "reject_padding_or_truncation": true,
+      "reject_zero_or_hold_fallback": true,
+      "reject_wls_or_residual_inference": true,
+      "reject_coordinate_inference": true,
+      "gate_relaxation": false,
+      "raw_d_fallback": "none"
+    },
+    "state_units": {
+      "receiver_clock_C": "metres internally",
+      "constellation_ISB": "metres internally",
+      "receiver_clock_drift_D": "metres_per_second",
+      "signal_inter_frequency_bias": "metres, unchanged",
+      "residual_ionosphere": "metres, unchanged",
+      "raw_pseudorange_and_doppler": "source units, unchanged",
+      "public_PositionSolution_receiver_clock_bias": "seconds, obtained by dividing final C by C_LIGHT exactly once"
+    },
+    "official_equations": {
+      "pseudorange": "range + C_i + ISB_group + signal_bias + ionosphere - P",
+      "source_clock_c0d_residual": "(C_{i+1}-C_i)-((D_i+D_{i+1})*dt/2)",
+      "source_clock_c0d_jacobian_order": ["C_i", "C_{i+1}", "D_i", "D_{i+1}"],
+      "source_clock_c0d_jacobian": "[-1,+1,-dt/2,-dt/2]",
+      "source_clock_c0d_dt_units": "seconds",
+      "source_clock_c0d_residual_units": "metres",
+      "source_clock_c0d_sigma_m": 0.1,
+      "equivalence": "the metre row is the official seconds row multiplied by C_LIGHT; do not alter the physical equation or sigma"
+    },
+    "unit_conversion_contract": {
+      "plain_and_isb_pseudorange": "base C and ISB enter directly in metres with unit derivatives; signal-bias and ionosphere terms remain metres",
+      "clock_motion_and_prior": "use existing physical metre sigmas directly with metre C state; preserve edge, gap, and jump rules",
+      "source_clock_c0d": "C metres, D metres_per_second, dt seconds, residual/Jacobian/sigma as frozen above",
+      "undifferenced_doppler": "D remains direct metres_per_second with no C_LIGHT conversion",
+      "tdcp_and_carrier_phase": "use a metre-aware equivalent or an explicit audited seconds boundary for any enabled factor; never mix a metre C key with a seconds-clock factor",
+      "stock_carrier_phase_api": "if enabled, keep its documented seconds boundary explicit and convert only at that factor boundary",
+      "residual_diagnostics": "report C and ISB metre states directly; apply no second C_LIGHT multiplication to metre states",
+      "public_output": "convert C metres to public seconds once at PositionSolution output; retain existing public API",
+      "optimizer": "unchanged GTSAM batch Levenberg-Marquardt algorithm and parameters",
+      "source_sigma": "unchanged official C0D sigma 0.1 m; no tuning",
+      "direct_quality": "unchanged raw direct P+D quality, masks, and source sigmas"
+    },
+    "preserved_contract": {
+      "same_run_gnss_first_native_handoff": true,
+      "raw_device_gnss_only": true,
+      "raw_device_imu_only": true,
+      "broadcast_navigation_only": true,
+      "no_pdc": true,
+      "no_base_rinex": true,
+      "no_direct_wls": true,
+      "no_velocity_only": true,
+      "no_external_or_precomputed_coordinates": true,
+      "no_truth_mat_kaggle_or_token": true,
+      "no_accuracy_scoring": true,
+      "c0d_edge_phone_clock_jump_rules_unchanged": true,
+      "c0d_direct_quality_and_measurement_sigma_unchanged": true,
+      "legacy_selector_absent_behavior": "unchanged"
+    },
+    "required_implementation_tests": [
+      "retained-key map accepts filtered-out raw epochs while requiring every retained key exactly once and in order",
+      "retained-key map rejects missing, nonfinite, duplicate, reordered, time-misaligned, week/TOW-misaligned, nearest, interpolated, padded, truncated, zero, hold, WLS, residual, and coordinate-derived values",
+      "raw D is finite and fully covered for every retained epoch with no fallback",
+      "C and ISB are metre-valued, D is metres_per_second, and C0D residual/Jacobian/sigma match the frozen official row",
+      "plain/ISB pseudorange, optional carrier/TDCP, clock motion, priors, diagnostics, and public output use one consistent unit boundary",
+      "default-off selector leaves legacy behavior unchanged",
+      "same-run GNSS-first handoff, raw P+D quality, no-PDC, and no-coordinate-copy invariants remain enforced",
+      "synthetic accepted active solve emits complete recognized termination telemetry",
+      "future active-solve gates remain finite costs, iterations >= 1, and final_cost < initial_cost"
+    ]
+  },
+  "future_execution_boundary": {
+    "requires_separate_pre_raw_manifest": true,
+    "execution_authorized_by_this_freeze": false,
+    "routes_authorized_by_this_freeze": [],
+    "later_raw_matrix_must_be_separately_frozen": true,
+    "raw_inputs_if_later_authorized": [
+      "raw Android device_gnss.csv",
+      "raw Android device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "forbidden_inputs": [
+      "base RINEX",
+      "truth or MAT",
+      "Kaggle or token",
+      "validation holdout",
+      "Phase82 candidate coordinates",
+      "precomputed coordinates",
+      "result-file or external coordinate input"
+    ],
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "submission": false,
+    "execution_on_failure": "fail closed; do not tune sigma, alter the equation/Jacobian, relax retained-key coverage, add a route, or open accuracy artifacts"
+  },
+  "read_accounting_at_freeze": {
+    "phase92_audit_record_reads": 1,
+    "sealed_phase91_result_direct_reads": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "source_evidence_pins": {
+    "official_clock_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc"
+    },
+    "official_pseudorange_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/PseudorangeFactor_XC.h",
+      "sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415"
+    },
+    "official_doppler_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/DopplerFactor_VD.h",
+      "sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1"
+    },
+    "official_source_pipeline": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "official_clock_unit_conversion": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff"
+    },
+    "official_sigma": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "pinned_phase91_source_diagnostic": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_result_v1.json",
+      "sha256": "9929e285b58b5d9a65350ba1a3d497c736968bb896d72dbe5fb014534b6d58c8"
+    }
+  }
+}

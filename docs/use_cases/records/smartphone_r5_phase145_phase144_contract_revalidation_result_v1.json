@@ -1,0 +1,116 @@
+{
+  "schema_version": "smartphone-r5-phase145-phase144-contract-revalidation-result.v1",
+  "phase": 145,
+  "execution_label": "Luna Max",
+  "status": "revalidated-structural-only-go",
+  "historical_phase144": {
+    "path": "docs/use_cases/records/smartphone_r5_phase144_telemetry_serializer_raw_result_v1.json",
+    "sha256": "86fa44a595d71ed7f8bf400001a30060e61f343815bac92e76f9e4d3fefc50ee",
+    "commit": "3110202",
+    "status_preserved": true,
+    "historical_status": "sealed-structural-raw-result-no-accuracy",
+    "mutated": false
+  },
+  "validator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase145_phase144_contract_revalidation.py",
+    "sha256": "3f1c140e4264d4d0cae535f2a2e9f97a325dc3bdee04e4a3e35ca60931f0a3ff",
+    "implementation_commit": "1c13efa64a61debb8aa496b71c6b5591f1d8e657",
+    "phase144_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase144_telemetry_serializer_structural.py",
+    "phase144_runner_sha256": "4fd6012c03b3a128dce5f804324e20f8403f07119ec2e982fa2646e5056c635c",
+    "focused_tests_path": "tests/test_smartphone_phase145_phase144_contract_revalidation.py",
+    "focused_tests_sha256": "62c54c3f052ddbb11af6132cee66fe27288f81af122ecaadcff901d77aa7632f",
+    "audit_path": "docs/use_cases/records/smartphone_r5_phase145_phase144_contract_revalidation_audit_v1.md",
+    "audit_sha256": "c17abb73afb0098980a138e1b08eb7309fa7060808fb3b2429a851cd83eb55ee",
+    "corrected_expectations": {
+      "main_configured_max_iterations": 12,
+      "main_effective_max_iterations": 1000,
+      "gnss_first_configured_max_iterations": 1000,
+      "gnss_first_effective_max_iterations": 1000,
+      "native_gnss_first_stage_label": "gnss-first",
+      "maximum_lambda_semantics": "observed peak lambda; finite and within configured bounds"
+    },
+    "phase144_structural_gates_reused": true,
+    "wrapper_inference": false,
+    "summary_overwrite": false
+  },
+  "routes": [
+    {
+      "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "summary_path": "output/smartphone-r5/phase144-telemetry-serializer-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/native_summary.json",
+      "summary_sha256": "a9361eafe005e06fe8912154f0e3f5ffd919ca60725a2e2c5ba3b71cead536ea",
+      "main": {
+        "configured_max_iterations": 12,
+        "effective_max_iterations": 1000,
+        "attempted_outer_iterations": 25,
+        "accepted_outer_iterations": 25,
+        "rejected_outer_iterations": 0,
+        "termination_branch": "outer_convergence_tolerance",
+        "maximum_lambda_observed": 1e-05
+      },
+      "gnss_first": {
+        "configured_max_iterations": 1000,
+        "effective_max_iterations": 1000,
+        "attempted_outer_iterations": 111,
+        "accepted_outer_iterations": 111,
+        "rejected_outer_iterations": 0,
+        "termination_branch": "outer_convergence_tolerance",
+        "maximum_lambda_observed": 1e-05
+      },
+      "solution_content_read": false,
+      "coordinate_rows_interpreted": false
+    },
+    {
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "summary_path": "output/smartphone-r5/phase144-telemetry-serializer-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/native_summary.json",
+      "summary_sha256": "f8347b0bf15ad7ba0ac34b1e43a0f30ebf98860d9683ced4a0d80338702bd5f4",
+      "main": {
+        "configured_max_iterations": 12,
+        "effective_max_iterations": 1000,
+        "attempted_outer_iterations": 31,
+        "accepted_outer_iterations": 31,
+        "rejected_outer_iterations": 0,
+        "termination_branch": "outer_convergence_tolerance",
+        "maximum_lambda_observed": 1.0
+      },
+      "gnss_first": {
+        "configured_max_iterations": 1000,
+        "effective_max_iterations": 1000,
+        "attempted_outer_iterations": 116,
+        "accepted_outer_iterations": 116,
+        "rejected_outer_iterations": 0,
+        "termination_branch": "outer_convergence_tolerance",
+        "maximum_lambda_observed": 1e-05
+      },
+      "solution_content_read": false,
+      "coordinate_rows_interpreted": false
+    }
+  ],
+  "read_accounting": {
+    "historical_native_summary_reads": 2,
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "policy": {
+    "raw_execution": false,
+    "solver_execution": false,
+    "truth_used": false,
+    "solution_content_interpreted": false,
+    "historical_phase144_artifacts_mutated": false
+  },
+  "provenance": {
+    "revalidation_command": "python3 apps/commands/benchmarks/gnss_smartphone_phase145_phase144_contract_revalidation.py --print-result",
+    "focused_test_command": "python3 -m unittest -v tests/test_smartphone_phase145_phase144_contract_revalidation.py",
+    "raw_payloads_opened": false,
+    "native_binary_started": false,
+    "accuracy_or_coordinate_evaluation": false
+  }
+}

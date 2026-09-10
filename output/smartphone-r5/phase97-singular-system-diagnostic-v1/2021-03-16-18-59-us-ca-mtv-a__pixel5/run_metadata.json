@@ -1,0 +1,76 @@
+{
+  "command": [
+    "build/apps/gnss_fgo_imu_no_base",
+    "--dataset-id",
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "--android-gnss",
+    "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+    "--android-imu",
+    "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+    "--nav",
+    "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+    "--all-epochs",
+    "--android-raw-utc-keys",
+    "--android-raw-clock-only",
+    "--android-utc-wall-clock-fallback",
+    "--native-pdc-imu-tdcp-no-bridge",
+    "--native-source-direct-observable-quality",
+    "--native-source-clock-c0d-factor",
+    "--native-source-clock-c0d-meter-state-parity",
+    "--native-source-clock-c0d-active-solve-diagnostic",
+    "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "--native-source-clock-c0d-phase97-singular-system-diagnostics",
+    "--out",
+    "output/smartphone-r5/phase97-singular-system-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+    "--summary-json",
+    "output/smartphone-r5/phase97-singular-system-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json"
+  ],
+  "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+  "ended_unix_s": 1788375740.539332,
+  "interrupted": false,
+  "launch_error": "",
+  "planned_output": {
+    "summary": "output/smartphone-r5/phase97-singular-system-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+    "withheld_solution_output": "output/smartphone-r5/phase97-singular-system-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv"
+  },
+  "raw_content_copied_or_transformed": false,
+  "raw_inputs": {
+    "brdc.nav": {
+      "bytes": 9955040,
+      "copied_or_transformed": false,
+      "exists_before_launch": true,
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+      "read_by_runner": false,
+      "sha256_read_by_runner": false,
+      "source": "Phase95 sealed result raw_inputs.path"
+    },
+    "device_gnss.csv": {
+      "bytes": 57715495,
+      "copied_or_transformed": false,
+      "exists_before_launch": true,
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+      "read_by_runner": false,
+      "sha256_read_by_runner": false,
+      "source": "Phase95 sealed result raw_inputs.path"
+    },
+    "device_imu.csv": {
+      "bytes": 34393802,
+      "copied_or_transformed": false,
+      "exists_before_launch": true,
+      "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+      "read_by_runner": false,
+      "sha256_read_by_runner": false,
+      "source": "Phase95 sealed result raw_inputs.path"
+    }
+  },
+  "return_code": 1,
+  "run_number": 1,
+  "runner_read_raw_bytes": false,
+  "runner_read_truth_mat_base_coordinate_kaggle": false,
+  "schema_version": "smartphone-r5-phase97-singular-system-diagnostic-route-execution.v1",
+  "started_unix_s": 1788375688.0247931,
+  "stderr": "output/smartphone-r5/phase97-singular-system-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/stderr.log",
+  "stdout": "output/smartphone-r5/phase97-singular-system-diagnostic-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/stdout.log",
+  "summary_present_after_launch": true,
+  "withheld_solution_output_present_after_launch": false
+}

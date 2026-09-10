@@ -40,6 +40,11 @@ struct Config {
         double relative_cost_convergence_threshold = 0.0;
         double absolute_cost_convergence_threshold = 0.0;
         double pseudorange_sigma_m = 3.0;
+        // Opt-in native Android measurement-variance model.  A valid
+        // ReceivedSvTimeUncertaintyNanos value is converted to metres at the
+        // input boundary and floors the existing raw pseudorange sigma;
+        // disabled by default for byte-identical legacy behaviour.
+        bool use_native_android_sv_time_uncertainty_sigma_floor = false;
         double pseudorange_elevation_sigma_power = 1.0;
         double min_elevation_deg = 10.0;
         double min_snr_dbhz = 0.0;
@@ -51,11 +56,267 @@ struct Config {
         double max_float_position_jump_m = 0.0;
 
         bool use_spp_seed = true;
+        // Research-only, raw/nav-derived SPP initialization.  The builder
+        // first audits all finite per-epoch SPP solutions, chooses a
+        // deterministic quality anchor (satellite count, GDOP, normalized
+        // residual, then time), and replays the stateful SPP pass outward
+        // from that anchor.  The default remains the historical chronological
+        // pass so production and existing callers remain byte-compatible.
+        bool use_quality_anchor_initialization = false;
+        // Research-only extension of the quality-anchor initializer.  The
+        // normal elevation-gated reconnaissance always runs first.  Only
+        // when it has no eligible candidate does the builder retry the same
+        // raw pseudorange/broadcast-navigation SPP solve with an explicit
+        // -90 degree elevation gate, then replay the selected raw/nav anchor
+        // through the ordinary elevation-gated path.  This flag never
+        // changes factor-builder masks or enables a sentinel bypass.
+        bool use_fallback_seed_quality_anchor_recovery = false;
+        // Raw no-base research paths may use the dedicated receiver-only SPP
+        // seed contract. The historical default keeps inter-system clock
+        // states enabled for compatibility.
+        bool spp_model_intersystem_bias = true;
+        // Research-only raw Android recovery switch. When enabled, epochs
+        // with fewer than min_satellites_per_epoch usable measurements are
+        // retained so the IMU/temporal graph can carry state through short
+        // GNSS outages. The default remains false; this never invents
+        // coordinates or relaxes finite/solver checks.
+        bool retain_sparse_epochs_for_imu = false;
         bool use_pseudorange_factors = true;
         bool use_motion_factors = true;
         bool use_position_motion_factors = true;
         bool use_clock_motion_factors = true;
+        // Opt-in source-exact ClockFactor_CCDD C0/D row for the native
+        // receiver-only Pose3+IMU graph.  The scalar clock states are in
+        // seconds and the per-epoch Doppler clock-drift states are in m/s;
+        // the raw entry point supplies the exact dataset phone identity so
+        // the source exclusion list is applied without route-name matching.
+        // The default remains false to preserve the legacy scalar clock
+        // BetweenFactor graph.
+        bool use_native_source_clock_c0d_factor = false;
+        std::string native_source_clock_c0d_phone;
+        // Phase92 opt-in source-aligned state convention.  In the GTSAM
+        // Pose3+IMU batch graph receiver C_i and global ISB_i are metres,
+        // while D_i remains metres/second.  This selector is intentionally
+        // separate from the Phase84 seconds-state C0/D candidate so its
+        // absence leaves every legacy path unchanged.
+        bool use_native_source_clock_c0d_meter_state_parity = false;
+        // Phase88 opt-in: instrument the existing GTSAM LM call around the
+        // source-exact C0/D graph. This records termination/conditioning
+        // telemetry only; it does not alter the optimizer, factor equation,
+        // state units, or source sigma.
+        bool use_native_source_clock_c0d_active_solve_diagnostic = false;
+        // Phase91 opt-in: initialize only the main Pose3+IMU graph's D_i
+        // state from the same retained raw Android EpochSeed drift sequence.
+        // This never changes the GNSS-first in-memory position/clock/velocity
+        // handoff, and is valid only with complete finite epoch coverage.
+        bool use_native_source_clock_c0d_raw_drift_d_initializer = false;
+        // Phase93 opt-in: enable the official metre-valued C0/D graph in the
+        // GNSS-first Point3+velocity stage and hand its optimized C_i/D_i
+        // states to the existing main meter-state graph.  The GNSS-first D_i
+        // initializer is the exact retained EpochSeed raw drift; the main
+        // graph must receive the same-run optimized D vector through
+        // FGOProblem::native_source_clock_c0d_gnss_first_d_handoff_mps.
+        // Defaults remain false and the legacy path is unchanged.
+        bool use_native_source_clock_c0d_gnss_first_meter_state_handoff = false;
+        // Phase101 opt-in source-parity topology.  Each retained epoch owns
+        // one official seven-component metre-valued C vector:
+        // [base/GPS-L1, GLO-L1, GAL-L1, BDS-L1, GPS-L5, GAL-L5, BDS-L5].
+        // Pseudorange
+        // rows select the component mapped by sysfreq2sigtype.m and the
+        // official CCDD row couples only component zero to D.  This selector
+        // is deliberately separate from the Phase93 scalar-C handoff so the
+        // legacy/default graph (including its global ISB state) is unchanged.
+        // When enabled, global `i` ISB keys are forbidden; optimized C and D
+        // vectors must be exported in exact retained epoch order.
+        bool use_native_source_clock_c0d_epoch_vector_parity = false;
+        // Phase164 opt-in: admit the dedicated GNSS-only Point3/V/C7/D
+        // graph from a complete same-run raw-P handoff when the Doppler row
+        // family is empty.  This is deliberately separate from all generic
+        // Doppler/Phase135 guards and remains default-off.
+        bool use_native_raw_p_no_doppler_graph = false;
+        // Explicit numerical gauge for C7 slots that have no retained
+        // pseudorange row in the dedicated no-D graph.  This is not a
+        // measured ISB prior and is reported in FGOResult diagnostics.
+        double native_raw_p_no_doppler_unobserved_clock_gauge_sigma_m = 1.0e6;
+        // Dedicated Phase171 GNSS-first opt-in: retain corrected raw Doppler
+        // rows in the Point3/V/C7 staging graph with ECEF velocity states.
+        // The Pose3+IMU main graph remains on its existing empty-generic-D
+        // contract; this selector is rejected for Pose3/IMU or legacy paths.
+        bool use_native_raw_p_ecef_doppler_gnss_first = false;
+        // Experimental batch staging only. Keep seed and clock-edge guards;
+        // permit per-epoch sparse P with at least one supported epoch.
+        bool allow_native_raw_p_sparse_epochs = false;
+        // Phase135 opt-in: use the official fixed-initial-geometry affine
+        // P/D/ordinary-TDCP family as one transactional graph adapter.  The
+        // selector is deliberately separate from the existing nonlinear
+        // source-clock factors: selector-off keeps the legacy graph exactly
+        // unchanged, while selector-on rejects any partial/mixed family.
+        bool use_native_phase135_official_affine_measurement_family = false;
+        // Phase135 execution may compose with the already implemented
+        // Phase107 raw-base/miss-mask path without enabling the later
+        // Phase126-134 compound selectors.  The native app sets this only
+        // after validating the hash-bound raw-base argv contract; direct
+        // library callers must set it explicitly and still provide the same
+        // provenance outside this configuration object.  Default-off keeps
+        // all historical paths unchanged.
+        bool use_native_phase135_phase107_raw_base_recipe = false;
+        // Phase138 opt-in: correct only the ordinary Phase135 affine TDCP
+        // measurement by the fixed initial-endpoint source range difference.
+        // The source range uses the same satellite state, endpoint seed, LOS,
+        // and single-Sagnac convention as the Phase135 affine factor.  This
+        // selector is deliberately dependent on Phase135 and default-off;
+        // pair admission, Jacobians, sigma/Huber, and all other factors are
+        // unchanged.
+        bool use_native_phase138_affine_tdcp_anchor_range_constant = false;
+        // Phase96 opt-in: expose read-only diagnostics for the existing main
+        // C0/D Levenberg-Marquardt solve.  This flag changes telemetry
+        // collection only; it does not change graph construction, factor
+        // equations, state units, noise, filtering, damping, or fallback
+        // behavior.  The default is deliberately disabled.
+        bool use_native_source_clock_c0d_phase96_main_diagnostics = false;
+        // Phase97 opt-in: inspect the exact main graph's keyed structure and
+        // one read-only initial linearization for singular-system attribution.
+        // This does not change graph construction, ordering, factors, Values,
+        // LM parameters, or the solution path.  The default is disabled.
+        bool use_native_source_clock_c0d_phase97_singular_system_diagnostics =
+            false;
+        // Phase98 opt-in: record only the existing pinned LM solver-boundary
+        // metadata and a typed IndeterminantLinearSystemException's exact
+        // nearby key when that exception reaches this integration boundary.
+        // No graph, Values, ordering, damping, trial, fallback, or solution
+        // behavior is changed.  The default remains disabled.
+        bool use_native_source_clock_c0d_phase98_solver_rank_diagnostic =
+            false;
+        // Phase128 opt-in: preserve canonical GLONASS data[0..14] field
+        // positions and admit each record only after typed SatelliteId/native
+        // GPST/header-vs-geph provenance checks.  This composes with Phase127
+        // and leaves all solver/factor settings and the legacy default off.
+        bool use_native_phase128_glonass_provenance_parser_admission = false;
+        // Phase129 opt-in: turn failed GLONASS FCN provenance into an explicit
+        // local miss at the existing observation boundary.  This composes
+        // strictly with Phase126/127/128; certified GLONASS and non-GLONASS
+        // rows are unchanged, and the default remains fail-closed/off.
+        bool use_native_phase129_glonass_local_miss_mask = false;
+        // Phase131 opt-in: use the source-defined physical-frequency family
+        // as the raw-base correction join key while retaining the original
+        // typed estimator signal.  This composes with Phase126/127/128/129;
+        // default-off preserves the exact legacy correction key.
+        bool use_native_phase131_canonical_correction_band_key = false;
+        // Phase99 opt-in: select GTSAM's multifrontal QR elimination only for
+        // the Phase93 source-meter C0/D Pose3+IMU main graph.  GNSS-first
+        // staging and every legacy/default path remain on the historical
+        // multifrontal Cholesky branch.  This selector changes no graph,
+        // Values, equation, unit, sigma, filter, ordering, or LM setting.
+        bool use_native_source_clock_c0d_phase99_main_multifrontal_qr_solver =
+            false;
+        // Phase143 opt-in: use the official 1000-iteration LM budget for the
+        // Phase142/Phase99 meter-state Pose3+IMU main batch solve.  The
+        // separate GNSS-first Point3/velocity staging solve already uses
+        // 1000 iterations, so this selector has no effect there.  No other
+        // optimizer parameter or graph setting is changed; the default is
+        // deliberately false to preserve the historical 12-iteration main
+        // cap.
+        bool use_native_phase143_official_main_lm_termination_budget = false;
+        // Phase167 opt-in: apply the source-backed 1000-iteration LM budget
+        // and Phase143 termination telemetry only to the dedicated native
+        // raw-P/no-Doppler GNSS-first graph.  The app must also select the
+        // complete Phase165 graph and configure max_iterations=1000; this
+        // flag never changes legacy or normal-D paths.
+        bool use_native_phase167_raw_p_no_doppler_lm_termination_budget =
+            false;
+        // Phase171 opt-in: consume a same-run Phase165/167 raw-P GNSS-first
+        // result as the typed C7/D/velocity handoff for the native Pose3+IMU
+        // main graph.  The main graph is allowed to have an empty generic
+        // Doppler family only under this explicit selector; all normal-D and
+        // legacy guards remain unchanged.
+        bool use_native_phase171_raw_p_no_doppler_imu_main = false;
+        // Research-only main-stage paired TDCP residual slant-change states.
+        // Explicit prior required; zero is deliberately invalid when enabled.
+        bool use_native_tdcp_frequency_residual_states = false;
+        bool use_native_lm_lambda_floor = false; // opt-in 1e-8 numerical experiment
+        double native_tdcp_frequency_residual_prior_sigma_m = 0.0;
+        // Phase184 opt-in: apply the cached source L_robust_prm Type mapping
+        // only to ordinary TDCP factors in the dedicated Phase171 no-Doppler
+        // lane.  This is deliberately separate from Phase118 so the
+        // historical Phase118 composition/admission and all default paths
+        // remain unchanged.
+        bool use_native_phase184_source_tdcp_huber_k = false;
+        std::string native_phase184_tdcp_setting_type;
+        // Phase201 opt-in: use the cached source's inclusive-forward IMU
+        // sample schedule in the dedicated Phase171 Pose3/IMU main graph.
+        // This is deliberately a new branch: the legacy preceding-delta plus
+        // boundary-tail schedule remains unchanged when this flag is false.
+        bool use_native_phase201_source_inclusive_forward_imu_schedule = false;
+        // Experimental N/T bias covariance density, legacy integration only.
+        bool use_native_phase205_source_count_bias_density = false;
+        // Experimental ending-bias ImuFactor + separate sample-count bias
+        // evolution; legacy integration and finite initial priors retained.
+        bool use_native_phase209_source_separate_imu_factors = false;
+        // Dedicated corrected raw-D likelihood in the Phase171 IMU main
+        // graph; generic no-D admission remains unchanged.
+        bool use_native_phase213_main_doppler = false;
+        // Pixel5 Street source XXVV (sigma 0.05 m), main only.
+        bool use_native_phase217_main_pose3_motion = false;
+        // Phase114 opt-in: bypass the GNSS-first optimized trajectory and
+        // initialize the same Phase99 QR+C0/D Pose3+IMU main graph from a
+        // direct-WLS sequence produced in this process from retained raw
+        // observations.  The adapter is source-keyed and fail-closed; it
+        // never accepts a file/precomputed coordinate seed, finite-difference
+        // velocity, or a second clock source.  Legacy and GNSS-first paths
+        // remain unchanged when this selector is false.
+        bool use_native_direct_wls_ephemeral_c7d_main_seed = false;
         bool use_tdcp_factors = true;
+        // Phase116 opt-in: collect ordinary, undifferenced TDCP incidence
+        // telemetry grouped by (SignalType/frequency band).  This is a
+        // read-only builder report; it does not enable carrier/ambiguity/DD
+        // factors and does not alter any graph, equation, unit, noise, or
+        // solver behavior.  The default remains disabled.
+        bool use_carrier_tdcp_incidence_diagnostic = false;
+        // Phase117 opt-in: replace only the scalar sigma on already accepted
+        // ordinary TDCP pairs with the official SNR/type-dependent
+        // obserr.L model.  The official L value is converted from cycles to
+        // the native metre-valued residual with that pair's retained
+        // wavelength.  Invalid/missing metadata rejects the pair closed;
+        // there is no 0.03 m fallback.  Residuals, keys, admission,
+        // robust k=4, and every solver/config path remain unchanged.
+        bool use_official_tdcp_snr_type_sigma = false;
+        // Source resL sigma is already metres; separate from historical Phase117.
+        bool use_source_tdcp_meter_sigma = false;
+        // Opt-in diagonal-only ADR endpoint uncertainty experiment.
+        bool use_native_tdcp_adr_endpoint_sigma = false;
+        // Source resL observable only; leaves sigma and pair admission unchanged.
+        bool use_source_tdcp_resl_observable = false;
+        bool use_native_tdcp_only_affine_geometry = false;
+        bool use_native_epoch_heading_attitude_seeds = false;
+        bool omit_native_first_imu_bias_prior = false;
+        bool omit_native_first_imu_velocity_prior = false;
+        // Same-run GNSS-first relative local-up pairs; never enabled by default.
+        bool use_native_relative_height_pairs = false;
+        // Phase118 opt-in: replace only the ordinary TDCP Huber threshold
+        // with the official route-setting Type mapping.  The native fixed
+        // TDCP sigma, residual/key/admission contract, and every other robust
+        // kernel remain unchanged.  The application supplies the exact
+        // source setting type; an empty/unknown type is rejected at the
+        // solver boundary rather than silently defaulting.
+        bool use_official_tdcp_huber_k = false;
+        std::string official_tdcp_setting_type;
+        // Phase120 opt-in: match the official resL ordinary-TDCP observable
+        // by retaining raw carrier metres plus satellite-clock metres while
+        // excluding the broadcast ionosphere/troposphere terms from only the
+        // ordinary TDCP pair measurement.  Factor geometry, pair admission,
+        // sigma, Huber, and every non-ordinary carrier path remain unchanged.
+        // The default is deliberately false for legacy compatibility.
+        bool use_official_tdcp_resl_atmosphere_cancellation = false;
+        // Phase126 opt-in: use the source-complete raw-base correction
+        // operator.  This is deliberately a single compound selector; it
+        // does not expose independent atmosphere, Sagnac, bias, or stream
+        // switches.  Default-off keeps the legacy base operator unchanged.
+        bool use_native_phase126_raw_base_source_complete = false;
+        // Phase127 opt-in: require raw GLONASS FCN provenance from the
+        // source-complete base RINEX header and/or exact time-valid broadcast
+        // geph.frq.  This is composed only with Phase126 and never changes
+        // the graph, factor, correction, or legacy/default paths.
+        bool use_native_phase127_glonass_channel_provenance = false;
         bool use_carrier_phase_factors = false;
         bool use_double_difference_factors = false;
         // When true (default) AND use_double_difference_factors, the DD
@@ -133,6 +394,96 @@ struct Config {
         // from 47% to 29%). Kept as an opt-in knob for a future partial-AR
         // scheme that fixes independent satellites first, then adds bands.
         bool double_difference_lambda_one_band_per_satellite = false;
+        // Receiver-only raw Doppler factors for no-base graphs.  This is
+        // deliberately separate from the base-dependent single-difference
+        // switch below: enabling it must never manufacture a base/reference
+        // observation or change the default production graph.
+        bool use_undifferenced_doppler_factors = false;
+        // Correct Android/RINEX undifferenced Doppler contract.  Android's
+        // pseudorange rate is uncorrected for receiver clock frequency error;
+        // when this opt-in is enabled, the existing per-epoch clock-bias
+        // states provide receiver clock drift through their finite difference
+        // and satellite position/velocity are Earth-rotation corrected as a
+        // pair.  The historical row remains the default for compatibility.
+        bool use_corrected_undifferenced_doppler_factors = false;
+        // Opt-in deterministic per-epoch linear WLS initializer for the
+        // corrected undifferenced-Doppler rows.  The solve is truth-free and
+        // fail-closed; production/default graphs remain byte-compatible when
+        // this switch is false.
+        bool use_doppler_velocity_wls_initialization = false;
+        // Research-only in-memory native PDC state bridge. When enabled,
+        // FGO backends may use finite, quality-gated PDC position/velocity/
+        // clock seeds supplied on FGOProblem::native_pdc_state_seeds. No
+        // additional P/D factors are added and the default graph is unchanged.
+        bool use_native_pdc_state_bridge = false;
+        // Research-only receiver inter-frequency code-bias states.  When
+        // enabled, each eligible secondary (system, signal) gets one static
+        // meter-valued state relative to that system's primary code.  The
+        // state is attached to raw undifferenced pseudorange factors only;
+        // no observation is combined or discarded.  Default OFF preserves
+        // the established graph and output byte-for-byte.
+        bool use_receiver_signal_bias_states = false;
+        // Weak zero-mean gauge prior for a signal-bias state [m].  This is a
+        // fixed physical regularizer, not a truth-trained correction.
+        double receiver_signal_bias_prior_sigma_m = 1000.0;
+        // Research-only residual-ionosphere states.  The existing Klobuchar,
+        // troposphere, satellite-clock, and broadcast group-delay corrections
+        // remain applied exactly once by the problem builder.  When enabled,
+        // one vertical L1 residual state [m] is attached to each pseudorange
+        // epoch with a fixed thin-shell/elevation/frequency coefficient and
+        // connected by a random walk.  Default OFF preserves the established
+        // graph and output byte-for-byte.
+        bool use_residual_ionosphere_states = false;
+        // Dedicated main-only joint code/TDCP research lane. No implicit priors.
+        bool use_native_joint_ionosphere = false;
+        // Research-only rotation-rate Doppler equation, GNSS-first + main.
+        bool use_native_doppler_rotation_rate = false;
+        double native_joint_ionosphere_anchor_sigma_m = 0.0;
+        double native_joint_ionosphere_density_m_sqrt_s = 0.0;
+        double native_joint_ionosphere_max_gap_s = 0.0;
+        // Weak zero-mean gauge prior for the first state in each continuous
+        // clock/time segment.  This is a physical regularizer, not a
+        // truth-trained offset.
+        double residual_ionosphere_prior_sigma_m = 10.0;
+        // Random-walk density in metres/sqrt(second), fixed before scoring.
+        double residual_ionosphere_random_walk_sigma_m_per_sqrt_s = 1.0;
+        // A structural sanity bound for the estimated residual state.  The
+        // backend records out-of-bound values and the raw candidate fails
+        // closed; it is not used to clip or select a solution.
+        double residual_ionosphere_max_abs_m = 30.0;
+        double residual_ionosphere_max_gap_s = 2.0;
+        // Research-only raw-observable quality contract.  When enabled, the
+        // problem builder computes the MATLAB-compatible global SNR p85 from
+        // Observation::snr, applies the published adjacent P-D/L-D masks,
+        // and uses the resulting P/D SNR sigmas.  TDCP keeps its caller's
+        // sigma (the smartphone Phase12 contract is 0.03 m); no file,
+        // coordinate, or truth input is consulted.  All defaults remain off.
+        bool use_upstream_observable_quality = false;
+        // Receive-time broadcast selection and one transmission state per
+        // satellite, using the parser-masked first available frequency slot.
+        // Native orbit equations remain in use; this is not full MALIB parity.
+        bool use_source_rover_epoch_states = false;
+        // Retain same-construction P rows before the grouped residual mask.
+        // Storage only: does not change graph admission or enable re-masking.
+        bool retain_native_pseudorange_remasking_pool = false;
+        double upstream_snr_percentile = 85.0;
+        double upstream_min_snr_dbhz = 20.0;
+        double upstream_min_elevation_deg = 5.0;
+        double upstream_max_adjacent_gap_s = 1.5;
+        std::string upstream_device_model;
+        // Isolated raw-only port of exobs_residuals.m's absolute Doppler
+        // residual screen.  The Android adapter supplies the optional
+        // DriftNanosPerSecond field in m/s; rows without it are rejected by
+        // this opt-in screen.  This does not enable SNR weighting or alter
+        // the historical upstream-quality proxy above.
+        bool use_upstream_absolute_doppler_residual_screen = false;
+        double upstream_absolute_doppler_residual_threshold_mps = 3.0;
+        // Phase58 opt-in raw Android C/N0/Doppler calibration.  The fixed
+        // source-supported shape and pooled closure-residual scale are
+        // implemented in cn0_doppler_calibration.hpp.  This floors only the
+        // existing undifferenced FGO Doppler sigma; defaults stay disabled so
+        // the Phase43/champion graph remains byte-compatible.
+        bool use_native_cn0_doppler_calibration = false;
         bool use_single_difference_doppler_factors = false;
         bool use_single_difference_tdcp_factors = false;
         bool use_velocity_states = false;
@@ -186,6 +537,21 @@ struct Config {
         double clock_prior_sigma_m = 0.0;
         double tdcp_sigma_m = 0.03;
         double carrier_phase_sigma_m = 0.01;
+        double undifferenced_doppler_sigma_mps = 0.2;
+        // Robust threshold for receiver-only undifferenced Doppler rows.
+        // Keep this separate from tdcp_huber_threshold_sigma so a source
+        // P+D quality contract can tune D without changing the frozen TDCP
+        // robust-loss setting or the base-dependent SD Doppler path.
+        double undifferenced_doppler_huber_threshold_sigma = 4.0;
+        int doppler_velocity_wls_min_rows = 4;
+        double doppler_velocity_wls_max_condition_number = 1.0e8;
+        double doppler_velocity_wls_huber_threshold_sigma = 4.0;
+        int doppler_velocity_wls_max_irls_iterations = 3;
+        double doppler_velocity_wls_max_velocity_mps = 70.0;
+        double doppler_velocity_wls_max_clock_rate_mps = 2000.0;
+        double doppler_velocity_wls_max_normalized_rms = 4.0;
+        double doppler_velocity_wls_max_abs_normalized_residual = 25.0;
+        double doppler_velocity_wls_edge_hold_max_s = 1.0;
         double single_difference_doppler_sigma_mps = 0.2;
         double single_difference_tdcp_sigma_m = 0.003;
         double double_difference_pseudorange_sigma_m = 1.0;
@@ -260,6 +626,9 @@ struct Config {
         double elevation_sigma_clock_stability = 5e-12;      ///< reference err_sclkstab [s/s]
 
         double pseudorange_huber_threshold_sigma = 4.0;
+        // Experimental main-stage undifferenced P only, fixed whitened
+        // Cauchy scale 4. Requires Phase171 batch GTSAM IMU; default off.
+        bool use_main_pseudorange_cauchy_loss = false;
         double carrier_phase_huber_threshold_sigma = 4.0;
         double tdcp_huber_threshold_sigma = 4.0;
         double ambiguity_prior_sigma_m = 1000.0;
@@ -621,6 +990,10 @@ struct Config {
         bool use_ionosphere_model = true;
         bool use_troposphere_model = true;
         bool use_multi_constellation = true;
+        // Raw-only opt-in: select the Galileo E1 broadcast group-delay field
+        // from the RINEX clock-reference source bits.  False preserves the
+        // established tgd-only correction and all production defaults.
+        bool use_signal_specific_galileo_group_delay = false;
         bool collect_lambda_debug = false;
 
         // --- Phase 2 milestone 2a (docs/gtsam_backend_design.md) ---
@@ -750,6 +1123,10 @@ struct Config {
         // moving, non-turning epochs so it never fights legitimate lateral
         // motion.
         bool monitor_motion_constraints = false;
+        // Raw Phase171 batch experiment; independent of fixed-lag use_nhc.
+        // Frozen gate: speed 2 m/s, peak angular speed .2 rad/s, gap .05 s.
+        // Frozen robust factor: lateral/vertical sigma .3/.2 m/s, Huber 1.345.
+        bool use_native_batch_nhc = false;
         bool use_nhc = false;
         double nhc_min_speed_mps = 2.0;          ///< only apply NHC above this speed
         double nhc_max_yaw_rate_radps = 0.20;    ///< skip NHC when |yaw rate| exceeds this (turn)
@@ -770,6 +1147,25 @@ struct Config {
         double zupt_max_gyro_std = 0.030;        ///< stationary gate: gyro deviation std [rad/s]
         double zupt_max_gyro_median = 0.020;     ///< stationary gate: gyro deviation median [rad/s]
         int zupt_min_samples = 5;                ///< minimum IMU samples in window to test
+
+        // --- Upstream stationary-stop constraints (smartphone research) ---
+        // The batch GTSAM path normally leaves these disabled.  When enabled,
+        // the backend ports fgo_gnss_imu.m's raw-IMU stop velocity prior and
+        // consecutive-stop Pose3 identity factor.  Detection uses only the
+        // aligned raw IMU stream; no trajectory, truth, or height reference is
+        // consulted.  This is separate from the fixed-lag ZUPT/NHC knobs above
+        // so the historical batch graph remains byte-compatible by default.
+        bool use_upstream_stop_constraints = false;
+        int upstream_stop_window_samples = 500;
+        double upstream_stop_acceleration_std_offset_mps2 = 0.08;
+        double upstream_stop_gyro_std_offset_radps = 0.005;
+        double upstream_stop_gyro_norm_max_radps = 0.05;
+        double upstream_stop_velocity_threshold_mps = 0.5;
+        double upstream_stop_velocity_sigma_mps = 0.01;
+        double upstream_stop_velocity_huber_k_sigma = 0.5;
+        double upstream_stop_pose_rotation_sigma_rad = 0.0017453292519943296;
+        double upstream_stop_pose_translation_sigma_m = 0.02;
+        double upstream_stop_pose_huber_k_sigma = 0.5;
 
         // --- Phase 2 milestone 2e: fix-and-hold ambiguity resolution ---
         // In the fixed-lag path, once an arc's DD ambiguity is validated-fixed
@@ -1576,6 +1972,61 @@ struct Config {
         //    exactly the old (faithful) ever-growing-counter behaviour.
         double sat_badness_cppr_decay = 0.8;
 };
+
+// Resolve the official source setting.Type mapping for the ordinary TDCP
+// robust kernel.  The source uses Street/Mix -> 0.2 and Highway -> 0.5.  The
+// native application admits only the exact, pinned route/type table; a
+// library caller that supplies an empty or unrecognised type must fail closed
+// instead of silently treating it as Highway/"other".
+inline bool resolveOfficialTdcpHuberThresholdSigmaForType(
+    const std::string& setting_type, double& threshold_sigma) {
+    if (setting_type == "Street" || setting_type == "Mix") {
+        threshold_sigma = 0.2;
+        return true;
+    }
+    if (setting_type == "Highway") {
+        threshold_sigma = 0.5;
+        return true;
+    }
+    return false;
+}
+
+// Resolve the threshold used only by ordinary TDCP factors.  With the
+// selector disabled, preserve the caller's existing native threshold exactly.
+// This helper intentionally does not mutate Config::tdcp_huber_threshold_sigma
+// because that field is shared by historical non-ordinary paths.
+inline bool resolveOfficialTdcpHuberThresholdSigma(
+    const Config& config, double& threshold_sigma) {
+    threshold_sigma = config.tdcp_huber_threshold_sigma;
+    if (!config.use_official_tdcp_huber_k) {
+        return true;
+    }
+    return resolveOfficialTdcpHuberThresholdSigmaForType(
+        config.official_tdcp_setting_type, threshold_sigma);
+}
+
+// Resolve the ordinary TDCP robust threshold for any explicit source-parity
+// lane.  Phase118 retains its historical helper above; Phase184 is a separate
+// Phase171-only composition and therefore carries its own setting-type field.
+// The two selectors are mutually exclusive so a caller cannot silently mix
+// provenance from two source contracts.
+inline bool resolveOrdinaryTdcpHuberThresholdSigma(
+    const Config& config, double& threshold_sigma) {
+    threshold_sigma = config.tdcp_huber_threshold_sigma;
+    if (config.use_official_tdcp_huber_k &&
+        config.use_native_phase184_source_tdcp_huber_k) {
+        return false;
+    }
+    if (config.use_official_tdcp_huber_k) {
+        return resolveOfficialTdcpHuberThresholdSigmaForType(
+            config.official_tdcp_setting_type, threshold_sigma);
+    }
+    if (config.use_native_phase184_source_tdcp_huber_k) {
+        return resolveOfficialTdcpHuberThresholdSigmaForType(
+            config.native_phase184_tdcp_setting_type, threshold_sigma);
+    }
+    return true;
+}
 
 }  // namespace fgo
 }  // namespace libgnss

@@ -1,0 +1,93 @@
+{
+  "schema": "smartphone-phase27-pdc-bridge-integrated-seed-freeze-v1",
+  "phase": "27",
+  "status": "frozen-before-implementation",
+  "purpose": "Condition only the native raw PDC bridge initializer using a raw-observable Doppler-WLS velocity integral; do not change the P+D+temporal objective or any numeric parameter.",
+  "base_commit": "049523c5c1cb8298fff0b2a5787832e25174953b",
+  "truth_policy": {
+    "truth_open_count_before_freeze": 0,
+    "truth_open_count_allowed": 0,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "mat_read_or_generated": false,
+    "kaggle_or_token_access": false,
+    "score_or_leaderboard_tuning": false
+  },
+  "input_contract": {
+    "allowed": [
+      "raw device_gnss.csv timing and observables",
+      "raw device_imu.csv",
+      "brdc.nav broadcast ephemeris"
+    ],
+    "forbidden": [
+      "ground truth",
+      "device-provided WLS or coordinates",
+      "precomputed trajectories",
+      "sample coordinates",
+      "result files",
+      "MAT files"
+    ],
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "candidate_contract": {
+    "name": "native_raw_pdc_bridge_integrated_wls_position_seed_v1",
+    "anchor": "the first finite native SPP ECEF position already present in the in-memory raw problem",
+    "valid_velocity": "use an existing valid raw-observable Doppler-WLS ECEF velocity and clock-rate estimate only; no new solve or truth feature",
+    "position_update": "for a continuous interval dt>0 and dt<=1.5 s, p[i]=p[i-1]+0.5*dt*(v[i-1]+v[i]) when both velocities are available",
+    "invalid_wls_interval": "if the current WLS estimate is invalid but the preceding velocity and interval remain valid, use p[i]=p[i-1]+dt*v[i-1]; otherwise use the original finite per-epoch native SPP seed and reset the integrated chain",
+    "clock_jump_or_gap": "never integrate across a clock jump, non-positive/non-finite dt, or dt>1.5 s; use the original per-epoch SPP seed and reset the chain",
+    "safety": "integrated position must be finite and have ECEF norm in (1e6,1e7) m; otherwise use the original finite SPP seed, and fail closed if that is invalid",
+    "velocity_seed_handoff": "valid WLS velocity/clock-rate remains the bridge state initializer; invalid WLS remains the historical zero initializer",
+    "clock_bias_initialization": "unchanged source native SPP clock bias in metres",
+    "no_velocity_extrapolation": true,
+    "no_cross_trip_integration": true
+  },
+  "unchanged_objective_and_parameters": {
+    "state": "per-epoch ECEF position, five clock groups, ECEF velocity, receiver clock rate",
+    "pseudorange_huber_threshold_sigma": 1.234,
+    "doppler_huber_threshold_sigma": 1.234,
+    "position_prior_sigma_m": 1000.0,
+    "clock_prior_sigma_m": 1000000.0,
+    "velocity_prior_sigma_mps": 1000.0,
+    "clock_rate_prior_sigma_mps": 1000.0,
+    "motion_sigma_m": 0.1,
+    "clock_motion_sigma_m": 0.1,
+    "clock_jump_sigma_m": 1000000.0,
+    "inter_system_clock_motion_sigma_m": 0.000001,
+    "clock_rate_between_sigma_mps": 0.1,
+    "max_iterations": 1000,
+    "max_velocity_mps": 70.0,
+    "max_clock_rate_mps": 2000.0,
+    "max_normalized_rms": 25.0,
+    "quality_gate_relaxed": false,
+    "production_default_changed": false
+  },
+  "preimplementation_hashes": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "1c68679bf79236234d0e85bf86762ac92ff5afbb3650758c6570a5de8b2d6909",
+    "include/libgnss++/algorithms/pdc_state_bridge.hpp": "37580b310a03415768956f849fcea117ce1612e14b6345e2e8a3ccf7cb29ac88",
+    "src/algorithms/pdc_state_bridge.cpp": "ccb8f16e8f46df86ef0ae94de61818a119f4a9c25a4c4ec385f445b3c117e03a",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0",
+    "phase26_result": "docs/use_cases/records/smartphone_r5_phase26_pdc_bridge_diagnostic_result_v1.json:1c6a290327a0edc13f95b371689512a1a19b9a07e72d4511ef1c964ad5b71809"
+  },
+  "predeclared_structural_gate": {
+    "all_three_routes_must_pass": true,
+    "finite_and_converged": true,
+    "velocity_bound_violations": 0,
+    "clock_rate_bound_violations": 0,
+    "position_norm_valid": true,
+    "accepted_cost_monotonic": true,
+    "exact_raw_target_coverage": true,
+    "deterministic_repeat": true,
+    "if_failed": "seal No-Go; do not open truth or rerun the Phase24 matrix"
+  },
+  "evaluation": {
+    "truth_scoring": "forbidden in Phase27; structural only",
+    "phase24_matrix": "not rerun until the three-route structural gate passes",
+    "next_action": "implement this initializer-only contract, add synthetic integration/fallback tests, run the three raw routes, and seal the result"
+  }
+}

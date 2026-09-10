@@ -1,0 +1,142 @@
+{
+  "schema_version": "smartphone-r5-phase28-native-fgo-no-bridge-freeze.v1",
+  "phase": "28",
+  "status": "frozen-before-code-and-truth",
+  "purpose": "Separate the native Android IMU/TDCP/FGO recipe from the failed PDC state bridge initializer without changing the estimator model or numeric parameters.",
+  "parent_evidence": {
+    "phase27_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase27_pdc_bridge_integrated_seed_freeze_v1.json",
+      "sha256": "021676981614d9e99b9fdfd57411912d6c616507d1749b85e2cc3cc789984d58"
+    },
+    "phase27_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase27_pdc_bridge_integrated_seed_result_v1.json",
+      "sha256": "2718ece67c1638b0d14a74d2ccd58a531a9b60594881fbbac52a6d60d71acd0d"
+    },
+    "phase25_no_bridge_control": {
+      "record": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_structural_result_v1.json",
+      "record_sha256": "ffe737069bad363951a82fb79f4d25252e0b31150690e993825612379c65df9f",
+      "interpretation": "The recorded raw-clock-only no-bridge smoke is the existing converged control; its output is reused only as a byte/hash reference and is never an inference input."
+    }
+  },
+  "allowed_inference_inputs": [
+    "raw device_gnss.csv timing/status/measurement fields",
+    "raw device_imu.csv",
+    "broadcast brdc.nav"
+  ],
+  "forbidden_inference_inputs": [
+    "ground_truth.csv",
+    "any .mat file",
+    "device WLS or enriched SvPosition/SvElevation fields",
+    "sample/submission/precomputed trajectory coordinates",
+    "Phase25/Phase27 output CSVs or summaries"
+  ],
+  "identities": {
+    "raw_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "route_group": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ],
+    "truth_open_count_before_freeze": 0,
+    "validation_opened_before_freeze": false,
+    "holdout_opened_before_freeze": false
+  },
+  "source_and_binary_hashes_before_change": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "3213e6b0b918f89a13ea6fe476298db52780bf5e0369e8bc8de0ce526c2c549f",
+    "include/libgnss++/algorithms/pdc_state_bridge.hpp": "d3c40100955960cf9ee6613f18bcd90e8f23191b26ca61e680714f46cd3d44c0",
+    "src/algorithms/pdc_state_bridge.cpp": "1e80b0d6add9bbbb6b633bd0e1e128553a463b4c0acba1129f0f9b0e995da6d0",
+    "tests/test_fgo.cpp": "8257a203341c35ef138673f715068b2e3ee92ffdb22943b5284c006e39c35043",
+    "build/apps/gnss_fgo_imu_no_base": "0e885e3b315373303beedfc0aa3825dca8d11b8b6f87d60dff18ebb215feb668",
+    "git_head": "a2f6b9a"
+  },
+  "control_recipe": {
+    "id": "phase25_raw_clock_no_bridge_control",
+    "flags": [
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--all-epochs",
+      "--android-raw-utc-keys"
+    ],
+    "native_pdc_state_bridge": false,
+    "native_pdc_imu_tdcp": false,
+    "model_and_numeric_parameters": "Reuse the Phase25 raw-clock-only no-bridge recipe exactly; no solver, noise, Huber, gate, or iteration changes."
+  },
+  "separation_contract": {
+    "new_flag": "--native-pdc-imu-tdcp-no-bridge",
+    "semantics": "Enable the existing native_pdc_imu_tdcp TDCP/IMU/FGO settings while explicitly suppressing the automatic native_pdc_state_bridge initializer.",
+    "native_pdc_imu_tdcp": true,
+    "native_pdc_state_bridge": false,
+    "bridge_initializer": "must not be built, solved, or used",
+    "same_process_raw_graph": true,
+    "numeric_parameters_unchanged": true,
+    "production_default_changed": false,
+    "explicit_conflict": "--native-pdc-state-bridge together with the new flag must fail closed",
+    "quality_bridge_conflict": "The existing --native-upstream-quality path remains incompatible with this flag because it intentionally constructs a separate PDC initializer; no quality path is changed in Phase28."
+  },
+  "fixed_structural_probes": [
+    {
+      "id": "tdcp_no_bridge",
+      "flags": ["--native-pdc-imu-tdcp-no-bridge"],
+      "purpose": "Native IMU/TDCP/FGO path with only the bridge disabled."
+    },
+    {
+      "id": "tdcp_no_bridge_gal_e1_e5a",
+      "flags": [
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-signal-bias-states",
+        "--native-residual-ionosphere",
+        "--native-carrier-code-leveling",
+        "--native-carrier-code-innovation-reset",
+        "--native-carrier-code-gal-e1-e5a"
+      ],
+      "purpose": "Assess the already-frozen Galileo E1/E5a Hatch applicability without the bridge."
+    },
+    {
+      "id": "tdcp_no_bridge_gal_e1_e5a_stop",
+      "flags": [
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-signal-bias-states",
+        "--native-residual-ionosphere",
+        "--native-carrier-code-leveling",
+        "--native-carrier-code-innovation-reset",
+        "--native-carrier-code-gal-e1-e5a",
+        "--native-upstream-stop-constraints"
+      ],
+      "purpose": "Assess the existing raw-only stationary constraint port with the bridge disabled."
+    },
+    {
+      "id": "tdcp_no_bridge_gal_e1_e5a_position_offset",
+      "flags": [
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-signal-bias-states",
+        "--native-residual-ionosphere",
+        "--native-carrier-code-leveling",
+        "--native-carrier-code-innovation-reset",
+        "--native-carrier-code-gal-e1-e5a",
+        "--native-upstream-position-offset"
+      ],
+      "purpose": "Assess the existing raw-only phone-position offset port with the bridge disabled."
+    }
+  ],
+  "structural_gate_before_truth": {
+    "all_three_routes_each_probe": true,
+    "finite_converged_output": true,
+    "exact_raw_utc_key_contract": true,
+    "no_fallback_for_candidate": true,
+    "no_nonfinite_or_out_of_earth_coordinates": true,
+    "no_isolated_position_transition_above_70_mps": true,
+    "tdcp_factor_count_nonzero_for_tdcp_probes": true,
+    "deterministic_repeat": true,
+    "truth_opened_only_after_all_candidate_artifacts_are_sealed": true
+  },
+  "evaluation_policy": {
+    "truth_free_first": true,
+    "train_truth": "If and only if every fixed candidate probe seals successfully on all three routes, open the declared train truth in one evaluator process and compare control/candidates together; this is development evidence only.",
+    "fresh_validation": "sealed and unopened",
+    "holdout": "sealed and unopened",
+    "phase24_matrix": "not authorized until the Phase28 train gate passes",
+    "post_score_tuning": false,
+    "kaggle_or_token_access": false
+  },
+  "no_post_freeze_model_changes": true
+}

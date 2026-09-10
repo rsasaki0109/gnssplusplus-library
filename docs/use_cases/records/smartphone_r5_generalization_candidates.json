@@ -1,0 +1,100 @@
+{
+  "schema_version": "smartphone-r5-generalization-candidate-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "GSDC2023 train entries in the local archive only",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "central_directory_inventory_only": true,
+    "member_content_read_during_selection": false,
+    "expected_sha256_from_profile": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "sealed_data_policy": {
+    "development_profile_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "designated_holdout_profile_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "holdout_content_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_ids_excluded_before_selection": true
+  },
+  "inventory_contract": {
+    "required_phone_members": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "ground_truth.csv"
+    ],
+    "required_route_member": "brdc.nav",
+    "missing_or_duplicate_member": "fail-closed",
+    "archive_integrity": "profile SHA-256 must match before selected member extraction"
+  },
+  "candidate_selection_rule": {
+    "description": "After excluding the development and designated holdout IDs, retain only train route/phone pairs with all three phone CSVs and route-level brdc.nav. Select one pair from each of 2021, 2022, and 2023, maximizing distinct phone model and route-region strata; ties are resolved by the lexicographically smallest dataset ID. Before the final evaluation, a signal-only eligibility screen confirms at least one GAL_E1_C_P row; it reads no truth and any failed route is recorded as ineligible before the final fixed set is frozen.",
+    "avoidance_constraints": [
+      "no development route/phone reuse",
+      "no designated holdout route/phone reuse",
+      "distinct route IDs",
+      "distinct phone models",
+      "distinct calendar-year strata",
+      "at least one GAL_E1_C_P row (signal-only eligibility; no truth read)",
+      "do not inspect truth while selecting or screening"
+    ],
+    "max_candidates": 3,
+    "tie_break": "ASCII lexicographic dataset ID",
+    "fixed_candidate_ids": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro"
+    ]
+  },
+  "evaluation_freeze": {
+    "signal_lane": "promoted Galileo E1 with Hatch C1C window 30 seconds",
+    "trajectory_baseline": "truth-free constant-velocity Kalman/RTS, process_noise=1.0, measurement_floor_m=1.0, outlier_gate_sigma=5.0, segment_gap_s=10.0",
+    "imu_candidate": "causal gyro/acceleration norm process-noise multiplier; window=1.0s, max sample gap/age=0.25s, gyro threshold=0.25, acceleration dynamic threshold=1.0, multiplier=2.0",
+    "truth_use": "ground truth is read only after both truth-free pipelines publish artifacts, for post-hoc scoring",
+    "truth_gap_policy": "explicit --allow-missing-truth is used for route tails with no reference row; scores report exact matched coverage and do not interpolate absent truth",
+    "official_metric": "not asserted; local public-spec-compatible distance diagnostics only",
+    "holdout": "not run"
+  },
+  "post_evaluation": {
+    "initial_screening_note": "The first structurally selected 2022-07-26-21-01-us-ca-sjc-s/samsunga325g route was opened only through the development adapter's signal path and failed closed because no GAL_E1_C_P was present. It was not scored or substituted silently. The final frozen 2022 candidate was selected from the predeclared E1-capable train pool.",
+    "report_path": "output/smartphone-r5/generalization-v6/generalization_report.json",
+    "report_sha256": "8b16e4b7a10363ad9f4250ef4899f74c7deb94c19474ed9219d449894ba0d4ec",
+    "inventory_path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "materialization_manifest_paths": [
+      "output/smartphone-r5/generalization-v6/routes/2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8/materialization_manifest.json",
+      "output/smartphone-r5/generalization-v6/routes/2022-08-04-20-07-us-ca-sjc-q/pixel5/materialization_manifest.json",
+      "output/smartphone-r5/generalization-v6/routes/2023-03-08-21-34-us-ca-mtv-u/pixel6pro/materialization_manifest.json"
+    ],
+    "aggregate": {
+      "fixed_q": {
+        "phone_count": 3,
+        "mean_h_median_m": 2.630556748860158,
+        "mean_h_p95_m": 194.73133267781955,
+        "mean_v_p95_m": 28.737035059760604,
+        "mean_availability": 1.0,
+        "mean_truth_coverage": 0.9956291695422129,
+        "wgs84_vincenty_linear_phone_score_m": 98.68094471333985,
+        "haversine_sphere_linear_phone_score_m": 98.76272156975072,
+        "mean_wall_s": 1.1806849583323735,
+        "mean_peak_rss_kb": 43037.333333333336
+      },
+      "imu_adaptive": {
+        "phone_count": 3,
+        "mean_h_median_m": 2.630556748860158,
+        "mean_h_p95_m": 194.73133267781955,
+        "mean_v_p95_m": 28.737035059760604,
+        "mean_availability": 1.0,
+        "mean_truth_coverage": 0.9956291695422129,
+        "wgs84_vincenty_linear_phone_score_m": 98.68094471333985,
+        "haversine_sphere_linear_phone_score_m": 98.76272156975072,
+        "mean_wall_s": 2.2374845646651615,
+        "mean_peak_rss_kb": 45533.333333333336
+      }
+    },
+    "comparison": {
+      "non_regression_passed": true,
+      "strict_accuracy_improvement": false,
+      "decision": "no-go-no-strict-improvement",
+      "holdout_opened": false
+    }
+  }
+}

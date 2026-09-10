@@ -1,0 +1,204 @@
+{
+  "schema_version": "smartphone-r5-variant-record.v1",
+  "profile_id": "gsdc2023-pixel7pro-standalone-v1",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "variant": "gps-l5-q-independent-measurement-audit",
+  "role": "development-only",
+  "decision": "evaluated-not-promoted",
+  "reason": "The Pixel development source and GPS broadcast ephemeris cover GPS L5_Q, but the current smartphone adapter and SPP model cannot safely use L1/L5 as independent measurements. GPS L5 is a secondary SPP signal used only by the generic IFLC path, which has no GPS L5 ISC/code-bias state in the local navigation model. No experimental flag or solver output was published; this is a fail-closed audit record and no holdout data was opened.",
+  "source_contract_audit": {
+    "device_gnss_rows": 48000,
+    "source_epochs": 1384,
+    "selected_epochs_after_skip_1": 1383,
+    "source_signal": "GPS_L5_Q",
+    "source_l5_rows": 4005,
+    "selected_l5_rows": 4003,
+    "selected_l5_rows_by_prn": {
+      "18": 1323,
+      "25": 1310,
+      "26": 316,
+      "28": 1054
+    },
+    "source_prns": [18, 25, 26, 28],
+    "constellation_type": "1",
+    "code_type_values": {
+      "<empty>": 4005
+    },
+    "carrier_frequency_hz": {
+      "expected": 1176450000,
+      "observed_values": {
+        "1176450000": 4005
+      },
+      "maximum_residual_hz": 0
+    },
+    "raw_pseudorange_rows": 4005,
+    "quality_selected": {
+      "raw_pseudorange_uncertainty_m": {
+        "min": 1.7987547480000003,
+        "p50": 2.9979245800000003,
+        "p95": 26.981321220000005,
+        "max": 53.363057524000006
+      },
+      "received_sv_time_uncertainty_ns": {
+        "min": 6.0,
+        "p50": 10.0,
+        "p95": 90.0,
+        "max": 178.0
+      },
+      "cn0_dbhz": {
+        "min": 20.76914405822754,
+        "p50": 32.684173583984375,
+        "p95": 43.847209167480464,
+        "max": 46.21009826660156
+      },
+      "state_values": {
+        "81921": 4003
+      },
+      "accumulated_delta_range_state_values": {
+        "25": 2967,
+        "16": 1033,
+        "29": 3
+      },
+      "multipath_indicator_values": {
+        "0": 4000,
+        "1": 3
+      },
+      "hardware_clock_discontinuity_count_values": {
+        "3": 4003
+      }
+    },
+    "epoch_timing": {
+      "first_utc_time_millis": 1684960017999,
+      "last_utc_time_millis": 1684961400999,
+      "cadence_ms": 1000,
+      "non_1000_ms_gaps": 0,
+      "selected_max_gap_ms": 1000
+    },
+    "l1_l5_same_satellite_epoch": {
+      "gps_l1_source_rows": 11007,
+      "gps_l1_selected_rows": 11000,
+      "gps_l5_source_rows": 4005,
+      "gps_l5_selected_rows": 4003,
+      "paired_source_satellite_epoch_keys": 3877,
+      "paired_selected_satellite_epoch_keys": 3875,
+      "unpaired_source_l5_keys": 128,
+      "unpaired_selected_l5_keys": 128,
+      "source_common_epochs": 1384,
+      "selected_common_epochs": 1383,
+      "duplicate_source_satellite_epoch_keys": 0
+    }
+  },
+  "navigation_audit": {
+    "file": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/brdc.nav",
+    "gps_broadcast_record_count": 449,
+    "gps_record_prns": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32
+    ],
+    "selected_l5_prn_nav_coverage": 1.0,
+    "selected_l5_rows_with_nearest_gps_record": 4003,
+    "selected_l5_rows_without_nearest_gps_record": 0,
+    "nearest_record_age_s": {
+      "p50": 2355.999,
+      "p95": 2940.999,
+      "max": 3000.999
+    },
+    "tgd_values_m_for_selected_nearest_records": {
+      "min": -2.931636580266201,
+      "p50": -2.5128313545136725,
+      "p95": 2.0940261287614437,
+      "max": 2.0940261287614437
+    },
+    "signal_bias_coverage": "The local GPS broadcast records expose the legacy single delay field only; no GPS L5 ISC_L5Q/ISC_L5I or equivalent signal-specific correction is present in the local navigation parser/data. No smartphone GPS L5 OSB/DCB product is supplied to this route.",
+    "source_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "rinex_audit": {
+    "native_signal_type": "GPS_L5",
+    "source_signal_to_native_signal": "GPS_L5_Q -> GPS_L5",
+    "frequency_model_hz": 1176450000,
+    "accepted_rinex_observation_types": ["C5Q", "L5Q", "D5Q", "S5Q"],
+    "mapping_source": "include/libgnss++/core/signal_policy.hpp trySignalForObservationType (GPS band 5)",
+    "current_adapter_status": "not enabled; SIGNAL_CONTRACTS and StreamingRinexWriter publish GPS_L1_CA and optional GAL_E1_C_P only",
+    "required_writer_change": "A safe candidate would need per-satellite L1 and L5 fields in one GPS RINEX observation row, rather than the current one-selected-frequency tuple."
+  },
+  "native_solver_audit": {
+    "primary_signal_policy": "GPS_L1CA only when use_ionosphere_free_combination=false",
+    "dual_frequency_policy": "When use_ionosphere_free_combination=true, validateObservations groups one satellite's observations and emits at most one SPPObservation; GPS_L5 is a secondary signal, not an independent measurement.",
+    "l1_l5_iflc_coefficients": {
+      "l1": 2.2606043275188257,
+      "l5": -1.2606043275188257
+    },
+    "group_delay_model": "src/algorithms/spp.cpp groupDelayCorrectionMeters returns eph.tgd for GPS regardless of GPS_L1CA/GPS_L5; the IFLC combination therefore has no L5-specific ISC term.",
+    "navigation_parser_model": "src/io/rinex.cpp stores the GPS broadcast delay in eph.tgd and leaves eph.tgd_secondary at 0.0 for GPS; no GPS L5 ISC field is decoded.",
+    "code_bias_model": "biasObservationCode can name GPS_L5 as C5Q for an external DCB/SSR lookup, but this smartphone route supplies no such product and that does not add a broadcast L5 ISC state.",
+    "inter_system_bias": "The existing receiver clock grouping can model GPS versus other constellations, but it does not model a GPS L1/L5 signal-specific receiver/code bias.",
+    "quality_weighting": "The existing SPP variance model receives RINEX S/CN0; RawPseudorangeUncertaintyMeters is not propagated by the current adapter/RINEX/SPP interface.",
+    "decision": "no-go-before-solver-run",
+    "missing_model": [
+      "GPS L5 Q code/ISC correction provenance (CNAV or validated DCB/OSB)",
+      "a per-frequency observation/ionosphere/bias state or a validated L1/L5 IFLC contract",
+      "an adapter/RINEX representation that preserves paired L1 and L5 observations and their quality fields"
+    ]
+  },
+  "comparison": {
+    "candidate_execution": "not-run; fail-closed model audit blocked an unsafe experiment",
+    "holdout": "not-run; development-only audit",
+    "reference_promoted_galileo_e1_development_full": {
+      "solution_epochs": 1383,
+      "availability_ratio": 1.0,
+      "horizontal_median_m": 3.407342956477305,
+      "horizontal_p95_m": 8.42770050922664,
+      "vertical_p95_abs_m": 19.50174819776725,
+      "kaggle_diagnostics_m": {
+        "haversine_sphere__linear_n_minus_1": 5.910908316047448,
+        "haversine_sphere__nearest_rank_ceiling": 5.91158863174743,
+        "wgs84_vincenty__linear_n_minus_1": 5.921346759174058,
+        "wgs84_vincenty__nearest_rank_ceiling": 5.921857149904408
+      },
+      "solver_wall_s": 1.06,
+      "solver_peak_rss_kb": 19804
+    }
+  },
+  "promotion_gate": {
+    "required": "Only after the missing L5 bias/multi-frequency model is implemented: all major accuracy, availability, and four local Kaggle diagnostic metrics must improve against the promoted Galileo E1 development baseline.",
+    "result": "not-applicable-before-model",
+    "holdout": "not-run"
+  },
+  "artifacts": {
+    "source_device_gnss_sha256": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "source_ground_truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "source_navigation_sha256": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33",
+    "profile_sha256": "678cb100bee2bc565ec130bd5c5075adf7166ca5c70b7805cbc036b1ded320f2"
+  },
+  "implementation_status": "No GPS L5 experimental code was added. Revisit only after signal-specific bias provenance and a multi-frequency SPP contract are available; then rerun development 600/full before any holdout use."
+}

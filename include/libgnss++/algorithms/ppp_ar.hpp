@@ -14,6 +14,11 @@ SatelliteId clasRealSatellite(const SatelliteId& satellite);
 std::pair<GNSSSystem, int> ambiguityDdGroup(const SatelliteId& satellite);
 double claslibRatioThresholdForNb(int nb);
 
+int clasArMinimumDdRowsForEpoch(
+    const ppp_shared::PPPConfig& config,
+    bool prior_hold_is_active_and_valid,
+    int prior_reduced_dd_publication_streak = 0);
+
 // MRTKLIB PAR candidate gate: with the three configured frequency slots,
 // satellites missing more than one accepted ambiguity are not trial-excluded.
 std::vector<SatelliteId> selectMrtklibParCandidates(

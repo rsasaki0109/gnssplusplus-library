@@ -1,0 +1,270 @@
+{
+  "schema_version": "smartphone-r5-phase160-h-raw-p-collect-all-result.v1",
+  "phase": 160,
+  "execution_label": "Luna Max",
+  "status": "collect-all-complete-failed-closed",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase160_h_raw_p_collect_all_manifest_v1.json",
+    "commit": "f069e98f84c4212b85dfc366e38704653227813d",
+    "sha256": "d36283ae9b6e375176b9b30dc096cdf32d1ca32cd8d793dac0067f7c20368ea5"
+  },
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase160_h_raw_p_collect_all_authorization_v1.json",
+    "commit": "42e81707119d2e1671d316b2fd91ce99a771b85a",
+    "sha256": "612dc0e87364b1beee021eed97a0b6553673babedb584e85fdb67236310c7ba7"
+  },
+  "source_and_binary": {
+    "implementation_commit": "5a26b944cc9d3542141195edbad6108d69411173",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "cf3df6714d61a8baf4c6dea4ee34350c9340f0a1027193577a523714e96f92d5",
+    "app_source_sha256": "d72f5aaf01a68d3af435fc6981284e56bf8732aadaa1369a807147d25e11e85c",
+    "raw_p_seed_header_sha256": "5fe32db0ab02b31fbaf2a46228fb025256d41f754ee5f63d662f3d7e3aba426c",
+    "raw_p_seed_source_sha256": "dded4ac3c345d853abdbd5d4b4fdcc2ab955ec4535475b5a64c3ab3fe92fa5bb"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "argv_matches_manifest": true,
+    "invocation_count": 1,
+    "process_return_code": 1,
+    "failure_stage": "phase149-raw-p-seed-collect-all",
+    "failure_status": "rank-deficient",
+    "failure_reason": "pseudorange-geometry-rank-deficient",
+    "first_rejected_epoch_index": 27,
+    "collection_completed": true,
+    "input_epoch_count": 3140,
+    "evaluated_epoch_count": 3140,
+    "unassessed_epoch_count": 0,
+    "accepted_epoch_count": 1199,
+    "rejected_epoch_count": 1941,
+    "evaluated_percent": 100.0,
+    "accepted_percent": 38.18471337579618,
+    "rejected_percent": 61.81528662420382,
+    "collect_all_epochs_for_diagnostics": true,
+    "velocity_diagnostics_disabled": true,
+    "raw_pseudorange_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false,
+    "coordinate_values_read": false,
+    "coordinate_values_published": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false
+  },
+  "bootstrap": {
+    "enabled": true,
+    "attempted_epoch_count": 3140,
+    "accepted_epoch_count": 3140,
+    "rejected_epoch_count": 0,
+    "failure_reason": null,
+    "evidence": "Every evaluated epoch passed the raw/group prechecks and no epoch has native-raw-p-bootstrap-rejected or solver-rejected status; source control flow therefore indicates that each independent private bootstrap passed. Per-bootstrap rank/clock details are not serialized.",
+    "private_position_or_clock_values_read": false,
+    "private_position_or_clock_values_published": false
+  },
+  "status_and_reason_distribution": {
+    "statuses": {
+      "accepted": 1199,
+      "rank-deficient": 1931,
+      "missing-clock-bias-estimate": 10
+    },
+    "reasons": {
+      "accepted": 1199,
+      "pseudorange-geometry-rank-deficient": 1931,
+      "missing-native-clock-group-estimate": 10
+    },
+    "native_spp_status": {
+      "available_epoch_count": 3140,
+      "unavailable_epoch_count": 0,
+      "spp": 3140
+    }
+  },
+  "rank_vs_required_rank_distribution": {
+    "required_rank_derivation": "The Phase149 JSON serializer exports geometry_rank but not required_rank.  For this pinned recipe, SPP inter-system-bias modeling is enabled, GPS is the reference, and source GeometryRank uses 4 position/shared-clock columns plus one column for each observed non-reference corrected group; required rank is therefore 4 + (corrected_clock_groups - 1).",
+    "rows_are_corrected_post_filter_rows": true,
+    "groups_and_reference": {
+      "three_groups_gps_reference": 91,
+      "four_groups_gps_reference": 3049,
+      "gps_reference_epochs": 3140
+    },
+    "distribution": [
+      {
+        "status": "accepted",
+        "rank_status": "full-rank",
+        "rank": 6,
+        "required_rank": 6,
+        "corrected_clock_groups": 3,
+        "count": 91
+      },
+      {
+        "status": "accepted",
+        "rank_status": "full-rank",
+        "rank": 7,
+        "required_rank": 7,
+        "corrected_clock_groups": 4,
+        "count": 1108
+      },
+      {
+        "status": "missing-clock-bias-estimate",
+        "rank_status": "full-rank",
+        "rank": 7,
+        "required_rank": 7,
+        "corrected_clock_groups": 4,
+        "count": 10
+      },
+      {
+        "status": "rank-deficient",
+        "rank_status": "rank-deficient",
+        "rank": 0,
+        "required_rank": 7,
+        "corrected_clock_groups": 4,
+        "count": 1
+      },
+      {
+        "status": "rank-deficient",
+        "rank_status": "rank-deficient",
+        "rank": 4,
+        "required_rank": 7,
+        "corrected_clock_groups": 4,
+        "count": 1066
+      },
+      {
+        "status": "rank-deficient",
+        "rank_status": "rank-deficient",
+        "rank": 5,
+        "required_rank": 7,
+        "corrected_clock_groups": 4,
+        "count": 830
+      },
+      {
+        "status": "rank-deficient",
+        "rank_status": "rank-deficient",
+        "rank": 6,
+        "required_rank": 7,
+        "corrected_clock_groups": 4,
+        "count": 34
+      }
+    ]
+  },
+  "clock_group_availability_on_accepted_epochs": {
+    "gps": {
+      "accepted_epoch_count": 1199,
+      "observed_epoch_count": 1199,
+      "reference_epoch_count": 1199,
+      "estimate_available_epoch_count": 1199,
+      "corrected_rows_min": 4,
+      "corrected_rows_max": 10
+    },
+    "galileo": {
+      "accepted_epoch_count": 1199,
+      "observed_epoch_count": 1199,
+      "reference_epoch_count": 0,
+      "estimate_available_epoch_count": 1199,
+      "corrected_rows_min": 2,
+      "corrected_rows_max": 6
+    },
+    "glonass": {
+      "accepted_epoch_count": 1199,
+      "observed_epoch_count": 1189,
+      "reference_epoch_count": 0,
+      "estimate_available_epoch_count": 1189,
+      "absent_epoch_count": 10,
+      "corrected_rows_min": 0,
+      "corrected_rows_max": 6
+    },
+    "beidou": {
+      "accepted_epoch_count": 1199,
+      "observed_epoch_count": 1118,
+      "reference_epoch_count": 0,
+      "estimate_available_epoch_count": 1118,
+      "absent_epoch_count": 81,
+      "corrected_rows_min": 0,
+      "corrected_rows_max": 7
+    },
+    "qzss": {
+      "accepted_epoch_count": 1199,
+      "observed_epoch_count": 0,
+      "reference_epoch_count": 0,
+      "estimate_available_epoch_count": 0
+    },
+    "navic": {
+      "accepted_epoch_count": 1199,
+      "observed_epoch_count": 0,
+      "reference_epoch_count": 0,
+      "estimate_available_epoch_count": 0
+    }
+  },
+  "termination_and_time": {
+    "accepted_iteration_distribution": {
+      "1": 1180,
+      "2": 2,
+      "3": 17
+    },
+    "accepted_epochs_converged": 1199,
+    "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+    "velocity_finite_epoch_count": 0,
+    "time_rejection_statuses": {
+      "nonfinite": 0,
+      "duplicate": 0,
+      "nonmonotonic": 0,
+      "over_gap": 0
+    }
+  },
+  "preprocessing_aggregate": {
+    "input_rows": 109747,
+    "accepted_rows": 73286,
+    "rejected_rows": 36461,
+    "row_conservation": "109747 = 73286 + 36461",
+    "reason_counts": {
+      "accepted": 73286,
+      "invalid-pseudorange": 1014,
+      "unsupported-signal": 35447
+    },
+    "raw_pseudorange_rows": 108722,
+    "corrected_pseudorange_rows": 73286
+  },
+  "artifacts": {
+    "native_summary_path": "output/smartphone-r5/phase160-h-raw-p-collect-all-v1/mtv-h/native_summary.json",
+    "native_summary_bytes": 16523164,
+    "native_summary_sha256": "f5e5e1296eedc4eb64614ee7c1e8d777d7b531f1e10ee65552c5694052848b39",
+    "stdout_path": "output/smartphone-r5/phase160-h-raw-p-collect-all-v1/mtv-h/stdout.log",
+    "stdout_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "stderr_path": "output/smartphone-r5/phase160-h-raw-p-collect-all-v1/mtv-h/stderr.log",
+    "stderr_bytes": 77,
+    "stderr_sha256": "588d32dad7713922821f05105285d627564530ce87d7055c534be3a849c28a1f",
+    "stderr_message": "Phase149 raw-P seed stage failed closed: pseudorange-geometry-rank-deficient",
+    "phase158_summary_and_logs_overwritten": false
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 1,
+    "broadcast_navigation_reads": 1,
+    "raw_phone_imu_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_phase149_process_invocations": 1,
+    "independent_bootstrap_epoch_calls": 3140,
+    "ordinary_native_spp_epoch_calls": 3140,
+    "native_spp_epoch_calls_total": 6280,
+    "native_fgo_invocations": 0,
+    "summary_structural_read": 1,
+    "solution_coordinate_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "interpretation_boundary": {
+    "structural_observation": "Independent collect-all evaluation removed the prior first-failure truncation: all 3140 epochs were evaluated, with 1199 finite accepted position/clock records and 1941 explicit rejected records. The native SPP status was available as spp for every epoch, but 1931 post-filter rank checks remained deficient for the seven-column four-clock-group recipe and 10 full-rank epochs lacked a required native clock-group estimate.",
+    "algorithmic_go": false,
+    "accuracy_claim": false,
+    "coordinate_claim": false,
+    "next_action": "Use this aggregate-only result to diagnose the source/native clock-group and geometry-rank failures; do not relax rank gates, reuse failed seeds, infer accuracy, or rerun this route without a separate authorization."
+  }
+}

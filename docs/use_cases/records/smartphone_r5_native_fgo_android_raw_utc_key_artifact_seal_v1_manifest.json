@@ -1,0 +1,12 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-raw-utc-key-artifact-seal-manifest.v1",
+  "artifact_seal_record": "smartphone_r5_native_fgo_android_raw_utc_key_artifact_seal_v1.json",
+  "artifact_seal_record_sha256": "6510f976057707432b436fbd6867e1e49b5e0afd4d3a6d1a00187ece28fc2e6e",
+  "truth_open_count_before_evaluation": 0,
+  "fresh_validation_truth_open_count": 0,
+  "holdout_truth_open_count": 0,
+  "candidate_output_sha256": "7ec90e4d9c20da7d7a4e441ddfe4019bc6ede7933cb311e5e15eca9c4f5391b4",
+  "candidate_rows": 1383,
+  "atomic_publish": true,
+  "no_post_seal_tuning": true
+}

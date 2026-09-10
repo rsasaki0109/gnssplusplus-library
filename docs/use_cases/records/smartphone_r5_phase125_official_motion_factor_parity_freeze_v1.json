@@ -1,0 +1,235 @@
+{
+  "schema_version": "smartphone-r5-phase125-official-motion-factor-parity-freeze.v1",
+  "phase": 125,
+  "execution_label": "Luna Max",
+  "status": "sealed-no-candidate-read-only",
+  "purpose": "Freeze the source-only official/native MotionFactor_XXVV parity audit. No implementation, raw run, solver run, truth evaluation, accuracy calculation, solution release, or Kaggle action is authorized.",
+  "decision": {
+    "candidate_count": 0,
+    "decision": "no-candidate",
+    "source_backed_independent_candidate": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "official-motion-factor-is-three-dimensional-x1-x2-v1-v2-midpoint-equation",
+      "native-phase118-position-motion-is-six-dimensional-pose3-identity-between",
+      "native-phase118-has-no-independent-x-state-or-pose3-point3-coupling",
+      "official-motion-uses-measured-dt-and-strict-1.5-second-admission",
+      "native-phase118-motion-uses-all-adjacent-indices-without-dt",
+      "official-pixel5-highway-motion-sigma-is-0.01-m-native-translation-sigma-is-50-m",
+      "sigma-only-change-cannot-convert-native-pose3-random-walk-to-x-v-equation",
+      "official-motion-replacement-or-parallel-addition-changes-topology-and-information",
+      "optional-eigen-velocity-motion-rows-are-not-the-phase118-gtsam-target",
+      "no-topology-equation-and-admission-preserving-motion-candidate-remains"
+    ]
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase125_official_motion_factor_parity_audit_v1.md",
+    "commit": "33487ba2587e4b7fee790a1af10b85e5124440b0",
+    "sha256": "41a5ba257c004b60747e39abaa20b90c0d96c098b1b803776d19d642b1becf40"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "official_source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "baseline_phase124_audit": {
+      "commit": "b0a0c161ef39791321429464d2dc6ac6f5968da2",
+      "path": "docs/use_cases/records/smartphone_r5_phase124_official_imu_factor_parity_audit_v1.md",
+      "sha256": "36d3aaf0ac752422930df4e2e10c9f3a43419346e8f26af29c55b9aa085adb8b"
+    },
+    "baseline_phase124_freeze": {
+      "commit": "59586b424341ec0e36c52c3b28a349a473b837f2",
+      "path": "docs/use_cases/records/smartphone_r5_phase124_official_imu_factor_parity_freeze_v1.json",
+      "sha256": "607d28eaa4d66183f09f21bb65bf6e19a61e03b8c5b175fe862a19a36c7572b2"
+    },
+    "baseline_phase118_source_freeze_commit": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+    "baseline_phase118_structural_contract_commit": "25f3bada02c4073175054b5d668de02020761208",
+    "clock_dimension": "inherited from the previously audited Phase83-107 CCDD/C0D boundary; not reopened or combined",
+    "native_target_backend": "GTSAM",
+    "native_target_graph": "Phase118 Pose3+velocity+ConstantBias with CombinedImuFactor when an interval has integrated IMU samples",
+    "native_target_android_raw": true,
+    "target_route_type": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": "Highway",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": "Highway"
+    },
+    "read_only": true,
+    "new_raw_read": false,
+    "new_base_read": false,
+    "truth_read": false,
+    "solution_row_read": false,
+    "coordinate_row_read": false,
+    "mat_read": false,
+    "precomputed_coordinate_read": false,
+    "pdc_access": false,
+    "solver_run": false,
+    "accuracy_read_or_calculation": false,
+    "kaggle_access": false,
+    "rerun": false,
+    "fallback": false,
+    "parameter_or_weight_sweep": false
+  },
+  "official_motion_contract": {
+    "state_keys": {
+      "pose": "p_i: Pose3",
+      "position": "x_i: 3-vector ENU",
+      "velocity": "v_i: 3-vector ENU"
+    },
+    "pose_point_coupling": {
+      "factor": "Pose3Point3Factor_PX",
+      "keys": ["p_i", "x_i"],
+      "residual_dimension": 3,
+      "source_noise": "noise_sigmas([0,0,0]')"
+    },
+    "factor": "MotionFactor_XXVV",
+    "factor_arity": 4,
+    "keys": ["x_i", "x_i+1", "v_i", "v_i+1"],
+    "residual_dimension": 3,
+    "residual_units": "metres",
+    "dt_source": "(obs.utcms(i+1)-obs.utcms(i))/1000",
+    "dt_units": "seconds",
+    "edge_rule": "add only when dtgps < prm.time_diff_th",
+    "time_diff_threshold_s": 1.5,
+    "equation": "(x2-x1)-((v1+v2)*dt/2)",
+    "jacobian_order": ["x1", "x2", "v1", "v2"],
+    "jacobian": "[-I3,+I3,-dt/2*I3,-dt/2*I3]",
+    "target_pixel5_setting_type": "Highway",
+    "target_pixel5_sigma_motion_m": 0.01,
+    "clock_and_stop_neighbors": "not part of this freeze"
+  },
+  "native_motion_contract": {
+    "position_key_type": "positionKey(i) stores Pose3 in the Phase118 IMU path",
+    "velocity_key_type": "velocityKey(i) stores Vector3 in nav ENU",
+    "bias_key_type": "biasKey(i) stores ConstantBias",
+    "imu_factor": "CombinedImuFactor(position_i,velocity_i,position_i+1,velocity_i+1,bias_i,bias_i+1)",
+    "position_motion_factor": "BetweenFactor<Pose3>",
+    "position_motion_measurement": "Pose3 identity (zero rotation, zero translation)",
+    "position_motion_residual_dimension": 6,
+    "position_motion_rotation_sigma_rad": 10.0,
+    "position_motion_translation_sigma_m": 50.0,
+    "position_motion_edge_rule": "all adjacent index pairs when use_motion_factors and use_position_motion_factors are enabled",
+    "position_motion_dt_input": "none",
+    "position_motion_velocity_keys": "not consumed by the native position BetweenFactor",
+    "target_flags": {
+      "use_motion_factors": true,
+      "use_position_motion_factors": true,
+      "use_velocity_motion_factors": false
+    },
+    "eigen_velocity_row_note": "The separate Eigen backend contains an optional midpoint velocity row, but it has a different state/backend contract and is disabled in GNSS-first staging; it is not Phase118 GTSAM parity."
+  },
+  "term_classification": {
+    "equation": "divergent",
+    "residual_dimension": "divergent_3_official_vs_6_native_pose3",
+    "state_key_topology": "divergent",
+    "pose_point_coupling": "official_present_native_phase118_absent",
+    "interval_dt": "divergent_official_measured_native_not_consumed",
+    "edge_admission": "divergent_official_dt_less_than_1_5_native_all_adjacent",
+    "motion_sigma": "divergent_0.01m_official_vs_50m_native_translation",
+    "ordinary_noise_model": "Gaussian_on_both_paths_but_attached_to_different_factors",
+    "clock_factor": "out_of_scope_inherited_prior_audit",
+    "stop_height_initialization_priors_lm": "out_of_scope"
+  },
+  "candidate_assessment": {
+    "candidate_count": 0,
+    "candidates": [
+      {
+        "id": "phase125-replace-native-pose3-random-walk-with-official-motion-factor-v1",
+        "status": "rejected-topology-equation-and-admission-change",
+        "source_backed": true,
+        "reason": "The official factor needs independent X states and PX coupling, or a new Pose3/X/V custom equation; replacing the native six-residual Pose3 factor changes keys, residual dimension, covariance, and the strict dt gate."
+      },
+      {
+        "id": "phase125-add-official-motion-factor-in-parallel-v1",
+        "status": "rejected-objective-and-information-change",
+        "source_backed": true,
+        "reason": "Materializing X/PX state and adding the official three-residual factor would add independent information alongside CombinedImuFactor and the existing Pose3 random walk, changing factor incidence and the optimized objective."
+      },
+      {
+        "id": "phase125-change-motion-sigma-or-enable-eigen-velocity-rows-v1",
+        "status": "rejected-non-target-or-incomplete-parity",
+        "source_backed": true,
+        "reason": "Changing 50 m to 0.01 m leaves the native zero-motion Pose3 equation and six-dimensional topology unchanged; the optional Eigen velocity rows belong to a different backend/state layout and are disabled by the target staging contract."
+      }
+    ],
+    "no_op_rejected": "Changing only the native sigma is not official MotionFactor parity; no source-backed scalar or representation-only correction remains."
+  },
+  "source_pins": {
+    "official": {
+      "fgo_gnss_imu.m": {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "lines": "102-114,169-200,252-299"
+      },
+      "fgo_gnss.m": {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "lines": "89-101,103-178"
+      },
+      "parameters.m": {
+        "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "46-51,130-142"
+      },
+      "MotionFactor_XXVV.h": {
+        "path": "output/reproducibility-cache/gtsam_gnss/src/MotionFactor_XXVV.h",
+        "sha256": "0ca60daded389edfc2619350ca7fae89ccc8c3186624db1a96aa3ef5e3b1858f",
+        "lines": "16-62"
+      },
+      "Pose3Point3Factor_PX.h": {
+        "path": "output/reproducibility-cache/gtsam_gnss/src/Pose3Point3Factor_PX.h",
+        "sha256": "3893b16fe226fc253eafda16d634c0e229cb593373113f4de63cc66f47a1cb13",
+        "lines": "17-47"
+      }
+    },
+    "native": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "df77ab6556f90d6d9a8464d360e85d2a49a50d6fc04ef396833f354f821a1176",
+        "lines": "369-413,7588-7608,7807-7825,8227-8229"
+      },
+      "include/libgnss++/algorithms/fgo_config.hpp": {
+        "path": "include/libgnss++/algorithms/fgo_config.hpp",
+        "sha256": "e864b31ab04dc0f8f0f4764b4e89406282349012283944ed64e88c01ee8163e6",
+        "lines": "84-87,351-352,393-396"
+      },
+      "src/algorithms/fgo_gtsam_backend.cpp": {
+        "path": "src/algorithms/fgo_gtsam_backend.cpp",
+        "sha256": "c0da12d7a1d5eeb9492b02ad80f0e9868cbda32e452bbdd9c3f90cc57b4db0fa",
+        "lines": "262-270,691-809,1374-1400,1520-1523"
+      },
+      "src/algorithms/fgo_gtsam_internal.hpp": {
+        "path": "src/algorithms/fgo_gtsam_internal.hpp",
+        "sha256": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd",
+        "lines": "948-975"
+      },
+      "src/algorithms/fgo.cpp": {
+        "path": "src/algorithms/fgo.cpp",
+        "sha256": "145ffa3958d3a867ba53d962f07d346f9efa36e72140ad03d7a404ffdd3b5023",
+        "lines": "387-415,1241-1325"
+      }
+    }
+  },
+  "read_accounting": {
+    "official_and_native_source_text": "read-only",
+    "sealed_phase_metadata": "metadata-only",
+    "raw_phone_gnss_imu_navigation_payload": 0,
+    "raw_base_payload": 0,
+    "truth_or_coordinate_rows": 0,
+    "solution_rows": 0,
+    "mat_files_or_data": 0,
+    "precomputed_coordinates": 0,
+    "pdc_or_kaggle_access": 0,
+    "solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "reruns_fallbacks_repairs": 0,
+    "parameter_or_weight_sweeps": 0,
+    "code_implementation": 0
+  },
+  "next_boundary": "Keep the Phase118 Pose3+IMU motion graph, topology, interval admission, sigma, initialization, IMU/filter/clock/stop/height/LM settings, raw boundaries, and output policy unchanged. Any future official MotionFactor candidate requires a fresh source-complete X/PX/V topology and admission contract before implementation or execution."
+}

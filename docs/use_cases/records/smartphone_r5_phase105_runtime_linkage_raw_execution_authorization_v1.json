@@ -1,0 +1,120 @@
+{
+  "schema_version": "smartphone-r5-phase104-stage-main-attribution-raw-execution-authorization.v1",
+  "phase": 104,
+  "phase105_linkage_phase": 105,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-exact-two-route-phase104-stage-main-raw-execution",
+  "purpose": "New one-shot authorization after Phase105 runtime-linkage audit/freeze; authorize only the fresh Phase104 attribution flow.",
+  "phase105_linkage": {
+    "freeze_path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_freeze_v1.json",
+    "freeze_sha256": "3d44e1d9109be7e5d4cf5aba6f579976be2b71f5083c915b0d893567f002f36d",
+    "candidate_id": "phase105-child-only-trusted-gtsam-library-path-prepend-v1",
+    "child_ld_library_path": "/home/sasaki/.local/lib:${inherited_when_nonempty}",
+    "parent_environment_changed": false,
+    "binary_changed": false,
+    "solver_changed": false
+  },
+  "authority": {
+    "phase104_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase104_stage_main_accuracy_attribution_freeze_v1.json",
+      "sha256": "0d441945897c01899c9ed6cbf0659ee0382c778c35a8e2056315168a27d526dd"
+    },
+    "phase104_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase105_runtime_linkage_manifest_v1.json",
+      "sha256": "0c63d7696416dd4e8d8c92ebea16b3820acefb9efc2bb8fd4a84acb19201de51"
+    },
+    "phase104_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase105_runtime_linkage_attribution.py",
+      "sha256": "07baa52c30cf5bdc68517d716060ee1f5a866b59627785239dba05f197cd5b3d"
+    },
+    "phase104_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase105_runtime_linkage_execute.py",
+      "sha256": "ec12266fea83c19937bd3e616be822d5f920dec0156f02f5e1827eee8be4ad0c"
+    },
+    "phase104_focused_tests": {
+      "path": "tests/test_smartphone_phase105_runtime_linkage.py",
+      "sha256": "d784a283d467639cfd53d7f486c4d1e5636d53822cd33b521a3d804d526138cf"
+    },
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281"
+    },
+    "phase95_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase95_raw_input_path_corrected_execute.py",
+      "sha256": "5ac858cf156555652f6feae60c71a4237269d4b4c2cb70c1adf5a9e08f10e883"
+    },
+    "manifest_sha256": "0c63d7696416dd4e8d8c92ebea16b3820acefb9efc2bb8fd4a84acb19201de51",
+    "implementation_commit": "88f726a02d98e6dddd84e561b427ded43368e61d",
+    "implementation_source_sha256": "c81381b0a8fa8cea5c101fc5d54e6364173c0e8cffb83f02eac18c8b6cafde5b",
+    "implementation_binary_sha256": "6c2fbf9ed119e84383beb3b7db7f11cf1bce8db7a7e64919a38378373784c5c4"
+  },
+  "candidate": {
+    "id": "phase104-evaluation-only-gnss-first-stage-export-v1",
+    "candidate_count": 1,
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-phase104-stage-main-attribution"
+    ],
+    "raw_input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "truth_mat_base_pdc_precomputed_coordinate_kaggle_accuracy": false,
+    "stage_sidecar_reinput": false,
+    "runs_per_route": 1,
+    "controls": 0,
+    "truth_evaluation": false,
+    "accuracy_calculations": 0,
+    "solution_output_private": true,
+    "default_off_outside_command": true,
+    "child_runtime_linkage_only": true,
+    "no_fallback_or_rerun": true
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations": 2,
+    "raw_device_gnss_reads_by_wrapper": 0,
+    "raw_device_imu_reads_by_wrapper": 0,
+    "broadcast_navigation_reads_by_wrapper": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "stage_sidecar_seals": 2,
+    "main_displacement_stats_seals": 2,
+    "solution_rows_in_result": false
+  },
+  "execution_policy": {
+    "authorized": true,
+    "order": "MTV-A then LAX-T, sequentially",
+    "one_invocation_per_route": true,
+    "stop_after_two_routes": true,
+    "truth_or_accuracy_evaluation": false,
+    "no_rerun": true,
+    "solver_filter_lm_changes": false,
+    "fallback_or_guard_bypass": false,
+    "child_runtime_linkage_change_only": true,
+    "ld_library_path_exact_prepend": "/home/sasaki/.local/lib:${inherited_when_nonempty}",
+    "preserve_logs_and_partial_results": true
+  },
+  "raw_input_contract": {
+    "names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "source": "Phase95 sealed raw_inputs.path metadata",
+    "wrapper_stat_only": true,
+    "wrapper_byte_reads": 0,
+    "wrapper_hash_reads": 0,
+    "raw_content_copy_or_transform": false,
+    "truth_mat_base_pdc_precomputed_coordinate_kaggle_accuracy": false
+  },
+  "release_boundary": {
+    "raw_execution_authorized": true,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "Kaggle_submission_authorized": false
+  }
+}

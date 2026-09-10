@@ -1,0 +1,166 @@
+{
+  "schema_version": "smartphone-r5-phase132-typed-canonical-preflight-structural-authorization.v1",
+  "phase": 132,
+  "execution_label": "Luna Max",
+  "status": "independent-one-shot-inventory-first-structural-raw-authorized",
+  "authorization": {
+    "implementation": true,
+    "contract": true,
+    "raw_materialization": true,
+    "inventory_stage": true,
+    "raw_structural_execution": true,
+    "solver": true,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false
+  },
+  "authorization_scope": {
+    "candidate_id": "phase132-runner-canonical-preflight-admission-v1",
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solver_invocation_policy": "one only after that route's typed canonical inventory passes",
+    "solution_policy": "opaque SHA-256 and expected row count only"
+  },
+  "pins": {
+    "root_cause_freeze_commit": "3b3c785f5a641bc3f2f49ff4e704f80b41a7ea06",
+    "implementation_commit": "4f546734771ac56d8342aadb88d6c36f454540fa",
+    "contract_audit_commit": "f6f15a5bb90a533ae5f06590cd274f005609eaca",
+    "contract_freeze_commit": "75bd859ea29aa8dadc03fc53b131eacc7da6298b",
+    "contract_code_commit": "9c833dcaccffc079cdbb7b1e4c73876c7f5b8d70",
+    "manifest_commit": "df3672fd5fb7abae733cd0aed8657162d2cdcb42",
+    "pre_raw_accounting_commit": "f1d28532ff2f5550a202520c3ec24c050b7c783a",
+    "audit_sha256": "d4afbca4a84251bd791d796624fe282529bb4c0d05a2076a8ec68fa27f3e0a82",
+    "freeze_sha256": "2cb249efe3dee6ff22d1fb6ee48f997591ab836bf30f59aeadf85b3110e3aaa9",
+    "manifest_sha256": "03d8d89b9cbd544cc3cfdabc9157c51531ecc360ea95e0a66cbb5c1bc6ed372a",
+    "pre_raw_sha256": "92cccfb1c55a43852c803b86ffc3b964fc22d67b8179c78b9717b2b364ff7cd6",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase132_typed_canonical_structural_authorized_execute.py",
+    "authorized_runner_commit": "33957dce45ed94e445d43467d2810cc1008d94dc",
+    "authorized_runner_sha256": "3c859cb72a447937d6555a7f807fbbe1f2d20945355fb14844fc1544a89a08af"
+  },
+  "selectors": {
+    "phase126": 1,
+    "phase127": 1,
+    "phase128": 1,
+    "phase129": 1,
+    "phase130": 1,
+    "phase131": 1,
+    "phase118": 1,
+    "phase117": 0,
+    "phase120": 0,
+    "additional_frequency": 0
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "bytes": 10708536,
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "interval": 1.0,
+        "window": 151,
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false,
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only"
+      }
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "bytes": 719969,
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "interval": 15.0,
+        "window": 11,
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false,
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only"
+      }
+    }
+  ],
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "native_solver_invocations": 0,
+    "solution_coordinate_row_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "guards": {
+    "typed_canonical_preflight_call_count_must_be_positive": true,
+    "native_resolver_must_be_reached_on_inventory_pass": true,
+    "old_phase130_literal_preflight_call_count": 0,
+    "command_for_and_native_binary_exactly_once_on_pass": true,
+    "solver_zero_on_preflight_failure": true,
+    "solution_opaque": true,
+    "truth_mat_pdc_precomputed_accuracy_kaggle_forbidden": true,
+    "no_rerun_fallback_repair": true
+  }
+}

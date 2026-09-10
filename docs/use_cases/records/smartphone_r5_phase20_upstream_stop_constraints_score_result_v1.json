@@ -1,0 +1,156 @@
+{
+  "schema_version": "smartphone-r5-phase20-upstream-stop-constraints-score-result.v1",
+  "status": "development-only-go",
+  "created_at_utc": "2026-08-31T18:20:51Z",
+  "candidate_id": "native-fgo-upstream-stop-constraints-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_freeze_v1.json",
+  "freeze_record_sha256": "3d571e8ac669e23580906cca429f11d984b3d53f3315caef51792f73c24b3d66",
+  "truth_free_manifest": "docs/use_cases/records/smartphone_r5_phase20_upstream_stop_constraints_manifest_v1.json",
+  "truth_free_manifest_sha256": "996250f1c53ebfca3d368dc270483f79484775d8fadfa68f05c1030fc3fd60f8",
+  "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "base_commit": "07561b9",
+  "truth_policy": {
+    "mat_read_count_this_phase": 0,
+    "validation_truth_open_count_this_phase": 0,
+    "holdout_truth_open_count_this_phase": 0,
+    "test_truth_open_count_this_phase": 0,
+    "truth_free_generation_before_truth": true,
+    "development_truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "development_role": "already-used development identity; reused evidence, not validation or generalization",
+    "open_count_this_phase": 1,
+    "cumulative_open_count": 4,
+    "evaluation_processes": 1,
+    "truth_sha256": null,
+    "truth_sha256_note": "not computed after the sole truth read to preserve the one-open contract",
+    "score_read_contract": "intersection evaluator loaded truth once, then scored sealed baseline and candidate in the same process",
+    "no_post_score_tuning": true,
+    "no_candidate_rerun_after_score": true,
+    "no_kaggle_or_token_access": true
+  },
+  "sealed_artifacts": {
+    "baseline": {
+      "submission": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/baseline/submission.csv",
+      "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+      "summary": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/baseline/summary.json",
+      "summary_sha256": "112fc2954bf4a6a71311c3ae23a2e62e5f39da89515d090f275ce316851b1c94",
+      "rows": 1383,
+      "final_cost": 64362.4132009474,
+      "wall_seconds": 20.83,
+      "maximum_rss_kb": 194768
+    },
+    "candidate": {
+      "submission": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/candidate/submission.csv",
+      "submission_sha256": "2f90735087192490701e365af9d64b18732f3ed309322e4fd66e06680efa0c89",
+      "summary": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/candidate/summary.json",
+      "summary_sha256": "1b96c9973e35fffdb6251e57bae3174bdcbcfe977edd6fdf2518ebe5091e7d24",
+      "rows": 1383,
+      "final_cost": 64568.95769617818,
+      "wall_seconds": 20.06,
+      "maximum_rss_kb": 196048,
+      "stop_epochs": 500,
+      "stop_velocity_factors": 489,
+      "stop_pose_factors": 475,
+      "imu_samples": 166363,
+      "maximum_horizontal_speed_mps": 19.6021182370283,
+      "interpolated_rows": 0,
+      "edge_hold_rows": 0
+    },
+    "candidate_repeat": {
+      "submission": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/candidate_repeat/submission.csv",
+      "submission_sha256": "2f90735087192490701e365af9d64b18732f3ed309322e4fd66e06680efa0c89",
+      "summary": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/candidate_repeat/summary.json",
+      "summary_sha256": "1b96c9973e35fffdb6251e57bae3174bdcbcfe977edd6fdf2518ebe5091e7d24",
+      "byte_identical_to_candidate": true
+    },
+    "evaluation_report": {
+      "path": "output/smartphone-r5/phase20-upstream-stop-v1/pixel7pro/phase20_score.json",
+      "sha256": "123aeade40af160631e1794626eff5bba0af2be2c81dd2eef15b7d44f2f92c36"
+    }
+  },
+  "metrics_m": {
+    "baseline": {
+      "wgs84_vincenty__linear_n_minus_1": 3.1922489635126103,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.192568555787111,
+      "haversine_sphere__linear_n_minus_1": 3.19550488592491,
+      "haversine_sphere__nearest_rank_ceiling": 3.195826163862037,
+      "wgs84_p50_m": 2.3701343323397306,
+      "wgs84_p95_m": 4.0143635946854905
+    },
+    "candidate": {
+      "wgs84_vincenty__linear_n_minus_1": 3.188229553809071,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.1883058646447835,
+      "haversine_sphere__linear_n_minus_1": 3.191499145312675,
+      "haversine_sphere__nearest_rank_ceiling": 3.1915770985303755,
+      "wgs84_p50_m": 2.3686975208105716,
+      "wgs84_p95_m": 4.00776158680757
+    },
+    "candidate_minus_baseline": {
+      "wgs84_vincenty__linear_n_minus_1": -0.004019409703539534,
+      "wgs84_vincenty__nearest_rank_ceiling": -0.004262691142327579,
+      "haversine_sphere__linear_n_minus_1": -0.004005740612234909,
+      "haversine_sphere__nearest_rank_ceiling": -0.004249065331661583
+    }
+  },
+  "key_validation": {
+    "truth_rows": 1383,
+    "baseline_rows": 1383,
+    "candidate_rows": 1383,
+    "matched_key_count": 1383,
+    "matched_key_set_sha256": "7bffc3887021a0379e2c56e1529bbd5d8d1fe02277636f28ea4287961ec28f9a",
+    "coverage": 1.0,
+    "baseline_missing": 0,
+    "candidate_missing": 0,
+    "baseline_extra": 0,
+    "candidate_extra": 0
+  },
+  "gate": {
+    "all_four_strictly_improved": true,
+    "horizontal_p50_non_regressed": true,
+    "horizontal_p95_strictly_improved": true,
+    "coverage_non_regressed": true,
+    "finite_complete_outputs": true,
+    "continuity_safety_passed": true,
+    "structural_stop_factors_nonzero": true,
+    "promotion_decision": "development-only opt-in upstream stop velocity and consecutive-stop Pose3 constraints",
+    "production_default_changed": false,
+    "native_0_782_class_target": "not achieved; no Kaggle submission"
+  },
+  "commands": {
+    "truth_free": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere [--native-upstream-stop-constraints]",
+    "score_once": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py --truth <declared development ground_truth.csv> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --submission baseline=<sealed baseline.csv> --submission candidate=<sealed candidate.csv> --output <phase20_score.json>",
+    "focused_tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} build/tests/run_tests --gtest_filter='UpstreamStopConstraints.*'",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "verification": {
+    "release_build": {
+      "build_directory": "build",
+      "cmake_build_type": "Release",
+      "status": "passed",
+      "target": "all"
+    },
+    "focused_stop_constraints_tests": "5/5 passed",
+    "historical_pdc_factor_pin_test": "passed after adding the Phase20-compatible relinked Release binary hash",
+    "full_serial_ctest": {
+      "passed": 130,
+      "total": 131,
+      "status": "known-fixture-failure",
+      "failed_test": "16 python_cli_tests: QZSS L6 PTY fixture received frames=0/discarded=244; unrelated to Phase20"
+    },
+    "diff_check": "passed",
+    "json_parse": "passed for Phase20 records and updated historical pin manifest",
+    "credential_scan": "no credential values or token files in the change set"
+  },
+  "limitations": [
+    "This is one reused development identity, not route-disjoint validation or holdout evidence.",
+    "The stop detector uses raw IMU statistics and GNSS-first velocity seeds; supplemental mi8 structural data had no admitted stop velocity factors and was not scored.",
+    "The local evaluator's four variants remain sensitivity diagnostics because the public distance and percentile details are not fully specified.",
+    "The candidate improves the frozen Phase 12 baseline only marginally and is far above the native 0.782-class target."
+  ],
+  "immutability": {
+    "artifacts_sealed_before_truth": true,
+    "freeze_and_manifest_unchanged_after_score": true,
+    "candidate_unchanged_after_score": true,
+    "record_sha256": "excluded-from-self-hash"
+  }
+}

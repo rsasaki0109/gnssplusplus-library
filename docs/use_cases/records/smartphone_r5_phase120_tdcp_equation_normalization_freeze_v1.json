@@ -1,0 +1,191 @@
+{
+  "schema_version": "smartphone-r5-phase120-tdcp-equation-normalization-freeze.v1",
+  "phase": 120,
+  "execution_label": "Luna Max",
+  "status": "frozen-default-off-source-backed-candidate-no-execution",
+  "purpose": "Freeze exactly one source-backed ordinary TDCP measurement-normalization candidate after a read-only official/native equation audit. This record authorizes no implementation, raw read, solver run, truth read, accuracy calculation, solution release, or Kaggle action.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase120_tdcp_equation_normalization_parity_audit_v1.md",
+    "commit": "6d9e3f740e152893cdd2eb82dfc5e293387f13d9",
+    "sha256": "a47cfaad88aaa8e539ddb5590669206dcabfbfdb42814764bb44d5ea21a6b07a"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "official_functions": [
+      "fgo_gnss.m",
+      "fgo_gnss_imu.m",
+      "functions/gnsslog2obs.m",
+      "functions/exobs.m",
+      "functions/exobs_residuals.m",
+      "functions/obserrmodel.m",
+      "+gt/Gsat.m",
+      "+gt/Gobs.m",
+      "+gt/TDCPFactor_XXCC.h",
+      "+gt/TDCPFactor_XXDD.h"
+    ],
+    "native_components": [
+      "android_raw_gnss.cpp",
+      "fgo_problems.cpp",
+      "tdcp_contract.hpp",
+      "fgo_gtsam_internal.hpp",
+      "fgo_gtsam_backend.cpp",
+      "fgo.cpp"
+    ],
+    "official_repository_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "read_only": true,
+    "new_raw_read": false,
+    "new_base_read": false,
+    "truth_read": false,
+    "mat_read": false,
+    "solver_run": false,
+    "accuracy_read_or_calculation": false,
+    "solution_rows_read_or_published": false,
+    "pdc_or_kaggle_access": false
+  },
+  "term_classification": {
+    "cycles_to_metres_wavelength_frequency": "equivalent",
+    "epoch_difference_order_sign": "equivalent",
+    "receiver_clock_c0_difference_for_pixel5": "equivalent",
+    "satellite_clock_difference": "equivalent",
+    "satellite_motion_los_geometric_range": "divergent",
+    "sagnac_earth_rotation_representation": "divergent",
+    "ionosphere_troposphere_tdcp_cancellation": "divergent",
+    "time_interval_scaling_for_pixel5_xxcc": "equivalent",
+    "residual_noise_units_and_scale": "divergent",
+    "whitening_contract": "equivalent",
+    "huber_application_point": "equivalent",
+    "slip_outlier_gating": "divergent",
+    "same_satellite_same_signal_pairing": "exact"
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase120-official-tdcp-resl-atmosphere-cancellation-v1",
+    "kind": "ordinary-tdcp-measurement-preparation-source-parity",
+    "opt_in": true,
+    "default_off": true,
+    "implementation_in_this_freeze": false,
+    "one_changed_dimension": "Use the official resL atmosphere policy for the ordinary TDCP pair measurement: raw carrier phase in metres plus satellite-clock metres, with no ionosphere or troposphere addition.",
+    "measurement_contract": {
+      "source_parity_measurement_m": "carrier_phase_cycles * retained_wavelength_m + satellite_clock_m",
+      "exclude_from_tdcp_measurement": [
+        "ionosphere_delay_m",
+        "troposphere_delay_m"
+      ],
+      "retain_satellite_clock_difference": true,
+      "retain_existing_delta_order": "current minus previous",
+      "retain_native_factor_error": "range2 + receiver_clock2 - range1 - receiver_clock1 - delta_carrier_m",
+      "native_factor_geometry_changed": false,
+      "standalone_carrier_factor_changed": false,
+      "pseudorange_or_doppler_changed": false
+    },
+    "admission": {
+      "scope": "ordinary adjacent TDCP pairs in the Phase101/118 Pixel5 source-clock path",
+      "pair_key": "(SatelliteId, SignalType)",
+      "pair_order": "previous epoch to current epoch",
+      "exact_key_required": true,
+      "missing_wavelength_or_nonfinite_source_value": "fail-closed",
+      "duplicate_or_cross_signal_pair": "fail-closed",
+      "fallback_to_atmosphere_corrected_measurement": false,
+      "fallback_to_zero_or_precomputed_measurement": false,
+      "factor_count_or_reject_predicates_changed": false
+    },
+    "preserve": {
+      "fixed_tdcp_sigma_m": 0.03,
+      "dynamic_tdcp_sigma": false,
+      "phase118_official_huber_k_mapping": "Highway=0.5 for both pinned primary routes; Street/Mix=0.2 remains the official mapping",
+      "huber_selector_or_threshold_changed": false,
+      "c7_d_c0d_state_topology": true,
+      "raw_base_correction": true,
+      "multifrontal_qr": true,
+      "imu_graph_and_preintegration": true,
+      "slip_gap_loss_lock_code_phase_gates": true,
+      "sagnac_or_satellite_geometry": true,
+      "pixel5_final_offset": true,
+      "filter_initialization_and_lm": true,
+      "legacy_default_semantics": true,
+      "solution_rows": "withheld"
+    },
+    "not_selected": [
+      {
+        "id": "official-initial-los-vs-native-endpoint-range",
+        "reason": "Source-backed divergence, but changing it changes the factor geometry/linearization and is coupled to the Sagnac representation rather than isolating measurement normalization."
+      },
+      {
+        "id": "official-slip-ddl-gate-or-per-observation-l-noise",
+        "reason": "Source-backed divergences, but changing admission or the frozen Phase118 sigma changes factor population/recipe and is not a single isolated equation-normalization change."
+      }
+    ]
+  },
+  "source_evidence": {
+    "official_tdcp_no_atmosphere": [
+      "+gt/Gobs.m:1151-1158",
+      "+gt/Gobs.m:1160-1165",
+      "fgo_gnss.m:185-194",
+      "fgo_gnss_imu.m:307-316"
+    ],
+    "native_tdcp_atmosphere_in_measurement": [
+      "src/algorithms/fgo_problems.cpp:518-540",
+      "src/algorithms/fgo_problems.cpp:659-665",
+      "src/algorithms/fgo_problems.cpp:1446-1452"
+    ],
+    "native_factor_preservation": [
+      "src/algorithms/fgo_gtsam_internal.hpp:3397-3425",
+      "src/algorithms/fgo_gtsam_internal.hpp:3473-3500",
+      "src/algorithms/fgo_gtsam_backend.cpp:1207-1246"
+    ],
+    "pair_and_gate_preservation": [
+      "src/algorithms/fgo_problems.cpp:1411-1459",
+      "include/libgnss++/algorithms/tdcp_contract.hpp:34-67"
+    ],
+    "fixed_sigma_and_phase118_k": [
+      "include/libgnss++/algorithms/fgo_config.hpp:393-394,483-485",
+      "apps/native/gnss_fgo_imu_no_base.cpp:7581-7590,7716-7730",
+      "include/libgnss++/algorithms/fgo_config.hpp:1842-1853"
+    ]
+  },
+  "evidence_pins": {
+    "official_fgo_gnss_m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+    "official_fgo_gnss_imu_m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "official_gnsslog2obs_m": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+    "official_exobs_m": "e22db383f372f26597333d674a12ee1e2adfdc97b00828fbbc5470903947f456",
+    "official_exobs_residuals_m": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+    "official_gobs_m": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+    "official_gsat_m": "a56c3236646606c1b7e771180e9bc18b08f809fe8a6d71b795366b96207871f6",
+    "official_geodist_m": "4ddced92aea78defd7eb8b2040dd23b1b0575eb0c1ac719a128c8db62ab4a91f",
+    "official_geodist_c": "3929ec3d57575634a921a81957ce91f2dce9314457694e3bd7e00bd82ec765c4",
+    "official_tdcp_xxcc_h": "cc8f5acabd43db25b5b4aca48f6c8ae6a0e2a399820fb950de9004555c9cd4b2",
+    "official_tdcp_xxdd_h": "dc6b92e824f439df56286b2c2f81c0acb744f698c45648baaf5da67d6b239aed",
+    "native_android_raw_gnss_cpp": "a020ce900db6a9d3a994cc3adb3dcebbe84cbf67c1ff9793991b7a75039529c5",
+    "native_fgo_problems_cpp": "327fdc792afbeb29f150bc8566acaef63156c519d2dcb0a40f626659658edddc",
+    "native_fgo_gtsam_internal_hpp": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd",
+    "native_fgo_gtsam_backend_cpp": "43b80e75638f1b2d70907f1a9b36f6ee486c070c765ba733d852a022f2a58d2b",
+    "native_tdcp_contract_hpp": "1d56692d93f216703e2283b206b7bd0bca9c6593d51524d843fc6e385d96cbcf",
+    "native_fgo_config_hpp": "38ae28a5bdb398b0a764f9f09f8456107ddc0168654b1d1791879377cca24748",
+    "native_signals_hpp": "bb8cd20d4a22581ed2beb83f4e1b4ed6d397f28a2d5104d4736778c5b279ba56"
+  },
+  "authorization": {
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "rerun_or_fallback_authorized": false
+  },
+  "read_accounting": {
+    "official_or_native_source_text": "source-only permitted",
+    "new_raw_phone_gnss_imu_navigation_payloads": 0,
+    "new_raw_base_bytes_headers_or_hashes": 0,
+    "truth_payload_or_coordinate_rows": 0,
+    "sealed_solution_rows": 0,
+    "mat_files": 0,
+    "precomputed_phone_coordinates_or_trajectories": 0,
+    "solver_or_native_process_invocations": 0,
+    "accuracy_calculations_or_score_reads": 0,
+    "pdc_or_kaggle_access": 0,
+    "sweeps_reruns_fallbacks_or_tuning": 0
+  }
+}

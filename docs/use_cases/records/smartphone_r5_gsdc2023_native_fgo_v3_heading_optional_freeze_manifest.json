@@ -1,0 +1,20 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze.json",
+  "freeze_record_sha256": "38602200af437fe324ef738b5463cbea379406d2640e1372fb4c595b83e23b9a",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+  "selected_identities": [
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+    "2023-09-05-23-07-us-ca-routen/pixel5"
+  ],
+  "selected_payload_materialized_before_freeze": false,
+  "selected_truth_open_before_freeze": false,
+  "v3_source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+  "v3_release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+  "preserved_v2_1_source_sha256": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+  "preserved_v2_1_binary_sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+  "generated_after_freeze_record": true,
+  "no_post_holdout_or_validation_tuning": true,
+  "production_default_changed": false
+}

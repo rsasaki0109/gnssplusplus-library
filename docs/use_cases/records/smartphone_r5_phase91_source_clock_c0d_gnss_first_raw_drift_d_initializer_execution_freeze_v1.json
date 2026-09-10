@@ -1,0 +1,185 @@
+{
+  "schema_version": "smartphone-r5-phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-execution-freeze.v1",
+  "phase": 91,
+  "status": "frozen-before-phase91-raw-execution",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one diagnostic-only raw execution of the implemented source-aligned Phase91 candidate across the four Phase80/85 routes; no accuracy or submission scoring is authorized.",
+  "authority": {
+    "phase91_implementation_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_in_memory_raw_drift_d_initializer_freeze_v1.json",
+      "sha256": "e218864172b789d67ce5961ebfe67457c267960be8da5f27f5b6c017ebba906b",
+      "status": "frozen-before-implementation"
+    },
+    "phase91_implementation_commit": "0b9c4ebc5704428421f0bfc1cad569d834690b6d",
+    "phase85_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase85_source_clock_c0d_structural_manifest_v1.json",
+      "sha256": "20adc2e3388b92d045580739d025106c18aa068fcf26f8d117d48d3d2f5f7058"
+    },
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase80_structural_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    }
+  },
+  "decision_boundary": {
+    "candidate_count": 1,
+    "candidate_selection": "fixed-single-candidate",
+    "route_count": 4,
+    "repetitions_per_route": 1,
+    "controls": 0,
+    "implementation_authorized": true,
+    "execution_authorized": true,
+    "before_raw_execution": true,
+    "raw_execution_before_this_freeze": false,
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "promotion_or_accuracy_authorization": false,
+    "fail_closed_if_missing_active_telemetry": true,
+    "fail_closed_if_iterations_below_one": true,
+    "fail_closed_if_cost_nonfinite": true,
+    "fail_closed_if_final_cost_not_strictly_less": true,
+    "stop_before_accuracy_or_submission": true
+  },
+  "candidate": {
+    "id": "phase91_source_clock_c0d_gnss_first_in_memory_raw_drift_d_initializer",
+    "source_aligned": true,
+    "raw_only": true,
+    "diagnostic_only": true,
+    "default_off": true,
+    "selector": "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer",
+    "required_flags": [
+      "--android-gnss <frozen raw device_gnss.csv>",
+      "--android-imu <frozen raw device_imu.csv>",
+      "--nav <frozen broadcast brdc.nav>",
+      "--dataset-id <one of the four frozen route IDs>",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer"
+    ],
+    "forbidden_flags": [
+      "--obs",
+      "--native-gnss-first-velocity-only-handoff",
+      "--native-direct-doppler-wls-handoff",
+      "--native-pdc-state-bridge",
+      "--native-upstream-quality",
+      "--native-base-rinex",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "any result-file, MAT, truth, device-WLS, or precomputed-coordinate input"
+    ],
+    "handoff_contract": {
+      "mode": "gnss-first-in-memory-position-clock-velocity",
+      "position_clock_source": "same-run-gnss-first-optimizer-result",
+      "velocity_source": "same-run-gnss-first-optimizer-result",
+      "gnss_first_problem_instance": "same retained in-memory raw problem",
+      "exact_epoch_identity": true,
+      "nearest_interpolation_padding_truncation": false,
+      "coordinate_file_or_pdc_handoff": false
+    },
+    "main_graph_d_initializer": {
+      "scope": "main Pose3+IMU graph only",
+      "source": "EpochSeed.receiver_clock_drift_mps",
+      "units": "metres_per_second",
+      "finite_full_coverage": true,
+      "fallback": "none",
+      "zero_hold_interpolation_wls_inference": false
+    },
+    "preserved_source_contract": {
+      "c0d_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "c0d_jacobian_order": ["c1", "c2", "d1", "d2"],
+      "c0d_jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "c0d_clock_units": "seconds",
+      "c0d_drift_units": "metres_per_second",
+      "c0d_dt_units": "seconds",
+      "c0d_residual_units": "seconds",
+      "c0d_sigma_m": 0.1,
+      "c0d_sigma_seconds": "0.1/C_LIGHT",
+      "direct_quality_flag": "--native-source-direct-observable-quality",
+      "optimizer_algorithm": "unchanged GTSAM batch Levenberg-Marquardt",
+      "source_sigma_tuning": false,
+      "equation_or_jacobian_rewrite": false,
+      "coordinate_bridge": false
+    }
+  },
+  "routes_and_domain": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "domain_rows": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2158,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3139,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1465,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1101
+    },
+    "exactly_one_run_each": true,
+    "controls": 0,
+    "route_score_selection": false
+  },
+  "execution_authorization": {
+    "raw_inputs": ["raw Android device_gnss.csv", "raw Android device_imu.csv", "broadcast brdc.nav"],
+    "raw_device_gnss_reads": 4,
+    "raw_device_imu_reads": 4,
+    "broadcast_navigation_reads": 4,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false,
+    "no_raw_execution_performed_at_freeze": true,
+    "no_accuracy_or_submission_release": true,
+    "on_failure": "fail closed; do not add routes, change candidate, tune sigma, rewrite units/equation, or open accuracy artifacts"
+  },
+  "required_evaluator_gates": [
+    "implementation, binary, evaluator, and inherited freeze pins verify",
+    "exactly four frozen routes and exactly one run per route",
+    "raw-only command and provenance; no base/PDC/direct-WLS/velocity-only/external coordinates",
+    "same-run GNSS-first in-memory position/clock/velocity handoff and exact epoch identity",
+    "finite full EpochSeed.receiver_clock_drift_mps coverage for every retained epoch",
+    "active-solve telemetry complete with recognized exact terminal reason",
+    "finite initial/final costs, graph iterations >= 1, and final_cost < initial_cost",
+    "C0/D equation, Jacobian, units, sigma, edge/skip/phone invariants unchanged",
+    "raw UTC rows/domain and finite output coordinates/speed only",
+    "accuracy not scored and all gates ANDed"
+  ],
+  "read_accounting_at_freeze": {
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "output_policy": {
+    "new_output_root": "output/smartphone-r5/phase91-source-clock-c0d-gnss-first-raw-drift-d-initializer-v1",
+    "refuse_nonempty_output_root": true,
+    "failure_capture_required": true,
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "stop_before_raw_execution_result_release": true
+  }
+}

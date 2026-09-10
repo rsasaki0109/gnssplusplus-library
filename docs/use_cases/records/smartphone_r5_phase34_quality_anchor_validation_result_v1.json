@@ -1,0 +1,119 @@
+{
+  "schema_version": "smartphone-r5-phase34-quality-anchor-validation-result.v1",
+  "phase": 34,
+  "status": "validation-pass",
+  "decision": "development-only-validation-go",
+  "dataset_id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+  "protocol": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_freeze_v1.json",
+      "sha256": "18fd075f30699d0213a1cca3a9eac25d24d3765d75df8d770380dfa7fbeeb43b"
+    },
+    "evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_evaluator_manifest_v1.json",
+      "sha256": "8d6c5a7c0a4c98be94042d29e5ba9e98846e7c87a5e3dad041ae283e18c58f67"
+    },
+    "io_failure_before_truth_read": {
+      "path": "docs/use_cases/records/smartphone_r5_phase34_quality_anchor_validation_io_failure_v1.json",
+      "sha256": "92674e637e637eff2042b9d4e8b04a4c4ad4d5728bb2b39ac778bcc2ead7826f"
+    },
+    "solver_rerun": false,
+    "post_score_tuning": false,
+    "control_continuity_policy": "diagnostic-only; known baseline violations do not veto candidate scoring",
+    "vertical_policy": "informational-unavailable-four-column-prediction",
+    "future_holdout_truth_open_count": 0
+  },
+  "truth": {
+    "archive_member": "dataset_2023/train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/ground_truth.csv",
+    "path": "output/smartphone-r5/phase34-quality-anchor-validation-v1-io-failure/truth/2023-05-09-21-32-us-ca-mtv-pe1/pixel5/ground_truth.csv",
+    "sha256": "ef29d4712204bdf51b543c8e3fba28c639d759c4b21f8438e407ba555f920967",
+    "bytes": 206062,
+    "crc32_hex": "015842bb",
+    "archive_member_open_count": 1,
+    "truth_parser_read_count": 1,
+    "materialized_after_freeze_and_truth_free_seal": true,
+    "reused_failed_io_materialization": true,
+    "no_second_archive_materialization": true
+  },
+  "key_set": {
+    "truth_keys": 2132,
+    "control_prediction_keys": 2131,
+    "candidate_prediction_keys": 2131,
+    "control_matched_keys": 2131,
+    "candidate_matched_keys": 2131,
+    "shared_scored_keys": 2131,
+    "same_matched_key_set": true
+  },
+  "control": {
+    "horizontal_wgs84_p50_m": 1.7825997154379323,
+    "horizontal_wgs84_p95_m": 5.34860540452458,
+    "availability_ratio": 0.9995309568480301,
+    "truth_coverage_ratio": 0.9995309568480301,
+    "diagnostic_variants_m": {
+      "haversine_sphere__linear_n_minus_1": 3.5661975793879006,
+      "haversine_sphere__nearest_rank_ceiling": 3.5687193420433347,
+      "wgs84_vincenty__linear_n_minus_1": 3.565602559981256,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.5669335101639987
+    },
+    "continuity": {
+      "over_70_mps_count": 3,
+      "max_speed_mps": 145.34443682828024
+    }
+  },
+  "candidate": {
+    "horizontal_wgs84_p50_m": 1.577437007318745,
+    "horizontal_wgs84_p95_m": 2.95015136568213,
+    "availability_ratio": 0.9995309568480301,
+    "truth_coverage_ratio": 0.9995309568480301,
+    "diagnostic_variants_m": {
+      "haversine_sphere__linear_n_minus_1": 2.2625837880896476,
+      "haversine_sphere__nearest_rank_ceiling": 2.2631267550653296,
+      "wgs84_vincenty__linear_n_minus_1": 2.263794186500437,
+      "wgs84_vincenty__nearest_rank_ceiling": 2.266337725532912
+    },
+    "continuity": {
+      "over_70_mps_count": 0,
+      "max_speed_mps": 32.909429499526965
+    }
+  },
+  "gate": {
+    "passed": true,
+    "all_four_diagnostics_strictly_improved": true,
+    "horizontal_p50_non_regression": true,
+    "horizontal_p95_non_regression": true,
+    "coverage_non_regression": true,
+    "candidate_continuity_safe": true,
+    "control_safety_used_as_blocker": false,
+    "vertical": "informational-unavailable-four-column-prediction"
+  },
+  "output": {
+    "result": {
+      "path": "output/smartphone-r5/phase34-quality-anchor-validation-v1/validation_evaluation.json",
+      "sha256": "d19353ab6f9a643dfb0c8a1e1d34e738c99a1cd3ebd377b9c8c2847ba5546b0b"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/phase34-quality-anchor-validation-v1/validation_evaluation.manifest.json",
+      "sha256": "a3cea3265fe03c0a8418c1f02b6166b3c1da0bca86107c72e5f9387e2aa7c4ed"
+    },
+    "atomic_publish": true
+  },
+  "truth_access": {
+    "phase34_validation_truth_open_count": 1,
+    "phase32_train_truth_reads": 3,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "truth_used_for_inference_or_selection": false
+  },
+  "runtime": {
+    "wall_seconds": 1.473485319991596,
+    "max_rss_kb_process": 24868
+  },
+  "promotion": {
+    "development_only": true,
+    "production_default_changed": false,
+    "kaggle_submission": false,
+    "future_holdout_remains_sealed": true,
+    "native_0_782_class_achieved": false
+  }
+}

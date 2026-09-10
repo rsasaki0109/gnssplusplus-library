@@ -1,0 +1,58 @@
+{
+  "schema_version": "rtk-smartphone-performance-final-completion-audit-manifest.v1",
+  "status": "sealed-local-audit",
+  "audit": {
+    "path": "docs/use_cases/records/rtk_smartphone_performance_final_completion_audit.json",
+    "sha256": "0d89e7939fb7fc5b6c22596f0211eeeab6f7df30a5d2d3631d29a58203ddc11b"
+  },
+  "latest_candidate": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.csv",
+    "sha256": "ded15a2a92349b06accfe18bc2afa12c35f7a282497d70ab9fcedf15471fc1f3",
+    "bytes": 6150020,
+    "rows": 71936,
+    "submission_ref": 55905742
+  },
+  "latest_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1.json",
+    "sha256": "8dab4eb4d9dafeba2bab320a32f5d8dfe84a40c2e9a0da9c6dd215a0f846af43"
+  },
+  "latest_record_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_v2_kaggle_submission_v1_manifest.json",
+    "sha256": "be5b8b03fc414501467440b0cb272c0912057858b34eed6f3c2a63615c5acc8c"
+  },
+  "candidate_manifest": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/submission.manifest.json",
+    "sha256": "b0a94f8ff2ac42358fda5dcbd11e9c82b9b95abe99a55460d0bd1e6390b1652e"
+  },
+  "run_manifest": {
+    "path": "output/smartphone-r5/gsdc2023-upstream-mat-v2/test-batch/fallback_v2_run_manifest.json",
+    "sha256": "c99d2ac3419ac98ac80fa49dbda49ca349b11e28668a8c873c7294f5c6723efa"
+  },
+  "metric_primary_source_audit": {
+    "path": "docs/use_cases/records/smartphone_r5_kaggle_metric_primary_source_audit_v1.json",
+    "sha256": "568d424359c921c741f53ff0959fddd4e0782bd3fb722a57ede5500891354efe"
+  },
+  "release_and_evaluator": {
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "gnss_spp_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "gnss_solve_sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0",
+    "kaggle_evaluator_source_sha256": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "sample_key_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780"
+  },
+  "verification": {
+    "json_records_parsed": "230/230",
+    "selected_path_sha256_checks": "48/48",
+    "full_serial_ctest": "132/132 passed; exit 0; LD_LIBRARY_PATH includes /home/sasaki/.local/lib:/opt/ros/jazzy/lib; 98.35 s",
+    "git_diff_check": "passed",
+    "credential_scan": "1810 text files; 0 findings; token file not opened; token value not emitted",
+    "truth_reads_by_audit": 0,
+    "official_rank_asserted": false
+  },
+  "policy": {
+    "no_kaggle_mutation": true,
+    "no_token_access": true,
+    "no_score_tuning": true,
+    "no_self_hash": true
+  }
+}

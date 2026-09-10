@@ -1,0 +1,190 @@
+{
+  "schema_version": "smartphone-r5-phase92-source-meter-clock-state-parity-raw-execution-authorization.v1",
+  "status": "authorized-before-phase92-raw-execution",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Authorize exactly one sequential raw-only diagnostic execution of the already sealed Phase92 source-meter clock-state parity candidate on the four inherited routes. This authorization releases structural telemetry only and does not release accuracy, truth, submission scoring, tuning, or promotion.",
+  "authority": {
+    "phase92_execution_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_execution_freeze_v1.json",
+      "sha256": "c07ac587ebcfde6391de0b8a824687316de854442166a93daadb416d4e9b74d8"
+    },
+    "phase92_execution_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_execution_manifest_v1.json",
+      "sha256": "d6370b03f5d9dc48e8eb8da5667f06252caff444a2d8998cdac4380aea8f29a3"
+    },
+    "phase92_pre_raw_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase92_source_meter_clock_state_parity.py",
+      "sha256": "6398a31c580835834d79629e566db24d456b0caa931ca74db058bac4a95eba48"
+    },
+    "inherited_phase91_raw_input_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_execution_manifest_v1.json",
+      "sha256": "2078a4e2c3b963f07744c435ec303ea848bc372c8efd5003f6cb7b3d4b4ce988"
+    }
+  },
+  "implementation": {
+    "commit": "a1852bf45030d681e178fb9da9979c9a0dee737d",
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "68581bf1df17590ae9b0c859c4922c2ccb6bb2247e01590bb2eeb505ea79d649"
+    },
+    "candidate_source_unchanged": true,
+    "candidate_tuning": false
+  },
+  "executor": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase92_source_meter_clock_state_parity_execute.py",
+    "sha256": "66db6be16f5663fe5e163743de501ae5bae94785b8f7d8f1b7109e2670cf78c5",
+    "entrypoint": "--execute",
+    "role": "sequential native launcher and truth-free structural output evaluator",
+    "raw_input_hashing": false,
+    "accuracy_calculation": false
+  },
+  "candidate": {
+    "id": "phase92_source_meter_clock_state_parity_with_retained_raw_d_alignment",
+    "selector": "--native-source-clock-c0d-meter-state-parity",
+    "raw_only": true,
+    "diagnostic_only": true,
+    "accuracy_scored": false,
+    "route_score_selection": false,
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "Kaggle/token",
+      "base RINEX",
+      "precomputed coordinates",
+      "precomputed positioning results"
+    ]
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "raw_input_contract": {
+    "names": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "source": "inherited Phase91 raw-input path and SHA-256 pins",
+    "raw_input_manifest_read_for_paths_only": true,
+    "raw_bytes_read_by_authorizer": false,
+    "raw_bytes_read_by_executor": false,
+    "native_reads_per_route": {
+      "device_gnss.csv": 1,
+      "device_imu.csv": 1,
+      "brdc.nav": 1
+    },
+    "inherited_pins": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+        }
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+          "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+          "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480"
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+          "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+        }
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5"
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+        }
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_gnss.csv",
+          "sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204"
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/device_imu.csv",
+          "sha256": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab"
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2023-03-08-21-34-us-ca-mtv-u/pixel5/inputs/brdc.nav",
+          "sha256": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+        }
+      }
+    }
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "routes": 4,
+    "runs_per_route": 1,
+    "controls": 0,
+    "candidate_runs_total": 4,
+    "raw_device_gnss_reads": 4,
+    "raw_device_imu_reads": 4,
+    "broadcast_navigation_reads": 4,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "execution_authorization": {
+    "before_raw_execution": true,
+    "raw_execution_authorized": true,
+    "native_route_rerun_performed": false,
+    "exactly_one_run_each": true,
+    "sequential_route_order": true,
+    "stop_before_accuracy_or_submission": true,
+    "accuracy_or_submission_release": false,
+    "accuracy_scored": false,
+    "route_score_selection": false,
+    "failure_action": "preserve stdout/stderr and partial native outputs; record structural NO-GO; do not tune or open accuracy artifacts"
+  },
+  "read_accounting_at_authorization": {
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "required_structural_gates": [
+    "retained raw-key alignment",
+    "raw D finite full source coverage",
+    "meter clock and ISB units",
+    "official C0/D equation and meter sigma",
+    "active solve iterations at least one and strict cost decrease",
+    "finite Earth-valid output and speed",
+    "no PDC or external coordinate source"
+  ],
+  "stop_condition": {
+    "accuracy_not_scored": true,
+    "leaderboard_not_accessed": true,
+    "result_record_required": true
+  }
+}

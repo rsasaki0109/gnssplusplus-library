@@ -1,0 +1,78 @@
+{
+  "schema_version": "smartphone-r5-phase154-h-multiclock-raw-p-seed-authorization.v1",
+  "phase": 154,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-one-shot-mtv-h-prep",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase154_h_multiclock_raw_p_seed_manifest_v1.json",
+    "sha256": "c885d67ae6ea71f875e2bc40df9b480e59bb18356c0ace1776061cc64fd49267"
+  },
+  "source_and_binary": {
+    "implementation_commit": "94e5832e85a3e06183fabb5cdf89507c6ddab626",
+    "manifest_commit": "338a246cae53f3529cc1a594e6988b9d8edaf056",
+    "current_head_before_raw_reads": "338a246cae53f3529cc1a594e6988b9d8edaf056",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "603d8f81fda4b2ab40e43be6543e6b615dd8cc14fd2937e7306d858493eddb6c",
+    "phase153_raw_p_seed_source_sha256": "37f5be1bd4c3d64e4c4a762607b9c45cb0703edc007f46bae0fdecd90a725e10"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street",
+    "invocations": 1,
+    "failure_is_final": true
+  },
+  "authorization": {
+    "device_gnss": true,
+    "broadcast_navigation": true,
+    "phase149_raw_p_seed_stage": true,
+    "native_spp": true,
+    "raw_clock_only": true,
+    "imu": false,
+    "base_rinex": false,
+    "fgo": false,
+    "truth": false,
+    "accuracy": false,
+    "solution_coordinate_interpretation": false,
+    "solution_coordinate_publication": false,
+    "precomputed_position_or_seed": false,
+    "mat_pdc": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "sweep": false
+  },
+  "input_read_policy": {
+    "raw_gnss_reads": 1,
+    "navigation_reads": 1,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "input_paths_and_hashes": "exactly those pinned in the manifest; no payload inspection before launch",
+    "derived_or_precomputed_coordinate_inputs": 0
+  },
+  "result_policy": {
+    "preserve_phase152_artifacts": true,
+    "fresh_summary_path": "output/smartphone-r5/phase154-h-multiclock-raw-p-seed-v1/mtv-h/native_summary.json",
+    "aggregate_statuses_counts_reasons_only": true,
+    "coordinate_values_read_or_published": false,
+    "disk_seed_reuse": false,
+    "record_corrected_group_reference_rank_and_native_bias_availability": true,
+    "record_coverage_unassessed_if_first_epoch_fails": true,
+    "no_rerun_fallback_or_repair": true
+  },
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "navigation_reads": 0,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0
+  }
+}

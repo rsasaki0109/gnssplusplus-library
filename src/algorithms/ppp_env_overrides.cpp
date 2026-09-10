@@ -58,6 +58,19 @@ double envDoubleOr(const char* name, double fallback) {
     return value != nullptr ? std::atof(value) : fallback;
 }
 
+int envIntInRangeOr(const char* name, int fallback, int minimum, int maximum) {
+    const char* value = envValue(name);
+    if (value == nullptr) {
+        return fallback;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if (end == value || *end != '\0' || parsed < minimum || parsed > maximum) {
+        return fallback;
+    }
+    return static_cast<int>(parsed);
+}
+
 int envIntOr(const char* name, int fallback) {
     const char* value = envValue(name);
     if (value == nullptr) {
@@ -210,6 +223,11 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envStringOrEmpty("GNSS_PPP_CLAS_DD_ROW_DUMP");
     overrides.clas_mrtklib_float_parity =
         !envExactZero("GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY");
+    overrides.clas_ar_held_minimum_dd_rows =
+        envIntInRangeOr("GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS", 4, 2, 6);
+    overrides.clas_ar_held_maximum_publication_streak =
+        envIntInRangeOr(
+            "GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK", 5, 1, 5);
     overrides.clas_outage_reset_parity =
         !envExactZero("GNSS_PPP_CLAS_OUTAGE_RESET_PARITY");
     overrides.clas_sis_boundary =

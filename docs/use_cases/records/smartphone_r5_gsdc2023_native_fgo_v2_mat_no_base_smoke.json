@@ -1,0 +1,120 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-mat-no-base-smoke.v1",
+  "status": "structural-go-performance-no-go-short-window",
+  "candidate_id": "native-fgo-v2-mat-no-base-combined-imu",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_mat_no_base_freeze.json",
+    "sha256": "eabc310247f60f07a5d4641bb3d5d051fb88a4de66626b3407194121f8b21197",
+    "status_before_implementation": true
+  },
+  "truth_policy": {
+    "kaggle_scores_used_for_tuning": false,
+    "validation_materialized": false,
+    "validation_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_truth_opened": false,
+    "kaggle_or_external_mutation": false,
+    "train_truth_evaluation": "only after truth-free artifacts were sealed; two read-only diagnostic invocations, no parameter change"
+  },
+  "upstream": {
+    "taroz_repo": "https://github.com/taroz/gsdc2023",
+    "taroz_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "taroz_license": "MIT",
+    "gtsam_gnss_repo": "https://github.com/taroz/gtsam_gnss",
+    "gtsam_gnss_commit": "e679b72b620fc6800723578e4077dd157587d129",
+    "gtsam_gnss_license": "MIT",
+    "file_sha256": {
+      "gsdc2023/fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "gsdc2023/parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "gsdc2023/functions/imuprocessing.m": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+      "gsdc2023/functions/deviceimu2imu.m": "9aff2984b0aa1709bbb1b397b48216ab46c213a1e3cbcfa99c0546a48a6df632",
+      "gtsam_gnss/src/PseudorangeFactor_XC.h": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415",
+      "gtsam_gnss/src/TDCPFactor_XXCC.h": "cc8f5acabd43db25b5b4aca48f6c8ae6a0e2a399820fb950de9004555c9cd4b2",
+      "gtsam_gnss/src/DopplerFactor_VD.h": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1",
+      "gtsam_gnss/src/MotionFactor_XXVV.h": "0ca60daded389edfc2619350ca7fae89ccc8c3186624db1a96aa3ef5e3b1858f"
+    },
+    "line_references": {
+      "fgo_gnss_imu.m": ["129-153", "252-299", "325-380"],
+      "parameters.m": ["174-203"],
+      "functions/imuprocessing.m": ["7-47"],
+      "functions/deviceimu2imu.m": ["5-29"]
+    }
+  },
+  "source_hashes": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "fe5674ab9c3c370a3295630f76d05edff2706654e1fcb54735ea48bd7ea77d11",
+    "apps/commands/benchmarks/gnss_smartphone_phone_data_mat.py": "377382ea143f2ef5f4cfbd08e5fdb55510a1f72ec894b25ee4b006aac2585cc0",
+    "apps/CMakeLists.txt": "9827a74b2218c7809e21141eaf0c818b2ddcc43da0f9237840ba61f3750f9b0a",
+    "tests/test_smartphone_native_fgo_v2_mat.py": "1ff393552674fa89a67e4ed34eeecc104832de98696dfb32dbc3da5dca75f9a1",
+    "tests/CMakeLists.txt": "d099e843059da70a65f78e89d7d5dddab6a001892929a0d06ae540f572299225",
+    "release_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "48a44536bde0c76f396ba2775b40bf32f6ca296f2235185f8ecfd622c0a32903"
+    }
+  },
+  "structural_smoke": {
+    "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "truth_free": true,
+    "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --obs output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/rover.obs --nav output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/brdc.nav --imu output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/imu_processed.csv --out output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/submission.csv --summary-json output/smartphone-r5/native-fgo-v2-mat-no-base-v1/smoke/route-2021/run_summary.json --dataset-id 2021-03-16-18-59-us-ca-mtv-a/pixel5 --skip-epochs 200 --max-epochs 30",
+    "summary_sha256": "4b5db456dc7465c175bf25c49851a0dc59e9c0a9a60aff7cc2bc15f63d3715b4",
+    "output_sha256": "1a5b4c7f6233a633ec6d7f4774228087144d915ed3a0a2bc613bcff4ad023825",
+    "epochs": 30,
+    "output_rows": 30,
+    "pseudorange_factors": 452,
+    "double_difference_factors": 0,
+    "graph_factors": 513,
+    "graph_values": 121,
+    "imu_intervals": 29,
+    "converged": true,
+    "finite_coordinates": true,
+    "gravity_mean_norm_mps2": 9.787374328437304,
+    "gravity_norm_std_mps2": 0.28926185652145325,
+    "heading_windows": 3,
+    "heading_latched": true,
+    "wall_time_s": 0.91,
+    "peak_rss_kb": 35444,
+    "decision": "CombinedImuFactor structural smoke passed"
+  },
+  "train_extension": {
+    "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "truth_free_artifacts_sealed_before_truth": true,
+    "command": "python3 apps/commands/benchmarks/gnss_smartphone_phone_data_mat.py --input data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/phone_data.mat --output output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/imu_processed.csv --summary-json output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/mat_converter_summary.json; LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --obs output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/rover.obs --nav output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/brdc.nav --imu output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/imu_processed.csv --out output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/submission.csv --summary-json output/smartphone-r5/native-fgo-v2-mat-no-base-v1/train/route-2023/run_summary.json --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --skip-epochs 200 --max-epochs 30",
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_read_count_in_phase": 2,
+    "output_sha256": "9a3a37c7793a83b5618109a4d91ea016cdff158fedfdb2a07e22b4deebc24d08",
+    "run_summary_sha256": "c484a83b1a3f00bfc57997ae8d3e0a68c117b1b2a7083534d986fd3c3746aaa8",
+    "mat_converter": {
+      "source_sha256": "e2843d0104193d41ae56e797d11e695c603b4201109708f538eed9beff678870",
+      "converted_imu_sha256": "01501ba1271a2fac31f77238486b8c36a916ad6c757b462781d52af190270042",
+      "rows": 166363,
+      "opaque_gt_time_ignored": true,
+      "truth_used": false
+    },
+    "metrics": {
+      "candidate": {"rows": 30, "matched_truth": 30, "availability": 1.0, "horizontal_median_m": 2.3891977901516723, "horizontal_p95_m": 13.72809866592761},
+      "v1_same_window": {"rows": 30, "matched_truth": 30, "availability": 1.0, "horizontal_median_m": 1.4609035197361018, "horizontal_p95_m": 2.0009204942713765},
+      "truth_match_tolerance_ms": 1000,
+      "vertical_metric": "not available in the four-column research output",
+      "wall_time_s": 1.17,
+      "peak_rss_kb": 45112
+    },
+    "gate": {
+      "structural": true,
+      "performance_non_regression": false,
+      "reason": "short 30-epoch candidate horizontal P95 13.728 m exceeds the same-window v1 2.001 m; no parameter or code retuning permitted",
+      "promotion": "No-Go; retain isolated development prototype and do not open validation/holdout"
+    }
+  },
+  "artifact_manifest": {
+    "path": "output/smartphone-r5/native-fgo-v2-mat-no-base-v1/manifests/artifact_sha256.txt",
+    "sha256": "eb27caab66d9033babf16e96a9ee616737b1a30335fc401719b0f793a52bf96a",
+    "generated_artifact_count": 14,
+    "atomic_solver_outputs": true
+  },
+  "limitations": [
+    "The MATLAB gt.Gobs/gt.Gnav MCOS wrapper is not reproduced.",
+    "The current native no-base GTSAM backend does not insert taroz custom Doppler/TDCP factors; these remain an audited blocker, not a silently omitted claim.",
+    "The bounded performance comparison has no altitude column and is not a Kaggle score.",
+    "The entry point requires an explicit frozen mounting contract; an unknown handset axis convention must remain fail-closed."
+  ]
+}

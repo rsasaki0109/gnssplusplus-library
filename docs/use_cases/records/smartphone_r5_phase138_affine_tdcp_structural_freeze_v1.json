@@ -1,0 +1,165 @@
+{
+  "schema_version": "smartphone-r5-phase138-affine-tdcp-structural-freeze.v1",
+  "phase": 138,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-structural-contract",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase138_affine_tdcp_structural_audit_v1.md",
+    "commit": "739b940dc870e21de42deba6ba911c17a93f0526",
+    "sha256": "5cd012e87b3d2d2fecd5b0d5897b1252d99a979166108de244e92aaf8b4545fe"
+  },
+  "design_freeze": {
+    "commit": "49be79247b4d82bf7a64c7b63e542c5a6dfff2c0",
+    "implementation_commit": "c5783d7e323b0c4593958a4e210284cf9f9fc726",
+    "phase135_corrected_source_commit": "f9a1fc9403e7072435a30d9e06aa8ea59493cdc5"
+  },
+  "scope": "Structural qualification only; this artifact authorizes no raw, solver, truth, MAT, PDC, precomputed-coordinate, accuracy, or Kaggle execution.",
+  "candidate": {
+    "count": 1,
+    "id": "phase138-affine-tdcp-anchor-range-constant-v1",
+    "selector": "--native-phase138-affine-tdcp-anchor-range-constant",
+    "default_off": true,
+    "requires": [
+      "--native-phase135-official-affine-measurement-family",
+      "--native-phase118-official-tdcp-huber-k"
+    ],
+    "partial_selector_set_allowed": false,
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "measurement_equation": "tdcp_phase138 = tdcp_native - (rho_current_initial - rho_previous_initial)",
+    "factor_residual": "los_0^T((X_current-X_current_initial)-(X_previous-X_previous_initial)) + h_0^T(C_current-C_previous) - tdcp_phase138",
+    "range_definition": "source geodist range at each exact affine endpoint, using the same satellite state and one explicit Sagnac convention as the affine LOS",
+    "factor_families": {
+      "pseudorange": {"keys": ["X_i", "C_i"], "dimensions": [3, 7]},
+      "doppler": {"keys": ["V_i", "D_i"], "dimensions": [3, 1]},
+      "ordinary_tdcp": {"keys": ["X_i", "X_i+1", "C_i", "C_i+1"], "dimensions": [3, 3, 7, 7]},
+      "pose3_x_bridge": {"keys": ["x_i", "X_i"], "dimensions": [6, 3]}
+    },
+    "exactly_once_invariants": {
+      "range_constants_validated": "ordinary_tdcp_admitted_rows",
+      "measurements_adjusted": "ordinary_tdcp_admitted_rows",
+      "affine_tdcp_factor_count": "ordinary_tdcp_admitted_rows",
+      "adjustment_application_passes": 1,
+      "adjusted_exactly_once": true,
+      "factor_count_unchanged": true,
+      "same_endpoint_epoch_and_satellite_state": true,
+      "single_sagnac_representation": true,
+      "finite_adjusted_measurements": true
+    },
+    "fixed": {
+      "phase118_tdcp_sigma_m": 0.03,
+      "phase118_highway_huber_k": 0.5,
+      "phase107_raw_base_compensation": true,
+      "phase107_raw_base_source_miss_mask": true,
+      "phase107_preserve_additional_frequency_bands": false,
+      "phase99_main_linear_solver": "MULTIFRONTAL_QR",
+      "phase99_main_elimination": "EliminateQR",
+      "c7_dimension": 7,
+      "c_units": "metres",
+      "d_units": "metres/second",
+      "pixel5_final_offset_applications": 1,
+      "phase135_pseudorange_doppler_tdcp_equations": "unchanged",
+      "pairing_admission_sigma_filter_imu_lm": "unchanged"
+    },
+    "legacy_factor_counts": {
+      "pseudorange": 0,
+      "doppler": 0,
+      "ordinary_tdcp": 0
+    }
+  },
+  "recipe": {
+    "on_selectors": [
+      "--native-phase135-official-affine-measurement-family",
+      "--native-phase138-affine-tdcp-anchor-range-constant",
+      "--native-phase118-official-tdcp-huber-k"
+    ],
+    "off_selectors": [
+      "--native-phase117-tdcp-snr-type-sigma",
+      "--native-phase120-official-tdcp-resl-atmosphere-cancellation",
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask",
+      "--native-phase130-shared-ledger-key-local-support",
+      "--native-phase131-canonical-correction-band-key",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "phase107_raw_base": true,
+    "phase126_134_compound": false,
+    "route_type": "Highway",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1
+  },
+  "structural_gates": {
+    "selector_isolation": true,
+    "phase135_all_affine_and_legacy_zero": true,
+    "phase138_range_verified_anchor_applied_affine_count_equal": true,
+    "phase138_same_endpoint_satellite_state_and_sagnac": true,
+    "phase138_exactly_once_and_transactional": true,
+    "raw_base_exactly_once_and_miss_conserved": true,
+    "c7_d_exact_full_finite_alignment": true,
+    "qr_solver": true,
+    "gnss_first_and_main_accepted_iterations_positive": true,
+    "gnss_first_and_main_finite_strict_cost_decrease": true,
+    "finite_earth_valid_expected_epoch_coverage": true,
+    "pixel5_offset_exactly_once": true,
+    "no_fallback_retry_rerun_or_solution_rows": true
+  },
+  "routes": [
+    {"label": "MTV-A", "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5", "planned_solver_invocations": 1},
+    {"label": "LAX-T", "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5", "planned_solver_invocations": 1}
+  ],
+  "input_lineage": {
+    "allowed_after_authorization": [
+      "raw phone device_gnss.csv",
+      "raw phone device_imu.csv",
+      "broadcast navigation",
+      "sealed raw-base RINEX and station metadata"
+    ],
+    "forbidden": [
+      "truth or reference coordinates",
+      "MAT",
+      "PDC/precomputed coordinates or corrections",
+      "saved solution rows as solver input",
+      "accuracy evaluator",
+      "Kaggle or token/network dataset access"
+    ],
+    "solution_policy": "opaque hash/row-count seal only; coordinate content is never read by structural validation"
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "4201cae60b74c8037155cf926310eb790269e060a6c7ef62544ea446679ca6bf",
+    "include/libgnss++/algorithms/fgo.hpp": "c4995726b91d15ef62ed23f154f46a37d2ce562272e5a24892cca3e3fba34ea2",
+    "include/libgnss++/algorithms/fgo_config.hpp": "85cfe25b0e6cf45a618540976df11764f8cf7e3364299261bd8260fb7b8c7a19",
+    "include/libgnss++/algorithms/tdcp_contract.hpp": "f4423e1944fd58f28ad779fa6a6ba87919e358360cdf1ddda59b0af20a954d57",
+    "src/algorithms/fgo_gtsam_backend.cpp": "7f13cbd722b93842f0923abfc45affe60015aae3d9639c6813e496935cede945"
+  },
+  "target_binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "eff11f69f3fbe36e0e71aa52682c7f46f6aca072c179d6a3d75129301c725e24"
+  },
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0
+  },
+  "authorization_boundary": {
+    "independent_raw_authorization_commit_required": true,
+    "materialize_inputs_after_authorization_only": true,
+    "raw_solver_invocations": "exactly one per route, MTV-A then LAX-T",
+    "raw_result_commit_separate": true,
+    "truth_accuracy_authorization": false,
+    "solution_publication": false,
+    "rerun_fallback_repair_sweep": false
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-1-independent-confirmation-result.v1",
+  "status": "final-no-go-structural-heading-gate",
+  "candidate_id": "native-fgo-v2-1-preserve-v1-tdcp-motion-combined-imu",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze.json",
+    "sha256": "a6c1dff74f8ec0eb28985cb595976231bac7869ccddebc3d10fc725fd31f52c3"
+  },
+  "freeze_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze_manifest.json",
+    "sha256": "8845fa0a5d05e0340174de6957b0fa0647322c14337d4daca44579f58724cf2d"
+  },
+  "truth_policy": {
+    "selection_metadata_only": true,
+    "truth_free_payload_materialized_after_freeze": true,
+    "truth_free_candidate_attempted": true,
+    "confirmation_truth_materialized": false,
+    "confirmation_truth_open_count": 0,
+    "validation_materialized": false,
+    "validation_truth_opened": false,
+    "future_holdout_materialized": false,
+    "future_holdout_truth_opened": false,
+    "kaggle_or_external_mutation": false,
+    "token_access": false,
+    "leaderboard_scores_used_for_tuning": false,
+    "post_truth_tuning": false
+  },
+  "confirmation_set": [
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "route_results": [
+    {
+      "dataset_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "truth_free_inputs": {
+        "materialization_manifest": "output/smartphone-r5/native-fgo-v2-1-confirmation-v1/routes/2021-03-10-23-13-us-ca-mtv-h__pixel5/materialization_manifest.json",
+        "materialization_manifest_sha256": "8d371f40d88258afa91792fddd471f449e653af665cec2601e672836c52ed5ea",
+        "device_gnss_sha256": "aa5bda7b55373c2683a1abc1b19bf96e2af2168ac383087d2c0afc8f2761bed8",
+        "device_imu_sha256": "90b9f442008695b541c96b005373820dbf75d7de15734040e625ba6d1218614b",
+        "imu_processed_sha256": "347a9511fdc4f1a362bfdad02ca404273cf0638ea756c83c1b1e44ace339a1c0",
+        "brdc_nav_sha256": "4491d51958be9ee128eded5e1de0682bd4fb21968968d00326bf0af108e18a8b",
+        "reference_obs_sha256": "c957fd2a3284a4ba8daf637c5b91d00b266c3f7289e137cf04acc42b494a1799",
+        "adapter_summary_sha256": "6371f25765434739332c295f9876f756d00a9e678eb2d141a47265f31d4744c7",
+        "adapter_rover_obs_sha256": "eb3cce0c51e9fd5096a6174fef6450d856358030af22089462f007cc079baf26",
+        "imu_conversion_summary_sha256": "28a50f6fcfff8edbe28923110a67931e209ea557b8edd87307ccdb02b3ed0bce"
+      },
+      "adapter": {"truth_free": true, "epochs": 1465, "rows": 50639, "galileo_e1_hatch_window_s": 30},
+      "candidate": {
+        "status": "fail-closed-before-graph",
+        "return_code": 1,
+        "reason": "IMU initialization failed: GNSS course did not make heading observable under frozen gate",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "failure_log_sha256": "dcf00ca93f88267e08c61d49d5fcb53674bfcb1f4de686b6b6bd824055af31d8",
+        "wall_time_s": 0.91,
+        "peak_rss_kb": 30420,
+        "output_published": false
+      },
+      "structural_gate": {"passed": false, "heading_observable": false, "factor_graph_built": false, "converged": false}
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "truth_free_inputs": {
+        "materialization_manifest": "output/smartphone-r5/native-fgo-v2-1-confirmation-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/materialization_manifest.json",
+        "materialization_manifest_sha256": "8e92552d0a4f1b27bc6fd8c7d43f3929b58d5c0ef323c5156b68dfcd1e732529",
+        "device_gnss_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_imu_sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+        "imu_processed_sha256": "1c08d7cb09132723f330e26cb3307ebce9aa7ee42ec80ea567011354e57bd2ca",
+        "brdc_nav_sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+        "reference_obs_sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "adapter_summary_sha256": "8f8f9bb31c7e57d92c99acdc8400d0ed8386b2a8cd0d5104fcaa3209f2d6db86",
+        "adapter_rover_obs_sha256": "4e4d8ef2535e15b1c002fb5e75c2e5bcae3c8b52d17948ad3deb9b861f1ecec2",
+        "imu_conversion_summary_sha256": "fcbb7c7259ab47ea5a86a6fa5d017844c449f1f13e73f076fa93e773f5df5d7f"
+      },
+      "adapter": {"truth_free": true, "epochs": 1466, "rows": 51243, "galileo_e1_hatch_window_s": 30},
+      "candidate": {
+        "status": "fail-closed-before-graph",
+        "return_code": 1,
+        "reason": "IMU initialization failed: GNSS course did not make heading observable under frozen gate",
+        "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "failure_log_sha256": "3b237e484ed2d6d26de75262646270bb72ec818183fa174a13f0f1183b1d8df4",
+        "wall_time_s": 0.85,
+        "peak_rss_kb": 30456,
+        "output_published": false
+      },
+      "structural_gate": {"passed": false, "heading_observable": false, "factor_graph_built": false, "converged": false}
+    }
+  ],
+  "comparison": {
+    "exact_v1_baseline_generated": false,
+    "confirmation_truth_scored": false,
+    "diagnostic_metrics": null,
+    "vertical_metrics": null,
+    "reason": "The frozen v2.1 candidate failed its fail-closed GNSS-course/IMU heading gate on both identities before a valid graph/output existed; no truth score can be defined without violating the structural gate."
+  },
+  "decision": {
+    "passed": false,
+    "status": "No-Go",
+    "reason": "Both independent never-scored route/device identities failed the unchanged v2.1 heading-observability gate; do not open confirmation truth and do not open fresh validation.",
+    "fresh_validation_allowed": false,
+    "future_holdout_allowed": false,
+    "production_default_changed": false,
+    "algorithm_or_parameter_changed": false
+  },
+  "verification": {
+    "release_target_built": true,
+    "release_binary_sha256_unchanged": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "related_contract_tests": "pass: v2.1 contract and independent confirmation contract",
+    "full_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build -j1 --output-on-failure",
+      "total": 118,
+      "passed": 117,
+      "failed": ["python_cli_tests"],
+      "unrelated_failure": "tests/cli_cases/stream_protocols.py::test_qzss_l6_info_reads_frames_from_serial_device expected two L6 frames but received summary frames=0/discarded_bytes=244"
+    },
+    "git_diff_check": "pass"
+  },
+  "immutable_recipe_hashes": {
+    "v2_1_source_record_sha256": "6c33400e97345cc7f966c3ff5ff7a946b4fb6f89bb4c35cf56bc95654f663eae",
+    "v2_1_binary_sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "v2_1_source_sha256": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+    "gtsam_backend_sha256": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+    "gtsam_internal_sha256": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+  },
+  "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_result_manifest.json"
+}

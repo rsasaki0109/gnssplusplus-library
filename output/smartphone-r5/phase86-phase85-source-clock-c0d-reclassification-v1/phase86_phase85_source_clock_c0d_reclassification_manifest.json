@@ -1,0 +1,96 @@
+{
+  "accuracy_scored": false,
+  "all_gates_passed": false,
+  "candidate_runs": 8,
+  "control_runs": 0,
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase86_phase85_source_clock_c0d_reclassification.py",
+    "sha256": "18192466e80b3a17c5f93808da584535db8dac5959d59563469fdebfdcf017c1"
+  },
+  "failed_gates": {
+    "instances": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost"
+    ],
+    "names": [
+      "sealed_phase85_v2_artifact_hashes_exact",
+      "graph_iterations_at_least_one",
+      "final_cost_strictly_less_than_initial_cost",
+      "all_gates_anded"
+    ]
+  },
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase86_phase85_source_clock_c0d_reclassification_freeze_v1.json",
+    "sha256": "9b13d6a5118c734521e69d350c9478f0844c5bbf9047c5e057bf4f5a427ace46"
+  },
+  "native_reruns": 0,
+  "phase": 86,
+  "phase85_retry_manifest": {
+    "bytes": 10529,
+    "path": "docs/use_cases/records/smartphone_r5_phase85_source_clock_c0d_structural_manifest_v1.json",
+    "sha256": "20adc2e3388b92d045580739d025106c18aa068fcf26f8d117d48d3d2f5f7058"
+  },
+  "phase85_v2_aggregate": {
+    "bytes": 641315,
+    "freeze_declared_sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a",
+    "freeze_hash_matches_verified_output": false,
+    "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2/phase85_source_clock_c0d_structural_result.json",
+    "sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a6",
+    "verified_sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a6"
+  },
+  "phase85_v2_output_manifest": {
+    "bytes": 921,
+    "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2/phase85_source_clock_c0d_structural_manifest.json",
+    "sha256": "5bb7bdaeb0f1fb2c00d7fe1354cd0cda1c289b2b664840b4b39135380574c53c"
+  },
+  "read_accounting": {
+    "accuracy_scored": false,
+    "archive_reopens": 0,
+    "base_rinex_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "candidate_artifact_reads_total": 16,
+    "candidate_submission_reads": 8,
+    "candidate_summary_reads": 8,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_reruns": 0,
+    "native_solver_invocations": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "phase85_candidate_artifact_reads": 16,
+    "phase85_retry_manifest_reads": 1,
+    "phase85_v2_aggregate_reads": 1,
+    "phase85_v2_output_manifest_reads": 1,
+    "phase86_freeze_reads": 1,
+    "phase86_manifest_reads": 1,
+    "precomputed_coordinate_reads": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "raw_reads": 0,
+    "route_score_selection": false,
+    "sealed_phase85_artifacts_only": true,
+    "truth_reads": 0,
+    "validation_holdout_reads": 0
+  },
+  "result": {
+    "bytes": 22976,
+    "path": "output/smartphone-r5/phase86-phase85-source-clock-c0d-reclassification-v1/phase86_phase85_source_clock_c0d_reclassification_result.json",
+    "sha256": "e72ef3371d28650d3660795bd341fd1a0765e1cf77c99cbfcde9ac236422a89e"
+  },
+  "schema_version": "smartphone-r5-phase86-phase85-source-clock-c0d-reclassification-output-manifest.v1",
+  "status": "no-go-phase86-phase85-source-clock-c0d-active-solve-gates",
+  "truth_reads": 0
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-bridge-result-manifest.v1",
+  "status": "sealed-no-go",
+  "result": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_result_v1.json",
+    "sha256": "c2fec781e9364d3cb10c3c2198b0d3e83fcad60d26f56195486e98424002202b"
+  },
+  "score": {
+    "report": "output/smartphone-r5/native-fgo-pdc-bridge-v1/train_evaluation.json",
+    "report_sha256": "b48a9c2b750f5f57955f8bc7ca648a7664095b3078437e11ce77be6c7a87b1af",
+    "manifest": "output/smartphone-r5/native-fgo-pdc-bridge-v1/train_evaluation.manifest.json",
+    "manifest_sha256": "4b8fba16ba66287066cb9163f5d0409c420356125eac728fa60d0e4eb919f830"
+  },
+  "candidate_run_manifests": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": "707b952f0391a3ad00ea2bb15ba6f3e72c6da1f7642c5918628f53c975bc72c9",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": "d3315ef58fd143b48ac529d32589fe40866275fa57d97013599aa463b757234b",
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": "4d71ff2da3bf02213456499190a5ce0d7ab68076b06d117c3544e1d3f91f9dc7"
+  },
+  "baseline_run_manifests": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": "3fc88217872aa099e1cb3cf34ae068f417f91197b3afe7f1e46ad10c51c50dde",
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": "b4ac6de44c5cb2278f4694df2fbae0deb0e304b7270464edf27f0d2541814a11",
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": "ce4cefcf5c1fc8f6c4c27c4b6ba47ad70b0aecef297df8345dc68451d3cde259"
+  },
+  "verification": {
+    "release_binary": "build/apps/gnss_fgo",
+    "release_binary_sha256_after_rebuild": "c23bd80463d91cdd872571220f495971d492bc4ec6b1014641fa9284d62afb04",
+    "bridge_artifact_binary_sha256": "1ffe44faf7b5f1a988c1283409c634b5de86acd124fb6599439cb329254fe83c",
+    "v5_submission_sha256_unchanged": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "full_ctest": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build --output-on-failure -j1",
+      "total": 124,
+      "passed": 124,
+      "failed": 0
+    },
+    "diff_check": "passed",
+    "json_validation": "passed",
+    "truth_policy": "Only three already-opened development truth files were read once for this score; no validation, holdout, or test truth was opened."
+  }
+}

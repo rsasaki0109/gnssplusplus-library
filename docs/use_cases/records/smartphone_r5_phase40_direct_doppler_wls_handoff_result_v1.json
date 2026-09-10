@@ -1,0 +1,205 @@
+{
+  "schema_version": "smartphone-r5-phase40-direct-doppler-wls-handoff-result.v1",
+  "phase": 40,
+  "status": "sealed-structural-no-go",
+  "decision": {
+    "passed": false,
+    "classification": "native_direct_doppler_wls_physical_gate",
+    "promotion": "No-Go; retain as an unpromoted development diagnostic",
+    "reason": "The direct raw-Doppler WLS sequence had zero valid estimates for all 1325 target epochs. 1181 epochs reached the existing four-row solve and were rejected by the unchanged physical gate; the first solved state was physical-gate with velocity norm 8919.7537472980548 m/s and clock-rate absolute value 7314.3850372387406 m/s. The candidate therefore failed closed before IMU initialization, output projection, TDCP runtime reporting, or flag-off controls."
+  },
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "starting_commit": "5543e03",
+    "freeze_commit": "bd22998",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_freeze_v1.json",
+    "freeze_record_sha256": "544089e32a7f7c0ca96ee6cbbfd7634145aebe288fe32a947ef1f67d5c07f52e",
+    "source_commit": "4b60601d62a7c343bb3cdb4f8de48116b89052bb",
+    "candidate_source": "apps/native/gnss_fgo_imu_no_base.cpp",
+    "candidate_source_sha256": "c742a8bc1078b99af02748b23de71ebacf3cad964c3c8a458527fd6f7708a03a",
+    "candidate_binary": "build/apps/gnss_fgo_imu_no_base",
+    "candidate_binary_sha256": "8ba6a2a680107a0a1e542457f5d14cd57a2439360d4fb81474b6d20d33480c7e",
+    "runner": "apps/commands/benchmarks/gnss_smartphone_phase40_direct_doppler_wls_handoff.py",
+    "runner_sha256": "aa57cf8edad83a744df28d1706f4362f17e6968f249ed93efe3f101fd00fbac7",
+    "focused_test": "tests/test_smartphone_phase40_direct_doppler_wls_handoff.py",
+    "focused_test_sha256": "9ee3a04b7c8ed083cd9bfc58609dcf3123f7b19db847e12c58df4b052dabad6a"
+  },
+  "input_contract": {
+    "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "inputs_only": [
+      "raw device_gnss.csv",
+      "raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "device_gnss_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+    "device_imu_sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+    "brdc_nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+    "raw_epoch_count": 3140,
+    "target_epoch_count": 3139,
+    "other_inputs_opened": false
+  },
+  "candidate_probe": {
+    "flag": "--native-direct-doppler-wls-handoff",
+    "base_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor"
+    ],
+    "handoff_mode": "direct-doppler-wls",
+    "velocity_source": "FGOProblem::doppler_velocity_wls_estimates",
+    "measurement_source": "raw Doppler rows + broadcast satellite state + raw SPP seed",
+    "gnss_first_optimizer_attempted": false,
+    "positions_clocks_copied": 0,
+    "raw_spp_seed_position_count": 1325,
+    "raw_spp_seed_position_invalid_count": 0,
+    "corrected_undifferenced_doppler_factor_count": 4724,
+    "epochs_with_at_least_four_doppler_rows": 1181,
+    "epochs_with_insufficient_rows": 144,
+    "direct_valid_count": 0,
+    "propagated_valid_count": 0,
+    "rejected_count": 1325,
+    "nonfinite_count": 0,
+    "over_70_mps_count": 1181,
+    "clock_rate_over_2000_mps_count": 577,
+    "max_velocity_norm_mps": 8919.7537472980548,
+    "max_clock_rate_abs_mps": 7316.9109537785716,
+    "first_solved": {
+      "rows": 4,
+      "reason": "physical-gate",
+      "velocity_norm_mps": 8919.7537472980548,
+      "clock_rate_abs_mps": 7314.3850372387406
+    },
+    "fixed_limits": {
+      "velocity_norm_max_mps": 70.0,
+      "clock_rate_abs_max_mps": 2000.0,
+      "edge_hold_max_s": 1.0
+    },
+    "coverage_gate": "fail-closed: direct + propagated must equal all epochs and rejected must equal zero",
+    "output_published": false
+  },
+  "structural_matrix": {
+    "requested_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_order_fixed": true,
+    "candidate_run1_started": true,
+    "candidate_run2_started": false,
+    "candidate_routes_completed": 0,
+    "failed_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "flag_off_controls_started": false,
+    "status": "fail-closed-before-remaining-routes-repeats-and-controls",
+    "runner_exit_code": 2,
+    "truth_remained_sealed": true
+  },
+  "runtime_evidence": {
+    "output_root": "output/smartphone-r5/phase40-direct-doppler-wls-handoff-v3",
+    "failure_record": "output/smartphone-r5/phase40-direct-doppler-wls-handoff-v3/phase40_structural_failure.json",
+    "failure_record_sha256": "d08d7ff67c3608a0ac193ad913c127af0d38fc47d0cb63979149066211d8c9fe",
+    "run_log": "output/smartphone-r5/phase40-direct-doppler-wls-handoff-v3/candidate/2021-08-24-20-32-us-ca-mtv-h/pixel5/run1/run.log",
+    "run_log_sha256": "e8887b145f18d925e30bca77e83b5ea2a98e610d2a79561a38517bc512dc0983",
+    "failure_log_line": "direct Doppler WLS handoff failed closed: direct Doppler WLS coverage gate failed: count=0/1325 direct=0 propagated=0 rejected=1325 nonfinite=0 over_70_mps=1181 clock_over_2000_mps=577 max_mps=8919.7537472980548 max_clock_rate_abs_mps=7316.9109537785716 first_solved_rows=4 first_solved_reason=physical-gate first_solved_velocity_norm_mps=8919.7537472980548 first_solved_clock_rate_abs_mps=7314.3850372387406"
+  },
+  "tdcp_contract": {
+    "configured_by_base_recipe": true,
+    "required_factors_built": ">0",
+    "required_factors_inserted_equals_built": true,
+    "runtime_status": "not_reached_after_direct-WLS-fail-closed",
+    "no_tdcp_result_claimed": true
+  },
+  "flag_off_baseline_contract": {
+    "status": "not_started_after_candidate-fail-closed",
+    "authoritative_record": "docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json",
+    "authoritative_record_sha256": "17e75c367ae05e10ba5349b0db73cbfa048a27992286ae48b5cdf77346053580",
+    "known_safe2_baselines": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "summary_sha256": "b0ecd9c0eb931b11908a4e19ea54cb21a7a530492ac6fee245086dff93722460"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "submission_sha256": "18d90461883f9b51dc5e235ff2fda2e535d31678bb47b232a6aec12662faacdc",
+        "summary_sha256": "915f002eeb1c2f4728741d72e8225f6a36959462d4569f8a04f0ce3eb17da988"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "submission_sha256": "65b44029a90e75a6b11e96b6ae9344020dee55bb8b5ea9b8bee79f2c765bca47",
+        "summary_sha256": "77beb1b59aadefcdac0394c775f5ab45eb58c10ec7af92f21990dbbc694438b8"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "submission_sha256": "4eb2b566708a87db4903610a41cd648c7ff065d35710d358894a78eaa8e116e3",
+        "summary_sha256": "2c85fd545ecf6b1bc815c7c4c42a139424a722787b2b58da6ae48b412188a542"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "submission_sha256": "524769cdf67aa857eefaafdadf943dd76586dda6a53e8b6d1df4a707d7699f71",
+        "summary_sha256": "84b354751b617258db6499cf5ab477f520e3463ae73ec8b73dd3f3b438d45f31"
+      }
+    },
+    "mtv_h_flag_off_policy": "preserve the historical Phase39 expected native_solver_state_failure_before_utc_projection; no output is promoted"
+  },
+  "historical_binary_pin_policy": {
+    "freeze_starting_binary_sha256": "778b15e45649ce2686b2c5459599c45fe7ff078e90d96b9796df183ef20b421a",
+    "historical_pins_rewritten": false,
+    "explanation": "Existing pre-Phase40 binary SHA pins remain historical records. The candidate binary was rebuilt only after the source/focused-test push and is recorded separately above."
+  },
+  "verification": {
+    "build": {
+      "command": "cmake --build build -j4 --target gnss_fgo_imu_no_base",
+      "passed": true
+    },
+    "focused_python_test": {
+      "command": "python3 tests/test_smartphone_phase40_direct_doppler_wls_handoff.py",
+      "passed": true,
+      "tests": 4
+    },
+    "focused_ctest": {
+      "phase40": {
+        "command": "ctest --test-dir build -R python_smartphone_phase40_direct_doppler_wls_handoff_tests",
+        "passed": true,
+        "tests": 1
+      },
+      "phase39_regression": {
+        "command": "ctest --test-dir build -R python_smartphone_phase39_velocity_only_handoff_tests",
+        "passed": true,
+        "tests": 1
+      }
+    },
+    "full_ctest_with_runtime_library_path": {
+      "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build -j4 --output-on-failure",
+      "passed": false,
+      "total_tests": 142,
+      "passed_tests": 138,
+      "failed_tests": 4,
+      "failed_test_names": [
+        "python_cli_tests",
+        "python_smartphone_phase35_matrix_tests",
+        "python_smartphone_phase37_pixel5_repeatability_tests",
+        "python_smartphone_phase38_mtvh_failure_diagnosis_tests"
+      ],
+      "failure_explanation": "The Phase35/37/38 failures are historical tests that pin the pre-Phase40 native binary SHA and are intentionally not rewritten. python_cli_tests had unrelated serial pseudo-terminal stream fixture failures. run_tests and clas_outage_legacy_kill_switch passed with the runtime library path."
+    }
+  },
+  "native_policy": {
+    "production_default_changed": false,
+    "phase31_champion_mutated": false,
+    "candidate_failure_policy": "fail-closed",
+    "candidate_retained_as": "development-only diagnostic; not promoted",
+    "phase41_follow_up": "Any Doppler measurement-contract correction requires a new freeze and is outside Phase40."
+  },
+  "truth_accounting": {
+    "truth_open_count": 0,
+    "ground_truth_materialized": false,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_coordinates_used_for_inference": false,
+    "edge_hold_or_alternate_trajectory_used": false,
+    "token_or_kaggle_access": false,
+    "post_truth_tuning": false
+  }
+}

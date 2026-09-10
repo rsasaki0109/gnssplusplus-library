@@ -1,0 +1,85 @@
+{
+  "route": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+  "role": "development/train; not heldout or leaderboard proof",
+  "baseline_m": 1.305940315797287,
+  "truth": {
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+    "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+    "bytes": 108045,
+    "rows": 1102
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "phase": 371,
+  "status": "frozen before one truth read",
+  "candidate": {
+    "path": "output/smartphone-r5/phase369-u-code-gate-v1/mtv-u/opaque_solution_output.csv",
+    "sha256": "04d9da18626cde4dddd7d561de35ac0b48a094bd4abe74a0d3fb53c39a2d1785",
+    "bytes": 88214,
+    "rows": 1102
+  },
+  "authority": {
+    "phase199_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py",
+      "sha256": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4"
+    },
+    "phase196_thin_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py",
+      "sha256": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a"
+    },
+    "phase189_kernel": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py",
+      "sha256": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+      "commit": "5f456010c78cbb80cf5614f421d5c8b0d38aee3a"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "phase203_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca"
+    },
+    "phase203_tests": {
+      "path": "tests/test_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "74975757b952346b2fc51a17bfb64b3bec4b4caf3aef946f2df504912f416696"
+    },
+    "structural": {
+      "path": "docs/use_cases/records/smartphone_r5_phase369_u_code_gate_structural_result_v1.json",
+      "sha256": "fb978758f9741c55f1e85df2398d95d24dfb35d0557908645819f28c201a312b"
+    },
+    "previous_evaluation": {
+      "path": "docs/use_cases/records/smartphone_r5_phase250_h_accuracy_manifest_v1.json",
+      "sha256": "54af25b267692a100dcdb73cc61fdbca1564d8a7c554dc44f7ca9a883a2cdff7"
+    },
+    "evaluator": {
+      "path": "scripts/evaluate_phase371_u_code_gate.py",
+      "sha256": "f7569d99ba2cd71fc872153395a2e6c7249f751a29850dc0e346ce363647b4d0"
+    },
+    "baseline_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase250_h_accuracy_result_v1.json",
+      "sha256": "c76ac4a87b8425dc18918b1a817b330b844af8cfb491dd1681ce0d8a1a165c98"
+    }
+  },
+  "execution_policy": {
+    "candidate_reads": 1,
+    "truth_reads": 1,
+    "scores": 1,
+    "native_invocations": 0,
+    "no_retry": true,
+    "submission": false
+  }
+}

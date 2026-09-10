@@ -1,0 +1,109 @@
+{
+  "schema_version": "smartphone-r5-phase13-upstream-quality-freeze.v1",
+  "status": "frozen-after-truth-free-structural-run-before-truth",
+  "candidate_id": "native-upstream-observable-quality-gtsam-v1",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "purpose": "Opt-in raw SNR percentile weighting and upstream adjacent residual masks layered on the immutable Phase12 native PDC+IMU+TDCP+static-IFB+residual-ionosphere graph.",
+  "immutable_baseline": {
+    "record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_score_result_v1.json",
+    "record_sha256": "999e3c5c7361d55d313377e1c0aa898cc95030a3339db4e87a0187682546f44d",
+    "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26",
+    "wgs84_vincenty_linear_m": 3.1922489635126103,
+    "all_four_local_variants_are_sensitivity_only": true
+  },
+  "raw_audit": {
+    "record": "docs/use_cases/records/smartphone_r5_phase13_upstream_quality_raw_audit_v1.json",
+    "record_sha256": "excluded from self-hash; the companion freeze manifest fixes this file SHA256",
+    "ground_truth_read_count_before_freeze": 0,
+    "validation_truth_read_count_before_freeze": 0,
+    "holdout_truth_read_count_before_freeze": 0,
+    "test_truth_read_count_before_freeze": 0,
+    "mat_read_count_before_freeze": 0,
+    "enriched_coordinate_or_elevation_columns_read": false
+  },
+  "truth_free_contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_columns_only": true,
+    "forbidden_inputs": ["ground_truth.csv", "*.mat", "sample_submission.csv", "SvPosition*", "SvElevationDegrees", "device WLS coordinates", "precomputed trajectories", "leaderboard scores", "token"],
+    "production_default_changed": false,
+    "atomic_output_required": true,
+    "fail_closed_on_nonfinite_or_invalid_geometry": true,
+    "no_post_truth_code_or_parameter_change": true
+  },
+  "algorithm_contract": {
+    "backend": "GTSAM batch Levenberg-Marquardt",
+    "base_recipe": "Phase12 native raw PDC+IMU+ordinary TDCP graph with static GPS L5/Galileo E5a receiver signal-bias states and per-epoch residual-ionosphere states, unchanged",
+    "new_behavior": "MATLAB-compatible p85 SNR weights plus raw adjacent P-D/L-D masks before final P/D/carrier factor creation; P/D candidate rows are inserted into the graph, including IMU velocity+clock-drift states",
+    "global_residual_center": "two-pass truth-free native SPP-seed residual median by native clock group and L1/L5 band; no truth or imported coordinate",
+    "tdcp": "ordinary Phase12 TDCP factor and sigma remain unchanged at 0.03 m",
+    "base_compensation": "omitted and explicitly unavailable under raw-only no-base contract",
+    "forbidden_factors": ["base", "single/double difference", "truth-derived coordinate", "MAT/precomputed trajectory"]
+  },
+  "numeric_parameters": {
+    "upstream_snr_percentile": 85.0,
+    "upstream_snr_denominator_db": 20.0,
+    "upstream_min_snr_dbhz": 20.0,
+    "upstream_min_elevation_deg": 5.0,
+    "upstream_max_adjacent_gap_s": 1.5,
+    "pseudorange_mask_threshold_l1_m": 20.0,
+    "pseudorange_mask_threshold_l5_m": 15.0,
+    "doppler_residual_threshold_mps": 3.0,
+    "carrier_residual_threshold_m": 1.5,
+    "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+    "doppler_sigma_contract": "snr_scale/12",
+    "tdcp_sigma_m": 0.03,
+    "fgo_max_iterations": 12,
+    "pdc_initializer": "Phase12 unmasked in-process PDC state bridge, max_iterations=1000, unchanged; finite states are initializer-only",
+    "imu_sync_coefficient": 0.5,
+    "mounting_rotation_deg": [-85.0, 178.0, -94.0],
+    "physical_max_transition_mps": 70.0
+  },
+  "source_sha256_at_freeze": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "f9f5b42605578ebe8e0df222a5c7ea84da8e31a7a47ffbedba72e95c8e4a2120",
+    "apps/native/gnss_pos_vel_pdc.cpp": "98ea30d1a3780003cea22631e54c2fd7ad6bdd176d18031ad875b988e2fe49fc",
+    "apps/native/observable_upstream_preprocessing.hpp": "3d4e1213822f4483a43626c1a8d75ac605ea02e2a0e4af03ffea72504d65ae16",
+    "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp": "70b2f5607efdc9dfe2c964eeacc9bd59d7b07267a732f3475c1ea3141956724b",
+    "include/libgnss++/algorithms/fgo.hpp": "e39653bc98fa7884ab445130e11ad4a9d8d3e6b9c52a1f26ebc9c724a3c28c3f",
+    "include/libgnss++/algorithms/fgo_config.hpp": "dc4f9291c0dde91c2799cf7c62fdea36368e127e9690a4325b7f1ed1f939032d",
+    "src/algorithms/fgo.cpp": "be5d6710a32bbb5037a93f20d14c6ba1c2f1a318eb859c865a7b027fe717ef38",
+    "src/algorithms/fgo_problems.cpp": "3452d2b252d1a38624011f4af968809594d2b03b6a410c5b16b2675f74461dd8",
+    "src/algorithms/fgo_gtsam_backend.cpp": "845231bed5d7735ac57d7c2d5a66d3705ebffea872df8a5474cdd0c70bfd7284",
+    "tests/test_smartphone_upstream_preprocessing.cpp": "7a49d8198dce4cf696f2eb5af80897efabbea0927f47da66bcd66d35a6da0bf2"
+  },
+  "upstream_spec_sha256": {
+    "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324",
+    "output/reproducibility-cache/gsdc2023/functions/obserrmodel.m": "43d0671a25c81fa6d7df0e1fbe81bf48a14eb3a35c8399600200b44961a7f9ef",
+    "output/reproducibility-cache/gsdc2023/parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+  },
+  "binary_sha256_at_freeze": {
+    "build/apps/gnss_fgo_imu_no_base": "2a69c26ef7af93405c34a22d5c82663bbcca79ecf8e9d5e44fe4bcb4c5a32023"
+  },
+  "input_sha256_at_freeze": {
+    "device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "truth_free_structural_artifacts": {
+    "summary": "output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/summary.json",
+    "summary_sha256": "300e90c83e87d6d9698d6de65f9d2c6a12bc2fbc6563377fc349927c36034efe",
+    "summary_bytes": 8469,
+    "submission": "output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/submission.csv",
+    "submission_sha256": "6ace3ffc7a9e2f05dc48e4cb745cf6ec342bc8d021ef0f19aa8411fb3b8ff25f",
+    "submission_bytes": 117609,
+    "submission_rows": 1383,
+    "run_log_sha256": "b30859b2ccb89e172761524a8cd7e8cd946798fa1f0c60f4efe039f62740d029"
+  },
+  "freeze_gate": {
+    "required_before_truth": ["raw-only inputs", "finite output", "exact 1383/1383 raw UTC target keys", "no interpolation/fallback", "GTSAM convergence", "IMU intervals >0", "P/D candidate and graph counts finite", "TDCP unchanged", "no base/DD factors", "no transition >70 m/s", "deterministic repeat"],
+    "truth_read_count_at_freeze": 0,
+    "validation_truth_read_count_at_freeze": 0,
+    "holdout_truth_read_count_at_freeze": 0,
+    "mat_read_count_at_freeze": 0,
+    "promotion_gate_after_freeze": "WGS84/Vincenty linear <3.1922489635126103 m and all four local diagnostics non-regressive; coverage preserved; no vertical/continuity safety regression",
+    "score_once_after_seal": true,
+    "no_post_score_tuning": true,
+    "freeze_record_sha256": "excluded from self-hash; the companion freeze manifest fixes this file SHA256"
+  },
+  "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <route>/pixel7pro/device_gnss.csv --android-imu <route>/pixel7pro/device_imu.csv --nav <route>/brdc.nav --out output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/submission.csv --summary-json output/smartphone-r5/phase13-upstream-quality-gtsam-v1e/summary.json --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere --native-upstream-quality",
+  "post_freeze_changes": "No algorithm, numeric parameter, source, binary, or input changes are permitted after this record; only score/seal documentation may be added."
+}

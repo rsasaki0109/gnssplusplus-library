@@ -1,0 +1,15 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-freeze-manifest.v2",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2.json",
+  "freeze_record_sha256": "3a36135615b4a535e60a88c0e784e2c6a3d9d5a1928f68d92bd73045975e1964",
+  "candidate_id": "native-gnss-pdc-upstream-residual-snr-global-isb-v2",
+  "raw_only": true,
+  "mat_inputs_used": false,
+  "truth_free_before_score": true,
+  "validation_truth_opened": false,
+  "holdout_truth_opened": false,
+  "test_truth_opened": false,
+  "algorithm_change_scope": "pseudorange residual center only: per-epoch proxy to global system-by-frequency MATLAB splitapply-equivalent; all numeric solver parameters unchanged",
+  "historical_v1_unchanged": true,
+  "post_freeze_tuning": false
+}

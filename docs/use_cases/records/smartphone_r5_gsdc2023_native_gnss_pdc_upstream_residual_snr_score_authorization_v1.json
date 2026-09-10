@@ -1,0 +1,46 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-recovery.v1",
+  "status": "authorized-evaluation-recovery-v2",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Authorize one report-only development-train truth read after the raw-only SNR/residual candidate was frozen and its truth-free artifacts sealed.",
+  "exact_failure": "Initial score invocation passed candidate/manifest preflight and truth parsing, then failed while serializing the recovery metadata because this authorization lacked exact_failure. The candidate and parameters remain unchanged; a recovery read is explicitly recorded in the resulting score artifact.",
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "601363954c9f0d1abc8c5cd118fb251779c6dc61c3b5a7f007863cb054324079",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-upstream-residual-snr-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "abd651af976dde93a26a9d4ae4c8504f72d384f78674dfbe4a9fce0e7c04f565",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v1.json",
+    "freeze_record_sha256": "0b08e620f36cb56e33c8742a4506e82bba75f8d8a09486ba3cf9bb010e014a65",
+    "candidate_unchanged": true,
+    "solver_rerun": false
+  },
+  "truth_access": {
+    "role": "development-train",
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "validation_truth_read_count": 0,
+    "holdout_truth_read_count": 0,
+    "test_truth_read_count": 0,
+    "mat_inputs_used": false,
+    "single_read_after_freeze": true
+  },
+  "contract": {
+    "algorithm_or_numeric_parameter_change": false,
+    "candidate_unchanged": true,
+    "solver_rerun": false,
+    "parameter_selection": false,
+    "timestamp_alignment": "fixed one-to-one nearest truth timestamp within 1000 ms; no coordinate modification",
+    "result_coordinates_read": false,
+    "sample_coordinates_read": false,
+    "v5_output_read": false,
+    "base_or_double_difference_factors": false,
+    "external_mutation": false,
+    "no_post_score_tuning": true
+  },
+  "gate": {
+    "baseline_score_m": 93.50510102387848,
+    "promotion_requires": "horizontal score/P95 and availability/vertical/continuity non-regression; report only",
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false
+  }
+}

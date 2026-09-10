@@ -1,0 +1,75 @@
+{
+  "schema_version": "smartphone-r5-phase35-matrix-evaluator-manifest.v2",
+  "status": "evaluator-frozen-after-truth-free-resume-before-truth-evaluation",
+  "phase": 35,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase35_matrix_freeze_v1.json",
+    "sha256": "9be22fd18dd3f818a8c902dafde2aa7b5828ded13df98b138682863e8f14a92a"
+  },
+  "runner": {
+    "source": "apps/commands/benchmarks/gnss_smartphone_phase35_matrix.py",
+    "sha256": "12920acb60f6810e9f56ce2b7a50d5d1a06e7805823f77c689f0a1a4ea3cd48a",
+    "test": "tests/test_smartphone_phase35_matrix.py",
+    "test_sha256": "cfa6e63502fd18d477bda243947687726f2e547e0d3a6342e54a26b9a9a05063",
+    "cmake": "tests/CMakeLists.txt",
+    "cmake_sha256": "6a5b5e962e8152bd7893799cf6ef1c8f5f07ce30e7aebfa7c32b28c5e0397117",
+    "resume_operation": "resume",
+    "resume_semantics": "complete runs are validated and reused; incomplete runs are staged privately and existing bytes must match before atomic completion"
+  },
+  "recovery": {
+    "record": "docs/use_cases/records/smartphone_r5_phase35_interruption_recovery_v1.json",
+    "record_sha256": "9fbb44ed3142073d2640a76dbab55d53943293cb03ddf25fc7d5571db1d0c925",
+    "truth_open_count_before_structural_seal": 0,
+    "mat_read_or_generated_before_structural_seal": false,
+    "candidate_and_solver_parameters_unchanged": true
+  },
+  "cohort": {
+    "train_route_count": 3,
+    "validation_route_count": 1,
+    "route_ids": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2023-05-09-21-32-us-ca-mtv-pe1/pixel5"
+    ],
+    "train_truth_reads_before_structural": 0,
+    "validation_truth_reads_before_structural": 0,
+    "future_holdout_truth_open_count": 0
+  },
+  "matrix": {
+    "control": "quality_anchor_base_control",
+    "candidates": ["A_anchor_signal_iono_hatch", "B_A_plus_stop", "C_A_plus_position_offset"],
+    "solver_runs": "each route/lane twice; resumed raw-only runs preserve existing bytes",
+    "raw_inputs_only": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["ground_truth.csv", "*.mat", "sample coordinates", "previous trajectories", "device WLS"]
+  },
+  "structural_gate": {
+    "finite": true,
+    "converged": true,
+    "exact_raw_target_keys": true,
+    "repeat_byte_identical": true,
+    "over_70_mps_count": 0,
+    "unresolved_epochs": 0,
+    "all_routes_and_lanes_required": true,
+    "truth_before_gate": false,
+    "seal_authorized": true
+  },
+  "post_structural_evaluation": {
+    "train_truth_one_process": true,
+    "train_truth_read_count_per_route": 1,
+    "routewise_and_macro_four_diagnostic_gate": true,
+    "horizontal_p50_p95_coverage_continuity_non_regression": true,
+    "selected_lane_only_validation_reuse": true,
+    "validation_truth_one_process_read_count": 1,
+    "vertical": "informational-unavailable-four-column-prediction",
+    "post_score_tuning": false,
+    "future_holdout_remains_sealed": true
+  },
+  "truth_policy": {
+    "truth_open_count_before_structural_seal": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "ground_truth_used_for_inference_or_matrix_selection": false
+  },
+  "atomic_publish": true
+}

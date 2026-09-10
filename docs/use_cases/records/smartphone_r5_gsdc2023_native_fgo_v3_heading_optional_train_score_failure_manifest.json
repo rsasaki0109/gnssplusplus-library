@@ -1,0 +1,11 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-train-score-failure-manifest.v1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_train_score_failure.json",
+  "result_record_sha256": "924ed700b7c393f591d80bead7fc29da2409b3f461bd36cbf7c0b0439c8c5342",
+  "freeze_record_sha256": "38602200af437fe324ef738b5463cbea379406d2640e1372fb4c595b83e23b9a",
+  "truth_free_run_record_sha256": "19be2901b8fd3ea4544d0596647be2b8a01f9c3ab356b3e80d0ed205feb8fdfc",
+  "truth_payload_read_count": 2,
+  "metrics_published": false,
+  "rerun_or_truth_reopen": false,
+  "promotion": "No-Go"
+}

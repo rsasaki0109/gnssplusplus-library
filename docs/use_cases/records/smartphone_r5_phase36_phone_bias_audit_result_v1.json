@@ -1,0 +1,147 @@
+{
+  "schema_version": "smartphone-r5-phase36-phone-bias-audit-result.v1",
+  "phase": 36,
+  "status": "development-only-no-go",
+  "decision": "no-go-no-calibration-no-validation-no-kaggle",
+  "purpose": "Audit systematic phone/model residuals and the identifiability of a body-frame lever-arm-like correction using the sealed native Phase31 champion and already-opened Phase29 development truth.",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_freeze_v1.json",
+    "sha256": "e559f667d5200ac89b8be084b10ab684e770f2c3c437d259f5c79a44c29e102e"
+  },
+  "evaluator_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase36_phone_bias_audit_evaluator_manifest_v1.json",
+    "sha256": "c1e4fa698045f8e25a3b8ea445b97c3a750f17bbb9fc34fde0a8ecf1a4541e3c"
+  },
+  "output": {
+    "result": {
+      "path": "output/smartphone-r5/phase36-phone-bias-audit-v1/phone_bias_audit.json",
+      "sha256": "c8a098d6ccc675676f86686bd3ad175592ea63c6ecad20d58daed7e6204e02eb"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/phase36-phone-bias-audit-v1/phone_bias_audit.manifest.json",
+      "sha256": "42ba01bee2629be4aa0397897f302ef13885c2e4a598261ebd705a477e7f0bf3"
+    }
+  },
+  "truth_access": {
+    "source": "already materialized Phase29 development truth only",
+    "one_process": true,
+    "truth_open_count_per_route": 1,
+    "truth_open_count_total": 3,
+    "candidate_submission_open_count_per_route": 1,
+    "raw_imu_open_count_per_route": 1,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "archive_open": false,
+    "truth_rematerialized": false,
+    "truth_used_for_inference_or_selection": false,
+    "mat_read_or_generated": false,
+    "solver_rerun": false,
+    "candidate_regenerated": false,
+    "post_score_tuning": false,
+    "token_or_kaggle_access": false
+  },
+  "route_findings": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "matched_rows": 2158,
+      "missing_prediction_count": 1,
+      "median_enu_m": {"east": 0.4542592627258386, "north": 0.2991139519141637, "up": null},
+      "mad_enu_m": {"east": 0.8295711622983462, "north": 0.4427533202622923, "up": null},
+      "prefix_tail_median_delta_m": 2.6719255724115922,
+      "raw_imu_orientation_label_fraction": 1.0,
+      "heading_octant_max_group_median_delta_m": 0.7081065189024801
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "matched_rows": 1677,
+      "missing_prediction_count": 0,
+      "median_enu_m": {"east": 0.5638513340163205, "north": -0.4425371747447013, "up": null},
+      "mad_enu_m": {"east": 0.48671947390110637, "north": 0.3827105066911261, "up": null},
+      "prefix_tail_median_delta_m": 1.2566400762901722,
+      "raw_imu_orientation_label_fraction": 1.0,
+      "heading_octant_max_group_median_delta_m": 0.6312277148706067
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "matched_rows": 1164,
+      "missing_prediction_count": 1,
+      "median_enu_m": {"east": 0.8072619699516747, "north": 0.6238865188793126, "up": null},
+      "mad_enu_m": {"east": 0.16817042006573157, "north": 0.23733468042291614, "up": null},
+      "prefix_tail_median_delta_m": 0.6039673880348001,
+      "raw_imu_orientation_label_fraction": 1.0,
+      "heading_octant_max_group_median_delta_m": 0.15134758839867124
+    }
+  },
+  "cross_route_findings": {
+    "phone_model_route_counts": {"pixel4": 1, "pixel5": 1, "sm-g988b": 1},
+    "same_model_repeated_route_count": 1,
+    "route_median_horizontal_norm_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0.5438939547392774,
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": 0.7167757514753178,
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 1.0202481446048335
+    },
+    "pairwise_route_median_delta_m": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5__vs__2021-07-27-19-49-us-ca-mtv-b/pixel4": 0.7497044856235702,
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5__vs__2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 0.4796750270359105,
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4__vs__2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 1.0938501871870472
+    },
+    "interpretation": "A route-dependent residual is visible, but no exact phone model repeats. The Pixel5 family contributes one identity, so it cannot support a robust Pixel5 calibration claim. Prefix/tail and heading-octant shifts are diagnostics and may be route/motion confounding, not evidence of an identifiable hardware constant."
+  },
+  "identifiability": {
+    "single_phone_family_or_model_constant": "no-go",
+    "body_frame_lever_arm_like_vector": "no-go",
+    "reasons": [
+      "Each exact model has one route in the declared Phase29 cohort.",
+      "The submission has latitude/longitude only; up residual is unobservable and was not filled from any result artifact.",
+      "Raw UncalAccel/UncalMag yield coarse labels only; no calibrated device-to-antenna pose is available.",
+      "A per-route or per-timestamp fit would violate deployment generalization and is forbidden."
+    ],
+    "fit_performed": false,
+    "native_correction_applied": false
+  },
+  "metadata_only_next_cohort": {
+    "basis_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+      "central_directory_only": true,
+      "member_content_read": false
+    },
+    "prior_truth_use_inventory": [
+      {
+        "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+        "sha256": "fc90e3a6e4182276cbfebc635085d367c18fe10d3f0c982ee8d2cfcc9eb1f3d4"
+      },
+      {
+        "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_optimizer_truth_use_inventory_v1.json",
+        "sha256": "da10a5122f68e1ac4bd015949bdf3fa15dbb294e1938ebd6125691508e53eb1c"
+      }
+    ],
+    "purpose": "Provide a repeated Pixel5 development cohort for a future predeclared calibration experiment; no raw member or truth member is materialized/opened in Phase36.",
+    "selected_routes": [
+      {
+        "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "reason": "complete central device_gnss/device_imu/brdc.nav/ground_truth; distinct route; not Phase24 fresh validation or future holdout"
+      },
+      {
+        "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "reason": "complete central device_gnss/device_imu/brdc.nav/ground_truth; distinct LAX route; not Phase24 fresh validation or future holdout"
+      },
+      {
+        "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+        "reason": "complete central device_gnss/device_imu/brdc.nav/ground_truth; distinct later MTV route; not Phase24 fresh validation or future holdout"
+      }
+    ],
+    "current_phase24_validation_preserved": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "current_phase24_future_holdout_preserved": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "selection_status": "metadata-only-proposal; requires a new freeze before any materialization, solver run, or truth read",
+    "selection_ranked_by_score": false
+  },
+  "next_raw_physical_factor": {
+    "candidate": "raw Android timing/clock residual and antenna/measurement hardware model on a repeated exact-model cohort",
+    "why": "The current audit rules out a defensible single-route phone constant. A repeated Pixel5 cohort enables a route-disjoint test of a source-supported raw physical model while preserving the current validation and holdout seals.",
+    "phase31_champion_preserved": true
+  },
+  "promotion": {
+    "fresh_validation_opened": false,
+    "future_holdout_opened": false,
+    "kaggle_submission": false,
+    "native_0_782_class_achieved": false
+  }
+}

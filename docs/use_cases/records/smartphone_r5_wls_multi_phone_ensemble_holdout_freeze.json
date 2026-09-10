@@ -1,0 +1,164 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-freeze.v1",
+  "status": "frozen-before-holdout-payload-access",
+  "sealed_at": "2026-08-30",
+  "scope": "single sealed multi-phone WLS ensemble holdout evaluation",
+  "selection": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+    "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+  },
+  "selection_record_sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "holdout_route": "2022-10-06-21-51-us-ca-mtv-n",
+  "holdout": {
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "calendar_year": 2022,
+    "region": "mtv",
+    "phones": [
+      "sm-a205u",
+      "sm-a217m",
+      "sm-a325f"
+    ],
+    "central_directory_broadcast_nav": {
+      "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/brdc.nav",
+      "file_size": 11030006,
+      "compressed_size": 1070199,
+      "crc32_hex": "c27a5d37"
+    },
+    "records": [
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a205u/device_gnss.csv",
+          "file_size": 29692755,
+          "compressed_size": 4007343,
+          "crc32_hex": "101d8a1e"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a205u/ground_truth.csv",
+          "file_size": 118587,
+          "compressed_size": 30125,
+          "crc32_hex": "424ee2f9"
+        }
+      },
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a217m/device_gnss.csv",
+          "file_size": 21854996,
+          "compressed_size": 5438995,
+          "crc32_hex": "e8d27a46"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a217m/ground_truth.csv",
+          "file_size": 119257,
+          "compressed_size": 30152,
+          "crc32_hex": "95104496"
+        }
+      },
+      {
+        "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+        "device_gnss": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a325f/device_gnss.csv",
+          "file_size": 18266646,
+          "compressed_size": 3864139,
+          "crc32_hex": "98432e4e"
+        },
+        "ground_truth": {
+          "name": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/sm-a325f/ground_truth.csv",
+          "file_size": 120524,
+          "compressed_size": 29052,
+          "crc32_hex": "a332185f"
+        }
+      }
+    ],
+    "materialization_forbidden_before_freeze": true,
+    "truth_open_forbidden_before_freeze": true,
+    "truth_open_count_at_freeze": 0
+  },
+  "contract": {
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "selected_method": "coordinate_wise_ecef_median",
+    "baseline_method": "single_phone_wls",
+    "alignment_tolerance_ms": 1,
+    "minimum_aligned_phone_count": 1,
+    "fallback_policy": "when fewer than two phones align, use the target phone's finite raw WLS row; record the one-phone fallback count and never synthesize a missing row",
+    "wls_integrity": {
+      "timestamp_gap_threshold_ms": 1500,
+      "continuous_condition": "elapsed_ms <= 1500",
+      "gap_reset_condition": "elapsed_ms > 1500",
+      "missing_partial_nonfinite_policy": "fail-closed",
+      "all_epoch_rows_consistent": true,
+      "all_selected_rows_finite": true
+    },
+    "atomic_key_contract": {
+      "publish": "fsync temporary file, replace destination, fsync parent directory",
+      "submission_fields": [
+        "phone",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "key": "phone + exact UnixTimeMillis row identity",
+      "combined_sort": "phone, then UnixTimeMillis",
+      "partial_publish": "forbidden on integrity or non-finite failure"
+    },
+    "official_diagnostics": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ],
+    "signoff_thresholds": {
+      "availability_min": 0.98,
+      "truth_coverage_min": 0.98,
+      "horizontal_median_max_m": 7.0,
+      "horizontal_p95_max_m": 25.0,
+      "vertical_p95_max_m": 45.0
+    },
+    "no_post_holdout_tuning": true,
+    "truth_free_before_truth": true,
+    "truth_evaluation_pass_count": 1
+  },
+  "source_hashes": {
+    "apps/gnss.py": "c33aefbf0c45d334c49a3501b6868e1f161725f42dfe7ec3e44e4ad0852d20ba",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "a98550bf90b658a185b2fa257eed97e9b43c7c9b001408a2ee23c701a11fc876",
+    "apps/commands/benchmarks/gnss_smartphone_wls_multi_phone_ensemble_eval.py": "a1fdeab55f257f48423a9c1bfc19450024ac90ade6a0398978ba1129fe379d5b",
+    "apps/commands/benchmarks/gnss_smartphone_wls.py": "9fac3b562d8b43c4fdfaab19a871fee1c1d710199b27bfdcdbb1c090fab5007a",
+    "apps/commands/benchmarks/gnss_smartphone_kaggle.py": "d6c51335b2e607987392d3194e40746880651a9df6c6893742b249bed5503a6f",
+    "apps/commands/benchmarks/gnss_smartphone_trajectory_smoother.py": "2e95e96cd554cb8f78637e5f109c25e89801e4ae8958d6136124aa064e1191d4",
+    "tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py": "21a36cd132a4705c2106b4631ea9cec096dae446206f2dd3e8b6313c48abc853",
+    "tests/test_smartphone_wls_multi_phone_ensemble.py": "0744ac5fba37b842819add2a6f517cc967d74c4496b2fadec943be27d6021c21"
+  },
+  "release_binary": {
+    "path": "build/apps/gnss_spp",
+    "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+  },
+  "release_binaries": {
+    "gnss_spp": {
+      "path": "build/apps/gnss_spp",
+      "sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12"
+    },
+    "gnss_solve": {
+      "path": "build/apps/gnss_solve",
+      "sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+    }
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7",
+    "production_rtk_spp_default_changed": false
+  },
+  "preflight": {
+    "fixture_contract_test": "tests/test_smartphone_wls_multi_phone_ensemble_holdout_eval.py::test_central_metadata_fixture_preflight_does_not_need_payload_hashes",
+    "fixture_passed": true,
+    "central_metadata_verified": true,
+    "archive_payload_read_before_freeze": false,
+    "holdout_device_materialized_before_freeze": false,
+    "holdout_truth_opened_before_freeze": false,
+    "truth_open_count_before_freeze": 0,
+    "candidate_search_after_freeze": false,
+    "no_post_holdout_tuning": true
+  }
+}

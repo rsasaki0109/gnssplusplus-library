@@ -1,0 +1,99 @@
+{
+  "phase": 541,
+  "route": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+  "role": "development/train; not heldout or leaderboard proof",
+  "truth": {
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+    "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+    "bytes": 108045,
+    "rows": 1102
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "historical_baseline_m": null,
+  "authority": {
+    "phase199_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py",
+      "sha256": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4"
+    },
+    "phase196_thin_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py",
+      "sha256": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a"
+    },
+    "phase189_kernel": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py",
+      "sha256": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+      "commit": "5f456010c78cbb80cf5614f421d5c8b0d38aee3a"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "phase203_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca"
+    },
+    "phase203_tests": {
+      "path": "tests/test_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "74975757b952346b2fc51a17bfb64b3bec4b4caf3aef946f2df504912f416696"
+    },
+    "phase203_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase203_phase202_h_accuracy_manifest_v1.json",
+      "sha256": "6e7a7a9d12b10fbaa7452ff4e8bcc2a47aa42e9dc4146ff18fe6c8c0c8e2b98d"
+    },
+    "phase246_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase246_u_native_reference_transfer_result_v1.json",
+      "sha256": "15bb39870d380463ce07ba5ea15c628eaebdba31d84fc4672d00f7eaef36ea62"
+    },
+    "phase246_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase246_u_native_reference_transfer_manifest_v1.json",
+      "sha256": "4436d9b425617f5b995b7b2b3bd894cb6f9ad46167e465df76d489ce810a621d"
+    },
+    "output/smartphone-r5/phase538-joint-transfer-v1/u/manifest.json": {
+      "path": "output/smartphone-r5/phase538-joint-transfer-v1/u/manifest.json",
+      "sha256": "795c7ed7401eb2b9f8afd23e702a6238465f60aa7f9f551ba1704b8bb68088e9"
+    },
+    "output/smartphone-r5/phase538-joint-transfer-v1/u/completed.json": {
+      "path": "output/smartphone-r5/phase538-joint-transfer-v1/u/completed.json",
+      "sha256": "6d51b9e2eef370d15fc8b6e67cee7601da74d4824f3f06f5fc2a093327d70e04"
+    },
+    "output/smartphone-r5/phase538-joint-transfer-v1/u/native_summary.json": {
+      "path": "output/smartphone-r5/phase538-joint-transfer-v1/u/native_summary.json",
+      "sha256": "ea49e03f80f7d6f7a5122872fd5443bf01935ef9cb73f19ebee01c5dfff410a9"
+    },
+    "scripts/verify_phase538_joint_transfer.py": {
+      "path": "scripts/verify_phase538_joint_transfer.py",
+      "sha256": "5a60082ba7f91fc42de06125c8922bb29473e851b0733489072802d44aa398df"
+    },
+    "scripts/evaluate_phase541_joint_ionosphere.py": {
+      "path": "scripts/evaluate_phase541_joint_ionosphere.py",
+      "sha256": "d8c2a62282d8987422ecd117f5f71e47b2c5d506cba47877b0a64be96d95f4a2"
+    }
+  },
+  "baseline": {
+    "path": "output/smartphone-r5/phase480-u-native-first-epoch-v1/mtv-u/opaque_solution_output.csv",
+    "sha256": "b93739b27fe449c245af01f23af348690283df1457592f9d4d0d563c0f235a0d",
+    "bytes": 88214,
+    "rows": 1102
+  },
+  "candidate": {
+    "path": "output/smartphone-r5/phase538-joint-transfer-v1/u/opaque_solution_output.csv",
+    "sha256": "becb3a8d7b08c275eb0c478e31d1cefe2ec720b41434653c64ae5da7a9fdaba3",
+    "bytes": 88214,
+    "rows": 1102
+  },
+  "policy": "one evaluation of frozen candidate; no solver, no tuning or retry"
+}

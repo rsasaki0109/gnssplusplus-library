@@ -1,0 +1,128 @@
+{
+  "schema_version": "smartphone-r5-phase181-h-native-raw-p-no-doppler-imu-main-manifest.v1",
+  "phase": 181,
+  "execution_label": "Luna Max",
+  "status": "sealed-before-single-authorized-run",
+  "purpose": "one-shot H raw GNSS+IMU native integration after Phase180 clock-contract preflight",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "official_type": "Street",
+  "implementation_commit": "3fbea402e02f155c20f71e0ae162d1e15c359080",
+  "previous_phase180": {
+    "manifest": "docs/use_cases/records/smartphone_r5_phase180_android_clock_preflight_manifest_v1.json",
+    "result": "docs/use_cases/records/smartphone_r5_phase180_android_clock_preflight_result_v1.json"
+  },
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "68fce936081c91e0bf5f83bceea71634f2b4f7fc80eafb95c3b2616d44b6616c",
+    "bytes": 4045256
+  },
+  "source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "c0d06b66147e189f6fead59cd52d50d4e40bc80dd7dc61fca27afde0bdd0f01a",
+    "include/libgnss++/algorithms/fgo.hpp": "cd276238bbaf18eb1d0fd5e0f756bcf1e5157375b19babd33b555632e19c26fe",
+    "include/libgnss++/algorithms/fgo_config.hpp": "b025b782420c43ab7b59b9d1b74b004dbc50d7b177634d0558b681fc546523b3",
+    "src/algorithms/fgo.cpp": "4d0a7edcce0e0f1878674be2be7b9ee4ccd55c8a74a493fc43dc8c846c2a662c",
+    "src/algorithms/fgo_gtsam_backend.cpp": "14ab3f1ae3caeccade599165f63b1cdbe15e057c9bae1f88c0f278ff3ca98f4a",
+    "src/algorithms/fgo_gtsam_internal.hpp": "5a129417cff22bf27fa3826cd6eedb5f5e9445da5fc70b366d2166f17fb731bf"
+  },
+  "inputs": {
+    "android_gnss": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes": 74299283
+    },
+    "android_imu": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+      "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+      "bytes": 54271475
+    },
+    "nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes": 10805490
+    }
+  },
+  "argv": [
+    "build/apps/gnss_fgo_imu_no_base",
+    "--dataset-id", "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "--android-gnss", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+    "--android-imu", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_imu.csv",
+    "--nav", "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+    "--all-epochs",
+    "--android-raw-utc-keys",
+    "--android-raw-clock-only",
+    "--android-utc-wall-clock-fallback",
+    "--native-pdc-imu-tdcp-no-bridge",
+    "--native-source-direct-observable-quality",
+    "--native-source-clock-c0d-factor",
+    "--native-source-clock-c0d-meter-state-parity",
+    "--native-source-clock-c0d-active-solve-diagnostic",
+    "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "--native-source-clock-c0d-epoch-vector-parity",
+    "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+    "--native-source-clock-c0d-phase94-stage-diagnostics",
+    "--native-phase157-raw-p-bootstrap",
+    "--native-phase165-raw-p-no-doppler-graph",
+    "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+    "--native-phase171-raw-p-no-doppler-imu-main",
+    "--out", "output/smartphone-r5/phase181-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+    "--summary-json", "output/smartphone-r5/phase181-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json"
+  ],
+  "selector_contract": {
+    "phase157_bootstrap": true,
+    "phase165_graph": true,
+    "phase167_budget": true,
+    "phase171_same_run_imu_main": true,
+    "phase180_clock_fallback": true,
+    "phase94_late_failure_telemetry": true,
+    "gnss_first_configured_max_iterations": 1000,
+    "gnss_first_effective_max_iterations": 1000,
+    "main_configured_max_iterations": 12,
+    "main_effective_max_iterations": 1000,
+    "raw_clock_only": true,
+    "raw_utc_keys": true,
+    "all_epochs": true,
+    "source_c0d_c7_handoff": true,
+    "source_c0d_d_handoff": true,
+    "generic_doppler_factors": false,
+    "tdcp_family": true,
+    "base": false,
+    "truth": false,
+    "mat": false,
+    "precomputed_seed_files": false,
+    "kaggle": false,
+    "velocity_derivation": true,
+    "pixel5_offset_reapplication": false
+  },
+  "phase94_contract": "telemetry-only; no graph, optimizer, factor, weight, or numerical setting change",
+  "launcher_contract": {
+    "implementation": "python3 loads this manifest argv and invokes subprocess.run(argv, env preserving LD_LIBRARY_PATH, stdout/stderr captured)",
+    "manual_argv_retyping_forbidden": true,
+    "validate_manifest_json": true,
+    "validate_every_input_arg_exists": true,
+    "validate_every_input_arg_sha256": true,
+    "validate_binary_sha256": true,
+    "ld_library_path_prefix": "/home/sasaki/.local/lib"
+  },
+  "execution_policy": {
+    "authorized_native_invocations": 1,
+    "authorized_gnss_file_opens": 3,
+    "authorized_imu_file_opens": 1,
+    "authorized_nav_file_opens": 1,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "rerun_fallback_repair": false,
+    "failure_is_final_for_this_record": true,
+    "no_coordinate_interpretation": true
+  },
+  "output_policy": {
+    "summary_path": "output/smartphone-r5/phase181-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native_summary.json",
+    "opaque_solution_path": "output/smartphone-r5/phase181-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/opaque_solution_output.csv",
+    "fresh_output_only": true,
+    "candidate_output_reused_as_solver_input": false,
+    "public_result_coordinate_values": false,
+    "aggregate_telemetry_only": true,
+    "preserve_prior_artifacts": true
+  }
+}

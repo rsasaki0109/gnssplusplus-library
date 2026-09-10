@@ -1,0 +1,31 @@
+{
+  "schema_version": "smartphone-r5-phase69-base-matching-taxonomy-recovery-failure.v1",
+  "phase": 69,
+  "status": "evaluator-integrity-no-go",
+  "failure": {
+    "kind": "RINEX3-system-mapping-contract",
+    "message": "unsupported RINEX3 system 'S'",
+    "output_path": "output/smartphone-r5/phase69-base-matching-taxonomy-recovery-v1/phase69_base_matching_taxonomy_recovery_failure.json",
+    "output_sha256": "071aff78a1b6426b066f89660700876d2b926837d2786dda357126fc7a698bc3",
+    "raw_device_gnss_reads": 3,
+    "base_rinex_reads": 3,
+    "truth_reads": 0,
+    "solver_invocations": 0
+  },
+  "cause": "The native source maps RINEX system characters S (SBAS) and I (NavIC), but the Phase69 diagnostic helper only mapped G/R/E/C/J. A non-adopted source system row must be consumed and skipped rather than treated as malformed input.",
+  "integrity_policy": {
+    "phase69_raw_reread": false,
+    "partial_output_reused": false,
+    "physical_matching_finding": "not evaluated",
+    "phase67_coverage_gate_changed": false
+  },
+  "recovery": {
+    "phase": 70,
+    "new_output_required": true,
+    "fixture_requirements": [
+      "RINEX3 S-system row is consumed without a matching signal stream",
+      "RINEX3 long G-system record remains correctly framed",
+      "unsupported signal is skipped only after its physical record is consumed"
+    ]
+  }
+}

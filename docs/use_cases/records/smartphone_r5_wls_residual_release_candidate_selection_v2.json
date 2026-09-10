@@ -1,0 +1,152 @@
+{
+  "schema_version": "smartphone-r5-wls-residual-release-candidate-selection.v2",
+  "status": "selection-frozen-before-member-content-read",
+  "scope": "fresh validation of fixed WLS residual median5 shift0 postprocess",
+  "frozen_at": "2026-08-30",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_directory_inventory_path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "central_directory_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true,
+    "member_content_read_at_selection": false,
+    "truth_opened_at_selection": false
+  },
+  "audit_of_v1_report": {
+    "report_path": "output/smartphone-r5/wls-residual-v1/wls_residual_release_report.json",
+    "report_sha256": "dbc990e87d4ed2868b643f2a52780d2a48c4c20493f9119d975b702f43e59064",
+    "observed_median5_diagnostic_mean_m": 3.8641713244101785,
+    "observed_v3_selector_diagnostic_mean_m": 3.8901677249152584,
+    "observed_wls_only_diagnostic_mean_m": 4.12182904960396,
+    "observed_native_only_diagnostic_mean_m": 4.764214020096558,
+    "known_gate_failure_cause": "v1 compared aggregate records using route-level metric keys, producing inf/inf comparisons and an untrusted eligibility bit",
+    "correction_history": "aggregate comparator now maps route metric paths to mean_* aggregate paths; fixture regression covers both forms",
+    "algorithm_or_numeric_parameter_changed": false
+  },
+  "excluded_ids": {
+    "all_previously_used_or_sealed": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+      "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2022-11-15-00-53-us-ca-mtv-a/pixel7pro",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+      "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+      "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+      "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b"
+    ],
+    "old_holdout_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "next_holdout_id": "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "old_holdout_metrics_used_for_ranking": false,
+    "next_holdout_payload_materialized": false,
+    "next_holdout_truth_opened": false
+  },
+  "metadata_selection": {
+    "inventory_pool_after_exclusion_and_required_files": 29,
+    "selection_order": "ASCII dataset ID after exclusion; then truth-free capability screen",
+    "route_and_device_are_new": true,
+    "candidate_is_non_pixel": true,
+    "selected_validation": {
+      "dataset_id": "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g",
+      "route": "2023-05-23-19-56-us-ca-mtv-ie2",
+      "phone": "sm-a505g",
+      "calendar_year": 2023,
+      "route_region": "mtv",
+      "required_files_complete": true,
+      "broadcast_nav_present": true,
+      "broadcast_nav_duplicate_count": 0,
+      "central_directory_members": {
+        "device_gnss.csv": {
+          "name": "dataset_2023/train/2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g/device_gnss.csv",
+          "file_size": 17508358,
+          "compressed_size": 4293988,
+          "crc32_hex": "8800126c"
+        },
+        "device_imu.csv": {
+          "name": "dataset_2023/train/2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g/device_imu.csv",
+          "file_size": 28119639,
+          "compressed_size": 5413575,
+          "crc32_hex": "d07bf581"
+        },
+        "ground_truth.csv": {
+          "name": "dataset_2023/train/2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g/ground_truth.csv",
+          "file_size": 109380,
+          "compressed_size": 26637,
+          "crc32_hex": "f0dab485"
+        },
+        "brdc.nav": {
+          "name": "dataset_2023/train/2023-05-23-19-56-us-ca-mtv-ie2/brdc.nav",
+          "file_size": 11830241,
+          "compressed_size": 1114773,
+          "crc32_hex": "6974154b"
+        }
+      }
+    }
+  },
+  "fixed_candidate": {
+    "candidate_id": "median5_shift_0",
+    "robust_estimator": "component-wise centered median",
+    "robust_window_epochs": 5,
+    "along_track_shift_m": 0.0,
+    "heading_source": "not used for zero shift; candidate remains WLS-trajectory-only",
+    "truth_free": true,
+    "device_model_free": true,
+    "candidate_search_after_freeze": false
+  },
+  "truth_free_capability_screen": {
+    "required_signal": "GAL_E1_C_P",
+    "constellation_type": "6",
+    "carrier_frequency_hz": 1575420000,
+    "carrier_tolerance_hz": 1.0,
+    "code_type": "empty",
+    "wls_ecef": "finite, earth-range, epoch-consistent fields",
+    "selector_branch_target": "prefer WLS branch only if native segment stability is truth-free unstable",
+    "truth_used": false
+  },
+  "v2_promotion_gate_frozen_before_truth": {
+    "reference": "v3 stability-selector output on this fresh route",
+    "diagnostics": {
+      "keys": [
+        "haversine_sphere__linear_n_minus_1",
+        "haversine_sphere__nearest_rank_ceiling",
+        "wgs84_vincenty__linear_n_minus_1",
+        "wgs84_vincenty__nearest_rank_ceiling"
+      ],
+      "require_all_non_regressing": true,
+      "maximum_allowed_regression_m": 0.000001
+    },
+    "horizontal_p95": {
+      "require_strict_improvement": true
+    },
+    "horizontal_p50": {
+      "maximum_allowed_regression_m": 0.01
+    },
+    "availability": {
+      "require_non_regression": true
+    },
+    "truth_coverage": {
+      "require_non_regression": true
+    },
+    "vertical_p95": {
+      "maximum_profile_threshold_m": 45.0,
+      "major_regression_tolerance_m": 5.0,
+      "require_no_major_regression": true
+    },
+    "signoff": {
+      "profile_thresholds": true,
+      "official_like_horizontal_metric": "wgs84_vincenty__linear_n_minus_1"
+    },
+    "selection_and_ranking_truth_free": true
+  },
+  "sealed_data_policy": {
+    "validation_truth_open_before_this_record": false,
+    "validation_truth_open_after_truth_free_artifacts_only": true,
+    "validation_truth_open_count_allowed": 1,
+    "next_holdout_materialization_forbidden": true,
+    "next_holdout_truth_open_forbidden": true,
+    "post_truth_parameter_or_candidate_tuning_forbidden": true,
+    "production_rtk_spp_default_changed": false
+  }
+}

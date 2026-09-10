@@ -1,0 +1,244 @@
+{
+  "schema_version": "smartphone-r5-phase108-phase107-solution-accuracy-freeze.v1",
+  "phase": 108,
+  "status": "frozen-before-phase108-truth-only-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Score exactly the two already sealed Phase107 withheld solutions with one isolated truth-only evaluator, without rerunning solver, raw, or base processing.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_audit_v1.md",
+      "commit": "2ce53a7f0d0c56bc3e4bdd07ed943d3b1785c2ee",
+      "sha256": "adc77bfa634c5507eb5f16d7de803e0d972d8ff475f3bbc46aa6981bdf6b029e"
+    },
+    "phase107_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_result_v1.json",
+      "commit": "5b076bb647566a4789cadf637bb1ba611584c304",
+      "sha256": "e7eb3f1d2670672414744a100dc1e2fc3e0b019ae7efc0dbfef1518300ce8d6e",
+      "status": "go-phase107-raw-base-structural",
+      "accuracy_scored": false,
+      "solution_output_published": false
+    },
+    "phase107_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_manifest_v1.json",
+      "commit": "db58798c57ee66403edab8639b0aa1482f980c7c",
+      "sha256": "b46a4bfa23ac1604d9e51487734be18262f027612eede40fdbcba15fa75c2a9c"
+    },
+    "phase107_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_authorization_v1.json",
+      "commit": "6fb7e90e49c51ca07b610aca8ed9b47bb60d9375",
+      "sha256": "ba975dd93f11cd64fdaec6cc6d57a080367fc2e6a04ee58513cb3a0b0542eb56"
+    },
+    "phase82_metric_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase103_no_base_c7_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_result_v1.json",
+      "commit": "3b9ca8c4dc47d947ed8b8af2f08b0eafccafa43f",
+      "sha256": "1a909a9b91ea90517fac3f138faa363fd5a601e33e4361b2017e4873e8873688"
+    },
+    "phase102_metric_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+      "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1"
+    },
+    "phase103_metric_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_freeze_v1.json",
+      "sha256": "984fdd26171e8327095cbe9b37ba519c55c71a952dfd150a24938f14f2d0c9d1"
+    }
+  },
+  "candidate": {
+    "id": "phase108-phase107-withheld-solution-truth-only-accuracy-v1",
+    "candidate_count": 1,
+    "source": "immutable Phase107 raw-base source-parity solution outputs",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_order_fixed": true,
+    "runs_per_route": 1,
+    "solver_rerun": false,
+    "raw_or_base_rerun": false,
+    "solution_repaired_or_replaced": false,
+    "solution_publication": false,
+    "metadata_hash_seal": {
+      "performed_before_truth": true,
+      "opaque_bytes_only": true,
+      "coordinate_interpretation": false,
+      "csv_parse": false,
+      "row_values_interpreted": false,
+      "candidate_files_copied_or_transformed": false
+    },
+    "routes_metadata": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "bytes": 172694,
+        "sha256": "b401156e76d5a1a1cfc948aa666d69d292fe4ba43ea3e3f4580cde7e5f0339f8",
+        "expected_prediction_rows": 2158,
+        "expected_problem_epochs": 2159,
+        "opaque_metadata_seal": true
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase107-raw-base-source-parity-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "bytes": 117254,
+        "sha256": "6e85865825a250628db4d6aa842fc5992ebdc63aa51ffaf7f1dd513c1fe600d8",
+        "expected_prediction_rows": 1465,
+        "expected_problem_epochs": 1466,
+        "opaque_metadata_seal": true
+      }
+    }
+  },
+  "truth_cohort": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "read_by_solver": false,
+    "read_by_audit": false,
+    "read_by_freeze": false,
+    "read_by_evaluator_only": true,
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "expected_missing_truth_rows": 1,
+        "expected_missing_truth_key": ["2021-03-16-18-59-us-ca-mtv-a/pixel5", 1615921153434]
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "expected_missing_truth_rows": 0,
+        "expected_missing_truth_key": null
+      }
+    }
+  },
+  "metric_contract": {
+    "candidate_submission_header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed",
+    "required_truth_fields": ["UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "truth_phone_policy": "optional phone must equal declared route; absent phone is assigned route",
+    "key": "(phone, UnixTimeMillis)",
+    "timestamp_type": "exact integer",
+    "matching": "exact integer key intersection only",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "distance": "spherical Haversine per row",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "finite_and_earth_valid": "all coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]"
+  },
+  "comparison_baselines": {
+    "phase82_same_route": {
+      "route_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.1139384500152307,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.9389644134001871
+      },
+      "macro_m": 1.0264514317077089,
+      "result_sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase103_no_base_c7": {
+      "route_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.139793072101309,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 3.310820065300743
+      },
+      "macro_m": 2.225306568701026,
+      "result_sha256": "1a909a9b91ea90517fac3f138faa363fd5a601e33e4361b2017e4873e8873688"
+    }
+  },
+  "promotion_gates": {
+    "all_gates_anded": true,
+    "exact_two_existing_routes_one_evaluation_each": true,
+    "candidate_output_schema_and_exact_alignment": true,
+    "candidate_prediction_domain_coverage_exact": 1.0,
+    "candidate_all_finite_and_earth_valid": true,
+    "candidate_over_70_mps_count_zero": true,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_macro_score_strict_max_m": 0.782,
+    "candidate_no_route_regression_vs_phase82_same_route": true,
+    "candidate_no_route_regression_vs_phase103_no_base_c7": true,
+    "strict_0_782_is_explicit_and_gate": true,
+    "truth_read_only_by_one_evaluator_subprocess": true,
+    "solution_rows_absent_from_result": true,
+    "no_solver_raw_or_base_rerun": true,
+    "no_mat_precomputed_phone_coordinates_pdc_or_kaggle": true,
+    "promotion_on_failure": "no-go; preserve exact solution and evaluator artifacts; no rerun",
+    "promotion_on_success": "accuracy GO only; release, validation, and Kaggle submission remain unauthorized"
+  },
+  "truth_evaluator_boundary": {
+    "evaluator_process_count": 1,
+    "candidate_metadata_hash_seal_precedes_truth": true,
+    "candidate_parse_precedes_truth": true,
+    "truth_open": "after this freeze, evaluator contract, and independent authorization; one official pinned truth file per route",
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "native_after_truth": false,
+    "truth_path_or_bytes_in_solver": false,
+    "result_content": "metrics, gate booleans, sealed hashes, and accounting only; no solution or truth coordinate rows",
+    "release_or_submission": false
+  },
+  "leakage_guard": {
+    "solver_raw_base_reads": false,
+    "mat_reads_or_generated": false,
+    "precomputed_phone_coordinate_reads": false,
+    "pdc_reads": false,
+    "kaggle_or_token_access": false,
+    "truth_reads_before_authorization": false,
+    "accuracy_selection_before_truth": false,
+    "post_truth_tuning": false,
+    "solution_publication": false,
+    "failure_policy": "any leakage, schema, alignment, finite, speed, metric, or gate predicate fails closed; no repair, retry, fallback, rerun, or publication"
+  },
+  "read_accounting": {
+    "audit": {
+      "native_solver_invocations": 0,
+      "raw_gnss_imu_navigation_reads": 0,
+      "base_rinex_reads": 0,
+      "truth_reads": 0,
+      "candidate_coordinate_interpretations": 0,
+      "candidate_opaque_hash_reads": 2,
+      "mat_precomputed_phone_coordinate_pdc_reads": 0,
+      "accuracy_calculations": 0,
+      "reruns": 0,
+      "fallbacks": 0,
+      "kaggle_or_token_access": 0
+    },
+    "planned_truth_evaluation": {
+      "native_solver_invocations": 0,
+      "raw_gnss_imu_navigation_reads": 0,
+      "base_rinex_reads": 0,
+      "candidate_solution_reads_for_hash_and_parse": 2,
+      "truth_reads": 2,
+      "truth_reads_per_route": 1,
+      "accuracy_calculations": 2,
+      "reruns": 0,
+      "fallbacks": 0,
+      "mat_precomputed_phone_coordinate_pdc_reads": 0,
+      "kaggle_or_token_access": 0
+    }
+  },
+  "release_boundary": {
+    "truth_only_authorized_before_freeze": false,
+    "solution_publication_authorized": false,
+    "validation_authorized": false,
+    "kaggle_submission_authorized": false,
+    "required_next_artifacts": [
+      "Phase108 evaluator, wrapper, manifest, and focused tests",
+      "independent Phase108 truth-only authorization",
+      "one sealed Phase108 accuracy result"
+    ]
+  }
+}

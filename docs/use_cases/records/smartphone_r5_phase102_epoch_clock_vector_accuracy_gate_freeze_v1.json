@@ -1,0 +1,281 @@
+{
+  "schema_version": "smartphone-r5-phase102-epoch-clock-vector-accuracy-gate-freeze.v1",
+  "phase": 102,
+  "status": "frozen-before-phase102-solution-and-truth-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Evaluate exactly one fresh Phase101 source-parity raw-only candidate on MTV-A and LAX-T under the sealed Phase82 metric contract, compare it with same-route Phase82 and Phase100 QR scalar-clock baselines, and keep truth evaluator-only.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_audit_v1.md",
+      "commit": "1a91a0e",
+      "sha256": "2a31b4b8e6cafb5d710c3cc41ef61040937912d38b45373a8e1024f714de44bd"
+    },
+    "phase101_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "commit": "59a60fb",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a",
+      "status": "go-phase101-epoch-clock-vector-structural",
+      "accuracy_scored": false,
+      "solution_output_published": false
+    },
+    "phase101_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_manifest_v1.json",
+      "sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b"
+    },
+    "phase101_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_raw_execution_authorization_v1.json",
+      "sha256": "a5858b2ab51c5ed781e0a0fcc311d867b8b0e13db4fde77ede5de20a4195ee62"
+    },
+    "phase101_implementation": {
+      "commit": "d88c9fd",
+      "source_parity": "epoch-local seven-vector C/ISB plus exact retained raw D initialization and same-run C/D handoff",
+      "main_solver": "Phase99 MULTIFRONTAL_QR / EliminateQR"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase82_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_freeze_v1.json",
+      "sha256": "33bbfc4051af20cd3f39fbf8620ea4d277c4acc5dbe5d8d1621452a657eebf6b"
+    },
+    "phase82_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_manifest_v1.json",
+      "sha256": "77f3cc6f82b4953e3fd0a240eff149fdc6c96b9335cc5058c962010b985500a0"
+    },
+    "phase82_evaluator_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase100_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7",
+      "candidate": "phase100-phase99-main-multifrontal-qr-accuracy-v1"
+    },
+    "phase100_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_gate_freeze_v1.json",
+      "sha256": "de2d4f5626782297b5535767ff1f867e29538c74edafff337504b763dbfc0ff9"
+    },
+    "phase100_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_manifest_v1.json",
+      "sha256": "e31e959347aa4ca8d4f3bce3b5d66955c2abf8336fa3c965b59da199e7eb7729"
+    },
+    "phase100_evaluator_reference": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase100_phase99_qr_accuracy.py",
+      "sha256": "85d72342e34f83d3edcd9e3d0efc5d03c2aac10b243e40958e575f74fdbd1928"
+    },
+    "phase95_raw_path_authority": {
+      "result": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_materialization_result_v1.json",
+      "result_sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281",
+      "path_wrapper": "apps/commands/benchmarks/gnss_smartphone_phase95_raw_input_path_materialization_execute.py",
+      "path_wrapper_sha256": "5ac858cf156555652f6feae60c71a4237269d4b4c2cb70c1adf5a9e08f10e883",
+      "content_copy_or_transform": false
+    }
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase102-phase101-epoch-clock-vector-accuracy-v1",
+    "source": "fresh Phase101 epoch-local C/ISB vector parity plus D handoff and Phase99 QR main branch",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_order_fixed": true,
+    "runs_per_route": 1,
+    "fresh_solution_required": true,
+    "phase101_withheld_solution_reuse": false,
+    "solver_selectors": [
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-meter-state-parity",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver"
+    ],
+    "raw_input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_path_source": "Phase95 sealed raw-input materialization, resolved without copying or transforming content",
+    "no_raw_content_copy_or_transform": true,
+    "gnss_first_unchanged": true,
+    "legacy_default_unchanged": true,
+    "no_fallback_or_rerun": true,
+    "no_cholesky_comparison_rerun": true
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "expected_problem_epochs": 2159,
+      "expected_candidate_prediction_rows": 2158,
+      "expected_truth_rows": 2159,
+      "expected_missing_truth_rows": 1,
+      "expected_missing_truth_key": ["2021-03-16-18-59-us-ca-mtv-a/pixel5", 1615921153434],
+      "phase82_same_route_score_m": 1.1139384500152307,
+      "phase100_qr_scalar_clock_score_m": 1.147436714982201,
+      "truth_pin": {
+        "path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-03-16-18-59-us-ca-mtv-a/pixel5/ground_truth.csv",
+        "sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+        "bytes": 210009,
+        "rows": 2159,
+        "read_by_solver": false,
+        "read_by_audit": false,
+        "read_by_evaluator_only": true
+      }
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "expected_problem_epochs": 1466,
+      "expected_candidate_prediction_rows": 1465,
+      "expected_truth_rows": 1465,
+      "expected_missing_truth_rows": 0,
+      "expected_missing_truth_key": null,
+      "phase82_same_route_score_m": 0.9389644134001871,
+      "phase100_qr_scalar_clock_score_m": 3.3204375254720286,
+      "truth_pin": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "read_by_solver": false,
+        "read_by_audit": false,
+        "read_by_evaluator_only": true
+      }
+    }
+  },
+  "metric_contract": {
+    "candidate_submission_header": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed",
+    "required_truth_fields": ["UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+    "truth_phone_policy": "optional phone must equal declared route; absent phone is assigned route",
+    "key": "(phone, UnixTimeMillis)",
+    "timestamp_type": "exact integer",
+    "matching": "exact integer key intersection only",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "distance": "spherical Haversine per row",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "finite_and_earth_valid": "all coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]"
+  },
+  "comparison_baselines": {
+    "phase82_same_route_candidate": {
+      "route_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.1139384500152307,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.9389644134001871
+      },
+      "two_route_macro_m": 1.0264514317077089,
+      "official_four_route_macro_direct_comparison": false,
+      "source_result_sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase100_qr_scalar_clock": {
+      "route_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1.147436714982201,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 3.3204375254720286
+      },
+      "two_route_macro_m": 2.2339371202271145,
+      "source_result_sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7"
+    },
+    "phase43_same_route_control": {
+      "route_scores_m": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2.1200062768576293,
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": 4.511656202485746
+      },
+      "two_route_macro_m": 3.3158312396716876,
+      "source": "sealed Phase82 artifact_sources.phase43_control"
+    }
+  },
+  "leakage_guard": {
+    "truth_path_in_native_argv": false,
+    "truth_path_in_native_environment": false,
+    "truth_bytes_in_native_process": false,
+    "truth_open_before_native_exit": false,
+    "native_launch_after_truth_open": false,
+    "truth_read_by_solver": false,
+    "truth_read_by_audit": false,
+    "truth_read_by_evaluator_only": true,
+    "native_inputs_only_raw_gnss_imu_broadcast_nav": true,
+    "raw_content_copied_or_transformed": false,
+    "mat_read_or_generated": false,
+    "base_rinex_read": false,
+    "pdc_or_precomputed_coordinate_read": false,
+    "kaggle_or_token_access": false,
+    "accuracy_based_route_selection": false,
+    "post_truth_tuning": false,
+    "solution_rows_in_result": false,
+    "failure_policy": "any leakage, schema, alignment, finite, or metric predicate fails closed; no repair, retry, fallback, rerun, or publication"
+  },
+  "promotion_gates": {
+    "all_gates_anded": true,
+    "exact_two_routes_one_fresh_run_each": true,
+    "candidate_output_schema_and_exact_alignment": true,
+    "candidate_prediction_domain_coverage_exact": 1.0,
+    "candidate_all_finite_and_earth_valid": true,
+    "candidate_over_70_mps_count_zero": true,
+    "candidate_improves_each_route_vs_phase43_by_at_least_m": 0.05,
+    "candidate_no_route_regression_vs_phase43": true,
+    "candidate_macro_improvement_vs_phase43_at_least_m": 0.1,
+    "candidate_route_score_max_m": 3.0,
+    "candidate_macro_score_max_m": 2.0,
+    "candidate_macro_score_strict_max_m": 0.782,
+    "candidate_no_route_regression_vs_phase82_same_route": true,
+    "candidate_no_route_regression_vs_phase100_qr_scalar_clock": true,
+    "strict_0_782_is_explicit_and_gate": true,
+    "promotion_on_failure": "no-go; preserve exact candidate and evaluator artifacts; do not rerun",
+    "promotion_on_success": "accuracy GO only; no release, validation, or Kaggle submission"
+  },
+  "truth_evaluator_boundary": {
+    "evaluator_process_count": 1,
+    "candidate_generation_precedes_truth_open": true,
+    "pre_truth_checks": [
+      "candidate solution hash/bytes/header",
+      "route identity and expected row count",
+      "strict timestamp order",
+      "duplicate and extra key rejection",
+      "finite and Earth-valid coordinates"
+    ],
+    "truth_open": "after manifest, independent authorization, and native exit; one official pinned truth file per route",
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "native_after_truth": false,
+    "result_content": "metrics, gate booleans, sealed hashes, and accounting only; no solution or truth coordinate rows",
+    "release_or_submission": false
+  },
+  "read_accounting": {
+    "audit_time": {
+      "native_solver_invocations": 0,
+      "raw_reads": 0,
+      "truth_reads": 0,
+      "accuracy_calculations": 0,
+      "mat_base_pdc_precomputed_reads": 0,
+      "kaggle_or_token_access": 0,
+      "new_solution_artifacts": 0
+    },
+    "planned_execution": {
+      "native_solver_invocations": 2,
+      "candidate_runs_per_route": 1,
+      "truth_reads_after_solution_seal": 2,
+      "truth_reads_per_route": 1,
+      "accuracy_calculations": 2,
+      "fallbacks": 0,
+      "reruns": 0,
+      "post_truth_native_invocations": 0,
+      "mat_base_pdc_precomputed_reads": 0,
+      "kaggle_or_token_access": 0,
+      "solution_publication": false
+    }
+  },
+  "release_boundary": {
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_promotion_authorized": false,
+    "solution_csv_publication_authorized": false,
+    "kaggle_submission_authorized": false,
+    "required_next_artifacts": [
+      "Phase102 pre-raw evaluator/manifest/tests",
+      "independent one-shot Phase102 raw/evaluation authorization"
+    ]
+  }
+}

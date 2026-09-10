@@ -1,0 +1,174 @@
+{
+  "schema_version": "smartphone-r5-phase131-canonical-correction-band-structural-authorization.v1",
+  "phase": 131,
+  "execution_label": "Luna Max",
+  "status": "independent-one-shot-inventory-first-structural-raw-authorized",
+  "candidate_id": "phase131-canonical-correction-band-key-v1",
+  "pins": {
+    "contract_audit_commit": "c5afacef8416aace5e8f713ad8a4b08654666457",
+    "contract_freeze_commit": "322f1278c9b802d3414b1fd275baeb3e731542a9",
+    "implementation_commit": "c3af051e46f3685c0d3406537fa8f7c12eea75f2",
+    "manifest_commit": "41299c13832af3eaefade4c2e50a5ea1bcaebced",
+    "pre_raw_accounting_commit": "927b8fe2d4d20be8849f0afb91f3c7454c662603",
+    "authorized_runner_commit": "615a63c54802a5d7a3da725f2e64fc5bd26d64a5",
+    "contract_audit_sha256": "403c6434629edf6f51bdb4b6f77fa1800f76d9b367fc8b52a42d60f6802c8227",
+    "contract_freeze_sha256": "1ac82fad3ebe27b9a3e0592e9d80f6b73dff5bbee20f7ff3dd276ca8cc763200",
+    "audit_sha256": "403c6434629edf6f51bdb4b6f77fa1800f76d9b367fc8b52a42d60f6802c8227",
+    "freeze_sha256": "1ac82fad3ebe27b9a3e0592e9d80f6b73dff5bbee20f7ff3dd276ca8cc763200",
+    "manifest_sha256": "81e02d17a312040e4f94c835d8d4b6f751a4f449006b20ea6189b2212369bf95",
+    "pre_raw_accounting_sha256": "eda8ab5b68ca7af389fa8618589b2ccf1acdd724ec2be5c576e766ceca2420e7",
+    "authorized_runner_path": "apps/commands/benchmarks/gnss_smartphone_phase131_canonical_correction_structural_authorized_execute.py",
+    "authorized_runner_sha256": "95e4df869caaf14158a0688c7fd2c548fced7ae9bb23306fe2e09785b8dd6127",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "ed24b57b29f679123c3a52dbb04fad9b979092564abc4a35905bdb2abfaa0c8e"
+  },
+  "authorization": {
+    "implementation": true,
+    "contract": true,
+    "raw_materialization": true,
+    "inventory_stage": true,
+    "raw_structural_execution": true,
+    "solver": true,
+    "truth_evaluation": false,
+    "accuracy": false,
+    "solution_publication": false,
+    "kaggle_submission": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false
+  },
+  "authorization_scope": {
+    "candidate_id": "phase131-canonical-correction-band-key-v1",
+    "route_order": ["MTV-A", "LAX-T"],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "inventory_before_solver": true,
+    "solver_on_inventory_failure": 0,
+    "solution_mode": "opaque hash and expected row count only"
+  },
+  "selectors": {
+    "phase126": 1,
+    "phase127": 1,
+    "phase128": 1,
+    "phase129": 1,
+    "phase130": 1,
+    "phase131": 1,
+    "phase118": 1,
+    "phase117": 0,
+    "phase120": 0,
+    "additional_frequency": 0
+  },
+  "routes": [
+    {
+      "target": "MTV-A",
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "bytes": 10708536,
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "interval": 1.0,
+        "window": 151,
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false,
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only"
+      }
+    },
+    {
+      "target": "LAX-T",
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "device_imu.csv": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        },
+        "brdc.nav": {
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "read_before_authorization": false,
+          "copy_or_transform": false
+        }
+      },
+      "base_input": {
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "bytes": 719969,
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "interval": 15.0,
+        "window": 11,
+        "read_before_authorization": false,
+        "hash_read_before_authorization": false,
+        "copy_or_transform": false,
+        "coordinate_source": "raw base RINEX header APPROX POSITION XYZ only"
+      }
+    }
+  ],
+  "forbidden": {
+    "truth": true,
+    "mat": true,
+    "pdc": true,
+    "precomputed_coordinates": true,
+    "accuracy": true,
+    "kaggle": true,
+    "rerun": true,
+    "fallback": true,
+    "solution_content_interpretation": true
+  },
+  "read_accounting_before_authorization": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "repairs": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "independent_authorization_boundary": "This commit authorizes exactly one inventory-first pass for MTV-A followed by LAX-T. A route may launch the native solver once only when its canonical inventory passes; all other reads and publication remain forbidden."
+}

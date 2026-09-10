@@ -1,0 +1,81 @@
+{
+  "schema_version": "smartphone-r5-phase20-upstream-stop-constraints-freeze.v1",
+  "candidate_id": "native-fgo-upstream-stop-constraints-v1",
+  "status": "frozen-before-implementation",
+  "base_commit": "3623dc4",
+  "purpose": "Port the raw-IMU stationary velocity and consecutive stationary Pose3 constraints present in the pinned upstream GNSS/IMU specification into the native GTSAM batch smartphone path. This is an opt-in research candidate; the Phase 12/16/19 lanes and production defaults remain unchanged.",
+  "selection_basis": {
+    "highest_upside_unported_component": "upstream stationary stop constraints",
+    "evidence": [
+      {
+        "source": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "lines": "116-118, 160-163, 223-227, 287-294",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+      },
+      {
+        "source": "output/reproducibility-cache/gsdc2023/functions/imuprocessing.m",
+        "lines": "42-58",
+        "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae"
+      },
+      {
+        "source": "output/reproducibility-cache/gsdc2023/parameters.m",
+        "lines": "144-161",
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+      }
+    ],
+    "current_gap": "The native fixed-lag path has a separate opt-in ZUPT/NHC implementation, but the native smartphone batch path used by gnss_fgo_imu_no_base does not add the upstream stop velocity prior or the consecutive-stop Pose3 identity factor. The candidate therefore targets a specific backend gap rather than another carrier or smoothing heuristic.",
+    "alternatives_not_selected": [
+      "absolute height constraints: the upstream absolute branch requires reference-height/ground-truth-like data unavailable under the raw-only contract",
+      "new carrier or ionosphere states: Phase 11-19 lanes already cover related raw candidates and are separately sealed",
+      "optimizer iteration retuning: previously audited independently and is not a new physical measurement component"
+    ],
+    "truth_and_leaderboard_not_used": true
+  },
+  "raw_only_contract": {
+    "allowed_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["MAT files", "ground truth before the post-freeze score", "device WLS/results/sample coordinates", "leaderboard scores"],
+    "stationarity_source": "finite raw aligned IMU acceleration and gyro only",
+    "coordinate_source": "native raw GNSS/nav FGO in memory",
+    "default_unchanged": true,
+    "no_subprocess_or_precomputed_coordinates": true
+  },
+  "candidate_contract": {
+    "backend": "GTSAM batch Pose3+velocity+bias graph",
+    "flag": "--native-upstream-stop-constraints",
+    "stop_window_samples": 500,
+    "acceleration_std_threshold": "global finite minimum of sliding acceleration-norm std + 0.08 m/s^2",
+    "gyro_std_threshold": "global finite minimum of sliding gyro-norm std + 0.005 rad/s",
+    "gyro_norm_max_radps": 0.05,
+    "velocity_gate_mps": 0.5,
+    "velocity_prior_sigma_mps": 0.01,
+    "velocity_huber_k_sigma": 0.5,
+    "pose_between_sigma": {
+      "rotation_rad": 0.0017453292519943296,
+      "translation_m": 0.02,
+      "huber_k_sigma": 0.5
+    },
+    "epoch_mapping": "nearest aligned IMU stop flag, endpoint nearest hold (upstream interp1 nearest/extrap contract)",
+    "application": "velocity prior when stop(epoch) and initial GNSS/IMU velocity norm < 0.5 m/s; Pose3 identity between factor only when consecutive stop flags and preceding velocity gate pass",
+    "no_height_or_truth_factor": true,
+    "fail_closed": ["nonfinite IMU statistics", "nonfinite velocity/state", "nonfinite solver output", "solver non-convergence"]
+  },
+  "pre_score_structural_gate": {
+    "raw_route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "truth_free": true,
+    "required": ["finite output", "exact raw-key coverage", "no MAT/enriched/WLS/truth input", "GTSAM convergence", "finite cost decrease", "no new >70 m/s isolated continuity spike", "deterministic repeat", "nonzero stop diagnostics if raw stop flags exist"],
+    "comparison": "same raw inputs and exact Phase 12 recipe with the candidate flag added; no score is used to select parameters"
+  },
+  "post_freeze_evaluation": {
+    "scope": "development evidence only",
+    "truth_policy": "after structural artifacts and hashes are sealed, read the declared development ground_truth.csv once in one process to compare frozen baseline and candidate",
+    "gates": ["all four official diagnostic variants non-regress", "H P95 strictly improves", "coverage unchanged", "vertical safety", "physical continuity", "candidate remains opt-in"],
+    "no_post_score_tuning": true,
+    "validation_holdout_test_truth": "not opened by this phase"
+  },
+  "source_hashes_at_freeze": {
+    "native_backend": "845231bed5d7735ac57d7c2d5a66d3705ebffea872df8a5474cdd0c70bfd7284",
+    "native_config": "dc4f9291c0dde91c2799cf7c62fdea36368e127e9690a4325b7f1ed1f939032d",
+    "native_app": "9525c8b13c2d509a9f731bbf8b27abb1920654194e69f93ae32e1da88770fa72"
+  },
+  "implementation_rule": "Implement only this predeclared stop-constraint component and diagnostics after this record is committed to the working history; do not change Phase 19 outputs or tune any numeric value after truth access."
+}

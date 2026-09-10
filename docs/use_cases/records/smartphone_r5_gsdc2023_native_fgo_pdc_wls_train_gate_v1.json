@@ -1,0 +1,69 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-bridge-train-gate.v1",
+  "status": "frozen-before-development-train-score",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-pdc-doppler-velocity-wls-v1",
+  "purpose": "One development-only truth score of the sealed Doppler-velocity-WLS candidate against the sealed native-FGO baseline. This record is created after truth-free artifacts and before any truth read.",
+  "truth_policy": {
+    "truth_free_candidate_artifacts_sealed": true,
+    "truth_free_baseline_artifacts_sealed": true,
+    "development_truth_only": true,
+    "fresh_validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "leaderboard_used_for_tuning": false,
+    "token_access": false,
+    "external_mutation": false,
+    "no_post_score_parameter_tuning": true,
+    "candidate_truth_read_count": 1,
+    "baseline_truth_read_count": 1
+  },
+  "authoritative_inventory": {
+    "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "sha256_at_freeze": "fc90e3a6e4182276cbfebc635085d367c18fe10d3f0c982ee8d2cfcc9eb1f3d4"
+  },
+  "fixed_routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "truth": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_truth/2021-03-16-18-59-us-ca-mtv-a__pixel5/ground_truth.csv",
+      "truth_sha256_from_prior_record": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+      "candidate_manifest": "output/smartphone-r5/native-fgo-pdc-wls-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/epochs-all/run_manifest.json",
+      "candidate_manifest_sha256": "507ec2a5863d08805b04e47ea86b1e0d0d4120834a1f21124cccf4e4152e680b",
+      "baseline_manifest": "output/smartphone-r5/native-fgo-pdc-bridge-v1-baseline/2021-03-16-18-59-us-ca-mtv-a__pixel5/epochs-all/run_manifest.json",
+      "baseline_manifest_sha256": "3fc88217872aa099e1cb3cf34ae068f417f91197b3afe7f1e46ad10c51c50dde"
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "truth": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_truth/2021-07-27-19-49-us-ca-mtv-b__pixel4/ground_truth.csv",
+      "truth_sha256_from_prior_record": "cc7598498eb55937e9644ccf991b5ab478533363e732b3fb44c447fff6a566cd",
+      "candidate_manifest": "output/smartphone-r5/native-fgo-pdc-wls-v1/2021-07-27-19-49-us-ca-mtv-b__pixel4/epochs-all/run_manifest.json",
+      "candidate_manifest_sha256": "39b5f2d62fb0ee21335f4163630452bf90ed7efdd0fadc315009913b4ea82926",
+      "baseline_manifest": "output/smartphone-r5/native-fgo-pdc-bridge-v1-baseline/2021-07-27-19-49-us-ca-mtv-b__pixel4/epochs-all/run_manifest.json",
+      "baseline_manifest_sha256": "b4ac6de44c5cb2278f4694df2fbae0deb0e304b7270464edf27f0d2541814a11"
+    },
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "truth": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/train_truth/2022-02-24-18-29-us-ca-lax-o__pixel5/ground_truth.csv",
+      "truth_sha256_from_prior_record": "73875990485f43d36ce7608762b4071267d8361847ee5b9a171d3459ab2ba154",
+      "candidate_manifest": "output/smartphone-r5/native-fgo-pdc-wls-v1/2022-02-24-18-29-us-ca-lax-o__pixel5/epochs-all/run_manifest.json",
+      "candidate_manifest_sha256": "d1ce398d627da5f9e6bf15a05e40547495c53e2780c8100938cb5a29b7cb0d1f",
+      "baseline_manifest": "output/smartphone-r5/native-fgo-pdc-bridge-v1-baseline/2022-02-24-18-29-us-ca-lax-o__pixel5/epochs-all/run_manifest.json",
+      "baseline_manifest_sha256": "ce4cefcf5c1fc8f6c4c27c4b6ba47ad70b0aecef297df8345dc68451d3cde259"
+    }
+  },
+  "scoring_contract": {
+    "official_diagnostics": ["raw", "median5", "median15", "trimmed_mean"],
+    "candidate_and_baseline_scored_from_same_truth_read": true,
+    "match_tolerance_ms": 100,
+    "continuity_bound_mps": 70.0,
+    "promotion_gate": "Every route and aggregate must improve all four diagnostic variants and mean, preserve availability/truth coverage, not worsen H P50/P95/V P95, and add no >70 m/s transitions. Failure seals No-Go and validation/holdout/test remain unopened."
+  },
+  "source_hashes_at_freeze": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge_train_score.py": "830d794422d52070fa3d62a98503a49f9cbe4cf6739dde64bd533d3c5f1969c1",
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_wls.py": "2c16704937608ca211860dabb76d4d3f692322438984b027b9420c4cb900b300",
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_freeze_v1.json",
+    "freeze_record_sha256": "1569035091e5283f241ca8e921af74c81520bc7960d943fcc3335fd96ab65da5"
+  },
+  "commands": {
+    "score_once": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge_train_score.py --gate-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_train_gate_v1.json --output-root output/smartphone-r5/native-fgo-pdc-wls-v1",
+    "truth_access": "The score command may read only the three prior development train truth files named above once each; no validation, holdout, test, Kaggle, or token path is permitted."
+  },
+  "no_post_score_tuning": "The WLS source, binary, freeze, numeric parameters, candidate artifacts, and baseline artifacts are immutable for this score. The result cannot authorize a rerun or parameter change."
+}

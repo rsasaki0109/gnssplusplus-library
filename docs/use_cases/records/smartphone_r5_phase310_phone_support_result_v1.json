@@ -1,0 +1,20 @@
+{
+  "phase": 310,
+  "support": {
+    "phone_epochs": 3140,
+    "candidates": 108722,
+    "missing_stream": 20172,
+    "unavailable": 1819,
+    "finite": 86731
+  },
+  "base": {
+    "built": true,
+    "epochs": 3500,
+    "states": 68697,
+    "signal_rows": 112050,
+    "excluded_frequency_rows": 74777,
+    "streams": 38,
+    "failure": ""
+  },
+  "conservation": true
+}

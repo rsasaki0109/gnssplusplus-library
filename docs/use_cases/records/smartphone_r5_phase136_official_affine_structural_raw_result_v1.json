@@ -1,0 +1,404 @@
+{
+  "schema_version": "smartphone-r5-phase136-official-affine-structural-raw-result.v1",
+  "phase": 136,
+  "recipe_phase": 135,
+  "execution_label": "Luna Max",
+  "status": "sealed-structural-raw-result-no-accuracy",
+  "authorization_commit": "445f53b44b186c111a926f4e9b5daf88ef2ffd07",
+  "authorization_path": "docs/use_cases/records/smartphone_r5_phase136_official_affine_structural_raw_authorization_v1.json",
+  "authorization_sha256": "22f4ed4d7c18222bf78f56d7fb06958d36a9a7fe77a14f30eb4ce107ed437586",
+  "boundary_pins": {
+    "audit_commit": "5ef049c927dab2a67ba66a97a2a4e44ce98de4f8",
+    "freeze_commit": "a24f7d1ff4fc53b8e270767c0b32f25874e2fc94",
+    "implementation_commit": "3aa8bc08e7b7747fad8e127691160314eed592b2",
+    "qualification_manifest_commit": "d592e43b4796f851a87ed200c4724e087f3d16d9",
+    "pre_raw_accounting_commit": "efba5e896b841d1b7e26761baef2168f1bd6498f",
+    "wrapper_sha256": "5ff1c932bb685ca9a052b0d50c2df84fa93e8132a79dff8b06a469e42da10a21"
+  },
+  "phase135_pins": {
+    "source_audit_commit": "01b7b68a37c668422c7ca396cfe56edab706f819",
+    "doppler_correction_commit": "f9a1fc9403e7072435a30d9e06aa8ea59493cdc5",
+    "structural_freeze_commit": "bd1ef39ba9a7a29c210d953a7edc1e60011fb7bd",
+    "runner_manifest_commit": "be2f83721df24912f29cb59ae1c26a342d8701b5",
+    "pre_raw_accounting_commit": "142761dd530768ee6f4b20b181fe099ccc4db000",
+    "target_binary_sha256": "bcd9a1a896c09248cd1ff3d1a4b1cd2eb9d1eebf0559073c4bad9158188c529f"
+  },
+  "route_order": ["MTV-A", "LAX-T"],
+  "runs_per_route": 1,
+  "route_results": {
+    "MTV-A": {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "return_code": 0,
+      "solver_invocations": 1,
+      "input_read_counts": {
+        "device_gnss.csv": 1,
+        "device_imu.csv": 1,
+        "brdc.nav": 1,
+        "base.obs": 1
+      },
+      "input_hashes": {
+        "device_gnss.csv": {
+          "bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863"
+        },
+        "device_imu.csv": {
+          "bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+        },
+        "brdc.nav": {
+          "bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+        },
+        "base.obs": {
+          "bytes": 10708536,
+          "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52"
+        }
+      },
+      "native_summary": {
+        "bytes": 35082,
+        "sha256": "fe7cae34b6ad65b9abb75990f049b30578f7a279f3198df76030c57d21f6c645",
+        "coordinate_fields_interpreted": false
+      },
+      "opaque_solution": {
+        "bytes": 172694,
+        "newline_count": 2159,
+        "sha256": "dad4b5ee82942e11b051155f76fd28fe59c21e2928caba0d48a8955a6024005a",
+        "content_interpreted": false
+      },
+      "selectors": {
+        "native_pdc_imu_tdcp_no_bridge": true,
+        "phase135_official_affine_measurement_family": true,
+        "phase118_official_tdcp_huber_k": true,
+        "phase117_dynamic_tdcp_sigma": false,
+        "phase120_official_tdcp_resl_atmosphere_cancellation": false,
+        "phase126_134_compound": false,
+        "phase107_raw_base_compensation": true,
+        "phase107_raw_base_source_miss_mask": true,
+        "additional_frequency_bands": false,
+        "native_pdc_state_bridge": false,
+        "native_direct_wls_ephemeral_c7d_main_seed": false
+      },
+      "gnss_first": {
+        "epochs": 2159,
+        "iterations": 536,
+        "initial_cost": 165214679.50699747,
+        "final_cost": 136827359.04150486,
+        "strict_cost_decrease": true,
+        "converged": true,
+        "accepted_outer_iterations": 536,
+        "c7_dimension": 7,
+        "c_epoch_count": 2159,
+        "c_finite_components": 15113,
+        "c_nonfinite_components": 0,
+        "c_export_valid": true,
+        "d_epoch_count": 2159,
+        "d_finite_count": 2159,
+        "d_nonfinite_count": 0,
+        "d_export_valid": true,
+        "position_clock_handoff_count": 2159,
+        "velocity_handoff_count": 2159,
+        "exact_epoch_alignment": true,
+        "handoff_source": "same-run-gnss-first-optimizer-result"
+      },
+      "main": {
+        "telemetry_source": "native_summary.graph and native_source_clock_c0d_factor",
+        "epochs": 2159,
+        "graph_factors": 108230,
+        "imu_intervals": 2158,
+        "iterations": 12,
+        "accepted_outer_iterations": 12,
+        "initial_cost": 1765606150453.9958,
+        "final_cost": 214191269.26530388,
+        "strict_cost_decrease": true,
+        "converged": true,
+        "linear_solver": "MULTIFRONTAL_QR",
+        "elimination": "EliminateQR",
+        "c0d_factor_count": 2158,
+        "c0d_finite_costs": true,
+        "c0d_indeterminate_linear_solve_count": 8,
+        "c0d_total_inner_lambda_attempts": 20,
+        "c0d_initial_lambda": 1e-05,
+        "c0d_final_lambda": 1.0000000000000003e-09,
+        "termination_branch": "maximum_outer_iterations"
+      },
+      "affine_families": {
+        "pseudorange_admitted_or_inserted": 43259,
+        "doppler_admitted_or_inserted": 20748,
+        "ordinary_tdcp_admitted_or_inserted": 31269,
+        "pose3_x_bridge": 2159,
+        "geometry_rows_validated": 95276,
+        "configuration_valid": true,
+        "single_sagnac_representation": true,
+        "mixed_or_partial_family_allowed": false,
+        "key_order_exact": true,
+        "finite_jacobians_and_source_geometry": true
+      },
+      "legacy_family_evidence": {
+        "double_difference_carrier_factors": 0,
+        "double_difference_pseudorange_factors": 0,
+        "receiver_signal_bias_states": 0,
+        "base_or_double_difference_tdcp": false,
+        "standalone_carrier_ambiguity_factors": false,
+        "native_pdc_state_bridge": false
+      },
+      "c7_d_and_units": {
+        "c_dimension": 7,
+        "c_finite_epoch_vectors": 2159,
+        "d_finite_epoch_values": 2159,
+        "c_units": "metres",
+        "d_units": "metres_per_second",
+        "c0d_sigma_m": 0.1,
+        "global_isb_state_count": 0,
+        "exact_epoch_alignment": true
+      },
+      "raw_base": {
+        "applied": true,
+        "built": true,
+        "correction_application_pass_count": 1,
+        "correction_applied_exactly_once": true,
+        "adopted_rows_corrected": 43259,
+        "in_domain_rows": 43259,
+        "interpolation_misses": 14022,
+        "finite_correction_rows": 43259,
+        "no_extrapolation_or_endpoint_hold": true,
+        "duplicate_correction_rejected": false,
+        "failure": ""
+      },
+      "tdcp": {
+        "enabled": true,
+        "factors_built": 31269,
+        "factors_inserted": 31269,
+        "finite_residuals": 31269,
+        "nonfinite_residuals": 0,
+        "fixed_sigma_m": 0.03,
+        "official_huber_k": 0.5,
+        "setting_type": "Highway",
+        "base_or_double_difference_factors": false,
+        "standalone_ambiguity_factors": false
+      },
+      "output": {
+        "finite_coordinates": true,
+        "atomic_publish": true,
+        "expected_epoch_coverage": true,
+        "output_epochs": 2159,
+        "pixel5_offset_applications": 1
+      }
+    },
+    "LAX-T": {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "return_code": 0,
+      "solver_invocations": 1,
+      "input_read_counts": {
+        "device_gnss.csv": 1,
+        "device_imu.csv": 1,
+        "brdc.nav": 1,
+        "base.obs": 1
+      },
+      "input_hashes": {
+        "device_gnss.csv": {
+          "bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1"
+        },
+        "device_imu.csv": {
+          "bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5"
+        },
+        "brdc.nav": {
+          "bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+        },
+        "base.obs": {
+          "bytes": 719969,
+          "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe"
+        }
+      },
+      "native_summary": {
+        "bytes": 34404,
+        "sha256": "a6968dedb5b5ce007b561701a72215950614182b22b460e0aa836975aabc6c77",
+        "coordinate_fields_interpreted": false
+      },
+      "opaque_solution": {
+        "bytes": 117254,
+        "newline_count": 1466,
+        "sha256": "df022cad3fdd68a3de2a6b2eceac0c0520a5a22fda61c76edf997efde964b519",
+        "content_interpreted": false
+      },
+      "selectors": {
+        "native_pdc_imu_tdcp_no_bridge": true,
+        "phase135_official_affine_measurement_family": true,
+        "phase118_official_tdcp_huber_k": true,
+        "phase117_dynamic_tdcp_sigma": false,
+        "phase120_official_tdcp_resl_atmosphere_cancellation": false,
+        "phase126_134_compound": false,
+        "phase107_raw_base_compensation": true,
+        "phase107_raw_base_source_miss_mask": true,
+        "additional_frequency_bands": false,
+        "native_pdc_state_bridge": false,
+        "native_direct_wls_ephemeral_c7d_main_seed": false
+      },
+      "gnss_first": {
+        "epochs": 1466,
+        "iterations": 581,
+        "initial_cost": 66070529.934910096,
+        "final_cost": 46937212.955303565,
+        "strict_cost_decrease": true,
+        "converged": true,
+        "accepted_outer_iterations": 581,
+        "c7_dimension": 7,
+        "c_epoch_count": 1466,
+        "c_finite_components": 10262,
+        "c_nonfinite_components": 0,
+        "c_export_valid": true,
+        "d_epoch_count": 1466,
+        "d_finite_count": 1466,
+        "d_nonfinite_count": 0,
+        "d_export_valid": true,
+        "position_clock_handoff_count": 1466,
+        "velocity_handoff_count": 1466,
+        "exact_epoch_alignment": true,
+        "handoff_source": "same-run-gnss-first-optimizer-result"
+      },
+      "main": {
+        "telemetry_source": "native_summary.graph and native_source_clock_c0d_factor",
+        "epochs": 1466,
+        "graph_factors": 62414,
+        "imu_intervals": 1465,
+        "iterations": 12,
+        "accepted_outer_iterations": 12,
+        "initial_cost": 1660928418678.5596,
+        "final_cost": 88416528.19976115,
+        "strict_cost_decrease": true,
+        "converged": true,
+        "linear_solver": "MULTIFRONTAL_QR",
+        "elimination": "EliminateQR",
+        "c0d_factor_count": 1465,
+        "c0d_finite_costs": true,
+        "c0d_indeterminate_linear_solve_count": 6,
+        "c0d_total_inner_lambda_attempts": 23,
+        "c0d_initial_lambda": 1e-05,
+        "c0d_final_lambda": 1.0000000000000004e-06,
+        "termination_branch": "maximum_outer_iterations"
+      },
+      "affine_families": {
+        "pseudorange_admitted_or_inserted": 30664,
+        "doppler_admitted_or_inserted": 8942,
+        "ordinary_tdcp_admitted_or_inserted": 14012,
+        "pose3_x_bridge": 1466,
+        "geometry_rows_validated": 53618,
+        "configuration_valid": true,
+        "single_sagnac_representation": true,
+        "mixed_or_partial_family_allowed": false,
+        "key_order_exact": true,
+        "finite_jacobians_and_source_geometry": true
+      },
+      "legacy_family_evidence": {
+        "double_difference_carrier_factors": 0,
+        "double_difference_pseudorange_factors": 0,
+        "receiver_signal_bias_states": 0,
+        "base_or_double_difference_tdcp": false,
+        "standalone_carrier_ambiguity_factors": false,
+        "native_pdc_state_bridge": false
+      },
+      "c7_d_and_units": {
+        "c_dimension": 7,
+        "c_finite_epoch_vectors": 1466,
+        "d_finite_epoch_values": 1466,
+        "c_units": "metres",
+        "d_units": "metres_per_second",
+        "c0d_sigma_m": 0.1,
+        "global_isb_state_count": 0,
+        "exact_epoch_alignment": true
+      },
+      "raw_base": {
+        "applied": true,
+        "built": true,
+        "correction_application_pass_count": 1,
+        "correction_applied_exactly_once": true,
+        "adopted_rows_corrected": 30664,
+        "in_domain_rows": 30664,
+        "interpolation_misses": 134,
+        "finite_correction_rows": 30664,
+        "no_extrapolation_or_endpoint_hold": true,
+        "duplicate_correction_rejected": false,
+        "failure": ""
+      },
+      "tdcp": {
+        "enabled": true,
+        "factors_built": 14012,
+        "factors_inserted": 14012,
+        "finite_residuals": 14012,
+        "nonfinite_residuals": 0,
+        "fixed_sigma_m": 0.03,
+        "official_huber_k": 0.5,
+        "setting_type": "Highway",
+        "base_or_double_difference_factors": false,
+        "standalone_ambiguity_factors": false
+      },
+      "output": {
+        "finite_coordinates": true,
+        "atomic_publish": true,
+        "expected_epoch_coverage": true,
+        "output_epochs": 1466,
+        "pixel5_offset_applications": 1
+      }
+    }
+  },
+  "structural_gates": {
+    "route_order_exact": true,
+    "one_solver_invocation_each": true,
+    "native_return_zero_each": true,
+    "required_native_pdc_algorithm_option_exactly_once": true,
+    "phase135_and_phase118_active": true,
+    "phase117_120_126_134_additional_off": true,
+    "gnss_first_progress_and_strict_cost_decrease": true,
+    "main_progress_and_strict_cost_decrease": true,
+    "affine_p_d_tdcp_counts_equal_inserted": true,
+    "legacy_family_counts_zero": true,
+    "bridge_keys_and_count_exact": true,
+    "c7_d_full_finite_exact_handoff": true,
+    "fixed_los_single_sagnac_finite_jacobians": true,
+    "raw_base_exactly_once": true,
+    "tdcp_sigma_huber_and_finite_residuals": true,
+    "qr_solver_selected": true,
+    "finite_output_and_expected_epoch_coverage": true,
+    "pixel5_offset_exactly_once": true,
+    "no_fallback_rerun_repair": true
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 2,
+    "raw_phone_imu_reads": 2,
+    "broadcast_navigation_reads": 2,
+    "raw_base_rinex_reads": 2,
+    "native_solver_invocations": 2,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "policy": {
+    "truth_used": false,
+    "mat_used": false,
+    "pdc_used": false,
+    "precomputed_coordinates_used": false,
+    "accuracy_evaluation": false,
+    "kaggle_access": false,
+    "solution_publication": false,
+    "solution_coordinate_interpretation": false,
+    "fallback": false,
+    "rerun": false,
+    "repair": false,
+    "fail_closed_on_structural_failure": true
+  },
+  "solution_policy": "opaque SHA-256/bytes/newline seal only; solution rows were not opened or interpreted",
+  "native_result_source": {
+    "path": "output/smartphone-r5/phase135-official-affine-structural-v1/structural_raw_result.json",
+    "sha256": "6975dc338ef278ed95abb1e5ef2313c345fa06811629e2ce6f9ab3e22ecc092c",
+    "bytes": 52185,
+    "wrapper_normalized_main_field": "null",
+    "main_telemetry_recovered_from": ["native_summary.graph", "native_source_clock_c0d_factor"],
+    "coordinate_fields_interpreted": false
+  },
+  "next_action": "Structural result is sealed; no truth/accuracy evaluation or Kaggle submission is authorized by this artifact."
+}

@@ -1,0 +1,173 @@
+{
+  "schema_version": "smartphone-r5-phase118-tdcp-robust-k-raw-authorization.v1",
+  "phase": 118,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-exact-two-route-phase118-raw-structural-execution",
+  "authority": {
+    "source_parity_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_source_parity_freeze_v1.json",
+      "sha256": "c6f4fda2abe170417610d4fd1a4ae8a1a618d07096ff0432669081ab06a1cf77"
+    },
+    "structural_contract_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_contract_freeze_v1.json",
+      "sha256": "267a2f51dea06f7d29d5b27be1f7ffd84febac1c72a9fbe2676c5f5a2649f81b"
+    },
+    "contract_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_contract_audit_v1.md",
+      "sha256": "601b3c2dbe3e42e0125d20f70e86a6c9e295e69b46f4c64bff74eb4638bf43bf"
+    },
+    "structural_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_manifest_v1.json",
+      "sha256": "e0a4a0e879a56d7336fe1e2cbf041e5a72920d8103dd22dfdc9dffddfe62ec1d"
+    },
+    "launch_free_runner": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_structural_execute.py",
+      "sha256": "7c67289274eafd4b8a38bfe18555a82448392b1255ce9febb530b3e1b2d6df89"
+    },
+    "structural_validator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k.py",
+      "sha256": "6a7ff88fbee42baecd7bbccabdf76f7d31246ca075ba70cbb2ea3c35707d2201"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase118_tdcp_robust_k_structural_execution.py",
+      "sha256": "6d6a08a8efa1d33b8e7d49cb68794f44743a1fb4a164abd904011ab2372eb936"
+    },
+    "phase112_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_manifest_v1.json",
+      "sha256": "d8be91f42f07196e07b293558cc6b83dd261226af577c1b26b167eead75902e4"
+    },
+    "phase112_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_structural_result_v1.json",
+      "sha256": "087b1bf51b4e584b86a7b558560df4ceb78e19b01e572f2d60aeef4c3d759ba0"
+    },
+    "phase117_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_structural_result_v1.json",
+      "sha256": "2517dcc805146dc34e790c78a392caf000c79eaba837fe099b6d522c147e9cf2"
+    },
+    "pre_raw_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_pre_raw_audit_v1.json",
+      "sha256": "71a619578c6a4a8aa0e32562107f78857c4557a053e4822d5396421ddf2c8c29"
+    },
+    "target_binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "fe6c0b501921a8628fb813abe380b84c89824409e731bf7cfd01920d900dea34"
+    },
+    "source_parity_freeze_commit": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+    "structural_contract_freeze_commit": "25f3bada02c4073175054b5d668de02020761208",
+    "contract_commit": "8ffc4148e15431aeaa57ee65f730b8449829113d",
+    "implementation_commit": "7f339ccc8f0fb58e3dbcb7f3fc24ba2b04acbf40",
+    "pre_raw_audit_commit": "9fc06d23ec1f5e1f730d1d132bdf6107c4b65f8f",
+    "pre_raw_audit_sha256": "71a619578c6a4a8aa0e32562107f78857c4557a053e4822d5396421ddf2c8c29",
+    "target_binary_sha256": "fe6c0b501921a8628fb813abe380b84c89824409e731bf7cfd01920d900dea34"
+  },
+  "raw_executor": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase118_tdcp_robust_k_raw_execute.py",
+    "sha256": "966346fbfc618071c8fea7e96ffd4988f20ee6a9f242cdb8ec5d0b2e98906082",
+    "launch_boundary": "payload stat/hash and native launch are unreachable until this authorization verifies"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "candidate": {
+    "id": "phase118-official-tdcp-huber-k-mapping-v1",
+    "candidate_count": 1,
+    "selector": "--native-phase118-official-tdcp-huber-k",
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-upstream-position-offset",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-pseudorange-preserve-additional-frequency-bands",
+      "--native-phase118-official-tdcp-huber-k"
+    ],
+    "official_setting_type": "Highway",
+    "official_huber_k": 0.5,
+    "fixed_tdcp_sigma_m": 0.03,
+    "phase117_dynamic_sigma": false,
+    "default_off": true,
+    "opt_in": true,
+    "factor_count_and_reject_invariance": true,
+    "c7_d_handoff": "exact/full/finite retained epoch order",
+    "solver_branch": "MULTIFRONTAL_QR / EliminateQR",
+    "base_correction": "exactly once",
+    "pixel5_offset": "exactly once at final output boundary",
+    "no_fallback": true,
+    "solution_withheld": true,
+    "truth_evaluation": false,
+    "accuracy_scoring": false
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations": 2,
+    "raw_phone_gnss_process_reads_max": 2,
+    "raw_phone_imu_process_reads_max": 2,
+    "broadcast_navigation_process_reads_max": 2,
+    "raw_base_hash_reads_max": 2,
+    "raw_base_native_process_reads_max": 2,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_rows_authorized": false
+  },
+  "execution_policy": {
+    "authorized": true,
+    "order": "MTV-A then LAX-T, sequentially",
+    "one_invocation_per_route": true,
+    "no_rerun": true,
+    "no_solver_fallback": true,
+    "raw_inputs_only": "device_gnss.csv/device_imu.csv/brdc.nav plus sealed raw base RINEX",
+    "solver_filter_lm_graph_equations_units_sigma_unchanged": true,
+    "solution_output": "opaque hash/header/row seal only; no coordinate interpretation or publication",
+    "truth_or_accuracy_evaluation": false,
+    "content_copy_or_transform": false
+  },
+  "release_boundary": {
+    "raw_execution_authorized": true,
+    "solver_execution_authorized": true,
+    "structural_result_authorized": true,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false
+  },
+  "forbidden_inputs": {
+    "truth": true,
+    "MAT": true,
+    "phone_coordinates": true,
+    "precomputed_coordinates": true,
+    "PDC": true,
+    "accuracy": true,
+    "Kaggle": true,
+    "token": true
+  },
+  "pre_authorization_read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_hash_reads": 0,
+    "native_solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false
+  }
+}

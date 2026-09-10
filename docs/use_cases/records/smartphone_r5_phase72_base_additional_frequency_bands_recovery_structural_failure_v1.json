@@ -1,0 +1,116 @@
+{
+  "schema_version": "smartphone-r5-phase72-base-additional-frequency-bands-recovery-structural-failure.v1",
+  "phase": 72,
+  "status": "fail-closed-coverage-gates",
+  "execution_label": "Luna Max",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_freeze_v1.json",
+    "sha256": "3acff212c87657ff0cfb610f276b511bf6968178ef8e5794f7a4a9af283e198b"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase72_base_additional_frequency_bands_recovery_manifest_v1.json",
+    "sha256": "9122f293a3b4364adfff861b878e2ea3f9111b26807bba081df1b5655351acb1"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase72_base_additional_frequency_bands_recovery.py",
+    "sha256": "ff87fcf44b8ee982e8b8bfc4ad05156f5b293d33aedcb89cf8610187f5b45617"
+  },
+  "source_commit": "1ee721ebb6d8adfd5ab65fa8f2243ad2926ac982",
+  "phase71_partial_output_reused": false,
+  "failure": {
+    "stage": "MTV-a candidate run1 summary validation",
+    "gate": "matched_factor_fraction",
+    "matched_factor_fraction": 0.7804352754477443,
+    "matched_factor_fraction_threshold": 0.8,
+    "finite_correction_fraction_among_matched": 0.965992322855068,
+    "finite_correction_fraction_among_matched_threshold": 0.99,
+    "legacy_finite_correction_fraction_all_adopted": 0.7538944845678013,
+    "failure_reason": "Preserving additional base frequency bands increased selected streams (including GPS_L5), but exact source-key matched adopted factors remained below 0.80 and 1,639 exact-stream-matched factors lacked an in-domain finite correction; no denominator was relaxed.",
+    "candidate_repeat_run": 0,
+    "remaining_routes_unstarted": 3,
+    "accuracy_truth_read": false,
+    "zero_point_782_evaluated": false
+  },
+  "partial_route": {
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "control": {
+      "submission": {
+        "bytes": 172694,
+        "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+        "phase43_identity": true
+      },
+      "summary": {
+        "bytes": 14534,
+        "sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+        "phase43_identity": true
+      }
+    },
+    "candidate_run1": {
+      "submission": {
+        "bytes": 172694,
+        "sha256": "1171f72e53200dc2736aabff2a92f0dd6c80a7f61d62df1e6f373942767cfb57"
+      },
+      "summary": {
+        "bytes": 17629,
+        "sha256": "7bfa14a81ffb85538865bf58d20ce66871f6d22d3409e232d6d6b9b384779f11"
+      },
+      "selected_band_observation_rows": 167020,
+      "selected_band_streams": 69,
+      "selected_band_observation_rows_by_signal": {
+        "GAL_E1": 17633,
+        "GAL_E5A": 17633,
+        "GAL_E5B": 35266,
+        "GLO_L1CA": 17199,
+        "GLO_L2P": 15611,
+        "GPS_L1CA": 27154,
+        "GPS_L2C": 26410,
+        "GPS_L5": 10114
+      },
+      "selected_band_streams_by_signal": {
+        "GAL_E1": 7,
+        "GAL_E5A": 7,
+        "GAL_E5B": 7,
+        "GLO_L1CA": 9,
+        "GLO_L2P": 8,
+        "GPS_L1CA": 13,
+        "GPS_L2C": 13,
+        "GPS_L5": 5
+      },
+      "adopted_pseudorange_rows": 61754,
+      "matched_factor_rows": 48195,
+      "finite_correction_rows_among_matched": 46556,
+      "adopted_rows_corrected": 46556,
+      "in_domain_rows": 46556,
+      "interpolation_misses": 15198,
+      "prediction_domain_comparison": "not reached after coverage gate failure",
+      "candidate_repeat_identity": "not evaluated"
+    }
+  },
+  "gates": {
+    "control_phase43_identity": true,
+    "candidate_summary_finite_and_converged": true,
+    "prediction_domain_coverage_exact": "not evaluated",
+    "matched_factor_fraction_each_route_min_0_80": false,
+    "finite_correction_fraction_among_matched_each_route_min_0_99": false,
+    "selected_band_telemetry_exact": true,
+    "candidate_repeat_identity": "not evaluated",
+    "all_four_routes": false,
+    "all_passed": false
+  },
+  "read_accounting": {
+    "input_hash_verification_reads_per_member": 4,
+    "native_solver_invocations_started": 2,
+    "raw_device_gnss_process_reads": 2,
+    "raw_device_imu_process_reads": 2,
+    "broadcast_nav_process_reads": 2,
+    "base_rinex_process_reads": 1,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "phase71_partial_output_reused": false,
+    "post_truth_tuning": false
+  },
+  "policy": "The failure is a frozen structural coverage no-go, not an accuracy score. The all-band source option remains experimental and no further native correction, truth read, validation, or 0.782 claim is authorized without a new freeze. Phase43 remains champion."
+}

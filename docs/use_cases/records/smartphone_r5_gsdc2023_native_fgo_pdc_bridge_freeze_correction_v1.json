@@ -1,0 +1,28 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-bridge-freeze-correction.v1",
+  "status": "historical-inventory-correction-before-train-score",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "original_freeze": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_v1.json",
+  "original_freeze_sha256": "a1d37b055951267c6a99fef771aeb0736ced70d09dbd2f1c098e60815aa2dbf0",
+  "correction": "The original bridge freeze correctly recorded that no new truth was opened for the bridge, but its inherited inventory was stale about three development identities. Prior carrier-compatibility train_truth artifacts prove those identities had historical development truth reads. This correction does not alter source, parameters, inputs, or sealed candidate outputs; it only prevents a false never-opened claim.",
+  "corrected_inventory": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_convergence_selector_truth_use_inventory_v2.json",
+    "sha256": "fc90e3a6e4182276cbfebc635085d367c18fe10d3f0c982ee8d2cfcc9eb1f3d4",
+    "historical_development_truth_reuse": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2022-02-24-18-29-us-ca-lax-o/pixel5"
+    ]
+  },
+  "bridge_artifacts": {
+    "candidate_truth_free": true,
+    "baseline_truth_free": true,
+    "new_truth_opened_before_correction": 0,
+    "validation_truth_opened": false,
+    "holdout_truth_opened": false,
+    "test_truth_opened": false,
+    "candidate_recipe_changed": false,
+    "candidate_artifacts_regenerated": false
+  },
+  "selection_policy": "These three identities remain development-only train material for the fixed gate; no validation/holdout/test identity or leaderboard score is used."
+}

@@ -1,0 +1,162 @@
+{
+  "schema_version": "smartphone-r5-phase41-doppler-measurement-contract-audit-freeze.v1",
+  "phase": 41,
+  "status": "frozen-before-implementation-and-audit",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "base_commit": "f54e3db03a58333eb4b34b73f69b27ad9d676b41",
+    "phase40_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_freeze_v1.json",
+      "sha256": "544089e32a7f7c0ca96ee6cbbfd7634145aebe288fe32a947ef1f67d5c07f52e"
+    },
+    "phase40_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json",
+      "sha256": "ea1d92b2f69bf6810260e17d05ae4f3c0276e1ab7be6cec84a1f35b0fd5607b1"
+    },
+    "phase40_failure_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_structural_failure_manifest_v1.json",
+      "sha256": "2abcce07022b048a1a415c637f311cdef7a32ea5849b139faec9aab052066d08"
+    },
+    "phase40_frozen_failure": "The failed direct-Doppler candidate remains historical evidence; its physical gates, thresholds, and source are not changed by this audit."
+  },
+  "objective": {
+    "question": "Does the raw Android Doppler measurement preserve its physical unit and sign through the adapter and known-satellite terms into both the independent SPP velocity equation and FGO Doppler factor fields?",
+    "candidate_id": "doppler_measurement_contract_audit_v1",
+    "target_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "structural_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "route_order_is_fixed": true,
+    "truth_free": true,
+    "allowed_result": "diagnosis-no-go unless one concrete measurement-contract bug is proven by code and numerical identity evidence"
+  },
+  "input_contract": {
+    "raw_only": true,
+    "source_roots": {
+      "phase31_train3": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw",
+      "phase37_target_and_safe2": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes"
+    },
+    "sha256": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+        "device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+        "brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd"
+      },
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "device_gnss.csv": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594",
+        "device_imu.csv": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8",
+        "brdc.nav": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+      },
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+        "device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+        "device_imu.csv": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+        "brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440"
+      },
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "device_gnss.csv": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+        "device_imu.csv": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480",
+        "brdc.nav": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "device_gnss.csv": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+        "device_imu.csv": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+        "brdc.nav": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+        "device_gnss.csv": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+        "device_imu.csv": "c7d726e1cc0dacc7a569bd8be9bc2333765bbb3b3010203a4aea2e49778101ab",
+        "brdc.nav": "8893ef62fecdd9986f6b2cf1b7b980defa6430da5801aafcab4ecf4c99a03b92"
+      }
+    },
+    "mtv_h_first_probe": {
+      "raw_epoch_count": 3140,
+      "target_epoch_count": 3139,
+      "first_solvable_definition": "The first epoch in raw UTC order with at least four rows accepted by the unchanged adapter/FGO satellite-state construction and finite independent equation inputs."
+    }
+  },
+  "measurement_contract": {
+    "raw_field": "Android GnssMeasurement.PseudorangeRateMetersPerSecond",
+    "raw_unit": "m/s",
+    "adapter_field": "ObservationData::doppler",
+    "adapter_unit": "Hz (cycles/s)",
+    "adapter_identity": "D = -PseudorangeRateMetersPerSecond / wavelength_m",
+    "wavelength_field": "signalWavelengthMeters(observation, ephemeris) with observation fallback",
+    "wavelength_unit": "m/cycle",
+    "measured_range_rate_identity": "measured_range_rate_mps = -D * wavelength_m = raw PseudorangeRateMetersPerSecond",
+    "known_satellite_terms": [
+      "broadcast satellite ECEF position (m)",
+      "broadcast satellite ECEF velocity (m/s)",
+      "broadcast satellite clock drift (s/s and m/s after c multiplication)",
+      "earth-rotation/Sagnac correction and its velocity term"
+    ],
+    "los_definition": "LOS is the unit vector used by the existing satellite-state/range-rate model, with its documented receiver-to-satellite orientation recorded explicitly.",
+    "independent_spp_identity": "measured_range_rate_mps = LOS dot (satellite_velocity_ecef - receiver_velocity_ecef) - satellite_clock_drift_mps + earth_rotation_term + receiver_clock_rate_mps, with exact signs/terms taken from the independently written audit equation and compared numerically rather than assumed.",
+    "fgo_identity": "FGO Doppler factor measured_range_rate_mps, modeled_range_rate_mps, satellite_clock_drift_mps, wavelength_m, and residual_mps must be compared field-by-field against the same row and seed.",
+    "comparison_scope": "Every row at the same first solvable MTV-h epoch; no row may be dropped without a recorded reason and row-selection comparison."
+  },
+  "solver_comparison": {
+    "preferred": true,
+    "spp_solver": "libgnss::spp_velocity::solveVelocityFromObservations",
+    "fgo_solver": "FGOProblem::doppler_velocity_wls_estimates",
+    "same_epoch": true,
+    "same_raw_seed_position": true,
+    "same_rows_when_possible": true,
+    "row_selection_difference_required": true,
+    "comparison_is_diagnostic_only": true,
+    "no_threshold_or_gate_change": true
+  },
+  "candidate_policy": {
+    "correction_allowed_only_if": [
+      "a concrete contract bug is located in source code",
+      "the bug is demonstrated by numerical identity/unit/sign mismatch on frozen raw inputs",
+      "a separate explicit opt-in flag is used",
+      "production default and Phase31 champion remain byte-identical",
+      "source and focused tests are committed and pushed before the six-route structure run"
+    ],
+    "correction_forbidden_if": [
+      "evidence is only an implausible velocity or clock rate",
+      "the proposed action is a sign flip without identity proof",
+      "the proposed action is a threshold relaxation",
+      "the mismatch is unresolved or only inferred from a route-level result"
+    ],
+    "default_unchanged": true,
+    "phase40_failed_candidate_retained": true
+  },
+  "execution_order": [
+    "commit and push this freeze JSON",
+    "implement truth-free audit and focused tests, then commit and push",
+    "run MTV-h target audit and record every first-solvable-epoch row",
+    "compare SPP velocity and FGO WLS on the same epoch/seed and record row-selection differences",
+    "if and only if a contract bug is proven, implement separately flagged opt-in correction and focused tests",
+    "run MTV-h plus the other five frozen raw routes for structure",
+    "run relevant CTest and verify flag-off/default identity",
+    "publish an immutable v1 result; any supplement uses a new v2 file"
+  ],
+  "forbidden_actions": [
+    "open or materialize ground_truth.csv",
+    "open Phase34 validation 2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+    "open future holdout 2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+    "read or create any MATLAB .mat",
+    "use precomputed result/submission coordinates for inference",
+    "use truth, validation, holdout, Kaggle, or tokens",
+    "fit or apply a truth/common constant/body-frame correction",
+    "relax physical/residual/rank/condition thresholds",
+    "change production defaults or Phase31 champion path",
+    "rewrite this freeze after the audit"
+  ],
+  "truth_accounting": {
+    "allowed_truth_reads": 0,
+    "ground_truth_materialized": 0,
+    "validation_truth_reads": 0,
+    "holdout_truth_reads": 0,
+    "mat_inputs_or_outputs": 0,
+    "precomputed_coordinates_used": 0,
+    "kaggle_or_token_access": 0
+  },
+  "decision_rule": "A contract correction is Go only when source code and frozen-raw numerical identities prove one concrete unit/sign/known-satellite-term defect. Otherwise diagnosis is No-Go and the next measurement is specified without changing thresholds, signs, defaults, or the frozen Phase40 failure."
+}

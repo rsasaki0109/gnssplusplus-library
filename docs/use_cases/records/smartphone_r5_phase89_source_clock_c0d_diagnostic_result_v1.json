@@ -1,0 +1,179 @@
+{
+  "schema_version": "smartphone-r5-phase89-source-clock-c0d-diagnostic-result.v1",
+  "phase": 89,
+  "execution_label": "Luna Max",
+  "status": "no-go-phase89-source-clock-c0d-active-solve-gates",
+  "decision": "NO-GO: all four authorized raw-only invocations failed closed at or before the required GNSS-first velocity-only handoff; no Phase89 C0/D active IMU solve reached a publishable summary, so active-solve telemetry, rows, and finite-coordinate/speed gates are unproven and fail closed.",
+  "truth_free": true,
+  "accuracy_scored": false,
+  "promotion_authorized": false,
+  "submission_released": false,
+  "contract": {
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase89_source_clock_c0d_diagnostic_execution_freeze_v1.json",
+      "sha256": "b379d508129712107f1e582b68cf0f0072c96d49dd2de181593fbfd89639140b"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase89_source_clock_c0d_diagnostic_execution_manifest_v1.json",
+      "sha256": "60a79956d693f154ab453d60109b66bf8ec041c8934da95625653b33831a0e85"
+    },
+    "evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase89_source_clock_c0d_diagnostic.py",
+      "sha256": "e0b82c0a40044cb34a74f8c0bd3ed1963f14f856d4b2525d1a9dd6fec47dfe3e",
+      "missing_summary_fail_closed_return_code": 2
+    },
+    "pre_raw_seal_commits": ["38f69ab", "9b3a45e"],
+    "implementation_commit": "bd14626",
+    "binary": {
+      "path": "build/apps/gnss_fgo_imu_no_base",
+      "sha256": "d20167300615cdba5fa1b81ee5fb6efdea7c97b42bc5ca340fc4b7abbaf5f8d9"
+    },
+    "gtsam_runtime": {
+      "path": "/home/sasaki/.local/lib/libgtsam.so.4.3a2",
+      "sha256": "0bb5858e396250a1afecc990c766bde5255fecc38b22b22bd9964775dc9e47a3"
+    }
+  },
+  "authorized_matrix": {
+    "candidate_id": "phase89_source_clock_c0d_active_solve_diagnostic_matrix",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "runs_per_route": 1,
+    "authorized_route_attempts": 4,
+    "controls": 0,
+    "raw_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "required_compatibility_flags": [
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback"
+    ],
+    "forbidden_inputs": [
+      "base RINEX",
+      "truth/MAT/validation/Kaggle/token artifacts",
+      "precomputed coordinates"
+    ]
+  },
+  "preflight_anomaly": {
+    "attempts": 1,
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "stage": "raw Android GNSS conversion",
+    "return_code": 1,
+    "native_solver_invocations": 0,
+    "active_c0d_solve_invocations": 0,
+    "raw_device_gnss_reads": 1,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "error": "failed to convert raw Android GNSS: raw-clock pseudorange disagrees with enriched RawPseudorangeMeters",
+    "action": "not counted as an authorized route run; the compatibility flags were sealed in 9b3a45e before continuing",
+    "candidate_changed": false
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "authorized_run": 1,
+      "return_code": 1,
+      "stage": "GNSS-first velocity-only handoff",
+      "error": "GNSS-first optimized Doppler velocity gate failed: count=2159/2159 nonfinite=0 over_70_mps=10 max_mps=163.184",
+      "gnss_first_optimizer_invocations": 1,
+      "active_c0d_solve_invocations": 0,
+      "summary_published": false,
+      "submission_published": false,
+      "active_solve_telemetry": "absent"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "authorized_run": 1,
+      "return_code": 1,
+      "stage": "GNSS-first velocity-only handoff",
+      "error": "GNSS-first initialization unavailable: GNSS-first velocity count does not match observation epochs",
+      "gnss_first_optimizer_invocations": 1,
+      "active_c0d_solve_invocations": 0,
+      "summary_published": false,
+      "submission_published": false,
+      "active_solve_telemetry": "absent"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "authorized_run": 1,
+      "return_code": 1,
+      "stage": "GNSS-first velocity-only handoff",
+      "error": "GNSS-first optimized Doppler velocity gate failed: count=1466/1466 nonfinite=0 over_70_mps=19 max_mps=112.537",
+      "gnss_first_optimizer_invocations": 1,
+      "active_c0d_solve_invocations": 0,
+      "summary_published": false,
+      "submission_published": false,
+      "active_solve_telemetry": "absent"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "authorized_run": 1,
+      "return_code": 1,
+      "stage": "GNSS-first velocity-only handoff",
+      "error": "GNSS-first optimized Doppler velocity gate failed: count=720/720 nonfinite=0 over_70_mps=5 max_mps=6985.21",
+      "gnss_first_optimizer_invocations": 1,
+      "active_c0d_solve_invocations": 0,
+      "summary_published": false,
+      "submission_published": false,
+      "active_solve_telemetry": "absent"
+    }
+  },
+  "gates": {
+    "implementation_and_binary_pins": true,
+    "exactly_four_routes_one_run_each": true,
+    "raw_only_command_and_provenance": true,
+    "active_solve_telemetry_complete": false,
+    "exact_terminal_reason_and_counter_consistency": false,
+    "finite_initial_and_final_cost": false,
+    "graph_iterations_at_least_one": false,
+    "final_cost_strictly_less_than_initial_cost": false,
+    "c0d_equation_jacobian_units_sigma_unchanged": false,
+    "c0d_factor_and_skip_invariants": false,
+    "raw_utc_rows_and_domain": false,
+    "finite_coordinates_and_speed_only": false,
+    "no_pdc_bridge_or_coordinate_copy": false,
+    "accuracy_not_scored": true,
+    "all_gates_anded": false,
+    "all_passed": false
+  },
+  "failed_gates": [
+    "active_solve_telemetry_complete",
+    "exact_terminal_reason_and_counter_consistency",
+    "finite_initial_and_final_cost",
+    "graph_iterations_at_least_one",
+    "final_cost_strictly_less_than_initial_cost",
+    "c0d_equation_jacobian_units_sigma_unchanged",
+    "c0d_factor_and_skip_invariants",
+    "raw_utc_rows_and_domain",
+    "finite_coordinates_and_speed_only",
+    "no_pdc_bridge_or_coordinate_copy",
+    "all_gates_anded"
+  ],
+  "read_accounting": {
+    "authorized_route_runs": 4,
+    "authorized_gnss_first_optimizer_invocations": 4,
+    "authorized_active_c0d_solve_invocations": 0,
+    "authorized_raw_device_gnss_reads": 4,
+    "authorized_raw_device_imu_reads": 4,
+    "authorized_broadcast_navigation_reads": 4,
+    "preflight_raw_device_gnss_reads": 1,
+    "observed_raw_device_gnss_reads_total": 5,
+    "observed_raw_device_imu_reads_total": 4,
+    "observed_broadcast_navigation_reads_total": 4,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "route_score_selection": false,
+    "submission_or_upload": false,
+    "evaluator_raw_input_reads": 0,
+    "evaluator_truth_reads": 0
+  },
+  "evaluator_observation": {
+    "return_code": 2,
+    "result": "fail-closed",
+    "error": "missing Phase89 summary 2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "reason": "all four native processes stopped before summary/submission publication; no synthetic or precomputed coordinates were substituted"
+  }
+}

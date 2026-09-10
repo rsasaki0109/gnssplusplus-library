@@ -1,0 +1,191 @@
+{
+  "schema_version": "smartphone-r5-reacquisition-conservative-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "development-only conservative reacquisition; no holdout access",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "inventory_source": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "selection_inventory_rule": "central-directory metadata first; selected device_gnss is opened only for the signal-only screen after roles are fixed",
+    "member_content_read_for_selection": false,
+    "holdout_member_content_read": false
+  },
+  "sealed_data_policy": {
+    "designated_holdout_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "holdout_content_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_evaluation_forbidden": true
+  },
+  "fixed_roles": {
+    "candidate_train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5"
+    ],
+    "new_validation": [
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl"
+    ],
+    "development_main_regression": [
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "validation_reuse_policy": "The previously scored Pixel6Pro validation route is not reused; the new validation pair was absent from generalization-v6 materialized routes before this record was written.",
+    "route_phone_exclusion": "exclude all previously used dataset IDs, the development/main route, and the designated holdout; require a distinct route and device model from the fixed train/main set"
+  },
+  "new_validation_selection": {
+    "dataset_id": "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+    "selection_order": "ASCII dataset ID among eligible inventory rows",
+    "required_central_members": {
+      "device_gnss.csv": 1,
+      "device_imu.csv": 1,
+      "ground_truth.csv": 1,
+      "brdc.nav": 1
+    },
+    "signal_only_rule": {
+      "signal_type": "GAL_E1_C_P",
+      "constellation_type": "6",
+      "carrier_frequency_hz": 1575420000.0,
+      "carrier_frequency_tolerance_hz": 1.0,
+      "code_type": "empty",
+      "svid_range": [1, 36],
+      "raw_pseudorange": "finite and present",
+      "minimum_valid_rows": 1,
+      "truth_opened": false
+    },
+    "screen_result": {
+      "valid_galileo_e1_rows": 8819,
+      "galileo_e1_epochs": 1476,
+      "galileo_e1_svid_count": 8,
+      "unique_broadcast_nav_present": true,
+      "truth_opened": false,
+      "materialized_before_freeze": false
+    }
+  },
+  "baseline_contract": {
+    "signal_lane": "Galileo E1 with Hatch C1C 30 s",
+    "process_noise": 1.0,
+    "measurement_floor_m": 1.0,
+    "outlier_gate_sigma": 5.0,
+    "segment_gap_s": 10.0,
+    "truth_free_pipeline": true
+  },
+  "candidate_set": [
+    {
+      "id": "reacq_r15_d15",
+      "max_consecutive_rejects": 15,
+      "max_prediction_duration_s": 15.0
+    },
+    {
+      "id": "reacq_r20_d20",
+      "max_consecutive_rejects": 20,
+      "max_prediction_duration_s": 20.0
+    },
+    {
+      "id": "reacq_r30_d30",
+      "max_consecutive_rejects": 30,
+      "max_prediction_duration_s": 30.0
+    }
+  ],
+  "selection_and_promotion_rule": {
+    "train_selection": "Among candidates non-regressive versus the existing smoother on aggregate availability, H median, H P95, V P95, and all four local distance/percentile diagnostics, minimize aggregate H P95, then H median, V P95, diagnostic mean, and candidate ID.",
+    "new_validation_gate": "The train-selected candidate must be non-regressive versus both raw SPP/Hatch POS and existing smoother for availability, H median, H P95, V P95, and all four diagnostics; require strict H P95 improvement versus existing to justify reacquisition.",
+    "main_gate": "The candidate smoothed.pos must be byte-identical to the existing-smoother smoothed.pos, with zero reacquisition events; all accuracy and diagnostic metrics must also be non-regressive.",
+    "promotion_scope": "development-only; update the default/pipeline contract only if every gate passes",
+    "failure_policy": "No-Go; retain existing smoother and leave the production/default contract unchanged",
+    "imu_adaptive": "No-Go retained and not evaluated by this experiment",
+    "holdout": "never opened or evaluated"
+  },
+  "post_evaluation": {
+    "output_root": "output/smartphone-r5/reacquisition-conservative-v3",
+    "report_path": "output/smartphone-r5/reacquisition-conservative-v3/reacquisition_conservative_report.json",
+    "report_sha256": "e3bc55812241ef9311277bc053c261a9c2f62b1c510c09ab1d13e732c2b2ed2f",
+    "manifest_path": "output/smartphone-r5/reacquisition-conservative-v3/reacquisition_conservative_manifest.json",
+    "manifest_sha256": "c314f1f6218e3d35331a7ce9ea1e3c122c453af397ff1ab562dce42da2b7a0f9",
+    "inventory_path": "output/smartphone-r5/reacquisition-conservative-v3/archive_inventory.json",
+    "inventory_sha256": "2f1cc620479574ecb8b73f9a8bc3c45ea8913fb965f85ad84ce8f51feb2f1fd7",
+    "materialization_manifest_path": "output/smartphone-r5/reacquisition-conservative-v3/new-validation-materialized/routes/2021-03-16-20-40-us-ca-mtv-b/pixel4xl/materialization_manifest.json",
+    "materialization_manifest_sha256": "5a533f7d3d099753ed6a9201432f5183a59ae6c9bf096d11f07b2ec3e74173fd",
+    "truth_free_pipeline": {
+      "adapter_truth_free": true,
+      "new_validation_galileo_e1_rows": 8815,
+      "new_validation_spp_epochs": 1475,
+      "new_validation_spp_valid_solutions": 1475,
+      "new_validation_nav_coverage": 1.0,
+      "holdout_opened": false,
+      "holdout_truth_opened": false
+    },
+    "train_aggregate": {
+      "existing_h_median_m": 2.7422011672436986,
+      "existing_h_p95_m": 280.08578104559956,
+      "existing_v_p95_m": 35.741262346973514,
+      "reacq_r15_d15_h_median_m": 2.4014826034387315,
+      "reacq_r15_d15_h_p95_m": 22.62626011753217,
+      "reacq_r15_d15_v_p95_m": 18.593895509257493,
+      "reacq_r20_d20_h_median_m": 2.4865289373002724,
+      "reacq_r20_d20_h_p95_m": 58.2112236218986,
+      "reacq_r20_d20_v_p95_m": 21.66084311412056,
+      "reacq_r30_d30_h_median_m": 2.5053637207798896,
+      "reacq_r30_d30_h_p95_m": 119.22626009501083,
+      "reacq_r30_d30_v_p95_m": 28.82086925849763,
+      "selected_candidate_id": "reacq_r15_d15",
+      "all_candidates_non_regressive_vs_existing": true
+    },
+    "new_validation": {
+      "raw_h_median_m": 2.7054455123123553,
+      "raw_h_p95_m": 6.482453401624376,
+      "raw_v_p95_m": 14.941158788813901,
+      "existing_h_median_m": 153.80316835401752,
+      "existing_h_p95_m": 2301.470022592602,
+      "existing_v_p95_m": 503.03871328868047,
+      "reacq_r15_d15_h_median_m": 2.3590333747729586,
+      "reacq_r15_d15_h_p95_m": 118.13923150104384,
+      "reacq_r15_d15_v_p95_m": 38.2067830245628,
+      "reacq_r20_d20_h_median_m": 2.3693399186567086,
+      "reacq_r20_d20_h_p95_m": 178.21408562790384,
+      "reacq_r20_d20_v_p95_m": 33.15613683297262,
+      "reacq_r30_d30_h_median_m": 2.566679071375732,
+      "reacq_r30_d30_h_p95_m": 381.5612591561864,
+      "reacq_r30_d30_v_p95_m": 28.920183141300317,
+      "selected_candidate_vs_raw_non_regression": false,
+      "selected_candidate_vs_existing_non_regression": true,
+      "selected_candidate_strict_h_p95_improvement_vs_existing": true,
+      "gate_failures": [
+        "h_p95_regression_vs_raw",
+        "v_p95_regression_vs_raw",
+        "all_four_distance_percentile_diagnostics_regression_vs_raw"
+      ]
+    },
+    "development_main": {
+      "existing_h_median_m": 2.7477092028307726,
+      "existing_h_p95_m": 6.173092685041757,
+      "existing_v_p95_m": 20.103059982694667,
+      "candidate_ids": ["reacq_r15_d15", "reacq_r20_d20", "reacq_r30_d30"],
+      "all_candidate_pos_byte_identical": true,
+      "all_candidate_reacquisition_counts": {
+        "reacq_r15_d15": 0,
+        "reacq_r20_d20": 0,
+        "reacq_r30_d30": 0
+      },
+      "main_gate_passed": true
+    },
+    "reacquisition_counts": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "reacq_r15_d15": 4,
+        "reacq_r20_d20": 3,
+        "reacq_r30_d30": 4
+      },
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": {
+        "reacq_r15_d15": 12,
+        "reacq_r20_d20": 9,
+        "reacq_r30_d30": 6
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "reacq_r15_d15": 7,
+        "reacq_r20_d20": 7,
+        "reacq_r30_d30": 4
+      }
+    },
+    "promotion_decision": "no-go-new-validation-regression",
+    "existing_smoother_retained": true,
+    "default_pipeline_contract_updated": false,
+    "imu_adaptive_status": "No-Go retained"
+  }
+}

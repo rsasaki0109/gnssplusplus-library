@@ -1,0 +1,69 @@
+{
+  "phase": 425,
+  "role": "development/train; not heldout or leaderboard proof",
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "evaluator_path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+  "source_pins": {
+    "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4",
+    "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a",
+    "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+    "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+    "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+    "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca",
+    "scripts/evaluate_native_frequency_experiment.py": "32dcb64d464ddc75f74bd556d733ca90f94611496a8f2ef2c619a4da92d75e86",
+    "scripts/verify_native_frequency_experiment.py": "e69b770a9bd2695c4d33650237a88fb15f829a7971a84922d09e8b65a15648bd",
+    "scripts/project_phase424_lax_t_evaluation.py": "b1e7b051e86b28d14a9eba6bd0dbd6b7295a2e5458f9997855930a73ed5186d2",
+    "tests/test_native_frequency_evaluation_boundary.py": "07261336afd04d4be1534b04c713a60595661407cc4edfad4421d47864d0dcd8",
+    "docs/use_cases/records/smartphone_r5_phase424_projection_manifest_v1.json": "01f286f76438ec26c90ccb29cc1fb36fbd0c9c0a17281f627434d262457e1368",
+    "output/smartphone-r5/phase424-lax-t-evaluation-projection-v1/projection_record.json": "f492f0ee3bb60387a80bcf4644572094301ab77bc25d11863524e61d7ecb11a4"
+  },
+  "candidates": [
+    {
+      "phase": 422,
+      "path": "output/smartphone-r5/phase422-h-robust-diagnostic-v1/mtv-h/opaque_solution_output.csv",
+      "sha256": "a90df84590a62e520b509a2566b60e7ad594eb38c35c4572a15744b680a82fd2",
+      "native_sha256": "a90df84590a62e520b509a2566b60e7ad594eb38c35c4572a15744b680a82fd2",
+      "bytes": 251174,
+      "rows": 3139,
+      "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "truth": {
+        "source": "Historical Phase183/186/199-pinned H development truth metadata; official archive provenance",
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+        "bytes": 305432,
+        "rows": 3139,
+        "archive_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+        "archive_crc32": "fe212a4d",
+        "role": "development/train; not heldout or leaderboard proof"
+      },
+      "baseline_m": 1.0769392017393964
+    },
+    {
+      "phase": 423,
+      "path": "output/smartphone-r5/phase424-lax-t-evaluation-projection-v1/frequency.csv",
+      "sha256": "4fe2d5eab1a0629ede1aca58556a073b036a29e50e4363b0ae5d49f1f4239da2",
+      "bytes": 117254,
+      "rows": 1465,
+      "native_sha256": "58ecf000b36df8df7bd884158115b7565d040c1ddde42536d576b9f1631bd4e3",
+      "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "truth": {
+        "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+        "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+        "bytes": 143441,
+        "rows": 1465,
+        "expected_missing_truth_key": null
+      },
+      "baseline_m": 3.1024422817253834
+    }
+  ],
+  "result_path": "docs/use_cases/records/smartphone_r5_phase425_frequency_accuracy_result_v1.json",
+  "policy": "One score per route after both diagnostic replays verify. No retuning, no heldout claim, no native inference. H candidate identity is a required replay target, not assumed completion."
+}

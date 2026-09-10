@@ -1,0 +1,38 @@
+{
+  "schema_version": "smartphone-r5-phase39-gnss-first-velocity-only-handoff-structural-failure-manifest.v1",
+  "phase": 39,
+  "status": "sealed-fail-closed-before-truth",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_freeze_v1.json",
+    "sha256": "17e75c367ae05e10ba5349b0db73cbfa048a27992286ae48b5cdf77346053580"
+  },
+  "failure_result": {
+    "path": "docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_result_v1.json",
+    "documentation_record_sha256": "dc8afbe58d89ef6453082942a3291924917e2a6c225d532cbcf87347b7b97fde",
+    "runtime_path": "output/smartphone-r5/phase39-gnss-first-velocity-only-handoff-v1/phase39_structural_failure.json",
+    "runtime_sha256": "be8d85f7b39c2c0156965271df494c61d1583be62452f058876123cb88e02e33"
+  },
+  "candidate": {
+    "source_commit": "90024b64aab00d92087fec03865e375fd8933d57",
+    "flag": "--native-gnss-first-velocity-only-handoff",
+    "failed_route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "failed_gate": "1181 of 1325 final GNSS-first optimizer Doppler velocity states exceeded 70 m/s",
+    "position_clock_copy_count": 0,
+    "raw_seed_invalid_count": 0,
+    "gnss_first_position_invalid_count": 611,
+    "output_published": false,
+    "production_default_changed": false
+  },
+  "execution": {
+    "matrix_stopped_after_first_candidate_failure": true,
+    "candidate_run2_started": false,
+    "flag_off_controls_started": false,
+    "truth_open_count": 0,
+    "ground_truth_materialized": false,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "post_truth_tuning": false
+  }
+}

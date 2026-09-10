@@ -194,6 +194,23 @@ struct SatelliteId {
 };
 
 /**
+ * @brief One raw RINEX GLONASS ``Rnn fcn`` header entry.
+ *
+ * RINEXReader also keeps its historical satellite-to-channel map for the
+ * default path.  This ordered entry is a separate provenance ledger so an
+ * opt-in caller can detect duplicate and conflicting entries before the map
+ * collapse overwrites one of them.
+ */
+struct GlonassFrequencyChannelEntry {
+    SatelliteId satellite;
+    int channel = 0;
+
+    GlonassFrequencyChannelEntry() = default;
+    GlonassFrequencyChannelEntry(const SatelliteId& sat, int fcn)
+        : satellite(sat), channel(fcn) {}
+};
+
+/**
  * @brief 3D position vector
  */
 using Vector3d = Eigen::Vector3d;

@@ -1,0 +1,124 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-raw-quality-control-evaluation.v1",
+  "status": "no-go-train-gate",
+  "external_mutation": false,
+  "kaggle_token_access": false,
+  "public_private_scores_used_for_tuning": false,
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_raw_quality_control_selection.json",
+    "sha256": "b6937ab8d825bcaa01b115c1785d0ac6aba0b0d777f4ce118a6674bbe784162a"
+  },
+  "frozen_roles": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro"
+  },
+  "truth_access": {
+    "truth_free_artifacts_sealed_before_scoring": true,
+    "train_truth_open_count": 3,
+    "final_run_truth_open_count": 3,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "fresh_validation_materialized": false,
+    "future_holdout_materialized": false,
+    "holdout_content_opened": false,
+    "old_holdouts_or_leaderboard_used": false
+  },
+  "execution_notes": {
+    "final_artifact_run": "the final train evaluation was completed after report-only import/serialization and diagnostic-join repairs",
+    "pre_final_failed_attempts_truth_free_or_train_only": true,
+    "candidate_algorithm_or_numeric_parameter_changed_after_first_truth_score": false,
+    "candidate_inputs_or_route_roles_changed_after_freeze": false,
+    "no_holdout_or_validation_access_during_repair": true,
+    "final_artifacts_are_last_truth_free_seal_and_score": true
+  },
+  "algorithm": {
+    "id": "innovation_huber_native_spp_v1",
+    "parameters": {
+      "robust_weighting": true,
+      "robust_threshold_sigma": 3.0,
+      "robust_min_weight_factor": 0.05,
+      "outlier_detection": true,
+      "outlier_threshold_sigma": 3.0,
+      "raim_fde": true,
+      "raim_fde_min_improvement_ratio": 0.25,
+      "raim_fde_min_improvement_m": 1.0,
+      "variance_model": true,
+      "snr_reference_dbhz": 45.0,
+      "elevation_mask_deg": 15.0,
+      "snr_mask_dbhz": 0.0,
+      "galileo_e1_hatch_window_s": 30,
+      "leap_seconds": 18
+    },
+    "fallback": "invalid, incomplete, nonfinite, ambiguous, or failed robust POS copies exact handset WLS POS; no extrapolation",
+    "production_default_changed": false
+  },
+  "aggregate_metrics_m": {
+    "baseline_wls_raw": {
+      "h_p50": 2.4433751582073997,
+      "h_p95": 5.57882668610112,
+      "v_p95": 8.287797043014324,
+      "availability": 1.0,
+      "truth_coverage": 0.9956291695422129,
+      "diagnostic_mean": 4.009452743538194
+    },
+    "candidate_robust_or_wls": {
+      "h_p50": 2.86389233826301,
+      "h_p95": 7.763522065118096,
+      "v_p95": 16.035927753317797,
+      "availability": 1.0,
+      "truth_coverage": 0.9956291695422129,
+      "diagnostic_mean": 5.31448663811273
+    },
+    "diagnostic_variants": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ]
+  },
+  "route_gates": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": "fail-horizontal-and-vertical-and-four-diagnostics",
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": "fail-horizontal-and-vertical-and-four-diagnostics",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": "fail-vertical"
+  },
+  "candidate_source_counts": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {"robust": 2001, "fallback": 0, "total": 2001},
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": {"robust": 1449, "fallback": 0, "total": 1449},
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {"robust": 1383, "fallback": 0, "total": 1383}
+  },
+  "artifact_evidence": {
+    "output_report": {
+      "path": "output/smartphone-r5/raw-quality-control-v1/raw_quality_control_evaluation.json",
+      "sha256": "165ca109df72b6854cef3d4cfdcc7533b0477b1897b717c3d6f345b9ebaf90eb"
+    },
+    "output_manifest": {
+      "path": "output/smartphone-r5/raw-quality-control-v1/raw_quality_control_evaluation_manifest.json",
+      "sha256": "802fe53bbb3536333d31c4c88fe7a5e7ffe0be60f731bbc420031d928a169b84"
+    },
+    "truth_free_seal": {
+      "path": "output/smartphone-r5/raw-quality-control-v1/truth_free_seal.json",
+      "sha256": "321f134ea88dbe934ebfacb5495a912a55de1e6d854d092c0cf034f3558ded63"
+    },
+    "fgo_feasibility": {
+      "path": "output/smartphone-r5/raw-quality-control-v1/fgo_wiring_feasibility.json",
+      "sha256": "3beccf2f42c41b2a9023f400a2c6901d690e7b937af56c736ba585cf3f282ad5"
+    }
+  },
+  "bounded_fgo_alternative": {
+    "status": "blocked-bounded-wiring-no-go",
+    "reason": "existing FGO path is RTK/factor-graph oriented while the smartphone archive exposes a single handset observation stream; a coupled Android pseudorange/clock factor adapter would be a new estimator contract",
+    "production_default_changed": false
+  },
+  "source_hashes_after_implementation": {
+    "raw_quality_control": "9e35c2b8dbe81f6e8be3d9f3d6573d58a136205235d5221b3748557fedd8eb59",
+    "raw_quality_control_eval": "b0e395aa38bd29213fc904bd3872aa9a5d059864df454874f37559cbe79ea388",
+    "raw_quality_control_test": "27b5f8582fc159c55dd52fd72acd4206af47f917c0fc7ef825e792f67907f736",
+    "raw_quality_control_eval_test": "2f0d33635d997d4d139ce350e4bbe964efc367904bcd3d2601ccf174455b7c4a"
+  },
+  "decision": "No-Go; do not run fresh validation or future holdout, do not integrate robust SPP into production or recommended smartphone lane"
+}

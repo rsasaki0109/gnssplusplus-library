@@ -1,0 +1,326 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-source-seam-bridge-record.v1",
+  "status": "completed-truth-free-source-seam-bridge",
+  "purpose": "Truth-free bounded seam audit of the sealed v4 test submission; four high-speed prior-WLS seams satisfied the frozen bridge contract and were reconstructed from native-FGO endpoints.",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_freeze_v1.json",
+      "sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_freeze_v1_manifest.json",
+      "sha256": "a8de1dd300597465151cabfc6f35a9aa7eeff048a65d37eba6a39dc4cf9864c8"
+    },
+    "sealed_before_decision": true
+  },
+  "inputs": {
+    "v4_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/submission.csv",
+      "sha256": "64b85bd5946ad33d77e522bf7456d5dc0c4e4870cd7b65756faedd9f18ca1af8"
+    },
+    "v4_continuity_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_manifest.json",
+      "sha256": "e2c309d200d4cecca26fcf59e721b7d43349db192a4be25e90b27cab8f535bd3"
+    },
+    "v4_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_run_manifest.json",
+      "sha256": "2345909b4e237791a713a2c845be8718f5b49dfcbf91d6cde2bd9e9f1d52622d"
+    },
+    "native_fgo_target_route_position": {
+      "path": "output/smartphone-r5/native-fgo-test-v2/cache/e45f139a77b7662bf79300f61cc0b28176fcf7adfd88faf60c1b3b5cfb03b951/fgo/fgo.pos",
+      "sha256": "78f06b18e344b3d0c9f332403bca0ef9f064106c18155262680cb6b54e17ea63"
+    },
+    "current_wls_target_route_position": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-02-23-22-35-us-ca-lax-m/outputs/pixel5/selected.pos",
+      "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746"
+    },
+    "prior_wls_target_route_position": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/cache/807a879ac6566c28e2865e6b5b1fcfe49dab89a4c052bcd456e8470a163affe0/wls.pos",
+      "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746",
+      "byte_identical_to_current_wls": true
+    },
+    "target_wls_route_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-02-23-22-35-us-ca-lax-m/route_manifest.json",
+      "sha256": "c5b60cf2bc0689d44f84b760b57456f3b20940f7b6153bc7f8246a74d63d2ee4"
+    },
+    "official_sample_key_order": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "coordinates_read": false
+    }
+  },
+  "outputs": {
+    "v5_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+      "bytes": 6150020,
+      "row_count": 71936
+    },
+    "v5_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/source_seam_bridge_manifest.json",
+      "sha256": "dbba0ebe190d99aaeb1163405bd49f19bd7dc449be76241880f0d11f7e43c519"
+    },
+    "v5_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/source_seam_bridge_run_manifest.json",
+      "sha256": "89330f31ec5bde1575c664f108c4a1c71744f24810c937051cdf440a4f768d1b"
+    }
+  },
+  "frozen_bridge_contract": {
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "source_seam_or_gap_only": true,
+    "high_speed_boundary_trigger": "At least one endpoint-to-adjacent-seam transition must exceed the frozen 70 m/s bound; otherwise the source seam is preserved byte-for-byte.",
+    "trusted_lanes": [
+      "native_fgo",
+      "wls"
+    ],
+    "both_endpoints_same_trusted_lane": true,
+    "maximum_bracket_gap_ms": 10000,
+    "maximum_endpoint_speed_mps": 70.0,
+    "speed_metric": "finite ECEF Euclidean displacement divided by elapsed seconds",
+    "finite_ecef_required": true,
+    "earth_ecef_norm_range_m": [
+      6000000.0,
+      7500000.0
+    ],
+    "sample_and_dummy_coordinates_forbidden": true,
+    "replace_entire_interior_seam": true,
+    "interior_only": true,
+    "replacement": "timestamp-weighted ECEF linear interpolation between same-lane bracketing endpoints followed by WGS84 conversion",
+    "no_velocity_extrapolation": true,
+    "invalid_or_unresolved_policy": "fail-closed",
+    "no_truth_selection": true,
+    "fgo_wls_rerun": false,
+    "numeric_parameter_change": false,
+    "atomic_publish_if_applicable": true
+  },
+  "algorithm": {
+    "bridge_script": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_source_seam_bridge.py",
+      "sha256": "a60a13e6422aefa5341fa3f10e451c01e0f40402506f08d28ad1782ba9b0b73e"
+    },
+    "focused_test": {
+      "path": "tests/test_smartphone_native_fgo_test_submission_source_seam_bridge.py",
+      "sha256": "35b6ae23885d4126891cb1c93c7ccaa9a3644782c010c725f99cbbf0a272d023"
+    },
+    "release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+    },
+    "underlying_native_fgo_parameter_hash_unchanged": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+    "underlying_native_fgo_core_hash_unchanged": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+    "fgo_wls_rerun": false,
+    "numeric_parameter_change": false
+  },
+  "all_remaining_transitions": {
+    "count": 19,
+    "speed_metric": "ECEF Euclidean displacement / elapsed seconds",
+    "maximum_speed_mps": 70.0,
+    "isolated_two_sided_spike_points_after_v4": 0,
+    "bridge_eligible_count": 4,
+    "high_speed_seam_run_count": 5,
+    "replaced_row_count": 7,
+    "transitions": [
+      {"trip_id":"2022-02-08-22-04-us-ca-sjc-r/pixel5","from_timestamp_ms":1644358489448,"to_timestamp_ms":1644358490448,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":71.83945493509788,"classification":"same-lane high-speed edge; no source seam"},
+      {"trip_id":"2022-02-23-22-35-us-ca-lax-m/pixel5","from_timestamp_ms":1645656529438,"to_timestamp_ms":1645656530438,"from_source":"prior_wls_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":606.0351772746234,"classification":"source seam; target bracket checks below fail"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716058429,"to_timestamp_ms":1645716059429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":79.1738822674868,"classification":"same-lane sequential high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716059429,"to_timestamp_ms":1645716060429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":95.36257975044185,"classification":"same-lane sequential high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716060429,"to_timestamp_ms":1645716061429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":104.35004650092311,"classification":"same-lane sequential high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716061429,"to_timestamp_ms":1645716062429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":126.61722156973656,"classification":"same-lane sequential high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716062429,"to_timestamp_ms":1645716063429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":148.85156171394405,"classification":"same-lane sequential high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716063429,"to_timestamp_ms":1645716064429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":91.43192840141505,"classification":"same-lane sequential high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716737429,"to_timestamp_ms":1645716738429,"from_source":"prior_wls_exact","to_source":"prior_wls_exact","gap_ms":1000,"speed_mps":110.91741313661598,"classification":"same-lane high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645716739429,"to_timestamp_ms":1645716740429,"from_source":"prior_wls_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":107.3916454057871,"classification":"source seam; contiguous prior-WLS run bridged by native-FGO endpoints"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645718163429,"to_timestamp_ms":1645718164429,"from_source":"prior_wls_exact","to_source":"prior_wls_exact","gap_ms":1000,"speed_mps":73.7137086827271,"classification":"same-lane high-speed edge"},
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","from_timestamp_ms":1645718988429,"to_timestamp_ms":1645718989429,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":92.4608491698603,"classification":"same-lane high-speed edge"},
+      {"trip_id":"2022-02-24-22-14-us-ca-lax-i/pixel5","from_timestamp_ms":1645741700445,"to_timestamp_ms":1645741701445,"from_source":"native_fgo_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":70.42509157820555,"classification":"same-lane high-speed edge"},
+      {"trip_id":"2022-02-24-22-14-us-ca-lax-i/pixel5","from_timestamp_ms":1645742652445,"to_timestamp_ms":1645742653445,"from_source":"prior_wls_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":84.94561654574602,"classification":"source seam; one prior-WLS point bridged by native-FGO endpoints"},
+      {"trip_id":"2022-04-22-20-11-us-ca-ebf-y/pixel5","from_timestamp_ms":1650658901448,"to_timestamp_ms":1650658902448,"from_source":"prior_wls_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":75.26795774070709,"classification":"source seam; one prior-WLS point bridged by native-FGO endpoints"},
+      {"trip_id":"2022-04-25-22-36-us-ca-ebf-z/pixel5","from_timestamp_ms":1650926401445,"to_timestamp_ms":1650926402445,"from_source":"prior_wls_exact","to_source":"native_fgo_exact","gap_ms":1000,"speed_mps":74.37753384513721,"classification":"source seam; contiguous prior-WLS run bridged by native-FGO endpoints"},
+      {"trip_id":"2022-06-22-20-12-us-ca-lax-hh/samsunga325g","from_timestamp_ms":1655930152999,"to_timestamp_ms":1655930153999,"from_source":"wls_exact","to_source":"wls_exact","gap_ms":1000,"speed_mps":71.80908739636835,"classification":"same-lane high-speed edge"},
+      {"trip_id":"2022-06-22-20-12-us-ca-lax-hh/samsunga325g","from_timestamp_ms":1655930154999,"to_timestamp_ms":1655930155999,"from_source":"wls_exact","to_source":"wls_exact","gap_ms":1000,"speed_mps":75.43072683078651,"classification":"same-lane high-speed edge"},
+      {"trip_id":"2022-06-28-20-56-us-ca-sjc-r/samsunga32","from_timestamp_ms":1656450246000,"to_timestamp_ms":1656450247000,"from_source":"wls_exact","to_source":"wls_exact","gap_ms":1000,"speed_mps":80.95757164191487,"classification":"same-lane high-speed edge"}
+    ],
+    "eligible_source_seam_runs": [
+      {"trip_id":"2022-02-24-15-10-us-ca-lax-p/pixel5","run_lane":"prior_wls","trusted_lane":"native_fgo","run_count":3,"run_start_timestamp_ms":1645716737429,"run_end_timestamp_ms":1645716739429,"bracket_gap_ms":4000,"endpoint_speed_mps":16.118079507419452,"left_boundary_speed_mps":7.967907325443143,"right_boundary_speed_mps":107.3916454057871,"replaced_timestamps_ms":[1645716737429,1645716738429,1645716739429]},
+      {"trip_id":"2022-02-24-22-14-us-ca-lax-i/pixel5","run_lane":"prior_wls","trusted_lane":"native_fgo","run_count":1,"run_start_timestamp_ms":1645742652445,"run_end_timestamp_ms":1645742652445,"bracket_gap_ms":2000,"endpoint_speed_mps":19.547109266324217,"left_boundary_speed_mps":63.49255357522871,"right_boundary_speed_mps":84.94561654574602,"replaced_timestamps_ms":[1645742652445]},
+      {"trip_id":"2022-04-22-20-11-us-ca-ebf-y/pixel5","run_lane":"prior_wls","trusted_lane":"native_fgo","run_count":1,"run_start_timestamp_ms":1650658901448,"run_end_timestamp_ms":1650658901448,"bracket_gap_ms":2000,"endpoint_speed_mps":37.64266103898065,"left_boundary_speed_mps":7.648661356538625,"right_boundary_speed_mps":75.26795774070709,"replaced_timestamps_ms":[1650658901448]},
+      {"trip_id":"2022-04-25-22-36-us-ca-ebf-z/pixel5","run_lane":"prior_wls","trusted_lane":"native_fgo","run_count":2,"run_start_timestamp_ms":1650926400445,"run_end_timestamp_ms":1650926401445,"bracket_gap_ms":3000,"endpoint_speed_mps":23.627400633965056,"left_boundary_speed_mps":56.880366143121385,"right_boundary_speed_mps":74.37753384513721,"replaced_timestamps_ms":[1650926400445,1650926401445]}
+    ]
+  },
+  "target_window_inventory": {
+    "trip_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+    "anchor_timestamp_ms": 1645656530438,
+    "window_half_width_ms": 10000,
+    "official_key_count": 12,
+    "chosen_v4": [
+      {"timestamp_ms":1645656529438,"offset_from_anchor_ms":-1000,"source":"prior_wls_exact","latitude_degrees":33.939997945,"longitude_degrees":-118.396341975,"ecef_m":[-2519063.265438,-4659621.075072,3540913.018941]},
+      {"timestamp_ms":1645656530438,"offset_from_anchor_ms":0,"source":"native_fgo_exact","latitude_degrees":33.934542,"longitude_degrees":-118.396255,"ecef_m":[-2519229.333542,-4659945.151732,3540428.586965]},
+      {"timestamp_ms":1645656531438,"offset_from_anchor_ms":1000,"source":"native_fgo_exact","latitude_degrees":33.934428,"longitude_degrees":-118.39622,"ecef_m":[-2519216.040963,-4659927.335524,3540398.568099]},
+      {"timestamp_ms":1645656532438,"offset_from_anchor_ms":2000,"source":"native_fgo_exact","latitude_degrees":33.934267,"longitude_degrees":-118.396232,"ecef_m":[-2519225.13521,-4659941.851779,3540388.491368]},
+      {"timestamp_ms":1645656533438,"offset_from_anchor_ms":3000,"source":"native_fgo_exact","latitude_degrees":33.934109,"longitude_degrees":-118.396227,"ecef_m":[-2519229.405754,-4659950.731132,3540374.001935]},
+      {"timestamp_ms":1645656534438,"offset_from_anchor_ms":4000,"source":"native_fgo_exact","latitude_degrees":33.933956,"longitude_degrees":-118.396226,"ecef_m":[-2519234.044406,-4659959.481723,3540360.226613]},
+      {"timestamp_ms":1645656535438,"offset_from_anchor_ms":5000,"source":"native_fgo_exact","latitude_degrees":33.933805,"longitude_degrees":-118.396226,"ecef_m":[-2519238.753582,-4659968.162291,3540346.631169]},
+      {"timestamp_ms":1645656536438,"offset_from_anchor_ms":6000,"source":"native_fgo_exact","latitude_degrees":33.933658,"longitude_degrees":-118.396226,"ecef_m":[-2519243.250495,-4659976.621725,3540333.434673]},
+      {"timestamp_ms":1645656537438,"offset_from_anchor_ms":7000,"source":"native_fgo_exact","latitude_degrees":33.93351,"longitude_degrees":-118.396226,"ecef_m":[-2519247.880979,-4659985.13053,3540320.203535]},
+      {"timestamp_ms":1645656538438,"offset_from_anchor_ms":8000,"source":"native_fgo_exact","latitude_degrees":33.933356,"longitude_degrees":-118.396226,"ecef_m":[-2519252.745667,-4659994.016716,3540306.38274]},
+      {"timestamp_ms":1645656539438,"offset_from_anchor_ms":9000,"source":"native_fgo_exact","latitude_degrees":33.933195,"longitude_degrees":-118.396228,"ecef_m":[-2519257.909884,-4660003.301513,3540291.988846]},
+      {"timestamp_ms":1645656540438,"offset_from_anchor_ms":10000,"source":"native_fgo_exact","latitude_degrees":33.933028,"longitude_degrees":-118.396228,"ecef_m":[-2519263.082017,-4660012.893439,3540277.017164]}
+    ],
+    "alternatives_by_lane": {
+      "native_fgo_route_output": {
+        "path": "output/smartphone-r5/native-fgo-test-v2/cache/e45f139a77b7662bf79300f61cc0b28176fcf7adfd88faf60c1b3b5cfb03b951/fgo/fgo.pos",
+        "sha256": "78f06b18e344b3d0c9f332403bca0ef9f064106c18155262680cb6b54e17ea63",
+        "rows": [
+          {"timestamp_ms":1645656530438,"offset_from_anchor_ms":0,"latitude_degrees":33.934542,"longitude_degrees":-118.396255,"ecef_m":[-2519229.333542,-4659945.151732,3540428.586965]},
+          {"timestamp_ms":1645656531438,"offset_from_anchor_ms":1000,"latitude_degrees":33.934428,"longitude_degrees":-118.39622,"ecef_m":[-2519216.040963,-4659927.335524,3540398.568099]},
+          {"timestamp_ms":1645656532438,"offset_from_anchor_ms":2000,"latitude_degrees":33.934267,"longitude_degrees":-118.396232,"ecef_m":[-2519225.13521,-4659941.851779,3540388.491368]},
+          {"timestamp_ms":1645656533438,"offset_from_anchor_ms":3000,"latitude_degrees":33.934109,"longitude_degrees":-118.396227,"ecef_m":[-2519229.405754,-4659950.731132,3540374.001935]},
+          {"timestamp_ms":1645656534438,"offset_from_anchor_ms":4000,"latitude_degrees":33.933956,"longitude_degrees":-118.396226,"ecef_m":[-2519234.044406,-4659959.481723,3540360.226613]},
+          {"timestamp_ms":1645656535438,"offset_from_anchor_ms":5000,"latitude_degrees":33.933805,"longitude_degrees":-118.396226,"ecef_m":[-2519238.753582,-4659968.162291,3540346.631169]},
+          {"timestamp_ms":1645656536438,"offset_from_anchor_ms":6000,"latitude_degrees":33.933658,"longitude_degrees":-118.396226,"ecef_m":[-2519243.250495,-4659976.621725,3540333.434673]},
+          {"timestamp_ms":1645656537438,"offset_from_anchor_ms":7000,"latitude_degrees":33.93351,"longitude_degrees":-118.396226,"ecef_m":[-2519247.880979,-4659985.13053,3540320.203535]},
+          {"timestamp_ms":1645656538438,"offset_from_anchor_ms":8000,"latitude_degrees":33.933356,"longitude_degrees":-118.396226,"ecef_m":[-2519252.745667,-4659994.016716,3540306.38274]},
+          {"timestamp_ms":1645656539438,"offset_from_anchor_ms":9000,"latitude_degrees":33.933195,"longitude_degrees":-118.396228,"ecef_m":[-2519257.909884,-4660003.301513,3540291.988846]},
+          {"timestamp_ms":1645656540438,"offset_from_anchor_ms":10000,"latitude_degrees":33.933028,"longitude_degrees":-118.396228,"ecef_m":[-2519263.082017,-4660012.893439,3540277.017164]}
+        ]
+      },
+      "prior_wls_derived_output": {
+        "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/cache/807a879ac6566c28e2865e6b5b1fcfe49dab89a4c052bcd456e8470a163affe0/wls.pos",
+        "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746",
+        "rows": [
+          {"timestamp_ms":1645656529438,"offset_from_anchor_ms":-1000,"latitude_degrees":33.939997945,"longitude_degrees":-118.396341975,"ecef_m":[-2519063.265438,-4659621.075072,3540913.018941]},
+          {"timestamp_ms":1645656530438,"offset_from_anchor_ms":0,"latitude_degrees":33.934434295,"longitude_degrees":-118.396412449,"ecef_m":[-2519261.475883,-4659974.012524,3540441.529143]},
+          {"timestamp_ms":1645656531438,"offset_from_anchor_ms":1000,"latitude_degrees":33.934377963,"longitude_degrees":-118.396294032,"ecef_m":[-2519236.059552,-4659950.020567,3540411.664722]},
+          {"timestamp_ms":1645656532438,"offset_from_anchor_ms":2000,"latitude_degrees":33.934206745,"longitude_degrees":-118.396178878,"ecef_m":[-2519226.658389,-4659955.017896,3540388.723936]},
+          {"timestamp_ms":1645656533438,"offset_from_anchor_ms":3000,"latitude_degrees":33.934111117,"longitude_degrees":-118.396211589,"ecef_m":[-2519230.041795,-4659954.917041,3540376.962126]},
+          {"timestamp_ms":1645656534438,"offset_from_anchor_ms":4000,"latitude_degrees":33.933950719,"longitude_degrees":-118.396263528,"ecef_m":[-2519238.583729,-4659960.619928,3540361.627068]},
+          {"timestamp_ms":1645656535438,"offset_from_anchor_ms":5000,"latitude_degrees":33.933804109,"longitude_degrees":-118.396251685,"ecef_m":[-2519243.113612,-4659971.301431,3540349.798193]},
+          {"timestamp_ms":1645656536438,"offset_from_anchor_ms":6000,"latitude_degrees":33.933660062,"longitude_degrees":-118.396249037,"ecef_m":[-2519245.467916,-4659976.17122,3540334.176129]},
+          {"timestamp_ms":1645656537438,"offset_from_anchor_ms":7000,"latitude_degrees":33.933507545,"longitude_degrees":-118.396246333,"ecef_m":[-2519251.104979,-4659987.124053,3540322.07234]},
+          {"timestamp_ms":1645656538438,"offset_from_anchor_ms":8000,"latitude_degrees":33.933355927,"longitude_degrees":-118.396242139,"ecef_m":[-2519255.250564,-4659995.607692,3540308.150136]},
+          {"timestamp_ms":1645656539438,"offset_from_anchor_ms":9000,"latitude_degrees":33.933201234,"longitude_degrees":-118.396238067,"ecef_m":[-2519258.85711,-4660003.070599,3540293.040281]},
+          {"timestamp_ms":1645656540438,"offset_from_anchor_ms":10000,"latitude_degrees":33.93302846,"longitude_degrees":-118.396251475,"ecef_m":[-2519266.214606,-4660014.073442,3540278.808395]}
+        ]
+      },
+      "current_wls_route_output": {
+        "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/routes/2022-02-23-22-35-us-ca-lax-m/outputs/pixel5/selected.pos",
+        "sha256": "3d0c7e762c40c15a3c77f5e7de4799741337380e237a6bb902ad9ff5685a0746",
+        "byte_identical_to_prior_wls_derived_output": true,
+        "row_inventory": "The exact 12 timestamp/offset rows are byte-identical to prior_wls_derived_output.rows above; no independent current-WLS coordinate stream exists.",
+        "timestamps_and_offsets_ms": [
+          [-1000,1645656529438],[0,1645656530438],[1000,1645656531438],[2000,1645656532438],[3000,1645656533438],[4000,1645656534438],[5000,1645656535438],[6000,1645656536438],[7000,1645656537438],[8000,1645656538438],[9000,1645656539438],[10000,1645656540438]
+        ]
+      }
+    },
+    "same_lane_bracket_checks_for_candidate": {
+      "native_fgo": {
+        "before": {"timestamp_ms":1645656473438,"offset_from_anchor_ms":-57000,"source_lane":"native_fgo","latitude_degrees":33.940211,"longitude_degrees":-118.396102,"ecef_m":[-2519041.474812,-4659627.446412,3540938.263465]},
+        "after": {"timestamp_ms":1645656531438,"offset_from_anchor_ms":1000,"source_lane":"native_fgo","latitude_degrees":33.934428,"longitude_degrees":-118.39622,"ecef_m":[-2519216.040963,-4659927.335524,3540398.568099]},
+        "bracket_gap_ms":58000,
+        "endpoint_speed_mps":11.062436422397814,
+        "within_10_second_window":false,
+        "eligible":false,
+        "reason":"same-lane native bracket is wider than the frozen 10-second bound"
+      },
+      "prior_wls_and_current_wls": {
+        "before": {"timestamp_ms":1645656529438,"offset_from_anchor_ms":-1000,"source_lane":"prior_wls/current_wls","latitude_degrees":33.939997945,"longitude_degrees":-118.396341975,"ecef_m":[-2519063.265438,-4659621.075072,3540913.018941]},
+        "after": {"timestamp_ms":1645656531438,"offset_from_anchor_ms":1000,"source_lane":"prior_wls/current_wls","latitude_degrees":33.934377963,"longitude_degrees":-118.396294032,"ecef_m":[-2519236.059552,-4659950.020567,3540411.664722]},
+        "bracket_gap_ms":2000,
+        "endpoint_speed_mps":312.0172260562024,
+        "within_10_second_window":true,
+        "endpoint_speed_at_or_below_70_mps":false,
+        "eligible":false,
+        "reason":"same-lane WLS endpoints exceed the frozen physical speed bound"
+      }
+    }
+  },
+  "decision": {
+    "eligible_bridges": 4,
+    "replaced_rows": 7,
+    "v5_generated": true,
+    "v4_retained_as_input_baseline": true,
+    "v5_selected_for_development_only": true,
+    "reason": "The highlighted 607 m/s transition remains a prior-WLS to native-FGO seam with no eligible same-lane bridge: native-FGO bracket 58,000 ms and prior/current-WLS endpoint speed 312.0172260562024 m/s. Four other high-speed prior-WLS runs had native-FGO brackets of 2,000–4,000 ms and endpoint speeds of 16.118079507419452–37.64266103898065 m/s; all seven interior rows were replaced by the frozen same-lane interpolation rule.",
+    "no_truth_used_for_selection": true,
+    "no_fgo_or_wls_rerun": true,
+    "no_numeric_parameter_change": true
+  },
+  "physical_continuity": {
+    "v4_before": {
+      "speed_above_70_mps_edges": 19,
+      "one_sided_violation_points": 28,
+      "max_speed_mps": 606.0351772746234,
+      "isolated_two_sided_spike_points": 0
+    },
+    "v5_after": {
+      "speed_above_70_mps_edges": 14,
+      "one_sided_violation_points": 18,
+      "max_speed_mps": 606.0351772746234,
+      "isolated_two_sided_spike_points": 0
+    },
+    "trip_count": 40,
+    "replaced_rows": 7,
+    "target_607_mps_event_changed": false,
+    "remaining_events_are_reported": true
+  },
+  "verification": {
+    "v4_submission_sha256": "64b85bd5946ad33d77e522bf7456d5dc0c4e4870cd7b65756faedd9f18ca1af8",
+    "v4_header_exact": true,
+    "v4_key_order_exact": true,
+    "v4_row_count": 71936,
+    "v4_duplicate_keys": 0,
+    "v4_missing_keys": 0,
+    "v4_extra_keys": 0,
+    "v4_nonfinite_coordinates": 0,
+    "v4_sample_coordinate_fallback_rows": 0,
+    "v4_known_dummy_rows": 0,
+    "v4_out_of_earth_rows": 0,
+    "v4_isolated_two_sided_spike_points_after": 0,
+    "v5_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+      "bytes": 6150020
+    },
+    "v5_hash": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "v5_header_exact": true,
+    "v5_key_order_exact": true,
+    "v5_row_count": 71936,
+    "v5_duplicate_keys": 0,
+    "v5_missing_keys": 0,
+    "v5_extra_keys": 0,
+    "v5_nonfinite_coordinates": 0,
+    "v5_known_dummy_rows": 0,
+    "v5_sample_coordinate_fallback_rows": 0,
+    "v5_out_of_earth_rows": 0,
+    "v5_isolated_two_sided_spike_points_after": 0,
+    "v5_speed_above_70_mps_edges": 14,
+    "v5_one_sided_violation_points": 18,
+    "v5_max_speed_mps": 606.0351772746234,
+    "atomic_publish": true,
+    "truth_open_count": 0
+  },
+  "truth_policy": {
+    "ground_truth_members_read": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "holdout_or_test_truth_used": false,
+    "leaderboard_used": false,
+    "official_sample_coordinates_read": false
+  },
+  "publication_policy": {
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false,
+    "no_post_generation_tuning": true,
+    "no_v5_artifact_published": false,
+    "v5_development_only_artifact": true
+  },
+  "reproduction": {
+    "audit_method": "Reconstruct v4 from hash-pinned v3 native-FGO/WLS sources, apply the already sealed continuity pass in memory, enumerate all ECEF edges above 70 m/s, and bridge only eligible high-speed source runs.",
+    "command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_source_seam_bridge.py",
+    "focused_tests": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 -m unittest -v tests/test_smartphone_native_fgo_test_submission_source_seam_bridge.py",
+    "truth_free": true
+  }
+}

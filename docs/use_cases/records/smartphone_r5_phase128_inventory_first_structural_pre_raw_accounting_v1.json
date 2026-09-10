@@ -1,0 +1,103 @@
+{
+  "schema_version": "smartphone-r5-phase128-inventory-first-structural-pre-raw-accounting.v1",
+  "phase": 128,
+  "execution_label": "Luna Max",
+  "status": "sealed-pre-raw-no-payload-activity",
+  "contract": {
+    "audit_commit": "c2557ac7b99f2fd2827233900fbe88a10a9b1695",
+    "audit_sha256": "58993acacf45107928b10ebd3f406ca1a494102168e46366edb42777369678f7",
+    "freeze_commit": "751dbfff4fe21c1d9642a27c016fcab2cd317afa",
+    "freeze_sha256": "467b35e14ed3235244a6403eb5ac1fbcad777f9e675fd1a08db20209781ac385",
+    "implementation_commit": "50357e8f3eabbb2eca672b00a16eb2ce32cc2f16",
+    "runner_manifest_commit": "0bc9b1a53b0c798ae6d331504ba4f48c93eb2ee1",
+    "manifest_path": "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_manifest_v1.json",
+    "manifest_sha256": "8be91bc2e80a7228dd66a3facae1e719e59b6e356de209b5101488ca1bf02ac6",
+    "validator_path": "apps/commands/benchmarks/gnss_smartphone_phase128_inventory_first_structural.py",
+    "validator_sha256": "6b2ee8101cc03bae2b419da502ad336ed32efcf2f3aee45d905f2593027e1253",
+    "runner_path": "apps/commands/benchmarks/gnss_smartphone_phase128_inventory_first_structural_execute.py",
+    "runner_sha256": "654adda4fedf8f9326dcceb02952de21d4ce6459412fcc97320f70dc6d283d77",
+    "focused_test_path": "tests/test_smartphone_phase128_inventory_first_structural.py",
+    "focused_test_sha256": "4293595b6aa90ea8ce5525f01f68c78d10d5495415bcf37df13e96cd8b6ea890",
+    "target_binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "target_binary_sha256": "d823b031d865bde973d3bd6ffcf2957288bccf29d66bf89ade3dea11d108bfe0",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "raw_input_set": ["device_gnss.csv", "device_imu.csv", "brdc.nav", "sealed raw base RINEX"]
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_base_hash_reads": 0,
+    "solver_invocations": 0,
+    "solution_rows_opened": 0,
+    "solution_coordinate_interpretations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "pdc_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "raw_content_copied_or_transformed": false,
+    "solution_output_published": false
+  },
+  "launch_free_qualification": {
+    "phase128_python_focused": {"passed": 8, "failed": 0, "status": "pass"},
+    "phase128_inventory_python_focused": {"passed": 10, "failed": 0, "status": "pass"},
+    "cmake_registered_phase128_lanes": {"passed": 2, "failed": 0, "status": "pass"},
+    "target_build": {"target": "gnss_run_tests", "status": "pass"},
+    "full_cpp_gtest": {
+      "tests": 1160,
+      "passed": 1102,
+      "skipped": 58,
+      "failed": 0,
+      "status": "pass"
+    },
+    "historical_phase127_hash_check": {
+      "status": "expected-historical-pin-mismatch-retained",
+      "expected_old_app_sha256": "af2d74e23706e354b1b9fd715aaa09df807854787d789b0f46f7ee3efd3b5b73",
+      "current_phase128_app_sha256": "898b979c51d8fa4ec98432a3f2aeb8a99ff2603689e8cbe396aecad501985138",
+      "action": "do not rewrite sealed Phase127 validator or result"
+    }
+  },
+  "inventory_gate_policy": {
+    "stage": "post-independent-authorization-pre-solver",
+    "header_states": ["absent", "valid-empty", "entries", "malformed"],
+    "header_absent_or_valid_empty_geph_fallback": true,
+    "header_malformed_fail_closed": true,
+    "canonical_fields": "data[0..14]",
+    "fcn_field": "data[10]",
+    "fcn_encoded_gt_128_subtract_256": true,
+    "fcn_domain": [-7, 6],
+    "native_gpst_query_and_toe": true,
+    "geph_validity_seconds": 1800.0,
+    "per_record_reject_reason_counts": true,
+    "rover_base_full_retained_coverage_required": true,
+    "duplicate_conflict_tie_missing_out_of_time_range_fail_closed": true,
+    "phone_carrier_frequency_is_fcn_source": false,
+    "fixed_channel_or_external_table": false,
+    "inventory_failure_solver_count": 0,
+    "opaque_solution_only": true
+  },
+  "authorization_boundary": {
+    "implementation_authorized": true,
+    "contract_authorized": true,
+    "raw_materialization_authorized": false,
+    "inventory_reads_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "rerun_or_fallback_authorized": false,
+    "next_required_artifact": "independent authorization pinning this seal, manifest, runner, implementation, binary, and route input metadata",
+    "post_authorization_order": "materialize permitted inputs -> inventory each route once -> fail-closed gate -> Phase126 compound structural solver at most once"
+  }
+}

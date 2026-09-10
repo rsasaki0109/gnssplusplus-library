@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <cstdlib>
 #include <ctime>
 #include <filesystem>
 #include <fstream>
@@ -25,6 +26,45 @@
 using namespace libgnss;
 
 namespace {
+
+class ScopedEnvironmentVariable {
+public:
+    explicit ScopedEnvironmentVariable(const char* name) : name_(name) {
+        if (const char* value = std::getenv(name_.c_str())) {
+            had_original_ = true;
+            original_ = value;
+        }
+    }
+
+    ~ScopedEnvironmentVariable() {
+        if (had_original_) {
+            set(original_.c_str());
+        } else {
+            clear();
+        }
+    }
+
+    void set(const char* value) const {
+#ifdef _WIN32
+        ASSERT_EQ(_putenv_s(name_.c_str(), value), 0);
+#else
+        ASSERT_EQ(setenv(name_.c_str(), value, 1), 0);
+#endif
+    }
+
+    void clear() const {
+#ifdef _WIN32
+        ASSERT_EQ(_putenv_s(name_.c_str(), ""), 0);
+#else
+        ASSERT_EQ(unsetenv(name_.c_str()), 0);
+#endif
+    }
+
+private:
+    std::string name_;
+    std::string original_;
+    bool had_original_ = false;
+};
 
 TEST(PPPClasSeedFde, RetriesOnlyRejectedOrMaxdiffInconsistentSeeds) {
     EXPECT_FALSE(ppp_shared::shouldRetryClasSeedWithFde(
@@ -414,6 +454,53 @@ TEST(PPPEnvOverridesTest, MadocaPromotedPathRetainsReleaseCycleOptOuts) {
     EXPECT_TRUE(overrides.madoca_early_window);
     EXPECT_TRUE(overrides.madoca_postfit_commit);
     EXPECT_TRUE(overrides.madoca_spike_guard);
+}
+
+TEST(PPPEnvOverridesTest, ClasArHeldMinimumDdRowsUsesStrictBoundedOverride) {
+    ScopedEnvironmentVariable environment("GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS");
+
+    environment.clear();
+    EXPECT_EQ(
+        PPPEnvOverrides::fromEnvironment().clas_ar_held_minimum_dd_rows,
+        4);
+
+    environment.set("4");
+    EXPECT_EQ(
+        PPPEnvOverrides::fromEnvironment().clas_ar_held_minimum_dd_rows,
+        4);
+
+    for (const char* invalid :
+         {"", "0", "1", "7", "-1", "4trailing", "invalid"}) {
+        environment.set(invalid);
+        EXPECT_EQ(
+            PPPEnvOverrides::fromEnvironment().clas_ar_held_minimum_dd_rows,
+            4)
+            << "value=" << invalid;
+    }
+}
+
+TEST(PPPEnvOverridesTest, ClasArHeldPublicationStreakUsesStrictBoundedOverride) {
+    ScopedEnvironmentVariable environment(
+        "GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK");
+
+    environment.clear();
+    EXPECT_EQ(PPPEnvOverrides::fromEnvironment()
+                  .clas_ar_held_maximum_publication_streak,
+              5);
+
+    environment.set("5");
+    EXPECT_EQ(PPPEnvOverrides::fromEnvironment()
+                  .clas_ar_held_maximum_publication_streak,
+              5);
+
+    for (const char* invalid :
+         {"", "0", "6", "-1", "5trailing", "invalid"}) {
+        environment.set(invalid);
+        EXPECT_EQ(PPPEnvOverrides::fromEnvironment()
+                      .clas_ar_held_maximum_publication_streak,
+                  5)
+            << "value=" << invalid;
+    }
 }
 
 TEST(NavigationSsrIodeSelection, DoesNotFallBackWhenGpsIodeIsUnavailable) {

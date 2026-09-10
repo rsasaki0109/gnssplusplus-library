@@ -1,0 +1,245 @@
+{
+  "schema_version": "smartphone-r5-phase119-official-route-type-provenance-freeze.v1",
+  "phase": 119,
+  "execution_label": "Luna Max",
+  "status": "frozen-default-off-provenance-gated-candidate-no-execution",
+  "purpose": "Freeze one route-Type provenance gate after a read-only comparison of the official MATLAB driver/settings contract and sealed route-list metadata. This record authorizes no raw read, solver run, truth read, accuracy calculation, solution release, or Kaggle action.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase119_official_route_type_provenance_audit_v1.md",
+    "commit": "9a221524b7b34ccca1ae6c1ec7f14adaa0a0ec1d",
+    "sha256": "2ebf0d32a5018c74a79a7d6fd746b7bcc34b1c1282bf243a592d2c258bdc2ebc"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "official_functions": [
+      "fgo_gnss.m",
+      "fgo_gnss_imu.m",
+      "parameters.m",
+      "run_fgo.m"
+    ],
+    "native_context": "Phase118 exact route crosswalk and fixed sigma/official TDCP-k resolver",
+    "new_payload_or_solver_read": false,
+    "new_truth_or_accuracy_read": false
+  },
+  "authoritative_type_provenance": {
+    "official_repository": "https://github.com/taroz/gsdc2023",
+    "official_repository_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "settings_member": {
+      "member": "dataset_2023/settings_train.csv",
+      "sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+      "source_record": "Phase80 sealed public_settings_huber.by_route",
+      "route_mapping_fixed_before_read": true,
+      "payload_reopened_in_phase119": false,
+      "prior_source_metadata_read_count": 1
+    },
+    "official_cache_boundary": {
+      "source_git_tree_contains_settings_member": false,
+      "reason": "official source .gitignore contains /dataset_2023",
+      "missing_list_policy": "unknown; fail closed",
+      "native_route_table_is_not_authoritative": true
+    },
+    "official_call_path": [
+      {
+        "source": "run_fgo.m:12-20",
+        "effect": "read settings_(train|test).csv and choose dataset root"
+      },
+      {
+        "source": "run_fgo.m:29-32",
+        "effect": "select one settings row; Course/Phone forms the trip key and Type remains on that row"
+      },
+      {
+        "source": "run_fgo.m:34-55",
+        "effect": "pass the unchanged row to fgo_gnss and fgo_gnss_imu"
+      },
+      {
+        "source": "fgo_gnss.m:18-32; fgo_gnss_imu.m:18-38",
+        "effect": "preserve Course/Phone and call parameters(setting, initflag)"
+      },
+      {
+        "source": "parameters.m:12-20",
+        "effect": "copy setting.Type into prm.Type"
+      },
+      {
+        "source": "parameters.m:119-125",
+        "effect": "Street/Mix -> TDCP Huber k 0.2; all other official Types, including Highway, -> 0.5"
+      },
+      {
+        "source": "fgo_gnss.m:179-200; fgo_gnss_imu.m:301-321",
+        "effect": "apply the run-level prm.L_kernel to retained adjacent TDCP factors"
+      }
+    ],
+    "route_rows": [
+      {
+        "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "course": "2021-03-16-18-59-us-ca-mtv-a",
+        "phone": "pixel5",
+        "official_setting_type": "Highway",
+        "official_tdcp_huber_k": 0.5,
+        "provenance": "sealed Phase80 settings_train.csv route row"
+      },
+      {
+        "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "course": "2022-04-01-18-22-us-ca-lax-t",
+        "phone": "pixel5",
+        "official_setting_type": "Highway",
+        "official_tdcp_huber_k": 0.5,
+        "provenance": "sealed Phase80 settings_train.csv route row"
+      }
+    ],
+    "route_type_conclusion": "confirmed for both audited routes; not inferred from names, scores, truth, or native result telemetry"
+  },
+  "phase118_consistency": {
+    "assumption": "MTV-A and LAX-T use official Type Highway",
+    "consistent_with_official_settings_rows": true,
+    "fixed_tdcp_sigma_m": 0.03,
+    "official_mapping": {
+      "Street": 0.2,
+      "Mix": 0.2,
+      "Highway": 0.5,
+      "unknown": "fail-closed"
+    },
+    "phase118_expected_k_by_route": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0.5,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.5
+    },
+    "phase117_dynamic_sigma": false,
+    "native_crosscheck": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp:375-397",
+      "both_routes_match_highway": true,
+      "used_as_primary_official_evidence": false
+    }
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase119-official-route-type-provenance-gated-tdcp-k-v1",
+    "kind": "default-off provenance/admission correction",
+    "opt_in": true,
+    "default_off": true,
+    "raw_only": true,
+    "selector_anchor": "--native-phase118-official-tdcp-huber-k",
+    "one_changed_dimension": "official_tdcp_setting_type must come from exactly one authoritative settings row keyed by Course/Phone before TDCP-k admission",
+    "expected_numeric_effect_on_a_lax": "none; authoritative Type is Highway and resolves to k=0.5, matching Phase118",
+    "admission": {
+      "exact_key": "Course/Phone",
+      "required_row_count": 1,
+      "accepted_types": ["Street", "Mix", "Highway"],
+      "missing_duplicate_conflicting_malformed_or_unknown": "fail-closed before solver construction",
+      "route_name_heuristic": false,
+      "score_or_truth_lookup": false,
+      "default_highway_fallback": false,
+      "k_sweep": false,
+      "retry_or_fallback": false
+    },
+    "preserve": {
+      "fixed_tdcp_sigma_m": 0.03,
+      "official_tdcp_k_mapping": "Street/Mix=0.2; Highway/other recognized official Type=0.5",
+      "tdcp_equation_units_pair_order_and_rejects": true,
+      "pseudorange_and_doppler_robust_kernels": true,
+      "c7_d_c0d_handoff": true,
+      "raw_base_correction": true,
+      "pixel5_final_offset": true,
+      "multifrontal_qr": true,
+      "imu_filter_initialization_and_lm": true,
+      "legacy_default": true,
+      "solution_rows": "withheld"
+    },
+    "implementation_in_this_freeze": false,
+    "raw_execution_in_this_freeze": false,
+    "solver_execution_in_this_freeze": false,
+    "truth_evaluation_in_this_freeze": false,
+    "accuracy_in_this_freeze": false
+  },
+  "next_source_backed_parity_priority": {
+    "rank": 1,
+    "id": "ordinary-tdcp-equation-normalization-parity",
+    "status": "audit-only-not-a-second-freeze",
+    "reason": "Official source stores ADR/lambda cycles and forms a wavelength-scaled carrier/Doppler difference before resL(i+1)-resL(i), while native builds corrected metre deltas and evaluates a metre-valued temporal factor. The adjacent family agrees, but custom-factor sign/endpoint/unit normalization has not been proven line-by-line.",
+    "official_evidence": "functions/gnsslog2obs.m:182-188; functions/exobs_residuals.m:89-99; fgo_gnss.m:179-200; fgo_gnss_imu.m:301-321",
+    "native_evidence": "src/algorithms/fgo_problems.cpp:1446-1452; src/algorithms/fgo_gtsam_internal.hpp:3403-3407,3497-3500",
+    "permitted_now": false,
+    "no_equation_or_sigma_change_authorized": true
+  },
+  "evidence_pins": {
+    "phase80_route_type_freeze": {
+      "commit": "57cf769",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase118_source_parity_freeze": {
+      "commit": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+      "sha256": "c6f4fda2abe170417610d4fd1a4ae8a1a618d07096ff0432669081ab06a1cf77"
+    },
+    "phase118_structural_result": {
+      "commit": "b4ea80d96d7156f9fd62cc554f2deeedcc550cb0",
+      "sha256": "88e8799050fd396eeb14e83d4f5923339279f46d0219a385e303d3cb50731538"
+    },
+    "official_run_fgo_m": {
+      "path": "output/reproducibility-cache/gsdc2023/run_fgo.m",
+      "sha256": "02150849653b2e5c80609e971dbef41b010569de5dcc304782235b7fc96b9065"
+    },
+    "official_fgo_gnss_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+    },
+    "official_fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "official_parameters_m": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "official_gnsslog2obs_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff"
+    },
+    "official_exobs_residuals_m": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/exobs_residuals.m",
+      "sha256": "50c954a825edbdeaf5c9884486aff56c058f51d47610a06722d4f42b33095324"
+    },
+    "native_route_crosswalk": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "43e9fbbe8a0043f648b52b02e63be36b8960e412a989d21cfd345c8b8a9312d5"
+    },
+    "native_type_resolver": {
+      "path": "include/libgnss++/algorithms/fgo_config.hpp",
+      "sha256": "38ae28a5bdb398b0a764f9f09f8456107ddc0168654b1d1791879377cca24748"
+    }
+  },
+  "execution_policy": {
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "structural_result_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false,
+    "rerun_authorized": false,
+    "fallback_authorized": false
+  },
+  "read_accounting_phase119": {
+    "official_source_text_and_sealed_metadata": "read-only; permitted",
+    "new_settings_payload_read": 0,
+    "new_raw_phone_gnss_imu_navigation_reads": 0,
+    "new_raw_base_bytes_headers_or_hashes": 0,
+    "truth_payload_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_phone_coordinate_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_calculations_or_score_reads": 0,
+    "solution_rows_opened_or_published": 0,
+    "pdc_kaggle_or_token_access": 0,
+    "type_or_k_sweep": 0,
+    "reruns_fallbacks_or_tuning": 0
+  },
+  "fail_closed": {
+    "missing_or_unpinned_settings_row": true,
+    "duplicate_or_conflicting_course_phone_row": true,
+    "unknown_type": true,
+    "route_name_or_score_substitution": true,
+    "any_forbidden_payload_or_truth_access": true,
+    "any_unapproved_solver_or_accuracy_action": true
+  }
+}

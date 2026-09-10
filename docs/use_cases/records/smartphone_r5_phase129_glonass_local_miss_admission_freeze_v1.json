@@ -1,0 +1,435 @@
+{
+  "schema_version": "smartphone-r5-phase129-glonass-local-miss-admission-freeze.v1",
+  "phase": 129,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-source-backed-default-off-candidate",
+  "purpose": "Freeze one source-backed local GLONASS provenance-miss admission boundary after proving that the official correction graph uses local common-stream and finite-residual gates rather than a 100-percent GLONASS FCN route gate.",
+  "starting_state": {
+    "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "head_before_audit": "7ed294c2d6357520e795bb57b880171a63adb7c4",
+    "worktree_before_audit": "clean",
+    "audit_commit": "0ed5798afdea0738e059623a2f5b5470a5dcd2f1",
+    "audit_path": "docs/use_cases/records/smartphone_r5_phase129_glonass_local_miss_admission_audit_v1.md",
+    "audit_sha256": "fad6af5c8588d6976643fd6e3e0fcc3419d364ba71203739b827fa8ac26d02e7"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase129-glonass-certified-local-miss-admission-v1",
+    "selector": "--native-phase129-glonass-local-miss-mask",
+    "source_backed": true,
+    "official_requires_100_percent_glonass_fcn_coverage": false,
+    "official_admission_model": "per-observation/per-frequency-field finite corrected-code gate after common-satellite intersection and in-domain interpolation",
+    "native_phase111_model": "per-exact-(SatelliteId,SignalType) stream and finite correction local miss mask with conservation",
+    "current_native_phase126_128_model": "GLONASS provenance failure aborts source-complete base model and app before Phase111 mask",
+    "default_off": true,
+    "implementation_authorized": false,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "official-correct_pseudorange-uses-sameSat-and-no-extrapolation-interpolation",
+      "official-fgo-adds-pseudorange-factor-only-for-finite-resPc",
+      "phase111-sealed-taxonomy-proves-all-misses-dropped-with-zero-raw-or-zero-fallback",
+      "current-native-phase127-128-provenance-failure-is-an-earlier-global-abort",
+      "source-backed-local-certified-or-explicit-miss-is-the-minimal-boundary",
+      "missing-fcn-never-inferred-or-retained-uncorrected"
+    ]
+  },
+  "sealed_context": {
+    "phase128_result": {
+      "commit": "7ed294c2d6357520e795bb57b880171a63adb7c4",
+      "path": "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_result_v1.json",
+      "sha256": "071fd33634ccdd3060d286f166d0b0d79f72b8dfbcbe87c31a03e372734cc39b",
+      "status": "no-go-phase128-inventory-first-structural",
+      "route_order": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5"
+      ],
+      "native_solver_invocations": 0,
+      "historical_full_glonass_fcn_preflight": true,
+      "historical_result_is_not_official_coverage_proof": true
+    },
+    "phase128_contract_freeze": {
+      "commit": "751dbfff4fe21c1d9642a27c016fcab2cd317afa",
+      "path": "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_contract_freeze_v1.json",
+      "sha256": "467b35e14ed3235244a6403eb5ac1fbcad777f9e675fd1a08db20209781ac385"
+    },
+    "phase128_forensic_freeze": {
+      "commit": "32bdfdbc384d906560c28863002ae99cc15f9cb8",
+      "path": "docs/use_cases/records/smartphone_r5_phase128_phase127_zero_coverage_forensic_freeze_v1.json",
+      "sha256": "bf45258e5b9534fee5f5c82e51ad52925b7fb3a756027051449968347e82f6ac"
+    },
+    "phase111_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase111_common_satellite_miss_mask_parity_freeze_v1.json",
+      "sha256": "176cc4411cb53262b638feffb0ff41cb231139644d7ce618cf94e7c6150d241e",
+      "audit_commit": "6315df5668cfc94cea9ae80c7045c34f0f5fe8c2"
+    },
+    "phase126_contract_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_structural_contract_audit_v1.md",
+      "sha256": "8ad6fcedc7a3b23c8f13b82968f67bada2fbe039d90f919c104e9a910f71f4ee",
+      "commit": "5d00daf56afb6fe6b6e1f01b4a1213c287f671db"
+    },
+    "phase127_provenance_freeze": {
+      "commit": "a6df42a774f1b832796b9fa81a1e75217f7cb038",
+      "path": "docs/use_cases/records/smartphone_r5_phase127_glonass_channel_provenance_freeze_v1.json",
+      "sha256": "e0c28812ae8c28594f1286ca2512de17bcd4262bb7343b7bb985c6ba25cc901c"
+    }
+  },
+  "candidate": {
+    "id": "phase129-glonass-certified-local-miss-admission-v1",
+    "selector": "--native-phase129-glonass-local-miss-mask",
+    "requires_selectors": [
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission"
+    ],
+    "scope": "Change only an unaccepted GLONASS provenance row from an earlier route-global abort into an explicit local miss while preserving the existing canonical parser, source-complete operator, shared factor vector, and Phase111 exact-stream mask.",
+    "default_off": true,
+    "adds_factor": false,
+    "adds_state": false,
+    "changes_equation": false,
+    "changes_signal_mapping": false,
+    "changes_non_glonass_population": false,
+    "changes_certified_glonass_equation": false,
+    "changes_c7_d_ccdd": false,
+    "changes_solver_or_lm": false,
+    "partial_selector": false,
+    "fallback": false,
+    "raw_uncorrected_retention": false,
+    "zero_correction_fallback": false,
+    "solution_output": "opaque structural metadata/hash only"
+  },
+  "official_control_flow": {
+    "base_intersection": {
+      "expression": "obsb = obsb.sameSat(obsr)",
+      "source": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+      "lines": "5-6",
+      "meaning": "Only common satellites enter the base residual/interpolation path; this is not a requirement that every observed satellite or every GLONASS row be present."
+    },
+    "frequency_stream": {
+      "source": "output/reproducibility-cache/gsdc2023/fgo_gnss.m and fgo_gnss_imu.m",
+      "lines": "fgo_gnss.m:72-78; fgo_gnss_imu.m:85-92",
+      "meaning": "Correction is performed separately for each nonempty frequency field before graph construction."
+    },
+    "interpolation": {
+      "expression": "interp1(obsb.time.t, pc_, obsr.time.t, \"linear\")",
+      "source": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+      "lines": "26-34",
+      "meaning": "Missing stream values and times outside the finite interpolation domain do not receive an extrapolated correction; the corrected value is non-finite/NaN."
+    },
+    "factor_gate": {
+      "expression": "if ~isnan(obsr.(f).resPc(i,j)); add PseudorangeFactor_XC",
+      "source": "output/reproducibility-cache/gsdc2023/fgo_gnss.m and fgo_gnss_imu.m",
+      "lines": "fgo_gnss.m:123-142; fgo_gnss_imu.m:189-212",
+      "meaning": "A missing/non-finite corrected code row is locally not added; Doppler/TDCP have independent gates."
+    },
+    "official_fcn_caveat": {
+      "source": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "lines": "91-95,158-195,254-315",
+      "meaning": "The official Android conversion estimates a supported GLO frequency from raw CarrierFrequencyHz and materializes only available fields/rows. It does not establish a RINEX header/geph FCN provenance gate. Phase129 forbids that inference in its native opt-in path."
+    }
+  },
+  "native_control_flow": {
+    "phase111_miss_mask": {
+      "source": "src/algorithms/source_pseudorange_miss_mask.cpp",
+      "lines": "53-181",
+      "checks": [
+        "exact hasStream(SatelliteId,SignalType)",
+        "valid epoch and finite time",
+        "finite in-domain correctionAt",
+        "finite corrected value after one subtraction"
+      ],
+      "failure_action": "increment typed local counter and continue without appending the factor",
+      "commit_action": "swap the retained vector only after per-signal/global conservation",
+      "fallback": false
+    },
+    "base_model_provenance": {
+      "source": "src/algorithms/base_pseudorange_compensation.cpp",
+      "lines": "244-368",
+      "current_failure_action": "unaccepted GLO provenance sets diagnostics.failure and returns false at lines 338-352",
+      "other_global_failures_preserved": [
+        "satellite state unavailable",
+        "ephemeris unavailable",
+        "nonfinite geometry/Sagnac",
+        "nonfinite atmosphere",
+        "nonfinite source residual",
+        "wrong route interval",
+        "duplicate/non-monotonic source stream",
+        "no finite stream"
+      ]
+    },
+    "problem_builder": {
+      "source": "src/algorithms/fgo_problems.cpp",
+      "lines": "489-529",
+      "current_failure_action": "failed local GLO annotation continues to the next row",
+      "app_override": "apps/native/gnss_fgo_imu_no_base.cpp:8362-8369 and :8771-8776 convert accumulated Phase127 failure into route-global return 1"
+    }
+  },
+  "provenance_policy": {
+    "permitted_sources": [
+      "RINEX observation GLONASS SLOT / FRQ # header FCN for the exact typed satellite",
+      "selected time-valid broadcast GLONASS ephemeris geph.frq for the exact typed satellite and existing FGO query time"
+    ],
+    "header_priority": "header FCN is primary when present and must equal the selected geph.frq",
+    "header_absent_rule": "selected time-valid geph.frq is the only permitted source",
+    "query_time": "existing FGO second-pass transmit/query time; no new iteration or time substitute",
+    "validity": "existing valid flag and abs(query_time - toe) <= 1800 seconds",
+    "fcn_range": [-7, 6],
+    "missing_or_invalid_action": "explicit local miss, with reason and side/stage/signal counters",
+    "missing_geph_action": "explicit local miss; no header-only certification",
+    "header_geph_mismatch_action": "explicit local miss",
+    "different_fcn_tie_action": "explicit local miss",
+    "wavelength_action": "require finite positive wavelength from certified FCN; otherwise explicit local miss",
+    "forbidden_sources": [
+      "Android raw carrier-frequency FCN inference",
+      "fixed channel or zero channel",
+      "external channel/frequency table",
+      "cross-satellite or cross-signal fill",
+      "nearest-channel substitution",
+      "stale/out-of-window ephemeris",
+      "raw uncorrected retention",
+      "zero correction",
+      "endpoint hold or extrapolation"
+    ]
+  },
+  "admission_semantics": {
+    "base_side": "Uncertified GLO base rows contribute no sample to their exact (SatelliteId,SignalType) correction stream. Certified rows continue through the existing Phase126 source-complete residual, smoothing, and interpolation path.",
+    "rover_side": "A GLO code row with no exact certified base stream or no finite in-domain correction is removed by the existing Phase111 miss mask. A finite certified correction is subtracted once and retained.",
+    "stage_sharing": "GNSS-first and main consume the same post-mask shared factor population; no stage-specific re-inference or fallback.",
+    "non_glonass": "Non-GLONASS rows retain existing Phase126/Phase111 semantics and are not filtered by the Phase129 provenance predicate.",
+    "global_boundary": "Phase126 A/B/C, station/reference, state, geometry, atmosphere, interval, stream-integrity, finite-data, and graph gates remain route-global fail-closed conditions.",
+    "phase128_gate_override": "Only when Phase129 is explicitly on, the route-level all-GLO-FCN-complete predicate is replaced by certified-or-explicit-miss row accounting. Canonical Phase128 field/key/parser checks remain required. Selector-off historical Phase128 behavior is unchanged."
+  },
+  "minimum_data_and_fail_closed": {
+    "zero_solver_on_failure": true,
+    "predicates": [
+      "raw GNSS/IMU/navigation/base inputs and finite retained epochs are nonempty",
+      "all required source-complete A/B/C transaction steps pass atomically",
+      "at least one finite positive certified/base correction stream remains",
+      "at least one finite corrected rover pseudorange factor remains",
+      "per-signal and global factor/stream conservation passes",
+      "existing C7/D/CCDD/position/velocity alignment and graph gates pass",
+      "no unclassified row, partial mutation, duplicate correction, fallback, repair, or extrapolation"
+    ],
+    "certified_glonass_zero": {
+      "allowed": true,
+      "condition": "remaining non-GLONASS streams/factors satisfy all existing finite, exact, and graph gates",
+      "meaning": "zero certified GLO is an explicit telemetry result, never permission to retain raw GLO rows"
+    },
+    "empty_route": "If all rows/streams are removed, no finite source stream exists, or no finite graph code factor remains, fail closed before solver launch.",
+    "all_glo_only_route": "If the route depends only on uncertified GLONASS rows, fail closed before solver launch.",
+    "minimum_threshold_source": "Existing structural gates only; no new accuracy threshold, sigma, LM, or factor-count tuning is introduced."
+  },
+  "required_telemetry": {
+    "dimensions": [
+      "route",
+      "side: rover|base",
+      "stage: GNSS-first|main",
+      "constellation",
+      "signal"
+    ],
+    "provenance_counts": [
+      "original eligible GLONASS rows",
+      "header-primary certified rows",
+      "broadcast-geph certified rows",
+      "missing FCN",
+      "invalid/nonintegral/out-of-range FCN",
+      "query-time coverage gap",
+      "header malformed/conflict",
+      "geph missing/invalid",
+      "different-FCN tie",
+      "header/geph mismatch",
+      "canonical record failure",
+      "nonfinite wavelength"
+    ],
+    "correction_counts": [
+      "exact stream matched",
+      "missing exact stream",
+      "in-domain corrected",
+      "out-of-domain",
+      "nonfinite correction/subtraction",
+      "retained corrected factors",
+      "base finite stream samples"
+    ],
+    "transaction_counts": [
+      "Phase126 atomic A/B/C completion",
+      "source model build count",
+      "correction application pass count",
+      "exactly-once marker",
+      "duplicate application rejection",
+      "raw fallback count",
+      "zero fallback count",
+      "per-signal conservation",
+      "global conservation"
+    ],
+    "structural_gates": [
+      "GNSS-first/main accepted iterations",
+      "finite strict cost decrease",
+      "C7/D/CCDD exact/full/finite alignment",
+      "finite output coverage",
+      "solver branch and return code"
+    ],
+    "conservation_identity": "original = retained_corrected + explicit_provenance_miss + missing_stream + out_of_domain + nonfinite",
+    "pre_admission_rows": "Rows rejected by invalid raw data or unavailable source state are counted in separate typed pre-admission buckets and never silently omitted from the denominator.",
+    "forbidden_output": [
+      "solution coordinates",
+      "truth rows",
+      "accuracy values",
+      "raw payload samples"
+    ]
+  },
+  "fixed_invariants": [
+    "Phase126 raw-base source-complete equations, station/reference rules, Sagnac, atmosphere, smoothing, interpolation, and exactly-once correction remain unchanged",
+    "Phase111 exact-key finite in-domain correction and conservation semantics remain unchanged",
+    "C7/D/CCDD topology, units, initialization, exact-key handoff, and coverage remain unchanged",
+    "GNSS/Doppler/carrier/TDCP/IMU factor families and factor equations remain unchanged",
+    "MULTIFRONTAL_QR, ordering, whitening, sigma, Huber, filters, LM schedule, and iteration limits remain unchanged",
+    "Pixel5 offset, timestamp/output alignment, solution opacity, truth separation, and legacy/default behavior remain unchanged",
+    "No raw/truth/MAT/PDC/precomputed coordinate/base-table/Kaggle input is introduced"
+  ],
+  "source_evidence": [
+    {
+      "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+      "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "lines": "5-6,26-34",
+      "claim": "sameSat common-satellite intersection and linear interpolation without extrapolation"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "72-78,123-149",
+      "claim": "per-frequency correction and finite resPc/resD factor gates"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "85-92,189-221",
+      "claim": "same local code/Doppler admission in the IMU graph"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "lines": "91-95,158-195,254-315",
+      "claim": "official raw-frequency mapping and field/row materialization; no RINEX FCN global gate"
+    },
+    {
+      "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+      "sha256": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
+      "lines": "53-181",
+      "claim": "exact stream, finite in-domain correction, local drop, and conservation"
+    },
+    {
+      "path": "src/algorithms/base_pseudorange_compensation.cpp",
+      "sha256": "03459df5505a5e32e4ee356126a30742c693f32fe0d6eccc3bfc243c7fe4cca4",
+      "lines": "244-368,369-487,490-535,538-576",
+      "claim": "current source-complete GLO provenance global abort, global integrity gates, exact streams and interpolation"
+    },
+    {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "f3f86db94c8cf3f43e25d402e21b5d3f95d9259435e559fbe76e7564af6c3d55",
+      "lines": "489-529",
+      "claim": "existing query-time and row-local provenance continue"
+    },
+    {
+      "path": "src/algorithms/fgo_internal.hpp",
+      "sha256": "f3980a5190ef1cc59aa479665c7ccbe6fe4ec0096e0aef1aa3eb451b53241acb",
+      "lines": "674-710,785-795",
+      "claim": "carrier preparation local skip and finite wavelength admission"
+    },
+    {
+      "path": "src/algorithms/phase127_glonass_channel_provenance.cpp",
+      "sha256": "cc8e3105abc8367786b089e8d0492f8217550f0a69473869ae8a89cc01941bb0",
+      "lines": "69-246",
+      "claim": "exact-time header/geph FCN resolver and typed rejection reasons"
+    },
+    {
+      "path": "src/algorithms/phase128_glonass_provenance.cpp",
+      "sha256": "5d930d8be16c70c4956de41822160c0c44c1e2761f893a9a491cb9d1a076bbc7",
+      "lines": "37-82",
+      "claim": "canonical record admission around Phase127"
+    },
+    {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "898b979c51d8fa4ec98432a3f2aeb8a99ff2603689e8cbe396aecad501985138",
+      "lines": "8362-8369,8371-8451,8771-8776",
+      "claim": "app-global Phase127 guards and shared local miss-mask application"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_phase111_common_satellite_miss_mask_parity_freeze_v1.json",
+      "sha256": "176cc4411cb53262b638feffb0ff41cb231139644d7ce618cf94e7c6150d241e",
+      "lines": "classification, source_parity, candidate",
+      "claim": "sealed exact-miss taxonomy and no raw/zero fallback"
+    },
+    {
+      "path": "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_result_v1.json",
+      "sha256": "071fd33634ccdd3060d286f166d0b0d79f72b8dfbcbe87c31a03e372734cc39b",
+      "lines": "candidate, inventory_contract, routes, read_accounting",
+      "claim": "historical Phase128 route-level full-FCN preflight failed closed with zero solver launches"
+    }
+  ],
+  "implementation_and_test_plan": {
+    "implementation_authorized": false,
+    "planned_change_type": "one default-off provenance/local-miss adapter; no solver or factor change",
+    "planned_files": [
+      "include/libgnss++/algorithms/phase129_glonass_local_miss_admission.hpp",
+      "src/algorithms/phase129_glonass_local_miss_admission.cpp",
+      "existing base model/app admission boundary only",
+      "focused synthetic tests and launch-free validator metadata"
+    ],
+    "focused_tests": [
+      "mixed GPS/GAL plus certified and uncertified GLO rows retain non-GLO/certified-GLO and locally drop uncertified-GLO",
+      "header/geph match, header-only prohibited, missing FCN, invalid/range FCN, query gap, mismatch, malformed, and different-FCN tie reasons",
+      "certified wavelength finite-positive requirement with no carrier-frequency/fixed/zero inference",
+      "missing exact stream, out-of-domain correction, and nonfinite subtraction local drops",
+      "base-side and rover-side per-signal/global conservation",
+      "zero certified GLO allowed only with sufficient non-GLO population",
+      "all-row/empty-stream/all-GLO-uncertified route fails closed before solver",
+      "Phase126 global state/geometry/atmosphere/interval failures remain global",
+      "selector-off legacy observation/factor/config regression and no fallback"
+    ],
+    "required_pre_raw_artifacts": [
+      "implementation commit and source hash",
+      "launch-free contract/manifest/validator",
+      "pre-raw read-accounting seal",
+      "target binary hash",
+      "independent authorization pinning all source/runner/manifest/binary/route hashes"
+    ],
+    "future_route_policy": "After a new authorization only, materialize and inventory each selected route once; emit opaque structural result; do not read truth or publish solution rows. Any failed gate is a sealed NO-GO with no rerun/fallback."
+  },
+  "read_accounting": {
+    "this_audit": {
+      "official_native_source_text_reads": "nonzero_source_only",
+      "sealed_phase111_126_127_128_metadata_reads": "nonzero_aggregate_lineage_only",
+      "ignored_raw_derived_metadata_reads": 0,
+      "raw_phone_gnss_payload_reads": 0,
+      "raw_phone_imu_payload_reads": 0,
+      "broadcast_navigation_payload_reads": 0,
+      "raw_base_rinex_payload_header_stat_hash_reads": 0,
+      "solution_rows_opened_or_interpreted": 0,
+      "truth_payload_reads": 0,
+      "mat_reads_or_generated": 0,
+      "pdc_reads": 0,
+      "precomputed_coordinate_or_correction_reads": 0,
+      "native_solver_invocations": 0,
+      "accuracy_calculations": 0,
+      "kaggle_or_token_access": 0,
+      "raw_content_copied_or_transformed": false,
+      "reruns": 0,
+      "fallbacks_or_repairs": 0
+    },
+    "authorization_boundary": {
+      "implementation": false,
+      "raw_materialization": false,
+      "solver": false,
+      "truth": false,
+      "accuracy": false,
+      "solution_publication": false,
+      "kaggle": false,
+      "next_allowed_action": "read-only implementation review and synthetic tests only"
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "schema_version": "smartphone-r5-phase68-base-matching-taxonomy-manifest.v1",
+  "phase": 68,
+  "status": "sealed-before-phase68-raw-base-read",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase68_base_matching_taxonomy_freeze_v1.json",
+    "sha256": "f409f7038add71cd0a41df9278fc99651d637dd3697c10913c9da1fbb8c53b43"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase68_base_matching_taxonomy.py",
+    "sha256": "1374bc1bd2863b99b4488121c240d74fea541dae623ecb73cb982cff582755c5",
+    "single_process": true,
+    "truth_free": true,
+    "raw_base_read_only_after_seal": true,
+    "atomic_outputs": true
+  },
+  "source_pins": {
+    "phase65_commit": "f8cdf3b",
+    "phase65_runner_sha256": "6be7dd346a1ff219c15036fcf194861ebeda700678d52e3d93b2f3c2b96a16ae",
+    "android_loader_sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+    "rinex_loader_sha256": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533",
+    "signal_policy_sha256": "d3f8edbdd785f0292c2b8a1596248c00a2b5e9284c09de439e5c7340c1dbca99"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "diagnostics": {
+    "classification": [
+      "exact_signal_in_domain",
+      "same_frequency_variant_in_domain",
+      "out_of_domain_time",
+      "missing_frequency_stream",
+      "missing_satellite_stream"
+    ],
+    "duplicate_definition": "same base epoch, satellite and canonical frequency has at least two finite code observations; report only",
+    "proxy_disclaimer": "source-filtered raw/base populations are diagnostic proxies and are not asserted equal to native adopted FGO factors",
+    "no_gate_relaxation": true,
+    "no_canonicalization_or_interpolation": true
+  },
+  "read_accounting": {
+    "single_process": true,
+    "raw_device_gnss_reads": 4,
+    "base_rinex_reads": 4,
+    "nav_reads": 0,
+    "imu_reads": 0,
+    "solver_invocations": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "archive_reopens": 0,
+    "old_phase65_or_phase66_output_reuse": false
+  },
+  "forbidden_inputs": [
+    "ground_truth.csv",
+    "MAT/MATLAB products",
+    "navigation and IMU",
+    "validation/holdout/Kaggle/token data",
+    "solver and prior Phase65/Phase66 outputs"
+  ],
+  "result": null,
+  "all_gates_passed": null
+}

@@ -1,0 +1,28 @@
+{
+  "phase": 309,
+  "implementation_head": "d6207f77",
+  "binary": "build/native_base_correction_inventory",
+  "binary_sha256": "985be4a6aadc225e6d1702d58ba71b008a8371b637abbcb7c91e9104f4e6b69e",
+  "source": "scripts/native_base_correction_inventory.cpp",
+  "source_sha256": "32b85b81e317bec19dfa6770ac0e78d98b43657b718b402ea04c5e03bf28e8b7",
+  "raw_base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "raw_base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "preserve_additional_frequency_bands": true,
+  "raw_reads": "one hash scan per input, one native pass per input",
+  "output": "aggregate counts only",
+  "solver_calls": 0,
+  "truth_reads": 0,
+  "completion_gate": "native epoch count equals independent epoch-marker count; investigate rather than treating early EOF as completion",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "expected_epochs": 3500,
+  "mode": "source",
+  "station_reference": "raw header approximate XYZ; exact zero antenna delta required; not station-table parity",
+  "moving_mean_samples": 151,
+  "expected_interval_s": 1,
+  "atmosphere": true,
+  "extra_argv": [
+    "source-slots"
+  ],
+  "source_fgo_frequency_slots": true
+}

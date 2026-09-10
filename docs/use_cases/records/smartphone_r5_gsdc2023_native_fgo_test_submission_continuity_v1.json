@@ -1,0 +1,167 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-continuity-record.v1",
+  "status": "completed-truth-free-continuity-recovery",
+  "purpose": "Apply the frozen physical-continuity rule to v3 source artifacts without FGO/WLS rerun or sample-coordinate use.",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_freeze_v1.json",
+      "sha256": "d622c6662b3244254b03b565f56f989ba33d565e58046d50e88b2696513234c1"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_freeze_v1_manifest.json",
+      "sha256": "e668c4204f22fb01a7044b1fdc6ebba2f51159fec8e56dd7409caec9610523a3"
+    },
+    "sealed_before_generation": true
+  },
+  "inputs": {
+    "v3_submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.csv",
+      "sha256": "8581cf40a4e8ae81448df4e87b381431dce4c290b6b738fc5e6b9c03c3c41a29"
+    },
+    "v3_submission_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.manifest.json",
+      "sha256": "4f68714fd8783b9c2a588c8a1b7097fac872bf09ae5f13a17dc4d6eeb17c2778"
+    },
+    "v3_position_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/position_recovery_manifest.json",
+      "sha256": "716a2c331cf588983182c098b3bed26e3a9cdab9929f196ec39b9b1ee3ae28dd"
+    },
+    "v3_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/recovery_run_manifest.json",
+      "sha256": "635569e5b978d96f3f20df7fb8e06b9dee326dc9dbf3bca42b812e4a62e7c5ed"
+    },
+    "sample_key_order": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "coordinates_read": false,
+      "role": "key/order/schema authority only"
+    }
+  },
+  "algorithm": {
+    "continuity_script": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_continuity.py",
+      "sha256": "fdfaaa5f5a448d7e6ac2077c2b86c44f42d6018d84a17a8917c5e88fe48e15f0"
+    },
+    "release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+    },
+    "maximum_speed_mps": 70.0,
+    "interpolation_window_ms": 2500,
+    "speed_metric": "ECEF Euclidean displacement / elapsed seconds",
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "interior_only": true,
+    "timestamp_weighted_ecef_interpolation": true,
+    "adjacent_candidate_spikes_fail_closed": true,
+    "fgo_wls_rerun": false,
+    "numeric_parameter_change": false
+  },
+  "source_counts": {
+    "v3_baseline": {
+      "native_fgo_exact": 61261,
+      "wls_exact": 8587,
+      "prior_wls_exact": 2062,
+      "same_trip_ecef_interpolation": 1,
+      "same_trip_edge_hold": 25
+    },
+    "continuity_output": {
+      "native_fgo_exact": 61256,
+      "wls_exact": 8584,
+      "prior_wls_exact": 2061,
+      "same_trip_ecef_interpolation": 1,
+      "same_trip_edge_hold": 25,
+      "continuity_ecef_interpolation": 9
+    },
+    "continuity_replacements_by_original_source": {
+      "native_fgo_exact": 5,
+      "wls_exact": 3,
+      "prior_wls_exact": 1
+    }
+  },
+  "diagnosis_of_v3_607_mps_event": {
+    "trip_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+    "candidate_timestamp_ms": 1645656530438,
+    "candidate_source": "native_fgo_exact",
+    "previous_source": "prior_wls_exact",
+    "following_source": "native_fgo_exact",
+    "previous_to_candidate_speed_mps": 606.0351772746234,
+    "candidate_to_following_speed_mps": 37.3529415154502,
+    "direct_neighbor_speed_mps": 308.9480111333876,
+    "original_v3_geodetic_audit": {
+      "previous_to_candidate_speed_mps": 607.4061357906412,
+      "candidate_to_following_speed_mps": 13.095660415898703,
+      "direct_neighbor_speed_mps": 310.07288355221584,
+      "metric": "great-circle distance / elapsed seconds"
+    },
+    "previous_gap_ms": 1000,
+    "following_gap_ms": 1000,
+    "source_seam": true,
+    "isolated_two_sided_spike": false,
+    "replaced": false,
+    "reason": "The following incident edge is below 70 m/s and the direct neighbor edge exceeds 70 m/s; the generic replacement condition is not satisfied."
+  },
+  "physical_continuity": {
+    "routes": 40,
+    "candidate_spike_points_before": 14,
+    "repaired_points": 9,
+    "blocked_adjacent_candidate_points": 5,
+    "adjacent_candidate_pairs": 4,
+    "isolated_two_sided_spike_points_after": 0,
+    "sequential_candidate_points_after": 5,
+    "speed_above_bound_edges_before": 37,
+    "speed_above_bound_edges_after": 19,
+    "one_sided_violation_points_before": 46,
+    "one_sided_violation_points_after": 28,
+    "event_607_mps_changed": false
+  },
+  "verification": {
+    "submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/submission.csv",
+      "sha256": "64b85bd5946ad33d77e522bf7456d5dc0c4e4870cd7b65756faedd9f18ca1af8",
+      "bytes": 6150020
+    },
+    "continuity_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_manifest.json",
+      "sha256": "e2c309d200d4cecca26fcf59e721b7d43349db192a4be25e90b27cab8f535bd3"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v4-continuity-recovered/continuity_run_manifest.json",
+      "sha256": "2345909b4e237791a713a2c845be8718f5b49dfcbf91d6cde2bd9e9f1d52622d"
+    },
+    "header_exact": true,
+    "key_order_exact": true,
+    "row_count": 71936,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_coordinate_fallback_rows": 0,
+    "known_dummy_rows": 0,
+    "out_of_earth_rows": 0,
+    "isolated_two_sided_spike_points": 0,
+    "byte_identical_to_v3": false,
+    "atomic_publish": true
+  },
+  "truth_policy": {
+    "ground_truth_members_read": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "holdout_or_test_truth_used": false
+  },
+  "publication_policy": {
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false,
+    "no_post_generation_tuning": true
+  },
+  "timing": {
+    "wall_seconds": 16.93278837300022,
+    "peak_rss_bytes": null
+  },
+  "reproduction": {
+    "command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_continuity.py",
+    "focused_tests": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 -m unittest -v tests/test_smartphone_native_fgo_test_submission_continuity.py"
+  }
+}

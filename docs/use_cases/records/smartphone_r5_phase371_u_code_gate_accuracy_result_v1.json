@@ -1,0 +1,48 @@
+{
+  "route": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+  "candidate": {
+    "path": "output/smartphone-r5/phase369-u-code-gate-v1/mtv-u/opaque_solution_output.csv",
+    "sha256": "04d9da18626cde4dddd7d561de35ac0b48a094bd4abe74a0d3fb53c39a2d1785",
+    "bytes": 88214,
+    "rows": 1102,
+    "read_count": 1
+  },
+  "truth": {
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2023-03-08-21-34-us-ca-mtv-u/pixel5/ground_truth.csv",
+    "sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+    "bytes": 108045,
+    "rows": 1102,
+    "read_count": 1
+  },
+  "metric": {
+    "p50_m": 1.0315951582117595,
+    "p95_m": 1.518388422177751,
+    "route_score_m": 1.2749917901947554,
+    "matched_rows": 1102,
+    "prediction_domain_coverage": 1.0,
+    "truth_domain_coverage": 1.0,
+    "over_70_mps_count": 0,
+    "finite": true
+  },
+  "gates": {
+    "candidate_exact_alignment": true,
+    "candidate_prediction_domain_exact": true,
+    "truth_domain_exact": true,
+    "candidate_all_finite_and_earth_valid": true,
+    "velocity_gate_over_70_mps_zero": true,
+    "route_score_finite": true,
+    "strict_route_score_less_than_0_782_m": false
+  },
+  "read_accounting": {
+    "candidate_payload_reads": 1,
+    "truth_payload_reads": 1,
+    "score_calculations": 1,
+    "interpolated_epochs": 0,
+    "edge_hold_epochs": 0,
+    "pixel5_offset_reapplications": 0
+  },
+  "phase": 371,
+  "role": "development/train; not heldout or leaderboard proof",
+  "baseline_m": 1.305940315797287,
+  "delta_m": -0.030948525602531696
+}

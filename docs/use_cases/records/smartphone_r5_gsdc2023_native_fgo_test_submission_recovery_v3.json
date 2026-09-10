@@ -1,0 +1,172 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-test-submission-recovery-record.v3",
+  "status": "completed-truth-free-coordinate-recovery",
+  "purpose": "Replace the v2 official-sample coordinate fallbacks using only hash-pinned native-FGO and prior truth-free WLS positions.",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_freeze_v3.json",
+      "sha256": "d5da44973b264c720141b1978a033fba930c03492501fa0c88eefe2bf745bad2"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_recovery_freeze_v3_manifest.json",
+      "sha256": "8d7ba67cb57d3985c2fd94b3a4c0ca8504c4855c40904cd5d080abebf80cca9d"
+    },
+    "sealed_before_generation": true,
+    "source_hash_correction": "The freeze manifest recovery-script entry was corrected to the already sealed source hash; no algorithm, parameter, or output bytes changed."
+  },
+  "inputs": {
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "inventory": {
+      "path": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+      "sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495"
+    },
+    "official_sample_key_order": {
+      "path": "data/gsdc2023/sample_submission.csv",
+      "sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+      "header": [
+        "tripId",
+        "UnixTimeMillis",
+        "LatitudeDegrees",
+        "LongitudeDegrees"
+      ],
+      "row_count": 71936,
+      "coordinates_read": false,
+      "coordinates_used": false,
+      "role": "key/order/schema authority only"
+    },
+    "v2_native_fgo_run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v2/test_batch_run_manifest.json",
+      "sha256": "0808082ed8c81d24e5b5403812cca50651d493f39ea2c70ff6a91b6df556518c"
+    },
+    "prior_truth_free_wls_run_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-derived-unverified-v1/test_batch_derived_run_manifest.json",
+      "sha256": "a89c5c3ac816289b6c6e5958d77fbc034f601869c3e64bd5191d87808fe74822"
+    },
+    "prior_reconciliation_manifest": {
+      "path": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_reconciliation_v2_manifest.json",
+      "sha256": "9b611f1920bb48597eac518cf9f4a8e26f54f3719598ff9aaebea4839caa703a"
+    }
+  },
+  "algorithm": {
+    "parameter_hash": "4633bfd3a86cf34ebd86820ed59ee7192b3cbf23fc75ce9e72fc1f2c88fb39f6",
+    "core_hash": "e27eb31f4fcb597a1c5b392d8b558f429b25cd5c5a4b39b6474491209649f7b1",
+    "recovery_source_sha256": "f7e5499d2bf7e18c833fb181d7b57ebfee5a9b71b0e8c15ad1aa36cd2e8b6329",
+    "fgo_wls_rerun": false,
+    "numeric_parameter_change": false,
+    "source_artifacts_only": true,
+    "priority": [
+      "native_fgo_exact",
+      "wls_exact",
+      "prior_wls_exact",
+      "same_trip_ecef_interpolation",
+      "same_trip_edge_hold"
+    ],
+    "max_interpolation_gap_ms": 2500,
+    "max_edge_hold_gap_ms": 2500,
+    "same_trip_only": true,
+    "cross_trip_interpolation": false,
+    "edge_velocity_extrapolation": false,
+    "unresolved_policy": "fail-closed",
+    "release_binary": {
+      "path": "build/apps/gnss_fgo",
+      "sha256": "5e1e22979a84b938352a2096e570bb1587d6eba7ebb0757431a8ebd9423b525f"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    }
+  },
+  "source_counts": {
+    "native_fgo_exact": 61261,
+    "wls_exact": 8587,
+    "prior_wls_exact": 2062,
+    "same_trip_ecef_interpolation": 1,
+    "same_trip_edge_hold": 25,
+    "sample_coordinate_fallback": 0
+  },
+  "reconstructed_prior_wls_fallbacks": {
+    "expected_count": 24,
+    "reconstructed_count": 24,
+    "all_recovered_without_sample_coordinates": true
+  },
+  "verification": {
+    "submission": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.csv",
+      "sha256": "8581cf40a4e8ae81448df4e87b381431dce4c290b6b738fc5e6b9c03c3c41a29",
+      "bytes": 6150020
+    },
+    "submission_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/submission.manifest.json",
+      "sha256": "4f68714fd8783b9c2a588c8a1b7097fac872bf09ae5f13a17dc4d6eeb17c2778"
+    },
+    "position_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/position_recovery_manifest.json",
+      "sha256": "716a2c331cf588983182c098b3bed26e3a9cdab9929f196ec39b9b1ee3ae28dd"
+    },
+    "run_manifest": {
+      "path": "output/smartphone-r5/native-fgo-test-v3-recovered/recovery_run_manifest.json",
+      "sha256": "635569e5b978d96f3f20df7fb8e06b9dee326dc9dbf3bca42b812e4a62e7c5ed"
+    },
+    "header_exact": true,
+    "key_order_exact": true,
+    "row_count": 71936,
+    "duplicate_keys": 0,
+    "missing_keys": 0,
+    "extra_keys": 0,
+    "nonfinite_coordinates": 0,
+    "sample_coordinate_fallback_rows": 0,
+    "known_dummy_rows": 0,
+    "out_of_earth_source_rows": 0,
+    "official_sample_coordinates_compared": false,
+    "atomic_publish": true
+  },
+  "quality_diagnostics": {
+    "coordinate_domain": "finite latitude/longitude and sealed ECEF norm 6000000..7000000 m",
+    "out_of_earth_source_rows": 0,
+    "known_dummy": {
+      "latitude_degrees": 34.640195,
+      "longitude_degrees": -120.589642,
+      "implausibly_far_route_guard_m": 10000,
+      "emitted_rows": 0
+    },
+    "physical_jump_audit": {
+      "type": "diagnostic-only consecutive same-trip speed check",
+      "threshold_mps": 300.0,
+      "flagged_steps": 1,
+      "maximum_mps": 607.4061357906412,
+      "maximum_step": {
+        "trip_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+        "from_unix_time_millis": 1645656529438,
+        "to_unix_time_millis": 1645656530438,
+        "delta_millis": 1000,
+        "distance_m": 607.4061357906412
+      },
+      "policy": "flagged for audit; no source selection, interpolation, or numeric tuning was performed after generation"
+    }
+  },
+  "truth_policy": {
+    "ground_truth_members_read": false,
+    "truth_materialized_count": 0,
+    "truth_open_count": 0,
+    "holdout_or_test_truth_used": false
+  },
+  "publication_policy": {
+    "development_only": true,
+    "kaggle_external_submission": false,
+    "token_access": false,
+    "production_rtk_spp_default_changed": false,
+    "no_post_recovery_tuning": true
+  },
+  "timing": {
+    "recovery_wall_seconds": 19.14693976001581,
+    "peak_rss_bytes": null
+  },
+  "reproduction": {
+    "command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_recovery.py",
+    "verification_command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 -c 'import gnss_smartphone_native_fgo_test_submission_recovery as r; s=r._read_sample_keys(r.DEFAULT_SAMPLE); print(r._verify_submission(r.DEFAULT_OUTPUT / \"submission.csv\", s))'",
+    "regeneration_policy": "The sealed output is content-addressed and the recovery command refuses to overwrite an existing submission.csv."
+  }
+}

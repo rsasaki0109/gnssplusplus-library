@@ -1,0 +1,38 @@
+{
+  "schema_version": "smartphone-r5-phase64-base-preflight-policy-recovery-manifest.v1",
+  "status": "sealed-before-phase64-result-read",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_freeze_v1.json",
+  "freeze_record_sha256": "94487186338d85d289c64d04805254f95568020664e37d4402f1f9b238aee993",
+  "evaluator_source": "apps/commands/benchmarks/gnss_smartphone_phase64_base_preflight_policy_recovery.py",
+  "evaluator_source_sha256": "6dc9681b878dcf23c3f56950b6ed12aa291270772936bcd88848aac230094f0f",
+  "phase63_result": "docs/use_cases/records/smartphone_r5_phase63_settings_integrity_recovery_result_v1.json",
+  "phase63_result_sha256": "d6dc56c00c89ddd4e38624bbfe36567a76632aecae3f3f87f529ab0c8f93799b",
+  "archive_reopen_count": 0,
+  "base_file_reread_count": 0,
+  "route_order": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "read_contract": {
+    "phase64_result_json_read_count": 1,
+    "phase64_archive_open_count": 0,
+    "phase64_base_file_reread_count": 0,
+    "phase64_raw_device_read_count": 0,
+    "phase64_truth_read_count": 0,
+    "phase64_mat_read_count": 0,
+    "phase64_nav_read_count": 0,
+    "phase64_solver_invocation_count": 0,
+    "phase63_result_is_immutable": true
+  },
+  "recovery_scope": {
+    "input": "Phase63 sealed result JSON and recorded materialized base SHA/bytes/metrics only",
+    "Base1": "settings Base1 + unique *_rnx2.obs basename",
+    "dt": "observed epoch median interval exactly 1.0 or 15.0 s",
+    "station": "finite APPROX POSITION XYZ; MARKER NAME informational",
+    "no_accuracy": true,
+    "no_reopen": true
+  }
+}

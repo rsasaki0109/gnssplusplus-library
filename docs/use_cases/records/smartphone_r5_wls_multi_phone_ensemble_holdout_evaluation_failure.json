@@ -1,0 +1,78 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-evaluation-record.v1",
+  "status": "sealed-failed-after-device-materialization-before-wls",
+  "sealed_at": "2026-08-30",
+  "scope": "single sealed multi-phone WLS ensemble holdout evaluation",
+  "freeze": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze.json",
+      "sha256": "3b12264c321c47f5dca01923b3f40fd02a7eddea60610ccfd344587fd76dbf33"
+    },
+    "manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze_manifest.json",
+      "sha256": "bd2bf1cc4fee77a02b8116a9b9b064f0c0b1fafd6ef11ac6f6b0c6cadd8588e3"
+    },
+    "source_binary_archive_profile_hashes_verified": true,
+    "post_freeze_code_or_parameter_change": false,
+    "no_post_holdout_tuning": true
+  },
+  "selection": {
+    "record": {
+      "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+      "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+    },
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "route": "2022-10-06-21-51-us-ca-mtv-n",
+    "phones": ["sm-a205u", "sm-a217m", "sm-a325f"]
+  },
+  "preflight": {
+    "fixture_passed": true,
+    "central_metadata_verified": true,
+    "holdout_materialized_before_freeze": false,
+    "holdout_truth_opened_before_freeze": false,
+    "truth_open_count_before_freeze": 0
+  },
+  "holdout_access": {
+    "device_materialized_after_freeze": true,
+    "device_materialized_count": 3,
+    "device_artifacts": {
+      "sm-a205u": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a205u/device_gnss.csv",
+        "sha256": "a158d7c9327c6a039816ccb156820bc0785244d6a12011428d85f5262725a46e"
+      },
+      "sm-a217m": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a217m/device_gnss.csv",
+        "sha256": "ee6f9645d0af045e9b4270405700c377b650e62c4b4b9214c86df3323e4756e5"
+      },
+      "sm-a325f": {
+        "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/2022-10-06-21-51-us-ca-mtv-n/inputs/sm-a325f/device_gnss.csv",
+        "sha256": "376e2d0dd3dc62e568e89706a8cd9bab5a14fa4366555d63ba33c0e08917f557"
+      }
+    },
+    "truth_open_count": 0,
+    "ground_truth_materialized": false,
+    "wls_completed": false,
+    "median_completed": false,
+    "submission_completed": false
+  },
+  "failure": {
+    "artifact": {
+      "path": "output/smartphone-r5/wls-multi-phone-ensemble-holdout-v1/wls_multi_phone_ensemble_holdout_failure.json",
+      "sha256": "992fc403d6961c853e94f7f6c2a687c80b26fe36db293fa29c58615dd5871abc"
+    },
+    "error": "WLS lane is development-only; holdout is sealed",
+    "cause": "existing WLS extraction helper rejects the holdout role after device materialization",
+    "change_after_freeze": false,
+    "rerun_or_recovery_permitted": false
+  },
+  "decision": {
+    "promotion": "no-go-holdout-orchestration-guard",
+    "full_submission_integration_candidate": false,
+    "development_validation_lane_preserved": true,
+    "production_rtk_spp_default_changed": false,
+    "post_holdout_tuning": false,
+    "holdout_run_reexecuted": false
+  },
+  "source_of_truth": "sealed failure artifact and freeze hashes; no truth payload was opened"
+}

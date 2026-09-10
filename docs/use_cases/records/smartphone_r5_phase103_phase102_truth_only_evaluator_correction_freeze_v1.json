@@ -1,0 +1,111 @@
+{
+  "schema_version": "smartphone-r5-phase103-phase102-truth-only-evaluator-correction-freeze.v1",
+  "phase": 103,
+  "status": "frozen-before-phase103-truth-only-evaluation",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Correct only the Phase102 evaluator's optional-summary-field contract over its already sealed raw-only candidate outputs, then perform one isolated truth-only evaluation per route without native rerun.",
+  "authority": {
+    "audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase103_phase102_truth_only_evaluator_correction_audit_v1.md",
+      "commit": "ce8f513",
+      "sha256": "c8ecf7582832eadd818bee18eb1e075b50361cf45e355500ad5896fc4884df06"
+    },
+    "phase102_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_result_v1.json",
+      "commit": "811af21",
+      "sha256": "d4fcd2246407ad22f75dbf528ef0bbc41c391af341df66f8958b2eff0c48ada2",
+      "status": "no-go-phase102-epoch-clock-vector-accuracy-gates",
+      "native_runs_completed": 2,
+      "truth_reads": 0,
+      "accuracy_scored": false
+    },
+    "phase102_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+      "commit": "2c86aa9",
+      "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1"
+    },
+    "phase102_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy.py",
+      "commit": "4a45c12",
+      "sha256": "576ebf9749d1f295737bd82716275a20eb30a5aeeff3fc3828de10960c2255d8"
+    },
+    "phase102_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_manifest_v1.json",
+      "commit": "4a45c12",
+      "sha256": "3b7b5dc48d6a172dda21c5d27bd4d8b92a64347615768ab87d4716ca17d81cd9"
+    },
+    "phase102_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_raw_evaluation_authorization_v1.json",
+      "commit": "ef71224",
+      "sha256": "403b8feb245786180a12c0430de9a797e1c5c2c5355f1c75c79b11546ddce583"
+    },
+    "phase101_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "commit": "59a60fb",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a"
+    }
+  },
+  "correction": {
+    "candidate_count": 1,
+    "id": "phase103-phase102-truth-only-evaluator-correction-v1",
+    "native_candidate_source": "immutable Phase102 solution.csv and solution_metadata.json seals",
+    "native_solution_reuse": true,
+    "native_solver_invocations": 0,
+    "native_rerun": false,
+    "raw_byte_reads_by_correction": 0,
+    "phase102_solution_replacement": false,
+    "summary_optional_field_policy": "mat_used is optional; if present it must be false; if absent it remains absent and is not synthesized",
+    "lineage_policy": "verify frozen native command selector/forbidden tokens, raw input role/path lineage and wrapper accounting, solution seal metadata, and existing explicit no-base/no-PDC fields",
+    "no_algorithm_or_metric_change": true,
+    "no_fallback_or_rerun": true,
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "truth_reads_per_route": 1
+  },
+  "metric_and_gates": {
+    "source_freeze": "Phase102 freeze 2c86aa9",
+    "metric_unchanged": true,
+    "alignment_unchanged": true,
+    "phase82_same_route_and_phase100_qr_scalar_clock_baselines": true,
+    "strict_macro_gate_m": 0.782,
+    "strict_macro_gate_is_and_gate": true,
+    "promotion_on_failure": "no-go; preserve immutable Phase102 outputs and correction result; no rerun",
+    "solution_publication": false,
+    "kaggle_submission": false
+  },
+  "truth_evaluator_boundary": {
+    "evaluator_process_count": 1,
+    "truth_open_after_solution_seal": true,
+    "truth_open_after_phase102_native_exit": true,
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "native_after_truth": false,
+    "truth_path_or_bytes_in_native": false,
+    "solution_rows_in_result": false
+  },
+  "read_accounting": {
+    "audit_raw_reads": 0,
+    "audit_truth_reads": 0,
+    "correction_native_solver_invocations": 0,
+    "planned_truth_reads": 2,
+    "planned_accuracy_calculations": 2,
+    "mat_base_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "release_boundary": {
+    "truth_only_authorized_before_freeze": false,
+    "solution_publication_authorized": false,
+    "validation_authorized": false,
+    "kaggle_submission_authorized": false,
+    "required_next_artifacts": [
+      "Phase103 correction evaluator and focused tests",
+      "independent Phase103 truth-only authorization",
+      "Phase103 sealed correction evaluation result"
+    ]
+  }
+}

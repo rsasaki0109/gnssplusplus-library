@@ -180,6 +180,19 @@ struct PPPEnvOverrides {
     // GNSS_PPP_CLAS_MRTKLIB_FLOAT_PARITY: use the MRTKLIB-equivalent CLAS
     // float variance model unless set exactly to "0". Default true.
     bool clas_mrtklib_float_parity = true;
+    // GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS: held-continuation floor used only while a
+    // prior direct state-DD hold remains active and slip-valid. A candidate
+    // below MRTKLIB minamb=6 is publication-only: it cannot replace/apply
+    // hold constraints and advances the internal FLOAT lifecycle. Values
+    // 2..6 are accepted; invalid and unset values retain the validated
+    // four-row held continuation default. Set 6 explicitly as a kill switch.
+    int clas_ar_held_minimum_dd_rows = 4;
+    // GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK: maximum number of
+    // consecutive publication-only reduced-row FIX epochs authorized by the
+    // same still-valid full-row hold. Values 1..5 are accepted; invalid and
+    // unset values retain the validated five-epoch bound. Set 1 explicitly
+    // to recover the one-epoch bridge behavior.
+    int clas_ar_held_maximum_publication_streak = 5;
     // GNSS_PPP_CLAS_OUTAGE_RESET_PARITY: clear a satellite's per-frequency
     // outage counter (ambiguity.outage_count) as soon as this epoch's raw
     // observation for that frequency is usable, mirroring MRTKLIB's

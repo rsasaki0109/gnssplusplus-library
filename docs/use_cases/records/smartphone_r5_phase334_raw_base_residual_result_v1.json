@@ -1,0 +1,23 @@
+{
+  "phase": 334,
+  "freeze_commit": "a3fbb254",
+  "exit_code": 0,
+  "stderr_bytes": 0,
+  "base_epochs": 3500,
+  "fit_epochs": 3500,
+  "common_rows": 23564,
+  "rank_or_count_misses": 0,
+  "ionosphere_model_valid": true,
+  "modeled_l1_iono_median_m": 3.4380462586061737,
+  "modeled_trop_median_m": 3.3072850750580076,
+  "maximum_neutral_iono_cancellation_error_m": 7.105427357601002e-15,
+  "l1_displacement_norm_median_m": 2.9202065119665894,
+  "l5_displacement_norm_median_m": 3.329359866543525,
+  "neutral_combination_displacement_norm_median_m": 5.405936422322276,
+  "neutral_combination_post_fit_rms_median_m": 1.8357061715795677,
+  "dispersive_l1_equivalent_displacement_norm_median_m": 3.271483285537311,
+  "truth_reads": 0,
+  "phone_reads": 0,
+  "base_model_builds": 0,
+  "inference_feedback": false
+}

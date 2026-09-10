@@ -1,0 +1,85 @@
+{
+  "schema_version": "smartphone-r5-phase80-source-exact-direct-p-quality-structural-manifest.v1",
+  "phase": 80,
+  "status": "sealed-before-phase80-truth-free-structural-matrix",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+    "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+  },
+  "source_commit": "f28aebaf1b41df3ee5e363a8ad94987247321048",
+  "binary": {
+    "path": "build/apps/gnss_fgo_imu_no_base",
+    "sha256": "a9498b7aab4a1432af993cd1f3fe45873cf008cf165a6c245993ac77d0fe239c"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase80_direct_observable_quality_structural.py",
+    "sha256": "051333ae957a3faf82d6c2bacc44d98e98d262f61a049a9654b4717950ea2877"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase80_direct_observable_quality_structural.py",
+    "sha256": "a3b77009477098ea17050e9992026aac693194e44160ef4ef4116ff25e349387"
+  },
+  "cmake": {
+    "path": "tests/CMakeLists.txt",
+    "sha256": "044b733b1ec61fcdd3153992b107b5ce1389e36c8be71b4f9f6fba25ca2851e1"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "candidate": {
+    "flag": "--native-source-direct-observable-quality",
+    "phase78_flags_preserved": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-quality-anchor",
+      "--native-fallback-seed-quality-anchor-recovery",
+      "--native-signal-bias-states",
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex",
+      "--native-base-rinex-sha256",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "controls": 0,
+    "runs_per_route": 2,
+    "direct_no_pdc": true,
+    "preserve_additional_frequency_bands": false
+  },
+  "matrix": {
+    "candidate_runs_per_route": 2,
+    "control_runs_per_route": 0,
+    "candidate_runs_total": 8,
+    "native_invocations": 8,
+    "raw_device_gnss_reads": 8,
+    "raw_device_imu_reads": 8,
+    "broadcast_nav_reads": 8,
+    "base_rinex_reads": 8,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "new_output_root": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2"
+  },
+  "artifact_contract": {
+    "summary_artifact_key": "summary_artifact",
+    "summary_payload_key": "summary_payload",
+    "summary_key_collision_forbidden": true,
+    "unexpected_exception_failure_artifact": true,
+    "candidate_repeat_submission_and_summary_identity": true,
+    "direct_quality_object_and_count_identity": true,
+    "base_all_band_miss_mask_signal_bias_validation": true
+  },
+  "read_policy": {
+    "truth_before_matrix": 0,
+    "truth_in_matrix": 0,
+    "controls": 0,
+    "phase78_artifacts_provenance_only": true,
+    "phase78_result_reused_as_raw_input": false,
+    "solver_after_truth": false,
+    "forbidden_mat_wls_validation_holdout_kaggle": 0
+  }
+}

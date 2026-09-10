@@ -1,0 +1,18 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-float-carrier-freeze-manifest.v1",
+  "status": "sealed-before-new-materialization",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_float_carrier_freeze_v1.json",
+  "freeze_record_sha256": "ad0481e4833ed9299f3967dad4f30ea482ecf84f6f72ecd21978d09f84163b20",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "central_inventory_sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+  "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+  "truth_open_count_before_freeze": 0,
+  "new_payload_materialized_before_freeze": false,
+  "new_validation_materialized_before_freeze": false,
+  "new_holdout_materialized_before_freeze": false,
+  "strict_unused_three_way_split_available": false,
+  "candidate_algorithm_source_changed_after_freeze": false,
+  "candidate_parameters_changed_after_freeze": false,
+  "external_mutation": false,
+  "token_access": false
+}

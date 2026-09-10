@@ -1,0 +1,46 @@
+{
+  "schema_version": "smartphone-r5-wls-multi-phone-ensemble-holdout-freeze-manifest.v1",
+  "sealed": true,
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_holdout_freeze.json",
+    "sha256": "3b12264c321c47f5dca01923b3f40fd02a7eddea60610ccfd344587fd76dbf33"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_multi_phone_ensemble_selection.json",
+    "sha256": "374d652f6f772a2bc929cfeb22403e00b3abc0794445cc7880a070ad590e21c6"
+  },
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+  },
+  "inventory": {
+    "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7",
+    "central_directory_only": true,
+    "member_content_read": false
+  },
+  "release_binaries": {
+    "build/apps/gnss_spp": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "build/apps/gnss_solve": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+  },
+  "profile": {
+    "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+    "sha256": "d5add376f875f9b3f7b765c18e5946dfba6aae69f71869612b8ab757fbe4fce7"
+  },
+  "preflight": {
+    "fixture_passed": true,
+    "central_metadata_verified": true,
+    "holdout_device_materialized": false,
+    "holdout_truth_opened": false,
+    "truth_open_count": 0,
+    "post_freeze_code_or_parameter_change": false
+  },
+  "contract": {
+    "selected_method": "coordinate_wise_ecef_median",
+    "alignment_tolerance_ms": 1,
+    "minimum_aligned_phone_count": 1,
+    "official_diagnostic_count": 4,
+    "no_post_holdout_tuning": true,
+    "one_shot_truth_evaluation": true
+  }
+}

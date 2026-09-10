@@ -1,0 +1,109 @@
+{
+  "schema_version": "smartphone-r5-native-gnss-pdc-train-score-result.v1",
+  "status": "no-go-development-route",
+  "created_at_utc": "2026-08-31T06:20:00Z",
+  "candidate": {
+    "route_device": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "run_manifest": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/run_manifest.json",
+    "run_manifest_sha256": "32dd2cd0efae415dc26f2f50c880e07d5fc675b1f0e04ada29be7236af1006f5",
+    "keyed_output": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/keyed.csv",
+    "keyed_output_sha256": "16aff40056611a5404c29bfb63f1de506f78df6016480ff9b15cb69f3779fa3a",
+    "solver_rerun_after_seal": false,
+    "candidate_or_numeric_parameters_changed_after_seal": false
+  },
+  "truth_access": {
+    "path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "role": "development-train",
+    "fresh_validation_opened": false,
+    "holdout_opened": false,
+    "test_truth_opened": false,
+    "mat_open_count": 0,
+    "read_history": {
+      "strict_exact_evaluator_failed": 1,
+      "recovery_adapter_failed_before_final_result": 2,
+      "schema_diagnostic_reads_between_failures": 4,
+      "successful_recovery_score": 1,
+      "note": "The failures and diagnostic reads are disclosed; they were evaluation/schema recovery only. The file hash in every recovery path is identical. No truth value was passed to the solver or used for parameter selection."
+    }
+  },
+  "evaluation": {
+    "report": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/train_score_recovery.json",
+    "report_sha256": "b8d2b94a768d51b8366767d692c9a846deedc922451baadf3b858d2f3576cc5b",
+    "recovery_authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_recovery_v2.json",
+    "recovery_authorization_sha256": "038af6bc805537526c00f80e88a9d2e5489a53a4b521efb09e3d770244be6495",
+    "evaluator": "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc_eval.py",
+    "evaluator_sha256": "2992d29d4dd77c49e319b9b86bc4580ab90b8a39864a4931782bbacc57f0852c",
+    "test": "tests/test_smartphone_native_gnss_pdc_eval.py",
+    "test_sha256": "3c9e4a8f48e74005a32715cae7e45da89e68caff16daf5067d9e6d5ce8ea62dc",
+    "timestamp_contract": "one-to-one nearest truth timestamp, absolute delta <= 1000 ms, equal-distance ties fail closed; no coordinate interpolation",
+    "prediction_rows": 1384,
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "unmatched_prediction_rows": 1,
+    "delta_ms": {"min": 999, "median": 999, "max": 999},
+    "four_diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 93.50510102387848,
+      "wgs84_vincenty__nearest_rank_ceiling": 93.50525937880502,
+      "haversine_sphere__linear_n_minus_1": 93.6753044240868,
+      "haversine_sphere__nearest_rank_ceiling": 93.67546309390919
+    },
+    "horizontal_error_m": {
+      "wgs84_vincenty_p50": 6.513265251712395,
+      "wgs84_vincenty_p95": 180.49693679604457,
+      "haversine_p50": 6.508951969209522,
+      "haversine_p95": 180.84165687896407
+    },
+    "official_metric_m": null,
+    "official_metric_status": "undetermined-from-public-primary-sources"
+  },
+  "factor_trace": {
+    "factor_csv": "output/smartphone-r5/native-gnss-pdc-direct-v1/2023-05-24-20-26-us-ca-sjc-ge2__pixel7pro/factor.csv",
+    "factor_csv_sha256": "a0e605a7981535a73a24b1de452a8c5d77b34bbf773b1d7b3cd5526e862cfba2",
+    "families": {
+      "P": {"count": 16025, "finite_final_residual_count": 16025, "rms_m": 72.9048295050455, "mean_abs_m": 36.179647884644055, "max_abs_m": 203.55467583878635},
+      "D": {"count": 16025, "finite_final_residual_count": 16025, "rms_m": 1.140213852293164, "mean_abs_m": 0.08754564942958158, "max_abs_m": 134.9259330940749},
+      "C": {"count": 13806, "finite_final_residual_count": 13806, "rms_m": 0.6046916850438839, "mean_abs_m": 0.02243797362078608, "max_abs_m": 67.49269059538392}
+    },
+    "summary_sha256": "dd3d6011ca23deffdb1ccc6f165c5ac85198f888d8d56e9085d12d669e104cf0",
+    "initial_cost": 47200383.00689548,
+    "final_cost": 197981.06739692797,
+    "iterations": 158,
+    "converged": true,
+    "optimized_epochs": 1384,
+    "wall_seconds": 5.26528542599408,
+    "child_max_rss_kib": 81492
+  },
+  "comparison": {
+    "historical_native_fgo_v5_server_score_public_m": "3.952",
+    "historical_native_fgo_v5_server_score_private_m": "4.276",
+    "comparison_status": "not-a-like-for-like server comparison; this one-route local diagnostic is far above the historical native v5 server score and is not promoted",
+    "upstream_result_oracle": "not used or available under the no-MAT policy",
+    "external_precomputed_mat_baseline": "not used; historical imported result is rejected from the native lane"
+  },
+  "decision": {
+    "promotion": "no-go",
+    "reason": "The raw direct path is operational and truth-free, but its fixed development score has a 180.497 m horizontal P95 and 93.505 m WGS84 phone score; it does not establish an improvement over native FGO v5 or the 0.782-class target.",
+    "fresh_validation_authorized": false,
+    "holdout_authorized": false,
+    "test_batch_authorized": false,
+    "production_default_changed": false,
+    "score_used_for_tuning": false,
+    "external_mutation": false
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py": "09e7ab071ad6d1bb2f6a9b146cfed69e19f7739c25b308521fb099a57c38386d",
+    "apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc_eval.py": "2992d29d4dd77c49e319b9b86bc4580ab90b8a39864a4931782bbacc57f0852c",
+    "apps/commands/benchmarks/gnss_smartphone_native_only.py": "c649c4d1b40b61a26a88cb38c49e7f5671a714ad33fff4b26d4c96c703790561",
+    "include/libgnss++/io/android_raw_gnss.hpp": "117c7f81c3052f2ae95ec683a60290b03c0703c3a57f1487338930f4e3902a22",
+    "src/io/android_raw_gnss.cpp": "262d1e289b4dccdf6356b1ea07af92731b8df4600de52a9059b29f5bee31dda9",
+    "apps/native/gnss_pos_vel_pdc.cpp": "22c794c7c32923003f3d5e3b2f0a92d5ee7f266b634ebbc6fcaacde61f1ce0c5",
+    "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_gap_matrix_v1.json": "9f5e9caa74d3232c10f4a93103613fa239f2f834cf94eb0618c52e8db0d7c97f"
+  },
+  "reproduction": {
+    "truth_free": "python3 apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py --android-raw <raw device_gnss.csv> --nav <brdc.nav> --trip-id <route/device> --output-dir <new-output-dir>",
+    "score": "python3 apps/gnss.py smartphone-native-gnss-pdc-evaluate --candidate <keyed.csv> --run-manifest <run_manifest.json> --ground-truth <development ground_truth.csv> --recovery-authorization docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_recovery_v2.json --phone <route/device> --output-json <score.json>",
+    "release_environment": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:${LD_LIBRARY_PATH:-}",
+    "no_mat": true
+  }
+}

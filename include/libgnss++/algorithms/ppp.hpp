@@ -384,6 +384,10 @@ private:
     // Pre-anchor covariance saved for DD-AR position correction
     Eigen::MatrixXd pre_anchor_covariance_;
     bool had_fixed_last_epoch_ = false;  ///< AR succeeded in previous epoch
+    bool clas_ar_attempt_used_reduced_dd_floor_ = false;
+    bool clas_reduced_dd_fix_last_epoch_ = false;
+    bool clas_full_dd_fix_last_epoch_ = false;
+    int clas_reduced_dd_publication_streak_ = 0;
     int clas_kinematic_fix_candidate_streak_ = 0;
     int clas_kinematic_spp_divergence_count_ = 0;
     // Diagnostic-only (CLAS-HOLDCONT-DBG): consecutive epochs in a row with

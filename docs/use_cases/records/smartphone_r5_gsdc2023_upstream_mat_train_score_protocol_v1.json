@@ -1,0 +1,37 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-upstream-mat-train-score-protocol.v1",
+  "status": "frozen-before-train-truth-score-read",
+  "purpose": "Fixed development gate for the already frozen public upstream result MAT promotion lane; it is not a parameter-selection rule.",
+  "authorization_record": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_authorization_v1.json",
+  "authorization_manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_upstream_mat_train_score_authorization_v1_manifest.json",
+  "freeze_record_sha256": "9a10d2fd0a397287cc2501b23cef834d578d75ca62d17986880726efe2159c72",
+  "truth_free_manifest_sha256": "3388972b96e39125f3525f91a1d9df0ca16f4490f65daa821791213d363413e2",
+  "truth_policy": {
+    "only_declared_train_truth": true,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "leaderboard_used_for_tuning": false,
+    "source_or_parameter_change_after_freeze": false
+  },
+  "fixed_gate": {
+    "diagnostic_variants": [
+      "wgs84_vincenty__linear_n_minus_1",
+      "wgs84_vincenty__nearest_rank_ceiling",
+      "haversine_sphere__linear_n_minus_1",
+      "haversine_sphere__nearest_rank_ceiling"
+    ],
+    "aggregate_four_diagnostic_mean_max_m": 1.8,
+    "interpretation": "A fixed <1.8 m aggregate mean is the goal-aligned top-solution-scale screen; it is evaluated after scoring and cannot select between the predeclared GNSS and GNSS+IMU lanes.",
+    "per_route_non_regression": "Every declared route must have exact matching keys, full truth coverage, finite diagnostics, and no continuity violation.",
+    "continuity_max_speed_mps": 70.0,
+    "vertical_metric": "not available in the official ground_truth.csv/scoring contract; upstream MAT height is reported only as a finite conversion check.",
+    "promotion": "Only a passing fixed gate may justify later truth-free test conversion; validation and holdout remain sealed in this record."
+  },
+  "comparison": {
+    "primary": "result_gnss_imu.mat",
+    "reported_comparator": "result_gnss.mat",
+    "selection": "none; both lanes are scored and retained in the report regardless of relative score"
+  },
+  "no_post_score_changes": true
+}

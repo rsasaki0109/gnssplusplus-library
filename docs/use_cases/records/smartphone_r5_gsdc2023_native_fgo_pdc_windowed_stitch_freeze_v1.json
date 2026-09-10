@@ -1,0 +1,101 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-windowed-stitch.v1-freeze",
+  "status": "frozen-before-truth-free-stitch-run",
+  "candidate": "native_fgo_pdc_triangular_ecef_overlap_stitch_v1",
+  "purpose": "Post-process the already sealed v1 independent-window artifacts without rerunning the solver or opening truth.",
+  "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+  "fallback_sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+  "truth_policy": {
+    "truth_free": true,
+    "truth_opened": false,
+    "truth_materialized_count": 0,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_data_used": false,
+    "leaderboard_used": false,
+    "no_post_truth_tuning": true
+  },
+  "source_hashes": {
+    "apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch.py": "f0a1cb73020934db183d26308a7f5c6a6e8d28f0168b378f7cfb56e552ef8745",
+    "tests/test_smartphone_native_fgo_pdc_windowed_stitch.py": "b3e2c62abaa80dfa92c6b6922a520adf0a4d4f2d552312e18ea226bcd3980657",
+    "tests/CMakeLists.txt": "7096712217e8dc1b010516e4c4c8f0e64bdcefe3720280cd4b235429265a1fcf",
+    "build/apps/gnss_fgo": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+  },
+  "sealed_inputs": {
+    "v1_manifest": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v1/windowed_manifest.json",
+      "sha256": "48b019d36e1211caf6040e21b5d10bcf5352742170e7623712b153bb2d0d772f",
+      "seal_file_sha256": "bece1fd39e7cf8cdd1509cadc3480ac151987e1869372c118562302489d03aaf"
+    },
+    "v1_position": {
+      "path": "output/smartphone-r5/native-fgo-pdc-windowed-v1/windowed.pos",
+      "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd",
+      "rows": 2159
+    },
+    "sealed_v5_fallback": {
+      "path": "output/smartphone-r5/native-fgo-carrier-compatibility-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/baseline8/fgo.pos",
+      "sha256": "2804f70688955c94a8c58bfef9863053251d6a9a59b5793cd9186f8d1babe8cd"
+    },
+    "v1_window_count": 35,
+    "v1_successful_windows": 33,
+    "v1_failed_windows": 2
+  },
+  "window_contract": {
+    "window_epochs": 120,
+    "overlap_epochs": 60,
+    "stride_epochs": 60,
+    "valid_window_requirements": [
+      "finite keyed rows",
+      "one row per requested epoch",
+      "P and corrected undifferenced-D factors",
+      "ordinary TDCP and float carrier/ambiguity factors",
+      "monotone finite cost",
+      "native convergence within the sealed v1 bound",
+      "no SD/DD/base factors",
+      "within-window transition speed <=70 m/s"
+    ],
+    "invalid_window_policy": "reject the entire contribution and use sealed v5 fallback where no other valid source remains",
+    "v1_manifest_sha256": "48b019d36e1211caf6040e21b5d10bcf5352742170e7623712b153bb2d0d772f"
+  },
+  "stitch_contract": {
+    "coordinate_space": "ECEF",
+    "weight_family": "discrete triangular",
+    "edge_weight_floor": 1.0,
+    "center_weight": "maximal",
+    "one_contributor_policy": "return that row unchanged",
+    "multi_contributor_policy": "normalize triangular weights and blend ECEF; convert blended ECEF to WGS84 only for export",
+    "segment_policy": "never blend across canonical clock/time-reset segments or incompatible window segment_index",
+    "overlap_disagreement_bound_m": 150.0,
+    "bound_formula": "3 * frozen v5 motion sigma (50 m) + 70 m/s * exact-key timestamp span",
+    "v5_motion_sigma_m": 50.0,
+    "uncertainty_sigma_multiplier": 3.0,
+    "transition_speed_bound_mps": 70.0,
+    "excess_policy": "reject both neighboring valid window contributions wholesale; affected uncovered epochs use exact sealed v5 fallback",
+    "continuity_policy": "replace only unsafe selected epochs with exact sealed v5 fallback; no translation, smoothing, truth, sample, or extrapolation",
+    "earth_ecef_norm_m": [6000000.0, 7500000.0],
+    "dummy_or_sample_coordinates": "forbidden"
+  },
+  "algorithm_policy": {
+    "solver_invocation": false,
+    "numeric_estimator_parameters_changed": false,
+    "v1_window_artifacts_reused": true,
+    "production_rtk_spp_default_changed": false,
+    "v5_bytes_changed": false,
+    "truth_based_selection": false,
+    "no_post_holdout_or_validation_tuning": true
+  },
+  "commands": {
+    "fixture_tests": "python3 tests/test_smartphone_native_fgo_pdc_windowed_stitch.py",
+    "truth_free_run": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch.py --no-truth",
+    "release_build": "cmake --build build --config Release --target gnss_fgo",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build --output-on-failure -j1"
+  },
+  "promotion": {
+    "structural_gate_required_before_truth": true,
+    "if_structural_pass": "one development-only score against v5 using existing train roles and all four diagnostics; validation/holdout/test remain sealed",
+    "if_structural_fail": "seal No-Go and do not open any truth",
+    "external_mutation": false,
+    "kaggle_submission": false,
+    "token_access": false
+  }
+}

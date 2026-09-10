@@ -1,0 +1,12 @@
+{
+  "built": true,
+  "epochs": 3500,
+  "states": 68697,
+  "signal_rows": 112050,
+  "excluded_frequency_rows": 74777,
+  "streams": 38,
+  "failure": "",
+  "phase": 309,
+  "complete_epoch_count": true,
+  "row_conservation": true
+}

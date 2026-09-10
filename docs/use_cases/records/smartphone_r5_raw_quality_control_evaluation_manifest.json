@@ -1,0 +1,34 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-raw-quality-control-evaluation-manifest.v1",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_raw_quality_control_evaluation.json",
+    "sha256": "b71e1a4e5112f6ffa0369ccaed2db5d14d1fd499e87956b46d0d2a32ae831075"
+  },
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_raw_quality_control_selection.json",
+    "sha256": "b6937ab8d825bcaa01b115c1785d0ac6aba0b0d777f4ce118a6674bbe784162a"
+  },
+  "output_report": {
+    "path": "output/smartphone-r5/raw-quality-control-v1/raw_quality_control_evaluation.json",
+    "sha256": "165ca109df72b6854cef3d4cfdcc7533b0477b1897b717c3d6f345b9ebaf90eb"
+  },
+  "truth_free_seal": {
+    "path": "output/smartphone-r5/raw-quality-control-v1/truth_free_seal.json",
+    "sha256": "321f134ea88dbe934ebfacb5495a912a55de1e6d854d092c0cf034f3558ded63"
+  },
+  "fgo_feasibility": {
+    "path": "output/smartphone-r5/raw-quality-control-v1/fgo_wiring_feasibility.json",
+    "sha256": "3beccf2f42c41b2a9023f400a2c6901d690e7b937af56c736ba585cf3f282ad5"
+  },
+  "fgo_feasibility_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_fgo_wiring_feasibility.json",
+    "sha256": "c15ffc4129361e3c16ccc17d547588db80750b0ecabcab28353c0d7371fa4774"
+  },
+  "truth_policy": {
+    "train_truth_open_count": 3,
+    "fresh_validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "holdout_content_opened": false,
+    "public_private_scores_used_for_tuning": false
+  }
+}

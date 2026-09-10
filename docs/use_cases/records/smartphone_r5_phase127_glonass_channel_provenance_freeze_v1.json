@@ -1,0 +1,327 @@
+{
+  "schema_version": "smartphone-r5-phase127-glonass-channel-provenance-freeze.v1",
+  "phase": 127,
+  "execution_label": "Luna Max",
+  "status": "sealed-design-freeze-read-only",
+  "purpose": "Freeze one source-backed, default-off GLONASS FCN provenance/admission adapter without authorizing implementation or raw execution.",
+  "starting_state": {
+    "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "head_before_audit": "df27546fafa4fb6fbd96a520dcd3fd91acc3c0ae",
+    "worktree_before_audit": "clean",
+    "phase126_result_commit": "df27546fafa4fb6fbd96a520dcd3fd91acc3c0ae"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase127-glonass-geph-channel-provenance-v1",
+    "selector": "--native-phase127-glonass-channel-provenance",
+    "source_backed": true,
+    "default_off": true,
+    "factor_topology_preserving": true,
+    "factor_admission_preserving": true,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "official-header-fcn-and-nav-geph-frq-are-existing-source-paths",
+      "sealed-phase126-base-header-has-glo-rows-but-zero-header-fcn-entries",
+      "sealed-nav-inventory-lacks-geph-frq-time-coverage-and-conflict-accounting",
+      "time-aware-native-ephemeris-selection-is-required-around-satellite-only-frequency-api",
+      "missing-invalid-out-of-window-and-conflicting-fcn-must-fail-closed",
+      "fixed-channel-android-inference-external-table-and-base-frequency-fallback-forbidden"
+    ]
+  },
+  "candidate": {
+    "id": "phase127-glonass-geph-channel-provenance-v1",
+    "selector": "--native-phase127-glonass-channel-provenance",
+    "requires_selectors": [
+      "--native-phase126-raw-base-source-complete"
+    ],
+    "scope": "Read-only provenance/admission and Observation FCN annotation at the existing selected-ephemeris/transmission-time boundary.",
+    "adds_factor": false,
+    "adds_state": false,
+    "changes_equation": false,
+    "changes_observation_population": false,
+    "changes_correction_stream": false,
+    "partial_selector": false,
+    "fallback": false,
+    "solution_output": "opaque metadata/hash only"
+  },
+  "sealed_context": {
+    "phase126_result": {
+      "commit": "df27546fafa4fb6fbd96a520dcd3fd91acc3c0ae",
+      "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_structural_result_v1.json",
+      "sha256": "a0ab7f6ca35f06277953646f0f406a2c850ea73cef3b52ec4b681d0d48236b33",
+      "status": "no-go-phase126-raw-base-compound-structural",
+      "solver_invocations": 0,
+      "truth_reads": 0,
+      "solution_rows_opened": 0
+    },
+    "phase126_source_freeze": "5d00daf56afb6fe6b6e1f01b4a1213c287f671db",
+    "phase126_implementation": "9e9972667ee009e1bcd0dd1ea4732ae45415c3ce",
+    "official_cache_source_tree": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "upstream_rtklib_source_commit": "71db0ffa0d9735697c6adfd06fdf766d0e5ce807"
+  },
+  "route_inventory_sufficiency": {
+    "conclusion": "unknown-for-both-routes",
+    "reason": "Sealed metadata has GLO body-row/header counts and finite nav-domain facts, but no per-satellite geph.frq, toe/tof, time-window coverage, or duplicate/conflict evidence.",
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "glonass_body_rows": 17199,
+        "header_glonass_slot_frq_entries": 0,
+        "nav_inventory_finite_domain": true,
+        "geph_frq_record_count": "unknown",
+        "selected_time_valid_geph_coverage": "unknown",
+        "duplicate_or_conflict_status": "unknown",
+        "solver_admission": false
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "glonass_body_rows": 920,
+        "header_glonass_slot_frq_entries": 0,
+        "nav_inventory_finite_domain": true,
+        "geph_frq_record_count": "unknown",
+        "selected_time_valid_geph_coverage": "unknown",
+        "duplicate_or_conflict_status": "unknown",
+        "solver_admission": false
+      }
+    }
+  },
+  "provenance_policy": {
+    "permitted_sources_in_order": [
+      "RINEX observation GLONASS SLOT / FRQ # header entry for the exact satellite",
+      "broadcast GLONASS ephemeris geph.frq selected for the exact satellite and existing FGO query time"
+    ],
+    "header_priority": "header FCN is the primary provenance value when present",
+    "header_present_geph_required": true,
+    "header_present_geph_rule": "selected time-valid geph.frq must exist and equal the header FCN exactly",
+    "header_missing_rule": "selected time-valid geph.frq is the only permitted fallback; no base-frequency or guessed channel",
+    "missing_source_rule": "missing header plus missing selected geph, or header present plus missing selected geph, fails closed",
+    "mismatch_rule": "header FCN != selected geph.frq fails closed",
+    "invalid_rule": "non-integer, nonfinite, or out-of-range FCN fails closed",
+    "out_of_validity_rule": "no geph outside the existing GLONASS validity window may supply a channel",
+    "fixed_channel_rule": "forbidden",
+    "external_lookup_rule": "forbidden",
+    "android_frequency_inference_rule": "forbidden",
+    "default_zero_channel_rule": "forbidden"
+  },
+  "fcn_semantics": {
+    "value": "signed integer frequency-channel number n",
+    "unit": "dimensionless",
+    "inclusive_min": -7,
+    "inclusive_max": 6,
+    "rinex_header_text": "Rnn fcn",
+    "rtklib_header_encoding": "nav.glo_fcn = fcn + 8; zero is the absent sentinel",
+    "native_nav_normalization": "RINEX navigation value >128 is reduced by 256 before strict admission",
+    "frequency_hz": {
+      "glo_l1": "1602.0e6 + n * 0.5625e6",
+      "glo_l2": "1246.0e6 + n * 0.4375e6"
+    },
+    "wavelength_m": "299792458.0 / frequency_hz",
+    "finite_positive_frequency_required": true,
+    "finite_positive_wavelength_required": true
+  },
+  "ephemeris_selection": {
+    "api": "NavigationData::getEphemeris(satellite, existing_transmit_time)",
+    "query_time": "existing second-pass FGO transmit time after pseudorange and satellite-clock update; no new iteration",
+    "valid_flag_required": true,
+    "glonass_time_validity_seconds": 1800.0,
+    "validity_predicate": "valid && abs(query_time - toe) <= 1800.0",
+    "ranking": "minimum abs(query_time - toe) among valid records for the exact satellite",
+    "future_or_stale_extrapolation": false,
+    "state_or_factor_mutation": false,
+    "rtklib_time_api_caveat": "RTKLIB convenience frequency/wavelength helpers are satellite-based and have no time argument; native time-aware selection supplies the explicit query-time provenance boundary."
+  },
+  "duplicate_and_conflict_policy": {
+    "header_duplicates": {
+      "same_fcn": "accepted as consistent duplicate and counted",
+      "different_fcn": "header conflict; fail closed before map collapse",
+      "malformed_entry": "fail closed for a required satellite; never silently infer"
+    },
+    "ephemeris_ties": {
+      "same_minimum_age_same_fcn": "accepted as consistent duplicate and counted",
+      "same_minimum_age_different_fcn": "conflict; fail closed",
+      "non_tied_records": "existing minimum-age selection remains authoritative; no merge or rerank",
+      "invalid_or_out_of_window_records": "not candidates; if no valid candidate remains, fail closed"
+    },
+    "observation_interpolation": "missing or unequal FCN metadata is never blended into a synthetic channel; existing interpolation policy remains unchanged"
+  },
+  "source_evidence": {
+    "official_cache": [
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/+gt/Gobs.m",
+        "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+        "lines": "126-158,197-220,223-258",
+        "claim": "header FCN path, missing sentinel conversion, and separate nav-backed sat2freq path"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/src/mex/readrnxobs.c",
+        "sha256": "b20c05a830d2d42ccf09c45eccfd1b4d9f9983eefff376a3b941c4562feedbb9",
+        "lines": "44-75",
+        "claim": "RTKLIB RINEX observation read and nav.glo_fcn export"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/src/mex/sat2freq.c",
+        "sha256": "39b2486be2e2e35424643c506f81c1b51d24e6de394c8c823703bcd42475e0be",
+        "lines": "2-6,16-37",
+        "claim": "RTKLIB sat2freq wrapper receives nav and returns per-satellite/code frequency"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/src/mex/code2freq.c",
+        "sha256": "80116512b2be2ea531938a48ca5b366ac13761563801264553c86723e69023c6",
+        "lines": "43-53",
+        "claim": "RTKLIB code2freq delegation and -7..6 FCN warning boundary"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/src/mex/eph2eph.c",
+        "sha256": "3fd9be814c35b6e51fd6c9582ad12704625b3426187e47ced64ec39f44d377c2",
+        "lines": "89-104,186-205",
+        "claim": "geph.frq integer plus toe/tof are exported/imported"
+      },
+      {
+        "path": "output/reproducibility-cache/MatRTKLIB/+gt/C.m",
+        "sha256": "42cfdc2abb408159494de4e20bc2c2ba78c6e8267c459d42432fa374b070067a",
+        "lines": "33-39,79-82",
+        "claim": "GLO frequency base/steps and PRN domain"
+      }
+    ],
+    "official_upstream": [
+      {
+        "commit": "71db0ffa0d9735697c6adfd06fdf766d0e5ce807",
+        "path": "src/rinex.c",
+        "lines": "419-424,1143-1150",
+        "claim": "GLONASS header fcn+8 encoding and signed nav frq normalization/range diagnostic"
+      },
+      {
+        "commit": "71db0ffa0d9735697c6adfd06fdf766d0e5ce807",
+        "path": "src/rtkcmn.c",
+        "lines": "3162-3174",
+        "claim": "satellite-specific GLONASS wavelength uses geph.frq and base/step frequency"
+      }
+    ],
+    "native": [
+      {
+        "path": "src/io/rinex.cpp",
+        "sha256": "34f9d00fc151bccedaa7ae89724954e6742f40e73d7d3da5102723090a39ee40",
+        "lines": "1180-1200,1810-1836",
+        "claim": "header map parse and broadcast GLONASS FCN normalization"
+      },
+      {
+        "path": "src/core/navigation.cpp",
+        "sha256": "f876803d2e61fa62f370419f4ee4db16afb6b12b2d7ab00cd8b613af6f2649d3",
+        "lines": "59-86,146-168",
+        "claim": "1800-second GLONASS validity and minimum-age satellite/time selection"
+      },
+      {
+        "path": "include/libgnss++/core/signals.hpp",
+        "sha256": "bb8cd20d4a22581ed2beb83f4e1b4ed6d397f28a2d5104d4736778c5b279ba56",
+        "lines": "10-39,116-139",
+        "claim": "ephemeris/observation FCN frequency formulas and base fallback when metadata is absent"
+      },
+      {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "1c1c24699e82945b7ee71f036e4cf969b0bd303ab49205d998ec5338b09714b4",
+        "lines": "487-510",
+        "claim": "existing two-pass transmit-time and selected ephemeris boundary"
+      },
+      {
+        "path": "src/algorithms/fgo_internal.hpp",
+        "sha256": "73aefdc6f14b78a08f3854fc90cda4d894985043a739b855cdde95a6fd5ff6d0",
+        "lines": "633-655,863-866",
+        "claim": "GNSS-first selected ephemeris boundary and unequal channel interpolation guard"
+      }
+    ]
+  },
+  "fixed_invariants": [
+    "Phase126 source-complete raw-base operator and exactly-once correction remain unchanged",
+    "C7/D/CCDD topology, units, initialization, exact-key handoff, and coverage remain unchanged",
+    "GNSS/IMU/carrier/TDCP/Doppler factor families and admission remain unchanged",
+    "MULTIFRONTAL_QR, ordering, whitening, sigmas, filters, Huber, LM schedule, and iteration limits remain unchanged",
+    "Pixel5 final output offset, timestamp/output alignment, solution opacity, and truth separation remain unchanged",
+    "legacy/default path is byte/semantic unchanged when Phase127 selector is absent"
+  ],
+  "forbidden_lineage_and_actions": [
+    "fixed GLONASS channel or zero-channel default",
+    "Android raw carrier-frequency channel inference",
+    "external channel/frequency table or lookup",
+    "phone coordinate, result coordinate, base station table, or precomputed correction",
+    "MAT, PDC, truth, accuracy, Kaggle, or token access",
+    "raw payload read before a new independent authorization",
+    "solver launch before per-satellite/time geph inventory passes",
+    "rerun, fallback, extrapolation, endpoint hold, nearest fill, repair, or sweep"
+  ],
+  "planned_implementation_and_tests": {
+    "implementation_authorized": false,
+    "planned_files": [
+      "include/libgnss++/algorithms/phase127_glonass_channel_provenance.hpp",
+      "src/algorithms/phase127_glonass_channel_provenance.cpp",
+      "src/algorithms/fgo_problems.cpp and GNSS-first admission boundary only",
+      "src/io/rinex.cpp/include/libgnss++/io/rinex.hpp only for selector-on duplicate-ledger telemetry",
+      "apps/native/gnss_fgo_imu_no_base.cpp and focused structural validator"
+    ],
+    "atomicity": "No partial selector. Header/geph validation, exact-key annotation, and telemetry admission must all pass before any factor/correction mutation.",
+    "focused_tests": [
+      "header present and selected geph same FCN accepted",
+      "header absent and selected geph boundary FCN -7 or 6 accepted",
+      "header/geph mismatch fails closed",
+      "missing satellite, no geph, invalid flag, or abs(query-toe)>1800 fails closed",
+      "FCN -8, 7, nonfinite, nonintegral, malformed, and bad normalization fail closed",
+      "same-FCN header/geph duplicates accepted and counted; differing-FCN ties/conflicts fail closed",
+      "no channel synthesis through interpolation, fixed zero, base frequency, Android frequency, or external table",
+      "selector-off legacy observation/map/factor/config regression",
+      "route preflight emits compact missing/conflict coverage and does not launch solver"
+    ]
+  },
+  "read_accounting": {
+    "official_native_source_text": "read-only",
+    "sealed_phase126_metadata": "aggregate/provenance metadata only",
+    "raw_phone_gnss_imu_navigation_payload": 0,
+    "raw_base_bytes_or_headers": 0,
+    "truth_payload_or_coordinate_rows": 0,
+    "solution_coordinate_rows": 0,
+    "mat_data": 0,
+    "precomputed_coordinates_or_corrections": 0,
+    "pdc": 0,
+    "solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "code_configuration_test_changes": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "future_authorization_requirements": {
+    "old_phase126_authorization_reusable": false,
+    "new_implementation_pin": "required",
+    "new_pre_raw_manifest": "required; pin source, implementation, selector composition, route paths/hashes, and forbidden lineage",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "pre_solver_inventory": "required after authorization; header ledger, nav geph.frq/toe/tof, selected query-time validity, duplicate/conflict and exact GLO key coverage",
+    "fail_closed": "any missing, invalid, out-of-window, mismatched, conflicting, unresolved, nonfinite, or unproven channel; no solver launch",
+    "allowed_inputs": [
+      "raw phone device_gnss.csv",
+      "raw phone device_imu.csv",
+      "broadcast navigation",
+      "sealed raw base RINEX"
+    ],
+    "forbidden_inputs": [
+      "MAT",
+      "truth",
+      "PDC",
+      "precomputed coordinates/corrections",
+      "base/phone/result coordinate tables",
+      "external channel tables",
+      "Kaggle"
+    ],
+    "truth_authorization": "separate later authorization required; not granted here"
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase127_glonass_channel_provenance_audit_v1.md",
+    "commit": "527ed66279593c7dc04cd28ac8a513fd78a9089a",
+    "sha256": "e3a3b4aa3e37ed23850404ea766190efb8fbf5d7ce3aa591b1eccf2f92c6f313"
+  }
+}

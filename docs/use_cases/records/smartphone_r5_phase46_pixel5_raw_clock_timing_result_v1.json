@@ -1,0 +1,253 @@
+{
+  "schema_version": "smartphone-r5-phase46-pixel5-raw-clock-timing-result.v1",
+  "phase": 46,
+  "status": "no-go-clock-correction-common-mode-only",
+  "mode": "raw-device-gnss-clock-timing-audit-only",
+  "authority": {
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_freeze_v1.json",
+      "sha256": "b847826017ae7683d9fa91de7225301af682d778add210acd6f04fcce52e5196",
+      "commit": "aba89f5"
+    },
+    "evaluator_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase46_pixel5_raw_clock_timing_evaluator_manifest_v1.json",
+      "sha256": "54694dc6a3f389dd389c145e548c97db5fc859ffd8f619eaf6c6c31f57cd537f",
+      "commit": "089db81"
+    },
+    "evaluator_source": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase46_pixel5_raw_clock_timing_audit.py",
+      "sha256": "adc500a945d09fe158a5ae8f25fe2b804ef99c7f828d9b80e53b1390a5d55ff3"
+    },
+    "focused_test": {
+      "path": "tests/test_smartphone_phase46_pixel5_raw_clock_timing_audit.py",
+      "sha256": "85425d896a723091944e23d08e283b56928158802839a9e55f20c7d2650e0a4d"
+    }
+  },
+  "source_support": {
+    "android_gnss_clock": {
+      "url": "https://developer.android.com/reference/android/location/GnssClock",
+      "supports": [
+        "GPS time is derived as TimeNanos - (FullBiasNanos + BiasNanos).",
+        "FullBiasNanos is referenced to GPS epoch and HardwareClockDiscontinuityCount marks clock discontinuities.",
+        "DriftNanosPerSecond and its uncertainty describe the derivative and error estimate of the clock offset."
+      ]
+    },
+    "android_gnss_measurement": {
+      "url": "https://developer.android.com/reference/android/location/GnssMeasurement",
+      "supports": [
+        "ReceivedSvTimeNanos is the received satellite time at measurement time.",
+        "State describes per-satellite-signal synchronization and MultipathIndicator identifies multipath state.",
+        "The received satellite time and multipath status are satellite/signal measurements rather than a common receiver clock gauge."
+      ]
+    },
+    "repository_contract": {
+      "path": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json",
+      "sha256": "a65b22ed348067d2787f0369d6139708572679fbe49cd943d2eb7677d4675889"
+    }
+  },
+  "read_accounting": {
+    "single_evaluator_process": true,
+    "raw_device_gnss_reads_per_route": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 1,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 1,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1
+    },
+    "truth_reads": 0,
+    "phase45_truth_derived_payload_reads": 0,
+    "solver_reruns": 0,
+    "correction_implementations": 0,
+    "archive_reopens": 0,
+    "rematerializations": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "raw_rows": 87705,
+      "epochs": 2159,
+      "raw_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "route_clock_residual_median_ms": 0.248528316617012,
+      "route_clock_residual_mad_ms": 0.02536429464817,
+      "centered_p95_abs_ms": 0.059120562672615104,
+      "centered_max_abs_ms": 0.06488429009914401,
+      "detrended_p95_abs_ms": 0.007984421328031295,
+      "detrended_max_abs_ms": 0.012085167700372802,
+      "drift_ppm": 0.04744418239642533,
+      "prefix_tail_median_delta_ms": 0.07664076983928697,
+      "time_nanos_gaps_gt_1s": 0,
+      "utc_missing_nonmonotonic_or_conflict": {"missing": 0, "nonmonotonic": 0, "conflict": 0},
+      "hcdc_change_events": 0,
+      "full_bias_change_events": 2152,
+      "uncaptured_full_bias_changes": 2152,
+      "base_vs_row_identity_failures": 2158,
+      "base_vs_row_tow_p95_abs_ns": 92374.09999999999,
+      "base_vs_row_tow_max_abs_ns": 98138.0,
+      "base_vs_row_tow_p95_effect_m": 27693.058494537796,
+      "base_vs_row_tow_max_effect_m": 29421.032243204,
+      "same_epoch_receiver_tow_spread_max_m": 0.0,
+      "same_epoch_clock_field_inconsistency_count": 0,
+      "same_epoch_signal_group_median_spread_max_ms": 0.0,
+      "float64_exact_risk_max_ns": 256.0,
+      "optional_time_offset_nanos_all_zero": true
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "raw_rows": 112833,
+      "epochs": 3140,
+      "raw_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "route_clock_residual_median_ms": 0.304506450891495,
+      "route_clock_residual_mad_ms": 0.0006933212280275103,
+      "centered_p95_abs_ms": 0.004154179990291391,
+      "centered_max_abs_ms": 0.0050362348556519665,
+      "detrended_p95_abs_ms": 0.003177719144714345,
+      "detrended_max_abs_ms": 0.004003327052720751,
+      "drift_ppm": 0.001122258355240378,
+      "prefix_tail_median_delta_ms": 0.002522945404053012,
+      "time_nanos_gaps_gt_1s": 0,
+      "utc_missing_nonmonotonic_or_conflict": {"missing": 0, "nonmonotonic": 0, "conflict": 0},
+      "hcdc_change_events": 0,
+      "full_bias_change_events": 2940,
+      "uncaptured_full_bias_changes": 2940,
+      "base_vs_row_identity_failures": 3139,
+      "base_vs_row_tow_p95_abs_ns": 7834.15,
+      "base_vs_row_tow_max_abs_ns": 8292.0,
+      "base_vs_row_tow_p95_effect_m": 2348.6190848407,
+      "base_vs_row_tow_max_effect_m": 2485.879061736,
+      "same_epoch_receiver_tow_spread_max_m": 0.0,
+      "same_epoch_clock_field_inconsistency_count": 0,
+      "same_epoch_signal_group_median_spread_max_ms": 0.0,
+      "float64_exact_risk_max_ns": 256.0,
+      "optional_time_offset_nanos_all_zero": true
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "raw_rows": 51243,
+      "epochs": 1466,
+      "raw_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+      "route_clock_residual_median_ms": 0.26968276500701904,
+      "route_clock_residual_mad_ms": 0.002335816621780562,
+      "centered_p95_abs_ms": 0.00563471019268022,
+      "centered_max_abs_ms": 0.006815314292907937,
+      "detrended_p95_abs_ms": 0.002088193948965092,
+      "detrended_max_abs_ms": 0.0028436447315927336,
+      "drift_ppm": 0.005804140761060513,
+      "prefix_tail_median_delta_ms": 0.005586519837379483,
+      "time_nanos_gaps_gt_1s": 0,
+      "utc_missing_nonmonotonic_or_conflict": {"missing": 0, "nonmonotonic": 0, "conflict": 0},
+      "hcdc_change_events": 0,
+      "full_bias_change_events": 1398,
+      "uncaptured_full_bias_changes": 1398,
+      "base_vs_row_identity_failures": 1465,
+      "base_vs_row_tow_p95_abs_ns": 8333.25,
+      "base_vs_row_tow_max_abs_ns": 9514.0,
+      "base_vs_row_tow_p95_effect_m": 2498.2455006285,
+      "base_vs_row_tow_max_effect_m": 2852.225445412,
+      "same_epoch_receiver_tow_spread_max_m": 0.0,
+      "same_epoch_clock_field_inconsistency_count": 0,
+      "same_epoch_signal_group_median_spread_max_ms": 0.0,
+      "float64_exact_risk_max_ns": 256.0,
+      "optional_time_offset_nanos_all_zero": true
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "raw_rows": 35810,
+      "epochs": 1102,
+      "raw_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+      "route_clock_residual_median_ms": 0.930999249219894,
+      "route_clock_residual_mad_ms": 0.006523137912154031,
+      "centered_p95_abs_ms": 0.01039332486689068,
+      "centered_max_abs_ms": 0.010656807571649995,
+      "detrended_p95_abs_ms": 0.0018488685632799867,
+      "detrended_max_abs_ms": 0.0024574494095700224,
+      "drift_ppm": 0.02118996852356983,
+      "prefix_tail_median_delta_ms": 0.017578821629285035,
+      "time_nanos_gaps_gt_1s": 0,
+      "utc_missing_nonmonotonic_or_conflict": {"missing": 0, "nonmonotonic": 0, "conflict": 0},
+      "hcdc_change_events": 0,
+      "full_bias_change_events": 1088,
+      "uncaptured_full_bias_changes": 1088,
+      "base_vs_row_identity_failures": 1101,
+      "base_vs_row_tow_p95_abs_ns": 19781.05,
+      "base_vs_row_tow_max_abs_ns": 20909.0,
+      "base_vs_row_tow_p95_effect_m": 5930.2096013209,
+      "base_vs_row_tow_max_effect_m": 6268.360504322,
+      "same_epoch_receiver_tow_spread_max_m": 0.0,
+      "same_epoch_clock_field_inconsistency_count": 0,
+      "same_epoch_signal_group_median_spread_max_ms": 0.0,
+      "float64_exact_risk_max_ns": 256.0,
+      "optional_time_offset_nanos_all_zero": true
+    }
+  },
+  "aggregate": {
+    "route_count": 4,
+    "raw_rows": 287591,
+    "epochs": 7867,
+    "full_bias_change_events": 7578,
+    "uncaptured_full_bias_changes": 7578,
+    "base_vs_row_identity_failures": 7863,
+    "hcdc_change_events": 0,
+    "time_nanos_gaps_gt_1s": 0,
+    "utc_missing_nonmonotonic_or_conflict": {"missing": 0, "nonmonotonic": 0, "conflict": 0},
+    "route_clock_median_ms": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0.248528316617012,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 0.304506450891495,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 0.26968276500701904,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 0.930999249219894
+    },
+    "max_pairwise_route_median_distance_ms": 0.6824709326028819,
+    "aggregate_route_median_ms": 0.287094607949257,
+    "aggregate_route_median_mad_ms": 0.02798906713724149,
+    "same_epoch_receiver_tow_spread_max_m": 0.0,
+    "same_epoch_signal_group_median_spread_max_ms": 0.0,
+    "float64_exact_risk_max_ns": 256.0,
+    "event_count": 15441
+  },
+  "numeric_gate_summary": {
+    "route_count": {"required": 4, "observed": 4, "passed": true},
+    "raw_input_identity": {"required": true, "observed": true, "passed": true},
+    "all_finite_required_timing": {"required": true, "observed": true, "passed": true},
+    "raw_epoch_domain_coverage": {"required": 1.0, "observed": 1.0, "passed": true},
+    "utc_key_order_no_nonmonotonic_or_conflict": {"required": 0, "observed": 0, "passed": true},
+    "detrended_utc_gps_residual_max_abs_ms": {"required": 2.0, "observed_max": 0.012085167700372802, "passed": true},
+    "linear_drift_max_abs_ppm": {"required": 1000.0, "observed_max": 0.04744418239642533, "passed": true},
+    "uncaptured_hcdc_or_full_bias_changes": {"required": 0, "observed": 7578, "passed": false},
+    "uncaptured_tow_noncommon_mode_max_m": {"required": 10.0, "observed": 0.0, "passed": true},
+    "base_vs_row_full_bias_identity_failures": {"required": 0, "observed": 7863, "passed": false},
+    "all_hard_gates_passed": false
+  },
+  "finding": {
+    "strongest": "Per-row FullBiasNanos changes at essentially every 1 Hz epoch while HCDC remains unchanged and no TimeNanos gap is strictly greater than 1 second. The Phase25 segment-base FullBias contract therefore diverges from the per-row FullBias contract by up to 98138 ns (29.421 km c-scaled) on MTV-a, 8292 ns (2.486 km) on MTV-h, 9514 ns (2.852 km) on LAX-t, and 20909 ns (6.268 km) on MTV-u.",
+    "geometry_test": "The discrepancy is common receiver mode: same-epoch receiver-TOW spread is 0 m, same-epoch TimeNanos/FullBias/Bias/Drift/TimeOffset spreads are zero, and every available constellation/signal group has zero same-epoch median residual spread. It is a receiver-clock gauge, not an identified horizontal-geometry factor.",
+    "utc_quality": "The direct Android hardware-clock GPS-to-UTC comparison is stable: all four detrended maxima are <=0.0121 ms and all absolute affine drifts are <=0.0475 ppm, far inside the frozen 2 ms and 1000 ppm gates.",
+    "numeric_precision": "Exact integer/Decimal evaluation was retained; float64 subtraction risk reaches 256 ns, so large-nanosecond subtraction must not be used as the correction mechanism."
+  },
+  "decision": {
+    "clock_correction_go": false,
+    "clock_correction_reason": "No raw-only deployable clock correction is authorized: the only large structure is common-mode and the base-vs-row FullBias identity/boundary gates fail on all four routes.",
+    "correction_implemented": false,
+    "solver_rerun": false,
+    "loo_or_truth_derived_inference": false,
+    "next_single_raw_physical_factor": "satellite-specific raw code propagation/multipath residual",
+    "next_factor_contract": "If a future phase is authorized, audit only the satellite/signal-dependent code propagation residual using raw ReceivedSvTimeNanos plus Android State/MultipathIndicator semantics. It must demonstrate non-common-mode, geometry-changing evidence before any implementation is authorized."
+  },
+  "output_artifacts": {
+    "output_root": "output/smartphone-r5/phase46-pixel5-raw-clock-timing-v1",
+    "phase46_pixel5_raw_clock_timing.json": {
+      "bytes": 65931,
+      "sha256": "98e77fee8ff0f3135f7ba0bdbefdd97709085c8ba26a2e1d5f54837cdae23eba"
+    },
+    "phase46_pixel5_raw_clock_timing.routes.json": {
+      "bytes": 55650,
+      "sha256": "7e83aea173369019de9660392dbfcab87a619bf65b7fb71e56b7db2cd48c7b69"
+    },
+    "phase46_pixel5_raw_clock_timing.events.json": {
+      "bytes": 4866941,
+      "sha256": "8b887add559ebc1a47d3ce7fb5e3f5873098dad610355f7e810054180b44c00e"
+    },
+    "phase46_pixel5_raw_clock_timing.manifest.json": {
+      "bytes": 1342,
+      "sha256": "df0425fb8f1e334cc6dd2d0f52d2c2ff5705617ef3490fe4316c6be501db3a06"
+    }
+  }
+}

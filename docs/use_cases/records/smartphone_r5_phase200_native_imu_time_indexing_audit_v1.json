@@ -1,0 +1,112 @@
+{
+  "schema_version": "smartphone-r5-phase200-native-imu-time-indexing-audit.v1",
+  "phase": 200,
+  "execution_label": "Luna Max",
+  "status": "completed-source-audit-and-synthetic-diagnostic",
+  "purpose": "Bounded source-only audit of IMU interval selection and sample-time integration semantics; no production behavior change or raw-data execution.",
+  "production_behavior_changed": false,
+  "native_backend_refactored": false,
+  "source_contract": {
+    "matlab_preprocessing": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/imuprocessing.m",
+      "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+      "lines": "7-20,23-40",
+      "behavior": "With no GNSS elapsed-time anchors, add the configured accel/gyro UTC offsets; synchronize on gyro by interpolating acceleration; compute forward dt=diff(sync_time) and repeat the final dt."
+    },
+    "matlab_graph": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "280-298",
+      "behavior": "For each GNSS interval select IMU samples inclusively (time >= t0 && time <= t1) and call integrateMeasurement with each selected sample's forward acc.dt; the source factor uses keyB2."
+    },
+    "native_backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "e59d8821561212c28f494a7b8631d3aefafc6e32489f68b71c34a7bf7fb2f34f",
+      "lines": "1107-1127,1264-1268",
+      "behavior": "The unchanged native loop skips samples before t0, excludes samples at t1, integrates each sample using dt=current_sample_time-previous_time, then holds the last included sample through the interval tail; it attaches the resulting preintegration to CombinedImuFactor."
+    },
+    "separate_concern": "The source ImuFactor keyB2 versus native CombinedImuFactor/bias treatment was observed but not modified or conflated with this time-indexing audit. Phase197's -20 ms UTC-fallback correction is also separate and unchanged."
+  },
+  "synthetic_case": {
+    "sample_offsets_s": [
+      0.0,
+      0.25,
+      0.7,
+      1.0,
+      1.4
+    ],
+    "gnss_intervals_s": [
+      "[0.0,1.0]",
+      "[0.0,0.9]",
+      "[0.1,0.9]"
+    ],
+    "time_varying_inputs": {
+      "accel_x_mps2": "1 + 2t",
+      "gyro_z_radps": "0.1 + 0.3t",
+      "bounded_integrals_over_0_1": {
+        "accel_x": 2.0,
+        "gyro_z": 0.25
+      },
+      "exact_boundary_weighted_native": {
+        "dt_s": 1.0,
+        "accel_x": 2.175,
+        "gyro_z": 0.27625
+      },
+      "exact_boundary_weighted_matlab_source": {
+        "dt_s": 1.4,
+        "accel_x": 2.845,
+        "gyro_z": 0.35675
+      },
+      "between_boundary_dt_s": {
+        "native": 0.9,
+        "matlab_source": 1.0,
+        "bounded_left_hold_comparator": 0.9
+      },
+      "offset_start_dt_s": {
+        "native": 0.8,
+        "matlab_source": 0.75,
+        "bounded_left_hold_comparator": 0.8
+      }
+    },
+    "constant_input_control": {
+      "accel_x_mps2": 2.0,
+      "exact_boundary_dt_s": {
+        "native": 1.0,
+        "matlab_source": 1.4,
+        "bounded_left_hold_comparator": 1.0
+      },
+      "between_boundary_dt_s": {
+        "native": 0.9,
+        "matlab_source": 1.0,
+        "bounded_left_hold_comparator": 0.9
+      }
+    }
+  },
+  "verification": {
+    "test_path": "tests/test_gtsam_imu_time_indexing.cpp",
+    "test_sha256": "e5fcb63d705e813f245f1b563a193d0148c37f5f886a727ee8fe75409411e326",
+    "cmake_registration_sha256": "1d14eca02c6cdde6289bbe71045fae278bf4d903dd7689d365667a3cf49d920a",
+    "focused_gtest_filter": "GtsamImuTimeIndexingTest.*",
+    "focused_gtest_passed": 4,
+    "focused_gtest_failed": 0,
+    "gtsam_preintegration_control": "The test feeds the test-local transcription's segments into gtsam::PreintegratedCombinedMeasurements and observes deltaTij=1.0 s and deltaVij.x=2.175 for the native schedule. This validates the GTSAM API call/duration, not a hidden backend trace."
+  },
+  "interpretation": {
+    "finding": "The source and native schedules are measurably different at exact and between-sample GNSS boundaries. The source's inclusive endpoint plus forward dt can integrate beyond t1; the native loop preserves its current preceding-dt plus tail-hold behavior.",
+    "highest_leverage_next_ablation": "After a separately authorized real-data parity gate, expose/compare a source-inclusive-forward preintegration schedule against the current native schedule while holding IMU noise, UTC offset, bias random walk, factor family, and initialization fixed. No schedule change was made in Phase200.",
+    "limitations": [
+      "The native backend loop was not refactored and no raw H/native solve was run; the schedule transcription and GTSAM preintegration call are synthetic diagnostics, not full-backend or accuracy evidence.",
+      "The bounded left-hold comparator is illustrative only and is not asserted to be the official MATLAB model.",
+      "No candidate, truth, MAT/PDC, precomputed-coordinate, Kaggle, or token payload was read; no accuracy claim is made."
+    ]
+  },
+  "read_accounting": {
+    "raw_gnss_imu_reads": 0,
+    "candidate_payload_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_payload_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_calculations": 0,
+    "reruns": 0
+  }
+}

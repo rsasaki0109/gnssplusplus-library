@@ -1,0 +1,81 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-mat-no-base-freeze.v1",
+  "status": "frozen-before-entrypoint-implementation",
+  "scope": "opt-in research entry point only; production FGO/SPP defaults unchanged",
+  "truth_policy": {
+    "kaggle_scores_used_for_tuning": false,
+    "validation_or_holdout_materialized": false,
+    "validation_or_holdout_truth_opened": false,
+    "truth_free_smoke_required_before_train_truth": true,
+    "future_validation_or_holdout": "sealed and untouched"
+  },
+  "route_contract": {
+    "structural_smoke": {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "role": "existing truth-free v2 payload; 20-epoch bounded smoke",
+      "obs": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/adapter/rover.obs",
+      "nav": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/inputs/brdc.nav",
+      "imu": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/inputs/imu_processed.csv"
+    },
+    "train_extension": {
+      "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "role": "existing train payload; only after structural smoke",
+      "truth": "train-only comparison may be opened only after smoke artifact sealing",
+      "validation_or_holdout": "not permitted"
+    }
+  },
+  "candidate_recipe": {
+    "backend": "GTSAM batch Levenberg-Marquardt",
+    "base_factors": false,
+    "gnss_factors": ["undifferenced pseudorange", "optional motion random walk from existing config"],
+    "imu_factor": "gtsam::CombinedImuFactor via PreintegratedCombinedMeasurements",
+    "carrier_or_doppler_factors": "disabled; existing no-base native backend does not insert taroz custom TDCP/Doppler factors",
+    "pose_state": "Pose3 body-in-ENU, zero lever arm, ENU Z-up gravity -9.80665 m/s^2",
+    "axis_contract": "raw Android sensor axes are transformed by explicit identity axis map followed by upstream RzRyRx mounting rotation; no implicit axis assumption",
+    "mounting_rpy_deg_xyz": [-85.0, 178.0, -94.0],
+    "mounting_position_m": [0.0, 0.0, 0.0],
+    "imu_units": "accelerometer m/s^2; Android gyro rad/s converted once to loader CSV deg/s then back to rad/s",
+    "timestamp_contract": "GPST week/TOW; UTC milliseconds from Android are converted with the declared 18 s GPS-UTC offset; no estimated offset is applied at solve time",
+    "imu_sync": "gyro timestamps are anchors; accelerometer nearest pairing is the existing 25 ms schema adapter contract",
+    "stationary_window_samples": 250,
+    "gravity_alignment": "fusion_initialization::alignStatic after explicit mounting rotation; reject nonfinite/zero window",
+    "heading_alignment": "GNSS seed displacement over 25 epochs, horizontal speed 2..50 m/s, |up|<=3 m/s, three consistent windows within 20 deg; otherwise yaw remains unobserved and output falls back",
+    "noise": {
+      "gravity_mps2": 9.80665,
+      "accel_noise_sigma": 0.025,
+      "gyro_noise_sigma": 0.0005,
+      "accel_bias_rw_sigma": 0.00025,
+      "gyro_bias_rw_sigma": 0.0000005,
+      "integration_sigma": 0.05
+    },
+    "solver": {
+      "max_iterations": 12,
+      "robust_loss": true,
+      "position_prior_sigma_m": 0.0,
+      "clock_prior_sigma_m": 0.0,
+      "fixed_lag": false
+    },
+    "fallback": "if IMU schema, attitude observability, geometry, finite state, or solver checks fail, run the exact same no-base problem without IMU and mark native-fgo-v1 fallback; never synthesize a coordinate"
+  },
+  "upstream_contracts": {
+    "repository": "https://github.com/taroz/gsdc2023",
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "license": "MIT",
+    "gtsam_gnss_repository": "https://github.com/taroz/gtsam_gnss",
+    "gtsam_gnss_commit": "e679b72b620fc6800723578e4077dd157587d129",
+    "gtsam_gnss_license": "MIT",
+    "references": [
+      {"file": "fgo_gnss_imu.m", "lines": "129-153,252-299,325-380", "use": "preintegration parameters, Pose3/velocity/bias graph, CombinedImuFactor loop, ENU output"},
+      {"file": "parameters.m", "lines": "174-203", "use": "published IMU noise, mounting rotation, sync policy"},
+      {"file": "functions/imuprocessing.m", "lines": "7-47", "use": "elapsed-time mapping and gyro-anchored synchronization"},
+      {"file": "functions/deviceimu2imu.m", "lines": "5-29", "use": "Android UncalAccel/UncalGyro schema and units"},
+      {"file": "gtsam_gnss/src/PseudorangeFactor_XC.h", "lines": "1-120", "use": "audited but not copied; custom no-base factor remains deferred"}
+    ]
+  },
+  "implementation_boundary": {
+    "ported_logic": ["explicit Android time/unit contract", "gravity/course initialization contract", "no-base Pose3+velocity+bias CombinedImuFactor invocation"],
+    "not_ported": ["MATLAB gt.Gobs/gt.Gnav MCOS wrapper", "taroz custom Doppler/TDCP graph insertion", "base-dependent SD/DD factors", "truth-dependent preprocessing"],
+    "source_policy": "no upstream source copied into production; cache is hash-pinned and local adapter is isolated"
+  },
+  "promotion": "structural smoke and unchanged train comparison are required; production defaults and Kaggle lane remain unchanged"
+}

@@ -1,0 +1,12 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v1.json",
+  "freeze_record_sha256": "0b08e620f36cb56e33c8742a4506e82bba75f8d8a09486ba3cf9bb010e014a65",
+  "candidate_id": "native-gnss-pdc-upstream-residual-snr-v1",
+  "truth_free_before_score": true,
+  "mat_inputs_used": false,
+  "validation_opened": false,
+  "holdout_opened": false,
+  "parameter_tuning_after_score": false,
+  "source_hashes_frozen_in_record": true
+}

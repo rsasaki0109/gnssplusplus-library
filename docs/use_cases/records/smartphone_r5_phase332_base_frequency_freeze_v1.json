@@ -1,0 +1,25 @@
+{
+  "phase": 332,
+  "implementation_head": "58791ce3daae0fb5be91e283d5795d7580799c65",
+  "source": "scripts/native_base_residual_geometry_audit.cpp",
+  "binary": "build/native_base_residual_geometry_audit",
+  "base": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+  "base_sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+  "nav": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+  "nav_sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+  "expected_epochs": 3500,
+  "configuration": "dense source residual, 151 window; GPS L1/L5 common finite correction rows; healthy/elevation >=15deg; same design matrix for L1,L5,L5-L1; QR rank4",
+  "output": "aggregate apparent displacement norms/clock magnitude/residual RMS only; no coordinate payload",
+  "interpretation": "frequency-paired apparent geometry diagnostic only; differing smoothing support can prevent perfect cancellation of common errors; no station calibration or inference feedback",
+  "raw_passes_per_input": 1,
+  "hash_scans_per_input": 1,
+  "truth_reads": 0,
+  "phone_reads": 0,
+  "inference_feedback": false,
+  "source_sha256": "1323c17f94ed5af196878d3152b9183e7ab9b1a48268f3bd58b00e0b9f44e221",
+  "binary_sha256": "6cd1a96ce7d194fa683161fa720426504b73fe19b15fefb5b6919cef0f9f2abd",
+  "extra_argv": [
+    "paired-frequency"
+  ],
+  "synthetic_self_test": "passed before raw access"
+}

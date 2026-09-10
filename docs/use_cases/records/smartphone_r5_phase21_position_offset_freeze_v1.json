@@ -1,0 +1,69 @@
+{
+  "schema_version": "smartphone-r5-phase21-upstream-position-offset-freeze.v1",
+  "status": "frozen-before-implementation-and-truth",
+  "base_commit": "91f5c30",
+  "candidate_id": "native-fgo-upstream-position-offset-v1",
+  "purpose": "Port the pinned upstream add_position_offset post-processing step as an opt-in raw-only lane. The correction maps a fixed phone antenna-to-body offset through the estimated body-to-navigation attitude; no new measurement, truth, sample, MAT, or device-provided coordinate is admitted.",
+  "selection_basis": {
+    "unported_component": "functions/add_position_offset.m plus functions/eul2rotm.m",
+    "reason": "The upstream GNSS and GNSS/IMU pipelines apply a phone-specific physical antenna-to-phone-center offset after optimization. The current native raw lane emits the optimized antenna position without this explicit correction. A fixed geometry correction is independently specified and safer to port than an unobservable height/reference branch or truth-trained weighting.",
+    "alternatives_not_selected": [
+      "reference-height compensation: unavailable under the raw-only contract",
+      "new optimizer or robust thresholds: would be a truth-sensitive estimator change",
+      "additional carrier/ionosphere factors: already covered by separately sealed Phase 11-19 lanes"
+    ],
+    "truth_and_leaderboard_not_used": true
+  },
+  "raw_only_contract": {
+    "allowed_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "forbidden_inputs": ["*.mat", "ground_truth.csv before post-freeze score", "sample_submission.csv", "result coordinates", "device WLS coordinates", "leaderboard scores"],
+    "coordinate_source": "in-memory native raw GNSS/nav FGO result",
+    "attitude_source": "in-memory optimized native Pose3 attitude exported by the GTSAM backend",
+    "default_unchanged": true,
+    "no_subprocess_or_precomputed_coordinates": true
+  },
+  "candidate_contract": {
+    "backend": "existing native GTSAM Pose3+velocity+bias graph; no factor or optimizer changes",
+    "flag": "--native-upstream-position-offset",
+    "application_stage": "after finite optimized native solution and before raw UTC key alignment/output",
+    "rotation_spec": "MATLAB eul2rotm uses Rx*Ry*Rz on rpy=[roll,pitch,yaw] after subtracting [0,0,pi]",
+    "offset_frame": "[offsetUD, offsetRL, 0] metres in the upstream local phone frame",
+    "fixed_phone_offsets_m": {
+      "mi8": {"offsetRL": 0.25, "offsetUD": -0.35},
+      "sm-g988": {"offsetRL": 0.20, "offsetUD": -0.05},
+      "sm_or_samsung": {"offsetRL": 0.30, "offsetUD": -0.25},
+      "pixel6pro": {"offsetRL": -0.20, "offsetUD": -0.15},
+      "pixel7": {"offsetRL": -0.10, "offsetUD": -0.20},
+      "pixel4": {"offsetRL": 0.0, "offsetUD": -0.15},
+      "pixel5": {"offsetRL": -0.10, "offsetUD": -0.30}
+    },
+    "phone_matching": "upstream order: mi8; sm-g988 exact; sm or samsung; pixel6pro exact; pixel7 substring; pixel4 substring; pixel5 substring; unknown phone fails closed",
+    "position_semantics": "ECEF antenna estimate plus rotated local offset expressed through native ENU origin, then converted back to ECEF",
+    "fail_closed": ["unknown phone", "missing or mismatched finite attitude", "nonfinite offset or position", "out-of-Earth corrected position"]
+  },
+  "structural_gate": {
+    "raw_route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "supplemental_route": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "truth_free": true,
+    "required": ["finite corrected output", "exact raw-key coverage", "no MAT/enriched/WLS/truth input", "deterministic repeat", "default-off byte identity", "bounded correction magnitude", "no new continuity violation"],
+    "comparison": "same frozen Phase 12 native recipe with only this explicit post-processing flag added; no truth is used to select offsets or attitude"
+  },
+  "post_freeze_evaluation": {
+    "scope": "development evidence only; Pixel7 is already-used development identity",
+    "truth_policy": "seal candidate and control raw artifacts and hashes first, then read the declared development ground_truth.csv once in one evaluator process to compare both frozen outputs",
+    "gates": ["all four official diagnostic variants non-regress", "coverage unchanged", "finite/physical continuity safety", "candidate remains opt-in"],
+    "no_post_score_tuning": true,
+    "validation_holdout_test_truth": "not opened by this phase"
+  },
+  "source_hashes_at_freeze": {
+    "native_app": "1d08b78190fd68e5f9f2a66c78d7f70a2fce02da2731b8cc722aff57826346aa",
+    "native_backend": "a4d789db3b6a1006bec1c69739b1b23b50581ce69d9d4aa19cffa5bce8236fd3",
+    "native_fgo_header": "a00f05b54334bca7d3919b4d066b66db56bc7432fd20c8efef34b035b2111f29",
+    "upstream_add_position_offset_m": "2308b612b6aab9816ddcf3c1efef621b8ebe15a1bdae5d167df2783e6c831797",
+    "upstream_eul2rotm_m": "0214826c3a1dd662330acb034ab25756ea772961f0063092c887e535013c3da8",
+    "upstream_fgo_gnss_imu_m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+    "upstream_parameters_m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+  },
+  "implementation_rule": "Commit this freeze record before changing source. Implement only the fixed upstream offset helper, explicit opt-in wiring, diagnostics, and parity tests; do not alter Phase 19/20 artifacts, defaults, numeric estimator parameters, or any input contract after truth access.",
+  "freeze_record_sha256": "excluded-from-self-hash; compute from the committed file"
+}

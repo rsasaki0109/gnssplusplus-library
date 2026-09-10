@@ -1,0 +1,12 @@
+{
+  "schema_version": "smartphone-r5-wls-test-batch-kaggle-source-audit-manifest.v1",
+  "status": "sealed-failed-official-sample-unavailable",
+  "record": "docs/use_cases/records/smartphone_r5_wls_test_batch_v1_kaggle_source_audit.json",
+  "record_sha256": "2f808f3edf0301c83450279db389394adbf87de61895e612c1da34da4b1050c3",
+  "official_api_http_status": 401,
+  "sample_downloaded": false,
+  "derived_key_order_artifact_generated": false,
+  "truth_open_count": 0,
+  "algorithm_parameters_changed": false,
+  "post_failure_tuning": false
+}

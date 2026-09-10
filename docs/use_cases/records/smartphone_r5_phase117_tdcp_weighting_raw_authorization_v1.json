@@ -1,0 +1,126 @@
+{
+  "schema_version": "smartphone-r5-phase117-tdcp-weighting-raw-authorization.v1",
+  "phase": 117,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-exact-two-route-phase117-raw-base-structural-execution",
+  "authority": {
+    "phase117_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_source_parity_freeze_v1.json",
+      "sha256": "aba967b2ffab7ded84daa232ab948848d49497a70561262d1077200584b92dea"
+    },
+    "phase117_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_manifest_v1.json",
+      "sha256": "676f5653a3f3ed95302da2eaec03d38e5757334076cf33134a4df5f8b0a682ec"
+    },
+    "phase117_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase117_tdcp_weighting.py",
+      "sha256": "02083e7e642a73d05f2652a7786f8a1e769a6714a7a28dbcc7fe2fe39257717c"
+    },
+    "phase117_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase117_tdcp_weighting_execute.py",
+      "sha256": "07d7d9643bd449976bab85f2fde6d0dd16b77dbd9c5abbac2b4f0f706eb1e1c1"
+    },
+    "phase117_focused_tests": {
+      "path": "tests/test_smartphone_phase117_tdcp_weighting_execution.py",
+      "sha256": "d84810038f6593d94586072f5100fdde60d598d3a011f4e5572ee59a88947f1f"
+    },
+    "phase112_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_manifest_v1.json",
+      "sha256": "d8be91f42f07196e07b293558cc6b83dd261226af577c1b26b167eead75902e4"
+    },
+    "phase116_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase116_carrier_tdcp_incidence_structural_result_v1.json",
+      "sha256": "394ce1660ae5f181967b672bffab14d9228ffbe62ec6b748ca3854d30a14876f"
+    },
+    "freeze_commit": "283e129b16ea21f077e041b55c87772d03e74f58",
+    "implementation_commit": "13c1fe2c7fe9c1970db50018b5bc07cef76901bf",
+    "manifest_sha256": "676f5653a3f3ed95302da2eaec03d38e5757334076cf33134a4df5f8b0a682ec",
+    "evaluator_sha256": "02083e7e642a73d05f2652a7786f8a1e769a6714a7a28dbcc7fe2fe39257717c",
+    "wrapper_sha256": "07d7d9643bd449976bab85f2fde6d0dd16b77dbd9c5abbac2b4f0f706eb1e1c1",
+    "binary_sha256": "12c3c12152b443f40f0371cdf51b7d32b02f6bd953ca2bb648d69261a0ed14ee"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "candidate": {
+    "id": "phase117-official-tdcp-snr-type-weighting-v1",
+    "candidate_count": 1,
+    "selector": "--native-phase117-tdcp-snr-type-sigma",
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-upstream-position-offset",
+      "--native-phase116-carrier-tdcp-incidence-diagnostic",
+      "--native-phase117-tdcp-snr-type-sigma"
+    ],
+    "base_selectors": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "runs_per_route": 1,
+    "controls": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_evaluation": false,
+    "accuracy_scoring": false,
+    "solution_output_publication": false,
+    "solution_withheld": true,
+    "sigma_only": true,
+    "no_fallback": true,
+    "no_graph_mutation": true
+  },
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations": 2,
+    "raw_phone_gnss_process_reads_max": 2,
+    "raw_phone_imu_process_reads_max": 2,
+    "broadcast_navigation_process_reads_max": 2,
+    "raw_base_hash_reads_max": 2,
+    "raw_base_native_process_reads_max": 2,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "pdc_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_rows_authorized": false,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "execution_policy": {
+    "authorized": true,
+    "order": "MTV-A then LAX-T, sequentially",
+    "one_invocation_per_route": true,
+    "no_rerun": true,
+    "no_solver_fallback": true,
+    "official_tdcp_sigma_only": true,
+    "solver_filter_lm_equation_unit_sigma_graph_unchanged": true,
+    "truth_or_accuracy_evaluation": false,
+    "solution_output": "isolated withheld path; hash/row seal only; no coordinate interpretation or publication",
+    "base_input": "sealed raw base RINEX; one wrapper hash read plus one native process read per route",
+    "raw_inputs": "phone device_gnss.csv/device_imu.csv plus broadcast brdc.nav only",
+    "additional_frequency_band_selector": "preserved from Phase112/107 recipe; no-op proof remains sealed and no new selector is introduced"
+  },
+  "release_boundary": {
+    "raw_base_execution_authorized": true,
+    "structural_result_authorized": true,
+    "truth_or_accuracy_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_submission_authorized": false
+  },
+  "forbidden_inputs": {
+    "truth": false,
+    "MAT": false,
+    "phone_coordinates": false,
+    "precomputed_coordinates": false,
+    "PDC": false,
+    "Kaggle_or_token": false,
+    "accuracy": false
+  }
+}

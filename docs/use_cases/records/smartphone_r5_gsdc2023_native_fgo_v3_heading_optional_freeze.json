@@ -1,0 +1,182 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-freeze.v1",
+  "status": "frozen-before-v3-payload-materialization",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "purpose": "Freeze a structurally independent heading-optional native FGO train smoke/confirmation set after the v2.1 heading hard-gate No-Go and before reading any selected payload member.",
+  "external_mutation": false,
+  "token_access": false,
+  "truth_policy": {
+    "central_directory_metadata_only_for_selection": true,
+    "selected_payload_materialized_before_this_record": false,
+    "selected_truth_materialized_before_this_record": false,
+    "selected_truth_open_count_before_this_record": 0,
+    "validation_materialized_or_truth_opened": false,
+    "future_holdout_materialized_or_truth_opened": false,
+    "previous_holdout_or_validation_used_for_selection": false,
+    "leaderboard_scores_used_for_selection_or_tuning": false,
+    "policy": "Materialize only declared GNSS/IMU/nav/reference members after this freeze. Generate truth-free artifacts and seal their hashes before opening the two declared train truth members once. Fresh validation and all holdouts remain unopened unless every unchanged train gate passes in a later explicit follow-up."
+  },
+  "archive_inventory": {
+    "archive_path": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "archive_size_bytes": 2761355999,
+    "central_metadata_canonical_sha256": "5f619be94a00c33c3067f13b1cd3351d96f2804f07fa04eda8fb027739fb0992",
+    "inspection_method": "ZipFile.infolist() central-directory metadata only; selected member contents were not opened for this freeze."
+  },
+  "split_inventory": {
+    "source_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+    "source_record_sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+    "excluded_all_v2_and_v2_1_route_devices": true,
+    "exclusion_basis": "Conservative union of the v2 authoritative truth-use inventory, v2 selected train/validation/future-holdout identities, and the v2.1 independent confirmation identities; no prior scored/opened route-device is eligible for this v3 set.",
+    "excluded_records": [
+      "smartphone_r5_gsdc2023_native_fgo_v2_split_inventory_freeze.json",
+      "smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze.json",
+      "smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_result.json"
+    ],
+    "selected_train_smoke_confirmation": [
+      "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+      "2023-09-05-23-07-us-ca-routen/pixel5"
+    ],
+    "selected_identities_never_scored_or_truth_opened_per_authoritative_inventory": true,
+    "selected_set_route_disjoint_from_v2_and_v2_1": true,
+    "fresh_validation": null,
+    "future_holdout": null,
+    "selection_basis": "Metadata-only presence of device_gnss.csv, device_imu.csv, route-level brdc.nav, reference RINEX, and ground_truth.csv; route/year/environment separation; both are pixel5 because the heading failure is an initialization observability case, not a device-family ranking. No truth metric or public/private score was used."
+  },
+  "central_directory_metadata": {
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "device_gnss.csv": {"member": "dataset_2023/train/2021-07-19-20-49-us-ca-mtv-a/pixel5/device_gnss.csv", "file_size": 52340887, "compressed_size": 12200257, "crc32_hex": "a94927ad"},
+      "device_imu.csv": {"member": "dataset_2023/train/2021-07-19-20-49-us-ca-mtv-a/pixel5/device_imu.csv", "file_size": 18051289, "compressed_size": 3399367, "crc32_hex": "b6f4241e"},
+      "ground_truth.csv": {"member": "dataset_2023/train/2021-07-19-20-49-us-ca-mtv-a/pixel5/ground_truth.csv", "file_size": 184336, "compressed_size": 54491, "crc32_hex": "81a64f07"},
+      "brdc.nav": {"member": "dataset_2023/train/2021-07-19-20-49-us-ca-mtv-a/brdc.nav", "file_size": 10169517, "compressed_size": 1010274, "crc32_hex": "cd38898b"},
+      "reference_obs": {"member": "dataset_2023/train/2021-07-19-20-49-us-ca-mtv-a/SLAC_rnx2.obs", "file_size": 4843122, "compressed_size": 1081792, "crc32_hex": "309f76b5"}
+    },
+    "2023-09-05-23-07-us-ca-routen/pixel5": {
+      "device_gnss.csv": {"member": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/pixel5/device_gnss.csv", "file_size": 44495034, "compressed_size": 10329684, "crc32_hex": "f534419a"},
+      "device_imu.csv": {"member": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/pixel5/device_imu.csv", "file_size": 35928010, "compressed_size": 7372060, "crc32_hex": "da095459"},
+      "ground_truth.csv": {"member": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/pixel5/ground_truth.csv", "file_size": 151623, "compressed_size": 38815, "crc32_hex": "52e8eb21"},
+      "brdc.nav": {"member": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/brdc.nav", "file_size": 11434000, "compressed_size": 1084746, "crc32_hex": "ace7b572"},
+      "reference_obs": {"member": "dataset_2023/train/2023-09-05-23-07-us-ca-routen/P221_rnx3.obs", "file_size": 833265, "compressed_size": 220760, "crc32_hex": "e20f3c97"}
+    }
+  },
+  "v3_candidate": {
+    "id": "native-fgo-v3-heading-optional-preserve-v1-tdcp-motion-combined-imu",
+    "entrypoint": "build/apps/gnss_fgo_imu_v3_heading_optional",
+    "source_hashes": {
+      "apps/native/gnss_fgo_imu_v3_heading_optional.cpp": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+      "apps/native/gnss_fgo_imu_v21.cpp_dependency": "c158cdd2fc6cfba37b7bb300b52c2c5b9cf760482ac46206895f0462da835883",
+      "apps/native/gnss_fgo_imu_no_base.cpp_dependency": "fe5674ab9c3c370a3295630f76d05edff2706654e1fcb54735ea48bd7ea77d11",
+      "src/algorithms/fgo_gtsam_backend.cpp": "08c7b82e9395fc3645fc75785849576f982ec6e6e91432e3a58d85bb396ec191",
+      "src/algorithms/fgo_gtsam_internal.hpp": "aad937849b4ba1c9b9bec0cdaaaf270a66cb71b7d789e682d5ff571bb7f66621",
+      "apps/CMakeLists.txt": "7b9bc9ae636afd427cea744c1f6c880924dbd83c143c3d457e10294a69406715"
+    },
+    "release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+    "preserved_v2_1_binary_sha256": "8b978458735996ea571baa9975be70c37287f84fec029ced187b9f30fbb6d483",
+    "preserved_graph": [
+      "undifferenced pseudorange",
+      "ordinary time-differenced carrier phase",
+      "position motion between consecutive epochs",
+      "clock motion between consecutive epochs",
+      "existing Huber robust loss",
+      "CombinedImuFactor with pose/velocity/bias states"
+    ],
+    "forbidden_graph_classes": ["double-difference pseudorange", "double-difference carrier", "single-difference Doppler", "single-difference TDCP"],
+    "upstream_initialization_audit": {
+      "repository": "https://github.com/taroz/gsdc2023",
+      "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+      "license": "MIT",
+      "fgo_gnss_imu_m_sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "parameters_m_sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "vel2rpy_m_sha256": "1fc09b66f3e6548174e0eb6777d42becd0fa131b821013864e4fbfa9ff6e6a31",
+      "imuprocessing_m_sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+      "evidence": [
+        "fgo_gnss_imu.m:40-59 loads prior GNSS/IMU state and calls vel2rpy for initialization",
+        "fgo_gnss_imu.m:129-143 synchronizes IMU and applies gravity, noise, and RzRyRx mounting parameters",
+        "fgo_gnss_imu.m:145-186 inserts Pose3, position, velocity, clock, drift, and zero-bias states",
+        "fgo_gnss_imu.m:252-299 adds motion, clock, ordinary TDCP, IMU, and bias factors",
+        "functions/vel2rpy.m:5-14 smooths velocity over 20 samples, uses a 0.5 m/s threshold, and fills low-speed headings by nearest value",
+        "functions/imuprocessing.m:5-40 maps elapsed-ns sensor times and uses gyro-clock synchronization with coefficient 0.5"
+      ],
+      "distinction": "The v3 implementation ports only the observable initialization rationale and frozen frame/noise values; it does not copy MATLAB graph code or use truth-derived state. Unlike the upstream nearest-filled yaw, v3 explicitly represents weak yaw with a finite broad prior and a fail-closed fallback."
+    }
+  },
+  "heading_optional_contract": {
+    "gravity_leveling": {
+      "stationary_samples": 250,
+      "norm_min_mps2": 6.864655,
+      "norm_max_mps2": 12.748645,
+      "norm_std_max_mps2": 1.5,
+      "failure_action": "fail closed to exact v1 graph"
+    },
+    "course_initialization": {
+      "window_epochs": 5,
+      "minimum_horizontal_speed_mps": 0.5,
+      "maximum_horizontal_speed_mps": 50.0,
+      "maximum_vertical_speed_mps": 3.0,
+      "minimum_valid_windows": 3,
+      "minimum_path_m": 2.0,
+      "minimum_span_s": 2.0,
+      "maximum_circular_scatter_deg": 45.0,
+      "strong_course_yaw_sigma_deg": 5.0,
+      "weak_course_action": "do not abort; preserve gravity roll/pitch and use broad finite yaw prior"
+    },
+    "weak_yaw_gauge": {
+      "yaw_prior_sigma_rad": 3.141592653589793,
+      "prior_is_finite": true,
+      "estimated_jointly_with": ["GNSS pseudorange", "ordinary TDCP", "position/clock motion", "CombinedImuFactor"],
+      "covariance_off_diagonal_reset": true,
+      "nonfinite_or_conditioning_failure_action": "disable IMU and run the exact v1 preserve-TDCP/motion graph"
+    },
+    "offset_estimator": {
+      "grid_seconds": {"min": -0.1, "max": 0.1, "step": 0.01},
+      "window_seconds": 0.1,
+      "minimum_pairs": 20,
+      "minimum_pearson": 0.4,
+      "minimum_margin": 0.05,
+      "edge_or_weak_action": "zero-offset fail-closed"
+    },
+    "frame_and_units": {
+      "sensor_frame": "Android CSV converted to body FLU",
+      "mounting_rpy_deg_xyz": [-85.0, 178.0, -94.0],
+      "navigation_frame": "local ENU, Z-up",
+      "gravity_vector_mps2": [0.0, 0.0, -9.80665],
+      "gyro_units": "rad/s after adapter conversion",
+      "time": "GPST seconds in IMU CSV; Unix output subtracts 18 UTC leap seconds"
+    }
+  },
+  "commands": {
+    "materialize_after_freeze": "verify only the declared central metadata, then atomically materialize device_gnss.csv, device_imu.csv, route-level brdc.nav, and reference_obs for the two selected identities; do not materialize ground_truth until after truth-free artifacts are sealed",
+    "adapter_truth_free": "python3 apps/gnss.py smartphone-gnss-adapter --device-gnss <inputs/device_gnss.csv> --output-dir <adapter> --dataset-id <route/phone> --device-model pixel5 --source-url https://taroz.net/data/dataset_2023.zip --source-terms 'Original GSDC competition terms; local evaluation only' --role development --truth-free --skip-epochs 0 --max-epochs -1 --experimental-galileo-e1 --experimental-galileo-e1-hatch-window-s 30 --broadcast-nav <inputs/brdc.nav>",
+    "candidate_truth_free": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_v3_heading_optional --obs <adapter/rover.obs> --nav <inputs/brdc.nav> --imu <inputs/imu_processed.csv> --out <candidate/submission.csv> --summary-json <candidate/run_summary.json> --dataset-id <route/phone> --skip-epochs 200 --max-epochs 30",
+    "truth_score_once": "after both route truth-free output/detail/summary artifacts and hashes are sealed, materialize/read only the two declared train ground_truth.csv members once; no rerun or parameter change",
+    "release_build": "cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build --target gnss_fgo_imu_v3_heading_optional -j2",
+    "tests": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:/opt/ros/jazzy/lib ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "predeclared_train_gate": {
+    "structural_each_route": [
+      "gravity or exact-v1 fallback is finite",
+      "pseudorange, ordinary TDCP, position/clock motion, and CombinedImu factors are nonzero when IMU path is selected",
+      "all forbidden base/single-difference factor counts are zero",
+      "solver converges with finite costs, states, covariance initialization, and keyed finite output",
+      "no isolated two-sided >70 m/s coordinate spike"
+    ],
+    "truth_scored_each_route_and_aggregate": {
+      "all_four_official_distance_interpolation_variants_strictly_improve_vs_exact_v1": true,
+      "mean_of_four_variants_strictly_improves_vs_exact_v1": true,
+      "horizontal_p50_and_p95_non_regress": true,
+      "availability_and_truth_coverage_non_regress": true,
+      "vertical_p95_margin_m": 100.0,
+      "vertical_catastrophic_regression": false,
+      "physical_continuity": "finite coordinates and no unexplained >70 m/s isolated two-sided jump"
+    },
+    "promotion": "Only if every unchanged train route and aggregate gate passes may a fresh validation be opened once in a later explicit follow-up. This record does not authorize validation or holdout access."
+  },
+  "immutability": {
+    "source_binary_config_gates_frozen_before_selected_payload": true,
+    "no_post_truth_tuning": true,
+    "production_default_changed": false,
+    "v5_submission_bytes_or_hash_touched": false,
+    "freeze_record_sha256_pinned_in": "smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze_manifest.json"
+  }
+}

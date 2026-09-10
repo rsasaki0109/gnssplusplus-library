@@ -1,0 +1,121 @@
+{
+  "schema_version": "smartphone-r5-phase152-h-raw-p-seed-diagnostic-result.v1",
+  "phase": 152,
+  "execution_label": "Luna Max",
+  "status": "raw-ingress-success-stage-failed-closed",
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase152_h_raw_p_seed_diagnostic_authorization_v1.json",
+    "sha256": "f8ec7ea6da882703de081c24b31b341dc7919c78247bfe35919ef7cbae467c08"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase151_h_raw_p_seed_ingress_correction_manifest_v1.json",
+    "sha256": "33b6a5bf768e46e80f5ec7db610a156f61fff6233affefb545ad29a38dd93eec"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "execution": {
+    "invocation_count": 1,
+    "process_return_code": 1,
+    "native_phase149_stage_entries": 1,
+    "native_spp_initializations": 1,
+    "native_spp_epoch_solver_invocations": 0,
+    "failure_stage": "phase149-raw-p-seed-clock-group-admission",
+    "failure_status": "unsupported-clock-groups",
+    "failure_reason": "unsupported-multiple-or-unknown-clock-groups",
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false
+  },
+  "native_summary": {
+    "path": "output/smartphone-r5/phase152-h-raw-p-seed-v1/mtv-h/native_summary.json",
+    "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+    "bytes": 2466038,
+    "sha256": "8e4c63d5e40f0ab43ded6fdaafad2721d4203444c2dbf18b261a03d7462df353",
+    "present": true,
+    "preserved": true,
+    "coordinate_fields_interpreted": false,
+    "coordinate_numeric_keys_present": false,
+    "raw_pseudorange_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false,
+    "velocity_endpoint_policy": "one-sided-endpoints-centered-interior"
+  },
+  "structural_counts": {
+    "input_epoch_count": 3140,
+    "accepted_position_count": 0,
+    "finite_clock_count": 0,
+    "finite_velocity_count": 0,
+    "epoch_status_counts": {
+      "unsupported-clock-groups": 1,
+      "not-evaluated": 3139
+    },
+    "epoch_reason_counts": {
+      "unsupported-multiple-or-unknown-clock-groups": 1,
+      "not-evaluated-empty-reason": 3139
+    },
+    "raw_pseudorange_rows": {
+      "first_evaluated_epoch": 31,
+      "total_structural_summary_rows": 31,
+      "later_epochs_not_evaluated": 3139
+    },
+    "raw_pseudorange_satellite_counts": {
+      "22": 1,
+      "0": 3139
+    },
+    "raw_clock_group_counts": {
+      "4": 1,
+      "0": 3139
+    },
+    "unsupported_clock_group_count": 1,
+    "geometry_rank_counts": "unavailable: admission failed before geometry rank evaluation",
+    "time_policy_counts": "unavailable: admission failed before velocity timestamp evaluation",
+    "accepted_epoch_quality_fields": "unavailable: no epoch passed clock-group admission"
+  },
+  "failure_evidence": {
+    "stderr_path": "output/smartphone-r5/phase152-h-raw-p-seed-v1/mtv-h/stderr.log",
+    "stderr_bytes": 86,
+    "stderr_sha256": "9511d9776d89ecdd9978254a5e350dec944a3a4982c88a5a4d380bb2523d2c96",
+    "stderr_message": "Phase149 raw-P seed stage failed closed: unsupported-multiple-or-unknown-clock-groups",
+    "stdout_path": "output/smartphone-r5/phase152-h-raw-p-seed-v1/mtv-h/stdout.log",
+    "stdout_bytes": 0,
+    "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "read_accounting": {
+    "raw_phone_gnss_reads": 1,
+    "broadcast_navigation_reads": 1,
+    "raw_phone_imu_reads": 0,
+    "raw_base_rinex_reads": 0,
+    "native_phase149_stage_invocations": 1,
+    "native_spp_epoch_solver_invocations": 0,
+    "native_fgo_invocations": 0,
+    "summary_reads": 1,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  },
+  "interpretation_boundary": {
+    "raw_ingress_success": true,
+    "raw_clock_only_flag_applied": true,
+    "raw_clock_formula_changed": false,
+    "enriched_pseudorange_substituted": false,
+    "mixed_clock_groups_rejected_fail_closed": true,
+    "position_clock_velocity_values_published": false,
+    "no_doppler_graph_readiness": "not-assessed",
+    "diagnostic_success_or_failure_is_not_accuracy_or_leaderboard_proof": true
+  },
+  "root_cause_and_next_boundary": {
+    "root_cause": "The first loaded H epoch contains valid raw P rows from four native clock groups. Phase149 currently permits only one supported shared-clock group (GPS/QZSS coalesced); it rejects mixed or unknown groups before calling the native per-epoch SPP solve.",
+    "current_conclusion": "Corrected raw-clock-only ingress is proven to pass, but H raw-P position/clock/velocity coverage and no-Doppler graph admission remain unverified.",
+    "next_blocker": "A future source-backed per-clock-group rank and clock-seed contract is required before mixed-constellation H epochs can enter raw-P SPP; do not collapse four groups into one shared clock, synthesize a seed, or rerun this authorization."
+  }
+}

@@ -1,0 +1,246 @@
+{
+  "schema_version": "smartphone-r5-phase111-common-satellite-miss-mask-parity-freeze.v1",
+  "phase": 111,
+  "execution_label": "Luna Max",
+  "status": "frozen-source-backed-default-off-candidate-no-execution",
+  "purpose": "Freeze one source-backed common-satellite and finite in-domain corrected-code retention contract after a read-only official/native parity audit.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase111_common_satellite_miss_mask_parity_audit_v1.md",
+    "commit": "6315df5668cfc94cea9ae80c7045c34f0f5fe8c2",
+    "sha256": "d22eae620504768c555879620592aee65ae450e242befa3e8ce5b918d8fc25ae"
+  },
+  "sealed_evidence": {
+    "phase107_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_result_v1.json",
+      "sha256": "e7eb3f1d2670672414744a100dc1e2fc3e0b019ae7efc0dbfef1518300ce8d6e"
+    },
+    "phase108_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase108_phase107_solution_accuracy_result_v1.json",
+      "sha256": "9f9a2528745c06ba06e774139f56892bcea0ef208a3d064e4b70042e48f29a9d"
+    },
+    "phase109_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase109_raw_base_frequency_parity_result_v1.json",
+      "sha256": "b443c2fcd1ed3b067094b47bf0b81f7fa404ed20547e7234d1c174dcf9ca2225"
+    },
+    "phase110_noop_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase110_additional_band_noop_decision_freeze_v1.json",
+      "sha256": "91064f377228a506951599c946cbaaf6acf5fb7c5feb33a27dad8a6ba0172033"
+    },
+    "source_pins": {
+      "official_fgo_gnss_m": {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+      },
+      "official_fgo_gnss_imu_m": {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+      },
+      "official_correct_pseudorange_m": {
+        "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e"
+      },
+      "native_miss_mask_cpp": {
+        "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+        "sha256": "ce85e428ac0a7af93ee1ad3eadf082b5361454dff5c920245be7c16c940b6949"
+      },
+      "native_application_cpp": {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "be643811cfaf82304f9434bc969796b2a14cd0f6e5a2c8b46b043af7b326c5c2"
+      },
+      "native_base_model_cpp": {
+        "path": "src/algorithms/base_pseudorange_compensation.cpp",
+        "sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817"
+      }
+    }
+  },
+  "classification": {
+    "requested_categories": {
+      "a": "factor dropped",
+      "b": "raw uncorrected retained",
+      "c": "zero correction retained"
+    },
+    "mtv_a": {
+      "original_adopted_rows": 57281,
+      "retained_finite_corrected_rows": 43259,
+      "missing_exact_stream_rows": 12894,
+      "out_of_domain_rows": 1128,
+      "nonfinite_rows": 0,
+      "rows": [
+        {
+          "signal": "BDS_B1I",
+          "band": "B1",
+          "original_rows": 12849,
+          "exact_stream_matched": 0,
+          "retained_corrected": 0,
+          "missing_exact_stream": 12849,
+          "out_of_domain": 0,
+          "nonfinite": 0,
+          "classification": "a-factor-dropped-at-exact-stream-check"
+        },
+        {
+          "signal": "GLO_L1CA",
+          "band": "G1",
+          "original_rows": 9379,
+          "exact_stream_matched": 9334,
+          "retained_corrected": 9334,
+          "missing_exact_stream": 45,
+          "out_of_domain": 0,
+          "nonfinite": 0,
+          "classification": "a-factor-dropped-at-exact-stream-check"
+        },
+        {
+          "signal": "GPS_L1CA",
+          "band": "L1",
+          "original_rows": 21434,
+          "exact_stream_matched": 21434,
+          "retained_corrected": 20306,
+          "missing_exact_stream": 0,
+          "out_of_domain": 1128,
+          "nonfinite": 0,
+          "classification": "a-factor-dropped-at-in-domain-correction-check"
+        },
+        {
+          "signal": "GAL_E1",
+          "band": "E1",
+          "original_rows": 13619,
+          "exact_stream_matched": 13619,
+          "retained_corrected": 13619,
+          "missing_exact_stream": 0,
+          "out_of_domain": 0,
+          "nonfinite": 0,
+          "classification": "retained-with-finite-correction"
+        }
+      ],
+      "raw_uncorrected_retained_for_misses": 0,
+      "zero_fallback_retained_for_misses": 0
+    },
+    "lax_t": {
+      "original_adopted_rows": 30798,
+      "retained_finite_corrected_rows": 30664,
+      "missing_exact_stream_rows": 0,
+      "out_of_domain_rows": 134,
+      "nonfinite_rows": 0,
+      "raw_uncorrected_retained_for_misses": 0,
+      "zero_fallback_retained_for_misses": 0
+    }
+  },
+  "source_parity": {
+    "official_common_satellite_step": "obsb = obsb.sameSat(obsr)",
+    "official_correction_step": "pc = interp1(obsb.time.t, pc_, obsr.time.t, linear) with no extrapolation",
+    "official_factor_gate": "add PseudorangeFactor_XC only when corrected resPc is not NaN",
+    "native_exact_key": "(SatelliteId, SignalType)",
+    "native_missing_key_action": "hasStream false increments dropped_missing_exact_stream_rows and continues",
+    "native_time_failure_action": "invalid epoch/time or correctionAt false increments dropped_out_of_domain_rows and continues",
+    "native_nonfinite_action": "nonfinite correction/subtraction increments dropped_nonfinite_correction_rows and continues",
+    "native_retention_action": "subtract finite correction once, mark applied, append to retained vector",
+    "native_graph_input": "post-mask shared problem.pseudorange_factors only",
+    "source_evidence_lines": {
+      "official_helper": "correct_pseudorange.m:5-6,26-34",
+      "official_gnss_graph": "fgo_gnss.m:72-78,132-142",
+      "official_gnss_imu_graph": "fgo_gnss_imu.m:85-92,202-212",
+      "native_mask": "source_pseudorange_miss_mask.cpp:65-116",
+      "native_apply": "gnss_fgo_imu_no_base.cpp:6822-6901",
+      "native_backend": "fgo_gtsam_backend.cpp:850-875"
+    }
+  },
+  "accuracy_context": {
+    "source": "sealed Phase108 result only; no Phase111 truth read or evaluation",
+    "mtv_a_score_m": 1.1396560717187856,
+    "lax_t_score_m": 0.8241679860216076,
+    "macro_score_m": 0.9819120288701966,
+    "strict_gate_m": 0.782,
+    "interpretation": "LAX-T has zero exact-stream misses but still exceeds the strict promotion boundary; exact-stream misses alone are not a sufficient causal explanation of the route score difference.",
+    "causal_claim_authorized": false,
+    "truth_re_evaluation_authorized": false
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase111-source-common-satellite-in-domain-corrected-code-retention-v1",
+    "status": "frozen-default-off-source-backed-contract",
+    "source_backed": true,
+    "formalizes_existing_phase107_phase109_mask": true,
+    "scope": "GNSS-first Point3/velocity staging and main meter-state graph consume only the shared base-corrected code factor vector satisfying exact common satellite/signal key, valid epoch/time, finite in-domain interpolation, and finite subtraction.",
+    "retain_predicate": [
+      "exact hasStream(SatelliteId, SignalType)",
+      "valid retained epoch and finite time",
+      "finite correctionAt(time, SatelliteId, SignalType)",
+      "finite corrected pseudorange after one subtraction"
+    ],
+    "drop_predicate": [
+      "missing exact stream",
+      "out-of-domain or invalid epoch/time",
+      "nonfinite correction or corrected value"
+    ],
+    "correction_application": {
+      "shared_factor_vector": true,
+      "passes": 1,
+      "duplicate_application": false,
+      "raw_uncorrected_fallback": false,
+      "zero_fallback": false,
+      "endpoint_hold": false,
+      "extrapolation": false
+    },
+    "unchanged_contract": {
+      "c7_state_and_handoff": true,
+      "d_state_and_handoff": true,
+      "ccdd": true,
+      "doppler": true,
+      "tdcp": true,
+      "imu": true,
+      "equations_and_units": true,
+      "sigma": true,
+      "filter": true,
+      "lm_schedule": true,
+      "initialization": true,
+      "qr_solver_and_ordering": true,
+      "output_alignment": true,
+      "legacy_selector_off": true
+    },
+    "new_mapping_or_fill": false,
+    "raw_base_payload_authorized": false,
+    "solver_authorized": false,
+    "truth_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false
+  },
+  "rejected_alternatives": [
+    {
+      "id": "retain-raw-on-missing-base",
+      "reason": "Contradicts official NaN factor gate and native miss-mask continue path."
+    },
+    {
+      "id": "zero-correction-fallback",
+      "reason": "Neither official interpolation nor native correction path substitutes zero for a missing key/time."
+    },
+    {
+      "id": "new-satellite-signal-alias-or-cross-key-fill",
+      "reason": "No sealed per-key evidence and would change the frozen source mapping/topology."
+    },
+    {
+      "id": "endpoint-hold-or-extrapolation",
+      "reason": "Contradicts official interp1 default behavior and native correctionAt domain checks."
+    }
+  ],
+  "read_accounting_phase111": {
+    "official_native_source_reads": "nonzero_source_only",
+    "sealed_result_summary_metadata_reads": "nonzero_aggregate_lineage_only",
+    "solution_csv_reads": 0,
+    "raw_phone_gnss_imu_navigation_payload_reads": 0,
+    "raw_base_rinex_payload_header_stat_hash_reads": 0,
+    "truth_payload_reads": 0,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_or_truth_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "solution_publication": 0
+  },
+  "authorization_boundary": {
+    "phase111_raw_execution": false,
+    "phase111_truth_evaluation": false,
+    "new_raw_base_read": false,
+    "new_algorithm_implementation": false,
+    "only_next_action": "Any future structural authorization must measure exact common-key, in-domain, retained, and dropped counts by signal before an accuracy decision."
+  }
+}

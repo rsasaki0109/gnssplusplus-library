@@ -1,0 +1,209 @@
+{
+  "schema_version": "smartphone-r5-phase90-source-clock-c0d-raw-drift-direct-wls-handoff-freeze.v1",
+  "phase": 90,
+  "status": "frozen-before-implementation",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one source-aligned, raw-only implementation candidate for C0/D initialization and direct Doppler velocity handoff after the Phase90 blocker audit.",
+  "authority": {
+    "phase90_blocker_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase90_source_clock_c0d_velocity_handoff_blocker_audit_v1.md",
+      "sha256": "d5a675b14b1fe303967f9d243f4fd00dd11d9ab0e39e303d5002063e0c3a8955",
+      "commit": "0e2db4a"
+    },
+    "phase89_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase89_source_clock_c0d_diagnostic_result_v1.json",
+      "sha256": "9c61651f83a9b349866299b746c9e66f0ec8385b447a674692bab66d8b3c2f94",
+      "status": "no-go-phase89-source-clock-c0d-active-solve-gates"
+    },
+    "phase89_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase89_source_clock_c0d_diagnostic_execution_freeze_v1.json",
+      "sha256": "b379d508129712107f1e582b68cf0f0072c96d49dd2de181593fbfd89639140b"
+    },
+    "phase89_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase89_source_clock_c0d_diagnostic_execution_manifest_v1.json",
+      "sha256": "60a79956d693f154ab453d60109b66bf8ec041c8934da95625653b33831a0e85"
+    },
+    "phase39_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase39_gnss_first_velocity_only_handoff_result_v1.json",
+      "sha256": "dc8afbe58d89ef6453082942a3291924917e2a6c225d532cbcf87347b7b97fde",
+      "status": "sealed-structural-no-go"
+    },
+    "phase40_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json",
+      "sha256": "ea1d92b2f69bf6810260e17d05ae4f3c0276e1ab7be6cec84a1f35b0fd5607b1",
+      "status": "sealed-structural-no-go"
+    },
+    "phase88_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase88_source_clock_c0d_active_solve_observability_diagnostic_freeze_v1.json",
+      "sha256": "e03cc2327557fe9f5c5189b7a315dd02c50edec9bf4e38284e1a8c6c3271059e"
+    }
+  },
+  "decision_boundary": {
+    "candidate_count": 1,
+    "candidate_selection": "fixed-single-candidate",
+    "implementation_authorized": true,
+    "implementation_before_execution_required": true,
+    "execution_authorized": false,
+    "authorized_route_count_at_freeze": 0,
+    "followup_execution_manifest_required": true,
+    "followup_evaluator_and_focused_tests_required": true,
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "promotion_or_accuracy_authorization": false,
+    "phase85_phase86_phase89_no_go_preserved": true,
+    "source_sigma_tuning_authorized": false,
+    "c0d_unit_or_equation_rewrite_authorized": false,
+    "raw_execution_before_this_freeze": false
+  },
+  "candidate": {
+    "id": "phase90_source_clock_c0d_raw_drift_direct_wls_handoff",
+    "kind": "same-run-raw-android-drift-D-initializer-with-existing-direct-doppler-WLS-velocity-handoff",
+    "status_at_freeze": "not-implemented",
+    "source_aligned": true,
+    "raw_only": true,
+    "diagnostic_only": true,
+    "exactly_one_candidate": true,
+    "planned_selector": "--native-source-clock-c0d-raw-drift-direct-wls-handoff",
+    "existing_velocity_handoff_selector": "--native-direct-doppler-wls-handoff",
+    "existing_direct_quality_selector": "--native-source-direct-observable-quality",
+    "allowed_change": {
+      "d_initializer": "For each retained problem epoch i, initialize D_i from that same-run epoch's EpochSeed.receiver_clock_drift_mps.",
+      "d_source_field": "ObservationData.receiver_clock_drift_mps carried through EpochSeed.receiver_clock_drift_mps",
+      "d_units": "metres_per_second",
+      "android_conversion": "DriftNanosPerSecond * SPEED_OF_LIGHT / 1e9",
+      "d_coverage_gate": "Require one finite raw drift value for every retained epoch; fail closed on missing, nonfinite, count-mismatched, or reordered values.",
+      "epoch_alignment": "Use the same retained problem epoch sequence and source timestamp identity; do not align by vector position across independently rebuilt problems.",
+      "velocity_handoff": "Use the existing direct FGOProblem::doppler_velocity_wls_estimates handoff without changing its equations, quality gates, physical gates, or coverage accounting.",
+      "coordinate_policy": "Handoff velocity only; do not copy GNSS-first position or clock states and do not derive D from coordinates, position differences, or a base solution.",
+      "telemetry": "Expose only diagnostics proving D provenance, units, finite/count coverage, direct-WLS acceptance/rejection, and unchanged C0/D factor accounting."
+    },
+    "must_preserve": {
+      "c0d_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "c0d_jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "c0d_clock_units": "seconds",
+      "c0d_drift_units": "metres_per_second",
+      "c0d_residual_units": "seconds",
+      "c0d_sigma_m": 0.1,
+      "c0d_sigma_seconds": "0.1/C_LIGHT",
+      "direct_doppler_equation": "los.dot(v_receiver_ecef)+receiver_clock_rate_mps-measured_doppler_mps",
+      "direct_wls_minimum_rows": 4,
+      "direct_wls_velocity_bound_mps": 70.0,
+      "direct_wls_clock_rate_bound_mps": 2000.0,
+      "direct_wls_residual_condition_rank_gates": true,
+      "direct_wls_all_epoch_coverage_and_rejected_zero": true,
+      "direct_observable_quality": true,
+      "optimizer_algorithm_changed": false,
+      "measurement_factors_changed": false,
+      "source_sigma_tuning": false,
+      "meter_state_parity": false,
+      "native_pdc_state_bridge": false,
+      "coordinate_copy_or_bridge": false,
+      "precomputed_coordinate_input": false,
+      "historical_phone_residual_drift_replacement": false
+    },
+    "required_focused_tests_before_execution_manifest": [
+      "Synthetic finite DriftNanosPerSecond conversion produces the expected metres-per-second D seed.",
+      "Synthetic missing/nonfinite/count-mismatched/reordered raw drift fails closed with no zero or hold fallback.",
+      "Synthetic direct-WLS accepted velocity-only handoff preserves positions_clocks_copied=0 and source epoch count.",
+      "Synthetic direct-WLS over-70 and over-2000 states remain rejected and cannot be clipped, replaced, or propagated to pass coverage.",
+      "Synthetic C0/D factor verifies unchanged equation, Jacobian, sigma, row skip, and phone-exclusion invariants.",
+      "Diagnostics prove candidate selector does not enable PDC or any coordinate bridge."
+    ],
+    "required_gates_before_any_future_raw_execution": [
+      "Implementation and focused tests are committed separately from this freeze.",
+      "A separate pre-raw execution manifest pins source, binary, evaluator, candidate, and exact route matrix.",
+      "The evaluator fails closed on missing D telemetry, iterations below one, nonfinite costs, or final cost not strictly below initial cost.",
+      "Only a later manifest may authorize raw routes; this freeze itself authorizes none.",
+      "No truth, MAT, Kaggle, token, base, validation-holdout, Phase82, or precomputed-coordinate reads are permitted."
+    ],
+    "evidence_limit": "Phase40 reports zero valid direct-WLS coverage on MTV-h; this candidate is an implementation hypothesis supported by source-unit parity and does not claim route readiness or accuracy improvement."
+  },
+  "required_raw_domain_if_later_authorized": [
+    "raw Android device_gnss.csv",
+    "raw Android device_imu.csv",
+    "broadcast brdc.nav"
+  ],
+  "forbidden_inputs_and_paths": [
+    "base RINEX or base-station pseudorange",
+    "truth or MAT artifacts",
+    "Kaggle or token access",
+    "precomputed coordinates or Phase82 coordinate artifacts",
+    "coordinate-derived D or clock initialization",
+    "GNSS-first position/clock copy",
+    "native PDC state bridge",
+    "historical residual-derived phone-list D replacement",
+    "velocity clipping, interpolation, padding, reordering, or rejected-state substitution",
+    "source sigma, optimizer, physical-bound, rank, residual, or coverage-gate relaxation",
+    "accuracy scoring or route-score selection"
+  ],
+  "official_source_pins": {
+    "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m": {
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "evidence": "DriftNanosPerSecond is converted to dclk in metres/second at lines 103-118."
+    },
+    "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m": {
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "evidence": "The official D initial vector uses the source dclk sequence at lines 40-55 and 102-106; ClockFactor_CCDD is added at lines 252-277."
+    },
+    "output/reproducibility-cache/gsdc2023/parameters.m": {
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "evidence": "Official motion-clock sigma is 0.1 m at lines 130-133."
+    },
+    "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h": {
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc",
+      "evidence": "Official metre-valued C0/D equation and Jacobian are at lines 39-63."
+    },
+    "output/reproducibility-cache/gtsam_gnss/src/DopplerFactor_VD.h": {
+      "sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1",
+      "evidence": "Official direct Doppler velocity/clock-rate residual is at lines 45-56."
+    }
+  },
+  "repository_source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "a8511d42148dbff1d3833efd7ca3ff95aa575e955ea9da71e5db28b4aa59a6d3",
+    "src/algorithms/fgo_problems.cpp": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+    "src/algorithms/fgo_gtsam_backend.cpp": "3935f1efa9a7fda4700188a3c57c0d466fc808f61c13d467e1954fe385990f7d",
+    "src/algorithms/fgo_gtsam_internal.hpp": "7221aaa53360a81aeea3f44ee293e7e1b08d30d368ac18cd7b839fbeb34c6beb",
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0",
+    "src/io/android_raw_gnss.cpp": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+    "include/libgnss++/algorithms/fgo.hpp": "438e0ed049c9c43c68af4b9b9b79e7b08fa18f38307f758821deff79be81ca52",
+    "include/libgnss++/core/observation.hpp": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c",
+    "include/libgnss++/algorithms/doppler_contract.hpp": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d"
+  },
+  "read_accounting_at_freeze": {
+    "phase90_audit_read": 1,
+    "sealed_phase89_result_read": 1,
+    "sealed_phase89_freeze_and_manifest_reads": 2,
+    "sealed_phase39_result_read": 1,
+    "sealed_phase40_result_read": 1,
+    "sealed_phase87_audit_and_phase88_freeze_context_reads": 2,
+    "repository_source_or_header_files_read_or_hashed": 10,
+    "official_pinned_source_or_GTSAM_files_read_or_hashed": 9,
+    "in_memory_synthetic_sensitivity_checks": 1,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "implementation_authorization": {
+    "authorized": true,
+    "authorized_change_count": 1,
+    "authorized_candidate_id": "phase90_source_clock_c0d_raw_drift_direct_wls_handoff",
+    "execution_authorized": false,
+    "route_matrix": [],
+    "followup_implementation_commit_required": true,
+    "followup_focused_test_commit_required": true,
+    "followup_pre_raw_manifest_required": true,
+    "failure_action": "Fail closed; do not relax any source equation, sigma, direct-quality, physical, rank, residual, coverage, no-bridge, or provenance gate."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-gnss-pdc-upstream-residual-snr-score-result-manifest.v2.1",
+  "result_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_global_isb_v2_1_score_result.json",
+  "result_record_sha256": "d94ed5f00f576c5d6658bcc6046fd5be726003eacf001e5be123039479e521c4",
+  "authorization": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_global_isb_v2_1_score_authorization.json",
+  "authorization_sha256": "e8101ec4c3a240d73e9bb051ed68df080b4e1168763647ec1b64bce15eed936b",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_upstream_residual_snr_freeze_v2_1.json",
+  "freeze_record_sha256": "bf035ec5555ed3e9943b972782e4506512689548c1fd6d1cafd54b78d26ba635",
+  "candidate_keyed_sha256": "26930dcf9814626f9b6a1413e3932ce20ca9a7abe1b31ec4781c47f139c9dcec",
+  "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+  "mat_inputs_used": false,
+  "validation_truth_opened": false,
+  "holdout_truth_opened": false,
+  "test_truth_opened": false,
+  "promotion": "no-go-versus-retained-v1-proxy"
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": "smartphone-r5-phase19-gal-e1-e5a-verification.v1",
+  "status": "post-score-build-test-and-integrity-verification",
+  "created_at_utc": "2026-09-01T00:50:00Z",
+  "candidate_id": "native-carrier-code-leveling-gal-e1-e5a-innovation-reset-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_freeze_v1.json",
+  "freeze_record_sha256": "05c152f8be89c44204c54f2875ed24aec4dbe4f76fdc9ed112aa0808f2c7e6a1",
+  "implementation_manifest": "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_manifest_v1.json",
+  "implementation_manifest_sha256": "26549237fd2d2590eedaa4605be6f888121de2527cfd09658087a91ac2223aa5",
+  "score_result": "docs/use_cases/records/smartphone_r5_phase19_gal_e1_e5a_score_result_v1.json",
+  "score_result_sha256": "1562ec0a47cb6996d35bd84f184dda7d310f2d60a7494d55fb5d1c805c2658a8",
+  "verification": {
+    "release_build": "cmake --build build --config Release -j2 passed",
+    "full_serial_ctest": "131/131 passed",
+    "full_ctest_command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "focused_carrier_and_upstream_tests": "18/18 passed",
+    "diff_check": "git diff --check passed",
+    "json_parse_and_hash_cross_references": "passed",
+    "credential_scan": "no credential value or token artifact found; matched documentation policy words only",
+    "mat_scan": "no MAT input/output API in the Phase19 implementation; .mat appears only in fail-closed path validation and policy prose",
+    "enriched_satellite_column_scan": "no Phase19 implementation read SvPosition* or SvElevationDegrees",
+    "output_and_data_staging_scan": "no data/ or output/ artifacts staged",
+    "truth_read_after_score": false,
+    "candidate_or_parameter_changed_after_score": false
+  },
+  "release_binary_sha256": "51cf34714b5cf2b2a89a56a8de0486a81c71c6e352b6e58c3201108253c4f181",
+  "source_hashes": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "9525c8b13c2d509a9f731bbf8b27abb1920654194e69f93ae32e1da88770fa72",
+    "include/libgnss++/algorithms/carrier_code_leveling.hpp": "31f97f7c6a96a5e6064ddaad9cc3b3e3f76c1dde40a14dcbb58025d3d1d817a4",
+    "tests/test_carrier_code_leveling.cpp": "14679fa4e3c8eb1bd63eaabdd822e11771b75f125ee848793dcfd27cb71deeaf"
+  },
+  "sealed_score_integrity": {
+    "pixel7_score_sha256": "f8ca3c4bff2d9787f8d403a564eb8d51a406e71695e07d863396fb75345a2743",
+    "mi8_score_sha256": "3b1dab4451c91c22a3090d2ea0b45d84fbc3b64c060ad35b769e69595127d2b1",
+    "pixel7_candidate_sha256": "0cc4859fbcaf81ce409eee5679c9af6eb2e6da52f9e7b053c10f94f0e5277960",
+    "mi8_candidate_sha256": "281a1446185a04377a764fed6e380ae3394cfa6ee2e3733344c146d9a3f75f57",
+    "candidate_repeats_byte_identical": true
+  },
+  "record_sha256": "excluded-from-self-hash"
+}

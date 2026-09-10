@@ -1,0 +1,134 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-imu-bridge-freeze.v1",
+  "status": "frozen-before-truth-score",
+  "candidate_id": "native-fgo-pdc-imu-bridge-v1",
+  "purpose": "In-process raw Android P+D+temporal PDC state initialization followed by the existing CombinedImuFactor graph.",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_free_contract": {
+    "inference_inputs": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "brdc.nav"
+    ],
+    "forbidden_inference_inputs": [
+      "ground_truth.csv",
+      "*.mat",
+      "sample_submission.csv",
+      "device WLS or prior trajectory",
+      "precomputed coordinates"
+    ],
+    "truth_used_before_artifact_seal": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_opened": false,
+    "leaderboard_or_score_used_for_tuning": false,
+    "no_post_truth_parameter_tuning": true
+  },
+  "algorithm_contract": {
+    "backend": "GTSAM Levenberg-Marquardt",
+    "pdc_state": "per-epoch ECEF position + five clock biases + ECEF velocity + clock range-rate",
+    "pdc_measurements": [
+      "corrected undifferenced pseudorange",
+      "corrected undifferenced Doppler"
+    ],
+    "pdc_temporal_factors": [
+      "midpoint ECEF position/velocity motion",
+      "clock bias/range-rate continuity",
+      "clock-rate between factor"
+    ],
+    "pdc_handoff": "finite quality-gated PDC states are initial values only; raw P/D rows are added once by the normal FGO graph and no duplicate PDC priors are added",
+    "imu_graph": "Pose3 + velocity + ConstantBias + CombinedImuFactor with existing raw Android adapter and exact frozen mounting/timestamp contract",
+    "base_or_double_difference_factors": false,
+    "carrier_or_tdcp_factors": false,
+    "fallback": "fail closed to the existing raw native FGO route only when the opt-in bridge or IMU graph is invalid; no coordinate-file fallback"
+  },
+  "numeric_parameters": {
+    "pdc_max_iterations": 1000,
+    "pdc_min_pseudorange_rows": 4,
+    "pdc_min_doppler_rows": 4,
+    "pdc_pseudorange_huber_threshold_sigma": 1.234,
+    "pdc_doppler_huber_threshold_sigma": 1.234,
+    "pdc_position_prior_sigma_m": 1000.0,
+    "pdc_clock_prior_sigma_m": 1000000.0,
+    "pdc_velocity_prior_sigma_mps": 1000.0,
+    "pdc_clock_rate_prior_sigma_mps": 1000.0,
+    "pdc_motion_sigma_m": 0.1,
+    "pdc_clock_motion_sigma_m": 0.1,
+    "pdc_clock_jump_sigma_m": 1000000.0,
+    "pdc_inter_system_clock_motion_sigma_m": 0.000001,
+    "pdc_clock_rate_between_sigma_mps": 0.1,
+    "pdc_max_velocity_mps": 70.0,
+    "pdc_max_clock_rate_mps": 2000.0,
+    "pdc_max_normalized_rms": 25.0,
+    "pdc_max_position_norm_m": 10000000.0,
+    "fgo_max_iterations": 12,
+    "fgo_pose3_state": true,
+    "fgo_use_imu": true,
+    "fgo_use_pseudorange": true,
+    "fgo_use_corrected_undifferenced_doppler": true,
+    "fgo_use_carrier": false,
+    "fgo_use_tdcp": false,
+    "fgo_retain_sparse_epochs": true,
+    "fgo_use_doppler_velocity_wls_initialization": true,
+    "fgo_spp_model_intersystem_bias": false,
+    "android_min_elevation_deg": 0.0,
+    "android_min_snr_dbhz": 0.0,
+    "raw_solution_time_tolerance_ms": 2.0,
+    "raw_epoch_key_contract": "drop warm-up epoch only; remaining raw UTC keys are exact targets; ECEF interpolation/edge hold disabled here when exact matches exist"
+  },
+  "source_sha256": {
+    "CMakeLists.txt": "3f227312c087b01baec4702fe308206bea0f473524774fb9e78ccfca1d77b08f",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "a2eee232d7e4f823f0141b0f5c31ca588423faff4e0ceac672b5bc2856a28211",
+    "include/libgnss++/algorithms/pdc_state_bridge.hpp": "99cf61cbb66afce7c43303e640a260676220237b73d5e9eda680553685cfc662",
+    "src/algorithms/pdc_state_bridge.cpp": "f06cbff6c8c034ca37e163dae3ee27d24b57a9ddff313abccfe356ef81fdfdc8",
+    "include/libgnss++/algorithms/fgo.hpp": "fe716fcf986b8d6444268403500b18db4db3bec661ebddffd9a61870a28e7974",
+    "include/libgnss++/algorithms/fgo_config.hpp": "cc9497f5a1d5e4779c15dc011660e33be9275220e2019363961a27dc40db8a6d",
+    "src/algorithms/fgo_gtsam_backend.cpp": "e02d7df55c1b42ed3e9601e7f282a2ffa1c16344e04610aaad7cc6bc51175854",
+    "src/algorithms/fgo_problems.cpp": "2732c1a064267046b721bf7585560d91550069f65c34b698cd57d31eb9ece0a3",
+    "src/algorithms/fgo.cpp": "e45d4c1fde8f7e3bf3fb86e89fdda880cd4459b9523797d868f0596dade81025",
+    "tests/test_fgo.cpp": "b83cd6b4bad62c1ff3678833cdcf879fe2698a1858c4fe8eef29d126ecf56e19"
+  },
+  "binary_sha256": {
+    "build/apps/gnss_fgo_imu_no_base": "1f36de94b3ec3398ac894fcf2bf752d70c371ea549ba118dbf157d9db84ef115"
+  },
+  "input_sha256": {
+    "device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "truth_free_artifact": {
+    "summary": "output/smartphone-r5/phase9-native-pdc-imu-bridge-v8/summary.json",
+    "summary_sha256": "4c7db2b8b80fe282c92e3f27a865171df9aa47c983e7e10d507d155af87266f5",
+    "submission": "output/smartphone-r5/phase9-native-pdc-imu-bridge-v8/submission.csv",
+    "submission_sha256": "2a48661c5d18e80dbd9ee5e73efe64355d802cdc0541168ad2dab94c10c785f8",
+    "submission_bytes": 105162,
+    "problem_epochs": 1384,
+    "target_output_epochs": 1383,
+    "pseudorange_rows": 27462,
+    "doppler_rows": 27440,
+    "motion_intervals": 1383,
+    "pdc_iterations": 48,
+    "pdc_valid_state_seeds": 207,
+    "fgo_iterations": 7,
+    "combined_imu_intervals": 1383,
+    "pdc_fgo_seed_displacement_p50_m": 461.0862621490895,
+    "pdc_fgo_seed_displacement_max_m": 984.7570120024196,
+    "wall_seconds": 10.83,
+    "max_rss_kb": 155764
+  },
+  "commands": [
+    "cmake --build build --parallel 4 --target gnss_fgo_imu_no_base run_tests",
+    "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/tests/run_tests --gtest_filter=PdcStateBridgeTest.*",
+    "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --all-epochs --android-raw-utc-keys --native-pdc-state-bridge"
+  ],
+  "pre_truth_structural_result": {
+    "passed": true,
+    "finite_output": true,
+    "no_base_or_dd_factors": true,
+    "pdc_cost_decreased": true,
+    "fgo_cost_decreased": true,
+    "pdc_quality_rejected_states_are_not_seeded": true,
+    "truth_score": "pending",
+    "promotion_gate": "WGS84 linear diagnostic < 68.0475838937948 m, missing/extra/nonfinite=0; otherwise No-Go"
+  }
+}

@@ -1,0 +1,93 @@
+{
+  "schema_version": "smartphone-r5-phase22-galileo-tgd-score-result.v1",
+  "status": "development-only-no-go-sealed",
+  "candidate_id": "native_raw_galileo_signal_specific_group_delay_v1",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase22_galileo_tgd_freeze_v1.json",
+    "sha256": "6786f6326afb593ea55e5bbd647fd34662ae167dba6fa5b8883294600745a09b"
+  },
+  "truth_free_manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase22_galileo_tgd_manifest_v1.json",
+    "sha256_before_score": "d63fcd369cc851d019418d20d1d6390aed3088c6f244219dc60e1a391fdfe65a"
+  },
+  "truth_policy": {
+    "scope": "already-used Pixel7 development evidence only",
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_open_count_in_this_phase": 1,
+    "truth_read_after_truth_free_seal": true,
+    "validation_holdout_test_truth_opened": false,
+    "mat_read": false,
+    "post_score_tuning": false,
+    "leaderboard_or_token_access": false
+  },
+  "evaluation_command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_intersection_eval.py --truth data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --submission control=output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/control/submission.csv --submission candidate=output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/candidate/submission.csv --output output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/phase22_score.json",
+  "score_report": {
+    "path": "output/smartphone-r5/phase22-galileo-tgd-v1/pixel7pro/phase22_score.json",
+    "sha256": "448f91d445b3dfdb6bacced854bebd0b8b68e102b3786be12f0bd960dc815fc9",
+    "truth_rows": 1383,
+    "matched_rows": 1383,
+    "coverage": 1.0,
+    "control_candidate_matched_key_set_equal": true,
+    "control": {
+      "wgs84_vincenty_linear_m": 3.1922489635126103,
+      "wgs84_vincenty_nearest_rank_m": 3.192568555787111,
+      "haversine_linear_m": 3.19550488592491,
+      "haversine_nearest_rank_m": 3.195826163862037
+    },
+    "candidate": {
+      "wgs84_vincenty_linear_m": 3.268181634438241,
+      "wgs84_vincenty_nearest_rank_m": 3.2685126047859114,
+      "haversine_linear_m": 3.2716595321873827,
+      "haversine_nearest_rank_m": 3.2719921679649024
+    },
+    "candidate_minus_control_m": {
+      "wgs84_vincenty_linear": 0.0759326709256305,
+      "wgs84_vincenty_nearest_rank": 0.07594404899880036,
+      "haversine_linear": 0.0761546462624727,
+      "haversine_nearest_rank": 0.07616600410286534
+    },
+    "all_four_strictly_improved": false
+  },
+  "secondary_development_evaluation": {
+    "scope": "raw-only mi8 cross-device development evidence; separate one-process evaluation after the same truth-free seal",
+    "truth_path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/truth_materialized/ground_truth.csv",
+    "truth_open_count_in_this_evaluation": 1,
+    "report": {
+      "path": "output/smartphone-r5/phase22-galileo-tgd-v1/mi8/phase22_score.json",
+      "sha256": "83686be831f86faabaa08122053516df6c063761ffc2edf36de77ea69a8aaaf3",
+      "truth_rows": 1400,
+      "matched_rows": 1399,
+      "coverage": 0.9992857142857143,
+      "surplus_prediction_keys": 17,
+      "missing_truth_keys": 1,
+      "control_candidate_matched_key_set_equal": true,
+      "control": {
+        "wgs84_vincenty_linear_m": 2.078301578067555,
+        "wgs84_vincenty_nearest_rank_m": 2.081757295457608,
+        "haversine_linear_m": 2.0819052170623835,
+        "haversine_nearest_rank_m": 2.0850633889896675
+      },
+      "candidate": {
+        "wgs84_vincenty_linear_m": 2.0370034479195414,
+        "wgs84_vincenty_nearest_rank_m": 2.037542265989227,
+        "haversine_linear_m": 2.0386821490340745,
+        "haversine_nearest_rank_m": 2.0403740564323867
+      },
+      "candidate_minus_control_m": {
+        "wgs84_vincenty_linear": -0.041298130148013534,
+        "wgs84_vincenty_nearest_rank": -0.044215029468381406,
+        "haversine_linear": -0.043223068028309,
+        "haversine_nearest_rank": -0.0446893325572808
+      },
+      "all_four_strictly_improved": true
+    },
+    "decision": "cross-device development-only go; does not override Pixel7 no-go and is not validation/generalization evidence"
+  },
+  "decision": {
+    "promotion": "no-go",
+    "reason": "Pixel7 exact development route, the primary gate, degraded all four diagnostics by about 0.076 m; mi8 cross-device development evidence improved all four by about 0.041-0.045 m but cannot override the primary route failure",
+    "candidate_scope": "opt-in only; no production/default change",
+    "native_0_782_class_achieved": false,
+    "no_further_runs_or_parameter_changes": true
+  }
+}

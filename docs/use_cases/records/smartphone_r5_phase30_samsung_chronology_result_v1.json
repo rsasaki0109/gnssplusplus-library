@@ -1,0 +1,205 @@
+{
+  "schema_version": "smartphone-r5-phase30-samsung-chronology-result.v1",
+  "phase": 30,
+  "status": "diagnostic-only-no-new-candidate",
+  "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+  "purpose": "Locate the Phase29 Samsung horizontal-error tail by joining one authorized post-freeze truth chronology with sealed raw-only structural signals. This result does not select, retune, or authorize a new estimator lane.",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_phase30_samsung_chronology_freeze_v1.json",
+    "record_sha256": "7ded663956cf5373cb78e7aff248a5a945b5dcc0ae1eec1824f26386dd2d98aa",
+    "manifest": "docs/use_cases/records/smartphone_r5_phase30_samsung_chronology_freeze_v1_manifest.json",
+    "manifest_sha256": "aebd44176c489278c3b4b0c8ebb08e6f45455aa22058f93a101c038e86778a2b",
+    "phase29_result_sha256": "88d2cf8b91460e098873872cbcd1d0be8df2a15adf1d3a43749c7301e1533536"
+  },
+  "chronology_artifact": {
+    "path": "output/smartphone-r5/phase30-samsung-chronology-v1/samsung_chronology.json",
+    "sha256": "88c119871002abe1bf67387cb0be9d5a1018e030c061df3a1d17d7561e3ffb15",
+    "manifest_path": "output/smartphone-r5/phase30-samsung-chronology-v1/samsung_chronology.manifest.json",
+    "manifest_sha256": "073b58dbaed72354eeec2d5497df8bbb073d50006d75ba7d8b648e28dcd435ef"
+  },
+  "truth_access": {
+    "phase29_prior_open_count": 1,
+    "phase30_additional_open_count": 1,
+    "cumulative_open_count": 2,
+    "truth_path": "output/smartphone-r5/phase29-no-bridge-train-eval-v1/truth/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+    "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+    "truth_bytes": 113328,
+    "read_method": "one payload read in the single chronology process; hash and parse came from the same bytes",
+    "pixel_truth_opened": false,
+    "fresh_validation_truth_opened": false,
+    "future_holdout_truth_opened": false,
+    "test_truth_opened": false,
+    "mat_read_or_generated": false,
+    "token_access": false,
+    "kaggle_or_external_mutation": false,
+    "truth_used_for_inference_or_candidate_selection": false
+  },
+  "sealed_lanes": {
+    "control": {
+      "id": "phase25_raw_clock_no_bridge_control",
+      "submission_sha256": "d5df038f18978be78e1b03d07bf32c4643923baf0dafa4778709f15801bb76e2",
+      "summary_sha256": "1c1a1be54b325ded505ff54740aa0ab5d516c89ea05eae54f7cb12d451e98ed3"
+    },
+    "candidate": {
+      "id": "phase28_tdcp_no_bridge",
+      "submission_sha256": "1cfb9f3204934499fa9edf9e8073564897cf3660818e9a14afa5ddcb9c65f507",
+      "summary_sha256": "28a0ffd472e68f79e59fd9032acc5b70a7bdec4afe1b8fcf5b60f1da8cd60f81"
+    },
+    "solver_rerun": false,
+    "candidate_or_control_changed": false
+  },
+  "raw_structural_evidence": {
+    "device_gnss_sha256": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+    "raw_epoch_count": 1165,
+    "target_epoch_count_after_warmup": 1164,
+    "hcdc_unique": [55],
+    "hcdc_transition_count": 0,
+    "clock_segment_count": 2,
+    "clock_segment_boundary_utc_ms": [1626296265000],
+    "raw_gap_count_over_1000ms": 1,
+    "max_raw_gap_ms": 1001.0,
+    "max_time_nanos_gap_ms": 1001.0,
+    "tail_segment": 0,
+    "tail_hcdc": 55,
+    "derived_coordinate_columns_used": [],
+    "raw_fields_used": [
+      "MessageType",
+      "utcTimeMillis",
+      "TimeNanos",
+      "HardwareClockDiscontinuityCount",
+      "State",
+      "Svid",
+      "SignalType",
+      "PseudorangeRateMetersPerSecond",
+      "AccumulatedDeltaRangeState",
+      "Cn0DbHz"
+    ],
+    "fgo_coverage": {
+      "control_graph_converged": true,
+      "candidate_graph_converged": true,
+      "control_gnss_first_converged": true,
+      "candidate_gnss_first_converged": true,
+      "control_problem_epochs": 1130,
+      "candidate_problem_epochs": 1130,
+      "control_exact_solution_epochs": 1129,
+      "candidate_exact_solution_epochs": 1129,
+      "control_interpolated_epochs": 35,
+      "candidate_interpolated_epochs": 35,
+      "control_unresolved_epochs": 0,
+      "candidate_unresolved_epochs": 0,
+      "candidate_tdcp_factors": 12357,
+      "control_tdcp_factors": 0
+    }
+  },
+  "source_lane_inference": {
+    "method": "sealed summary exact/interpolated counts plus fixed 0.01 m two-lane ECEF linearity check",
+    "solver_timestamp_sidecar_available": false,
+    "inferred_interpolated_epochs": 35,
+    "summary_interpolated_epochs": 35,
+    "count_reconciled": true,
+    "tail_inferred_interpolated_epochs": 25,
+    "tail_epochs": 175,
+    "label_is_diagnostic_inference": true
+  },
+  "error_runs": {
+    "threshold_semantics": "contiguous target-key runs where max(control,candidate) horizontal WGS84 error is strictly greater than the threshold",
+    "over_50_m": [
+      {
+        "start_utc_ms": 1626295842999,
+        "end_utc_ms": 1626296247999,
+        "epoch_count": 406,
+        "start_index": 0,
+        "end_index": 405,
+        "control_max_m": 1069.3206037207583,
+        "candidate_max_m": 1082.2860443010463,
+        "control_mean_m": 360.43542380287954,
+        "candidate_mean_m": 359.7674640424519,
+        "control_over_70_mps": 3,
+        "candidate_over_70_mps": 4,
+        "raw_clock_segments": [0],
+        "hcdc": [55],
+        "raw_gap_max_ms": 1000.0,
+        "source_lane_counts": {"exact": 371, "inferred_interpolated": 35}
+      },
+      {
+        "start_utc_ms": 1626296259999,
+        "end_utc_ms": 1626296388000,
+        "epoch_count": 129,
+        "start_index": 417,
+        "end_index": 545,
+        "control_max_m": 150.1069868941978,
+        "candidate_max_m": 146.52116043413645,
+        "control_mean_m": 87.7314038382081,
+        "candidate_mean_m": 87.05228966365105,
+        "control_over_70_mps": 0,
+        "candidate_over_70_mps": 0,
+        "raw_clock_segments": [0, 1],
+        "hcdc": [55],
+        "raw_gap_max_ms": 1001.0,
+        "source_lane_counts": {"exact": 129, "inferred_interpolated": 0}
+      }
+    ],
+    "over_100_m": [
+      {"start_utc_ms": 1626295842999, "end_utc_ms": 1626296064999, "epoch_count": 223, "start_index": 0, "end_index": 222, "control_max_m": 1069.3206037207583, "candidate_max_m": 1082.2860443010463, "raw_clock_segments": [0]},
+      {"start_utc_ms": 1626296101999, "end_utc_ms": 1626296110999, "epoch_count": 10, "start_index": 259, "end_index": 268, "control_max_m": 115.17402568837495, "candidate_max_m": 113.23493320766008, "raw_clock_segments": [0]},
+      {"start_utc_ms": 1626296143999, "end_utc_ms": 1626296148999, "epoch_count": 6, "start_index": 301, "end_index": 306, "control_max_m": 101.85626265750304, "candidate_max_m": 101.39764027523812, "raw_clock_segments": [0]},
+      {"start_utc_ms": 1626296266000, "end_utc_ms": 1626296288000, "epoch_count": 23, "start_index": 423, "end_index": 445, "control_max_m": 150.1069868941978, "candidate_max_m": 146.52116043413645, "raw_clock_segments": [1]},
+      {"start_utc_ms": 1626296372000, "end_utc_ms": 1626296378000, "epoch_count": 7, "start_index": 529, "end_index": 535, "control_max_m": 101.96890882375794, "candidate_max_m": 100.36797992832878, "raw_clock_segments": [1]}
+    ],
+    "over_500_m": [
+      {
+        "start_utc_ms": 1626295842999,
+        "end_utc_ms": 1626296016999,
+        "epoch_count": 175,
+        "start_index": 0,
+        "end_index": 174,
+        "control_max_m": 1069.3206037207583,
+        "candidate_max_m": 1082.2860443010463,
+        "control_mean_m": 657.1137933032403,
+        "candidate_mean_m": 655.8895296459826,
+        "control_over_70_mps": 3,
+        "candidate_over_70_mps": 4,
+        "raw_clock_segments": [0],
+        "hcdc": [55],
+        "raw_gap_max_ms": 1000.0,
+        "source_lane_counts": {"exact": 150, "inferred_interpolated": 25}
+      }
+    ]
+  },
+  "tail_diagnosis": {
+    "classification": "initial graph/trajectory settling transient; not supported as an HCDC/raw-clock seam or interpolation-dominated failure",
+    "evidence": [
+      "The >500 m run begins at the first post-warmup target epoch and lasts 175 seconds, while the first four candidate and first three control transitions exceed 70 m/s.",
+      "HCDC remains 55 throughout the run, with no HCDC transition and no raw gap above the normal 1000 ms cadence in the run.",
+      "The only raw clock-segment boundary is at 1626296265000, after the >500 m run; its 1001 ms gap is inside a later ~100 m run, not the 669 m tail.",
+      "Both lanes have converged GNSS-first and final graphs with the same 1130 problem epochs and 1129 exact/35 inferred-interpolated output split; the candidate's extra TDCP factors do not remove the shared initial transient.",
+      "The tail has 150 exact-by-sealed-count and 25 inferred-interpolated epochs, so interpolation is not the dominant source category."
+    ],
+    "initial_samples": {
+      "first_target_utc_ms": 1626295842999,
+      "first_control_error_m": 605.1475539371331,
+      "first_candidate_error_m": 502.6247492400076,
+      "candidate_peak_utc_ms": 1626295850999,
+      "candidate_peak_error_m": 1082.2860443010463,
+      "tail_end_utc_ms": 1626296016999,
+      "tail_end_control_error_m": 506.1842005357573,
+      "tail_end_candidate_error_m": 506.0624496236906
+    },
+    "causal_confidence": "structural diagnosis only; no truth-derived parameter or coordinate correction is authorized"
+  },
+  "candidate_decision": {
+    "new_candidate_authorized": false,
+    "reason": "No localized raw anomaly supplies a generic physical recovery rule. Prefix trimming, translation, truth-shaped smoothing, or changing the initial graph would alter coverage or require truth-dependent selection.",
+    "production_default_changed": false,
+    "phase29_no_go_result_immutable": true,
+    "fresh_validation_opened": false,
+    "future_holdout_remains_sealed": true,
+    "postscore_tuning": false
+  },
+  "policy": {
+    "candidate_or_control_regenerated": false,
+    "solver_rerun": false,
+    "mat_read_or_generated": false,
+    "kaggle_or_external_mutation": false
+  }
+}

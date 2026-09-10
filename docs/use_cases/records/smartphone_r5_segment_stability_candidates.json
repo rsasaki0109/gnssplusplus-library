@@ -1,0 +1,206 @@
+{
+  "schema_version": "smartphone-r5-segment-stability-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "development-only truth-free segment stability gate; no holdout access",
+  "archive": {
+    "path": "data/gsdc2023/cache/dataset_2023.zip",
+    "inventory_source": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+    "selection_rule": "central-directory inventory first; selected device_gnss is opened only for signal-only E1 eligibility after roles are fixed",
+    "member_content_read_during_selection": false
+  },
+  "sealed_data_policy": {
+    "designated_holdout_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "holdout_content_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_evaluation_forbidden": true
+  },
+  "fixed_roles": {
+    "candidate_train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "new_validation": [
+      "2021-07-14-20-50-us-ca-mtv-e/pixel4"
+    ],
+    "previous_validation_not_reused": [
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl"
+    ],
+    "route_phone_exclusion": "exclude all previously scored/materialized route-phone pairs, the development main route, and the designated holdout; require a distinct route and phone model from the fixed train set"
+  },
+  "new_validation_selection": {
+    "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+    "selection_order": "ASCII dataset ID among eligible inventory rows",
+    "required_central_members": {
+      "device_gnss.csv": 1,
+      "device_imu.csv": 1,
+      "ground_truth.csv": 1,
+      "brdc.nav": 1
+    },
+    "signal_only_rule": {
+      "signal_type": "GAL_E1_C_P",
+      "constellation_type": "6",
+      "carrier_frequency_hz": 1575420000.0,
+      "carrier_frequency_tolerance_hz": 1.0,
+      "code_type": "empty",
+      "svid_range": [1, 36],
+      "raw_pseudorange": "finite and present",
+      "minimum_valid_rows": 1,
+      "truth_opened": false
+    },
+    "screen_result": {
+      "valid_galileo_e1_rows": 9009,
+      "galileo_e1_epochs": 1188,
+      "galileo_e1_svid_count": 10,
+      "unique_broadcast_nav_present": true,
+      "truth_opened": false,
+      "materialized_before_freeze": false
+    }
+  },
+  "baseline_contract": {
+    "signal_lane": "Galileo E1 with Hatch C1C 30 s",
+    "process_noise": 1.0,
+    "measurement_floor_m": 1.0,
+    "outlier_gate_sigma": 5.0,
+    "segment_gap_s": 10.0,
+    "truth_free_pipeline": true
+  },
+  "candidate_set": [
+    {
+      "id": "segment_r15_d15",
+      "max_consecutive_rejects": 15,
+      "max_prediction_duration_s": 15.0,
+      "reject_fraction_max": null
+    },
+    {
+      "id": "segment_r20_d20",
+      "max_consecutive_rejects": 20,
+      "max_prediction_duration_s": 20.0,
+      "reject_fraction_max": null
+    },
+    {
+      "id": "segment_r30_d30",
+      "max_consecutive_rejects": 30,
+      "max_prediction_duration_s": 30.0,
+      "reject_fraction_max": null
+    }
+  ],
+  "selection_and_promotion_rule": {
+    "segment_gate": "compute max consecutive rejects, reject fraction, max normalized innovation, and max prediction duration truth-free per static smoother segment; unstable segments use all raw/Hatch coordinates, while missing device keys use explicit nearest raw interpolation",
+    "train_selection": "On Mi8, Pixel5, and main Pixel7Pro, require raw non-regression for availability, H median, H P95, V P95, and all four diagnostics; require main POS byte identity and zero fallback/reacquisition; rank eligible candidates by aggregate H P95, H median, V P95, diagnostic mean, and candidate ID.",
+    "new_validation_gate": "Selected candidate must be non-regressive versus raw SPP/Hatch for availability, H median, H P95, V P95, and all four diagnostics; retain a strict smoother improvement on routes whose segments are stable.",
+    "promotion_scope": "development-only recommended pipeline only if all gates pass",
+    "failure_policy": "No-Go; retain existing smoother and default pipeline contract",
+    "imu_adaptive": "No-Go retained and not evaluated",
+    "holdout": "never opened or evaluated"
+  },
+  "post_evaluation": {
+    "status": "completed",
+    "evaluated_output_root": "output/smartphone-r5/segment-stability-v1",
+    "report": {
+      "path": "output/smartphone-r5/segment-stability-v1/segment_stability_report.json",
+      "sha256": "f71af7d66563224942af90915a0a5b3528f201d10d9cb6d5ac952ef7ae13addb"
+    },
+    "artifact_manifest": {
+      "path": "output/smartphone-r5/segment-stability-v1/segment_stability_manifest.json",
+      "hash_note": "the manifest records this selection-record hash and all report/artifact hashes; its own hash is intentionally not embedded here"
+    },
+    "inventory": {
+      "path": "output/smartphone-r5/segment-stability-v1/archive_inventory.json",
+      "sha256": "f278ce3e08fd683dadd282e8fec8b491df45ef66df813f4cfdc312d2caa9ad18"
+    },
+    "new_validation_materialization": {
+      "path": "output/smartphone-r5/segment-stability-v1/new-validation-materialized/routes/2021-07-14-20-50-us-ca-mtv-e/pixel4/materialization_manifest.json",
+      "sha256": "8d42e624759a1292b834660457750b79b26e32c154855de880db149c931650ac",
+      "candidate_profile_sha256": "754675906f751b21e9312e5b951531d5437deb8e287658c7b374b64cd4c1a65a"
+    },
+    "selected_candidate_id": "segment_r15_d15",
+    "promotion_decision": "promote-development-only-recommended-pipeline",
+    "promotion_scope": "development-only recommended pipeline; production/default smoother remains unchanged",
+    "gates": {
+      "train_raw_non_regression": true,
+      "train_stable_route_non_regression": true,
+      "new_validation_raw_non_regression": true,
+      "new_validation_stable_segment_gate": "not_applicable_all_segments_unstable",
+      "development_main_non_regression": true,
+      "development_main_pos_byte_identical": true,
+      "development_main_fallback_epochs": 0,
+      "holdout_opened": false
+    },
+    "train_aggregate_selected": {
+      "route_count": 3,
+      "mean_availability_ratio": 1.0,
+      "mean_horizontal_wgs84_p50_m": 2.7083751693920415,
+      "mean_horizontal_wgs84_p95_m": 7.173367528612378,
+      "mean_vertical_p95_abs_m": 16.00627669179171,
+      "mean_kaggle_diagnostic_m": 4.9406938825735605,
+      "all_four_kaggle_diagnostics_non_regressive": true
+    },
+    "new_validation_selected": {
+      "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+      "availability_ratio": 1.0,
+      "horizontal_wgs84_p50_m": 2.6840523503032974,
+      "horizontal_wgs84_p95_m": 7.337661385406831,
+      "vertical_p95_abs_m": 13.884661057600155,
+      "kaggle_diagnostic_mean_m": 5.014118824803424,
+      "source_counts": {
+        "raw_fallback": 1187
+      },
+      "segment_population": {
+        "segment_count": 1,
+        "stable_segment_count": 0,
+        "unstable_segment_count": 1,
+        "max_consecutive_rejects": 204,
+        "reject_fraction": 0.8567818028643639,
+        "max_normalized_innovation_sigma": 13.590652835241587,
+        "max_prediction_duration_s": 204.0,
+        "reason": "max_consecutive_rejects_exceeded+max_prediction_duration_exceeded"
+      }
+    },
+    "development_main_segment_population": {
+      "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "segment_count": 1,
+      "stable_segment_count": 1,
+      "unstable_segment_count": 0,
+      "max_consecutive_rejects": 11,
+      "reject_fraction": 0.2668112798264642,
+      "max_normalized_innovation_sigma": 24.41127500468907,
+      "max_prediction_duration_s": 11.0,
+      "candidate_output_source_counts": {
+        "measured": 1014,
+        "outlier_rejected": 369
+      }
+    },
+    "failure_route_segment_populations": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "max_consecutive_rejects": 130,
+        "max_prediction_duration_s": 130.0,
+        "reject_fraction": 0.24087956021989004,
+        "candidate_raw_fallback_epochs": 2001
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "max_consecutive_rejects": 87,
+        "max_prediction_duration_s": 87.0,
+        "reject_fraction": 0.46721877156659763,
+        "candidate_raw_fallback_epochs": 1449
+      }
+    },
+    "timing": {
+      "total_wall_s": 7.479408838989912,
+      "new_validation_adapter_wall_s": 1.7337698609917425,
+      "new_validation_adapter_peak_rss_kb": 24964,
+      "new_validation_spp_wall_s": 1.1774616990005597,
+      "new_validation_spp_peak_rss_kb": 19412,
+      "new_validation_canonicalization_wall_s": 0.39041412199730985
+    },
+    "truth_free_contract": {
+      "truth_used_before_pipeline_generation": false,
+      "truth_opened_only_for_post_generation_scoring": true,
+      "missing_device_key_policy": "explicit bracketing raw interpolation; edge keys use explicit nearest raw fallback",
+      "reject_fraction": "recorded but not used as a gate",
+      "segment_decisions_and_raw_hashes": "present in each candidate smoother_manifest.json"
+    }
+  }
+}

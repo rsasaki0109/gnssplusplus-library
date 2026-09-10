@@ -1,0 +1,124 @@
+{
+  "schema_version": "smartphone-r5-phase16-carrier-code-innovation-reset-score-result.v1",
+  "status": "development-only-gate-pass-with-evaluation-recovery",
+  "candidate_id": "native-carrier-code-leveling-e1-innovation-reset-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1.json",
+  "freeze_record_sha256": "44f3a1acd5164f87c6695ae196d69f0923e5e9f1f3a7b8af40a7169e4aa79c56",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase16_carrier_code_innovation_reset_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "6fcd69057b988268ffbf3d0f6adb32e109396977fb698a7e274b2edf81d46394",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256_from_evaluator": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_read_operations": 2,
+    "truth_read_breakdown": [
+      {
+        "attempt": 1,
+        "status": "failed-before-scoring",
+        "reason": "CLI phone alias used an underscore while the frozen submission key uses route/phone; evaluator rejected all keys",
+        "output_metrics_written": false
+      },
+      {
+        "attempt": 2,
+        "status": "scored",
+        "reason": "evaluation-recovery using the exact frozen submission key",
+        "output_metrics_written": true
+      }
+    ],
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_members_read": false,
+    "enriched_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "token_or_kaggle_access": false,
+    "post_score_algorithm_or_parameter_changes": false,
+    "post_score_candidate_rerun": false
+  },
+  "candidate_artifacts": {
+    "submission": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/candidate/submission.csv",
+    "submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+    "submission_rows": 1383,
+    "summary": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/candidate/summary.json",
+    "summary_sha256": "b6e71bcd4951eabe034cd77c4f3762452f618943e5c9767a38dc37f19c923a7d",
+    "score": "output/smartphone-r5/phase16-carrier-code-innovation-reset-v1/pixel7pro/candidate/development_score.json",
+    "score_sha256": "47da5229ef75c6e2989ace6279d4d7a50b530d5c2206ad2652e2ae06672f6323",
+    "score_submission_hash_verified": true,
+    "score_key_match": true,
+    "score_coverage_ratio": 1.0
+  },
+  "comparison_reference": {
+    "record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_score_result_v1.json",
+    "record_sha256": "999e3c5c7361d55d313377e1c0aa898cc95030a3339db4e87a0187682546f44d",
+    "submission": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/submission.csv",
+    "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "role": "frozen Phase12 accuracy comparator; not regenerated and not used to tune Phase16",
+    "metrics_m": {
+      "wgs84_vincenty__linear_n_minus_1": 3.1922489635126103,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.192568555787111,
+      "haversine_sphere__linear_n_minus_1": 3.19550488592491,
+      "haversine_sphere__nearest_rank_ceiling": 3.195826163862037
+    }
+  },
+  "candidate_metrics_m": {
+    "wgs84_vincenty__linear_n_minus_1": 3.146250665736974,
+    "wgs84_vincenty__nearest_rank_ceiling": 3.1465357983728337,
+    "haversine_sphere__linear_n_minus_1": 3.1495276482103556,
+    "haversine_sphere__nearest_rank_ceiling": 3.1498145071995935,
+    "p50_wgs84_m": 2.350984296464598,
+    "p95_wgs84_m": 3.9415170350093502,
+    "coverage_ratio": 1.0,
+    "prediction_rows": 1383
+  },
+  "variant_deltas_candidate_minus_phase12_m": {
+    "wgs84_vincenty__linear_n_minus_1": -0.04599829777563622,
+    "wgs84_vincenty__nearest_rank_ceiling": -0.04603275741427731,
+    "haversine_sphere__linear_n_minus_1": -0.0459772377145544,
+    "haversine_sphere__nearest_rank_ceiling": -0.0460116567248464
+  },
+  "promotion_gate": {
+    "fixed_reference_wgs84_linear_m": 3.1922489635126103,
+    "candidate_wgs84_linear_m": 3.146250665736974,
+    "fixed_gate_passed": true,
+    "all_four_variants_strictly_improved": true,
+    "availability_non_regressed": true,
+    "vertical_metric": "not available in four-column evaluator",
+    "continuity_structural_gate": true,
+    "promotion_decision": "development-only raw carrier seam recovery candidate; no validation/holdout/test/Kaggle promotion",
+    "native_0_782_class_target": "not achieved"
+  },
+  "structural_evidence": {
+    "mi8_baseline": {
+      "summary_sha256": "81e9a0ce5e361b94190750409477cb623567e51c4574840a93d621ae89c77b50",
+      "submission_sha256": "5650c41dd73833cf9ec35238bbad5e6ba3a8c4180ee89226425abbd1af13deec",
+      "rows": 1416,
+      "graph_converged": true,
+      "reset_innovation": 0,
+      "max_abs_level_adjustment_m": 399723.24144420365
+    },
+    "mi8_candidate": {
+      "summary_sha256": "84ea0782a23a212859558ae013bc71d2ca0aa45658b0e7f2a9b73e4d6d9aee9b",
+      "submission_sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+      "rows": 1416,
+      "graph_converged": true,
+      "reset_innovation": 18,
+      "max_abs_innovation_accepted_m": 13.292552024126053,
+      "max_abs_innovation_rejected_m": 1199176.5859814361,
+      "max_abs_level_adjustment_m": 6.6462760110226782,
+      "repeated_csv_hash_equal": true
+    },
+    "pixel7_candidate": {
+      "summary_sha256": "b6e71bcd4951eabe034cd77c4f3762452f618943e5c9767a38dc37f19c923a7d",
+      "submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+      "rows": 1383,
+      "graph_converged": true,
+      "reset_innovation": 0,
+      "max_abs_level_adjustment_m": 12.406640823464841,
+      "max_transition_speed_mps": 19.62386537894278,
+      "repeated_csv_hash_equal": true,
+      "phase14_hatch_control_byte_identical": true
+    }
+  },
+  "no_post_evaluation_change": true,
+  "record_sha256": "excluded-from-self-hash"
+}

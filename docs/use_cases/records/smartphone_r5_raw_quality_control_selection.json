@@ -1,0 +1,149 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-raw-quality-control-selection.v1",
+  "status": "selection-frozen-before-new-implementation",
+  "scope": "development-only robust raw-measurement quality-control candidate for the smartphone native SPP fallback",
+  "purpose": "Test one physically predeclared standardized innovation weighting scheme against the exact frozen handset WLS reference without using truth-derived thresholds.",
+  "external_mutation": false,
+  "kaggle_token_access": false,
+  "public_private_scores_used_for_tuning": false,
+  "source_hashes_at_freeze": {
+    "adapter": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py",
+      "sha256": "e740d42a5a3232775fef013c5f734a004f3aa4952add7415c1bcca0716ccaad0"
+    },
+    "workflow": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_gnss_workflow.py",
+      "sha256": "af9699dfe0d28ef7de222bec2fe103e20f19ed14dca555ce97ea9c98dcd125f3"
+    },
+    "native_spp_cli": {
+      "path": "apps/native/gnss_spp.cpp",
+      "sha256": "51a3c1e099280639392c1b8631310306c9e5ab070c8fb9850aa789a5280b3af6"
+    },
+    "spp_processor": {
+      "path": "src/algorithms/spp.cpp",
+      "sha256": "13a06c1ac432efb7dce261b2bfd0fa619b01f5669339844e1b8cb6334a43c202"
+    },
+    "spp_header": {
+      "path": "include/libgnss++/algorithms/spp.hpp",
+      "sha256": "efec0c0e44ff0433f26ac34b7ff88d168cecb65267c4e087ea3a141223d6b485"
+    },
+    "profile": {
+      "path": "configs/benchmarks/smartphone_r5_gsdc2023.json",
+      "sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776"
+    },
+    "feasibility_split_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_top_solution_feasibility_audit.json",
+      "sha256": "8bc2e4a3965fb266652def07b91c17f58de5845cfaf84fd0e64c938b46144470"
+    },
+    "archive": {
+      "path": "data/gsdc2023/cache/dataset_2023.zip",
+      "sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+    },
+    "central_inventory": {
+      "path": "output/smartphone-r5/generalization-v6/archive_inventory.json",
+      "sha256": "f4e68109885eecfc14b2bd5e8fab87e18d73473c04bb7f53da31b7040a8e90a7"
+    }
+  },
+  "frozen_split": {
+    "train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "fresh_validation": "2023-09-07-18-59-us-ca/pixel5",
+    "future_holdout": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "selection_basis": "route-disjoint central-directory metadata and the already frozen feasibility audit",
+    "fresh_validation_materialized_before_freeze": false,
+    "fresh_validation_truth_opened_before_freeze": 0,
+    "future_holdout_materialized_before_freeze": false,
+    "future_holdout_truth_opened_before_freeze": 0,
+    "old_holdouts_or_leaderboard_used": false
+  },
+  "candidate": {
+    "id": "innovation_huber_native_spp_v1",
+    "input_contract": {
+      "raw_fields": [
+        "RawPseudorangeMeters",
+        "RawPseudorangeUncertaintyMeters",
+        "Cn0DbHz",
+        "PseudorangeRateMetersPerSecond",
+        "AccumulatedDeltaRangeState",
+        "HardwareClockDiscontinuityCount",
+        "ConstellationType",
+        "CarrierFrequencyHz",
+        "SvPositionXEcefMeters",
+        "SvVelocityXEcefMetersPerSecond",
+        "WlsPositionXEcefMeters"
+      ],
+      "supported_signals": ["GPS_L1_CA", "GAL_E1_C_P"],
+      "adapter_policy": "retain the existing finite, signal/frequency/constellation, ADR/clock, timestamp, and RINEX contracts; no truth is passed to preprocessing"
+    },
+    "algorithm": "native SPP uncertainty-weighted iterative WLS with standardized residual Huber downweighting after the initial solve; existing residual outlier rejection and leave-one-out RAIM/FDE remain enabled",
+    "parameters": {
+      "robust_weighting": true,
+      "robust_threshold_sigma": 3.0,
+      "robust_min_weight_factor": 0.05,
+      "outlier_detection": true,
+      "outlier_threshold_sigma": 3.0,
+      "raim_fde": true,
+      "raim_fde_min_improvement_ratio": 0.25,
+      "raim_fde_min_improvement_m": 1.0,
+      "variance_model": true,
+      "snr_reference_dbhz": 45.0,
+      "elevation_mask_deg": 15.0,
+      "snr_mask_dbhz": 0.0,
+      "galileo_e1_hatch_window_s": 30,
+      "leap_seconds": 18
+    },
+    "scheme_rationale": "Huber's 3-sigma standardized-innovation rule is a fixed robust-statistics convention; the 0.05 floor prevents deleting a measurement and preserves solver fallback behavior. No route, device, or truth-trained threshold is introduced.",
+    "fallback": "if robust SPP has invalid geometry, rank deficiency, nonfinite solution, or process failure, publish the exact current Android WLS POS for that epoch; never extrapolate or synthesize a position",
+    "atomic_contract": "run solver in a private staging directory, validate finite POS keys against device epochs, then atomically publish POS, summary, and manifest; partial artifacts are not promoted",
+    "production_default_changed": false
+  },
+  "truth_free_observable_audit": {
+    "required_before_scoring": true,
+    "features": [
+      "standardized raw pseudorange innovation proxy after per-epoch clock-centering",
+      "raw pseudorange uncertainty",
+      "C/N0",
+      "ADR state validity/reset/cycle-slip",
+      "hardware clock discontinuity",
+      "constellation/frequency/signal",
+      "satellite count and line-of-sight geometry condition/GDOP proxy",
+      "epoch timestamp gaps"
+    ],
+    "truth_join_policy": "optional post-freeze train-only join; error labels are never used to set a threshold or alter an artifact",
+    "sentinel_policy": "non-finite Android sentinel values are counted as unavailable and never used as numeric quality values"
+  },
+  "gates": {
+    "train": "all three route-level H P50/P95, V P95, availability, truth coverage, and four local Kaggle diagnostic variants non-regressed versus exact WLS; require strict aggregate H P95 and diagnostic-mean improvement",
+    "fresh_validation": "open only after all train gates pass and truth-free artifacts are sealed; require per-route and aggregate non-regression plus strict aggregate H P95 improvement",
+    "future_holdout": "remain unopened unless fresh validation passes; one truth read only after truth-free artifacts are sealed; no post-holdout tuning or rerun",
+    "vertical": "V P95 must remain at or below the frozen profile threshold (45 m) and may not have a major regression of more than 5 m versus the WLS reference",
+    "availability_and_coverage": "non-regression; invalid robust epochs may use exact WLS fallback but no new keys may be synthesized",
+    "promotion": "development-only raw-quality native SPP fallback; production RTK/SPP and recommended smartphone WLS lane remain unchanged"
+  },
+  "truth_access_policy": {
+    "truth_free_artifacts_before_train_truth": true,
+    "train_truth_allowed_after_freeze": true,
+    "fresh_validation_truth_allowed_after_train_pass": true,
+    "future_holdout_truth_allowed_after_validation_pass": true,
+    "holdout_access_before_freeze": false,
+    "post_holdout_tuning": false
+  },
+  "planned_commands": {
+    "observable_audit": "python3 apps/gnss.py smartphone-raw-quality-control --device-gnss <device_gnss.csv> --position <wls.pos> --output-dir <route-output>",
+    "truth_free_candidate": "python3 apps/gnss.py smartphone-raw-quality-control --device-gnss <device_gnss.csv> --obs <rover.obs> --nav <brdc.nav> --fallback-position <wls.pos> --output-dir <route-output> --dataset-id <route/phone>",
+    "train_evaluation": "python3 apps/gnss.py smartphone-raw-quality-control-eval --selection-record docs/use_cases/records/smartphone_r5_raw_quality_control_selection.json --role train",
+    "release_build": "cmake --build build --config Release -j$(nproc)",
+    "full_ctest": "LD_LIBRARY_PATH=/home/sasaki/.local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH} ctest --test-dir build -j1 --output-on-failure",
+    "diff_check": "git diff --check"
+  },
+  "bounded_alternative_if_no_go": {
+    "id": "existing_factor_graph_gnss_imu_wiring_feasibility",
+    "precondition": "attempt only after robust candidate has a sealed train No-Go",
+    "scope": "inspect existing Ceres/GTSAM/factor-graph dependencies and Android observation adapters; no new estimator rewrite, no truth-based wiring decisions",
+    "success_definition": "compile/test-only adapter feasibility with explicit missing dependency or supported factor contract",
+    "production_default_changed": false
+  }
+}

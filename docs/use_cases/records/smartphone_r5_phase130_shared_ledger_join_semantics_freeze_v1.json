@@ -1,0 +1,281 @@
+{
+  "schema_version": "smartphone-r5-phase130-shared-ledger-join-semantics-freeze.v1",
+  "phase": 130,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-source-backed-default-off-contract-candidate",
+  "purpose": "Freeze one source-backed local keyed base-support admission boundary after the Phase129 whole-ledger equality gate was shown to exceed the official and native join semantics.",
+  "starting_state": {
+    "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "branch": "feat/rtk-smartphone-performance-pr",
+    "head_before_audit": "4855e2a5bebb417b51fcd8ef958c498f38bbbb14",
+    "worktree_before_audit": "clean",
+    "audit_commit": "355b6225bcc3bc838dad8a3044bc3aadd34d80f3",
+    "audit_path": "docs/use_cases/records/smartphone_r5_phase130_shared_ledger_join_semantics_audit_v1.md",
+    "audit_sha256": "fcde87b6267daaa2da2dba2210bd0e5baec2658daa8266d53b40bd4bd9256912"
+  },
+  "decision": {
+    "candidate_count": 1,
+    "candidate_id": "phase130-shared-ledger-key-local-support-v1",
+    "selector": "--native-phase130-shared-ledger-key-local-support",
+    "source_backed": true,
+    "official_requires_rover_base_whole_ledger_equality": false,
+    "official_admission_model": "sameSat common-satellite selection, per-frequency-field residual stream, finite in-domain interpolation, and per-observation finite corrected-code factor gate",
+    "native_admission_model": "exact (SatelliteId,SignalType) stream lookup at the factor epoch, finite in-domain correction, local factor drop, and side-local conservation",
+    "current_phase129_failure": "runner requires complete rover/base tuple equality even though each side independently conserves its own rows",
+    "default_off": true,
+    "implementation_authorized": false,
+    "raw_materialization_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false
+  },
+  "sealed_context": {
+    "phase129_result": {
+      "commit": "4855e2a5bebb417b51fcd8ef958c498f38bbbb14",
+      "json_path": "docs/use_cases/records/smartphone_r5_phase129_glonass_local_miss_structural_result_v1.json",
+      "json_sha256": "fb703473f05bd647fd30b9abaa230a4e6f9930f1798616f463061a74359aa83c",
+      "md_path": "docs/use_cases/records/smartphone_r5_phase129_glonass_local_miss_structural_result_v1.md",
+      "md_sha256": "62504623a8ad96b0d0f187ba0c7ab375938e0de683a013b43239d61bbf9d650f",
+      "status": "no-go-phase129-glonass-local-miss-structural",
+      "solver_invocations": 0,
+      "route_order": [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5"
+      ],
+      "route_failure": "rover/base shared GLONASS ledger differs",
+      "mtv_a_rover_glonass_certified_miss": "6858/5210",
+      "mtv_a_base_glonass_certified_miss": "9642/7557",
+      "lax_t_rover_glonass_certified_miss": "4058/4815",
+      "lax_t_base_glonass_certified_miss": "396/524"
+    },
+    "phase129_implementation": {
+      "commit": "05e57d5008320734de93c763ff84ccd31f755805",
+      "selector": "--native-phase129-glonass-local-miss-mask"
+    },
+    "phase129_runner": {
+      "commit": "4855e2a5bebb417b51fcd8ef958c498f38bbbb14",
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase129_glonass_local_miss_structural.py",
+      "sha256": "30e2c5975020c194ec68e2af1ff233c5c999960e543767e1acaeb5946d344c47",
+      "equality_lines": "591-601"
+    }
+  },
+  "source_pins": [
+    {
+      "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+      "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e",
+      "lines": "5-6,26-34",
+      "evidence": "sameSat common-satellite selection followed by fixed moving mean and linear interpolation at rover times without extrapolation"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "lines": "72-78,123-148",
+      "evidence": "per-frequency correction and per-observation finite P/D factor guards"
+    },
+    {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": "85-92,202-218",
+      "evidence": "same correction and local finite factor admission in the IMU graph"
+    },
+    {
+      "path": "src/algorithms/base_pseudorange_compensation.cpp",
+      "sha256": "b6c6a9b6a2f29c66c4f2abecbe8d7e56c4d7cf81e9c145273c3ea1255da6eb9d",
+      "lines": "144-145,499,536-581,584-617",
+      "evidence": "per (SatelliteId,SignalType) stream, finite samples, monotonic stream guard, and exact endpoint/in-domain interpolation"
+    },
+    {
+      "path": "include/libgnss++/algorithms/base_pseudorange_compensation.hpp",
+      "sha256": "f6e5e9c1436138e9b0ef943d8b8fa68f3deca51bca650bab71526703d3ad0272",
+      "lines": "27,140-158,168",
+      "evidence": "exact source key and no-extrapolation lookup contract"
+    },
+    {
+      "path": "src/algorithms/source_pseudorange_miss_mask.cpp",
+      "sha256": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
+      "lines": "53-181",
+      "evidence": "local missing-key/domain/nonfinite drops, one subtraction, and post-conservation swap"
+    },
+    {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "3ad1c235721a2ee0b550a01b2446e300d96fa87fd78bfadc6ab7600beb501547",
+      "lines": "8495-8598",
+      "evidence": "the miss mask is applied once to the shared pseudorange factor vector before both stage paths"
+    },
+    {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "b01c9c48f9bdfd470be8aba3bab5247923be4d0ec52d5bc1a3c26f78be139a9c",
+      "lines": "503-540",
+      "evidence": "native exact query-time satellite/signal annotation and row-local GLO skip"
+    }
+  ],
+  "join_contract": {
+    "key": [
+      "constellation",
+      "satellite_prn",
+      "signal_or_frequency_field"
+    ],
+    "query": "existing FGO factor epoch/query time; no new time conversion or iteration",
+    "official_join": "common satellite after sameSat, then selected frequency field and rover-time interpolation",
+    "native_join": "exact (SatelliteId,SignalType) stream plus query-time correctionAt",
+    "rover_base_row_index_pairing_required": false,
+    "rover_base_equal_epoch_count_required": false,
+    "rover_base_equal_cadence_required": false,
+    "rover_base_equal_key_count_required": false,
+    "rover_base_equal_certified_count_required": false,
+    "rover_base_equal_miss_reason_map_required": false,
+    "base_unused_rows_allowed": true,
+    "base_unused_rows_accounted": true,
+    "unmatched_rover_action": "explicit factor miss; omit raw rover factor",
+    "raw_uncorrected_fallback": false,
+    "zero_correction_fallback": false,
+    "cross_signal_fill": false,
+    "cross_satellite_fill": false,
+    "nearest_fill": false,
+    "endpoint_hold": false,
+    "extrapolation": false
+  },
+  "support_and_formula": {
+    "base_residual_m": "P_base_raw_m + satellite_clock_m - geometric_range_m - ionosphere_m - troposphere_m",
+    "explicit_tgd_bgd": false,
+    "smoothing": "existing route-frozen centered moving mean; 1-second route => 151 samples, 15-second route => 11 samples",
+    "support": "exact finite endpoint sample, or two adjacent finite same-key samples bracketing the rover query time",
+    "interpolation": "pc_l + (t_r - t_l)/(t_u - t_l) * (pc_u - pc_l), only when t_first <= t_r <= t_last",
+    "corrected_rover_code_m": "P_rover_raw_m - pc_m",
+    "finite_required": true,
+    "nonpositive_bracket_rejected": true,
+    "out_of_domain_action": "explicit out_of_domain factor miss",
+    "missing_exact_key_action": "explicit missing_exact_stream factor miss",
+    "correction_application": "one finite subtraction on the shared factor vector, then no second application"
+  },
+  "local_conservation": {
+    "side_domain": [
+      "rover",
+      "base"
+    ],
+    "per_key_partition": "eligible_side_rows = certified_side_rows + explicit_local_miss_side_rows",
+    "rover_factor_partition": "adopted_rover_factors = retained_corrected_factors + missing_exact_stream + out_of_domain + nonfinite_correction_or_subtraction",
+    "base_stream_partition": "finite_certified_base_samples + rejected_or_unusable_base_rows = eligible_base_rows; unused finite samples remain accounted, not errors",
+    "cross_side_partition": "forbidden; no equality is imposed between rover and base totals",
+    "retained_factor_predicate": "certified rover row AND exact base key AND finite in-domain support AND finite corrected code",
+    "factor_support_cardinality": "exactly one correction result per retained rover factor; an interior result has one left/right bracket pair",
+    "unused_base_stream_policy": "allow a finite base key/sample with no rover query and report it as unused"
+  },
+  "exception_and_fail_closed_policy": {
+    "phase126_global_failures_unchanged": [
+      "station/reference invalid",
+      "satellite state or ephemeris unavailable",
+      "nonfinite geometry/Sagnac",
+      "nonfinite atmosphere or residual",
+      "unsupported route interval/window",
+      "duplicate or non-monotonic source stream",
+      "atomic A/B/C transaction failure"
+    ],
+    "phase127_128_provenance": "header/geph missing, mismatch, conflict, tie, invalid, or out-of-time remains the existing typed provenance decision; no fixed or inferred FCN",
+    "duplicate_base_time": "global fail-closed; no deduplication or winner selection",
+    "all_miss_or_empty": "fail before solver when no finite usable base stream or corrected factor remains",
+    "partial_application": "fail closed; candidate map/vector is not exposed",
+    "fallback_or_repair": "forbidden"
+  },
+  "candidate": {
+    "id": "phase130-shared-ledger-key-local-support-v1",
+    "selector": "--native-phase130-shared-ledger-key-local-support",
+    "requires_selectors": [
+      "--native-phase126-raw-base-source-complete",
+      "--native-phase127-glonass-channel-provenance",
+      "--native-phase128-glonass-provenance-parser-admission",
+      "--native-phase129-glonass-local-miss-mask"
+    ],
+    "scope": "Replace only the Phase129 pre-solver whole-rover/base-ledger equality predicate with side-local conservation plus exact-key/time/domain support checks.",
+    "default_off": true,
+    "adds_factor": false,
+    "adds_state": false,
+    "changes_measurement_equation": false,
+    "changes_signal_mapping": false,
+    "changes_cadence_or_window": false,
+    "changes_interpolation": false,
+    "changes_provenance": false,
+    "changes_non_glonass_population": false,
+    "changes_c7_d_c0d_ccdd": false,
+    "changes_solver_or_lm": false,
+    "changes_sigma_or_filter": false,
+    "changes_output_or_truth": false,
+    "partial_selector": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solution_output": "opaque structural metadata/hash only after separate authorization"
+  },
+  "required_future_telemetry": [
+    "side-local eligible/certified/explicit-miss counts by key and reason",
+    "base finite stream keys and samples",
+    "base stream keys/samples unused by any rover query",
+    "rover exact-key matched/missing rows",
+    "exact endpoint versus interior bracket support",
+    "out-of-domain/nonfinite correction misses",
+    "retained corrected factor count and per-factor exact support marker",
+    "side and factor conservation predicates",
+    "one-pass/exactly-once and duplicate-application markers",
+    "Phase126 A/B/C and existing C7/D/CCDD/graph gates"
+  ],
+  "required_tests_before_raw": [
+    "unequal rover/base row counts and unequal cadence are accepted when every retained rover row has exact-key finite support",
+    "one base stream supports multiple rover query times and unused base samples are counted but do not fail",
+    "missing exact key is an explicit factor miss with no raw or zero fallback",
+    "exact endpoint and interior bracket interpolation are accepted; out-of-domain is rejected",
+    "certified and explicit-local-miss GLO rows conserve independently on rover and base",
+    "non-GLONASS rows retain existing semantics without cross-side count equality",
+    "duplicate/non-monotonic base times remain global fail-closed",
+    "GLONASS provenance duplicate/conflict/tie remains typed and cannot be hidden by join relaxation",
+    "all-miss/empty usable population fails before solver",
+    "correction is applied exactly once and late conservation failure leaves input unchanged",
+    "selector-off legacy behavior is unchanged"
+  ],
+  "future_authorization_boundary": {
+    "implementation_and_tests_commit_required": true,
+    "runner_validator_manifest_commit_required": true,
+    "pre_raw_read_accounting_commit_required": true,
+    "independent_authorization_commit_required": true,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "solver_start_condition": "only after inventory and local-join validator pass",
+    "failed_route_policy": "seal NO-GO; no rerun, fallback, repair, or truth evaluation",
+    "raw_inputs_only": [
+      "device_gnss.csv",
+      "device_imu.csv",
+      "broadcast navigation",
+      "sealed raw base RINEX"
+    ],
+    "forbidden_inputs": [
+      "truth",
+      "MAT",
+      "PDC",
+      "precomputed coordinates",
+      "precomputed corrections",
+      "base-derived phone coordinates",
+      "Kaggle"
+    ],
+    "solution_policy": "opaque hash/row metadata only; no coordinate interpretation"
+  },
+  "read_accounting": {
+    "this_audit_source_reads": "read-only",
+    "this_audit_sealed_metadata_reads": "aggregate/structural metadata only",
+    "this_freeze_raw_phone_gnss_payload_reads": 0,
+    "this_freeze_raw_phone_imu_payload_reads": 0,
+    "this_freeze_broadcast_navigation_payload_reads": 0,
+    "this_freeze_raw_base_payload_header_stat_hash_reads": 0,
+    "this_freeze_solution_rows_opened": 0,
+    "this_freeze_truth_reads": 0,
+    "this_freeze_mat_reads_or_generated": 0,
+    "this_freeze_pdc_reads": 0,
+    "this_freeze_precomputed_coordinate_reads": 0,
+    "this_freeze_native_solver_invocations": 0,
+    "this_freeze_accuracy_calculations": 0,
+    "this_freeze_kaggle_or_token_access": 0,
+    "this_freeze_reruns_fallbacks_repairs_sweeps": 0
+  }
+}

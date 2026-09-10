@@ -1,0 +1,121 @@
+{
+  "schema_version": "smartphone-r5-phase12-residual-ionosphere-score-result.v1",
+  "status": "development-train-gate-pass",
+  "candidate_id": "native-residual-ionosphere-gtsam-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1.json",
+  "freeze_record_sha256": "416b56c7bc13fa969a4f2397fe70bc01ecb78198612c341e41ecee731ff908fd",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "075d2059d2d0c418374db35adf92e3b64be7a39d58a087aee231665eca9655ff",
+  "structural_seal": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_structural_seal_v1.json",
+  "structural_seal_sha256": "20f76514b1c146d0dcbed4a3eb7a72ff29a738299bb07355c5392ade2640d970",
+  "dataset_id": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "truth_policy": {
+    "truth_path": "data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv",
+    "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+    "truth_read_count_after_structural_seal": 1,
+    "truth_read_reason": "single frozen development-train metric evaluation after raw-only candidate output and structural hashes were sealed",
+    "score_evaluation_passes": 1,
+    "truth_free_generation_before_truth": true,
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_members_read": false,
+    "token_or_kaggle_access": false,
+    "leaderboard_used_for_tuning": false,
+    "post_score_algorithm_or_parameter_changes": false
+  },
+  "candidate_artifacts": {
+    "submission": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/submission.csv",
+    "submission_sha256": "3069f149bc98b0383d008d5f20cc80cd4ada9f9eb1b5d09f05353895a2d5a26f",
+    "submission_rows": 1383,
+    "summary": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/summary.json",
+    "summary_sha256": "ce209dfd0a7b3662f8dff9512b3947acf5e3af840c94467ba84fccd132669cda",
+    "score": "output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/train_score.json",
+    "score_sha256": "12bd999d73abd666a26c4c5d67d9a0ce6551872b150d66185283c19780d425a8"
+  },
+  "candidate_metrics": {
+    "availability_ratio": 1.0,
+    "truth_coverage_ratio": 1.0,
+    "primary_score_m": null,
+    "primary_score_status": "undetermined-from-public-primary-sources",
+    "diagnostic_variants_m": {
+      "wgs84_vincenty__linear_n_minus_1": 3.1922489635126103,
+      "wgs84_vincenty__nearest_rank_ceiling": 3.192568555787111,
+      "haversine_sphere__linear_n_minus_1": 3.19550488592491,
+      "haversine_sphere__nearest_rank_ceiling": 3.195826163862037
+    },
+    "diagnostic_mean_m": 3.194037142271667,
+    "p50_m": 2.3701343323397306,
+    "p95_m": 4.0143635946854905,
+    "vertical_p95_abs_m": null,
+    "vertical_metric_note": "The native four-column output and public evaluator score latitude/longitude only; vertical is not available to this evaluator."
+  },
+  "comparison_to_phase11": {
+    "reference_candidate": "native-signal-bias-gtsam-v1.1",
+    "reference_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_score_result_v1.json",
+    "reference_submission_sha256": "d8da69a0cfea3e12d78c072ac76b5c0ac108ed5f7210fb1d3d8bce872d906a70",
+    "reference_wgs84_vincenty__linear_n_minus_1_m": 3.21558228095786,
+    "reference_wgs84_vincenty__nearest_rank_ceiling_m": 3.216005729693874,
+    "reference_haversine_sphere__linear_n_minus_1_m": 3.217859452313651,
+    "reference_haversine_sphere__nearest_rank_ceiling_m": 3.218284146566745,
+    "variant_deltas_m_candidate_minus_reference": {
+      "wgs84_vincenty__linear_n_minus_1": -0.023333317445249577,
+      "wgs84_vincenty__nearest_rank_ceiling": -0.02343717390676303,
+      "haversine_sphere__linear_n_minus_1": -0.022354566388740945,
+      "haversine_sphere__nearest_rank_ceiling": -0.02245798270470788
+    },
+    "all_four_variants_non_regressed": true,
+    "reference_p50_m": 2.3587407475349087,
+    "candidate_p50_m": 2.3701343323397306,
+    "reference_p95_m": 4.072423814380811,
+    "candidate_p95_m": 4.0143635946854905,
+    "p50_note": "P50 increased by 0.0113935848048219 m but was not a frozen promotion gate; the frozen gate was all four diagnostic variants plus coverage and structural safety."
+  },
+  "promotion_gate": {
+    "fixed_reference_wgs84_linear_m": 3.21558228095786,
+    "candidate_wgs84_linear_m": 3.1922489635126103,
+    "fixed_gate_passed": true,
+    "all_four_variants_strictly_improved": true,
+    "coverage_non_regressed": true,
+    "structural_gate_passed": true,
+    "promotion_decision": "development-only residual-ionosphere candidate passes the single frozen development route gate; no validation, holdout, test, or Kaggle promotion is authorized"
+  },
+  "truth_free_runtime": {
+    "problem_epochs": 1384,
+    "target_output_epochs": 1383,
+    "pseudorange_factors": 39539,
+    "residual_ionosphere_factors": 39539,
+    "residual_ionosphere_states": 1384,
+    "residual_ionosphere_resets": 0,
+    "residual_ionosphere_invalid_coefficients": 0,
+    "residual_ionosphere_min_coefficient": 1.0697162485718268,
+    "residual_ionosphere_max_coefficient": 5.052459778462452,
+    "residual_ionosphere_max_abs_m": 3.6522938612853384,
+    "residual_ionosphere_rms_m": 1.868437092820105,
+    "tdcp_factors_built": 23399,
+    "tdcp_factors_inserted": 23399,
+    "graph_factors": 68476,
+    "graph_values": 6924,
+    "graph_iterations": 12,
+    "graph_converged": true,
+    "graph_initial_cost": 1804659524.7669966,
+    "graph_final_cost": 64362.4132009474,
+    "imu_intervals": 1383,
+    "imu_fallback": false,
+    "maximum_transition_speed_mps": 19.601319033053937,
+    "transitions_over_70mps": 0
+  },
+  "reproduction": {
+    "truth_free_command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <device_gnss.csv> --android-imu <device_imu.csv> --nav <brdc.nav> --out <submission.csv> --summary-json <summary.json> --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere",
+    "score_command": "PYTHONPATH=apps/commands:apps/commands/benchmarks python3 apps/commands/benchmarks/gnss_smartphone_kaggle_evaluate.py --submission <sealed-submission.csv> --ground-truth <declared-development-ground_truth.csv> --output-json <train_score.json> --phone 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --profile configs/benchmarks/smartphone_r5_gsdc2023.json --role development --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "no_solver_rerun_after_truth": true,
+    "no_parameter_tuning_after_truth": true
+  },
+  "limitations": {
+    "official_metric": "The public primary source does not publish the distance formula/earth model or percentile interpolation; local diagnostics remain sensitivity variants and primary_score_m is null.",
+    "generalization": "Only one already-declared development route was scored. This result does not authorize validation or holdout promotion.",
+    "model_scope": "The per-epoch state models a bounded raw post-Klobuchar residual with the Phase11 static signal biases; it is not a full ionosphere-free PPP solution."
+  },
+  "no_post_score_change_declaration": true,
+  "result_record_hash": "computed after apply_patch and fixed by companion manifest"
+}

@@ -1,0 +1,226 @@
+{
+  "accuracy_scored": false,
+  "aggregate": {
+    "candidate_macro_score_m": null,
+    "control_phase43_macro_score_m": null,
+    "macro_improvement_vs_phase43_m": null,
+    "macro_route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "macro_weighting": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "phase100_qr_scalar_clock_two_route_macro_m": 2.2339371202271145,
+    "phase82_same_route_two_route_macro_m": 1.026451431707709,
+    "route_count": 2
+  },
+  "authority": {
+    "phase100_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7"
+    },
+    "phase101_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a"
+    },
+    "phase102_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_raw_evaluation_authorization_v1.json",
+      "sha256": "403b8feb245786180a12c0430de9a797e1c5c2c5355f1c75c79b11546ddce583",
+      "status": "authorized-for-exact-two-route-phase102-epoch-clock-vector-raw-and-isolated-truth-evaluation"
+    },
+    "phase102_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy.py",
+      "sha256": "576ebf9749d1f295737bd82716275a20eb30a5aeeff3fc3828de10960c2255d8"
+    },
+    "phase102_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+      "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1"
+    },
+    "phase102_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_manifest_v1.json",
+      "sha256": "3b7b5dc48d6a172dda21c5d27bd4d8b92a64347615768ab87d4716ca17d81cd9"
+    },
+    "phase102_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy_execute.py",
+      "sha256": "ed3e86f57a2b494aab9156a5f83ede44ab92f3863b7b0098acc81adcb900e389"
+    },
+    "phase43_control_source": "Phase82 artifact_sources.phase43_control resolved through sealed Phase43 structural identity",
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    }
+  },
+  "candidate": "phase102-phase101-epoch-clock-vector-accuracy-v1",
+  "decision": "accuracy gate failed closed; preserve artifacts and do not release",
+  "execution_label": "Luna Max",
+  "failed_gates": [
+    "candidate_prediction_domain_coverage_exact",
+    "candidate_all_finite_and_earth_valid",
+    "candidate_over_70_mps_count_zero",
+    "candidate_improves_each_route_vs_phase43_by_at_least_0_05m",
+    "candidate_no_route_regression_vs_phase43",
+    "candidate_macro_improvement_vs_phase43_at_least_0_10m",
+    "candidate_each_route_score_at_most_3m",
+    "candidate_macro_score_at_most_2m",
+    "candidate_macro_score_strict_at_most_0_782m",
+    "candidate_no_route_regression_vs_phase82_same_route",
+    "candidate_no_route_regression_vs_phase100_qr_scalar_clock",
+    "truth_read_only_by_evaluator"
+  ],
+  "forbidden_lanes": {
+    "base": false,
+    "kaggle_or_token": false,
+    "mat": false,
+    "pdc": false,
+    "precomputed_coordinates": false,
+    "solution_rows_in_result": false,
+    "truth_in_native_argv_or_environment": false
+  },
+  "metric_contract": {
+    "candidate_submission_header": [
+      "phone",
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0",
+    "distance": "spherical Haversine per row",
+    "duplicate_policy": "duplicate prediction or truth keys fail closed",
+    "earth_radius_m": 6371008.8,
+    "extra_prediction_policy": "prediction keys absent from truth fail closed",
+    "finite_and_earth_valid": "all coordinates and derived metric values finite; latitude in [-90,90] and longitude in [-180,180]",
+    "key": "(phone, UnixTimeMillis)",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "matching": "exact integer key intersection only",
+    "missing_truth_policy": "only the exact pinned leading warm-up truth key may be absent; no interpolation, nearest, edge hold, extrapolation, or fill",
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "required_truth_fields": [
+      "UnixTimeMillis",
+      "LatitudeDegrees",
+      "LongitudeDegrees"
+    ],
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "timestamp_type": "exact integer",
+    "truth_phone_policy": "optional phone must equal declared route; absent phone is assigned route",
+    "truth_reader": "CSV DictReader over required field names; optional columns allowed"
+  },
+  "phase": 102,
+  "promotion_gates": {
+    "candidate_all_finite_and_earth_valid": false,
+    "candidate_each_route_score_at_most_3m": false,
+    "candidate_improves_each_route_vs_phase43_by_at_least_0_05m": false,
+    "candidate_macro_improvement_vs_phase43_at_least_0_10m": false,
+    "candidate_macro_score_at_most_2m": false,
+    "candidate_macro_score_strict_at_most_0_782m": false,
+    "candidate_no_route_regression_vs_phase100_qr_scalar_clock": false,
+    "candidate_no_route_regression_vs_phase43": false,
+    "candidate_no_route_regression_vs_phase82_same_route": false,
+    "candidate_over_70_mps_count_zero": false,
+    "candidate_prediction_domain_coverage_exact": false,
+    "exact_two_routes_one_run_each": true,
+    "no_kaggle_submission": true,
+    "no_solution_rows_in_result": true,
+    "truth_read_only_by_evaluator": false
+  },
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "base_reads": 0,
+    "broadcast_navigation_reads_by_native": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 2,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "phase43_control_artifact_reads": 0,
+    "phase43_seal_metadata_reads": 2,
+    "raw_byte_reads_by_wrapper": 0,
+    "raw_content_copied_or_transformed": false,
+    "raw_device_gnss_reads_by_native": 2,
+    "raw_device_imu_reads_by_native": 2,
+    "raw_hash_reads_by_wrapper": 0,
+    "reruns": 0,
+    "solution_reads_for_hash_and_parse": 2,
+    "summary_reads": 2,
+    "truth_reads": 0,
+    "truth_reads_by_process": "Phase102 evaluator subprocess only",
+    "truth_reads_per_route_max": 1
+  },
+  "release_or_submission_authorized": false,
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "accuracy_scored": false,
+      "candidate_solution": {
+        "bytes": 172694,
+        "header": [
+          "phone",
+          "UnixTimeMillis",
+          "LatitudeDegrees",
+          "LongitudeDegrees"
+        ],
+        "path": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "pretruth_schema_valid": true,
+        "rows": 2158,
+        "sha256": "07afdb7f16515e069c8396cc8ff5b78910a44b68f26766d3b25e7248420fd075"
+      },
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "failure": "summary/2021-03-16-18-59-us-ca-mtv-a/pixel5/mat_used: expected False, got None",
+      "gates": {
+        "checks": {},
+        "failures": [
+          "route_evaluation"
+        ],
+        "passed": false
+      },
+      "native": {
+        "interrupted": false,
+        "launch_error": "",
+        "return_code": 0,
+        "solution": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json"
+      },
+      "truth_read": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "accuracy_scored": false,
+      "candidate_solution": {
+        "bytes": 117254,
+        "header": [
+          "phone",
+          "UnixTimeMillis",
+          "LatitudeDegrees",
+          "LongitudeDegrees"
+        ],
+        "path": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "pretruth_schema_valid": true,
+        "rows": 1465,
+        "sha256": "99fc5c92c30609ce6e023ff008bf4f6de27a4f734b3378a84d80b08e80c06b8b"
+      },
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "failure": "summary/2022-04-01-18-22-us-ca-lax-t/pixel5/mat_used: expected False, got None",
+      "gates": {
+        "checks": {},
+        "failures": [
+          "route_evaluation"
+        ],
+        "passed": false
+      },
+      "native": {
+        "interrupted": false,
+        "launch_error": "",
+        "return_code": 0,
+        "solution": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json"
+      },
+      "truth_read": false
+    }
+  },
+  "schema_version": "smartphone-r5-phase102-epoch-clock-vector-accuracy-result.v1",
+  "solution_output_published": false,
+  "status": "no-go-phase102-epoch-clock-vector-accuracy-gates",
+  "strict_0_782_gate": {
+    "candidate_macro_score_m": null,
+    "passed": false,
+    "threshold_m": 0.782
+  },
+  "truth_evaluator_only": true
+}

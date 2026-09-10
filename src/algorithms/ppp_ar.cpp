@@ -96,6 +96,24 @@ double safeVarianceFloor(double variance, double floor_value) {
     return variance;
 }
 
+int clasArMinimumDdRowsForEpoch(
+    const ppp_shared::PPPConfig& config,
+    bool prior_hold_is_active_and_valid,
+    int prior_reduced_dd_publication_streak) {
+    const int configured_publication_streak =
+        config.clas_ar_held_maximum_publication_streak;
+    const int maximum_publication_streak =
+        configured_publication_streak >= 1 && configured_publication_streak <= 5
+            ? configured_publication_streak
+            : 1;
+    if (!prior_hold_is_active_and_valid ||
+        prior_reduced_dd_publication_streak < 0 ||
+        prior_reduced_dd_publication_streak >= maximum_publication_streak) {
+        return 6;
+    }
+    return std::clamp(config.clas_ar_held_minimum_dd_rows, 2, 6);
+}
+
 EligibleAmbiguities collectEligibleAmbiguities(
     const ppp_shared::PPPState& filter_state,
     const std::map<SatelliteId, ppp_shared::PPPAmbiguityInfo>& ambiguity_states,
@@ -1446,9 +1464,13 @@ WlnlFixAttempt tryDirectStateDdFix(
         }
     }
 
-    // MRTKLIB minamb: clas.toml partial_ar.min_ambiguities = 6.
+    // MRTKLIB minamb is 6. A caller may lower the typed per-attempt floor
+    // only after proving that a prior ambiguity hold is still active and
+    // slip-valid; this function itself never infers hold continuity.
+    const int minimum_dd_rows =
+        std::clamp(config.clas_ar_minimum_dd_rows, 2, 6);
     if (!solveStateDdRows(config, filter_state, constraint_covariance, rows,
-                          /*have_wlnl_datum=*/false, /*min_rows=*/6,
+                          /*have_wlnl_datum=*/false, minimum_dd_rows,
                           attempt, debug_enabled)) {
         return WlnlFixAttempt{};
     }

@@ -1,0 +1,25 @@
+{
+  "schema_version": "smartphone-r5-native-fgo-android-imu-gnss-anchor-freeze-manifest.v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_native_fgo_android_imu_gnss_anchor_freeze_v1.json",
+  "freeze_record_sha256": "0a46c68ea24937ee2b6d377ead49f91da476fbbaaea02516c232e24fd08c11af",
+  "freeze_record_hash_algorithm": "sha256 over exact UTF-8 bytes",
+  "frozen_at_utc": "2026-08-31T00:00:00Z",
+  "candidate_id": "native-fgo-android-imu-gnss-anchor-v1",
+  "source_and_binary_hashes": {
+    "include/libgnss++/io/imu.hpp": "3fada449e6d2c94a9222150c673ff24e01f8b8bca2308702e6a02dd99e8fbd70",
+    "src/io/imu.cpp": "9c1553d2491f85090527507d8a8767a508e7e986e19347019ea8a6df82cb6f44",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "76976e985d70669866663a05d1d08d5552567f292c5c5101d627bee7a1896f4a",
+    "tests/test_imu_csv.cpp": "95844abbfcf728fea2d783b04974df07e5f402511a17cd92969edfecddb0471f",
+    "build/apps/gnss_fgo_imu_no_base": "ed231618b12bdc11c1e8b15e13281940fbae1bab57c4102490c8e72e55d9c90c"
+  },
+  "integrity_contract": {
+    "truth_open_count_at_freeze": 0,
+    "validation_or_holdout_touched": false,
+    "matlab_container_read": false,
+    "matlab_container_generated": false,
+    "token_access": false,
+    "external_mutation": false,
+    "post_freeze_parameter_tuning": false,
+    "freeze_record_mutation_after_hash": "forbidden"
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "schema_version": "smartphone-r5-wls-test-edge-completeness-fallback-run.v2.1",
+  "status": "sealed-completed-truth-free-derived-submission",
+  "freeze": {
+    "record": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_freeze_v2_1.json",
+    "record_sha256": "823ad164fe4c4e85d0964e737d418aa85e36117104d67246cd4c9dddccf68c7c",
+    "manifest": "docs/use_cases/records/smartphone_r5_wls_test_edge_completeness_fallback_freeze_v2_1_manifest.json",
+    "manifest_sha256": "2b8849e6655f025cdb492f712b53d8501719a2effeba817dc78e20a9f701e3e1"
+  },
+  "run": {
+    "manifest": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_batch_derived_run_manifest.json",
+    "manifest_sha256": "726a9c0b2141c567607701c97a544935f6500f0c59dd8054d06d08093ae37d35",
+    "authorization": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_authorization.json",
+    "authorization_sha256": "12d1ae36377e94a0ee3a6b946dd7fcf4d35d3b8ade360e2d532cf96e97f19a43",
+    "authorization_manifest": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/test_authorization_manifest.json",
+    "authorization_manifest_sha256": "96fc259ccdfb4eb930f5b2b14387396d48b194772257b874cc0af8cf876a290d",
+    "provisional_submission": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.csv",
+    "provisional_submission_sha256": "62c569f1b6f61fff2cccef598444ebbb053d59d504eb8178f54b916b8af7f439",
+    "provisional_submission_manifest": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/submission_derived_unverified.manifest.json",
+    "provisional_submission_manifest_sha256": "ecf62b2b54f2472a219fcca279c42dfbeccbb413f78c0524e5a045f156646003",
+    "provisional_key_manifest": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/provisional_key_manifest.json",
+    "provisional_key_manifest_sha256": "4783d74e378e829f01306a6ae28bff1ba631e9aa9ddfc1a7aa3172e21ffdd1f5",
+    "output_contract": {
+      "columns": ["phone", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
+      "key_count": 72010,
+      "missing_keys": 0,
+      "extra_keys": 0,
+      "duplicate_keys": 0,
+      "nonfinite_coordinates": 0,
+      "nonfinite_timestamps": 0,
+      "monotonic_per_phone": true,
+      "atomic_publish": true
+    }
+  },
+  "dataset": {
+    "archive": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "inventory": "output/smartphone-r5/wls-test-batch-v1/test_inventory.json",
+    "inventory_sha256": "dbf89222e6860d4fb31f12c9c46402033ed31e905f8fe3f6615e5131cb9e9495",
+    "inventory_route_phone_count": 40,
+    "target_route": "2022-10-06-20-46-us-ca-sjc-r",
+    "target_phone": "sm-a205u",
+    "target_route_manifest": "output/smartphone-r5/wls-test-batch-edge-completeness-fallback-v2-1/routes/2022-10-06-20-46-us-ca-sjc-r/route_manifest.json",
+    "target_route_manifest_sha256": "6383b807146503e8e0e614c3fc80f61e8995d8231c9559f0f8508de7dea40bb4",
+    "truth_policy": {
+      "test_truth_materialized_count": 0,
+      "test_truth_open_count": 0,
+      "ground_truth_members_read": false,
+      "holdout_or_test_truth_used_for_any_gate": false
+    }
+  },
+  "resume": {
+    "source_run_manifest": "output/smartphone-r5/wls-test-batch-completeness-fallback-v1/test_batch_derived_run_manifest.json",
+    "source_run_manifest_sha256": "be7676cea97b7839d62954b7f9c77afdd83eee46953fb387e2037f689a6fcff9",
+    "prior_success_route_count": 39,
+    "resumed_route_count": 39,
+    "selected_output_hashes_reused": 39,
+    "byte_identity_proven": true,
+    "recomputed_resumed_routes": 0,
+    "newly_processed_route_count": 1,
+    "completed_route_count": 40,
+    "failed_route_count": 0
+  },
+  "source_and_lane_counts": {
+    "completed_route_count": 40,
+    "raw_wls_route_count": 40,
+    "edge_hold_route_count": 1,
+    "native_fallback_route_count": 0,
+    "interpolation_route_count": 0,
+    "target_route_epoch_count": 1698,
+    "target_route_wls_raw_epoch_count": 1697,
+    "target_route_edge_constant_hold_epoch_count": 1,
+    "target_route_native_fallback_epoch_count": 0,
+    "target_route_interpolation_epoch_count": 0,
+    "target_route_source_counts": {
+      "wls_raw": 1697,
+      "wls_ecef_constant_edge_hold": 1
+    }
+  },
+  "edge_fallback": {
+    "candidate": "constant nearest finite selected-source WLS ECEF",
+    "scope": "leading/trailing unresolved target keys only",
+    "max_gap_ms": 1000,
+    "first_edge_gap_ms": 999,
+    "max_edge_gap_ms": 999,
+    "direction_counts": {"leading": 1, "trailing": 0},
+    "same_clock_segment_verified": true,
+    "velocity_extrapolation_count": 0,
+    "long_gap_or_clock_break_fail_closed": true,
+    "target_selected_output_sha256": "cc70b3f01f1a1b935c72674402da752ad6e82fb4e8df115ea719cb1362c2fb52",
+    "target_wls_position_sha256": "c8a70da7d0a70669887467d0b35d8f623933fb10b86896dfb0331227039002df"
+  },
+  "timing": {
+    "total_wall_s": 31.25713328400161,
+    "peak_rss_kb": 295620,
+    "rss_unit": "kilobytes from getrusage ru_maxrss",
+    "target_route_wall_s": 2.2110673610004596,
+    "target_route_peak_rss_kb": 235712
+  },
+  "provenance": {
+    "algorithm_core_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "algorithm_parameter_hash": "203cea0d8354c9b70515134642837269f26514346404514ee059a26e4a4076fb",
+    "wls_source_sha256": "f8a1da02265f73e4c50b526f60b2da90d1461c8d7891871b57818a6b9ca604e2",
+    "batch_source_sha256": "ae6ecfd832f8e7ba76002178e3d366befe7c2940895832263bc720ad5984b909",
+    "profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+    "release_gnss_spp_sha256": "4d272940437c2ab2dcffef31b7541c8c01212e97d2d2320edcf7bd8f80ea3c12",
+    "release_gnss_solve_sha256": "7140d077213ef528b7366aa8c1b925dcea6096ec6e0711748cf4cf9428392eb0"
+  },
+  "decision": {
+    "status": "completed-truth-free-derived-submission",
+    "development_only": true,
+    "official_sample_verified": false,
+    "official_sample_present": false,
+    "cannot_submit_to_kaggle": true,
+    "external_kaggle_submission": false,
+    "production_rtk_spp_default_changed": false,
+    "reason": "The fixed one-second edge-hold contract resolved the sole prior test sparse failure at a measured 999 ms leading edge; no truth was opened and no candidate or numeric parameter was tuned."
+  },
+  "no_post_test_tuning": true
+}

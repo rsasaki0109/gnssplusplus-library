@@ -1,0 +1,187 @@
+{
+  "schema_version": "smartphone-r5-reacquisition-candidate-selection.v1",
+  "status": "selection-frozen-before-evaluation",
+  "scope": "train-only route generalization; no holdout access",
+  "source_artifacts": {
+    "generalization_root": "output/smartphone-r5/generalization-v6",
+    "baseline_contract": {
+      "signal_lane": "Galileo E1 with Hatch C1C 30 s",
+      "process_noise": 1.0,
+      "measurement_floor_m": 1.0,
+      "outlier_gate_sigma": 5.0,
+      "segment_gap_s": 10.0
+    }
+  },
+  "sealed_data_policy": {
+    "designated_holdout_profile_id": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "holdout_content_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_materialized": false,
+    "holdout_evaluation_forbidden": true
+  },
+  "fixed_roles": {
+    "candidate_train": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5"
+    ],
+    "validation": [
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro"
+    ],
+    "development_main_regression": [
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro"
+    ],
+    "role_freeze_reason": "Mi8 and Pixel5 are candidate-train routes; Pixel6Pro is held as a fixed validation route before candidate outputs are scored; the existing development main route is an independent regression check."
+  },
+  "diagnostic_contract": {
+    "raw_input": "canonical SPP POS produced from the Galileo E1/Hatch30 lane",
+    "truth_use": "ground truth is read only after each truth-free smoother run publishes its artifact",
+    "per_epoch_fields": [
+      "raw horizontal/vertical error",
+      "existing smoother horizontal/vertical error",
+      "existing smoother minus raw horizontal separation",
+      "existing smoother speed",
+      "normalized innovation",
+      "outlier flag",
+      "consecutive reject run"
+    ],
+    "catastrophic_drift_test": "A route is marked prediction-drift-supported when its largest existing-smoother errors occur on rejected rows, raw error remains materially smaller, and the top reject run contains the route P95 region."
+  },
+  "candidate_set": [
+    {
+      "id": "reacq_r2_d2",
+      "max_consecutive_rejects": 2,
+      "max_prediction_duration_s": 2.0
+    },
+    {
+      "id": "reacq_r3_d3",
+      "max_consecutive_rejects": 3,
+      "max_prediction_duration_s": 3.0
+    },
+    {
+      "id": "reacq_r5_d5",
+      "max_consecutive_rejects": 5,
+      "max_prediction_duration_s": 5.0
+    }
+  ],
+  "selection_and_promotion_rule": {
+    "train_rank": "among candidates with no regression versus the existing smoother on aggregate availability, H median, H P95, V P95, and all four local distance/percentile diagnostics, minimize (aggregate H P95, aggregate H median, aggregate V P95, mean of four diagnostics, candidate id).",
+    "validation_gate": "selected candidate must be non-regressive versus both raw SPP/Hatch POS and the existing smoother for availability, H median, H P95, V P95, and all four diagnostics; it must strictly reduce H P95 versus the existing smoother to address catastrophic prediction drift.",
+    "main_route_gate": "selected candidate must be non-regressive versus the existing smoother for the same metrics on the development main route; otherwise do not promote.",
+    "promotion_scope": "development-only; IMU adaptive lane remains No-Go and is not modified by this experiment",
+    "tie_break": "candidate id in ASCII order"
+  },
+  "post_evaluation": {
+    "report_path": "output/smartphone-r5/reacquisition-v2/reacquisition_report.json",
+    "report_sha256": "bb534a8a4fd8b825f06d92fd4cab0926a60c0044f4eab82c26ad407280e8cec3",
+    "manifest_path": "output/smartphone-r5/reacquisition-v2/reacquisition_manifest.json",
+    "manifest_sha256": "75b22abe53d160c6cc1fb841056879f7f8e509febb164256e7b891389f3d4722",
+    "diagnostic_artifacts": {
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+        "csv_sha256": "96a3eb4d3c579a8ff5b576dad8a8a25b461d1933fefdda02780091ea350c5a3b",
+        "json_sha256": "8437838b36f82c2ae885a79af88b12d40e65eda45b1188a35df31107b1cdcc5d"
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+        "csv_sha256": "2299399c7d2fec74748b92887609edabe761c3b6c099b5fb0027830121375b75",
+        "json_sha256": "4c5f0fbd128e03325b8179611258b4bed88bdabf792f9cc844bdbed5bd10b606"
+      },
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+        "csv_sha256": "0e1321baf0c235f96f3a5906517f265e637179b38aa547bc658ea2bdc7d5b128",
+        "json_sha256": "f4b4db5c0783c15b699b63f2d2463c2212ebbcfb7d851a39204085ab9f2e40e3"
+      },
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+        "csv_sha256": "6eebde1cb9a43b8541f7c3d5ed759e71168e17c420cd800d78404c31b74d28de",
+        "json_sha256": "a09dd20b7a7634f8f91062078edfac0e70632c86b5a695f4d796007d2d81a524"
+      }
+    },
+    "diagnostic_conclusion": {
+      "mi8": {
+        "raw_h_p95_m": 5.400121208395055,
+        "existing_smoother_h_p95_m": 368.6326817091868,
+        "existing_smoother_h_max_m": 598.0035726600864,
+        "maximum_reject_run_epochs": 130,
+        "maximum_reject_run_duration_s": 129.0,
+        "prediction_drift_supported": true
+      },
+      "pixel5": {
+        "raw_h_p95_m": 9.946888692400321,
+        "existing_smoother_h_p95_m": 191.5388803820124,
+        "existing_smoother_h_max_m": 500.76412424097833,
+        "maximum_reject_run_epochs": 87,
+        "maximum_reject_run_duration_s": 86.0,
+        "prediction_drift_supported": true
+      },
+      "pixel6pro": {
+        "raw_h_p95_m": 5.816894443123533,
+        "existing_smoother_h_p95_m": 24.022469377726047,
+        "existing_smoother_h_max_m": 61.91591840940451,
+        "maximum_reject_run_epochs": 51,
+        "maximum_reject_run_duration_s": 50.0,
+        "prediction_drift_supported": true
+      },
+      "development_main": {
+        "raw_h_p95_m": 7.943556294558911,
+        "existing_smoother_h_p95_m": 6.173092685041757,
+        "existing_smoother_h_max_m": 11.802296149520016,
+        "maximum_reject_run_epochs": 11,
+        "maximum_reject_run_duration_s": 10.0,
+        "prediction_drift_supported": false
+      }
+    },
+    "train_aggregate": {
+      "existing_smoother_mean_h_p50_m": 2.7422011672436986,
+      "existing_smoother_mean_h_p95_m": 280.08578104559956,
+      "existing_smoother_mean_v_p95_m": 35.741262346973514,
+      "reacq_r2_d2_mean_h_p50_m": 2.342527574054672,
+      "reacq_r2_d2_mean_h_p95_m": 7.591856861872495,
+      "reacq_r2_d2_mean_v_p95_m": 14.488306673057945,
+      "reacq_r3_d3_mean_h_p50_m": 2.3446968072514887,
+      "reacq_r3_d3_mean_h_p95_m": 8.071071728212825,
+      "reacq_r3_d3_mean_v_p95_m": 14.670665379792272,
+      "reacq_r5_d5_mean_h_p50_m": 2.3476420284956636,
+      "reacq_r5_d5_mean_h_p95_m": 8.728905776290159,
+      "reacq_r5_d5_mean_v_p95_m": 16.046162185878927,
+      "selected_candidate_id": "reacq_r2_d2"
+    },
+    "validation": {
+      "raw_spp_hatch": {
+        "h_p50_m": 2.46319357976038,
+        "h_p95_m": 5.816894443123533,
+        "v_p95_m": 14.17030759520746,
+        "diagnostic_mean_m": 4.138394512135983,
+        "availability_ratio": 1.0
+      },
+      "existing_smoother": {
+        "h_p50_m": 2.4073252541789496,
+        "h_p95_m": 24.022469377726047,
+        "v_p95_m": 14.728581047026701,
+        "diagnostic_mean_m": 13.201387072632592,
+        "availability_ratio": 1.0
+      },
+      "reacq_r2_d2": {
+        "h_p50_m": 2.210303928594427,
+        "h_p95_m": 5.605662636028152,
+        "v_p95_m": 14.032438482152429,
+        "diagnostic_mean_m": 3.9073502994524754,
+        "availability_ratio": 1.0,
+        "reacquisition_count": 48,
+        "maximum_reject_run_epochs": 2
+      },
+      "non_regression_vs_raw_and_existing": true,
+      "strict_h_p95_improvement_vs_existing": true
+    },
+    "development_main": {
+      "existing_smoother_h_p50_m": 2.7477092028307726,
+      "existing_smoother_h_p95_m": 6.173092685041757,
+      "existing_smoother_v_p95_m": 20.103059982694667,
+      "reacq_r2_d2_h_p50_m": 2.9007958113975474,
+      "reacq_r2_d2_h_p95_m": 7.509809676623899,
+      "reacq_r2_d2_v_p95_m": 20.541519921232812,
+      "non_regression_passed": false
+    },
+    "promotion_decision": "no-go-development-main-regression",
+    "existing_smoother_retained": true,
+    "holdout_opened": false,
+    "holdout_truth_opened": false,
+    "holdout_materialized": false
+  }
+}

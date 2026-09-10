@@ -1,0 +1,65 @@
+{
+  "schema_version": "smartphone-r5-phase136-wrapper-forbidden-token-boundary-pre-raw-accounting.v1",
+  "phase": 136,
+  "execution_label": "Luna Max",
+  "status": "sealed-launch-free-pre-raw",
+  "candidate_id": "phase136-typed-argv-path-forbidden-token-boundary-v1",
+  "pins": {
+    "audit_commit": "5ef049c927dab2a67ba66a97a2a4e44ce98de4f8",
+    "freeze_commit": "a24f7d1ff4fc53b8e270767c0b32f25874e2fc94",
+    "implementation_commit": "3aa8bc08e7b7747fad8e127691160314eed592b2",
+    "qualification_manifest_commit": "d592e43b4796f851a87ed200c4724e087f3d16d9",
+    "freeze_sha256": "b14697b8e946c7f6a2275bb771753d2fabc944e32e267561da9c5ba4d39efc59",
+    "manifest_sha256": "142c9807b6f1111dbca786c786d57fe21faf686e859423863b6244f7905d9ad9",
+    "authorized_wrapper_sha256": "5ff1c932bb685ca9a052b0d50c2df84fa93e8132a79dff8b06a469e42da10a21",
+    "launch_free_validator_sha256": "7d00413aeb4473ae62f345f8c782f7af34344e4eaa100b0bf99160b991b93788"
+  },
+  "qualification": {
+    "validator": "apps/commands/benchmarks/gnss_smartphone_phase136_wrapper_forbidden_token_boundary.py",
+    "status": "launch-free-qualified",
+    "required_native_pdc_algorithm_option_accepted_once": true,
+    "pdc_input_path_rejected": true,
+    "pdc_value_rejected": true,
+    "unknown_selector_rejected": true,
+    "duplicate_required_option_rejected": true,
+    "off_selector_rejected": true,
+    "static_option_order_and_counts_exact": true,
+    "native_source_or_recipe_changed": false
+  },
+  "pre_raw_read_accounting": {
+    "source_text_reads": "read-only",
+    "sealed_result_reads": "read-only",
+    "raw_phone_gnss_reads": 0,
+    "raw_phone_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "raw_base_rinex_payload_reads": 0,
+    "raw_base_header_reads": 0,
+    "raw_payload_copies_or_transforms": 0,
+    "native_solver_invocations": 0,
+    "native_help_invocations": 0,
+    "solution_coordinate_reads": 0,
+    "truth_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_reads": 0,
+    "pdc_input_or_artifact_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs_sweeps": 0
+  },
+  "future_authorization_boundary": {
+    "old_phase135_authorization_reusable": false,
+    "new_independent_authorization_required": true,
+    "new_authorized_wrapper_hash_must_be_pinned": true,
+    "raw_materialization_after_authorization_only": true,
+    "route_order": [
+      "MTV-A",
+      "LAX-T"
+    ],
+    "runs_per_route": 1,
+    "solver_invocations_per_route_max": 1,
+    "truth_or_accuracy": false,
+    "solution_publication": false,
+    "rerun_fallback_repair_sweep": false,
+    "failure_policy": "fail-closed"
+  }
+}

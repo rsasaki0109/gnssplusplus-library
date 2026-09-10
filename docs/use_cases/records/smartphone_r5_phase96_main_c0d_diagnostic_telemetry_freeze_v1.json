@@ -1,0 +1,227 @@
+{
+  "schema_version": "smartphone-r5-phase96-main-c0d-diagnostic-telemetry-freeze.v1",
+  "phase": 96,
+  "execution_label": "Luna Max",
+  "status": "frozen-diagnostic-only-not-implemented",
+  "decision": "Freeze exactly one opt-in diagnostic candidate to make the main C0/D no-progress mechanism observable. Do not alter the algorithm, run a route, publish a solution, or enter truth/accuracy/submission lanes.",
+  "exactly_one_candidate_frozen": true,
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase96_main_c0d_root_cause_audit_v1.md",
+    "sha256": "de1d1e1b2f1af53849778331a2939c736b3c8a63989dbabb02bf96b71c4e8fe0",
+    "commit": "9c6aeef323fe578ce00c5372a8041a9d4e13dc50"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "route_scope_meaning": "The GNSS-first result reached exact retained-key alignment and full finite optimized-D handoff; the Phase95 route as a whole still failed closed at main progress.",
+    "excluded_routes": [
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "excluded_route_reason": "MTV-H has retained undifferenced Doppler count 0 and fails before GNSS-first solve; MTV-U has an independent 564/720 earth-valid position failure and is not pooled with the two target routes.",
+    "route_selection_by_score_or_truth": false
+  },
+  "candidate": {
+    "id": "phase96_main_c0d_factor_family_lm_trial_diagnostic_telemetry",
+    "kind": "source-aligned-observability-only",
+    "status": "frozen-not-implemented",
+    "implemented": false,
+    "default_enabled": false,
+    "activation": "Future explicit opt-in only; no current CLI flag is authorized by this record.",
+    "raw_execution_authorized": false,
+    "purpose": "Expose enough read-only main-graph and pinned-LM telemetry to distinguish factor-family load, linearization geometry, and existing lambda-trial rejection branches.",
+    "algorithmic_effect": "None. The existing graph, values, factor equations, optimizer calls, acceptance decisions, and fail-closed gates remain authoritative.",
+    "graph_observation": {
+      "factor_family_labels": [
+        "gnss_code",
+        "gnss_doppler",
+        "imu_preintegration_bias",
+        "priors",
+        "clock_ccdd",
+        "other"
+      ],
+      "initial_family_costs": {
+        "metric": "read-only sum of existing factor errors at the existing initial Values",
+        "total_reconciliation_required": true,
+        "total_field": "graph_initial_cost",
+        "difference_field": "family_sum_minus_graph_initial_cost",
+        "finite_and_nonfinite_counts_required": true,
+        "no_residual_or_state_vector_publication": true
+      },
+      "initial_linearization": {
+        "one_existing_linearization_only": true,
+        "additional_optimizer_or_solve": false,
+        "factor_family_metrics": [
+          "whitened_gradient_l2_norm",
+          "whitened_gradient_finite_count",
+          "normal_diagonal_l2_norm",
+          "normal_diagonal_min",
+          "normal_diagonal_max",
+          "normal_diagonal_finite_count",
+          "normal_diagonal_nonfinite_count"
+        ],
+        "variable_buckets": [
+          "position",
+          "velocity",
+          "imu_bias",
+          "clock_C",
+          "clock_ISB",
+          "clock_D",
+          "signal_bias",
+          "ambiguity",
+          "other"
+        ],
+        "family_by_variable_cross_tabulation": true,
+        "damping_diagonal_and_optimizer_parameters_unchanged": true
+      }
+    },
+    "lm_trial_observation": {
+      "source_boundary": "The existing pinned GTSAM LevenbergMarquardtOptimizer::tryLambda path; no replacement optimizer.",
+      "max_trials_recorded": 10,
+      "existing_trials_only": true,
+      "fields": [
+        "trial_index",
+        "outer_iteration",
+        "lambda",
+        "old_linearized_cost",
+        "new_linearized_cost",
+        "predicted_linearized_reduction",
+        "tentative_nonlinear_cost",
+        "actual_nonlinear_reduction",
+        "model_fidelity_when_defined",
+        "linear_system_status",
+        "finite_status_by_quantity",
+        "rejection_or_termination_reason"
+      ],
+      "source_reason_categories": [
+        "accepted_outer_step",
+        "indeterminate_linear_system",
+        "negative_linearized_reduction",
+        "nonfinite_linearized_or_nonlinear_quantity",
+        "non_decreasing_nonlinear_cost",
+        "model_fidelity_below_threshold",
+        "relative_cost_change_stop",
+        "maximum_lambda_stop",
+        "other_exception",
+        "unknown_unpublished"
+      ],
+      "reason_must_follow_pinned_control_flow": true,
+      "trial_trace_complete_flag_required": true,
+      "no_lambda_retry_added": true,
+      "no_trial_rejection_changed": true
+    },
+    "exception_observation": {
+      "stages": [
+        "initial_graph_error",
+        "initial_linearization",
+        "damped_linear_system_build",
+        "linear_system_solve",
+        "value_retract",
+        "tentative_nonlinear_graph_error"
+      ],
+      "classes": [
+        "finite",
+        "nonfinite_nan",
+        "nonfinite_inf",
+        "IndeterminantLinearSystemException",
+        "std_exception",
+        "unknown_exception"
+      ],
+      "type_and_message_when_exception": true,
+      "solution_values_excluded": true,
+      "publish_on_early_failure": true
+    }
+  },
+  "source_and_unit_invariants": {
+    "official_ccdd_equation": "(C2-C1)-((D1+D2)*dt/2)",
+    "official_ccdd_jacobian_order": "[-1,+1,-dt/2,-dt/2] for [C1,C2,D1,D2]",
+    "meter_state_units": {
+      "clock_C": "metres",
+      "clock_ISB": "metres",
+      "drift_D": "metres_per_second",
+      "dt": "seconds",
+      "residual": "metres"
+    },
+    "ordinary_ccdd_sigma_m": 0.1,
+    "equation_unchanged": true,
+    "jacobian_order_unchanged": true,
+    "units_unchanged": true,
+    "sigma_unchanged": true,
+    "filters_unchanged": true,
+    "lm_parameters_unchanged": true,
+    "legacy_default_unchanged": true,
+    "no_pdc_or_external_coordinate_input": true,
+    "no_fallback_or_bridge": true,
+    "no_mtvu_or_mtuh_fix_included": true
+  },
+  "publication_and_execution_policy": {
+    "diagnostic_payload_only": true,
+    "raw_observations_excluded": true,
+    "coordinates_excluded": true,
+    "solution_rows_excluded": true,
+    "truth_excluded": true,
+    "mat_excluded": true,
+    "kaggle_or_token_excluded": true,
+    "accuracy_excluded": true,
+    "native_solver_invocations_at_freeze": 0,
+    "raw_execution_authorized": false,
+    "separate_future_raw_authorization_required": true,
+    "fail_closed_preserved": true
+  },
+  "rejected_alternatives_not_frozen": [
+    "Remove or disable C0/D to reproduce the Phase80 no-C0D reference; this changes the experiment.",
+    "Change C0/D sigma, LM damping/limits/tolerances, priors, filters, or add a retry/fallback/PDC bridge; no supporting evidence and outside the phase boundary.",
+    "Rerun routes, add MTV-H/U, or enter truth/MAT/Kaggle/accuracy lanes; prohibited by this read-only freeze."
+  ],
+  "authority": {
+    "phase95_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase95_raw_input_path_corrected_structural_result_v1.json",
+      "sha256": "beba25d4b0d910064d76bea7aa6b7a884937ca01c3b00cf0f7f9f4b6267ea281",
+      "commit": "f120e68"
+    },
+    "phase92_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_structural_result_v1.json",
+      "sha256": "8488306b3ec61d0360418de73fa1596271597b6971d77de676fcd279d7e1b01c"
+    },
+    "phase80_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "official_gnss_source": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+    },
+    "official_gnss_imu_source": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "backend_source": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "cafefea8c0a982a58dd860468f433176bab055690a3f41c996882adc5c57500a"
+    },
+    "lm_source": {
+      "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtOptimizer.cpp",
+      "sha256": "834f732ac4ad4130b2a719a3181e5dfcd2ecdf584ece6f0c76bdf5f390e10cbc"
+    },
+    "ccdd_source": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc"
+    }
+  },
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "kaggle_or_token_access": 0,
+    "base_rinex_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "route_reruns": 0,
+    "fallbacks": 0
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v2-smoke-record-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_smoke.json",
+  "record_sha256": "4d98837b9291cab00a431ef5190be7f8a140d3440b1e08b02b455c936823f9a6",
+  "artifact_manifest": "output/smartphone-r5/native-fgo-v2-processed/train_smoke_manifest.json",
+  "artifact_manifest_sha256": "8e1cc867c499d3eea63c83f18a1e37ab2a7895804302c48243701c09310b1556",
+  "split_freeze_sha256": "7e7c8d29bc385cefef947e56a653c8a19e76ac4df36eb3999bf154899187a2a9",
+  "candidate_freeze_sha256": "7ab9679a7eb691b7bd77a3c66ae8fd522e906de871330b5ab3cb7cfb9f8106d3",
+  "truth_open_count": 0,
+  "validation_open_count": 0,
+  "future_holdout_open_count": 0,
+  "external_mutation": false,
+  "production_default_changed": false,
+  "integrity": {
+    "hash_algorithm": "SHA-256",
+    "record_hash_is_computed_after_record_write": true
+  }
+}

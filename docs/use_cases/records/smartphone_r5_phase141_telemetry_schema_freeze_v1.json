@@ -1,0 +1,126 @@
+{
+  "schema_version": "smartphone-r5-phase141-telemetry-schema-freeze.v1",
+  "phase": 141,
+  "execution_label": "Luna Max",
+  "status": "frozen-before-implementation-and-raw-execution",
+  "scope": "Native-authoritative telemetry schema bridge only; no algorithm, factor, equation, unit, sigma, filter, initialization, solver, LM, output-row, raw, solver, truth, MAT/PDC/precomputed-coordinate, accuracy, or Kaggle execution is authorized.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase141_telemetry_schema_audit_v1.md",
+    "commit": "de71c39",
+    "sha256": "a040f2076da254f2f11e8041edbc3c23112f65bdb12b8f0665e8de927212f092"
+  },
+  "historical_evidence": {
+    "phase139_result_commit": "02b3c3042e131e0c08403be738e76050f8b887c4",
+    "phase139_result_sha256": "a772fe23935376cddb95f4e0c6cc1ec8954bf9c875f5577504ed84179004a748",
+    "phase140_audit_commit": "5bcd50a25d9b45612805a78b6a54f09719394fff",
+    "phase140_freeze_commit": "539de2a82cc153d197e39728229c1d46e9edee67",
+    "historical_result_status": "NO-GO; immutable; no rerun or repair"
+  },
+  "candidate": {
+    "count": 1,
+    "id": "phase141-native-authoritative-telemetry-schema-v1",
+    "selector": "--native-phase141-telemetry-schema",
+    "default_off": true,
+    "diagnostic_only": true,
+    "native_summary_immutable": true,
+    "wrapper_may_validate_only": true,
+    "wrapper_may_infer_or_overwrite": false,
+    "partial_schema_allowed": false,
+    "duplicate_or_mismatched_field_policy": "fail-closed",
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false
+  },
+  "native_schema": {
+    "schema_version": "smartphone-r5-native-fgo-phase141-telemetry.v1",
+    "object_path": "phase141_telemetry",
+    "sync_count": 1,
+    "source_authority": {
+      "gnss_first": "ImuBuildReport.gnss_first_* and the same-run GNSS-first FGOResult diagnostics",
+      "main": "FGOResult.diagnostics and same-run FGOProblem/IMU report",
+      "raw_base": "BasePseudorangeCompensationReport",
+      "offset": "UpstreamPositionOffsetReport",
+      "output": "same-run output/alignment report at the native output boundary",
+      "wrapper_read_accounting": "independent wrapper observation; never copied into native telemetry"
+    },
+    "required_groups": {
+      "equation": {
+        "semantic_id": "phase138-affine-tdcp-anchor-range-constant-v1",
+        "representation": ["full-assignment", "rhs-only-native-diagnostic"],
+        "display_expression": "phase138_measurement_equation",
+        "ast": "typed assignment/subtraction AST",
+        "token_tuple": "exact token tuple preserving operator order and grouping",
+        "whitespace_normalization_only": true
+      },
+      "selectors": "all Phase135/138/118/117/120/126-131/107 states, emitted from native option/config state",
+      "phase135": {
+        "flags": ["enabled", "configuration_valid", "transactional", "fixed_initial_geometry", "finite_jacobians", "single_sagnac_representation"],
+        "geometry": ["los_convention", "geometry_rows", "sagnac_evaluations"],
+        "families": ["pseudorange", "doppler", "ordinary_tdcp"],
+        "family_fields": ["admitted_rows", "affine_factors_inserted", "key_order_exact", "finite_values", "source_geometry_same_path"],
+        "legacy_factor_counts": "all legacy P/D/TDCP family counters",
+        "pose3_x_bridge": ["count", "keys_exact"]
+      },
+      "phase138": {
+        "flags": ["enabled", "phase135_dependency_satisfied", "configuration_valid", "transactional", "adjusted_exactly_once", "factor_count_unchanged", "same_endpoint_epoch_and_satellite_state", "same_satellite_state", "finite_adjusted_measurements", "no_raw_or_zero_fallback", "phase118_atmosphere_sigma_huber_unchanged", "single_sagnac_representation"],
+        "equation": ["semantic_id", "representation", "display_expression", "ast", "token_tuple"],
+        "counts": ["range_constants_validated", "tdcp_measurements_adjusted", "affine_tdcp_factor_count", "adjustment_application_passes", "legacy_tdcp_factor_count"]
+      },
+      "raw_base": "native report exactly-once/conservation/failure fields; no normalized wrapper reconstruction",
+      "clock": ["c_units", "d_units", "c7_mapping_exact", "d_full_finite_exact_alignment", "c_epoch_count", "d_epoch_count", "c_finite_count", "d_finite_count"],
+      "solver": {
+        "global": ["linear_solver", "elimination"],
+        "stages": ["gnss_first", "main"],
+        "stage_fields": ["attempted", "accepted_iterations", "initial_cost", "final_cost", "costs_finite", "strict_cost_decrease", "terminal_branch", "no_fallback"],
+        "accepted_iteration_authority": "stage active C0/D solve report; never generic iterations or return code"
+      },
+      "factor_counts": "native diagnostics family counts and legacy zero counters, without wrapper hard-coding",
+      "bridge": "native Phase135 bridge count/key exactness and Phase131/base report sync marker",
+      "output": ["finite", "earth_valid", "expected_epoch_coverage", "opaque_solution_seal", "pixel5_offset_applications"],
+      "policy": ["truth_used", "coordinate_rows_interpreted", "solution_publication_authorized", "fallback", "rerun"]
+    },
+    "forbidden_repairs": ["derive accepted_iterations from iterations", "derive finite/earth-valid from return code", "coerce missing offset pass to one", "copy native fields into renamed wrapper fields", "reopen historical native summary", "serialize coordinate rows or solution values"]
+  },
+  "legacy_invariants": {
+    "selector_off_summary_semantics_unchanged": true,
+    "default_algorithm_unchanged": true,
+    "phase135_138_factors_unchanged": true,
+    "phase138_display_expression_preserved": true,
+    "raw_base_c7d_qr_imu_tdcp_offset_unchanged": true
+  },
+  "qualification": {
+    "required_focused_tests": [
+      "complete real-shaped native summary has no missing required fields",
+      "full-assignment and declared rhs-only equation representations accept",
+      "wrong AST/token order/sign/LHS/identifier/grouping rejects",
+      "missing, misnamed, duplicate, conflicting, or non-finite fields reject",
+      "accepted_iterations is not inferred from generic iterations or return code",
+      "native summary and wrapper structural view cannot double-sync or overwrite",
+      "selector-on/off isolation and legacy summary semantics remain unchanged",
+      "launch-free validator reads no raw/solver/truth/solution/MAT/PDC/Kaggle paths"
+    ],
+    "full_cpp_suite_required": true,
+    "pre_raw_read_accounting": {
+      "raw_phone_gnss_reads": 0,
+      "raw_phone_imu_reads": 0,
+      "broadcast_navigation_reads": 0,
+      "raw_base_rinex_reads": 0,
+      "native_solver_invocations": 0,
+      "truth_reads": 0,
+      "solution_coordinate_reads": 0,
+      "mat_pdc_precomputed_coordinate_reads": 0,
+      "accuracy_calculations": 0,
+      "kaggle_or_token_access": 0,
+      "reruns_fallbacks_repairs_sweeps": 0
+    }
+  },
+  "authorization_boundary": {
+    "implementation_commit_before_runner_pin": true,
+    "launch_free_runner_manifest_pre_raw_seal_separate": true,
+    "new_independent_authorization_required_before_any_raw_or_solver": true,
+    "historical_phase139_artifacts_immutable": true,
+    "truth_accuracy_authorization": false,
+    "solution_publication": false
+  }
+}

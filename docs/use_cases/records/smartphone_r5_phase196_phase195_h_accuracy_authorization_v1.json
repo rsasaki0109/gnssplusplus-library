@@ -1,0 +1,17 @@
+{
+  "schema_version": "smartphone-r5-phase196-phase195-h-accuracy-authorization.v1",
+  "phase": 196,
+  "execution_label": "Luna Max",
+  "allow_truth_read": true,
+  "manifest": "docs/use_cases/records/smartphone_r5_phase196_phase195_h_accuracy_manifest_v1.json",
+  "manifest_sha256": "05b1180a9051e0d4239afa4db269af86c452d851e353ea50425b01c5fa6f0d4c",
+  "candidate_sha256": "97e0e372b472e0186ca05b4ec6552e8300970b6cfff6eaf5b8f4f7399c6ecadc",
+  "truth_sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+  "scope": "One aggregate-only H development/train score for the frozen Phase195 candidate; not heldout or leaderboard proof.",
+  "prohibitions": [
+    "no native solver or raw GNSS/IMU/nav reads",
+    "no MAT/PDC/precomputed coordinate or base reads",
+    "no coordinate rows in result",
+    "no rerun, interpolation, hold, fill, or Pixel5 offset reapplication"
+  ]
+}

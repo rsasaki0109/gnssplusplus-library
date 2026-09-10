@@ -1,0 +1,14 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-bridge-freeze-manifest.v1",
+  "record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_freeze_v1.json",
+  "record_sha256": "a1d37b055951267c6a99fef771aeb0736ced70d09dbd2f1c098e60815aa2dbf0",
+  "sealed_at_utc": "2026-08-31T00:00:00Z",
+  "integrity": {
+    "record_hash_checked_after_write": true,
+    "manifest_created_after_record_hash": true,
+    "truth_free_before_implementation": true,
+    "holdout_or_validation_opened": false,
+    "token_or_external_mutation": false
+  },
+  "scope": "The companion fixes the pre-implementation evaluation boundary. The post-implementation source and Release executable are deliberately recorded only in the run manifest, so this freeze cannot silently bless an unreviewed code change."
+}

@@ -1,0 +1,119 @@
+{
+  "schema_version": "smartphone-r5-phase12-residual-ionosphere-freeze.v1",
+  "status": "frozen-before-truth-free-structural-run",
+  "candidate_id": "native-residual-ionosphere-gtsam-v1",
+  "purpose": "Opt-in raw-only residual first-order ionosphere state layered on the immutable Phase11 static signal-bias recipe. Production defaults and the Phase11 artifact are unchanged.",
+  "route": "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+  "raw_audit": {
+    "record": "docs/use_cases/records/smartphone_r5_phase12_residual_ionosphere_raw_audit_v1.json",
+    "record_sha256": "b8c2791149f1524e07fc01f2e2f634e3fa4a5e2271ca1804dcf81321772be8cd",
+    "truth_read_count_before_freeze": 0,
+    "mat_read_count_before_freeze": 0,
+    "enriched_coordinate_or_elevation_columns_read": false
+  },
+  "truth_free_contract": {
+    "inference_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "raw_columns_used": ["utcTimeMillis", "Svid", "ConstellationType", "SignalType", "RawPseudorangeMeters", "RawPseudorangeUncertaintyMeters", "CarrierFrequencyHz", "Cn0DbHz", "AccumulatedDeltaRangeMeters", "AccumulatedDeltaRangeState", "FullInterSignalBiasNanos", "FullInterSignalBiasUncertaintyNanos"],
+    "forbidden_inputs": ["ground_truth.csv", "*.mat", "sample_submission.csv", "SvPosition*", "SvElevationDegrees", "device WLS coordinates", "precomputed trajectories", "previous submission coordinates", "leaderboard scores", "token"],
+    "ground_truth_read_count_before_freeze": 0,
+    "validation_read_count_before_freeze": 0,
+    "holdout_read_count_before_freeze": 0,
+    "test_read_count_before_freeze": 0,
+    "mat_read_count_before_freeze": 0,
+    "kaggle_or_token_access": false,
+    "truth_free_selection": true,
+    "post_score_parameter_tuning": false,
+    "production_default_changed": false,
+    "atomic_output_required": true,
+    "fail_closed_on_invalid_geometry_or_state": true
+  },
+  "algorithm_contract": {
+    "backend": "GTSAM batch Levenberg-Marquardt",
+    "base_recipe": "Phase11 native raw PDC+IMU+ordinary TDCP graph plus static GPS L5/Galileo E5a receiver signal-bias states, unchanged",
+    "new_state": "one vertical L1 residual-ionosphere scalar state j(epoch), in metres",
+    "coefficient": "thin_shell_mapping(native_broadcast_nav_elevation) * (GPS_L1_frequency / signal_frequency)^2",
+    "mapping_constants": {"earth_radius_m": 6371000.0, "shell_height_m": 350000.0},
+    "factor_model": "range + c*(epoch_clock + constellation_ISB) + static_signal_bias + coefficient*j(epoch) - corrected_pseudorange",
+    "factor_sign": "positive coefficient*j increases predicted pseudorange",
+    "ordinary_corrections_once": "Existing satellite-clock, Klobuchar, Saastamoinen and broadcast group-delay corrections remain in fgo_problems.cpp; the new state does not reapply them or re-estimate Phase11 static IFB.",
+    "gauge": "j(0)=0 weak zero-mean prior, sigma 10 m; each continuous epoch pair uses zero-mean random walk",
+    "random_walk": "sigma=1 m/sqrt(s), scaled by sqrt(dt); clock discontinuity, invalid dt, or dt>2 s starts a fresh zero prior",
+    "state_bound": "absolute j <= 30 m is a structural acceptance gate, never clipping or truth selection",
+    "unsupported_or_invalid": "nonfinite native-nav elevation/frequency coefficient skips the row and causes the candidate to fail closed",
+    "tdcp_contract": "Phase11 signal-specific ordinary TDCP arcs and gates are unchanged; residual ionosphere is not inserted into TDCP",
+    "forbidden_factors": ["base", "single/double difference", "integer ambiguity fixing", "truth/device-WLS/precomputed-coordinate input"]
+  },
+  "numeric_parameters": {
+    "use_multi_frequency_double_difference": true,
+    "use_receiver_signal_bias_states": true,
+    "receiver_signal_bias_prior_sigma_m": 1000.0,
+    "use_residual_ionosphere_states": true,
+    "residual_ionosphere_prior_sigma_m": 10.0,
+    "residual_ionosphere_random_walk_sigma_m_per_sqrt_s": 1.0,
+    "residual_ionosphere_max_abs_m": 30.0,
+    "residual_ionosphere_max_gap_s": 2.0,
+    "fgo_max_iterations": 12,
+    "pseudorange_sigma_m": 3.0,
+    "pseudorange_elevation_sigma_power": 1.0,
+    "pseudorange_huber_threshold_sigma": 1.234,
+    "min_elevation_deg": 0.0,
+    "min_snr_dbhz": 0.0,
+    "use_ionosphere_model": true,
+    "use_troposphere_model": true,
+    "use_inter_system_biases": true,
+    "use_corrected_undifferenced_doppler_factors": true,
+    "use_tdcp_factors": true,
+    "tdcp_sigma_m": 0.03,
+    "max_tdcp_gap_s": 2.0,
+    "tdcp_code_phase_jump_threshold_m": 10.0,
+    "pdc_max_iterations": 1000,
+    "pdc_pseudorange_huber_threshold_sigma": 1.234,
+    "pdc_doppler_huber_threshold_sigma": 1.234,
+    "imu_sync_coefficient": 0.5,
+    "mounting_rotation_deg": [-85.0, 178.0, -94.0],
+    "physical_max_velocity_mps": 70.0
+  },
+  "source_sha256_at_freeze": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "d9470ace25467fee61ce9e316b982e4f1c6e161602de3df2c44a4b4e6085139c",
+    "include/libgnss++/algorithms/fgo.hpp": "a3f4e732e512378c496072572f169a19c0da310ac599f9bbe66ec7e77b30e392",
+    "include/libgnss++/algorithms/fgo_config.hpp": "fe653b7729a959d7772b3314ebcee322e7f5b87aef6921db9ef9fe2db1d1821d",
+    "include/libgnss++/algorithms/residual_ionosphere_contract.hpp": "8d5bf4260d47102f15eb6a5b62c1dcdd5dd563dacbdd0bfe73f536bc309b0bc8",
+    "src/algorithms/fgo_problems.cpp": "ed68e970f3160f0e4706bc4151908356be7403adcd65b3ad8873784aad56717d",
+    "src/algorithms/fgo_gtsam_internal.hpp": "f1eaf35d52c515ddb9f0cdd9f350ba0f793ff02d34f3d3b7465aeab7882027bf",
+    "src/algorithms/fgo_gtsam_backend.cpp": "eb799dbcae60a6ca4ff497457a37259617a4b23d461db10d6cf7894b85613db6"
+  },
+  "binary_sha256_at_freeze": {
+    "build/apps/gnss_fgo_imu_no_base": "8e72bf4d57517ba9eaa6532280eb806f7913f189f2b13ca9ec23ede3d40c3ffa"
+  },
+  "input_sha256_at_freeze": {
+    "device_gnss.csv": "c5af6cc3aeae6ab29a2a10d975d291b8fba4fab15273c0729163cd639ff10e42",
+    "device_imu.csv": "8f1c582bdad545d11e68349b221001b69e2a9d43f9257e60038c193276fa1804",
+    "brdc.nav": "16c859f8015c874398978bae6004172c355f7d3a3b06fa81b54aac88b6b78d33"
+  },
+  "immutable_baseline": {
+    "phase11_freeze_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_freeze_v1_1.json",
+    "phase11_freeze_record_sha256": "e4ff6aba34240250b55e5ca017809ea5fdca347aa03ab4dab5bc1507ec231e55",
+    "phase11_structural_seal": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_structural_seal_v1.json",
+    "phase11_structural_seal_sha256": "ebc0316a9f84da76a398b87410c5d81a3ca3c3299ccdcbe2533a220de87bbb06",
+    "phase11_submission_sha256": "d8da69a0cfea3e12d78c072ac76b5c0ac108ed5f7210fb1d3d8bce872d906a70",
+    "phase11_wgs84_linear_m": 3.21558228095786,
+    "phase11_score_record": "docs/use_cases/records/smartphone_r5_phase11_signal_bias_score_result_v1.json"
+  },
+  "structural_gate_before_truth": {
+    "required": ["finite output", "exact raw UTC keys 1383/1383", "no interpolation or fallback", "GTSAM convergence", "finite residual-ionosphere states", "residual-ionosphere factors equal all pseudorange factors", "invalid coefficient count zero", "absolute state bound", "finite cost with final <= initial", "no base or double-difference factors", "no isolated transition over 70 m/s"],
+    "truth_read_allowed": false,
+    "candidate_artifact_hash_before_truth": "pending",
+    "failure_is_nogo_without_truth": true
+  },
+  "evaluation_protocol": {
+    "truth_route": "same already-declared development route only, after structural artifact seal",
+    "metrics": ["WGS84/Vincenty linear", "WGS84 nearest-rank", "Haversine linear", "Haversine nearest-rank"],
+    "promotion_gate": "WGS84/Vincenty linear strictly below 3.21558228095786 m and all four diagnostics non-regressive versus Phase11; coverage preserved; vertical and continuity safe",
+    "one_truth_read_intent": true,
+    "post_score_code_or_parameter_change": false,
+    "validation_holdout_test_authorization": false,
+    "kaggle_or_token_access": false
+  },
+  "command": "LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH build/apps/gnss_fgo_imu_no_base --android-gnss <route>/pixel7pro/device_gnss.csv --android-imu <route>/pixel7pro/device_imu.csv --nav <route>/brdc.nav --out output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/submission.csv --summary-json output/smartphone-r5/phase12-residual-ionosphere-gtsam-v1/summary.json --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro --all-epochs --android-raw-utc-keys --native-pdc-imu-tdcp --native-signal-bias-states --native-residual-ionosphere",
+  "freeze_record_hash": "computed after apply_patch and fixed by companion manifest"
+}

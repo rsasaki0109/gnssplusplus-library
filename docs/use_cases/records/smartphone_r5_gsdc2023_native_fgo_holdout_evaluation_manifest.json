@@ -1,0 +1,19 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-holdout-evaluation-record-manifest.v1",
+  "status": "sealed-holdout-pass-development-only",
+  "record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_holdout_evaluation.json",
+    "sha256": "6df3cd038768b86f0c79dd01ae62884f1f73e7fa0a1d1a5bb9b4a12eb2036a44"
+  },
+  "dataset_id": "2023-09-06-00-01-us-ca-routen/pixel6pro",
+  "freeze_record_sha256": "bf3b524cd1301bc4129a95da40c66fa654e59cf93dfe934439c1aca0c14664ca",
+  "freeze_manifest_sha256": "9c55e83163583cab4ec4f745a3e6e8499ed2f39b274e68f91d108f0c43f65910",
+  "truth_free_manifest_sha256": "02d121f5ebd27697fcb63672b7d27773c79d9f18c4c519c3f92e6d38f2ab0dd4",
+  "evaluation_report_sha256": "5e13704562e7958a930a600adb9a54092769bb5569e202d0de4196746a19a056",
+  "evaluation_manifest_sha256": "74f1764de34afc49f6df4cb99900927482495fc1f2474494e8de4446a619c1a5",
+  "truth_open_count": 1,
+  "truth_content_hash_recorded": false,
+  "no_post_holdout_tuning": true,
+  "external_mutation": false,
+  "test_batch_authorized": true
+}

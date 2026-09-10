@@ -1,0 +1,24 @@
+{
+  "schema_version": "smartphone-r5-wls-stability-selector-holdout-freeze-manifest.v1",
+  "freeze_id": "smartphone-r5-wls-stability-selector-release-freeze-2026-08-30",
+  "status": "sealed-before-holdout-evaluation",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_stability_selector_holdout_freeze.json",
+    "sha256": "49ec6a07ca770aac764f562abfa2d4823cd74aabbb948163250f7c3b5656783f"
+  },
+  "hash_scope": [
+    "source_files",
+    "Release binary",
+    "archive",
+    "profile",
+    "development navigation",
+    "designated holdout navigation metadata from frozen profile",
+    "all truth-free lane and selector parameters",
+    "CLI commands",
+    "signoff thresholds",
+    "truth-free/atomic contract"
+  ],
+  "holdout_content_opened": false,
+  "holdout_truth_opened": false,
+  "post_holdout_tuning_permitted": false
+}

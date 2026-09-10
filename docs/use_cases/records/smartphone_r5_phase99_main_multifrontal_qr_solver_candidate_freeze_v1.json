@@ -1,0 +1,305 @@
+{
+  "schema_version": "smartphone-r5-phase99-main-multifrontal-qr-solver-candidate-freeze.v1",
+  "phase": 99,
+  "execution_label": "Luna Max",
+  "created_at_utc": "2026-09-03T00:00:00Z",
+  "status": "frozen-candidate-not-implemented",
+  "purpose": "Freeze exactly one bounded solver-path candidate for the Phase93/98 opt-in main meter-state graph after the MTV-A/LAX-T structural evidence audit. This record is not a raw-execution or accuracy authorization.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase99_main_qr_solver_candidate_audit_v1.md",
+    "sha256": "0e10a62d1fbec6d3cab8d2faed51d02c9b538f8726ba177bb8a5fece50e8e498",
+    "commit": "3a3727e36594aaf42cba490822aa4173aacdec01"
+  },
+  "decision": {
+    "structural_gate": "qualified-for-candidate-freeze-only",
+    "structural_gate_routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "gnss_first_progress_and_handoff_observed": true,
+    "main_cholesky_failure_boundary_observed": true,
+    "phase80_no_c0d_comparator_progress_observed": true,
+    "exactly_one_candidate_frozen": true,
+    "candidate_count": 1,
+    "unique_algorithmic_correction_established": false,
+    "qr_success_observed": false,
+    "raw_execution_authorized": false,
+    "solver_rerun_authorized": false,
+    "accuracy_or_promotion_authorized": false
+  },
+  "scope": {
+    "phase93_98_opt_in_main_meter_state_only": true,
+    "routes_for_structural_gate": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "gnss_first_solver_unchanged": true,
+    "legacy_default_unchanged": true,
+    "phase80_is_comparator_only": true,
+    "no_route_execution_in_this_freeze": true,
+    "no_solution_or_accuracy_output": true
+  },
+  "candidate": {
+    "id": "phase99-main-meter-state-multifrontal-qr-branch-only",
+    "kind": "algorithmic-linear-solver-branch-only",
+    "status": "frozen-not-implemented",
+    "implemented": false,
+    "opt_in": true,
+    "default_off": true,
+    "selector": "A future explicitly scoped Phase99 opt-in selector; no current executable flag is introduced by this freeze",
+    "implementation_boundary": {
+      "location": "src/algorithms/fgo_gtsam_backend.cpp main optimizer construction at the existing solve block",
+      "operation": "Set params.linearSolverType to MULTIFRONTAL_QR only for the Phase93/98 main meter-state invocation before the existing optimizer is constructed",
+      "gnss_first_must_not_receive_branch": true,
+      "explicit_ordering_must_remain_empty": true,
+      "shared_backend_scope_must_fail_closed_if_stage_cannot_be_separated": true
+    },
+    "solver": {
+      "existing_solver_type": "MULTIFRONTAL_CHOLESKY",
+      "existing_elimination_function": "EliminatePreferCholesky",
+      "candidate_solver_type": "MULTIFRONTAL_QR",
+      "candidate_elimination_function": "EliminateQR",
+      "existing_branch": "multifrontal",
+      "candidate_branch": "multifrontal",
+      "existing_ordering_type": "COLAMD",
+      "candidate_ordering_type": "COLAMD",
+      "explicit_ordering_present": false,
+      "ordering_policy_changed": false,
+      "sequential_elimination": false,
+      "candidate_effect": "Change only the selected multifrontal linear elimination/factorization function; QR may change numerical rank handling and step acceptance"
+    },
+    "unchanged_contract": {
+      "graph_and_values": true,
+      "factor_families": true,
+      "ccdd_equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "ccdd_jacobian": "[-1,+1,-dt/2,-dt/2]",
+      "c_and_isb_units": "metres",
+      "d_units": "metres_per_second",
+      "dt_units": "seconds",
+      "ccdd_sigma": "0.1 m",
+      "raw_retained_d_initialization": true,
+      "exact_retained_key_alignment": true,
+      "full_finite_optimized_c_and_d": true,
+      "position_velocity_handoff": true,
+      "filter_and_observation_retention": true,
+      "initialization": true,
+      "priors": true,
+      "lm_lambda_initial": "1e-5",
+      "lm_lambda_factor": 10.0,
+      "lm_lambda_upper_bound": "1e5",
+      "lm_diagonal_damping": false,
+      "lm_iteration_and_acceptance_policy": true,
+      "fail_closed": true,
+      "no_cholesky_fallback": true
+    },
+    "failure_policy": {
+      "qr_exception_or_nonfinite_step": "fail-closed",
+      "structural_gate_failure": "fail-closed",
+      "fallback_solver": "none",
+      "solution_publication_on_failure": false,
+      "raw_rerun_on_failure": false
+    }
+  },
+  "sealed_structural_basis": {
+    "phase98_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase98_solver_rank_diagnostic_structural_result_v1.json",
+      "sha256": "8948a006aa4d02b40418c9eb1bc78ad711c9432154eba6ad69c70359e6b5b7be",
+      "commit": "1e843beb5dedf94a6339b46b163800c387f00637",
+      "main_solver": "MULTIFRONTAL_CHOLESKY",
+      "main_ordering": "COLAMD",
+      "main_trials": 10,
+      "main_trial_lambdas": [
+        "1e-5",
+        "1e-4",
+        "1e-3",
+        "1e-2",
+        "1e-1",
+        "1",
+        "10",
+        "100",
+        "1000",
+        "10000"
+      ],
+      "main_trial_status": "indeterminate_linear_system_for_each_trial; maximum_lambda terminal branch",
+      "exception_nearby_key": "unavailable_at_pinned_lm_catch_boundary"
+    },
+    "routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+        "phase80_main": {
+          "factors": 143414,
+          "values": 10799,
+          "accepted_iterations": 12,
+          "initial_cost": 155976340.16237149,
+          "final_cost": 28128.450524519692
+        },
+        "phase98_gnss_first_meter_c0d": {
+          "accepted_iterations": 167,
+          "initial_cost": 5618000.786274777,
+          "final_cost": 21298.114523521894,
+          "c0d_factors": 2158,
+          "optimized_d_epochs": 2159,
+          "optimized_d_finite_epochs": 2159,
+          "exact_key_alignment": true
+        },
+        "phase98_main_meter_c0d": {
+          "factors": 120093,
+          "values": 10798,
+          "accepted_iterations": 0,
+          "initial_cost": 79358354.39651252,
+          "final_cost": 79358354.39651252,
+          "conditioning_proxy": 1.9999999980791472,
+          "all_factor_family_linearizations_finite": true
+        }
+      },
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+        "phase80_main": {
+          "factors": 88025,
+          "values": 7333,
+          "accepted_iterations": 12,
+          "initial_cost": 190528071.24200463,
+          "final_cost": 22206.857308543094
+        },
+        "phase98_gnss_first_meter_c0d": {
+          "accepted_iterations": 262,
+          "initial_cost": 6419784.856579111,
+          "final_cost": 12818.288538454106,
+          "c0d_factors": 1465,
+          "optimized_d_epochs": 1466,
+          "optimized_d_finite_epochs": 1466,
+          "exact_key_alignment": true
+        },
+        "phase98_main_meter_c0d": {
+          "factors": 61082,
+          "values": 7332,
+          "accepted_iterations": 0,
+          "initial_cost": 166205998.11910567,
+          "final_cost": 166205998.11910567,
+          "conditioning_proxy": 1.9999999980209395,
+          "all_factor_family_linearizations_finite": true
+        }
+      }
+    },
+    "comparison_limitation": "Phase80 and Phase98 are not the same graph with one appended PSD factor: clock rows, C units, signal-bias states, retained observations, and factor populations differ; numerical rank causality is therefore unproven"
+  },
+  "gtsam_local_api": {
+    "distribution": "pinned local GTSAM 4.3a source",
+    "source_pins": [
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizerParams.h",
+        "sha256": "0cf55b15a4d04aa1364b63bdae659fc65f568a8e08898a104a28d7fdc6ca07a5",
+        "facts": [
+          "MULTIFRONTAL_QR is a supported enum",
+          "both multifrontal enum values use the multifrontal solve branch",
+          "MULTIFRONTAL_CHOLESKY maps to EliminatePreferCholesky",
+          "MULTIFRONTAL_QR maps to EliminateQR",
+          "default linear solver is MULTIFRONTAL_CHOLESKY"
+        ]
+      },
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtParams.h",
+        "sha256": "dd9348c08a96f0dffb2cf6b6f24eab18d4d32280a21e333a1e38725b254ec3f2",
+        "facts": [
+          "default orderingType is COLAMD",
+          "EnsureHasOrdering materializes COLAMD when explicit ordering is absent",
+          "legacy lambda and damping defaults are retained"
+        ]
+      },
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/NonlinearOptimizer.cpp",
+        "sha256": "594fd9bf3d48199f00d05794913df6c84d300664458d609fcdf0fb6ed3215a35",
+        "facts": [
+          "multifrontal solve passes the same graph and ordering to the selected elimination function"
+        ]
+      },
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/linear/HessianFactor.cpp",
+        "sha256": "9ad05f58d0f77faea406b6d86a909e8c829bfb55ff05fd5c92d70c58938cded0",
+        "facts": [
+          "prefer-Cholesky uses Cholesky for ordinary unconstrained noise and QR for constrained noise"
+        ]
+      },
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/linear/JacobianFactor.cpp",
+        "sha256": "1b5eef269cab6999f580b40c0d6ba65a732a3c51206b523744182a60dd5b0eee",
+        "facts": [
+          "EliminateQR is implemented and retains insufficient-row/indeterminate checks"
+        ]
+      },
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/nonlinear/LevenbergMarquardtOptimizer.cpp",
+        "sha256": "834f732ac4ad4130b2a719a3181e5dfcd2ecdf584ece6f0c76bdf5f390e10cbc",
+        "facts": [
+          "each LM trial builds the existing damped system and calls solve",
+          "IndeterminantLinearSystemException is caught and lambda is increased",
+          "the current catch does not retain the exception object"
+        ]
+      },
+      {
+        "path": "output/reproducibility-cache/gtsam-4.3a/gtsam/inference/EliminateableFactorGraph-inst.h",
+        "sha256": "e652ffda77bb22c58ef55607bb566296f97060d694db449dafacb1bdbafe7845",
+        "facts": [
+          "the multifrontal tree/order construction is shared while the supplied elimination function selects QR or Cholesky"
+        ]
+      }
+    ],
+    "numerical_rationale": "QR avoids the Cholesky positive-definiteness requirement for the ordinary Hessian path and may preserve a usable least-squares step for a semidefinite or ill-conditioned linearization; the local source does not guarantee solvability",
+    "ordering_and_lm_unchanged": true
+  },
+  "official_matlab_consistency": {
+    "fgo_gnss_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+      "observed": [
+        "initializes or reloads position, velocity, clk, and dclk",
+        "inserts x/v/c/d Values and CCDD temporal factors",
+        "uses gtsam.LevenbergMarquardtOptimizer",
+        "exports clkest and dclkest with position and velocity"
+      ]
+    },
+    "fgo_gnss_imu_m": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "observed": [
+        "loads GNSS-first posest/velest/clkest/dclkest",
+        "inserts Pose3/position/velocity/clock/drift/bias Values",
+        "uses CCDD and the same GTSAM LM optimizer family"
+      ]
+    },
+    "qr_consistency": "The official source does not explicitly request QR; main-only QR is not an official success claim, but it does not alter the official C/D/position/velocity staging contract"
+  },
+  "rejected_alternatives": [
+    "SEQUENTIAL_QR or any ordering change",
+    "GNSS-first QR",
+    "LM lambda, iteration, damping, or acceptance tuning",
+    "CCDD equation, unit, sigma, filter, initialization, factor, or prior changes",
+    "Cholesky-then-QR fallback or any second solver path"
+  ],
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_binary_reads_or_generated": 0,
+    "base_rinex_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "solution_publications": 0,
+    "route_reruns_or_fallbacks": 0,
+    "new_large_artifacts": 0
+  },
+  "execution_policy": {
+    "this_freeze_authorizes_raw_execution": false,
+    "this_freeze_authorizes_solver_rerun": false,
+    "required_before_any_execution": [
+      "implement the single opt-in main-only branch",
+      "focused synthetic/regression tests",
+      "legacy-default and GNSS-first source/diff qualification",
+      "new pre-raw manifest/evaluator",
+      "independent one-shot authorization"
+    ],
+    "raw_input_policy_if_later_authorized": "raw device GNSS/IMU and broadcast navigation only; no truth, MAT data, base, precomputed coordinates, Kaggle, accuracy, or solution publication",
+    "failure_policy": "fail closed without fallback or rerun"
+  }
+}

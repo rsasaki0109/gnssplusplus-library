@@ -1,0 +1,348 @@
+{
+  "schema_version": "smartphone-r5-phase93-source-staging-clock-state-handoff-freeze.v1",
+  "phase": 93,
+  "status": "frozen-before-phase93-implementation",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one opt-in implementation candidate that aligns native GNSS-first clock-state staging with the official fgo_gnss/fgo_gnss_imu source contract. This record authorizes implementation review only; it does not authorize raw execution, accuracy scoring, or submission release.",
+  "authority": {
+    "phase93_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase93_source_staging_clock_state_handoff_audit_v1.md",
+      "sha256": "ed0f11f404f5db1f3379af5723cffed825508a9e877208ad84b89e6d84bd4112",
+      "commit": "522c70d",
+      "status": "sealed-read-only-source-and-artifact-audit"
+    },
+    "authoritative_head_before_phase93": "3008b29",
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase80_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "phase81_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase81_phase80_direct_observable_quality_reclassification_result_v1.json",
+      "sha256": "f5809f173c3e346aec775ca6dd152de5436eb68ea348d3fe90dffc7f82153b14"
+    },
+    "phase91_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer_result_v1.json",
+      "sha256": "9929e285b58b5d9a65350ba1a3d497c736968bb896d72dbe5fb014534b6d58c8",
+      "status": "sealed-no-go-input"
+    },
+    "phase92_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_structural_result_v1.json",
+      "sha256": "8488306b3ec61d0360418de73fa1596271597b6971d77de676fcd279d7e1b01c",
+      "status": "sealed-no-go-input"
+    },
+    "phase92_execution_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_execution_freeze_v1.json",
+      "sha256": "c07ac587ebcfde6391de0b8a824687316de854442166a93daadb416d4e9b74d8"
+    },
+    "phase92_execution_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_execution_manifest_v1.json",
+      "sha256": "d6370b03f5d9dc48e8eb8da5667f06252caff444a2d8998cdac4380aea8f29a3"
+    }
+  },
+  "official_source_pins": {
+    "fgo_gnss": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+      "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+    },
+    "fgo_gnss_imu": {
+      "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+    },
+    "parameters": {
+      "path": "output/reproducibility-cache/gsdc2023/parameters.m",
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+    },
+    "gnsslog2obs": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m",
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff"
+    },
+    "gobs_phone": {
+      "path": "output/reproducibility-cache/gsdc2023/functions/GobsPhone.m",
+      "sha256": "11d43c1e76370b9d393075ec88071585efb3efb5d2fa97b3be58c0e1bd196986"
+    },
+    "clock_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h",
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc"
+    },
+    "pseudorange_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/PseudorangeFactor_XC.h",
+      "sha256": "7f467698f2239818724eba4485b830fbc543586bbee06a21b8b2c03ae5b56415"
+    },
+    "doppler_factor": {
+      "path": "output/reproducibility-cache/gtsam_gnss/src/DopplerFactor_VD.h",
+      "sha256": "de2c11d06ff860a95785c84620e5ed57dcfd5ca24995a0e642e9a5984fe093e1"
+    }
+  },
+  "native_source_pins": {
+    "entrypoint": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+      "sha256": "3ef5d9ce8dcc0b6e2ef72a019dd0ede67b9403730f5566310ea5d77d32acfc1e"
+    },
+    "problem_builder": {
+      "path": "src/algorithms/fgo_problems.cpp",
+      "sha256": "e7607ce8f0fe27fd382a01b5b6f147b027b7bf51453e920eae458c86ddac0c17"
+    },
+    "gtsam_backend": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp",
+      "sha256": "0f97a40a6e863f068facc5113481b921c4050dc29afc7a820e4ad003187615bb"
+    },
+    "fgo_result_api": {
+      "path": "include/libgnss++/algorithms/fgo.hpp",
+      "sha256": "eb75b5ca5cbf41845721efc5cb97a2cb71c827828c7fc6a0526ef952cb52c2b3"
+    }
+  },
+  "source_staging_contract": {
+    "gnss_first": {
+      "source": "fgo_gnss.m",
+      "initial_state": {
+        "position": "posbl.copy()",
+        "velocity": "posbl.gradient(obs.dt)",
+        "clock_C": "[obs.clk zeros(n,6)]",
+        "clock_drift_D": "obs.dclk"
+      },
+      "state_insertion": ["x_ini=posini.enu'", "v_ini=velini.enu'", "c_ini=clk'", "d_ini=dclk'"],
+      "factors": ["PseudorangeFactor_XC", "DopplerFactor_VD", "ClockFactor_CCDD"],
+      "clock_factor_scope": "eligible adjacent retained epochs",
+      "clock_factor_equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "clock_factor_jacobian_order": ["C1", "C2", "D1", "D2"],
+      "clock_factor_jacobian": "[-1,+1,-dt/2,-dt/2]",
+      "clock_unit": "metres",
+      "isb_unit": "metres",
+      "drift_unit": "metres_per_second",
+      "dt_unit": "seconds",
+      "residual_unit": "metres",
+      "ordinary_sigma_m": 0.1,
+      "jump_rule": "use source jump noise; preserve source phone exclusion and dt<1.5s rule",
+      "optimizer": "GTSAM batch Levenberg-Marquardt, source maxIterations=1000",
+      "exports": ["clkest", "dclkest"],
+      "export_scope": "one value per optimized epoch"
+    },
+    "gnss_first_to_main": {
+      "position": "same-run GNSS-first optimized solution",
+      "velocity": "same-run GNSS-first optimized velocity state",
+      "clock_C": "same-run GNSS-first optimized C; existing public seconds field is multiplied by C_LIGHT exactly once at the main meter-state boundary",
+      "clock_drift_D": "same-run GNSS-first optimized D exported through FGOResult.epoch_clock_drift_mps",
+      "raw_or_zero_d_fallback_when_selector_active": false,
+      "pdc_or_external_coordinate_handoff": false,
+      "coordinate_inference": false
+    },
+    "gnss_imu": {
+      "source": "fgo_gnss_imu.m",
+      "initflag_handoff": ["posini=posest", "velini=velest", "clk=clkest", "dclk=dclkest"],
+      "state_insertion": ["c_ini=clk'", "d_ini=dclk'"],
+      "clock_factor": "ClockFactor_CCDD with the same source equation and ordinary sigma",
+      "exports": ["clkest", "dclkest"]
+    }
+  },
+  "native_contrast": {
+    "current_gnss_first_config": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp:4641-4667",
+      "use_imu": false,
+      "use_pose3_state": false,
+      "use_velocity_states": true,
+      "source_c0d_factor": false,
+      "meter_state_parity": false,
+      "active_solve_diagnostic": false,
+      "raw_d_initializer": false
+    },
+    "current_backend_gate": {
+      "path": "src/algorithms/fgo_gtsam_backend.cpp:206-212",
+      "source_c0d_factor_requires_use_imu": true
+    },
+    "current_main_handoff": {
+      "path": "apps/native/gnss_fgo_imu_no_base.cpp:4751-4768",
+      "position": "GNSS-first solution copied",
+      "clock_C": "GNSS-first public clock seconds multiplied by C_LIGHT into main receiver_clock_bias_m",
+      "velocity": "GNSS-first velocity handoff remains existing path",
+      "clock_drift_D": "not copied from GNSS-first; main backend chooses raw retained EpochSeed D under Phase91, otherwise finite PDC D or zero"
+    },
+    "current_result_api": {
+      "path": "include/libgnss++/algorithms/fgo.hpp:1343-1380",
+      "optimized_velocity_export": true,
+      "optimized_clock_drift_export": false
+    }
+  },
+  "sealed_solver_evidence": {
+    "phase80_no_c0d_main_graph": {
+      "artifact": "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/phase80_direct_observable_quality_structural_failure.json",
+      "sha256": "767ef5f7089e535063ec6cbe4e9dc3e6d061bdab62eb521f794c3fab0b171903",
+      "all_routes_graph_iterations": 12,
+      "all_routes_strict_cost_decrease": true,
+      "routes": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"initial_cost": 155976340.1623715, "final_cost": 28128.450524519692, "imu_intervals": 2158},
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"initial_cost": 296097006.7793359, "final_cost": 19159.621845562328, "imu_intervals": 3139},
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": {"initial_cost": 190528071.24200463, "final_cost": 22206.857308543094, "imu_intervals": 1465},
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"initial_cost": 59252349.484390005, "final_cost": 8166.863690687162, "imu_intervals": 1101}
+      },
+      "interpretation": "sealed structural baseline only; no accuracy claim"
+    },
+    "phase92_meter_c0d_main_graph": {
+      "artifact": "docs/use_cases/records/smartphone_r5_phase92_source_meter_clock_state_parity_structural_result_v1.json",
+      "sha256": "8488306b3ec61d0360418de73fa1596271597b6971d77de676fcd279d7e1b01c",
+      "published_route_summaries": {
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+          "summary_sha256": "25334b486b03f2e4ff2892d8f5cb604fc5de3de89e5169a1393d84e93dc3700c",
+          "c0d_rows": 2158,
+          "raw_d_finite": "2159/2159",
+          "accepted_outer_iterations": 0,
+          "initial_cost": 162235823.07086447,
+          "final_cost": 162235823.07086447,
+          "conditioning_proxy": 1.9999999980791472,
+          "termination": "no_progress_unclassified"
+        },
+        "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+          "summary_sha256": "4b0c863eda6ba862d03d395fb93694bfec45361e182f7ef81aba6d83586a2b0a",
+          "c0d_rows": 1465,
+          "raw_d_finite": "1466/1466",
+          "accepted_outer_iterations": 0,
+          "initial_cost": 284569697.4514789,
+          "final_cost": 284569697.4514789,
+          "conditioning_proxy": 1.9999999980209395,
+          "termination": "no_progress_unclassified"
+        }
+      },
+      "other_route_behavior": {
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5": "fail-closed before summary due retained-epoch handoff",
+        "2023-03-08-21-34-us-ca-mtv-u/pixel5": "structural domain coverage failure"
+      },
+      "interpretation": "meter-state conditioning parity did not supply optimized GNSS-first D; formal result remains no-go and stops before accuracy"
+    }
+  },
+  "candidate": {
+    "exactly_one": true,
+    "id": "phase93_source_meter_c0d_gnss_first_retained_clock_state_handoff",
+    "status": "not-implemented",
+    "implementation_authorized": true,
+    "raw_execution_authorized": false,
+    "accuracy_scored": false,
+    "promotion_authorized": false,
+    "submission_release_authorized": false,
+    "default_off": true,
+    "selector": "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+    "selector_implemented": false,
+    "scope": {
+      "gnss_first_graph": "Point3 position plus explicit velocity states",
+      "gnss_first_use_pose3_state": false,
+      "gnss_first_use_imu": false,
+      "gnss_first_input": "same retained in-memory raw device GNSS problem, raw direct P+D factors, and broadcast navigation",
+      "main_graph": "existing source-meter C0D Pose3+IMU batch graph",
+      "main_position_velocity": "existing same-run GNSS-first position/velocity handoff",
+      "no_pdc": true,
+      "no_direct_doppler_wls": true,
+      "no_velocity_only_handoff": true,
+      "no_external_or_precomputed_coordinates": true,
+      "no_truth_mat_kaggle_token": true
+    },
+    "gnss_first_state_contract": {
+      "clock_C_unit": "metres",
+      "constellation_ISB_unit": "metres",
+      "clock_drift_D_unit": "metres_per_second",
+      "initial_clock_drift_D": "exact retained raw EpochSeed.receiver_clock_drift_mps value for each GNSS-first epoch",
+      "initial_clock_drift_D_lookup": "raw_source_index + raw_utc_time_millis + GNSS week/TOW identity; no retained-vector-position guess",
+      "initial_clock_drift_D_finite_full_coverage": true,
+      "initial_clock_drift_D_fallback": "none",
+      "dt_unit": "seconds",
+      "residual_unit": "metres",
+      "ordinary_clock_factor_sigma_m": 0.1,
+      "equation": "(C2-C1)-((D1+D2)*dt/2)",
+      "jacobian_order": ["C1", "C2", "D1", "D2"],
+      "jacobian": "[-1,+1,-dt/2,-dt/2]",
+      "phone_exclusion_rule": "unchanged official list",
+      "clock_jump_rule": "unchanged official jump noise/edge behavior",
+      "maximum_gap_rule": "unchanged dt<1.5s eligibility",
+      "sigma_tuning": false,
+      "lm_tuning": false,
+      "optimizer_algorithm": "unchanged GTSAM batch Levenberg-Marquardt",
+      "gnss_first_max_iterations": 1000,
+      "main_max_iterations": "existing frozen native main value; no candidate-specific increase"
+    },
+    "result_export": {
+      "new_fgo_result_field": "epoch_clock_drift_mps",
+      "field_unit": "metres_per_second",
+      "field_order": "retained GNSS-first epoch/source order",
+      "required_length": "gnss_first_problem.epochs.size()",
+      "required_finite_coverage": true,
+      "missing_or_nonfinite_behavior": "fail closed",
+      "raw_or_zero_fallback": false
+    },
+    "handoff": {
+      "position_source": "gnss_first_result.solution.solutions[i].position_ecef",
+      "velocity_source": "gnss_first_result.epoch_velocities_ecef_mps[i]",
+      "clock_C_source": "gnss_first_result.solution.solutions[i].receiver_clock_bias",
+      "clock_C_public_unit": "seconds",
+      "clock_C_main_unit": "metres",
+      "clock_C_conversion": "multiply by C_LIGHT exactly once at the explicit handoff boundary",
+      "clock_D_source": "gnss_first_result.epoch_clock_drift_mps[i]",
+      "clock_D_main_unit": "metres_per_second",
+      "main_D_initializer": "optimized GNSS-first D only",
+      "forbidden_main_D_fallbacks": ["raw retained D", "zero", "hold", "interpolation", "padding", "truncation", "WLS", "residual inference", "velocity-difference inference", "coordinate inference"],
+      "same_run": true
+    },
+    "retained_key_alignment": {
+      "required": true,
+      "keys": ["raw_source_index", "raw_utc_time_millis", "GNSS week/TOW identity"],
+      "maps": ["main retained EpochSeed", "GNSS-first retained EpochSeed", "GNSS-first solution", "raw retained D source"],
+      "one_to_one": true,
+      "source_order_preserved": true,
+      "filtered_out_raw_epochs_may_remain_unmatched": true,
+      "reject_missing_key": true,
+      "reject_duplicate_key": true,
+      "reject_reordered_key": true,
+      "reject_nonfinite_time": true,
+      "reject_time_or_week_tow_mismatch": true,
+      "reject_nearest_time_match": true,
+      "reject_interpolation": true,
+      "reject_padding_or_truncation": true,
+      "reject_raw_zero_or_hold_fallback": true,
+      "reject_wls_or_residual_inference": true,
+      "reject_coordinate_inference": true,
+      "gate_relaxation": false
+    },
+    "legacy_preservation": {
+      "selector_absent_behavior": "unchanged",
+      "default_graph_factors": "unchanged",
+      "default_clock_units": "unchanged outside this opt-in candidate",
+      "default_optimizer": "unchanged",
+      "candidate_is_not_a_tuning_lane": true
+    }
+  },
+  "required_implementation_checks_before_raw_authorization": [
+    "exact retained-key map accepts filtered-out raw epochs while requiring every retained main/GNSS-first/solution key exactly once and in source order",
+    "exact retained-key map rejects missing, duplicate, reordered, nonfinite, time-mismatched, week/TOW-mismatched, nearest, interpolated, padded, and truncated mappings",
+    "GNSS-first Point3+velocity graph inserts official C0/D row with metre C/ISB, metre-per-second D, sigma 0.1 m, and unchanged phone/gap/jump rules",
+    "FGOResult exports finite epoch_clock_drift_mps with exact retained length and source order",
+    "main graph receives optimized C and optimized D plus existing same-run position/velocity and has no raw/zero fallback when selector is active",
+    "legacy selector-absent path remains behaviorally unchanged",
+    "compile and focused structural tests pass; active solve requires finite costs, at least one accepted iteration, and strict cost decrease",
+    "a new execution freeze and explicit raw authorization are created only after implementation and tests; this Phase93 freeze is not raw authorization"
+  ],
+  "read_accounting_at_freeze": {
+    "native_solver_invocations": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_calculations": 0,
+    "route_score_selection": false,
+    "raw_input_hash_reads": 0,
+    "source_text_reads": true,
+    "sealed_artifact_reads": true
+  },
+  "execution_boundary": {
+    "raw_execution_authorized": false,
+    "accuracy_scoring_authorized": false,
+    "submission_release_authorized": false,
+    "required_next_state": "implementation commit plus focused tests, followed by a separately sealed execution freeze/authorization",
+    "on_failure": "fail closed; do not add candidates/routes, tune sigma/LM, relax retained-key gates, open truth/MAT/Kaggle/token artifacts, or score accuracy"
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "schema_version": "smartphone-r5-phase17-primary-l1-e1-score-result.v1",
+  "status": "development-evaluation-failed-before-score",
+  "created_at_utc": "2026-08-31T17:16:56Z",
+  "candidate_id": "native-carrier-code-leveling-primary-l1-e1-innovation-reset-v1",
+  "freeze_record": "docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_freeze_v1.json",
+  "freeze_record_sha256": "55bddd265afd84b3d0baee7986d7de8ee75dc12ecdf69ce3b597d7564652548d",
+  "freeze_manifest": "docs/use_cases/records/smartphone_r5_phase17_primary_l1_e1_freeze_v1_manifest.json",
+  "freeze_manifest_sha256": "e1ace87e3b664c834a822b5500d7c5bf19ca75bdb2448a4dcdb20eea69e77074",
+  "dataset_id": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+  "truth_policy": {
+    "route_role": "same-route cross-device development evidence only; not validation or holdout",
+    "truth_member": "dataset_2023/train/2022-08-04-20-07-us-ca-sjc-q/mi8/ground_truth.csv",
+    "archive_path": "data/gsdc2023/cache/dataset_2023.zip",
+    "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "central_member_metadata": {
+      "file_size": 135916,
+      "compress_size": 35730,
+      "crc32": "ba473cd6"
+    },
+    "materialized_path": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/truth_materialized/ground_truth.csv",
+    "truth_open_operations": 1,
+    "truth_materialization_operations": 1,
+    "truth_content_sha256": null,
+    "truth_content_sha256_note": "Not computed after the one permitted open; hashing the materialized truth would be a second truth-file read. Archive central size/CRC and archive SHA are recorded instead.",
+    "evaluation_processes": 1,
+    "evaluation_attempt": {
+      "phase": "post-freeze single-process control/candidate comparison",
+      "status": "failed-before-scoring",
+      "error": "key mismatch extra=17 missing=1",
+      "metrics_written": false,
+      "truth_bytes_were_read_in_memory": true,
+      "candidate_outputs_were_not_modified": true
+    },
+    "validation_truth_open_count": 0,
+    "holdout_truth_open_count": 0,
+    "test_truth_open_count": 0,
+    "mat_read_count": 0,
+    "enriched_columns_read": false,
+    "device_wls_or_precomputed_coordinates_read": false,
+    "token_or_kaggle_access": false,
+    "post_truth_algorithm_or_parameter_changes": false,
+    "post_failure_rerun": false,
+    "same_route_other_phone_prior_evidence": "The mi8 route had prior truth-free structural evidence only; prior Pixel7 accuracy evidence was a different route/device and was not used for this comparison."
+  },
+  "candidate_artifacts": {
+    "control": {
+      "summary": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/control/summary.json",
+      "summary_sha256": "84ea0782a23a212859558ae013bc71d2ca0aa45658b0e7f2a9b73e4d6d9aee9b",
+      "submission": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/control/submission.csv",
+      "submission_sha256": "f1ddbfa14dc8dbe179e2eaf896e31a3f69b216fc3cb2a0c24de429877d35e272",
+      "rows": 1416
+    },
+    "candidate": {
+      "summary": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/candidate/summary.json",
+      "summary_sha256": "8a3e2ff90ef879ab469c6591200653db0b7bc408a547c29b2add03d3dc8d3c15",
+      "submission": "output/smartphone-r5/phase17-primary-l1-e1-v1/mi8/candidate/submission.csv",
+      "submission_sha256": "c419d5335ac6f07ec55c84d40a886b6292009826e308a36d4077a679e9962832",
+      "rows": 1416
+    },
+    "pixel7_structural_only": {
+      "control_submission_sha256": "803f25689650df54e6d959605ca80b567d4ccdf28271b570fa0ad41d342532cd",
+      "candidate_submission_sha256": "c04d2438af7b2908e300ac5a79ede262404736cfdf6cbef9362ca144d2dc9111",
+      "accuracy_reread": false
+    }
+  },
+  "metrics": null,
+  "promotion": {
+    "decision": "no-go",
+    "reason": "The sealed one-shot evaluator stopped at the frozen key-set check, so no diagnostic score or control/candidate accuracy comparison exists. The candidate cannot be promoted from this attempt.",
+    "all_four_diagnostics_compared": false,
+    "coverage_gate": "not scored",
+    "safety_gate": "truth-free structural gate passed before evaluation",
+    "native_0_782_class_target": "not achieved"
+  },
+  "verification": {
+    "focused_google_tests": "15/15 passed (10 CarrierCodeLevelingTest and 5 UpstreamObservablePreprocessingTest)",
+    "release_targets_built": ["gnss_run_tests", "gnss_fgo_imu_no_base"],
+    "full_serial_ctest": {
+      "status": "130/131 passed",
+      "failed_test": "python_cli_tests",
+      "failure": "QZSS L6 PTY fixture observed frames=0 and discarded_bytes=244; known fixture instability, unrelated to Phase 17"
+    },
+    "diff_check": "passed",
+    "structural_hashes_rechecked": true,
+    "credential_or_token_access": false,
+    "mat_input_or_output_access": false
+  },
+  "immutability": {
+    "freeze_unchanged": true,
+    "control_and_candidate_artifacts_unchanged": true,
+    "no_post_truth_tuning": true,
+    "no_candidate_rerun": true,
+    "record_sha256": "excluded-from-self-hash"
+  }
+}

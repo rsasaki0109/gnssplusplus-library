@@ -1,0 +1,289 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-factor-hypothesis-audit.v1",
+  "status": "truth-free-hypothesis-audit-sealed",
+  "purpose": "Record the factor-by-factor structural hypotheses tested against one already sealed native-FGO development route without changing the candidate or opening truth.",
+  "policy": {
+    "local_only": true,
+    "truth_opened": false,
+    "validation_opened": false,
+    "holdout_opened": false,
+    "test_data_used": false,
+    "kaggle_or_token_access": false,
+    "external_mutation": false,
+    "candidate_or_parameter_changed": false,
+    "production_default_changed": false,
+    "v5_artifact_touched": false,
+    "no_post_score_tuning": true
+  },
+  "sealed_inputs": {
+    "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "role": "development-train-already-materialized",
+    "route_directory": "output/smartphone-r5/native-fgo-v2-processed/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5",
+    "route_manifest_sha256": "06b0a327a17a3bf2674e36ba1f7dccbd1b763600905e67360f8d2948057e3d3c",
+    "materialization_manifest_sha256": "9ede18927ded98cfd0cfcbe7aaddf721f3c41e694b6250ffa86eae57a53c72cc",
+    "members": {
+      "adapter/rover.obs": "50fc974321b19e99f7080e63faa859a4ee0dd951d7f5d0f943f8a1318216fe38",
+      "inputs/brdc.nav": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+      "inputs/device_gnss.csv": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "inputs/device_imu.csv": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6"
+    },
+    "freeze_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json",
+    "freeze_record_sha256": "a1d9a6f9d7018cb0bdf9736e9886d19865d3476ae1547281632833da90a3eac2",
+    "audit_artifact": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.json",
+    "audit_artifact_sha256": "b0b18311ef253010240b3cfc7df4854b4f5ca81d79f217ee47522f02b63b0847",
+    "audit_manifest": "output/smartphone-r5/native-fgo-pdc-factor-audit-v1/factor_audit.manifest.json",
+    "audit_manifest_sha256": "257744c4cde33612d5d0574531662bb81b95c28749a77b24ddc4d24a15324f8e",
+    "release_binary_sha256": "a10d13da4614f7cdc8e24556f5a32f870aee6c7aa94c5d3e890429996d583b0c"
+  },
+  "source_evidence": {
+    "src/algorithms/fgo.cpp": {
+      "sha256": "df098a258f4bcdbc9802f8b89617425b0521851a76a888ea0c9edd1cd3e9b1e2",
+      "references": {
+        "pseudorange_residual_and_jacobian": "558-599",
+        "carrier_residual_and_jacobian": "601-647",
+        "tdcp_residual_and_jacobian": "795-860",
+        "undifferenced_doppler_residual_and_jacobian": "863-987",
+        "motion_and_velocity_motion_rows": "1094-1179"
+      }
+    },
+    "src/algorithms/fgo_problems.cpp": {
+      "sha256": "d24c88c331439b20f3a54580f584254d823d81332657c1a90996b620f32f6033",
+      "references": {
+        "satellite_range_rate_and_corrected_state": "316-377",
+        "doppler_factor_fields": "382-403",
+        "tdcp_pair_construction": "756-809"
+      }
+    },
+    "include/libgnss++/algorithms/doppler_contract.hpp": {
+      "sha256": "66d97c9ca2cc474247464d8af782cc3ca1837195967e601576ee25b6f8e1f56d",
+      "references": {
+        "rinex_rate_conversion": "13-40",
+        "known_satellite_range_rate": "98-134",
+        "receiver_only_residual_and_prediction": "137-166"
+      }
+    },
+    "include/libgnss++/algorithms/doppler_velocity_wls.hpp": {
+      "sha256": "ef888b3e6c2f15d0dd035c0905bafdee463e346c549f81cf892ec30c1c4dcde0",
+      "references": {
+        "shared_receiver_equation": "17-34",
+        "design_row": "72-87",
+        "rank_condition_robust_and_physical_gates": "89-274"
+      }
+    }
+  },
+  "diagnostic_matrix": {
+    "source": "existing sealed factor_audit.json; no solver rerun",
+    "stages": [
+      {
+        "id": "A_P_only_1",
+        "epochs": 1,
+        "factors": {"P": 15, "D": 0, "TDCP": 0, "carrier": 0, "motion": 0},
+        "global_cost": {"initial": 2438.527025070502, "final": 33.55015025077056},
+        "rms": {"P_m": 13.14979931992203, "D_mps": 0.0, "TDCP_m": 0.0, "carrier_m": 0.0},
+        "termination": {"iterations": 8, "converged": false},
+        "jacobian": {"rows": 15, "columns": 6, "rank": 5, "condition_number": 9.73322555959567},
+        "max_position_seed_delta_m": 13.991717248014632,
+        "max_velocity_norm_mps": null
+      },
+      {
+        "id": "B_P_D_no_temporal_2",
+        "epochs": 2,
+        "factors": {"P": 30, "D": 15, "TDCP": 0, "carrier": 0, "motion": 0},
+        "global_cost": {"initial": 5036.459028292622, "final": 76.22882002557645},
+        "rms": {"P_m": 14.2922907748349, "D_mps": 0.08204469104661484, "TDCP_m": 0.0, "carrier_m": 0.0},
+        "termination": {"iterations": 8, "converged": false},
+        "jacobian": {"rows": 30, "columns": 10, "rank": 9, "condition_number": 11.669776274317218},
+        "max_position_seed_delta_m": 8.749304039849806,
+        "max_velocity_norm_mps": 0.12095286213645381
+      },
+      {
+        "id": "C_P_motion_2",
+        "epochs": 2,
+        "factors": {"P": 30, "D": 0, "TDCP": 0, "carrier": 0, "motion": 1},
+        "global_cost": {"initial": 4891.249300191524, "final": 75.34696714766692},
+        "rms": {"P_m": 14.018817917192068, "D_mps": 0.0, "TDCP_m": 0.0, "carrier_m": 0.0},
+        "termination": {"iterations": 8, "converged": false},
+        "jacobian": {"rows": 30, "columns": 10, "rank": 9, "condition_number": 11.669776274317218},
+        "max_position_seed_delta_m": 13.368867526182285,
+        "max_velocity_norm_mps": 12.587958614393202
+      },
+      {
+        "id": "D_P_D_velocity_motion_2",
+        "epochs": 2,
+        "factors": {"P": 30, "D": 15, "TDCP": 0, "carrier": 0, "motion": 1},
+        "global_cost": {"initial": 134445.87335087324, "final": 77.27346665785808},
+        "rms": {"P_m": 14.39966606049586, "D_mps": 0.08286998489235357, "TDCP_m": 0.0, "carrier_m": 0.0},
+        "termination": {"iterations": 7, "converged": true},
+        "jacobian": {"rows": 30, "columns": 10, "rank": 9, "condition_number": 11.669776274317218},
+        "wls": {"valid_epochs": 2, "rejected_epochs": 0, "max_velocity_norm_mps": 0.1296114777454378, "max_clock_rate_abs_mps": 4.441407391485742},
+        "max_position_seed_delta_m": 7.945129289576526,
+        "max_velocity_norm_mps": 0.1287045431599056
+      },
+      {
+        "id": "E_P_D_TDCP_2",
+        "epochs": 2,
+        "factors": {"P": 30, "D": 15, "TDCP": 11, "carrier": 0, "motion": 1},
+        "global_cost": {"initial": 136419.34081249774, "final": 96.21016875584313},
+        "rms": {"P_m": 14.421302890596566, "D_mps": 0.2448328869141607, "TDCP_m": 0.005787649529102902, "carrier_m": 0.0},
+        "termination": {"iterations": 7, "converged": true},
+        "jacobian": {"rows": 30, "columns": 10, "rank": 9, "condition_number": 11.669776274317218},
+        "max_position_seed_delta_m": 7.878538076416184,
+        "max_velocity_norm_mps": 0.5451070299179785
+      },
+      {
+        "id": "F_P_D_TDCP_carrier_2",
+        "epochs": 2,
+        "factors": {"P": 30, "D": 15, "TDCP": 11, "carrier": 23, "motion": 1},
+        "global_cost": {"initial": 1430554.6803902325, "final": 96.70590756957591},
+        "rms": {"P_m": 14.41843395246025, "D_mps": 0.246606618603501, "TDCP_m": 0.0048178649397363875, "carrier_m": 0.0023559825768275674},
+        "termination": {"iterations": 7, "converged": true},
+        "jacobian": {"rows": 30, "columns": 10, "rank": 9, "condition_number": 11.669776274317218},
+        "max_position_seed_delta_m": 7.881097632774121,
+        "max_velocity_norm_mps": 0.5516280691407935
+      },
+      {
+        "id": "C_P_motion_30",
+        "epochs": 30,
+        "factors": {"P": 445, "D": 0, "TDCP": 0, "carrier": 0, "motion": 29},
+        "global_cost": {"initial": 73368.47497160189, "final": 793.4980282207173},
+        "rms": {"P_m": 11.8720636437536, "D_mps": 0.0, "TDCP_m": 0.0, "carrier_m": 0.0},
+        "termination": {"iterations": 8, "converged": false},
+        "jacobian": {"rows": 445, "columns": 122, "rank": 121, "condition_number": 34.67040421347716},
+        "max_position_seed_delta_m": 17.696629945745684,
+        "max_velocity_norm_mps": 12.46664238013913
+      },
+      {
+        "id": "D_P_D_velocity_motion_30",
+        "epochs": 30,
+        "factors": {"P": 445, "D": 430, "TDCP": 0, "carrier": 0, "motion": 29},
+        "global_cost": {"initial": 19733266.63983053, "final": 994.2368925838157},
+        "rms": {"P_m": 12.861846168900541, "D_mps": 0.136764830452978, "TDCP_m": 0.0, "carrier_m": 0.0},
+        "termination": {"iterations": 8, "converged": true},
+        "jacobian": {"rows": 445, "columns": 122, "rank": 121, "condition_number": 34.67040421347716},
+        "wls": {"valid_epochs": 30, "rejected_epochs": 0, "max_velocity_norm_mps": 0.497040113064138, "max_normalized_rms": 0.855864742760089},
+        "max_position_seed_delta_m": 17.092985114253814,
+        "max_velocity_norm_mps": 0.4823064881120717
+      },
+      {
+        "id": "E_P_D_TDCP_30",
+        "epochs": 30,
+        "factors": {"P": 445, "D": 430, "TDCP": 337, "carrier": 0, "motion": 29},
+        "global_cost": {"initial": 19841094.576411452, "final": 2133.7676991492754},
+        "rms": {"P_m": 12.875655331168685, "D_mps": 0.38071616154605836, "TDCP_m": 0.026994867190352906, "carrier_m": 0.0},
+        "termination": {"iterations": 8, "converged": true},
+        "jacobian": {"rows": 445, "columns": 122, "rank": 121, "condition_number": 34.67040421347716},
+        "max_position_seed_delta_m": 17.066372011672495,
+        "max_velocity_norm_mps": 0.8954156727285937
+      },
+      {
+        "id": "F_P_D_TDCP_carrier_30",
+        "epochs": 30,
+        "factors": {"P": 445, "D": 430, "TDCP": 337, "carrier": 356, "motion": 29},
+        "global_cost": {"initial": 40414751.11287717, "final": 2673.7061182276084},
+        "rms": {"P_m": 12.982324054549476, "D_mps": 0.41047021381817733, "TDCP_m": 0.021702706808016413, "carrier_m": 0.021036526423466703},
+        "termination": {"iterations": 8, "converged": true},
+        "jacobian": {"rows": 445, "columns": 122, "rank": 121, "condition_number": 34.67040421347716},
+        "max_position_seed_delta_m": 18.645802404689242,
+        "max_velocity_norm_mps": 0.8015109069382649
+      }
+    ],
+    "family_initial_cost_contract": {
+      "status": "partially-available",
+      "pseudorange": "initial and final unrobust quadratic-equivalent terms are available in native factor debug",
+      "D_TDCP_carrier_motion": "initial per-family residuals are not emitted by the frozen gnss_fgo CLI; only exact final family RMS/counts and global initial/final robust cost are recorded",
+      "policy": "do not infer missing family initial costs or alter the frozen binary to expose them"
+    }
+  },
+  "hypotheses": [
+    {
+      "id": "H1_absolute_ecef_derivative_conditioning",
+      "hypothesis": "Absolute ECEF coordinates near 6.0e6 m make the P Jacobian numerically unstable.",
+      "truth_free_test": "Exact weighted P rows reconstructed from each sealed native factor_debug.csv, including a realistic ECEF-scale fixture in the regression test.",
+      "evidence": {"one_epoch": {"rank": 5, "columns": 6, "condition_number": 9.73322555959567}, "two_epoch": {"rank": 9, "columns": 10, "condition_number": 11.669776274317218}, "thirty_epoch": {"rank": 121, "columns": 122, "condition_number": 34.67040421347716}},
+      "verdict": "not_supported_as_first_failure",
+      "reason": "All P geometries are finite and moderately conditioned; the one-dimensional rank loss is the expected clock/inter-system-bias gauge, not an ECEF-scale blow-up."
+    },
+    {
+      "id": "H2_clock_bias_seconds_vs_metres",
+      "hypothesis": "The graph mixes receiver clock bias seconds with metre-valued pseudorange states.",
+      "truth_free_test": "Source-level equation audit against the sealed source hash.",
+      "evidence": {"fgo_cpp_lines": "563-580", "equation": "predicted = geometric_range_m + clock_bias_m (+ system_bias_m)", "state_contract": "clock bias state is metres"},
+      "verdict": "not_supported",
+      "reason": "The residual and P Jacobian use the clock state as metres; no seconds-to-metres mismatch is visible in the frozen implementation."
+    },
+    {
+      "id": "H3_clock_drift_dt_coupling",
+      "hypothesis": "Doppler clock-drift coupling uses an incorrect time unit or derivative.",
+      "truth_free_test": "Source-level derivative audit plus D stages with finite WLS clock-rate diagnostics.",
+      "evidence": {"fgo_cpp_lines": "885-897, 972-984", "contract": "clock_rate = (clock_bias_current_m - clock_bias_previous_m) / dt_s; Jacobian coefficients are +/-1/dt_s", "D2_max_clock_rate_abs_mps": 4.441407391485742, "D30_max_normalized_wls_rms": 0.855864742760089},
+      "verdict": "not_supported_as_structural_failure",
+      "reason": "The exact dt coupling is finite and D converges with valid WLS epochs; no unit/gauge failure is exposed by the sealed route."
+    },
+    {
+      "id": "H4_velocity_frame_or_los_sign",
+      "hypothesis": "The WLS and FGO Doppler equations use different LOS orientation or velocity frames.",
+      "truth_free_test": "Compare the shared design-row/receiver equation contract with D-stage factor construction and WLS diagnostics.",
+      "evidence": {"wls_contract_lines": "include/libgnss++/algorithms/doppler_velocity_wls.hpp:17-29", "preparation_lines": "src/algorithms/fgo_problems.cpp:316-377", "D30": {"wls_valid_epochs": 30, "wls_rejected_epochs": 0, "D_rms_mps": 0.136764830452978, "max_velocity_norm_mps": 0.4823064881120717}},
+      "verdict": "not_supported_as_structural_failure",
+      "reason": "The initializer and factor consume the same corrected LOS contract and remain finite; the frozen structural audit does not prove a frame/sign defect."
+    },
+    {
+      "id": "H5_satellite_term_or_sagnac",
+      "hypothesis": "The known satellite range-rate term or Earth-rotation correction destabilizes corrected Doppler.",
+      "truth_free_test": "Audit the corrected preparation branch and compare its finite stage behavior with the frozen no-base contract.",
+      "evidence": {"preparation_lines": "316-377", "contract_lines": "98-134", "D2_D_rms_mps": 0.08286998489235357, "D30_D_rms_mps": 0.136764830452978, "over_70mps_transitions_all_stages": 0},
+      "verdict": "not_supported_as_structural_failure",
+      "reason": "The corrected branch rotates satellite position and velocity consistently and produces bounded residuals; no isolated physical jump appears."
+    },
+    {
+      "id": "H6_motion_sigma_or_temporal_gauge",
+      "hypothesis": "Position/velocity/clock temporal factors or their sigma scaling are the first destabilizing factor.",
+      "truth_free_test": "Compare C (P+motion) and D (P+D+WLS velocity/clock+motion) at 2 and 30 epochs under the immutable recipe.",
+      "evidence": {"C30": {"converged": false, "final_cost": 793.4980282207173, "max_velocity_norm_mps": 12.46664238013913}, "D30": {"converged": true, "final_cost": 994.2368925838157, "max_velocity_norm_mps": 0.4823064881120717}, "motion_source_lines": "1094-1179"},
+      "verdict": "not_identified_as_failure",
+      "reason": "C reaches the fixed iteration bound but remains finite; adding corrected D/WLS in D improves convergence and bounds velocity. This is not evidence for a motion-sigma bug."
+    },
+    {
+      "id": "H7_duplicate_or_conflicting_tdcp",
+      "hypothesis": "TDCP rows duplicate or conflict with D/motion constraints and cause the first instability.",
+      "truth_free_test": "Compare exact D→E and E→F stage deltas with factor counts, costs, residuals, convergence, and continuity.",
+      "evidence": {"D30_to_E30": {"TDCP_rows_added": 337, "D_rms_mps": [0.136764830452978, 0.38071616154605836], "final_cost": [994.2368925838157, 2133.7676991492754]}, "E30_to_F30": {"carrier_rows_added": 356, "carrier_states_added": 14, "D_rms_mps": [0.38071616154605836, 0.41047021381817733]}, "all_added_factor_stages_converged": true, "over_70mps_transitions": 0},
+      "verdict": "first_observed_residual_degradation_not_proven_bug",
+      "reason": "E is the first measurable D-RMS/global-cost degradation, but it is finite, convergent, and has no continuity violation; exact per-row TDCP parity is not available in the frozen CLI output."
+    },
+    {
+      "id": "H8_clock_bias_inter_system_gauge",
+      "hypothesis": "The rank deficiency is an accidental underconstraint rather than an expected gauge.",
+      "truth_free_test": "Inspect exact P Jacobian rank across A/B/D/30 stages with no absolute clock prior.",
+      "evidence": {"rank_pattern": "A=5/6, B=9/10, D=9/10, 30-epoch=121/122", "clock_prior_sigma_m": 0.0, "P_jacobian_definition": "weighted native P rows only"},
+      "verdict": "expected_gauge_exposed",
+      "reason": "The rank loss is stable across factor additions and matches the intentionally unanchored receiver/system clock bias contract."
+    },
+    {
+      "id": "H9_taroz_numeric_parity",
+      "hypothesis": "The native factors can be declared numerically equivalent to the taroz pos_vel_amb_pdc oracle from this checkout.",
+      "truth_free_test": "Resolve the pinned dogfood paths before any comparison.",
+      "evidence": {"oracle_source": "apps/commands/benchmarks/gnss_taroz_pos_vel_amb_pdc_dogfood.py and tests/test_taroz_pos_vel_amb_pdc_factor_parity.py", "cpp_dogfood_directory_present": false, "matlab_dogfood_directory_present": false},
+      "verdict": "unavailable",
+      "reason": "No sealed taroz real-input factor artifact exists in this checkout; no surrogate or truth-derived parity claim was made."
+    }
+  ],
+  "structural_decision": {
+    "first_structural_failure": null,
+    "first_observed_degradation": "E_P_D_TDCP_30: D residual RMS rises from 0.136764830452978 to 0.38071616154605836 m/s while cost remains finite and convergent",
+    "candidate_change": "none",
+    "promotion": "not evaluated",
+    "production_default": "unchanged",
+    "v5_submission_sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+    "next_action": "stop structural lane pending a real sealed factor/Jacobian parity artifact; do not score or tune from this audit"
+  },
+  "tests_and_reproduction": {
+    "unit_test": "python3 tests/test_smartphone_native_fgo_pdc_factor_audit.py",
+    "unit_test_result": "5/5 passed",
+    "focused_ctest_result": "2/2 passed",
+    "full_serial_ctest_result": "127/127 passed",
+    "release_build": "cmake --build build --target gnss_run_tests -j2",
+    "diff_check": "git diff --check passed",
+    "audit_reproduction": "python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_factor_audit.py --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json --output-root output/smartphone-r5/native-fgo-pdc-factor-audit-v1 --binary build/apps/gnss_fgo"
+  }
+}

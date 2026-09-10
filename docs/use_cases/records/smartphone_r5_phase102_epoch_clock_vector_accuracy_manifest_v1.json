@@ -1,0 +1,243 @@
+{
+  "schema_version": "smartphone-r5-phase102-epoch-clock-vector-accuracy-manifest.v1",
+  "phase": 102,
+  "status": "sealed-before-phase102-raw-and-truth-evaluation",
+  "execution_label": "Luna Max",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase102_epoch_clock_vector_accuracy_gate_freeze_v1.json",
+    "sha256": "e964c73160c5851a4e3f6db9497630dad7c8de5081301fa678ed52753a8b0bd1",
+    "commit": "2c86aa9",
+    "execution_authorized_before_manifest": false
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "id": "phase102-phase101-epoch-clock-vector-accuracy-v1",
+    "source": "fresh Phase101 epoch-local C/ISB vector parity plus D handoff and Phase99 QR main branch",
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "raw_only": true,
+    "fresh_solution_required": true,
+    "phase101_withheld_solution_reuse": false,
+    "input_names_exact": ["device_gnss.csv", "device_imu.csv", "brdc.nav"],
+    "solver_branch": {
+      "selected_main_solver_type": "MULTIFRONTAL_QR",
+      "selected_main_elimination": "EliminateQR",
+      "gnss_first_solver_type": "MULTIFRONTAL_CHOLESKY",
+      "legacy_solver_type": "MULTIFRONTAL_CHOLESKY"
+    },
+    "no_solver_filter_or_lm_change": true,
+    "no_equation_unit_sigma_change": true,
+    "diagnostic_withholding_selectors_absent": true,
+    "no_fallback_or_rerun": true,
+    "solution_publication": false,
+    "truth_evaluation_in_native": false
+  },
+  "routes": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "runs": 1,
+      "problem_epochs": 2159,
+      "domain_rows": 2158,
+      "diagnostic_only": false,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "__PHASE95_RAW_DEVICE_GNSS__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "device_imu.csv": {
+          "path": "__PHASE95_RAW_DEVICE_IMU__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "brdc.nav": {
+          "path": "__PHASE95_RAW_BROADCAST_NAV__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        }
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        "--android-gnss",
+        "__PHASE95_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE95_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE95_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--out",
+        "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json"
+      ],
+      "planned_output": {
+        "solution": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "solution_metadata": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/solution_metadata.json",
+        "run_metadata": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/run_metadata.json"
+      }
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "runs": 1,
+      "problem_epochs": 1466,
+      "domain_rows": 1465,
+      "diagnostic_only": false,
+      "raw_inputs": {
+        "device_gnss.csv": {
+          "path": "__PHASE95_RAW_DEVICE_GNSS__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "device_imu.csv": {
+          "path": "__PHASE95_RAW_DEVICE_IMU__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        },
+        "brdc.nav": {
+          "path": "__PHASE95_RAW_BROADCAST_NAV__",
+          "path_source": "Phase95 sealed result raw_inputs.path",
+          "sha256": null,
+          "read_at_manifest_creation": false
+        }
+      },
+      "command": [
+        "build/apps/gnss_fgo_imu_no_base",
+        "--dataset-id",
+        "2022-04-01-18-22-us-ca-lax-t/pixel5",
+        "--android-gnss",
+        "__PHASE95_RAW_DEVICE_GNSS__",
+        "--android-imu",
+        "__PHASE95_RAW_DEVICE_IMU__",
+        "--nav",
+        "__PHASE95_RAW_BROADCAST_NAV__",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--out",
+        "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "--summary-json",
+        "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json"
+      ],
+      "planned_output": {
+        "solution": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution.csv",
+        "summary": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "solution_metadata": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/solution_metadata.json",
+        "run_metadata": "output/smartphone-r5/phase102-epoch-clock-vector-accuracy-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/run_metadata.json"
+      }
+    }
+  ],
+  "matrix": {
+    "candidate_count": 1,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "native_invocations_planned": 2,
+    "controls_in_native": 0,
+    "reruns": 0,
+    "fallbacks": 0,
+    "truth_reads_in_native": 0,
+    "truth_reads_in_evaluator_planned": 2,
+    "mat_reads_or_generated": 0,
+    "base_rinex_reads": 0,
+    "pdc_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_access": 0,
+    "solution_rows_published": false,
+    "route_score_selection": false
+  },
+  "comparison_baselines": {
+    "phase82_same_route_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    },
+    "phase100_qr_scalar_clock_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase100_phase99_qr_accuracy_result_v1.json",
+      "sha256": "7acd77e948f17de96f8dd24a7c137e708f9a7f5329dbef52c3a78d8cca40b2b7"
+    },
+    "same_route_only": true,
+    "phase82_four_route_macro_direct_comparison": false
+  },
+  "metric_contract": {
+    "parser_reference": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+    "matching": "exact integer key intersection only",
+    "key": "(phone, UnixTimeMillis)",
+    "prediction_domain_coverage": "matched prediction keys / prediction keys; required exactly 1.0",
+    "distance": "spherical Haversine per row",
+    "earth_radius_m": 6371008.8,
+    "percentile": "linear interpolation at rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "macro": "unweighted arithmetic mean over exactly MTV-A then LAX-T",
+    "missing_truth": "only pinned leading warm-up truth key may be absent; no interpolation or fill",
+    "continuity": "prediction Haversine transition speed; over_70_mps_count must equal 0"
+  },
+  "read_policy_before_execution": {
+    "native_solver_invocations": 0,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "base_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_outputs_generated": 0,
+    "raw_content_copied_or_transformed": false
+  },
+  "execution_authorization": {
+    "raw_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "solution_publication_authorized": false,
+    "stop_after_two_native_routes": true
+  },
+  "pre_raw_checks": {
+    "phase101_structural_result_sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a",
+    "phase101_structural_status": "go-phase101-epoch-clock-vector-structural",
+    "phase101_solution_reuse": false,
+    "truth_read": false,
+    "raw_read": false,
+    "accuracy_scored": false,
+    "strict_0_782_gate_frozen": true
+  },
+  "pre_raw_evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy.py",
+    "sha256": "576ebf9749d1f295737bd82716275a20eb30a5aeeff3fc3828de10960c2255d8"
+  },
+  "execution_wrapper": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase102_epoch_clock_vector_accuracy_execute.py",
+    "sha256": "ed3e86f57a2b494aab9156a5f83ede44ab92f3863b7b0098acc81adcb900e389"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase102_epoch_clock_vector_accuracy.py",
+    "sha256": "bfe3486bb67765baab83719eadf75c335e8e6a58d26d46ac3da31b52651ef73a"
+  }
+}

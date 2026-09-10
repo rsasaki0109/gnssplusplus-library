@@ -1,0 +1,106 @@
+{
+  "phase": 564,
+  "route": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "role": "development/train; not heldout or leaderboard proof",
+  "truth": {
+    "source": "Historical Phase183/186/199-pinned H development truth metadata; official archive provenance",
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+    "bytes": 305432,
+    "rows": 3139,
+    "archive_member": "dataset_2023/train/2021-08-24-20-32-us-ca-mtv-h/pixel5/ground_truth.csv",
+    "archive_crc32": "fe212a4d",
+    "role": "development/train; not heldout or leaderboard proof"
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "authority": {
+    "phase199_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py",
+      "sha256": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4"
+    },
+    "phase196_thin_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py",
+      "sha256": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a"
+    },
+    "phase189_kernel": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py",
+      "sha256": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+      "commit": "5f456010c78cbb80cf5614f421d5c8b0d38aee3a"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "phase203_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca"
+    },
+    "phase203_tests": {
+      "path": "tests/test_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "74975757b952346b2fc51a17bfb64b3bec4b4caf3aef946f2df504912f416696"
+    },
+    "output/smartphone-r5/phase563-rotation-rate-v1/manifest.json": {
+      "path": "output/smartphone-r5/phase563-rotation-rate-v1/manifest.json",
+      "sha256": "9e59b9f3dd51e61ed1a255951b25eae3d38f143dc79ffd74b8a2cb05480a73ff"
+    },
+    "scripts/verify_phase563_rotation_rate.py": {
+      "path": "scripts/verify_phase563_rotation_rate.py",
+      "sha256": "4583fa67e43ec049c180b2b59f310df8d08d305b68ad6c37b7017eb60813b7f7"
+    },
+    "scripts/evaluate_phase564_rotation_rate.py": {
+      "path": "scripts/evaluate_phase564_rotation_rate.py",
+      "sha256": "d1234c72a3659d71a6e4f628c5e0ff59db9ea63b9024316f6d98813a08f0d055"
+    },
+    "scripts/run_phase563_rotation_rate.py": {
+      "path": "scripts/run_phase563_rotation_rate.py",
+      "sha256": "8738612eaeda8829df961733d4a6405af8d11b64252c87cb11fc14c28633e0ce"
+    },
+    "scripts/run_phase486_nhc_monitor.py": {
+      "path": "scripts/run_phase486_nhc_monitor.py",
+      "sha256": "6c0608bb36b28dc4b162bdc116a1dfe9c4862599e89a90ad4b15181b84bede3e"
+    },
+    "output/smartphone-r5/phase563-rotation-rate-v1/baseline/completed.json": {
+      "path": "output/smartphone-r5/phase563-rotation-rate-v1/baseline/completed.json",
+      "sha256": "b61ba98399ab96da763f6039069b65798dd933fc65c13499840f70bd79058414"
+    },
+    "output/smartphone-r5/phase563-rotation-rate-v1/baseline/native_summary.json": {
+      "path": "output/smartphone-r5/phase563-rotation-rate-v1/baseline/native_summary.json",
+      "sha256": "51298f96294e3e7f1ebc2903e78471dd3a68787ac2c7a5cda17337ea6141ff71"
+    },
+    "output/smartphone-r5/phase563-rotation-rate-v1/candidate/completed.json": {
+      "path": "output/smartphone-r5/phase563-rotation-rate-v1/candidate/completed.json",
+      "sha256": "6bbca5a733f710d5ded9aca4da0531a53489bb0d3ad379f6f555cc101472ff93"
+    },
+    "output/smartphone-r5/phase563-rotation-rate-v1/candidate/native_summary.json": {
+      "path": "output/smartphone-r5/phase563-rotation-rate-v1/candidate/native_summary.json",
+      "sha256": "61b290d5332e07cd347dcce15c7df8ccf7787663faf333658947ac8cbf8b249e"
+    }
+  },
+  "policy": "one fixed development comparison, no tuning, no inference, not held-out or leaderboard",
+  "baseline": {
+    "path": "output/smartphone-r5/phase563-rotation-rate-v1/baseline/opaque_solution_output.csv",
+    "sha256": "4a0c4ef8822c72aa9134368cd57fe769817895e63b5dbe925783a9c8d091fa8e",
+    "bytes": 251174,
+    "rows": 3139
+  },
+  "candidate": {
+    "path": "output/smartphone-r5/phase563-rotation-rate-v1/candidate/opaque_solution_output.csv",
+    "sha256": "2d19cdcb5f63dd155dcc52b02eee40b30ad1e80f57929f4f99501bf5d3fd2f87",
+    "bytes": 251174,
+    "rows": 3139
+  }
+}

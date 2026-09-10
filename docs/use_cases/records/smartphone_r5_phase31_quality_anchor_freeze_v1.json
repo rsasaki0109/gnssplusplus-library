@@ -1,0 +1,65 @@
+{
+  "schema_version": "smartphone-r5-phase31-quality-anchor-freeze.v1",
+  "phase": "31",
+  "status": "frozen-before-implementation",
+  "candidate_id": "native_fgo_raw_quality_anchor_spp_replay_v1",
+  "base_commit": "381aa8d34c07a31e1e1ae7bea01f4ebca27f137b",
+  "base_commit_source_hashes": {
+    "include/libgnss++/algorithms/fgo_config.hpp": "f16840eada7147081d5b8dabed989dd9e7f10cc8d243bc1ead864968e94eacab",
+    "include/libgnss++/algorithms/fgo.hpp": "d980ba1f34e21378d91409804ccecc4c7c2b40f224163e7f5676a997e2411ac7",
+    "src/algorithms/fgo_problems.cpp": "d4dad5f9bd93b77817f0bc6d9274af2fc35175a9f9bc80f2e2b178f0f1b6f259",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "04866823b3b70243a08199216a6c61316eaad2922fd105f3c3d22baa2b025ee6",
+    "tests/test_fgo.cpp": "8257a203341c35ef138673f715068b2e3ee92ffdb22943b5284c006e39c35043"
+  },
+  "scope": {
+    "inputs": [
+      "raw Android device_gnss.csv",
+      "raw Android device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "forbidden": [
+      "ground truth during inference",
+      "device-provided WLS coordinates",
+      "result/submission coordinates",
+      "MAT files",
+      "fresh validation",
+      "holdout",
+      "Kaggle/public-private score"
+    ],
+    "production_default_changed": false,
+    "graph_model_changed": false,
+    "prefix_trim": false,
+    "coordinate_translation": false
+  },
+  "predeclared_algorithm": {
+    "reconnaissance": "run the existing stateful SPP implementation chronologically over every raw epoch using the existing raw/nav corrections",
+    "eligible_anchor": "finite valid SPP position with norm>1e6, at least four satellites, finite GDOP, and finite nonnegative pre-QC residual RMS",
+    "ranking": [
+      "descending final SPP satellite count",
+      "ascending GDOP",
+      "ascending pre-QC pseudorange residual RMS divided by configured pseudorange sigma",
+      "ascending input epoch index (deterministic time tie-break)"
+    ],
+    "replay": "reset an identical SPP processor, process the selected anchor first with its reconnaissance ECEF position as the initial state, then process later epochs chronologically; independently reset and process the anchor first, then earlier epochs in reverse index order",
+    "merge": "use backward replay seeds before the anchor and forward replay seeds at/after the anchor; preserve invalid epochs for the existing last-valid-seed policy",
+    "fallback": "if no eligible anchor exists, reset and use the historical chronological pass; no synthetic coordinate is permitted",
+    "fgo": "pass the replay seeds to the unchanged P/D/TDCP/IMU graph and unchanged numerical parameters",
+    "selection_authority": "raw/nav-derived SPP count, geometry, and normalized residual only; no truth or score"
+  },
+  "safety_gates_before_truth": [
+    "anchor is selected exactly once by the frozen lexicographic rule",
+    "reverse replay uses a reset state and explicit decreasing-time diagnostic; no negative-dt factor is constructed",
+    "every input epoch has deterministic forward/backward assignment or historical-seed fallback",
+    "finite Earth-surface seeds and unchanged factor counts/model are required",
+    "three route-disjoint raw-only train structural runs pass deterministic repeat and physical continuity checks",
+    "Samsung initial settling/continuity must improve without a new >70 m/s isolated transition",
+    "fresh validation and holdout remain sealed until structural and already-opened-development gates pass"
+  ],
+  "truth_access": {
+    "opened_before_freeze": false,
+    "opened_after_freeze": false,
+    "phase30_samsung_truth": "historical sealed diagnostic only; not reopened or used for this freeze",
+    "next_allowed_action": "truth-free structural artifacts only"
+  },
+  "post_score_rule": "no candidate parameter or source change after any development truth read; failed structural gate is a No-Go"
+}

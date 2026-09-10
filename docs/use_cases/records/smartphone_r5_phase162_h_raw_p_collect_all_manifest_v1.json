@@ -1,0 +1,150 @@
+{
+  "schema_version": "smartphone-r5-phase162-h-raw-p-collect-all-manifest.v1",
+  "phase": 162,
+  "execution_label": "Luna Max",
+  "status": "pinned-before-execution",
+  "purpose": "One authorized MTV-H Phase149 raw-P preparation invocation using the Phase161 native-row identity/clock-group/weight correction and Phase159 collect-all diagnostics; aggregate structural metadata only, with no FGO, truth, accuracy, or coordinate interpretation.",
+  "predecessors": {
+    "phase160_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase160_h_raw_p_collect_all_manifest_v1.json",
+      "commit": "f069e98f84c4212b85dfc366e38704653227813d",
+      "sha256": "d36283ae9b6e375176b9b30dc096cdf32d1ca32cd8d793dac0067f7c20368ea5"
+    },
+    "phase160_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase160_h_raw_p_collect_all_result_v1.json",
+      "commit": "337dd3a8df6d8a3689503e0b461d2517589831c0",
+      "sha256": "8c6e3b751ce4541cbc0b6f6d81ddc08c80cf03403bb4eda799ec81d62b155dce"
+    },
+    "phase161_commit": "7d7dc572602d4c8fda76fc04027562815ae6f324"
+  },
+  "source_and_binary": {
+    "implementation_commit": "7d7dc572602d4c8fda76fc04027562815ae6f324",
+    "current_head_before_raw_reads": "7d7dc572602d4c8fda76fc04027562815ae6f324",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "473161260db72ac489baa37184c395227eef4eec3737386e7baa311b92f3c707",
+    "app_source_sha256": "47cd3cb98c27bebbec391fc1cd63607871e4041d186e2a2b5ce67d5950643cfe",
+    "raw_p_seed_header_sha256": "12d6d1cd5619c04c09dec4defe1ebda17343a55cb658fe66bc0b873cdc34e76c",
+    "raw_p_seed_source_sha256": "d40976ac70a0d9801c7fc78a99b38ef212be3e49b33b2f98675a26da6223a711",
+    "spp_header_sha256": "1e28d5e4a7d0da38b9b847f79e66d00dade5e0be16166aa0baa03fc3674b05cd",
+    "solution_header_sha256": "1af45865b3e5d717ea17eb426fdeaf3ecdb46836913b2746234ae1d7a0893f6c",
+    "spp_source_sha256": "8faaf340af8d9fdab3f55185b32b1412579596d155ae0c20dc55356f883a673c"
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street",
+    "invocations": 1,
+    "failure_is_final": true
+  },
+  "input_integrity": {
+    "device_gnss.csv": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "sha256_pinned_by_phase147": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "bytes_pinned_by_phase147": 74299283,
+      "authorized_read_count": 1
+    },
+    "brdc.nav": {
+      "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "sha256_pinned_by_phase147": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909",
+      "bytes_pinned_by_phase147": 10805490,
+      "authorized_read_count": 1
+    }
+  },
+  "command": {
+    "working_directory": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "argv": [
+      "build/apps/gnss_fgo_imu_no_base",
+      "--dataset-id",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "--android-gnss",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "--nav",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "--all-epochs",
+      "--android-raw-clock-only",
+      "--summary-json",
+      "output/smartphone-r5/phase162-h-raw-p-collect-all-v1/mtv-h/native_summary.json",
+      "--native-phase149-raw-p-seed-stage",
+      "--native-phase157-raw-p-bootstrap",
+      "--native-phase159-collect-all-epochs"
+    ],
+    "raw_clock_only_selector_count": 1,
+    "phase149_selector_count": 1,
+    "phase157_bootstrap_selector_count": 1,
+    "phase159_collect_all_selector_count": 1,
+    "imu_argument": false,
+    "base_argument": false,
+    "solution_csv_argument": false,
+    "precomputed_seed_argument": false
+  },
+  "diagnostic_contract": {
+    "collect_all_epochs_for_diagnostics": true,
+    "expected_input_epoch_count": 3140,
+    "independent_native_spp_per_epoch": true,
+    "independent_bootstrap_per_epoch": true,
+    "failed_epoch_seeds_promoted": false,
+    "failed_state_reused_as_prior": false,
+    "velocity_derivation": "disabled-and-explicitly-unavailable",
+    "configured_max_iterations": 1000,
+    "ordinary_configured_elevation_mask_deg": 0.0,
+    "bootstrap_private_elevation_mask_deg": -90.0,
+    "minimum_pseudorange_satellites": 4,
+    "raw_d_initializer": "not-used-and-not-copied",
+    "rank_rows": "exact native final measurement identities when native SPP is valid; otherwise raw preprocessing rows",
+    "rank_columns": "native clockBiasGroup mapping with GPS reference and separate supported inter-system groups",
+    "rank_weights": "native base inverse variance carried with each final identity; no robust-factor inference",
+    "unresolved_phase160_cause": "the 1931 rank-deficient epochs are not attributed to any one semantic difference without direct per-epoch native matrix evidence"
+  },
+  "execution_contract": {
+    "native_invocations": 1,
+    "phase149_raw_p_stage": true,
+    "phase157_bootstrap": true,
+    "phase159_collect_all": true,
+    "doppler_consumed": false,
+    "velocity_derivation": false,
+    "fgo": false,
+    "imu": false,
+    "base_rinex": false,
+    "truth": false,
+    "accuracy": false,
+    "solution_coordinate_interpretation": false,
+    "solution_coordinate_publication": false,
+    "mat_pdc": false,
+    "kaggle_or_token": false,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "tuning": false,
+    "output_policy": "aggregate statuses/counts/reasons/rank distributions and provenance coverage only; no coordinate values or disk seed reuse"
+  },
+  "required_result_fields": [
+    "process_return_code",
+    "raw_ingress_and_phase149_stage_status",
+    "bootstrap_attempted_accepted_and_failure_reason",
+    "input_evaluated_accepted_rejected_conservation",
+    "unassessed_epoch_count",
+    "position_clock_velocity_counts",
+    "rank_vs_required_rank_distribution",
+    "native_final_identity_and_weight_coverage",
+    "corrected_clock_group_and_reference_distribution",
+    "failure_reason_distribution",
+    "time_and_velocity_policy",
+    "raw_and_navigation_read_accounting",
+    "summary_sha256",
+    "coordinate_values_not_read_or_published"
+  ],
+  "pre_authorization_read_accounting": {
+    "raw_gnss_reads": 0,
+    "navigation_reads": 0,
+    "raw_imu_reads": 0,
+    "raw_base_reads": 0,
+    "native_spp_invocations": 0,
+    "native_fgo_invocations": 0,
+    "truth_reads": 0,
+    "solution_coordinate_reads": 0,
+    "accuracy_calculations": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0
+  }
+}

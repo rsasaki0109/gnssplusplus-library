@@ -1,0 +1,169 @@
+{
+  "schema_version": "smartphone-r5-phase89-source-clock-c0d-diagnostic-execution-freeze.v1",
+  "phase": 89,
+  "status": "frozen-before-phase89-raw-execution",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Authorize one source-aligned, diagnostic-only raw matrix to observe the Phase88 C0/D active GTSAM solve and fail closed on missing or immaterial optimization.",
+  "authority": {
+    "phase88_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase88_source_clock_c0d_active_solve_observability_diagnostic_freeze_v1.json",
+      "sha256": "e03cc2327557fe9f5c5189b7a315dd02c50edec9bf4e38284e1a8c6c3271059e"
+    },
+    "phase88_execution_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase88_source_clock_c0d_active_solve_diagnostic_execution_manifest_v1.json",
+      "sha256": "609552de0c6f3f7bd70ef4a3a4fc9264aec6af3be42bceb2522376a8756d6ad8"
+    },
+    "phase88_implementation_commit": "bd14626",
+    "phase88_candidate_id": "phase88_source_clock_c0d_active_solve_observability_conditioning_diagnostic"
+  },
+  "decision_boundary": {
+    "candidate_count": 1,
+    "route_count": 4,
+    "repetitions_per_route": 1,
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "promotion_or_accuracy_authorization": false,
+    "phase85_phase86_no_go_preserved": true,
+    "raw_execution_before_this_freeze": false,
+    "fail_closed_if_iterations_below_one": true,
+    "fail_closed_if_final_cost_not_strictly_less": true
+  },
+  "candidate": {
+    "id": "phase89_source_clock_c0d_active_solve_diagnostic_matrix",
+    "kind": "single-active-solve-telemetry-diagnostic",
+    "source_aligned": true,
+    "raw_only": true,
+    "diagnostic_only": true,
+    "new_candidate_flags": [],
+    "required_flags": [
+      "--android-gnss <frozen raw device_gnss.csv>",
+      "--android-imu <frozen raw device_imu.csv>",
+      "--nav <frozen broadcast brdc.nav>",
+      "--dataset-id <one of the four frozen route IDs>",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-gnss-first-velocity-only-handoff",
+      "--native-source-clock-c0d-active-solve-diagnostic"
+    ],
+    "forbidden_flags": [
+      "--obs",
+      "--native-base-rinex",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-pdc-state-bridge",
+      "--native-direct-doppler-wls-handoff",
+      "--native-upstream-quality",
+      "--native-upstream-position-offset",
+      "--native-upstream-stop-constraints",
+      "--native-source-clock-c0d-active-solve-diagnostic <second occurrence>"
+    ],
+    "raw_input_domain": [
+      "Android raw device_gnss.csv",
+      "Android raw device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "handoff_contract": {
+      "native_pdc_state_bridge": false,
+      "native_pdc_imu_tdcp_no_bridge": true,
+      "native_gnss_first_velocity_only_handoff": true,
+      "gnss_first_position_clock_copy": false,
+      "coordinate_bridge_or_copy": false,
+      "precomputed_coordinate_input": false,
+      "coordinate_output_used_for_selection": false
+    },
+    "preserved_source_contract": {
+      "c0d_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "c0d_jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "c0d_clock_units": "seconds",
+      "c0d_drift_units": "metres_per_second",
+      "c0d_residual_units": "seconds",
+      "c0d_sigma_m": 0.1,
+      "c0d_sigma_seconds": "0.1/C_LIGHT",
+      "optimizer_algorithm_changed": false,
+      "measurement_factors_changed": false,
+      "source_sigma_tuning": false,
+      "meter_state_parity": false
+    },
+    "required_telemetry": [
+      "active_solve_diagnostic_enabled",
+      "active_solve_attempted",
+      "active_solve_initial_cost",
+      "active_solve_final_cost",
+      "accepted_outer_iterations",
+      "total_inner_lambda_attempts",
+      "initial_lambda",
+      "maximum_lambda",
+      "final_lambda",
+      "indeterminate_linear_solve_count",
+      "unsuccessful_model_step_count",
+      "small_cost_change_stop_count",
+      "maximum_lambda_stop_count",
+      "active_solve_finite_costs",
+      "termination_trace_complete",
+      "termination_branch_reason",
+      "max_whitened_clock_column_norm",
+      "max_whitened_drift_column_norm",
+      "conditioning_proxy"
+    ],
+    "required_gates": {
+      "active_solve_telemetry_complete": true,
+      "exact_terminal_reason_and_counter_consistency": true,
+      "finite_initial_and_final_cost": true,
+      "graph_iterations_at_least_one": true,
+      "final_cost_strictly_less_than_initial_cost": true,
+      "C0D_equation_jacobian_units_sigma_unchanged": true,
+      "C0D_factor_and_skip_invariants": true,
+      "raw_utc_rows_and_domain": true,
+      "finite_coordinates_and_speed_only": true,
+      "no_pdc_bridge_or_coordinate_copy": true,
+      "raw_only_provenance": true,
+      "accuracy_not_scored": true
+    }
+  },
+  "routes_and_domain": {
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+    ],
+    "domain_rows": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": 2158,
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": 3139,
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": 1465,
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5": 1101
+    },
+    "exactly_one_run_each": true,
+    "controls": 0,
+    "route_selection": false
+  },
+  "execution_authorization": {
+    "before_raw_execution": true,
+    "raw_execution_authorized": true,
+    "authorized_matrix": "exactly four route IDs above, one diagnostic run per route",
+    "implementation_and_evaluator_must_be_committed_first": true,
+    "post_execution_result_record_required": true,
+    "accuracy_or_submission_release": false,
+    "failure_action": "fail closed; preserve candidate and do not tune sigma, change units, add routes, or read accuracy artifacts"
+  },
+  "read_accounting_at_freeze": {
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  }
+}

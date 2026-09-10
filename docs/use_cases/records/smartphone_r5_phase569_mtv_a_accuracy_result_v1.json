@@ -1,0 +1,31 @@
+{
+  "phase": 569,
+  "role": "previously evaluated development, not heldout",
+  "metric": {
+    "prediction_rows": 2158,
+    "truth_rows": 2159,
+    "matched_rows": 2158,
+    "missing_truth_rows": 1,
+    "missing_truth_keys": [
+      [
+        "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+        1615921153434
+      ]
+    ],
+    "prediction_domain_coverage": 1.0,
+    "truth_row_coverage": 0.999536822603057,
+    "mean_m": 1.2074261000949946,
+    "p50_m": 1.241926785340521,
+    "p95_m": 1.4807440485361916,
+    "max_m": 1.5730654029516462,
+    "score_m": 1.3613354169383562,
+    "max_speed_mps": 44.31253012326811,
+    "over_70_mps_count": 0,
+    "finite": true
+  },
+  "reads": {
+    "candidate": 1,
+    "truth": 1
+  },
+  "inference_calls": 0
+}

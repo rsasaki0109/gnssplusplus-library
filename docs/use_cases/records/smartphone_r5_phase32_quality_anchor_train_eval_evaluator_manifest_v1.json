@@ -1,0 +1,63 @@
+{
+  "schema_version": "smartphone-r5-phase32-quality-anchor-train-evaluation-manifest.v1",
+  "phase": 32,
+  "status": "sealed-before-development-truth-reread",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_phase32_quality_anchor_train_eval_freeze_v1.json",
+    "sha256": "fa6ff8545d9b9a6c1dd83e4c952964b4193d3d4dd822bb41df17d5f2be35322a"
+  },
+  "candidate_control": {
+    "candidate_id": "native_fgo_raw_quality_anchor_spp_replay_v1",
+    "control_id": "phase28_tdcp_no_bridge_sealed_control",
+    "candidate_control_mutation": false,
+    "solver_rerun": false,
+    "prediction_artifacts_verified": true,
+    "route_count": 3,
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b"
+    ]
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py",
+    "sha256": "1c9288e40a4b3569ed059486a5ea4c71f9f2eaa095dc335736b12e1064800b78",
+    "metric_source_path": "apps/commands/benchmarks/gnss_smartphone_phase29_train_eval.py",
+    "metric_source_sha256": "b3890989a870c2c0db7ffd63e336d9c253d488c3e2d54e6859069eb105573337",
+    "test_path": "tests/test_smartphone_phase32_quality_anchor_eval.py",
+    "test_sha256": "1339535f081b6aae5bf509ce3602b775c8849d16e91c2a120cc0c9dff934f30d",
+    "cmake_path": "tests/CMakeLists.txt",
+    "cmake_sha256": "b85967881bc6686fb5a6df30266d174872c933b5d051bc04546850dd777bd15b",
+    "pure_tests": "3/3 passed",
+    "truth_read_before_manifest": 0,
+    "vertical_gate": "informational-unavailable",
+    "one_process": true,
+    "one_read_per_route": true,
+    "atomic_output": true
+  },
+  "truth_policy": {
+    "allowed_after_freeze": "Only the three already-materialized Phase29 development ground_truth.csv files, one read each in the Phase32 score process.",
+    "phase32_truth_reads_before_freeze": 0,
+    "validation_truth_open_count": 0,
+    "future_holdout_truth_open_count": 0,
+    "mat_read_or_generated": false,
+    "token_or_kaggle_access": false,
+    "post_score_tuning": false,
+    "test_truth_read": false,
+    "fresh_validation_remains_sealed": true,
+    "future_holdout_remains_sealed": true
+  },
+  "commands": {
+    "pure_tests": "python3 tests/test_smartphone_phase32_quality_anchor_eval.py",
+    "freeze_verification": "python3 -c 'import importlib.util; ...; module._verify_freeze()'",
+    "score": "python3 apps/commands/benchmarks/gnss_smartphone_phase32_quality_anchor_eval.py score",
+    "score_authorization": "truth read only after freeze verification and sealed artifact verification"
+  },
+  "integrity": {
+    "candidate_control_bytes_are_sealed": true,
+    "truth_hash_and_bytes_checked_before_metrics": true,
+    "common_truth_matched_key_set_required": true,
+    "extra_or_missing_prediction_keys_counted_not_filled": true,
+    "no_truth_based_inference": true
+  }
+}

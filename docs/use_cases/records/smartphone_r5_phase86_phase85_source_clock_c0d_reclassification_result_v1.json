@@ -1,0 +1,183 @@
+{
+  "schema_version": "smartphone-r5-phase86-phase85-source-clock-c0d-reclassification-record.v1",
+  "phase": 86,
+  "execution_label": "Luna Max",
+  "status": "no-go-phase86-phase85-source-clock-c0d-active-solve-gates",
+  "decision": "NO-GO: the immutable Phase85-v2 candidate matrix is a converged-only diagnostic. All eight candidate summaries have graph iterations=0 and initial_cost==final_cost, so the active-solve promotion gates are not met.",
+  "truth_free": true,
+  "accuracy_scored": false,
+  "promotion_authorized": false,
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase86_phase85_source_clock_c0d_reclassification_freeze_v1.json",
+    "sha256": "9b13d6a5118c734521e69d350c9478f0844c5bbf9047c5e057bf4f5a427ace46"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase86_phase85_source_clock_c0d_reclassification_manifest_v1.json",
+    "sha256": "43f64984fac0723a4b412a579ed75d2cd89ff0f1b054790f6261433e11960305"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase86_phase85_source_clock_c0d_reclassification.py",
+    "sha256": "18192466e80b3a17c5f93808da584535db8dac5959d59563469fdebfdcf017c1"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase86_phase85_source_clock_c0d_reclassification.py",
+    "sha256": "611f0a5f06e7bff99f5d32c5af6eb8c2ae7c1f5bfaffbc014d34313e89c6d748",
+    "passed": 6
+  },
+  "cmake": {
+    "path": "tests/CMakeLists.txt",
+    "sha256": "9d377ac2992d645b81badf2f9a43a288b6a9afb497e34235671081d064f23cff"
+  },
+  "source_artifacts": {
+    "phase85_retry_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase85_source_clock_c0d_structural_manifest_v1.json",
+      "sha256": "20adc2e3388b92d045580739d025106c18aa068fcf26f8d117d48d3d2f5f7058",
+      "bytes": 10529,
+      "read_once": true
+    },
+    "phase85_v2_result": {
+      "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2/phase85_source_clock_c0d_structural_result.json",
+      "sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a6",
+      "verified_sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a6",
+      "freeze_declared_sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a",
+      "bytes": 641315,
+      "rewritten": false,
+      "freeze_hash_matches_verified_output": false
+    },
+    "phase85_v2_output_manifest": {
+      "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2/phase85_source_clock_c0d_structural_manifest.json",
+      "sha256": "5bb7bdaeb0f1fb2c00d7fe1354cd0cda1c289b2b664840b4b39135380574c53c",
+      "bytes": 921,
+      "read_once": true
+    },
+    "candidate_artifacts": {
+      "routes": 4,
+      "runs_per_route": 2,
+      "submission_reads": 8,
+      "summary_reads": 8,
+      "total_reads": 16,
+      "hashes_and_bytes_verified": true
+    }
+  },
+  "output": {
+    "root": "output/smartphone-r5/phase86-phase85-source-clock-c0d-reclassification-v1",
+    "result_path": "output/smartphone-r5/phase86-phase85-source-clock-c0d-reclassification-v1/phase86_phase85_source_clock_c0d_reclassification_result.json",
+    "result_sha256": "e72ef3371d28650d3660795bd341fd1a0765e1cf77c99cbfcde9ac236422a89e",
+    "result_bytes": 22976,
+    "manifest_path": "output/smartphone-r5/phase86-phase85-source-clock-c0d-reclassification-v1/phase86_phase85_source_clock_c0d_reclassification_manifest.json",
+    "manifest_sha256": "2499dfa75119796cfba065fcb1351448d417b92f95d061f44f9c7a0151843382",
+    "all_gates_passed": false
+  },
+  "active_solve": {
+    "runs_evaluated": 8,
+    "finite_cost_runs": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run1",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run2",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run1",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run2",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run1",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run2",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run1",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run2"
+    ],
+    "iterations_at_least_one_runs": [],
+    "strictly_decreasing_cost_runs": [],
+    "all_iterations_zero": true,
+    "all_initial_cost_equals_final_cost": true,
+    "observations": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run1": {"iterations": 0, "initial_cost": 181489255.2266004, "final_cost": 181489255.2266004, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run2": {"iterations": 0, "initial_cost": 181489255.2266004, "final_cost": 181489255.2266004, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run1": {"iterations": 0, "initial_cost": 299479705.9119013, "final_cost": 299479705.9119013, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run2": {"iterations": 0, "initial_cost": 299479705.9119013, "final_cost": 299479705.9119013, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run1": {"iterations": 0, "initial_cost": 192965599.96515816, "final_cost": 192965599.96515816, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run2": {"iterations": 0, "initial_cost": 192965599.96515816, "final_cost": 192965599.96515816, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run1": {"iterations": 0, "initial_cost": 62260446.071378246, "final_cost": 62260446.071378246, "finite_costs": true, "final_cost_less_than_initial": false},
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run2": {"iterations": 0, "initial_cost": 62260446.071378246, "final_cost": 62260446.071378246, "finite_costs": true, "final_cost_less_than_initial": false}
+    }
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {"rows": 2158, "output_epochs": 2159, "iterations": [0, 0], "initial_cost": 181489255.2266004, "final_cost": 181489255.2266004, "max_speed_mps": 60.69892835337503, "over_70_mps": 0, "repeat_identity": true, "all_legacy_gates": true, "active_solve_gates": {"finite_initial_and_final_cost": true, "graph_iterations_at_least_one": false, "final_cost_strictly_less_than_initial_cost": false}},
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {"rows": 3139, "output_epochs": 3140, "iterations": [0, 0], "initial_cost": 299479705.9119013, "final_cost": 299479705.9119013, "max_speed_mps": 33.34971865816182, "over_70_mps": 0, "repeat_identity": true, "all_legacy_gates": true, "active_solve_gates": {"finite_initial_and_final_cost": true, "graph_iterations_at_least_one": false, "final_cost_strictly_less_than_initial_cost": false}},
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {"rows": 1465, "output_epochs": 1466, "iterations": [0, 0], "initial_cost": 192965599.96515816, "final_cost": 192965599.96515816, "max_speed_mps": 51.80728678963212, "over_70_mps": 0, "repeat_identity": true, "all_legacy_gates": true, "active_solve_gates": {"finite_initial_and_final_cost": true, "graph_iterations_at_least_one": false, "final_cost_strictly_less_than_initial_cost": false}},
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {"rows": 1101, "output_epochs": 1102, "iterations": [0, 0], "initial_cost": 62260446.071378246, "final_cost": 62260446.071378246, "max_speed_mps": 31.560149921344713, "over_70_mps": 0, "repeat_identity": true, "all_legacy_gates": true, "active_solve_gates": {"finite_initial_and_final_cost": true, "graph_iterations_at_least_one": false, "final_cost_strictly_less_than_initial_cost": false}}
+  },
+  "gates": {
+    "sealed_phase85_v2_artifact_hashes_exact": false,
+    "candidate_only_exact_four_routes": true,
+    "rows_equal_pinned_phase80_phase78_domain": true,
+    "rows_plus_one_equals_summary_epochs_output": true,
+    "repeat_submission_and_summary_byte_identical": true,
+    "converged": true,
+    "finite_coordinates_and_earth_valid": true,
+    "speed_over_70_zero": true,
+    "finite_initial_and_final_cost": true,
+    "graph_iterations_at_least_one": false,
+    "final_cost_strictly_less_than_initial_cost": false,
+    "phase80_direct_no_pdc_base_miss_signal_bias_pd_tdcp_invariants": true,
+    "c0d_telemetry_exact_equation_jacobian_units_sigma": true,
+    "c0d_factor_count_positive": true,
+    "c0d_phone_exclusion_zero": true,
+    "c0d_legacy_scalar_between_zero": true,
+    "c0d_factor_plus_all_skips_equals_epochs_minus_one": true,
+    "c0d_dt_range_positive": true,
+    "candidate_flag_once_and_dependencies": true,
+    "truth_free": true,
+    "accuracy_not_scored": true,
+    "all_gates_anded": false,
+    "all_passed": false
+  },
+  "failed_gates": {
+    "names": [
+      "sealed_phase85_v2_artifact_hashes_exact",
+      "graph_iterations_at_least_one",
+      "final_cost_strictly_less_than_initial_cost",
+      "all_gates_anded"
+    ],
+    "instances": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run1:graph_iterations_at_least_one",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run2:graph_iterations_at_least_one",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run1:final_cost_strictly_less_than_initial_cost",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel5/candidate_run2:final_cost_strictly_less_than_initial_cost"
+    ]
+  },
+  "read_accounting": {
+    "phase86_freeze_reads": 1,
+    "phase86_manifest_reads": 1,
+    "phase85_retry_manifest_reads": 1,
+    "phase85_v2_aggregate_reads": 1,
+    "phase85_v2_output_manifest_reads": 1,
+    "candidate_submission_reads": 8,
+    "candidate_summary_reads": 8,
+    "candidate_artifact_reads_total": 16,
+    "phase85_candidate_artifact_reads": 16,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "raw_reads": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopens": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false,
+    "sealed_phase85_artifacts_only": true
+  }
+}

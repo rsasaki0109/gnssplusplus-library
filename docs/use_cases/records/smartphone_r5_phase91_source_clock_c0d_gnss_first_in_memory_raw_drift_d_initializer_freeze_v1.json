@@ -1,0 +1,289 @@
+{
+  "schema_version": "smartphone-r5-phase91-source-clock-c0d-gnss-first-in-memory-raw-drift-d-initializer-freeze.v1",
+  "phase": 91,
+  "status": "frozen-before-implementation",
+  "created_at_utc": "2026-09-02T00:00:00Z",
+  "execution_label": "Luna Max",
+  "purpose": "Freeze exactly one source-aligned implementation candidate: preserve the standard same-run raw GNSS-first native FGO position/clock/velocity staging and initialize only the main Pose3+IMU C0/D drift state from the retained raw Android receiver clock drift.",
+  "authority": {
+    "phase91_rejection_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase91_phase90_direct_wls_rejection_and_gnss_first_drift_audit_v1.md",
+      "sha256": "545806297a3ad728cfaee181b23855d2096f068a91b184b460ca2be608bf6959",
+      "commit": "7faa28f"
+    },
+    "rejected_phase90_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase90_source_clock_c0d_raw_drift_direct_wls_handoff_freeze_v1.json",
+      "sha256": "c6543b28d069c5a2d3a3c270991545c3d1cf8ced234caa4e9d8e0ab1a477fcea",
+      "status": "rejected-unimplemented-no-go"
+    },
+    "phase40_direct_wls_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase40_direct_doppler_wls_handoff_result_v1.json",
+      "sha256": "ea1d92b2f69bf6810260e17d05ae4f3c0276e1ab7be6cec84a1f35b0fd5607b1",
+      "status": "sealed-structural-no-go"
+    },
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e"
+    },
+    "phase80_structural_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_structural_manifest_v1.json",
+      "sha256": "6d20541560b726ed2409cd05902e5105874ac72e113af0c3812f029130df310f"
+    },
+    "phase85_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase85_source_clock_c0d_structural_manifest_v1.json",
+      "sha256": "20adc2e3388b92d045580739d025106c18aa068fcf26f8d117d48d3d2f5f7058"
+    },
+    "phase85_v2_aggregate": {
+      "path": "output/smartphone-r5/phase85-source-clock-c0d-structural-v2/phase85_source_clock_c0d_structural_result.json",
+      "sha256": "2ac9919e57bb18e52ccb81bc73471af017af77fe3dad65d5750f919d5b1cc4a6",
+      "status": "sealed-structural-result-reclassified-by-phase86"
+    }
+  },
+  "decision_boundary": {
+    "candidate_count": 1,
+    "candidate_selection": "fixed-single-candidate",
+    "implementation_authorized": true,
+    "implementation_before_execution_required": true,
+    "execution_authorized": false,
+    "authorized_route_count_at_freeze": 0,
+    "route_matrix_at_freeze": [],
+    "followup_pre_raw_execution_manifest_required": true,
+    "followup_evaluator_and_focused_tests_required": true,
+    "accuracy_scoring": false,
+    "route_score_selection": false,
+    "promotion_or_accuracy_authorization": false,
+    "phase80_phase85_handoff_semantics_preserved": true,
+    "phase85_zero_iteration_no_go_preserved": true,
+    "source_sigma_tuning_authorized": false,
+    "c0d_unit_or_equation_rewrite_authorized": false,
+    "raw_execution_before_this_freeze": false
+  },
+  "candidate": {
+    "id": "phase91_source_clock_c0d_gnss_first_in_memory_raw_drift_d_initializer",
+    "kind": "main-graph-raw-android-drift-D-initializer-with-standard-in-memory-GNSS-first-handoff",
+    "status_at_freeze": "not-implemented",
+    "source_aligned": true,
+    "raw_observation_staging": true,
+    "default_off": true,
+    "diagnostic_only": true,
+    "exactly_one_candidate": true,
+    "planned_selector": "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer",
+    "required_flags": [
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer"
+    ],
+    "forbidden_flags": [
+      "--native-gnss-first-velocity-only-handoff",
+      "--native-direct-doppler-wls-handoff",
+      "--native-pdc-state-bridge",
+      "--native-upstream-quality",
+      "--native-base-rinex",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--obs",
+      "any result-file, MAT, truth, device-WLS, or precomputed-coordinate input"
+    ],
+    "handoff_contract": {
+      "gnss_first_mode": "standard native raw GNSS-first FGO pass, not velocity-only and not direct-WLS",
+      "gnss_first_problem_instance": "the same in-memory raw problem retained for the main graph; no independently rebuilt handoff vector",
+      "gnss_first_c0d": "C0/D factor and active-solve diagnostic remain disabled in the non-Pose3 GNSS-first initializer, as in the existing path",
+      "position_handoff": "copy the finite GNSS-first optimized positions into the same in-memory main problem",
+      "clock_handoff": "copy the finite GNSS-first optimized receiver clock bias into the same in-memory main problem using the existing metre convention",
+      "velocity_handoff": "pass the finite GNSS-first optimized velocity sequence in memory to buildImuInput and the main Pose3+IMU graph",
+      "position_clock_velocity_handoff": true,
+      "coordinate_file_or_pdc_handoff": false,
+      "source_staging_identity": "raw GNSS P+D -> native GNSS-only FGO state -> native GNSS+IMU FGO state"
+    },
+    "exact_epoch_alignment": {
+      "required": true,
+      "count": "GNSS-first solutions and velocity states must equal the retained main problem epoch count",
+      "order": "source order must be unchanged",
+      "raw_utc_key": "each GNSS-first state must carry the identical raw Android UTC millisecond key of the corresponding retained epoch",
+      "gnss_time": "each state must carry identical GNSS week and TOW to the corresponding retained EpochSeed",
+      "duplicates": "forbidden",
+      "missing": "forbidden",
+      "reordering": "forbidden",
+      "nearest_or_interpolated_handoff": "forbidden",
+      "padding_or_truncation": "forbidden",
+      "alignment_failure": "fail closed before main-graph construction",
+      "existing_time_equality": "GNSSTime week/TOW equality may be used only as an asserted source-key check; no broader tolerance is introduced"
+    },
+    "main_graph_d_initializer": {
+      "scope": "main Pose3+IMU graph only",
+      "state": "per-retained-epoch dopplerClockDriftKey D_i",
+      "source": "same retained problem.epochs[i].receiver_clock_drift_mps",
+      "source_provenance": "raw Android ObservationData receiver drift carried through EpochSeed",
+      "units": "metres_per_second",
+      "android_conversion": "DriftNanosPerSecond * SPEED_OF_LIGHT / 1e9",
+      "finite_full_coverage": true,
+      "required_count": "exactly one finite raw drift value for every retained main-graph epoch",
+      "missing_or_nonfinite": "fail closed",
+      "count_or_order_mismatch": "fail closed",
+      "zero_fallback": false,
+      "hold_or_interpolation": false,
+      "WLS_or_residual_inference": false,
+      "coordinate_difference_inference": false,
+      "PDC_seed_fallback": false,
+      "GNSS_first_initializer_D_behavior": "unchanged; this candidate modifies only main-graph D_i"
+    },
+    "preserved_contract": {
+      "direct_observable_quality_flag": "--native-source-direct-observable-quality",
+      "direct_quality_parameters": "unchanged source P/D quality, SNR model, residual masks, and public route-independent settings",
+      "c0d_equation": "(c2-c1)-((d1+d2)*dt/(2*C_LIGHT))",
+      "c0d_jacobian_order": ["c1", "c2", "d1", "d2"],
+      "c0d_jacobian": "[-1,+1,-dt/(2*C_LIGHT),-dt/(2*C_LIGHT)]",
+      "c0d_clock_units": "seconds",
+      "c0d_drift_units": "metres_per_second",
+      "c0d_dt_units": "seconds",
+      "c0d_residual_units": "seconds",
+      "c0d_sigma_m": 0.1,
+      "c0d_sigma_seconds": "0.1/C_LIGHT",
+      "c0d_adjacent_edge_and_phone_exclusion": "unchanged",
+      "direct_doppler_equation": "los.dot(v_receiver_ecef)+receiver_clock_rate_mps-measured_doppler_mps",
+      "optimizer_algorithm": "unchanged GTSAM batch Levenberg-Marquardt",
+      "measurement_factors": "unchanged raw P/D, IMU, and existing C0/D factors",
+      "physical_and_coverage_gates": "unchanged",
+      "active_solve_telemetry": "preserve Phase88 telemetry and fail-closed termination gates",
+      "source_sigma_tuning": false,
+      "meter_state_parity_rewrite": false,
+      "coordinate_bridge": false,
+      "native_pdc_state_bridge": false,
+      "external_coordinate_input": false,
+      "precomputed_coordinate_input": false
+    },
+    "required_focused_tests_before_any_execution_manifest": [
+      "Synthetic exact epoch alignment accepts identical retained UTC/week/TOW keys and rejects missing, duplicate, reordered, nearest, interpolated, padded, and count-mismatched handoff states.",
+      "Synthetic Android DriftNanosPerSecond conversion produces the expected finite m/s D seed.",
+      "Synthetic missing/nonfinite raw drift fails closed without zero, hold, interpolation, WLS, residual, coordinate, or PDC fallback.",
+      "Synthetic standard GNSS-first in-memory handoff preserves finite position/clock/velocity state provenance and does not read a result file or coordinate artifact.",
+      "Synthetic main-graph D initializer changes only D_i; GNSS-first position/clock/velocity staging and raw P/D factor values remain unchanged.",
+      "Synthetic C0/D factor verifies unchanged equation, Jacobian, sigma, edge skips, phone exclusions, and row accounting.",
+      "Synthetic diagnostics prove the candidate cannot enable direct-WLS, velocity-only, PDC, base, or external/precomputed-coordinate paths.",
+      "Active-solve evaluator tests retain finite-cost, iterations-at-least-one, and strictly-decreasing-final-cost fail-closed gates."
+    ],
+    "required_gates_before_any_future_raw_execution": [
+      "Implementation, focused tests, and candidate selector are committed after this freeze.",
+      "A separate pre-raw execution manifest pins implementation source, binary, evaluator, candidate flag, raw inputs, and exact routes.",
+      "The evaluator verifies exact UTC/GNSS epoch alignment, finite full raw D coverage, same-run handoff provenance, no PDC/external coordinates, and unchanged C0/D/direct-quality contracts.",
+      "The evaluator fails closed on missing active telemetry, iterations below one, nonfinite costs, final cost not strictly below initial cost, or any handoff invariant failure.",
+      "No truth, MAT, Kaggle, token, base, validation-holdout, Phase82, result-file, device-WLS, or precomputed-coordinate read is permitted.",
+      "No accuracy score or route-score selection is permitted."
+    ],
+    "evidence_limit": "Phase85 proves the standard GNSS-first staging reached complete state sequences, while Phase86 proves the later main graph failed active-solve gates. The new raw-D initializer is supported as a source-unit/provenance correction hypothesis only; no route readiness or accuracy improvement is claimed."
+  },
+  "future_raw_domain_if_separately_authorized": {
+    "execution_authorized_by_this_freeze": false,
+    "inputs": [
+      "raw Android device_gnss.csv",
+      "raw Android device_imu.csv",
+      "broadcast brdc.nav"
+    ],
+    "external_coordinate_input": false,
+    "precomputed_coordinate_input": false,
+    "base_rinex_input": false,
+    "future_route_matrix": "must be separately frozen; this record authorizes zero routes"
+  },
+  "forbidden_inputs_and_behaviors": [
+    "native PDC state bridge or PDC-derived initializer",
+    "base RINEX, base coordinate, or external coordinate-bearing input",
+    "device WLS coordinates or any result-file coordinate/clock/velocity input",
+    "MAT/MATLAB products, truth, validation holdout, Phase82 artifacts, Kaggle data, or tokens",
+    "--native-gnss-first-velocity-only-handoff",
+    "--native-direct-doppler-wls-handoff",
+    "raw D replacement from residuals, coordinates, velocity differences, or historical phone-list preprocessing",
+    "D zero/hold/interpolation/WLS fallback when raw drift is absent or invalid",
+    "coordinate copy from any source other than the same-run in-memory GNSS-first result",
+    "source equation, sigma, direct-quality, rank, residual, physical, coverage, optimizer, or termination-gate relaxation",
+    "accuracy scoring, route-score selection, or promotion"
+  ],
+  "official_source_pins": {
+    "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m": {
+      "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+      "lines": ["40-61", "102-106", "169-218", "252-277"],
+      "evidence": "Official GNSS-first result supplies posini, velini, clk, and dclk; those initialize the GNSS+IMU graph's position, velocity, clock, and drift states before P/D, C0/D, and IMU factors."
+    },
+    "output/reproducibility-cache/gsdc2023/functions/gnsslog2obs.m": {
+      "sha256": "665ce43d1fc3c5a9c3b3a6fd76f81539126e3ab897fbba484ab0ccd18964acff",
+      "lines": ["103-118"],
+      "evidence": "Official Android DriftNanosPerSecond conversion is c * drift / 1e9 in metres/second."
+    },
+    "output/reproducibility-cache/gsdc2023/parameters.m": {
+      "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+      "lines": ["130-133"],
+      "evidence": "Official C0/D motion-clock sigma is 0.1 metres."
+    },
+    "output/reproducibility-cache/gtsam_gnss/src/ClockFactor_CCDD.h": {
+      "sha256": "7c174217218aa0059155e1e5a7182c69d56a3cd389d0ebd95c242d6d8c65b9fc",
+      "lines": ["39-63"],
+      "evidence": "Official metre-valued C0/D equation and Jacobian."
+    }
+  },
+  "repository_source_pins": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": {
+      "sha256": "a8511d42148dbff1d3833efd7ca3ff95aa575e955ea9da71e5db28b4aa59a6d3",
+      "lines": ["4257-4381", "4417-4431"],
+      "evidence": "Standard mode keeps one in-memory GNSS-first problem, copies position/clock unless velocity-only is selected, and passes velocity to IMU; direct-WLS and velocity-only branches are distinct."
+    },
+    "src/algorithms/fgo_problems.cpp": {
+      "sha256": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245",
+      "lines": ["344-392", "1106-1250"],
+      "evidence": "Raw receiver drift is carried into EpochSeed; direct-WLS is computed upstream of the main graph and is not part of this candidate."
+    },
+    "src/algorithms/fgo_gtsam_backend.cpp": {
+      "sha256": "3935f1efa9a7fda4700188a3c57c0d466fc808f61c13d467e1954fe385990f7d",
+      "lines": ["122-139", "267-280", "350-408", "934-1010"],
+      "evidence": "Main IMU D states currently use PDC or zero, while velocity/pose seeds and unchanged C0/D rows are inserted separately."
+    },
+    "src/io/android_raw_gnss.cpp": {
+      "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387",
+      "lines": ["414-422", "783-800"],
+      "evidence": "Raw DriftNanosPerSecond is parsed and converted to m/s, with NaN preserved when absent."
+    },
+    "include/libgnss++/algorithms/fgo.hpp": "438e0ed049c9c43c68af4b9b9b79e7b08fa18f38307f758821deff79be81ca52",
+    "include/libgnss++/core/types.hpp": "0dce831efb63bb4f7615752ba64f33ba339a6b0e479cc99a913f5a7cef6dc31b"
+  },
+  "read_accounting_at_freeze": {
+    "phase91_audit_read": 1,
+    "sealed_phase90_freeze_and_audit_reads": 2,
+    "sealed_phase40_result_read": 1,
+    "sealed_phase80_freeze_and_manifest_reads": 2,
+    "sealed_phase85_manifest_and_aggregate_reads": 2,
+    "official_pinned_source_reads": 4,
+    "repository_source_or_header_reads": 6,
+    "synthetic_solver_tests": 0,
+    "raw_device_gnss_reads": 0,
+    "raw_device_imu_reads": 0,
+    "broadcast_navigation_reads": 0,
+    "base_rinex_reads": 0,
+    "native_solver_invocations": 0,
+    "native_reruns": 0,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "result_file_or_device_wls_reads": 0,
+    "external_or_precomputed_coordinate_reads": 0,
+    "phase82_candidate_coordinate_reads": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_or_token_access": 0,
+    "accuracy_scored": false,
+    "route_score_selection": false
+  },
+  "implementation_authorization": {
+    "authorized": true,
+    "authorized_change_count": 1,
+    "authorized_candidate_id": "phase91_source_clock_c0d_gnss_first_in_memory_raw_drift_d_initializer",
+    "authorized_scope": "Only main-graph D_i initialization from same retained raw Android receiver_clock_drift_mps plus the mandatory alignment/provenance diagnostics and tests.",
+    "execution_authorized": false,
+    "route_matrix": [],
+    "followup_implementation_commit_required": true,
+    "followup_focused_test_commit_required": true,
+    "followup_pre_raw_manifest_required": true,
+    "failure_action": "Fail closed; preserve the standard in-memory GNSS-first handoff and all source C0/D, direct-quality, optimizer, no-PDC, no-external-coordinate, and active-solve gates."
+  }
+}

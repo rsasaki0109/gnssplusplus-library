@@ -1,0 +1,255 @@
+{
+  "schema_version": "smartphone-r5-phase128-phase127-zero-coverage-forensic-freeze.v1",
+  "phase": 128,
+  "execution_label": "Luna Max",
+  "status": "sealed-read-only-forensic-candidate-freeze",
+  "repository": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+  "branch": "feat/rtk-smartphone-performance-pr",
+  "head_at_audit_start": "25f144f4943b30d6e74bd6582a5d378f0aad7748",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase128_phase127_zero_coverage_forensic_audit_v1.md",
+    "commit": "32bdfdbc384d906560c28863002ae99cc15f9cb8",
+    "sha256": "61970532f70c7de4ddb8cd88bf8f968b5caef91824dc6b44c9bc444668d58e3f"
+  },
+  "authoritative_phase127": {
+    "result_commit": "25f144f4943b30d6e74bd6582a5d378f0aad7748",
+    "result_json": "docs/use_cases/records/smartphone_r5_phase127_inventory_first_structural_result_v1.json",
+    "result_json_sha256": "dad0bd0c9b627a11ebe794d67bbdb28eead808e5903d924e08dafc481a424e45",
+    "result_markdown": "docs/use_cases/records/smartphone_r5_phase127_inventory_first_structural_result_v1.md",
+    "result_markdown_sha256": "7acb2a6fa4f780d908d839ecda05526bf50edaa78b9c18feaec1297a1e54abf7",
+    "authorization_commit": "e2e6c3a30c0e1391c464bb29c487601d674dd6dc",
+    "implementation_commit": "f41d082e5170fe5dcbebbb4526c7d513f9512b60",
+    "design_freeze_commit": "5c3e66fc4b62d86b52f8e9ee8aa1f26f4cb2a8a4",
+    "contract_audit_commit": "d4b28a8dbe85ac67bf8957e28de16f072874d072",
+    "runner_manifest_commit": "93ee772e595aac01a5de4e7357becd88581f70ec",
+    "pre_raw_commit": "da8d50cb37e9adebcd6b140b2f67a482276323be",
+    "authorized_runner_sha256": "cf5fc5530d8f79b1e56a9e435630ef84d0c8df6e5dd982311cf2d5b5617a71e3",
+    "target_binary_sha256": "653797970fbe65f199fc98dfe47ddd57ec26da66fadc4df40dff930a6d1c436a",
+    "status": "no-go-phase127-inventory-first-structural",
+    "route_order": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "runs_per_route": 1,
+    "solver_invocations": 0
+  },
+  "ignored_metadata_read": {
+    "files": [
+      {
+        "path": "output/smartphone-r5/phase127-inventory-first-structural-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/inventory.json",
+        "bytes": 2954
+      },
+      {
+        "path": "output/smartphone-r5/phase127-inventory-first-structural-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/inventory.json",
+        "bytes": 2858
+      },
+      {
+        "path": "output/smartphone-r5/phase127-inventory-first-structural-v1/partial_result.json",
+        "bytes": 8893
+      }
+    ],
+    "file_count": 3,
+    "bytes_total": 12705,
+    "payload_files_read": false
+  },
+  "read_accounting": {
+    "this_audit": {
+      "raw_phone_gnss_payload_reads": 0,
+      "raw_phone_imu_payload_reads": 0,
+      "broadcast_navigation_payload_reads": 0,
+      "raw_base_payload_or_header_reads": 0,
+      "solver_invocations": 0,
+      "solution_rows_opened": 0,
+      "truth_reads": 0,
+      "mat_reads_or_generated": 0,
+      "pdc_reads": 0,
+      "precomputed_coordinate_reads": 0,
+      "accuracy_calculations": 0,
+      "kaggle_or_token_access": 0,
+      "reruns": 0,
+      "fallbacks_or_repairs": 0,
+      "raw_content_copied_or_transformed": false,
+      "ignored_metadata_files_read": 3,
+      "ignored_metadata_bytes_read": 12705
+    },
+    "historical_phase127_sealed": {
+      "raw_device_gnss_inventory_reads": 2,
+      "raw_device_imu_inventory_reads": 2,
+      "broadcast_navigation_inventory_reads": 2,
+      "raw_base_rinex_inventory_reads": 2,
+      "raw_base_header_inventory_reads": 2,
+      "raw_base_hash_reads": 2,
+      "native_solver_invocations": 0,
+      "solution_rows_opened": 0,
+      "truth_reads": 0,
+      "mat_reads_or_generated": 0,
+      "pdc_reads": 0,
+      "precomputed_coordinate_reads": 0,
+      "accuracy_calculations": 0,
+      "kaggle_or_token_access": 0,
+      "route_reruns": 0,
+      "fallbacks": 0,
+      "raw_content_copied_or_transformed": false
+    }
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "label": "MTV-A",
+      "phone_gnss_rows": 87705,
+      "selected_glonass_rows": 12068,
+      "invalid_selected_glonass_rows": 236,
+      "retained_glonass_rows": 11832,
+      "missing_satellite_rows": 0,
+      "missing_time_rows": 0,
+      "nav_record_count": 671,
+      "nav_malformed_records": 480,
+      "nav_unique_accepted_satellites": 14,
+      "base_glonass_rows": 17199,
+      "header_entries": 0,
+      "header_conflicts": 0,
+      "header_malformed": 1,
+      "rover_certified_rows": 0,
+      "base_certified_rows": 0,
+      "query_time_coverage_gaps_recorded": 0,
+      "ties_recorded": 0,
+      "mismatches_recorded": 0,
+      "max_age_seconds_recorded": 0.0,
+      "resolver_entered": false,
+      "solver_invocations": 0
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "label": "LAX-T",
+      "phone_gnss_rows": 51243,
+      "selected_glonass_rows": 8873,
+      "invalid_selected_glonass_rows": 247,
+      "retained_glonass_rows": 8626,
+      "missing_satellite_rows": 0,
+      "missing_time_rows": 0,
+      "nav_record_count": 686,
+      "nav_malformed_records": 442,
+      "nav_unique_accepted_satellites": 14,
+      "base_glonass_rows": 920,
+      "header_entries": 0,
+      "header_conflicts": 0,
+      "header_malformed": 1,
+      "rover_certified_rows": 0,
+      "base_certified_rows": 0,
+      "query_time_coverage_gaps_recorded": 0,
+      "ties_recorded": 0,
+      "mismatches_recorded": 0,
+      "max_age_seconds_recorded": 0.0,
+      "resolver_entered": false,
+      "solver_invocations": 0
+    }
+  },
+  "forensic_conclusion": {
+    "earliest_observable_failure": "pre-resolution inventory short-circuit",
+    "first_rover_predicate": "inventory_phone_gnss.ok == false because invalid_rows is nonzero",
+    "shared_navigation_predicate": "parse_nav_geph.ok == (bool(records) and malformed_records == 0)",
+    "shared_base_predicate": "parse_base_rinex.ok == false because header_malformed is nonzero",
+    "resolver_guard": "build_inventory enters rover resolution only when phone.ok and nav.ok; base resolution only when base.ok and nav.ok",
+    "671_480_meaning": "671 complete accepted flushes plus 480 malformed flushes; the latter is an aggregate bucket for short/nonfinite/nonintegral/out-of-range/epoch-parse failures",
+    "686_442_meaning": "686 complete accepted flushes plus 442 malformed flushes; the latter has the same unresolved subreason composition",
+    "malformed_ledger_1_meaning": "the Python base inventory found a GLONASS SLOT / FRQ # label without a regex Rnn fcn match; entries and conflicts are both zero, so this is not one FCN conflict",
+    "coverage_zero_is_not": [
+      "not evidence of query-time coverage gaps",
+      "not evidence of a different-FCN tie",
+      "not evidence of a header/geph mismatch",
+      "not evidence that no usable geph.frq exists"
+    ],
+    "unobserved": {
+      "sample_satellite_keys": true,
+      "query_time_deltas": true,
+      "malformed_nav_reason_subcounts": true,
+      "actual_header_line_semantics": true
+    },
+    "available_non_coordinate_identifiers": [
+      "GLO_G1_CA",
+      "GLONASS",
+      "Rnn",
+      "constellation code 3"
+    ]
+  },
+  "candidate": {
+    "candidate_count": 1,
+    "candidate_id": "phase128-glonass-provenance-parser-admission-v1",
+    "proposed_selector": "--native-phase128-glonass-provenance-parser-admission",
+    "default_off": true,
+    "source_backed": true,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_or_accuracy_authorized": false,
+    "single_boundary": "canonical GLONASS parser plus per-retained-row provenance admission",
+    "scope": {
+      "typed_key": "SatelliteId(GNSSSystem::GLONASS, prn)",
+      "android_svid_range": "native GLONASS PRN 1..24",
+      "rinex_nav_key": "Rnn -> GLONASS PRN using the existing native/RTKLIB mapping",
+      "query_time": "existing native GPST GNSSTime; no independent POSIX query-time substitute",
+      "nav_fields": "canonical fixed fields data[0..14] with position-preserving parsing",
+      "fcn_field": "data[10] / geph.frq",
+      "fcn_normalization": "encoded value >128 maps to value-256 only",
+      "fcn_range": {
+        "min": -7,
+        "max": 6
+      },
+      "toe_units": "seconds in GNSSTime; GLONASS UTC epoch rounded to 900 seconds before native UTC-to-GPST conversion",
+      "validity_seconds": 1800.0,
+      "record_admission": "keep valid records in a per-satellite index; malformed unrelated records are counted but do not poison the route",
+      "row_gate": "every retained rover/base GLONASS row requires an exact-time finite valid selected record and existing tie/mismatch policy",
+      "header_ledger": "fixed RINEX slots; zero entries is missing, while truncated/lexically invalid R slots remain malformed",
+      "header_policy": "header primary requires exact selected geph FCN corroboration; missing header permits only selected broadcast-geph fallback",
+      "failure_closed": [
+        "missing satellite or query time",
+        "missing/out-of-window geph",
+        "missing/nonfinite/nonintegral/out-of-range FCN",
+        "different-FCN minimum-age tie",
+        "header/geph mismatch",
+        "malformed required record"
+      ]
+    },
+    "explicitly_not_changed": [
+      "Phase126 raw-base equations and exactly-once correction",
+      "C7/D/CCDD state topology, units, initialization, and handoff",
+      "GNSS factors, IMU, Doppler, carrier/TDCP, and admission topology",
+      "sigma, whitening, robust loss, filters, QR, LM, ordering, and iteration limits",
+      "Pixel5 offset, output, solution opacity, legacy/default behavior",
+      "fixed FCN, Android carrier-frequency inference, external tables, and fallback"
+    ]
+  },
+  "implementation_plan": {
+    "planned_change_type": "default-off parser/provenance adapter only",
+    "planned_files": [
+      "apps/commands/benchmarks/gnss_smartphone_phase128_*",
+      "include/libgnss++/algorithms/phase128_glonass_provenance.hpp",
+      "src/algorithms/phase128_glonass_provenance.cpp",
+      "focused synthetic tests and launch-free validator metadata"
+    ],
+    "tests": [
+      "absent versus malformed fixed-slot header",
+      "Rnn/Svid typed-key equality and PRN bounds",
+      "all 15 nav fields, blank/nonfinite handling, FCN 128/129 and -7/6/-8/7",
+      "record-level malformed accounting with unrelated valid-record admission",
+      "native GPST query time, 900-second toe rounding, 1800-second boundary",
+      "missing/out-of-window, same-FCN duplicate, different-FCN tie, mismatch",
+      "full rover/base coverage and finite-positive wavelength",
+      "selector-off legacy regression and failed-inventory solver count zero"
+    ],
+    "required_new_artifacts_before_raw": [
+      "implementation commit and hash",
+      "launch-free manifest/validator",
+      "pre-raw read-accounting seal",
+      "independent authorization pinning all source, runner, manifest, binary, and route hashes"
+    ]
+  },
+  "authorization_boundary": {
+    "this_freeze_authorizes_code": false,
+    "this_freeze_authorizes_raw_materialization": false,
+    "this_freeze_authorizes_solver": false,
+    "this_freeze_authorizes_truth": false,
+    "this_freeze_authorizes_accuracy": false,
+    "this_freeze_authorizes_kaggle": false,
+    "next_allowed_step": "read-only implementation review and synthetic tests only",
+    "raw_run_policy": "no raw reread, rerun, repair, fallback, fixed channel, or sweep until a separate authorization is committed"
+  }
+}

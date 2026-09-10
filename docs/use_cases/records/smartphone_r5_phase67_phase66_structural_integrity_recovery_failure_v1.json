@@ -1,0 +1,135 @@
+{
+  "schema_version": "smartphone-r5-phase67-phase66-structural-integrity-recovery-failure.v1",
+  "phase": 67,
+  "execution_label": "Luna Max",
+  "status": "fail-closed-native-materiality-coverage",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_freeze_v1.json",
+    "sha256": "9fbf4543310fb89a6e9148a94c4fa5cb82ba91089fad75fc1e8e13046d608e0d"
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase67_phase66_structural_integrity_recovery_manifest_v1.json",
+    "sha256": "eff787bd9b343349ada075ab906103ee26ac133a6c0f7d1fd9765ccd0cea4d51"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase67_phase66_structural_integrity_recovery.py",
+    "sha256": "21f905e1fc876de0d998153dd23f12ca45db7c51ffb6778bf161c99fe1accc47",
+    "commit": "01ce9a0"
+  },
+  "source_commit": "f8cdf3b",
+  "prior_integrity_records_preserved": {
+    "phase65_failure_sha256": "fd346e1289a3dca726f45da001972c37d4f54c4808af50d44dce6c9a94f2d669",
+    "phase66_failure_sha256": "540d925228081005a6ebd5f8866c88d8c0fc5aa31b939eaa4a6ea1d6d086b1cb",
+    "phase65_partial_output_reused": false,
+    "phase66_partial_output_reused": false
+  },
+  "failure": {
+    "class": "native_base_correction_coverage_below_frozen_gate",
+    "route": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "control_direct_artifact_identity": true,
+    "control_submission_sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c",
+    "control_summary_sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe",
+    "candidate_process_return_code": 0,
+    "candidate_validation_error": "base correction coverage failed: 2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "adopted_pseudorange_rows": 61754,
+    "adopted_rows_corrected": 46556,
+    "in_domain_rows": 46556,
+    "interpolation_misses": 15198,
+    "finite_correction_fraction": 0.7538944845678013,
+    "required_finite_correction_fraction": 0.99,
+    "matched_base_rows": 121673,
+    "matching_streams": 58,
+    "correction_abs_p50_m": 7.093666204009779,
+    "correction_abs_p95_m": 14.90088104925494,
+    "correction_abs_max_m": 15.637516129413319,
+    "candidate_run2_started": false,
+    "remaining_native_invocations_not_run": 10,
+    "structural_gate": "not-evaluable; fail closed",
+    "no_accuracy_or_truth_evaluation": true,
+    "no_gate_relaxation_or_rerun": true
+  },
+  "new_phase67_output": {
+    "failure_record": {
+      "path": "output/smartphone-r5/phase67-phase66-structural-integrity-recovery-v1/phase67_phase66_structural_integrity_recovery_failure.json",
+      "bytes": 375,
+      "sha256": "0cf1aa5e28f198188289db7a4178643333e02dc78cf23629be36fecc78cda08c"
+    },
+    "control_run": {
+      "path": "output/smartphone-r5/phase67-phase66-structural-integrity-recovery-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/control/run1",
+      "submission": {
+        "bytes": 172694,
+        "sha256": "d4d7652e5d12389466e586fe2d8e85d34977a7e11036cee2f591a89293c5426c"
+      },
+      "summary": {
+        "bytes": 14534,
+        "sha256": "d4980260e257c92d7e2fb716f900501fd55c3eb9278f9b38a4f72ac2e62303fe"
+      },
+      "run_log": {
+        "bytes": 113,
+        "sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28"
+      }
+    },
+    "candidate_run1": {
+      "path": "output/smartphone-r5/phase67-phase66-structural-integrity-recovery-v1/2021-03-16-18-59-us-ca-mtv-a/pixel5/candidate/run1",
+      "submission": {
+        "bytes": 172694,
+        "sha256": "1171f72e53200dc2736aabff2a92f0dd6c80a7f61d62df1e6f373942767cfb57"
+      },
+      "summary": {
+        "bytes": 16946,
+        "sha256": "459710d43aeb8f3c8fe551877ffbc0f37836b803fa1f23a8ca04a655074947d2"
+      },
+      "run_log": {
+        "bytes": 113,
+        "sha256": "67fc4fe986a1ab61f38212163aa35fdb24caf78d9256a02774aa3c76f81d8c28"
+      },
+      "telemetry": {
+        "base_member_sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "base_rinex_bytes": 10708536,
+        "base_rinex_read_count": 1,
+        "base_epochs": 2519,
+        "finite_base_residual_rows": 121673,
+        "observed_interval_s": 1,
+        "moving_mean_samples": 151,
+        "same_satellite_signal_only": true,
+        "spp_applied": false,
+        "tdcp_applied": false,
+        "no_extrapolation_or_endpoint_hold": true
+      }
+    }
+  },
+  "read_accounting": {
+    "hash_verification_reads": {
+      "device_gnss": 4,
+      "device_imu": 4,
+      "broadcast_nav": 4,
+      "base_rinex": 4
+    },
+    "native_solver_invocations_reported_started": 1,
+    "native_processes_completed": 2,
+    "raw_device_gnss_process_reads": 2,
+    "raw_device_imu_process_reads": 2,
+    "broadcast_nav_process_reads": 2,
+    "base_rinex_process_reads": 1,
+    "candidate_runs_completed": 1,
+    "candidate_runs_required_before_gate": 2,
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "validation_holdout_reads": 0,
+    "kaggle_token_reads": 0,
+    "archive_reopens": 0,
+    "phase65_partial_output_reuse": false,
+    "phase66_partial_output_reuse": false,
+    "post_truth_tuning": false,
+    "accounting_note": "The frozen runner increments its started counter after P65.run_case returns; the candidate native process completed and emitted files before P65 validation raised, so the runner failure file reports 1 while the observed completed native processes are 2. No process was retried."
+  },
+  "decision": {
+    "phase67_structural_gate": "not-evaluable; fail closed",
+    "native_base_correction_authorized_for_accuracy": false,
+    "phase43_champion_preserved": true,
+    "phase51_experimental_preserved": true,
+    "phase58_experimental_preserved": true,
+    "next_action": "If pursued, a separately frozen evidence-only diagnostic must classify the 15198 correction misses by raw matching key, time domain, and signal/constellation without loosening the 0.99 gate or reusing this partial output."
+  },
+  "zero_point_782": "not evaluated"
+}

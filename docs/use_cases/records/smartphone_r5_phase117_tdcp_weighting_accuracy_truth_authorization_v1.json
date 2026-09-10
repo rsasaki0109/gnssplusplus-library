@@ -1,0 +1,107 @@
+{
+  "schema_version": "smartphone-r5-phase117-tdcp-weighting-accuracy-truth-authorization.v1",
+  "phase": 117,
+  "execution_label": "Luna Max",
+  "status": "authorized-for-phase117-truth-only-accuracy-evaluation",
+  "authority": {
+    "accuracy_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_accuracy_freeze_v1.json",
+      "sha256": "0257bb38489e83898786b8d456d10773071e4ea7248a0e06c9d9766a4d7c2f24"
+    },
+    "accuracy_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_accuracy_manifest_v1.json",
+      "sha256": "cbba73a941d2cd46c5d9a6cfacfa55404c4e716b4c05191fa5d5e8fd3140789a"
+    },
+    "accuracy_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase117_tdcp_weighting_accuracy.py",
+      "sha256": "88e8020052a0bdaed3f7262dedc46600f6608a84a7bcdabe82ac009b8db82ebf"
+    },
+    "focused_tests": {
+      "path": "tests/test_smartphone_phase117_tdcp_weighting_accuracy.py",
+      "sha256": "1b2bcc567569a46f4c0e27c09535b113643e9cf4d59eebfe19cde6d3804c49f3"
+    },
+    "phase117_structural_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_structural_result_v1.json",
+      "sha256": "2517dcc805146dc34e790c78a392caf000c79eaba837fe099b6d522c147e9cf2"
+    },
+    "phase117_raw_authorization": {
+      "path": "docs/use_cases/records/smartphone_r5_phase117_tdcp_weighting_raw_authorization_v1.json",
+      "sha256": "5bccd316f942ea7bb8bf2e0e69da627b92fd2dd76f1af4d75ad628e053fba202"
+    },
+    "phase112_accuracy_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase112_main_output_offset_accuracy_result_v1.json",
+      "sha256": "46d8d836758ac1a88b95ec2c1a0c0080cedfb753c12411ed74e4c2501549c57e"
+    },
+    "phase82_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase82_phase80_direct_quality_accuracy.py",
+      "sha256": "232ba0ab1fa7ebde6ddfaaf851d190d1ed32377ea056ab6c31e244139c2977fb"
+    },
+    "phase82_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873"
+    }
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5"
+  ],
+  "candidate": {
+    "id": "phase117-official-tdcp-snr-type-weighting-truth-only-accuracy-v1",
+    "candidate_count": 1,
+    "native_solution_reuse": true,
+    "native_solver_invocations": 0,
+    "solver_rerun": false,
+    "raw_or_base_rerun": false,
+    "tdcp_rerun": false,
+    "truth_reads": 2,
+    "truth_reads_per_route": 1,
+    "accuracy_calculations": 2,
+    "solution_publication": false,
+    "no_fallback_or_rerun": true
+  },
+  "execution_policy": {
+    "truth_only_evaluation_authorized": true,
+    "native_solver_invocations": 0,
+    "raw_reads": 0,
+    "base_reads": 0,
+    "tdcp_reads": 0,
+    "truth_reads_per_route": 1,
+    "native_after_truth": false,
+    "solution_publication": false,
+    "strict_macro_gate_m": 0.782,
+    "mat_precomputed_phone_coordinate_pdc_reads": 0,
+    "kaggle_or_token_access": 0,
+    "one_evaluator_process": true,
+    "candidate_hash_schema_finite_preflight_before_truth": true,
+    "truth_path_or_bytes_in_native": false,
+    "result_coordinate_rows": false
+  },
+  "leakage_guard": {
+    "solver_raw_base_tdcp_reads": false,
+    "mat_reads_or_generated": false,
+    "precomputed_phone_coordinate_reads": false,
+    "pdc_reads": false,
+    "kaggle_or_token_access": false,
+    "truth_reads_before_authorization": false,
+    "post_truth_tuning": false,
+    "solution_publication": false,
+    "failure_policy": "any schema, alignment, finite, speed, metric, leakage, or gate failure is no-go; preserve artifacts and do not rerun"
+  },
+  "read_accounting": {
+    "authorization_raw_reads": 0,
+    "authorization_base_reads": 0,
+    "authorization_truth_reads": 0,
+    "authorization_candidate_solution_reads": 0,
+    "authorization_accuracy_calculations": 0,
+    "native_solver_invocations": 0,
+    "reruns": 0,
+    "fallbacks": 0
+  },
+  "release_boundary": {
+    "accuracy_evaluation_only": true,
+    "release_authorized": false,
+    "validation_authorized": false,
+    "kaggle_submission_authorized": false,
+    "solution_publication_authorized": false
+  }
+}

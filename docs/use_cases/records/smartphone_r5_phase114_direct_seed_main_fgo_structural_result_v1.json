@@ -1,0 +1,417 @@
+{
+  "accuracy_scored": false,
+  "authorization": {
+    "path": "docs/use_cases/records/smartphone_r5_phase114_direct_seed_main_fgo_authorization_v1.json",
+    "sha256": "5753b2cdaa01e591c7f7ba69ba8d039f52044402b97211f80b48ad6b6aa3a0a4",
+    "status": "authorized-for-exact-two-route-phase114-direct-seed-raw-structural-execution"
+  },
+  "candidate": {
+    "base_selectors": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-pseudorange-preserve-additional-frequency-bands"
+    ],
+    "default_off": true,
+    "gnss_first_stage": "bypassed by design",
+    "id": "phase114-main-direct-wls-ephemeral-c7d-seed-v1",
+    "same_run_ephemeral": true,
+    "selector": "--native-direct-wls-ephemeral-c7d-main-seed",
+    "selectors": [
+      "--native-direct-wls-ephemeral-c7d-main-seed",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-upstream-position-offset"
+    ],
+    "solution_output_published": false
+  },
+  "decision": "Structural gate failed closed; preserve outputs and do not retry, fallback, truth-score, or publish.",
+  "execution_label": "Luna Max",
+  "failed_gates": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": [
+      "native_process_completed",
+      "summary_present",
+      "direct_seed_full_finite_exact_key_handoff",
+      "main_qr_progress_strict_cost_decrease",
+      "main_meter_c0d_units_sigma_factor_gate",
+      "base_factors_active_exactly_once",
+      "final_pixel5_offset_exactly_once",
+      "finite_earth_valid_expected_output_coverage",
+      "no_gnss_first_stage_or_solver_fallback"
+    ],
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": [
+      "native_process_completed",
+      "summary_present",
+      "direct_seed_full_finite_exact_key_handoff",
+      "main_qr_progress_strict_cost_decrease",
+      "main_meter_c0d_units_sigma_factor_gate",
+      "base_factors_active_exactly_once",
+      "final_pixel5_offset_exactly_once",
+      "finite_earth_valid_expected_output_coverage",
+      "no_gnss_first_stage_or_solver_fallback"
+    ]
+  },
+  "forbidden_lanes": {
+    "Kaggle_or_token": false,
+    "MAT": false,
+    "PDC": false,
+    "accuracy": false,
+    "phone_coordinates": false,
+    "precomputed_coordinates": false,
+    "solution_rows": false,
+    "truth": false
+  },
+  "freeze": {
+    "commit": "cb365712e32b354ff8b335acb9ad29276b2240f5",
+    "path": "docs/use_cases/records/smartphone_r5_phase114_direct_seed_main_fgo_freeze_v1.json",
+    "sha256": "aa47295bffd61d72c851a06043d5ceb56c96dcde94059442ddfd97ed5a36b838"
+  },
+  "gates": {
+    "all_structural_gates_passed": false,
+    "failed_routes": {
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5": [
+        "native_process_completed",
+        "summary_present",
+        "direct_seed_full_finite_exact_key_handoff",
+        "main_qr_progress_strict_cost_decrease",
+        "main_meter_c0d_units_sigma_factor_gate",
+        "base_factors_active_exactly_once",
+        "final_pixel5_offset_exactly_once",
+        "finite_earth_valid_expected_output_coverage",
+        "no_gnss_first_stage_or_solver_fallback"
+      ],
+      "2022-04-01-18-22-us-ca-lax-t/pixel5": [
+        "native_process_completed",
+        "summary_present",
+        "direct_seed_full_finite_exact_key_handoff",
+        "main_qr_progress_strict_cost_decrease",
+        "main_meter_c0d_units_sigma_factor_gate",
+        "base_factors_active_exactly_once",
+        "final_pixel5_offset_exactly_once",
+        "finite_earth_valid_expected_output_coverage",
+        "no_gnss_first_stage_or_solver_fallback"
+      ]
+    },
+    "route_order_exact": true
+  },
+  "implementation": {
+    "commit": "44771ef6b52eddb0df6193b8b9d9f1b52b7fcea5",
+    "source_sha256": {
+      "app": "301265974631f20781ff4460e1ede4032165e11c79ef59d0510a273aebb1a59e",
+      "backend": "78792c9306abe339228a3004e3d23f1486fac77822d0f1785b69dc07af14f578",
+      "binary": "96374063aa91aea6ea72fd1402b6c4895cb5f004a506e57e10c620234fa0bd69",
+      "c7_header": "cf8562c75307f79a8b6a35262dac0f6e9d04588b23145169d076594a9c7889a4",
+      "config": "23d0b67aa33b2186a610c07ba8aa2022476f12d518974bd6d5929fa135a60fa9",
+      "fgo": "0b0b3665383ca4b465bcfbf6a9161efe7050e093ad36161f1d9b00bd9029c75c",
+      "internal": "7aba732064d2cd6b3858c60226b84aa904423becdf66cb386e628fae16fc5afd"
+    }
+  },
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase114_direct_seed_main_fgo_manifest_v1.json",
+    "sha256": "03d4e1fb07f79aa8531a2c52ed8a27b8f5508705a98302b6602c3cd9e4657840"
+  },
+  "matrix": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_process_reads": 2,
+    "candidate_count": 1,
+    "controls": 0,
+    "fallbacks": 0,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 2,
+    "pdc_reads": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "raw_base_native_process_reads_declared": 2,
+    "raw_base_wrapper_hash_reads": 2,
+    "raw_phone_gnss_process_reads": 2,
+    "raw_phone_imu_process_reads": 2,
+    "reruns": 0,
+    "route_count": 2,
+    "runs_per_route": 1,
+    "solution_rows_published": false,
+    "truth_reads": 0
+  },
+  "phase": 114,
+  "promotion_authorized": false,
+  "read_accounting": {
+    "accuracy_calculations": 0,
+    "broadcast_navigation_process_reads": 2,
+    "fallbacks": 0,
+    "kaggle_or_token_access": 0,
+    "logs_and_partial_results_preserved": true,
+    "mat_reads_or_generated": 0,
+    "native_solver_invocations": 2,
+    "pdc_reads": 0,
+    "phone_coordinate_reads": 0,
+    "precomputed_coordinate_reads": 0,
+    "raw_base_native_process_reads_declared": 2,
+    "raw_base_wrapper_hash_reads": 2,
+    "raw_content_copied_or_transformed": false,
+    "raw_phone_gnss_process_reads": 2,
+    "raw_phone_imu_process_reads": 2,
+    "route_reruns": 0,
+    "runner_raw_input_hash_reads": 0,
+    "runner_raw_payload_reads": 0,
+    "solution_output_published": false,
+    "solution_output_reads": 0,
+    "truth_reads": 0
+  },
+  "routes": {
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "base_input": {
+        "approx_position_xyz_m": [
+          -2703115.921,
+          -4291767.2078,
+          3854247.9066
+        ],
+        "bytes": 10708536,
+        "content_copied_or_transformed": false,
+        "coordinate_source": "raw RINEX header APPROX POSITION XYZ (native process)",
+        "exists_before_launch": true,
+        "hash_read_by_wrapper": true,
+        "hash_verification_reads": 1,
+        "moving_mean_samples": 151,
+        "native_process_reads_expected": 1,
+        "observed_dt_s": 1.0,
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+        "payload_read_by_wrapper": false,
+        "sealed_bytes": 10708536,
+        "sealed_sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+        "stat_read_by_wrapper": true
+      },
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "expected": {
+        "domain_rows": 2158,
+        "output_epochs": 2159,
+        "problem_epochs": 2159
+      },
+      "failure_reasons": [
+        "native_process_completed",
+        "native_process_completed",
+        "summary_present",
+        "direct_seed_full_finite_exact_key_handoff",
+        "main_qr_progress_strict_cost_decrease",
+        "main_meter_c0d_units_sigma_factor_gate",
+        "base_factors_active_exactly_once",
+        "final_pixel5_offset_exactly_once",
+        "finite_earth_valid_expected_output_coverage",
+        "no_gnss_first_stage_or_solver_fallback"
+      ],
+      "gates": {
+        "base_factors_active_exactly_once": false,
+        "direct_seed_full_finite_exact_key_handoff": false,
+        "final_pixel5_offset_exactly_once": false,
+        "finite_earth_valid_expected_output_coverage": false,
+        "main_meter_c0d_units_sigma_factor_gate": false,
+        "main_qr_progress_strict_cost_decrease": false,
+        "native_process_completed": false,
+        "no_gnss_first_stage_or_solver_fallback": false,
+        "summary_present": false
+      },
+      "kaggle_or_token_accessed": false,
+      "mat_used": false,
+      "pdc_used": false,
+      "phone_coordinates_used": false,
+      "precomputed_coordinates_used": false,
+      "raw_inputs": {
+        "brdc.nav": {
+          "bytes": 9955040,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_wrapper": false,
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/brdc.nav",
+          "payload_read_by_wrapper": false,
+          "sealed_bytes": 9955040,
+          "sha256": "6adfaf7fe4452a4faeb94a7b607c15e05f578c46a028a030b94aa6f79de194cd",
+          "stat_read_by_wrapper": true
+        },
+        "device_gnss.csv": {
+          "bytes": 57715495,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_wrapper": false,
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_gnss.csv",
+          "payload_read_by_wrapper": false,
+          "sealed_bytes": 57715495,
+          "sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+          "stat_read_by_wrapper": true
+        },
+        "device_imu.csv": {
+          "bytes": 34393802,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_wrapper": false,
+          "path": "output/smartphone-r5/phase25-raw-clock-eval-v1/raw/2021-03-16-18-59-us-ca-mtv-a/pixel5/device_imu.csv",
+          "payload_read_by_wrapper": false,
+          "sealed_bytes": 34393802,
+          "sha256": "afc540e7c4ce2ca66b442a1afbcd604e9f6b3d2cc4d3733183739901b5b97bd6",
+          "stat_read_by_wrapper": true
+        }
+      },
+      "read_accounting": {
+        "accuracy_calculations": 0,
+        "mat_reads_or_generated": 0,
+        "native_base_rinex_reads": 1,
+        "native_broadcast_navigation_reads": 1,
+        "native_raw_phone_gnss_reads": 1,
+        "native_raw_phone_imu_reads": 1,
+        "pdc_reads": 0,
+        "phone_coordinate_reads": 0,
+        "precomputed_coordinate_reads": 0,
+        "raw_content_copied_or_transformed": false,
+        "runner_base_hash_reads": 1,
+        "runner_raw_hash_reads": 0,
+        "runner_raw_payload_reads": 0,
+        "solution_output_reads": 0,
+        "truth_reads": 0
+      },
+      "return_code": 2,
+      "solution_output": {
+        "opened": false,
+        "path": "output/smartphone-r5/phase114-main-direct-wls-c7d-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/withheld_solution_output.csv",
+        "present": false,
+        "published": false,
+        "read_count": 0
+      },
+      "solution_output_published": false,
+      "summary": {
+        "path": "output/smartphone-r5/phase114-main-direct-wls-c7d-v1/2021-03-16-18-59-us-ca-mtv-a__pixel5/summary.json",
+        "present": false,
+        "read_count": 0
+      },
+      "telemetry": null,
+      "truth_used": false
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "base_input": {
+        "approx_position_xyz_m": [
+          -2507798.7984,
+          -4676369.6918,
+          3526890.8008
+        ],
+        "bytes": 719969,
+        "content_copied_or_transformed": false,
+        "coordinate_source": "raw RINEX header APPROX POSITION XYZ (native process)",
+        "exists_before_launch": true,
+        "hash_read_by_wrapper": true,
+        "hash_verification_reads": 1,
+        "moving_mean_samples": 11,
+        "native_process_reads_expected": 1,
+        "observed_dt_s": 15.0,
+        "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+        "payload_read_by_wrapper": false,
+        "sealed_bytes": 719969,
+        "sealed_sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+        "stat_read_by_wrapper": true
+      },
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "expected": {
+        "domain_rows": 1465,
+        "output_epochs": 1466,
+        "problem_epochs": 1466
+      },
+      "failure_reasons": [
+        "native_process_completed",
+        "native_process_completed",
+        "summary_present",
+        "direct_seed_full_finite_exact_key_handoff",
+        "main_qr_progress_strict_cost_decrease",
+        "main_meter_c0d_units_sigma_factor_gate",
+        "base_factors_active_exactly_once",
+        "final_pixel5_offset_exactly_once",
+        "finite_earth_valid_expected_output_coverage",
+        "no_gnss_first_stage_or_solver_fallback"
+      ],
+      "gates": {
+        "base_factors_active_exactly_once": false,
+        "direct_seed_full_finite_exact_key_handoff": false,
+        "final_pixel5_offset_exactly_once": false,
+        "finite_earth_valid_expected_output_coverage": false,
+        "main_meter_c0d_units_sigma_factor_gate": false,
+        "main_qr_progress_strict_cost_decrease": false,
+        "native_process_completed": false,
+        "no_gnss_first_stage_or_solver_fallback": false,
+        "summary_present": false
+      },
+      "kaggle_or_token_accessed": false,
+      "mat_used": false,
+      "pdc_used": false,
+      "phone_coordinates_used": false,
+      "precomputed_coordinates_used": false,
+      "raw_inputs": {
+        "brdc.nav": {
+          "bytes": 10635773,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_wrapper": false,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/brdc.nav",
+          "payload_read_by_wrapper": false,
+          "sealed_bytes": 10635773,
+          "sha256": "443d3d5a73f4895b83e576e24a568f4658f869e79a480856de7f0717763dcbe6",
+          "stat_read_by_wrapper": true
+        },
+        "device_gnss.csv": {
+          "bytes": 33837317,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_wrapper": false,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_gnss.csv",
+          "payload_read_by_wrapper": false,
+          "sealed_bytes": 33837317,
+          "sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+          "stat_read_by_wrapper": true
+        },
+        "device_imu.csv": {
+          "bytes": 23649244,
+          "content_copied_or_transformed": false,
+          "exists_before_launch": true,
+          "hash_read_by_wrapper": false,
+          "path": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2022-04-01-18-22-us-ca-lax-t/pixel5/inputs/device_imu.csv",
+          "payload_read_by_wrapper": false,
+          "sealed_bytes": 23649244,
+          "sha256": "2e39a3e9f294c64b8ecfd452d0960025d1013b97f2d7497e6e48a2a1997b38c5",
+          "stat_read_by_wrapper": true
+        }
+      },
+      "read_accounting": {
+        "accuracy_calculations": 0,
+        "mat_reads_or_generated": 0,
+        "native_base_rinex_reads": 1,
+        "native_broadcast_navigation_reads": 1,
+        "native_raw_phone_gnss_reads": 1,
+        "native_raw_phone_imu_reads": 1,
+        "pdc_reads": 0,
+        "phone_coordinate_reads": 0,
+        "precomputed_coordinate_reads": 0,
+        "raw_content_copied_or_transformed": false,
+        "runner_base_hash_reads": 1,
+        "runner_raw_hash_reads": 0,
+        "runner_raw_payload_reads": 0,
+        "solution_output_reads": 0,
+        "truth_reads": 0
+      },
+      "return_code": 2,
+      "solution_output": {
+        "opened": false,
+        "path": "output/smartphone-r5/phase114-main-direct-wls-c7d-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/withheld_solution_output.csv",
+        "present": false,
+        "published": false,
+        "read_count": 0
+      },
+      "solution_output_published": false,
+      "summary": {
+        "path": "output/smartphone-r5/phase114-main-direct-wls-c7d-v1/2022-04-01-18-22-us-ca-lax-t__pixel5/summary.json",
+        "present": false,
+        "read_count": 0
+      },
+      "telemetry": null,
+      "truth_used": false
+    }
+  },
+  "schema_version": "smartphone-r5-phase114-direct-seed-main-fgo-structural-result.v1",
+  "solution_output_published": false,
+  "status": "no-go-phase114-direct-seed-main-structural",
+  "stop_before_truth_accuracy_submission": true,
+  "truth_free": true
+}

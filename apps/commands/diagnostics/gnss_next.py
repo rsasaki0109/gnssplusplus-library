@@ -245,14 +245,6 @@ def bundle_viewable_for(manifest_path: Path, goal_id: str) -> Path | None:
     return None
 
 
-def bundle_kml_for(manifest_path: Path, goal_id: str) -> Path | None:
-    """Return the primary viewable KML next to a bundle manifest, if present."""
-    viewable = bundle_viewable_for(manifest_path, goal_id)
-    if viewable is not None and viewable.suffix.lower() == ".kml":
-        return viewable
-    return None
-
-
 def cli_prefix(workspace: Path) -> str:
     if (workspace / "apps" / "gnss.py").is_file():
         if os.name == "nt":

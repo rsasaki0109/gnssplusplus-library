@@ -1,0 +1,54 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-train-score-failure.v1",
+  "status": "sealed-evaluator-failure-after-single-truth-read",
+  "created_at_utc": "2026-08-31T00:00:00Z",
+  "candidate": "native-fgo-v3-heading-optional-preserve-v1-tdcp-motion-combined-imu",
+  "freeze_record": {
+    "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_freeze.json",
+    "sha256": "38602200af437fe324ef738b5463cbea379406d2640e1372fb4c595b83e23b9a"
+  },
+  "truth_policy": {
+    "selected_train_routes": [
+      "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+      "2023-09-05-23-07-us-ca-routen/pixel5"
+    ],
+    "truth_free_artifacts_sealed_before_truth": true,
+    "truth_materialized_after_seal": true,
+    "truth_payload_read_count": 2,
+    "each_route_truth_read_once": true,
+    "validation_materialized_or_opened": false,
+    "future_holdout_materialized_or_opened": false,
+    "post_truth_tuning": false,
+    "leaderboard_scores_used": false,
+    "rerun_after_failure": false,
+    "truth_reopened_after_failure": false
+  },
+  "failure": {
+    "stage": "single-process-truth-free-artifact-plus-train-truth-evaluation",
+    "exception": "TypeError: unsupported operand type(s) for +: 'NoneType' and 'NoneType'",
+    "cause_scope": "The local diagnostic scorer reached variant aggregation with an empty matched-distance percentile for at least one route. The scorer stopped before publishing a metric report; no key/schema correction was inferred from truth.",
+    "metrics": null,
+    "selected_lane": null,
+    "promotion": "No-Go",
+    "fresh_validation_allowed": false,
+    "future_holdout_allowed": false,
+    "required_follow_up": "A separately authorized evaluator/schema audit is required before any truth re-open; this record authorizes no additional truth access."
+  },
+  "artifacts": {
+    "truth_free_run_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_truth_free_run.json",
+    "truth_free_run_record_sha256": "19be2901b8fd3ea4544d0596647be2b8a01f9c3ab356b3e80d0ed205feb8fdfc",
+    "truth_free_materialization_root": "output/smartphone-r5/native-fgo-v3-heading-optional-v1",
+    "truth_free_candidate_outputs_unchanged": true,
+    "truth_ground_truth_files_materialized": true,
+    "truth_ground_truth_sha256": "not-recorded-after-single-read-failure",
+    "v5_submission_touched": false
+  },
+  "decision": {
+    "passed": false,
+    "status": "No-Go",
+    "algorithm_or_parameter_changed_after_freeze": false,
+    "production_default_changed": false,
+    "validation_or_holdout_opened": false
+  },
+  "manifest": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_train_score_failure_manifest.json"
+}

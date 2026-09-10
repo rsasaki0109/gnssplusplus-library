@@ -1,0 +1,17 @@
+{
+  "phase": 313,
+  "support": {
+    "phone_epochs": 3140,
+    "candidates": 108722,
+    "missing_stream": 20172,
+    "unavailable": 1819,
+    "finite": 86731
+  },
+  "domain": {
+    "before_domain": 1343,
+    "after_domain": 476,
+    "in_domain_failure": 0
+  },
+  "matches_phase311": true,
+  "domain_conservation": true
+}

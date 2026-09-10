@@ -1,0 +1,104 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-pdc-correctness-authorization.v1",
+  "status": "frozen-before-correction",
+  "purpose": "Authorize only a truth-free Doppler contract correction after the PDC v1 No-Go; no estimator parameter search or score-driven change is authorized.",
+  "scope": {
+    "allowed_change": [
+      "Android pseudorange-rate to RINEX Doppler sign/unit mapping audit and oracle tests",
+      "opt-in undifferenced Doppler model using the existing receiver clock-bias difference as receiver clock drift",
+      "consistent Earth-rotation correction of satellite position and velocity"
+    ],
+    "forbidden_change": [
+      "all numeric sigmas, Huber thresholds, masks, iteration limits, motion model, and seeds",
+      "default production configuration",
+      "carrier, TDCP, single/double-difference, or base-factor behavior",
+      "validation, holdout, test truth, Kaggle/token, and leaderboard access",
+      "truth/residual-derived mapping selection"
+    ],
+    "new_behavior_default": false,
+    "fallback": "the exact pre-existing undifferenced Doppler path remains selected unless the new opt-in is explicitly requested"
+  },
+  "sealed_prior": {
+    "candidate": "native-fgo-pdc-bridge-v1",
+    "result": {
+      "path": "output/smartphone-r5/native-fgo-pdc-bridge-v1/train_evaluation.json",
+      "sha256": "b48a9c2b750f5f57955f8bc7ca648a7664095b3078437e11ce77be6c7a87b1af"
+    },
+    "result_record": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_result_v1.json",
+      "sha256": "c2fec781e9364d3cb10c3c2198b0d3e83fcad60d26f56195486e98424002202b"
+    },
+    "result_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_result_v1_manifest.json",
+      "sha256": "a6d1d3cf0d818ce2f58c63b3f326a6852f359379f6b9cf9fb8d53b9a4a3187e0"
+    },
+    "prior_test_submission_v5": {
+      "path": "output/smartphone-r5/native-fgo-test-v5-source-seam-bridge/submission.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26"
+    },
+    "pre_change_sources": {
+      "src/algorithms/fgo.cpp": "bf93c75a4d59279b7332d93a06397c2cff3f1c520f2b07b403326326eaf261b8",
+      "src/algorithms/fgo_problems.cpp": "7e45b706641bf41fa340d4db5221d1cc65562b61eac9d3f94b83b033dad7ba2c",
+      "include/libgnss++/algorithms/fgo_config.hpp": "0f5cba87642bc5bfb287e7eb21424f260094c97c105c1f5a8768d799f214c640",
+      "include/libgnss++/algorithms/fgo.hpp": "9825a296073087a38a15ca3f0aa6615ebfe8da9eaa801243a4ae0b41ad2ba2f8",
+      "src/algorithms/spp_velocity.cpp": "06204f84ddb3db9417fa63e7b6efb0e92495503ee80e8fdda5581002caf15e0f",
+      "src/io/rinex.cpp": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533",
+      "src/io/rtcm_internal.hpp": "d2272c32d6a60a9f0b027e692bc4dffe43a8db55d108b4efe8b11404cf7a616f",
+      "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py": "4a26dbbef0d5eff4a4840c43b600d790d573accc9977a9993754386ad086466b",
+      "apps/native/gnss_fgo.cpp": "e3bbc0d767eb4f76725fcefc87b3da4ba534e17f86c101f83b100da9980f8c1b"
+    }
+  },
+  "contract_evidence": {
+    "android": {
+      "url": "https://developer.android.com/reference/android/location/GnssMeasurement.html",
+      "fields_and_lines": {
+        "pseudorange_rate_mps": "getPseudorangeRateMetersPerSecond: lines 2774-2800; value is uncorrected for receiver/satellite clock frequency corrections, positive means SV moving away, pseudorange_rate = -k*doppler_shift",
+        "pseudorange_rate_uncertainty": "lines 2774-2800; one-sigma absolute uncertainty in m/s",
+        "adr_sign": "lines 2483-2487; accumulated delta range is -k*carrier phase and positive ADR means SV moving away",
+        "measurement_time": "lines 2952-2964; TimeNanos plus TimeOffsetNanos"
+      }
+    },
+    "android_raw_measurements": {
+      "url": "https://developer.android.com/develop/sensors-and-location/sensors/gnss",
+      "fields_and_lines": "lines 59-65 describe optional raw pseudorange/rate/nav/ADR fields; lines 134-137 describe raw pseudorange-rate weighting"
+    },
+    "local_reference": {
+      "path": "src/algorithms/spp_velocity.cpp",
+      "contract": "RINEX Doppler positive means approaching; measured range rate is -doppler*c/frequency; solve [receiver velocity ECEF, receiver clock drift m/s] and rotate satellite position/velocity for Earth rotation",
+      "line_ranges": "DopplerObservation and solveVelocityFromObservations implementation around lines 25-90 and 360-470 (line ranges are source audit anchors, verified against the pre-change SHA above)"
+    },
+    "rinex_and_observation": {
+      "paths": [
+        "src/io/rinex.cpp:384-390 assigns RINEX D directly to Observation::doppler",
+        "include/libgnss++/core/observation.hpp: Doppler is Hz and has_doppler",
+        "src/io/rtcm_internal.hpp: observationRangeRateMetersPerSecond returns -doppler*wavelength",
+        "apps/commands/benchmarks/gnss_smartphone_gnss_adapter.py:431-432 writes -PseudorangeRateMetersPerSecond/wavelength"
+      ]
+    },
+    "upstream_pinned": {
+      "url": "https://github.com/taroz/gsdc2023/blob/main/fgo_gnss_imu.m",
+      "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+      "sha256": {
+        "fgo_gnss_imu.m": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "fgo_gnss.m": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3",
+        "parameters.m": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52"
+      },
+      "lines": "fgo_gnss_imu.m lines 189-217 uses a Doppler factor with a receiver velocity/clock-drift observation model; lines 276-294 preintegrate IMU; lines 296+ carry biases"
+    }
+  },
+  "diagnostic_hypotheses_to_test": [
+    "Android uncorrected receiver clock frequency error is absorbed into receiver velocity because the old no-base FGO row has no receiver clock-drift term",
+    "old no-base FGO uses unrotated satellite velocity plus an explicit Sagnac approximation instead of the established rotated satellite position/velocity contract",
+    "RINEX/Android sign and m/s-versus-Hz conversion must round-trip exactly"
+  ],
+  "evaluation_policy": {
+    "truth_free_first": true,
+    "allowed_truth_after_structural_pass": "development-only train CV already designated in prior records, once, with no parameter search",
+    "validation_open": false,
+    "holdout_open": false,
+    "test_truth_open": false,
+    "kaggle_or_token": false,
+    "no_post_truth_tuning": true
+  },
+  "created_for": "PDC correctness recovery v1; apply-patched before implementation"
+}

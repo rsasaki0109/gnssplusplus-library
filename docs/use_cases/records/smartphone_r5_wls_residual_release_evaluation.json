@@ -1,0 +1,103 @@
+{
+  "schema_version": "smartphone-r5-wls-residual-release-evaluation-record.v1",
+  "status": "no-go-experimental-selection-contract",
+  "decision": "do-not-promote",
+  "scope": "development-only truth-free WLS residual candidate research",
+  "selection_record": {
+    "path": "docs/use_cases/records/smartphone_r5_wls_residual_release_candidate_selection.json",
+    "sha256": "e7c51c056c105a123d394403a3e0d33709e4e22cea411b809358f00d5ba596b8"
+  },
+  "role_contract": {
+    "known_development_routes": [
+      "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8",
+      "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+      "2021-03-16-20-40-us-ca-mtv-b/pixel4xl",
+      "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+      "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+      "2022-11-15-00-53-us-ca-mtv-a/pixel7pro"
+    ],
+    "old_holdout": "2023-09-06-22-49-us-ca-routebb1/pixel7pro",
+    "old_holdout_metrics_used_for_ranking": false,
+    "old_holdout_used_as_train_or_candidate": false,
+    "new_validation": "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+    "next_holdout": "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "next_holdout_materialized": false,
+    "next_holdout_truth_opened": false
+  },
+  "candidate_contract": {
+    "candidate_count": 9,
+    "candidate_ids": [
+      "raw_shift_m1",
+      "raw_shift_0",
+      "raw_shift_p1",
+      "median3_shift_m1",
+      "median3_shift_0",
+      "median3_shift_p1",
+      "median5_shift_m1",
+      "median5_shift_0",
+      "median5_shift_p1"
+    ],
+    "robust_estimator": "component-wise centered median",
+    "windows_epochs": [1, 3, 5],
+    "along_track_shift_m": [-1.0, 0.0, 1.0],
+    "heading_source": "WLS ECEF trajectory only",
+    "truth_free": true,
+    "device_model_free": true
+  },
+  "residual_analysis": {
+    "frame": "local along/cross/up at truth WGS84 origin",
+    "groups": ["overall", "speed slow<1mps / mid 1-5mps / fast>=5mps", "turn straight<5degps / turning>=5degps"],
+    "conclusion": "route/device vertical and horizontal bias signs vary; no fixed global shift was justified",
+    "median3_zero_shift_selected_as_future_candidate": true
+  },
+  "sealed_run_artifacts": {
+    "report": {
+      "path": "output/smartphone-r5/wls-residual-v1/wls_residual_release_report.json",
+      "sha256": "dbc990e87d4ed2868b643f2a52780d2a48c4c20493f9119d975b702f43e59064"
+    },
+    "manifest": {
+      "path": "output/smartphone-r5/wls-residual-v1/wls_residual_release_manifest.json",
+      "sha256": "387135f5a91c1ab7531cc9d13bd93a0f3bc8d044e8b6140eee8e13a105b88a21"
+    },
+    "truth_free_validation_manifest": {
+      "path": "output/smartphone-r5/wls-residual-v1/validation/truth_free_manifest.json",
+      "sha256": "f50a6651efeb9f9a16b5825d6da75079195eb4b261ef0473009ade4f237b429e"
+    },
+    "candidate_source_sha256_after_contract_fix": "33c7d6fb831e7a559d2ccf051d2109e4c3c3a1d947f33f132b31872ee6d2a175",
+    "evaluation_source_sha256_after_contract_fix": "72837965380859752ae28695489ada70a5d561e070ea6cac50ec43abb4884b70"
+  },
+  "known_aggregate_gate_audit": {
+    "run_selected_candidate": "median5_shift_0",
+    "v3_selector_baseline": {
+      "h_p50_m": 2.6201507470372944,
+      "h_p95_m": 5.159886876751061,
+      "v_p95_m": 11.204835296590469
+    },
+    "run_selected_candidate_metrics": {
+      "h_p50_m": 2.6202360209802293,
+      "h_p95_m": 5.108817881053853,
+      "v_p95_m": 10.976978675314495
+    },
+    "corrected_gate": {
+      "passed": false,
+      "failure": "h_p50_regression_vs_v3_selector_by_0.0000852739429349m",
+      "interpretation": "The raw run's aggregate comparator treated route-level keys as aggregate keys, so the generated eligibility bit is not trusted. The sealed median5 result also fails the actual non-regression rule on H P50."
+    },
+    "no_post_validation_substitution": true,
+    "no_promotion": true
+  },
+  "new_validation_audit": {
+    "truth_open_count": 1,
+    "selector_lane": "native_stable",
+    "candidate_output_lane": "not selected because native stability was true",
+    "v3_selector_baseline_and_candidate_scores_equal": true,
+    "h_p50_m": 1.6121453724828598,
+    "h_p95_m": 5.780875317416493,
+    "v_p95_m": 8.291539453031888,
+    "availability_ratio": 1.0,
+    "non_regression_and_signoff_passed": true
+  },
+  "promotion_scope": "No-Go; retain implementation as experimental only. Production RTK/SPP defaults and existing v3 selector are unchanged.",
+  "freeze_policy": "The next holdout remains sealed and no second validation truth read or parameter adjustment is authorized for this run."
+}

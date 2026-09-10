@@ -1,0 +1,20 @@
+{
+  "schema_version": "smartphone-r5-gsdc2023-native-fgo-v3-heading-optional-evaluator-recovery-authorization-manifest.v1",
+  "status": "authorized-before-scoring-code-change",
+  "authorization_record": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v3_heading_optional_evaluator_recovery_authorization.json",
+  "authorization_record_sha256": "a0a8a470403a6a9abf11070156813885be578d9951b1f29a939c3f26f412bf90",
+  "candidate_source_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+  "candidate_release_binary_sha256": "482cd0a7641eaaa29ee212d6cd664558d9160d02ac5975507f3832bc4fb32dd3",
+  "candidate_profile_sha256": "273dfcc4e4636940d5216cca793a55773d9a04f668d1bfa5fcdc0013f4768776",
+  "freeze_record_sha256": "38602200af437fe324ef738b5463cbea379406d2640e1372fb4c595b83e23b9a",
+  "freeze_manifest_sha256": "c1d61e1875fd2ae9962de686804d79325d2af706c5ef7329b46d7142730f32e1",
+  "truth_free_run_record_sha256": "19be2901b8fd3ea4544d0596647be2b8a01f9c3ab356b3e80d0ed205feb8fdfc",
+  "scoring_code_before_change_sha256": "688c56f015ebfe54dfc2358c470f3b57acb98a5fcd2bd1ea81d5166c11a0494b",
+  "allowed_mutation": "evaluator null-handling/schema aggregation plus its regression tests and recovery records only",
+  "truth_recovery_read_count": 2,
+  "validation_truth_open_count": 0,
+  "future_holdout_truth_open_count": 0,
+  "solver_rerun": false,
+  "external_mutation": false,
+  "no_post_recovery_tuning": true
+}

@@ -1,0 +1,92 @@
+{
+  "phase": 545,
+  "route": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+  "role": "development/train; not heldout or leaderboard proof",
+  "truth": {
+    "path": "output/smartphone-r5/phase44-pixel5-development-accuracy-v1/truth/2022-04-01-18-22-us-ca-lax-t/pixel5/ground_truth.csv",
+    "sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+    "bytes": 143441,
+    "rows": 1465,
+    "expected_missing_truth_key": null
+  },
+  "metric_contract": {
+    "candidate_parser": "Phase74 _parse_submission",
+    "truth_parser": "Phase76 _parse_truth_dictreader (CSV DictReader; required fields by name; optional columns allowed)",
+    "join": "exact (phone, UnixTimeMillis) keys; no interpolation/hold/fill",
+    "distance": "Phase74 spherical Haversine, radius 6371008.8 m",
+    "percentile": "Phase74 linear rank (n - 1) * q",
+    "route_scalar": "(P50 + P95) / 2 in metres",
+    "pixel5_offset_reapplication": false
+  },
+  "historical_baseline_m": null,
+  "authority": {
+    "phase199_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase199_phase198_h_accuracy.py",
+      "sha256": "67e5591f9156e800a205cc7ad40af1ad09d2b1d52686466d0cf3c9ef61178ef4"
+    },
+    "phase196_thin_wrapper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase196_phase195_h_accuracy.py",
+      "sha256": "372b68f2e1b4a83ab17ac9af0c16f172af1b71201983bd786469586f0454368a"
+    },
+    "phase189_kernel": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase189_phase188_h_accuracy.py",
+      "sha256": "525a436707ab7de0202b1130bb6daed4e001686b8396a24b23ed15c669a60a83",
+      "commit": "5f456010c78cbb80cf5614f421d5c8b0d38aee3a"
+    },
+    "phase76_parser": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase76_phase75_accuracy_integrity_recovery.py",
+      "sha256": "513e5970ee58846963f077b9960944e5fbf5f3535e5be24ca6e72493785f7761",
+      "commit": "7a8e77ce03f6f4354cf2f541098a53628faa23d5"
+    },
+    "phase74_metric_helper": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase74_phase73_miss_mask_accuracy.py",
+      "sha256": "bf07ff7ccb9f9efce5a759f2fabe57b7dc0c24ac5acdaf57c6ad9fc88a3fd761",
+      "commit": "84ce2a1d6a3bc1f5813a09ffee31111be275e1a6"
+    },
+    "phase203_evaluator": {
+      "path": "apps/commands/benchmarks/gnss_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "ccf7e0ed5bc9604ade8f3464e2473264ffb8dd64200258f2399e1d1d8b1b0aca"
+    },
+    "phase203_tests": {
+      "path": "tests/test_smartphone_phase203_phase202_h_accuracy.py",
+      "sha256": "74975757b952346b2fc51a17bfb64b3bec4b4caf3aef946f2df504912f416696"
+    },
+    "output/smartphone-r5/phase545-lax-evaluation-only-v1/projection_manifest.json": {
+      "path": "output/smartphone-r5/phase545-lax-evaluation-only-v1/projection_manifest.json",
+      "sha256": "7e53ce9b2425bfbc3bd15acf511ca24db07cfde916156a657ba9d2639cdf1c21"
+    },
+    "output/smartphone-r5/phase538-joint-transfer-v1/lax/manifest.json": {
+      "path": "output/smartphone-r5/phase538-joint-transfer-v1/lax/manifest.json",
+      "sha256": "5eed93f598235cfa4aa5055a89ba93f15cb8b7e6b83077373c59b0b23299ed89"
+    },
+    "output/smartphone-r5/phase538-joint-transfer-v1/lax/completed.json": {
+      "path": "output/smartphone-r5/phase538-joint-transfer-v1/lax/completed.json",
+      "sha256": "b5320bca48fd6eaf8bd214d128fc823abe2784e5597fc2cb3f4ca679ef00e281"
+    },
+    "output/smartphone-r5/phase538-joint-transfer-v1/lax/native_summary.json": {
+      "path": "output/smartphone-r5/phase538-joint-transfer-v1/lax/native_summary.json",
+      "sha256": "d2e23d7e47321270afc7bbdb528869c15c6df039d83cf3b37933a3346539d7eb"
+    },
+    "scripts/verify_phase538_joint_transfer.py": {
+      "path": "scripts/verify_phase538_joint_transfer.py",
+      "sha256": "5a60082ba7f91fc42de06125c8922bb29473e851b0733489072802d44aa398df"
+    },
+    "scripts/evaluate_phase545_joint_ionosphere.py": {
+      "path": "scripts/evaluate_phase545_joint_ionosphere.py",
+      "sha256": "19aeef0c898f18f0e576653e916013e981815bc77cddf032d3b446fbbdcf8c1e"
+    }
+  },
+  "baseline": {
+    "path": "output/smartphone-r5/phase545-lax-evaluation-only-v1/baseline.csv",
+    "sha256": "a82982e4d8069e92d5bcfbb802e017aa7d514d96dc47eeb4e8ce29a63e4a9968",
+    "bytes": 117254,
+    "rows": 1465
+  },
+  "candidate": {
+    "path": "output/smartphone-r5/phase545-lax-evaluation-only-v1/candidate.csv",
+    "sha256": "4c4a32d4b752db846a4f122a0edfb0ce56a736b91c322e676ac07965733b0442",
+    "bytes": 117254,
+    "rows": 1465
+  },
+  "policy": "one evaluation of frozen candidate; no solver, no tuning or retry"
+}

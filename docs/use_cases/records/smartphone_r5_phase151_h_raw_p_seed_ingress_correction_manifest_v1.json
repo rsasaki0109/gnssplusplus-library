@@ -1,0 +1,103 @@
+{
+  "schema_version": "smartphone-r5-phase151-h-raw-p-seed-ingress-correction-manifest.v1",
+  "phase": 151,
+  "execution_label": "Luna Max",
+  "status": "source-diagnosed-corrected-command-not-run",
+  "purpose": "Correct the Phase150 prep command's missing raw-clock-only selector while preserving the sealed Phase150 invocation and result; no raw rerun is authorized by this record.",
+  "historical_records": {
+    "phase150_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase150_h_raw_p_seed_diagnostic_manifest_v1.json",
+      "sha256": "8f9831f8686e27dbcb4896984db19a9a5db795d4266cd2dbdf14abc136827433",
+      "argv_missing_raw_clock_only": true
+    },
+    "phase150_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase150_h_raw_p_seed_diagnostic_result_v1.json",
+      "sha256": "086c42611b4484fbea3ea3325d7300efbabf8601a3519eefa83d074202a0a107",
+      "failure_preserved": true
+    },
+    "phase147_h_result": {
+      "path": "docs/use_cases/records/smartphone_r5_phase147_hu_structural_diagnostic_result_v1.json",
+      "ingress_reached_before_later_failure": true,
+      "h_argv_contained_raw_clock_only": true
+    }
+  },
+  "route": {
+    "target": "MTV-H",
+    "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "official_type": "Street"
+  },
+  "source_rule": {
+    "raw_clock_pseudorange": "rawPseudorange(TimeNanos, FullBiasNanos, BiasNanos, TimeOffsetNanos, ReceivedSvTimeNanos) with long-double arithmetic and system week rules",
+    "estimator_pseudorange": "raw-clock reconstruction only",
+    "enriched_RawPseudorangeMeters": "diagnostic-only-and-ignored",
+    "strict_predicate": "finite enriched value is checked with abs(raw_clock_p - enriched_p) <= enriched_pseudorange_tolerance_m",
+    "strict_default_tolerance_m": 0.05,
+    "strict_mismatch_action": "increment mismatch diagnostic and fail conversion",
+    "raw_clock_only_action": "do not parse/use enriched value; retain raw-clock P",
+    "source_locations": {
+      "config_default": "include/libgnss++/io/android_raw_gnss.hpp:35-40",
+      "raw_formula": "src/io/android_raw_gnss.cpp:529-560",
+      "mismatch_predicate": "src/io/android_raw_gnss.cpp:862-871",
+      "app_flag_mapping": "apps/native/gnss_fgo_imu_no_base.cpp:9248-9250",
+      "frozen_contract": "docs/use_cases/records/smartphone_r5_phase25_raw_clock_contract_freeze_v1.json:44-49"
+    }
+  },
+  "diagnosis": {
+    "phase150_failure_stage": "android-gnss-ingress",
+    "phase150_failure_message": "raw-clock pseudorange disagrees with enriched RawPseudorangeMeters",
+    "cause_class": "missing-existing-raw-clock-only-command-flag",
+    "raw_clock_formula_invalidated": false,
+    "enriched_value_substituted": false,
+    "tolerance_relaxed": false,
+    "algorithm_changed": false,
+    "coordinate_provenance": "No WLS/SvPosition/enriched coordinate field is an estimator input; this correction selects the already-frozen raw-clock P contract only."
+  },
+  "binary_and_source_pins": {
+    "implementation_commit": "7f090b8be3b8c19e2fdd10a8edb6f9b98cb72817",
+    "binary_path": "build/apps/gnss_fgo_imu_no_base",
+    "binary_sha256": "900eeedc6c56f635fb5c923d4d7c83e37ad8ae7445d2cf96e3e1f01a111438c3",
+    "app_source_sha256": "7e6d4d80f4c854657ce433b38cf866d6d68fc7f1b6ce720e60af6188e45a1012",
+    "raw_p_seed_source_sha256": "7936a62d00d311d92a7f0f80a12917f524ea16f861950280eee5148c2f73f0e6"
+  },
+  "corrected_command": {
+    "working_directory": "/home/sasaki/workspace/rtklib_v2_ws/gnssplusplus-library",
+    "argv": [
+      "build/apps/gnss_fgo_imu_no_base",
+      "--dataset-id",
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "--android-gnss",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+      "--nav",
+      "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/brdc.nav",
+      "--all-epochs",
+      "--android-raw-clock-only",
+      "--summary-json",
+      "output/smartphone-r5/phase151-h-raw-p-seed-v1/mtv-h/native_summary.json",
+      "--native-phase149-raw-p-seed-stage"
+    ],
+    "change_from_phase150": [
+      "add exactly one --android-raw-clock-only selector",
+      "keep raw GNSS and nav paths unchanged",
+      "keep prep-only flag and no-IMU/no-base/no-out shape unchanged"
+    ],
+    "no_payload_read_in_test": true,
+    "run_authorized_here": false,
+    "future_authorization_required": true
+  },
+  "synthetic_acceptance": {
+    "argv": "corrected command contains exactly one raw-clock-only and exactly one Phase149 selector, and contains no IMU, output CSV, Phase144, base, or FGO selector",
+    "ingress": "strict mode rejects a synthetic finite enriched P differing by 1 m; verify_enriched_pseudorange=false accepts the same row, retains the raw-clock P, and records the enriched field as ignored",
+    "raw_payload_reads": 0,
+    "native_runs": 0,
+    "truth_reads": 0,
+    "coordinate_reads": 0
+  },
+  "execution_boundary": {
+    "no_raw_rerun_in_phase151": true,
+    "no_nav_spp_fgo_run_in_phase151": true,
+    "no_truth_accuracy_mat_pdc_kaggle": true,
+    "do_not_switch_to_enriched_pseudorange": true,
+    "do_not_relax_numeric_tolerance": true,
+    "next_executable_step": "A separately authorized one-shot Phase149 prep invocation may use this corrected argv; record its ingress, epoch, rank, clock, velocity, and failure accounting independently."
+  }
+}

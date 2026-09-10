@@ -1,0 +1,75 @@
+{
+  "schema_version": "smartphone-r5-phase79-phase78-signal-bias-accuracy-manifest.v1",
+  "phase": 79,
+  "status": "sealed-before-phase79-truth-read",
+  "freeze": {
+    "path": "docs/use_cases/records/smartphone_r5_phase79_phase78_signal_bias_accuracy_freeze_v1.json",
+    "sha256": "f57b064405cc8e591f03bd1f76c208b364e8fcc4a06c59106a117911d992b166"
+  },
+  "evaluator": {
+    "path": "apps/commands/benchmarks/gnss_smartphone_phase79_phase78_signal_bias_accuracy.py",
+    "sha256": "2d2fa791fab93fb2b0e458e73055518bd46b0a85a1267c2ef29e1ee33f1b621c"
+  },
+  "focused_tests": {
+    "path": "tests/test_smartphone_phase79_phase78_signal_bias_accuracy.py",
+    "sha256": "9cf3bc0206a2bfdf7c3f325e2d06529c703d688615c5a5ba2cd675ab4016cc8f",
+    "passed": 6
+  },
+  "cmake": {
+    "path": "tests/CMakeLists.txt",
+    "sha256": "ac99ff55e4145cc943d609e7ea89301ef0e0452c7e8684ea7038a57d1e3d244e"
+  },
+  "phase43_baseline_resolver": {
+    "result_path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.json",
+    "result_sha256": "fdeaf672b015cae99dfdf8351a5e7a92ca2d37bcdb0872c5c3fc5b937416b64d",
+    "result_bytes": 567854,
+    "manifest_path": "output/smartphone-r5/phase43-native-fallback-seed-quality-anchor-recovery-v1/phase43_structural_seal.manifest.json",
+    "manifest_sha256": "c116fe122399dafb516b9d76eeab6ea4fb77bcad5aeb9b552f08550d351a26ce",
+    "manifest_bytes": 1075,
+    "route_source": "candidate_runs[route].run1.submission/summary",
+    "path_policy": "only repository-relative paths recorded by the pinned Phase43 seal are accepted"
+  },
+  "routes": [
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+    "2022-04-01-18-22-us-ca-lax-t/pixel5",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5"
+  ],
+  "artifact_sources": {
+    "phase78_candidate_run1": "freeze.artifact_sources.phase78_candidate_run1; one submission and one summary read per route",
+    "phase43_control": "freeze.artifact_sources.phase43_control; exact Phase43 identity pins, one submission and one summary read per route",
+    "phase73_no_bias": "freeze.artifact_sources.phase73_no_bias; one submission and one summary read per route",
+    "phase51": "historical metadata only; never a scoring input"
+  },
+  "read_policy": {
+    "truth_reads_before_freeze": 0,
+    "truth_reads_before_manifest": 0,
+    "truth_reads": 4,
+    "truth_reads_after_manifest": 4,
+    "truth_reads_per_route": 1,
+    "phase78_candidate_artifact_reads": 8,
+    "phase43_control_artifact_reads": 8,
+    "phase73_artifact_reads": 8,
+    "single_scorer_process": true,
+    "native_or_solver_subprocess": false,
+    "post_truth_tuning": false,
+    "raw_gnss_reads": 0,
+    "raw_imu_reads": 0,
+    "navigation_reads": 0,
+    "validation_holdout_reads": 0,
+    "mat_reads_or_generated": 0,
+    "device_wls_or_precomputed_coordinates": 0,
+    "kaggle_or_token_access": 0,
+    "archive_reopen_or_rematerialize": false
+  },
+  "artifact_contract": {
+    "new_output_root": "output/smartphone-r5/phase79-phase78-signal-bias-accuracy-v2",
+    "candidate_run1_only": true,
+    "phase78_repeat_identity_already_sealed": true,
+    "exact_prediction_domain_required": true,
+    "truth_row_coverage_informational": true,
+    "failure_capture": true,
+    "no_accuracy_or_validation_read_before_manifest": true
+  },
+  "metric_and_gate_source": "Phase79 freeze; exact Phase76 corrected DictReader and Haversine contract; all declared accuracy gates are ANDed"
+}

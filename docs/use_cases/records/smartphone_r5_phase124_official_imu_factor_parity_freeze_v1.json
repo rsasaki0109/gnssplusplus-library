@@ -1,0 +1,236 @@
+{
+  "schema_version": "smartphone-r5-phase124-official-imu-factor-parity-freeze.v1",
+  "phase": 124,
+  "execution_label": "Luna Max",
+  "status": "sealed-no-candidate-read-only",
+  "purpose": "Freeze the official/native IMU-factor parity audit. No implementation, raw run, solver run, truth evaluation, accuracy calculation, solution release, or Kaggle action is authorized.",
+  "decision": {
+    "candidate_count": 0,
+    "decision": "no-candidate",
+    "source_backed_independent_candidate": false,
+    "implementation_authorized": false,
+    "raw_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "solution_publication_authorized": false,
+    "kaggle_authorized": false,
+    "reason_codes": [
+      "pixel5-accelerometer-and-gyroscope-noise-densities-already-match-after-sync-coefficient",
+      "bias-random-walk-and-integration-sigma-values-already-match",
+      "gravity-zero-coriolis-and-zero-lever-arm-behavior-already-match",
+      "official-imu-factor-plus-bias-between-differs-from-native-combined-imu-factor",
+      "official-9-state-preintegration-differs-from-native-15-state-correlated-preintegration",
+      "official-zero-infinite-bias-prior-differs-from-native-static-bias-finite-prior",
+      "official-interpolation-inclusive-dt-and-gap-admission-differ-from-native-bounded-pairing",
+      "official-stop-factors-are-not-in-the-phase118-native-recipe",
+      "no-topology-and-admission-preserving-source-backed-single-candidate-remains"
+    ]
+  },
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase124_official_imu_factor_parity_audit_v1.md",
+    "commit": "b0a0c16",
+    "sha256": "36d3aaf0ac752422930df4e2e10c9f3a43419346e8f26af29c55b9aa085adb8b"
+  },
+  "scope": {
+    "routes": [
+      "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "2022-04-01-18-22-us-ca-lax-t/pixel5"
+    ],
+    "official_source_tree_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "baseline_phase118_source_freeze": "5fcc06ab64189dd5dfb8001664bdb8496f85224f",
+    "baseline_phase118_structural_contract": "25f3bada02c4073175054b5d668de02020761208",
+    "baseline_phase123_audit": "db4e23255529b6212f86f37409a1931d60641fcc",
+    "baseline_phase123_freeze": "e1642294c53176326fd9d277cd5fa6172b49857d",
+    "native_imu_graph": "Pose3+velocity+ConstantBias with CombinedImuFactor when an interval has integrated samples",
+    "native_target_android_raw": true,
+    "native_phase118_upstream_stop_constraints": false,
+    "native_phase118_direct_quality": true,
+    "native_phase118_c7_d_qr_raw_base_pixel5_boundary": "unchanged; identified only from sealed/source contract",
+    "read_only": true,
+    "new_raw_read": false,
+    "new_base_read": false,
+    "truth_read": false,
+    "solution_row_read": false,
+    "mat_read": false,
+    "precomputed_coordinate_read": false,
+    "solver_run": false,
+    "accuracy_read_or_calculation": false,
+    "pdc_access": false,
+    "kaggle_access": false,
+    "rerun": false,
+    "fallback": false,
+    "parameter_or_weight_sweep": false
+  },
+  "numeric_contract": {
+    "official_pixel_acc_sigma_raw_mps2_per_sqrt_hz": 0.05,
+    "official_pixel_gyro_sigma_raw_radps_per_sqrt_hz": 0.001,
+    "official_sync_coefficient": 0.5,
+    "effective_acc_sigma_mps2_per_sqrt_hz": 0.025,
+    "effective_gyro_sigma_radps_per_sqrt_hz": 0.0005,
+    "accel_bias_random_walk_sigma": 0.00025,
+    "gyro_bias_random_walk_sigma": 0.0000005,
+    "integration_sigma": 0.05,
+    "gravity_mps2": 9.80665,
+    "mounting_angles_deg_xyz": [-85.0, 178.0, -94.0],
+    "mounting_position_m_xyz": [0.0, 0.0, 0.0],
+    "native_phase118_imu_noise_accel_sigma": 0.025,
+    "native_phase118_imu_noise_gyro_sigma": 0.0005,
+    "native_phase118_imu_noise_accel_bias_rw_sigma": 0.00025,
+    "native_phase118_imu_noise_gyro_bias_rw_sigma": 0.0000005,
+    "native_phase118_imu_noise_integration_sigma": 0.05,
+    "native_phase118_gravity_vector_enu": [0.0, 0.0, -9.80665]
+  },
+  "term_classification": {
+    "accelerometer_white_noise_density": "exact_pixel5_effective_value",
+    "gyroscope_white_noise_density": "exact_pixel5_effective_value",
+    "bias_random_walk_numeric_values": "equivalent_values_but_divergent_factor_realization",
+    "integration_covariance_parameter": "exact_value_but_divergent_full_covariance",
+    "gravity_vector": "exact",
+    "coriolis_behavior": "equivalent_zero_behavior_optional-representation-differs",
+    "sampling_clock_and_accel_gyro_sync": "divergent",
+    "integration_dt_and_epoch_endpoint": "divergent",
+    "body_sensor_frame_rotation": "physically_equivalent_zero-lever-arm-placement-differs",
+    "lever_arm": "exact_zero",
+    "initial_attitude": "divergent",
+    "initial_bias_and_bias_prior": "divergent",
+    "imu_factor_topology": "divergent",
+    "preintegration_covariance_propagation": "divergent",
+    "ordinary_imu_robust_loss": "equivalent_gaussian",
+    "official_stop_factor_admission": "divergent_phase118-native-switch-off",
+    "long_gap_imu_admission": "divergent",
+    "raw_sample_nonfinite_and_pair_admission": "divergent_fail-closed-native-contract"
+  },
+  "topology_and_covariance": {
+    "official": {
+      "factor": "ImuFactor",
+      "factor_arity": 5,
+      "keys": ["pose_i", "velocity_i", "pose_j", "velocity_j", "bias_i"],
+      "preintegrated_covariance_dimension": 9,
+      "bias_evolution": "separate BetweenFactorConstantBias",
+      "bias_initial_value": "zero",
+      "bias_prior": "infinite_sigma"
+    },
+    "native_phase118": {
+      "factor": "CombinedImuFactor",
+      "factor_arity": 6,
+      "keys": ["pose_i", "velocity_i", "pose_j", "velocity_j", "bias_i", "bias_j"],
+      "preintegrated_covariance_dimension": 15,
+      "bias_evolution": "inside CombinedImuFactor with bias random walk and cross-correlation",
+      "bias_initial_value": "static-window estimated accel/gyro bias",
+      "bias_prior": "finite first-state accel=0.1, gyro=0.01"
+    }
+  },
+  "admission_comparison": {
+    "official_sync": "GNSS elapsed-to-UTC linear/extrapolation; gyro grid; acceleration linear/extrapolation",
+    "native_sync": "validated elapsed anchors or validated UTC fallback; nearest/interior-linear accel pairing; 0.025 s bound",
+    "official_interval_selection": "acc.utcmssync >= obs.utcms(i) && <= obs.utcms(i+1)",
+    "native_interval_selection": "samples with time < t1 plus a held-sample tail to t1",
+    "official_long_gap_rule": "ImuFactor only when dtgps < 1.5 s; assert at least one IMU index",
+    "native_long_gap_rule": "CombinedImuFactor when integrated>0, otherwise loose velocity/bias continuity in backend; Phase118 wrapper rejects zero-interval candidate",
+    "official_stop_path": "final-mode robust zero-velocity and consecutive-stop Pose3 factors when source stop predicates pass",
+    "native_phase118_stop_path": "disabled by exact Phase118 validation; no substitution permitted"
+  },
+  "candidate_assessment": {
+    "candidate_count": 0,
+    "candidates": [
+      {
+        "id": "phase124-official-imu-factor-plus-bias-between-v1",
+        "status": "rejected-topology-and-covariance-change",
+        "source_backed": true,
+        "reason": "Replacing CombinedImuFactor changes six-way versus five-way factor incidence, 15-state versus 9-state covariance, bias random-walk placement, and bias linearization."
+      },
+      {
+        "id": "phase124-official-gyro-grid-interpolation-and-inclusive-dt-v1",
+        "status": "rejected-admission-and-integration-change",
+        "source_backed": true,
+        "reason": "Official extrapolation/inclusive endpoint and native bounded pairing/[t0,t1) tail produce different samples, dt assignments, counts, and gap predicates."
+      },
+      {
+        "id": "phase124-official-zero-bias-infinite-prior-v1",
+        "status": "rejected-initialization-and-gauge-change",
+        "source_backed": true,
+        "reason": "Changing native static bias and finite first-state priors alters the initial state and gauge/conditioning; it is not a single equation-preserving factor change."
+      }
+    ],
+    "representation_only_noop": "Explicitly setting native omegaCoriolis=[0,0,0] would reproduce the official optional representation but not behavior; absent optional Coriolis already returns zero, so it is not frozen."
+  },
+  "source_pins": {
+    "official": {
+      "fgo_gnss_imu.m": {
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3",
+        "lines": "40-60,129-187,252-299,325-365"
+      },
+      "functions/imuprocessing.m": {
+        "sha256": "d942df6fe046841d69f6a30290e7878679359f5015b13c805c86e8aa5c91f7ae",
+        "lines": "5-40,42-58"
+      },
+      "functions/deviceimu2imu.m": {
+        "sha256": "9aff2984b0aa1709bbb1b397b48216ab46c213a1e3cbcfa99c0546a48a6df632",
+        "lines": "5-28"
+      },
+      "functions/vel2rpy.m": {
+        "sha256": "1fc09b66f3e6548174e0eb6777d42becd0fa131b821013864e4fbfa9ff6e6a31",
+        "lines": "5-14"
+      },
+      "parameters.m": {
+        "sha256": "518925e9c75c7a14fceb5cd99432fe883311e0d64c72b94396744ac765120f52",
+        "lines": "46-51,176-203"
+      }
+    },
+    "native": {
+      "apps/native/gnss_fgo_imu_no_base.cpp": {
+        "sha256": "df77ab6556f90d6d9a8464d360e85d2a49a50d6fc04ef396833f354f821a1176",
+        "lines": "1787-1798,4341-4552,7603-7608,7780-7825,8540-8674"
+      },
+      "src/io/imu.cpp": {
+        "sha256": "79efa99a4b24cc7895fb8756a59967604c1048a1a297d2662f00cb23b239809a",
+        "lines": "729-785,850-958,1001-1141"
+      },
+      "include/libgnss++/io/imu.hpp": {
+        "sha256": "154675958cc37c865dd76165ad92d922689c81670206efaf9584ebbb7bd87d8c",
+        "lines": "21-30,63-85,202-228"
+      },
+      "include/libgnss++/algorithms/fgo.hpp": {
+        "sha256": "b2224fd4cbe6958eed491ae0551485c4cdb86ef8cd5c5a03f5572f1c41400b86",
+        "lines": "440-491"
+      },
+      "src/algorithms/fgo_gtsam_backend.cpp": {
+        "sha256": "c0da12d7a1d5eeb9492b02ad80f0e9868cbda32e452bbdd9c3f90cc57b4db0fa",
+        "lines": "624-809"
+      },
+      "src/fusion/fusion_initialization.cpp": {
+        "sha256": "c1f7d6bb00179afd471f4287c296da0c8718e23b146ea9518d8a002f70dfd6aa",
+        "lines": "13-48,61-165"
+      }
+    },
+    "gtsam_local": {
+      "ImuFactor.h": "d26230ccc4ad1784d26c5145e49ca68e34aea602a611d106135ad09954f04156",
+      "ImuFactor.cpp": "6500ec260c4b1157a4c0b76857fbe284d5684dabe4864d8ed443813b368bb66",
+      "CombinedImuFactor.h": "be3fe486859127aeb3503a928cda99366b9ac21929b6e11428f1c33ea266be70",
+      "CombinedImuFactor.cpp": "780a612c661ca6a445178e52b5484dee28c1719ef11747a201ffca93433ddd32",
+      "PreintegrationParams.h": "f629799dd7ffde1be2e1b41f9d001c2e51978ce858b6178a88c76b6d6006c409",
+      "PreintegrationCombinedParams.h": "754532ff66c6d2105322374f8288b8ddc0c2601ecb83eb84a6300c5103604f7e",
+      "PreintegratedRotation.h": "97571b5d0649e7a1b4e66492510b77fb7def7ee0601ab9f1cf06371c7b9d9f20",
+      "PreintegratedRotation.cpp": "24c8e5e3adf8e96837246356eef4f4b4a9ad0580f9fae7a269d7fe02c1c7bdc7",
+      "PreintegrationBase.h": "508d2ddcc9805df837452b5178edb444731d083c9854a8eb804c861b4ea48c1c",
+      "PreintegrationBase.cpp": "713f0c8490f2edebe3fbf9e1fa7a82539ebcc6144b6b80d8dbd4ba2b462ffd0d"
+    }
+  },
+  "read_accounting": {
+    "official_and_native_source_text": "read-only",
+    "sealed_phase_metadata": "metadata-only",
+    "raw_phone_gnss_imu_navigation_payload": 0,
+    "raw_base_payload": 0,
+    "truth_or_coordinate_rows": 0,
+    "solution_rows": 0,
+    "mat_files_or_data": 0,
+    "precomputed_coordinates": 0,
+    "solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_access": 0,
+    "reruns_fallbacks_repairs": 0,
+    "parameter_or_weight_sweeps": 0
+  },
+  "next_boundary": "Keep the Phase118 IMU recipe unchanged. Any future candidate would need source-complete proof of one topology- and admission-preserving difference; this freeze authorizes no implementation, raw, solver, truth, accuracy, or Kaggle action."
+}

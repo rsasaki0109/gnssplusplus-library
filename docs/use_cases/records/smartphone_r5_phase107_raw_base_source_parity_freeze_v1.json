@@ -1,0 +1,319 @@
+{
+  "schema_version": "smartphone-r5-phase107-raw-base-source-parity-freeze.v1",
+  "phase": 107,
+  "status": "frozen-read-only-before-raw-base-phase101-execution",
+  "created_at_utc": "2026-09-03T01:17:10Z",
+  "execution_label": "Luna Max",
+  "purpose": "Audit whether sealed raw base RINEX members can be processed in the native C++ process and applied to the Phase101 raw code path while preserving C7/D handoff and Phase99 QR.",
+  "audit": {
+    "path": "docs/use_cases/records/smartphone_r5_phase107_raw_base_source_parity_audit_v1.md",
+    "commit": "f047d3341843ab7262c5988264ca6424f49170ae",
+    "sha256": "79d1c79510138498c05d4096ed7c3f97b34b1ee16690f3fc7a7b57af3b0192ab"
+  },
+  "pinned_head_before_audit": {
+    "commit": "d6bf02662a40e4c0168ad7346d3316595d19a0e9",
+    "working_tree_clean": true,
+    "algorithm_or_solver_source_changed_for_phase107": false
+  },
+  "sealed_evidence": {
+    "phase82_direct_quality_accuracy": {
+      "path": "docs/use_cases/records/smartphone_r5_phase82_phase80_direct_quality_accuracy_result_v1.json",
+      "sha256": "39c5a38b7e3e61fda0306582fffb961dad3e6fb0bd49fcfe70e66674e2c90873",
+      "use": "historical base-backed scalar reference only",
+      "candidate_macro_m": 1.7643320853515223,
+      "phase43_control_macro_m": 3.536446745838451,
+      "status": "no-go-phase82-accuracy-gates"
+    },
+    "phase80_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase80_source_exact_direct_p_quality_freeze_v1.json",
+      "sha256": "9ebdde21fe7fd955029243d3bdbba3a9f9d3832388d67480760394177c8f685e",
+      "use": "sealed direct-quality recipe and base flag provenance"
+    },
+    "phase73_base_structural": {
+      "path": "docs/use_cases/records/smartphone_r5_phase73_source_exact_pseudorange_miss_mask_structural_result_v1.json",
+      "sha256": "8493d16b3d2c5ce8b09b65ab0dada6903fcbac01257fb8db7977cb41c85577fd",
+      "use": "sealed four-route finite/material base-correction evidence"
+    },
+    "phase65_base_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase65_native_base_pseudorange_compensation_manifest_v1.json",
+      "sha256": "1306480f6b7fb839e55309e9c2c77b41f2ac0a1baf9f6971949612fd485d2255",
+      "use": "sealed exact base member paths, hashes, byte counts, and sampling metadata"
+    },
+    "phase64_base_policy_recovery": {
+      "path": "docs/use_cases/records/smartphone_r5_phase64_base_preflight_policy_recovery_result_v4.json",
+      "sha256": "70e620b6726c089b6ebc65d494d45405860e37e2a072b34239fb9c93673f8e80",
+      "use": "sealed member identity, overlap, finite header position, and recovery policy"
+    },
+    "phase101_structural": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_result_v1.json",
+      "sha256": "5ffb15c04fbdeac33d907f4ed3a1fdacb031508c6e3db8d7ef5b230dcab8d36a",
+      "use": "no-base C7/D/QR structural baseline"
+    },
+    "phase101_manifest": {
+      "path": "docs/use_cases/records/smartphone_r5_phase101_epoch_clock_vector_structural_manifest_v1.json",
+      "sha256": "ddda124d762e7f15854c65da35b322eaee7a7547fb87f6847f1b4965d3215b9b",
+      "use": "exact Phase101 selectors and raw-only contract"
+    },
+    "phase106_fallback_audit": {
+      "path": "docs/use_cases/records/smartphone_r5_phase106_gnss_first_regression_audit_v1.md",
+      "sha256": "ed8997df27e8c4b481f678a4824685db20295c8a214d7940a76c9423c2860e7c",
+      "use": "active diagnostic fallback"
+    },
+    "phase106_fallback_freeze": {
+      "path": "docs/use_cases/records/smartphone_r5_phase106_gnss_first_regression_diagnostic_freeze_v1.json",
+      "sha256": "2e3fe2727f5a121115adc4de54623f30d87b934b95653621edb5225a0a9598af",
+      "use": "fallback contract"
+    }
+  },
+  "source_pins": {
+    "official": [
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss.m",
+        "sha256": "5368e4056f70f448b728792c5e4c124b7f2afc1e00653492b807083bd3ccf0c3"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/fgo_gnss_imu.m",
+        "sha256": "c70090ccb8b27fc8ac7fd2929e2f995a14cfe7f089bb1fef067370e22051c3e3"
+      },
+      {
+        "path": "output/reproducibility-cache/gsdc2023/functions/correct_pseudorange.m",
+        "sha256": "b0536ccff478b0aff253448ffb7a203c715b8064dd8dc85898e38f1f05d0441e"
+      }
+    ],
+    "native": [
+      {
+        "path": "apps/native/gnss_fgo_imu_no_base.cpp",
+        "sha256": "c81381b0a8fa8cea5c101fc5d54e6364173c0e8cffb83f02eac18c8b6cafde5b"
+      },
+      {
+        "path": "src/algorithms/fgo_problems.cpp",
+        "sha256": "e7607ce8f0fe27fd382a01b5b6f147b027b7bf51453e920eae458c86ddac0c17"
+      },
+      {
+        "path": "src/algorithms/base_pseudorange_compensation.cpp",
+        "sha256": "f3c3c859793c4bed9c7ae93825d32565f20eab0badb09412a4fab2a5930c9817"
+      },
+      {
+        "path": "include/libgnss++/algorithms/base_pseudorange_compensation.hpp",
+        "sha256": "a182091ef47af8692e3f4dfb0d714cf365f5b24bc6927a8204d05648248e026b"
+      },
+      {
+        "path": "src/io/rinex.cpp",
+        "sha256": "92f683e34b4052f8d105f69fc4bf4397ca990be3b5a6b220181a56423f465533"
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_backend.cpp",
+        "sha256": "781d65e34826ec08e04d1dfdac0ab10b2ed9409726078465f3020b57afac4baa"
+      },
+      {
+        "path": "src/algorithms/fgo_gtsam_internal.hpp",
+        "sha256": "cc6327e36800afa8217e5a834260adc81c0a74a5aefbfc956bb4679c8d86105f"
+      }
+    ]
+  },
+  "base_route_members_sealed_metadata_only": [
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-03-16-18-59-us-ca-mtv-a__pixel5/base.obs",
+      "sha256": "380b8ff9091344fb756697e27f0983d9a0ba2cf0c201b96849bfc1ecc1af0e52",
+      "bytes": 10708536,
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151,
+      "header_approx_position_xyz_m": [-2703115.921, -4291767.2078, 3854247.9066]
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2021-08-24-20-32-us-ca-mtv-h__pixel5/base.obs",
+      "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+      "bytes": 11854125,
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151,
+      "header_approx_position_xyz_m": [-2698116.8365, -4301328.0461, 3847285.9307]
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2022-04-01-18-22-us-ca-lax-t__pixel5/base.obs",
+      "sha256": "d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe",
+      "bytes": 719969,
+      "observed_dt_s": 15.0,
+      "moving_mean_samples": 11,
+      "header_approx_position_xyz_m": [-2507798.7984, -4676369.6918, 3526890.8008]
+    },
+    {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "path": "output/smartphone-r5/phase63-settings-integrity-recovery-v1/routes/2023-03-08-21-34-us-ca-mtv-u__pixel5/base.obs",
+      "sha256": "aedb7a39e7b6612ea97964b363c74cd2c10318255b7f2287f4720d18e71803e6",
+      "bytes": 5950275,
+      "observed_dt_s": 1.0,
+      "moving_mean_samples": 151,
+      "header_approx_position_xyz_m": [-2698116.8365, -4301328.0461, 3847285.9307]
+    }
+  ],
+  "availability_decision": {
+    "source_artifacts_reproducible_for_four_frozen_train_routes": true,
+    "historical_four_route_base_members_materialized_and_structurally_used": true,
+    "current_filesystem_existence_rechecked": false,
+    "generic_competition_or_test_route_base_coverage_proven": false,
+    "base_member_route_scope": "the four sealed dataset_2023/train members only",
+    "competition_inference_reproducible_from_sealed_evidence": false,
+    "reason": "No sealed route inventory or exact base member provenance exists for arbitrary competition/test inference routes; the audit also cannot probe raw/base bytes under the read boundary."
+  },
+  "station_coordinate_provenance": {
+    "runtime_candidate_source": "raw RINEX header APPROX POSITION XYZ only",
+    "official_source_compared": "official correct_pseudorange.m references base_position.csv mean XYZ plus base_offset.csv ENU antenna offset",
+    "official_station_payload_read_in_phase107": false,
+    "native_header_station_id_and_interval_sealed_as_present": false,
+    "native_header_version_sealed": "3.03",
+    "settings_rinex_contract_sealed": "V2",
+    "antenna_delta_parity": "unresolved; parser exposes antenna delta but current native base model consumes only approximate XYZ",
+    "phone_result_wls_pdc_or_precomputed_coordinate_allowed": false,
+    "unresolved_reference_mismatch_action": "fail closed"
+  },
+  "correction_contract": {
+    "source": "same native C++ process from exact raw base RINEX and broadcast navigation",
+    "stream_key": "exact satellite and signal",
+    "residual_m_expression": "P + satellite_clock_m - ionosphere - troposphere - group_delay - geometric_range",
+    "earth_rotation_correction": true,
+    "two_pass_satellite_clock_and_transmit_time": true,
+    "smoothing": {
+      "one_hz_samples": 151,
+      "fifteen_hz_samples": 11,
+      "centered_moving_mean": true
+    },
+    "time_transfer": "in-domain linear interpolation only",
+    "extrapolation_or_endpoint_fill": false,
+    "positive_pc_subtracted_from_raw_code_factor": true,
+    "source_exact_miss_mask_required": true,
+    "apply_to_existing_raw_code_factors": true,
+    "new_base_factor_family": false,
+    "spp_seed_changed": false,
+    "doppler_changed": false,
+    "carrier_or_tdcp_changed": false
+  },
+  "phase101_invariants": {
+    "selectors": [
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver"
+    ],
+    "clock_vector_dimension": 7,
+    "clock_component_order": [
+      "base_gps_l1",
+      "glo_l1",
+      "gal_l1",
+      "bds_l1",
+      "gps_l5",
+      "gal_l5",
+      "bds_l5"
+    ],
+    "clock_units": "metres",
+    "drift_units": "metres_per_second",
+    "raw_d_initializer": "retained EpochSeed.receiver_clock_drift_mps",
+    "ccdd_sigma_m": 0.1,
+    "global_isb_state_count": 0,
+    "same_run_position_velocity_handoff": true,
+    "main_solver": "MULTIFRONTAL_QR / EliminateQR",
+    "filter_sigma_robust_loss_lm_ordering_iterations_initialization_changed": false
+  },
+  "decision": {
+    "candidate_id": "phase107-raw-base-rinex-source-exact-pseudorange-phase101-c7d-qr-v1",
+    "candidate_count": 1,
+    "candidate_type": "future-opt-in-guard-only-source-admission",
+    "source_data_candidate_reproducible": true,
+    "current_phase101_plus_base_combination_executable": false,
+    "blocked_by_existing_guard": true,
+    "guard_path": "apps/native/gnss_fgo_imu_no_base.cpp:838-846",
+    "guard_reason": "Phase101 GNSS-first meter-state handoff rejects native base compensation, source miss mask, base RINEX path, and base RINEX hash as base/external coordinate inputs.",
+    "unique_algorithmic_fix_identified": false,
+    "only_frozen_candidate": "guard-only admission of the existing raw-base model alongside Phase101 selectors; no equation, factor, state, solver, or parameter change",
+    "phase106_diagnostic_remains_fallback": true,
+    "fallback_reason": "Until the guard-only admission boundary is separately implemented, qualified, and authorized, no Phase107 raw run can be executed fail-closed."
+  },
+  "candidate_contract": {
+    "opt_in": true,
+    "default_off": true,
+    "required_base_flags": [
+      "--native-base-pseudorange-compensation",
+      "--native-base-rinex <exact sealed route member>",
+      "--native-base-rinex-sha256 <sealed hash>",
+      "--native-base-pseudorange-source-miss-mask"
+    ],
+    "raw_base_only_coordinate_source": true,
+    "base_rinex_header_approx_position_required": true,
+    "base_rinex_header_position_finite_and_earth_valid_required": true,
+    "exact_route_hash_and_byte_preflight_required": true,
+    "observed_interval_must_match_frozen_1_or_15_seconds": true,
+    "exact_satellite_signal_in_domain_coverage_required": true,
+    "gnss_first_and_main_use_same_corrected_code_factor_vector": true,
+    "full_finite_exact_c7_d_handoff_required": true,
+    "strict_gnss_first_and_main_progress_required": true,
+    "main_qr_selection_required": true,
+    "no_fallback": true,
+    "no_solution_publication": true,
+    "no_truth_during_solver": true,
+    "legacy_default_unchanged": true,
+    "forbidden_inputs": [
+      "phone coordinates",
+      "result coordinates",
+      "device-WLS coordinates",
+      "PDC coordinates",
+      "precomputed or external coordinates",
+      "base_position.csv at runtime",
+      "base_offset.csv at runtime",
+      "MAT",
+      "truth",
+      "Kaggle"
+    ],
+    "solver_filter_lm_equation_unit_sigma_initialization_change": false
+  },
+  "future_qualification_boundary": {
+    "routes": ["MTV-A", "MTV-H", "LAX-T", "MTV-U"],
+    "runs_per_route": 1,
+    "raw_execution_authorized_at_freeze": false,
+    "required_inputs": ["device_gnss.csv", "device_imu.csv", "brdc.nav", "exact raw base RINEX member"],
+    "truth_reads": 0,
+    "mat_reads_or_generated": 0,
+    "phone_or_precomputed_coordinate_reads": 0,
+    "kaggle_or_token_reads": 0,
+    "accuracy_evaluation": false,
+    "route_reruns": 0,
+    "fallbacks": 0,
+    "required_structural_telemetry": [
+      "base path/hash/bytes and header reference",
+      "base interval/window and exact stream/miss-mask counts",
+      "GNSS-first and main progress/costs/strict decrease",
+      "finite Earth-valid output coverage",
+      "C7/D exact retained-key handoff",
+      "selected MULTIFRONTAL_QR / EliminateQR",
+      "no fallback or solution publication"
+    ],
+    "generic_competition_routes": "not authorized or inferred from the four train members"
+  },
+  "authorization_boundary": {
+    "audit_only": true,
+    "raw_base_execution_authorized": false,
+    "solver_execution_authorized": false,
+    "truth_evaluation_authorized": false,
+    "accuracy_authorized": false,
+    "algorithm_change_authorized": false,
+    "guard_only_implementation_authorized": false,
+    "kaggle_submission_authorized": false
+  },
+  "read_accounting_phase107": {
+    "source_files_read": true,
+    "sealed_artifact_metadata_read": true,
+    "raw_device_gnss_payloads": 0,
+    "raw_device_imu_payloads": 0,
+    "broadcast_navigation_payloads": 0,
+    "raw_base_rinex_bytes": 0,
+    "raw_base_rinex_headers": 0,
+    "raw_base_files_stat_or_hash": 0,
+    "truth_payloads": 0,
+    "mat_payloads": 0,
+    "phone_result_or_precomputed_coordinate_payloads": 0,
+    "native_solver_invocations": 0,
+    "accuracy_evaluator_invocations": 0,
+    "kaggle_or_token_resources": 0,
+    "raw_content_copied_or_transformed": false
+  }
+}

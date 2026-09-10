@@ -1,0 +1,62 @@
+{
+  "schema_version": "smartphone-r5-phase174-h-native-raw-p-no-doppler-imu-main-result.v1",
+  "phase": 174,
+  "execution_label": "Luna Max",
+  "status": "sealed-preflight-launch-failure",
+  "manifest": {
+    "path": "docs/use_cases/records/smartphone_r5_phase174_h_native_raw_p_no_doppler_imu_main_manifest_v1.json",
+    "sha256": "50a153f4a59a9eb16f05b91f79a8d0d1c7d00e575696104e62e8e3089b9661c1",
+    "commit": "bc03e89b35d46d96b409c854ea482fdd27e9f49a"
+  },
+  "implementation_commit": "d2525ce56d9fe106d5db8c66e08c2554215020f6",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "execution": {
+    "invocation_count": 1,
+    "return_code": 1,
+    "native_solver_invocations": 0,
+    "payload_reads": 0,
+    "rerun": false,
+    "fallback": false,
+    "repair": false,
+    "status_boundary": "launcher preflight only; not an H diagnostic result"
+  },
+  "attempted_argv_discrepancy": {
+    "manifest_android_gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-20-32-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+    "attempted_android_gnss": "output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-18-59-us-ca-mtv-h/pixel5/inputs/device_gnss.csv",
+    "cause": "manual command transcription typo in the launcher wrapper",
+    "other_inputs": "not opened because GNSS path failed before ingress"
+  },
+  "native_artifacts": {
+    "stderr": {
+      "path": "output/smartphone-r5/phase174-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stderr.log",
+      "sha256": "abc22ae9d4a32970dbfc1def3314d0da11329eb78c95ee5a379e02764aab926e",
+      "bytes": 192,
+      "exact_failure": "failed to convert raw Android GNSS: failed to open raw Android GNSS CSV: output/smartphone-r5/phase37-pixel5-repeatability-v1/routes/2021-08-24-18-59-us-ca-mtv-h/pixel5/inputs/device_gnss.csv"
+    },
+    "stdout": {
+      "path": "output/smartphone-r5/phase174-h-native-raw-p-no-doppler-imu-main-v1/mtv-h/native.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    "summary": {
+      "present": false,
+      "coordinate_values_read": false
+    },
+    "opaque_solution_output": {
+      "present": false,
+      "coordinate_values_read": false
+    }
+  },
+  "read_accounting": {
+    "gnss_reads": 0,
+    "imu_reads": 0,
+    "nav_reads": 0,
+    "truth_reads": 0,
+    "base_reads": 0,
+    "mat_pdc_precomputed_reads": 0,
+    "accuracy_calculations": 0,
+    "kaggle_or_token_access": 0,
+    "solution_coordinate_interpretation": 0
+  },
+  "next_boundary": "Phase175 uses the committed manifest argv through a subprocess launcher, validates each pinned input path/hash before launch, and has a separate output/result path."
+}

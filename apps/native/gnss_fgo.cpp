@@ -1,4 +1,5 @@
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
@@ -67,6 +68,7 @@ struct Options {
     double clock_prior_sigma_m = 0.0;
     double tdcp_sigma_m = 0.03;
     double carrier_phase_sigma_m = 0.01;
+    double undifferenced_doppler_sigma_mps = 0.2;
     double double_difference_pseudorange_sigma_m = 1.0;
     double double_difference_carrier_sigma_m = 0.02;
     double ambiguity_prior_sigma_m = 1000.0;
@@ -105,6 +107,9 @@ struct Options {
     bool use_robust_loss = true;
     bool no_pseudorange_factors = false;
     bool no_double_difference_factors = false;
+    bool use_undifferenced_doppler_factors = false;
+    bool use_corrected_undifferenced_doppler_factors = false;
+    bool use_doppler_velocity_wls_initialization = false;
     bool use_single_difference_doppler_factors = false;
     bool use_single_difference_tdcp_factors = false;
     bool use_velocity_states = false;
@@ -168,6 +173,8 @@ void printUsage(const char* program_name) {
         << "  --clock-prior-sigma <m>       Weak clock prior sigma; 0 disables (default: 0)\n"
         << "  --tdcp-sigma <m>              TDCP factor sigma in meters (default: 0.03)\n"
         << "  --carrier-phase-sigma <m>     Carrier phase sigma in meters (default: 0.01)\n"
+        << "  --undifferenced-doppler-sigma <m/s>\n"
+        << "                                No-base raw Doppler sigma (default: 0.2)\n"
         << "  --dd-pseudorange-sigma <m>    Double-difference code sigma in meters (default: 1)\n"
         << "  --dd-carrier-sigma <m>        Double-difference carrier sigma in meters (default: 0.02)\n"
         << "  --ambiguity-prior-sigma <m>   Weak float ambiguity prior sigma (default: 1000)\n"
@@ -222,6 +229,12 @@ void printUsage(const char* program_name) {
         << "                                Batch reoptimization iterations (default: 1)\n"
         << "  --no-pseudorange-factors      Do not add raw pseudorange factors\n"
         << "  --no-dd-factors               Ignore --base for FGO double-difference factors\n"
+        << "  --undifferenced-doppler-factors\n"
+        << "                                Add receiver-only raw Doppler factors (no base)\n"
+        << "  --corrected-undifferenced-doppler-factors\n"
+        << "                                Include Android receiver clock drift and rotated satellite state\n"
+        << "  --doppler-velocity-wls-initialization\n"
+        << "                                Initialize velocity/clock-rate states from gated per-epoch Doppler WLS\n"
         << "  --sd-doppler-factors          Add taroz-style SD Doppler factors\n"
         << "  --sd-tdcp-factors             Add taroz-style SD TDCP factors\n"
         << "  --velocity-states             Add per-epoch 3D velocity states\n"
@@ -504,6 +517,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.tdcp_sigma_m = std::stod(argv[++i]);
         } else if (arg == "--carrier-phase-sigma" && i + 1 < argc) {
             options.carrier_phase_sigma_m = std::stod(argv[++i]);
+        } else if (arg == "--undifferenced-doppler-sigma" && i + 1 < argc) {
+            options.undifferenced_doppler_sigma_mps = std::stod(argv[++i]);
         } else if (arg == "--dd-pseudorange-sigma" && i + 1 < argc) {
             options.double_difference_pseudorange_sigma_m = std::stod(argv[++i]);
         } else if (arg == "--dd-carrier-sigma" && i + 1 < argc) {
@@ -583,6 +598,13 @@ Options parseArguments(int argc, char* argv[]) {
             options.no_pseudorange_factors = true;
         } else if (arg == "--no-dd-factors") {
             options.no_double_difference_factors = true;
+        } else if (arg == "--undifferenced-doppler-factors") {
+            options.use_undifferenced_doppler_factors = true;
+        } else if (arg == "--corrected-undifferenced-doppler-factors") {
+            options.use_corrected_undifferenced_doppler_factors = true;
+            options.use_undifferenced_doppler_factors = true;
+        } else if (arg == "--doppler-velocity-wls-initialization") {
+            options.use_doppler_velocity_wls_initialization = true;
         } else if (arg == "--sd-doppler-factors") {
             options.use_single_difference_doppler_factors = true;
         } else if (arg == "--sd-tdcp-factors") {
@@ -645,6 +667,25 @@ Options parseArguments(int argc, char* argv[]) {
     if (options.backend != "eigen" && options.backend != "gtsam-pc") {
         argumentError("--backend must be eigen or gtsam-pc", argv[0]);
     }
+    if (options.use_undifferenced_doppler_factors &&
+        options.backend != "eigen") {
+        argumentError(
+            "--undifferenced-doppler-factors requires the eigen backend",
+            argv[0]);
+    }
+    if (options.use_corrected_undifferenced_doppler_factors &&
+        !options.use_undifferenced_doppler_factors) {
+        argumentError(
+            "--corrected-undifferenced-doppler-factors requires undifferenced Doppler",
+            argv[0]);
+    }
+    if (options.use_doppler_velocity_wls_initialization &&
+        (!options.use_corrected_undifferenced_doppler_factors ||
+         !options.use_velocity_states || options.backend != "eigen")) {
+        argumentError(
+            "--doppler-velocity-wls-initialization requires corrected undifferenced Doppler, velocity states, and eigen backend",
+            argv[0]);
+    }
     if (options.max_epochs < 0) {
         argumentError("--max-epochs must be non-negative", argv[0]);
     }
@@ -666,6 +707,7 @@ Options parseArguments(int argc, char* argv[]) {
         options.ambiguity_between_sigma_cycles <= 0.0 ||
         options.tdcp_sigma_m <= 0.0 ||
         options.carrier_phase_sigma_m <= 0.0 ||
+        options.undifferenced_doppler_sigma_mps <= 0.0 ||
         options.double_difference_pseudorange_sigma_m <= 0.0 ||
         options.double_difference_carrier_sigma_m <= 0.0 ||
         options.ambiguity_prior_sigma_m <= 0.0 ||
@@ -1809,6 +1851,14 @@ void writeSummaryJson(const Options& options,
     output << "  \"use_spp_seed\": " << jsonBool(!options.no_spp_seed) << ",\n";
     output << "  \"use_pseudorange_factors\": "
            << jsonBool(!options.no_pseudorange_factors) << ",\n";
+    output << "  \"use_undifferenced_doppler_factors\": "
+           << jsonBool(options.use_undifferenced_doppler_factors) << ",\n";
+    output << "  \"use_corrected_undifferenced_doppler_factors\": "
+           << jsonBool(options.use_corrected_undifferenced_doppler_factors)
+           << ",\n";
+    output << "  \"use_doppler_velocity_wls_initialization\": "
+           << jsonBool(options.use_doppler_velocity_wls_initialization)
+           << ",\n";
     output << "  \"use_single_difference_doppler_factors\": "
            << jsonBool(options.use_single_difference_doppler_factors) << ",\n";
     output << "  \"use_single_difference_tdcp_factors\": "
@@ -1842,6 +1892,17 @@ void writeSummaryJson(const Options& options,
            << options.carrier_phase_huber_threshold_sigma << ",\n";
     output << "  \"tdcp_huber_threshold_sigma\": "
            << options.tdcp_huber_threshold_sigma << ",\n";
+    output << "  \"undifferenced_doppler_sigma_mps\": "
+           << options.undifferenced_doppler_sigma_mps << ",\n";
+    output << "  \"doppler_velocity_wls_min_rows\": 4,\n";
+    output << "  \"doppler_velocity_wls_max_condition_number\": 100000000,\n";
+    output << "  \"doppler_velocity_wls_huber_threshold_sigma\": 4,\n";
+    output << "  \"doppler_velocity_wls_max_irls_iterations\": 3,\n";
+    output << "  \"doppler_velocity_wls_max_velocity_mps\": 70,\n";
+    output << "  \"doppler_velocity_wls_max_clock_rate_mps\": 2000,\n";
+    output << "  \"doppler_velocity_wls_max_normalized_rms\": 4,\n";
+    output << "  \"doppler_velocity_wls_max_abs_normalized_residual\": 25,\n";
+    output << "  \"doppler_velocity_wls_edge_hold_max_s\": 1,\n";
     output << "  \"lambda_ratio_threshold\": "
            << options.lambda_ratio_threshold << ",\n";
     output << "  \"position_prior_sigma_m\": "
@@ -1906,6 +1967,22 @@ void writeSummaryJson(const Options& options,
     output << "  \"tdcp_factors\": " << diagnostics.tdcp_factors << ",\n";
     output << "  \"tdcp_factors_inserted\": "
            << diagnostics.tdcp_factors_inserted << ",\n";
+    output << "  \"undifferenced_doppler_factors\": "
+           << diagnostics.undifferenced_doppler_factors << ",\n";
+    output << "  \"doppler_velocity_wls_valid_epochs\": "
+           << diagnostics.doppler_velocity_wls_valid_epochs << ",\n";
+    output << "  \"doppler_velocity_wls_propagated_epochs\": "
+           << diagnostics.doppler_velocity_wls_propagated_epochs << ",\n";
+    output << "  \"doppler_velocity_wls_rejected_epochs\": "
+           << diagnostics.doppler_velocity_wls_rejected_epochs << ",\n";
+    output << "  \"doppler_velocity_wls_max_condition_number\": "
+           << diagnostics.doppler_velocity_wls_max_condition_number << ",\n";
+    output << "  \"doppler_velocity_wls_max_normalized_rms\": "
+           << diagnostics.doppler_velocity_wls_max_normalized_rms << ",\n";
+    output << "  \"doppler_velocity_wls_max_velocity_norm_mps\": "
+           << diagnostics.doppler_velocity_wls_max_velocity_norm_mps << ",\n";
+    output << "  \"doppler_velocity_wls_max_clock_rate_abs_mps\": "
+           << diagnostics.doppler_velocity_wls_max_clock_rate_abs_mps << ",\n";
     output << "  \"single_difference_doppler_factors\": "
            << diagnostics.single_difference_doppler_factors << ",\n";
     output << "  \"single_difference_tdcp_factors\": "
@@ -2007,6 +2084,8 @@ void writeSummaryJson(const Options& options,
     output << "  \"last_update_norm_m\": " << diagnostics.last_update_norm_m << ",\n";
     output << "  \"residual_rms_m\": " << diagnostics.residual_rms_m << ",\n";
     output << "  \"tdcp_residual_rms_m\": " << diagnostics.tdcp_residual_rms_m << ",\n";
+    output << "  \"undifferenced_doppler_residual_rms_mps\": "
+           << diagnostics.undifferenced_doppler_residual_rms_mps << ",\n";
     output << "  \"single_difference_doppler_residual_rms_mps\": "
            << diagnostics.single_difference_doppler_residual_rms_mps << ",\n";
     output << "  \"single_difference_tdcp_residual_rms_m\": "
@@ -2030,6 +2109,8 @@ libgnss::FGOProcessor::FGOResult makeProblemOnlyResult(
     diagnostics.epochs = problem.epochs.size();
     diagnostics.pseudorange_factors = problem.pseudorange_factors.size();
     diagnostics.tdcp_factors = problem.tdcp_factors.size();
+    diagnostics.undifferenced_doppler_factors =
+        problem.undifferenced_doppler_factors.size();
     diagnostics.single_difference_doppler_factors =
         problem.single_difference_doppler_factors.size();
     diagnostics.single_difference_tdcp_factors =
@@ -2082,6 +2163,7 @@ libgnss::FGOProcessor::FGOResult makeProblemOnlyResult(
     diagnostics.graph_factors =
         diagnostics.pseudorange_factors +
         diagnostics.tdcp_factors +
+        diagnostics.undifferenced_doppler_factors +
         diagnostics.single_difference_doppler_factors +
         diagnostics.single_difference_tdcp_factors +
         diagnostics.carrier_phase_factors +
@@ -2686,29 +2768,43 @@ bool prepareSdObservationModel(const libgnss::ObservationData& epoch,
     model.los = -corrected_delta / corrected_range;
 
     if (observation.has_doppler) {
-        const libgnss::Vector3d doppler_delta =
-            satellite_position - receiver_position;
-        const double doppler_range = doppler_delta.norm();
-        if (doppler_range > 0.0) {
-            const libgnss::Vector3d ex = doppler_delta / doppler_range;
-            const double sagnac_rate =
-                libgnss::constants::OMEGA_E /
-                libgnss::constants::SPEED_OF_LIGHT *
-                (satellite_velocity(1) * receiver_position(0) -
-                 satellite_velocity(0) * receiver_position(1));
-            const double modeled_range_rate =
-                satellite_velocity.dot(ex) + sagnac_rate;
-            const double satellite_clock_drift_mps =
-                satellite_clock_drift *
-                libgnss::constants::SPEED_OF_LIGHT;
+        libgnss::Vector3d doppler_los = libgnss::Vector3d::Zero();
+        double modeled_range_rate = 0.0;
+        bool geometry_valid = false;
+        if (options.use_corrected_undifferenced_doppler_factors) {
+            geometry_valid =
+                libgnss::doppler_contract::knownSatelliteRangeRate(
+                    satellite_position, satellite_velocity, receiver_position,
+                    true, doppler_los, modeled_range_rate);
+        } else {
+            const libgnss::Vector3d doppler_delta =
+                satellite_position - receiver_position;
+            const double doppler_range = doppler_delta.norm();
+            if (doppler_range > 0.0 && doppler_delta.allFinite()) {
+                doppler_los = doppler_delta / doppler_range;
+                const double sagnac_rate =
+                    libgnss::constants::OMEGA_E /
+                    libgnss::constants::SPEED_OF_LIGHT *
+                    (satellite_velocity(1) * receiver_position(0) -
+                     satellite_velocity(0) * receiver_position(1));
+                modeled_range_rate =
+                    satellite_velocity.dot(doppler_los) + sagnac_rate;
+                geometry_valid = std::isfinite(modeled_range_rate);
+            }
+        }
+        if (geometry_valid) {
             const double measured_range_rate =
-                -observation.doppler * wavelength;
+                libgnss::doppler_contract::rinexDopplerToRangeRate(
+                    observation.doppler,
+                    libgnss::constants::SPEED_OF_LIGHT / wavelength);
             model.raw_doppler_hz = observation.doppler;
             model.doppler_residual_mps =
-                measured_range_rate -
-                (modeled_range_rate - satellite_clock_drift_mps);
+                libgnss::doppler_contract::receiverOnlyResidual(
+                    measured_range_rate, modeled_range_rate,
+                    satellite_clock_drift);
             model.has_doppler_residual =
-                std::isfinite(model.doppler_residual_mps);
+                std::isfinite(model.doppler_residual_mps) &&
+                std::isfinite(measured_range_rate);
         }
     }
 
@@ -3350,6 +3446,8 @@ int main(int argc, char* argv[]) {
         config.clock_prior_sigma_m = options.clock_prior_sigma_m;
         config.tdcp_sigma_m = options.tdcp_sigma_m;
         config.carrier_phase_sigma_m = options.carrier_phase_sigma_m;
+        config.undifferenced_doppler_sigma_mps =
+            options.undifferenced_doppler_sigma_mps;
         config.double_difference_pseudorange_sigma_m =
             options.double_difference_pseudorange_sigma_m;
         config.double_difference_carrier_sigma_m =
@@ -3402,6 +3500,12 @@ int main(int argc, char* argv[]) {
         config.use_tdcp_factors = !options.no_tdcp_factors;
         config.use_double_difference_factors =
             !options.base_path.empty() && !options.no_double_difference_factors;
+        config.use_undifferenced_doppler_factors =
+            options.use_undifferenced_doppler_factors;
+        config.use_corrected_undifferenced_doppler_factors =
+            options.use_corrected_undifferenced_doppler_factors;
+        config.use_doppler_velocity_wls_initialization =
+            options.use_doppler_velocity_wls_initialization;
         config.use_single_difference_doppler_factors =
             options.use_single_difference_doppler_factors;
         config.use_single_difference_tdcp_factors =
@@ -3541,6 +3645,9 @@ int main(int argc, char* argv[]) {
             std::cout << "TDCP factors: " << result.diagnostics.tdcp_factors << "\n";
             std::cout << "TDCP factors inserted: "
                       << result.diagnostics.tdcp_factors_inserted << "\n";
+            std::cout << "Undifferenced Doppler factors: "
+                      << result.diagnostics.undifferenced_doppler_factors
+                      << "\n";
             std::cout << "SD Doppler factors: "
                       << result.diagnostics.single_difference_doppler_factors
                       << "\n";
@@ -3630,6 +3737,9 @@ int main(int argc, char* argv[]) {
                       << result.diagnostics.last_update_norm_m << "\n";
             std::cout << "Residual RMS [m]: " << result.diagnostics.residual_rms_m << "\n";
             std::cout << "TDCP residual RMS [m]: " << result.diagnostics.tdcp_residual_rms_m << "\n";
+            std::cout << "Undifferenced Doppler residual RMS [m/s]: "
+                      << result.diagnostics.undifferenced_doppler_residual_rms_mps
+                      << "\n";
             std::cout << "SD Doppler residual RMS [m/s]: "
                       << result.diagnostics.single_difference_doppler_residual_rms_mps
                       << "\n";
