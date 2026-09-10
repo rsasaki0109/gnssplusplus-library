@@ -264,7 +264,7 @@ class GnssNextTest(unittest.TestCase):
             payload["recommendation"]["id"], "open-urban-continuity-bundle"
         )
 
-    def test_trajectory_bundle_without_kml_recommends_web(self) -> None:
+    def test_trajectory_bundle_without_kml_opens_png(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss-next-traj-") as temp_dir:
             workspace = Path(temp_dir)
             summary = workspace / "output" / "self-contained-demo" / "demo_summary.json"
@@ -285,6 +285,7 @@ class GnssNextTest(unittest.TestCase):
                 json.dumps({"schema_version": "libgnsspp.trajectory_bundle.v1"}),
                 encoding="utf-8",
             )
+            (bundle_dir / "trajectory.png").write_bytes(b"\x89PNG\r\n\x1a\n")
             result = self.run_next(
                 workspace, "--goal", "trajectory-bundle", "--format", "json"
             )
@@ -294,8 +295,45 @@ class GnssNextTest(unittest.TestCase):
         self.assertEqual(payload["stage"], "inspect-result")
         self.assertEqual(payload["detected_goal"], "trajectory-bundle")
         self.assertEqual(
-            payload["recommendation"]["id"], "inspect-trajectory-bundle-bundle"
+            payload["recommendation"]["id"], "open-trajectory-bundle-bundle"
         )
+        self.assertEqual(
+            payload["recommendation"]["kml"], "output/trajectory_bundle/trajectory.png"
+        )
+
+    def test_bundle_without_viewable_recommends_web(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss-next-noview-") as temp_dir:
+            workspace = Path(temp_dir)
+            summary = workspace / "output" / "self-contained-demo" / "demo_summary.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text(
+                json.dumps(
+                    {
+                        "processed_epochs": 8,
+                        "valid_solutions": 8,
+                        "demo": {"schema_version": "self-contained-demo.v1"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            bundle_dir = workspace / "output" / "urban_continuity_bundle"
+            bundle_dir.mkdir(parents=True)
+            (bundle_dir / "manifest.json").write_text(
+                json.dumps({"schema_version": "libgnsspp.urban_continuity_bundle.v1"}),
+                encoding="utf-8",
+            )
+            result = self.run_next(
+                workspace, "--goal", "urban-continuity", "--format", "json"
+            )
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["stage"], "inspect-result")
+        self.assertEqual(payload["detected_goal"], "urban-continuity")
+        self.assertEqual(
+            payload["recommendation"]["id"], "inspect-urban-continuity-bundle"
+        )
+        self.assertIn(" web ", payload["recommendation"]["command"])
 
     def test_source_checkout_uses_platform_python_launcher(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss-next-source-") as temp_dir:

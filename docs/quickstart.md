@@ -28,7 +28,8 @@ least one solution epoch; empty or header-only outputs remain at
 `apply-to-data`. Completed R1/R3 bundles are detected the same way: any
 `output/**/manifest.json` carrying `libgnsspp.urban_continuity_bundle.v1` or
 `libgnsspp.trajectory_bundle.v1` advances to `inspect-result`, opening the
-bundle KML when present and recommending `gnss web` otherwise
+bundle KML when present, else the bundle trajectory PNG, and recommending
+`gnss web` only when neither exists
 (`--goal urban-continuity` / `--goal trajectory-bundle` constrain the search).
 If a documented standard input is not present, the command
 lists the missing paths and opens focused command help instead of recommending

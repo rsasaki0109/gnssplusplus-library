@@ -227,12 +227,13 @@ def completed_bundle(
     return goal_id, manifest_path
 
 
-def bundle_kml_for(manifest_path: Path, goal_id: str) -> Path | None:
-    """Return the primary viewable KML next to a bundle manifest, if present."""
+def bundle_viewable_for(manifest_path: Path, goal_id: str) -> Path | None:
+    """Return the primary viewable artifact next to a bundle manifest, if present."""
     parent = manifest_path.parent
     names = (
-        ("fused.kml", "raw.kml") if goal_id == "urban-continuity"
-        else ("accepted.kml", "raw.kml")
+        ("fused.kml", "fused_trajectory.png", "raw.kml")
+        if goal_id == "urban-continuity"
+        else ("accepted.kml", "trajectory.png", "raw.kml")
     )
     for name in names:
         candidate = parent / name
@@ -241,6 +242,14 @@ def bundle_kml_for(manifest_path: Path, goal_id: str) -> Path | None:
                 return candidate
         except OSError:
             continue
+    return None
+
+
+def bundle_kml_for(manifest_path: Path, goal_id: str) -> Path | None:
+    """Return the primary viewable KML next to a bundle manifest, if present."""
+    viewable = bundle_viewable_for(manifest_path, goal_id)
+    if viewable is not None and viewable.suffix.lower() == ".kml":
+        return viewable
     return None
 
 
@@ -311,16 +320,16 @@ def build_payload(workspace: Path, goal: str | None) -> dict[str, object]:
     elif bundle is not None:
         detected_goal, manifest_path = bundle
         relative_manifest = manifest_path.relative_to(workspace).as_posix()
-        kml_path = bundle_kml_for(manifest_path, detected_goal)
-        if kml_path is not None:
-            kml_relative = kml_path.relative_to(workspace).as_posix()
+        viewable_path = bundle_viewable_for(manifest_path, detected_goal)
+        if viewable_path is not None:
+            viewable_relative = viewable_path.relative_to(workspace).as_posix()
             recommendation = {
                 "id": f"open-{detected_goal}-bundle",
-                "label": f"open the completed {GOALS[detected_goal]['label']} KML",
-                "command": open_command(kml_relative),
+                "label": f"open the completed {GOALS[detected_goal]['label']} file",
+                "command": open_command(viewable_relative),
                 "guide": GOALS[detected_goal]["guide"],
                 "result": relative_manifest,
-                "kml": kml_relative,
+                "kml": viewable_relative,
                 "epochs": 0,
             }
         else:
