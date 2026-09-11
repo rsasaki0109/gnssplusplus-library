@@ -1,0 +1,17 @@
+# Language statistics overrides for GitHub Linguist.
+#
+# The shipped product is the C++ library (include/ + src/ + apps/native) with
+# its thin Python command surface. The research scaffolding below is archived
+# phase-by-phase experiment history that is retained for provenance (its
+# freeze records pin source SHA256 hashes, so the files must stay byte-stable
+# and in place) but is not part of the library surface. Exclude it from
+# GitHub's language breakdown so the reported primary language reflects the
+# C++ core.
+
+# Archived smartphone phase harnesses and their launch/evaluation wrappers.
+apps/commands/benchmarks/gnss_smartphone_phase*.py linguist-vendored
+tests/test_smartphone_phase*.py                   linguist-vendored
+
+# One-off research analysis and experiment drivers (not shipped commands).
+scripts/analysis/**    linguist-vendored
+scripts/experiments/** linguist-vendored
