@@ -34,6 +34,7 @@ nav:
       - GNSS timing and holdover: use_cases/gnss_timing_holdover.md
       - Reference trajectory bundle: use_cases/trajectory_ground_truth.md
       - CLAS/MADOCA application decision: use_cases/clas_submeter.md
+      - CLAS PPP below 10 cm without a base station: use_cases/clas_ppp_no_base_station.md
       - Smartphone raw GNSS (R5): use_cases/smartphone_raw_gnss.md
       - UAV navigation and flight continuity (R6): use_cases/uav_navigation.md
       - RTKLIB migration: use_cases/rtklib_migration.md
