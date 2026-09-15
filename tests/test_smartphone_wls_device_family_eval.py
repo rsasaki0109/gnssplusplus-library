@@ -10,15 +10,17 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "commands"))
 sys.path.insert(0, str(ROOT / "apps" / "commands" / "benchmarks"))
 import gnss_smartphone_wls_device_family_eval as EVAL  # noqa: E402
+from frozen_contract import require_files  # noqa: E402
 
 
 class SmartphoneWlsDeviceFamilyEvalTests(unittest.TestCase):
     def test_frozen_candidate_and_inventory_contract(self) -> None:
-        record = EVAL._load_selection_record(EVAL.DEFAULT_SELECTION_RECORD)
-        inventory = EVAL._load_frozen_inventory(
-            ROOT / "output" / "smartphone-r5" / "generalization-v6" / "archive_inventory.json",
-            record,
+        inventory_path = (
+            ROOT / "output" / "smartphone-r5" / "generalization-v6" / "archive_inventory.json"
         )
+        require_files("WLS device-family frozen inventory", [inventory_path])
+        record = EVAL._load_selection_record(EVAL.DEFAULT_SELECTION_RECORD)
+        inventory = EVAL._load_frozen_inventory(inventory_path, record)
         candidate = EVAL._verify_central_candidate(inventory, record)
         self.assertEqual(candidate["dataset_id"], EVAL.CANDIDATE_ID)
         self.assertEqual(candidate["phone"], "pixel7pro")
@@ -41,6 +43,7 @@ class SmartphoneWlsDeviceFamilyEvalTests(unittest.TestCase):
         )
         report = ROOT / "output" / "smartphone-r5" / "wls-device-family-v1" / "wls_device_family_report.json"
         manifest = ROOT / "output" / "smartphone-r5" / "wls-device-family-v1" / "wls_device_family_manifest.json"
+        require_files("WLS device-family evaluation artifacts", [report, manifest])
         self.assertEqual(post["report"]["sha256"], hashlib.sha256(report.read_bytes()).hexdigest())
         self.assertEqual(
             post["evaluation_manifest"]["sha256"],

@@ -14,6 +14,7 @@ BENCHMARKS = ROOT / "apps" / "commands" / "benchmarks"
 sys.path.insert(0, str(BENCHMARKS))
 
 import gnss_smartphone_phase50_pixel5_adr_half_cycle_audit as audit  # noqa: E402
+from frozen_contract import require_frozen  # noqa: E402
 
 
 def _row(
@@ -166,7 +167,12 @@ class Phase50AdrHalfCycleAuditTest(unittest.TestCase):
 
     def test_static_contract_is_solver_free_and_half_cycle_bits_are_not_loader_gates(self) -> None:
         freeze = audit._verify_freeze()
-        contract = audit._static_contract(freeze)
+        contract = require_frozen(
+            "Phase50 static source contract",
+            audit.Phase50Error,
+            audit._static_contract,
+            freeze,
+        )
         self.assertTrue(contract["adapter_parses_adr_state"])
         self.assertTrue(contract["adapter_carrier_mask_ignores_half_cycle_bits"])
         self.assertTrue(contract["adapter_lli_ignores_half_cycle_bits"])

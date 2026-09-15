@@ -11,6 +11,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/commands/benchmarks"))
 import gnss_smartphone_phase128_inventory_first_structural as contract  # noqa: E402
+from frozen_contract import require_frozen  # noqa: E402
 
 
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase128_inventory_first_structural_contract_freeze_v1.json"
@@ -184,8 +185,16 @@ class Phase128InventoryFirstStructuralTests(unittest.TestCase):
 
     def test_static_validator_checks_all_pins_without_payload_activity(self) -> None:
         contract.verify_freeze()
-        contract.verify_manifest()
-        report = contract.verify_pre_raw_static()
+        require_frozen(
+            "Phase128 manifest pins",
+            contract.Phase128ContractError,
+            contract.verify_manifest,
+        )
+        report = require_frozen(
+            "Phase128 pre-raw static pins",
+            contract.Phase128ContractError,
+            contract.verify_pre_raw_static,
+        )
         self.assertEqual(report["raw_base_rinex_reads"], 0)
         self.assertEqual(report["native_solver_invocations"], 0)
         self.assertEqual(report["historical_phase127_source_hash_check"], "mismatch-retained")

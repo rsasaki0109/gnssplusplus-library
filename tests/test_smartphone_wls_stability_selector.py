@@ -12,6 +12,7 @@ sys.path.insert(0, str(ROOT / "apps" / "commands"))
 sys.path.insert(0, str(ROOT / "apps" / "commands" / "benchmarks"))
 import gnss_smartphone_trajectory_smoother as smoother  # noqa: E402
 import gnss_smartphone_wls_stability_selector as selector  # noqa: E402
+from frozen_contract import require_files  # noqa: E402
 
 
 class SmartphoneWlsStabilitySelectorTests(unittest.TestCase):
@@ -115,6 +116,7 @@ class SmartphoneWlsStabilitySelectorTests(unittest.TestCase):
             / "inputs"
             / "device_gnss.csv"
         )
+        require_files("WLS stability selector route artifacts", [manifest, position, device])
         original = json.loads(manifest.read_text(encoding="utf-8"))
         original["inputs"]["ground_truth"] = {"path": "forbidden"}
         with tempfile.TemporaryDirectory() as temporary:
@@ -142,6 +144,16 @@ class SmartphoneWlsStabilitySelectorTests(unittest.TestCase):
             / "2023-05-16-19-55-us-ca-mtv-xe1"
             / "pixel7pro"
             / "inputs"
+        )
+        require_files(
+            "WLS stability selector candidate artifacts",
+            [
+                source / "native-segment-stability" / "smoothed.pos",
+                source / "native-segment-stability" / "segment_stability.json",
+                source / "wls" / "wls.pos",
+                source / "wls" / "wls_manifest.json",
+                materialized / "device_gnss.csv",
+            ],
         )
         with tempfile.TemporaryDirectory() as temporary:
             result = selector.select_and_publish(

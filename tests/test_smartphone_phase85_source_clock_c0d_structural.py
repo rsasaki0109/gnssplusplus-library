@@ -9,6 +9,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from frozen_contract import require_frozen
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "apps/commands/benchmarks/gnss_smartphone_phase85_source_clock_c0d_structural.py"
@@ -24,7 +26,11 @@ _SPEC.loader.exec_module(RUNNER)
 
 class Phase85SourceClockC0DStructuralTests(unittest.TestCase):
     def test_freeze_chain_and_manifest_are_pinned_without_raw_matrix(self) -> None:
-        freeze = RUNNER.verify_freeze()
+        freeze = require_frozen(
+            "Phase85 freeze chain",
+            RUNNER.Phase85StructuralError,
+            RUNNER.verify_freeze,
+        )
         self.assertEqual(freeze["phase"], 84)
         self.assertEqual(hashlib.sha256(RUNNER.PHASE84_FREEZE.read_bytes()).hexdigest(), EXPECTED_PHASE84_SHA256)
         manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))

@@ -11,10 +11,12 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "commands"))
 sys.path.insert(0, str(ROOT / "apps" / "commands" / "benchmarks"))
 import gnss_smartphone_wls_stability_selector_eval as EVAL  # noqa: E402
+from frozen_contract import require_files  # noqa: E402
 
 
 class SmartphoneWlsStabilitySelectorEvalTests(unittest.TestCase):
     def test_selection_is_frozen_and_excludes_all_used_routes(self) -> None:
+        require_files("WLS stability selector frozen inventory", [EVAL.DEFAULT_INVENTORY])
         record = EVAL._load_selection_record(EVAL.DEFAULT_SELECTION_RECORD)
         inventory = EVAL._load_frozen_inventory(EVAL.DEFAULT_INVENTORY, record)
         candidate = EVAL._verify_candidate(inventory, record)
@@ -27,6 +29,7 @@ class SmartphoneWlsStabilitySelectorEvalTests(unittest.TestCase):
         root = ROOT / "output" / "smartphone-r5" / "wls-stability-selector-v1"
         report_path = root / "wls_stability_selector_report.json"
         manifest_path = root / "wls_stability_selector_manifest.json"
+        require_files("WLS stability selector evaluation artifacts", [report_path, manifest_path])
         record = EVAL._load_selection_record(EVAL.DEFAULT_SELECTION_RECORD)
         post = record["post_evaluation"]
         report = json.loads(report_path.read_text(encoding="utf-8"))
@@ -44,15 +47,15 @@ class SmartphoneWlsStabilitySelectorEvalTests(unittest.TestCase):
         )
 
     def test_known_seven_selector_is_strictly_better_horizontally(self) -> None:
-        report = json.loads(
-            (
-                ROOT
-                / "output"
-                / "smartphone-r5"
-                / "wls-stability-selector-v1"
-                / "wls_stability_selector_report.json"
-            ).read_text(encoding="utf-8")
+        report_path = (
+            ROOT
+            / "output"
+            / "smartphone-r5"
+            / "wls-stability-selector-v1"
+            / "wls_stability_selector_report.json"
         )
+        require_files("WLS stability selector report", [report_path])
+        report = json.loads(report_path.read_text(encoding="utf-8"))
         aggregates = report["known_seven_route_aggregates"]
         selected = aggregates["selector"]
         for reference_name in ("native_only", "wls_only"):
@@ -73,15 +76,15 @@ class SmartphoneWlsStabilitySelectorEvalTests(unittest.TestCase):
         self.assertTrue(report["gates"]["known_seven_route"]["passed"])
 
     def test_new_route_selects_wls_when_native_segment_is_unstable(self) -> None:
-        report = json.loads(
-            (
-                ROOT
-                / "output"
-                / "smartphone-r5"
-                / "wls-stability-selector-v1"
-                / "wls_stability_selector_report.json"
-            ).read_text(encoding="utf-8")
+        report_path = (
+            ROOT
+            / "output"
+            / "smartphone-r5"
+            / "wls-stability-selector-v1"
+            / "wls_stability_selector_report.json"
         )
+        require_files("WLS stability selector report", [report_path])
+        report = json.loads(report_path.read_text(encoding="utf-8"))
         self.assertEqual(report["new_route_scores"]["selected_lane"], "wls_raw")
         self.assertFalse(report["route"]["native"]["stability"]["population"]["stable_segment_count"])
         self.assertTrue(report["gates"]["new_validation"]["passed"])

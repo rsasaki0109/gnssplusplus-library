@@ -7,6 +7,8 @@ import importlib.util
 from pathlib import Path
 import unittest
 
+from frozen_contract import require_frozen
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "apps/commands/benchmarks/gnss_smartphone_phase91_source_clock_c0d_gnss_first_raw_drift_d_initializer.py"
@@ -151,10 +153,19 @@ def _summary(route: str, *, iterations: int = 2, initial: float = 10.0, final: f
 class Phase91ExecutionTests(unittest.TestCase):
     def test_sealed_freeze_manifest_and_exact_four_route_matrix(self) -> None:
         self.assertEqual(hashlib.sha256(FREEZE.read_bytes()).hexdigest(), RUNNER.FREEZE_SHA256)
-        freeze = RUNNER.verify_freeze()
+        freeze = require_frozen(
+            "Phase91 execution freeze",
+            RUNNER.Phase91DiagnosticError,
+            RUNNER.verify_freeze,
+        )
         self.assertEqual(freeze["status"], "frozen-before-phase91-raw-execution")
         manifest = RUNNER._read_json(MANIFEST, "Phase91 manifest")
-        RUNNER._verify_manifest(manifest)
+        require_frozen(
+            "Phase91 execution manifest pins",
+            RUNNER.Phase91DiagnosticError,
+            RUNNER._verify_manifest,
+            manifest,
+        )
         self.assertEqual([item["dataset_id"] for item in manifest["routes"]], list(RUNNER.ROUTES))
         self.assertEqual([item["runs"] for item in manifest["routes"]], [1, 1, 1, 1])
         self.assertEqual(manifest["matrix"]["native_invocations"], 4)

@@ -74,7 +74,12 @@ jobs:
     needs: [changes, hygiene]
     if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'macos-latest' && 180 || 120 }}
+    # macOS is an advisory cross-platform leg: GitHub-hosted macos runners
+    # intermittently run 10-50x slower (a deterministic 2-minute compile has
+    # taken >96 minutes on a degraded VM), so a timeout there must not fail the
+    # workflow. The ubuntu legs remain the blocking gate.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    timeout-minutes: ${{ matrix.os == 'macos-latest' && 60 || 120 }}
     strategy:
       fail-fast: false
       matrix:
@@ -174,9 +179,12 @@ jobs:
             handle.write(f"| ccache hit rate | {hit_rate} |\n")
         PY
 
+  # Heavy integration lanes rebuild the tree from scratch and take tens of
+  # minutes each, so they run post-merge (push to main/develop) rather than on
+  # every pull request. PRs are gated by build-and-test + static-analysis.
   linux-extended-tests:
     needs: [changes, hygiene, build-and-test]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -234,7 +242,7 @@ jobs:
 
   docker-smoke:
     needs: [changes, hygiene, build-and-test]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -267,7 +275,7 @@ jobs:
 
   linux-optional-signoffs:
     needs: [changes, linux-extended-tests, docker-smoke]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -569,7 +577,7 @@ jobs:
 
   madoca-parity:
     needs: [changes, hygiene]
-    if: needs.changes.outputs.run_heavy == 'true'
+    if: github.event_name != 'pull_request' && needs.changes.outputs.run_heavy == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
