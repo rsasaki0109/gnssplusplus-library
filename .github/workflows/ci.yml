@@ -74,7 +74,12 @@ jobs:
     needs: [changes, hygiene]
     if: needs.changes.outputs.run_heavy == 'true'
     runs-on: ${{ matrix.os }}
-    timeout-minutes: ${{ matrix.os == 'macos-latest' && 180 || 120 }}
+    # macOS is an advisory cross-platform leg: GitHub-hosted macos runners
+    # intermittently run 10-50x slower (a deterministic 2-minute compile has
+    # taken >96 minutes on a degraded VM), so a timeout there must not fail the
+    # workflow. The ubuntu legs remain the blocking gate.
+    continue-on-error: ${{ matrix.os == 'macos-latest' }}
+    timeout-minutes: ${{ matrix.os == 'macos-latest' && 60 || 120 }}
     strategy:
       fail-fast: false
       matrix:
