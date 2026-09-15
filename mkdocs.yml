@@ -16,8 +16,11 @@ exclude_docs: |
 theme:
   name: material
   features:
+    # Landing on a page should not open every section: keep top-level
+    # navigation collapsed so the first view is six section names, not the
+    # whole tree.
     - navigation.sections
-    - navigation.expand
+    - navigation.top
     - content.code.copy
     - search.suggest
     - search.highlight
