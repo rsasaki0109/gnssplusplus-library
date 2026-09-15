@@ -124,7 +124,7 @@ class CommunityHealthTest(unittest.TestCase):
         self.assertIn("docs/community.md", contributing)
         self.assertIn("15-minute first contribution", contributing)
         self.assertIn("Community onboarding", docs_index)
-        self.assertIn("Community Onboarding: community.md", mkdocs)
+        self.assertIn("Community onboarding: community.md", mkdocs)
         self.assertIn("docs/community.md", readme)
         self.assertNotIn("discussions", community.lower())
 

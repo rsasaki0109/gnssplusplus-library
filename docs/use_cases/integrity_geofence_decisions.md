@@ -83,8 +83,8 @@ Nagoya run1 was selected and hash-sealed before its solution was generated.
 The one-shot run stopped because fused bridge coverage was 97.891% versus the
 99% gate and maximum bridge horizontal error was 100.191 m versus the 75 m
 gate. The decision stage did not run, which is the intended fail-safe outcome.
-See the [development record](records/integrity_r8_development.json) and
-[holdout run1 record](records/integrity_r8_holdout_run1.json).
+See the [development record](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/use_cases/records/integrity_r8_development.json) and
+[holdout run1 record](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/use_cases/records/integrity_r8_holdout_run1.json).
 
 ## Outputs and field boundary
 

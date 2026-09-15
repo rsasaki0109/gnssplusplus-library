@@ -146,7 +146,7 @@ class UseCaseGuideTest(unittest.TestCase):
         self.assertIn("[Use cases](use_cases.md)", index)
         self.assertIn("use_cases/urban_rtk_imu_field_checklist.md", index)
         self.assertIn("use_cases/urban_rtk_imu_field_checklist.md", overview)
-        self.assertIn("  - Use cases:", nav)
+        self.assertIn("  - Guides:", nav)
         for relative_path in (
             "use_cases.md",
             "use_cases/urban_rtk_fgo.md",

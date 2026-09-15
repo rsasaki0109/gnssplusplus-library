@@ -100,8 +100,8 @@ The sealed day passed unchanged: 99.861111% FIX, no missing epoch gap, no
 stable-site alert, and an offset of approximately `(-0.000307, +0.000058,
 +0.000567) m` from the frozen baseline. The synthetic witness was detected
 with its recorded magnitude and azimuth. Full evidence is preserved in the
-[development record](records/structural_r7_development.json) and
-[holdout run1 record](records/structural_r7_holdout_run1.json).
+[development record](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/use_cases/records/structural_r7_development.json) and
+[holdout run1 record](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/use_cases/records/structural_r7_holdout_run1.json).
 
 ## Decision rules and field checklist
 
