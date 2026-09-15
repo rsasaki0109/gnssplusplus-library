@@ -14,6 +14,7 @@ BENCHMARKS = ROOT / "apps" / "commands" / "benchmarks"
 sys.path.insert(0, str(BENCHMARKS))
 
 import gnss_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit as audit  # noqa: E402
+from frozen_contract import require_frozen  # noqa: E402
 
 
 def _row(
@@ -146,7 +147,12 @@ class Phase48RawCodeRateUncertaintyAuditTest(unittest.TestCase):
 
     def test_static_contract_audit_is_solver_free_and_field_not_assumed(self) -> None:
         freeze = audit._verify_freeze()
-        contract = audit._static_contract(freeze)
+        contract = require_frozen(
+            "Phase48 static source contract",
+            audit.Phase48Error,
+            audit._static_contract,
+            freeze,
+        )
         self.assertIn("source_hashes", contract)
         self.assertFalse(contract["adapter_parses_received_sv_time_uncertainty"])
         self.assertFalse(contract["fgo_consumes_received_sv_time_uncertainty_as_sigma"])

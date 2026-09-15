@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 import unittest
 
+from frozen_contract import require_source_marker
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FREEZE = ROOT / (
@@ -34,14 +36,15 @@ class Phase91ImplementationTests(unittest.TestCase):
     def test_opt_in_selector_and_exact_dependencies_are_present(self) -> None:
         source = APP.read_text(encoding="utf-8")
         selector = "--native-source-clock-c0d-gnss-first-raw-drift-d-initializer"
+        require_source_marker(
+            "Phase91 frozen source marker",
+            source,
+            "gnss_first_config.use_native_source_clock_c0d_raw_drift_d_initializer =\n"
+            "            false;",
+        )
         self.assertIn(selector, source)
         self.assertIn("validatePhase91GnssFirstHandoff", source)
         self.assertIn("gnss_first_problem = problem", source)
-        self.assertIn(
-            "gnss_first_config.use_native_source_clock_c0d_raw_drift_d_initializer =\n"
-            "            false;",
-            source,
-        )
         self.assertIn("android_gnss.epoch_utc_time_millis", source)
         self.assertIn("--native-gnss-first-velocity-only-handoff", source)
         self.assertIn("--native-direct-doppler-wls-handoff", source)

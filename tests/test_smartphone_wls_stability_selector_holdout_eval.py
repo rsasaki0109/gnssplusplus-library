@@ -14,6 +14,7 @@ sys.path.insert(0, str(ROOT / "apps" / "commands" / "benchmarks"))
 import gnss_smartphone_wls_stability_selector_holdout_eval as HOLDOUT  # noqa: E402
 import gnss_smartphone_gnss_adapter as ADAPTER  # noqa: E402
 import gnss_smartphone_wls as WLS  # noqa: E402
+from frozen_contract import require_files  # noqa: E402
 
 
 class SmartphoneWlsStabilitySelectorHoldoutTests(unittest.TestCase):
@@ -80,6 +81,7 @@ class SmartphoneWlsStabilitySelectorHoldoutTests(unittest.TestCase):
             / "wls-stability-selector-holdout-run2-v1"
             / "wls_stability_selector_holdout_run2_failure.json"
         )
+        require_files("WLS stability selector holdout failure artifact", [failure_path])
         failure = json.loads(failure_path.read_text(encoding="utf-8"))
         self.assertEqual(failure["status"], "sealed-failed-one-shot")
         self.assertEqual(failure["truth_open_count"], 0)

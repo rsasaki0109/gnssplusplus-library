@@ -9,6 +9,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from frozen_contract import require_frozen
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "apps/commands/benchmarks/gnss_smartphone_phase86_phase85_source_clock_c0d_reclassification.py"
@@ -26,7 +28,11 @@ _SPEC.loader.exec_module(RUNNER)
 class Phase86ReclassificationTests(unittest.TestCase):
     def test_freeze_and_phase86_manifest_are_sealed(self) -> None:
         self.assertEqual(hashlib.sha256(FREEZE.read_bytes()).hexdigest(), EXPECTED_FREEZE_SHA256)
-        freeze = RUNNER.verify_freeze()
+        freeze = require_frozen(
+            "Phase86 freeze",
+            RUNNER.Phase86Error,
+            RUNNER.verify_freeze,
+        )
         self.assertEqual(freeze["phase"], 86)
         self.assertEqual(freeze["status"], "frozen-before-phase86-sealed-artifact-read")
         self.assertTrue(freeze["scope"]["sealed_phase85_artifacts_only"])

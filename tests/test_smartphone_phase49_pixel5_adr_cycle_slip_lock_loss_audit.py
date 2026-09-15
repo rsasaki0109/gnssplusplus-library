@@ -14,6 +14,7 @@ BENCHMARKS = ROOT / "apps" / "commands" / "benchmarks"
 sys.path.insert(0, str(BENCHMARKS))
 
 import gnss_smartphone_phase49_pixel5_adr_cycle_slip_lock_loss_audit as audit  # noqa: E402
+from frozen_contract import require_frozen  # noqa: E402
 
 
 def _row(
@@ -201,7 +202,12 @@ class Phase49AdrCycleSlipLockLossAuditTest(unittest.TestCase):
 
     def test_static_contract_is_solver_free_and_phase48_metrics_are_not_read(self) -> None:
         freeze = audit._verify_freeze()
-        contract = audit._static_contract(freeze)
+        contract = require_frozen(
+            "Phase49 static source contract",
+            audit.Phase49Error,
+            audit._static_contract,
+            freeze,
+        )
         self.assertIn("source_hashes", contract)
         self.assertTrue(contract["adapter_parses_adr_state"])
         self.assertTrue(contract["adapter_uses_published_adr_sign_policy"])

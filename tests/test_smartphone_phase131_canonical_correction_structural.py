@@ -16,6 +16,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/commands/benchmarks"))
 import gnss_smartphone_phase131_canonical_correction_structural as contract  # noqa: E402
+from frozen_contract import require_frozen  # noqa: E402
 
 
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase131_canonical_correction_structural_contract_freeze_v1.json"
@@ -307,10 +308,21 @@ class Phase131CanonicalStructuralTests(unittest.TestCase):
         self.assertTrue(freeze["decision"]["implementation_authorized"])
         self.assertFalse(freeze["decision"]["raw_materialization_authorized"])
         self.assertEqual(contract.verify_freeze()["phase"], 131)
-        self.assertEqual(contract.verify_manifest()["phase"], 131)
+        self.assertEqual(
+            require_frozen(
+                "Phase131 manifest pins",
+                contract.Phase131ContractError,
+                contract.verify_manifest,
+            )["phase"],
+            131,
+        )
 
     def test_pre_raw_accounting_is_zero(self) -> None:
-        result = contract.verify_pre_raw_static()
+        result = require_frozen(
+            "Phase131 pre-raw static pins",
+            contract.Phase131ContractError,
+            contract.verify_pre_raw_static,
+        )
         self.assertEqual(result["read_accounting"]["raw_phone_gnss_reads"], 0)
         self.assertEqual(result["read_accounting"]["raw_base_rinex_payload_reads"], 0)
         self.assertEqual(result["read_accounting"]["native_solver_invocations"], 0)

@@ -9,6 +9,8 @@ from __future__ import annotations
 from pathlib import Path
 import unittest
 
+from frozen_contract import require_files
+
 
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "apps/native/gnss_fgo_imu_no_base.cpp"
@@ -26,19 +28,20 @@ class Phase184SourceTdcpParityTests(unittest.TestCase):
         cls.config = CONFIG.read_text(encoding="utf-8")
         cls.fgo = FGO.read_text(encoding="utf-8")
         cls.gtsam = GTSAM.read_text(encoding="utf-8")
-        cls.params = SOURCE_PARAMS.read_text(encoding="utf-8")
-        cls.source_graph = SOURCE_GRAPH.read_text(encoding="utf-8")
 
     def test_cached_street_contract_is_explicit(self) -> None:
+        require_files("Phase184 reproducibility-cache sources", [SOURCE_PARAMS, SOURCE_GRAPH])
+        params = SOURCE_PARAMS.read_text(encoding="utf-8")
+        source_graph = SOURCE_GRAPH.read_text(encoding="utf-8")
         self.assertIn(
             'if setting.Type == "Street" || setting.Type == "Mix"',
-            self.params,
+            params,
         )
-        street = self.params.index("prm.L_robust_prm = 0.2")
-        street_block = self.params[street - 120 : street + 180]
+        street = params.index("prm.L_robust_prm = 0.2")
+        street_block = params[street - 120 : street + 180]
         self.assertIn("prm.L_robust_prm = 0.2", street_block)
-        self.assertIn("prm.L_kernel = huber(prm.L_robust_prm)", self.params)
-        self.assertIn("noise_robust(prm.L_kernel, noise)", self.source_graph)
+        self.assertIn("prm.L_kernel = huber(prm.L_robust_prm)", params)
+        self.assertIn("noise_robust(prm.L_kernel, noise)", source_graph)
 
     def test_phase184_is_opt_in_and_separate_from_phase118(self) -> None:
         selector = "--native-phase184-source-tdcp-huber-k"

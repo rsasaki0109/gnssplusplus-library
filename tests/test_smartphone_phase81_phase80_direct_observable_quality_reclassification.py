@@ -9,6 +9,8 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from frozen_contract import require_files
+
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNNER_PATH = ROOT / "apps/commands/benchmarks/gnss_smartphone_phase81_phase80_direct_observable_quality_reclassification.py"
@@ -49,7 +51,14 @@ class Phase81ReclassificationTests(unittest.TestCase):
         self.assertEqual(len(failure["sha256"]), 64)
 
     def test_legacy_diagnostic_has_only_domain_leaf_false(self) -> None:
-        failure = json.loads((ROOT / "output/smartphone-r5/phase80-source-exact-direct-observable-quality-structural-v2/phase80_direct_observable_quality_structural_failure.json").read_text(encoding="utf-8"))
+        failure_path = (
+            ROOT
+            / "output/smartphone-r5/"
+            "phase80-source-exact-direct-observable-quality-structural-v2/"
+            "phase80_direct_observable_quality_structural_failure.json"
+        )
+        require_files("Phase80 structural failure artifact", [failure_path])
+        failure = json.loads(failure_path.read_text(encoding="utf-8"))
         self.assertEqual(failure["errors"], [])
         for route in RUNNER.ROUTES:
             gates = failure["routes"][route]["gates"]

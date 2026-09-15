@@ -17,6 +17,7 @@ FREEZE = ROOT / "docs" / "use_cases" / "records" / "smartphone_r5_phase40_direct
 sys.path.insert(0, str(BENCHMARKS))
 
 import gnss_smartphone_phase40_direct_doppler_wls_handoff as phase40  # noqa: E402
+from frozen_contract import require_source_marker  # noqa: E402
 
 
 class SmartphonePhase40DirectDopplerWlsTest(unittest.TestCase):
@@ -54,6 +55,11 @@ class SmartphonePhase40DirectDopplerWlsTest(unittest.TestCase):
             self.assertNotIn(token, joined)
 
     def test_source_bypasses_gnss_first_and_consumes_problem_wls_sequence(self) -> None:
+        require_source_marker(
+            "Phase40 frozen source literal",
+            self.source,
+            "direct Doppler WLS candidate IMU initialization failed",
+        )
         self.assertIn("if (android_raw && options.native_direct_doppler_wls_handoff)", self.source)
         self.assertIn("validateDirectDopplerWlsHandoff(", self.source)
         self.assertIn("problem.doppler_velocity_wls_estimates", self.source)

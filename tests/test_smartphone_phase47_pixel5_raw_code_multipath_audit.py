@@ -14,6 +14,7 @@ BENCHMARKS = ROOT / "apps" / "commands" / "benchmarks"
 sys.path.insert(0, str(BENCHMARKS))
 
 import gnss_smartphone_phase47_pixel5_raw_code_multipath_audit as audit  # noqa: E402
+from frozen_contract import require_frozen  # noqa: E402
 
 
 HEADER = [
@@ -122,7 +123,12 @@ class Phase47RawCodeMultipathAuditTest(unittest.TestCase):
 
     def test_static_contract_and_source_are_solver_free(self) -> None:
         freeze = audit._verify_freeze()
-        contract = audit._static_signal_contract(freeze)
+        contract = require_frozen(
+            "Phase47 static source contract",
+            audit.Phase47Error,
+            audit._static_signal_contract,
+            freeze,
+        )
         self.assertTrue(contract["all_declared_pair_signals_adopted_by_current_fgo"])
         source = Path(audit.__file__).read_text(encoding="utf-8")
         self.assertNotIn("subprocess", source)
