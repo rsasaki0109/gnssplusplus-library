@@ -81,8 +81,8 @@ The sealed day kept 100% coverage, phase p95 21.26 ns, and holdover p95
 21.86–22.52 ns, but its maximum five-minute phase-error step was 14.71 ns.
 That exceeds the unchanged 12 ns gate, so the assessment is degraded and the
 release is No-Go. Evidence is preserved in the
-[development record](records/timing_r9_development.json) and
-[holdout run1 record](records/timing_r9_holdout_run1.json).
+[development record](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/use_cases/records/timing_r9_development.json) and
+[holdout run1 record](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/docs/use_cases/records/timing_r9_holdout_run1.json).
 
 ## Outputs and service boundary
 
