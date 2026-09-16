@@ -9,19 +9,28 @@ PPC helpers, so the numbers agree with `apps/gnss.py ppc-coverage-matrix` and
 the README tables. Per the published navi776 sign-off protocol the compared
 stream is the RTK solution (`--rtk-pos-out`), which the tight loop refines.
 
+FIX integrity is reported after the deployable **sigma-demote** policy from
+`configs/benchmarks/ppc_sigma_demote_nis2_ratio4.toml` (demote a FIXED epoch
+to FLOAT when `ratio <= 4.0` or `NIS/obs > 2.0`), applied identically to both
+arms via `scripts/plot_ppc_rtk_vs_imu_fusion.py --demote-max-ratio 4
+--demote-nis-per-obs 2`.
+
 | metric | RTK only | RTK + GNSS/IMU (tight) | delta |
 |---|---:|---:|---:|
-| FIX rate | 76.58 % | **78.64 %** | +2.06 pp |
+| Correct FIX (3D < 0.5 m) | 64.95 % | **68.42 %** | +3.47 pp |
+| Wrong FIX / FIX | 8.66 % | **4.15 %** | **−4.51 pp** |
+| FIX rate (post-demote) | 71.10 % | **71.38 %** | +0.28 pp |
+| Official PPC score | 70.46 % | **74.76 %** | +4.30 pp |
 | P50 horizontal | 0.031 m | **0.028 m** | −0.003 m |
 | P95 horizontal | 6.869 m | **6.859 m** | −0.010 m |
-| 3D < 0.5 m | 72.33 % | **73.44 %** | +1.11 pp |
-| Official PPC score | 70.46 % | **74.76 %** | +4.30 pp |
-| Wrong FIX / FIX | 9.60 % | **8.92 %** | −0.68 pp |
-| Max horizontal | 124 m | **93 m** | −31 m |
+| 3D < 0.5 m (all epochs) | 72.33 % | **73.44 %** | +1.11 pp |
+| Worst epoch (FLOAT) | 124 m | **93 m** | −31 m |
 
-The gain is concentrated in the FIX-decision quality and the distance-weighted
-official score rather than the P50/P95 percentiles: tight coupling recovers
-correct fixes and removes the largest outliers (max-epoch error).
+Tight coupling roughly **halves the wrong-FIX rate** and raises the
+distance-weighted official score, without giving up FIX rate. The residual
+tail (worst single epoch ≈ 93 m) is a FLOAT/SPP outlier; shrinking it needs
+the FGO-path fix-demote/surplus guards or the offline fixed-anchor FLOAT
+bridge, which are separate from this KF-path preset.
 
 ## Reproduce
 
@@ -44,12 +53,13 @@ build/apps/gnss_fuse \
   --rtk-pos-out output/ppc_rtk_vs_imu_fusion/tokyo1_canon/on_rtk.pos \
   --out        output/ppc_rtk_vs_imu_fusion/tokyo1_canon/on_fused.pos
 
-# Figure
+# Figure (with the deployable sigma-demote policy)
 python3 scripts/plot_ppc_rtk_vs_imu_fusion.py \
   --reference data/PPC-Dataset/tokyo/run1/reference.csv \
   --rtk-pos   output/ppc_rtk_vs_imu_fusion/tokyo1_canon/off_rtk.pos \
   --fusion-pos output/ppc_rtk_vs_imu_fusion/tokyo1_canon/on_rtk.pos \
   --output docs/ppc_rtk_vs_gnss_imu_fusion.png \
+  --demote-max-ratio 4 --demote-nis-per-obs 2 \
   --title "PPC Tokyo run1 — RTK only vs RTK + tightly-coupled GNSS/IMU"
 ```
 

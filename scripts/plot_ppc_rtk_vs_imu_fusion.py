@@ -16,6 +16,7 @@ Metric definitions are the shared PPC helpers, so the numbers agree with
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -50,12 +51,32 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rtk-label", default="RTK only")
     parser.add_argument("--fusion-label", default="RTK + GNSS/IMU (tight FGO)")
     parser.add_argument("--match-tolerance-s", type=float, default=0.11)
+    parser.add_argument("--demote-max-ratio", type=float, default=0.0,
+                        help="Demote FIXED to FLOAT when ratio <= value (0 = off); "
+                             "repo sigma-demote uses 4.0")
+    parser.add_argument("--demote-nis-per-obs", type=float, default=0.0,
+                        help="Demote FIXED to FLOAT when NIS/obs > value (0 = off); "
+                             "repo sigma-demote uses 2.0")
     parser.add_argument("--dpi", type=int, default=160)
     return parser.parse_args()
 
 
-def summarize(path: Path, reference, label: str, tol: float) -> dict:
+def summarize(path: Path, reference, label: str, tol: float,
+              demote_max_ratio: float, demote_nis_per_obs: float) -> dict:
     solution = comparison.read_libgnss_pos(path)
+    if demote_max_ratio > 0.0 or demote_nis_per_obs > 0.0:
+        demoted = []
+        for epoch in solution:
+            if epoch.status == 4 and (
+                (demote_max_ratio > 0.0 and epoch.ratio is not None
+                 and epoch.ratio <= demote_max_ratio)
+                or (demote_nis_per_obs > 0.0
+                    and epoch.rtk_update_normalized_innovation_squared_per_observation is not None
+                    and epoch.rtk_update_normalized_innovation_squared_per_observation > demote_nis_per_obs)
+            ):
+                epoch = dataclasses.replace(epoch, status=3)
+            demoted.append(epoch)
+        solution = demoted
     summary = metrics.summarize_solution_epochs(
         reference, solution, 4, label, tol, solver_wall_time_s=None
     )
@@ -71,14 +92,17 @@ def metric_row(summary: dict) -> dict:
         "official": float(summary["ppc_official_score_pct"]),
         "fix": float(summary["fix_rate_pct"]),
         "wrong_fix": float(summary["wrong_fix_rate_pct"]),
+        "correct_fix": float(summary["correct_fix_matched_pct"]),
     }
 
 
 def main() -> int:
     args = parse_args()
     reference = comparison.read_reference_csv(args.reference)
-    rtk = summarize(args.rtk_pos, reference, args.rtk_label, args.match_tolerance_s)
-    fusion = summarize(args.fusion_pos, reference, args.fusion_label, args.match_tolerance_s)
+    rtk = summarize(args.rtk_pos, reference, args.rtk_label, args.match_tolerance_s,
+                    args.demote_max_ratio, args.demote_nis_per_obs)
+    fusion = summarize(args.fusion_pos, reference, args.fusion_label, args.match_tolerance_s,
+                       args.demote_max_ratio, args.demote_nis_per_obs)
     rtk_m, fusion_m = metric_row(rtk["summary"]), metric_row(fusion["summary"])
 
     origin = reference[0]
@@ -151,20 +175,20 @@ def main() -> int:
     ax.legend(fontsize=12)
     ax.grid(alpha=0.3, axis="y")
 
-    # (d) FIX rate and official score
+    # (d) correct FIX and official score
     ax = axes[1, 1]
-    rtk_vals = [rtk_m["fix"], rtk_m["official"]]
-    fusion_vals = [fusion_m["fix"], fusion_m["official"]]
+    rtk_vals = [rtk_m["correct_fix"], rtk_m["official"]]
+    fusion_vals = [fusion_m["correct_fix"], fusion_m["official"]]
     rtk_bars = ax.bar(x - width / 2, rtk_vals, width, color=RTK_COLOR, label=args.rtk_label)
     fusion_bars = ax.bar(x + width / 2, fusion_vals, width, color=FUSION_COLOR, label=args.fusion_label)
     for bars in (rtk_bars, fusion_bars):
         for bar in bars:
             ax.annotate(f"{bar.get_height():.1f}", (bar.get_x() + bar.get_width() / 2, bar.get_height()),
                         ha="center", va="bottom", fontsize=13, fontweight="bold")
-    ax.set_xticks(x, ["FIX rate [%]", "Official score [%]"])
+    ax.set_xticks(x, ["Correct FIX [%]", "Official score [%]"])
     ax.set_ylim(0, 100)
     ax.set_ylabel("[%]")
-    ax.set_title("FIX rate and official PPC score")
+    ax.set_title("Correct FIX (3D < 0.5 m) and official PPC score")
     ax.legend(fontsize=12)
     ax.grid(alpha=0.3, axis="y")
 
@@ -172,10 +196,12 @@ def main() -> int:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output, dpi=args.dpi)
     print(f"wrote {args.output}")
-    print(f"{args.rtk_label}: fix {rtk_m['fix']:.2f}% P50 {rtk_m['p50']:.3f} P95 {rtk_m['p95']:.3f} "
-          f"3D<50cm {rtk_m['h50']:.2f}% official {rtk_m['official']:.2f}% wrong-fix {rtk_m['wrong_fix']:.2f}%")
-    print(f"{args.fusion_label}: fix {fusion_m['fix']:.2f}% P50 {fusion_m['p50']:.3f} P95 {fusion_m['p95']:.3f} "
-          f"3D<50cm {fusion_m['h50']:.2f}% official {fusion_m['official']:.2f}% wrong-fix {fusion_m['wrong_fix']:.2f}%")
+    print(f"{args.rtk_label}: fix {rtk_m['fix']:.2f}% correct-FIX {rtk_m['correct_fix']:.2f}% "
+          f"wrong-FIX {rtk_m['wrong_fix']:.2f}% P50 {rtk_m['p50']:.3f} P95 {rtk_m['p95']:.3f} "
+          f"official {rtk_m['official']:.2f}% max {rtk_max:.0f} m")
+    print(f"{args.fusion_label}: fix {fusion_m['fix']:.2f}% correct-FIX {fusion_m['correct_fix']:.2f}% "
+          f"wrong-FIX {fusion_m['wrong_fix']:.2f}% P50 {fusion_m['p50']:.3f} P95 {fusion_m['p95']:.3f} "
+          f"official {fusion_m['official']:.2f}% max {fusion_max:.0f} m")
     return 0
 
 
