@@ -5,7 +5,9 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/signals.hpp>
+#include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/fusion/fusion_initialization.hpp>
 #include <libgnss++/models/ionosphere.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
@@ -52,6 +54,13 @@ struct Options {
     std::string seed_pos_path;
     std::string preset = "default";
     std::string backend = "eigen";
+    std::string imu_path;
+    double imu_lever_arm_x = 0.0;
+    double imu_lever_arm_y = 0.0;
+    double imu_lever_arm_z = 0.0;
+    bool imu_apply_mounting = true;
+    double imu_fixed_lag_s = 5.0;
+    double imu_noise_scale = 1.0;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -151,6 +160,11 @@ void printUsage(const char* program_name) {
         << "  --cost-trace-csv <trace.csv>  Write optimizer cost by iteration\n"
         << "  --debug-problem-only          Build factors and debug outputs without optimizing\n"
         << "  --seed-pos <solution.pos>     Use LibGNSS++/RTKLIB POS rows as epoch initial positions\n"
+        << "  --imu <imu.csv>               Tightly-coupled IMU factors (GTSAM Pose3 backend)\n"
+        << "  --imu-lever-arm X Y Z         IMU lever arm in body FLU metres (default 0 0 0)\n"
+        << "  --imu-no-mounting             Skip the taroz sensor mounting rotation\n"
+        << "  --imu-fixed-lag <s>           Fixed-lag smoother window (default 5, 0=batch)\n"
+        << "  --imu-noise-scale <s>         Scale IMU accel/gyro noise (default 1; >1 weakens IMU)\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -483,6 +497,18 @@ Options parseArguments(int argc, char* argv[]) {
             options.seed_pos_path = argv[++i];
         } else if (arg == "--backend" && i + 1 < argc) {
             options.backend = argv[++i];
+        } else if (arg == "--imu" && i + 1 < argc) {
+            options.imu_path = argv[++i];
+        } else if (arg == "--imu-lever-arm" && i + 3 < argc) {
+            options.imu_lever_arm_x = std::stod(argv[++i]);
+            options.imu_lever_arm_y = std::stod(argv[++i]);
+            options.imu_lever_arm_z = std::stod(argv[++i]);
+        } else if (arg == "--imu-no-mounting") {
+            options.imu_apply_mounting = false;
+        } else if (arg == "--imu-fixed-lag" && i + 1 < argc) {
+            options.imu_fixed_lag_s = std::stod(argv[++i]);
+        } else if (arg == "--imu-noise-scale" && i + 1 < argc) {
+            options.imu_noise_scale = std::stod(argv[++i]);
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3283,6 +3309,172 @@ bool writeFactorDebugCsv(
     return true;
 }
 
+// --- Tightly-coupled IMU attachment -------------------------------------
+//
+// Mirrors the frozen non-Android recipe of gnss_fgo_imu_no_base.cpp so the
+// carrier-phase DD solution can be fused with IMU factors under the same
+// initialization contract (stationary leveling, GNSS-course heading latch).
+constexpr double kFgoImuPi = 3.14159265358979323846;
+constexpr double kFgoImuGravity = 9.80665;
+constexpr std::size_t kFgoImuStationarySamples = 250;
+constexpr std::size_t kFgoImuHeadingWindowEpochs = 25;
+constexpr int kFgoImuRequiredHeadingWindows = 3;
+constexpr double kFgoImuHeadingSpeedMinMps = 2.0;
+constexpr double kFgoImuHeadingSpeedMaxMps = 50.0;
+constexpr double kFgoImuHeadingVerticalSpeedMaxMps = 3.0;
+constexpr double kFgoImuHeadingConsistencyRad = 20.0 * kFgoImuPi / 180.0;
+constexpr double kFgoImuGravityNormMin = 0.70 * kFgoImuGravity;
+constexpr double kFgoImuGravityNormMax = 1.30 * kFgoImuGravity;
+constexpr double kFgoImuGravityNormStdMax = 1.50;
+
+Eigen::Matrix3d fgoImuMountingRotation() {
+    const double rx = -85.0 * kFgoImuPi / 180.0;
+    const double ry = 178.0 * kFgoImuPi / 180.0;
+    const double rz = -94.0 * kFgoImuPi / 180.0;
+    return (Eigen::AngleAxisd(rz, Eigen::Vector3d::UnitZ()) *
+            Eigen::AngleAxisd(ry, Eigen::Vector3d::UnitY()) *
+            Eigen::AngleAxisd(rx, Eigen::Vector3d::UnitX()))
+        .toRotationMatrix();
+}
+
+bool attachImuToProblem(const std::string& path,
+                        libgnss::FGOProcessor::FGOProblem& problem,
+                        bool apply_mounting,
+                        double noise_scale,
+                        std::string& error) {
+    if (problem.epochs.size() < 2) {
+        error = "fewer than two GNSS epochs";
+        return false;
+    }
+    libgnss::ImuSeries series;
+    const libgnss::ImuCsvLoadResult load = libgnss::loadImuCsv(path, series);
+    if (!load.ok || series.isEmpty()) {
+        error = load.error.empty() ? "empty IMU series" : load.error;
+        return false;
+    }
+    series.sortByTime();
+    const Eigen::Matrix3d mounting =
+        apply_mounting ? fgoImuMountingRotation() : Eigen::Matrix3d::Identity();
+    std::vector<libgnss::ImuSample> samples;
+    samples.reserve(series.samples.size());
+    for (auto sample : series.samples) {
+        sample.accel_raw = mounting * sample.accel_raw;
+        sample.gyro_raw_radps = mounting * sample.gyro_raw_radps;
+        if (!sample.accel_raw.allFinite() || !sample.gyro_raw_radps.allFinite()) {
+            error = "non-finite IMU sample";
+            return false;
+        }
+        samples.push_back(sample);
+    }
+    if (samples.size() < kFgoImuStationarySamples) {
+        error = "IMU stream shorter than leveling window";
+        return false;
+    }
+    const std::size_t stationary_count =
+        std::min(kFgoImuStationarySamples, samples.size());
+    const std::vector<libgnss::ImuSample> stationary(
+        samples.begin(), samples.begin() + stationary_count);
+    Eigen::Vector3d accel_sum = Eigen::Vector3d::Zero();
+    std::vector<double> norms;
+    norms.reserve(stationary.size());
+    for (const auto& sample : stationary) {
+        accel_sum += sample.accel_raw;
+        norms.push_back(sample.accel_raw.norm());
+    }
+    const double n = static_cast<double>(stationary.size());
+    const Eigen::Vector3d accel_mean = accel_sum / n;
+    const double mean_norm = accel_mean.norm();
+    double variance = 0.0;
+    for (double norm : norms) variance += (norm - mean_norm) * (norm - mean_norm);
+    const double norm_std = std::sqrt(variance / n);
+    if (!std::isfinite(mean_norm) || !std::isfinite(norm_std) ||
+        mean_norm < kFgoImuGravityNormMin || mean_norm > kFgoImuGravityNormMax ||
+        norm_std > kFgoImuGravityNormStdMax) {
+        error = "leveling window failed the gravity gate";
+        return false;
+    }
+    const libgnss::Vector3d origin_ecef = problem.epochs.front().position_ecef;
+    double lat = 0.0, lon = 0.0, height = 0.0;
+    libgnss::ecef2geodetic(origin_ecef, lat, lon, height);
+    if (!origin_ecef.allFinite() || !std::isfinite(lat) || !std::isfinite(lon)) {
+        error = "invalid GNSS nav origin";
+        return false;
+    }
+    const libgnss::NominalState aligned = libgnss::fusion_initialization::alignStatic(
+        stationary, libgnss::Vector3d::Zero(), kFgoImuGravity);
+    libgnss::FusionState state;
+    state.nominal = aligned;
+    state.covariance.setIdentity();
+    libgnss::Vector3d initial_velocity = libgnss::Vector3d::Zero();
+    bool heading_latched = false;
+    libgnss::Vector3d previous_velocity = libgnss::Vector3d::Zero();
+    libgnss::Vector3d velocity_sum = libgnss::Vector3d::Zero();
+    int consistent = 0;
+    for (std::size_t i = 0; i + kFgoImuHeadingWindowEpochs < problem.epochs.size(); ++i) {
+        const std::size_t j = i + kFgoImuHeadingWindowEpochs;
+        const double dt = problem.epochs[j].time - problem.epochs[i].time;
+        if (dt <= 1e-3) continue;
+        const Eigen::Vector3d p0 = libgnss::ecef2enu(
+            problem.epochs[i].position_ecef - origin_ecef, lat, lon);
+        const Eigen::Vector3d p1 = libgnss::ecef2enu(
+            problem.epochs[j].position_ecef - origin_ecef, lat, lon);
+        const libgnss::Vector3d velocity = (p1 - p0) / dt;
+        const double speed = std::hypot(velocity.x(), velocity.y());
+        if (!std::isfinite(speed) || speed < kFgoImuHeadingSpeedMinMps ||
+            speed > kFgoImuHeadingSpeedMaxMps ||
+            std::abs(velocity.z()) > kFgoImuHeadingVerticalSpeedMaxMps) {
+            consistent = 0;
+            velocity_sum.setZero();
+            continue;
+        }
+        bool direction_consistent = true;
+        if (consistent > 0) {
+            const double previous_speed =
+                std::hypot(previous_velocity.x(), previous_velocity.y());
+            const double cosine = velocity.x() * previous_velocity.x() +
+                                  velocity.y() * previous_velocity.y();
+            direction_consistent =
+                cosine / std::max(1e-9, speed * previous_speed) >=
+                std::cos(kFgoImuHeadingConsistencyRad);
+        }
+        if (!direction_consistent) {
+            consistent = 0;
+            velocity_sum.setZero();
+        }
+        previous_velocity = velocity;
+        velocity_sum += velocity;
+        ++consistent;
+        if (consistent >= kFgoImuRequiredHeadingWindows) {
+            const libgnss::Vector3d course =
+                velocity_sum / static_cast<double>(consistent);
+            if (libgnss::fusion_initialization::tryAlignHeading(
+                    state, course, 1.0, 5.0)) {
+                initial_velocity = course;
+                heading_latched = true;
+                break;
+            }
+        }
+    }
+    if (!heading_latched) {
+        error = "GNSS course did not make heading observable";
+        return false;
+    }
+    auto& imu = problem.imu;
+    imu.valid = true;
+    imu.nav_origin_ecef = origin_ecef;
+    imu.nav_origin_lat_rad = lat;
+    imu.nav_origin_lon_rad = lon;
+    imu.samples_body_flu = std::move(samples);
+    imu.init_attitude_body_to_nav = state.nominal.attitude_body_to_enu.toRotationMatrix();
+    imu.init_velocity_nav = initial_velocity;
+    imu.init_accel_bias = aligned.accel_bias;
+    imu.init_gyro_bias = aligned.gyro_bias;
+    imu.noise.gravity_mps2 = kFgoImuGravity;
+    imu.noise.accel_noise_sigma *= noise_scale;
+    imu.noise.gyro_noise_sigma *= noise_scale;
+    return true;
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -3536,16 +3728,43 @@ int main(int argc, char* argv[]) {
         config.use_ionosphere_model = options.use_ionosphere_model;
         config.use_troposphere_model = options.use_troposphere_model;
         config.collect_lambda_debug = !options.lambda_debug_csv_path.empty();
+        if (!options.imu_path.empty()) {
+            config.backend = libgnss::FGOBackend::GTSAM;
+            config.use_pose3_state = true;
+            config.use_imu = true;
+            config.pose3_lever_arm_body_m =
+                libgnss::Vector3d(options.imu_lever_arm_x,
+                                  options.imu_lever_arm_y,
+                                  options.imu_lever_arm_z);
+            config.fixed_lag_smoother_lag_s = options.imu_fixed_lag_s;
+            config.use_fixed_lag_smoother = options.imu_fixed_lag_s > 0.0;
+        }
 
         const libgnss::FGOProcessor processor(config);
-        const libgnss::FGOProcessor::FGOProblem problem =
+        libgnss::FGOProcessor::FGOProblem problem =
             config.use_double_difference_factors
                 ? processor.buildDoubleDifferenceProblem(
                       epochs, base_epochs, nav_data, base_position)
                 : processor.buildPseudorangeProblem(epochs, nav_data);
+        if (!options.imu_path.empty()) {
+            std::string imu_error;
+            if (!attachImuToProblem(options.imu_path, problem,
+                                    options.imu_apply_mounting,
+                                    options.imu_noise_scale, imu_error)) {
+                std::cerr << "Error: IMU attachment failed: " << imu_error << "\n";
+                return 1;
+            }
+        }
         libgnss::FGOProcessor::FGOResult result;
         if (options.debug_problem_only) {
             result = makeProblemOnlyResult(problem, config);
+        } else if (!options.imu_path.empty()) {
+#ifdef GNSS_WITH_GTSAM
+            result = processor.optimizeProblem(problem);
+#else
+            std::cerr << "Error: --imu requires a GTSAM build\n";
+            return 1;
+#endif
         } else if (options.backend == "gtsam-pc") {
 #ifdef GNSS_WITH_GTSAM
             if (!config.use_double_difference_factors) {

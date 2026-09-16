@@ -108,6 +108,36 @@ the solution more than the fault it removes. A viable FDE needs a calibrated
 fault-free innovation distribution (or a subset-consensus test) rather than a
 fixed global threshold.
 
+## Carrier-phase FGO vs IMU-aided FGO
+
+`gnss_fgo` now accepts `--imu <imu.csv>` and builds a tightly-coupled
+double-difference-carrier + IMU factor graph (GTSAM Pose3 fixed-lag). The
+flag is opt-in: without `--imu` the output is byte-identical to before.
+Related knobs: `--imu-lever-arm X Y Z`, `--imu-no-mounting`,
+`--imu-fixed-lag <s>` (0 = batch), `--imu-noise-scale <s>`.
+
+![PPC Tokyo run1 — carrier-phase vs IMU-aided FGO](ppc_fgo_carrier_vs_imu.png)
+
+| arm (Tokyo run1) | P50 | P95 | max | RMS |
+|---|---:|---:|---:|---:|
+| GNSS carrier FGO (DD, base) | 1.66 | 7.49 | 29.3 | 3.55 |
+| Carrier + IMU FGO (fixed-lag) | 2.67 | 12.28 | 29.2 | 5.26 |
+| Carrier + IMU, IMU noise x1000 | 3.10 | 13.17 | **692** | 15.4 |
+| GNSS/IMU FGO (no-base TDCP) | 4.60 | 18.29 | 45.9 | 10.3 |
+| GNSS code FGO (no base) | 3.62 | 20.94 | 39.6 | 9.4 |
+
+Carrier-phase ambiguity resolution dominates: the code-only FGO is ~2x
+worse than the carrier FGO. The pure GNSS carrier arm runs the Eigen
+batch solver while the IMU arm runs the GTSAM fixed-lag smoother (batch
+GTSAM is ~15 min for 1000 epochs), so that cross-solver gap is not a
+clean IMU ablation. The clean ablation holds the solver fixed:
+
+![IMU ablation in the same fixed-lag FGO](ppc_fgo_imu_ablation.png)
+
+Weakening the IMU (noise x1000) inside the same fixed-lag smoother raises
+P50 2.67 -> 3.10 and injects a 692 m gross error, so the IMU factors are
+load-bearing; the nominal weighting bounds the worst epoch to 29 m.
+
 ## Reproduce
 
 ```bash
@@ -138,6 +168,39 @@ python3 scripts/plot_ppc_rtk_vs_imu_fusion.py \
   --output docs/ppc_rtk_vs_gnss_imu_fusion.png \
   --demote-max-ratio 4 --demote-nis-per-obs 2 \
   --title "PPC Tokyo run1 — RTK only vs RTK + tightly-coupled GNSS/IMU"
+
+# Carrier-phase FGO arms (gnss_fgo)
+P=data/PPC-Dataset/tokyo/run1
+build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
+  --preset real-data-fixed --out output/ppc_fgo/tokyo1_carrier.pos
+build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
+  --preset real-data-fixed --imu $P/imu.csv \
+  --out output/ppc_fgo/tokyo1_carrier_imu.pos
+build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
+  --preset real-data-fixed --imu $P/imu.csv --imu-noise-scale 1000 \
+  --out output/ppc_fgo/tokyo1_carrier_imu_weak.pos
+build/apps/gnss_fgo_imu_no_base --obs $P/rover.obs --imu $P/imu.csv --nav $P/base.nav \
+  --all-epochs --out output/ppc_fgo/tokyo1_no_base_imu.csv
+
+# FGO figure (3 arms) and IMU ablation
+python3 scripts/plot_ppc_gnss_vs_fgo.py \
+  --reference $P/reference.csv \
+  --gnss-pos  output/ppc_fgo/tokyo1_carrier.pos \
+  --imu-csv   output/ppc_fgo/tokyo1_no_base_imu.csv \
+  --extra-pos output/ppc_fgo/tokyo1_carrier_imu.pos \
+  --output docs/ppc_fgo_carrier_vs_imu.png \
+  --gnss-label "GNSS carrier FGO (DD, base)" \
+  --imu-label "GNSS/IMU FGO (no-base TDCP)" \
+  --extra-label "Carrier + IMU FGO (base)" \
+  --title "PPC Tokyo run1: carrier-phase vs IMU-aided FGO"
+python3 scripts/plot_ppc_gnss_vs_fgo.py \
+  --reference $P/reference.csv \
+  --gnss-pos  output/ppc_fgo/tokyo1_carrier_imu.pos \
+  --extra-pos output/ppc_fgo/tokyo1_carrier_imu_weak.pos \
+  --output docs/ppc_fgo_imu_ablation.png --no-osm \
+  --gnss-label "Carrier + IMU FGO (IMU nominal)" \
+  --extra-label "Carrier + IMU FGO (IMU x1000 noise)" \
+  --title "PPC Tokyo run1: IMU ablation in the same fixed-lag FGO"
 ```
 
 ## Scope
