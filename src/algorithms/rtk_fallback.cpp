@@ -227,8 +227,35 @@ void RTKProcessor::recordFixedEpoch(const PositionSolution& solution) {
 }
 
 void RTKProcessor::stabilizeFloatOutput(PositionSolution& solution) const {
-    if (!rtk_config_.enable_fixed_anchor_float_stabilization ||
-        solution.status != SolutionStatus::FLOAT) {
+    if (solution.status != SolutionStatus::FLOAT) {
+        return;
+    }
+    stabilizeNonFixedOutput(
+        solution, debug_telemetry_.float_position_covariance_trace_m2);
+}
+
+void RTKProcessor::stabilizeSingleOutput(PositionSolution& solution) const {
+    if (!rtk_config_.enable_fixed_anchor_single_stabilization ||
+        solution.status != SolutionStatus::SPP) {
+        return;
+    }
+    // SPP covariance is not tracked independently. Treat the single-point
+    // solution as high-uncertainty and rely on the anchor-age, fit-RMS and
+    // disagreement safeguards to avoid replacing a trustworthy SPP epoch.
+    // A large finite value is required: predict() rejects non-finite traces.
+    // Only replace clearly-wrong SPP: a 5 m disagreement floor avoids swapping
+    // a modest SPP error for an equally imperfect anchor extrapolation, which
+    // otherwise inflated the 99th percentile.
+    rtk_float_stabilizer::Config config;
+    config.min_float_disagreement_m = 5.0;
+    stabilizeNonFixedOutput(solution, 1.0e9, config);
+}
+
+void RTKProcessor::stabilizeNonFixedOutput(
+    PositionSolution& solution,
+    double position_covariance_trace_m2,
+    const rtk_float_stabilizer::Config& config) const {
+    if (!rtk_config_.enable_fixed_anchor_float_stabilization) {
         return;
     }
     const double time_s =
@@ -238,7 +265,8 @@ void RTKProcessor::stabilizeFloatOutput(PositionSolution& solution) const {
         fixed_anchor_float_history_,
         time_s,
         solution.position_ecef,
-        debug_telemetry_.float_position_covariance_trace_m2);
+        position_covariance_trace_m2,
+        config);
     if (!prediction.has_value()) return;
 
     solution.position_ecef = *prediction;

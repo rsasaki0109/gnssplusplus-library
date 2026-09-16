@@ -252,6 +252,8 @@ struct FuseOptions {
     // navi.776 A2: innovation-based adaptive measurement variance, mirroring
     // gnss_solve's --rtk-adaptive-noise family. Off by default.
     bool rtk_adaptive_noise = false;
+    // Extend the causal fixed-anchor stabilizer to the SPP fallback output.
+    bool rtk_single_stabilizer = false;
     double rtk_adaptive_noise_alpha_phase = 0.9;
     double rtk_adaptive_noise_alpha_code = 0.5;
     double rtk_adaptive_noise_min_scale = 0.25;
@@ -2019,6 +2021,8 @@ FuseOptions parseArguments(int argc, char* argv[]) {
             options.max_subset_ar_drop_steps = std::stoi(requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise") {
             options.rtk_adaptive_noise = true;
+        } else if (arg == "--rtk-single-stabilizer") {
+            options.rtk_single_stabilizer = true;
         } else if (arg == "--rtk-adaptive-noise-alpha-phase") {
             options.rtk_adaptive_noise_alpha_phase = std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--rtk-adaptive-noise-alpha-code") {
@@ -2459,6 +2463,8 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         options.rtk_adaptive_noise &&
         options.tc_doppler_max_baseline_m == 1000.0 &&
         options.rtk_adaptive_noise_max_baseline_m == 1000.0;
+    rtk_config.enable_fixed_anchor_single_stabilization =
+        options.rtk_single_stabilizer;
     rtk_config.enable_doppler_measurement_rows = options.tc_doppler_rows;
     rtk_config.reuse_kalman_factorization_for_nis =
         options.tc_reuse_update_factorization;

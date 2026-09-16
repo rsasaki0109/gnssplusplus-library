@@ -679,6 +679,11 @@ public:
         /// Doppler/adaptive-noise combination. It never feeds the predicted
         /// position back into the float filter or ambiguity state.
         bool enable_fixed_anchor_float_stabilization = false;
+        /// Extend the same causal fixed-anchor stabilization to the SPP
+        /// fallback output (status SINGLE/SPP), which otherwise bypasses the
+        /// FLOAT stabilizer. Opt-in and default off; the anchor-age / fit-RMS
+        /// / disagreement safeguards are identical.
+        bool enable_fixed_anchor_single_stabilization = false;
 
         /// M5 measurement-neutral single-difference TDCP-vs-Doppler
         /// diagnostics. No filter row or state mutation is performed.
@@ -2094,6 +2099,10 @@ private:
         bool saved_has_last_trusted_time);
     void recordFixedEpoch(const PositionSolution& solution);
     void stabilizeFloatOutput(PositionSolution& solution) const;
+    void stabilizeSingleOutput(PositionSolution& solution) const;
+    void stabilizeNonFixedOutput(PositionSolution& solution,
+                                 double position_covariance_trace_m2,
+                                 const rtk_float_stabilizer::Config& config = {}) const;
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 

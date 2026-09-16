@@ -190,6 +190,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 spp.isValid() &&
                 !debug_telemetry_.safe_float_continuity_used) {
                 spp.status = SolutionStatus::SPP;
+                stabilizeSingleOutput(spp);
             }
             if (!debug_telemetry_.safe_float_continuity_used) {
                 rememberSolution(spp);
@@ -756,6 +757,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         if (spp.isValid() &&
             !debug_telemetry_.safe_float_continuity_used) {
             spp.status = SolutionStatus::SPP;
+            stabilizeSingleOutput(spp);
             rememberSolution(spp);
         }
         recordFallbackEpoch(rover_obs, nav);
