@@ -257,6 +257,12 @@ struct Options {
     // Phase65 opt-in: subtract source-compatible, smoothed base-station
     // pseudorange residuals from adopted undifferenced pseudorange factors.
     bool native_base_pseudorange_compensation = false;
+    // Surveyed base antenna reference override (ECEF metres).  The default
+    // uses the RINEX header APPROX POSITION XYZ; the source gsdc2023 pipeline
+    // instead uses the year-matched surveyed station coordinate, which can
+    // differ by up to ~2 m for some stations (e.g. P221).
+    bool native_base_position_ecef_override = false;
+    double native_base_position_ecef[3] = {0.0, 0.0, 0.0};
     // Phase71 opt-in: preserve one selected base observation per supported
     // frequency band before building the Phase65 correction model.  This is
     // deliberately scoped to the base reader and does not alter rover/nav
@@ -324,6 +330,12 @@ struct Options {
     // validated raw UTC/GPS wall-clock fallback is actually selected.  Raw
     // UTC keys, pairing clocks, and elapsed-anchor paths remain unchanged.
     bool native_phase197_source_utc_fallback_imu_offset = false;
+    // Explicit per-drive override of the UTC wall-clock fallback offset.
+    // When set, this value replaces the source Phase197 -20 ms preset and is
+    // applied only through the validated UTC->GPS fallback mapping; it enables
+    // a Motooka-style GNSS-IMU time-offset search without touching raw keys.
+    bool native_imu_time_offset_override = false;
+    std::int64_t native_imu_time_offset_ms = 0;
     // Phase201 opt-in: use the cached source-inclusive-forward IMU schedule
     // in the Pixel5 Phase171 Pose3/IMU main graph.  The legacy preceding-delta
     // plus boundary-tail schedule remains the default.
@@ -487,6 +499,7 @@ void usage(const char* program) {
                  " [--native-cn0-doppler-calibration]"
                  " [--native-base-pseudorange-compensation --native-base-rinex <base.obs>"
                  " --native-base-rinex-sha256 <sha256>]"
+                 " [--native-base-position-ecef X Y Z]"
                  " [--native-base-pseudorange-preserve-additional-frequency-bands]"
                  " [--native-base-pseudorange-source-miss-mask]"
                  " [--native-gnss-first-velocity-only-handoff]"
@@ -503,6 +516,7 @@ void usage(const char* program) {
                  " [--native-phase180-android-clock-preflight]"
                  " [--native-phase194-source-utc-fallback-imu-noise]"
                  " [--native-phase197-source-utc-fallback-imu-offset]"
+                 " [--native-imu-time-offset-ms N]"
                  " [--native-phase201-source-inclusive-forward-imu-schedule]"
                  " [--native-phase205-source-count-bias-density]"
                  " [--native-phase209-source-separate-imu-factors]"
@@ -809,6 +823,22 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_cn0_doppler_calibration = true;
         } else if (arg == "--native-base-pseudorange-compensation") {
             options.native_base_pseudorange_compensation = true;
+        } else if (arg == "--native-base-position-ecef") {
+            if (options.native_base_position_ecef_override) return false;
+            for (double* value : {&options.native_base_position_ecef[0],
+                                  &options.native_base_position_ecef[1],
+                                  &options.native_base_position_ecef[2]}) {
+                std::string token;
+                if (!requireValue(argc, argv, i, token)) return false;
+                std::istringstream stream(token);
+                if (!(stream >> *value) || !stream.eof() || !std::isfinite(*value))
+                    return false;
+            }
+            if (options.native_base_position_ecef[0] == 0.0 &&
+                options.native_base_position_ecef[1] == 0.0 &&
+                options.native_base_position_ecef[2] == 0.0)
+                return false;
+            options.native_base_position_ecef_override = true;
         } else if (arg == "--native-base-pseudorange-preserve-additional-frequency-bands") {
             options.native_base_pseudorange_preserve_additional_frequency_bands = true;
         } else if (arg == "--native-base-pseudorange-source-miss-mask") {
@@ -845,6 +875,18 @@ bool parseArguments(int argc, char** argv, Options& options) {
         } else if (arg ==
                    "--native-phase197-source-utc-fallback-imu-offset") {
             options.native_phase197_source_utc_fallback_imu_offset = true;
+        } else if (arg == "--native-imu-time-offset-ms") {
+            std::string value;
+            if (!requireValue(argc, argv, i, value)) return false;
+            if (options.native_imu_time_offset_override) return false;
+            try {
+                std::size_t consumed = 0;
+                options.native_imu_time_offset_ms = std::stoll(value, &consumed);
+                if (consumed != value.size()) return false;
+            } catch (...) {
+                return false;
+            }
+            options.native_imu_time_offset_override = true;
         } else if (arg ==
                    "--native-phase201-source-inclusive-forward-imu-schedule") {
             options.native_phase201_source_inclusive_forward_imu_schedule = true;
@@ -1312,6 +1354,14 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "--android-raw-clock-only requires Android raw GNSS/IMU input\n";
         return false;
     }
+    if (options.native_imu_time_offset_override &&
+        (!android_raw || !options.android_raw_clock_only ||
+         !options.android_raw_utc_key_contract || !options.all_epochs ||
+         !options.android_utc_wall_clock_fallback)) {
+        std::cerr << "--native-imu-time-offset-ms requires raw Android "
+                     "clock-only all-epoch UTC wall-clock fallback input\n";
+        return false;
+    }
     if (options.native_android_sv_time_uncertainty_sigma_floor && !android_raw) {
         std::cerr << "--native-android-sv-time-uncertainty-sigma-floor requires "
                      "Android raw GNSS/IMU input\n";
@@ -1546,6 +1596,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (!options.native_base_pseudorange_compensation &&
         !options.native_base_rinex_sha256.empty()) {
         std::cerr << "--native-base-rinex-sha256 requires "
+                     "--native-base-pseudorange-compensation\n";
+        return false;
+    }
+    if (options.native_base_position_ecef_override &&
+        !options.native_base_pseudorange_compensation) {
+        std::cerr << "--native-base-position-ecef requires "
                      "--native-base-pseudorange-compensation\n";
         return false;
     }
@@ -5865,7 +5921,9 @@ bool buildImuInput(const std::string& path,
                    bool phase194_source_utc_fallback_imu_noise = false,
                    bool phase197_source_utc_fallback_imu_offset = false,
                    bool epoch_heading_attitude_seeds = false,
-                   bool stationary_gyro_initializer = false) {
+                   bool stationary_gyro_initializer = false,
+                   std::int64_t utc_wall_clock_fallback_offset_override_ms =
+                       std::numeric_limits<std::int64_t>::max()) {
     if (problem.epochs.size() < 2) {
         report.failure = "fewer than two GNSS epochs";
         return false;
@@ -5877,19 +5935,28 @@ bool buildImuInput(const std::string& path,
         libgnss::AndroidImuCsvConfig android_config;
         android_config.require_gnss_elapsed_anchor = true;
         android_config.allow_utc_wall_clock_fallback = utc_gps_mapping != nullptr;
+        const bool imu_time_offset_override_set =
+            utc_wall_clock_fallback_offset_override_ms !=
+            std::numeric_limits<std::int64_t>::max();
         android_config.apply_utc_wall_clock_fallback_offset =
-            phase197_source_utc_fallback_imu_offset;
+            phase197_source_utc_fallback_imu_offset ||
+            imu_time_offset_override_set;
         android_config.utc_wall_clock_fallback_offset_ms =
-            phase197_source_utc_fallback_imu_offset
-                ? libgnss::native_utc_fallback_imu_offset::kSourceUtcWallClockOffsetMs
-                : 0;
+            imu_time_offset_override_set
+                ? utc_wall_clock_fallback_offset_override_ms
+                : (phase197_source_utc_fallback_imu_offset
+                       ? libgnss::native_utc_fallback_imu_offset::
+                             kSourceUtcWallClockOffsetMs
+                       : 0);
         android_config.imu_sync_coefficient = kUpstreamImuSyncCoefficient;
         report.android_load = libgnss::loadAndroidImuCsv(
             path, series, android_config, gnss_time_anchors, utc_gps_mapping);
         const auto offset_selection =
             libgnss::native_utc_fallback_imu_offset::select(
                 phase197_source_utc_fallback_imu_offset,
-                report.android_load.utc_wall_clock_fallback_applied);
+                report.android_load.utc_wall_clock_fallback_applied,
+                imu_time_offset_override_set,
+                utc_wall_clock_fallback_offset_override_ms);
         report.phase197_source_utc_fallback_imu_offset_requested =
             offset_selection.requested;
         report.phase197_source_utc_fallback_imu_offset_applied =
@@ -11280,6 +11347,12 @@ int main(int argc, char** argv) {
         base_pseudorange_report.header_interval_s = base_header.interval;
         base_pseudorange_report.base_position_ecef =
             base_header.approximate_position;
+        if (options.native_base_position_ecef_override) {
+            base_pseudorange_report.base_position_ecef =
+                libgnss::Vector3d(options.native_base_position_ecef[0],
+                                  options.native_base_position_ecef[1],
+                                  options.native_base_position_ecef[2]);
+        }
         std::error_code file_size_error;
         base_pseudorange_report.base_rinex_bytes =
             std::filesystem::file_size(options.native_base_rinex_path,
@@ -11306,7 +11379,7 @@ int main(int argc, char** argv) {
         }
         base_pseudorange_report.moving_mean_samples = moving_mean_samples;
         libgnss::base_pseudorange_compensation::Config base_config;
-        base_config.base_position_ecef = base_header.approximate_position;
+        base_config.base_position_ecef = base_pseudorange_report.base_position_ecef;
         base_config.source_complete =
             options.native_phase126_raw_base_source_complete || options.native_paired_epoch_states;
         base_config.use_source_epoch_states = options.native_paired_epoch_states;
@@ -13330,7 +13403,10 @@ int main(int argc, char** argv) {
                                  options.native_phase194_source_utc_fallback_imu_noise,
                                  options.native_phase197_source_utc_fallback_imu_offset,
                                  options.native_epoch_heading_attitude_seeds,
-                                 options.native_stationary_gyro_initializer);
+                                 options.native_stationary_gyro_initializer,
+                                 options.native_imu_time_offset_override
+                                     ? options.native_imu_time_offset_ms
+                                     : std::numeric_limits<std::int64_t>::max());
     if (options.native_main_code_edge_readmission) {
         std::set<std::tuple<std::size_t, libgnss::SatelliteId, libgnss::SignalType>> keys;
         for (const auto& factor : problem.pseudorange_factors)

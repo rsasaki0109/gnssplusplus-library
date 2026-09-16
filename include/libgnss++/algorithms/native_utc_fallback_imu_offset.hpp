@@ -18,15 +18,23 @@ struct Selection {
     const char* source = "native-no-utc-fallback-offset";
 };
 
-inline Selection select(bool requested, bool fallback_applied) {
+inline Selection select(bool requested, bool fallback_applied,
+                        bool override_set = false,
+                        std::int64_t override_ms = 0) {
     Selection selection;
-    selection.requested = requested;
+    selection.requested = requested || override_set;
     selection.fallback_applied = fallback_applied;
+    if (override_set && fallback_applied) {
+        selection.applied = true;
+        selection.offset_ms = override_ms;
+        selection.source = "native-explicit-imu-time-offset";
+        return selection;
+    }
     if (requested && fallback_applied) {
         selection.applied = true;
         selection.offset_ms = kSourceUtcWallClockOffsetMs;
         selection.source = "source-utc-wall-clock-offset-minus-20ms";
-    } else if (requested) {
+    } else if (requested || override_set) {
         selection.source = "native-no-offset-fallback-not-applied";
     }
     return selection;
