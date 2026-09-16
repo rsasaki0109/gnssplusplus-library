@@ -27,11 +27,11 @@ arms via `scripts/plot_ppc_rtk_vs_imu_fusion.py --demote-max-ratio 4
 | Correct FIX (3D < 0.5 m) | 64.95 % | **73.88 %** | **+8.93 pp** |
 | Wrong FIX / FIX | 8.66 % | **5.53 %** | −3.13 pp |
 | FIX rate (post-demote) | 71.10 % | **78.20 %** | +7.10 pp |
-| Official PPC score | 70.46 % | **77.71 %** | **+7.25 pp** |
+| Official PPC score | 70.46 % | **77.76 %** | **+7.30 pp** |
 | P50 horizontal | 0.031 m | **0.026 m** | −0.005 m |
-| P95 horizontal | 6.869 m | **5.696 m** | −1.17 m |
+| P95 horizontal | 6.869 m | **5.655 m** | −1.21 m |
 | 3D < 0.5 m (all epochs) | 72.33 % | **78.40 %** | +6.07 pp |
-| Worst epoch | 124 m | **93 m** | −31 m |
+| Worst epoch | 124 m | **72 m** | −52 m |
 
 ## Ablation
 
@@ -45,20 +45,24 @@ same sigma-demote policy.
 |---|---:|---:|---:|---:|---:|
 | RTK only | 71.10 | 64.95 | 8.66 | 70.46 | 6.869 |
 | + TC | 71.38 | 68.42 | **4.15** | 74.76 | 6.859 |
-| + TC + robust | **78.20** | **73.88** | 5.53 | **77.71** | **5.696** |
+| + TC + robust + SPP stab | **78.20** | **73.88** | 5.53 | **77.76** | **5.655** |
 
 Tight coupling alone cuts the wrong-fix rate; the robust front-end then
 converts the recovered epochs into correct fixes, raising coverage and the
-official score.
+official score. The SPP stabilizer then trims the worst isolated epoch.
 
-## Heavy-tail front-end wiring fix
+## In-KF components
 
-The Student-t / Huber / Laplacian front-end was only assigned to the primary
-RTK config inside the `--library-fix-integrity-gate` block, so
-`--integrity-student-t-*` was a silent no-op on the PPC/navi776 lane
-(verified byte-identical output). `apps/native/gnss_fuse.cpp` now assigns the
-front-end to the primary RTK config outside that gate; default behaviour is
-unchanged (the base run is byte-identical).
+- **Heavy-tail front-end** (`--integrity-student-t-*`): IRLS Student-t /
+  Huber / Laplacian weighting on the RTK measurement rows, applied to the
+  primary RTK config. It previously only applied inside the
+  `--library-fix-integrity-gate` block and was a silent no-op on this lane
+  (verified byte-identical output).
+- **SPP fixed-anchor stabilizer** (`--rtk-single-stabilizer`): the causal
+  fixed-anchor prediction (linear fit over the last 20 s of FIX anchors,
+  anchor <= 15 s old, fit RMS <= 2 m, >= 5 m disagreement) now also replaces
+  clearly-wrong SPP fallback output. It is output-only, never fed back into
+  the RTK state, and reduces the worst epoch from 93 m to 72 m.
 
 ## Reproduce
 
@@ -80,13 +84,14 @@ build/apps/gnss_fuse \
   --integrity-student-t-all-measurements \
   --integrity-student-t-degrees-of-freedom 3 \
   --integrity-heavy-tail-activation-sigma 2.0 \
-  --rtk-pos-out output/ppc_rtk_vs_imu_fusion/tokyo1_robust/student_t3.pos
+  --rtk-single-stabilizer \
+  --rtk-pos-out output/ppc_rtk_vs_imu_fusion/tokyo1_single/single_stab.pos
 
 # Figure
 python3 scripts/plot_ppc_rtk_vs_imu_fusion.py \
   --reference data/PPC-Dataset/tokyo/run1/reference.csv \
   --rtk-pos   output/ppc_rtk_vs_imu_fusion/tokyo1_canon/off_rtk.pos \
-  --fusion-pos output/ppc_rtk_vs_imu_fusion/tokyo1_robust/student_t3.pos \
+  --fusion-pos output/ppc_rtk_vs_imu_fusion/tokyo1_single/single_stab.pos \
   --output docs/ppc_rtk_vs_gnss_imu_fusion.png \
   --demote-max-ratio 4 --demote-nis-per-obs 2 \
   --title "PPC Tokyo run1 — RTK only vs RTK + tightly-coupled GNSS/IMU"
