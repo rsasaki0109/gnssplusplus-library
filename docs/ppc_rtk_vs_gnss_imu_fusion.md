@@ -27,11 +27,11 @@ arms via `scripts/plot_ppc_rtk_vs_imu_fusion.py --demote-max-ratio 4
 | Correct FIX (3D < 0.5 m) | 64.95 % | **73.88 %** | **+8.93 pp** |
 | Wrong FIX / FIX | 8.66 % | **5.53 %** | −3.13 pp |
 | FIX rate (post-demote) | 71.10 % | **78.20 %** | +7.10 pp |
-| Official PPC score | 70.46 % | **77.76 %** | **+7.30 pp** |
+| Official PPC score | 70.46 % | **77.71 %** | **+7.25 pp** |
 | P50 horizontal | 0.031 m | **0.026 m** | −0.005 m |
-| P95 horizontal | 6.869 m | **5.655 m** | −1.21 m |
+| P95 horizontal | 6.869 m | **5.781 m** | −1.09 m |
 | 3D < 0.5 m (all epochs) | 72.33 % | **78.40 %** | +6.07 pp |
-| Worst epoch | 124 m | **72 m** | −52 m |
+| Worst epoch | 124 m | **65 m** | −59 m |
 
 ## Ablation
 
@@ -59,10 +59,12 @@ official score. The SPP stabilizer then trims the worst isolated epoch.
   `--library-fix-integrity-gate` block and was a silent no-op on this lane
   (verified byte-identical output).
 - **SPP fixed-anchor stabilizer** (`--rtk-single-stabilizer`): the causal
-  fixed-anchor prediction (linear fit over the last 20 s of FIX anchors,
-  anchor <= 15 s old, fit RMS <= 2 m, >= 5 m disagreement) now also replaces
-  clearly-wrong SPP fallback output. It is output-only, never fed back into
-  the RTK state, and reduces the worst epoch from 93 m to 72 m.
+  fixed-anchor prediction now also replaces grossly-wrong SPP fallback output.
+  It fits the last 20 s of FIX anchors (constant-velocity linear first, and a
+  constant-acceleration quadratic only when the linear residual exceeds 2 m),
+  requires an anchor <= 15 s old and >= 15 m disagreement with the raw SPP,
+  and is output-only (never fed back into the RTK state). It reduces the
+  worst epoch from 93 m to 65 m at a small P95/P99 trade.
 
 ## Reproduce
 

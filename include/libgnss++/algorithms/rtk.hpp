@@ -2102,7 +2102,8 @@ private:
     void stabilizeSingleOutput(PositionSolution& solution) const;
     void stabilizeNonFixedOutput(PositionSolution& solution,
                                  double position_covariance_trace_m2,
-                                 const rtk_float_stabilizer::Config& config = {}) const;
+                                 const rtk_float_stabilizer::Config& config = {},
+                                 const rtk_float_stabilizer::Config* fallback_config = nullptr) const;
     void recordFloatEpoch(const ObservationData& rover_obs, const NavigationData& nav);
     void recordFallbackEpoch(const ObservationData& rover_obs, const NavigationData& nav);
 

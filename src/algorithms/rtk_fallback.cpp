@@ -243,30 +243,45 @@ void RTKProcessor::stabilizeSingleOutput(PositionSolution& solution) const {
     // solution as high-uncertainty and rely on the anchor-age, fit-RMS and
     // disagreement safeguards to avoid replacing a trustworthy SPP epoch.
     // A large finite value is required: predict() rejects non-finite traces.
-    // Only replace clearly-wrong SPP: a 5 m disagreement floor avoids swapping
-    // a modest SPP error for an equally imperfect anchor extrapolation, which
-    // otherwise inflated the 99th percentile.
+    // Only replace grossly-wrong SPP: a 15 m disagreement floor limits the
+    // replacement to clearly-broken epochs, so a modest SPP error is never
+    // swapped for an equally imperfect anchor extrapolation. Try the
+    // constant-velocity linear fit first and fall back to a constant-
+    // acceleration quadratic only when the linear fit fails the residual
+    // safeguard (turns).
     rtk_float_stabilizer::Config config;
-    config.min_float_disagreement_m = 5.0;
-    stabilizeNonFixedOutput(solution, 1.0e9, config);
+    config.min_float_disagreement_m = 15.0;
+    rtk_float_stabilizer::Config fallback;
+    fallback.min_float_disagreement_m = 15.0;
+    fallback.fit_degree = 2;
+    stabilizeNonFixedOutput(solution, 1.0e9, config, &fallback);
 }
 
 void RTKProcessor::stabilizeNonFixedOutput(
     PositionSolution& solution,
     double position_covariance_trace_m2,
-    const rtk_float_stabilizer::Config& config) const {
+    const rtk_float_stabilizer::Config& config,
+    const rtk_float_stabilizer::Config* fallback_config) const {
     if (!rtk_config_.enable_fixed_anchor_float_stabilization) {
         return;
     }
     const double time_s =
         static_cast<double>(solution.time.week) * 604800.0 +
         solution.time.tow;
-    const auto prediction = rtk_float_stabilizer::predict(
+    auto prediction = rtk_float_stabilizer::predict(
         fixed_anchor_float_history_,
         time_s,
         solution.position_ecef,
         position_covariance_trace_m2,
         config);
+    if (!prediction.has_value() && fallback_config != nullptr) {
+        prediction = rtk_float_stabilizer::predict(
+            fixed_anchor_float_history_,
+            time_s,
+            solution.position_ecef,
+            position_covariance_trace_m2,
+            *fallback_config);
+    }
     if (!prediction.has_value()) return;
 
     solution.position_ecef = *prediction;
