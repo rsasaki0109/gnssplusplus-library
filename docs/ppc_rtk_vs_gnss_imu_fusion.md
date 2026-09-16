@@ -87,6 +87,27 @@ promoted**: on Tokyo run2 it replaced a moderate SPP error with a bad
 quadratic extrapolation and raised the worst epoch from 63 m to 210 m. It
 stays default-off and opt-in for research.
 
+## Rejected: FDE with exclusion on the global NIS gate
+
+A row-exclusion FDE (when the global normalized-innovation gate would reject
+the update, exclude the worst-normalized-innovation row and retry up to N
+times) was implemented on top of the robust stack and reverted after it
+degraded every run:
+
+| run | arm | Official % | P95 m | Worst epoch m |
+|---|---|---:|---:|---:|
+| tokyo1 | robust | 77.71 | 5.70 | 93 |
+| tokyo1 | + FDE | 64.08 | 14.03 | 93 |
+| tokyo2 | robust | 84.10 | 3.47 | 63 |
+| tokyo2 | + FDE | 63.02 | 4.06 | **146** |
+| tokyo3 | robust | 76.16 | 5.95 | 251 |
+
+The PPC RTK update routinely exceeds NIS/obs ≈ 3 without a fault, so the gate
+fires on healthy epochs; excluding rows then destroys redundancy and degrades
+the solution more than the fault it removes. A viable FDE needs a calibrated
+fault-free innovation distribution (or a subset-consensus test) rather than a
+fixed global threshold.
+
 ## Reproduce
 
 ```bash
