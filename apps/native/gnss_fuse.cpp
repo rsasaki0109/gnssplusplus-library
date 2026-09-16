@@ -2620,23 +2620,28 @@ int runRtkFusion(const FuseOptions& options, libgnss::ImuSeries& imu_series,
         rtk_config
             .disjoint_satellite_fix_max_statistical_separation_m =
             options.integrity_max_statistical_separation_m;
-        rtk_config.student_t_front_end.enabled =
-            options.integrity_student_t_front_end;
-        rtk_config.student_t_front_end.code_only =
-            !options.integrity_student_t_all_measurements;
-        rtk_config.student_t_front_end.degrees_of_freedom =
-            options.integrity_student_t_degrees_of_freedom;
-        rtk_config.student_t_front_end.activation_threshold_sigma =
-            options.integrity_heavy_tail_activation_sigma;
-        if (options.integrity_laplacian_all_measurements) {
-            rtk_config.student_t_front_end.weight_model =
-                libgnss::rtk_update::HeavyTailWeightModel::
-                    LAPLACIAN;
-        } else if (options.integrity_huber_all_measurements) {
-            rtk_config.student_t_front_end.weight_model =
-                libgnss::rtk_update::HeavyTailWeightModel::
-                    HUBER;
-        }
+    }
+    // Independent of the FFRT integrity gate.  The heavy-tail (Student-t /
+    // Huber / Laplacian) front-end is a measurement-domain robust weight and
+    // must be selectable on the primary RTK update by itself; keeping it
+    // inside the --library-fix-integrity-gate block silently made
+    // --integrity-student-t-* a no-op on the PPC/navi776 lane.
+    rtk_config.student_t_front_end.enabled =
+        options.integrity_student_t_front_end;
+    rtk_config.student_t_front_end.code_only =
+        !options.integrity_student_t_all_measurements;
+    rtk_config.student_t_front_end.degrees_of_freedom =
+        options.integrity_student_t_degrees_of_freedom;
+    rtk_config.student_t_front_end.activation_threshold_sigma =
+        options.integrity_heavy_tail_activation_sigma;
+    if (options.integrity_laplacian_all_measurements) {
+        rtk_config.student_t_front_end.weight_model =
+            libgnss::rtk_update::HeavyTailWeightModel::
+                LAPLACIAN;
+    } else if (options.integrity_huber_all_measurements) {
+        rtk_config.student_t_front_end.weight_model =
+            libgnss::rtk_update::HeavyTailWeightModel::
+                HUBER;
     }
     rtk_processor.setRTKConfig(rtk_config);
     rtk_processor.setBasePosition(base_position);
