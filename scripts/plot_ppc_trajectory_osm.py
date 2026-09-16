@@ -34,7 +34,7 @@ for path in (SCRIPTS_DIR, ROOT_DIR / "apps" / "commands",
 import generate_driving_comparison as comparison  # noqa: E402
 
 RTK_COLOR = "#1f77b4"
-FUSION_COLOR = "#d62728"
+FUSION_COLOR = "#1a7f37"
 REF_COLOR = "#555555"
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 USER_AGENT = "gnssplusplus-library/1.0 (PPC research figure)"

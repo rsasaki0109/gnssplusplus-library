@@ -37,7 +37,7 @@ import generate_driving_comparison as comparison  # noqa: E402
 import gnss_ppc_metrics as metrics  # noqa: E402
 
 RTK_COLOR = "#1f77b4"
-FUSION_COLOR = "#d62728"
+FUSION_COLOR = "#1a7f37"
 REF_COLOR = "#7f7f7f"
 
 
