@@ -26,6 +26,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPTS_DIR.parent
@@ -38,6 +39,41 @@ GNSS_COLOR = "#1f77b4"
 FUSION_COLOR = "#1a7f37"
 EXTRA_COLOR = "#d62728"
 REF_COLOR = "#555555"
+ARM_LINESTYLES = ["-", "--", ":"]
+
+STATUS_COLORS = {4: "#1a7f37", 3: "#ff7f0e", 2: "#9467bd", 1: "#d62728",
+                 0: "#999999"}
+STATUS_NAMES = {4: "FIX", 3: "FLOAT", 2: "DGPS", 1: "SPP", 0: "status n/a"}
+
+
+def plot_status_track(ax, xy, statuses, linestyle="-", lw=1.5, alpha=0.9,
+                      zorder=3):
+    """Draw a trajectory with line segments coloured by per-epoch status."""
+    n = len(xy)
+    if n == 0:
+        return
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and statuses[j + 1] == statuses[i]:
+            j += 1
+        end = min(j + 1, n - 1)
+        seg = xy[i:end + 1]
+        if seg.shape[0] >= 2:
+            ax.plot(seg[:, 0], seg[:, 1],
+                    color=STATUS_COLORS.get(statuses[i], "#999999"),
+                    ls=linestyle, lw=lw, alpha=alpha, zorder=zorder)
+        i = j + 1
+
+
+def status_legend_handles(epochs_list, arm_handles):
+    present = {e.status for epochs in epochs_list for e in epochs}
+    handles = list(arm_handles)
+    for code in (4, 3, 2, 1, 0):
+        if code in present:
+            handles.append(Line2D([0], [0], color=STATUS_COLORS[code], lw=2.4,
+                                  label=STATUS_NAMES[code]))
+    return handles
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 USER_AGENT = "gnssplusplus-library/1.0 (PPC research figure)"
 GPS_TO_UNIX_OFFSET_S = 315964800.0  # 1980-01-06 - 1970-01-01
@@ -66,7 +102,7 @@ def read_submission_lat_lon(path: Path) -> list[comparison.SolutionEpoch]:
             week, tow = unix_millis_to_week_tow(unix_millis)
             ecef = comparison.llh_to_ecef(lat, lon, 0.0)
             rows.append(comparison.SolutionEpoch(
-                week, tow, lat, lon, 0.0, ecef, 4, 0))
+                week, tow, lat, lon, 0.0, ecef, 0, 0))
     return rows
 
 
@@ -215,12 +251,15 @@ def main() -> int:
 
     all_epochs = [reference] + [arm["epochs"] for arm in arms]
     if args.no_osm:
-        for arm in arms:
-            ax_map.plot([e.lon_deg for e in arm["epochs"]],
-                        [e.lat_deg for e in arm["epochs"]],
-                        color=arm["color"], lw=1.5, alpha=0.9, label=arm["label"])
         ax_map.plot([e.lon_deg for e in reference], [e.lat_deg for e in reference],
                     color=REF_COLOR, lw=2.0, alpha=0.9, label="Reference")
+        for idx, arm in enumerate(arms):
+            plot_status_track(
+                ax_map,
+                np.column_stack([[e.lon_deg for e in arm["epochs"]],
+                                 [e.lat_deg for e in arm["epochs"]]]),
+                [e.status for e in arm["epochs"]],
+                linestyle=ARM_LINESTYLES[idx % len(ARM_LINESTYLES)], lw=1.5)
     else:
         lat = np.array([e.lat_deg for epochs in all_epochs for e in epochs])
         lon = np.array([e.lon_deg for epochs in all_epochs for e in epochs])
@@ -236,11 +275,13 @@ def main() -> int:
         ax_map.imshow(np.asarray(basemap), extent=[ox, ox + w, oy + h, oy])
         xs, ys = to_px([e.lat_deg for e in reference], [e.lon_deg for e in reference], zoom)
         ax_map.plot(xs, ys, color=REF_COLOR, lw=4.0, alpha=0.9, label="Reference", zorder=3)
-        for arm in arms:
+        for idx, arm in enumerate(arms):
             xs, ys = to_px([e.lat_deg for e in arm["epochs"]],
                            [e.lon_deg for e in arm["epochs"]], zoom)
-            ax_map.plot(xs, ys, color=arm["color"], lw=1.8, alpha=0.9,
-                        label=arm["label"], zorder=3)
+            plot_status_track(ax_map, np.column_stack([xs, ys]),
+                              [e.status for e in arm["epochs"]],
+                              linestyle=ARM_LINESTYLES[idx % len(ARM_LINESTYLES)],
+                              lw=1.8)
         ax_map.set_xlim(ox, ox + w)
         ax_map.set_ylim(oy + h, oy)
         fig.text(0.995, 0.01, "(c) OpenStreetMap contributors", ha="right", va="bottom",
@@ -276,10 +317,14 @@ def main() -> int:
                 rxs, rys = to_px([e.lat_deg for e in reference],
                                  [e.lon_deg for e in reference], izoom)
                 axi.plot(rxs, rys, color=REF_COLOR, lw=2.5, alpha=0.9, zorder=3)
-                for arm in arms:
+                for idx, arm in enumerate(arms):
                     xs, ys = to_px([e.lat_deg for e in arm["epochs"]],
                                    [e.lon_deg for e in arm["epochs"]], izoom)
-                    axi.plot(xs, ys, color=arm["color"], lw=1.6, alpha=0.9, zorder=3)
+                    plot_status_track(
+                        axi, np.column_stack([xs, ys]),
+                        [e.status for e in arm["epochs"]],
+                        linestyle=ARM_LINESTYLES[idx % len(ARM_LINESTYLES)],
+                        lw=1.6)
                 axi.set_xlim(ix, ix + iw)
                 axi.set_ylim(iy + ih, iy)
                 axi.set_aspect("equal")
@@ -292,7 +337,14 @@ def main() -> int:
     ax_map.set_xticks([])
     ax_map.set_yticks([])
     ax_map.set_title(args.title, fontsize=18, fontweight="bold")
-    ax_map.legend(fontsize=12, loc="upper right", framealpha=0.9)
+    arm_handles = [Line2D([0], [0], color=REF_COLOR, lw=3.5, label="Reference")]
+    for idx, arm in enumerate(arms):
+        arm_handles.append(Line2D(
+            [0], [0], color="#333333", lw=1.8,
+            ls=ARM_LINESTYLES[idx % len(ARM_LINESTYLES)], label=arm["label"]))
+    ax_map.legend(handles=status_legend_handles([a["epochs"] for a in arms],
+                                                arm_handles),
+                  fontsize=10, loc="upper right", framealpha=0.9)
     table = "\n".join(
         f"{arm['label'][:18]:18s} P50 {arm['stats']['p50_m']:.2f}"
         f"  P95 {arm['stats']['p95_m']:.2f}  max {arm['stats']['max_m']:.1f} m"

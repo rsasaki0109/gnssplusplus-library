@@ -25,6 +25,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+from matplotlib.lines import Line2D  # noqa: E402
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 ROOT_DIR = SCRIPTS_DIR.parent
@@ -39,6 +40,39 @@ import gnss_ppc_metrics as metrics  # noqa: E402
 RTK_COLOR = "#1f77b4"
 FUSION_COLOR = "#1a7f37"
 REF_COLOR = "#7f7f7f"
+
+STATUS_COLORS = {4: "#1a7f37", 3: "#ff7f0e", 2: "#9467bd", 1: "#d62728"}
+STATUS_NAMES = {4: "FIX", 3: "FLOAT", 2: "DGPS", 1: "SPP"}
+
+
+def plot_status_track(ax, xy, statuses, linestyle="-", lw=1.5, alpha=0.9,
+                      zorder=3):
+    """Draw a trajectory with line segments coloured by per-epoch status."""
+    n = len(xy)
+    if n == 0:
+        return
+    i = 0
+    while i < n:
+        j = i
+        while j + 1 < n and statuses[j + 1] == statuses[i]:
+            j += 1
+        end = min(j + 1, n - 1)
+        seg = xy[i:end + 1]
+        if seg.shape[0] >= 2:
+            ax.plot(seg[:, 0], seg[:, 1],
+                    color=STATUS_COLORS.get(statuses[i], "#999999"),
+                    ls=linestyle, lw=lw, alpha=alpha, zorder=zorder)
+        i = j + 1
+
+
+def status_legend_handles(epochs_list, arm_handles):
+    present = {e.status for epochs in epochs_list for e in epochs}
+    handles = list(arm_handles)
+    for code in (4, 3, 2, 1):
+        if code in present:
+            handles.append(Line2D([0], [0], color=STATUS_COLORS[code], lw=2.4,
+                                  label=STATUS_NAMES[code]))
+    return handles
 
 
 def parse_args() -> argparse.Namespace:
@@ -128,16 +162,27 @@ def main() -> int:
     fig, axes = plt.subplots(2, 2, figsize=(14, 11))
     fig.suptitle(args.title, fontsize=20, fontweight="bold")
 
-    # (a) trajectory
+    # (a) trajectory — colour = FIX/FLOAT/SPP, line style = arm
     ax = axes[0, 0]
     ax.plot(ref_enu[:, 0], ref_enu[:, 1], color=REF_COLOR, lw=4, alpha=0.7, label="Reference")
-    ax.plot(rtk_enu[:, 0], rtk_enu[:, 1], color=RTK_COLOR, lw=1.4, alpha=0.9, label=f"{args.rtk_label} (P95 {rtk_m['p95']:.2f} m)")
-    ax.plot(fusion_enu[:, 0], fusion_enu[:, 1], color=FUSION_COLOR, lw=1.4, alpha=0.9, label=f"{args.fusion_label} (P95 {fusion_m['p95']:.2f} m)")
+    plot_status_track(ax, rtk_enu, [e.status for e in rtk["solution"]],
+                      linestyle="-", lw=1.4)
+    plot_status_track(ax, fusion_enu, [e.status for e in fusion["solution"]],
+                      linestyle="--", lw=1.4)
+    arm_handles = [
+        Line2D([0], [0], color=REF_COLOR, lw=4, alpha=0.7, label="Reference"),
+        Line2D([0], [0], color="#333333", lw=1.6, ls="-",
+               label=f"{args.rtk_label} (P95 {rtk_m['p95']:.2f} m)"),
+        Line2D([0], [0], color="#333333", lw=1.6, ls="--",
+               label=f"{args.fusion_label} (P95 {fusion_m['p95']:.2f} m)"),
+    ]
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_xlabel("East [m]")
     ax.set_ylabel("North [m]")
-    ax.set_title("Trajectory (ENU)")
-    ax.legend(fontsize=11, loc="best")
+    ax.set_title("Trajectory (ENU) — solid/dashed = arm, colour = status")
+    ax.legend(handles=status_legend_handles([rtk["solution"], fusion["solution"]],
+                                            arm_handles),
+              fontsize=9, loc="best")
     ax.grid(alpha=0.3)
 
     # (b) CDF
