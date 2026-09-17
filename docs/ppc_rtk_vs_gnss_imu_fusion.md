@@ -168,10 +168,27 @@ the earlier hand-tuned "noise x0.1" result to within 0.01 m.
 
 ### In-estimator trajectory smoothing
 
-With the calibrated noise and a 20 s fixed-lag window the estimated
-trajectory is smoothed entirely inside the estimator — no post-processing
-(filter, RTS or spline). The figure auto-draws a 120 m zoom inset at the
-worst combined epoch so the local track shape can be inspected.
+With the calibrated IMU noise, the inuex35 reference DD sigmas
+(`--dd-carrier-sigma 0.003 --dd-pseudorange-sigma 0.3`) and a 20 s
+fixed-lag window the estimated trajectory is smoothed entirely inside the
+estimator — no post-processing (filter, RTS or spline). On Tokyo run1 the
+carrier+IMU arm reaches P50 1.80 / P95 7.12 / max 8.7 m (RMS 3.50) versus
+the carrier-only P50 1.67 / P95 7.50 / max 29.7 m (RMS 3.61): the median is
+within 0.13 m while the tail and worst epoch improve. The figure
+auto-draws a 120 m zoom inset at the worst combined epoch.
+
+### Ambiguity resolution in the fixed lag
+
+The fixed-lag AR resolves integers too. With `--fixed-lag-partial-ar`
+(ranked subset LAMBDA retry) Tokyo run1 fixes 2610/11866 epochs and the
+FIXED epochs are accurate (horizontal P50 0.299 m, RMS 2.65) versus the
+float epochs (P50 2.05, RMS 3.72) — consistent with the upstream inuex35
+reference FixRMS 0.29 m. The full-set LAMBDA ratio sits near 1.0 because a
+near-singular joint ambiguity mode degenerates the search (the ambiguity
+estimates themselves are precise: median std 0.04 cyc, LAMBDA BSR 1.0); the
+subset retry drops that mode. The remaining gap to the reference fix rate
+(63%) needs the upstream graph composition (1 s fixed lag, SD Doppler,
+NHC/ZUPT, held-integer conditioning), not a single parameter.
 
 ![Carrier-only vs calibrated carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
 
