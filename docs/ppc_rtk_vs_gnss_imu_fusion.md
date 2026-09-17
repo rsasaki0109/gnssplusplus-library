@@ -164,6 +164,29 @@ worst combined epoch so the local track shape can be inspected.
 
 ![Carrier-only vs calibrated carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
 
+### Limitations
+
+The carrier + IMU arm is limited by the GTSAM fixed-lag solver, not by the
+IMU. On Tokyo run1 its worst epoch is a ~5 s sustained segment (tow
+188360-188370) sitting at 14.1 m while the carrier-only arm is at 7.6 m;
+the two arms also use different solvers (Eigen batch vs GTSAM fixed-lag),
+so they are not a pure IMU ablation. Conversely the IMU arm caps the
+carrier-only 29 m excursions.
+
+Neither of the obvious ways to remove that 14 m segment works:
+
+- **GTSAM batch + IMU** (fixed-lag 0) finishes with a DD carrier residual
+  RMS of 13.2 m (unconverged), P95 20.5 m, max 155 m and ~111 m/s²
+  position acceleration. Seeding it from the fixed-lag solution and raising
+  the iteration cap to 20 give byte-identical broken output, so the batch
+  path is not a usable operating point here.
+- Lowering the IMU trust (noise x10/x30) raises P50/P95/max; enabling
+  `--epoch-lambda-fixed-output` fixes only 853/11866 epochs and collapses
+  the smoothness from 0.35 to 1.90 m/s².
+
+Net: the calibrated IMU fixed-lag arm trades median/P95 for in-estimator
+smoothness and gross-error robustness; it is not uniformly more accurate.
+
 ## Reproduce
 
 ```bash
