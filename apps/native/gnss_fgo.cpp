@@ -62,6 +62,7 @@ struct Options {
     double imu_fixed_lag_s = 20.0;
     double imu_noise_scale = 1.0;
     bool imu_noise_calibrate = true;
+    bool use_fixed_lag_partial_lambda = false;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -167,6 +168,7 @@ void printUsage(const char* program_name) {
         << "  --imu-fixed-lag <s>           Fixed-lag smoother window (default 20, 0=batch)\n"
         << "  --imu-noise-scale <s>         Multiplier on the IMU noise (default 1)\n"
         << "  --imu-no-noise-calibrate      Use fixed noise instead of static-window calibration\n"
+        << "  --fixed-lag-partial-ar        Attempt partial (subset) LAMBDA in the fixed lag\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -513,6 +515,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.imu_noise_scale = std::stod(argv[++i]);
         } else if (arg == "--imu-no-noise-calibrate") {
             options.imu_noise_calibrate = false;
+        } else if (arg == "--fixed-lag-partial-ar") {
+            options.use_fixed_lag_partial_lambda = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -2348,7 +2352,11 @@ bool writeEpochDebugCsv(
               "position_x_m,position_y_m,position_z_m,"
               "seed_position_x_m,seed_position_y_m,seed_position_z_m,"
               "seed_position_divergence_m,"
-              "velocity_x_mps,velocity_y_mps,velocity_z_mps\n";
+              "velocity_x_mps,velocity_y_mps,velocity_z_mps,"
+              "ambiguity_variance_median_cycles2,"
+              "ambiguity_variance_max_cycles2,"
+              "ambiguity_fractional_median_cycles,"
+              "lambda_bsr\n";
     output << std::fixed << std::setprecision(6);
     const auto& solution = result.solution;
     const std::size_t rows =
@@ -2425,6 +2433,20 @@ bool writeEpochDebugCsv(
                 (sol.position_ecef - epoch.position_ecef).norm();
         }
 
+        double amb_var_median = std::numeric_limits<double>::quiet_NaN();
+        double amb_var_max = std::numeric_limits<double>::quiet_NaN();
+        double amb_frac_median = std::numeric_limits<double>::quiet_NaN();
+        double lambda_bsr = std::numeric_limits<double>::quiet_NaN();
+        if (result.epoch_diagnostics.size() > epoch_index) {
+            amb_var_median =
+                result.epoch_diagnostics[epoch_index].ambiguity_variance_median_cycles2;
+            amb_var_max =
+                result.epoch_diagnostics[epoch_index].ambiguity_variance_max_cycles2;
+            amb_frac_median =
+                result.epoch_diagnostics[epoch_index].ambiguity_fractional_median_cycles;
+            lambda_bsr =
+                result.epoch_diagnostics[epoch_index].lambda_candidate_bsr;
+        }
         output << epoch_index << ','
                << epoch.time.week << ','
                << epoch.time.tow << ','
@@ -2445,7 +2467,11 @@ bool writeEpochDebugCsv(
                << seed_position_divergence_m << ','
                << velocity_mps(0) << ','
                << velocity_mps(1) << ','
-               << velocity_mps(2)
+               << velocity_mps(2) << ','
+               << amb_var_median << ','
+               << amb_var_max << ','
+               << amb_frac_median << ','
+               << lambda_bsr
                << '\n';
     }
     return true;
@@ -3761,6 +3787,8 @@ int main(int argc, char* argv[]) {
             options.use_partial_lambda_ambiguity_fix;
         config.use_robust_loss = options.use_robust_loss;
         config.use_ambiguity_priors = !options.no_ambiguity_priors;
+        config.use_fixed_lag_partial_lambda =
+            options.use_fixed_lag_partial_lambda;
         config.reject_rover_carrier_loss_of_lock =
             options.reject_rover_carrier_lli;
         config.reject_tdcp_code_phase_jump = !options.no_tdcp_slip_reject;

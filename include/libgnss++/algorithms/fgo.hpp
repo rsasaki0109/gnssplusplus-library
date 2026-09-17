@@ -2012,6 +2012,10 @@ public:
         int lambda_selected_stage = -1;  ///< PPC cascade: 0=GQEBR ... 5=GQ
         double ambiguity_variance_median_cycles2 = 0.0;
         double ambiguity_variance_max_cycles2 = 0.0;
+        /// Median |float ambiguity - nearest integer| over the epoch's LAMBDA
+        /// candidates (cycles). A small variance with a large fractional part
+        /// indicates an integer bias rather than a weak estimate.
+        double ambiguity_fractional_median_cycles = 0.0;
         double imu_pose_correction_m = 0.0;
         // Read-only copy of the builder's independent current-epoch SPP
         // seed. This exposes an absolute-code witness for AR analysis while

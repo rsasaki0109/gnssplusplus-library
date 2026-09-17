@@ -2799,6 +2799,16 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                         epoch_diagnostics[i].ambiguity_variance_median_cycles2 =
                             diagonal.empty() ? 0.0 : diagonal[diagonal.size() / 2];
                         epoch_diagnostics[i].ambiguity_variance_max_cycles2 = vmax;
+                        std::vector<double> fractional;
+                        fractional.reserve(static_cast<std::size_t>(n));
+                        for (int k = 0; k < n; ++k) {
+                            fractional.push_back(
+                                std::abs(float_amb(k) - std::round(float_amb(k))));
+                        }
+                        std::sort(fractional.begin(), fractional.end());
+                        epoch_diagnostics[i].ambiguity_fractional_median_cycles =
+                            fractional.empty() ? 0.0
+                                               : fractional[fractional.size() / 2];
                     }
 
                     // Diagnostic-only conditional multi-band AR shadow. Unlike the
