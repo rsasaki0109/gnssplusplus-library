@@ -119,17 +119,31 @@ Related knobs: `--imu-lever-arm X Y Z`, `--imu-no-mounting`,
 
 ![PPC Tokyo run1 — carrier-phase vs IMU-aided FGO](ppc_fgo_carrier_vs_imu.png)
 
-| arm (Tokyo run1) | P50 | P95 | max | RMS |
-|---|---:|---:|---:|---:|
-| GNSS carrier FGO (DD, base) | 1.66 | 7.49 | 29.3 | 3.55 |
-| Carrier + IMU FGO (calibrated) | 2.29 | 10.39 | 14.1 | 4.31 |
-| GNSS/IMU FGO (no-base TDCP) | 4.60 | 18.29 | 45.9 | 10.26 |
-| GNSS code FGO (no base) | 3.62 | 20.94 | 39.6 | 9.41 |
+Carrier-phase ambiguity resolution dominates: on Tokyo run1 the code-only
+no-base FGO (P50 3.62 m) is ~2x worse than the carrier FGO (P50 1.66 m),
+and the no-base IMU TDCP FGO is 4.60 m. The pure GNSS carrier arm runs the
+Eigen batch solver while the IMU arm runs the GTSAM fixed-lag smoother
+(batch GTSAM is ~15 min for 1000 epochs), so the two arms differ by solver.
 
-Carrier-phase ambiguity resolution dominates: the code-only FGO is ~2x
-worse than the carrier FGO. The pure GNSS carrier arm runs the Eigen
-batch solver while the IMU arm runs the GTSAM fixed-lag smoother (batch
-GTSAM is ~15 min for 1000 epochs), so the arms differ by solver.
+### Six-run check (Tokyo and Nagoya, run1/2/3)
+
+carrier-only vs carrier + IMU (calibrated), horizontal error P50/P95/max
+(m) and mean horizontal acceleration (in-estimator smoothness, m/s²):
+
+| run | carrier-only P50/P95/max | carrier+IMU P50/P95/max | acc only -> IMU |
+|---|---|---|---|
+| tokyo1 | 1.66 / 7.49 / 29.3 | 2.29 / 10.39 / 14.1 | 5.13 -> 0.35 |
+| tokyo2 | 0.39 / 2.91 / 40.3 | 0.47 / 2.47 / 15.9 | 5.22 -> 0.37 |
+| tokyo3 | 0.61 / 10.95 / 45.7 | 0.50 / 10.17 / 30.7 | 6.16 -> 0.33 |
+| nagoya1 | 0.37 / 7.59 / 158.8 | 0.61 / 20.85 / 61.9 | 7.23 -> 0.27 |
+| nagoya2 | 1.58 / 16.56 / 92.7 | 3.05 / 11.61 / 21.5 | 3.77 -> 0.27 |
+| nagoya3 | 3.60 / 10.78 / 22.3 | 3.68 / 16.65 / 22.5 | 3.93 -> 0.33 |
+
+The smoothing is consistent across all six runs (~15-20x lower
+acceleration), and the worst epoch improves in five of six (up to
+158.8 -> 61.9 m on nagoya1). The median is mixed (slightly worse in
+tokyo1/2 and nagoya1/2, better in tokyo3), so this is a robustness and
+smoothness trade, not a uniform accuracy win.
 
 ### IMU noise calibration
 
@@ -144,11 +158,9 @@ the earlier hand-tuned "noise x0.1" result to within 0.01 m.
 ### In-estimator trajectory smoothing
 
 With the calibrated noise and a 20 s fixed-lag window the estimated
-trajectory is smoothed entirely inside the estimator — no post-processing.
-The mean horizontal acceleration from position second differences at the
-native epoch rate drops from 5.13 m/s² (carrier-only Eigen batch) to
-0.35 m/s², and the worst epoch improves from 29.3 m to 14.1 m; P50 moves
-1.66 -> 2.29 m.
+trajectory is smoothed entirely inside the estimator — no post-processing
+(filter, RTS or spline). The figure auto-draws a 120 m zoom inset at the
+worst combined epoch so the local track shape can be inspected.
 
 ![Carrier-only vs calibrated carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
 

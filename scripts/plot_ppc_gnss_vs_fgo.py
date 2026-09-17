@@ -75,6 +75,7 @@ def horizontal_stats(solution, reference, tolerance_s: float) -> dict:
     if not matched:
         return {"matched": 0}
     h = np.array([epoch.horiz_error_m for epoch in matched])
+    acc_mean, acc_p95 = smoothness_stats(solution)
     return {
         "matched": len(matched),
         "p50_m": float(np.percentile(h, 50)),
@@ -82,7 +83,29 @@ def horizontal_stats(solution, reference, tolerance_s: float) -> dict:
         "max_m": float(h.max()),
         "rms_m": float(np.sqrt(np.mean(h * h))),
         "official_pct": float((np.percentile(h, 50) + np.percentile(h, 95)) / 2.0),
+        "acc_mean_mps2": acc_mean,
+        "acc_p95_mps2": acc_p95,
     }
+
+
+def smoothness_stats(solution) -> tuple:
+    """Mean/95th horizontal acceleration magnitude from position second
+    differences at the native epoch rate (in-estimator smoothness)."""
+    acc = []
+    for i in range(1, len(solution) - 1):
+        dt1 = solution[i].tow - solution[i - 1].tow
+        dt2 = solution[i + 1].tow - solution[i].tow
+        if not (0.15 <= dt1 <= 0.25 and 0.15 <= dt2 <= 0.25):
+            continue
+        a = solution[i - 1].ecef
+        b = solution[i].ecef
+        d = solution[i + 1].ecef
+        second = (d - 2.0 * b + a) / (dt1 * dt2)
+        acc.append(math.hypot(second[0], second[1]))
+    if not acc:
+        return float("nan"), float("nan")
+    arr = np.array(acc)
+    return float(arr.mean()), float(np.percentile(arr, 95))
 
 
 def lonlat_to_world(lat: float, lon: float, zoom: int) -> tuple[float, float]:
@@ -148,6 +171,9 @@ def parse_args():
     p.add_argument("--tolerance-s", type=float, default=0.25)
     p.add_argument("--no-osm", action="store_true",
                    help="Skip the OSM basemap (offline plot)")
+    p.add_argument("--no-zoom", action="store_true",
+                   help="Disable the zoomed inset at the worst combined epoch")
+    p.add_argument("--zoom-span-m", type=float, default=120.0)
     p.add_argument("--summary-only", action="store_true",
                    help="Print stats only, draw nothing")
     p.add_argument("--dpi", type=int, default=170)
@@ -219,6 +245,48 @@ def main() -> int:
         ax_map.set_ylim(oy + h, oy)
         fig.text(0.995, 0.01, "(c) OpenStreetMap contributors", ha="right", va="bottom",
                  fontsize=10, bbox=dict(boxstyle="round", fc="white", ec="#999999", alpha=0.85))
+
+        if not args.no_zoom:
+            worst_err = -1.0
+            worst_tow = None
+            for arm in arms:
+                for e in arm["matched"]:
+                    if e.horiz_error_m > worst_err:
+                        worst_err = e.horiz_error_m
+                        worst_tow = e.tow
+            center = None
+            if worst_tow is not None:
+                for arm in arms:
+                    for e in arm["epochs"]:
+                        if abs(e.tow - worst_tow) < 1e-6:
+                            center = (e.lat_deg, e.lon_deg)
+                            break
+                    if center is not None:
+                        break
+            if center is not None:
+                clat, clon = center
+                span_m = args.zoom_span_m
+                dlat = span_m / 111320.0
+                dlon = span_m / (111320.0 * math.cos(math.radians(clat)))
+                inset, izoom, ix, iy = build_basemap(
+                    clat - dlat, clat + dlat, clon - dlon, clon + dlon, 18)
+                iw, ih = inset.size
+                axi = ax_map.inset_axes([0.61, 0.03, 0.36, 0.36])
+                axi.imshow(np.asarray(inset), extent=[ix, ix + iw, iy + ih, iy])
+                rxs, rys = to_px([e.lat_deg for e in reference],
+                                 [e.lon_deg for e in reference], izoom)
+                axi.plot(rxs, rys, color=REF_COLOR, lw=2.5, alpha=0.9, zorder=3)
+                for arm in arms:
+                    xs, ys = to_px([e.lat_deg for e in arm["epochs"]],
+                                   [e.lon_deg for e in arm["epochs"]], izoom)
+                    axi.plot(xs, ys, color=arm["color"], lw=1.6, alpha=0.9, zorder=3)
+                axi.set_xlim(ix, ix + iw)
+                axi.set_ylim(iy + ih, iy)
+                axi.set_aspect("equal")
+                axi.set_xticks([])
+                axi.set_yticks([])
+                axi.set_title(f"zoom {span_m:.0f} m at worst epoch ({worst_err:.1f} m)",
+                              fontsize=9)
 
     ax_map.set_aspect("equal")
     ax_map.set_xticks([])
