@@ -13,7 +13,7 @@ spherical Haversine R=6371008.8. Dev routes, Pixel5:
 | H | 2021-08-24 MTV | P221 | 1.0769 | **0.57738** |
 | U | 2023-03-08 MTV | P221 | 1.3060 | **0.73751** |
 | A | 2021-03-16 MTV | SLAC | 1.3613 | **0.30169** |
-| LAX-T | 2022-04-01 LAX | LBCH | 3.1026 | n/a |
+| LAX-T | 2022-04-01 LAX | LBCH | 3.1026 | **0.71207** |
 
 H and U reproduce the #501 result; **A is a new, large improvement**
 (1.36 -> 0.30 m). The per-route base station must be matched: A uses SLAC,
@@ -63,10 +63,21 @@ A uses the same flag set with the accepted A-transfer inputs
 U uses the phase37 U inputs, the U base (`aedb7a39...`) and
 `--native-base-position-ecef -2698117.9861 -4301326.2071 3847286.2977`.
 
-## LAX-T limitation
+## LAX-T
 
-The LAX-T recipes that initialise (`phase524`/`phase538`) require
-`--native-sparse-p-staging`, which the app restricts to the LAX-T Phase171
-**base-off** recipe, so it cannot be combined with the `--native-base-*`
-flags. Base-surveyed is therefore unavailable for LAX-T without relaxing
-that contract.
+LAX-T needs `--native-sparse-p-staging` to initialise and the
+`--native-joint-ionosphere 3 0.02 1.5` recipe (best no-base 2.9065 m,
+phase538). The app originally forbade combining sparse-p staging with the
+base compensation; that exclusion is dropped in
+`feat/smartphone-lax-sparse-staging-base`, so LAX-T now runs base-surveyed
+and scores **0.71207 m**.
+
+Command additions on top of the LAX-T phase538 recipe:
+
+```bash
+--native-base-pseudorange-compensation --native-base-pseudorange-source-miss-mask \
+--native-base-rinex <lax base.obs> \
+--native-base-rinex-sha256 d731e0e8a7ba4396d62340c85b6238e66c50c6a349621f9dcea0ea6885fd4cfe \
+--native-base-position-ecef -2507799.2243 -4676369.3031 3526891.0358
+```
+
