@@ -186,9 +186,31 @@ float epochs (P50 2.05, RMS 3.72) — consistent with the upstream inuex35
 reference FixRMS 0.29 m. The full-set LAMBDA ratio sits near 1.0 because a
 near-singular joint ambiguity mode degenerates the search (the ambiguity
 estimates themselves are precise: median std 0.04 cyc, LAMBDA BSR 1.0); the
-subset retry drops that mode. The remaining gap to the reference fix rate
-(63%) needs the upstream graph composition (1 s fixed lag, SD Doppler,
-NHC/ZUPT, held-integer conditioning), not a single parameter.
+subset retry drops that mode.
+
+A fix-and-hold arm is available opt-in (`--ambiguity-hold
+--allow-partial-fix-and-hold --ambiguity-hold-min-fixed 1`, meaningful only
+together with `--solve-exception-recovery --ddpr-anchor`). It labels held
+epochs FIXED with the smoother position (no post-processing) and improves
+the median on all three Tokyo runs, at a small tail cost on run1/run3:
+
+| run | float P50 / P95 / max | fix-and-hold P50 / P95 / max |
+|---|---|---|
+| tokyo1 | 1.80 / 7.12 / 8.7 | 1.62 / 7.73 / 9.2 |
+| tokyo2 | 0.39 / 2.37 / 15.8 | 0.24 / 2.27 / 14.2 |
+| tokyo3 | 0.50 / 10.17 / 30.7 | 0.29 / 12.03 / 33.4 |
+
+`--solve-exception-recovery` is required for safety: without it a per-epoch
+`smoother.update()` that throws `IndeterminantLinearSystemException` leaves
+the ISAM2 state corrupted, so every later update throws `map::at` and tokyo
+run2 diverges by 6370 km at tow 178316 (28% of epochs NONE). With recovery
+the exception is handled once and the run stays healthy.
+
+Of the other upstream levers, NHC/ZUPT factors (`--nhc --zupt`),
+variance-ranked partial AR, ambiguity-between factors and a 30-cycle
+new-arc prior all fail to lift the fix rate and mostly degrade accuracy, so
+the remaining gap to the reference 63% fix rate needs the full upstream
+integrity stack, not a parameter change.
 
 ![Carrier-only vs calibrated carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
 
