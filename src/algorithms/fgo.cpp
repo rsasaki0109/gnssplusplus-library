@@ -1676,7 +1676,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 if (cost_converged()) {
                     store_current_linearization();
                     if (config_.collect_lambda_debug ||
-                        config_.use_epoch_lambda_fixed_output) {
+                        config_.use_epoch_lambda_fixed_output ||
+                        (config_.use_lambda_ambiguity_fix &&
+                         config_.fix_ambiguities)) {
                         output.sparse_normal_matrix = std::move(sparse_normal);
                     }
                     output.iterations = iter;
@@ -1706,7 +1708,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     damping *= 10.0;
                 }
                 if (config_.collect_lambda_debug ||
-                    config_.use_epoch_lambda_fixed_output) {
+                    config_.use_epoch_lambda_fixed_output ||
+                    (config_.use_lambda_ambiguity_fix &&
+                     config_.fix_ambiguities)) {
                     current_sparse_normal = std::move(sparse_normal);
                 }
             } else {
@@ -1746,7 +1750,9 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
             store_current_linearization();
             if (use_sparse_normal &&
                 (config_.collect_lambda_debug ||
-                 config_.use_epoch_lambda_fixed_output)) {
+                 config_.use_epoch_lambda_fixed_output ||
+                 (config_.use_lambda_ambiguity_fix &&
+                  config_.fix_ambiguities))) {
                 output.sparse_normal_matrix = std::move(current_sparse_normal);
             }
             const bool update_converged =
@@ -1829,14 +1835,18 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
         };
 
         auto build_lambda_constraints = [&]() -> bool {
-            if (!config_.use_lambda_ambiguity_fix ||
-                optimization.normal_matrix.rows() != state_size) {
+            if (!config_.use_lambda_ambiguity_fix) {
                 return false;
             }
-
-            const Eigen::MatrixXd float_covariance =
-                pseudoInverse(optimization.normal_matrix);
-            if (float_covariance.rows() != state_size) {
+            Eigen::MatrixXd dense_covariance;
+            bool have_dense_cov = false;
+            if (optimization.normal_matrix.rows() == state_size) {
+                dense_covariance = pseudoInverse(optimization.normal_matrix);
+                have_dense_cov = dense_covariance.rows() == state_size;
+            }
+            const bool have_sparse_normal =
+                optimization.sparse_normal_matrix.rows() == state_size;
+            if (!have_dense_cov && !have_sparse_normal) {
                 return false;
             }
 
@@ -1855,14 +1865,19 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 }
 
                 const int col = base_state_size + i;
-                const double variance_m2 = float_covariance(col, col);
-                const double variance_cycles =
-                    variance_m2 / (ambiguity.wavelength_m * ambiguity.wavelength_m);
                 const double ambiguity_cycles =
                     optimization.state(col) / ambiguity.wavelength_m;
-                if (!std::isfinite(variance_cycles) || variance_cycles <= 0.0 ||
-                    !std::isfinite(ambiguity_cycles)) {
+                if (!std::isfinite(ambiguity_cycles)) {
                     continue;
+                }
+                double variance_cycles = 1.0;
+                if (have_dense_cov) {
+                    const double variance_m2 = dense_covariance(col, col);
+                    variance_cycles =
+                        variance_m2 / (ambiguity.wavelength_m * ambiguity.wavelength_m);
+                    if (!std::isfinite(variance_cycles) || variance_cycles <= 0.0) {
+                        continue;
+                    }
                 }
 
                 const double nearest_cycles = std::round(ambiguity_cycles);
@@ -1897,6 +1912,55 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                 return false;
             }
 
+            const int candidate_count = static_cast<int>(candidates.size());
+            std::vector<int> candidate_state_cols(
+                static_cast<std::size_t>(candidate_count));
+            for (int i = 0; i < candidate_count; ++i) {
+                candidate_state_cols[i] =
+                    base_state_size + candidates[i].ambiguity_index;
+            }
+            Eigen::MatrixXd covariance_m2 =
+                Eigen::MatrixXd::Zero(candidate_count, candidate_count);
+            if (have_dense_cov) {
+                for (int r = 0; r < candidate_count; ++r) {
+                    for (int c = 0; c < candidate_count; ++c) {
+                        covariance_m2(r, c) =
+                            dense_covariance(candidate_state_cols[r],
+                                             candidate_state_cols[c]);
+                    }
+                }
+            } else {
+#ifdef GNSSPP_HAS_CHOLMOD
+                Eigen::CholmodSupernodalLLT<Eigen::SparseMatrix<double>> llt;
+#else
+                Eigen::SimplicialLLT<Eigen::SparseMatrix<double>> llt;
+#endif
+                double max_diagonal = 0.0;
+                for (int i = 0; i < state_size; ++i) {
+                    max_diagonal = std::max(
+                        max_diagonal,
+                        std::abs(optimization.sparse_normal_matrix.coeff(i, i)));
+                }
+                llt.setShift(std::max(1e-12, max_diagonal * 1e-12));
+                llt.compute(optimization.sparse_normal_matrix);
+                if (llt.info() != Eigen::Success) {
+                    return false;
+                }
+                for (int c = 0; c < candidate_count; ++c) {
+                    Eigen::VectorXd rhs = Eigen::VectorXd::Zero(state_size);
+                    rhs(candidate_state_cols[c]) = 1.0;
+                    const Eigen::VectorXd solution = llt.solve(rhs);
+                    if (!solution.allFinite()) {
+                        return false;
+                    }
+                    for (int r = 0; r < candidate_count; ++r) {
+                        covariance_m2(r, c) = solution(candidate_state_cols[r]);
+                    }
+                }
+                covariance_m2 =
+                    0.5 * (covariance_m2 + covariance_m2.transpose());
+            }
+
             auto solve_candidate_subset = [&](std::size_t subset_size) -> bool {
                 const int n = static_cast<int>(subset_size);
                 Eigen::VectorXd float_ambiguities = Eigen::VectorXd::Zero(n);
@@ -1910,9 +1974,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     for (int col = 0; col < n; ++col) {
                         const int ambiguity_col = candidates[col].ambiguity_index;
                         const auto& col_state = problem.ambiguity_states[ambiguity_col];
-                        const int state_col = base_state_size + ambiguity_col;
                         ambiguity_covariance(row, col) =
-                            float_covariance(row_col, state_col) /
+                            covariance_m2(row, col) /
                             (row_state.wavelength_m * col_state.wavelength_m);
                     }
                 }
@@ -1999,7 +2062,8 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
 
         const bool can_attempt_lambda =
             config_.use_lambda_ambiguity_fix &&
-            optimization.normal_matrix.rows() == state_size;
+            (optimization.normal_matrix.rows() == state_size ||
+             optimization.sparse_normal_matrix.rows() == state_size);
         const bool lambda_constraints_built =
             can_attempt_lambda && build_lambda_constraints();
         if (!lambda_constraints_built &&
