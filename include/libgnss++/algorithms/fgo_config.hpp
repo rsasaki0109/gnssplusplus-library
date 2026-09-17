@@ -752,6 +752,10 @@ struct Config {
         // This prevents one marginal early decision from steering all later
         // ambiguity estimates through fix-and-hold.
         bool allow_relaxed_ratio_fix_and_hold = false;
+        /// Allow a partial (ranked-subset) LAMBDA fix to seed fix-and-hold,
+        /// not just a full-candidate attempt. Port of the upstream
+        /// fix-and-hold behaviour where any exact-integer subset is held.
+        bool allow_partial_fix_and_hold = false;
         int external_doppler_dr_max_age_epochs = 30;
         int external_doppler_dr_min_factors = 4;
         double external_doppler_dr_chi2_threshold = 11.345;  ///< 99% / 3 dof

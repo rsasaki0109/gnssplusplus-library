@@ -4176,7 +4176,8 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                         if (config.use_ambiguity_hold && !is_low_count_attempt &&
                             (!output_only_relaxed_fix ||
                              config.allow_relaxed_ratio_fix_and_hold) &&
-                            (full_candidate_attempt || temporally_validated_partial_hold) &&
+                            (full_candidate_attempt || temporally_validated_partial_hold ||
+                             config.allow_partial_fix_and_hold) &&
                             ratio > config.ambiguity_hold_ratio_threshold &&
                             subset >= config.ambiguity_hold_min_fixed &&
                             !holdBlockedByPlausibility() &&
