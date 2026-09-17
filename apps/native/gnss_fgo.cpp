@@ -70,6 +70,8 @@ struct Options {
     bool use_geometry_free_cycle_slip_reset = false;
     bool use_fix_plausibility_demotion = false;
     bool use_fixed_history_dr_validation = false;
+    bool use_solve_exception_recovery = false;
+    bool use_ddpr_anchor = false;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -183,6 +185,8 @@ void printUsage(const char* program_name) {
         << "  --geometry-free-cycle-slip-reset  Enable GF cycle-slip arc reset + guard\n"
         << "  --fix-plausibility-demotion   Demote implausible FIXED epochs\n"
         << "  --fixed-history-dr-validation  Validate fixes against fixed-history DR\n"
+        << "  --solve-exception-recovery    Recover the smoother after a solve exception\n"
+        << "  --ddpr-anchor                 Enable the DDPR-LS warm-reset anchor stage\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -545,6 +549,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_fix_plausibility_demotion = true;
         } else if (arg == "--fixed-history-dr-validation") {
             options.use_fixed_history_dr_validation = true;
+        } else if (arg == "--solve-exception-recovery") {
+            options.use_solve_exception_recovery = true;
+        } else if (arg == "--ddpr-anchor") {
+            options.use_ddpr_anchor = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3828,6 +3836,8 @@ int main(int argc, char* argv[]) {
             options.use_fix_plausibility_demotion;
         config.use_fixed_history_dr_validation =
             options.use_fixed_history_dr_validation;
+        config.use_solve_exception_recovery = options.use_solve_exception_recovery;
+        config.use_ddpr_anchor = options.use_ddpr_anchor;
         config.reject_rover_carrier_loss_of_lock =
             options.reject_rover_carrier_lli;
         config.reject_tdcp_code_phase_jump = !options.no_tdcp_slip_reject;
