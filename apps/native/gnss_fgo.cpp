@@ -74,6 +74,7 @@ struct Options {
     bool use_ddpr_anchor = false;
     bool use_nhc = false;
     bool use_zupt = false;
+    double ambiguity_hold_ratio_threshold = 3.0;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -191,6 +192,7 @@ void printUsage(const char* program_name) {
         << "  --ddpr-anchor                 Enable the DDPR-LS warm-reset anchor stage\n"
         << "  --nhc                         Non-holonomic vehicle constraint factors\n"
         << "  --zupt                        Zero-velocity update factors\n"
+        << "  --ambiguity-hold-ratio <r>    Min LAMBDA ratio to seed fix-and-hold (default 3)\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -561,6 +563,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_nhc = true;
         } else if (arg == "--zupt") {
             options.use_zupt = true;
+        } else if (arg == "--ambiguity-hold-ratio" && i + 1 < argc) {
+            options.ambiguity_hold_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3848,6 +3852,8 @@ int main(int argc, char* argv[]) {
         config.use_ddpr_anchor = options.use_ddpr_anchor;
         config.use_nhc = options.use_nhc;
         config.use_zupt = options.use_zupt;
+        config.ambiguity_hold_ratio_threshold =
+            options.ambiguity_hold_ratio_threshold;
         config.reject_rover_carrier_loss_of_lock =
             options.reject_rover_carrier_lli;
         config.reject_tdcp_code_phase_jump = !options.no_tdcp_slip_reject;
