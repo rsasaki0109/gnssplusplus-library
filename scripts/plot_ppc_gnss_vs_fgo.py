@@ -74,6 +74,90 @@ def status_legend_handles(epochs_list, arm_handles):
             handles.append(Line2D([0], [0], color=STATUS_COLORS[code], lw=2.4,
                                   label=STATUS_NAMES[code]))
     return handles
+
+
+def draw_zoom_only(args, reference, arms):
+    """Large OSM zoom at the GNSS-only worst epochs for a tweet-style shot."""
+    if args.zoom_tows:
+        tows = [float(t) for t in args.zoom_tows.split(",")]
+    else:
+        tows = []
+        for e in sorted(arms[0]["matched"], key=lambda e: -e.horiz_error_m):
+            if all(abs(e.tow - t) > 50.0 for t in tows):
+                tows.append(e.tow)
+            if len(tows) >= 2:
+                break
+    if not tows:
+        print("no zoom epochs found", file=sys.stderr)
+        return 1
+
+    def epoch_at(epochs, tow):
+        for e in epochs:
+            if abs(e.tow - tow) < 1e-6:
+                return e
+        return None
+
+    fig, axes = plt.subplots(1, len(tows), figsize=(10.5 * len(tows), 9.5))
+    if len(tows) == 1:
+        axes = [axes]
+
+    for ax, tow in zip(axes, tows):
+        ref_e = epoch_at(reference, tow)
+        if ref_e is None:
+            continue
+        clat, clon = ref_e.lat_deg, ref_e.lon_deg
+        span = args.zoom_span_m
+        dlat = span / 111320.0
+        dlon = span / (111320.0 * math.cos(math.radians(clat)))
+        basemap, zoom, ox, oy = build_basemap(
+            clat - dlat, clat + dlat, clon - dlon, clon + dlon, 18)
+        w, h = basemap.size
+        ax.imshow(np.asarray(basemap), extent=[ox, ox + w, oy + h, oy])
+        rxs, rys = to_px([e.lat_deg for e in reference],
+                         [e.lon_deg for e in reference], zoom)
+        ax.plot(rxs, rys, color=REF_COLOR, lw=3.5, alpha=0.9, zorder=3,
+                label="Reference")
+        lines = [f"tow {tow:.1f}  ({span:.0f} m box)"]
+        for idx, arm in enumerate(arms):
+            xs, ys = to_px([e.lat_deg for e in arm["epochs"]],
+                           [e.lon_deg for e in arm["epochs"]], zoom)
+            plot_status_track(ax, np.column_stack([xs, ys]),
+                              [e.status for e in arm["epochs"]],
+                              linestyle=ARM_LINESTYLES[idx % len(ARM_LINESTYLES)],
+                              lw=2.4)
+            matched = epoch_at(arm["matched"], tow)
+            if matched is not None:
+                lines.append(f"{arm['label'][:24]:24s} {matched.horiz_error_m:5.1f} m")
+        ax.set_xlim(ox, ox + w)
+        ax.set_ylim(oy + h, oy)
+        ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_title("GNSS-only vs GNSS/IMU at a GNSS-only miss",
+                     fontsize=15, fontweight="bold")
+        ax.text(0.02, 0.02, "\n".join(lines), transform=ax.transAxes,
+                ha="left", va="bottom", fontsize=12, family="monospace",
+                bbox=dict(boxstyle="round", fc="white", ec="#999999", alpha=0.9))
+
+    arm_handles = [Line2D([0], [0], color=REF_COLOR, lw=3.5, label="Reference")]
+    for idx, arm in enumerate(arms):
+        arm_handles.append(Line2D(
+            [0], [0], color="#333333", lw=2.0,
+            ls=ARM_LINESTYLES[idx % len(ARM_LINESTYLES)], label=arm["label"]))
+    axes[0].legend(handles=status_legend_handles([a["epochs"] for a in arms],
+                                                 arm_handles),
+                   fontsize=10, loc="upper right", framealpha=0.9)
+    fig.text(0.995, 0.01, "(c) OpenStreetMap contributors", ha="right",
+             va="bottom", fontsize=10,
+             bbox=dict(boxstyle="round", fc="white", ec="#999999", alpha=0.85))
+    fig.suptitle(args.title, fontsize=19, fontweight="bold")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    fig.tight_layout(rect=(0, 0.02, 1, 0.96))
+    fig.savefig(args.output, dpi=args.dpi)
+    print(f"wrote {args.output}")
+    return 0
+
+
 TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 USER_AGENT = "gnssplusplus-library/1.0 (PPC research figure)"
 GPS_TO_UNIX_OFFSET_S = 315964800.0  # 1980-01-06 - 1970-01-01
@@ -209,6 +293,10 @@ def parse_args():
                    help="Skip the OSM basemap (offline plot)")
     p.add_argument("--no-zoom", action="store_true",
                    help="Disable the zoomed inset at the worst combined epoch")
+    p.add_argument("--zoom-only", action="store_true",
+                   help="Emit a dedicated large zoom figure instead of the panels")
+    p.add_argument("--zoom-tows", default=None,
+                   help="Comma-separated GPS TOWs for --zoom-only (default: worst GNSS-only epochs)")
     p.add_argument("--zoom-span-m", type=float, default=120.0)
     p.add_argument("--summary-only", action="store_true",
                    help="Print stats only, draw nothing")
@@ -242,6 +330,8 @@ def main() -> int:
         args.summary_json.write_text(json.dumps(summary, indent=2))
     if args.summary_only:
         return 0
+    if args.zoom_only:
+        return draw_zoom_only(args, reference, arms)
 
     fig = plt.figure(figsize=(20, 11))
     grid = fig.add_gridspec(2, 2, width_ratios=[3, 2], hspace=0.28, wspace=0.12)

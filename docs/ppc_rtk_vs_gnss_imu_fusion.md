@@ -173,6 +173,12 @@ worst combined epoch so the local track shape can be inspected.
 
 ![Carrier-only vs calibrated carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
 
+Two GNSS-only misses at 200 m OSM zoom (tow 188258: carrier-only 29.3 m
+vs IMU 3.1 m; tow 188031: 23.0 m vs 1.3 m). The solid carrier-only track
+leaves the road while the dashed calibrated IMU track follows it.
+
+![GNSS-only miss vs GNSS/IMU zoom](ppc_fgo_gnss_miss_zoom.png)
+
 ### Limitations
 
 The carrier + IMU arm is limited by the GTSAM fixed-lag solver, not by the
