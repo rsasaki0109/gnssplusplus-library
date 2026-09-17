@@ -63,6 +63,7 @@ struct Options {
     double imu_noise_scale = 1.0;
     bool imu_noise_calibrate = true;
     bool use_fixed_lag_partial_lambda = false;
+    bool use_variance_ranked_partial_ar = false;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -169,6 +170,7 @@ void printUsage(const char* program_name) {
         << "  --imu-noise-scale <s>         Multiplier on the IMU noise (default 1)\n"
         << "  --imu-no-noise-calibrate      Use fixed noise instead of static-window calibration\n"
         << "  --fixed-lag-partial-ar        Attempt partial (subset) LAMBDA in the fixed lag\n"
+        << "  --variance-ranked-partial-ar  Rank/drop candidates by ambiguity std in partial AR\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -517,6 +519,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.imu_noise_calibrate = false;
         } else if (arg == "--fixed-lag-partial-ar") {
             options.use_fixed_lag_partial_lambda = true;
+        } else if (arg == "--variance-ranked-partial-ar") {
+            options.use_variance_ranked_partial_ar = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3789,6 +3793,8 @@ int main(int argc, char* argv[]) {
         config.use_ambiguity_priors = !options.no_ambiguity_priors;
         config.use_fixed_lag_partial_lambda =
             options.use_fixed_lag_partial_lambda;
+        config.use_variance_ranked_partial_ar =
+            options.use_variance_ranked_partial_ar;
         config.reject_rover_carrier_loss_of_lock =
             options.reject_rover_carrier_lli;
         config.reject_tdcp_code_phase_jump = !options.no_tdcp_slip_reject;
