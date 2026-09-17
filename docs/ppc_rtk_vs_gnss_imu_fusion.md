@@ -115,14 +115,14 @@ double-difference-carrier + IMU factor graph (GTSAM Pose3 fixed-lag). The
 flag is opt-in: without `--imu` the output is byte-identical to before.
 Related knobs: `--imu-lever-arm X Y Z`, `--imu-no-mounting`,
 `--imu-fixed-lag <s>` (default 20, 0 = batch), `--imu-noise-scale <s>`
-(default 0.1).
+(multiplier, default 1), `--imu-no-noise-calibrate`.
 
 ![PPC Tokyo run1 — carrier-phase vs IMU-aided FGO](ppc_fgo_carrier_vs_imu.png)
 
 | arm (Tokyo run1) | P50 | P95 | max | RMS |
 |---|---:|---:|---:|---:|
 | GNSS carrier FGO (DD, base) | 1.66 | 7.49 | 29.3 | 3.55 |
-| Carrier + IMU FGO (tuned) | 2.30 | 10.43 | 14.2 | 4.33 |
+| Carrier + IMU FGO (calibrated) | 2.29 | 10.39 | 14.1 | 4.31 |
 | GNSS/IMU FGO (no-base TDCP) | 4.60 | 18.29 | 45.9 | 10.26 |
 | GNSS code FGO (no base) | 3.62 | 20.94 | 39.6 | 9.41 |
 
@@ -131,16 +131,26 @@ worse than the carrier FGO. The pure GNSS carrier arm runs the Eigen
 batch solver while the IMU arm runs the GTSAM fixed-lag smoother (batch
 GTSAM is ~15 min for 1000 epochs), so the arms differ by solver.
 
+### IMU noise calibration
+
+Instead of a hand-tuned noise scale, `--imu` estimates the IMU noise from
+the leading low-dynamics window (first 250 samples, the same window used
+for leveling): the per-axis residual std converted to a continuous-time
+density with the native 10 ms sample interval. PPC Tokyo run1 yields
+accel `0.0055 m/s²/√Hz` and gyro `0.00022 rad/s/√Hz`, ~18x and ~45x below
+the GTSAM defaults. This is truth-free (no reference used) and reproduces
+the earlier hand-tuned "noise x0.1" result to within 0.01 m.
+
 ### In-estimator trajectory smoothing
 
-Trusting the IMU more (noise x0.1) and widening the fixed-lag window
-(20 s) smooths the estimated trajectory entirely inside the estimator — no
-post-processing. The mean horizontal acceleration from position second
-differences at the native epoch rate drops from 5.13 m/s² (carrier-only
-Eigen batch) to 0.35 m/s², and the worst epoch improves from 29.3 m to
-14.2 m; P50 moves 1.66 -> 2.30 m.
+With the calibrated noise and a 20 s fixed-lag window the estimated
+trajectory is smoothed entirely inside the estimator — no post-processing.
+The mean horizontal acceleration from position second differences at the
+native epoch rate drops from 5.13 m/s² (carrier-only Eigen batch) to
+0.35 m/s², and the worst epoch improves from 29.3 m to 14.1 m; P50 moves
+1.66 -> 2.29 m.
 
-![Carrier-only vs tuned carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
+![Carrier-only vs calibrated carrier+IMU FGO](ppc_fgo_imu_smoothing.png)
 
 ## Reproduce
 
@@ -177,7 +187,7 @@ python3 scripts/plot_ppc_rtk_vs_imu_fusion.py \
 P=data/PPC-Dataset/tokyo/run1
 build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
   --preset real-data-fixed --out output/ppc_fgo/tokyo1_carrier.pos
-# --imu defaults to the tuned profile (noise x0.1, fixed-lag 20 s)
+# --imu defaults to static-window noise calibration + 20 s fixed-lag
 build/apps/gnss_fgo --obs $P/rover.obs --base $P/base.obs --nav $P/base.nav \
   --preset real-data-fixed --imu $P/imu.csv \
   --out output/ppc_fgo/tokyo1_carrier_imu.pos
@@ -193,17 +203,17 @@ python3 scripts/plot_ppc_gnss_vs_fgo.py \
   --output docs/ppc_fgo_carrier_vs_imu.png \
   --gnss-label "GNSS carrier FGO (DD, base)" \
   --imu-label "GNSS/IMU FGO (no-base TDCP)" \
-  --extra-label "Carrier + IMU FGO (tuned)" \
+  --extra-label "Carrier + IMU FGO (calibrated)" \
   --title "PPC Tokyo run1: carrier-phase vs IMU-aided FGO"
 
-# In-estimator smoothing figure (carrier-only vs tuned carrier+IMU)
+# In-estimator smoothing figure (carrier-only vs calibrated carrier+IMU)
 python3 scripts/plot_ppc_gnss_vs_fgo.py \
   --reference $P/reference.csv \
   --gnss-pos  output/ppc_fgo/tokyo1_carrier.pos \
   --extra-pos output/ppc_fgo/tokyo1_carrier_imu.pos \
   --output docs/ppc_fgo_imu_smoothing.png \
   --gnss-label "GNSS-only FGO (carrier AR)" \
-  --extra-label "Carrier + IMU FGO (tuned)" \
+  --extra-label "Carrier + IMU FGO (calibrated)" \
   --title "PPC Tokyo run1: GNSS-only vs carrier+IMU FGO (in-estimator smoothing)"
 ```
 

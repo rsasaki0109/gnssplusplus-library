@@ -60,7 +60,8 @@ struct Options {
     double imu_lever_arm_z = 0.0;
     bool imu_apply_mounting = true;
     double imu_fixed_lag_s = 20.0;
-    double imu_noise_scale = 0.1;
+    double imu_noise_scale = 1.0;
+    bool imu_noise_calibrate = true;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -164,7 +165,8 @@ void printUsage(const char* program_name) {
         << "  --imu-lever-arm X Y Z         IMU lever arm in body FLU metres (default 0 0 0)\n"
         << "  --imu-no-mounting             Skip the taroz sensor mounting rotation\n"
         << "  --imu-fixed-lag <s>           Fixed-lag smoother window (default 20, 0=batch)\n"
-        << "  --imu-noise-scale <s>         Scale IMU accel/gyro noise (default 0.1)\n"
+        << "  --imu-noise-scale <s>         Multiplier on the IMU noise (default 1)\n"
+        << "  --imu-no-noise-calibrate      Use fixed noise instead of static-window calibration\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -509,6 +511,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.imu_fixed_lag_s = std::stod(argv[++i]);
         } else if (arg == "--imu-noise-scale" && i + 1 < argc) {
             options.imu_noise_scale = std::stod(argv[++i]);
+        } else if (arg == "--imu-no-noise-calibrate") {
+            options.imu_noise_calibrate = false;
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3340,6 +3344,7 @@ Eigen::Matrix3d fgoImuMountingRotation() {
 bool attachImuToProblem(const std::string& path,
                         libgnss::FGOProcessor::FGOProblem& problem,
                         bool apply_mounting,
+                        bool calibrate_noise,
                         double noise_scale,
                         std::string& error) {
     if (problem.epochs.size() < 2) {
@@ -3470,6 +3475,40 @@ bool attachImuToProblem(const std::string& path,
     imu.init_accel_bias = aligned.accel_bias;
     imu.init_gyro_bias = aligned.gyro_bias;
     imu.noise.gravity_mps2 = kFgoImuGravity;
+    if (calibrate_noise) {
+        // Truth-free Allan-style calibration: the leading low-dynamics window
+        // yields the per-sample sensor noise, converted to a continuous-time
+        // density with the native IMU sample interval.
+        Eigen::Vector3d gyro_sum = Eigen::Vector3d::Zero();
+        for (const auto& sample : stationary) gyro_sum += sample.gyro_raw_radps;
+        const Eigen::Vector3d gyro_mean = gyro_sum / n;
+        Eigen::Vector3d accel_var = Eigen::Vector3d::Zero();
+        Eigen::Vector3d gyro_var = Eigen::Vector3d::Zero();
+        for (const auto& sample : stationary) {
+            accel_var += (sample.accel_raw - accel_mean).cwiseAbs2();
+            gyro_var += (sample.gyro_raw_radps - gyro_mean).cwiseAbs2();
+        }
+        const double accel_sigma = (accel_var / n).cwiseSqrt().mean();
+        const double gyro_sigma = (gyro_var / n).cwiseSqrt().mean();
+        double sample_dt = 0.01;
+        if (stationary.size() > 1) {
+            std::vector<double> diffs;
+            diffs.reserve(stationary.size() - 1);
+            for (std::size_t i = 1; i < stationary.size(); ++i) {
+                const double dt = stationary[i].time - stationary[i - 1].time;
+                if (dt > 0.0) diffs.push_back(dt);
+            }
+            if (!diffs.empty()) {
+                std::sort(diffs.begin(), diffs.end());
+                sample_dt = diffs[diffs.size() / 2];
+            }
+        }
+        imu.noise.accel_noise_sigma = accel_sigma * std::sqrt(sample_dt);
+        imu.noise.gyro_noise_sigma = gyro_sigma * std::sqrt(sample_dt);
+        std::cerr << "IMU noise calibration: accel_sigma=" << imu.noise.accel_noise_sigma
+                  << " gyro_sigma=" << imu.noise.gyro_noise_sigma
+                  << " (static_dt=" << sample_dt << ", n=" << stationary.size() << ")\n";
+    }
     imu.noise.accel_noise_sigma *= noise_scale;
     imu.noise.gyro_noise_sigma *= noise_scale;
     return true;
@@ -3750,6 +3789,7 @@ int main(int argc, char* argv[]) {
             std::string imu_error;
             if (!attachImuToProblem(options.imu_path, problem,
                                     options.imu_apply_mounting,
+                                    options.imu_noise_calibrate,
                                     options.imu_noise_scale, imu_error)) {
                 std::cerr << "Error: IMU attachment failed: " << imu_error << "\n";
                 return 1;
