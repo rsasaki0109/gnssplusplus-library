@@ -106,7 +106,7 @@ Base-surveyed correction on the GSDC dev routes (Pixel5, `(P50+P95)/2` m):
 | no-base | 1.077 | 1.306 | 1.361 | 3.103 |
 | base-surveyed | **0.577** | **0.738** | **0.302** | **0.712** |
 
-![GSDC base-surveyed dev routes](docs/gsdc_base_surveyed_dev_routes.png)
+![GSDC base-surveyed dev routes on OpenStreetMap](docs/gsdc_base_surveyed_osm.png)
 
 Raw GNSS + IMU + broadcast nav only. Dev routes, not a Kaggle leaderboard
 score. Details in the

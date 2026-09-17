@@ -615,7 +615,26 @@ DirectObservableQualitySettings directObservableQualitySettingsForDataset(
         }
         return settings;
     }
-    return {};
+    // General fallback for non-frozen routes: classify by a route-name
+    // heuristic so the recipe can run on arbitrary GSDC test routes. The
+    // four frozen dev IDs above keep their exact tuned entries.
+    std::string lowered = dataset_id;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    const bool highway = lowered.find("lax") != std::string::npos ||
+                         lowered.find("ebf") != std::string::npos ||
+                         lowered.find("highway") != std::string::npos ||
+                         lowered.find("pao") != std::string::npos;
+    DirectObservableQualitySettings settings;
+    settings.valid = true;
+    settings.environment = highway ? "Highway" : "Street";
+    settings.pseudorange_huber_threshold_sigma = highway ? 0.2 : 0.1;
+    settings.doppler_huber_threshold_sigma = highway ? 0.8 : 0.4;
+    if (!libgnss::fgo::resolveOfficialTdcpHuberThresholdSigmaForType(
+            settings.environment, settings.official_tdcp_huber_threshold_sigma)) {
+        return {};
+    }
+    return settings;
 }
 
 bool hasMatExtension(const std::string& path) {
@@ -1443,9 +1462,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.android_raw_utc_key_contract || !options.all_epochs ||
          options.skip_epochs != 0 || !phase171_imu_main || !phase171_ecef_doppler ||
          options.native_main_p_cauchy ||
-         options.native_stationary_gyro_initializer || options.native_epoch_heading_attitude_seeds ||
-         options.dataset_id != "2022-04-01-18-22-us-ca-lax-t/pixel5")) {
-        std::cerr << "--native-sparse-p-staging requires raw LAX-T all-epoch Phase171 recipe\n";
+         options.native_stationary_gyro_initializer || options.native_epoch_heading_attitude_seeds)) {
+        std::cerr << "--native-sparse-p-staging requires raw all-epoch Phase171 recipe\n";
         return false;
     }
     if (options.native_tdcp_no_code_jump_gate &&
