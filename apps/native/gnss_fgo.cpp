@@ -64,6 +64,8 @@ struct Options {
     bool imu_noise_calibrate = true;
     bool use_fixed_lag_partial_lambda = false;
     bool use_variance_ranked_partial_ar = false;
+    bool use_ambiguity_hold = false;
+    int ambiguity_hold_min_fixed = 4;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -171,6 +173,8 @@ void printUsage(const char* program_name) {
         << "  --imu-no-noise-calibrate      Use fixed noise instead of static-window calibration\n"
         << "  --fixed-lag-partial-ar        Attempt partial (subset) LAMBDA in the fixed lag\n"
         << "  --variance-ranked-partial-ar  Rank/drop candidates by ambiguity std in partial AR\n"
+        << "  --ambiguity-hold              Fixed-lag fix-and-hold (pin held arcs at integers)\n"
+        << "  --ambiguity-hold-min-fixed <n> Hold threshold (default 4)\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -521,6 +525,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_fixed_lag_partial_lambda = true;
         } else if (arg == "--variance-ranked-partial-ar") {
             options.use_variance_ranked_partial_ar = true;
+        } else if (arg == "--ambiguity-hold") {
+            options.use_ambiguity_hold = true;
+        } else if (arg == "--ambiguity-hold-min-fixed" && i + 1 < argc) {
+            options.ambiguity_hold_min_fixed = std::stoi(argv[++i]);
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3795,6 +3803,8 @@ int main(int argc, char* argv[]) {
             options.use_fixed_lag_partial_lambda;
         config.use_variance_ranked_partial_ar =
             options.use_variance_ranked_partial_ar;
+        config.use_ambiguity_hold = options.use_ambiguity_hold;
+        config.ambiguity_hold_min_fixed = options.ambiguity_hold_min_fixed;
         config.reject_rover_carrier_loss_of_lock =
             options.reject_rover_carrier_lli;
         config.reject_tdcp_code_phase_jump = !options.no_tdcp_slip_reject;
