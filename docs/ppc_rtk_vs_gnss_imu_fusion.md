@@ -3,8 +3,9 @@
 ![PPC Tokyo run1 — RTK only vs RTK + tightly-coupled GNSS/IMU](ppc_rtk_vs_gnss_imu_fusion.png)
 
 The trajectory is coloured by per-epoch status (green = FIX, orange =
-FLOAT, red = SPP) with solid = RTK only and dashed = fused, so the panels
-show both where each arm was fixed and how dense the fixes were.
+FLOAT, red = SPP) with solid = RTK only and dashed = fused, and the legend
+prints each arm's FIX/FLOAT/SPP composition (RTK only FIX 71% / FLOAT 23% /
+SPP 6%; fused FIX 78% / FLOAT 17% / SPP 5%).
 
 OpenStreetMap overlay: left is the full route, right zooms on the worst
 RTK-only epoch (near Tokyo Station), where RTK-only cuts across the building
@@ -125,8 +126,9 @@ Related knobs: `--imu-lever-arm X Y Z`, `--imu-no-mounting`,
 
 Trajectory colour is the per-epoch status (green = FIX, orange = FLOAT,
 grey = no status field in the submission CSV) and the line style is the
-arm; here the DD-carrier arm reports FIX throughout while the IMU arms are
-float.
+arm. The stats box prints each arm's composition: the DD-carrier arm is
+FIX 100%, the calibrated carrier+IMU arm is FLOAT 100%, and the no-base
+TDCP submission carries no status.
 
 Carrier-phase ambiguity resolution dominates: on Tokyo run1 the code-only
 no-base FGO (P50 3.62 m) is ~2x worse than the carrier FGO (P50 1.66 m),

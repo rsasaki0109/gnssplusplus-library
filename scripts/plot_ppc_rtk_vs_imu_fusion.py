@@ -75,6 +75,16 @@ def status_legend_handles(epochs_list, arm_handles):
     return handles
 
 
+def status_text(epochs):
+    counts = {}
+    for e in epochs:
+        counts[e.status] = counts.get(e.status, 0) + 1
+    n = max(1, len(epochs))
+    return " ".join(
+        f"{STATUS_NAMES[st]} {100.0 * counts.get(st, 0) / n:.0f}%"
+        for st in (4, 3, 2, 1) if counts.get(st, 0) > 0)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, required=True)
@@ -172,9 +182,9 @@ def main() -> int:
     arm_handles = [
         Line2D([0], [0], color=REF_COLOR, lw=4, alpha=0.7, label="Reference"),
         Line2D([0], [0], color="#333333", lw=1.6, ls="-",
-               label=f"{args.rtk_label} (P95 {rtk_m['p95']:.2f} m)"),
+               label=f"{args.rtk_label} — {status_text(rtk['solution'])} (P95 {rtk_m['p95']:.2f} m)"),
         Line2D([0], [0], color="#333333", lw=1.6, ls="--",
-               label=f"{args.fusion_label} (P95 {fusion_m['p95']:.2f} m)"),
+               label=f"{args.fusion_label} — {status_text(fusion['solution'])} (P95 {fusion_m['p95']:.2f} m)"),
     ]
     ax.set_aspect("equal", adjustable="datalim")
     ax.set_xlabel("East [m]")

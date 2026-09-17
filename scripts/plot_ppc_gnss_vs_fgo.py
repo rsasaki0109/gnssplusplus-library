@@ -76,6 +76,17 @@ def status_legend_handles(epochs_list, arm_handles):
     return handles
 
 
+def status_text(epochs):
+    """Per-arm FIX/FLOAT/SPP composition as a compact string."""
+    counts = {}
+    for e in epochs:
+        counts[e.status] = counts.get(e.status, 0) + 1
+    n = max(1, len(epochs))
+    return " ".join(
+        f"{STATUS_NAMES[st]} {100.0 * counts.get(st, 0) / n:.0f}%"
+        for st in (4, 3, 2, 1, 0) if counts.get(st, 0) > 0)
+
+
 def draw_zoom_only(args, reference, arms):
     """Large OSM zoom at the GNSS-only worst epochs for a tweet-style shot."""
     if args.zoom_tows:
@@ -127,7 +138,8 @@ def draw_zoom_only(args, reference, arms):
                               lw=2.4)
             matched = epoch_at(arm["matched"], tow)
             if matched is not None:
-                lines.append(f"{arm['label'][:24]:24s} {matched.horiz_error_m:5.1f} m")
+                lines.append(f"{arm['label'][:22]:22s} {matched.horiz_error_m:5.1f} m")
+                lines.append(f"   {status_text(arm['epochs'])}")
         ax.set_xlim(ox, ox + w)
         ax.set_ylim(oy + h, oy)
         ax.set_aspect("equal")
@@ -435,10 +447,14 @@ def main() -> int:
     ax_map.legend(handles=status_legend_handles([a["epochs"] for a in arms],
                                                 arm_handles),
                   fontsize=10, loc="upper right", framealpha=0.9)
-    table = "\n".join(
-        f"{arm['label'][:18]:18s} P50 {arm['stats']['p50_m']:.2f}"
-        f"  P95 {arm['stats']['p95_m']:.2f}  max {arm['stats']['max_m']:.1f} m"
-        for arm in arms)
+    table_lines = []
+    for arm in arms:
+        s = arm["stats"]
+        table_lines.append(
+            f"{arm['label'][:20]:20s} P50 {s['p50_m']:.2f}"
+            f"  P95 {s['p95_m']:.2f}  max {s['max_m']:.1f} m")
+        table_lines.append(f"   {status_text(arm['epochs'])}")
+    table = "\n".join(table_lines)
     ax_map.text(0.01, 0.01, table, transform=ax_map.transAxes, ha="left", va="bottom",
                 fontsize=12, family="monospace",
                 bbox=dict(boxstyle="round", fc="white", ec="#999999", alpha=0.9))
