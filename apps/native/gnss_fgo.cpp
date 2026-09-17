@@ -59,8 +59,8 @@ struct Options {
     double imu_lever_arm_y = 0.0;
     double imu_lever_arm_z = 0.0;
     bool imu_apply_mounting = true;
-    double imu_fixed_lag_s = 5.0;
-    double imu_noise_scale = 1.0;
+    double imu_fixed_lag_s = 20.0;
+    double imu_noise_scale = 0.1;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -163,8 +163,8 @@ void printUsage(const char* program_name) {
         << "  --imu <imu.csv>               Tightly-coupled IMU factors (GTSAM Pose3 backend)\n"
         << "  --imu-lever-arm X Y Z         IMU lever arm in body FLU metres (default 0 0 0)\n"
         << "  --imu-no-mounting             Skip the taroz sensor mounting rotation\n"
-        << "  --imu-fixed-lag <s>           Fixed-lag smoother window (default 5, 0=batch)\n"
-        << "  --imu-noise-scale <s>         Scale IMU accel/gyro noise (default 1; >1 weakens IMU)\n"
+        << "  --imu-fixed-lag <s>           Fixed-lag smoother window (default 20, 0=batch)\n"
+        << "  --imu-noise-scale <s>         Scale IMU accel/gyro noise (default 0.1)\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
