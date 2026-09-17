@@ -1442,10 +1442,10 @@ bool parseArguments(int argc, char** argv, Options& options) {
         (!android_raw || !options.android_raw_clock_only ||
          !options.android_raw_utc_key_contract || !options.all_epochs ||
          options.skip_epochs != 0 || !phase171_imu_main || !phase171_ecef_doppler ||
-         options.native_base_pseudorange_compensation || options.native_main_p_cauchy ||
+         options.native_main_p_cauchy ||
          options.native_stationary_gyro_initializer || options.native_epoch_heading_attitude_seeds ||
          options.dataset_id != "2022-04-01-18-22-us-ca-lax-t/pixel5")) {
-        std::cerr << "--native-sparse-p-staging requires raw LAX-T all-epoch Phase171 base-off recipe\n";
+        std::cerr << "--native-sparse-p-staging requires raw LAX-T all-epoch Phase171 recipe\n";
         return false;
     }
     if (options.native_tdcp_no_code_jump_gate &&
