@@ -67,6 +67,9 @@ struct Options {
     bool use_ambiguity_hold = false;
     int ambiguity_hold_min_fixed = 4;
     bool allow_partial_fix_and_hold = false;
+    bool use_geometry_free_cycle_slip_reset = false;
+    bool use_fix_plausibility_demotion = false;
+    bool use_fixed_history_dr_validation = false;
     int max_epochs = 0;
     int skip_epochs = 0;
     int max_iterations = 8;
@@ -177,6 +180,9 @@ void printUsage(const char* program_name) {
         << "  --ambiguity-hold              Fixed-lag fix-and-hold (pin held arcs at integers)\n"
         << "  --ambiguity-hold-min-fixed <n> Hold threshold (default 4)\n"
         << "  --allow-partial-fix-and-hold  Let partial LAMBDA fixes seed fix-and-hold\n"
+        << "  --geometry-free-cycle-slip-reset  Enable GF cycle-slip arc reset + guard\n"
+        << "  --fix-plausibility-demotion   Demote implausible FIXED epochs\n"
+        << "  --fixed-history-dr-validation  Validate fixes against fixed-history DR\n"
         << "  --backend <name>              Optimizer backend: eigen, gtsam-pc (if built with GTSAM)\n"
         << "  --preset <name>               Defaults: default, real-data, real-data-float,\n"
         << "                                real-data-fixed, tdcp-only, taroz-p,\n"
@@ -533,6 +539,12 @@ Options parseArguments(int argc, char* argv[]) {
             options.ambiguity_hold_min_fixed = std::stoi(argv[++i]);
         } else if (arg == "--allow-partial-fix-and-hold") {
             options.allow_partial_fix_and_hold = true;
+        } else if (arg == "--geometry-free-cycle-slip-reset") {
+            options.use_geometry_free_cycle_slip_reset = true;
+        } else if (arg == "--fix-plausibility-demotion") {
+            options.use_fix_plausibility_demotion = true;
+        } else if (arg == "--fixed-history-dr-validation") {
+            options.use_fixed_history_dr_validation = true;
         } else if (arg == "--preset" && i + 1 < argc) {
             ++i;
         } else if (arg == "--skip-epochs" && i + 1 < argc) {
@@ -3810,6 +3822,12 @@ int main(int argc, char* argv[]) {
         config.use_ambiguity_hold = options.use_ambiguity_hold;
         config.ambiguity_hold_min_fixed = options.ambiguity_hold_min_fixed;
         config.allow_partial_fix_and_hold = options.allow_partial_fix_and_hold;
+        config.use_geometry_free_cycle_slip_reset =
+            options.use_geometry_free_cycle_slip_reset;
+        config.use_fix_plausibility_demotion =
+            options.use_fix_plausibility_demotion;
+        config.use_fixed_history_dr_validation =
+            options.use_fixed_history_dr_validation;
         config.reject_rover_carrier_loss_of_lock =
             options.reject_rover_carrier_lli;
         config.reject_tdcp_code_phase_jump = !options.no_tdcp_slip_reject;
