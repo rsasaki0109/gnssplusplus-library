@@ -70,7 +70,7 @@
       },
       "native_fgo_cli": {
         "path": "apps/native/gnss_fgo_imu_no_base.cpp",
-        "sha256": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec"
+        "sha256": "6b77c8ac90f9cbff073c838d3aeaae832634269ca45027591eb2cf689a63397b"
       }
     }
   },

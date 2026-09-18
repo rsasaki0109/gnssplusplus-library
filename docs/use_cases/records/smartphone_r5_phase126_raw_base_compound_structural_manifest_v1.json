@@ -6,7 +6,7 @@
   "freeze": {
     "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_structural_contract_freeze_v1.json",
     "commit": "5d00daf56afb6fe6b6e1f01b4a1213c287f671db",
-    "sha256": "f8a97052f6226be3983ded3462c8a05b07ad179654a6525015e704d9d12fe99e",
+    "sha256": "09bf2a6fdf1b49e89444059f9739dd5b141e97f1a398009082faba4d36f69e69",
     "raw_execution_authorized_before_manifest": false
   },
   "contract_audit": {
@@ -32,7 +32,7 @@
     "additional_frequency_selector": false,
     "no_fallback": true,
     "source_sha256": {
-      "apps/native/gnss_fgo_imu_no_base.cpp": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "6b77c8ac90f9cbff073c838d3aeaae832634269ca45027591eb2cf689a63397b",
       "include/libgnss++/algorithms/fgo_config.hpp": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff",
       "include/libgnss++/algorithms/fgo.hpp": "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6",
       "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "87a7d86a01b4f0c43abda39f7f22f2d73bee502228b2cd05802a3e2820e78566",
@@ -44,7 +44,7 @@
     },
     "binary": {
       "path": "build/apps/gnss_fgo_imu_no_base",
-      "sha256": "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888"
+      "sha256": "b2254284328b52bb3aa4ebdba731e795fea2e6a32197478cb2423828d3e43b12"
     }
   },
   "sealed_phase118_recipe": {
@@ -63,7 +63,7 @@
   "artifacts": {
     "validator": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase126_raw_base_compound_structural.py",
-      "sha256": "fde99e2a63d87358b7b4223091845e310ae6e5689c9c85482e609a3733e54113"
+      "sha256": "a1facb7a6b59b42798656b49484d08990900e46241abdc22dc2167d2d8900a09"
     },
     "runner": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase126_raw_base_compound_structural_execute.py",

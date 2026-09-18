@@ -21,7 +21,7 @@
     "partial_selectors_allowed": false,
     "legacy_default_unchanged": true,
     "source_sha256": {
-      "apps/native/gnss_fgo_imu_no_base.cpp": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "6b77c8ac90f9cbff073c838d3aeaae832634269ca45027591eb2cf689a63397b",
       "include/libgnss++/algorithms/fgo_config.hpp": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff",
       "include/libgnss++/algorithms/fgo.hpp": "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6",
       "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "87a7d86a01b4f0c43abda39f7f22f2d73bee502228b2cd05802a3e2820e78566",
@@ -33,7 +33,7 @@
     },
     "binary": {
       "path": "build/apps/gnss_fgo_imu_no_base",
-      "sha256": "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888"
+      "sha256": "b2254284328b52bb3aa4ebdba731e795fea2e6a32197478cb2423828d3e43b12"
     }
   },
   "target_routes": [

@@ -31,7 +31,7 @@ IMPLEMENTATION_COMMIT = "9e9972667ee009e1bcd0dd1ea4732ae45415c3ce"
 AUDIT_COMMIT = "ea083e3eb8ecf01a1d99ddd6f6ef852483da13ca"
 AUDIT_SHA256 = "8ad6fcedc7a3b23c8f13b82968f67bada2fbe039d90f919c104e9a910f71f4ee"
 FREEZE_COMMIT = "5d00daf56afb6fe6b6e1f01b4a1213c287f671db"
-FREEZE_SHA256 = "f8a97052f6226be3983ded3462c8a05b07ad179654a6525015e704d9d12fe99e"
+FREEZE_SHA256 = "09bf2a6fdf1b49e89444059f9739dd5b141e97f1a398009082faba4d36f69e69"
 
 PHASE118_MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_manifest_v1.json"
 PHASE118_RESULT = ROOT / "docs/use_cases/records/smartphone_r5_phase118_tdcp_robust_k_structural_result_v1.json"

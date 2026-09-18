@@ -28,9 +28,9 @@ BINARY = ROOT / "build/apps/gnss_fgo_imu_no_base"
 AUDIT_COMMIT = "4e6634a694da571b15ab7a98d001756cd93d8e75"
 AUDIT_SHA256 = "385e9a531881d9ac7fdfe4f7bfba8b9eabcab074a7e4635a14d1d7b2112e881a"
 FREEZE_COMMIT = "4b1c32eae1d47f80c32e2ea73a885e179fe5389b"
-FREEZE_SHA256 = "3bdc75dedb6a4bfc101bd9907acff6f75059327e1123171d0b4ba34cee507475"
+FREEZE_SHA256 = "9b4e593671ae41b4a38a6c1ab5415fb953b7af10136aa13e05cb20eadd9ee235"
 IMPLEMENTATION_COMMIT = "05e57d5008320734de93c763ff84ccd31f755805"
-TARGET_BINARY_SHA256 = "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888"
+TARGET_BINARY_SHA256 = "b2254284328b52bb3aa4ebdba731e795fea2e6a32197478cb2423828d3e43b12"
 
 PHASE126_SELECTOR = "--native-phase126-raw-base-source-complete"
 PHASE127_SELECTOR = "--native-phase127-glonass-channel-provenance"
@@ -63,7 +63,7 @@ IMPLEMENTATION_SOURCES = {
     "src/algorithms/source_pseudorange_miss_mask.cpp": ROOT / "src/algorithms/source_pseudorange_miss_mask.cpp",
 }
 SOURCE_SHA256 = {
-    "apps/native/gnss_fgo_imu_no_base.cpp": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "6b77c8ac90f9cbff073c838d3aeaae832634269ca45027591eb2cf689a63397b",
     "include/libgnss++/algorithms/fgo_config.hpp": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff",
     "include/libgnss++/algorithms/fgo.hpp": "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6",
     "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "87a7d86a01b4f0c43abda39f7f22f2d73bee502228b2cd05802a3e2820e78566",
