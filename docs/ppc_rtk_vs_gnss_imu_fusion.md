@@ -206,6 +206,31 @@ the ISAM2 state corrupted, so every later update throws `map::at` and tokyo
 run2 diverges by 6370 km at tow 178316 (28% of epochs NONE). With recovery
 the exception is handled once and the run stays healthy.
 
+### FIX integrity and the AR ratio threshold
+
+The FIXED label is only trustworthy with a strict ratio test. The
+real-data-fixed preset used ratio 1.5, at which the fixed-lag AR accepted
+~50% wrong fixes; the preset now uses **3.0** (the inuex35 default), which
+makes the FIXED epochs genuine (wrong-fix = FIXED epochs with 3D error
+> 0.5 m, PPC convention; `scripts/score_ppc_fix_integrity.py`):
+
+| run | fix% | wrong-fix% | correct-fix% | fixed median 3D |
+|---|---:|---:|---:|---:|
+| tokyo1 | 6.4 | 7.3 | 5.9 | 0.05 m |
+| tokyo2 | 18.1 | 4.1 | 17.3 | 0.03 m |
+| tokyo3 | 24.8 | 2.4 | 24.2 | 0.04 m |
+| tokyo1 (ratio 1.5) | 22.0 | 50.0 | 11.0 | 0.47 m |
+
+The correct-fix rate is route-dependent (tokyo1 is the hard one); raising it
+further needs the upstream AR strengths (continuity priors, SD Doppler,
+fix-and-hold), not a looser ratio.
+
+**Carrier-only Eigen caveat**: the Eigen batch path (no `--imu`) still
+reports FIX 100% with ~93% wrong fixes even with LAMBDA ratio 29.7 and a
+tighter carrier sigma — its integer-constrained batch solution is
+meter-level, so its FIXED status is not trustworthy. The fixed-lag path is
+the one with genuine fixes.
+
 Of the other upstream levers, NHC/ZUPT factors (`--nhc --zupt`),
 variance-ranked partial AR, ambiguity-between factors and a 30-cycle
 new-arc prior all fail to lift the fix rate and mostly degrade accuracy, so
