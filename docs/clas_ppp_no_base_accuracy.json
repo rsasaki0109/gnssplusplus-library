@@ -1,0 +1,47 @@
+{
+  "dataset": {
+    "base_station": null,
+    "inputs": [
+      "0627239Q.obs",
+      "sept_2019239.nav",
+      "2019239Q.l6"
+    ],
+    "ref": "23cfd363a2db6d8d8144e292c82e9d97ca2d3015",
+    "source": "QZSS-Strategy-Office/claslib public data",
+    "window": "2019/08/27 16:00:00 GPST, 3580 epochs"
+  },
+  "epochs": 3580,
+  "fix": {
+    "below_target_ratio": 1.0,
+    "max_horizontal_m": 0.010209,
+    "median_horizontal_m": 0.001371,
+    "p95_horizontal_m": 0.002528
+  },
+  "overall": {
+    "max_horizontal_m": 0.08205,
+    "median_horizontal_m": 0.001371,
+    "median_vertical_m": 0.003211,
+    "p95_horizontal_m": 0.002528
+  },
+  "quality_counts": {
+    "fix": 3575,
+    "float": 5
+  },
+  "quality_stats": {
+    "4": {
+      "epochs": 3575,
+      "max_horizontal_m": 0.010209,
+      "median_horizontal_m": 0.001371,
+      "p95_horizontal_m": 0.002528
+    },
+    "5": {
+      "epochs": 5,
+      "max_horizontal_m": 0.08205,
+      "median_horizontal_m": 0.060867,
+      "p95_horizontal_m": 0.081334
+    }
+  },
+  "reference": "Published CLASLIB 2019-08-27 antenna reference (-3957235.3717, 3310368.2257, 3737529.7179)",
+  "schema": "clas_ppp_accuracy_gif.v1",
+  "target_horizontal_m": 0.1
+}
