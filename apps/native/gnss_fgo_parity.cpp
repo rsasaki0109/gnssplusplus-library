@@ -2823,6 +2823,262 @@ bool readBoolVec(std::istream& is, std::vector<bool>& v) {
     return true;
 }
 
+// FGOProblemDiagnostics mixes flat scalar counters (safe for the raw-byte
+// path) with std::string / std::map provenance fields, so it is NOT
+// standard-layout and cannot use writePod. Round-trip it field by field
+// instead; the scalar list below is shared by the writer and reader via an
+// X-macro so the two sides cannot drift.
+#define FGO_PROBLEM_DIAGNOSTIC_SCALARS(X)                          \
+    X(phase131_diagnostics_bridge_sync_count)                      \
+    X(phase131_canonicalization_attempt_rows)                      \
+    X(phase131_resolver_call_count)                                \
+    X(phase131_source_miss_mask_enabled)                           \
+    X(phase131_source_miss_mask_canonical_key_mode)                \
+    X(phase131_original_adopted_pseudorange_rows)                  \
+    X(phase131_retained_finite_pc_pseudorange_rows)                \
+    X(phase131_dropped_missing_exact_stream_rows)                  \
+    X(phase131_dropped_out_of_domain_rows)                         \
+    X(phase131_dropped_nonfinite_correction_rows)                  \
+    X(phase131_matched_factor_rows)                                \
+    X(phase131_finite_correction_rows_among_matched)               \
+    X(phase131_source_model_build_count)                           \
+    X(phase131_correction_application_pass_count)                  \
+    X(phase131_corrected_rows)                                     \
+    X(phase131_pseudorange_factor_count_consistent)                \
+    X(phase131_signal_count_consistent)                            \
+    X(phase131_applied)                                            \
+    X(phase131_correction_applied_exactly_once)                    \
+    X(phase131_duplicate_correction_rejected)                      \
+    X(input_epochs)                                                \
+    X(seeded_epochs)                                               \
+    X(skipped_epochs_without_seed)                                 \
+    X(quality_anchor_initialization_enabled)                       \
+    X(quality_anchor_selected)                                     \
+    X(quality_anchor_index)                                        \
+    X(quality_anchor_candidates)                                   \
+    X(quality_anchor_forward_valid_epochs)                         \
+    X(quality_anchor_backward_valid_epochs)                        \
+    X(quality_anchor_fallback_epochs)                              \
+    X(quality_anchor_satellites)                                   \
+    X(quality_anchor_gdop)                                         \
+    X(quality_anchor_normalized_residual_rms)                      \
+    X(quality_anchor_recovery_enabled)                             \
+    X(quality_anchor_recovery_triggered)                           \
+    X(quality_anchor_recovery_selected)                            \
+    X(quality_anchor_normal_candidates)                            \
+    X(quality_anchor_recovery_candidates)                          \
+    X(quality_anchor_recovery_anchor_index)                        \
+    X(quality_anchor_recovery_anchor_satellites)                   \
+    X(quality_anchor_recovery_anchor_gdop)                         \
+    X(quality_anchor_recovery_anchor_normalized_residual_rms)      \
+    X(quality_anchor_recovery_replay_valid_epochs)                 \
+    X(quality_anchor_recovery_replay_invalid_epochs)               \
+    X(sentinel_factor_bypass)                                      \
+    X(phase127_glonass_channel_provenance_enabled)                 \
+    X(phase128_glonass_provenance_parser_admission_enabled)        \
+    X(phase129_glonass_local_miss_mask_enabled)                    \
+    X(phase129_configuration_valid)                                \
+    X(phase128_canonical_records)                                  \
+    X(phase128_canonical_rejected_records)                         \
+    X(phase127_glonass_rows)                                       \
+    X(phase127_accepted_rows)                                      \
+    X(phase127_header_primary_rows)                                \
+    X(phase127_ephemeris_fallback_rows)                            \
+    X(phase127_header_entries_seen)                                \
+    X(phase127_header_duplicate_entries)                           \
+    X(phase127_header_conflict_entries)                            \
+    X(phase127_header_malformed_entries)                           \
+    X(phase127_ephemeris_candidates)                               \
+    X(phase127_ephemeris_ties)                                     \
+    X(phase127_ephemeris_duplicate_entries)                        \
+    X(phase127_ephemeris_conflict_entries)                         \
+    X(phase127_query_time_coverage_gaps)                           \
+    X(phase127_invalid_channels)                                   \
+    X(phase129_glonass_local_miss_rows)                            \
+    X(phase129_glonass_factor_rows_dropped)                        \
+    X(phase129_glonass_factor_rows_retained)                       \
+    X(phase129_glonass_factor_count_consistent)                    \
+    X(phase129_glonass_row_count_consistent)                       \
+    X(phase131_canonical_correction_band_key_enabled)              \
+    X(phase131_configuration_valid)                                \
+    X(phase131_canonical_rows)                                     \
+    X(phase131_canonical_rejected_rows)                            \
+    X(phase131_unknown_band_rows)                                  \
+    X(phase131_canonical_key_conflicts)                            \
+    X(phase131_canonical_duplicate_rows)                           \
+    X(phase131_canonical_streams)                                  \
+    X(phase131_canonical_selected_streams)                         \
+    X(phase131_canonical_merged_streams)                           \
+    X(phase135_official_affine_measurement_family_enabled)         \
+    X(phase135_configuration_valid)                                \
+    X(sparse_epochs_retained)                                      \
+    X(sparse_empty_epochs_retained)                                \
+    X(double_difference_matched_base_epochs)                       \
+    X(double_difference_interpolated_base_epochs)                  \
+    X(double_difference_candidate_pairs)                           \
+    X(double_difference_rejected_no_base_epoch)                    \
+    X(double_difference_rejected_no_reference)                     \
+    X(tdcp_candidate_pairs)                                        \
+    X(tdcp_rejected_gap)                                           \
+    X(tdcp_rejected_clock_discontinuity)                           \
+    X(tdcp_rejected_missing_previous)                              \
+    X(tdcp_rejected_loss_of_lock)                                  \
+    X(tdcp_rejected_invalid_measurement)                           \
+    X(tdcp_rejected_code_phase_jump)                               \
+    X(tdcp_rejected_invalid_weight)                                \
+    X(residual_ionosphere_invalid_coefficients)                    \
+    X(source_rover_epoch_states_built)                             \
+    X(source_rover_missing_ephemeris_satellite_epochs)             \
+    X(residual_ionosphere_candidate_rows)                          \
+    X(code_minus_carrier_jump_resets)                              \
+    X(geometry_free_cycle_slip_resets)                             \
+    X(code_minus_carrier_level_exclusions)                         \
+    X(cmc_ref_avoided_count)                                       \
+    X(upstream_snr_l1_dbhz)                                        \
+    X(upstream_snr_l5_dbhz)                                        \
+    X(upstream_pseudorange_candidates)                             \
+    X(upstream_doppler_candidates)                                 \
+    X(upstream_pseudorange_factors)                                \
+    X(upstream_doppler_factors)                                    \
+    X(upstream_pd_pair_rejections)                                 \
+    X(upstream_ld_pair_rejections)                                 \
+    X(upstream_doppler_residual_rejections)                        \
+    X(upstream_pseudorange_residual_rejections)                    \
+    X(upstream_absolute_doppler_candidates)                        \
+    X(upstream_absolute_doppler_factors)                           \
+    X(upstream_absolute_doppler_rejections)                        \
+    X(upstream_absolute_doppler_missing_clock)                     \
+    X(upstream_absolute_doppler_max_abs_corrected_residual)        \
+    X(galileo_e1_fnav_group_delay_rows)                            \
+    X(galileo_e1_inav_group_delay_rows)                            \
+    X(galileo_e1_group_delay_source_fallback_rows)                 \
+    X(galileo_e1_group_delay_invalid_rows)                         \
+    X(native_android_sv_time_uncertainty_sigma_floor_enabled)      \
+    X(native_android_sv_time_uncertainty_rows_applied)             \
+    X(native_android_sv_time_uncertainty_rows_fallback)            \
+    X(native_android_sv_time_uncertainty_factors_affected)         \
+    X(native_android_sv_time_uncertainty_floor_min_m)              \
+    X(native_android_sv_time_uncertainty_floor_median_m)           \
+    X(native_android_sv_time_uncertainty_floor_p95_m)              \
+    X(native_android_sv_time_uncertainty_floor_max_m)              \
+    X(native_cn0_doppler_calibration_enabled)                      \
+    X(native_cn0_doppler_calibration_candidate_rows)               \
+    X(native_cn0_doppler_calibration_finite_cn0_rows)              \
+    X(native_cn0_doppler_calibration_fallback_rows)                \
+    X(native_cn0_doppler_calibration_factors_affected)             \
+    X(native_cn0_doppler_calibration_alpha_mps)                    \
+    X(native_cn0_doppler_calibration_reference_cn0_dbhz)           \
+    X(native_cn0_doppler_calibration_model_sigma_min_mps)          \
+    X(native_cn0_doppler_calibration_model_sigma_median_mps)       \
+    X(native_cn0_doppler_calibration_model_sigma_p95_mps)          \
+    X(native_cn0_doppler_calibration_model_sigma_max_mps)
+
+void writeString(std::ostream& os, const std::string& s) {
+    const uint64_t n = s.size();
+    writePod(os, n);
+    if (n != 0) {
+        os.write(s.data(), static_cast<std::streamsize>(n));
+    }
+}
+
+bool readString(std::istream& is, std::string& s) {
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;
+    s.assign(static_cast<std::size_t>(n), '\0');
+    if (n != 0) {
+        is.read(s.data(), static_cast<std::streamsize>(n));
+    }
+    return static_cast<bool>(is);
+}
+
+void writeStringCountMap(std::ostream& os,
+                         const std::map<std::string, std::size_t>& m) {
+    const uint64_t n = m.size();
+    writePod(os, n);
+    for (const auto& [key, value] : m) {
+        writeString(os, key);
+        writePod(os, value);
+    }
+}
+
+bool readStringCountMap(std::istream& is,
+                        std::map<std::string, std::size_t>& m) {
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;
+    m.clear();
+    for (uint64_t i = 0; i < n; ++i) {
+        std::string key;
+        std::size_t value = 0;
+        if (!readString(is, key) || !readPod(is, value)) return false;
+        m.emplace(std::move(key), value);
+    }
+    return true;
+}
+
+template <typename Map>
+void writeSignalDiagMap(std::ostream& os, const Map& m) {
+    const uint64_t n = m.size();
+    writePod(os, n);
+    for (const auto& [key, value] : m) {
+        writePod(os, key);
+        writePod(os, value);
+    }
+}
+
+template <typename Map>
+bool readSignalDiagMap(std::istream& is, Map& m) {
+    uint64_t n = 0;
+    if (!readPod(is, n)) return false;
+    if (n > (1ull << 34)) return false;
+    m.clear();
+    for (uint64_t i = 0; i < n; ++i) {
+        typename Map::key_type key{};
+        typename Map::mapped_type value{};
+        if (!readPod(is, key) || !readPod(is, value)) return false;
+        m.emplace(key, value);
+    }
+    return true;
+}
+
+void writeProblemDiagnostics(
+    std::ostream& os,
+    const libgnss::FGOProcessor::FGOProblemDiagnostics& d) {
+#define FGO_DIAG_WRITE(name) writePod(os, d.name);
+    FGO_PROBLEM_DIAGNOSTIC_SCALARS(FGO_DIAG_WRITE)
+#undef FGO_DIAG_WRITE
+    writeString(os, d.phase131_source_miss_mask_matching_key);
+    writeString(os, d.phase127_failure);
+    writeString(os, d.phase129_configuration_failure);
+    writeString(os, d.phase128_header_status);
+    writeString(os, d.phase131_configuration_failure);
+    writeString(os, d.phase135_configuration_failure);
+    writeStringCountMap(os, d.phase127_failure_counts);
+    writeStringCountMap(os, d.phase129_glonass_local_miss_counts);
+    writeStringCountMap(os, d.phase131_failure_counts);
+    writeSignalDiagMap(os, d.tdcp_signal_diagnostics);
+}
+
+bool readProblemDiagnostics(
+    std::istream& is,
+    libgnss::FGOProcessor::FGOProblemDiagnostics& d) {
+#define FGO_DIAG_READ(name) \
+    if (!readPod(is, d.name)) return false;
+    FGO_PROBLEM_DIAGNOSTIC_SCALARS(FGO_DIAG_READ)
+#undef FGO_DIAG_READ
+    return readString(is, d.phase131_source_miss_mask_matching_key) &&
+           readString(is, d.phase127_failure) &&
+           readString(is, d.phase129_configuration_failure) &&
+           readString(is, d.phase128_header_status) &&
+           readString(is, d.phase131_configuration_failure) &&
+           readString(is, d.phase135_configuration_failure) &&
+           readStringCountMap(is, d.phase127_failure_counts) &&
+           readStringCountMap(is, d.phase129_glonass_local_miss_counts) &&
+           readStringCountMap(is, d.phase131_failure_counts) &&
+           readSignalDiagMap(is, d.tdcp_signal_diagnostics);
+}
+
 void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) {
     writeVec(os, p.epochs);
     writeBoolVec(os, p.clock_jumps);
@@ -2841,7 +3097,7 @@ void writeProblem(std::ostream& os, const libgnss::FGOProcessor::FGOProblem& p) 
     writeVec(os, p.double_difference_carrier_factors);
     writeVec(os, p.excluded_double_difference_carrier_factors);
     writeVec(os, p.ambiguity_between_factors);
-    writePod(os, p.diagnostics);
+    writeProblemDiagnostics(os, p.diagnostics);
 }
 
 bool readProblem(std::istream& is, libgnss::FGOProcessor::FGOProblem& p) {
@@ -2862,7 +3118,7 @@ bool readProblem(std::istream& is, libgnss::FGOProcessor::FGOProblem& p) {
            readVec(is, p.double_difference_carrier_factors) &&
            readVec(is, p.excluded_double_difference_carrier_factors) &&
            readVec(is, p.ambiguity_between_factors) &&
-           readPod(is, p.diagnostics);
+           readProblemDiagnostics(is, p.diagnostics);
 }
 
 struct FileId {
@@ -2889,7 +3145,7 @@ FileId statFile(const std::string& path) {
 // vector, new factor field, ...) -- an old cache then fails the magic/version
 // check in load() below and is rebuilt instead of misread.
 constexpr uint32_t kMagic = 0x50434647u;  // "PCFG" (problem-cache fgo)
-constexpr uint32_t kVersion = 10u;
+constexpr uint32_t kVersion = 11u;
 constexpr std::size_t kBuilderFingerprintBytes = 512u;
 
 struct Fingerprint {
