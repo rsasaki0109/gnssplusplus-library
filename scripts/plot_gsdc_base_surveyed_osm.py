@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""GSDC base-surveyed dev routes on OpenStreetMap.
+"""GSDC base-surveyed dev routes on OpenStreetMap with zoom insets.
 
 2x2 OpenStreetMap basemaps, one per dev route, overlaying the ground truth
-and the base-surveyed native FGO trajectory.
+and the base-surveyed native FGO trajectory, with a zoom inset at each
+route's worst horizontal-error epoch.
 
 Predictions/truth are submission CSVs with UnixTimeMillis, LatitudeDegrees,
 LongitudeDegrees. Tile usage respects the OSM tile policy (descriptive
-User-Agent, one zoom per route). Attribution: (c) OpenStreetMap contributors.
+User-Agent). Attribution: (c) OpenStreetMap contributors.
 """
 from __future__ import annotations
 
 import argparse
+import csv
 import io
 import math
 import urllib.request
@@ -26,6 +28,15 @@ TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
 USER_AGENT = "gnssplusplus-library/1.0 (GSDC research figure)"
 TRUTH_COLOR = "#555555"
 FIX_COLOR = "#1a7f37"
+R = 6371008.8
+
+
+def haversine(lat1, lon1, lat2, lon2):
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * R * math.asin(min(1.0, math.sqrt(a)))
 
 
 def lonlat_to_world(lat, lon, zoom):
@@ -63,15 +74,14 @@ def build_basemap(lat_min, lat_max, lon_min, lon_max, zoom):
 
 
 def read_latlon(path):
-    import csv
-    lat, lon = [], []
+    data = {}
     with open(path, newline="") as fh:
         for row in csv.DictReader(fh):
             if not row.get("LatitudeDegrees"):
                 continue
-            lat.append(float(row["LatitudeDegrees"]))
-            lon.append(float(row["LongitudeDegrees"]))
-    return np.array(lat), np.array(lon)
+            data[int(row["UnixTimeMillis"])] = (
+                float(row["LatitudeDegrees"]), float(row["LongitudeDegrees"]))
+    return data
 
 
 def to_px(lat, lon, zoom):
@@ -83,20 +93,41 @@ def to_px(lat, lon, zoom):
     return np.asarray(xs), np.asarray(ys)
 
 
+def draw_tracks(ax, truth, pred, zoom, lw=1.8):
+    for data, color, width, label in (
+        (truth, TRUTH_COLOR, lw * 2.2, "Ground truth"),
+        (pred, FIX_COLOR, lw, "base-surveyed"),
+    ):
+        values = list(data.values())
+        lat = [v[0] for v in values]
+        lon = [v[1] for v in values]
+        xs, ys = to_px(lat, lon, zoom)
+        ax.plot(xs, ys, color=color, lw=width, alpha=0.9, label=label, zorder=3)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--routes", nargs="+", required=True, help="name:pred.csv:truth.csv")
     ap.add_argument("--output", type=Path, required=True)
+    ap.add_argument("--inset-span-m", type=float, default=110.0)
     ap.add_argument("--dpi", type=int, default=150)
     args = ap.parse_args()
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 15))
     for ax, spec in zip(axes.ravel(), args.routes):
         name, pred_path, truth_path = spec.split(":")
-        tlat, tlon = read_latlon(truth_path)
-        plat, plon = read_latlon(pred_path)
-        all_lat = np.concatenate([tlat, plat])
-        all_lon = np.concatenate([tlon, plon])
+        truth = read_latlon(truth_path)
+        pred = read_latlon(pred_path)
+        keys = sorted(set(truth) & set(pred))
+        errs = {k: haversine(*pred[k], *truth[k]) for k in keys}
+        worst_key = max(errs, key=errs.get) if errs else None
+
+        tlat = [v[0] for v in truth.values()]
+        tlon = [v[1] for v in truth.values()]
+        plat = [v[0] for v in pred.values()]
+        plon = [v[1] for v in pred.values()]
+        all_lat = np.array(tlat + plat)
+        all_lon = np.array(tlon + plon)
         pad = 0.05
         dlat = max((all_lat.max() - all_lat.min()) * pad, 1e-4)
         dlon = max((all_lon.max() - all_lon.min()) * pad, 1e-4)
@@ -106,12 +137,7 @@ def main():
                                         all_lon.min() - dlon, all_lon.max() + dlon, zoom)
         w, h = base.size
         ax.imshow(np.asarray(base), extent=[ox, ox + w, oy + h, oy])
-        for lat, lon, color, lw, label in (
-            (tlat, tlon, TRUTH_COLOR, 4.0, "Ground truth"),
-            (plat, plon, FIX_COLOR, 1.8, "base-surveyed"),
-        ):
-            xs, ys = to_px(lat, lon, zoom)
-            ax.plot(xs, ys, color=color, lw=lw, alpha=0.9, label=label, zorder=3)
+        draw_tracks(ax, truth, pred, zoom)
         ax.set_xlim(ox, ox + w)
         ax.set_ylim(oy + h, oy)
         ax.set_aspect("equal")
@@ -119,6 +145,26 @@ def main():
         ax.set_yticks([])
         ax.set_title(name, fontsize=16, fontweight="bold")
         ax.legend(fontsize=11, loc="upper right", framealpha=0.9)
+
+        if worst_key is not None:
+            clat, clon = truth[worst_key]
+            span = args.inset_span_m
+            idlat = span / 111320.0
+            idlon = span / (111320.0 * math.cos(math.radians(clat)))
+            inset, izoom, ix, iy = build_basemap(
+                clat - idlat, clat + idlat, clon - idlon, clon + idlon, 18)
+            iw, ih = inset.size
+            axi = ax.inset_axes([0.60, 0.03, 0.37, 0.37])
+            axi.imshow(np.asarray(inset), extent=[ix, ix + iw, iy + ih, iy])
+            draw_tracks(axi, truth, pred, izoom, lw=1.3)
+            axi.set_xlim(ix, ix + iw)
+            axi.set_ylim(iy + ih, iy)
+            axi.set_aspect("equal")
+            axi.set_xticks([])
+            axi.set_yticks([])
+            axi.set_title(f"zoom {span:.0f} m (worst {errs[worst_key]:.2f} m)",
+                          fontsize=9)
+
     fig.text(0.995, 0.01, "(c) OpenStreetMap contributors", ha="right", va="bottom",
              fontsize=10, bbox=dict(boxstyle="round", fc="white", ec="#999999", alpha=0.85))
     args.output.parent.mkdir(parents=True, exist_ok=True)
