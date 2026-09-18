@@ -1953,12 +1953,22 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
                     if (!solution.allFinite()) {
                         return false;
                     }
-                    for (int r = 0; r < candidate_count; ++r) {
-                        covariance_m2(r, c) = solution(candidate_state_cols[r]);
-                    }
+                for (int r = 0; r < candidate_count; ++r) {
+                    covariance_m2(r, c) = solution(candidate_state_cols[r]);
                 }
+            }
                 covariance_m2 =
                     0.5 * (covariance_m2 + covariance_m2.transpose());
+                // Mirror the dense path's non-positive-variance rejection.
+                // The shifted sparse inverse can still yield a non-finite or
+                // indefinite ambiguity block; feeding that to lambdaSearch
+                // produces undefined quadratic forms.
+                for (int c = 0; c < candidate_count; ++c) {
+                    const double diagonal = covariance_m2(c, c);
+                    if (!std::isfinite(diagonal) || diagonal <= 0.0) {
+                        return false;
+                    }
+                }
             }
 
             auto solve_candidate_subset = [&](std::size_t subset_size) -> bool {
