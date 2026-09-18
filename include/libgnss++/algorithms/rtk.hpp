@@ -679,10 +679,13 @@ public:
         /// Doppler/adaptive-noise combination. It never feeds the predicted
         /// position back into the float filter or ambiguity state.
         bool enable_fixed_anchor_float_stabilization = false;
-        /// Extend the same causal fixed-anchor stabilization to the SPP
+        /// Apply the same causal fixed-anchor stabilization to the SPP
         /// fallback output (status SINGLE/SPP), which otherwise bypasses the
-        /// FLOAT stabilizer. Opt-in and default off; the anchor-age / fit-RMS
-        /// / disagreement safeguards are identical.
+        /// FLOAT stabilizer. Independent of
+        /// enable_fixed_anchor_float_stabilization: enabling this alone still
+        /// records fixed-epoch anchors and stabilizes SPP output, without
+        /// transforming FLOAT output. Opt-in and default off; the anchor-age
+        /// / fit-RMS / disagreement safeguards are identical.
         bool enable_fixed_anchor_single_stabilization = false;
 
         /// M5 measurement-neutral single-difference TDCP-vs-Doppler

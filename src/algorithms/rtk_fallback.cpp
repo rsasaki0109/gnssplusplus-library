@@ -201,7 +201,8 @@ void RTKProcessor::recordFixedEpoch(const PositionSolution& solution) {
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
-    if (!rtk_config_.enable_fixed_anchor_float_stabilization ||
+    if ((!rtk_config_.enable_fixed_anchor_float_stabilization &&
+         !rtk_config_.enable_fixed_anchor_single_stabilization) ||
         !solution.position_ecef.allFinite()) {
         return;
     }
@@ -227,7 +228,8 @@ void RTKProcessor::recordFixedEpoch(const PositionSolution& solution) {
 }
 
 void RTKProcessor::stabilizeFloatOutput(PositionSolution& solution) const {
-    if (solution.status != SolutionStatus::FLOAT) {
+    if (!rtk_config_.enable_fixed_anchor_float_stabilization ||
+        solution.status != SolutionStatus::FLOAT) {
         return;
     }
     stabilizeNonFixedOutput(
@@ -262,9 +264,8 @@ void RTKProcessor::stabilizeNonFixedOutput(
     double position_covariance_trace_m2,
     const rtk_float_stabilizer::Config& config,
     const rtk_float_stabilizer::Config* fallback_config) const {
-    if (!rtk_config_.enable_fixed_anchor_float_stabilization) {
-        return;
-    }
+    // Callers gate on their own enable flag (float vs single/SPP); anchors are
+    // recorded while either is enabled.
     const double time_s =
         static_cast<double>(solution.time.week) * 604800.0 +
         solution.time.tow;
