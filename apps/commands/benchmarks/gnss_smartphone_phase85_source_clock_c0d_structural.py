@@ -417,11 +417,14 @@ def _failure(output_root: Path, routes: dict[str, Any], errors: list[dict[str, A
 
 
 def run_matrix(output_root: Path = DEFAULT_OUTPUT) -> dict[str, Any]:
-    verify_freeze()
+    # Refuse a nonempty output root before touching the frozen contract so the
+    # cheap destructive-write guard does not depend on the git-ignored
+    # reproducibility cache that verify_freeze() reads.
     output_root = output_root.resolve()
     reject_forbidden(output_root)
     if output_root.exists() and (not output_root.is_dir() or any(output_root.iterdir())):
         raise fail(f"refusing to overwrite nonempty output: {output_root}")
+    verify_freeze()
     expected_rows = _phase78_domain_rows()
     output_root.mkdir(parents=True, exist_ok=True)
     routes: dict[str, Any] = {}

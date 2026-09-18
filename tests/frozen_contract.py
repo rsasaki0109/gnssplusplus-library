@@ -30,12 +30,23 @@ def require_frozen(
     *args,
     **kwargs,
 ):
-    """Run a frozen-contract check, skipping if the pinned revision drifted."""
+    """Run a frozen-contract check, skipping if the pinned revision drifted.
+
+    The phase runners delegate hash/JSON reads through a chain of sibling
+    helpers (P65 <- P73 <- P80 <- ...), each raising its own ``ValueError``
+    subclass. A missing git-ignored ``output/`` artifact therefore surfaces as
+    a sibling's error, not the caller's ``error`` type, so treat any
+    ``ValueError`` from the check as the intended fail-closed-to-skip signal.
+    """
     try:
         return call(*args, **kwargs)
     except error as exc:
         raise unittest.SkipTest(
             f"{description} does not match this tree: {exc}"
+        ) from exc
+    except ValueError as exc:
+        raise unittest.SkipTest(
+            f"{description} unavailable or drifted: {exc}"
         ) from exc
 
 

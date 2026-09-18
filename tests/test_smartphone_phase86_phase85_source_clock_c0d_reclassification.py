@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from frozen_contract import require_frozen
+from frozen_contract import require_files, require_frozen
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,6 +57,7 @@ class Phase86ReclassificationTests(unittest.TestCase):
     def test_summary_active_solve_gate_observations_are_the_formal_no_go(self) -> None:
         route = RUNNER.ROUTES[0]
         summary_path = ROOT / json.loads(FREEZE.read_text(encoding="utf-8"))["candidate_artifact_pins"][route]["candidate_run1"]["summary"]["path"]
+        require_files("Phase86 sealed Phase85 summary", [summary_path])
         diagnostics = RUNNER.validate_summary(summary_path, route, RUNNER.DOMAIN_ROWS[route])
         graph = diagnostics["graph"]
         self.assertTrue(diagnostics["graph"]["converged"])

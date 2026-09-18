@@ -821,11 +821,14 @@ def _failed_gate_details(route_reports: dict[str, Any], gates: dict[str, bool]) 
 
 
 def run_reclassification(output_root: Path = OUTPUT_ROOT) -> dict[str, Any]:
-    freeze = verify_freeze()
+    # Refuse a nonempty output root before touching the frozen contract so the
+    # destructive-write guard does not depend on the git-ignored Phase85
+    # artifacts that verify_freeze() reads.
     output_root = output_root.resolve()
     reject_forbidden(output_root)
     if output_root.exists() and (not output_root.is_dir() or any(output_root.iterdir())):
         raise fail(f"refusing to overwrite nonempty Phase86 output: {output_root}")
+    freeze = verify_freeze()
     counters: dict[str, int] = {"phase86_freeze": 1, "phase86_manifest": 1, "phase85_retry_manifest": 0, "phase85_v2_aggregate": 0, "phase85_v2_output_manifest": 0, "candidate_submission": 0, "candidate_summary": 0}
     # The freeze and Phase86 manifest were read by verify_freeze.  Their
     # one-read counts are explicit above; all Phase85 artifacts below are read
