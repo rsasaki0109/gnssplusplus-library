@@ -1,0 +1,53 @@
+name: macOS (advisory)
+
+# GitHub-hosted macOS runners intermittently run 10-50x slower than the ubuntu
+# runners, and their ccache is frequently a cold miss, so a full build can hang
+# for an hour. A job-level timeout-minutes cancellation marks the whole run
+# cancelled even when the leg is continue-on-error, which turns the develop/PR
+# CI red for an advisory-only signal. Keep the macOS compile/test coverage but
+# run it outside the blocking CI workflow, on demand and weekly.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-advisory-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    # Advisory: a stuck/degraded runner must not hold the run for hours.
+    timeout-minutes: 180
+    steps:
+    - uses: actions/checkout@v7
+
+    - name: Prepare build
+      uses: ./.github/actions/prepare-build
+      with:
+        os-name: macos-latest
+        compiler: clang
+        build-type: Release
+        install-docs-deps: "true"
+
+    - name: Show ccache stats
+      run: ccache -s
+
+    - name: Run core tests
+      run: bash scripts/ci/run_core_tests.sh
+
+    - name: Upload CTest diagnostics
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: ctest-diagnostics-macos-latest-clang
+        path: |
+          build/CMakeCache.txt
+          build/Testing/Temporary/LastTest.log
+          build/Testing/Temporary/LastTestsFailed.log
+        if-no-files-found: ignore
