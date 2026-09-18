@@ -436,7 +436,10 @@ void applyPresetDefaults(Options& options, const char* program_name) {
     if (options.preset == "real-data-fixed") {
         applyRealDataFloatPreset(options);
         options.fix_ambiguities = true;
-        options.lambda_ratio_threshold = 1.5;
+        // Ratio 3.0 (inuex35 default): at 1.5 the fixed-lag AR accepted
+        // ~50% wrong fixes (3D > 0.5 m); 3.0 gives cm-level fixes at a lower
+        // but trustworthy fix rate.
+        options.lambda_ratio_threshold = 3.0;
         options.min_fixed_ambiguities = 6;
         options.max_lambda_ambiguities = 16;
         options.fixed_ambiguity_sigma_m = 0.005;
