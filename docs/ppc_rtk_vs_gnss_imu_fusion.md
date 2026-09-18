@@ -228,8 +228,12 @@ fix-and-hold), not a looser ratio.
 **Carrier-only Eigen caveat**: the Eigen batch path (no `--imu`) still
 reports FIX 100% with ~93% wrong fixes even with LAMBDA ratio 29.7 and a
 tighter carrier sigma — its integer-constrained batch solution is
-meter-level, so its FIXED status is not trustworthy. The fixed-lag path is
-the one with genuine fixes.
+meter-level, so its FIXED status is not trustworthy. Pass
+`--report-batch-fix-as-float` to report FLOAT instead (opt-in; the batch
+FIXED behaviour is covered by the frozen tests), or use
+`--epoch-lambda-fixed-output`, whose per-epoch conditional update does yield
+cm-level fixes (wrong-fix 2.8% on tokyo1). The fixed-lag path is the one
+with genuine fixes at a useful rate.
 
 Of the other upstream levers, NHC/ZUPT factors (`--nhc --zupt`),
 variance-ranked partial AR, ambiguity-between factors and a 30-cycle
