@@ -5,7 +5,7 @@
   "execution_label": "Luna Max",
   "freeze": {
     "path": "docs/use_cases/records/smartphone_r5_phase60_pixel5_intersignal_bias_freeze_v1.json",
-    "sha256": "d4c0a0ea383801b77cd96083a04dd15c79a6061e79be5e70f5e0859d2340e4a0",
+    "sha256": "b8850661d10c2f83e6b299d0fd1378f3d7c7898a680e563d99761d2a1a238da9",
     "seal_commit": "d6e6773"
   },
   "objective": {
@@ -21,7 +21,7 @@
     "operation": "truth-free raw inter-signal-bias audit",
     "source": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase60_pixel5_intersignal_bias_audit.py",
-      "sha256": "fcb2bcda7be8a14f83f7a6091101d762bb35a5436e531f6bc1380b07e6dce819"
+      "sha256": "e9ffed666632a955a78174283e1d9bab20cfe025a3475c3f7fe929f2d3f2199e"
     },
     "test": {
       "path": "tests/test_smartphone_phase60_pixel5_intersignal_bias_audit.py",

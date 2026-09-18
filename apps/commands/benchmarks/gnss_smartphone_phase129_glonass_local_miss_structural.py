@@ -28,9 +28,9 @@ BINARY = ROOT / "build/apps/gnss_fgo_imu_no_base"
 AUDIT_COMMIT = "4e6634a694da571b15ab7a98d001756cd93d8e75"
 AUDIT_SHA256 = "385e9a531881d9ac7fdfe4f7bfba8b9eabcab074a7e4635a14d1d7b2112e881a"
 FREEZE_COMMIT = "4b1c32eae1d47f80c32e2ea73a885e179fe5389b"
-FREEZE_SHA256 = "bdc4f3f395d3556e8f791fff202197f0a9ed302e6f054059e8e477e5da01e73c"
+FREEZE_SHA256 = "3bdc75dedb6a4bfc101bd9907acff6f75059327e1123171d0b4ba34cee507475"
 IMPLEMENTATION_COMMIT = "05e57d5008320734de93c763ff84ccd31f755805"
-TARGET_BINARY_SHA256 = "5c81e9b8f83843e16550553c6add5143fde32ba105cd5f1904b8f4b6cd4b9c4b"
+TARGET_BINARY_SHA256 = "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888"
 
 PHASE126_SELECTOR = "--native-phase126-raw-base-source-complete"
 PHASE127_SELECTOR = "--native-phase127-glonass-channel-provenance"
@@ -63,15 +63,15 @@ IMPLEMENTATION_SOURCES = {
     "src/algorithms/source_pseudorange_miss_mask.cpp": ROOT / "src/algorithms/source_pseudorange_miss_mask.cpp",
 }
 SOURCE_SHA256 = {
-    "apps/native/gnss_fgo_imu_no_base.cpp": "3ad1c235721a2ee0b550a01b2446e300d96fa87fd78bfadc6ab7600beb501547",
-    "include/libgnss++/algorithms/fgo_config.hpp": "616271e69ec8c1e18ec3da14a710d0716c1c721f44c26b6c46ec77cdc60f1dec",
-    "include/libgnss++/algorithms/fgo.hpp": "9d0a966e702b8db3f1498bcf34603173968c685e7ab2260197cc26c44e8bdd36",
-    "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "f6e5e9c1436138e9b0ef943d8b8fa68f3deca51bca650bab71526703d3ad0272",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec",
+    "include/libgnss++/algorithms/fgo_config.hpp": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff",
+    "include/libgnss++/algorithms/fgo.hpp": "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6",
+    "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "87a7d86a01b4f0c43abda39f7f22f2d73bee502228b2cd05802a3e2820e78566",
     "include/libgnss++/algorithms/phase129_glonass_local_miss.hpp": "c3dc7bc699a0bf95d960b045ec08887f13ba757ddccb32ac5dda4354b72d4abe",
-    "src/algorithms/base_pseudorange_compensation.cpp": "b6c6a9b6a2f29c66c4f2abecbe8d7e56c4d7cf81e9c145273c3ea1255da6eb9d",
-    "src/algorithms/fgo_internal.hpp": "c648f8fd1332a096a771e39e16e2d07aaed38d12345f7917431bb6b32e3fe07d",
-    "src/algorithms/fgo_problems.cpp": "b01c9c48f9bdfd470be8aba3bab5247923be4d0ec52d5bc1a3c26f78be139a9c",
-    "src/algorithms/source_pseudorange_miss_mask.cpp": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
+    "src/algorithms/base_pseudorange_compensation.cpp": "716ce1daa694b540b55687255097fe4de2fcdbbae0351c4d183e831ed2753ad2",
+    "src/algorithms/fgo_internal.hpp": "175b6cbe699c455793af1eb13ad6fdab933b1d9770d9ee7ef5b44318e29dcaed",
+    "src/algorithms/fgo_problems.cpp": "5802eb24c34c3bc954ffd4bdf980bb51a59124b64379795b7867518c577994e5",
+    "src/algorithms/source_pseudorange_miss_mask.cpp": "ed44bcf156147d4ff612cbe939c99371a998885ada3f206bb9657f2f72bb0591",
 }
 
 

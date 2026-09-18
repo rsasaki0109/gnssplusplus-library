@@ -6,7 +6,7 @@
   "freeze": {
     "path": "docs/use_cases/records/smartphone_r5_phase126_raw_base_compound_structural_contract_freeze_v1.json",
     "commit": "5d00daf56afb6fe6b6e1f01b4a1213c287f671db",
-    "sha256": "196a9ffd1ecc909f8a34bbf8b9107be216a32bbd128fa54c94ed8a588ec7cc7b",
+    "sha256": "f8a97052f6226be3983ded3462c8a05b07ad179654a6525015e704d9d12fe99e",
     "raw_execution_authorized_before_manifest": false
   },
   "contract_audit": {
@@ -32,19 +32,19 @@
     "additional_frequency_selector": false,
     "no_fallback": true,
     "source_sha256": {
-      "apps/native/gnss_fgo_imu_no_base.cpp": "1c9340a6caf05e16262c947c88d1e286baf3715f93f77a65f0ce34f38fefa95a",
-      "include/libgnss++/algorithms/fgo_config.hpp": "a50ccbce9b9fdd5b9129edc8e8612286af83697e2d6eeef0d24fb2cd16c3bb96",
-      "include/libgnss++/algorithms/fgo.hpp": "b2224fd4cbe6958eed491ae0551485c4cdb86ef8cd5c5a03f5572f1c41400b86",
-      "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "7f867e549d554230a2fe8c9a46e129ca3db69361ab14ea9b662ca9a3e79f4900",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec",
+      "include/libgnss++/algorithms/fgo_config.hpp": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff",
+      "include/libgnss++/algorithms/fgo.hpp": "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6",
+      "include/libgnss++/algorithms/base_pseudorange_compensation.hpp": "87a7d86a01b4f0c43abda39f7f22f2d73bee502228b2cd05802a3e2820e78566",
       "include/libgnss++/algorithms/phase126_raw_base_compound.hpp": "8e7c18260905cd8c36149cb55d97cd4aa40c6bae2649202f57a5693f728e6f62",
-      "src/algorithms/base_pseudorange_compensation.cpp": "4add96387d9fc2277b57da78cc7a0623ec97d3f4f6cd6d10a97c2f97beb95c49",
+      "src/algorithms/base_pseudorange_compensation.cpp": "716ce1daa694b540b55687255097fe4de2fcdbbae0351c4d183e831ed2753ad2",
       "src/algorithms/phase126_raw_base_compound.cpp": "5bbb276c2c22b2d9d2a27d90746cbb2451b26d8cf87b339a36c50a7fe7dc513d",
-      "src/algorithms/source_pseudorange_miss_mask.cpp": "291ff2591dbd62ecba92c24d1d74c686274568f2af6182bc4dc52f237b0b9946",
-      "src/algorithms/fgo_problems.cpp": "1c1c24699e82945b7ee71f036e4cf969b0bd303ab49205d998ec5338b09714b4"
+      "src/algorithms/source_pseudorange_miss_mask.cpp": "ed44bcf156147d4ff612cbe939c99371a998885ada3f206bb9657f2f72bb0591",
+      "src/algorithms/fgo_problems.cpp": "5802eb24c34c3bc954ffd4bdf980bb51a59124b64379795b7867518c577994e5"
     },
     "binary": {
       "path": "build/apps/gnss_fgo_imu_no_base",
-      "sha256": "5dc5a336ff605e418d42be957f3ec5ce5663744da77999b5acbf12f3ef440e70"
+      "sha256": "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888"
     }
   },
   "sealed_phase118_recipe": {
@@ -63,7 +63,7 @@
   "artifacts": {
     "validator": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase126_raw_base_compound_structural.py",
-      "sha256": "0d851e24eee695f6b9019e911d7699eaf074101823179930bcc8013445fff6e4"
+      "sha256": "fde99e2a63d87358b7b4223091845e310ae6e5689c9c85482e609a3733e54113"
     },
     "runner": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase126_raw_base_compound_structural_execute.py",

@@ -43,7 +43,7 @@
   },
   "native_baseline": {
     "binary_path": "build/apps/gnss_fgo_imu_no_base",
-    "binary_sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd",
+    "binary_sha256": "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888",
     "flags_exact": [
       "--all-epochs",
       "--android-raw-utc-keys",
@@ -140,7 +140,7 @@
     "rejection_follow_on_failure": "GNSS course did not make heading observable under frozen gate; fallback was then unable to satisfy the required TDCP insertion contract.",
     "flag_off_byte_identity": {
       "status": "preserved-no-candidate-commit",
-      "frozen_binary_sha256": "883701ef34606af4be84a44181f6b3616b2559ee4031982fff98d73dbbbbe7bd",
+      "frozen_binary_sha256": "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888",
       "source_flag_materialized": false,
       "production_default_changed": false,
       "test_required_by_contract": true

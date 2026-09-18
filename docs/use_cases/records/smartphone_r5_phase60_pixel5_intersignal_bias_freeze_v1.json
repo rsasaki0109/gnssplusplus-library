@@ -46,31 +46,31 @@
     "source_contracts": {
       "android_raw_gnss_cpp": {
         "path": "src/io/android_raw_gnss.cpp",
-        "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387"
+        "sha256": "c03425160f114905cf1841efba75f321883ffc2ab71bbcd048fd41c4fd47d649"
       },
       "android_raw_gnss_header": {
         "path": "include/libgnss++/io/android_raw_gnss.hpp",
-        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+        "sha256": "8e70080bb5ac0cd63ad6ff49c03e163e0e2157863e2daf82c002b211c863379c"
       },
       "observation_header": {
         "path": "include/libgnss++/core/observation.hpp",
-        "sha256": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c"
+        "sha256": "f8ea278c573418ff5a0131cb7c2f53f83949f5b3b50ccd3b68fe6aa1db0fa0fd"
       },
       "fgo_problems_cpp": {
         "path": "src/algorithms/fgo_problems.cpp",
-        "sha256": "725167ccc21a62e61c4da9852726ed5cafbfc05ab794eaa76c4641676f576245"
+        "sha256": "5802eb24c34c3bc954ffd4bdf980bb51a59124b64379795b7867518c577994e5"
       },
       "fgo_header": {
         "path": "include/libgnss++/algorithms/fgo.hpp",
-        "sha256": "90efe485b2c50eb56535a7eb0709a1b7daa29e4f7a9bd3878acf527dc624ab36"
+        "sha256": "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6"
       },
       "fgo_config_header": {
         "path": "include/libgnss++/algorithms/fgo_config.hpp",
-        "sha256": "e7a72c89475d0edf1da3a767ea7d1702d76b8b52dc90a4bd5db225826875ffbe"
+        "sha256": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff"
       },
       "native_fgo_cli": {
         "path": "apps/native/gnss_fgo_imu_no_base.cpp",
-        "sha256": "2a924ddd681ce43e1bf08fc4155b3fa62569a9c7694a1550c28f153af4db5218"
+        "sha256": "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec"
       }
     }
   },

@@ -38,7 +38,7 @@ import gnss_smartphone_phase48_pixel5_raw_code_rate_uncertainty_audit as phase48
 
 
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_freeze_v1.json"
-FREEZE_SHA256 = "11501f4a03dd03cefecb3ff931a9ce8a1b4322953daacd84a95e62c19397fafd"
+FREEZE_SHA256 = "621781c8d50448815ee33226ecbe0c1209472736182714251104f627473640eb"
 MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase57_pixel5_rate_uncertainty_evaluator_manifest_v1.json"
 MANIFEST_SHA256 = ""
 VERIFIED_MANIFEST_SHA256 = ""

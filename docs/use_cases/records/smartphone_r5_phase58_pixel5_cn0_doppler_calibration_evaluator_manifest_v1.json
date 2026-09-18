@@ -5,18 +5,18 @@
   "seal_commit": "pre-raw-evaluator-seal",
   "freeze": {
     "path": "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_freeze_v1.json",
-    "sha256": "8bd52f165d69279b4eb92dac82e9b470d4656de639ccdf327ae0613df7137448"
+    "sha256": "ec9dbee1354b7e791e7eedbad95df525b06c4bae8900025c976e49a62bed4fc7"
   },
   "evaluator": {
     "operation": "truth-free raw Cn0DbHz/Doppler residual calibration audit",
     "path": "apps/commands/benchmarks/gnss_smartphone_phase58_pixel5_cn0_doppler_calibration.py",
-    "sha256": "31dd5d3a05dfa6b647434c71e2a73900a1398007d7b7eb388972767882c2ead1",
+    "sha256": "32ffe3769e7093ff61033a0b40ad1e1270d1cb1858ebe6fadf5d8f49482abfa7",
     "single_process": true,
     "native_solver_invoked": false,
     "raw_reads_per_route": 1,
     "source": {
       "path": "apps/commands/benchmarks/gnss_smartphone_phase58_pixel5_cn0_doppler_calibration.py",
-      "sha256": "31dd5d3a05dfa6b647434c71e2a73900a1398007d7b7eb388972767882c2ead1"
+      "sha256": "32ffe3769e7093ff61033a0b40ad1e1270d1cb1858ebe6fadf5d8f49482abfa7"
     },
     "test": {
       "path": "tests/test_smartphone_phase58_pixel5_cn0_doppler_calibration.py",

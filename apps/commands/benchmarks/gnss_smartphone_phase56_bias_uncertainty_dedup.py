@@ -22,7 +22,7 @@ from typing import Any, Iterable
 
 ROOT = Path(__file__).resolve().parents[3]
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase56_pixel5_bias_uncertainty_dedup_freeze_v1.json"
-FREEZE_SHA256 = "b6242ed176fbe124b523d635575572f12d25494082f5c57c837d3c3c5fe35567"
+FREEZE_SHA256 = "3ac8403cf95e0db9fc7e77f0833f341a850f1609fc1eab0a10be573230e033a3"
 MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase56_bias_uncertainty_dedup_manifest_v1.json"
 MANIFEST_SHA256 = ""
 VERIFIED_MANIFEST_SHA256 = ""

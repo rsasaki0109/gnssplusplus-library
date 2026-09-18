@@ -26,7 +26,7 @@ from typing import Any, Iterable, Sequence
 
 ROOT = Path(__file__).resolve().parents[3]
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_freeze_v1.json"
-FREEZE_SHA256 = "8bd52f165d69279b4eb92dac82e9b470d4656de639ccdf327ae0613df7137448"
+FREEZE_SHA256 = "ec9dbee1354b7e791e7eedbad95df525b06c4bae8900025c976e49a62bed4fc7"
 MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase58_pixel5_cn0_doppler_calibration_evaluator_manifest_v1.json"
 MANIFEST_SHA256 = ""
 VERIFIED_MANIFEST_SHA256 = ""

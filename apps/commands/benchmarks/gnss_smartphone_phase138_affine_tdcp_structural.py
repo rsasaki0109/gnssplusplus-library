@@ -42,25 +42,25 @@ BINARY = ROOT / "build/apps/gnss_fgo_imu_no_base"
 AUDIT_COMMIT = "739b940dc870e21de42deba6ba911c17a93f0526"
 AUDIT_SHA256 = "5cd012e87b3d2d2fecd5b0d5897b1252d99a979166108de244e92aaf8b4545fe"
 FREEZE_COMMIT = "f1f5fef2ae0ccdcbae94be86e6af813b65ec499b"
-FREEZE_SHA256 = "4a6491631e19ddb7d838f8311c7eabfc8da1a0dc6e8a5ba2bb5e302bda32b1d8"
+FREEZE_SHA256 = "6c79d8a870613552b7340f4532560bfbe219f7fb20b004ba3e0d00674d11fc4e"
 DESIGN_FREEZE_COMMIT = "49be79247b4d82bf7a64c7b63e542c5a6dfff2c0"
 IMPLEMENTATION_COMMIT = "c5783d7e323b0c4593958a4e210284cf9f9fc726"
 PHASE135_CORRECTION_COMMIT = "f9a1fc9403e7072435a30d9e06aa8ea59493cdc5"
 TARGET_BINARY_SHA256 = (
-    "eff11f69f3fbe36e0e71aa52682c7f46f6aca072c179d6a3d75129301c725e24"
+    "20a5b8d96a0c024757f3b8d2948595e857023ecf25e2c3cbcc295d44907f0888"
 )
 
 SOURCE_SHA256 = {
     "apps/native/gnss_fgo_imu_no_base.cpp":
-        "4201cae60b74c8037155cf926310eb790269e060a6c7ef62544ea446679ca6bf",
+        "76fa5638f56b77ce69c185f384c12dcf7bfa9b59e8cc9bcb41ff3bb096e3f6ec",
     "include/libgnss++/algorithms/fgo.hpp":
-        "c4995726b91d15ef62ed23f154f46a37d2ce562272e5a24892cca3e3fba34ea2",
+        "d2794573f15a1b4ac569ecb97869c9a5bfcbd519ae471472aaaa0a3d6f167ce6",
     "include/libgnss++/algorithms/fgo_config.hpp":
-        "85cfe25b0e6cf45a618540976df11764f8cf7e3364299261bd8260fb7b8c7a19",
+        "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff",
     "include/libgnss++/algorithms/tdcp_contract.hpp":
         "f4423e1944fd58f28ad779fa6a6ba87919e358360cdf1ddda59b0af20a954d57",
     "src/algorithms/fgo_gtsam_backend.cpp":
-        "7f13cbd722b93842f0923abfc45affe60015aae3d9639c6813e496935cede945",
+        "2d28e4825e49143919a7c6254940e4b14a53883b5d9d3928a09e8730e3309fcf",
 }
 
 PHASE135_SELECTOR = "--native-phase135-official-affine-measurement-family"

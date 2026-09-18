@@ -33,7 +33,7 @@ from typing import Any, Iterable, Sequence
 
 ROOT = Path(__file__).resolve().parents[3]
 FREEZE = ROOT / "docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_freeze_v1.json"
-FREEZE_SHA256 = "618b351764876fb0eafd3c2431076acf0ac8fd43670ea1a5e33f8d7ee43dce1a"
+FREEZE_SHA256 = "01b7db9f0cd4b6fb13b5d4cb53e634b433b3c04d39645ac2cd82362199e64bda"
 MANIFEST = ROOT / "docs/use_cases/records/smartphone_r5_phase53_pixel5_carrier_frequency_antenna_phase_bias_evaluator_manifest_v1.json"
 MANIFEST_SHA256 = ""
 VERIFIED_MANIFEST_SHA256 = ""

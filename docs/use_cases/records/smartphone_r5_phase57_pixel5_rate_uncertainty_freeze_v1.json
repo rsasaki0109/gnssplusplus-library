@@ -50,27 +50,27 @@
     "source_contracts": {
       "android_raw_gnss_cpp": {
         "path": "src/io/android_raw_gnss.cpp",
-        "sha256": "1bb9369e7db651e53fddab2a92c2f217512667bb349f70aa52934aeb80cbf387"
+        "sha256": "c03425160f114905cf1841efba75f321883ffc2ab71bbcd048fd41c4fd47d649"
       },
       "android_raw_gnss_header": {
         "path": "include/libgnss++/io/android_raw_gnss.hpp",
-        "sha256": "e833570103a521b9e051086b6ea75192ae3a575b83eee33d978143eaf279c52c"
+        "sha256": "8e70080bb5ac0cd63ad6ff49c03e163e0e2157863e2daf82c002b211c863379c"
       },
       "observation_header": {
         "path": "include/libgnss++/core/observation.hpp",
-        "sha256": "9ba79a44fd1f8c4f4f7b7f8707a119c350174bf850b226ff89e587c55f8abd2c"
+        "sha256": "f8ea278c573418ff5a0131cb7c2f53f83949f5b3b50ccd3b68fe6aa1db0fa0fd"
       },
       "fgo_problems_cpp": {
         "path": "src/algorithms/fgo_problems.cpp",
-        "sha256": "41c0fa5db6a745562342061c9cd6bcf08f74e02038580869a09294a325f05ca1"
+        "sha256": "5802eb24c34c3bc954ffd4bdf980bb51a59124b64379795b7867518c577994e5"
       },
       "fgo_config_header": {
         "path": "include/libgnss++/algorithms/fgo_config.hpp",
-        "sha256": "627fbc8585d6f6a384d9ea10b2670e4a9889dc20ba89a3427ed735eb61a6a358"
+        "sha256": "eed0d551ebfc8eec73ff3abb6cfe70ac3a9f7669476d661c24596b05baf8c9ff"
       },
       "gnss_fgo_cli": {
         "path": "apps/native/gnss_fgo.cpp",
-        "sha256": "3f5382e760368c9232e68220f00dfa1dbdaf15863737f0990a694e29a9c8243c"
+        "sha256": "4af9587857f279eb1f6bf265fb99b30e05c0e8ffd5076087433bbcabc9c9fb67"
       },
       "doppler_contract": {
         "path": "include/libgnss++/algorithms/doppler_contract.hpp",
@@ -78,7 +78,7 @@
       },
       "observable_upstream_preprocessing": {
         "path": "include/libgnss++/algorithms/observable_upstream_preprocessing.hpp",
-        "sha256": "5d85cfd82519b6aa3492af8cffb8b895935db7eb50f3a4c6001ab72d8ce13f54"
+        "sha256": "4146a5f4897744fc7b88fc5bd6f71fbf4e6547cb5e20f91fa7f6bf98a4e0ce96"
       }
     }
   },
