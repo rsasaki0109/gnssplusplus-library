@@ -84,5 +84,53 @@ TEST(RTKFloatStabilizerTest, DoesNotArmOutsideShortBaselineRegion) {
     EXPECT_FALSE(shouldArm(9000.0, 1000.0));
 }
 
+TEST(RTKFloatStabilizerTest, PredictsConstantAccelerationWithQuadraticFit) {
+    std::deque<FixedAnchor> anchors;
+    const Eigen::Vector3d origin(1.0e6, 2.0e6, 3.0e6);
+    const Eigen::Vector3d velocity(4.0, -2.0, 0.5);
+    const Eigen::Vector3d acceleration(2.0, -2.0, 1.0);
+    for (int i = 0; i <= 20; ++i) {
+        const double tau = static_cast<double>(i);
+        anchors.push_back(
+            {1000.0 + tau,
+             origin + velocity * tau + 0.5 * acceleration * tau * tau});
+    }
+    const double tau_pred = 21.0;
+    const Eigen::Vector3d expected =
+        origin + velocity * tau_pred +
+        0.5 * acceleration * tau_pred * tau_pred;
+    const Eigen::Vector3d far_position = expected + Eigen::Vector3d(50.0, 50.0, 50.0);
+
+    // The constant-velocity linear fit cannot follow the acceleration, so the
+    // turn/acceleration safeguard rejects it.
+    EXPECT_FALSE(predict(anchors, 1021.0, far_position, 25.0).has_value());
+
+    Config quadratic;
+    quadratic.fit_degree = 2;
+    const auto predicted = predict(anchors, 1021.0, far_position, 25.0, quadratic);
+    ASSERT_TRUE(predicted.has_value());
+    EXPECT_NEAR((*predicted - expected).norm(), 0.0, 1e-6);
+}
+
+TEST(RTKFloatStabilizerTest, QuadraticFitRespectsDisagreementFloor) {
+    std::deque<FixedAnchor> anchors;
+    const Eigen::Vector3d origin(1.0e6, 2.0e6, 3.0e6);
+    const Eigen::Vector3d velocity(4.0, -2.0, 0.5);
+    const Eigen::Vector3d acceleration(2.0, -2.0, 1.0);
+    for (int i = 0; i <= 20; ++i) {
+        const double tau = static_cast<double>(i);
+        anchors.push_back(
+            {1000.0 + tau,
+             origin + velocity * tau + 0.5 * acceleration * tau * tau});
+    }
+    const Eigen::Vector3d near_position =
+        origin + velocity * 21.0 + 0.5 * acceleration * 441.0 +
+        Eigen::Vector3d(1.0, 0.0, 0.0);
+
+    Config quadratic;
+    quadratic.fit_degree = 2;
+    EXPECT_FALSE(predict(anchors, 1021.0, near_position, 25.0, quadratic).has_value());
+}
+
 }  // namespace
 }  // namespace libgnss::rtk_float_stabilizer

@@ -5174,15 +5174,11 @@ TEST(FGOGtsamPhase99SolverSelectorTest,
     EXPECT_EQ(result.diagnostics.selected_elimination_function,
               "EliminatePreferCholesky");
     EXPECT_TRUE(result.diagnostics.converged);
-    EXPECT_TRUE(result.diagnostics.native_raw_p_no_doppler_graph_enabled);
-    EXPECT_DOUBLE_EQ(
-        result.diagnostics
-            .native_raw_p_no_doppler_unobserved_clock_gauge_sigma_m,
-        1.0e6);
-    EXPECT_EQ(
-        result.diagnostics
-            .native_raw_p_no_doppler_unobserved_clock_gauge_components,
-        6U);
+    // This lane stages the raw-D initializer on the generic GNSS-first
+    // velocity graph, not the Phase164 raw-P no-Doppler graph (which would
+    // require the dedicated seed adapter and an empty generic Doppler
+    // family). Its provenance must therefore stay false.
+    EXPECT_FALSE(result.diagnostics.native_raw_p_no_doppler_graph_enabled);
 }
 
 FGOProcessor::FGOPhase143TerminationDiagnostics makePhase143TestTelemetry(

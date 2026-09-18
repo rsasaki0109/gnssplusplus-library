@@ -2832,6 +2832,49 @@ TEST(FGOTest, FixedAmbiguityPassSnapsIntegerCarrierPhaseStates) {
     }
 }
 
+TEST(FGOTest, ReportBatchFixAsFloatRelabelsWithoutChangingPositions) {
+    FGOProcessor::FGOConfig config;
+    config.max_iterations = 12;
+    config.convergence_threshold_m = 1e-8;
+    config.use_motion_factors = false;
+    config.fix_ambiguities = true;
+    config.use_lambda_ambiguity_fix = true;
+    config.carrier_phase_sigma_m = 0.01;
+    config.ambiguity_prior_sigma_m = 1000.0;
+    config.fixed_ambiguity_sigma_m = 1e-4;
+    config.ambiguity_fix_max_fractional_cycles = 0.2;
+    config.lambda_ratio_threshold = 1.5;
+    config.min_fixed_ambiguities = 4;
+
+    const auto baseline =
+        FGOProcessor(config).optimizeProblem(makeSyntheticProblem(false, true));
+    ASSERT_EQ(baseline.solution.size(), 2u);
+    EXPECT_EQ(baseline.solution.solutions[0].status, SolutionStatus::FIXED);
+    EXPECT_EQ(baseline.solution.solutions[1].status, SolutionStatus::FIXED);
+
+    config.report_batch_fix_as_float = true;
+    const auto relabelled =
+        FGOProcessor(config).optimizeProblem(makeSyntheticProblem(false, true));
+    ASSERT_EQ(relabelled.solution.size(), 2u);
+    EXPECT_EQ(relabelled.solution.solutions[0].status, SolutionStatus::FLOAT);
+    EXPECT_EQ(relabelled.solution.solutions[1].status, SolutionStatus::FLOAT);
+    // Only the reported status changes; the integer-constrained batch
+    // position is retained.
+    for (std::size_t epoch = 0; epoch < 2; ++epoch) {
+        EXPECT_NEAR((relabelled.solution.solutions[epoch].position_ecef -
+                     baseline.solution.solutions[epoch].position_ecef)
+                        .norm(),
+                    0.0,
+                    1e-9);
+    }
+}
+
+TEST(FGOTest, NewArLeversAreDefaultOff) {
+    const FGOProcessor::FGOConfig config;
+    EXPECT_FALSE(config.report_batch_fix_as_float);
+    EXPECT_FALSE(config.allow_partial_fix_and_hold);
+}
+
 TEST(FGOTest, LambdaAcceptsRatioQualifiedCandidatesWithoutFractionalGate) {
     FGOProcessor::FGOProblem problem = makeSyntheticProblem(false, true);
     const SatelliteId degraded_satellite(GNSSSystem::GPS, 6);
