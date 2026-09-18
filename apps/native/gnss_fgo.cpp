@@ -3892,8 +3892,14 @@ int main(int argc, char* argv[]) {
                                     options.imu_apply_mounting,
                                     options.imu_noise_calibrate,
                                     options.imu_noise_scale, imu_error)) {
-                std::cerr << "Error: IMU attachment failed: " << imu_error << "\n";
-                return 1;
+                if (!options.debug_problem_only) {
+                    std::cerr << "Error: IMU attachment failed: " << imu_error << "\n";
+                    return 1;
+                }
+                // Problem inspection needs no graph, so a diagnostic IMU log
+                // must not abort the run.
+                std::cerr << "Warning: IMU attachment failed (" << imu_error
+                          << "); continuing without IMU factors\n";
             }
         }
         libgnss::FGOProcessor::FGOResult result;
