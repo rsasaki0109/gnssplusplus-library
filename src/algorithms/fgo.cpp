@@ -2644,8 +2644,16 @@ FGOProcessor::FGOResult FGOProcessor::optimizeProblem(const FGOProblem& problem)
     std::size_t single_difference_tdcp_residual_count = 0;
     const bool has_float_ambiguity_solution =
         ambiguity_count > 0 && has_ambiguity_measurements;
+    // The Eigen batch path's integer-constrained reoptimization reports FIXED
+    // for every epoch while its positions stay meter-level on PPC (~93% wrong
+    // fixes on tokyo1 even at LAMBDA ratio 29.7; the batch ambiguity
+    // covariance is mis-scaled). config_.report_batch_fix_as_float suppresses
+    // that FIXED label; the per-epoch conditional output
+    // (use_epoch_lambda_fixed_output) stays authoritative and overrides it.
+    const bool batch_fix_suppressed =
+        config_.report_batch_fix_as_float && !has_epoch_lambda_fixed_outputs;
     const SolutionStatus fgo_solution_status =
-        result.diagnostics.fixed_solution && !has_epoch_lambda_fixed_outputs
+        (result.diagnostics.fixed_solution && !batch_fix_suppressed)
             ? SolutionStatus::FIXED
             : (has_float_ambiguity_solution ? SolutionStatus::FLOAT
                                             : SolutionStatus::SPP);

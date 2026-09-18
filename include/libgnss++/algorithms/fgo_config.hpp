@@ -497,6 +497,11 @@ struct Config {
         bool prefer_double_difference_ambiguity_fixing = true;
         bool use_lambda_ambiguity_fix = true;
         bool use_epoch_lambda_fixed_output = false;
+        /// Report the Eigen batch integer-constrained solution as FLOAT
+        /// instead of FIXED. The batch path labels every epoch FIXED while its
+        /// positions stay meter-level on PPC (mis-scaled batch ambiguity
+        /// covariance); the per-epoch conditional output remains authoritative.
+        bool report_batch_fix_as_float = false;
         bool use_partial_lambda_ambiguity_fix = true;
         // Independently re-optimize the active fixed-lag graph with the
         // candidate integers imposed as tight priors. The candidate is

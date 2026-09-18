@@ -122,6 +122,7 @@ struct Options {
     bool fix_all_ambiguities = false;
     bool use_lambda_ambiguity_fix = true;
     bool use_epoch_lambda_fixed_output = false;
+    bool report_batch_fix_as_float = false;
     bool use_integer_constrained_reoptimization = false;
     double integer_constrained_prior_sigma_cycles = 1e-3;
     double integer_constrained_cost_abs_tolerance = 1e-6;
@@ -256,6 +257,7 @@ void printUsage(const char* program_name) {
         << "  --no-lambda-ambiguity-fix     Use nearest-integer fixed pass instead of LAMBDA\n"
         << "  --epoch-lambda-fixed-output   Apply per-epoch LAMBDA fixed position output\n"
         << "  --no-epoch-lambda-fixed-output\n"
+        << "  --report-batch-fix-as-float   Report the Eigen batch fix as FLOAT\n"
         << "                                Keep optimized float positions in output\n"
         << "  --no-partial-lambda-ambiguity-fix\n"
         << "                                Disable partial LAMBDA retry with fewer candidates\n"
@@ -669,6 +671,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_epoch_lambda_fixed_output = true;
         } else if (arg == "--no-epoch-lambda-fixed-output") {
             options.use_epoch_lambda_fixed_output = false;
+        } else if (arg == "--report-batch-fix-as-float") {
+            options.report_batch_fix_as_float = true;
         } else if (arg == "--integer-constrained-reoptimization") {
             options.use_integer_constrained_reoptimization = true;
         } else if (arg == "--integer-constrained-prior-sigma" && i + 1 < argc) {
@@ -3770,6 +3774,7 @@ int main(int argc, char* argv[]) {
         config.ambiguity_fix_max_fractional_cycles =
             options.ambiguity_fix_threshold_cycles;
         config.lambda_ratio_threshold = options.lambda_ratio_threshold;
+        config.report_batch_fix_as_float = options.report_batch_fix_as_float;
         config.use_epoch_lambda_fixed_output =
             options.use_epoch_lambda_fixed_output;
         config.use_integer_constrained_reoptimization =
