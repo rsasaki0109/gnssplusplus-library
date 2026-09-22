@@ -125,6 +125,80 @@ TEST(IntegrityConsensusTest, ResetGenerationRestartsRecovery) {
     EXPECT_FALSE(decision.promote_joint_anchor);
 }
 
+TEST(IntegrityConsensusTest, InterruptedRecoveryMustRestartItsCleanStreak) {
+    Manager::Config config;
+    config.recovery_streak = 3;
+    for (const bool lose_shadow : {false, true}) {
+        Manager manager(config);
+        auto value = input();
+        value.hard_primary_suspect = true;
+        manager.update(value);
+        value.hard_primary_suspect = false;
+        manager.update(value);
+        manager.update(value);
+        auto gap = value;
+        gap.fixed_candidate = false;
+        gap.independent.valid = !lose_shadow;
+        const auto interrupted = manager.update(gap);
+        EXPECT_EQ(interrupted.state, Manager::State::QUARANTINE);
+        EXPECT_EQ(interrupted.recovery_streak, 0);
+        const auto first = manager.update(value);
+        EXPECT_FALSE(first.promote_joint_anchor);
+        EXPECT_EQ(first.recovery_streak, 1);
+        EXPECT_FALSE(manager.update(value).promote_joint_anchor);
+        EXPECT_TRUE(manager.update(value).promote_joint_anchor);
+    }
+}
+
+TEST(IntegrityConsensusTest, HardEvidenceCannotBeOverruledByEstimatorAgreement) {
+    Manager manager;
+    auto value = input();
+    value.hard_primary_suspect = true;
+    for (int i = 0; i < 8; ++i) {
+        const auto result = manager.update(value);
+        EXPECT_EQ(result.state, Manager::State::QUARANTINE);
+        EXPECT_FALSE(result.allow_fixed);
+        EXPECT_FALSE(result.promote_joint_anchor);
+    }
+    value.hard_primary_suspect = false;
+    EXPECT_EQ(manager.update(value).state, Manager::State::RECOVERY);
+    value.hard_primary_suspect = true;
+    EXPECT_EQ(manager.update(value).state, Manager::State::QUARANTINE);
+}
+
+TEST(IntegrityConsensusTest, OneEpochRecoveryHonorsConfiguredThreshold) {
+    Manager::Config config;
+    config.recovery_streak = 1;
+    Manager manager(config);
+    auto value = input();
+    value.hard_primary_suspect = true;
+    manager.update(value);
+    value.hard_primary_suspect = false;
+    const auto recovered = manager.update(value);
+    EXPECT_TRUE(recovered.promote_joint_anchor);
+    EXPECT_EQ(recovered.state, Manager::State::NORMAL);
+}
+
+TEST(IntegrityConsensusTest, NonPositiveCovarianceCannotAuthorizeRecovery) {
+    for (double covariance : {0.0, -1.0}) {
+        for (bool invalid_primary : {false, true}) {
+            Manager manager;
+            auto value = input();
+            value.hard_primary_suspect = true;
+            manager.update(value);
+            value.hard_primary_suspect = false;
+            (invalid_primary ? value.primary : value.independent)
+                .covariance_trace_m2 = covariance;
+            for (int i = 0; i < 8; ++i) {
+                const auto result = manager.update(value);
+                EXPECT_FALSE(result.estimators_agree);
+                EXPECT_FALSE(result.promote_joint_anchor);
+                EXPECT_EQ(result.state, Manager::State::QUARANTINE);
+            }
+        }
+    }
+}
+
 PositionConsensus::Shadow shadow(
     std::uint64_t source_id, double x, std::uint64_t age_epochs = 0) {
     PositionConsensus::Shadow value;
@@ -715,6 +789,20 @@ TEST(ShadowEstimateHealthGateTest, MissingTraceAllowedWithExplicitOptIn) {
     const auto result = gate.evaluate(sample);
     EXPECT_TRUE(result.healthy);
     EXPECT_NEAR(result.covariance_trace_m2, 2.0, 1e-12);
+}
+
+TEST(ShadowEstimateHealthGateTest, SmoothedEstimateWaitsForContributingObservations) {
+    HealthGate gate;
+    auto sample = healthy_shadow_sample();
+    sample.solution_latency_s = 0.5;
+    sample.age_s = 0.2;
+    EXPECT_FALSE(gate.evaluate(sample).healthy);
+    sample.age_s = 0.5;
+    EXPECT_TRUE(gate.evaluate(sample).healthy);
+    sample.solution_latency_s = -0.1;
+    EXPECT_FALSE(gate.evaluate(sample).healthy);
+    sample.solution_latency_s = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(gate.evaluate(sample).healthy);
 }
 
 TEST(ShadowEstimateHealthGateTest, TraceAboveCeilingUnhealthy) {

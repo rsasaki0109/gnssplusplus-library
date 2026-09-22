@@ -3,6 +3,7 @@
 // shared helper surface.
 
 #include "fgo_gtsam_internal.hpp"
+#include "fgo_gtsam_covariance_internal.hpp"
 
 namespace libgnss {
 
@@ -248,6 +249,38 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
     std::vector<Vector3d> epoch_vel_nav(num_epochs, Vector3d::Zero());
     std::vector<bool> epoch_solved(num_epochs, false);
     std::vector<FGOProcessor::FGOEpochDiagnostics> epoch_diagnostics(num_epochs);
+    std::vector<Eigen::Matrix3d> epoch_float_covariance(
+        num_epochs, missingPositionCovariance());
+    std::vector<Eigen::Matrix3d> epoch_fixed_covariance(
+        num_epochs, missingPositionCovariance());
+    std::vector<double> epoch_float_latency_s(num_epochs,
+        std::numeric_limits<double>::quiet_NaN());
+    std::uint64_t smoother_generation = 0;
+    std::vector<std::uint64_t> epoch_float_generation(num_epochs, 0);
+    std::vector<std::uint64_t> epoch_fixed_generation(num_epochs, 0);
+    auto snapshotCovariance = [&](std::size_t epoch, const Pose3& pose) {
+        if (!config.compute_fixed_lag_position_covariance) {
+            return missingPositionCovariance();
+        }
+        try {
+            // Reset/report-only branches can retain a pose from an older
+            // graph. Its covariance cannot be taken from the current graph.
+            if (!pose.equals(smoother.calculateEstimate<Pose3>(positionKey(epoch)),
+                             1e-12)) return missingPositionCovariance();
+            return antennaPositionCovariance(gnss_lever_arm, pose,
+                smoother.getISAM2().marginalCovariance(positionKey(epoch)));
+        } catch (const std::exception&) {
+            return missingPositionCovariance();
+        }
+    };
+    auto recordFloatPosition = [&](std::size_t epoch, const Pose3& pose,
+                                   std::size_t latest_epoch) {
+        epoch_float_position[epoch] = antennaOf(pose);
+        epoch_float_generation[epoch] = smoother_generation;
+        epoch_float_covariance[epoch] = snapshotCovariance(epoch, pose);
+        epoch_float_latency_s[epoch] =
+            problem.epochs[latest_epoch].time - problem.epochs[epoch].time;
+    };
     std::vector<std::map<SatelliteId, double>>
         satellite_quarantine_postfit_residuals;
     if (config.monitor_satellite_quarantine_witness) {
@@ -1053,6 +1086,7 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
     // caller decides whether to give up on the epoch).
     auto performFullWarmReset = [&](std::size_t epoch_idx, const Pose3& seed_pose,
                                     const gtsam::imuBias::ConstantBias& seed_bias) {
+        ++smoother_generation;
         smoother = gtsam::IncrementalFixedLagSmoother(config.fixed_lag_smoother_lag_s, isam_params);
         dummy_created = false;
         ambiguity_created.clear();
@@ -2160,7 +2194,7 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
             if (!lin.exists(positionKey(j))) break;  // older keys already marginalized
             const Pose3 pj = smoother.calculateEstimate<Pose3>(positionKey(j));
             const gtsam::Vector3 vj = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(j));
-            epoch_float_position[j] = antennaOf(pj);
+            recordFloatPosition(j, pj, i);
             const gtsam::Matrix3 R = pj.rotation().matrix();
             const Eigen::Vector3d fwd = R.col(0);
             const Eigen::Vector3d left = R.col(1);
@@ -2633,7 +2667,7 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                 vel_i = smoother.calculateEstimate<gtsam::Vector3>(velocityKey(i));
                 prev_bias = smoother.calculateEstimate<gtsam::imuBias::ConstantBias>(biasKey(i));
                 prev_nav = gtsam::NavState(pose_i, vel_i);
-                epoch_float_position[i] = antennaOf(pose_i);
+                recordFloatPosition(i, pose_i, i);
                 const gtsam::Matrix3 R_fde = pose_i.rotation().matrix();
                 const Eigen::Vector3d fwd_fde = R_fde.col(0);
                 const Eigen::Vector3d left_fde = R_fde.col(1);
@@ -3183,6 +3217,7 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                         epoch_ratio[i] = ratio;
                         Eigen::Vector3d provisional_fixed_ant = Eigen::Vector3d::Zero();
                         Eigen::Matrix3d provisional_fixed_cov = Eigen::Matrix3d::Zero();
+                        Eigen::Matrix3d provisional_output_cov = missingPositionCovariance();
                         bool has_provisional_fixed_ant = false;
                         bool has_provisional_fixed_cov = false;
                         if (fixed_amb.size() == subset) {
@@ -3264,6 +3299,10 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                                             provisional_fixed_cov = 0.5 *
                                                 (provisional_fixed_cov +
                                                  provisional_fixed_cov.transpose());
+                                            if (config.compute_fixed_lag_position_covariance) {
+                                                provisional_output_cov =
+                                                    checkedPositionCovariance(provisional_fixed_cov);
+                                            }
                                             // Numerical conditioning can
                                             // leave tiny negative diagonal
                                             // terms after the Schur update.
@@ -3969,6 +4008,11 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                                         Eigen::Vector3d(antennaOf(*cost.optimized_pose));
                                     has_provisional_fixed_ant =
                                         provisional_fixed_ant.allFinite();
+                                    provisional_output_cov = cost.optimized_pose_covariance
+                                        ? antennaPositionCovariance(gnss_lever_arm,
+                                              *cost.optimized_pose,
+                                              *cost.optimized_pose_covariance)
+                                        : missingPositionCovariance();
                                 }
                             } catch (const std::exception&) {
                                 integer_constrained_pass = false;
@@ -4062,6 +4106,15 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                         if (config.use_epoch_lambda_fixed_output && has_provisional_fixed_ant) {
                             epoch_fixed_position[i] = Point3(provisional_fixed_ant);
                             epoch_has_fixed[i] = true;
+                            epoch_fixed_generation[i] = smoother_generation;
+                            // The conditional position is frozen at this epoch,
+                            // independently of subsequent FLOAT smoothing.
+                            // Reoptimized candidates carry their own constrained
+                            // graph marginal instead of the linear Schur result.
+                            if (config.compute_fixed_lag_position_covariance) {
+                                epoch_fixed_covariance[i] =
+                                    provisional_output_cov;
+                            }
                         }
                         if ((config.monitor_external_doppler_dr ||
                              config.use_external_doppler_dr_validation ||
@@ -4206,7 +4259,7 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                                     vel_i = smoother.calculateEstimate<gtsam::Vector3>(
                                         velocityKey(i));
                                     prev_nav = gtsam::NavState(pose_i, vel_i);
-                                    epoch_float_position[i] = antennaOf(pose_i);
+                                    recordFloatPosition(i, pose_i, i);
                                 } catch (const std::exception& e) {
                                     std::fprintf(stderr,
                                                  "[fgo_gtsam_backend] hold update epoch %zu "
@@ -4770,6 +4823,8 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                 epoch_fixed_count[i] = held_here;
                 epoch_has_fixed[i] = true;
                 epoch_fixed_position[i] = antennaOf(pose_i);
+                epoch_fixed_covariance[i] = snapshotCovariance(i, pose_i);
+                epoch_fixed_generation[i] = smoother_generation;
                 ++held_epoch_count;
                 for (std::size_t idx : epoch_amb_indices) {
                     const std::size_t sym_idx = ambSymbolId(idx);
@@ -5347,6 +5402,14 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
                             }
                         }
                         epoch_float_position[i] = report_ant;
+                        epoch_float_latency_s[i] = 0.0;
+                        epoch_float_generation[i] = smoother_generation;
+                        // A report-only predicted replacement is not a graph
+                        // estimate; no current marginal describes it.
+                        epoch_float_covariance[i] =
+                            (report_ant - graph_ant_pose).squaredNorm() == 0.0
+                                ? snapshotCovariance(i, pose_i)
+                                : missingPositionCovariance();
                     }
                 }
 
@@ -5715,26 +5778,9 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
     }
 
     // --- Per-epoch solutions ---
-    // TODO(agent/realtime-fix-integrity follow-up, Fix 3): solution.position_
-    // covariance is intentionally left unpopulated (default-constructed) on
-    // this fixed-lag path -- dumpEpochCsv() in gnss_fgo_parity.cpp now emits
-    // an empty CSV field for it rather than a fake 0.0, so downstream
-    // consumers (e.g. ShadowEstimateHealthGate) correctly treat it as
-    // missing. A real per-epoch trace IS already computed nearby
-    // (antenna_position_cov / provisional_fixed_cov, both derived from
-    // smoother.getISAM2().jointMarginalCovariance(keys) during the per-epoch
-    // LAMBDA block above) but only for the pose_i snapshot AT THE MOMENT
-    // LAMBDA runs for epoch i. epoch_float_position[i] (see the window
-    // re-read loop above, "Re-read every still-in-window pose") keeps being
-    // refined by later epochs until i leaves the fixed-lag window, so that
-    // captured trace would silently stop matching the final reported
-    // position by the time this loop reads it -- wiring it through without
-    // re-deriving a matching marginal at emission time would trade a
-    // visibly-missing value for a silently-stale one. Left unpopulated
-    // rather than risk feeding a mismatched covariance into a health/
-    // consensus gate; a correct fix would recompute (or cache) the marginal
-    // for each epoch's FINAL window-exit pose, which is a larger, separately
-    // scoped change.
+    // Covariance is snapshotted when each reported position is assigned.
+    // A marginalized/reset key therefore retains its matching snapshot, not
+    // a stale epoch-i marginal or a covariance from a replacement graph.
     if (!clock_resilient_tdcp_shadow.empty()) {
         result.temporal_carrier_shadow_factors = FGOProcessor::
             classifyClockResilientTemporalCarrierShadow(
@@ -5853,12 +5899,21 @@ FGOProcessor::FGOResult optimizeProblemFixedLag(
         if (fixed) {
             solution.status = SolutionStatus::FIXED;
             solution.position_ecef = epoch_fixed_position[i];
+            solution.position_covariance = epoch_fixed_covariance[i];
         } else {
             solution.status = have_amb ? SolutionStatus::FLOAT : SolutionStatus::SPP;
             solution.position_ecef = epoch_float_position[i];
+            solution.position_covariance = epoch_float_covariance[i];
         }
+        result.epoch_diagnostics[i].solution_latency_s =
+            fixed ? 0.0 : epoch_float_latency_s[i];
+        result.epoch_diagnostics[i].solution_reset_generation =
+            fixed ? epoch_fixed_generation[i] : epoch_float_generation[i];
         if (!epoch_solved[i]) {
             solution.status = SolutionStatus::NONE;
+            solution.position_covariance = missingPositionCovariance();
+            result.epoch_diagnostics[i].solution_latency_s =
+                std::numeric_limits<double>::quiet_NaN();
         }
         solution.num_frequencies = 1;
         solution.ratio = epoch_ratio[i];

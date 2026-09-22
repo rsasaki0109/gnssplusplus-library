@@ -491,6 +491,17 @@ public:
             if (!tow || !x || !y || !z) continue;
             Sample sample;
             sample.tow_s = *tow;
+            if (columns.count("causal_provenance_verified")) {
+                sample.causal_provenance_verified =
+                    field(row, "causal_provenance_verified") == "1";
+            }
+            // New exports expose observation lookahead. A malformed/missing
+            // value in that schema cannot be treated as a zero-latency sample.
+            if (columns.count("solution_latency_s")) {
+                const auto latency = parseFiniteDouble(field(row, "solution_latency_s"));
+                if (!latency || *latency < 0.0) continue;
+                sample.latency_s = *latency;
+            }
             sample.position_ecef = Eigen::Vector3d(*x, *y, *z);
             const std::string status = field(row, "status");
             sample.status_fixed = status == "FIXED" || status == "4";
@@ -528,8 +539,11 @@ public:
             [](double tow, const Sample& sample) { return tow < sample.tow_s; });
         if (after == samples_.begin()) return output;
         const Sample* best = &*std::prev(after);
+        if (!best->causal_provenance_verified) return output;
         const double age_s = time.tow - best->tow_s;
         if (age_s > config_.match_tolerance_s) return output;
+        // Do not expose even the reset generation before the sample exists.
+        if (age_s + 1e-9 < best->latency_s) return output;
 
         output.present = true;
         output.age_s = age_s;
@@ -545,6 +559,7 @@ public:
         health_sample.num_satellites = best->num_satellites;
         health_sample.covariance_trace_m2 = best->covariance_trace_m2;
         health_sample.age_s = age_s;
+        health_sample.solution_latency_s = best->latency_s;
         const auto health = health_gate_.evaluate(health_sample);
         output.estimate.covariance_trace_m2 = health.covariance_trace_m2;
 
@@ -556,6 +571,8 @@ public:
 private:
     struct Sample {
         double tow_s = 0.0;
+        double latency_s = 0.0;  // Legacy CSVs predate explicit lookahead metadata.
+        bool causal_provenance_verified = true;  // Legacy producer contract.
         bool status_fixed = false;
         bool status_present = false;
         Eigen::Vector3d position_ecef = Eigen::Vector3d::Zero();
@@ -2454,6 +2471,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
             continue;
         }
+        // Bound MSVC's else-if nesting without changing option order or
+        // handlers. A consumed option advances to the same next argv entry.
+        bool parsed_general_option = true;
         if (arg == "--data-dir" && i + 1 < argc) {
             config.data_dir = argv[++i];
         } else if (arg == "--rover" && i + 1 < argc) {
@@ -2711,7 +2731,11 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
         } else if (arg == "--nonfix-drift-max-segment-epochs" && i + 1 < argc) {
             config.nonfix_drift_guard_max_segment_epochs = std::stoi(argv[++i]);
-        } else if (arg == "--no-spp-height-step-guard") {
+        } else {
+            parsed_general_option = false;
+        }
+        if (parsed_general_option) continue;
+        if (arg == "--no-spp-height-step-guard") {
             config.enable_spp_height_step_guard = false;
         } else if (arg == "--spp-height-step-min" && i + 1 < argc) {
             config.spp_height_step_guard_min_m = std::stod(argv[++i]);

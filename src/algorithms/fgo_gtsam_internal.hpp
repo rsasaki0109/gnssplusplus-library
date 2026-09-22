@@ -1409,6 +1409,7 @@ struct IntegerConstrainedGraphCostOutcome {
     double base_cost_before = 0.0;
     double base_cost_after = 0.0;
     std::optional<Pose3> optimized_pose;
+    std::optional<gtsam::Matrix> optimized_pose_covariance;
 };
 
 inline IntegerConstrainedGraphCostOutcome evaluateIntegerConstrainedGraphCost(
@@ -1450,6 +1451,16 @@ inline IntegerConstrainedGraphCostOutcome evaluateIntegerConstrainedGraphCost(
             std::max(0.0, config.integer_constrained_cost_abs_tolerance);
     if (current_position_key && optimized_values.exists(*current_position_key)) {
         outcome.optimized_pose = optimized_values.at<Pose3>(*current_position_key);
+        if (outcome.pass && config.compute_fixed_lag_position_covariance) {
+            try {
+                outcome.optimized_pose_covariance =
+                    gtsam::Marginals(constrained_graph, optimized_values)
+                        .marginalCovariance(*current_position_key);
+            } catch (const std::exception&) {
+                // Output uncertainty is optional evidence; its failure must
+                // neither accept nor reject the existing integer candidate.
+            }
+        }
     }
     return outcome;
 }

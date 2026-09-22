@@ -29,6 +29,7 @@ IntegrityConsensusManager::Decision IntegrityConsensusManager::update(const Inpu
     const bool primary_healthy = input.primary.valid &&
         input.primary.position_ecef.allFinite() &&
         std::isfinite(input.primary.covariance_trace_m2) &&
+        input.primary.covariance_trace_m2 > 0.0 &&
         input.primary.covariance_trace_m2 <= config_.max_primary_covariance_trace_m2;
     const bool independent_available = input.independent.valid &&
         input.independent.position_ecef.allFinite() &&
@@ -36,6 +37,7 @@ IntegrityConsensusManager::Decision IntegrityConsensusManager::update(const Inpu
         input.independent_age_s <= config_.max_independent_age_s;
     const bool independent_healthy = independent_available &&
         std::isfinite(input.independent.covariance_trace_m2) &&
+        input.independent.covariance_trace_m2 > 0.0 &&
         input.independent.covariance_trace_m2 <=
             config_.max_independent_covariance_trace_m2;
 
@@ -67,7 +69,7 @@ IntegrityConsensusManager::Decision IntegrityConsensusManager::update(const Inpu
         soft_suspect_evidence_available &&
         (!independent_healthy || !decision.estimators_agree);
 
-    const bool generation_changed = has_independent_reset_generation_ &&
+    const bool generation_changed = independent_available && has_independent_reset_generation_ &&
         input.independent_reset_generation != independent_reset_generation_;
     if (generation_changed) decision.reasons |= RESET_GENERATION_CHANGED;
     if (independent_available) {
@@ -80,6 +82,8 @@ IntegrityConsensusManager::Decision IntegrityConsensusManager::update(const Inpu
         (!config_.disagreement_requires_primary_suspect || input.primary_suspect);
     suspect_count_ = effective_primary_suspect ? suspect_count_ + 1 : 0;
     disagreement_count_ = disagreement ? disagreement_count_ + 1 : 0;
+    const bool recovery_evidence = input.fixed_candidate && decision.estimators_agree &&
+        !effective_primary_suspect && !input.hard_primary_suspect && !generation_changed;
 
     switch (state_) {
         case State::NORMAL:
@@ -104,28 +108,31 @@ IntegrityConsensusManager::Decision IntegrityConsensusManager::update(const Inpu
             }
             break;
         case State::QUARANTINE:
-            if (input.fixed_candidate && decision.estimators_agree &&
-                !effective_primary_suspect && !generation_changed) {
+            if (recovery_evidence) {
                 state_ = State::RECOVERY;
                 recovery_count_ = 1;
             }
             break;
         case State::RECOVERY:
-            if (generation_changed || effective_primary_suspect ||
-                (input.fixed_candidate && !decision.estimators_agree)) {
+            // Recovery requires consecutive clean FIX candidates, not a
+            // lifetime total that survives FLOAT gaps or missing shadows.
+            if (!recovery_evidence) {
                 state_ = State::QUARANTINE;
                 recovery_count_ = 0;
-            } else if (input.fixed_candidate && decision.estimators_agree) {
+            } else {
                 ++recovery_count_;
-                if (recovery_count_ >= std::max(1, config_.recovery_streak)) {
-                    state_ = State::NORMAL;
-                    recovery_count_ = 0;
-                    suspect_count_ = 0;
-                    disagreement_count_ = 0;
-                    decision.promote_joint_anchor = true;
-                }
             }
             break;
+    }
+
+    // Also handles a configured one-epoch streak at QUARANTINE -> RECOVERY.
+    if (state_ == State::RECOVERY &&
+        recovery_count_ >= std::max(1, config_.recovery_streak)) {
+        state_ = State::NORMAL;
+        recovery_count_ = 0;
+        suspect_count_ = 0;
+        disagreement_count_ = 0;
+        decision.promote_joint_anchor = true;
     }
 
     decision.state = state_;
@@ -344,6 +351,7 @@ bool RealtimeFixIntegrityGate::independentHealthy(
         std::isfinite(independent.age_s) && independent.age_s >= 0.0 &&
         independent.age_s <= config_.consensus.max_independent_age_s &&
         std::isfinite(independent.estimate.covariance_trace_m2) &&
+        independent.estimate.covariance_trace_m2 > 0.0 &&
         independent.estimate.covariance_trace_m2 <=
             config_.consensus.max_independent_covariance_trace_m2;
 }
@@ -563,6 +571,8 @@ ShadowEstimateHealthGate::Result ShadowEstimateHealthGate::evaluate(
         *sample.ddpr_rms_m <= config_.max_ddpr_rms_m &&
         *sample.num_satellites >= config_.min_satellites &&
         std::isfinite(sample.age_s) && sample.age_s >= 0.0 &&
+        std::isfinite(sample.solution_latency_s) && sample.solution_latency_s >= 0.0 &&
+        sample.age_s + 1e-9 >= sample.solution_latency_s &&
         sample.age_s <= config_.max_age_s;
 
     // A covariance trace must be present AND strictly positive (a reported
