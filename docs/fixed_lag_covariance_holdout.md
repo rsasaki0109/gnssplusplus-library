@@ -4,9 +4,16 @@ Status: **complete** (2026-09-22). All six existing PPC runs and all 42 native
 comparisons completed successfully. No positioning-accuracy improvement is claimed.
 Baseline: `eff1a3c`; candidate branch: `feat/fixed-lag-covariance-holdout`.
 
+PR integration note: the tested change was committed as `038e13e` and then
+cherry-picked onto `develop` at `34858d1` on `fix/fixed-lag-covariance-recovery`.
+The four scoring tests pass on that branch. Native test and replay evidence
+below describes the original frozen source, not the integrated PR head;
+native integration validation remains pending for the draft PR.
+
 The user explicitly cancelled unused-data validation. This supersedes that
 clause of the registered goal. Only existing PPC development data are used;
-no new dataset acquisition, held-out evaluation, push, PR or merge is in scope.
+no new dataset acquisition or held-out evaluation is in scope. The user
+subsequently authorized publishing a PR; merging remains out of scope.
 
 ## Scope and implementation
 
