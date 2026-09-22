@@ -13,6 +13,7 @@
 #include <libgnss++/io/imu.hpp>
 
 #include "../src/algorithms/fgo_gtsam_internal.hpp"
+#include "../src/algorithms/fgo_gtsam_covariance_internal.hpp"
 
 #include <algorithm>
 #include <array>
@@ -3553,6 +3554,152 @@ TEST(FGOFixDemoteTest, DefaultOffIsNoOp) {
     EXPECT_EQ(result.diagnostics.fix_plausibility_demotions, 0u);
     EXPECT_EQ(result.diagnostics.fix_plausibility_hold_skips, 0u);
     EXPECT_EQ(result.solution.solutions.size(), problem.epochs.size());
+}
+
+TEST(FGOFixedLagCovarianceTest, RejectsMissingAndIndefiniteCovariance) {
+    using namespace fgo_gtsam_internal;
+    EXPECT_FALSE(checkedPositionCovariance(missingPositionCovariance()).allFinite());
+    EXPECT_FALSE(checkedPositionCovariance(Eigen::Matrix3d::Zero()).allFinite());
+    Eigen::Matrix3d indefinite = Eigen::Matrix3d::Identity();
+    indefinite(0, 1) = indefinite(1, 0) = 2.0;
+    EXPECT_FALSE(checkedPositionCovariance(indefinite).allFinite());
+    Eigen::Matrix3d roundoff = Eigen::Matrix3d::Identity();
+    roundoff(0, 0) = -1e-12;
+    const auto repaired = checkedPositionCovariance(roundoff);
+    ASSERT_TRUE(repaired.allFinite());
+    EXPECT_GE(Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(repaired)
+                  .eigenvalues().minCoeff(), 0.0);
+}
+
+TEST(FGOFixedLagCovarianceTest, PropagatesRotationAndLeverArmAgainstNumericalJacobian) {
+    const gtsam::Pose3 pose(gtsam::Rot3::RzRyRx(0.2, -0.3, 0.4),
+                            gtsam::Point3(10, 20, 30));
+    const gtsam::Pose3 ecef_T_nav(gtsam::Rot3::RzRyRx(-0.4, 0.8, 0.1),
+                                  gtsam::Point3(100, 200, 300));
+    const gtsam::gnss::LeverArm arm(gtsam::Point3(0.3, -0.7, 1.2), ecef_T_nav);
+    gtsam::Matrix66 pose_cov = gtsam::Matrix66::Identity();
+    pose_cov.diagonal() << 0.02, 0.03, 0.04, 2.0, 3.0, 4.0;
+    pose_cov(0, 3) = pose_cov(3, 0) = 0.05;
+    gtsam::Matrix36 numerical;
+    for (int axis = 0; axis < 6; ++axis) {
+        gtsam::Vector6 step = gtsam::Vector6::Zero();
+        step(axis) = 1e-5;
+        numerical.col(axis) = (arm.antennaPosition(pose.retract(step)) -
+                              arm.antennaPosition(pose.retract(-step))) / 2e-5;
+    }
+    const Eigen::Matrix3d expected = numerical * pose_cov * numerical.transpose();
+    const auto actual = fgo_gtsam_internal::antennaPositionCovariance(arm, pose, pose_cov);
+    EXPECT_LT((actual - expected).norm(), 1e-7);
+    EXPECT_LT((actual - actual.transpose()).norm(), 1e-12);
+}
+
+TEST(FGOFixedLagCovarianceTest, MatchesWindowExitAndTailWithoutChangingPositions) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 9;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+    auto config = makeCpHoldBaseConfig();
+    config.fixed_lag_smoother_lag_s = 2.0;
+    ASSERT_FALSE(config.compute_fixed_lag_position_covariance);
+    const auto baseline = FGOProcessor(config).optimizeProblem(problem);
+    config.compute_fixed_lag_position_covariance = true;
+    const auto result = FGOProcessor(config).optimizeProblem(problem);
+    ASSERT_EQ(result.solution.solutions.size(), opt.num_epochs);
+    for (std::size_t i = 0; i < opt.num_epochs; ++i) {
+        const auto& s = result.solution.solutions[i];
+        EXPECT_TRUE(s.position_ecef.isApprox(baseline.solution.solutions[i].position_ecef, 0.0));
+        EXPECT_EQ(s.status, baseline.solution.solutions[i].status);
+        EXPECT_DOUBLE_EQ(s.ratio, baseline.solution.solutions[i].ratio);
+        ASSERT_TRUE(s.position_covariance.allFinite()) << i;
+        EXPECT_GT(s.position_covariance.trace(), 0.0);
+        EXPECT_GE(Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d>(s.position_covariance)
+                      .eigenvalues().minCoeff(), -1e-12);
+    }
+    // Epoch 0's final window snapshot is at epoch 2, not when it was born.
+    opt.num_epochs = 3;
+    const auto prefix = FGOProcessor(config).optimizeProblem(makeCpHoldFixedLagProblem(opt));
+    EXPECT_TRUE(result.solution.solutions[0].position_covariance.isApprox(
+        prefix.solution.solutions[0].position_covariance, 1e-10));
+    EXPECT_DOUBLE_EQ(result.epoch_diagnostics[0].solution_latency_s, 2.0);
+    EXPECT_DOUBLE_EQ(result.epoch_diagnostics.back().solution_latency_s, 0.0);
+    // A one-epoch problem uses the batch backend; two epochs is the earliest
+    // fixed-lag prefix and must still differ from the final window snapshot.
+    opt.num_epochs = 2;
+    const auto early = FGOProcessor(config).optimizeProblem(makeCpHoldFixedLagProblem(opt));
+    ASSERT_TRUE(early.solution.solutions[0].position_covariance.allFinite());
+    EXPECT_GT((early.solution.solutions[0].position_covariance -
+               result.solution.solutions[0].position_covariance).norm(), 1e-6);
+}
+
+TEST(FGOFixedLagCovarianceTest, FixedSnapshotIsCausalAndPositionPreserving) {
+    CpHoldTestOptions opt;
+    opt.satellites = lambdaCapableSatelliteGeometry();
+    opt.num_epochs = 12;
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+    auto config = makeFixDemoteBaseConfig();
+    const auto baseline = FGOProcessor(config).optimizeProblem(problem);
+    config.compute_fixed_lag_position_covariance = true;
+    const auto result = FGOProcessor(config).optimizeProblem(problem);
+    std::size_t fixed = 0;
+    for (std::size_t i = 0; i < opt.num_epochs; ++i) {
+        const auto& s = result.solution.solutions.at(i);
+        const auto& b = baseline.solution.solutions.at(i);
+        EXPECT_TRUE(s.position_ecef.isApprox(b.position_ecef, 0.0));
+        EXPECT_EQ(s.status, b.status);
+        EXPECT_DOUBLE_EQ(s.ratio, b.ratio);
+        if (s.status != SolutionStatus::FIXED) continue;
+        ++fixed;
+        ASSERT_TRUE(s.position_covariance.allFinite()) << i;
+        EXPECT_GT(s.position_covariance.trace(), 0.0);
+        EXPECT_DOUBLE_EQ(result.epoch_diagnostics[i].solution_latency_s, 0.0);
+    }
+    EXPECT_GT(fixed, 0u);
+}
+
+TEST(FGOFixedLagCovarianceTest, ReportOnlyPredictionDoesNotBorrowGraphMarginal) {
+    CpHoldTestOptions opt;
+    opt.num_epochs = 11;  // Stop at the replaced epoch before any later smoothing.
+    opt.carrier_corrupt_epochs = {10};
+    opt.carrier_corrupt_offset_ecef = Vector3d(150.0, 0.0, 0.0);
+    const auto problem = makeCpHoldFixedLagProblem(opt);
+    auto config = makeCpHoldBaseConfig();
+    config.use_cp_hold_recovery = true;
+    config.cp_hold_main_residual_threshold_m = 3.0;
+    config.cp_hold_persist_epochs = 1000;
+    config.cp_hold_catastrophic_threshold_m = 5.0;
+    config.cp_hold_fast_worst_satellite_min_m = 1.0;
+    config.cp_hold_max_gdop = 0.0;
+    config.cp_hold_pose_replace_threshold_m = 5.0;
+    const auto baseline = FGOProcessor(config).optimizeProblem(problem);
+    config.compute_fixed_lag_position_covariance = true;
+    const auto result = FGOProcessor(config).optimizeProblem(problem);
+    ASSERT_GT(result.diagnostics.sanity_pose_replacements, 0u);
+    EXPECT_FALSE(result.solution.solutions.back().position_covariance.allFinite());
+    EXPECT_TRUE(result.solution.solutions.back().position_ecef.isApprox(
+        baseline.solution.solutions.back().position_ecef, 0.0));
+    EXPECT_EQ(result.solution.solutions.back().status, SolutionStatus::FLOAT);
+    EXPECT_DOUBLE_EQ(result.epoch_diagnostics.back().solution_latency_s, 0.0);
+}
+
+TEST(FGOFixedLagCovarianceTest, ReoptimizedIntegerPoseCarriesItsOwnMarginal) {
+    using namespace fgo_gtsam_internal;
+    const gtsam::Key pose_key = gtsam::Symbol('x', 0);
+    const gtsam::Key ambiguity_key = gtsam::Symbol('a', 0);
+    gtsam::NonlinearFactorGraph graph;
+    const gtsam::Pose3 pose(gtsam::Rot3(), gtsam::Point3(1, 2, 3));
+    graph.addPrior(pose_key, pose, gtsam::noiseModel::Isotropic::Sigma(6, 2.0));
+    graph.addPrior(ambiguity_key, 1.0, gtsam::noiseModel::Isotropic::Sigma(1, 1.0));
+    gtsam::Values values;
+    values.insert(pose_key, pose);
+    values.insert(ambiguity_key, 1.0);
+    FGOProcessor::FGOConfig config;
+    config.compute_fixed_lag_position_covariance = true;
+    const auto outcome = evaluateIntegerConstrainedGraphCost(
+        graph, values, {{ambiguity_key, 1.0}}, pose_key, config);
+    ASSERT_TRUE(outcome.pass);
+    ASSERT_TRUE(outcome.optimized_pose.has_value());
+    ASSERT_TRUE(outcome.optimized_pose_covariance.has_value());
+    EXPECT_TRUE(outcome.optimized_pose_covariance->isApprox(
+        4.0 * gtsam::Matrix66::Identity(), 1e-10));
 }
 
 TEST(FGOExternalDopplerDrShadowTest, MonitorDoesNotChangeSolutionAuthority) {

@@ -1,0 +1,27 @@
+diff --git a/apps/native/gnss_solve.cpp b/apps/native/gnss_solve.cpp
+index e189c06..95b83f4 100644
+--- a/apps/native/gnss_solve.cpp
++++ b/apps/native/gnss_solve.cpp
+@@ -2454,6 +2454,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
+             config.fixed_bridge_burst_guard_max_segment_epochs = std::stoi(argv[++i]);
+             continue;
+         }
++        // Bound MSVC's else-if nesting without changing option order or
++        // handlers. A consumed option advances to the same next argv entry.
++        bool parsed_general_option = true;
+         if (arg == "--data-dir" && i + 1 < argc) {
+             config.data_dir = argv[++i];
+         } else if (arg == "--rover" && i + 1 < argc) {
+@@ -2711,7 +2714,11 @@ SolveConfig parseArguments(int argc, char* argv[]) {
+             config.nonfix_drift_guard_min_segment_epochs = std::stoi(argv[++i]);
+         } else if (arg == "--nonfix-drift-max-segment-epochs" && i + 1 < argc) {
+             config.nonfix_drift_guard_max_segment_epochs = std::stoi(argv[++i]);
+-        } else if (arg == "--no-spp-height-step-guard") {
++        } else {
++            parsed_general_option = false;
++        }
++        if (parsed_general_option) continue;
++        if (arg == "--no-spp-height-step-guard") {
+             config.enable_spp_height_step_guard = false;
+         } else if (arg == "--spp-height-step-min" && i + 1 < argc) {
+             config.spp_height_step_guard_min_m = std::stod(argv[++i]);

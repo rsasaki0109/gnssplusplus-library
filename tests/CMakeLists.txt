@@ -5,6 +5,10 @@ cmake_minimum_required(VERSION 3.10)
 find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+add_test(NAME python_fixed_lag_covariance_comparison_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fixed_lag_covariance_comparison.py)
+set_tests_properties(python_fixed_lag_covariance_comparison_tests PROPERTIES LABELS core)
+
 if(GTest_FOUND)
     # Consolidate all tests into a single executable.
     # The target is named gnss_run_tests (not run_tests): with the Visual

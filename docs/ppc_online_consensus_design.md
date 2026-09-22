@@ -193,8 +193,16 @@ Validation on 2026-07-23 (reports:
   strict default is byte-identical to running without a shadow. The
   `--integrity-shadow-assume-default-covariance-trace` escape hatch exists
   but the Tokyo 1 FGO shadow is not accurate enough to be net-positive;
-  populating a real fixed-lag marginal trace is a scoped follow-up
-  (see the TODO in `fgo_gtsam_backend.cpp`).
+  real fixed-lag position marginals are now available behind the default-off
+  `--fixed-lag-covariance` parity option. They follow the reported antenna
+  position, including FIX conditioning and lever-arm propagation. This does
+  not grant the batch FGO producer online authority: its export includes
+  smoothing/initialization lookahead and `causal_provenance_verified=0`, because
+  full-file tracking-code selection and base interpolation still require a
+  streaming provenance audit. The native consumer treats an explicitly
+  unverified shadow as absent. See the current
+  [covariance and recovery validation record](fixed_lag_covariance_holdout.md)
+  for tests, measured cost and development replay results.
 
 ## License boundary
 

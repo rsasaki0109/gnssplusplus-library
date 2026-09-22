@@ -1,0 +1,2967 @@
+{
+  "date": "2026-09-22",
+  "base_commit": "eff1a3ce9bc17efd8f1071f151766017747f50a0",
+  "scope": "Existing PPC development data only; unused-data validation cancelled by user.",
+  "verdict": "Correctness fixes validated. No positioning accuracy improvement established. Covariance stays default-off; unverified batch shadow has no recovery authority.",
+  "raw_evidence_root": "E:\\rtklib_v2_ws_output\\integrity_covariance",
+  "runs": {
+    "tokyo_run1": {
+      "fgo": {
+        "run": "tokyo/run1",
+        "max_epochs": -1,
+        "start_epoch": 0,
+        "baseline_off_solution_text_identical": true,
+        "off_covariance_solution_text_identical": true,
+        "expected_epoch_basis": "native rover reader inputs, before problem construction and output filtering",
+        "metrics": {
+          "baseline": {
+            "matched_rows": 11905,
+            "expected_input_epochs": 11928,
+            "missing_or_unmatched_epochs": 23,
+            "missing_or_unmatched_pct": 0.19282360831656606,
+            "fixed_epochs": 5924,
+            "fix_pct_matched": 49.76060478790424,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 388,
+            "wrong_fix_pct_fixed": 6.549628629304524,
+            "correct_fix_epochs": 5536,
+            "within_50cm_pct_matched": 49.84460310793784,
+            "horizontal_p50_m": 0.29099312706660274,
+            "horizontal_p95_m": 16.284337902546767,
+            "error_3d_p95_m": 61.71719427298652,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 67,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 65,
+            "unrecovered_events": 2,
+            "recovery_delay_p50_s": 21.800000000017462,
+            "recovery_delay_p95_s": 64.68000000001629
+          },
+          "off": {
+            "matched_rows": 11905,
+            "expected_input_epochs": 11928,
+            "missing_or_unmatched_epochs": 23,
+            "missing_or_unmatched_pct": 0.19282360831656606,
+            "fixed_epochs": 5924,
+            "fix_pct_matched": 49.76060478790424,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 388,
+            "wrong_fix_pct_fixed": 6.549628629304524,
+            "correct_fix_epochs": 5536,
+            "within_50cm_pct_matched": 49.84460310793784,
+            "horizontal_p50_m": 0.29099312706660274,
+            "horizontal_p95_m": 16.284337902546767,
+            "error_3d_p95_m": 61.71719427298652,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 67,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 65,
+            "unrecovered_events": 2,
+            "recovery_delay_p50_s": 21.800000000017462,
+            "recovery_delay_p95_s": 64.68000000001629
+          },
+          "covariance": {
+            "matched_rows": 11905,
+            "expected_input_epochs": 11928,
+            "missing_or_unmatched_epochs": 23,
+            "missing_or_unmatched_pct": 0.19282360831656606,
+            "fixed_epochs": 5924,
+            "fix_pct_matched": 49.76060478790424,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 388,
+            "wrong_fix_pct_fixed": 6.549628629304524,
+            "correct_fix_epochs": 5536,
+            "within_50cm_pct_matched": 49.84460310793784,
+            "horizontal_p50_m": 0.29099312706660274,
+            "horizontal_p95_m": 16.284337902546767,
+            "error_3d_p95_m": 61.71719427298652,
+            "positive_covariance_rows": 11905,
+            "positive_covariance_fixed_rows": 5924,
+            "covariance_trace_p50_m2": 5.9202245025612627e-05,
+            "wrong_fix_events": 67,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 65,
+            "unrecovered_events": 2,
+            "recovery_delay_p50_s": 21.800000000017462,
+            "recovery_delay_p95_s": 64.68000000001629
+          }
+        },
+        "wall_seconds": {
+          "baseline": 135.82572090020403,
+          "off": 134.66293219989166,
+          "covariance": 389.09984420007095
+        },
+        "solver_wall_seconds": {
+          "baseline": 91.5263,
+          "off": 90.8077,
+          "covariance": 347.087
+        },
+        "native_none_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "native_nonfinite_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "off_covariance_full_precision_positions_identical": true
+      },
+      "rtk": {
+        "run": "tokyo/run1",
+        "variants": {
+          "baseline_plain": {
+            "metrics": {
+              "matched_rows": 10062,
+              "expected_input_epochs": 11928,
+              "missing_or_unmatched_epochs": 1866,
+              "missing_or_unmatched_pct": 15.643863179074447,
+              "fixed_epochs": 8175,
+              "fix_pct_matched": 81.24627310673823,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 282,
+              "wrong_fix_pct_fixed": 3.44954128440367,
+              "correct_fix_epochs": 7893,
+              "within_50cm_pct_matched": 81.06738223017292,
+              "horizontal_p50_m": 0.028594116786884914,
+              "horizontal_p95_m": 2.256491964212033,
+              "error_3d_p95_m": 4.570799642656501,
+              "wrong_fix_events": 37,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 37,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 51.79999999998836,
+              "recovery_delay_p95_s": 93.68000000000465,
+              "native_output_epochs": 10062,
+              "native_none_epochs": 0
+            },
+            "wall_s": 63.57233100011945,
+            "states": {
+              "NORMAL": 11928
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "candidate_plain": {
+            "metrics": {
+              "matched_rows": 10062,
+              "expected_input_epochs": 11928,
+              "missing_or_unmatched_epochs": 1866,
+              "missing_or_unmatched_pct": 15.643863179074447,
+              "fixed_epochs": 8175,
+              "fix_pct_matched": 81.24627310673823,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 282,
+              "wrong_fix_pct_fixed": 3.44954128440367,
+              "correct_fix_epochs": 7893,
+              "within_50cm_pct_matched": 81.06738223017292,
+              "horizontal_p50_m": 0.028594116786884914,
+              "horizontal_p95_m": 2.256491964212033,
+              "error_3d_p95_m": 4.570799642656501,
+              "wrong_fix_events": 37,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 37,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 51.79999999998836,
+              "recovery_delay_p95_s": 93.68000000000465,
+              "native_output_epochs": 10062,
+              "native_none_epochs": 0
+            },
+            "wall_s": 61.8931577000767,
+            "states": {
+              "NORMAL": 11928
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "baseline_shadow": {
+            "metrics": {
+              "matched_rows": 10036,
+              "expected_input_epochs": 11928,
+              "missing_or_unmatched_epochs": 1892,
+              "missing_or_unmatched_pct": 15.861837692823608,
+              "fixed_epochs": 7060,
+              "fix_pct_matched": 70.34675169390195,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 278,
+              "wrong_fix_pct_fixed": 3.9376770538243626,
+              "correct_fix_epochs": 6782,
+              "within_50cm_pct_matched": 80.63969709047429,
+              "horizontal_p50_m": 0.028413206550108892,
+              "horizontal_p95_m": 2.2621535202991994,
+              "error_3d_p95_m": 4.73451820914651,
+              "wrong_fix_events": 36,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 36,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 52.19999999998254,
+              "recovery_delay_p95_s": 93.70000000000437,
+              "native_output_epochs": 10036,
+              "native_none_epochs": 0
+            },
+            "wall_s": 63.784782299771905,
+            "states": {
+              "NORMAL": 10420,
+              "SUSPECT": 11,
+              "QUARANTINE": 1414,
+              "RECOVERY": 83
+            },
+            "independent_position_valid": 11910,
+            "shadow_health_qualified": 5392,
+            "shadow_health_lookups": 11910,
+            "consensus_demoted": 1085
+          },
+          "candidate_shadow": {
+            "metrics": {
+              "matched_rows": 10062,
+              "expected_input_epochs": 11928,
+              "missing_or_unmatched_epochs": 1866,
+              "missing_or_unmatched_pct": 15.643863179074447,
+              "fixed_epochs": 8175,
+              "fix_pct_matched": 81.24627310673823,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 282,
+              "wrong_fix_pct_fixed": 3.44954128440367,
+              "correct_fix_epochs": 7893,
+              "within_50cm_pct_matched": 81.06738223017292,
+              "horizontal_p50_m": 0.028594116786884914,
+              "horizontal_p95_m": 2.256491964212033,
+              "error_3d_p95_m": 4.570799642656501,
+              "wrong_fix_events": 37,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 37,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 51.79999999998836,
+              "recovery_delay_p95_s": 93.68000000000465,
+              "native_output_epochs": 10062,
+              "native_none_epochs": 0
+            },
+            "wall_s": 61.70859449962154,
+            "states": {
+              "NORMAL": 11928
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          }
+        },
+        "comparisons": {
+          "baseline_plain_to_candidate_plain": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          },
+          "baseline_shadow_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 9,
+            "epoch_grid_identical": false,
+            "positions_identical": false,
+            "statuses_identical": false
+          },
+          "candidate_plain_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          }
+        },
+        "reference_match_tolerance_s": 0.11,
+        "wrong_fix_threshold_3d_m": 2.0,
+        "expected_epoch_basis": "native processed rover epochs: exact base + interpolated base + skipped"
+      },
+      "covariance_accuracy": {
+        "fixed": {
+          "count": 5924,
+          "finite_positive_trace": 5924,
+          "trace_at_most_4_m2": 5924,
+          "trace_p50_m2": 2.0630093198672288e-05,
+          "trace_p95_m2": 0.0001298600823414423
+        },
+        "wrong_fixed_3d_above_2m": {
+          "count": 388,
+          "finite_positive_trace": 388,
+          "trace_at_most_4_m2": 388,
+          "trace_p50_m2": 2.1474267246471804e-05,
+          "trace_p95_m2": 0.0010867848233345457
+        },
+        "interpretation": "Conditional model covariance is not the probability that the integer hypothesis is correct."
+      },
+      "evidence_hashes": {
+        "fgo/baseline": {
+          "run_record_sha256": "c0268301150a65a941a5b9b345c9da347c501b35d5fca7521458040169e36b1d",
+          "binary_sha256": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+              "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+              "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+              "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+              "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+              "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+            }
+          },
+          "outputs": {
+            ".csv": "5126d8be80b37f8287ad30a08a8c7fa7a18c8fcaf9b4ca0f321129e59e92ab68"
+          }
+        },
+        "fgo/off": {
+          "run_record_sha256": "48e27343b47c69200bbbfa71c8c1f2845bbc094d4569a5842a21af3123a9ca22",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+              "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+              "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+              "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+              "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+              "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+            }
+          },
+          "outputs": {
+            ".csv": "6263da50f24b8a75526fbb2f91ac5afa329a588c02319926166755382ebe3d44",
+            ".shadow.csv": "dbf1cb9af777d423f7f183a83e29f14d04787f16ea77278ebb04d043d7d129a1"
+          }
+        },
+        "fgo/covariance": {
+          "run_record_sha256": "3e82e6c36bb26d3e641b872453dc7e6f968d9f0b6887c2c8525ef32177bbde09",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+              "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+              "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+              "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+              "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+              "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+            }
+          },
+          "outputs": {
+            ".csv": "76a8d06e4ad0304d903091ece6c7a34a4b6ff408c55e518df283abefa08f2f25",
+            ".shadow.csv": "0fbe74a3a65ec19a4e977c01086ae040ec3224658886e575f0810eefdbc0e69c"
+          }
+        },
+        "rtk/baseline_plain": {
+          "run_record_sha256": "014101731072b1e8a6a91495326bd72c5c494de56ba57b40a09fc563aa14d9c5",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+            "base.obs": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+            "base.nav": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+            "reference.csv": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+            "shadow": "0fbe74a3a65ec19a4e977c01086ae040ec3224658886e575f0810eefdbc0e69c"
+          },
+          "outputs": {
+            ".pos": "1f476a0a158866e52cfd260583264f70c79ce9cb8e4f61649910bcf2ace91376",
+            ".integrity.csv": "717545a713a58a39f187c00ac69815665717fdb39731060d65fd02608a40ab5b",
+            ".log": "c0f7cad6179c86dd091388a806967f113c6369737089589a891167323a826056"
+          }
+        },
+        "rtk/candidate_plain": {
+          "run_record_sha256": "a80794f16a0f0f5faa4eb92e7cc0403862a8e89e851d02e868f3c9b7fa0548dc",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+            "base.obs": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+            "base.nav": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+            "reference.csv": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+            "shadow": "0fbe74a3a65ec19a4e977c01086ae040ec3224658886e575f0810eefdbc0e69c"
+          },
+          "outputs": {
+            ".pos": "1f476a0a158866e52cfd260583264f70c79ce9cb8e4f61649910bcf2ace91376",
+            ".integrity.csv": "717545a713a58a39f187c00ac69815665717fdb39731060d65fd02608a40ab5b",
+            ".log": "4cfdd8b5b6416be6c6fbf0529d100919840541286baeb1275fac848033726412"
+          }
+        },
+        "rtk/baseline_shadow": {
+          "run_record_sha256": "ded0a254e8d9d1f768431418423158337e80d60177e8ae33053b2a0a1324a808",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+            "base.obs": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+            "base.nav": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+            "reference.csv": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+            "shadow": "0fbe74a3a65ec19a4e977c01086ae040ec3224658886e575f0810eefdbc0e69c"
+          },
+          "outputs": {
+            ".pos": "4114c8733c8535bca7d285beeeb3719add24c1fa8e018c220400e6710ea06569",
+            ".integrity.csv": "94c46a84dd9f7920dacf626a779c52fc8acf99ffdd1e00f4b8a013d4045e8328",
+            ".log": "dcdf7de8ce9f6b7d66775284dda7dad1b23a12c23084fd8c6ac6a027bdd93d17"
+          }
+        },
+        "rtk/candidate_shadow": {
+          "run_record_sha256": "a227961ec8f349073eea6ee81bd39e96b047bf5936e9d441af91d5d4b8db6279",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+            "base.obs": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+            "base.nav": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+            "reference.csv": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+            "shadow": "0fbe74a3a65ec19a4e977c01086ae040ec3224658886e575f0810eefdbc0e69c"
+          },
+          "outputs": {
+            ".pos": "1f476a0a158866e52cfd260583264f70c79ce9cb8e4f61649910bcf2ace91376",
+            ".integrity.csv": "5b4df208f69cd8abf3cf76ca016d81e6513d67d34c9d801f48518bb37849d324",
+            ".log": "dace5f106574f966b79eedde877e6f4302634aaf938d4795850eb021dc142974"
+          }
+        }
+      }
+    },
+    "tokyo_run2": {
+      "fgo": {
+        "run": "tokyo/run2",
+        "max_epochs": -1,
+        "start_epoch": 0,
+        "baseline_off_solution_text_identical": true,
+        "off_covariance_solution_text_identical": true,
+        "expected_epoch_basis": "native rover reader inputs, before problem construction and output filtering",
+        "metrics": {
+          "baseline": {
+            "matched_rows": 9147,
+            "expected_input_epochs": 9151,
+            "missing_or_unmatched_epochs": 4,
+            "missing_or_unmatched_pct": 0.04371106982843405,
+            "fixed_epochs": 6650,
+            "fix_pct_matched": 72.70143216355089,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 226,
+            "wrong_fix_pct_fixed": 3.398496240601504,
+            "correct_fix_epochs": 6424,
+            "within_50cm_pct_matched": 77.94905433475456,
+            "horizontal_p50_m": 0.0206155281280883,
+            "horizontal_p95_m": 3.392072213226557,
+            "error_3d_p95_m": 4.355849917901217,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 14,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 14,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 12.900000000008731,
+            "recovery_delay_p95_s": 53.6799999999901
+          },
+          "off": {
+            "matched_rows": 9147,
+            "expected_input_epochs": 9151,
+            "missing_or_unmatched_epochs": 4,
+            "missing_or_unmatched_pct": 0.04371106982843405,
+            "fixed_epochs": 6650,
+            "fix_pct_matched": 72.70143216355089,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 226,
+            "wrong_fix_pct_fixed": 3.398496240601504,
+            "correct_fix_epochs": 6424,
+            "within_50cm_pct_matched": 77.94905433475456,
+            "horizontal_p50_m": 0.0206155281280883,
+            "horizontal_p95_m": 3.392072213226557,
+            "error_3d_p95_m": 4.355849917901217,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 14,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 14,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 12.900000000008731,
+            "recovery_delay_p95_s": 53.6799999999901
+          },
+          "covariance": {
+            "matched_rows": 9147,
+            "expected_input_epochs": 9151,
+            "missing_or_unmatched_epochs": 4,
+            "missing_or_unmatched_pct": 0.04371106982843405,
+            "fixed_epochs": 6650,
+            "fix_pct_matched": 72.70143216355089,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 226,
+            "wrong_fix_pct_fixed": 3.398496240601504,
+            "correct_fix_epochs": 6424,
+            "within_50cm_pct_matched": 77.94905433475456,
+            "horizontal_p50_m": 0.0206155281280883,
+            "horizontal_p95_m": 3.392072213226557,
+            "error_3d_p95_m": 4.355849917901217,
+            "positive_covariance_rows": 9130,
+            "positive_covariance_fixed_rows": 6650,
+            "covariance_trace_p50_m2": 1.3742753338234057e-05,
+            "wrong_fix_events": 14,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 14,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 12.900000000008731,
+            "recovery_delay_p95_s": 53.6799999999901
+          }
+        },
+        "wall_seconds": {
+          "baseline": 149.305331800133,
+          "off": 146.64624349959195,
+          "covariance": 438.0428781998344
+        },
+        "solver_wall_seconds": {
+          "baseline": 97.1698,
+          "off": 92.1896,
+          "covariance": 390.292
+        },
+        "native_none_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "native_nonfinite_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "off_covariance_full_precision_positions_identical": true
+      },
+      "rtk": {
+        "run": "tokyo/run2",
+        "variants": {
+          "baseline_plain": {
+            "metrics": {
+              "matched_rows": 8383,
+              "expected_input_epochs": 9151,
+              "missing_or_unmatched_epochs": 768,
+              "missing_or_unmatched_pct": 8.392525407059338,
+              "fixed_epochs": 7146,
+              "fix_pct_matched": 85.24394608135512,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 45,
+              "wrong_fix_pct_fixed": 0.6297229219143576,
+              "correct_fix_epochs": 7101,
+              "within_50cm_pct_matched": 88.5721102230705,
+              "horizontal_p50_m": 0.018839151458417042,
+              "horizontal_p95_m": 1.6094678723222402,
+              "error_3d_p95_m": 3.197279009422308,
+              "wrong_fix_events": 13,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 13,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 5.2000000000116415,
+              "recovery_delay_p95_s": 39.92000000000698,
+              "native_output_epochs": 8383,
+              "native_none_epochs": 0
+            },
+            "wall_s": 76.4859046000056,
+            "states": {
+              "NORMAL": 9151
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "candidate_plain": {
+            "metrics": {
+              "matched_rows": 8383,
+              "expected_input_epochs": 9151,
+              "missing_or_unmatched_epochs": 768,
+              "missing_or_unmatched_pct": 8.392525407059338,
+              "fixed_epochs": 7146,
+              "fix_pct_matched": 85.24394608135512,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 45,
+              "wrong_fix_pct_fixed": 0.6297229219143576,
+              "correct_fix_epochs": 7101,
+              "within_50cm_pct_matched": 88.5721102230705,
+              "horizontal_p50_m": 0.018839151458417042,
+              "horizontal_p95_m": 1.6094678723222402,
+              "error_3d_p95_m": 3.197279009422308,
+              "wrong_fix_events": 13,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 13,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 5.2000000000116415,
+              "recovery_delay_p95_s": 39.92000000000698,
+              "native_output_epochs": 8383,
+              "native_none_epochs": 0
+            },
+            "wall_s": 74.52195420023054,
+            "states": {
+              "NORMAL": 9151
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "baseline_shadow": {
+            "metrics": {
+              "matched_rows": 8378,
+              "expected_input_epochs": 9151,
+              "missing_or_unmatched_epochs": 773,
+              "missing_or_unmatched_pct": 8.447164244344881,
+              "fixed_epochs": 6897,
+              "fix_pct_matched": 82.32275005968012,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 43,
+              "wrong_fix_pct_fixed": 0.6234594751341163,
+              "correct_fix_epochs": 6854,
+              "within_50cm_pct_matched": 86.82263069945094,
+              "horizontal_p50_m": 0.018853742815017317,
+              "horizontal_p95_m": 1.6021257415715207,
+              "error_3d_p95_m": 3.1738582078277373,
+              "wrong_fix_events": 13,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 13,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 5.2000000000116415,
+              "recovery_delay_p95_s": 39.92000000000698,
+              "native_output_epochs": 8378,
+              "native_none_epochs": 0
+            },
+            "wall_s": 73.66635939991102,
+            "states": {
+              "NORMAL": 8833,
+              "SUSPECT": 7,
+              "QUARANTINE": 303,
+              "RECOVERY": 8
+            },
+            "independent_position_valid": 9151,
+            "shadow_health_qualified": 6502,
+            "shadow_health_lookups": 9151,
+            "consensus_demoted": 103
+          },
+          "candidate_shadow": {
+            "metrics": {
+              "matched_rows": 8383,
+              "expected_input_epochs": 9151,
+              "missing_or_unmatched_epochs": 768,
+              "missing_or_unmatched_pct": 8.392525407059338,
+              "fixed_epochs": 7146,
+              "fix_pct_matched": 85.24394608135512,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 45,
+              "wrong_fix_pct_fixed": 0.6297229219143576,
+              "correct_fix_epochs": 7101,
+              "within_50cm_pct_matched": 88.5721102230705,
+              "horizontal_p50_m": 0.018839151458417042,
+              "horizontal_p95_m": 1.6094678723222402,
+              "error_3d_p95_m": 3.197279009422308,
+              "wrong_fix_events": 13,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 13,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 5.2000000000116415,
+              "recovery_delay_p95_s": 39.92000000000698,
+              "native_output_epochs": 8383,
+              "native_none_epochs": 0
+            },
+            "wall_s": 73.2450864999555,
+            "states": {
+              "NORMAL": 9151
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          }
+        },
+        "comparisons": {
+          "baseline_plain_to_candidate_plain": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          },
+          "baseline_shadow_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": false,
+            "positions_identical": false,
+            "statuses_identical": false
+          },
+          "candidate_plain_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          }
+        },
+        "reference_match_tolerance_s": 0.11,
+        "wrong_fix_threshold_3d_m": 2.0,
+        "expected_epoch_basis": "native processed rover epochs: exact base + interpolated base + skipped"
+      },
+      "covariance_accuracy": {
+        "fixed": {
+          "count": 6650,
+          "finite_positive_trace": 6650,
+          "trace_at_most_4_m2": 6650,
+          "trace_p50_m2": 1.1121834964898616e-05,
+          "trace_p95_m2": 5.8187201746769854e-05
+        },
+        "wrong_fixed_3d_above_2m": {
+          "count": 226,
+          "finite_positive_trace": 226,
+          "trace_at_most_4_m2": 226,
+          "trace_p50_m2": 1.2532270120003327e-05,
+          "trace_p95_m2": 8.339486666440873e-05
+        },
+        "interpretation": "Conditional model covariance is not the probability that the integer hypothesis is correct."
+      },
+      "evidence_hashes": {
+        "fgo/baseline": {
+          "run_record_sha256": "1983f0aae4f106c3b00bd00731cc11f119cb21bfc5f2c211c0acb9baecef7334",
+          "binary_sha256": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\rover.obs",
+              "sha256": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\base.obs",
+              "sha256": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\base.nav",
+              "sha256": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\imu.csv",
+              "sha256": "4f9492fae0d11938e3a2b0ce64fc33cf513f123c4c40ee79693b76abaa847daa"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\reference.csv",
+              "sha256": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53"
+            }
+          },
+          "outputs": {
+            ".csv": "5260c122384300a062d39de5fdc08ccc96a12edbe79134c6ec1c568b00c6414a"
+          }
+        },
+        "fgo/off": {
+          "run_record_sha256": "95e26a1dd9cb361b43dd5d911c424891eb48c0d24f92090378a51a8fe1325c1b",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\rover.obs",
+              "sha256": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\base.obs",
+              "sha256": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\base.nav",
+              "sha256": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\imu.csv",
+              "sha256": "4f9492fae0d11938e3a2b0ce64fc33cf513f123c4c40ee79693b76abaa847daa"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\reference.csv",
+              "sha256": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53"
+            }
+          },
+          "outputs": {
+            ".csv": "01f2e4cd417fb04de18cf911e624e129e49adc52ec229d317b1c8903e21f82a1",
+            ".shadow.csv": "2ded603a4d342360b7ed673b2cc1d0470e8d4f1546015bd0a8a21a5ced0c329a"
+          }
+        },
+        "fgo/covariance": {
+          "run_record_sha256": "9d785d04e165a1f3230693d3aa0a46dd16967a9b33e23592341de2c74944fed7",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\rover.obs",
+              "sha256": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\base.obs",
+              "sha256": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\base.nav",
+              "sha256": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\imu.csv",
+              "sha256": "4f9492fae0d11938e3a2b0ce64fc33cf513f123c4c40ee79693b76abaa847daa"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\reference.csv",
+              "sha256": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53"
+            }
+          },
+          "outputs": {
+            ".csv": "d61d6395065d86ed502ccccf94db07a6f533e27ed6327c99afdb186a726f58b8",
+            ".shadow.csv": "b6cdb999f72d6c24a7ade4e9c5d837bc0a64bcc18882f2a202519531d78a56aa"
+          }
+        },
+        "rtk/baseline_plain": {
+          "run_record_sha256": "e20d602c078479a417e45edaef3698304c656b94066e5a665abc372254ddcc58",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098",
+            "base.obs": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53",
+            "shadow": "b6cdb999f72d6c24a7ade4e9c5d837bc0a64bcc18882f2a202519531d78a56aa"
+          },
+          "outputs": {
+            ".pos": "01e7720d6d7fbe8f11752bdb99051d4f1950dace70594d37f03797b023330b79",
+            ".integrity.csv": "01139eda3cd58ab6d14c3d67707f53a9a25e6ce21fd1a3590491b8150571f575",
+            ".log": "6b076625576ac0d11fb4186fdea00a01d64204d4ef33c529cc9df935dc10b90b"
+          }
+        },
+        "rtk/candidate_plain": {
+          "run_record_sha256": "974c19404498bffc08e0532c088a6048017573ce239672e5df6d3498175c2654",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098",
+            "base.obs": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53",
+            "shadow": "b6cdb999f72d6c24a7ade4e9c5d837bc0a64bcc18882f2a202519531d78a56aa"
+          },
+          "outputs": {
+            ".pos": "01e7720d6d7fbe8f11752bdb99051d4f1950dace70594d37f03797b023330b79",
+            ".integrity.csv": "01139eda3cd58ab6d14c3d67707f53a9a25e6ce21fd1a3590491b8150571f575",
+            ".log": "22cfee90668679214423c8da99f8f203c01ca004ade08567d83ba0a7ea7c679d"
+          }
+        },
+        "rtk/baseline_shadow": {
+          "run_record_sha256": "d7e20705b39522589b1397fd0e21c4ac755d2919804cbf239c934ede3edc4b0f",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098",
+            "base.obs": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53",
+            "shadow": "b6cdb999f72d6c24a7ade4e9c5d837bc0a64bcc18882f2a202519531d78a56aa"
+          },
+          "outputs": {
+            ".pos": "d4e11eed00efdce5c52e43e249c0a57690f33fa6bb0ca0eb00e61231cef12243",
+            ".integrity.csv": "6e56cd29519d526c4cd743090ab64ddf4ba0c3675b6c94a9c767143f0002192e",
+            ".log": "19f30c8c4a864665bc47f6f3b2b054311f96fb97876240ad2b1896a1d19bde9a"
+          }
+        },
+        "rtk/candidate_shadow": {
+          "run_record_sha256": "b43453d5d536c06092b9f6df5087d9756f3ec4f9faed835a74162638b601a305",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098",
+            "base.obs": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53",
+            "shadow": "b6cdb999f72d6c24a7ade4e9c5d837bc0a64bcc18882f2a202519531d78a56aa"
+          },
+          "outputs": {
+            ".pos": "01e7720d6d7fbe8f11752bdb99051d4f1950dace70594d37f03797b023330b79",
+            ".integrity.csv": "44380134b69bf0fd6029389c152242e6dc02a141525df953ecec72662e1336d4",
+            ".log": "df6d040d306a57c13e6871cd158ae2d2af3f32dfdfc03ccd2c398391359770e1"
+          }
+        }
+      }
+    },
+    "tokyo_run3": {
+      "fgo": {
+        "run": "tokyo/run3",
+        "max_epochs": -1,
+        "start_epoch": 0,
+        "baseline_off_solution_text_identical": true,
+        "off_covariance_solution_text_identical": true,
+        "expected_epoch_basis": "native rover reader inputs, before problem construction and output filtering",
+        "metrics": {
+          "baseline": {
+            "matched_rows": 15294,
+            "expected_input_epochs": 15301,
+            "missing_or_unmatched_epochs": 7,
+            "missing_or_unmatched_pct": 0.045748643879485004,
+            "fixed_epochs": 10963,
+            "fix_pct_matched": 71.6817052438865,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 112,
+            "wrong_fix_pct_fixed": 1.0216181702088845,
+            "correct_fix_epochs": 10851,
+            "within_50cm_pct_matched": 68.03975415195501,
+            "horizontal_p50_m": 0.026419689627245814,
+            "horizontal_p95_m": 5.981295045593516,
+            "error_3d_p95_m": 12.571139297213213,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 23,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 23,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 35.0,
+            "recovery_delay_p95_s": 143.31999999999533
+          },
+          "off": {
+            "matched_rows": 15294,
+            "expected_input_epochs": 15301,
+            "missing_or_unmatched_epochs": 7,
+            "missing_or_unmatched_pct": 0.045748643879485004,
+            "fixed_epochs": 10963,
+            "fix_pct_matched": 71.6817052438865,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 112,
+            "wrong_fix_pct_fixed": 1.0216181702088845,
+            "correct_fix_epochs": 10851,
+            "within_50cm_pct_matched": 68.03975415195501,
+            "horizontal_p50_m": 0.026419689627245814,
+            "horizontal_p95_m": 5.981295045593516,
+            "error_3d_p95_m": 12.571139297213213,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 23,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 23,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 35.0,
+            "recovery_delay_p95_s": 143.31999999999533
+          },
+          "covariance": {
+            "matched_rows": 15294,
+            "expected_input_epochs": 15301,
+            "missing_or_unmatched_epochs": 7,
+            "missing_or_unmatched_pct": 0.045748643879485004,
+            "fixed_epochs": 10963,
+            "fix_pct_matched": 71.6817052438865,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 112,
+            "wrong_fix_pct_fixed": 1.0216181702088845,
+            "correct_fix_epochs": 10851,
+            "within_50cm_pct_matched": 68.03975415195501,
+            "horizontal_p50_m": 0.026419689627245814,
+            "horizontal_p95_m": 5.981295045593516,
+            "error_3d_p95_m": 12.571139297213213,
+            "positive_covariance_rows": 15294,
+            "positive_covariance_fixed_rows": 10963,
+            "covariance_trace_p50_m2": 1.5836667820750057e-05,
+            "wrong_fix_events": 23,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 23,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 35.0,
+            "recovery_delay_p95_s": 143.31999999999533
+          }
+        },
+        "wall_seconds": {
+          "baseline": 329.3726332001388,
+          "off": 223.2190820001997,
+          "covariance": 739.0788786998019
+        },
+        "solver_wall_seconds": {
+          "baseline": 230.637,
+          "off": 138.694,
+          "covariance": 656.1
+        },
+        "native_none_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "native_nonfinite_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "off_covariance_full_precision_positions_identical": true
+      },
+      "rtk": {
+        "run": "tokyo/run3",
+        "variants": {
+          "baseline_plain": {
+            "metrics": {
+              "matched_rows": 13539,
+              "expected_input_epochs": 15301,
+              "missing_or_unmatched_epochs": 1762,
+              "missing_or_unmatched_pct": 11.515587216521796,
+              "fixed_epochs": 10924,
+              "fix_pct_matched": 80.68542728414211,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 14,
+              "wrong_fix_pct_fixed": 0.12815818381545221,
+              "correct_fix_epochs": 10910,
+              "within_50cm_pct_matched": 87.93854789866312,
+              "horizontal_p50_m": 0.016076304757148697,
+              "horizontal_p95_m": 1.1878732148355193,
+              "error_3d_p95_m": 2.7912878734726867,
+              "wrong_fix_events": 11,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 11,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 22.0,
+              "recovery_delay_p95_s": 42.0,
+              "native_output_epochs": 13539,
+              "native_none_epochs": 0
+            },
+            "wall_s": 159.7009534998797,
+            "states": {
+              "NORMAL": 15301
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "candidate_plain": {
+            "metrics": {
+              "matched_rows": 13539,
+              "expected_input_epochs": 15301,
+              "missing_or_unmatched_epochs": 1762,
+              "missing_or_unmatched_pct": 11.515587216521796,
+              "fixed_epochs": 10924,
+              "fix_pct_matched": 80.68542728414211,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 14,
+              "wrong_fix_pct_fixed": 0.12815818381545221,
+              "correct_fix_epochs": 10910,
+              "within_50cm_pct_matched": 87.93854789866312,
+              "horizontal_p50_m": 0.016076304757148697,
+              "horizontal_p95_m": 1.1878732148355193,
+              "error_3d_p95_m": 2.7912878734726867,
+              "wrong_fix_events": 11,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 11,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 22.0,
+              "recovery_delay_p95_s": 42.0,
+              "native_output_epochs": 13539,
+              "native_none_epochs": 0
+            },
+            "wall_s": 158.89236389985308,
+            "states": {
+              "NORMAL": 15301
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "baseline_shadow": {
+            "metrics": {
+              "matched_rows": 13541,
+              "expected_input_epochs": 15301,
+              "missing_or_unmatched_epochs": 1760,
+              "missing_or_unmatched_pct": 11.502516175413371,
+              "fixed_epochs": 10082,
+              "fix_pct_matched": 74.45535780223027,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 4,
+              "wrong_fix_pct_fixed": 0.0396746677246578,
+              "correct_fix_epochs": 10078,
+              "within_50cm_pct_matched": 86.05715973709475,
+              "horizontal_p50_m": 0.0161839847994229,
+              "horizontal_p95_m": 1.9122383181538218,
+              "error_3d_p95_m": 4.602496302423818,
+              "wrong_fix_events": 4,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 4,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 1.6999999999970896,
+              "recovery_delay_p95_s": 18.999999999999993,
+              "native_output_epochs": 13541,
+              "native_none_epochs": 0
+            },
+            "wall_s": 160.55425389995798,
+            "states": {
+              "NORMAL": 13868,
+              "SUSPECT": 16,
+              "QUARANTINE": 1344,
+              "RECOVERY": 73
+            },
+            "independent_position_valid": 15297,
+            "shadow_health_qualified": 10904,
+            "shadow_health_lookups": 15297,
+            "consensus_demoted": 591
+          },
+          "candidate_shadow": {
+            "metrics": {
+              "matched_rows": 13539,
+              "expected_input_epochs": 15301,
+              "missing_or_unmatched_epochs": 1762,
+              "missing_or_unmatched_pct": 11.515587216521796,
+              "fixed_epochs": 10924,
+              "fix_pct_matched": 80.68542728414211,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 14,
+              "wrong_fix_pct_fixed": 0.12815818381545221,
+              "correct_fix_epochs": 10910,
+              "within_50cm_pct_matched": 87.93854789866312,
+              "horizontal_p50_m": 0.016076304757148697,
+              "horizontal_p95_m": 1.1878732148355193,
+              "error_3d_p95_m": 2.7912878734726867,
+              "wrong_fix_events": 11,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 11,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 22.0,
+              "recovery_delay_p95_s": 42.0,
+              "native_output_epochs": 13539,
+              "native_none_epochs": 0
+            },
+            "wall_s": 160.07175339991227,
+            "states": {
+              "NORMAL": 15301
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          }
+        },
+        "comparisons": {
+          "baseline_plain_to_candidate_plain": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          },
+          "baseline_shadow_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 50,
+            "epoch_grid_identical": false,
+            "positions_identical": false,
+            "statuses_identical": false
+          },
+          "candidate_plain_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          }
+        },
+        "reference_match_tolerance_s": 0.11,
+        "wrong_fix_threshold_3d_m": 2.0,
+        "expected_epoch_basis": "native processed rover epochs: exact base + interpolated base + skipped"
+      },
+      "covariance_accuracy": {
+        "fixed": {
+          "count": 10963,
+          "finite_positive_trace": 10963,
+          "trace_at_most_4_m2": 10963,
+          "trace_p50_m2": 1.0536565545811617e-05,
+          "trace_p95_m2": 5.4236708826324175e-05
+        },
+        "wrong_fixed_3d_above_2m": {
+          "count": 112,
+          "finite_positive_trace": 112,
+          "trace_at_most_4_m2": 112,
+          "trace_p50_m2": 3.90332134259408e-05,
+          "trace_p95_m2": 0.0017788676673825552
+        },
+        "interpretation": "Conditional model covariance is not the probability that the integer hypothesis is correct."
+      },
+      "evidence_hashes": {
+        "fgo/baseline": {
+          "run_record_sha256": "ea55fef687faf42b37166d8a968e6962a3ed1cd691347bcfb7bf1b6d5958eaff",
+          "binary_sha256": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\rover.obs",
+              "sha256": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\base.obs",
+              "sha256": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\base.nav",
+              "sha256": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\imu.csv",
+              "sha256": "8af69bad09876319b959cb6edb8f4a062d4c32611c450fa03265f6e5b9ac2265"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\reference.csv",
+              "sha256": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49"
+            }
+          },
+          "outputs": {
+            ".csv": "8afd08a1446c0c8465d656135bca7e15c579559d0d17511715358884f1fbb3c0"
+          }
+        },
+        "fgo/off": {
+          "run_record_sha256": "532203c580f0f2d636786cb5716e8b5983b830153bf72dbde04f036e77187527",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\rover.obs",
+              "sha256": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\base.obs",
+              "sha256": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\base.nav",
+              "sha256": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\imu.csv",
+              "sha256": "8af69bad09876319b959cb6edb8f4a062d4c32611c450fa03265f6e5b9ac2265"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\reference.csv",
+              "sha256": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49"
+            }
+          },
+          "outputs": {
+            ".csv": "4d69d3b7d7d8e0463751acee1a8bb70f7e7f086c1e83bb3498b21dd8437d6522",
+            ".shadow.csv": "3d9c153a7c085dcb24260cec59db6956af6ed4ba849cbcc8d23ace2f13918cd3"
+          }
+        },
+        "fgo/covariance": {
+          "run_record_sha256": "24fd3c7db8f8f26474500ac6a94aa3f63589a42a32d03fdf63bc9fbd16b7641a",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\rover.obs",
+              "sha256": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\base.obs",
+              "sha256": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\base.nav",
+              "sha256": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\imu.csv",
+              "sha256": "8af69bad09876319b959cb6edb8f4a062d4c32611c450fa03265f6e5b9ac2265"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\reference.csv",
+              "sha256": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49"
+            }
+          },
+          "outputs": {
+            ".csv": "1f5a096a4321daa1071706ac75a105995c2ef23e133f6b5d584e5d3e8f172fec",
+            ".shadow.csv": "dbdcec54b8c303e843e1b9f98ed4591061b8f4a56a76c2c0a6de229c501be8b2"
+          }
+        },
+        "rtk/baseline_plain": {
+          "run_record_sha256": "e1023cbda8ee0c8742fda49e98f03a4462cb1adcd2484ba93685884ee9609166",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3",
+            "base.obs": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49",
+            "shadow": "dbdcec54b8c303e843e1b9f98ed4591061b8f4a56a76c2c0a6de229c501be8b2"
+          },
+          "outputs": {
+            ".pos": "b4aa57766c72f55e6785b81c310ecf48165380c9e56557569cdf988cbdd3053e",
+            ".integrity.csv": "2f426395a9f70ad7674a2c3acfba1660c0db2defe7f714c67e6919bafe8345e8",
+            ".log": "8033a32b8fba59f3772ad6a720d67b344acd8768e2761ed2dcc0cefe3022a333"
+          }
+        },
+        "rtk/candidate_plain": {
+          "run_record_sha256": "6e07b9d23eb96077fa89db9e2f04a074745050ad0a148e5253ef536562f2690c",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3",
+            "base.obs": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49",
+            "shadow": "dbdcec54b8c303e843e1b9f98ed4591061b8f4a56a76c2c0a6de229c501be8b2"
+          },
+          "outputs": {
+            ".pos": "b4aa57766c72f55e6785b81c310ecf48165380c9e56557569cdf988cbdd3053e",
+            ".integrity.csv": "2f426395a9f70ad7674a2c3acfba1660c0db2defe7f714c67e6919bafe8345e8",
+            ".log": "c9da2616d31df746cd1db41e6361007417639237611a73dec1b1ecd1fa607c1e"
+          }
+        },
+        "rtk/baseline_shadow": {
+          "run_record_sha256": "db59d05d282572e13103ce75b2167be5e6a5b9a1a560cd80a6d496a395feec2e",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3",
+            "base.obs": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49",
+            "shadow": "dbdcec54b8c303e843e1b9f98ed4591061b8f4a56a76c2c0a6de229c501be8b2"
+          },
+          "outputs": {
+            ".pos": "d6f0d0599c64114eb84af912c148c464e8258943cbe93b2641f0892e6fa3fca3",
+            ".integrity.csv": "2afc3ea1f1604fb644a81c9a3b22309088ad9b4326480139b81c72dddd02166a",
+            ".log": "87d87a80ac58cad36926339d1cabbb76c31b0a1f77e5d0fdc2f28b46d4428f17"
+          }
+        },
+        "rtk/candidate_shadow": {
+          "run_record_sha256": "9fe2c88c4c42125a456f134aa6e6a33d1fb4734dce4d825a6e5ac9f4d2526159",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3",
+            "base.obs": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8",
+            "base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+            "reference.csv": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49",
+            "shadow": "dbdcec54b8c303e843e1b9f98ed4591061b8f4a56a76c2c0a6de229c501be8b2"
+          },
+          "outputs": {
+            ".pos": "b4aa57766c72f55e6785b81c310ecf48165380c9e56557569cdf988cbdd3053e",
+            ".integrity.csv": "ed1d662604b8a08c0ed34d33d6da5c1a51dd9ee510112a0c01fc8b62191f1d7c",
+            ".log": "396d4ff39139ce5d75ecc39466fb4534e094b4816f6a1d82ee5416129064e527"
+          }
+        }
+      }
+    },
+    "nagoya_run1": {
+      "fgo": {
+        "run": "nagoya/run1",
+        "max_epochs": -1,
+        "start_epoch": 0,
+        "baseline_off_solution_text_identical": true,
+        "off_covariance_solution_text_identical": true,
+        "expected_epoch_basis": "native rover reader inputs, before problem construction and output filtering",
+        "metrics": {
+          "baseline": {
+            "matched_rows": 7529,
+            "expected_input_epochs": 7602,
+            "missing_or_unmatched_epochs": 73,
+            "missing_or_unmatched_pct": 0.9602736122073139,
+            "fixed_epochs": 3076,
+            "fix_pct_matched": 40.85535927746049,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 37,
+            "wrong_fix_pct_fixed": 1.2028608582574774,
+            "correct_fix_epochs": 3039,
+            "within_50cm_pct_matched": 46.06189400982866,
+            "horizontal_p50_m": 0.3712155707941142,
+            "horizontal_p95_m": 17.352225405978196,
+            "error_3d_p95_m": 24.459312007545265,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 23,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 23,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 6.400000000023283,
+            "recovery_delay_p95_s": 84.15999999995111
+          },
+          "off": {
+            "matched_rows": 7529,
+            "expected_input_epochs": 7602,
+            "missing_or_unmatched_epochs": 73,
+            "missing_or_unmatched_pct": 0.9602736122073139,
+            "fixed_epochs": 3076,
+            "fix_pct_matched": 40.85535927746049,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 37,
+            "wrong_fix_pct_fixed": 1.2028608582574774,
+            "correct_fix_epochs": 3039,
+            "within_50cm_pct_matched": 46.06189400982866,
+            "horizontal_p50_m": 0.3712155707941142,
+            "horizontal_p95_m": 17.352225405978196,
+            "error_3d_p95_m": 24.459312007545265,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 23,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 23,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 6.400000000023283,
+            "recovery_delay_p95_s": 84.15999999995111
+          },
+          "covariance": {
+            "matched_rows": 7529,
+            "expected_input_epochs": 7602,
+            "missing_or_unmatched_epochs": 73,
+            "missing_or_unmatched_pct": 0.9602736122073139,
+            "fixed_epochs": 3076,
+            "fix_pct_matched": 40.85535927746049,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 37,
+            "wrong_fix_pct_fixed": 1.2028608582574774,
+            "correct_fix_epochs": 3039,
+            "within_50cm_pct_matched": 46.06189400982866,
+            "horizontal_p50_m": 0.3712155707941142,
+            "horizontal_p95_m": 17.352225405978196,
+            "error_3d_p95_m": 24.459312007545265,
+            "positive_covariance_rows": 7529,
+            "positive_covariance_fixed_rows": 3076,
+            "covariance_trace_p50_m2": 0.0009674754250055893,
+            "wrong_fix_events": 23,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 23,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 6.400000000023283,
+            "recovery_delay_p95_s": 84.15999999995111
+          }
+        },
+        "wall_seconds": {
+          "baseline": 100.04638970037922,
+          "off": 103.69407110009342,
+          "covariance": 371.4276506002061
+        },
+        "solver_wall_seconds": {
+          "baseline": 71.346,
+          "off": 72.4582,
+          "covariance": 340.629
+        },
+        "native_none_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "native_nonfinite_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "off_covariance_full_precision_positions_identical": true
+      },
+      "rtk": {
+        "run": "nagoya/run1",
+        "variants": {
+          "baseline_plain": {
+            "metrics": {
+              "matched_rows": 6715,
+              "expected_input_epochs": 7602,
+              "missing_or_unmatched_epochs": 887,
+              "missing_or_unmatched_pct": 11.66798210997106,
+              "fixed_epochs": 4702,
+              "fix_pct_matched": 70.02233804914371,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 5,
+              "wrong_fix_pct_fixed": 0.10633772862611654,
+              "correct_fix_epochs": 4697,
+              "within_50cm_pct_matched": 73.25390915860015,
+              "horizontal_p50_m": 0.12372289376485164,
+              "horizontal_p95_m": 1.429349545125566,
+              "error_3d_p95_m": 4.065614267646724,
+              "wrong_fix_events": 4,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 4,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 46.00000000005821,
+              "recovery_delay_p95_s": 46.54000000008964,
+              "native_output_epochs": 6715,
+              "native_none_epochs": 0
+            },
+            "wall_s": 43.56255569960922,
+            "states": {
+              "NORMAL": 7602
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "candidate_plain": {
+            "metrics": {
+              "matched_rows": 6715,
+              "expected_input_epochs": 7602,
+              "missing_or_unmatched_epochs": 887,
+              "missing_or_unmatched_pct": 11.66798210997106,
+              "fixed_epochs": 4702,
+              "fix_pct_matched": 70.02233804914371,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 5,
+              "wrong_fix_pct_fixed": 0.10633772862611654,
+              "correct_fix_epochs": 4697,
+              "within_50cm_pct_matched": 73.25390915860015,
+              "horizontal_p50_m": 0.12372289376485164,
+              "horizontal_p95_m": 1.429349545125566,
+              "error_3d_p95_m": 4.065614267646724,
+              "wrong_fix_events": 4,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 4,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 46.00000000005821,
+              "recovery_delay_p95_s": 46.54000000008964,
+              "native_output_epochs": 6715,
+              "native_none_epochs": 0
+            },
+            "wall_s": 43.03581769997254,
+            "states": {
+              "NORMAL": 7602
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "baseline_shadow": {
+            "metrics": {
+              "matched_rows": 6697,
+              "expected_input_epochs": 7602,
+              "missing_or_unmatched_epochs": 905,
+              "missing_or_unmatched_pct": 11.904761904761905,
+              "fixed_epochs": 4213,
+              "fix_pct_matched": 62.90876511870987,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 0,
+              "wrong_fix_pct_fixed": 0.0,
+              "correct_fix_epochs": 4213,
+              "within_50cm_pct_matched": 75.83992832611617,
+              "horizontal_p50_m": 0.1192376458194739,
+              "horizontal_p95_m": 1.2066817351153123,
+              "error_3d_p95_m": 3.5067865138231324,
+              "wrong_fix_events": 0,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 0,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": null,
+              "recovery_delay_p95_s": null,
+              "native_output_epochs": 6697,
+              "native_none_epochs": 0
+            },
+            "wall_s": 43.31202580034733,
+            "states": {
+              "NORMAL": 5465,
+              "SUSPECT": 7,
+              "QUARANTINE": 2106,
+              "RECOVERY": 24
+            },
+            "independent_position_valid": 7534,
+            "shadow_health_qualified": 3047,
+            "shadow_health_lookups": 7534,
+            "consensus_demoted": 652
+          },
+          "candidate_shadow": {
+            "metrics": {
+              "matched_rows": 6715,
+              "expected_input_epochs": 7602,
+              "missing_or_unmatched_epochs": 887,
+              "missing_or_unmatched_pct": 11.66798210997106,
+              "fixed_epochs": 4702,
+              "fix_pct_matched": 70.02233804914371,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 5,
+              "wrong_fix_pct_fixed": 0.10633772862611654,
+              "correct_fix_epochs": 4697,
+              "within_50cm_pct_matched": 73.25390915860015,
+              "horizontal_p50_m": 0.12372289376485164,
+              "horizontal_p95_m": 1.429349545125566,
+              "error_3d_p95_m": 4.065614267646724,
+              "wrong_fix_events": 4,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 4,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 46.00000000005821,
+              "recovery_delay_p95_s": 46.54000000008964,
+              "native_output_epochs": 6715,
+              "native_none_epochs": 0
+            },
+            "wall_s": 43.1211044001393,
+            "states": {
+              "NORMAL": 7602
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          }
+        },
+        "comparisons": {
+          "baseline_plain_to_candidate_plain": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          },
+          "baseline_shadow_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 104,
+            "epoch_grid_identical": false,
+            "positions_identical": false,
+            "statuses_identical": false
+          },
+          "candidate_plain_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          }
+        },
+        "reference_match_tolerance_s": 0.11,
+        "wrong_fix_threshold_3d_m": 2.0,
+        "expected_epoch_basis": "native processed rover epochs: exact base + interpolated base + skipped"
+      },
+      "covariance_accuracy": {
+        "fixed": {
+          "count": 3076,
+          "finite_positive_trace": 3076,
+          "trace_at_most_4_m2": 3076,
+          "trace_p50_m2": 1.16889049697352e-05,
+          "trace_p95_m2": 8.680999954499247e-05
+        },
+        "wrong_fixed_3d_above_2m": {
+          "count": 37,
+          "finite_positive_trace": 37,
+          "trace_at_most_4_m2": 37,
+          "trace_p50_m2": 4.4899621480547734e-05,
+          "trace_p95_m2": 0.00017878937773476374
+        },
+        "interpretation": "Conditional model covariance is not the probability that the integer hypothesis is correct."
+      },
+      "evidence_hashes": {
+        "fgo/baseline": {
+          "run_record_sha256": "b4e4fa60b1a09b25a3651cedf87c902e55d355a5456291f5ce38a5af01b4130a",
+          "binary_sha256": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\rover.obs",
+              "sha256": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\base.obs",
+              "sha256": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\base.nav",
+              "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\imu.csv",
+              "sha256": "1503944e298a47b395837028e8b6eca8b889ee2c2bc38b6c1d9606d6dde90f70"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\reference.csv",
+              "sha256": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d"
+            }
+          },
+          "outputs": {
+            ".csv": "35fed1972ce86ba0aafe3d9a477a66817c96c6f22662f6ad68f812d62f57de07"
+          }
+        },
+        "fgo/off": {
+          "run_record_sha256": "22640a33c6de9f7fe54303b3123e1c961b4efdb397831ec8e31411de9c0dc106",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\rover.obs",
+              "sha256": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\base.obs",
+              "sha256": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\base.nav",
+              "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\imu.csv",
+              "sha256": "1503944e298a47b395837028e8b6eca8b889ee2c2bc38b6c1d9606d6dde90f70"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\reference.csv",
+              "sha256": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d"
+            }
+          },
+          "outputs": {
+            ".csv": "774052eddc87abdbaff82304ef428cd29d75ef5145ad590a9dc5d656f5b13d33",
+            ".shadow.csv": "fadd234d17fc622c7bd5966f7278f399b77642c96abd0af5e5738d832c53e7c1"
+          }
+        },
+        "fgo/covariance": {
+          "run_record_sha256": "93cd95f7b8dacc321ba560811e288a3db829b0b3c3a6738934a8d4670cef96a8",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\rover.obs",
+              "sha256": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\base.obs",
+              "sha256": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\base.nav",
+              "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\imu.csv",
+              "sha256": "1503944e298a47b395837028e8b6eca8b889ee2c2bc38b6c1d9606d6dde90f70"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\reference.csv",
+              "sha256": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d"
+            }
+          },
+          "outputs": {
+            ".csv": "5096b0958106ab08b9d107861e3313a9c97dd9b7652fafd628b5a14bc746d17e",
+            ".shadow.csv": "4eeaafc9468c962d3f45f9acdb325494927ff1a8d9007ddf2d57a1d255813245"
+          }
+        },
+        "rtk/baseline_plain": {
+          "run_record_sha256": "62f534e829f09c4aeb30e7b32a474a333863fda0758cdb9641fe86d40878e62f",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb",
+            "base.obs": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d",
+            "shadow": "4eeaafc9468c962d3f45f9acdb325494927ff1a8d9007ddf2d57a1d255813245"
+          },
+          "outputs": {
+            ".pos": "be73033850402d5566874b33983cf7dbede918bc722ed361a3c05ef7594110c6",
+            ".integrity.csv": "6b204be803f87021e18466805055584c4f971c1f095c0628510ef91c80b77995",
+            ".log": "6284fe9af8a44fdf76191c10cb6ac2da31cbc9450e216851dffa02f656692eab"
+          }
+        },
+        "rtk/candidate_plain": {
+          "run_record_sha256": "0cb8a2d264f1f71eff798e16d441c30642fa09ea657031489d9a0072b214252f",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb",
+            "base.obs": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d",
+            "shadow": "4eeaafc9468c962d3f45f9acdb325494927ff1a8d9007ddf2d57a1d255813245"
+          },
+          "outputs": {
+            ".pos": "be73033850402d5566874b33983cf7dbede918bc722ed361a3c05ef7594110c6",
+            ".integrity.csv": "6b204be803f87021e18466805055584c4f971c1f095c0628510ef91c80b77995",
+            ".log": "b2ce04039b6092f096597bcc4f32c443987bb970d875626ce52590ec5e9320b1"
+          }
+        },
+        "rtk/baseline_shadow": {
+          "run_record_sha256": "8fe7cb8e7e8505846c52fbd08c1eacce8a633a2a1672dcbe0aa021a7b9de5a52",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb",
+            "base.obs": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d",
+            "shadow": "4eeaafc9468c962d3f45f9acdb325494927ff1a8d9007ddf2d57a1d255813245"
+          },
+          "outputs": {
+            ".pos": "f5f287effcbab2949dc14c922b512bff71a17ed65d4cdeb8176b72413e251ace",
+            ".integrity.csv": "155ed0e196a7c004160e7600bd7abcda6a15cf667c7283322d90fc7187bcfb73",
+            ".log": "7acea92c6c47c5621cb35b5cd7d56e48cfbe05783f3d48a2b695519c7937786c"
+          }
+        },
+        "rtk/candidate_shadow": {
+          "run_record_sha256": "417fb749d165b11c4dabb5fee353d07dc3b98a147e5f3664168e8c126396c0d4",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb",
+            "base.obs": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d",
+            "shadow": "4eeaafc9468c962d3f45f9acdb325494927ff1a8d9007ddf2d57a1d255813245"
+          },
+          "outputs": {
+            ".pos": "be73033850402d5566874b33983cf7dbede918bc722ed361a3c05ef7594110c6",
+            ".integrity.csv": "7555912c890a49c4d7750d8c2c25a16fa9b272463a2e41d4da001bd8f6b85029",
+            ".log": "474411cbf311616eec7848798c632844365163bf91d4b5afdeb4df9d4ecb3fce"
+          }
+        }
+      }
+    },
+    "nagoya_run2": {
+      "fgo": {
+        "run": "nagoya/run2",
+        "max_epochs": -1,
+        "start_epoch": 0,
+        "baseline_off_solution_text_identical": true,
+        "off_covariance_solution_text_identical": true,
+        "expected_epoch_basis": "native rover reader inputs, before problem construction and output filtering",
+        "metrics": {
+          "baseline": {
+            "matched_rows": 9425,
+            "expected_input_epochs": 9451,
+            "missing_or_unmatched_epochs": 26,
+            "missing_or_unmatched_pct": 0.2751031636863824,
+            "fixed_epochs": 3586,
+            "fix_pct_matched": 38.04774535809018,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 178,
+            "wrong_fix_pct_fixed": 4.963747908533184,
+            "correct_fix_epochs": 3408,
+            "within_50cm_pct_matched": 34.80106100795756,
+            "horizontal_p50_m": 0.7080854468212152,
+            "horizontal_p95_m": 43.57654852786262,
+            "error_3d_p95_m": 76.10819774655523,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 57,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 57,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 8.800000000046566,
+            "recovery_delay_p95_s": 186.95999999991614
+          },
+          "off": {
+            "matched_rows": 9425,
+            "expected_input_epochs": 9451,
+            "missing_or_unmatched_epochs": 26,
+            "missing_or_unmatched_pct": 0.2751031636863824,
+            "fixed_epochs": 3586,
+            "fix_pct_matched": 38.04774535809018,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 178,
+            "wrong_fix_pct_fixed": 4.963747908533184,
+            "correct_fix_epochs": 3408,
+            "within_50cm_pct_matched": 34.80106100795756,
+            "horizontal_p50_m": 0.7080854468212152,
+            "horizontal_p95_m": 43.57654852786262,
+            "error_3d_p95_m": 76.10819774655523,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 57,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 57,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 8.800000000046566,
+            "recovery_delay_p95_s": 186.95999999991614
+          },
+          "covariance": {
+            "matched_rows": 9425,
+            "expected_input_epochs": 9451,
+            "missing_or_unmatched_epochs": 26,
+            "missing_or_unmatched_pct": 0.2751031636863824,
+            "fixed_epochs": 3586,
+            "fix_pct_matched": 38.04774535809018,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 178,
+            "wrong_fix_pct_fixed": 4.963747908533184,
+            "correct_fix_epochs": 3408,
+            "within_50cm_pct_matched": 34.80106100795756,
+            "horizontal_p50_m": 0.7080854468212152,
+            "horizontal_p95_m": 43.57654852786262,
+            "error_3d_p95_m": 76.10819774655523,
+            "positive_covariance_rows": 9185,
+            "positive_covariance_fixed_rows": 3586,
+            "covariance_trace_p50_m2": 0.00926886012044498,
+            "wrong_fix_events": 57,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 57,
+            "unrecovered_events": 0,
+            "recovery_delay_p50_s": 8.800000000046566,
+            "recovery_delay_p95_s": 186.95999999991614
+          }
+        },
+        "wall_seconds": {
+          "baseline": 108.64116769982502,
+          "off": 109.75873090000823,
+          "covariance": 317.26793599966913
+        },
+        "solver_wall_seconds": {
+          "baseline": 70.9741,
+          "off": 71.636,
+          "covariance": 279.719
+        },
+        "native_none_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "native_nonfinite_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "off_covariance_full_precision_positions_identical": true
+      },
+      "rtk": {
+        "run": "nagoya/run2",
+        "variants": {
+          "baseline_plain": {
+            "metrics": {
+              "matched_rows": 6683,
+              "expected_input_epochs": 9451,
+              "missing_or_unmatched_epochs": 2768,
+              "missing_or_unmatched_pct": 29.28790604168871,
+              "fixed_epochs": 4488,
+              "fix_pct_matched": 67.15546910070327,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 26,
+              "wrong_fix_pct_fixed": 0.5793226381461676,
+              "correct_fix_epochs": 4462,
+              "within_50cm_pct_matched": 74.23312883435582,
+              "horizontal_p50_m": 0.15324947018557944,
+              "horizontal_p95_m": 5.943076579832574,
+              "error_3d_p95_m": 14.493808911164999,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 82.10000000003492,
+              "recovery_delay_p95_s": 290.77999999998707,
+              "native_output_epochs": 6683,
+              "native_none_epochs": 0
+            },
+            "wall_s": 51.93863340001553,
+            "states": {
+              "NORMAL": 9451
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "candidate_plain": {
+            "metrics": {
+              "matched_rows": 6683,
+              "expected_input_epochs": 9451,
+              "missing_or_unmatched_epochs": 2768,
+              "missing_or_unmatched_pct": 29.28790604168871,
+              "fixed_epochs": 4488,
+              "fix_pct_matched": 67.15546910070327,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 26,
+              "wrong_fix_pct_fixed": 0.5793226381461676,
+              "correct_fix_epochs": 4462,
+              "within_50cm_pct_matched": 74.23312883435582,
+              "horizontal_p50_m": 0.15324947018557944,
+              "horizontal_p95_m": 5.943076579832574,
+              "error_3d_p95_m": 14.493808911164999,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 82.10000000003492,
+              "recovery_delay_p95_s": 290.77999999998707,
+              "native_output_epochs": 6683,
+              "native_none_epochs": 0
+            },
+            "wall_s": 51.05074519990012,
+            "states": {
+              "NORMAL": 9451
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "baseline_shadow": {
+            "metrics": {
+              "matched_rows": 6888,
+              "expected_input_epochs": 9451,
+              "missing_or_unmatched_epochs": 2563,
+              "missing_or_unmatched_pct": 27.118823404930694,
+              "fixed_epochs": 2890,
+              "fix_pct_matched": 41.95702671312427,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 14,
+              "wrong_fix_pct_fixed": 0.4844290657439446,
+              "correct_fix_epochs": 2876,
+              "within_50cm_pct_matched": 69.75900116144018,
+              "horizontal_p50_m": 0.15438451685688306,
+              "horizontal_p95_m": 5.667606654090576,
+              "error_3d_p95_m": 13.804999959823698,
+              "wrong_fix_events": 8,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 8,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 40.29999999998836,
+              "recovery_delay_p95_s": 302.7399999999848,
+              "native_output_epochs": 6888,
+              "native_none_epochs": 0
+            },
+            "wall_s": 49.74285800009966,
+            "states": {
+              "NORMAL": 5489,
+              "SUSPECT": 10,
+              "QUARANTINE": 3902,
+              "RECOVERY": 50
+            },
+            "independent_position_valid": 9426,
+            "shadow_health_qualified": 2953,
+            "shadow_health_lookups": 9426,
+            "consensus_demoted": 1802
+          },
+          "candidate_shadow": {
+            "metrics": {
+              "matched_rows": 6683,
+              "expected_input_epochs": 9451,
+              "missing_or_unmatched_epochs": 2768,
+              "missing_or_unmatched_pct": 29.28790604168871,
+              "fixed_epochs": 4488,
+              "fix_pct_matched": 67.15546910070327,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 26,
+              "wrong_fix_pct_fixed": 0.5793226381461676,
+              "correct_fix_epochs": 4462,
+              "within_50cm_pct_matched": 74.23312883435582,
+              "horizontal_p50_m": 0.15324947018557944,
+              "horizontal_p95_m": 5.943076579832574,
+              "error_3d_p95_m": 14.493808911164999,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 82.10000000003492,
+              "recovery_delay_p95_s": 290.77999999998707,
+              "native_output_epochs": 6683,
+              "native_none_epochs": 0
+            },
+            "wall_s": 49.46144200023264,
+            "states": {
+              "NORMAL": 9451
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          }
+        },
+        "comparisons": {
+          "baseline_plain_to_candidate_plain": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          },
+          "baseline_shadow_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 340,
+            "epoch_grid_identical": false,
+            "positions_identical": false,
+            "statuses_identical": false
+          },
+          "candidate_plain_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          }
+        },
+        "reference_match_tolerance_s": 0.11,
+        "wrong_fix_threshold_3d_m": 2.0,
+        "expected_epoch_basis": "native processed rover epochs: exact base + interpolated base + skipped"
+      },
+      "covariance_accuracy": {
+        "fixed": {
+          "count": 3586,
+          "finite_positive_trace": 3586,
+          "trace_at_most_4_m2": 3586,
+          "trace_p50_m2": 2.1502985630377975e-05,
+          "trace_p95_m2": 0.00016822275337909136
+        },
+        "wrong_fixed_3d_above_2m": {
+          "count": 178,
+          "finite_positive_trace": 178,
+          "trace_at_most_4_m2": 178,
+          "trace_p50_m2": 0.00014607025422528982,
+          "trace_p95_m2": 0.0015486610397701405
+        },
+        "interpretation": "Conditional model covariance is not the probability that the integer hypothesis is correct."
+      },
+      "evidence_hashes": {
+        "fgo/baseline": {
+          "run_record_sha256": "4682270342ad2521d69917042524ac6b784e40bf7a48c6a2b0df3f8ca461d124",
+          "binary_sha256": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\rover.obs",
+              "sha256": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\base.obs",
+              "sha256": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\base.nav",
+              "sha256": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\imu.csv",
+              "sha256": "b73d40fb73e4cb14209d9cda4ae56824c5149c1ea4709843bbcb6f0418787a70"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\reference.csv",
+              "sha256": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e"
+            }
+          },
+          "outputs": {
+            ".csv": "c37494369b0ae52c8648138d2856c86d5e3f8cfeda38b955b3605e30bc2cdaf8"
+          }
+        },
+        "fgo/off": {
+          "run_record_sha256": "0a2c42de70fb6aeb401a80e39e6d5c78c6e94210bb8055a8297e0a6215b79c4c",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\rover.obs",
+              "sha256": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\base.obs",
+              "sha256": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\base.nav",
+              "sha256": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\imu.csv",
+              "sha256": "b73d40fb73e4cb14209d9cda4ae56824c5149c1ea4709843bbcb6f0418787a70"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\reference.csv",
+              "sha256": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e"
+            }
+          },
+          "outputs": {
+            ".csv": "dd5bcebd1fcfe10eaa81774fce75d01867ffb203481cef77bdab4b10ecacba50",
+            ".shadow.csv": "32cefc49b43142a1fa3e330bd160620ac0a0ad40ff53d3373141c571e715a067"
+          }
+        },
+        "fgo/covariance": {
+          "run_record_sha256": "0466029237f30e4b8935fa33390fdc2ca57c527a5b26d4bf5eac3974bd866108",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\rover.obs",
+              "sha256": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\base.obs",
+              "sha256": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\base.nav",
+              "sha256": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\imu.csv",
+              "sha256": "b73d40fb73e4cb14209d9cda4ae56824c5149c1ea4709843bbcb6f0418787a70"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\reference.csv",
+              "sha256": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e"
+            }
+          },
+          "outputs": {
+            ".csv": "5cf21c40ed91b5d0f67843dd8ddacdd23d7436e9df7c154749771bfa7ff7eade",
+            ".shadow.csv": "c3126a256570023a7187be8d3d7a920a5e57b4a8333a46e3b003efdfc15c75ea"
+          }
+        },
+        "rtk/baseline_plain": {
+          "run_record_sha256": "9cfdcd7e8f69271c591c715e4546cce427e758b3121367b6d5fad36f59de8a97",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6",
+            "base.obs": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2",
+            "base.nav": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf",
+            "reference.csv": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e",
+            "shadow": "c3126a256570023a7187be8d3d7a920a5e57b4a8333a46e3b003efdfc15c75ea"
+          },
+          "outputs": {
+            ".pos": "18ffe7584738bd8ab7d8afffcd76d804b464fdc03948b5b1e767c7b9e0394e6d",
+            ".integrity.csv": "96ad68e0a1df7fffd171721bb1f418642cc1d98ab9e661e16787019de44e3bd5",
+            ".log": "18b1351622dcacd6cc4cf8df2c28b8c59b764a93fa2cfd21737605fe7f34bcd6"
+          }
+        },
+        "rtk/candidate_plain": {
+          "run_record_sha256": "c7485cd07ea638979139ad21bbd3805c7708ee7cc258f69a680d38b6128aa903",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6",
+            "base.obs": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2",
+            "base.nav": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf",
+            "reference.csv": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e",
+            "shadow": "c3126a256570023a7187be8d3d7a920a5e57b4a8333a46e3b003efdfc15c75ea"
+          },
+          "outputs": {
+            ".pos": "18ffe7584738bd8ab7d8afffcd76d804b464fdc03948b5b1e767c7b9e0394e6d",
+            ".integrity.csv": "96ad68e0a1df7fffd171721bb1f418642cc1d98ab9e661e16787019de44e3bd5",
+            ".log": "d666ed2d248119de100d3b418fbe1ec8242b76ba4b3c806778ede3f6c5c5e722"
+          }
+        },
+        "rtk/baseline_shadow": {
+          "run_record_sha256": "a4c6150b9fedc67077d624b16544ec36ae1455c2ae27aad5a212bedbc3e7a359",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6",
+            "base.obs": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2",
+            "base.nav": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf",
+            "reference.csv": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e",
+            "shadow": "c3126a256570023a7187be8d3d7a920a5e57b4a8333a46e3b003efdfc15c75ea"
+          },
+          "outputs": {
+            ".pos": "387ccda49e4875b8455c973b606198c2c4d2398974206b34a1b8c487fb544eb8",
+            ".integrity.csv": "8579fc6caa2101f46c687df7c8987062a96d2e0efa97272b116e22d3bbffe6fa",
+            ".log": "2b7519d7035799730023129d4f3b4f9ce93b99fdab9c55886752ad73a93a5b40"
+          }
+        },
+        "rtk/candidate_shadow": {
+          "run_record_sha256": "46dd5ea409cdeb98c106879bdf3940b4126d946584398aef03cb617af742cc58",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6",
+            "base.obs": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2",
+            "base.nav": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf",
+            "reference.csv": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e",
+            "shadow": "c3126a256570023a7187be8d3d7a920a5e57b4a8333a46e3b003efdfc15c75ea"
+          },
+          "outputs": {
+            ".pos": "18ffe7584738bd8ab7d8afffcd76d804b464fdc03948b5b1e767c7b9e0394e6d",
+            ".integrity.csv": "cc4130b5ebdbc350661ff7e9d3e22d1466f106085a78f572664d2c67f8d8face",
+            ".log": "9f69ff241d31b9134108e216b19f619a4fec2b07a4cd4e0faf56f6e5d67ba1a0"
+          }
+        }
+      }
+    },
+    "nagoya_run3": {
+      "fgo": {
+        "run": "nagoya/run3",
+        "max_epochs": -1,
+        "start_epoch": 0,
+        "baseline_off_solution_text_identical": true,
+        "off_covariance_solution_text_identical": true,
+        "expected_epoch_basis": "native rover reader inputs, before problem construction and output filtering",
+        "metrics": {
+          "baseline": {
+            "matched_rows": 5201,
+            "expected_input_epochs": 5201,
+            "missing_or_unmatched_epochs": 0,
+            "missing_or_unmatched_pct": 0.0,
+            "fixed_epochs": 1517,
+            "fix_pct_matched": 29.167467794654875,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 61,
+            "wrong_fix_pct_fixed": 4.021094264996704,
+            "correct_fix_epochs": 1456,
+            "within_50cm_pct_matched": 15.400884445298981,
+            "horizontal_p50_m": 0.9148923433934728,
+            "horizontal_p95_m": 14.811425117118205,
+            "error_3d_p95_m": 27.568557905701198,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 18,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 16,
+            "unrecovered_events": 2,
+            "recovery_delay_p50_s": 26.20000000001164,
+            "recovery_delay_p95_s": 57.249999999970896
+          },
+          "off": {
+            "matched_rows": 5201,
+            "expected_input_epochs": 5201,
+            "missing_or_unmatched_epochs": 0,
+            "missing_or_unmatched_pct": 0.0,
+            "fixed_epochs": 1517,
+            "fix_pct_matched": 29.167467794654875,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 61,
+            "wrong_fix_pct_fixed": 4.021094264996704,
+            "correct_fix_epochs": 1456,
+            "within_50cm_pct_matched": 15.400884445298981,
+            "horizontal_p50_m": 0.9148923433934728,
+            "horizontal_p95_m": 14.811425117118205,
+            "error_3d_p95_m": 27.568557905701198,
+            "positive_covariance_rows": 0,
+            "positive_covariance_fixed_rows": 0,
+            "covariance_trace_p50_m2": null,
+            "wrong_fix_events": 18,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 16,
+            "unrecovered_events": 2,
+            "recovery_delay_p50_s": 26.20000000001164,
+            "recovery_delay_p95_s": 57.249999999970896
+          },
+          "covariance": {
+            "matched_rows": 5201,
+            "expected_input_epochs": 5201,
+            "missing_or_unmatched_epochs": 0,
+            "missing_or_unmatched_pct": 0.0,
+            "fixed_epochs": 1517,
+            "fix_pct_matched": 29.167467794654875,
+            "wrong_fix_threshold_3d_m": 2.0,
+            "wrong_fix_epochs": 61,
+            "wrong_fix_pct_fixed": 4.021094264996704,
+            "correct_fix_epochs": 1456,
+            "within_50cm_pct_matched": 15.400884445298981,
+            "horizontal_p50_m": 0.9148923433934728,
+            "horizontal_p95_m": 14.811425117118205,
+            "error_3d_p95_m": 27.568557905701198,
+            "positive_covariance_rows": 5201,
+            "positive_covariance_fixed_rows": 1517,
+            "covariance_trace_p50_m2": 0.014735572760958545,
+            "wrong_fix_events": 18,
+            "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+            "recovered_events": 16,
+            "unrecovered_events": 2,
+            "recovery_delay_p50_s": 26.20000000001164,
+            "recovery_delay_p95_s": 57.249999999970896
+          }
+        },
+        "wall_seconds": {
+          "baseline": 49.493673199787736,
+          "off": 50.10484560020268,
+          "covariance": 130.8018186003901
+        },
+        "solver_wall_seconds": {
+          "baseline": 33.1574,
+          "off": 32.2617,
+          "covariance": 112.649
+        },
+        "native_none_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "native_nonfinite_epochs": {
+          "baseline": 0,
+          "off": 0,
+          "covariance": 0
+        },
+        "off_covariance_full_precision_positions_identical": true
+      },
+      "rtk": {
+        "run": "nagoya/run3",
+        "variants": {
+          "baseline_plain": {
+            "metrics": {
+              "matched_rows": 3275,
+              "expected_input_epochs": 5201,
+              "missing_or_unmatched_epochs": 1926,
+              "missing_or_unmatched_pct": 37.03134012689868,
+              "fixed_epochs": 2231,
+              "fix_pct_matched": 68.12213740458016,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 139,
+              "wrong_fix_pct_fixed": 6.2303899596593455,
+              "correct_fix_epochs": 2092,
+              "within_50cm_pct_matched": 70.13740458015268,
+              "horizontal_p50_m": 0.11800465939425732,
+              "horizontal_p95_m": 10.635554001485684,
+              "error_3d_p95_m": 18.45077053429434,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 34.79999999998836,
+              "recovery_delay_p95_s": 128.29000000000815,
+              "native_output_epochs": 3275,
+              "native_none_epochs": 0
+            },
+            "wall_s": 21.151961600407958,
+            "states": {
+              "NORMAL": 5201
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "candidate_plain": {
+            "metrics": {
+              "matched_rows": 3275,
+              "expected_input_epochs": 5201,
+              "missing_or_unmatched_epochs": 1926,
+              "missing_or_unmatched_pct": 37.03134012689868,
+              "fixed_epochs": 2231,
+              "fix_pct_matched": 68.12213740458016,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 139,
+              "wrong_fix_pct_fixed": 6.2303899596593455,
+              "correct_fix_epochs": 2092,
+              "within_50cm_pct_matched": 70.13740458015268,
+              "horizontal_p50_m": 0.11800465939425732,
+              "horizontal_p95_m": 10.635554001485684,
+              "error_3d_p95_m": 18.45077053429434,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 34.79999999998836,
+              "recovery_delay_p95_s": 128.29000000000815,
+              "native_output_epochs": 3275,
+              "native_none_epochs": 0
+            },
+            "wall_s": 21.068435600027442,
+            "states": {
+              "NORMAL": 5201
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          },
+          "baseline_shadow": {
+            "metrics": {
+              "matched_rows": 3269,
+              "expected_input_epochs": 5201,
+              "missing_or_unmatched_epochs": 1932,
+              "missing_or_unmatched_pct": 37.14670255720054,
+              "fixed_epochs": 2060,
+              "fix_pct_matched": 63.016212909146525,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 139,
+              "wrong_fix_pct_fixed": 6.747572815533981,
+              "correct_fix_epochs": 1921,
+              "within_50cm_pct_matched": 69.37901498929337,
+              "horizontal_p50_m": 0.11898497654129302,
+              "horizontal_p95_m": 10.63562637259864,
+              "error_3d_p95_m": 18.481457973504092,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 34.79999999998836,
+              "recovery_delay_p95_s": 128.29000000000815,
+              "native_output_epochs": 3269,
+              "native_none_epochs": 0
+            },
+            "wall_s": 21.44101920025423,
+            "states": {
+              "NORMAL": 5024,
+              "SUSPECT": 4,
+              "QUARANTINE": 153,
+              "RECOVERY": 20
+            },
+            "independent_position_valid": 5201,
+            "shadow_health_qualified": 966,
+            "shadow_health_lookups": 5201,
+            "consensus_demoted": 140
+          },
+          "candidate_shadow": {
+            "metrics": {
+              "matched_rows": 3275,
+              "expected_input_epochs": 5201,
+              "missing_or_unmatched_epochs": 1926,
+              "missing_or_unmatched_pct": 37.03134012689868,
+              "fixed_epochs": 2231,
+              "fix_pct_matched": 68.12213740458016,
+              "wrong_fix_threshold_3d_m": 2.0,
+              "wrong_fix_epochs": 139,
+              "wrong_fix_pct_fixed": 6.2303899596593455,
+              "correct_fix_epochs": 2092,
+              "within_50cm_pct_matched": 70.13740458015268,
+              "horizontal_p50_m": 0.11800465939425732,
+              "horizontal_p95_m": 10.635554001485684,
+              "error_3d_p95_m": 18.45077053429434,
+              "wrong_fix_events": 10,
+              "recovery_delay_definition": "last wrong FIX in event to next FIX with 3D error <= threshold",
+              "recovered_events": 10,
+              "unrecovered_events": 0,
+              "recovery_delay_p50_s": 34.79999999998836,
+              "recovery_delay_p95_s": 128.29000000000815,
+              "native_output_epochs": 3275,
+              "native_none_epochs": 0
+            },
+            "wall_s": 22.671157700009644,
+            "states": {
+              "NORMAL": 5201
+            },
+            "independent_position_valid": 0,
+            "shadow_health_qualified": 0,
+            "shadow_health_lookups": 0,
+            "consensus_demoted": 0
+          }
+        },
+        "comparisons": {
+          "baseline_plain_to_candidate_plain": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          },
+          "baseline_shadow_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": false,
+            "positions_identical": false,
+            "statuses_identical": false
+          },
+          "candidate_plain_to_candidate_shadow": {
+            "caught_wrong_fix": 0,
+            "harmed_correct_fix": 0,
+            "epoch_grid_identical": true,
+            "positions_identical": true,
+            "statuses_identical": true
+          }
+        },
+        "reference_match_tolerance_s": 0.11,
+        "wrong_fix_threshold_3d_m": 2.0,
+        "expected_epoch_basis": "native processed rover epochs: exact base + interpolated base + skipped"
+      },
+      "covariance_accuracy": {
+        "fixed": {
+          "count": 1517,
+          "finite_positive_trace": 1517,
+          "trace_at_most_4_m2": 1517,
+          "trace_p50_m2": 3.1991684355214986e-05,
+          "trace_p95_m2": 0.00023309371097324658
+        },
+        "wrong_fixed_3d_above_2m": {
+          "count": 61,
+          "finite_positive_trace": 61,
+          "trace_at_most_4_m2": 61,
+          "trace_p50_m2": 0.00037617044923218823,
+          "trace_p95_m2": 0.001473904117857194
+        },
+        "interpretation": "Conditional model covariance is not the probability that the integer hypothesis is correct."
+      },
+      "evidence_hashes": {
+        "fgo/baseline": {
+          "run_record_sha256": "3103452071d5308bf89a32b6c2a323a042b7da415efb39577804160b7314476f",
+          "binary_sha256": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\rover.obs",
+              "sha256": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\base.obs",
+              "sha256": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\base.nav",
+              "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\imu.csv",
+              "sha256": "ceb09d385e966aaa7aa70f392950a5f7da304e182796d51834cfa4af3c7b9965"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\reference.csv",
+              "sha256": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564"
+            }
+          },
+          "outputs": {
+            ".csv": "05a3f3c13f8f2844a124e0024037b79943aea1b37e44cdb4703bb408ec500bef"
+          }
+        },
+        "fgo/off": {
+          "run_record_sha256": "babd3a8f26d919356a7ff04da7657a80dfedadb90c6e1bd86f44cb7e4777e05a",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\rover.obs",
+              "sha256": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\base.obs",
+              "sha256": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\base.nav",
+              "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\imu.csv",
+              "sha256": "ceb09d385e966aaa7aa70f392950a5f7da304e182796d51834cfa4af3c7b9965"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\reference.csv",
+              "sha256": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564"
+            }
+          },
+          "outputs": {
+            ".csv": "29d893328efc36c4ce65dcc68853d9be3c32e3da78f9e8a7f0b22ef103239d56",
+            ".shadow.csv": "cc6eedb84a7341a79041a71b907ff36d1af56ca6fd580359d36bb5ebfd054805"
+          }
+        },
+        "fgo/covariance": {
+          "run_record_sha256": "a1df3d47eb86d37ea9c8bf0652133e15858eac588a944c4a15c243c48fbbe8b9",
+          "binary_sha256": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "inputs": {
+            "rover.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\rover.obs",
+              "sha256": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46"
+            },
+            "base.obs": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\base.obs",
+              "sha256": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43"
+            },
+            "base.nav": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\base.nav",
+              "sha256": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5"
+            },
+            "imu.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\imu.csv",
+              "sha256": "ceb09d385e966aaa7aa70f392950a5f7da304e182796d51834cfa4af3c7b9965"
+            },
+            "reference.csv": {
+              "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\reference.csv",
+              "sha256": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564"
+            }
+          },
+          "outputs": {
+            ".csv": "d9b51957ce10088289df634c580e700bc7cd6c954ee7a1dd7d657ad9ef84e2b8",
+            ".shadow.csv": "923e3466c6de6626e4cc0030ccc4f3d295e422a6c7fd74e0893da554e8a3d83e"
+          }
+        },
+        "rtk/baseline_plain": {
+          "run_record_sha256": "a9906584cdfddc48a0498912545491c4f35f62822af81f181e31d7f1e734f32b",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46",
+            "base.obs": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564",
+            "shadow": "923e3466c6de6626e4cc0030ccc4f3d295e422a6c7fd74e0893da554e8a3d83e"
+          },
+          "outputs": {
+            ".pos": "a31e8b55508e8f4ad9ed4fb46a80cdab9d202647ffbf23bfd1f2ff56260205f7",
+            ".integrity.csv": "5e1765c133968ee1feb3e08e3c507c6219245038acb80e477767e617e8dc3ac7",
+            ".log": "631327993448c7151c7c304842c93ed7832b5506d5771715e411b8db5baf08a5"
+          }
+        },
+        "rtk/candidate_plain": {
+          "run_record_sha256": "1a6ff0be1ae81df28976ddaa7bbfb8aa45ab80567e6a57edb7f555bff82035fd",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46",
+            "base.obs": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564",
+            "shadow": "923e3466c6de6626e4cc0030ccc4f3d295e422a6c7fd74e0893da554e8a3d83e"
+          },
+          "outputs": {
+            ".pos": "a31e8b55508e8f4ad9ed4fb46a80cdab9d202647ffbf23bfd1f2ff56260205f7",
+            ".integrity.csv": "5e1765c133968ee1feb3e08e3c507c6219245038acb80e477767e617e8dc3ac7",
+            ".log": "efd402e3c11565547ed32672b21dfb33a620437dee5c44dcc51a4107d43d28d4"
+          }
+        },
+        "rtk/baseline_shadow": {
+          "run_record_sha256": "c598b08bc141975a8f3df4acf1033a8a5c71fd325ba2331a253c68702fe70e39",
+          "binary_sha256": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "inputs": {
+            "rover.obs": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46",
+            "base.obs": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564",
+            "shadow": "923e3466c6de6626e4cc0030ccc4f3d295e422a6c7fd74e0893da554e8a3d83e"
+          },
+          "outputs": {
+            ".pos": "1f269828d51c5928e685f1eb9db6840cdf795db33a3aa9c65918ac3f43743f20",
+            ".integrity.csv": "b9fe08daf6f4b5199efb38d83e05eed78fc21bf04ae327f1f3490cb1e589b5d8",
+            ".log": "8531f89bab4774d32e57bab2be55fa6a69252c698f15807733b29af02cf9aad5"
+          }
+        },
+        "rtk/candidate_shadow": {
+          "run_record_sha256": "33038afd944b638ad738c388ab2dedcd8579981f5d40a16964539185a0e6a682",
+          "binary_sha256": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "inputs": {
+            "rover.obs": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46",
+            "base.obs": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43",
+            "base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+            "reference.csv": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564",
+            "shadow": "923e3466c6de6626e4cc0030ccc4f3d295e422a6c7fd74e0893da554e8a3d83e"
+          },
+          "outputs": {
+            ".pos": "a31e8b55508e8f4ad9ed4fb46a80cdab9d202647ffbf23bfd1f2ff56260205f7",
+            ".integrity.csv": "b9409cca968968ca95687e1bc6b6f246640840097809e345205c5db5276bfcae",
+            ".log": "aa7f02b9883b36fd2cfe8d9e6a03b2d21fcfa9ec58e52081c2d97448015c7ee0"
+          }
+        }
+      }
+    }
+  },
+  "audit": {
+    "completed_native_runs": 42,
+    "runs": {
+      "tokyo_run1": {
+        "all_input_binary_output_hashes_match": true,
+        "correct_input_denominators": true,
+        "covariance_solution_invariants": true,
+        "plain_RTK_byte_identical": true,
+        "unverified_shadow_POS_byte_inert": true,
+        "all_shadow_rows_explicitly_unverified": true,
+        "candidate_shadow_authority_count": 0,
+        "missing_covariance_rows": 0
+      },
+      "tokyo_run2": {
+        "all_input_binary_output_hashes_match": true,
+        "correct_input_denominators": true,
+        "covariance_solution_invariants": true,
+        "plain_RTK_byte_identical": true,
+        "unverified_shadow_POS_byte_inert": true,
+        "all_shadow_rows_explicitly_unverified": true,
+        "candidate_shadow_authority_count": 0,
+        "missing_covariance_rows": 17
+      },
+      "tokyo_run3": {
+        "all_input_binary_output_hashes_match": true,
+        "correct_input_denominators": true,
+        "covariance_solution_invariants": true,
+        "plain_RTK_byte_identical": true,
+        "unverified_shadow_POS_byte_inert": true,
+        "all_shadow_rows_explicitly_unverified": true,
+        "candidate_shadow_authority_count": 0,
+        "missing_covariance_rows": 0
+      },
+      "nagoya_run1": {
+        "all_input_binary_output_hashes_match": true,
+        "correct_input_denominators": true,
+        "covariance_solution_invariants": true,
+        "plain_RTK_byte_identical": true,
+        "unverified_shadow_POS_byte_inert": true,
+        "all_shadow_rows_explicitly_unverified": true,
+        "candidate_shadow_authority_count": 0,
+        "missing_covariance_rows": 0
+      },
+      "nagoya_run2": {
+        "all_input_binary_output_hashes_match": true,
+        "correct_input_denominators": true,
+        "covariance_solution_invariants": true,
+        "plain_RTK_byte_identical": true,
+        "unverified_shadow_POS_byte_inert": true,
+        "all_shadow_rows_explicitly_unverified": true,
+        "candidate_shadow_authority_count": 0,
+        "missing_covariance_rows": 240
+      },
+      "nagoya_run3": {
+        "all_input_binary_output_hashes_match": true,
+        "correct_input_denominators": true,
+        "covariance_solution_invariants": true,
+        "plain_RTK_byte_identical": true,
+        "unverified_shadow_POS_byte_inert": true,
+        "all_shadow_rows_explicitly_unverified": true,
+        "candidate_shadow_authority_count": 0,
+        "missing_covariance_rows": 0
+      }
+    },
+    "inference_source_hashes_unchanged": true,
+    "reporting_source_hashes_match": true
+  },
+  "source_manifests": {
+    "source_manifest_final.json": {
+      "base_commit": "eff1a3ce9bc17efd8f1071f151766017747f50a0",
+      "branch": "feat/fixed-lag-covariance-holdout",
+      "source_sha256": {
+        "apps/native/gnss_fgo_parity.cpp": "9490c4bc2cacc5758fc908e338b4dfac3ee5557898f6d9962adcb151b4d189d7",
+        "apps/native/gnss_solve.cpp": "ec55b4bb6d22f0ce8d5d4248cd63e6951a48cf4e6e6ff7b5b9e817c3550dc03f",
+        "include/libgnss++/algorithms/fgo.hpp": "25efaa0d4b2193e1baf1d47ebddab4ad01476878c908075853c8d1fef6953765",
+        "include/libgnss++/algorithms/fgo_config.hpp": "d1be31e66a96437ade69a00e852cc1989e369da03404eee0f6378cacdaaf8ba8",
+        "include/libgnss++/algorithms/integrity_consensus.hpp": "9f91733c9d192ffbd6de8c314d90e34806a9fea4a8c446cd9e0ef63e067683cb",
+        "scripts/analysis/compare_fixed_lag_covariance.py": "208430b314e6ed672581f7612cd2f23615bd7e385f9a516c31ea0e6ac838b443",
+        "scripts/analysis/run_fixed_lag_covariance_regression.py": "37e0e13965c87c7a81d0ad36be266b763926307a746ceef310e1656ea126b2d8",
+        "scripts/analysis/run_integrity_covariance_replay.py": "d54157333466d897f04c7a1c81af409c46c35bc28fbd24448e9e8a2a30da34b2",
+        "src/algorithms/fgo_gtsam_covariance_internal.hpp": "d95ce109660b626714cb56ef959da9983d5f3da80fff6c666c81ab09f84e6cac",
+        "src/algorithms/fgo_gtsam_fixed_lag.cpp": "be52d4b72285bd214122b5deac439d673904c5db025450ae55f1b52c9ca4beac",
+        "src/algorithms/fgo_gtsam_internal.hpp": "fca45852810bf8a5d4386cd09537cf67e46bf3bd621fca928bcf77c9d91c4ddc",
+        "src/algorithms/integrity_consensus.cpp": "62e887048b522992a07a80a982e35293c95f1cd343558582b7db2d463209f166",
+        "tests/CMakeLists.txt": "b4f685295dee2918e8382de4f56715189bee9d405811a92bd8d85223bc46a2c7",
+        "tests/test_fgo_gtsam_backend.cpp": "6183020a751ca3efaa7fb566391ee73149b27202a0def12cd1f012712a397f34",
+        "tests/test_fixed_lag_covariance_comparison.py": "0fde2c9b1b03cde04dc4061c83971c01c8328939d37ef55fe163e026a2ca2b4a",
+        "tests/test_integrity_consensus.cpp": "083de4d97939f56908c2744a171a550f543bc1089bfc4a095b77cf7e089b6576"
+      }
+    },
+    "source_manifest_reporting.json": {
+      "base_commit": "eff1a3ce9bc17efd8f1071f151766017747f50a0",
+      "branch": "feat/fixed-lag-covariance-holdout",
+      "source_sha256": {
+        "apps/native/gnss_fgo_parity.cpp": "9490c4bc2cacc5758fc908e338b4dfac3ee5557898f6d9962adcb151b4d189d7",
+        "apps/native/gnss_solve.cpp": "ec55b4bb6d22f0ce8d5d4248cd63e6951a48cf4e6e6ff7b5b9e817c3550dc03f",
+        "include/libgnss++/algorithms/fgo.hpp": "25efaa0d4b2193e1baf1d47ebddab4ad01476878c908075853c8d1fef6953765",
+        "include/libgnss++/algorithms/fgo_config.hpp": "d1be31e66a96437ade69a00e852cc1989e369da03404eee0f6378cacdaaf8ba8",
+        "include/libgnss++/algorithms/integrity_consensus.hpp": "9f91733c9d192ffbd6de8c314d90e34806a9fea4a8c446cd9e0ef63e067683cb",
+        "scripts/analysis/compare_fixed_lag_covariance.py": "b9c6b17489dab5f747d980e5170155ac2fda58a6fa15c7f8d676110bd89c2cae",
+        "scripts/analysis/run_fixed_lag_covariance_regression.py": "8472f3c3a2c041735dce7a5c664163c74b7dca538859f0af31ae9899e86232d8",
+        "scripts/analysis/run_integrity_covariance_replay.py": "6a6283ff06c800571e0f03229acedb76653f019a61aa0d9c4bb879d160ccb494",
+        "src/algorithms/fgo_gtsam_covariance_internal.hpp": "d95ce109660b626714cb56ef959da9983d5f3da80fff6c666c81ab09f84e6cac",
+        "src/algorithms/fgo_gtsam_fixed_lag.cpp": "be52d4b72285bd214122b5deac439d673904c5db025450ae55f1b52c9ca4beac",
+        "src/algorithms/fgo_gtsam_internal.hpp": "fca45852810bf8a5d4386cd09537cf67e46bf3bd621fca928bcf77c9d91c4ddc",
+        "src/algorithms/integrity_consensus.cpp": "62e887048b522992a07a80a982e35293c95f1cd343558582b7db2d463209f166",
+        "tests/CMakeLists.txt": "b4f685295dee2918e8382de4f56715189bee9d405811a92bd8d85223bc46a2c7",
+        "tests/test_fgo_gtsam_backend.cpp": "6183020a751ca3efaa7fb566391ee73149b27202a0def12cd1f012712a397f34",
+        "tests/test_fixed_lag_covariance_comparison.py": "2d1b029d7db26a166893ea581d678634beda11bc7bc4b42ec13e81c31e07e1ac",
+        "tests/test_integrity_consensus.cpp": "083de4d97939f56908c2744a171a550f543bc1089bfc4a095b77cf7e089b6576"
+      },
+      "reporting_revision": "Input-based missing denominator, separate position validity and qualified authority; native binaries unchanged"
+    }
+  },
+  "build_manifest": {
+    "cmake_version": "cmake version 4.1.1",
+    "builds": {
+      "baseline": {
+        "root": "E:\\gnsspp-build-integrity-baseline",
+        "settings": {
+          "CMAKE_CXX_FLAGS:STRING": "/DWIN32 /D_WINDOWS /W3 /GR /EHsc /utf-8",
+          "CMAKE_CXX_FLAGS_DEBUG:STRING": "/MDd /Zi /Ob0 /Od /RTC1",
+          "CMAKE_CXX_FLAGS_MINSIZEREL:STRING": "/MD /O1 /Ob1 /DNDEBUG",
+          "CMAKE_CXX_FLAGS_RELEASE:STRING": "/MD /O2 /Ob2 /DNDEBUG",
+          "CMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING": "/MD /Zi /O2 /Ob1 /DNDEBUG",
+          "Eigen3_DIR:UNINITIALIZED": "C:/vcpkg/installed/x64-windows/share/eigen3",
+          "GNSSPP_BUILD_PYTHON_BINDINGS:BOOL": "OFF",
+          "GTSAM_DIR:UNINITIALIZED": "E:/gtsam/install/CMake",
+          "GTest_DIR:UNINITIALIZED": "C:/vcpkg/installed/x64-windows/share/gtest",
+          "CMAKE_CXX_FLAGS-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_DEBUG-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_MINSIZEREL-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_RELEASE-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL": "1",
+          "CMAKE_GENERATOR:INTERNAL": "Visual Studio 17 2022",
+          "CMAKE_GENERATOR_INSTANCE:INTERNAL": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+          "CMAKE_GENERATOR_PLATFORM:INTERNAL": "x64",
+          "CMAKE_GENERATOR_TOOLSET:INTERNAL": ""
+        },
+        "binaries_sha256": {
+          "apps/Release/gnss_fgo_parity.exe": "2c8f789282456c16e95c3c792b7a208953e051b8fca8051a59b05463cec92299",
+          "apps/Release/gnss_solve.exe": "3eccfa4a64f66c5f52ddbfe8c60aa597f7004802a909069398e6cfc224f3cf24",
+          "Release/gnss_lib.lib": "9f5b1a42c8090a7616ca15d0bf94e5c16f1836836b36fcea91daeefe6b784b06",
+          "Release/gnss_lib_solvers.lib": "57f3cd2027821a7b9fa068c49f4af61aa2c5f7cd4ebf73242c74fc3b401c376f"
+        }
+      },
+      "candidate": {
+        "root": "E:\\gnsspp-build-integrity-covariance",
+        "settings": {
+          "CMAKE_CXX_FLAGS:STRING": "/DWIN32 /D_WINDOWS /W3 /GR /EHsc /utf-8",
+          "CMAKE_CXX_FLAGS_DEBUG:STRING": "/MDd /Zi /Ob0 /Od /RTC1",
+          "CMAKE_CXX_FLAGS_MINSIZEREL:STRING": "/MD /O1 /Ob1 /DNDEBUG",
+          "CMAKE_CXX_FLAGS_RELEASE:STRING": "/MD /O2 /Ob2 /DNDEBUG",
+          "CMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING": "/MD /Zi /O2 /Ob1 /DNDEBUG",
+          "Eigen3_DIR:UNINITIALIZED": "C:/vcpkg/installed/x64-windows/share/eigen3",
+          "GNSSPP_BUILD_PYTHON_BINDINGS:BOOL": "OFF",
+          "GTSAM_DIR:UNINITIALIZED": "E:/gtsam/install/CMake",
+          "GTest_DIR:UNINITIALIZED": "C:/vcpkg/installed/x64-windows/share/gtest",
+          "CMAKE_CXX_FLAGS-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_DEBUG-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_MINSIZEREL-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_RELEASE-ADVANCED:INTERNAL": "1",
+          "CMAKE_CXX_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL": "1",
+          "CMAKE_GENERATOR:INTERNAL": "Visual Studio 17 2022",
+          "CMAKE_GENERATOR_INSTANCE:INTERNAL": "C:/Program Files/Microsoft Visual Studio/2022/Community",
+          "CMAKE_GENERATOR_PLATFORM:INTERNAL": "x64",
+          "CMAKE_GENERATOR_TOOLSET:INTERNAL": ""
+        },
+        "binaries_sha256": {
+          "apps/Release/gnss_fgo_parity.exe": "8401b89d980fdbbd1f7e1494678a7ef189e399cd33609d77d82b0a5c0de191ee",
+          "apps/Release/gnss_solve.exe": "da71a2277b1355bf6c9299731d71dc26fe3ce8637ed530c14e92c6a5421817b9",
+          "Release/gnss_lib.lib": "e445277c65ec426129ffa6d29ca144392fe2daa0e1455eaba9b6f512bc89eeb4",
+          "Release/gnss_lib_solvers.lib": "57fa98ff59175bf086810c711ac919cbfd0f9d96efd2a70810f00f0109128c79"
+        }
+      }
+    },
+    "test_projects": {
+      "E:/rtklib_v2_ws_tmp/integrity-unit/CMakeLists.txt": {
+        "sha256": "402099d77ab3ff222d3553c5ecc473b35323e811ef7f01df0f19e2a7874b3b55",
+        "cmake_source": "cmake_minimum_required(VERSION 3.20)\nproject(integrity_unit LANGUAGES CXX)\nset(CMAKE_CXX_STANDARD 20)\nfind_package(Eigen3 REQUIRED)\nfind_package(GTest REQUIRED)\nset(REPO C:/Users/rsasa/Workspace/rtklib_v2_ws/gnssplusplus-library)\nadd_executable(integrity_unit ${REPO}/tests/test_integrity_consensus.cpp ${REPO}/src/algorithms/integrity_consensus.cpp ${REPO}/src/core/types.cpp)\ntarget_include_directories(integrity_unit PRIVATE ${REPO}/include)\ntarget_link_libraries(integrity_unit PRIVATE Eigen3::Eigen GTest::gtest_main)\ntarget_compile_definitions(integrity_unit PRIVATE _USE_MATH_DEFINES NOMINMAX)\n\n"
+      },
+      "E:/rtklib_v2_ws_tmp/fgo-covariance-unit/CMakeLists.txt": {
+        "sha256": "661a0d18360320506e262633eb1ab6d5495444eda71c301131bc9ea299a5eaec",
+        "cmake_source": "cmake_minimum_required(VERSION 3.20)\nproject(fgo_covariance_unit LANGUAGES CXX)\nset(CMAKE_CXX_STANDARD 20)\nfind_package(Eigen3 REQUIRED)\nfind_package(GTest REQUIRED)\nfind_package(GTSAM REQUIRED CONFIG)\nset(REPO C:/Users/rsasa/Workspace/rtklib_v2_ws/gnssplusplus-library)\nset(LIBDIR E:/gnsspp-build-integrity-covariance)\nadd_executable(fgo_covariance_unit ${REPO}/tests/test_fgo_gtsam_backend.cpp)\ntarget_include_directories(fgo_covariance_unit PRIVATE ${REPO}/include)\ntarget_compile_options(fgo_covariance_unit PRIVATE /bigobj /utf-8)\ntarget_compile_definitions(fgo_covariance_unit PRIVATE GNSSPP_HAS_GTSAM _USE_MATH_DEFINES NOMINMAX)\ntarget_link_libraries(fgo_covariance_unit PRIVATE Eigen3::Eigen GTest::gtest_main\n ${LIBDIR}/Release/gnss_lib.lib ${LIBDIR}/Release/gnss_lib_solvers.lib\n ${LIBDIR}/third_party/sofa/Release/sofa.lib\n ${LIBDIR}/third_party/ginan-iers2010/Release/ginan_iers2010.lib gtsam)\n\ntarget_link_options(fgo_covariance_unit PRIVATE /FORCE:MULTIPLE)\nadd_executable(fgo_parity_final ${REPO}/apps/native/gnss_fgo_parity.cpp)\ntarget_include_directories(fgo_parity_final PRIVATE ${REPO}/include)\ntarget_compile_options(fgo_parity_final PRIVATE /bigobj /utf-8)\ntarget_compile_definitions(fgo_parity_final PRIVATE GNSSPP_HAS_GTSAM _USE_MATH_DEFINES NOMINMAX)\ntarget_link_options(fgo_parity_final PRIVATE /FORCE:MULTIPLE)\ntarget_link_libraries(fgo_parity_final PRIVATE Eigen3::Eigen\n ${LIBDIR}/Release/gnss_lib.lib ${LIBDIR}/Release/gnss_lib_solvers.lib\n ${LIBDIR}/third_party/sofa/Release/sofa.lib\n ${LIBDIR}/third_party/ginan-iers2010/Release/ginan_iers2010.lib gtsam)\n"
+      },
+      "E:/rtklib_v2_ws_tmp/fgo-baseline-unit/CMakeLists.txt": {
+        "sha256": "fba73f643d5c27ca3e17a4f14dae8947c496d9c8d9f0a81c3d9a73dbed721c37",
+        "cmake_source": "cmake_minimum_required(VERSION 3.20)\nproject(fgo_covariance_unit LANGUAGES CXX)\nset(CMAKE_CXX_STANDARD 20)\nfind_package(Eigen3 REQUIRED)\nfind_package(GTest REQUIRED)\nfind_package(GTSAM REQUIRED CONFIG)\nset(REPO E:/gnsspp-integrity-baseline-source)\nset(LIBDIR E:/gnsspp-build-integrity-baseline)\nadd_executable(fgo_covariance_unit ${REPO}/tests/test_fgo_gtsam_backend.cpp)\ntarget_include_directories(fgo_covariance_unit PRIVATE ${REPO}/include)\ntarget_compile_options(fgo_covariance_unit PRIVATE /bigobj /utf-8)\ntarget_compile_definitions(fgo_covariance_unit PRIVATE GNSSPP_HAS_GTSAM _USE_MATH_DEFINES NOMINMAX)\ntarget_link_libraries(fgo_covariance_unit PRIVATE Eigen3::Eigen GTest::gtest_main\n ${LIBDIR}/Release/gnss_lib.lib ${LIBDIR}/Release/gnss_lib_solvers.lib\n ${LIBDIR}/third_party/sofa/Release/sofa.lib\n ${LIBDIR}/third_party/ginan-iers2010/Release/ginan_iers2010.lib gtsam)\n\ntarget_link_options(fgo_covariance_unit PRIVATE /FORCE:MULTIPLE)\n\n"
+      }
+    },
+    "gtsam_runtime_sha256": {
+      "cephes-gtsam.dll": "e2a225b1cd7629b66df114f6188f45c4c937dac80fbaec97021701614d97d8d1",
+      "gtsam.dll": "926bc5f93c09874c89aaf208fa63226e5fb720e21449795b4ae52ae5b9ed9cdf",
+      "metis-gtsam.dll": "dc2a44fda7e9e6511e3021b291b93182d6d8d12c32518f46949ae14fb09335b6"
+    }
+  },
+  "input_epoch_inventory": {
+    "tokyo_run1": {
+      "rinex3_rover_epoch_flags": {
+        "0": 11928
+      },
+      "normal_observation_epochs": 11928,
+      "reference_rows": 11951,
+      "reference_gps_weeks": [
+        "2324"
+      ]
+    },
+    "tokyo_run2": {
+      "rinex3_rover_epoch_flags": {
+        "0": 9151
+      },
+      "normal_observation_epochs": 9151,
+      "reference_rows": 9151,
+      "reference_gps_weeks": [
+        "2324"
+      ]
+    },
+    "tokyo_run3": {
+      "rinex3_rover_epoch_flags": {
+        "0": 15301
+      },
+      "normal_observation_epochs": 15301,
+      "reference_rows": 15301,
+      "reference_gps_weeks": [
+        "2324"
+      ]
+    },
+    "nagoya_run1": {
+      "rinex3_rover_epoch_flags": {
+        "0": 7602
+      },
+      "normal_observation_epochs": 7602,
+      "reference_rows": 7651,
+      "reference_gps_weeks": [
+        "2325"
+      ]
+    },
+    "nagoya_run2": {
+      "rinex3_rover_epoch_flags": {
+        "0": 9451
+      },
+      "normal_observation_epochs": 9451,
+      "reference_rows": 9451,
+      "reference_gps_weeks": [
+        "2323"
+      ]
+    },
+    "nagoya_run3": {
+      "rinex3_rover_epoch_flags": {
+        "0": 5201
+      },
+      "normal_observation_epochs": 5201,
+      "reference_rows": 5201,
+      "reference_gps_weeks": [
+        "2325"
+      ]
+    }
+  }
+}

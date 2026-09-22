@@ -53,6 +53,9 @@ struct Args {
     std::string ref_path;        // optional reference.csv for attitude sanity
     double fixed_lag_s = 0.0;    // milestone 2c: >0 enables the fixed-lag smoother
     bool fixed_lag_qr = false;   // rank-tolerant iSAM2 elimination
+    bool fixed_lag_covariance = false;
+    std::string dump_shadow_csv_path;
+    libgnss::Vector3d fixed_lag_lever_arm_m{0.31, 0.0, 0.55};
     bool use_nhc = false;        // milestone 2d
     bool use_zupt = false;       // milestone 2d
     bool motion_constraint_shadow = false;
@@ -254,6 +257,25 @@ Args parseArgs(int argc, char** argv) {
         }
         if (a == "--fixed-lag-qr") {
             args.fixed_lag_qr = true;
+            continue;
+        }
+        if (a == "--fixed-lag-covariance") {
+            args.fixed_lag_covariance = true;
+            continue;
+        }
+        if (a == "--dump-shadow-csv" && i + 1 < argc) {
+            args.dump_shadow_csv_path = argv[++i];
+            continue;
+        }
+        if (a == "--fixed-lag-lever-arm" && i + 1 < argc) {
+            std::istringstream values(argv[++i]);
+            char first = 0, second = 0;
+            auto& arm = args.fixed_lag_lever_arm_m;
+            if (!(values >> arm.x() >> first >> arm.y() >> second >> arm.z()) ||
+                first != ',' || second != ',' || !arm.allFinite() ||
+                !(values >> std::ws).eof()) {
+                throw std::invalid_argument("--fixed-lag-lever-arm requires finite x,y,z in body FLU metres");
+            }
             continue;
         }
         if (a == "--motion-constraint-shadow") {
@@ -1423,7 +1445,9 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
                                       bool use_nhc = false,
                                       bool use_zupt = false,
                                       bool use_hold = false,
-                                      bool fixed_lag_qr = false) {
+                                      bool fixed_lag_qr = false,
+                                      const libgnss::Vector3d& lever_arm_m = libgnss::Vector3d(
+                                          kTokyoLeverArmX, kTokyoLeverArmY, kTokyoLeverArmZ)) {
     config.backend = backend;
     config.use_lambda_ambiguity_fix = use_lambda;
     config.fix_ambiguities = use_lambda;
@@ -1437,8 +1461,7 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
         // Milestone 2a (docs/gtsam_backend_design.md): key the GTSAM rover
         // state as a body Pose3 + lever arm instead of a bare Point3.
         config.use_pose3_state = true;
-        config.pose3_lever_arm_body_m =
-            libgnss::Vector3d(kTokyoLeverArmX, kTokyoLeverArmY, kTokyoLeverArmZ);
+        config.pose3_lever_arm_body_m = lever_arm_m;
     }
     // Milestone 2b: enable IMU tight coupling (the problem must already carry
     // a valid ImuInput; the backend checks problem.imu.valid).
@@ -1598,6 +1621,46 @@ HorizError horizontalErrorVsRef(const libgnss::FGOProcessor::FGOResult& r,
     return he;
 }
 
+// Native shadow output never loads, filters by, or otherwise consumes truth.
+// The explicit latency keeps a smoothed FLOAT estimate out of a causal gate
+// until its latest contributing observation has actually arrived.
+bool dumpShadowCsv(const libgnss::FGOProcessor::FGOResult& result,
+                   const std::string& path) {
+    std::ofstream out(path);
+    if (!out) {
+        std::cerr << "Error: cannot open --dump-shadow-csv output " << path << '\n';
+        return false;
+    }
+    out << "gps_week,tow,status,x_ecef_m,y_ecef_m,z_ecef_m,"
+           "position_covariance_trace_m2,gdop,ddpr_rms_m,nsat,"
+           "solution_latency_s,reset_generation,causal_provenance_verified\n";
+    out << std::setprecision(17);
+    for (std::size_t i = 0; i < result.solution.solutions.size(); ++i) {
+        const auto& s = result.solution.solutions[i];
+        if (s.status == libgnss::SolutionStatus::NONE || !s.position_ecef.allFinite() ||
+            i >= result.epoch_diagnostics.size()) continue;
+        const auto& d = result.epoch_diagnostics[i];
+        out << s.time.week << ',' << s.time.tow << ','
+            // Preserve the native status: SPP must not gain FLOAT authority
+            // when a consumer explicitly permits non-fixed RTK estimates.
+            << static_cast<int>(s.status) << ','
+            << s.position_ecef.x() << ',' << s.position_ecef.y() << ','
+            << s.position_ecef.z() << ',';
+        if (s.position_covariance.allFinite() && s.position_covariance.trace() > 0.0) {
+            out << s.position_covariance.trace();
+        }
+        out << ',' << d.gdop << ',' << d.ddpr_rms_m << ',' << d.num_satellites << ',';
+        if (std::isfinite(d.solution_latency_s)) out << d.solution_latency_s;
+        // This batch harness preselects secondary tracking codes from the
+        // whole file and may interpolate future base epochs. Smoother and
+        // initialization latency alone do not establish online causality.
+        // Keep the export useful for offline covariance audits, but do not
+        // let it silently acquire real-time demotion authority.
+        out << ',' << d.solution_reset_generation << ",0\n";
+    }
+    return static_cast<bool>(out);
+}
+
 // Debug/plotting aid: one row per solved epoch (status != NONE), reusing the
 // exact same nearest-in-time reference cursor as horizontalErrorVsRef() so the
 // per-epoch numbers are consistent with the printed headline metrics. Columns:
@@ -1700,7 +1763,7 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
            "integer_reopt_base_cost_after,integer_reopt_base_cost_delta,"
            "dr_bypass_eval,dr_bypass_horiz_err_m,dr_bypass_applied,"
            "clock_jump,clock_common_delta_m,"
-           "clock_common_delta_satellites\n";
+           "clock_common_delta_satellites,solution_latency_s\n";
     std::size_t ri = 0;
     for (std::size_t si = 0; si < r.solution.solutions.size(); ++si) {
         const auto& s = r.solution.solutions[si];
@@ -1744,7 +1807,10 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             << horiz << ',' << pos_enu.x() << ',' << pos_enu.y() << ',' << pos_enu.z() << ','
             << s.position_ecef.x() << ',' << s.position_ecef.y() << ',' << s.position_ecef.z() << ',';
         if (covariance_populated) {
-            out << covariance_trace;
+            // Preserve small valid FIX uncertainties; the position CSV's
+            // millimetre formatting would round a trace below 0.0005 to zero.
+            out << std::scientific << std::setprecision(17) << covariance_trace
+                << std::fixed << std::setprecision(3);
         }
         out << ','
             << ref_pos_enu.x() << ',' << ref_pos_enu.y() << ',' << ref_pos_enu.z() << ','
@@ -2018,6 +2084,11 @@ void dumpEpochCsv(const libgnss::FGOProcessor::FGOResult& r,
             << ',' << (si < problem.gps_common_pseudorange_delta_satellites.size()
                            ? problem.gps_common_pseudorange_delta_satellites[si]
                            : 0);
+        out << ',';
+        if (si < r.epoch_diagnostics.size() &&
+            std::isfinite(r.epoch_diagnostics[si].solution_latency_s)) {
+            out << r.epoch_diagnostics[si].solution_latency_s;
+        }
         out << '\n';
     }
 
@@ -2543,7 +2614,8 @@ bool loadTemporalShadowTruthReplay(
 // Populate problem.imu from an imu.csv + the already-built FGOProblem epochs.
 // Returns false (and leaves problem.imu.valid=false) if anything is missing.
 bool buildImuInput(const std::string& imu_path,
-                   libgnss::FGOProcessor::FGOProblem& problem) {
+                   libgnss::FGOProcessor::FGOProblem& problem,
+                   libgnss::GNSSTime* initialization_available_at = nullptr) {
     if (problem.epochs.size() < 2) return false;
     libgnss::ImuSeries imu_series;
     const auto load = libgnss::loadImuCsv(imu_path, imu_series);
@@ -2585,6 +2657,10 @@ bool buildImuInput(const std::string& imu_path,
     }
     const libgnss::NominalState aligned = libgnss::fusion_initialization::alignStatic(
         stationary, libgnss::Vector3d::Zero(), imu.noise.gravity_mps2);
+    libgnss::GNSSTime available_at = t_first;
+    if (!stationary.empty() && stationary.back().time - available_at > 0.0) {
+        available_at = stationary.back().time;
+    }
 
     // Heading latch from a sustained, windowed GNSS course.  A consecutive
     // 0.2-s position difference is far too sensitive to urban code noise: on
@@ -2604,6 +2680,9 @@ bool buildImuInput(const std::string& imu_path,
     int consistent_course_count = 0;
     for (std::size_t i = 0; i + kCourseWindowEpochs < problem.epochs.size(); ++i) {
         const std::size_t j = i + kCourseWindowEpochs;
+        if (problem.epochs[j].time - available_at > 0.0) {
+            available_at = problem.epochs[j].time;
+        }
         const double dt = problem.epochs[j].time - problem.epochs[i].time;
         if (dt <= 1e-3) continue;
         const libgnss::Vector3d enu0 = libgnss::ecef2enu(
@@ -2674,6 +2753,7 @@ bool buildImuInput(const std::string& imu_path,
     imu.init_accel_bias_sigma = 0.1;
     imu.init_gyro_bias_sigma = 0.01;
     imu.valid = true;
+    if (initialization_available_at) *initialization_available_at = available_at;
 
     {
         // Epoch/IMU cadence sanity (helps diagnose preintegration dt issues).
@@ -3337,6 +3417,7 @@ int main(int argc, char** argv) {
     // --problem-cache fingerprint (which snapshots these bytes) can gate the
     // expensive RINEX parse + buildDoubleDifferenceProblem() call below.
     libgnss::FGOProcessor::FGOConfig config = buildFgoConfig(args);
+    config.compute_fixed_lag_position_covariance = args.fixed_lag_covariance;
 
     libgnss::FGOProcessor::FGOProblem problem;
     uint64_t rover_epoch_count = 0;
@@ -3679,7 +3760,8 @@ int main(int argc, char** argv) {
     // avoids). Requires --imu + --fixed-lag S. ---
     if (args.fixed_lag_s > 0.0 && !args.imu_path.empty()) {
         libgnss::FGOProcessor::FGOProblem problem_imu = problem;
-        if (!buildImuInput(args.imu_path, problem_imu)) {
+        libgnss::GNSSTime initialization_available_at;
+        if (!buildImuInput(args.imu_path, problem_imu, &initialization_available_at)) {
             std::cerr << "Error: could not build IMU input for fixed-lag run.\n";
             return 1;
         }
@@ -3688,9 +3770,24 @@ int main(int argc, char** argv) {
         if (!args.ref_path.empty()) ref_rows = loadReference(args.ref_path);
 
         double t_fl = 0.0;
-        const auto fl = run(problem_imu, config, libgnss::FGOBackend::GTSAM, true, t_fl,
+        auto fl = run(problem_imu, config, libgnss::FGOBackend::GTSAM, true, t_fl,
                              /*use_pose3=*/true, /*use_imu=*/true, args.fixed_lag_s,
-                             args.use_nhc, args.use_zupt, args.use_hold, args.fixed_lag_qr);
+                             args.use_nhc, args.use_zupt, args.use_hold, args.fixed_lag_qr,
+                             args.fixed_lag_lever_arm_m);
+        // The backend tracks smoothing lookahead. This harness also learns
+        // its initial attitude from a later static/course window; that
+        // observation dependence applies even to a frozen epoch-i FIX.
+        for (std::size_t i = 0; i < fl.epoch_diagnostics.size() &&
+                                i < fl.solution.solutions.size(); ++i) {
+            auto& latency = fl.epoch_diagnostics[i].solution_latency_s;
+            if (std::isfinite(latency)) {
+                latency = std::max(latency,
+                    initialization_available_at - fl.solution.solutions[i].time);
+            }
+        }
+        if (!args.dump_shadow_csv_path.empty() && !dumpShadowCsv(fl, args.dump_shadow_csv_path)) {
+            return 1;
+        }
         std::size_t nonfinite = 0, none_epochs = 0;
         for (const auto& s : fl.solution.solutions) {
             if (s.status == libgnss::SolutionStatus::NONE) ++none_epochs;

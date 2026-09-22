@@ -350,6 +350,9 @@ public:
         std::optional<int> num_satellites;
         std::optional<double> covariance_trace_m2;
         double age_s = std::numeric_limits<double>::infinity();
+        // Latest contributing observation time minus the estimate epoch.
+        // Legacy callers are causal by contract; new smoother exports set it.
+        double solution_latency_s = 0.0;
     };
 
     struct Result {

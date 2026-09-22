@@ -1958,6 +1958,10 @@ public:
     /// did or did not fix, rather than only reporting the final FIX/FLOAT label.
     struct FGOEpochDiagnostics {
         GNSSTime time;
+        /// Latest observation time used for the reported position minus its
+        /// epoch time. Smoothed positions must not masquerade as causal input.
+        double solution_latency_s = std::numeric_limits<double>::quiet_NaN();
+        std::uint64_t solution_reset_generation = 0;
         AmbiguityResolutionOutcome ar_outcome =
             AmbiguityResolutionOutcome::NotAttempted;
         double ddpr_rms_m = 0.0;

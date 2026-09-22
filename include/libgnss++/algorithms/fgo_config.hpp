@@ -1121,6 +1121,10 @@ struct Config {
         /// QR tolerates rank-deficient urban marginalization better than
         /// Cholesky at higher computational cost.
         bool fixed_lag_use_qr_factorization = false;
+        /// Snapshot the antenna marginal with every reported pose revision.
+        /// Opt-in until real-data runtime overhead has been measured. Missing
+        /// or invalid marginals remain NaN; this never changes solver authority.
+        bool compute_fixed_lag_position_covariance = false;
 
         // --- Phase 2 milestone 2d: NHC + ZUPT pseudo-measurements ---
         // Applied per-epoch in the IMU-coupled fixed-lag path (gated), mirror

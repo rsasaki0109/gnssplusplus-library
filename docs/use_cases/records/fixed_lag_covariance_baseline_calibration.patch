@@ -1,0 +1,61 @@
+diff --git a/apps/native/gnss_fgo_parity.cpp b/apps/native/gnss_fgo_parity.cpp
+index 82ed7de..90b8783 100644
+--- a/apps/native/gnss_fgo_parity.cpp
++++ b/apps/native/gnss_fgo_parity.cpp
+@@ -53,6 +53,7 @@ struct Args {
+     std::string ref_path;        // optional reference.csv for attitude sanity
+     double fixed_lag_s = 0.0;    // milestone 2c: >0 enables the fixed-lag smoother
+     bool fixed_lag_qr = false;   // rank-tolerant iSAM2 elimination
++    libgnss::Vector3d fixed_lag_lever_arm_m{0.31, 0.0, 0.55};
+     bool use_nhc = false;        // milestone 2d
+     bool use_zupt = false;       // milestone 2d
+     bool motion_constraint_shadow = false;
+@@ -256,6 +257,17 @@ Args parseArgs(int argc, char** argv) {
+             args.fixed_lag_qr = true;
+             continue;
+         }
++        if (a == "--fixed-lag-lever-arm" && i + 1 < argc) {
++            std::istringstream values(argv[++i]);
++            char first = 0, second = 0;
++            auto& arm = args.fixed_lag_lever_arm_m;
++            if (!(values >> arm.x() >> first >> arm.y() >> second >> arm.z()) ||
++                first != ',' || second != ',' || !arm.allFinite() ||
++                !(values >> std::ws).eof()) {
++                throw std::invalid_argument("--fixed-lag-lever-arm requires finite x,y,z in body FLU metres");
++            }
++            continue;
++        }
+         if (a == "--motion-constraint-shadow") {
+             args.motion_constraint_shadow = true;
+             continue;
+@@ -1423,7 +1435,9 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
+                                       bool use_nhc = false,
+                                       bool use_zupt = false,
+                                       bool use_hold = false,
+-                                      bool fixed_lag_qr = false) {
++                                      bool fixed_lag_qr = false,
++                                      const libgnss::Vector3d& lever_arm_m = libgnss::Vector3d(
++                                          kTokyoLeverArmX, kTokyoLeverArmY, kTokyoLeverArmZ)) {
+     config.backend = backend;
+     config.use_lambda_ambiguity_fix = use_lambda;
+     config.fix_ambiguities = use_lambda;
+@@ -1437,8 +1451,7 @@ libgnss::FGOProcessor::FGOResult run(const libgnss::FGOProcessor::FGOProblem& pr
+         // Milestone 2a (docs/gtsam_backend_design.md): key the GTSAM rover
+         // state as a body Pose3 + lever arm instead of a bare Point3.
+         config.use_pose3_state = true;
+-        config.pose3_lever_arm_body_m =
+-            libgnss::Vector3d(kTokyoLeverArmX, kTokyoLeverArmY, kTokyoLeverArmZ);
++        config.pose3_lever_arm_body_m = lever_arm_m;
+     }
+     // Milestone 2b: enable IMU tight coupling (the problem must already carry
+     // a valid ImuInput; the backend checks problem.imu.valid).
+@@ -3434,7 +3447,8 @@ int main(int argc, char** argv) {
+         double t_fl = 0.0;
+         const auto fl = run(problem_imu, config, libgnss::FGOBackend::GTSAM, true, t_fl,
+                              /*use_pose3=*/true, /*use_imu=*/true, args.fixed_lag_s,
+-                             args.use_nhc, args.use_zupt, args.use_hold, args.fixed_lag_qr);
++                             args.use_nhc, args.use_zupt, args.use_hold, args.fixed_lag_qr,
++                             args.fixed_lag_lever_arm_m);
+         std::size_t nonfinite = 0, none_epochs = 0;
+         for (const auto& s : fl.solution.solutions) {
+             if (s.status == libgnss::SolutionStatus::NONE) ++none_epochs;
