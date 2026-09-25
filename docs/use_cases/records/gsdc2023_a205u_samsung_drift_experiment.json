@@ -1,0 +1,70 @@
+{
+  "status": "matched-source-preset-comparison-complete",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_samsung_drift_plan.json",
+  "plan_sha256": "f3bc70389b24c25d4f601af49681ecb68007aba3ff51a5ec5de9d21e0c9b3132",
+  "binary_sha256": "493eb2f5f45de1a522c29931ef5ee7d896ec3b2a3b65de48d65206646381d3cd",
+  "only_added_flag": "--native-samsung-clock-drift",
+  "baseline_final_score_m": 2.0408683488832184,
+  "baseline_environment": "Street",
+  "source_imu_and_offset_enabled_both": true,
+  "stage_export_enabled_both": true,
+  "external_coordinates_used": false,
+  "promotion": false,
+  "official_score": false,
+  "preprocessing_observation": {
+    "sidecar_sha256": "0e7928452b41b23cfe2fd80159b15396f389af8333e62398915ce9e21764cbfb",
+    "epochs": 1213,
+    "jump_masks": 0,
+    "filled_values": 4,
+    "raw_drift_median_mps": 18520.032754365297,
+    "selected_drift_median_mps": 204.43146752718306,
+    "accuracy_effect_not_yet_evaluated": false
+  },
+  "result": {
+    "status": "matched-source-preset-comparison-complete",
+    "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "same_binary_inputs_other_args_verified": true,
+    "runs": {
+      "control": {
+        "gnss_stage": {
+          "p50_m": 1.8947256950239566,
+          "p95_m": 3.870999593225566,
+          "mean_m": 2.8828626441247613
+        },
+        "final": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.3130854418015072,
+          "p95_m": 2.7686512559649294,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.0408683488832184
+        },
+        "wall_s": 252.70565271377563,
+        "gnss_iterations": 284,
+        "solution_sha256": "af51f80102a21f8c98cd95f0af196c1297bec575106ea7abb7b1b1bb1476a8cf"
+      },
+      "candidate": {
+        "gnss_stage": {
+          "p50_m": 1.8946186677872157,
+          "p95_m": 3.871009676802515,
+          "mean_m": 2.8828141722948653
+        },
+        "final": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.3130788426138722,
+          "p95_m": 2.7686512559649294,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.0408650492894007
+        },
+        "wall_s": 195.77097415924072,
+        "gnss_iterations": 268,
+        "solution_sha256": "49893b93c26957bca89c5a025abce5a7a62f4bf9d161303a650292389b02f15f"
+      }
+    },
+    "final_delta_m": -3.2995938177293738e-06,
+    "stage_delta_m": -4.847182989609067e-05,
+    "official_score": false,
+    "promoted": false,
+    "scope": "one exposed development route; source GPS L1 drift initializer only"
+  },
+  "interpretation": "GNSS iterations 284 to 268; final local metric difference about 0.0033 mm, no material accuracy gain demonstrated; no promotion"
+}

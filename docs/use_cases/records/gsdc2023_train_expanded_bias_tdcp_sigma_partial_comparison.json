@@ -1,0 +1,277 @@
+{
+  "status": "partial-matched-sigma-comparison",
+  "checked_unix": 1790180000.0509758,
+  "planned_count": 11,
+  "compared_count": 2,
+  "unscored": {
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": "pending-record-not-liveness-proof",
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": "pending-record-not-liveness-proof",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": "not-started",
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": "not-started",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": "not-started",
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": "not-started",
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": "not-started",
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": "not-started",
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": "not-started"
+  },
+  "results": {
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4546566128864969,
+            "p95_m": 0.7975510850403802,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6261038489634385
+          },
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "truth_keys": 1165,
+          "raw_keys": 1165,
+          "solution_sha256": "e60d989461542f33a763f029a3618a0eba8d2e950e442a82e4bbe4ee360573af",
+          "seed_metadata_sha256": "2fc3110e82322137f06fedd84e16b403ad6f35737df96fa9635bfb94b2256791",
+          "wall_s": 497.54633355140686,
+          "tdcp_factors_inserted": 22408,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 35252,
+              "pseudorange_factors": 35029,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 223,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4716991610975178,
+            "p95_m": 0.8334203510428706,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6525597560701942
+          },
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "truth_keys": 1165,
+          "raw_keys": 1165,
+          "solution_sha256": "5156eb3cbf2c4a6aceda821a3fa89c04948939d0fe9ae0a39f0ca4e87799eb40",
+          "seed_metadata_sha256": "2fc3110e82322137f06fedd84e16b403ad6f35737df96fa9635bfb94b2256791",
+          "wall_s": 910.603296995163,
+          "tdcp_factors_inserted": 22408,
+          "representative_sigma_m": 0.001153494181723202,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 35252,
+              "pseudorange_factors": 35029,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 223,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.026455907106755716,
+        "p50_m": 0.017042548211020914,
+        "p95_m": 0.03586926600249041
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7711075537254555,
+            "p95_m": 1.1197943497239309,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.9454509517246932
+          },
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "truth_keys": 2162,
+          "raw_keys": 2180,
+          "solution_sha256": "0ff5c5992385ad2e914021b589002907a0d92b3ab994373fadb8855d05264240",
+          "seed_metadata_sha256": "b23c635db85df44ff22450a7a2eaa1100edf8436ea2f83195d40b8254633cec4",
+          "wall_s": 708.8854877948761,
+          "tdcp_factors_inserted": 33122,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53403,
+              "pseudorange_factors": 52208,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1195,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.49338788056340965,
+            "p95_m": 0.8009763426156067,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6471821115895082
+          },
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "truth_keys": 2162,
+          "raw_keys": 2180,
+          "solution_sha256": "6a87efe850a5bddf437dbddc60e0660311659f7f322c5551b5a7899685454fd6",
+          "seed_metadata_sha256": "b23c635db85df44ff22450a7a2eaa1100edf8436ea2f83195d40b8254633cec4",
+          "wall_s": 2583.4473741054535,
+          "tdcp_factors_inserted": 33122,
+          "representative_sigma_m": 0.004729201053364944,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53403,
+              "pseudorange_factors": 52208,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1195,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": -0.29826884013518495,
+        "p50_m": -0.2777196731620458,
+        "p95_m": -0.3188180071083242
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    }
+  },
+  "heldout": false,
+  "official_score": false,
+  "promoted": false,
+  "paired_mean_delta_m": {
+    "phone_score_m": -0.13590646651421462,
+    "p50_m": -0.13033856247551245,
+    "p95_m": -0.1414743705529169
+  },
+  "limitations": [
+    "Eleven selected-by-phone development drives; this mean is not all40 performance.",
+    "Source route and Huber settings unchanged; not full source parity.",
+    "Partial checkpoint: paired mean covers completed audited candidates only and is not the eleven-drive result."
+  ],
+  "full_scope_mean_delta_m": null
+}

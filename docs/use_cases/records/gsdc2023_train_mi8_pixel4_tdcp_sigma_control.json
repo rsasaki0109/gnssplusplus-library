@@ -1,0 +1,29 @@
+{
+  "status": "candidate-scored-native-development",
+  "created_unix": 1790137411.607718,
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_control_plan.json",
+  "plan_sha256": "c3c82bd68a4b231bbc770ab8242731441be565a62cbabca394e9538d7b92dfee",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "historical_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "historical_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "scope": "Matched new-executable Mi8/Pixel4 source TDCP sigma experiment; control must reproduce frozen submitted-recipe output. Candidate changes only source metre-sigma flag.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "limitations": [
+    "Two existing exposed route groups; no heldout claim.",
+    "Admission expansion does not prove accuracy; output auditing and matched controls are required.",
+    "Drift-clock and TDCP-disabled phones remain excluded from this flag."
+  ],
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_control_v1\\validation.json",
+  "validation_sha256": "4c4c1bdb49e3474ddb048a055c424ef875284d8860ccbcdc35adaf9fb0dcb347",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.6166209322735198,
+  "mean_route_group_score_m": 0.6166209322735198
+}

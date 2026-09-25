@@ -1,0 +1,61 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_g988b_may13_source_init_plan.json",
+  "plan_sha256": "77ee0b394e17d1ce95649f33c06b87163a5fa394b661c8d596a294631a4f0078",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "isolated_added_flag": "--native-source-imu-initialization",
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "baseline_score_at_selection": null,
+  "baseline_run_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\18\\run.json",
+  "scope": "sm-g988b long-running frozen baseline: isolate source IMU initialization on the same input. Selected before baseline score is available; shared-load runtime is observational.",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_g988b_may13_source_init_v1\\validation.json",
+  "validation_sha256": "865203c977726fca9e22a35690b94652e7bfdef8d45d3e75d2ef23a3c52ea5ac",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.2956856153497034,
+  "mean_route_group_score_m": 1.2956856153497034,
+  "paired_validation_complete": true,
+  "results": {
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 2.435778236565316,
+            "p95_m": 20.59034126247208,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 11.513059749518698
+          },
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "solution_sha256": "ec38677bc7a4ee106d1bb31ae0a3df2776958a904688606bbcfa1c5b169d66cb",
+          "native_epochs": 2182,
+          "wall_s": 16976.30044579506,
+          "seed_metadata_sha256": "35e34b589a282f0a559e072b09dbe821676cd9e3fe037034f1967b6fb8754d2a"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8619685628371849,
+            "p95_m": 1.7294026678622219,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.2956856153497034
+          },
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "solution_sha256": "0cfd5bd24fb05a200733c3e9fb7b0bdaba919b15c25010107fe6c09fe39597a1",
+          "native_epochs": 2182,
+          "wall_s": 1059.8011481761932,
+          "seed_metadata_sha256": "35e34b589a282f0a559e072b09dbe821676cd9e3fe037034f1967b6fb8754d2a"
+        }
+      },
+      "delta_m": -10.217374134168995
+    }
+  },
+  "checked_unix": 1790156473.7564921,
+  "scope_limitation": "One exposed development route. Clock drift may alter seed metadata by design. Shared-load runtime; no MATLAB runtime equivalence claim."
+}

@@ -1,0 +1,23 @@
+{
+  "schema": "gsdc-a217m-imu-bracket-failure.v1",
+  "failed_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_leading_states_v1\\00\\run.json",
+  "failed_summary": {
+    "schema_version": "native-imu-initialization-failure.v1",
+    "status": "failed-closed",
+    "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+    "failure_reason": "mapped IMU does not bracket the complete GNSS interval",
+    "truth_used": false,
+    "fallback_used": false
+  },
+  "existing_baseline_summary_sha256": "02e04fc86f58efc6a009936d4ec08e6ddabba1fe7102d3d39558185c99511189",
+  "existing_baseline_mapped_first_utc_ms": 1665093111436.7495,
+  "existing_baseline_mapped_last_utc_ms": 1665094333969.225,
+  "first_missing_raw_utc_ms": 1665093113990,
+  "last_raw_utc_ms": 1665094334000,
+  "raw_accel_last_utc_ms": 1665094333979,
+  "raw_gyro_last_utc_ms": 1665094333969,
+  "approximate_trailing_shortfall_ms": 30.77490234375,
+  "interpretation": "Existing baseline mapping covers the leading raw keys, but stops about 31 ms before the last GNSS UTC key. Leading-state opt-in invokes full-graph coverage check. Exact failed-run mapped times are not exported; investigate scope and normal tail integration semantics before any policy change.",
+  "policy_changed": false,
+  "checked_unix": 1790145713.3500695
+}

@@ -1,0 +1,41 @@
+{
+  "status": "source-stage-conditional-audit-complete-not-runtime-parity",
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "source_files_sha256": {
+    "parameters.m": "cc9e8ee178c79fd8c1853d1e1d0a91db12e951872d1773e279068c02f146a331",
+    "fgo_gnss_imu.m": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "functions/exobs_residuals.m": "39ae0d6db90c7a1e73dc4747e043f8e368f09aa3b8977d76e5541bda0ee75bc2"
+  },
+  "stage_conditionals": {
+    "parameters.m": [
+      "P residual thresholds: initial L1/L5 50/30 m, final 20/15 m.",
+      "D residual thresholds: initial 20 m/s, final 3 m/s.",
+      "SNR noise model, signal weights, robust kernels, IMU noise and bias noise do not branch on initflag in this file; they may depend on phone/course settings."
+    ],
+    "fgo_gnss_imu.m": [
+      "Initial uses GNSS output plus velocity-derived attitude; final uses prior IMU output, optionally resetting attitude when RPYReset=1.",
+      "Zero-velocity and relative/reference-height factors are final-only.",
+      "Stationary pose factors remain in both passes with strict raw UTC difference < 1.5 s."
+    ]
+  },
+  "settings": {
+    "train": {
+      "archive_member": "dataset_2023/settings_train.csv",
+      "sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+      "rows": 40,
+      "rpy_reset_cases": []
+    },
+    "test": {
+      "archive_member": "dataset_2023/settings_test.csv",
+      "sha256": "b75cd094c7ba49f78b4fc315a68fe07c0e26b563ac5e8354baa3a4717c03a2f8",
+      "rows": 40,
+      "rpy_reset_cases": [
+        "2022-02-24-15-10-us-ca-lax-p/pixel5"
+      ]
+    }
+  },
+  "current_mi8_august_january_and_a205u_october_RPYReset": 0,
+  "native_rpy_reset_implemented": false,
+  "scope": "Source inspection plus existing settings inventory. Current comparison routes all request RPYReset=0, so carrying their estimated attitude matches that choice. Cases requesting reset need separate support and verification before any all-phone source-parity claim. This does not verify the broader native noise, prior, observation or solver models."
+}

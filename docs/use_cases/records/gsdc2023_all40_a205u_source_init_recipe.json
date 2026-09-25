@@ -1,0 +1,43 @@
+{
+  "status": "local-artifact-assembled-not-submitted",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_a205u_source_init_recipe_plan.json",
+  "plan_sha256": "636fc8eeeb7c544a12dea6fa2730ba6c1e3b6b945748e135a89810a604af18e3",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "Candidate local artifact only; not a claim of test-score improvement or taroz parity.",
+  "recipe": {
+    "parent_plan_sha256": "c5f1364f5d39a625cbb46d9a1112598b0763060bf9b3b38659da20b067cf6cda",
+    "single_case_candidate_plan_sha256": "8d3adcfc392cb5209ab1168bf0abd5d52b7e1f68bd8b6ea7f5882e71a758623f",
+    "changed_case": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+    "change": "Enable source IMU initialization for sm-a205u, reusing an already audited native run from the identical executable and inputs. All other 39 outputs retain the fixed recipe.",
+    "selection_evidence": "One previously exposed A205u development route; no official test accuracy available.",
+    "test_ground_truth_used": false,
+    "submitted": false
+  },
+  "official_accuracy_validated": false,
+  "submitted": false,
+  "all40_native_audit_passed": true,
+  "audit_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_source_init_validation.json",
+  "audit_sha256": "66481cff9c7c64b53c7f57624f66338fb832d2290d9aa675245c6436bbbaaaed",
+  "manifest_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_source_init_submission_v1\\manifest.json",
+  "manifest_sha256": "a6258894bb5fa377da3bb3a65ea68c9d667d0bf568d700a3155d1e38326e978e",
+  "submission_sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+  "official_key_rows": 71936,
+  "assembled_artifact_comparison": {
+    "control_submission_sha256": "4267205e472005629ee3269dc636dc833b2c4ee89ae253feb2258d7d138b30e5",
+    "candidate_submission_sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+    "identical_ordered_official_keys": true,
+    "changed_rows_by_case": {
+      "2022-10-06-20-46-us-ca-sjc-r/sm-a205u": 1699
+    },
+    "unchanged_rows": 70237,
+    "all_other_39_drives_byte_identical_values": true,
+    "accuracy_claim": false
+  },
+  "official_submission": {
+    "submission_ref": 56479759,
+    "public_score_m": 1.698,
+    "private_score_m": 1.333,
+    "server_payload_roundtrip_verified": true,
+    "evidence_record": "gsdc2023_all40_official_submission_v1.json"
+  }
+}

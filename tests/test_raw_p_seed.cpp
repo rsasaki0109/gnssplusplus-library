@@ -987,6 +987,23 @@ TEST(RawPSeedTest, RejectsDuplicateNonmonotonicAndOverGapTimesBeforeSolving) {
     EXPECT_TRUE(receiver.allFinite());
 }
 
+TEST(RawPSeedTest, GapBoundaryUsesExistingMicrosecondTimeEquality) {
+    const NavigationData nav = makeSyntheticNavigation();
+    for (double excess : {-0.5e-6, 0.0, 64e-9, 0.5e-6, 2e-6, 0.001}) {
+        SCOPED_TRACE(excess);
+        auto epochs = makeTrajectory(nav, 2, false);
+        epochs[1].time = epochs[0].time + (2.0 + excess);
+        const auto result = libgnss::raw_p_seed::solve(epochs, nav, syntheticConfig());
+        if (excess <= 1e-6) {
+            EXPECT_TRUE(result.ok) << result.failure_reason;
+            EXPECT_EQ(result.accepted_epoch_count, 2U);
+        } else {
+            EXPECT_FALSE(result.ok);
+            EXPECT_EQ(result.failure_status, libgnss::raw_p_seed::EpochStatus::TimeGap);
+        }
+    }
+}
+
 TEST(RawPSeedTest, AccountsForInvalidRowsAlongsideAcceptedRows) {
     const NavigationData nav = makeSyntheticNavigation();
     auto epochs = makeTrajectory(nav, 1, false);
@@ -1337,6 +1354,59 @@ TEST(RawPSeedTest, CollectAllMatchesOrdinaryAcceptedSolvesWhenAllValid) {
     }
 }
 
+TEST(RawPSeedAdapterTest, TemporalInitializationPreservesFailedSppProvenance) {
+    const auto nav = makeSyntheticNavigation();
+    auto epochs = makeTrajectory(nav, 5, false);
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        epochs[i].raw_source_index = 10 + i;
+        epochs[i].raw_utc_time_millis = 1700000000000LL + i * 1000;
+        epochs[i].receiver_clock_drift_mps = 0.25 + 0.1 * i;
+    }
+    epochs[1].observations.pop_back();
+    epochs[2].observations.pop_back();
+    auto config = syntheticConfig();
+    config.collect_all_epochs_for_diagnostics = true;
+    const auto raw = libgnss::raw_p_seed::solve(epochs, nav, config);
+    ASSERT_EQ(raw.accepted_epoch_count, 3U);
+    const auto initialized = libgnss::raw_p_seed::initializeShortGaps(epochs, raw);
+    ASSERT_TRUE(initialized.ok) << initialized.failure_reason;
+    EXPECT_TRUE(initialized.graph_compatible);
+    EXPECT_EQ(initialized.temporal_initial_guess_count, 2U);
+    EXPECT_FALSE(raw.ok);
+    EXPECT_EQ(raw.epochs[1].status, libgnss::raw_p_seed::EpochStatus::InsufficientPseudorange);
+    EXPECT_FALSE(raw.epochs[1].position_ecef.allFinite());
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        const auto& seed = initialized.seeds[i];
+        EXPECT_EQ(seed.raw_source_index, epochs[i].raw_source_index);
+        EXPECT_EQ(seed.temporal_initial_guess, i == 1 || i == 2);
+        EXPECT_DOUBLE_EQ(seed.clock_rate_mps, epochs[i].receiver_clock_drift_mps);
+        EXPECT_TRUE(seed.velocity_ecef_mps.allFinite());
+        if (seed.temporal_initial_guess) {
+            EXPECT_EQ(seed.initial_guess_left_source, 10U);
+            EXPECT_EQ(seed.initial_guess_right_source, 13U);
+            const double a = i / 3.0;
+            EXPECT_TRUE(seed.position_ecef.isApprox(raw.epochs[0].position_ecef +
+                a * (raw.epochs[3].position_ecef - raw.epochs[0].position_ecef), 1e-12));
+        }
+    }
+    EXPECT_FALSE(libgnss::raw_p_seed::initializeShortGaps(epochs, raw, 2.0).ok);
+    auto mismatch = epochs;
+    mismatch[1].raw_utc_time_millis++;
+    EXPECT_FALSE(libgnss::raw_p_seed::initializeShortGaps(mismatch, raw).ok);
+    auto no_drift = epochs;
+    no_drift[1].receiver_clock_drift_mps = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(libgnss::raw_p_seed::initializeShortGaps(no_drift, raw).ok);
+    auto bad = raw;
+    bad.epochs[0].status = libgnss::raw_p_seed::EpochStatus::InsufficientPseudorange;
+    EXPECT_FALSE(libgnss::raw_p_seed::initializeShortGaps(epochs, bad).ok);
+    bad = raw;
+    bad.epochs[1].status = libgnss::raw_p_seed::EpochStatus::TimeGap;
+    EXPECT_FALSE(libgnss::raw_p_seed::initializeShortGaps(epochs, bad).ok);
+    bad = raw;
+    bad.epochs[3].reference_clock_group = GNSSSystem::Galileo;
+    EXPECT_FALSE(libgnss::raw_p_seed::initializeShortGaps(epochs, bad).ok);
+}
+
 TEST(RawPSeedAdapterTest, AcceptsSameRunFiniteClockRateAndCertifiesGpsC0) {
     const NavigationData nav = makeSyntheticNavigation();
     auto epochs = makeTrajectory(nav, 3, true);
@@ -1462,4 +1532,96 @@ TEST(RawPSeedAdapterTest, AccountsUnsupportedC7SignalWithoutFoldingIntoC0) {
     EXPECT_EQ(adapted.seeds[0].c7_unsupported_pseudorange_rows, 1U);
     EXPECT_TRUE(adapted.seeds[0].clock_bias_component_available[0]);
     EXPECT_TRUE(std::isfinite(adapted.seeds[0].clock_bias_components_m[0]));
+}
+
+TEST(RawPSeedAdapterTest, LeadingGuessesKeepFailedSppAndRequireTwoNearbyAnchors) {
+    using namespace libgnss::raw_p_seed;
+    const auto nav = makeSyntheticNavigation();
+    auto epochs = makeTrajectory(nav, 6, false);
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        epochs[i].raw_source_index = 10 + i;
+        epochs[i].raw_utc_time_millis = 1700000000000LL + i * 1000;
+        epochs[i].receiver_clock_drift_mps = .25;
+    }
+    epochs[0].observations.clear(); epochs[1].observations.clear();
+    auto config = syntheticConfig(); config.collect_all_epochs_for_diagnostics = true;
+    auto raw = solve(epochs, nav, config);
+    ASSERT_EQ(raw.accepted_epoch_count, 4U);
+    EXPECT_FALSE(initializeShortGaps(epochs, raw).ok);
+    const auto initialized = initializeWithLeadingGuesses(epochs, raw);
+    ASSERT_TRUE(initialized.ok) << initialized.failure_reason;
+    EXPECT_EQ(initialized.temporal_initial_guess_count, 2U);
+    for (std::size_t i = 0; i < 2; ++i) {
+        const auto& seed = initialized.seeds[i];
+        EXPECT_EQ(raw.epochs[i].status, EpochStatus::InsufficientPseudorange);
+        EXPECT_FALSE(raw.epochs[i].position_ecef.allFinite());
+        EXPECT_TRUE(seed.temporal_initial_guess);
+        EXPECT_EQ(seed.initial_guess_left_source, 12U);
+        EXPECT_EQ(seed.initial_guess_right_source, 13U);
+        EXPECT_EQ(seed.reason, "same-run-leading-linear-initial-guess-not-SPP");
+        EXPECT_TRUE(seed.position_ecef.isApprox(raw.epochs[2].position_ecef +
+            (static_cast<double>(i) - 2.) *
+            (raw.epochs[3].position_ecef - raw.epochs[2].position_ecef), 1e-12));
+    }
+    for (std::size_t i = 0; i < 5; ++i) epochs[i].observations.clear();
+    raw = solve(epochs, nav, config);
+    EXPECT_FALSE(initializeWithLeadingGuesses(epochs, raw, 60.).ok);
+    epochs.back().observations.clear(); raw = solve(epochs, nav, config);
+    EXPECT_FALSE(initializeWithLeadingGuesses(epochs, raw).ok);
+}
+
+TEST(RawPSeedAdapterTest, LeadingGpsBoundaryToleranceDoesNotRelaxUtcOrAdmitMillisecondExcess) {
+    using namespace libgnss::raw_p_seed;
+    const auto nav = makeSyntheticNavigation();
+    auto epochs = makeTrajectory(nav, 7, false);
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        epochs[i].raw_source_index = i;
+        epochs[i].raw_utc_time_millis = 1700000000000LL + i * 1000;
+        epochs[i].receiver_clock_drift_mps = .25;
+        if (i < 4) epochs[i].observations.clear();
+    }
+    auto config = syntheticConfig(); config.collect_all_epochs_for_diagnostics = true;
+    const auto original_time = epochs.front().time;
+    epochs.front().time = original_time + (-0.000003);
+    auto raw = solve(epochs, nav, config);
+    const auto accepted = initializeWithLeadingGuesses(epochs, raw);
+    ASSERT_TRUE(accepted.ok) << accepted.failure_reason;
+    EXPECT_EQ(accepted.temporal_initial_guess_count, 4U);
+    EXPECT_NE(raw.epochs.front().status, EpochStatus::Accepted);
+    EXPECT_TRUE(accepted.seeds.front().temporal_initial_guess);
+    epochs.front().time = original_time + (-0.002);
+    raw = solve(epochs, nav, config);
+    EXPECT_FALSE(initializeWithLeadingGuesses(epochs, raw).ok);
+    epochs.front().time = original_time;
+    --epochs.front().raw_utc_time_millis;
+    raw = solve(epochs, nav, config);
+    EXPECT_FALSE(initializeWithLeadingGuesses(epochs, raw).ok);
+}
+
+TEST(RawPSeedAdapterTest, LeadingBoundCannotBeRelaxedByLongInteriorGapPolicy) {
+    using namespace libgnss::raw_p_seed;
+    const auto nav = makeSyntheticNavigation();
+    auto epochs = makeTrajectory(nav, 7, false);
+    for (std::size_t i = 0; i < epochs.size(); ++i) {
+        epochs[i].raw_source_index = i;
+        epochs[i].raw_utc_time_millis = 1700000000000LL + i * 1000;
+        epochs[i].receiver_clock_drift_mps = .25;
+        if (i < 4) epochs[i].observations.clear();
+    }
+    auto config = syntheticConfig(); config.collect_all_epochs_for_diagnostics = true;
+    auto raw = solve(epochs, nav, config);
+    ASSERT_TRUE(initializeWithLeadingGuesses(epochs, raw, 60.).ok);
+    epochs[4].observations.clear(); raw = solve(epochs, nav, config);
+    const auto too_long = initializeWithLeadingGuesses(epochs, raw, 60.);
+    EXPECT_FALSE(too_long.ok);
+    EXPECT_EQ(too_long.failure_reason, "leading-initialization-span-exceeds-four-seconds");
+    auto trailing = makeTrajectory(nav, 4, false);
+    for (std::size_t i = 0; i < trailing.size(); ++i) {
+        trailing[i].raw_source_index = i;
+        trailing[i].raw_utc_time_millis = 1700000000000LL + i * 1000;
+        trailing[i].receiver_clock_drift_mps = .25;
+    }
+    trailing.front().observations.clear(); trailing.back().observations.clear();
+    raw = solve(trailing, nav, config);
+    EXPECT_FALSE(initializeWithLeadingGuesses(trailing, raw).ok);
 }

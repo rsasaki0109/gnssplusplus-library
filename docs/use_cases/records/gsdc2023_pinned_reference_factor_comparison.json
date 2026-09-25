@@ -1,0 +1,44 @@
+{
+  "status": "pinned-original-cpp-factor-evaluators-compared",
+  "reference_commit": "e679b72b620fc6800723578e4077dd157587d129",
+  "reference_headers_sha256": {
+    "ClockFactor_CCDD.h": "be36e9644d18a95d000c62640c4cbfd08ff571d94418937716c4d18a4f086459",
+    "MotionFactor_XXVV.h": "26dab9f5e8a11d170d53514dfe508f362da4115304b29ce45f7c54978350add5",
+    "DopplerFactor_VD.h": "23af721b84ab9f2f43fcb6a1aff44a0b0c8656ab06c8b8e6342ab1e3c5367e71"
+  },
+  "native_source_sha256": {
+    "src/algorithms/fgo_gtsam_internal.hpp": "c19aee64292ad196df1156a1bfcca0219a1eeed9e9220fdcc69cef7b7c149493",
+    "include/libgnss++/algorithms/fgo.hpp": "730734765055485f9d654d91eb354edade84347195fa70be0150d1fe252542d0",
+    "include/libgnss++/algorithms/fgo_config.hpp": "3090896b0027886edfa53f24161b61def86503bc220b0be9d745e871f2eeb1d1",
+    "tests/reference_gsdc_factors/test_reference_factors.cpp": "389eb90be45187cdac17196b9b34da703d5b12437bfabb251d49c54e22ef2b2e",
+    "tests/reference_gsdc_factors/CMakeLists.txt": "de4f781f722ecc66a6784e97ec0e177ab7ec148d5b417ee3ac91f8bb2e235ac4"
+  },
+  "executable_path": "E:/rtklib_v2_ws_tmp/gsdc-reference-factor-build/Release/reference_factors.exe",
+  "executable_sha256": "b128f5c1dba880615ab6d3c985f4e35b8be9efe771e57e0d8dcd5087a7f8e217",
+  "gtsam_dll_sha256": "926bc5f93c09874c89aaf208fa63226e5fb720e21449795b4ae52ae5b9ed9cdf",
+  "tests_passed": 3,
+  "state_cases": {
+    "clock": 15,
+    "motion": 15,
+    "doppler": 12
+  },
+  "residual_and_jacobian_absolute_tolerance": {
+    "clock": 1e-12,
+    "motion": 1e-12,
+    "doppler_residual": 1e-10,
+    "doppler_jacobian": 1e-12
+  },
+  "xml_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\pinned_reference_factor_tests.xml",
+  "xml_sha256": "4b9a341e4724bf1f6aad14be4745ebdba58009d3a75988f33100abcc6093f339",
+  "truth_used": false,
+  "accuracy_claim": false,
+  "paired_matlab_runtime": false,
+  "scope": "Direct execution of original pinned C++ headers and native classes on identical states; Doppler residual-origin convention explicitly converted.",
+  "limitations": [
+    "Unwhitened residual/Jacobian evaluation only; no whitening or graph-selection parity proved.",
+    "No P, TDCP, IMU or height factors in this suite.",
+    "No observation preprocessing, trajectory optimization or MATLAB runtime parity proved."
+  ],
+  "superseded_by": "gsdc2023_pinned_reference_factor_comparison_v2.json",
+  "executable_path_is_mutable_build_output": true
+}

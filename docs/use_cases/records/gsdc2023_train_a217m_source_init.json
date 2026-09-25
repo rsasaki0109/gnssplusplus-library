@@ -1,0 +1,61 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_source_init_plan.json",
+  "plan_sha256": "062c81f39c6607e435898e9b81f88afde4189865092bf1c44a9b065d91db5b65",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_bounded_tail_plan.json",
+  "baseline_plan_sha256": "7f041c56338ee6eb4dc4e3baeab4fadaedcb22f811225418439a9e50731fb243",
+  "binary_sha256": "d122fbeecd8d7295c5f37b3660f699aa3cc37993e586a7a55e49182503bdc43d",
+  "isolated_added_flag": "--native-source-imu-initialization",
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "prior_truth_exposure": true,
+  "dependency": "train_a217m_bounded_tail",
+  "scope": "Matched A217M source attitude/zero-bias initialization experiment on the fully native bounded-tail recovery. Only source initialization flag changes.",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_source_init_v1\\validation.json",
+  "validation_sha256": "e82841adc290b6a0faecbf1993f16b7f30c0d881dafd7af70c5ce62aaea3cba5",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 2.018911155622045,
+  "mean_route_group_score_m": 2.018911155622045,
+  "paired_validation_complete": true,
+  "results": {
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.4209790871168606,
+            "p95_m": 2.617140502723216,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.019059794920038
+          },
+          "truth_sha256": "e7f7bda0243cfe5cb1494bb84244cf3606f29eb90c84bd0f68d7b261851b2df9",
+          "solution_sha256": "a80392daa2d634ef2eb9737a1f859ed6be70f225f957ef9df675c9c56fd60958",
+          "native_epochs": 1222,
+          "wall_s": 208.27556443214417,
+          "seed_metadata_sha256": "833156844cba848ab1e6face0191fecdc06c53d0a231829b67b08e1b76b31d55"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.4208983165051192,
+            "p95_m": 2.6169239947389715,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.018911155622045
+          },
+          "truth_sha256": "e7f7bda0243cfe5cb1494bb84244cf3606f29eb90c84bd0f68d7b261851b2df9",
+          "solution_sha256": "6e7f1e2901454f3710595d1fd13c873ed78a9e12165340e9cc1b7ac2d8169920",
+          "native_epochs": 1222,
+          "wall_s": 231.50771951675415,
+          "seed_metadata_sha256": "833156844cba848ab1e6face0191fecdc06c53d0a231829b67b08e1b76b31d55"
+        }
+      },
+      "delta_m": -0.0001486392979930251
+    }
+  },
+  "checked_unix": 1790147882.214398,
+  "scope_limitation": "One exposed development route. Clock drift may alter seed metadata by design. Shared-load runtime; no MATLAB runtime equivalence claim."
+}

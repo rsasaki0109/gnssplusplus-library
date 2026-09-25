@@ -1,0 +1,41 @@
+{
+  "status": "bounded-tail-native-recovery-verified",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_bounded_tail_plan.json",
+  "plan_sha256": "7f041c56338ee6eb4dc4e3baeab4fadaedcb22f811225418439a9e50731fb243",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_bounded_tail_control_plan.json",
+  "baseline_plan_sha256": "a596183010727cf8db30c247de5d2d443bd963012fb6ba18f5da16d55b4e061f",
+  "binary_sha256": "d122fbeecd8d7295c5f37b3660f699aa3cc37993e586a7a55e49182503bdc43d",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "accuracy_verified": false,
+  "policy": "explicit terminal IMU measurement hold <=50 ms, leading real-sample bracketing and <=50 ms internal sample gaps required",
+  "baseline_score": null,
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_bounded_tail_v1\\validation.json",
+  "validation_sha256": "c5531d065fd92145c86f450c544cf2a7eb7518094b2325100f509092045c407a",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 2.019059794920038,
+  "mean_route_group_score_m": 2.019059794920038,
+  "score": {
+    "distance_variant": "haversine_sphere",
+    "p50_m": 1.4209790871168606,
+    "p95_m": 2.617140502723216,
+    "percentile_variant": "linear_n_minus_1",
+    "phone_score_m": 2.019059794920038
+  },
+  "output_rows": 1222,
+  "imu_coverage": {
+    "policy": "bounded-terminal-measurement-hold",
+    "real_samples_bracket_full_interval": false,
+    "terminal_measurement_hold_s": 0.02956026018364355,
+    "maximum_sample_gap_s": 0.03899998334236443
+  },
+  "baseline_remains_failed": true,
+  "wall_s": 208.27556443214417,
+  "checked_unix": 1790147562.9797204,
+  "local_accuracy_evaluated": true,
+  "official_accuracy_verified": false
+}

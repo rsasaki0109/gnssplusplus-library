@@ -1,3 +1,5 @@
+#include <libgnss++/algorithms/imu_continuous_coverage.hpp>
+#include <libgnss++/algorithms/smartphone_temporal_recipe.hpp>
 #include <libgnss++/algorithms/stationary_gyro_initializer.hpp>
 #include <libgnss++/algorithms/adjacent_residual_moments.hpp>
 #include <libgnss++/algorithms/code_edge_candidates.hpp>
@@ -14,7 +16,16 @@
 
 #include <libgnss++/algorithms/fgo.hpp>
 #include <libgnss++/algorithms/pseudorange_remasking.hpp>
+#include <libgnss++/algorithms/native_imu_refinement_rebuild.hpp>
+#include <libgnss++/algorithms/native_imu_refinement_attitude_reset.hpp>
+#include <libgnss++/algorithms/native_stage_position_offset.hpp>
+#include <libgnss++/algorithms/native_gnss_initial_observations.hpp>
+#include <optional>
 #include <libgnss++/algorithms/raw_p_seed.hpp>
+#include <libgnss++/algorithms/source_mi8_clock_drift.hpp>
+#include <libgnss++/algorithms/source_samsung_clock_drift.hpp>
+#include <libgnss++/algorithms/source_route_settings.hpp>
+#include <libgnss++/algorithms/source_phone_imu_noise.hpp>
 #include <libgnss++/algorithms/base_pseudorange_compensation.hpp>
 #include <libgnss++/algorithms/phase126_raw_base_compound.hpp>
 #include <libgnss++/algorithms/source_pseudorange_miss_mask.hpp>
@@ -54,7 +65,11 @@
 #include <tuple>
 #include <typeinfo>
 #include <vector>
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace {
 
@@ -297,6 +312,26 @@ struct Options {
     // velocity / clock handoff records. This lane is prep-only: it never
     // admits or launches an FGO graph, and never reads saved seed files.
     bool native_phase163_raw_p_no_doppler_seed_stage = false;
+    std::string native_source_route_type;
+    int native_source_l5 = -1;
+    bool native_samsung_clock_drift = false;
+    bool native_source_raw_clock_drift_cleanup = false;
+    bool native_source_imu_initialization = false;
+    bool native_imu_supported_long_gaps = false;
+    bool native_leading_imu_states = false;
+    bool native_leading_imu_bounded_tail = false;
+    bool native_source_lm_tolerances = false;
+    bool native_source_phone_imu_noise = false;
+    bool native_export_gnss_stage = false;
+    bool native_export_gnss_stage_factors = false;
+    bool native_export_imu_stage = false;
+    bool native_imu_refinement_pass = false;
+    bool native_refinement_attitude_reset = false;
+    bool native_source_stage_position_offsets = false;
+    bool native_source_imu_stop_phases = false;
+    bool native_source_imu_observation_stages = false;
+    bool native_source_gnss_initial_observations = false;
+    bool native_temporal_seed_initialization = false;
     // Phase165 opt-in: consume the same-run typed raw-P handoff in the
     // dedicated GNSS-only no-Doppler C7 graph.  This lane returns before any
     // IMU/main output path and never reads a persisted seed.
@@ -351,6 +386,9 @@ struct Options {
     bool native_omit_first_imu_bias_prior = false;
     bool native_omit_first_imu_velocity_prior = false;
     bool native_relative_height_pairs = false;
+    std::string native_height_map_path;
+    double native_gnss_first_doppler_threshold_mps = 0.0;
+    double native_phase217_motion_sigma_m = 0.05;
     bool native_pseudorange_remasking = false;
 };
 
@@ -466,6 +504,7 @@ void usage(const char* program) {
                  " [--native-paired-epoch-states]"
                  " [--native-rover-epoch-states]"
                  " [--native-dense-base-smoothing]"
+                 " [--native-export-gnss-stage-factors]"
                  " [--native-base-mask-only-ablation]"
                  " [--native-base-gps-values-only-ablation]"
                  " [--native-base-gps-center-ablation]"
@@ -507,6 +546,23 @@ void usage(const char* program) {
                  " [--native-phase149-raw-p-seed-stage]"
                  " [--native-phase157-raw-p-bootstrap]"
                  " [--native-phase159-collect-all-epochs]"
+                 " [--native-source-route-type Highway|Street|Mix --native-source-l5 0|1]"
+                 " [--native-imu-supported-long-gaps]"
+                 " [--native-source-raw-clock-drift-cleanup]"
+                 " [--native-leading-imu-states]"
+                 " [--native-leading-imu-bounded-tail]"
+                 " [--native-source-lm-tolerances]"
+                 " [--native-samsung-clock-drift]"
+                 " [--native-source-imu-initialization]"
+                 " [--native-export-gnss-stage]"
+                 " [--native-export-imu-stage]"
+                 " [--native-source-imu-stop-phases]"
+                 " [--native-source-imu-observation-stages]"
+                 " [--native-source-gnss-initial-observations]"
+                 " [--native-imu-refinement-pass]"
+                 " [--native-refinement-attitude-reset]"
+                 " [--native-source-stage-position-offsets]"
+                 " [--native-temporal-seed-initialization]"
                  " [--native-phase163-raw-p-no-doppler-seed-stage]"
                  " [--native-phase165-raw-p-no-doppler-graph]"
                  " [--native-phase167-raw-p-no-doppler-lm-termination-budget]"
@@ -515,6 +571,7 @@ void usage(const char* program) {
                  " [--native-phase184-source-tdcp-huber-k]"
                  " [--native-phase180-android-clock-preflight]"
                  " [--native-phase194-source-utc-fallback-imu-noise]"
+                 " [--native-source-phone-imu-noise]"
                  " [--native-phase197-source-utc-fallback-imu-offset]"
                  " [--native-imu-time-offset-ms N]"
                  " [--native-phase201-source-inclusive-forward-imu-schedule]"
@@ -573,19 +630,50 @@ bool phase112MainOutputPositionOffsetSelectors(const Options& options) {
            !options.native_phase104_stage_main_accuracy_attribution;
 }
 
+// The raw-SPP Phase171 path exports optimized native attitudes for every
+// output epoch too. Keep the older Phase112 admission unchanged, while
+// allowing its existing single post-solve correction for known raw phones.
+bool phase171RawImuPositionOffsetSelectors(const Options& options) {
+    libgnss::upstream_position_offset::PhoneOffset offset;
+    return phase112MainOutputPositionOffsetSelectors(options) &&
+           options.native_phase157_raw_p_bootstrap &&
+           options.native_phase171_raw_p_no_doppler_imu_main &&
+           options.native_phase171_raw_p_ecef_doppler_gnss_first &&
+           options.android_raw_clock_only &&
+           !options.native_direct_wls_ephemeral_c7d_main_seed &&
+           libgnss::upstream_position_offset::phoneOffset(
+               phoneFromDatasetId(options.dataset_id), offset);
+}
+
 struct DirectObservableQualitySettings {
     bool valid = false;
     std::string environment;
     double pseudorange_huber_threshold_sigma = 0.0;
     double doppler_huber_threshold_sigma = 0.0;
     double official_tdcp_huber_threshold_sigma = 0.0;
+    double elevation_deg = 5.0;
+    double velocity_motion_sigma_m = 0.01;
 };
 
 // Phase80's P+D robust thresholds are a fixed Type mapping over the four
 // frozen route IDs.  Dataset identity is the only selector; no route score,
 // truth, or precomputed result is consulted.
 DirectObservableQualitySettings directObservableQualitySettingsForDataset(
-    const std::string& dataset_id) {
+    const std::string& dataset_id, const std::string& source_type = "", int source_l5 = -1) {
+    if (!source_type.empty() || source_l5 != -1) {
+        const auto selected = libgnss::smartphone_temporal::sourceRouteSettings(
+            source_type, phoneFromDatasetId(dataset_id), source_l5);
+        if (!selected.valid) return {};
+        DirectObservableQualitySettings settings;
+        settings.valid = true;
+        settings.environment = source_type;
+        settings.pseudorange_huber_threshold_sigma = selected.pseudorange_huber;
+        settings.doppler_huber_threshold_sigma = selected.doppler_huber;
+        settings.official_tdcp_huber_threshold_sigma = selected.tdcp_huber;
+        settings.elevation_deg = selected.elevation_deg;
+        settings.velocity_motion_sigma_m = selected.velocity_motion_sigma_m;
+        return settings;
+    }
     struct Entry {
         const char* route_id;
         const char* environment;
@@ -652,6 +740,100 @@ bool hasMatExtension(const std::string& path) {
 bool parseArguments(int argc, char** argv, Options& options) {
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        // Keep new metadata switches out of the legacy deep else-if chain
+        // (MSVC imposes a nesting limit on that chain).
+        if (arg == "--native-source-phone-imu-noise") {
+            options.native_source_phone_imu_noise = true;
+            continue;
+        }
+        if (arg == "--native-source-raw-clock-drift-cleanup") {
+            options.native_source_raw_clock_drift_cleanup = true;
+            continue;
+        }
+        if (arg == "--native-leading-imu-bounded-tail") {
+            options.native_leading_imu_bounded_tail = true;
+            continue;
+        }
+        if (arg == "--native-leading-imu-states") {
+            options.native_leading_imu_states = true;
+            continue;
+        }
+        if (arg == "--native-source-lm-tolerances") {
+            options.native_source_lm_tolerances = true;
+            continue;
+        }
+        if (arg == "--native-imu-supported-long-gaps") {
+            options.native_imu_supported_long_gaps = true;
+            continue;
+        }
+        if (arg == "--native-source-route-type") {
+            if (!requireValue(argc, argv, i, options.native_source_route_type)) return false;
+            continue;
+        }
+        if (arg == "--native-source-l5") {
+            std::string value;
+            if (!requireValue(argc, argv, i, value) || (value != "0" && value != "1")) return false;
+            options.native_source_l5 = value == "1" ? 1 : 0;
+            continue;
+        }
+        if (arg == "--native-export-gnss-stage") {
+            options.native_export_gnss_stage = true;
+            continue;
+        }
+        if (arg == "--native-export-gnss-stage-factors") {
+            options.native_export_gnss_stage_factors = true;
+            continue;
+        }
+        if (arg == "--native-phase217-motion-sigma") {
+            std::string value;
+            if (!requireValue(argc, argv, i, value)) return false;
+            try {
+                options.native_phase217_motion_sigma_m = std::stod(value);
+            } catch (...) {
+                return false;
+            }
+            if (!(options.native_phase217_motion_sigma_m > 0.0)) return false;
+            continue;
+        }
+        if (arg == "--native-gnss-first-doppler-threshold") {
+            std::string value;
+            if (!requireValue(argc, argv, i, value)) return false;
+            try {
+                options.native_gnss_first_doppler_threshold_mps = std::stod(value);
+            } catch (...) {
+                return false;
+            }
+            if (!(options.native_gnss_first_doppler_threshold_mps > 0.0)) return false;
+            continue;
+        }
+        if (arg == "--native-imu-refinement-pass") {
+            options.native_imu_refinement_pass = true;
+            continue;
+        }
+        if (arg == "--native-source-stage-position-offsets") {
+            options.native_source_stage_position_offsets = true;
+            continue;
+        }
+        if (arg == "--native-refinement-attitude-reset") {
+            options.native_refinement_attitude_reset = true;
+            continue;
+        }
+        if (arg == "--native-source-imu-stop-phases") {
+            options.native_source_imu_stop_phases = true;
+            continue;
+        }
+        if (arg == "--native-source-imu-observation-stages") {
+            options.native_source_imu_observation_stages = true;
+            continue;
+        }
+        if (arg == "--native-source-gnss-initial-observations") {
+            options.native_source_gnss_initial_observations = true;
+            continue;
+        }
+        if (arg == "--native-export-imu-stage") {
+            options.native_export_imu_stage = true;
+            continue;
+        }
         if (arg == "--help" || arg == "-h") {
             usage(argv[0]);
             return false;
@@ -674,6 +856,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             if (!requireValue(argc, argv, i, options.out_path)) return false;
         } else if (arg == "--summary-json") {
             if (!requireValue(argc, argv, i, options.summary_path)) return false;
+        } else if (arg == "--native-height-map") {
+            if (!requireValue(argc, argv, i, options.native_height_map_path)) return false;
         } else if (arg == "--dataset-id") {
             if (!requireValue(argc, argv, i, options.dataset_id)) return false;
         } else if (arg == "--max-epochs") {
@@ -870,6 +1054,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_phase149_raw_p_seed_stage = true;
         } else if (arg == "--native-phase157-raw-p-bootstrap") {
             options.native_phase157_raw_p_bootstrap = true;
+        } else if (arg == "--native-samsung-clock-drift") {
+            options.native_samsung_clock_drift = true;
+        } else if (arg == "--native-source-imu-initialization") {
+            options.native_source_imu_initialization = true;
+        } else if (arg == "--native-temporal-seed-initialization") {
+            options.native_temporal_seed_initialization = true;
         } else if (arg == "--native-phase159-collect-all-epochs") {
             options.native_phase159_collect_all_epochs = true;
         } else if (arg == "--native-phase163-raw-p-no-doppler-seed-stage") {
@@ -1013,9 +1203,60 @@ bool parseArguments(int argc, char** argv, Options& options) {
                      "the Phase167 1000-iteration GNSS-first selector\n";
         return false;
     }
+    if (options.native_export_gnss_stage_factors && !options.native_export_gnss_stage) {
+        std::cerr << "--native-export-gnss-stage-factors requires --native-export-gnss-stage\n";
+        return false;
+    }
+    if ((options.native_export_gnss_stage || options.native_export_imu_stage) &&
+        (!phase171_imu_main || !phase171_ecef_doppler ||
+         !options.android_raw_clock_only || options.summary_path.empty())) {
+        std::cerr << (options.native_export_gnss_stage ? "--native-export-gnss-stage" : "--native-export-imu-stage")
+                  << " requires raw-clock Phase171 ECEF-D and --summary-json\n";
+        return false;
+    }
+    if (options.native_imu_refinement_pass &&
+        (!options.native_export_gnss_stage || !options.native_export_imu_stage || !options.native_source_imu_initialization ||
+         !options.native_phase213_main_doppler || !options.native_base_pseudorange_source_miss_mask ||
+         options.native_phase131_canonical_correction_band_key ||
+         options.native_base_mask_only_ablation || options.native_base_gps_values_only_ablation ||
+         options.native_base_gps_center_ablation ||
+         options.native_pseudorange_remasking)) {
+        std::cerr << "--native-imu-refinement-pass requires exported Phase171 source-IMU/main-D stages and ordinary exact-stream base corrections\n";
+        return false;
+    }
+    if (options.native_source_stage_position_offsets &&
+        (!options.native_source_imu_observation_stages || !options.native_upstream_position_offset)) {
+        std::cerr << "--native-source-stage-position-offsets requires --native-source-imu-observation-stages and --native-upstream-position-offset\n";
+        return false;
+    }
+    if (options.native_refinement_attitude_reset && !options.native_imu_refinement_pass) {
+        std::cerr << "--native-refinement-attitude-reset requires --native-imu-refinement-pass\n";
+        return false;
+    }
+    if (options.native_source_imu_stop_phases &&
+        (!options.native_imu_refinement_pass || !options.native_upstream_stop_constraints)) {
+        std::cerr << "--native-source-imu-stop-phases requires --native-imu-refinement-pass and --native-upstream-stop-constraints\n";
+        return false;
+    }
+    if (options.native_source_imu_observation_stages && !options.native_source_imu_stop_phases) {
+        std::cerr << "--native-source-imu-observation-stages requires --native-source-imu-stop-phases\n";
+        return false;
+    }
+    if (options.native_source_gnss_initial_observations && !options.native_source_imu_observation_stages) {
+        std::cerr << "--native-source-gnss-initial-observations requires --native-source-imu-observation-stages\n";
+        return false;
+    }
     if (phase171_ecef_doppler && !phase171_imu_main) {
         std::cerr << "--native-phase171-raw-p-ecef-doppler-gnss-first "
                      "requires the Phase171 raw-P IMU-main selector\n";
+        return false;
+    }
+    if (options.native_source_phone_imu_noise &&
+        (!phase171_imu_main || !phase171_ecef_doppler || options.android_gnss_path.empty() ||
+         phase194_source_utc_fallback_imu_noise ||
+         !libgnss::source_phone_imu_noise::select(phoneFromDatasetId(options.dataset_id), false))) {
+        std::cerr << "--native-source-phone-imu-noise requires a source-supported phone, "
+                     "Android raw Phase171 ECEF-Doppler, and no Phase194 override\n";
         return false;
     }
     if (phase194_source_utc_fallback_imu_noise &&
@@ -1070,13 +1311,21 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "Pseudorange re-masking requires Pixel5 Phase171 ECEF-D, UTC fallback and no base/Phase135\n";
         return false;
     }
+    if (!options.native_height_map_path.empty() &&
+        (!phase171_imu_main || !phase171_ecef_doppler ||
+         options.native_relative_height_pairs ||
+         options.native_phase135_official_affine_measurement_family)) {
+        std::cerr << "--native-height-map requires Phase171 ECEF-D, excludes relative height pairs and Phase135\n";
+        return false;
+    }
     if (options.native_relative_height_pairs &&
         (!phase171_imu_main || !phase171_ecef_doppler ||
          !options.native_upstream_stop_constraints ||
          !options.android_utc_wall_clock_fallback ||
-         options.native_phase135_official_affine_measurement_family ||
-         phoneFromDatasetId(options.dataset_id) != "pixel5")) {
-        std::cerr << "Relative height requires Pixel5 Phase171 ECEF-D, stop constraints, UTC fallback and no Phase135\n";
+         options.native_phase135_official_affine_measurement_family)) {
+        // Upstream fgo_gnss_imu.m adds these pairs for every phone on routes
+        // without ref_hight.mat; the former Pixel5-only admission is lifted.
+        std::cerr << "Relative height requires Phase171 ECEF-D, stop constraints, UTC fallback and no Phase135\n";
         return false;
     }
     if (options.native_omit_first_imu_velocity_prior &&
@@ -1115,22 +1364,31 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "Source TDCP resL requires Pixel5 Phase171 ECEF-D, UTC fallback and no Phase117/118/120\n";
         return false;
     }
+    // Experimental admission for the same bias-difference TDCP family.
+    // The source sigma formula depends on signal/SNR, not phone identity.
+    // Keep drift-clock and TDCP-disabled phones outside this validated lane.
+    const std::string source_sigma_phone = phoneFromDatasetId(options.dataset_id);
+    const bool source_sigma_phone_supported =
+        source_sigma_phone == "pixel5" || source_sigma_phone == "pixel4" ||
+        source_sigma_phone == "pixel4xl" || source_sigma_phone == "mi8" ||
+        source_sigma_phone == "xiaomimi8" || source_sigma_phone == "sm-g988b" ||
+        source_sigma_phone == "pixel6pro" || source_sigma_phone == "pixel7pro" ||
+        source_sigma_phone == "sm-s908b";
     if (options.native_source_tdcp_meter_sigma &&
         (!phase171_imu_main || !phase171_ecef_doppler ||
          !options.android_utc_wall_clock_fallback ||
          options.native_phase117_tdcp_snr_type_sigma ||
          options.native_phase118_official_tdcp_huber_k ||
          options.native_phase120_official_tdcp_resl_atmosphere_cancellation ||
-         phoneFromDatasetId(options.dataset_id) != "pixel5")) {
-        std::cerr << "Source TDCP metre sigma requires Pixel5 Phase171 ECEF-D, UTC fallback and no Phase117/118/120\n";
+         !source_sigma_phone_supported)) {
+        std::cerr << "Source TDCP metre sigma requires a supported bias-difference phone, Phase171 ECEF-D, UTC fallback and no Phase117/118/120\n";
         return false;
     }
     if (options.native_phase217_main_pose3_motion &&
         (!phase171_imu_main || !phase171_ecef_doppler || !options.android_utc_wall_clock_fallback ||
          phase201_source_inclusive_forward_imu_schedule || options.native_phase205_source_count_bias_density ||
-         options.native_phase209_source_separate_imu_factors ||
-         phoneFromDatasetId(options.dataset_id) != "pixel5")) {
-        std::cerr << "Phase217 requires Pixel5 Phase171 ECEF-D, UTC fallback and legacy IMU options\n";
+         options.native_phase209_source_separate_imu_factors)) {
+        std::cerr << "Phase217 requires Phase171 ECEF-D, UTC fallback and legacy IMU options\n";
         return false;
     }
     if (options.native_phase213_main_doppler &&
@@ -1138,9 +1396,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.android_utc_wall_clock_fallback ||
          phase201_source_inclusive_forward_imu_schedule ||
          options.native_phase205_source_count_bias_density ||
-         options.native_phase209_source_separate_imu_factors ||
-         phoneFromDatasetId(options.dataset_id) != "pixel5")) {
-        std::cerr << "Phase213 requires Pixel5 Phase171 ECEF-D with UTC fallback "
+         options.native_phase209_source_separate_imu_factors)) {
+        std::cerr << "Phase213 requires Phase171 ECEF-D with UTC fallback "
                      "and legacy IMU options\n";
         return false;
     }
@@ -1352,6 +1609,64 @@ bool parseArguments(int argc, char** argv, Options& options) {
     if (options.native_phase159_collect_all_epochs && !raw_only_stage) {
         std::cerr << "--native-phase159-collect-all-epochs requires "
                      "a raw-P prep selector\n";
+        return false;
+    }
+    if (!options.native_source_route_type.empty() || options.native_source_l5 != -1) {
+        if (!android_raw || !phase171_imu_main || !options.native_source_direct_observable_quality ||
+            !libgnss::smartphone_temporal::sourceRouteSettings(options.native_source_route_type,
+                phoneFromDatasetId(options.dataset_id), options.native_source_l5).valid) {
+            std::cerr << "Explicit source Type/L5 requires valid paired metadata and Android Phase171 direct quality\n";
+            return false;
+        }
+    }
+    if (options.native_source_raw_clock_drift_cleanup &&
+        (!options.native_phase171_raw_p_no_doppler_imu_main ||
+         !options.native_temporal_seed_initialization || !options.android_raw_clock_only ||
+         !options.android_include_first_native_epoch || options.native_samsung_clock_drift ||
+         phoneFromDatasetId(options.dataset_id) != "pixel7pro")) {
+        std::cerr << "Source raw clock drift cleanup requires Pixel7 Pro Phase171 temporal raw-clock initialization including first epoch, without Samsung drift estimation\n";
+        return false;
+    }
+    if (options.native_samsung_clock_drift &&
+        (!android_raw || !phase171_imu_main ||
+         !options.native_phase165_raw_p_no_doppler_graph ||
+         !libgnss::smartphone_temporal::samsungClockRecipe(phoneFromDatasetId(options.dataset_id)))) {
+        std::cerr << "--native-samsung-clock-drift requires a source-listed Samsung Android Phase171 raw-P graph\n";
+        return false;
+    }
+    if (options.native_source_lm_tolerances &&
+        !options.native_phase171_raw_p_no_doppler_imu_main) {
+        std::cerr << "--native-source-lm-tolerances requires Phase171\n";
+        return false;
+    }
+    if (options.native_leading_imu_bounded_tail &&
+        (!options.native_leading_imu_states || options.native_imu_supported_long_gaps ||
+         options.native_phase201_source_inclusive_forward_imu_schedule)) {
+        std::cerr << "--native-leading-imu-bounded-tail requires leading states and the default IMU schedule without extended gaps\n";
+        return false;
+    }
+    if (options.native_leading_imu_states &&
+        (!options.native_phase171_raw_p_no_doppler_imu_main ||
+         !options.native_temporal_seed_initialization || !options.native_sparse_p_staging ||
+         !options.android_include_first_native_epoch || !options.android_raw_clock_only)) {
+        std::cerr << "--native-leading-imu-states requires Phase171, temporal seeds, sparse staging, first epoch and raw clock only\n";
+        return false;
+    }
+    if (options.native_imu_supported_long_gaps &&
+        (!options.native_phase171_raw_p_no_doppler_imu_main ||
+         !options.native_temporal_seed_initialization ||
+         !options.native_sparse_p_staging)) {
+        std::cerr << "--native-imu-supported-long-gaps requires Phase171, temporal seeds and sparse staging\n";
+        return false;
+    }
+    if (options.native_source_imu_initialization &&
+        (!android_raw || !phase171_imu_main || options.native_stationary_gyro_initializer)) {
+        std::cerr << "--native-source-imu-initialization requires Android Phase171 and zero bias initialization\n";
+        return false;
+    }
+    if (options.native_temporal_seed_initialization &&
+        !options.native_phase163_raw_p_no_doppler_seed_stage && !phase171_imu_main) {
+        std::cerr << "--native-temporal-seed-initialization requires Phase163 or Phase171\n";
         return false;
     }
     if (options.native_pdc_imu_tdcp_no_bridge) {
@@ -1694,7 +2009,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
     }
     if (options.native_source_direct_observable_quality) {
         const DirectObservableQualitySettings direct_settings =
-            directObservableQualitySettingsForDataset(options.dataset_id);
+            directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
         if (!direct_settings.valid) {
             std::cerr << "--native-source-direct-observable-quality requires one "
                          "of the four pinned Phase80 dataset IDs (exact match): "
@@ -1910,11 +2226,13 @@ bool parseArguments(int argc, char** argv, Options& options) {
             return false;
         }
         if (options.native_upstream_position_offset &&
+            !phase171RawImuPositionOffsetSelectors(options) &&
             (!phase112MainOutputPositionOffsetSelectors(options) ||
              phoneFromDatasetId(options.dataset_id) != "pixel5")) {
             std::cerr << "--native-upstream-position-offset with the Phase101 "
                          "meter-state handoff requires the exact Phase112 "
-                         "C7/D/QR main recipe and dataset phone pixel5\n";
+                         "C7/D/QR main recipe and dataset phone pixel5, or the "
+                         "raw-SPP Phase171 IMU recipe with a known phone\n";
             return false;
         }
         if (options.fgo_imu_sparse_recovery || options.native_signal_bias_states ||
@@ -2337,7 +2655,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             return false;
         }
         const DirectObservableQualitySettings direct_settings =
-            directObservableQualitySettingsForDataset(options.dataset_id);
+            directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
         if (!direct_settings.valid ||
             !std::isfinite(direct_settings.official_tdcp_huber_threshold_sigma) ||
             !(direct_settings.official_tdcp_huber_threshold_sigma > 0.0)) {
@@ -2396,7 +2715,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             return false;
         }
         const DirectObservableQualitySettings direct_settings =
-            directObservableQualitySettingsForDataset(options.dataset_id);
+            directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
         if (!direct_settings.valid || direct_settings.environment.empty() ||
             !std::isfinite(direct_settings.official_tdcp_huber_threshold_sigma) ||
             !(direct_settings.official_tdcp_huber_threshold_sigma > 0.0)) {
@@ -3128,7 +3448,12 @@ bool atomicWrite(const std::string& path, const std::string& contents) {
         std::filesystem::create_directories(destination.parent_path(), error);
         if (error) return false;
     }
-    const std::string temporary = path + ".tmp." + std::to_string(static_cast<long long>(::getpid()));
+#ifdef _WIN32
+    const auto process_id = ::_getpid();
+#else
+    const auto process_id = ::getpid();
+#endif
+    const std::string temporary = path + ".tmp." + std::to_string(static_cast<long long>(process_id));
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output.is_open()) return false;
@@ -3218,7 +3543,55 @@ bool deriveGnssFirstVelocities(
     return true;
 }
 
+libgnss::source_pseudorange_miss_mask::Report applyFreshNativeBase(
+    libgnss::FGOProcessor::FGOProblem& refreshed,
+    const libgnss::base_pseudorange_compensation::Model& model) {
+    libgnss::source_pseudorange_miss_mask::Report correction;
+    if (!libgnss::source_pseudorange_miss_mask::apply(
+            refreshed.pseudorange_factors, refreshed.epochs,
+            [&model](const libgnss::SatelliteId& sat, libgnss::SignalType sig) {
+                return model.hasStream(sat,sig);
+            },
+            [&model](const libgnss::GNSSTime& t, const libgnss::SatelliteId& sat,
+                     libgnss::SignalType sig, double& value) {
+                return model.correctionAt(t,sat,sig,value);
+            }, correction) || correction.correction_already_applied ||
+        correction.correction_application_passes!=1 || !correction.factor_count_consistent ||
+        correction.retained_finite_pc_rows==0)
+        throw std::invalid_argument("Native rebuild base correction failed exact-once validation");
+    if (correction.corrected_rows!=refreshed.pseudorange_factors.size() ||
+        !std::all_of(refreshed.pseudorange_factors.begin(),refreshed.pseudorange_factors.end(),
+                     [](const auto& row){return row.native_base_pseudorange_correction_applied;}))
+        throw std::invalid_argument("Native rebuild has an uncorrected pseudorange row");
+    return correction;
+}
+
 struct ImuBuildReport {
+    bool gnss_initial_observations_applied = false;
+    double gnss_initial_gradient_interval_s = 0.0;
+    std::size_t gnss_initial_p_rows = 0, gnss_initial_base_corrected_rows = 0;
+    std::size_t gnss_initial_base_application_passes = 0;
+    std::size_t gnss_initial_doppler_candidates = 0, gnss_initial_doppler_retained = 0;
+    std::vector<libgnss::FGOProcessor::PseudorangeCenterAudit> gnss_initial_code_centers;
+    bool source_observation_stages_applied = false;
+    std::size_t initial_doppler_candidates = 0, initial_doppler_retained = 0;
+    std::size_t initial_p_rows = 0, initial_base_corrected_rows = 0;
+    std::size_t initial_base_application_passes = 0;
+    std::vector<libgnss::FGOProcessor::PseudorangeCenterAudit> initial_code_centers, final_code_centers;
+    bool source_stop_phases_applied = false;
+    std::size_t initial_stop_velocity_factors = 0, initial_stop_pose_factors = 0;
+    std::size_t initial_stop_velocity_phase_omissions = 0, initial_stop_pose_gap_rejections = 0;
+    bool refinement_applied = false;
+    bool refinement_attitude_reset_applied = false;
+    bool source_stage_position_offsets_applied = false;
+    std::size_t gnss_stage_offset_epochs = 0;
+    std::size_t imu_stage_offset_epochs = 0;
+    std::size_t refinement_attitude_reset_low_speed = 0;
+    std::size_t refinement_attitude_reset_nearest_fill = 0;
+    std::size_t refinement_initial_iterations = 0;
+    std::size_t refinement_doppler_candidates = 0, refinement_doppler_retained = 0;
+    std::size_t refinement_p_rows = 0, refinement_base_corrected_rows = 0;
+    std::size_t refinement_base_application_passes = 0;
     bool stationary_gyro_initializer_applied = false;
     std::size_t stationary_gyro_blocks = 0;
     double stationary_gyro_scatter_radps = 0.0;
@@ -3349,6 +3722,16 @@ struct ImuBuildReport {
     std::string gnss_first_failure;
     std::string failure;
     std::size_t loaded_samples = 0;
+    std::size_t leading_clock_only_epochs = 0;
+    bool long_gap_imu_coverage_verified = false;
+    double long_gap_imu_max_sample_gap_s = 0.0;
+    bool imu_bounded_tail_verified = false;
+    double imu_trailing_measurement_hold_s = 0.0;
+    double imu_required_real_end_relative_s = 0.0;
+    bool imu_coverage_attempted = false;
+    double imu_coverage_first_sample_relative_s = 0.0;
+    double imu_coverage_last_sample_relative_s = 0.0;
+    double imu_coverage_required_end_relative_s = 0.0;
     std::size_t stationary_samples = 0;
     double gravity_mean_norm = 0.0;
     double gravity_norm_std = 0.0;
@@ -3370,6 +3753,7 @@ struct ImuBuildReport {
     int heading_windows = 0;
     bool android_raw = false;
     libgnss::io::AndroidRawGnssDiagnostics android_gnss_diagnostics;
+    libgnss::smartphone_temporal::Mi8ClockDrift mi8_clock_drift;
     libgnss::AndroidImuCsvLoadResult android_load;
     libgnss::AndroidGnssTimeAnchorLoadResult android_gnss_anchor_load;
     libgnss::AndroidGnssUtcGpsMappingLoadResult android_gnss_utc_mapping_load;
@@ -4484,6 +4868,7 @@ struct TdcpRuntimeReport {
     double robust_cost_sum = 0.0;
     double quadratic_cost_sum = 0.0;
     bool enabled = false;
+    bool omitted_by_phone_model = false;
     std::size_t factors_built = 0;
     std::size_t factors_inserted = 0;
     std::size_t candidate_pairs = 0;
@@ -4697,6 +5082,80 @@ bool exportPhase104StageEcef(const Options& options,
     }
     report.written = true;
     return true;
+}
+
+// Diagnostic output only: these coordinates are never read by initialization,
+// main optimization, raw-key alignment, or submission assembly.
+bool exportNativeGnssStage(
+    const Options& options,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    const libgnss::FGOProcessor::FGOResult& stage,
+    const std::vector<std::int64_t>& raw_keys,
+    const std::string& stage_name = "gnss-first") {
+    if (!stage.diagnostics.converged || raw_keys.empty() ||
+        raw_keys.size() != problem.epochs.size() ||
+        raw_keys.size() != stage.solution.solutions.size()) return false;
+    std::ostringstream csv;
+    csv << "phone,UnixTimeMillis,PositionEcefX_m,PositionEcefY_m,PositionEcefZ_m\n"
+        << std::setprecision(17);
+    for (std::size_t i = 0; i < raw_keys.size(); ++i) {
+        const auto& epoch = problem.epochs[i];
+        const auto& solution = stage.solution.solutions[i];
+        // Match original epoch identity; never interpolate or infer a key.
+        if (epoch.raw_utc_time_millis != raw_keys[i] ||
+            (i && raw_keys[i] <= raw_keys[i - 1]) ||
+            (solution.time - epoch.time) != 0.0 ||
+            !solution.position_ecef.allFinite() ||
+            !earthValidEcef(solution.position_ecef)) return false;
+        csv << options.dataset_id << ',' << raw_keys[i] << ','
+            << solution.position_ecef.x() << ',' << solution.position_ecef.y()
+            << ',' << solution.position_ecef.z() << '\n';
+    }
+    return atomicWrite(options.summary_path + "." + stage_name + ".csv", csv.str());
+}
+
+// Diagnostic-only dump of the pseudorange factors consumed by the GNSS-first
+// solve.  Model: corrected_pseudorange_m = |satellite_position_ecef - x| +
+// clock[c7_component].  Nothing here is read back by inference.
+bool exportNativeGnssStageFactors(
+    const Options& options,
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    const std::vector<std::int64_t>& raw_keys) {
+    if (raw_keys.size() != problem.epochs.size()) return false;
+    std::ostringstream csv;
+    csv << "UnixTimeMillis,epoch_index,system,prn,signal,c7_component,"
+           "sat_x_m,sat_y_m,sat_z_m,corrected_pseudorange_m,sigma_m,snr_dbhz,"
+           "elevation_rad,base_correction_applied\n"
+        << std::setprecision(17);
+    for (const auto& factor : problem.pseudorange_factors) {
+        if (factor.epoch_index >= raw_keys.size()) return false;
+        csv << raw_keys[factor.epoch_index] << ',' << factor.epoch_index << ','
+            << static_cast<int>(factor.satellite.system) << ','
+            << static_cast<int>(factor.satellite.prn) << ','
+            << static_cast<int>(factor.signal) << ','
+            << libgnss::raw_p_seed::c7ClockComponentFor(factor.satellite.system,
+                                                        factor.signal)
+            << ',' << factor.satellite_position_ecef.x() << ','
+            << factor.satellite_position_ecef.y() << ','
+            << factor.satellite_position_ecef.z() << ','
+            << factor.corrected_pseudorange_m << ',' << factor.sigma_m << ','
+            << factor.snr_dbhz << ',' << factor.elevation_rad << ','
+            << (factor.native_base_pseudorange_correction_applied ? 1 : 0) << '\n';
+    }
+    std::ostringstream doppler;
+    doppler << "UnixTimeMillis,epoch_index,system,prn,signal,residual_mps,sigma_mps,"
+               "elevation_rad\n"
+            << std::setprecision(17);
+    for (const auto& factor : problem.undifferenced_doppler_factors) {
+        if (factor.epoch_index >= raw_keys.size()) return false;
+        doppler << raw_keys[factor.epoch_index] << ',' << factor.epoch_index << ','
+                << static_cast<int>(factor.satellite.system) << ','
+                << static_cast<int>(factor.satellite.prn) << ','
+                << static_cast<int>(factor.signal) << ',' << factor.residual_mps
+                << ',' << factor.sigma_mps << ',' << factor.elevation_rad << '\n';
+    }
+    return atomicWrite(options.summary_path + ".gnss-first-factors.csv", csv.str()) &&
+           atomicWrite(options.summary_path + ".gnss-first-doppler.csv", doppler.str());
 }
 
 bool writePhase104MainDisplacementStats(
@@ -5063,6 +5522,31 @@ double phase116HuberCost(double normalized_residual,
                          const libgnss::FGOProcessor::FGOConfig& config,
                          bool& outlier);
 
+const libgnss::FGOProcessor::FGOResult::TdcpFactorResidual&
+checkedDriftTdcpResidual(
+    const libgnss::FGOProcessor::FGOProblem& problem,
+    const libgnss::FGOProcessor::FGOResult& result,
+    const libgnss::FGOProcessor::TimeDifferencedCarrierFactor& factor) {
+    if (result.tdcp_drift_factor_residuals.size() != problem.tdcp_factors.size())
+        throw std::invalid_argument("Drift TDCP residual export size mismatch");
+    const auto index = static_cast<std::size_t>(&factor - problem.tdcp_factors.data());
+    const auto& value = result.tdcp_drift_factor_residuals.at(index);
+    if (value.previous_epoch_index != factor.previous_epoch_index ||
+        value.current_epoch_index != factor.current_epoch_index ||
+        !(value.satellite == factor.satellite) || value.signal != factor.signal ||
+        !std::isfinite(value.initial_m) || !std::isfinite(value.final_m))
+        throw std::invalid_argument("Drift TDCP residual export identity/value mismatch");
+    return value;
+}
+
+bool usesDriftTdcpDiagnostics(const libgnss::FGOProcessor::FGOConfig& config) {
+    return config.use_upstream_observable_quality &&
+        (config.use_native_phase171_raw_p_no_doppler_imu_main ||
+         config.use_native_raw_p_ecef_doppler_gnss_first) &&
+        libgnss::smartphone_temporal::forPhone(config.native_source_clock_c0d_phone)
+            .carrier_clock == libgnss::smartphone_temporal::CarrierClock::IntegratedDrift;
+}
+
 TdcpRuntimeReport evaluateTdcpRuntime(
     const libgnss::FGOProcessor::FGOProblem& problem,
     const libgnss::FGOProcessor::FGOResult& result,
@@ -5093,6 +5577,16 @@ TdcpRuntimeReport evaluateTdcpRuntime(
         problem.diagnostics.tdcp_rejected_code_phase_jump;
     report.rejected_invalid_weight =
         problem.diagnostics.tdcp_rejected_invalid_weight;
+
+    report.omitted_by_phone_model =
+        (config.use_native_raw_p_ecef_doppler_gnss_first ||
+         config.use_native_phase171_raw_p_no_doppler_imu_main) &&
+        config.use_upstream_observable_quality &&
+        libgnss::smartphone_temporal::forPhone(config.native_source_clock_c0d_phone)
+            .carrier_clock == libgnss::smartphone_temporal::CarrierClock::Disabled;
+    // Preserve candidate counts, but do not publish hypothetical post-fit
+    // residuals for factors which the selected phone model never inserted.
+    if (report.omitted_by_phone_model) return report;
 
     using CarrierKey = std::pair<libgnss::SatelliteId, libgnss::SignalType>;
     struct ArcState {
@@ -5138,6 +5632,9 @@ TdcpRuntimeReport evaluateTdcpRuntime(
             current_range + libgnss::constants::SPEED_OF_LIGHT * current.receiver_clock_bias -
             previous_range - libgnss::constants::SPEED_OF_LIGHT * previous.receiver_clock_bias -
             factor.delta_carrier_m;
+        if (usesDriftTdcpDiagnostics(config)) {
+            residual = checkedDriftTdcpResidual(problem, result, factor).final_m;
+        }
         if (config.use_native_tdcp_frequency_residual_states) {
             const auto index=static_cast<std::size_t>(&factor-problem.tdcp_factors.data());
             const auto& correction=result.tdcp_frequency_corrections[index];
@@ -5382,6 +5879,10 @@ Phase116CarrierTdcpReport evaluatePhase116CarrierTdcp(
         if (!(previous_range > 0.0) || !(current_range > 0.0) ||
             !std::isfinite(previous_range) || !std::isfinite(current_range)) {
             return std::numeric_limits<double>::quiet_NaN();
+        }
+        if (usesDriftTdcpDiagnostics(config)) {
+            const auto& residual = checkedDriftTdcpResidual(problem, result, factor);
+            return initial ? residual.initial_m : residual.final_m;
         }
         return current_range + current_clock - previous_range - previous_clock -
                factor.delta_carrier_m;
@@ -5941,7 +6442,11 @@ bool buildImuInput(const std::string& path,
                    bool epoch_heading_attitude_seeds = false,
                    bool stationary_gyro_initializer = false,
                    std::int64_t utc_wall_clock_fallback_offset_override_ms =
-                       std::numeric_limits<std::int64_t>::max()) {
+                       std::numeric_limits<std::int64_t>::max(),
+                   bool source_imu_initialization = false,
+                   bool imu_supported_long_gaps = false,
+                   const std::string& source_noise_phone = {},
+                   bool leading_bounded_tail = false) {
     if (problem.epochs.size() < 2) {
         report.failure = "fewer than two GNSS epochs";
         return false;
@@ -6014,11 +6519,49 @@ bool buildImuInput(const std::string& path,
         sample.gyro_raw_radps = gyro;
         samples.push_back(sample);
     }
-    if (samples.size() < kStationarySamples) {
+    if (samples.size() < (source_imu_initialization ? 2U : kStationarySamples)) {
         report.failure = "IMU stream shorter than frozen leveling window";
         return false;
     }
     report.loaded_samples = samples.size();
+    if (imu_supported_long_gaps) {
+        std::vector<double> mapped_times;
+        mapped_times.reserve(samples.size());
+        const auto origin = problem.epochs.front().time;
+        for (const auto& sample : samples) mapped_times.push_back(sample.time - origin);
+        report.imu_coverage_attempted = true;
+        report.imu_coverage_first_sample_relative_s = mapped_times.front();
+        report.imu_coverage_last_sample_relative_s = mapped_times.back();
+        report.imu_coverage_required_end_relative_s = problem.epochs.back().time - origin;
+        if (leading_bounded_tail) {
+            if (report.leading_clock_only_epochs == 0 ||
+                report.leading_clock_only_epochs >= problem.epochs.size()) {
+                report.failure = "bounded-tail policy requires actual leading recovery states";
+                return false;
+            }
+            report.imu_required_real_end_relative_s =
+                problem.epochs[report.leading_clock_only_epochs].time - origin;
+            const auto coverage = libgnss::imu_coverage::checkBoundedTail(
+                mapped_times, 0.0, report.imu_coverage_required_end_relative_s,
+                report.imu_required_real_end_relative_s);
+            report.imu_trailing_measurement_hold_s = coverage.trailing_measurement_hold_s;
+            if (!coverage.ok) { report.failure = coverage.error; return false; }
+            report.imu_bounded_tail_verified = true;
+            report.long_gap_imu_coverage_verified = coverage.real_samples_bracket_full_interval;
+            report.long_gap_imu_max_sample_gap_s = coverage.maximum_gap_s;
+        } else {
+            const auto coverage = libgnss::imu_coverage::check(
+                mapped_times, 0.0, problem.epochs.back().time - origin);
+            if (!coverage.ok) { report.failure = coverage.error; return false; }
+            report.long_gap_imu_coverage_verified = true;
+            report.long_gap_imu_max_sample_gap_s = coverage.maximum_gap_s;
+        }
+        std::cerr << "[native-imu-long-gap-coverage] samples=" << samples.size()
+                  << " max_sample_gap_s=" << report.long_gap_imu_max_sample_gap_s
+                  << " bound_s=0.05 real_full_graph=" << report.long_gap_imu_coverage_verified
+                  << " terminal_measurement_hold_s=" << report.imu_trailing_measurement_hold_s << "\n";
+    }
+
 
     const std::size_t stationary_count = std::min(kStationarySamples, samples.size());
     std::vector<libgnss::ImuSample> stationary(samples.begin(),
@@ -6039,9 +6582,10 @@ bool buildImuInput(const std::string& path,
     report.stationary_samples = stationary.size();
     report.gravity_mean_norm = mean_norm;
     report.gravity_norm_std = norm_std;
-    if (!std::isfinite(mean_norm) || !std::isfinite(norm_std) ||
-        mean_norm < kGravityNormMin || mean_norm > kGravityNormMax ||
-        norm_std > kGravityNormStdMax) {
+    if (!source_imu_initialization &&
+        (!std::isfinite(mean_norm) || !std::isfinite(norm_std) ||
+         mean_norm < kGravityNormMin || mean_norm > kGravityNormMax ||
+         norm_std > kGravityNormStdMax)) {
         report.failure = "leveling window is not stationary/low-dynamics under frozen gravity gate";
         return false;
     }
@@ -6054,8 +6598,16 @@ bool buildImuInput(const std::string& path,
         return false;
     }
 
-    const libgnss::NominalState aligned = libgnss::fusion_initialization::alignStatic(
-        stationary, libgnss::Vector3d::Zero(), kGravity);
+    // fgo_gnss_imu.m initializes all biases to zero and attitude from vel2rpy.
+    // A moving start must not be interpreted as a stationary bias measurement.
+    libgnss::NominalState aligned;
+    if (source_imu_initialization) {
+        aligned.accel_bias.setZero();
+        aligned.gyro_bias.setZero();
+    } else {
+        aligned = libgnss::fusion_initialization::alignStatic(
+            stationary, libgnss::Vector3d::Zero(), kGravity);
+    }
     libgnss::FusionState state;
     state.nominal = aligned;
     state.covariance.setIdentity();
@@ -6074,7 +6626,8 @@ bool buildImuInput(const std::string& path,
             return false;
         }
         libgnss::fusion_initialization::VelocityHeadingConfig heading_config;
-        heading_config.nearest_fill_interior = epoch_heading_attitude_seeds;
+        heading_config.nearest_fill_interior =
+            epoch_heading_attitude_seeds || source_imu_initialization;
         const auto velocity_heading = libgnss::fusion_initialization::velocityToRpy(
             *gnss_first_velocities_enu, heading_config);
         if (!velocity_heading.ok || velocity_heading.rpy_rad.empty() ||
@@ -6093,7 +6646,7 @@ bool buildImuInput(const std::string& path,
         state.nominal.attitude_body_to_enu = Eigen::Quaterniond(
             rpyToBodyToNav(velocity_heading.rpy_rad.front()));
         initial_velocity = velocity_heading.smoothed_velocity_enu.front();
-        if (epoch_heading_attitude_seeds) {
+        if (epoch_heading_attitude_seeds || source_imu_initialization) {
             problem.imu.epoch_heading_attitudes_body_to_nav.clear();
             problem.imu.epoch_heading_attitude_times.clear();
             for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
@@ -6180,10 +6733,24 @@ bool buildImuInput(const std::string& path,
     // The values are the public taroz pixel preset after the 0.5 synchronization
     // coefficient, with no truth-driven tuning.
     imu.noise.gravity_mps2 = kGravity;
-    const auto noise_selection =
+    auto noise_selection =
         libgnss::native_utc_fallback_imu_noise::apply(
             imu.noise, phase194_source_utc_fallback_imu_noise,
             android_raw && report.android_load.utc_wall_clock_fallback_applied);
+    if (!source_noise_phone.empty()) {
+        const auto selected = libgnss::source_phone_imu_noise::select(
+            source_noise_phone, android_raw && report.android_load.utc_wall_clock_fallback_applied);
+        if (!selected || !android_raw) {
+            report.failure = "source phone IMU noise requires supported Android raw phone";
+            return false;
+        }
+        imu.noise.accel_noise_sigma = selected->accel_noise_sigma;
+        imu.noise.gyro_noise_sigma = selected->gyro_noise_sigma;
+        noise_selection.accel_noise_sigma = selected->accel_noise_sigma;
+        noise_selection.gyro_noise_sigma = selected->gyro_noise_sigma;
+        noise_selection.measurement_sync_coefficient = selected->sync_coefficient;
+        noise_selection.source = selected->source;
+    }
     report.phase194_source_utc_fallback_imu_noise_requested =
         noise_selection.requested;
     report.phase194_source_utc_fallback_imu_noise_applied =
@@ -6398,7 +6965,9 @@ std::string makePhase149RawPSeedJson(
 std::string makePhase163RawPNoDopplerSeedJson(
     const std::string& dataset_id,
     const libgnss::raw_p_seed::Result& raw_result,
-    const libgnss::raw_p_seed::RawPNoDopplerSeedAdapterResult& adapter) {
+    const libgnss::raw_p_seed::RawPNoDopplerSeedAdapterResult& adapter,
+    bool source_mi8_clock_gradient = false,
+    bool source_raw_clock_cleanup = false) {
     std::ostringstream out;
     out << std::setprecision(17)
         << "{\n  \"schema_version\": "
@@ -6417,6 +6986,8 @@ std::string makePhase163RawPNoDopplerSeedJson(
         << ",\n  \"graph_disabled_reason\": ";
     writeJsonString(out, adapter.graph_disabled_reason);
     out << ",\n  \"input_epoch_count\": " << adapter.input_epoch_count
+        << ",\n  \"temporal_initial_guess_count\": " << adapter.temporal_initial_guess_count
+        << ",\n  \"independent_spp_accepted_epochs\": " << raw_result.accepted_epoch_count
         << ",\n  \"accepted_epoch_count\": "
         << adapter.accepted_epoch_count
         << ",\n  \"rejected_epoch_count\": "
@@ -6432,7 +7003,11 @@ std::string makePhase163RawPNoDopplerSeedJson(
         libgnss::raw_p_seed::velocityEndpointPolicyName(
             raw_result.endpoint_policy));
     out << ",\n  \"clock_rate_source\": "
-        << "\"exact-original-epoch-receiver_clock_drift_mps\",\n"
+        << (source_raw_clock_cleanup
+            ? "\"source-raw-clock-drift-jump-mask-fill\",\n"
+            : source_mi8_clock_gradient
+            ? "\"source-mi8-raw-clock-gradient-mask-fill\",\n"
+            : "\"exact-original-epoch-receiver_clock_drift_mps\",\n")
         << "  \"c7_reference_policy\": "
         << "\"GPS-reference-only-C0;unproven-frequency-ISBs-unavailable\",\n"
         << "  \"imported_seed_files\": false,\n"
@@ -6456,6 +7031,17 @@ std::string makePhase163RawPNoDopplerSeedJson(
             out, libgnss::raw_p_seed::seedAdapterStatusName(seed.status));
         out << ",\n      \"reason\": ";
         writeJsonString(out, seed.reason);
+        if (source_raw_clock_cleanup) {
+            out << ",\n      \"selected_clock_rate_mps\": ";
+            if (std::isfinite(seed.clock_rate_mps)) out << seed.clock_rate_mps;
+            else out << "null";
+        }
+        out << ",\n      \"temporal_initial_guess\": "
+            << (seed.temporal_initial_guess ? "true" : "false");
+        if (seed.temporal_initial_guess) {
+            out << ",\n      \"initial_guess_left_source\": " << seed.initial_guess_left_source
+                << ",\n      \"initial_guess_right_source\": " << seed.initial_guess_right_source;
+        }
         out << ",\n      \"reference_clock_group\": ";
         writeJsonString(
             out, libgnss::raw_p_seed::clockGroupName(seed.reference_clock_group));
@@ -6597,13 +7183,25 @@ std::string makePhase165RawPNoDopplerGraphJson(
         }
     }
     if (problem != nullptr) {
-        out << ",\n  \"retained_epochs\": " << problem->epochs.size()
+        out << ",\n  \"builder_input_epochs\": " << problem->diagnostics.input_epochs
+            << ",\n  \"builder_skipped_epochs_without_seed\": " << problem->diagnostics.skipped_epochs_without_seed
+            << ",\n  \"builder_pd_pair_rejections\": " << problem->diagnostics.upstream_pd_pair_rejections
+            << ",\n  \"builder_ld_pair_rejections\": " << problem->diagnostics.upstream_ld_pair_rejections
+            << ",\n  \"builder_pseudorange_residual_rejections\": " << problem->diagnostics.upstream_pseudorange_residual_rejections
+            << ",\n  \"builder_doppler_residual_rejections\": " << problem->diagnostics.upstream_doppler_residual_rejections
+            << ",\n  \"retained_epochs\": " << problem->epochs.size()
             << ",\n  \"retained_pseudorange_factors\": "
             << problem->pseudorange_factors.size()
             << ",\n  \"retained_tdcp_factors\": "
             << problem->tdcp_factors.size()
             << ",\n  \"retained_undifferenced_doppler_factors\": "
-            << problem->undifferenced_doppler_factors.size();
+            << problem->undifferenced_doppler_factors.size()
+            << ",\n  \"builder_tdcp_candidate_pairs\": " << problem->diagnostics.tdcp_candidate_pairs
+            << ",\n  \"builder_tdcp_rejected_gap\": " << problem->diagnostics.tdcp_rejected_gap
+            << ",\n  \"builder_tdcp_rejected_clock_discontinuity\": " << problem->diagnostics.tdcp_rejected_clock_discontinuity
+            << ",\n  \"builder_tdcp_rejected_loss_of_lock\": " << problem->diagnostics.tdcp_rejected_loss_of_lock
+            << ",\n  \"builder_tdcp_rejected_code_phase_jump\": " << problem->diagnostics.tdcp_rejected_code_phase_jump
+            << ",\n  \"builder_tdcp_rejected_missing_previous\": " << problem->diagnostics.tdcp_rejected_missing_previous;
     }
     if (result != nullptr) {
         std::size_t finite_positions = 0U;
@@ -8431,7 +9029,8 @@ std::string makeSummary(const Options& options,
     const bool meter_state_parity =
         options.native_source_clock_c0d_meter_state_parity;
     const DirectObservableQualitySettings direct_quality_settings =
-        directObservableQualitySettingsForDataset(options.dataset_id);
+        directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
     std::ostringstream out;
     out << std::setprecision(17);
     out << "{\n"
@@ -9174,6 +9773,7 @@ std::string makeSummary(const Options& options,
                 ? "true"
                 : "false") << ",\n"
         << "  \"imu_measurement_noise\": {\n"
+        << "    \"phone_selector_requested\": " << (options.native_source_phone_imu_noise ? "true" : "false") << ",\n"
         << "    \"selector_requested\": "
         << (imu_report.phase194_source_utc_fallback_imu_noise_requested
                 ? "true"
@@ -9368,6 +9968,10 @@ std::string makeSummary(const Options& options,
     if (imu_report.android_raw) {
         const auto& gnss = imu_report.android_gnss_diagnostics;
         out << "  \"android_gnss_diagnostics\": {\n"
+            << "    \"source_mi8_clock_gradient\": " << (imu_report.mi8_clock_drift.ok ? "true" : "false") << ",\n"
+            << "    \"mi8_clock_magnitude_masks\": " << imu_report.mi8_clock_drift.magnitude_masks << ",\n"
+            << "    \"mi8_clock_jump_masks\": " << imu_report.mi8_clock_drift.jump_masks << ",\n"
+            << "    \"mi8_clock_filled_values\": " << imu_report.mi8_clock_drift.filled_values << ",\n"
             << "    \"input_rows\": " << gnss.input_rows << ",\n"
             << "    \"raw_rows\": " << gnss.raw_rows << ",\n"
             << "    \"selected_rows\": " << gnss.selected_rows << ",\n"
@@ -9525,7 +10129,10 @@ std::string makeSummary(const Options& options,
             << "      \"use_upstream_observable_quality\": true,\n"
             << "      \"upstream_snr_percentile\": 85.0,\n"
             << "      \"upstream_min_snr_dbhz\": 20.0,\n"
-            << "      \"upstream_min_elevation_deg\": 5.0,\n"
+            << "      \"upstream_min_elevation_deg\": " << direct_quality_settings.elevation_deg << ",\n"
+            << "      \"velocity_motion_sigma_m\": " << direct_quality_settings.velocity_motion_sigma_m << ",\n"
+            << "      \"explicit_source_type_l5\": " << (!options.native_source_route_type.empty() ? "true" : "false") << ",\n"
+            << "      \"source_l5\": " << options.native_source_l5 << ",\n"
             << "      \"upstream_max_adjacent_gap_s\": 1.5,\n"
             << "      \"pseudorange_huber_threshold_sigma\": "
             << direct_quality_settings.pseudorange_huber_threshold_sigma << ",\n"
@@ -9813,6 +10420,7 @@ std::string makeSummary(const Options& options,
         << "  },\n"
         << "  \"tdcp_contract\": {\n"
         << "    \"enabled\": " << (tdcp_report.enabled ? "true" : "false") << ",\n"
+        << "    \"omitted_by_phone_model\": " << (tdcp_report.omitted_by_phone_model ? "true" : "false") << ",\n"
         << "    \"official_snr_type_sigma_enabled\": "
         << (options.native_phase117_tdcp_snr_type_sigma ? "true" : "false")
         << ",\n"
@@ -9838,6 +10446,12 @@ std::string makeSummary(const Options& options,
                 ? "true"
                 : "false")
         << ",\n"
+        << "    \"drift_factor_residual_rows\": "
+        << result.tdcp_drift_factor_residuals.size() << ",\n"
+        << "    \"residual_evaluation\": \""
+        << (result.tdcp_drift_factor_residuals.empty()
+                ? "legacy-reconstruction" : "inserted-drift-factor")
+        << "\",\n"
         << "    \"ordinary_measurement_m\": \"carrier_m + satellite_clock_m "
            "(no ionosphere/troposphere) when enabled; legacy corrected carrier "
            "otherwise\",\n"
@@ -9890,6 +10504,13 @@ std::string makeSummary(const Options& options,
         << "    \"relative_height_proximity_m\": 15,\n"
         << "    \"relative_height_speed_sample_sum_threshold\": 100,\n"
         << "    \"relative_height_no_external_reference\": true,\n"
+        << "    \"gnss_first_doppler_threshold_mps\": " << options.native_gnss_first_doppler_threshold_mps << ",\n"
+        << "    \"height_map_requested\": " << (options.native_height_map_path.empty() ? "false" : "true") << ",\n"
+        << "    \"height_map_points\": " << result.diagnostics.height_map_points << ",\n"
+        << "    \"height_map_factors_inserted\": " << result.diagnostics.height_map_factors_inserted << ",\n"
+        << "    \"height_map_sigma_m\": 0.1,\n"
+        << "    \"height_map_huber_k\": 0.5,\n"
+        << "    \"height_map_horizontal_radius_m\": 15,\n"
         << "    \"first_imu_velocity_priors_inserted\": "
         << result.diagnostics.first_imu_velocity_priors_inserted << ",\n"
         << "    \"first_imu_velocity_priors_omitted\": "
@@ -10984,6 +11605,19 @@ std::string makeSummary(const Options& options,
                                                 : "gpst-metric-imu.csv");
     out << ",\n"
         << "    \"loaded_samples\": " << imu_report.loaded_samples << ",\n"
+        << "    \"leading_imu_states_requested\": " << (options.native_leading_imu_states ? "true" : "false") << ",\n"
+        << "    \"leading_clock_only_epochs\": " << imu_report.leading_clock_only_epochs << ",\n"
+        << "    \"source_lm_tolerances_requested\": " << (options.native_source_lm_tolerances ? "true" : "false") << ",\n"
+        << "    \"imu_supported_long_gaps_requested\": " << (options.native_imu_supported_long_gaps ? "true" : "false") << ",\n"
+        << "    \"long_gap_imu_coverage_verified\": " << (imu_report.long_gap_imu_coverage_verified ? "true" : "false") << ",\n"
+        << "    \"long_gap_imu_max_sample_gap_s\": " << imu_report.long_gap_imu_max_sample_gap_s << ",\n"
+        << "    \"leading_imu_bounded_tail_requested\": " << (options.native_leading_imu_bounded_tail ? "true" : "false") << ",\n"
+        << "    \"bounded_tail_imu_coverage_verified\": " << (imu_report.imu_bounded_tail_verified ? "true" : "false") << ",\n"
+        << "    \"imu_trailing_measurement_hold_s\": " << imu_report.imu_trailing_measurement_hold_s << ",\n"
+        << "    \"imu_required_real_end_relative_s\": " << imu_report.imu_required_real_end_relative_s << ",\n"
+        << "    \"imu_coverage_first_sample_relative_s\": " << imu_report.imu_coverage_first_sample_relative_s << ",\n"
+        << "    \"imu_coverage_last_sample_relative_s\": " << imu_report.imu_coverage_last_sample_relative_s << ",\n"
+        << "    \"imu_coverage_required_end_relative_s\": " << imu_report.imu_coverage_required_end_relative_s << ",\n"
         << "    \"stationary_samples\": " << imu_report.stationary_samples << ",\n"
         << "    \"stationary_gyro_initializer_requested\": " << (options.native_stationary_gyro_initializer ? "true" : "false") << ",\n"
         << "    \"stationary_gyro_initializer_applied\": " << (imu_report.stationary_gyro_initializer_applied ? "true" : "false") << ",\n"
@@ -10991,7 +11625,70 @@ std::string makeSummary(const Options& options,
         << "    \"stationary_gyro_scatter_radps\": " << imu_report.stationary_gyro_scatter_radps << ",\n"
         << "    \"gravity_mean_norm_mps2\": " << imu_report.gravity_mean_norm << ",\n"
         << "    \"gravity_norm_std_mps2\": " << imu_report.gravity_norm_std << ",\n"
-        << "    \"heading_windows\": " << imu_report.heading_windows << ",\n"
+        << "    \"native_source_raw_clock_drift_cleanup\": " << (options.native_source_raw_clock_drift_cleanup ? "true" : "false") << ",\n"
+        << "    \"native_samsung_clock_drift\": " << (options.native_samsung_clock_drift ? "true" : "false") << ",\n"
+        << "    \"source_velocity_attitude_zero_bias_initialization\": " << (options.native_source_imu_initialization ? "true" : "false") << ",\n"
+        << "    \"gnss_stage_sidecar_requested\": " << (options.native_export_gnss_stage ? "true" : "false") << ",\n"
+        << "    \"imu_stage_sidecar_requested\": " << (options.native_export_imu_stage ? "true" : "false") << ",\n"
+        << "    \"refinement_requested\": " << (options.native_imu_refinement_pass ? "true" : "false") << ",\n"
+        << "    \"source_stage_position_offsets_requested\": " << (options.native_source_stage_position_offsets ? "true" : "false") << ",\n"
+        << "    \"source_stage_position_offsets_applied\": " << (imu_report.source_stage_position_offsets_applied ? "true" : "false") << ",\n"
+        << "    \"gnss_stage_offset_epochs\": " << imu_report.gnss_stage_offset_epochs << ",\n"
+        << "    \"imu_stage_offset_epochs\": " << imu_report.imu_stage_offset_epochs << ",\n"
+        << "    \"refinement_attitude_reset_requested\": " << (options.native_refinement_attitude_reset ? "true" : "false") << ",\n"
+        << "    \"refinement_attitude_reset_applied\": " << (imu_report.refinement_attitude_reset_applied ? "true" : "false") << ",\n"
+        << "    \"refinement_attitude_reset_low_speed\": " << imu_report.refinement_attitude_reset_low_speed << ",\n"
+        << "    \"refinement_attitude_reset_nearest_fill\": " << imu_report.refinement_attitude_reset_nearest_fill << ",\n"
+        << "    \"source_stop_phases_requested\": " << (options.native_source_imu_stop_phases ? "true" : "false") << ",\n"
+        << "    \"source_stop_phases_applied\": " << (imu_report.source_stop_phases_applied ? "true" : "false") << ",\n"
+        << "    \"source_observation_stages_requested\": " << (options.native_source_imu_observation_stages ? "true" : "false") << ",\n"
+        << "    \"source_observation_stages_applied\": " << (imu_report.source_observation_stages_applied ? "true" : "false") << ",\n"
+        << "    \"gnss_initial_observations_requested\": " << (options.native_source_gnss_initial_observations ? "true" : "false") << ",\n"
+        << "    \"gnss_initial_observations_applied\": " << (imu_report.gnss_initial_observations_applied ? "true" : "false") << ",\n"
+        << "    \"gnss_initial_gradient_interval_s\": " << imu_report.gnss_initial_gradient_interval_s << ",\n"
+        << "    \"gnss_initial_p_rows\": " << imu_report.gnss_initial_p_rows << ",\n"
+        << "    \"gnss_initial_base_corrected_rows\": " << imu_report.gnss_initial_base_corrected_rows << ",\n"
+        << "    \"gnss_initial_base_application_passes\": " << imu_report.gnss_initial_base_application_passes << ",\n"
+        << "    \"gnss_initial_doppler_candidates\": " << imu_report.gnss_initial_doppler_candidates << ",\n"
+        << "    \"gnss_initial_doppler_retained\": " << imu_report.gnss_initial_doppler_retained << ",\n"
+        << "    \"initial_doppler_candidates\": " << imu_report.initial_doppler_candidates << ",\n"
+        << "    \"initial_doppler_retained\": " << imu_report.initial_doppler_retained << ",\n"
+        << "    \"initial_p_rows\": " << imu_report.initial_p_rows << ",\n"
+        << "    \"initial_base_corrected_rows\": " << imu_report.initial_base_corrected_rows << ",\n"
+        << "    \"initial_base_application_passes\": " << imu_report.initial_base_application_passes << ",\n"
+        << "    \"initial_stop_velocity_factors\": " << imu_report.initial_stop_velocity_factors << ",\n"
+        << "    \"initial_stop_pose_factors\": " << imu_report.initial_stop_pose_factors << ",\n"
+        << "    \"initial_stop_velocity_phase_omissions\": " << imu_report.initial_stop_velocity_phase_omissions << ",\n"
+        << "    \"initial_stop_pose_gap_rejections\": " << imu_report.initial_stop_pose_gap_rejections << ",\n"
+        << "    \"final_stop_velocity_phase_omissions\": " << result.diagnostics.upstream_stop_velocity_phase_omissions << ",\n"
+        << "    \"final_stop_pose_gap_rejections\": " << result.diagnostics.upstream_stop_pose_gap_rejections << ",\n"
+        << "    \"refinement_applied\": " << (imu_report.refinement_applied ? "true" : "false") << ",\n"
+        << "    \"refinement_initial_iterations\": " << imu_report.refinement_initial_iterations << ",\n"
+        << "    \"refinement_doppler_candidates\": " << imu_report.refinement_doppler_candidates << ",\n"
+        << "    \"refinement_doppler_retained\": " << imu_report.refinement_doppler_retained << ",\n"
+        << "    \"refinement_p_rows\": " << imu_report.refinement_p_rows << ",\n"
+        << "    \"refinement_base_corrected_rows\": " << imu_report.refinement_base_corrected_rows << ",\n"
+        << "    \"refinement_base_application_passes\": " << imu_report.refinement_base_application_passes << ",\n"
+        << "    \"heading_windows\": " << imu_report.heading_windows << ",\n";
+    const auto write_centers = [&](const char* name, const auto& rows) {
+        out << "    \"" << name << "\": [";
+        for (std::size_t i=0;i<rows.size();++i) {
+            const auto& row=rows[i];
+            if (i) out << ',';
+            out << "{\"system\":" << static_cast<int>(row.system)
+                << ",\"band\":" << row.band << ",\"cached_rows\":" << row.cached_rows
+                << ",\"admitted_rows\":" << row.admitted_rows << ",\"cached_center_m\":";
+            if (std::isfinite(row.cached_center_m)) out << row.cached_center_m; else out << "null";
+            out << ",\"admitted_center_m\":";
+            if (std::isfinite(row.admitted_center_m)) out << row.admitted_center_m; else out << "null";
+            out << ",\"selected_threshold_m\":" << row.selected_threshold_m << '}';
+        }
+        out << "],\n";
+    };
+    write_centers("initial_code_residual_centers",imu_report.initial_code_centers);
+    write_centers("final_code_residual_centers",imu_report.final_code_centers);
+    write_centers("gnss_initial_code_residual_centers",imu_report.gnss_initial_code_centers);
+    out
         << "    \"heading_latched\": " << (imu_report.heading_latched ? "true" : "false") << ",\n"
         << "    \"heading_initialization_mode\": ";
     writeJsonString(out, imu_report.heading_initialization_mode);
@@ -11225,15 +11922,21 @@ int main(int argc, char** argv) {
     libgnss::io::RINEXReader obs_reader;
     libgnss::io::RINEXReader::RINEXHeader obs_header;
     libgnss::io::AndroidRawGnssResult android_gnss;
+    std::size_t android_leading_clock_only_epochs = 0;
+    libgnss::smartphone_temporal::Mi8ClockDrift mi8_clock_drift;
     std::vector<libgnss::GNSSTime> android_raw_epoch_times;
     if (android_raw) {
         libgnss::io::AndroidRawGnssConfig android_gnss_config;
+        android_gnss_config.device_model = phoneFromDatasetId(options.dataset_id);
         android_gnss_config.require_frequency_pair_timing =
             options.native_tdcp_frequency_residual_states;
         android_gnss_config.verify_enriched_pseudorange =
             !options.android_raw_clock_only;
         std::string conversion_error;
-        if (!libgnss::io::loadAndroidRawGnssCsv(
+        const auto load_android = options.native_leading_imu_states
+            ? libgnss::io::loadAndroidRawGnssCsvWithLeadingClockEpochs
+            : libgnss::io::loadAndroidRawGnssCsv;
+        if (!load_android(
                 options.android_gnss_path, android_gnss_config, android_gnss,
                 conversion_error)) {
             std::cerr << "failed to convert raw Android GNSS: "
@@ -11243,6 +11946,64 @@ int main(int argc, char** argv) {
         if (android_gnss.observations.isEmpty()) {
             std::cerr << "raw Android GNSS has no usable observation epochs\n";
             return 1;
+        }
+        // Capture before observations are moved into the graph input epochs.
+        if (options.native_leading_imu_states)
+            android_leading_clock_only_epochs = std::count_if(
+                android_gnss.observations.epochs.begin(), android_gnss.observations.epochs.end(),
+                [](const auto& epoch) { return epoch.observations.empty(); });
+        const auto phone = phoneFromDatasetId(options.dataset_id);
+        if (options.native_source_direct_observable_quality &&
+            (phone == "mi8" || phone == "xiaomimi8")) {
+            std::vector<double> clock_m;
+            for (const auto& epoch : android_gnss.observations.epochs)
+                clock_m.push_back(epoch.receiver_clock_bias * libgnss::constants::SPEED_OF_LIGHT);
+            mi8_clock_drift = libgnss::smartphone_temporal::mi8ClockDrift(clock_m);
+            if (!mi8_clock_drift.ok) {
+                std::cerr << "source Mi8 clock-gradient initialization has no finite support\n";
+                return 1;
+            }
+            for (std::size_t i = 0; i < clock_m.size(); ++i)
+                android_gnss.observations.epochs[i].receiver_clock_drift_mps = mi8_clock_drift.values[i];
+            std::cerr << "[native-mi8-clock-gradient] epochs=" << clock_m.size()
+                      << " magnitude_masks=" << mi8_clock_drift.magnitude_masks
+                      << " jump_masks=" << mi8_clock_drift.jump_masks
+                      << " filled=" << mi8_clock_drift.filled_values << "\n";
+        }
+        if (options.native_source_raw_clock_drift_cleanup) {
+            auto& source_epochs = android_gnss.observations.epochs;
+            std::vector<double> raw_drift;
+            for (const auto& epoch : source_epochs)
+                raw_drift.push_back(epoch.receiver_clock_drift_mps);
+            const auto cleanup = libgnss::smartphone_temporal::finishSamsungDrift(raw_drift);
+            if (!cleanup.ok) {
+                std::cerr << "Source raw clock drift cleanup has no finite support\n";
+                return 1;
+            }
+            std::ostringstream provenance;
+            provenance << std::setprecision(17)
+                << "{\"schema\":\"native-source-raw-clock-drift-cleanup.v1\","
+                   "\"source\":\"preprocessing.m:161-171\",\"truth_used\":false,"
+                   "\"jump_masks\":" << cleanup.jump_masks
+                << ",\"filled_values\":" << cleanup.filled_values << ",\"epochs\":[";
+            for (std::size_t i = 0; i < source_epochs.size(); ++i) {
+                if (i) provenance << ',';
+                provenance << "{\"utc\":" << source_epochs[i].raw_utc_time_millis
+                    << ",\"raw_source_index\":" << source_epochs[i].raw_source_index
+                    << ",\"original_drift_mps\":";
+                if (std::isfinite(raw_drift[i])) provenance << raw_drift[i];
+                else provenance << "null";
+                provenance << ",\"selected_drift_mps\":" << cleanup.values[i]
+                    << ",\"left_epoch_index\":" << cleanup.left_sources[i]
+                    << ",\"right_epoch_index\":" << cleanup.right_sources[i]
+                    << ",\"right_weight\":" << cleanup.right_weights[i] << '}';
+                source_epochs[i].receiver_clock_drift_mps = cleanup.values[i];
+            }
+            provenance << "]}\n";
+            if (!atomicWrite(options.summary_path + ".raw-clock-cleanup.json", provenance.str())) {
+                std::cerr << "Failed to write source raw clock cleanup provenance\n";
+                return 1;
+            }
         }
         android_raw_epoch_times.reserve(android_gnss.observations.epochs.size());
         for (const auto& raw_epoch : android_gnss.observations.epochs) {
@@ -11603,6 +12364,7 @@ int main(int argc, char** argv) {
         // any corrected factor geometry is selected; no serialized seed or
         // previous result can enter this lane.
         libgnss::raw_p_seed::Config seed_config;
+        if (options.native_imu_supported_long_gaps) seed_config.max_gap_s = 60.0;
         seed_config.processor_config.elevation_mask = 0.0;
         seed_config.processor_config.snr_mask = 0.0;
         seed_config.bootstrap_position_before_elevation =
@@ -11613,6 +12375,20 @@ int main(int argc, char** argv) {
         phase165_adapter =
             libgnss::raw_p_seed::adaptSameRunNoDopplerSeeds(epochs,
                                                             phase165_raw_result);
+        if (options.native_temporal_seed_initialization) {
+            seed_config.collect_all_epochs_for_diagnostics = true;
+            phase165_raw_result = libgnss::raw_p_seed::solve(epochs, nav, seed_config);
+            phase165_adapter = (options.native_leading_imu_states ? libgnss::raw_p_seed::initializeWithLeadingGuesses : libgnss::raw_p_seed::initializeShortGaps)(epochs, phase165_raw_result, options.native_imu_supported_long_gaps ? 60.0 : 4.0);
+        }
+        if (options.native_temporal_seed_initialization || mi8_clock_drift.ok) {
+            if (!atomicWrite(options.summary_path + ".initialization.json",
+                    makePhase163RawPNoDopplerSeedJson(options.dataset_id,
+                        phase165_raw_result, phase165_adapter, mi8_clock_drift.ok,
+                        options.native_source_raw_clock_drift_cleanup))) {
+                std::cerr << "failed to write temporal initialization provenance\n";
+                return 1;
+            }
+        }
         if (!phase165_adapter.ok || !phase165_adapter.graph_compatible ||
             phase165_adapter.seeds.size() != epochs.size()) {
             const std::string failure = phase165_adapter.failure_reason.empty()
@@ -11633,6 +12409,41 @@ int main(int argc, char** argv) {
             std::cerr << "Phase165 raw-P graph handoff failed closed: "
                       << (failure.empty() ? "adapter rejected" : failure) << "\n";
             return 1;
+        }
+        if (options.native_samsung_clock_drift) {
+            const auto drift = libgnss::smartphone_temporal::samsungClockDrift(
+                epochs, nav, phase165_adapter.seeds);
+            if (!drift.ok || drift.values.size() != epochs.size()) {
+                std::cerr << "Samsung native GPS L1 drift initialization failed closed\n";
+                return 1;
+            }
+            std::ostringstream provenance;
+            provenance << std::setprecision(17)
+                << "{\"schema\":\"native-samsung-clock-drift.v1\","
+                   "\"trajectory\":\"same-invocation-native-raw-P-initial-trajectory\","
+                   "\"paired_upstream_equivalence_proven\":false,\"jump_masks\":"
+                << drift.jump_masks << ",\"filled_values\":" << drift.filled_values
+                << ",\"epochs\":[";
+            for (std::size_t i = 0; i < epochs.size(); ++i) {
+                if (i) provenance << ',';
+                provenance << "{\"utc\":" << epochs[i].raw_utc_time_millis
+                    << ",\"raw_drift_mps\":" << epochs[i].receiver_clock_drift_mps
+                    << ",\"gps_l1_rows\":" << drift.rows[i]
+                    << ",\"residual_median_mps\":";
+                if (std::isfinite(drift.medians[i])) provenance << drift.medians[i];
+                else provenance << "null";
+                provenance << ",\"selected_drift_mps\":" << drift.values[i] << '}';
+                epochs[i].receiver_clock_drift_mps = drift.values[i];
+                phase165_adapter.seeds[i].clock_rate_mps = drift.values[i];
+            }
+            provenance << "]}\n";
+            if (!atomicWrite(options.summary_path + ".samsung-clock.json", provenance.str())) {
+                std::cerr << "failed to write Samsung clock preprocessing provenance\n";
+                return 1;
+            }
+            std::cerr << "[native-samsung-clock-drift] epochs=" << drift.values.size()
+                      << " jump_masks=" << drift.jump_masks
+                      << " filled=" << drift.filled_values << "\n";
         }
         for (std::size_t i = 0; i < epochs.size(); ++i) {
             const auto& seed = phase165_adapter.seeds[i];
@@ -11683,6 +12494,7 @@ int main(int argc, char** argv) {
         // derives only same-run position-gradient velocities, emits structural
         // metadata, and exits before any FGO/IMU path is entered.
         libgnss::raw_p_seed::Config seed_config;
+        if (options.native_imu_supported_long_gaps) seed_config.max_gap_s = 60.0;
         seed_config.processor_config.elevation_mask = 0.0;
         seed_config.processor_config.snr_mask = 0.0;
         seed_config.bootstrap_position_before_elevation =
@@ -11711,16 +12523,19 @@ int main(int argc, char** argv) {
         // vector remains the sole source of an exact raw receiver clock rate.
         // No serialized seed, coordinate, or graph path is consulted here.
         libgnss::raw_p_seed::Config seed_config;
+        if (options.native_imu_supported_long_gaps) seed_config.max_gap_s = 60.0;
         seed_config.processor_config.elevation_mask = 0.0;
         seed_config.processor_config.snr_mask = 0.0;
         seed_config.bootstrap_position_before_elevation =
             options.native_phase157_raw_p_bootstrap;
         seed_config.collect_all_epochs_for_diagnostics =
-            options.native_phase159_collect_all_epochs;
+            options.native_phase159_collect_all_epochs || options.native_temporal_seed_initialization;
         const auto raw_result =
             libgnss::raw_p_seed::solve(epochs, nav, seed_config);
         const auto adapter =
-            libgnss::raw_p_seed::adaptSameRunNoDopplerSeeds(epochs, raw_result);
+            options.native_temporal_seed_initialization
+                ? (options.native_leading_imu_states ? libgnss::raw_p_seed::initializeWithLeadingGuesses : libgnss::raw_p_seed::initializeShortGaps)(epochs, raw_result, options.native_imu_supported_long_gaps ? 60.0 : 4.0)
+                : libgnss::raw_p_seed::adaptSameRunNoDopplerSeeds(epochs, raw_result);
         if (!atomicWrite(options.summary_path,
                          makePhase163RawPNoDopplerSeedJson(
                              options.dataset_id, raw_result, adapter))) {
@@ -11784,6 +12599,13 @@ int main(int argc, char** argv) {
         options.native_tdcp_frequency_residual_states ? 0.01 : 0.0;
     config.backend = libgnss::FGOBackend::GTSAM;
     config.max_iterations = 12;
+    if (options.native_source_lm_tolerances) {
+        // Source scripts leave these at GTSAM defaults (1e-5 in the installed
+        // library). Compare this explicitly; do not change legacy defaults.
+        config.relative_cost_convergence_threshold = 1e-5;
+        config.absolute_cost_convergence_threshold = 1e-5;
+    }
+
     config.use_pose3_state = true;
     config.use_imu = true;
     config.use_double_difference_factors = false;
@@ -11810,6 +12632,11 @@ int main(int argc, char** argv) {
         // This is opt-in; the production/default graph remains unchanged.
         config.retain_sparse_epochs_for_imu = true;
         config.use_multi_frequency_double_difference = true;
+    }
+    if (options.native_sparse_p_staging) {
+        // Keep the same raw state identities through problem construction,
+        // not only the later GNSS-first minimum-P admission check.
+        config.retain_sparse_epochs_for_imu = true;
     }
     if (options.native_pdc_state_bridge) {
         // One frozen bridge recipe: solve the full native P+D+temporal state
@@ -11892,7 +12719,8 @@ int main(int argc, char** argv) {
         // PDC bridge option; the bridge branch below remains guarded only by
         // the legacy --native-upstream-quality flag.
         const DirectObservableQualitySettings direct_settings =
-            directObservableQualitySettingsForDataset(options.dataset_id);
+            directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
         if (!direct_settings.valid) {
             std::cerr << "direct Phase80 observable-quality dataset mapping is invalid\n";
             return 1;
@@ -11900,9 +12728,14 @@ int main(int argc, char** argv) {
         config.use_upstream_observable_quality = true;
         config.upstream_snr_percentile = 85.0;
         config.upstream_min_snr_dbhz = 20.0;
-        config.upstream_min_elevation_deg = 5.0;
+        config.upstream_min_elevation_deg = direct_settings.elevation_deg;
+        if (!options.native_source_route_type.empty())
+            config.velocity_motion_sigma_m = direct_settings.velocity_motion_sigma_m;
         config.upstream_max_adjacent_gap_s = 1.5;
-        config.upstream_device_model.clear();
+        // The source residual screen has phone-specific P-D exclusions and
+        // carrier offsets. Route the phone identity just as the raw loader
+        // does; Pixel devices continue to use the ordinary masks.
+        config.upstream_device_model = phoneFromDatasetId(options.dataset_id);
         config.pseudorange_huber_threshold_sigma =
             direct_settings.pseudorange_huber_threshold_sigma;
         config.undifferenced_doppler_huber_threshold_sigma =
@@ -11977,7 +12810,8 @@ int main(int argc, char** argv) {
         // setting.Type to the library resolver; no P/D or dynamic-sigma
         // setting is changed here.
         const DirectObservableQualitySettings direct_settings =
-            directObservableQualitySettingsForDataset(options.dataset_id);
+            directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
         if (!direct_settings.valid || direct_settings.environment.empty()) {
             throw std::invalid_argument(
                 "Phase118 requires a recognised source setting.Type");
@@ -12195,7 +13029,8 @@ int main(int argc, char** argv) {
             // the source fixed TDCP sigma and every legacy/default path
             // unchanged.
             const DirectObservableQualitySettings phase184_tdcp_settings =
-                directObservableQualitySettingsForDataset(options.dataset_id);
+                directObservableQualitySettingsForDataset(options.dataset_id,
+                options.native_source_route_type, options.native_source_l5);
             if (!phase184_tdcp_settings.valid ||
                 !std::isfinite(
                     phase184_tdcp_settings.official_tdcp_huber_threshold_sigma) ||
@@ -12227,13 +13062,50 @@ int main(int argc, char** argv) {
             options.native_phase209_source_separate_imu_factors;
         config.use_native_phase213_main_doppler = options.native_phase213_main_doppler;
         config.use_native_phase217_main_pose3_motion = options.native_phase217_main_pose3_motion;
+        config.native_phase217_motion_sigma_m = options.native_phase217_motion_sigma_m;
         config.use_source_tdcp_meter_sigma = options.native_source_tdcp_meter_sigma;
         config.use_source_tdcp_resl_observable = options.native_source_tdcp_resl_observable;
         config.use_native_tdcp_only_affine_geometry = options.native_tdcp_only_affine_geometry;
-        config.use_native_epoch_heading_attitude_seeds = options.native_epoch_heading_attitude_seeds;
+        config.use_native_epoch_heading_attitude_seeds =
+            options.native_epoch_heading_attitude_seeds || options.native_source_imu_initialization;
         config.omit_native_first_imu_bias_prior = options.native_omit_first_imu_bias_prior;
         config.omit_native_first_imu_velocity_prior = options.native_omit_first_imu_velocity_prior;
         config.use_native_relative_height_pairs = options.native_relative_height_pairs;
+        if (!options.native_height_map_path.empty()) {
+            // CSV header lat_deg,lon_deg,height_m (train ground truth only).
+            constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+            std::ifstream map_stream(options.native_height_map_path);
+            std::string line;
+            if (!map_stream || !std::getline(map_stream, line)) {
+                std::cerr << "failed to read --native-height-map\n";
+                return 1;
+            }
+            while (std::getline(map_stream, line)) {
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                if (line.empty()) continue;
+                std::stringstream row(line);
+                std::string lat_text, lon_text, height_text;
+                if (!std::getline(row, lat_text, ',') || !std::getline(row, lon_text, ',') ||
+                    !std::getline(row, height_text, ',')) {
+                    std::cerr << "malformed --native-height-map row\n";
+                    return 1;
+                }
+                const double lat = std::stod(lat_text);
+                const double lon = std::stod(lon_text);
+                const double height = std::stod(height_text);
+                const auto ecef = libgnss::geodetic2ecef(lat * kDegToRad, lon * kDegToRad, height);
+                if (!std::isfinite(lat) || !std::isfinite(lon) || !std::isfinite(height) ||
+                    !ecef.allFinite()) {
+                    std::cerr << "nonfinite --native-height-map row\n";
+                    return 1;
+                }
+                config.native_height_map_ecef.push_back(ecef);
+            }
+            if (config.native_height_map_ecef.empty()) {
+                std::cerr << "--native-height-map has no points\n";
+                return 1;
+            }
+        }
         config.retain_native_pseudorange_remasking_pool = options.native_pseudorange_remasking;
         config.use_native_raw_p_no_doppler_graph = false;
         // The dedicated ECEF-D selector belongs only to the GNSS-first
@@ -12714,10 +13586,13 @@ int main(int argc, char** argv) {
     }
 
     ImuBuildReport imu_report;
+    imu_report.leading_clock_only_epochs = android_leading_clock_only_epochs;
+    imu_report.mi8_clock_drift = mi8_clock_drift;
     if (android_raw) {
         imu_report.android_gnss_diagnostics = android_gnss.diagnostics;
     }
     std::vector<libgnss::Vector3d> gnss_first_velocities_enu;
+    std::optional<libgnss::FGOProcessor::FGOResult> initial_observation_gnss_result;
     std::vector<double> gnss_first_clock_drift_mps;
     std::vector<libgnss::FGOProcessor::EpochClockBiasComponentsM>
         gnss_first_clock_bias_components_m;
@@ -12823,6 +13698,9 @@ int main(int argc, char** argv) {
         gnss_first_config.omit_native_first_imu_bias_prior = false;
         gnss_first_config.omit_native_first_imu_velocity_prior = false;
         gnss_first_config.use_native_relative_height_pairs = false;
+        gnss_first_config.native_height_map_ecef.clear();
+        gnss_first_config.native_doppler_residual_threshold_override_mps =
+            options.native_gnss_first_doppler_threshold_mps;
         gnss_first_config.use_native_batch_nhc = false;
         gnss_first_config.use_native_joint_ionosphere = false;
         gnss_first_config.retain_native_pseudorange_remasking_pool = false;
@@ -12983,7 +13861,44 @@ int main(int argc, char** argv) {
         gnss_first_config.allow_native_raw_p_sparse_epochs = options.native_sparse_p_staging;
         const libgnss::FGOProcessor gnss_first_processor(gnss_first_config);
         libgnss::FGOProcessor::FGOProblem gnss_first_problem = problem;
-        if (phase171_ecef_doppler) {
+        if (options.native_source_gnss_initial_observations) {
+            try {
+                auto refreshed=libgnss::native_gnss_initial::rebuild(epochs,nav,problem,gnss_first_config);
+                const auto correction=applyFreshNativeBase(refreshed.problem,base_pseudorange_model);
+                imu_report.gnss_initial_gradient_interval_s=refreshed.interval_s;
+                imu_report.gnss_initial_doppler_candidates=refreshed.doppler_mask.candidates;
+                imu_report.gnss_initial_doppler_retained=refreshed.doppler_mask.retained;
+                imu_report.gnss_initial_p_rows=refreshed.problem.pseudorange_factors.size();
+                imu_report.gnss_initial_base_corrected_rows=correction.corrected_rows;
+                imu_report.gnss_initial_base_application_passes=correction.correction_application_passes;
+                imu_report.gnss_initial_code_centers=refreshed.problem.diagnostics.native_pseudorange_center_audit;
+                gnss_first_problem=std::move(refreshed.problem);
+                // All epoch identities were checked against the main problem.
+                // Initial IMU later reconstructs its own rows from GNSS output.
+                problem.native_phase213_main_doppler_rows=gnss_first_problem.undifferenced_doppler_factors;
+                std::ostringstream proof;
+                proof << std::setprecision(17)
+                      << "{\"schema\":\"native-cold-gnss-input.v1\",\"truth_used\":false,"
+                         "\"velocity_source\":\"same-run-native-position-gradient\",\"nominal_interval_s\":"
+                      << refreshed.interval_s << ",\"epochs\":[";
+                for (std::size_t i=0;i<gnss_first_problem.native_raw_p_no_doppler_seeds.size();++i) {
+                    const auto& seed=gnss_first_problem.native_raw_p_no_doppler_seeds[i];
+                    if (i) proof << ',';
+                    proof << "{\"raw_index\":" << seed.raw_source_index << ",\"utc\":" << seed.raw_utc_time_millis
+                          << ",\"temporal_initial_guess\":" << (seed.temporal_initial_guess ? "true":"false")
+                          << ",\"position_ecef\":[" << seed.position_ecef.x() << ',' << seed.position_ecef.y() << ',' << seed.position_ecef.z()
+                          << "],\"velocity_ecef_mps\":[" << seed.velocity_ecef_mps.x() << ',' << seed.velocity_ecef_mps.y() << ',' << seed.velocity_ecef_mps.z()
+                          << "],\"clock_c0_m\":" << seed.clock_bias_m << ",\"clock_d_mps\":" << seed.clock_rate_mps << '}';
+                }
+                proof << "]}\n";
+                if (!atomicWrite(options.summary_path+".gnss-initial-input.json",proof.str()))
+                    throw std::invalid_argument("Cold GNSS input provenance export failed");
+                imu_report.gnss_initial_observations_applied=true;
+            } catch (const std::exception& error) {
+                std::cerr << "Cold GNSS observation rebuild failed: " << error.what() << "\n";
+                return 1;
+            }
+        } else if (phase171_ecef_doppler) {
             // The main processor intentionally built an empty-generic-D
             // problem.  Build a temporary staging view with the same mutated
             // raw epochs/nav and SPP disabled so corrected raw-D rows are
@@ -13122,8 +14037,24 @@ int main(int argc, char** argv) {
                 return 1;
             }
         } else {
-            gnss_first_result =
-                gnss_first_processor.optimizeProblem(gnss_first_problem);
+            try {
+                gnss_first_result =
+                    gnss_first_processor.optimizeProblem(gnss_first_problem);
+            } catch (const std::exception& error) {
+                std::cerr << "GNSS-first optimization failed: " << error.what()
+                          << "\n";
+                if (options.native_phase165_raw_p_no_doppler_graph) {
+                    atomicWrite(options.summary_path,
+                        makePhase165RawPNoDopplerGraphJson(
+                            options.dataset_id, phase165_adapter,
+                            phase165_raw_result_available ? &phase165_raw_result
+                                                         : nullptr,
+                            &gnss_first_problem, nullptr, error.what(), true,
+                            false,
+                            options.native_phase167_raw_p_no_doppler_lm_termination_budget));
+                }
+                return 1;
+            }
         }
         imu_report.gnss_first_converged = gnss_first_result.diagnostics.converged;
         imu_report.gnss_first_epochs = gnss_first_result.solution.solutions.size();
@@ -13141,6 +14072,14 @@ int main(int argc, char** argv) {
         imu_report.gnss_first_iterations = gnss_first_result.diagnostics.iterations;
         imu_report.gnss_first_initial_cost = gnss_first_result.diagnostics.initial_cost;
         imu_report.gnss_first_final_cost = gnss_first_result.diagnostics.final_cost;
+        std::cerr << "[native-gnss-first-progress] initial_cost="
+                  << gnss_first_result.diagnostics.initial_cost
+                  << " final_cost=" << gnss_first_result.diagnostics.final_cost
+                  << " accepted="
+                  << gnss_first_result.diagnostics.native_source_clock_c0d_accepted_outer_iterations
+                  << " finite_costs="
+                  << gnss_first_result.diagnostics.native_source_clock_c0d_active_solve_finite_costs
+                  << "\n";
         imu_report.gnss_first_c0d_factor_count =
             gnss_first_result.diagnostics.native_source_clock_c0d_factor_count;
         imu_report.gnss_first_c0d_accepted_outer_iterations =
@@ -13182,7 +14121,10 @@ int main(int argc, char** argv) {
                 if (!c0d_diagnostics.native_source_clock_c0d_factor_enabled ||
                     !c0d_diagnostics
                          .native_source_clock_c0d_meter_state_parity_enabled ||
-                    c0d_diagnostics.native_source_clock_c0d_factor_count == 0U ||
+                    !libgnss::smartphone_temporal::clockEdgeCountMatches(
+                        options.native_phase171_raw_p_no_doppler_imu_main,
+                        phoneFromDatasetId(options.dataset_id),
+                        c0d_diagnostics.native_source_clock_c0d_factor_count) ||
                     !c0d_diagnostics.native_source_clock_c0d_active_solve_finite_costs ||
                     c0d_diagnostics.native_source_clock_c0d_accepted_outer_iterations ==
                         0U ||
@@ -13305,6 +14247,20 @@ int main(int argc, char** argv) {
                     }
                 }
             }
+            if (options.native_source_imu_observation_stages)
+                initial_observation_gnss_result = gnss_first_result;
+            if (options.native_export_gnss_stage &&
+                !exportNativeGnssStage(options, problem, gnss_first_result,
+                                      android_gnss.epoch_utc_time_millis)) {
+                std::cerr << "native GNSS stage export failed epoch/coordinate validation or write\n";
+                return 1;
+            }
+            if (options.native_export_gnss_stage_factors &&
+                !exportNativeGnssStageFactors(options, gnss_first_problem,
+                                              android_gnss.epoch_utc_time_millis)) {
+                std::cerr << "native GNSS stage factor export failed\n";
+                return 1;
+            }
             if (options.native_phase104_stage_main_accuracy_attribution) {
                 std::string stage_export_error;
                 if (!exportPhase104StageEcef(
@@ -13334,7 +14290,8 @@ int main(int argc, char** argv) {
             if (!imu_report.android_gnss_anchor_load.ok) {
                 imu_report.android_gnss_utc_mapping_load =
                     libgnss::loadAndroidGnssUtcGpsMapping(
-                        options.android_gnss_path, android_utc_gps_mapping);
+                        options.android_gnss_path, android_utc_gps_mapping,
+                        options.native_imu_supported_long_gaps ? 60000.0 : 5000.0);
                 if (!imu_report.android_gnss_utc_mapping_load.ok) {
                     std::cerr << "failed to load raw GNSS UTC/GPS mapping: "
                               << imu_report.android_gnss_utc_mapping_load.error << "\n";
@@ -13424,7 +14381,11 @@ int main(int argc, char** argv) {
                                  options.native_stationary_gyro_initializer,
                                  options.native_imu_time_offset_override
                                      ? options.native_imu_time_offset_ms
-                                     : std::numeric_limits<std::int64_t>::max());
+                                     : std::numeric_limits<std::int64_t>::max(),
+                                 options.native_source_imu_initialization,
+                                 options.native_imu_supported_long_gaps || options.native_leading_imu_states,
+                                 options.native_source_phone_imu_noise ? phoneFromDatasetId(options.dataset_id) : std::string{},
+                                 options.native_leading_imu_bounded_tail);
     if (options.native_main_code_edge_readmission) {
         std::set<std::tuple<std::size_t, libgnss::SatelliteId, libgnss::SignalType>> keys;
         for (const auto& factor : problem.pseudorange_factors)
@@ -13590,6 +14551,27 @@ int main(int argc, char** argv) {
          options.native_phase171_raw_p_no_doppler_imu_main)) {
         std::cerr << "candidate IMU initialization failed closed; fallback is "
                      "forbidden\n";
+        std::cerr << "IMU initialization reason: " << imu_report.failure << "\n";
+        std::ostringstream failure_json;
+        failure_json << "{\n  \"schema_version\": \"native-imu-initialization-failure.v1\",\n"
+                     << "  \"status\": \"failed-closed\",\n  \"dataset_id\": ";
+        writeJsonString(failure_json, options.dataset_id);
+        failure_json << ",\n  \"failure_reason\": ";
+        writeJsonString(failure_json, imu_report.failure);
+        if (imu_report.imu_coverage_attempted) {
+            failure_json << std::setprecision(17)
+                         << ",\n  \"imu_coverage\": {\n"
+                         << "    \"time_origin\": \"first_gnss_epoch\",\n"
+                         << "    \"required_begin_relative_s\": 0,\n"
+                         << "    \"required_end_relative_s\": " << imu_report.imu_coverage_required_end_relative_s << ",\n"
+                         << "    \"first_sample_relative_s\": " << imu_report.imu_coverage_first_sample_relative_s << ",\n"
+                         << "    \"last_sample_relative_s\": " << imu_report.imu_coverage_last_sample_relative_s << ",\n"
+                         << "    \"loaded_samples\": " << imu_report.loaded_samples << ",\n"
+                         << "    \"verified\": " << (imu_report.long_gap_imu_coverage_verified ? "true" : "false") << "\n  }";
+        }
+        failure_json << ",\n  \"truth_used\": false,\n  \"fallback_used\": false\n}\n";
+        if (!atomicWrite(options.summary_path, failure_json.str()))
+            std::cerr << "failed to write IMU initialization failure summary\n";
         if (phase94_diagnostics.enabled) {
             phase94RecordFailure(phase94_diagnostics, "imu-build",
                                  imu_report.failure.empty()
@@ -13604,7 +14586,166 @@ int main(int argc, char** argv) {
     }
     if (use_imu) {
         try {
-            result = processor.optimizeProblem(problem);
+            const auto export_stage_offset = [&](const std::string& stage,
+                const libgnss::native_imu_refinement::PositionOffsetHandoff& shifted,
+                const libgnss::FGOProcessor::FGOResult& previous) {
+                std::ostringstream audit;
+                audit << std::setprecision(17)
+                      << "{\"schema\":\"native-stage-position-offset.v1\",\"truth_used\":false,\"stage\":";
+                writeJsonString(audit, stage);
+                audit << ",\"phone\":";
+                writeJsonString(audit, phoneFromDatasetId(options.dataset_id));
+                audit << ",\"origin_lat_rad\":" << problem.imu.nav_origin_lat_rad
+                      << ",\"origin_lon_rad\":" << problem.imu.nav_origin_lon_rad << ",\"epochs\":[";
+                const auto vector_json = [&](const libgnss::Vector3d& v) {
+                    audit << '[' << v.x() << ',' << v.y() << ',' << v.z() << ']';
+                };
+                for (std::size_t i = 0; i < epochs.size(); ++i) {
+                    if (i) audit << ',';
+                    audit << "{\"raw_index\":" << i << ",\"utc\":" << epochs[i].raw_utc_time_millis
+                          << ",\"source_position_ecef_m\":";
+                    vector_json(previous.solution.solutions[i].position_ecef);
+                    audit << ",\"shifted_position_ecef_m\":";
+                    vector_json(shifted.states.observations[i].receiver_position);
+                    audit << ",\"displacement_enu_m\":";
+                    vector_json(shifted.displacement_enu_m[i]);
+                    audit << ",\"velocity_ecef_mps\":";
+                    vector_json(shifted.states.velocity_ecef_mps[i]);
+                    if (!previous.epoch_attitude_rpy_rad.empty()) {
+                        audit << ",\"source_rpy_rad\":";
+                        vector_json(previous.epoch_attitude_rpy_rad[i]);
+                    }
+                    audit << '}';
+                }
+                audit << "]}\n";
+                if (!atomicWrite(options.summary_path + ".stage-offset-" + stage + ".json", audit.str()))
+                    throw std::invalid_argument("Failed to export stage position-offset provenance");
+            };
+            auto initial_config = config;
+            if (options.native_source_imu_stop_phases)
+                initial_config.native_imu_stop_phase = libgnss::NativeImuStopPhase::Initialization;
+            if (options.native_source_imu_observation_stages) {
+                if (!initial_observation_gnss_result)
+                    throw std::invalid_argument("Initial IMU rebuild is missing its same-run GNSS result");
+                initial_config.native_imu_observation_phase = libgnss::NativeImuObservationPhase::Initialization;
+                initial_config.use_native_relative_height_pairs = false;
+                initial_config.native_height_map_ecef.clear();
+                auto refreshed = [&]() {
+                    if (!options.native_source_stage_position_offsets)
+                        return libgnss::native_imu_refinement::rebuildInitial(
+                            epochs, nav, problem, *initial_observation_gnss_result, initial_config);
+                    auto shifted = libgnss::native_imu_refinement::fromGnssResultWithPositionOffset(
+                        epochs, problem, *initial_observation_gnss_result, phoneFromDatasetId(options.dataset_id));
+                    export_stage_offset("gnss", shifted, *initial_observation_gnss_result);
+                    imu_report.gnss_stage_offset_epochs = shifted.states.observations.size();
+                    return libgnss::native_imu_refinement::rebuildHandoff(
+                        epochs, nav, problem, std::move(shifted.states), problem.imu.stop_velocity_seeds_nav,
+                        initial_observation_gnss_result->epoch_clock_drift_mps, initial_config);
+                }();
+                const auto correction = applyFreshNativeBase(refreshed.problem,base_pseudorange_model);
+                imu_report.initial_doppler_candidates = refreshed.doppler_mask.candidates;
+                imu_report.initial_doppler_retained = refreshed.doppler_mask.retained;
+                imu_report.initial_p_rows = refreshed.problem.pseudorange_factors.size();
+                imu_report.initial_base_corrected_rows = correction.corrected_rows;
+                imu_report.initial_base_application_passes = correction.correction_application_passes;
+                imu_report.initial_code_centers = refreshed.problem.diagnostics.native_pseudorange_center_audit;
+                problem = std::move(refreshed.problem);
+            }
+            if (options.native_source_imu_observation_stages && phase94_diagnostics.enabled)
+                phase94_diagnostics.main_preflight = makePhase94C0DPreflight(problem, initial_config);
+            result = libgnss::FGOProcessor(initial_config).optimizeProblem(problem);
+            imu_report.initial_stop_velocity_factors = result.diagnostics.upstream_stop_velocity_factors;
+            imu_report.initial_stop_pose_factors = result.diagnostics.upstream_stop_pose_factors;
+            imu_report.initial_stop_velocity_phase_omissions = result.diagnostics.upstream_stop_velocity_phase_omissions;
+            imu_report.initial_stop_pose_gap_rejections = result.diagnostics.upstream_stop_pose_gap_rejections;
+            if (options.native_export_imu_stage &&
+                !exportNativeGnssStage(options, problem, result,
+                    android_gnss.epoch_utc_time_millis, "imu-initial"))
+                throw std::invalid_argument("Initial IMU stage export is incomplete");
+            if (options.native_imu_refinement_pass) {
+                // Freeze a diagnostic copy before any final phone offset. The
+                // second pass consumes only the in-memory result above.
+                imu_report.refinement_initial_iterations = result.diagnostics.iterations;
+                auto final_config = config;
+                if (options.native_source_imu_stop_phases)
+                    final_config.native_imu_stop_phase = libgnss::NativeImuStopPhase::Final;
+                if (options.native_source_imu_observation_stages)
+                    final_config.native_imu_observation_phase = libgnss::NativeImuObservationPhase::Final;
+                std::optional<libgnss::native_imu_refinement::PositionOffsetHandoff> shifted;
+                if (options.native_source_stage_position_offsets) {
+                    shifted = libgnss::native_imu_refinement::fromResultWithPositionOffset(
+                        epochs, problem, result, phoneFromDatasetId(options.dataset_id));
+                    export_stage_offset("imu", *shifted, result);
+                    imu_report.imu_stage_offset_epochs = shifted->states.observations.size();
+                }
+                auto refreshed = [&]() {
+                    if (!options.native_refinement_attitude_reset) {
+                        if (shifted)
+                            return libgnss::native_imu_refinement::rebuildHandoff(
+                                epochs, nav, problem, std::move(shifted->states),
+                                result.epoch_velocity_nav_mps, result.epoch_clock_drift_mps, final_config);
+                        return libgnss::native_imu_refinement::rebuild(
+                            epochs, nav, problem, result, final_config);
+                    }
+                    auto reset = libgnss::native_imu_refinement::fromResultWithAttitudeReset(
+                        epochs, problem, result);
+                    // Source offsets use the previous optimized RPY, before an
+                    // optional RPYReset changes the next pass's attitude seeds.
+                    if (shifted) reset.states.observations = std::move(shifted->states.observations);
+                    imu_report.refinement_attitude_reset_low_speed = reset.low_speed_count;
+                    imu_report.refinement_attitude_reset_nearest_fill = reset.nearest_fill_count;
+                    std::ostringstream provenance;
+                    provenance << std::setprecision(17)
+                        << "{\"schema\":\"native-refinement-attitude-reset.v1\","
+                           "\"truth_used\":false,\"source\":\"previous-same-run-imu-velocity\","
+                           "\"epochs\":[";
+                    for (std::size_t i = 0; i < epochs.size(); ++i) {
+                        if (i) provenance << ',';
+                        provenance << "{\"raw_index\":" << i << ",\"utc\":"
+                            << epochs[i].raw_utc_time_millis << ",\"velocity_nav_mps\":[";
+                        for (int axis = 0; axis < 3; ++axis) {
+                            if (axis) provenance << ',';
+                            provenance << result.epoch_velocity_nav_mps[i](axis);
+                        }
+                        provenance << "],\"previous_rpy_rad\":[";
+                        for (int axis = 0; axis < 3; ++axis) {
+                            if (axis) provenance << ',';
+                            provenance << result.epoch_attitude_rpy_rad[i](axis);
+                        }
+                        provenance << "],\"reset_body_to_nav_row_major\":[";
+                        for (int row = 0; row < 3; ++row)
+                            for (int col = 0; col < 3; ++col) {
+                                if (row || col) provenance << ',';
+                                provenance << reset.states.attitude_body_to_nav[i](row, col);
+                            }
+                        provenance << "]}";
+                    }
+                    provenance << "]}\n";
+                    if (!atomicWrite(options.summary_path + ".attitude-reset-input.json", provenance.str()))
+                        throw std::invalid_argument("Failed to export native attitude-reset provenance");
+                    return libgnss::native_imu_refinement::rebuildHandoff(
+                        epochs, nav, problem, std::move(reset.states),
+                        result.epoch_velocity_nav_mps, result.epoch_clock_drift_mps, final_config);
+                }();
+                const auto correction = applyFreshNativeBase(refreshed.problem,base_pseudorange_model);
+                imu_report.refinement_doppler_candidates = refreshed.doppler_mask.candidates;
+                imu_report.refinement_doppler_retained = refreshed.doppler_mask.retained;
+                imu_report.refinement_p_rows = refreshed.problem.pseudorange_factors.size();
+                imu_report.refinement_base_corrected_rows = correction.corrected_rows;
+                imu_report.refinement_base_application_passes = correction.correction_application_passes;
+                imu_report.final_code_centers = refreshed.problem.diagnostics.native_pseudorange_center_audit;
+                problem = std::move(refreshed.problem);
+                if (options.native_source_imu_observation_stages && phase94_diagnostics.enabled)
+                    phase94_diagnostics.main_preflight = makePhase94C0DPreflight(problem, final_config);
+                result = libgnss::FGOProcessor(final_config).optimizeProblem(problem);
+                if (!result.diagnostics.converged || result.solution.solutions.size() != epochs.size())
+                    throw std::invalid_argument("Refined IMU solve failed complete convergence");
+                imu_report.refinement_applied = true;
+                imu_report.refinement_attitude_reset_applied = options.native_refinement_attitude_reset;
+                imu_report.source_stage_position_offsets_applied = options.native_source_stage_position_offsets;
+                imu_report.source_stop_phases_applied = options.native_source_imu_stop_phases;
+                imu_report.source_observation_stages_applied = options.native_source_imu_observation_stages;
+            }
         } catch (const std::exception& error) {
             if (phase94_diagnostics.enabled) {
                 if (phase94_diagnostics.phase96_enabled) {
@@ -13736,7 +14877,10 @@ int main(int argc, char** argv) {
         const bool strict_progress =
             c0d_diagnostics.native_source_clock_c0d_factor_enabled &&
             c0d_diagnostics.native_source_clock_c0d_meter_state_parity_enabled &&
-            c0d_diagnostics.native_source_clock_c0d_factor_count > 0U &&
+            libgnss::smartphone_temporal::clockEdgeCountMatches(
+                options.native_phase171_raw_p_no_doppler_imu_main,
+                phoneFromDatasetId(options.dataset_id),
+                c0d_diagnostics.native_source_clock_c0d_factor_count) &&
             c0d_diagnostics.native_source_clock_c0d_active_solve_attempted &&
             c0d_diagnostics.native_source_clock_c0d_accepted_outer_iterations > 0U &&
             c0d_diagnostics.native_source_clock_c0d_active_solve_finite_costs &&
@@ -13918,8 +15062,10 @@ int main(int argc, char** argv) {
         return 1;
     }
     if (options.native_pdc_imu_tdcp &&
-        (tdcp_report.factors_built == 0U ||
-         tdcp_report.factors_inserted != tdcp_report.factors_built ||
+        ((tdcp_report.omitted_by_phone_model
+              ? tdcp_report.factors_inserted != 0U
+              : (tdcp_report.factors_built == 0U ||
+                 tdcp_report.factors_inserted != tdcp_report.factors_built)) ||
          tdcp_report.nonfinite_residuals != 0U)) {
         std::cerr << "native PDC+IMU TDCP contract failed: built="
                   << tdcp_report.factors_built
@@ -13977,7 +15123,8 @@ int main(int argc, char** argv) {
         libgnss::upstream_position_offset::PhoneOffset phone_offset;
         const bool phase112_recipe =
             phase112MainOutputPositionOffsetSelectors(options);
-        if (phase112_recipe && position_offset_report.phone != "pixel5") {
+        if (phase112_recipe && !phase171RawImuPositionOffsetSelectors(options) &&
+            position_offset_report.phone != "pixel5") {
             position_offset_report.failure =
                 "Phase112 output candidate requires exact dataset phone pixel5";
             std::cerr << "upstream position offset failed closed: "

@@ -69,6 +69,11 @@ if(GTSAM_FOUND)
     add_executable(gnss_fgo_imu_no_base ${GNSS_NATIVE_DIR}/gnss_fgo_imu_no_base.cpp)
     target_compile_definitions(gnss_fgo_imu_no_base PRIVATE GNSS_WITH_GTSAM=1)
     target_link_libraries(gnss_fgo_imu_no_base PRIVATE gnss_lib gnss_lib_solvers Threads::Threads gtsam)
+    if(MSVC)
+        # Full smartphone trajectories exhaust Windows' default 1 MiB stack
+        # during GTSAM processing. Keep enough reserve for the batch graph.
+        target_link_options(gnss_fgo_imu_no_base PRIVATE /STACK:8388608)
+    endif()
 
     # v2.1 keeps the v1 ordinary TDCP + position/clock motion graph while
     # retaining the opt-in Pose3/velocity/bias CombinedImuFactor chain.  It is

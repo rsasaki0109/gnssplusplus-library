@@ -1,0 +1,57 @@
+{
+  "schema": "gsdc-a325g-g988b-all40-candidate-review.v1",
+  "status": "submitted-official-complete",
+  "candidate_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_a325g_g988b_source_init_submission_v1\\submission.csv",
+  "candidate_sha256": "c318140ed183290e07101ce877860de8807f3c3ac8b636dfd6d62cdb215837ef",
+  "candidate_bytes": 5862276,
+  "manifest_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_a325g_g988b_source_init_submission_v1\\manifest.json",
+  "manifest_sha256": "4cee9a0a2e799201e5c6e327fd0e3f77d120600797cdfb7b5fac276bef82f5f9",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_a205u_a325g_g988b_source_init_recipe_plan.json",
+  "plan_sha256": "7a238eecb96b6a48f1e187e66f7d1ee26962c3706794235479a4c7a1bfb15154",
+  "baseline_submission_sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+  "baseline_official_ref": 56479759,
+  "baseline_official_public_m": 1.698,
+  "baseline_official_private_m": 1.333,
+  "rows": 71936,
+  "native_drives": 40,
+  "changed_drives": {
+    "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": {
+      "rows": 1171,
+      "changed_rows": 1171,
+      "median_position_change_m": 0.0005959272391184511,
+      "max_position_change_m": 0.002845959473933405
+    },
+    "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": {
+      "rows": 1141,
+      "changed_rows": 1141,
+      "median_position_change_m": 0.0011178563023910167,
+      "max_position_change_m": 0.0022290468468701085
+    },
+    "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": {
+      "rows": 1861,
+      "changed_rows": 1861,
+      "median_position_change_m": 0.14944641273695386,
+      "max_position_change_m": 55.47685959008126
+    },
+    "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": {
+      "rows": 1423,
+      "changed_rows": 1423,
+      "median_position_change_m": 0.29724335240130023,
+      "max_position_change_m": 10.031118929876397
+    }
+  },
+  "unchanged_drives": 36,
+  "unchanged_rows": 66340,
+  "sample_coordinates_used": false,
+  "coordinate_interpolation_or_hold_rows": 0,
+  "position_changes_are_accuracy_gains": false,
+  "official_score": {
+    "submission_ref": 56491795,
+    "public_m": 1.396,
+    "private_m": 1.333
+  },
+  "submitted": true,
+  "submission_requires_explicit_user_instruction": true,
+  "checked_unix": 1790157279.8138342,
+  "submission_receipt_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_a325g_g988b_source_init_submission_v1\\kaggle_receipt.json"
+}

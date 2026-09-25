@@ -1,0 +1,79 @@
+{
+  "status": "matched-refinement-comparison-complete",
+  "scope": "Second MI8 route, matched v2 native refinement on/off using already available GSDC archive; no new external evaluation dataset",
+  "cases": [
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8"
+  ],
+  "route_groups": [
+    "2022-01-26-20-02-us-ca-mtv-pe1"
+  ],
+  "route_group_members": [
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8",
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5"
+  ],
+  "other_route_phones_not_independent_validation": true,
+  "selection_basis": "2022 MI8 route preceding the August development route, shared with Pixel5, 1699 source epochs; selected before reading its truth in this experiment",
+  "prior_usage": "unknown; development only; not claimed unused or held out",
+  "truth_read_for_this_experiment": true,
+  "truth_read_cases": [
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8"
+  ],
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "external_download": false,
+  "official_score": false,
+  "promoted": false,
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_january_refinement_control_plan.json",
+      "sha256": "c1da6385b0edb345a3d6e5d0547cfe460f057bc2117fdedf8846f9bf34781242"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_january_refinement_candidate_plan.json",
+      "sha256": "649be4576ac651a79006b5417da571d311dc64636397ee411fc246c66e018c24"
+    }
+  },
+  "binary_sha256": "baa3bfcbe3b5c5988f595ce6774f0190a69fa93aa6a402a74c8ac2676fb64c99",
+  "result": {
+    "status": "matched-refinement-comparison-complete",
+    "same_binary_inputs_other_args_verified": true,
+    "initial_stages_byte_identical": true,
+    "stage_hashes": {
+      "gnss-first": "a8b3cbd61803e92adb6e55b2b1744378149ddad7320eb57a1d2379e0d9a0bb01",
+      "imu-initial": "902249ce24f723b058ce148e9d0d7e9169d8a8867e0a3d962e9223efc26c0309"
+    },
+    "runs": {
+      "control": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.896955072423841,
+          "p95_m": 2.2568984482917784,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.07692676035781
+        },
+        "wall_s": 398.7227244377136,
+        "truth_sha256": "1f002698508de0ce3b6bf1453685e6f55a9a197528310f9a30e9ca2726861983",
+        "solution_sha256": "cc20208bf1d380c963793b15dfa1b91149b109f9909229f24a21399692733666",
+        "initial_iterations": 0,
+        "final_p_rows": 0
+      },
+      "candidate": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.8888770650167819,
+          "p95_m": 2.3081404618351136,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.0985087634259476
+        },
+        "wall_s": 494.01265716552734,
+        "truth_sha256": "1f002698508de0ce3b6bf1453685e6f55a9a197528310f9a30e9ca2726861983",
+        "solution_sha256": "acb5636f024d8ef40d69bf4ed2ccceb48f51a42fb8d46dcf59cf4ad3bd89aeea",
+        "initial_iterations": 122,
+        "final_p_rows": 36293
+      }
+    },
+    "delta_m": 0.021582003068137734,
+    "control_matches_previous_binary": null,
+    "official_score": false,
+    "promoted": false
+  }
+}

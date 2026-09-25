@@ -1,0 +1,91 @@
+{
+  "official_score": false,
+  "metric": "haversine_sphere__linear_n_minus_1",
+  "scope": "exposed development routes; no archived coordinates consumed by inference",
+  "runs": {
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "status": "scored",
+      "stages_byte_identical": true,
+      "stage_sha256": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+      "runs": {
+        "control": {
+          "gnss_stage": {
+            "p50_m": 1.8947256950239566,
+            "p95_m": 3.870999593225566,
+            "mean_m": 2.8828626441247613
+          },
+          "final": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.3130854418015072,
+            "p95_m": 2.7686512559649294,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.0408683488832184
+          },
+          "raw_epochs": 1213,
+          "truth_epochs": 1213,
+          "extra_raw_keys_dropped": 0
+        },
+        "candidate": {
+          "gnss_stage": {
+            "p50_m": 1.8947256950239566,
+            "p95_m": 3.870999593225566,
+            "mean_m": 2.8828626441247613
+          },
+          "final": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.3315488932161896,
+            "p95_m": 2.7679322111547364,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.049740552185463
+          },
+          "raw_epochs": 1213,
+          "truth_epochs": 1213,
+          "extra_raw_keys_dropped": 0
+        }
+      },
+      "interpretation": "GNSS stage is before phone offset; final includes IMU and the same source phone offset in both conditions. Stage/final difference is not an isolated IMU effect."
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/mi8": {
+      "status": "scored",
+      "stages_byte_identical": true,
+      "stage_sha256": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+      "runs": {
+        "control": {
+          "gnss_stage": {
+            "p50_m": 0.792796994643657,
+            "p95_m": 1.7373769974989006,
+            "mean_m": 1.265086996071279
+          },
+          "final": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8947760505588985,
+            "p95_m": 1.423393785609381,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1590849180841398
+          },
+          "raw_epochs": 1417,
+          "truth_epochs": 1400,
+          "extra_raw_keys_dropped": 17
+        },
+        "candidate": {
+          "gnss_stage": {
+            "p50_m": 0.792796994643657,
+            "p95_m": 1.7373769974989006,
+            "mean_m": 1.265086996071279
+          },
+          "final": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8717086122812767,
+            "p95_m": 1.4247984685155977,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.148253540398437
+          },
+          "raw_epochs": 1417,
+          "truth_epochs": 1400,
+          "extra_raw_keys_dropped": 17
+        }
+      },
+      "interpretation": "GNSS stage is before phone offset; final includes IMU and the same source phone offset in both conditions. Stage/final difference is not an isolated IMU effect."
+    }
+  }
+}

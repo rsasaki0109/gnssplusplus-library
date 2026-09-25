@@ -1,0 +1,152 @@
+{
+  "status": "additional-reference-input-difference-confirmed-source-path-conditional",
+  "source_file_sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+  "source_lines": {
+    "conditional_load": "fgo_gnss_imu.m:26-29",
+    "noninitial_pass_gate": "fgo_gnss_imu.m:223",
+    "height_factor": "fgo_gnss_imu.m:228-235"
+  },
+  "files": [
+    {
+      "member": "dataset_2023/test/2020-12-11-19-30-us-ca-mtv-e/ref_hight.mat",
+      "bytes": 152211,
+      "sha256": "f56acafac2fa94284a8e5b84c8c93133d51893d435c2e98cbe489f2f615b4991"
+    },
+    {
+      "member": "dataset_2023/test/2021-08-17-20-37-us-ca-mtv-g/ref_hight.mat",
+      "bytes": 120415,
+      "sha256": "4ada37b28c06586e343d88c4a6fd04aefcdc01c234c23a6a5f541b6d6a5e0f4c"
+    },
+    {
+      "member": "dataset_2023/test/2021-08-31-20-37-us-ca-mtv-e/ref_hight.mat",
+      "bytes": 152211,
+      "sha256": "f56acafac2fa94284a8e5b84c8c93133d51893d435c2e98cbe489f2f615b4991"
+    },
+    {
+      "member": "dataset_2023/test/2021-09-14-20-32-us-ca-mtv-k/ref_hight.mat",
+      "bytes": 116952,
+      "sha256": "b961d3629d46a636b89352e14789bc6f19367c1393019314eef5ddf39ec7ac6e"
+    },
+    {
+      "member": "dataset_2023/test/2021-09-28-21-56-us-ca-mtv-a/ref_hight.mat",
+      "bytes": 236695,
+      "sha256": "8ee057f4810956d4b7d6415b33f544cd5179fd9b86eb5b7fbe58bee94b03100d"
+    },
+    {
+      "member": "dataset_2023/test/2021-11-05-18-28-us-ca-mtv-m/ref_hight.mat",
+      "bytes": 110770,
+      "sha256": "9b77446699c1f17086fe8bc2fd32dd0b3e74fe1894da88d80b5d5d48d0827efb"
+    },
+    {
+      "member": "dataset_2023/test/2021-11-30-20-59-us-ca-mtv-m/ref_hight.mat",
+      "bytes": 110770,
+      "sha256": "9b77446699c1f17086fe8bc2fd32dd0b3e74fe1894da88d80b5d5d48d0827efb"
+    },
+    {
+      "member": "dataset_2023/test/2022-02-08-22-04-us-ca-sjc-r/ref_hight.mat",
+      "bytes": 21391,
+      "sha256": "dd630d56b336a88559440b8cb36cdd96823c600c56ceed102f6b63c2e78e5f55"
+    },
+    {
+      "member": "dataset_2023/test/2022-03-14-19-57-us-ca-mtv-pe1/ref_hight.mat",
+      "bytes": 206973,
+      "sha256": "f2fc3054c94e9a08ef6738bf03596a2468e51a79ea3aaf0da458eeb4096dd276"
+    },
+    {
+      "member": "dataset_2023/test/2022-03-17-20-16-us-ca-sjc-q/ref_hight.mat",
+      "bytes": 163544,
+      "sha256": "04b5cfe43dc0483ffff2ade14d83ad5ed148140ae6d3cd9978bd872e0cba7bbb"
+    },
+    {
+      "member": "dataset_2023/test/2022-03-22-18-44-us-ca-mtv-pe1/ref_hight.mat",
+      "bytes": 206973,
+      "sha256": "f2fc3054c94e9a08ef6738bf03596a2468e51a79ea3aaf0da458eeb4096dd276"
+    },
+    {
+      "member": "dataset_2023/test/2022-04-25-22-36-us-ca-ebf-z/ref_hight.mat",
+      "bytes": 32571,
+      "sha256": "b14c8e66811459adf60668c0f9aa7ac98fc789d032ea5d9d1704af0c7cde9f14"
+    },
+    {
+      "member": "dataset_2023/test/2022-04-27-18-16-us-ca-ebf-zz/ref_hight.mat",
+      "bytes": 32571,
+      "sha256": "b14c8e66811459adf60668c0f9aa7ac98fc789d032ea5d9d1704af0c7cde9f14"
+    },
+    {
+      "member": "dataset_2023/test/2022-05-12-20-19-us-ca-mtv-pe1/ref_hight.mat",
+      "bytes": 206973,
+      "sha256": "f2fc3054c94e9a08ef6738bf03596a2468e51a79ea3aaf0da458eeb4096dd276"
+    },
+    {
+      "member": "dataset_2023/test/2022-06-28-20-56-us-ca-sjc-r/ref_hight.mat",
+      "bytes": 21391,
+      "sha256": "dd630d56b336a88559440b8cb36cdd96823c600c56ceed102f6b63c2e78e5f55"
+    },
+    {
+      "member": "dataset_2023/test/2022-07-12-18-37-us-ca-mtv-b/ref_hight.mat",
+      "bytes": 192628,
+      "sha256": "74fd372c04dc440e9c1749d9448de0874fd50072732dea1508e604f0d3f2dbd3"
+    },
+    {
+      "member": "dataset_2023/test/2022-10-06-20-46-us-ca-sjc-r/ref_hight.mat",
+      "bytes": 21391,
+      "sha256": "dd630d56b336a88559440b8cb36cdd96823c600c56ceed102f6b63c2e78e5f55"
+    },
+    {
+      "member": "dataset_2023/test/2023-04-27-19-25-us-ca-mtv-pe1/ref_hight.mat",
+      "bytes": 206973,
+      "sha256": "f2fc3054c94e9a08ef6738bf03596a2468e51a79ea3aaf0da458eeb4096dd276"
+    },
+    {
+      "member": "dataset_2023/test/2023-04-27-20-55-us-ca-sjc-q/ref_hight.mat",
+      "bytes": 163544,
+      "sha256": "04b5cfe43dc0483ffff2ade14d83ad5ed148140ae6d3cd9978bd872e0cba7bbb"
+    },
+    {
+      "member": "dataset_2023/test/2023-05-02-19-24-us-ca-sjc-we1/ref_hight.mat",
+      "bytes": 37755,
+      "sha256": "99a144710034bd2af20c0f3a531c63470509f8975173e6df6ff367be98b18128"
+    },
+    {
+      "member": "dataset_2023/test/2023-05-02-20-33-us-ca-mtv-xe1/ref_hight.mat",
+      "bytes": 302144,
+      "sha256": "8a3a9400f4cf9fbbb5a6166468ee8fc08aeccd3a0b7dc007960ba6b2a0001422"
+    },
+    {
+      "member": "dataset_2023/test/2023-05-09-23-10-us-ca-sjc-r/ref_hight.mat",
+      "bytes": 21391,
+      "sha256": "dd630d56b336a88559440b8cb36cdd96823c600c56ceed102f6b63c2e78e5f55"
+    },
+    {
+      "member": "dataset_2023/test/2023-05-23-21-06-us-ca-mtv-de1/ref_hight.mat",
+      "bytes": 110770,
+      "sha256": "9b77446699c1f17086fe8bc2fd32dd0b3e74fe1894da88d80b5d5d48d0827efb"
+    },
+    {
+      "member": "dataset_2023/test/2023-05-23-22-16-us-ca-mtv-ie2/ref_hight.mat",
+      "bytes": 122963,
+      "sha256": "68d54603da2191126f247262712e51970c4e5d019668303ead70d517081613f9"
+    },
+    {
+      "member": "dataset_2023/test/2023-05-26-21-23-us-ca-sjc-be2/ref_hight.mat",
+      "bytes": 174925,
+      "sha256": "8260c6ccc1c333df9a313bdddaffdd261a747b6cb6fbc4dbcc796ce3e0da02ec"
+    },
+    {
+      "member": "dataset_2023/test/2023-06-06-22-43-us-ca-sjc-he2/ref_hight.mat",
+      "bytes": 160085,
+      "sha256": "8e6186dcb8871d381685e1e0d605b38ac8473e55e03be4f487787df01b12018b"
+    },
+    {
+      "member": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/ref_hight.mat",
+      "bytes": 114891,
+      "sha256": "9daa8820bd61de72a9c351d9dcd7050cc9b7120dd46e5409ccfd32707f7fd83c"
+    }
+  ],
+  "count": 27,
+  "source_policy": "if ref_hight.mat exists load it; on noninitial passes use nearest reference height within 15 m, otherwise same-trajectory relative height branch",
+  "native_inference_used_reference_height": false,
+  "reference_file_origin": "not established; variable name posgt alone does not prove origin",
+  "archived_result_actual_use": "not established without run provenance",
+  "comparison_consequence": "archived outputs remain illustrative; no paired same-input parity or attribution of score gap solely to algorithm"
+}

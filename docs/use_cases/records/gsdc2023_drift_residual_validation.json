@@ -1,0 +1,115 @@
+{
+  "run": {
+    "inputs": {
+      "--android-gnss": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+        "sha256": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0"
+      },
+      "--android-imu": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_imu.csv",
+        "sha256": "b90e35248b3a2049c2db343611010002733543740f99da625833486f4cd9baf5"
+      },
+      "--nav": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+        "sha256": "8928c254995b9b50c233813df8aefa67c759acc21edfcd53b48d28d3d06fa2c4"
+      },
+      "--native-base-rinex": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\P226_rnx2.obs",
+        "sha256": "8eb96565b013041dab82b07f1facf406a2b8ae0447c249c998c6da7925d02183"
+      }
+    },
+    "purpose": "existing test data truth-free full inference, not accuracy evaluation",
+    "base_setting": {
+      "Course": "2022-10-06-20-46-us-ca-sjc-r",
+      "Phone": "sm-a205u",
+      "Type": "Mix",
+      "Nepoch": "1697",
+      "IdxStart": "2",
+      "IdxEnd": "1697",
+      "RPYReset": "0",
+      "L5": "0",
+      "BDS": "0",
+      "Base1": "P226",
+      "RINEX": "V2",
+      "SameCourse": "2023-09-07-22-48-us-ca-routebc2"
+    },
+    "argv": [
+      "E:\\gnsspp-build-gsdc-native\\apps\\Release\\gnss_fgo_imu_no_base.exe",
+      "--dataset-id",
+      "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "--android-gnss",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+      "--android-imu",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_imu.csv",
+      "--nav",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+      "--native-base-rinex",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\P226_rnx2.obs",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-meter-state-parity",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-phase157-raw-p-bootstrap",
+      "--native-phase165-raw-p-no-doppler-graph",
+      "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+      "--native-phase171-raw-p-no-doppler-imu-main",
+      "--native-phase171-raw-p-ecef-doppler-gnss-first",
+      "--native-upstream-stop-constraints",
+      "--native-lm-lambda-floor",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-rinex-sha256",
+      "8eb96565b013041dab82b07f1facf406a2b8ae0447c249c998c6da7925d02183",
+      "--native-base-position-ecef",
+      "-2677501.0146",
+      "-4314063.5177",
+      "3847179.5753",
+      "--out",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_factor_residual_v5\\solution.csv",
+      "--summary-json",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_factor_residual_v5\\summary.json"
+    ],
+    "binary_sha256": "c4c21bdd9b826b1cb215c561a53aa704c9647185f8d57b0a0f6eaa9ca40d2e03",
+    "state": "complete",
+    "started_unix": 1790093499.1645086,
+    "pid": 24652,
+    "returncode": 0,
+    "wall_s": 189.39310765266418,
+    "outputs": {
+      "solution.csv": "181b10564cc7afd4a4824cf7e2f1d4e83bc9955b9ca612ce085fd71dcbe56197",
+      "stderr.log": "ffa305dbd89db473badc7bdb8f43150a1ee840ca88424acbba1b77d65871fb6e",
+      "stdout.log": "c17283c0ee83b1abf0d5441394217540f6aeaf672205d41ef8d6e051d7198da0",
+      "summary.json": "4a2a9f223965ce4728eab01a8f0ee045c712f99e467e66b00ea7feaa3d60ffd3"
+    }
+  },
+  "solution_byte_identical": true,
+  "stdout_byte_identical": true,
+  "tdcp": {
+    "residual_evaluation": "inserted-drift-factor",
+    "drift_factor_residual_rows": 10759,
+    "factors_inserted": 10759,
+    "finite_residuals": 10759,
+    "nonfinite_residuals": 0,
+    "residual_rms_m": 280.3276329557209,
+    "backend_residual_rms_m": 280.3276329557209,
+    "max_abs_residual_m": 25297.636285123728,
+    "reconstructed_huber_tail_count": 827
+  },
+  "reported_rms_agrees": true,
+  "diagnostic_scope": "Actual inserted factor unwhitenedError evaluated at initial and optimized Values; row identity checked on handoff. Does not measure trajectory accuracy.",
+  "old_invalid_legacy_rms_m": 516.7249164461647,
+  "remaining_concern": "Actual RMS remains large with 827/10759 Huber-tail rows; investigate observation outliers and source preprocessing, not just legacy diagnostic mismatch.",
+  "source_sha256": {
+    "include/libgnss++/algorithms/fgo.hpp": "ae9bf363c088ef6f0e772c8ecf9273fbc29118e19b33b6cf4ac6e95344fa9262",
+    "src/algorithms/fgo_gtsam_backend.cpp": "bfe1ce3627e2474a8b1b7b895eaee3a74d60b9815896da7c15706c942541e4f2",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "86885c16157050775c72f0eedefd3e425b25a2014ea453f70c9d225915df98df"
+  }
+}

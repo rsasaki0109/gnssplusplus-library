@@ -1,0 +1,40 @@
+{
+  "schema": "gsdc-a325g-all40-candidate-review.v1",
+  "status": "local-candidate-audited-not-submitted",
+  "candidate_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_a325g_source_init_submission_v1\\submission.csv",
+  "candidate_sha256": "119279101c2cf3bf50b8b64f2b195cb1ba8e7939b903cc5a8477cc41799e9125",
+  "candidate_bytes": 5862276,
+  "manifest_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_a325g_source_init_submission_v1\\manifest.json",
+  "manifest_sha256": "565ded3b9fc28e7bb04cc9ee5c0f5d32821852a11ea4c9a5cdfed623e672c50f",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_a205u_a325g_source_init_recipe_plan.json",
+  "plan_sha256": "9399bbf40d6e67091fde34ff725ea242a5cbdc2a05a92d0b27317adcd94b8eca",
+  "baseline_submission_sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+  "baseline_official_ref": 56479759,
+  "baseline_official_public_m": 1.698,
+  "baseline_official_private_m": 1.333,
+  "rows": 71936,
+  "native_drives": 40,
+  "changed_drives": {
+    "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": {
+      "rows": 1423,
+      "changed_rows": 1423,
+      "median_position_change_m": 0.29724335240130023,
+      "max_position_change_m": 10.031118929876397
+    },
+    "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": {
+      "rows": 1861,
+      "changed_rows": 1861,
+      "median_position_change_m": 0.14944641273695386,
+      "max_position_change_m": 55.47685959008126
+    }
+  },
+  "unchanged_drives": 38,
+  "unchanged_rows": 68652,
+  "sample_coordinates_used": false,
+  "coordinate_interpolation_or_hold_rows": 0,
+  "position_changes_are_accuracy_gains": false,
+  "official_score": null,
+  "submitted": false,
+  "submission_requires_explicit_user_instruction": true,
+  "checked_unix": 1790147880.461977
+}

@@ -1,0 +1,220 @@
+{
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "control_context": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "native_environment": "Street",
+      "source_type": "Highway",
+      "run_sha256": "ea55b5914463dfd80c55a7644514bcf2b7884b2fa3971b20e3e2059c79433b11",
+      "gnss_first_doppler_factors": 13150
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "native_environment": "Street",
+      "source_type": "Highway",
+      "run_sha256": "fd587125bf521bce25fb554dfd580415e1a36bdfcea81ec908349172707cb53c",
+      "gnss_first_doppler_factors": 12235
+    }
+  },
+  "source_evidence": {
+    "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+    "sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "lines": [
+      214,
+      217
+    ]
+  },
+  "limitations": [
+    "Source/native route presets are retained as frozen; this isolates main Doppler insertion, not full source parity.",
+    "Previous A325F initialization-only comparison had no gain.",
+    "Two already exposed development route groups."
+  ],
+  "status": "two-route-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_main_doppler_matched_plan.json",
+  "plan_sha256": "3a0be226b365e79256f86ac2da1549aea065b4717bacc9847364445446ad5ce3",
+  "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "scope": "Matched executable A325F main Doppler comparison; default-off option is the only between-arm change.",
+  "created_unix": 1790154329.662156,
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_main_doppler_matched_control_plan.json",
+  "baseline_plan_sha256": "f3f4b2896f9a6d0b39173914585ac6fe7201466267c223762bd25653d37728c6",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_main_doppler_matched_v1\\validation.json",
+  "validation_sha256": "845e432dd897887bb5991a7f0aa31ca38dceb060c32624ee513fcdbe144adf97",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.8941107411982883,
+  "mean_route_group_score_m": 1.8941107411982883,
+  "results": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.4181577118931417,
+            "p95_m": 3.0844132107032567,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.251285461298199
+          },
+          "truth_sha256": "db4662651c4da981b06d370121aa21a685f33eac0154161ceedee6c319db18e1",
+          "solution_sha256": "756080b65086bb9e989a3f92f57ca203fcc124548bfe3bfdd081549f8e6239df",
+          "wall_s": 609.0027332305908,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": false,
+              "enabled": false,
+              "factors": 0
+            },
+            "gnss_first_doppler": 13150,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "e51b6a929c68a9883596125ac6a1c107c87f7131f87c01f8ebcf23808eb3afe7"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2495323426482385,
+            "p95_m": 2.4835009462900075,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.866516644469123
+          },
+          "truth_sha256": "db4662651c4da981b06d370121aa21a685f33eac0154161ceedee6c319db18e1",
+          "solution_sha256": "225be8bdf8133d9f1306d6bd7664f2bb9d4f803ca76c078ff2ceae86526a45c3",
+          "wall_s": 201.55900621414185,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": true,
+              "enabled": true,
+              "factors": 13150
+            },
+            "gnss_first_doppler": 13150,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "e51b6a929c68a9883596125ac6a1c107c87f7131f87c01f8ebcf23808eb3afe7"
+        }
+      },
+      "delta_m": -0.38476881682907593
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2854577189076237,
+            "p95_m": 2.725284585709374,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.005371152308499
+          },
+          "truth_sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+          "solution_sha256": "b4f52b56054b5d11baf078bafbddbb6eb94c5ea16a885be9aa9a6f414a2be00d",
+          "wall_s": 738.2961156368256,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": false,
+              "enabled": false,
+              "factors": 0
+            },
+            "gnss_first_doppler": 12235,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "5696df78b1a9a420ba64e2621f67ec8ee7c2594548eedee8b80c4ffc3f5e47af"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.0705518353180907,
+            "p95_m": 2.7728578405368163,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9217048379274535
+          },
+          "truth_sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+          "solution_sha256": "64920b0011231dda873a39ec676a547a5ae1496260eded831361152eebb37d74",
+          "wall_s": 68.30757236480713,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": true,
+              "enabled": true,
+              "factors": 12235
+            },
+            "gnss_first_doppler": 12235,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "5696df78b1a9a420ba64e2621f67ec8ee7c2594548eedee8b80c4ffc3f5e47af"
+        }
+      },
+      "delta_m": -0.08366631438104544
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "Two existing development route groups, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790155977.952723
+}

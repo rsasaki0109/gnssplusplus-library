@@ -1,0 +1,49 @@
+{
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "checked_unix": 1790136649.5808885,
+  "source_matches": [
+    {
+      "path": "parameters.m",
+      "line": 16,
+      "text": "prm.L5 = setting.L5;"
+    },
+    {
+      "path": "parameters.m",
+      "line": 17,
+      "text": "prm.BDS = setting.BDS;"
+    },
+    {
+      "path": "parameters.m",
+      "line": 63,
+      "text": "if setting.L5"
+    },
+    {
+      "path": "parameters.m",
+      "line": 86,
+      "text": "if setting.L5"
+    },
+    {
+      "path": "parameters.m",
+      "line": 111,
+      "text": "if setting.L5"
+    }
+  ],
+  "file_sha256": {
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\parameters.m": "cc9e8ee178c79fd8c1853d1e1d0a91db12e951872d1773e279068c02f146a331",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\functions\\exobs.m": "57fa4e0199beee89c62c61dab2be6ebb92f76de719bafa1fe338d106f57efefe",
+    "gnssplusplus-library-gsdc\\include\\libgnss++\\algorithms\\source_route_settings.hpp": "5f2fd4b0d3464975fe1b55825d8687e99f63ba56f5c10b8535899424f646803d",
+    "gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp": "173c22d73f1162c0ba8bade1e130a14bb9836e7bf31b787cf68bf22c73249089"
+  },
+  "findings": [
+    "In pinned MATLAB .m files, setting.L5 selects elevation thresholds for P/D/L (5 degrees if true, 10 otherwise). The direct prm.L5 field is assigned but no direct read was found.",
+    "prm.BDS is assigned in parameters.m; no direct read of prm.BDS was found in the pinned MATLAB .m files.",
+    "Source exobs.m iterates L1 and L5 whenever present; this function does not exclude a band based on prm.L5 or prm.BDS.",
+    "Native explicit route preset maps L5 to elevation thresholds and Type to robust thresholds and GNSS velocity-motion sigma. TDCP Huber changes only with its separate selector."
+  ],
+  "limitations": [
+    "Static named-field audit only; dynamic field access and external toolbox behavior are not proved by this search.",
+    "No claim that source or native BDS/L5 satellite admission is fully equivalent.",
+    "The explicit route comparison changes a preset bundle; it cannot isolate individual parameter impact."
+  ],
+  "official_score": false
+}

@@ -1,0 +1,27 @@
+{
+  "status": "both-new-binary-controls-reproduce-legacy",
+  "new_binary_sha256": "04a853b3af950229b3fa4aadadbfc48edbf2340cc72bc8b61a7b6cae5039b6f1",
+  "legacy_binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "plan_hashes": {
+    "baseline_plan": "c416d6e6ec8d8dfc19ba14ac7c043653ef5795e693c0d8df7661ce87dcfc9ea9",
+    "legacy_control_plan": "f4f296384cabaa7b5d856c72ac9e7d9ffdd66d251aaaa075c188813fc858fc3a"
+  },
+  "results": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "same_solution_and_seed_bytes": true,
+      "solution_sha256": "0ae06fd9746685d21d1acd93336dec834172d013bd2d6ee448dfe4a74df89b19",
+      "native_epochs": 1452,
+      "new_run_sha256": "74b272b0fae6512d44a839416a27aa24d641ba4f49d8b5cd20dc3dd8a5555f42",
+      "legacy_run_sha256": "1d92bbb5c18032c36cbfd1b892869b6d9fa2e97b3e81e81dcb7829502084a1c6"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "same_solution_and_seed_bytes": true,
+      "solution_sha256": "eba7837eaf063c13286b6834e7511bc52749f600574ffd675111ed6fc487f6d3",
+      "native_epochs": 1230,
+      "new_run_sha256": "5271ca3ff769513a8a6a34a1c61891cb516022636f2647e9440984c5ca2e4e17",
+      "legacy_run_sha256": "60397a88f4fa2292da2c12c41a2b7433f7d4fe1250770c4ad3aeac1690eb017c"
+    }
+  },
+  "checked_unix": 1790157359.0998342,
+  "candidate_accuracy_known": false
+}

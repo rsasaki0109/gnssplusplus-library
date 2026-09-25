@@ -1,0 +1,97 @@
+{
+  "status": "analytical-weight-interaction-audit",
+  "checked_unix": 1790140105.9461992,
+  "formula": "Scalar loss rho_k(r/sigma): boundary |r|=k*sigma; quadratic curvature=1/sigma^2; absolute linear-tail gradient=k/sigma.",
+  "rows": [
+    {
+      "route": "January04",
+      "mode": "legacy",
+      "representative_sigma_m": 0.03,
+      "huber_k": 4,
+      "quadratic_to_linear_boundary_m": 0.12,
+      "quadratic_curvature_per_m2": 1111.111111111111,
+      "linear_tail_gradient_magnitude_per_m": 133.33333333333334,
+      "tail_gradient_ratio_to_legacy": 1.0,
+      "accuracy_evidence": false
+    },
+    {
+      "route": "January04",
+      "mode": "sigma_only",
+      "representative_sigma_m": 0.002798401423210426,
+      "huber_k": 4,
+      "quadratic_to_linear_boundary_m": 0.011193605692841705,
+      "quadratic_curvature_per_m2": 127696.78815800814,
+      "linear_tail_gradient_magnitude_per_m": 1429.3874948830812,
+      "tail_gradient_ratio_to_legacy": 10.720406211623109,
+      "accuracy_evidence": false
+    },
+    {
+      "route": "January04",
+      "mode": "sigma_and_source_k_at_same_sigma",
+      "representative_sigma_m": 0.002798401423210426,
+      "huber_k": 0.5,
+      "quadratic_to_linear_boundary_m": 0.001399200711605213,
+      "quadratic_curvature_per_m2": 127696.78815800814,
+      "linear_tail_gradient_magnitude_per_m": 178.67343686038515,
+      "tail_gradient_ratio_to_legacy": 1.3400507764528886,
+      "accuracy_evidence": false
+    },
+    {
+      "route": "March10",
+      "mode": "legacy",
+      "representative_sigma_m": 0.03,
+      "huber_k": 4,
+      "quadratic_to_linear_boundary_m": 0.12,
+      "quadratic_curvature_per_m2": 1111.111111111111,
+      "linear_tail_gradient_magnitude_per_m": 133.33333333333334,
+      "tail_gradient_ratio_to_legacy": 1.0,
+      "accuracy_evidence": false
+    },
+    {
+      "route": "March10",
+      "mode": "sigma_only",
+      "representative_sigma_m": 0.0016827902832903905,
+      "huber_k": 4,
+      "quadratic_to_linear_boundary_m": 0.006731161133161562,
+      "quadratic_curvature_per_m2": 353134.3861556885,
+      "linear_tail_gradient_magnitude_per_m": 2377.0044548740366,
+      "tail_gradient_ratio_to_legacy": 17.827533411555272,
+      "accuracy_evidence": false
+    },
+    {
+      "route": "March10",
+      "mode": "sigma_and_source_k_at_same_sigma",
+      "representative_sigma_m": 0.0016827902832903905,
+      "huber_k": 0.2,
+      "quadratic_to_linear_boundary_m": 0.0003365580566580781,
+      "quadratic_curvature_per_m2": 353134.3861556885,
+      "linear_tail_gradient_magnitude_per_m": 118.85022274370183,
+      "tail_gradient_ratio_to_legacy": 0.8913766705777637,
+      "accuracy_evidence": false
+    }
+  ],
+  "source_summaries": [
+    {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_sigma_v1\\00\\summary.json",
+      "sha256": "fc69519485fb82fc1a4726a14167e60368bfb1cf8fcbc96528323b3d0b3a736d"
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_march10_tdcp_sigma_v1\\00\\summary.json",
+      "sha256": "c53ab09bab45179714b8a9210b8a94418238503eddaf632848a429dda2844439"
+    }
+  ],
+  "code_sha256": {
+    "gnssplusplus-library-gsdc\\src\\algorithms\\fgo_gtsam_internal.hpp": "c19aee64292ad196df1156a1bfcca0219a1eeed9e9220fdcc69cef7b7c149493",
+    "gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp": "6fd9a13124bf84c80bd5bd64c79d029906ab5889af7f7117f47a2c3e28ab4bc7",
+    "E:\\gtsam\\src\\gtsam\\linear\\LossFunctions.cpp": "2b89801396da351e8f81a89b101f5f65c0e58070f7010db7f827c3bc3efdfe75",
+    "E:\\gtsam\\install\\include\\gtsam\\linear\\NoiseModel.h": "863a845b3d9a76837d3d9a8f68fd79640ac0620ad02e9a26a5bbc6c6e97a474d"
+  },
+  "representative_sigma_scope": "Summary sigma_m is taken from the first finite residual factor (report.finite_residuals==1), not a median or a fixed value for all factors.",
+  "limitations": [
+    "This is an analytical diagnostic, not evidence that residuals are outliers or an explanation proven by the position-error result.",
+    "The combined rows hold the sigma-only representative sigma fixed for illustration; they are not measurements from pending joint runs.",
+    "Graph coupling, factor distribution, initialization, geometry and residual construction also affect trajectory accuracy."
+  ],
+  "official_score": false,
+  "promoted": false
+}

@@ -1,0 +1,19 @@
+{
+  "schema": "gsdc-january04-noise-bundle-decision.v1",
+  "comparison_record_sha256": "948c085729d3185cfca1d717c18bba5d5dbc4737951cbf56e079c0acb83ec894",
+  "same_source_route_control_score_m": 0.6516831755369328,
+  "candidate_score_m": 0.541417590615823,
+  "paired_bundle_delta_m": -0.11026558492110983,
+  "original_recipe_score_m": 0.5945094662429546,
+  "delta_from_original_recipe_m": -0.05309187562713169,
+  "original_recipe_comparison_changes_multiple_controls": true,
+  "candidate_gnss_iterations": 178,
+  "candidate_main_iterations": 196,
+  "candidate_wall_s_shared_load": 5170.204478979111,
+  "native_epochs": 1855,
+  "promoted": false,
+  "official_score": false,
+  "heldout": false,
+  "decision": "One-route bundle improvement; await March10 interaction and stage diagnostics. This does not isolate sigma from Huber or prove uniform generalization.",
+  "checked_unix": 1790142975.516696
+}

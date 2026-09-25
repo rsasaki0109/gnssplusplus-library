@@ -18,6 +18,32 @@
 #include <map>
 #include <vector>
 
+TEST(NativeImuStopPhaseTest, PreservesLegacyAndSeparatesSourceVelocityFromPose) {
+    using Phase = libgnss::NativeImuStopPhase;
+    EXPECT_EQ(libgnss::FGOProcessor::FGOConfig{}.native_imu_stop_phase, Phase::Legacy);
+    EXPECT_TRUE(libgnss::nativeImuStopVelocityPrior(Phase::Legacy));
+    EXPECT_TRUE(libgnss::nativeImuStopPoseInterval(Phase::Legacy, 60.0));
+    EXPECT_FALSE(libgnss::nativeImuStopVelocityPrior(Phase::Initialization));
+    EXPECT_TRUE(libgnss::nativeImuStopVelocityPrior(Phase::Final));
+    for (const auto phase : {Phase::Initialization, Phase::Final}) {
+        EXPECT_TRUE(libgnss::nativeImuStopPoseUtcInterval(phase, 1700000000000LL, 1700000001499LL));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseUtcInterval(phase, 1700000000000LL, 1700000001500LL));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseUtcInterval(phase, 0, 1000));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseUtcInterval(phase, 1000, 1000));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseUtcInterval(phase, 2000, 1000));
+        EXPECT_TRUE(libgnss::nativeImuStopPoseInterval(phase, 1.0));
+        EXPECT_TRUE(libgnss::nativeImuStopPoseInterval(phase, std::nextafter(1.5, 0.0)));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseInterval(phase, 1.5));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseInterval(phase, 2.0));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseInterval(phase, 0.0));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseInterval(phase, -1.0));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseInterval(phase, std::numeric_limits<double>::quiet_NaN()));
+        EXPECT_FALSE(libgnss::nativeImuStopPoseInterval(phase, std::numeric_limits<double>::infinity()));
+    }
+    EXPECT_THROW(libgnss::nativeImuStopVelocityPrior(static_cast<Phase>(99)), std::invalid_argument);
+    EXPECT_THROW(libgnss::nativeImuStopPoseInterval(static_cast<Phase>(99), 1.0), std::invalid_argument);
+}
+
 using namespace libgnss;
 
 TEST(FGORemaskingSelectionTest, RecoversAndRemovesRowsWithoutMutatingInput) {
@@ -1202,6 +1228,114 @@ bool makeSyntheticGpsL1Observation(const NavigationData& nav,
     observation.has_carrier_phase = true;
     observation.valid = true;
     return true;
+}
+
+TEST(FGORefinementBuilderTest, KeepsFirstAndPostGapDopplerWithIndependentClockDrift) {
+    const auto nav=makeSyntheticGpsNavigation(1);
+    const Vector3d receiver(1113194.0,-4841695.0,3985350.0);
+    const Vector3d velocity(40.0,-12.0,3.0);
+    const std::array<double,3> times{100100.0,100101.0,100104.0};
+    std::vector<ObservationData> raw;
+    for (std::size_t i=0;i<times.size();++i) {
+        ObservationData epoch(GNSSTime(2300,times[i]));
+        epoch.receiver_position=receiver; epoch.receiver_clock_drift_mps=0;
+        epoch.raw_source_index=i; epoch.raw_utc_time_millis=1700000000000LL+static_cast<std::int64_t>((times[i]-times[0])*1000);
+        Observation obs;
+        ASSERT_TRUE(makeSyntheticGpsL1Observation(nav,SatelliteId(GNSSSystem::GPS,1),epoch.time,receiver,0,obs));
+        Vector3d position,sv_velocity,los; double clock=0,drift=0,rate=0;
+        ASSERT_TRUE(nav.calculateSatelliteState(obs.satellite,epoch.time-obs.pseudorange/constants::SPEED_OF_LIGHT,
+                                                position,sv_velocity,clock,drift));
+        ASSERT_TRUE(doppler_contract::knownSatelliteRangeRate(position,sv_velocity,receiver,true,los,rate));
+        const double measured=rate-los.dot(velocity)-drift*constants::SPEED_OF_LIGHT;
+        obs.doppler=-measured/constants::GPS_L1_WAVELENGTH;
+        obs.has_doppler=true; epoch.observations.push_back(obs); raw.push_back(epoch);
+    }
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed=false; config.use_pseudorange_factors=false; config.use_tdcp_factors=false;
+    config.use_upstream_observable_quality=true; config.upstream_min_elevation_deg=-90;
+    config.use_native_phase171_raw_p_no_doppler_imu_main=true;
+    config.use_native_source_clock_c0d_factor=true;
+    config.use_undifferenced_doppler_factors=true;
+    config.use_corrected_undifferenced_doppler_factors=true;
+    config.retain_sparse_epochs_for_imu=true; config.min_satellites_per_epoch=0;
+    config.max_tdcp_gap_s=1.5;
+    const std::vector<Vector3d> velocities(raw.size(),velocity);
+    const auto rebuilt=FGOProcessor(config).buildPseudorangeProblem(raw,nav,velocities);
+    ASSERT_EQ(rebuilt.epochs.size(),3U);
+    ASSERT_EQ(rebuilt.undifferenced_doppler_factors.size(),3U);
+    for (std::size_t i=0;i<3;++i) {
+        const auto& row=rebuilt.undifferenced_doppler_factors[i];
+        EXPECT_EQ(row.epoch_index,i);
+        EXPECT_TRUE(row.includes_receiver_clock_drift); EXPECT_TRUE(row.uses_rotated_satellite_state);
+        EXPECT_DOUBLE_EQ(row.dt_s,0);
+    }
+    raw[1].observations[0].doppler+=50/constants::GPS_L1_WAVELENGTH;
+    const auto masked=FGOProcessor(config).buildPseudorangeProblem(raw,nav,velocities);
+    ASSERT_EQ(masked.undifferenced_doppler_factors.size(),2U);
+    EXPECT_EQ(masked.undifferenced_doppler_factors[0].epoch_index,0U);
+    EXPECT_EQ(masked.undifferenced_doppler_factors[1].epoch_index,2U);
+}
+
+TEST(FGORefinementBuilderTest, SourcePhasesCenterCachedRowsBeforeElevationAdmission) {
+    const auto nav=makeSyntheticGpsNavigation(5);
+    const Vector3d receiver(1113194.0,-4841695.0,3985350.0);
+    ObservationData epoch(GNSSTime(2300,100100.0));
+    epoch.receiver_position=receiver; epoch.receiver_clock_drift_mps=0;
+    epoch.raw_source_index=0; epoch.raw_utc_time_millis=1700000000000LL;
+    for (uint8_t prn=1;prn<=5;++prn) {
+        Observation obs;
+        ASSERT_TRUE(makeSyntheticGpsL1Observation(nav,SatelliteId(GNSSSystem::GPS,prn),epoch.time,receiver,0,obs));
+        epoch.observations.push_back(obs);
+    }
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed=false; config.use_tdcp_factors=false;
+    config.use_ionosphere_model=false; config.use_troposphere_model=false;
+    config.use_upstream_observable_quality=true; config.upstream_min_elevation_deg=-90;
+    config.use_native_phase171_raw_p_no_doppler_imu_main=true;
+    config.use_native_source_clock_c0d_factor=true;
+    config.use_corrected_undifferenced_doppler_factors=true;
+    config.retain_sparse_epochs_for_imu=true; config.min_satellites_per_epoch=0;
+    const std::vector<Vector3d> velocities{Vector3d::Zero()};
+    // The synthetic input does not include the builder's Earth-rotation
+    // correction. Calibrate from the pre-residual pool, since that correction
+    // alone can exceed the final residual limit on this artificial geometry.
+    config.retain_native_pseudorange_remasking_pool=true;
+    auto baseline=FGOProcessor(config).buildPseudorangeProblem({epoch},nav,velocities);
+    ASSERT_EQ(baseline.native_pseudorange_remasking_pool.size(),5U);
+    auto rows=baseline.native_pseudorange_remasking_pool;
+    config.retain_native_pseudorange_remasking_pool=false;
+    std::sort(rows.begin(),rows.end(),[](const auto& a,const auto& b){return a.elevation_rad<b.elevation_rad;});
+    ASSERT_GT(rows[2].elevation_rad-rows[1].elevation_rad,1e-5);
+    const std::array<double,5> residuals{-100,-90,0,19,29};
+    for (std::size_t i=0;i<rows.size();++i) {
+        auto& obs=epoch.observations.at(rows[i].satellite.prn-1);
+        obs.pseudorange+=residuals[i]-rows[i].upstream_seed_residual_m;
+    }
+    config.upstream_min_elevation_deg=(rows[1].elevation_rad+rows[2].elevation_rad)*0.5*180.0/std::acos(-1.0);
+    const auto legacy=FGOProcessor(config).buildPseudorangeProblem({epoch},nav,velocities);
+    ASSERT_EQ(legacy.pseudorange_factors.size(),3U);
+    EXPECT_TRUE(legacy.diagnostics.native_pseudorange_center_audit.empty());
+    config.native_imu_observation_phase=NativeImuObservationPhase::Final;
+    const auto final=FGOProcessor(config).buildPseudorangeProblem({epoch},nav,velocities);
+    ASSERT_EQ(final.pseudorange_factors.size(),2U);
+    ASSERT_EQ(final.diagnostics.native_pseudorange_center_audit.size(),1U);
+    const auto& audit=final.diagnostics.native_pseudorange_center_audit.front();
+    EXPECT_EQ(audit.cached_rows,5U); EXPECT_EQ(audit.admitted_rows,3U);
+    EXPECT_NEAR(audit.cached_center_m,0,0.01); EXPECT_NEAR(audit.admitted_center_m,19,0.01);
+    EXPECT_DOUBLE_EQ(audit.selected_threshold_m,20);
+    config.native_imu_observation_phase=NativeImuObservationPhase::Initialization;
+    const auto initial=FGOProcessor(config).buildPseudorangeProblem({epoch},nav,velocities);
+    EXPECT_EQ(initial.pseudorange_factors.size(),3U);
+    EXPECT_DOUBLE_EQ(initial.diagnostics.native_pseudorange_center_audit.front().selected_threshold_m,50);
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem({epoch},nav),std::invalid_argument);
+    // The same source initialization limits also apply to the cold GNSS graph.
+    config.use_native_phase171_raw_p_no_doppler_imu_main=false;
+    config.use_native_raw_p_ecef_doppler_gnss_first=true;
+    config.use_imu=false;
+    const auto cold=FGOProcessor(config).buildPseudorangeProblem({epoch},nav,velocities);
+    EXPECT_EQ(cold.pseudorange_factors.size(),3U);
+    ASSERT_EQ(cold.diagnostics.native_pseudorange_center_audit.size(),1U);
+    EXPECT_EQ(cold.diagnostics.native_pseudorange_center_audit.front().cached_rows,5U);
 }
 
 std::vector<ObservationData> makeSyntheticDoubleDifferenceObservationEpochs(

@@ -1,0 +1,78 @@
+{
+  "status": "diagnostic-complete-not-promoted",
+  "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\long_gap_native_diagnostic_v1\\run.json",
+  "binary_sha256": "0039ab0cc87525920056e7ec0c95311e2e1a6270a0eec5fd5dfb693c3161dc34",
+  "diagnostic_changes": [
+    "SPP time-gap bound 60s",
+    "initialization bracket bound 60s",
+    "UTC/GPS anchor-gap bound 60s"
+  ],
+  "source_hashes": {
+    "E:\\rtklib_v2_ws_tmp\\gsdc-loader-test\\wide_gap_native_diagnostic.cpp": "51e77c09230c8077989258d9b178bfcd5dc98944a93523081e577decc8d98cd2",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-loader-test\\imu_wide_gap_diagnostic.cpp": "f908aa7be2ca3655cbc292af8f870e4c29f9c194063b9cbecfb6e497e1d79af6"
+  },
+  "raw_epochs": 2805,
+  "independent_spp_accepted_epochs": 2769,
+  "temporal_initial_guess_count": 36,
+  "maximum_bracket_span_s": 60,
+  "maximum_raw_epoch_gap_s": 60,
+  "maximum_utc_gps_anchor_gap_ms": 60000,
+  "production_source_changed": false,
+  "full_native_replay_verified": true,
+  "position_accuracy_evaluated": false,
+  "requirements_before_promotion": [
+    "Retain all original SPPrejection statuses and per-epoch guess provenance",
+    "Verify GNSS-first rank/epoch/finite-state contracts",
+    "Verify mapped IMU coverage and main graph observability through every long gap",
+    "Verify full original-key output and no output interpolation",
+    "Expose bounded opt-in policy with sensor-coverage validation rather than changing global default guards"
+  ],
+  "output_audit": {
+    "returncode": 0,
+    "wall_s": 1172.0917029380798,
+    "binary_sha256": "0039ab0cc87525920056e7ec0c95311e2e1a6270a0eec5fd5dfb693c3161dc34",
+    "status": "raw-key-coverage-verified",
+    "raw_utc_groups": 2805,
+    "expected_output_keys": 2804,
+    "output_rows": 2804,
+    "missing_raw_keys": 0,
+    "extra_raw_keys": 0,
+    "duplicate_output_keys": 0,
+    "complete_ordered_raw_key_match": true,
+    "finite_phone_coordinates": true,
+    "summary_count_matches": true,
+    "key_contract": {
+      "warmup_epoch_excluded": true,
+      "raw_epoch_keys": 2805,
+      "target_epochs": 2804,
+      "exact_solution_epochs": 2804,
+      "interpolated_epochs": 0,
+      "edge_hold_epochs": 0,
+      "unresolved_epochs": 0,
+      "solution_time_tolerance_ms": 2,
+      "max_interpolation_gap_ms": 0,
+      "max_edge_hold_gap_ms": 0,
+      "coordinate_interpolation": "ECEF linear then geodetic",
+      "device_wls_coordinates_used": false
+    },
+    "position_accuracy_evaluated": false,
+    "native_estimation_contract_verified": true,
+    "native_exact_output_fraction": 1.0,
+    "output_interpolation_or_hold_count": 0,
+    "all_output_epochs_from_native_states": true,
+    "official_key_coverage": {
+      "required_keys": 2805,
+      "missing_keys": [
+        1645655744438
+      ],
+      "extra_nonofficial_keys": [],
+      "required_order_preserved": false,
+      "all_required_keys_from_native_states": false,
+      "exact_submission_key_order": false,
+      "submission_assembled": false
+    },
+    "temporal_initial_guess_count": 36,
+    "independent_spp_accepted_epochs": 2769
+  },
+  "wall_s": 1172.0917029380798
+}

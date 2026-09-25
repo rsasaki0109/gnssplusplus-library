@@ -1,0 +1,115 @@
+{
+  "schema_version": "gsdc2023-mi8-drift-sparse-checkpoint.v1",
+  "goal_achieved": false,
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "mi8_algorithm": "preprocessing.m: gradient(raw receiver clock m) with unit sample spacing; abs>1000 mask; linear fill/extrap; both sides of abs(diff)>50 mask; linear then nearest fill",
+  "matlab_fillmissing_reference": "https://www.mathworks.com/help/matlab/ref/fillmissing.html",
+  "unit_tests": {
+    "tests": 4,
+    "failures": 0
+  },
+  "candidate_binary_sha256": "b71da06b2d381e8333d627d6fc23413659e35d70f35c0d9fc12cc9df549a5524",
+  "pixel5_sparse": {
+    "returncode": 0,
+    "wall_s": 352.03176522254944,
+    "output_hashes": {
+      "solution.csv": "0efd0474a0da611958ae75d09278074642acb25362b96e553cc652128daab511",
+      "stderr.log": "35018807d187a35697606d0fc1c80152bfdce10533cc1ec10cb72a9684e6ad95",
+      "stdout.log": "8ad59e06561da4eb925399fc6d3ca037560926e102909e5252b8f2fce707829b",
+      "summary.json": "b5f316ab4d8c6f337cd73b9568134eb256fd2fa9dd9b9b86ffc4f1d60892fd09",
+      "summary.json.initialization.json": "0c0d77b0d5ec6d14a5a763eef1de8c3cf6c10cc417902f2bd9c46c91e6e31499"
+    },
+    "epochs": {
+      "problem": 1357,
+      "output": 1357,
+      "sparse_epochs_retained": 1,
+      "sparse_empty_epochs_retained": 1,
+      "pseudorange_factors": 30438,
+      "receiver_signal_bias_factors": 0,
+      "receiver_signal_bias_states": 0,
+      "residual_ionosphere_factors": 0,
+      "residual_ionosphere_states": 0,
+      "residual_ionosphere_resets": 0,
+      "tdcp_factors_built": 21724,
+      "double_difference_pseudorange_factors": 0,
+      "double_difference_carrier_factors": 0
+    },
+    "key_contract": {
+      "warmup_epoch_excluded": true,
+      "raw_epoch_keys": 1357,
+      "target_epochs": 1356,
+      "exact_solution_epochs": 1356,
+      "interpolated_epochs": 0,
+      "edge_hold_epochs": 0,
+      "unresolved_epochs": 0,
+      "solution_time_tolerance_ms": 2,
+      "max_interpolation_gap_ms": 0,
+      "max_edge_hold_gap_ms": 0,
+      "coordinate_interpolation": "ECEF linear then geodetic",
+      "device_wls_coordinates_used": false
+    }
+  },
+  "mi8_nov": {
+    "clock_drift_blocker_resolved": true,
+    "gnss_first_accepted_iterations": 99,
+    "gnss_first_initial_cost_rounded": 407012000,
+    "gnss_first_final_cost_rounded": 15490.5,
+    "full_pipeline_complete": false,
+    "failure": {
+      "schema_version": "native-imu-initialization-failure.v1",
+      "status": "failed-closed",
+      "dataset_id": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "failure_reason": "leveling window is not stationary/low-dynamics under frozen gravity gate",
+      "truth_used": false,
+      "fallback_used": false
+    },
+    "utc_gps_mapping_probe_ok": true,
+    "mapping_anchors": 1395,
+    "mapping_drift_ppm_rounded": -0.0893752
+  },
+  "live_sessions": {
+    "full40": 49715,
+    "mi8_sparse_regression": 77932
+  },
+  "limitations": [
+    "Test truth not opened; no official score or taroz paired run",
+    "MI8 September full run still pending; MI8 November fails at static leveling",
+    "Source fgo_gnss_imu initializes attitude via vel2rpy and IMU biases at zero; native static-bias seed and gate need source-specific correction"
+  ],
+  "mi8_september_completed_audit": {
+    "returncode": 0,
+    "wall_s": 1687.3314845561981,
+    "binary_sha256": "b71da06b2d381e8333d627d6fc23413659e35d70f35c0d9fc12cc9df549a5524",
+    "status": "raw-key-coverage-verified",
+    "raw_utc_groups": 2479,
+    "expected_output_keys": 2478,
+    "output_rows": 2478,
+    "missing_raw_keys": 0,
+    "extra_raw_keys": 0,
+    "duplicate_output_keys": 0,
+    "complete_ordered_raw_key_match": true,
+    "finite_phone_coordinates": true,
+    "summary_count_matches": true,
+    "key_contract": {
+      "warmup_epoch_excluded": true,
+      "raw_epoch_keys": 2479,
+      "target_epochs": 2478,
+      "exact_solution_epochs": 2478,
+      "interpolated_epochs": 0,
+      "edge_hold_epochs": 0,
+      "unresolved_epochs": 0,
+      "solution_time_tolerance_ms": 2,
+      "max_interpolation_gap_ms": 0,
+      "max_edge_hold_gap_ms": 0,
+      "coordinate_interpolation": "ECEF linear then geodetic",
+      "device_wls_coordinates_used": false
+    },
+    "position_accuracy_evaluated": false,
+    "native_exact_output_fraction": 1.0,
+    "output_interpolation_or_hold_count": 0,
+    "all_output_epochs_from_native_states": true,
+    "temporal_initial_guess_count": 0,
+    "independent_spp_accepted_epochs": 2479
+  },
+  "mi8_september_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_sparse_regression_v1\\mi8_sep\\run.json"
+}

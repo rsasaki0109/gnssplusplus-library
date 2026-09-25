@@ -1,0 +1,2511 @@
+{
+  "complete": true,
+  "runs": {
+    "2020-12-11-19-30-us-ca-mtv-e/pixel4xl": {
+      "dataset_id": "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2020-12-11-19-30-us-ca-mtv-e\\pixel4xl\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2020-12-11-19-30-us-ca-mtv-e\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\00\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2020-12-11-19-30-us-ca-mtv-e\\pixel4xl\\device_gnss.csv",
+          "sha256": "7c0b96f3e45c616ef49ded80ad8e4f58d5ae89d4b8c3cb8d97a36c7137bf61bc",
+          "bytes": 29347352
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2020-12-11-19-30-us-ca-mtv-e\\brdc.nav",
+          "sha256": "90df3eea00912b38a38578fdd0204b48a57d116bb3681b3764899e74dd521315",
+          "bytes": 10508085
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091556.827185,
+      "state": "complete",
+      "pid": 60792,
+      "returncode": 0,
+      "wall_s": 4.3072829246521,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "b39913dc5b8b86857aeea70e2fadfaa28182c2a3ae79d05b36d777f0a9d6c29c"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1190,
+        "evaluated_epoch_count": 1190,
+        "accepted_epoch_count": 1190,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-08-17-20-37-us-ca-mtv-g/pixel5": {
+      "dataset_id": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-17-20-37-us-ca-mtv-g\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-17-20-37-us-ca-mtv-g\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\01\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-17-20-37-us-ca-mtv-g\\pixel5\\device_gnss.csv",
+          "sha256": "e79257f776608e09769adffb16e8a53ac112899e4025ea1071544968bcc4f831",
+          "bytes": 38887326
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-17-20-37-us-ca-mtv-g\\brdc.nav",
+          "sha256": "bcd8072ca86a5f9d2b0ee26bbaef705466e3b2c6cda8b56991191ed5cac1414a",
+          "bytes": 10561072
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091561.2714431,
+      "state": "complete",
+      "pid": 63900,
+      "returncode": 0,
+      "wall_s": 4.912950754165649,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "3bd4b3830cf4e7cb5309f86b628649d711148399fba9f6753c699747a6dd0e05"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1676,
+        "evaluated_epoch_count": 1676,
+        "accepted_epoch_count": 1676,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": {
+      "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-31-20-37-us-ca-mtv-e\\sm-g988b\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-31-20-37-us-ca-mtv-e\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\02\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-31-20-37-us-ca-mtv-e\\sm-g988b\\device_gnss.csv",
+          "sha256": "89e37f07899025f13763e999233a34ba88d37bf5f57a846a928708b0bce7e082",
+          "bytes": 25631908
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-08-31-20-37-us-ca-mtv-e\\brdc.nav",
+          "sha256": "5e6b13899e7416db611f7ff170094ed040fc6e10de5b1a96ee4cea7ca1c8a2f0",
+          "bytes": 11066228
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091566.4293365,
+      "state": "complete",
+      "pid": 28872,
+      "returncode": 1,
+      "wall_s": 3.4974582195281982,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "84163cbc55f235a38fc8f9de3e589927ef440bf74077ed35ebf738239f3718c0"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1141,
+        "evaluated_epoch_count": 788,
+        "accepted_epoch_count": 787,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-09-14-20-32-us-ca-mtv-k/pixel4": {
+      "dataset_id": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-14-20-32-us-ca-mtv-k\\pixel4\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-14-20-32-us-ca-mtv-k\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\03\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-14-20-32-us-ca-mtv-k\\pixel4\\device_gnss.csv",
+          "sha256": "3d0ec7209d47ed105c12603be5449d2b55a2635861f9a252202d6f2c4a26b3e4",
+          "bytes": 27830207
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-14-20-32-us-ca-mtv-k\\brdc.nav",
+          "sha256": "384298f3add9e654e65920973f6bdb028f5f4ba2ffa8af70868262bdfd653036",
+          "bytes": 11047948
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091570.0722218,
+      "state": "complete",
+      "pid": 47452,
+      "returncode": 0,
+      "wall_s": 3.5928127765655518,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "133abdfad223e9310689c0dea38eb78611169d4487480c40b0764f9f87641f2e"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1274,
+        "evaluated_epoch_count": 1274,
+        "accepted_epoch_count": 1274,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-09-20-19-03-us-ca-mtv-l/pixel4": {
+      "dataset_id": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-20-19-03-us-ca-mtv-l\\pixel4\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-20-19-03-us-ca-mtv-l\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\04\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-20-19-03-us-ca-mtv-l\\pixel4\\device_gnss.csv",
+          "sha256": "9a3d879a276bff3f1dc2a411f5c74e1ff413480170d8a95eed462327cfd22ce9",
+          "bytes": 42839810
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-20-19-03-us-ca-mtv-l\\brdc.nav",
+          "sha256": "881852e4e7b41215fd872b783ce5a930f74c9942db573a03f61a4f291a03dee2",
+          "bytes": 10687358
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091573.8259373,
+      "state": "complete",
+      "pid": 46860,
+      "returncode": 0,
+      "wall_s": 5.114653825759888,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "c990ab686d9646f15ebac83851f7f4f525e3632607942a57c54c1cf26a525b89"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1797,
+        "evaluated_epoch_count": 1797,
+        "accepted_epoch_count": 1797,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-09-28-21-56-us-ca-mtv-a/mi8": {
+      "dataset_id": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-09-28-21-56-us-ca-mtv-a/mi8",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-28-21-56-us-ca-mtv-a\\mi8\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-28-21-56-us-ca-mtv-a\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\05\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-28-21-56-us-ca-mtv-a\\mi8\\device_gnss.csv",
+          "sha256": "7422aa61b42bc3c2a0d70e0332443048b1c8a3990a7d3f22f012c4ffb1630da8",
+          "bytes": 62823363
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-09-28-21-56-us-ca-mtv-a\\brdc.nav",
+          "sha256": "e8d078886dcc4fcb18b33af46e9382d7cc2c5237fcb3f56d22e3ee01c0824b13",
+          "bytes": 10847806
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091579.2149525,
+      "state": "complete",
+      "pid": 56460,
+      "returncode": 0,
+      "wall_s": 9.330574035644531,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "c58ae1ae20a4fef8544dd8ceccadfc6764b5d8644f16e8f1a2c2099babb5074c"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2479,
+        "evaluated_epoch_count": 2479,
+        "accepted_epoch_count": 2479,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-11-05-18-28-us-ca-mtv-m/pixel6pro": {
+      "dataset_id": "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\pixel6pro\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\06\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\pixel6pro\\device_gnss.csv",
+          "sha256": "385554d11c17d0e4606ae2e66f6a9c65aa6bb8bd667235dac456f51196d0d271",
+          "bytes": 27875575
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\brdc.nav",
+          "sha256": "377cb49b66558cb3a1b68fb027bd219cb1f9ed3c8bce1f4712e4958f293e935a",
+          "bytes": 11112982
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091588.8971548,
+      "state": "complete",
+      "pid": 9076,
+      "returncode": 0,
+      "wall_s": 4.311011552810669,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "98d585e628f8edb8b375e1d882be155ffc3716b590e2e3bb22e23da06a7ac5a1"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1446,
+        "evaluated_epoch_count": 1446,
+        "accepted_epoch_count": 1446,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2021-11-30-20-59-us-ca-mtv-m/mi8": {
+      "dataset_id": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-11-30-20-59-us-ca-mtv-m/mi8",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\mi8\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\07\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\mi8\\device_gnss.csv",
+          "sha256": "9af63add3455f995e53b4584c9790a5ff9ffdf9fb11b80042e15223deed580c9",
+          "bytes": 31725741
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\brdc.nav",
+          "sha256": "1d01308c6f915b849af9ad197404d79f33d8d091743b6907a534525267ce6142",
+          "bytes": 10560440
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091593.3885446,
+      "state": "complete",
+      "pid": 19508,
+      "returncode": 1,
+      "wall_s": 0.06278610229492188,
+      "outputs": {
+        "stderr.log": "8a5927913c779f66f7726fd0d15aadc1f980730a15e93c7fa3e97786aa3f9d44",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      }
+    },
+    "2022-02-08-22-04-us-ca-sjc-r/pixel5": {
+      "dataset_id": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-08-22-04-us-ca-sjc-r\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-08-22-04-us-ca-sjc-r\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\08\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-08-22-04-us-ca-sjc-r\\pixel5\\device_gnss.csv",
+          "sha256": "2c965557899008c7071f5cc4c2e872d73d7ab3acf453dfbc415705337f7013e6",
+          "bytes": 37279864
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-08-22-04-us-ca-sjc-r\\brdc.nav",
+          "sha256": "90d7ccf52fd9de84340d0c1a9b38d50644bf98716bbc4033fdf877a5a870ce63",
+          "bytes": 10753104
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091593.4628751,
+      "state": "complete",
+      "pid": 11816,
+      "returncode": 0,
+      "wall_s": 4.647887468338013,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "73cf360b727361a383e8930d2800dbd2412ac687a3e3c22040ac0af48ace4206"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1665,
+        "evaluated_epoch_count": 1665,
+        "accepted_epoch_count": 1665,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-02-23-17-46-us-ca-lax-n/pixel5": {
+      "dataset_id": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-02-23-17-46-us-ca-lax-n/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-17-46-us-ca-lax-n\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-17-46-us-ca-lax-n\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\09\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-17-46-us-ca-lax-n\\pixel5\\device_gnss.csv",
+          "sha256": "1620f95e57eb095e59bfa906638e642f990d085ed1a11ffe24a45b4092b70e17",
+          "bytes": 48013910
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-17-46-us-ca-lax-n\\brdc.nav",
+          "sha256": "d02aeb204d118589745ff0b3e54e3dad885e2cec32003602de91a91a91067503",
+          "bytes": 10835998
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091598.3197505,
+      "state": "complete",
+      "pid": 32932,
+      "returncode": 0,
+      "wall_s": 5.697248935699463,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "22108db779812d7a4ba7386b1ba0eee9fb6ac917c2f881a391e662465560591b"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2407,
+        "evaluated_epoch_count": 2407,
+        "accepted_epoch_count": 2407,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-02-23-22-35-us-ca-lax-m/pixel5": {
+      "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-02-23-22-35-us-ca-lax-m/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\10\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\pixel5\\device_gnss.csv",
+          "sha256": "5f4030c1614c29062a0cab37a733b3f56d7262576f27f8081c73d79dcdf7124e",
+          "bytes": 59406203
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\brdc.nav",
+          "sha256": "d02aeb204d118589745ff0b3e54e3dad885e2cec32003602de91a91a91067503",
+          "bytes": 10835998
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091604.2931674,
+      "state": "complete",
+      "pid": 50252,
+      "returncode": 1,
+      "wall_s": 3.645540714263916,
+      "outputs": {
+        "stderr.log": "8552d155a207c30ad582123149736141359e8f8cfecb8b78d0b9489ff19a88fe",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "6a7dcd82d977b5de4c7b6ed8a4c9dccc14667722e3f33a4e92a1aab875ffe3a2"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+        "status": "failed-closed",
+        "failure_status": "time-gap",
+        "failure_reason": "epoch-time-gap-exceeds-limit",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2805,
+        "evaluated_epoch_count": 1,
+        "accepted_epoch_count": 0,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-02-24-15-10-us-ca-lax-p/pixel5": {
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-02-24-15-10-us-ca-lax-p/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-15-10-us-ca-lax-p\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-15-10-us-ca-lax-p\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\11\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-15-10-us-ca-lax-p\\pixel5\\device_gnss.csv",
+          "sha256": "6e61db67a63224d0ba70cec8477103acda441e1167e3a374f4417b485e34ae02",
+          "bytes": 95797049
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-15-10-us-ca-lax-p\\brdc.nav",
+          "sha256": "f0cd31bc0a124691a954cef8736ddc59336852b3674b8dcae369f612349aa79a",
+          "bytes": 10880480
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091607.997129,
+      "state": "complete",
+      "pid": 28984,
+      "returncode": 1,
+      "wall_s": 7.3305604457855225,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "6edc50bd0d404308ac3c3f4c9582d37f4159a162ddd111584e6ae1bdf197092d"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 4515,
+        "evaluated_epoch_count": 1327,
+        "accepted_epoch_count": 1326,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-02-24-22-14-us-ca-lax-i/pixel5": {
+      "dataset_id": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-02-24-22-14-us-ca-lax-i/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-22-14-us-ca-lax-i\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-22-14-us-ca-lax-i\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\12\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-22-14-us-ca-lax-i\\pixel5\\device_gnss.csv",
+          "sha256": "add06a9ca0ca8ae0b6c98d7598dcb8508ad904f54c42d9f15428e95d942ea5f8",
+          "bytes": 76310654
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-24-22-14-us-ca-lax-i\\brdc.nav",
+          "sha256": "f0cd31bc0a124691a954cef8736ddc59336852b3674b8dcae369f612349aa79a",
+          "bytes": 10880480
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091615.5418422,
+      "state": "complete",
+      "pid": 66372,
+      "returncode": 0,
+      "wall_s": 9.451858282089233,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "9087ed9cd1d4c8719ccf8bcc058f8145489a239e64c64804f79a8899b7841c9d"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 3582,
+        "evaluated_epoch_count": 3582,
+        "accepted_epoch_count": 3582,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8": {
+      "dataset_id": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-14-19-57-us-ca-mtv-pe1\\xiaomimi8\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-14-19-57-us-ca-mtv-pe1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\13\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-14-19-57-us-ca-mtv-pe1\\xiaomimi8\\device_gnss.csv",
+          "sha256": "279a80a42b5d6e19d971aff008f212d9f02043f74e5f27a9a52280aa9832d27f",
+          "bytes": 42044137
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-14-19-57-us-ca-mtv-pe1\\brdc.nav",
+          "sha256": "c414db6b09a2e0b608e146815252d5524bd7c2fa1e6a92f8f6d44503cdbd50e8",
+          "bytes": 10587087
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091625.4383113,
+      "state": "complete",
+      "pid": 63436,
+      "returncode": 0,
+      "wall_s": 7.4482197761535645,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "bf2835263ea1c3bda08689c7926da1507207ef81ba20dbcb2c1404af1eb311b2"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1679,
+        "evaluated_epoch_count": 1679,
+        "accepted_epoch_count": 1679,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": {
+      "dataset_id": "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-17-20-16-us-ca-sjc-q\\sm-g988b\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-17-20-16-us-ca-sjc-q\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\14\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-17-20-16-us-ca-sjc-q\\sm-g988b\\device_gnss.csv",
+          "sha256": "6b9b3def8827baf33e0f9b813281965414e5761270438f5f3ac92aa4840860e8",
+          "bytes": 27183500
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-17-20-16-us-ca-sjc-q\\brdc.nav",
+          "sha256": "121bd5357534b31a61b4b7ec22101f69bd2a3d260f21b0d1058b18e1421ccd0a",
+          "bytes": 10698280
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091633.1229825,
+      "state": "complete",
+      "pid": 62308,
+      "returncode": 0,
+      "wall_s": 4.231954097747803,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "8ef8402dcfa5344bdcf4d2b984ca239e999f4b7c3abd7b2788704c75dcf4a29d"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1172,
+        "evaluated_epoch_count": 1172,
+        "accepted_epoch_count": 1172,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-03-22-18-44-us-ca-mtv-pe1/pixel5": {
+      "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-22-18-44-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-22-18-44-us-ca-mtv-pe1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\15\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-22-18-44-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+          "sha256": "bb0fc11f873b1918b448eceb7b14d149b4647575a5a328fbca0a08612a055ac4",
+          "bytes": 55492841
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-03-22-18-44-us-ca-mtv-pe1\\brdc.nav",
+          "sha256": "c567a1612640940d7c6ee17a4e93ba01eaee3f65ae6e086b97b3396118fd4984",
+          "bytes": 10694339
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091637.5121803,
+      "state": "complete",
+      "pid": 46868,
+      "returncode": 1,
+      "wall_s": 6.477540731430054,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "73b33901af6fd3dabc71e9bc45aa725642db56bdbefbbf519c2c2a42972dcce3"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2112,
+        "evaluated_epoch_count": 1999,
+        "accepted_epoch_count": 1998,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-04-16-31-us-ca-lax-x/pixel5": {
+      "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-04-16-31-us-ca-lax-x/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-04-16-31-us-ca-lax-x\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-04-16-31-us-ca-lax-x\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\16\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-04-16-31-us-ca-lax-x\\pixel5\\device_gnss.csv",
+          "sha256": "321df22438e5c9a9e3ee675a42f568fbb28ee6268940cd5612785a7871f39369",
+          "bytes": 53217193
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-04-16-31-us-ca-lax-x\\brdc.nav",
+          "sha256": "be8cd02cc733cda8246a32ada2d9b22d10809dd5c7736556befc0f7cb3746f71",
+          "bytes": 10654593
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091644.2773647,
+      "state": "complete",
+      "pid": 7720,
+      "returncode": 0,
+      "wall_s": 5.68154764175415,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "715042b6ad814dcc6f3b62c12194701b6cdb70af3321e4827b88fde6cd0bfc0e"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2171,
+        "evaluated_epoch_count": 2171,
+        "accepted_epoch_count": 2171,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-22-20-11-us-ca-ebf-y/pixel5": {
+      "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-22-20-11-us-ca-ebf-y\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-22-20-11-us-ca-ebf-y\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\17\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-22-20-11-us-ca-ebf-y\\pixel5\\device_gnss.csv",
+          "sha256": "1d56404d6938236e72df8229a999fb020a286e47218c6f253a03589cbf12493c",
+          "bytes": 26345663
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-22-20-11-us-ca-ebf-y\\brdc.nav",
+          "sha256": "710fb6fae91c75a7f5bb87317caae1b06883dc1a0e6f111ef04a8c290c0f5d50",
+          "bytes": 10982840
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091650.2215915,
+      "state": "complete",
+      "pid": 26368,
+      "returncode": 1,
+      "wall_s": 2.333436965942383,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "c0b6ca67d82e242d344d1dc2b8faae9f7ca88e300321e57a22b9e51843c4acc2"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1400,
+        "evaluated_epoch_count": 641,
+        "accepted_epoch_count": 640,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-25-21-04-us-ca-ebf-x/mi8": {
+      "dataset_id": "2022-04-25-21-04-us-ca-ebf-x/mi8",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-25-21-04-us-ca-ebf-x/mi8",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-21-04-us-ca-ebf-x\\mi8\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-21-04-us-ca-ebf-x\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\18\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-21-04-us-ca-ebf-x\\mi8\\device_gnss.csv",
+          "sha256": "27c7eda7f1b446e6668721c38c70631e6f9a12988b5d6790c56b7f00d401afac",
+          "bytes": 45789873
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-21-04-us-ca-ebf-x\\brdc.nav",
+          "sha256": "f0ab8060483ba9457b2de25c8385293a2039cb4d288e6c5cbf1879a68195f1f4",
+          "bytes": 10979610
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091652.657725,
+      "state": "complete",
+      "pid": 50548,
+      "returncode": 0,
+      "wall_s": 5.813574552536011,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "d1584bcc5113b8e0e4d35a6bdaf5eea5857b5e60e70202f0c5f12ed1180a8d91"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-25-21-04-us-ca-ebf-x/mi8",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1924,
+        "evaluated_epoch_count": 1924,
+        "accepted_epoch_count": 1924,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5": {
+      "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-22-36-us-ca-ebf-z\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-22-36-us-ca-ebf-z\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\19\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-22-36-us-ca-ebf-z\\pixel5\\device_gnss.csv",
+          "sha256": "c6e535f3e438a72ecfbeaa2e2f74b84d69af9c3a7ebc3173c8d80a5c3e971338",
+          "bytes": 31932924
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-25-22-36-us-ca-ebf-z\\brdc.nav",
+          "sha256": "f0ab8060483ba9457b2de25c8385293a2039cb4d288e6c5cbf1879a68195f1f4",
+          "bytes": 10979610
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091658.6975274,
+      "state": "complete",
+      "pid": 33980,
+      "returncode": 1,
+      "wall_s": 2.46811842918396,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "dfe9d4fd9c9de226c46bba46ff2289ebdfbbff1a206062e6ab2a340a02b6cb46"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1587,
+        "evaluated_epoch_count": 241,
+        "accepted_epoch_count": 240,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-27-18-16-us-ca-ebf-zz/pixel5": {
+      "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-18-16-us-ca-ebf-zz\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-18-16-us-ca-ebf-zz\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\20\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-18-16-us-ca-ebf-zz\\pixel5\\device_gnss.csv",
+          "sha256": "f57516d57dd9d95dd1f70468cb3f49fec0c76b8ee3dedb90dbb59097fe7c896f",
+          "bytes": 30920521
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-18-16-us-ca-ebf-zz\\brdc.nav",
+          "sha256": "90c53f8ab1df11be5933f7940a7b14c4b99c61b7ce0c9299e6e1526972b37e85",
+          "bytes": 10503636
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091661.2372506,
+      "state": "complete",
+      "pid": 48572,
+      "returncode": 1,
+      "wall_s": 2.3018887042999268,
+      "outputs": {
+        "stderr.log": "b128aa264d8e04455304146fbfaadda2c5310ea286b9a6b598bd3a267f871abe",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "39ce41c8d17578e5ded8fb9ec1b4a9ca618e07e6e44c27150a8550644f2180ec"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+        "status": "failed-closed",
+        "failure_status": "insufficient-pseudorange",
+        "failure_reason": "insufficient-pseudorange-satellites",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1315,
+        "evaluated_epoch_count": 291,
+        "accepted_epoch_count": 290,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-27-19-23-us-ca-ebf-xx/pixel5": {
+      "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-19-23-us-ca-ebf-xx\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-19-23-us-ca-ebf-xx\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\21\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-19-23-us-ca-ebf-xx\\pixel5\\device_gnss.csv",
+          "sha256": "2ac3ec7f143e6e770d981e81fe24588c016b23e25b9bc82b8fc8b69a3550ae18",
+          "bytes": 27921254
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-19-23-us-ca-ebf-xx\\brdc.nav",
+          "sha256": "90c53f8ab1df11be5933f7940a7b14c4b99c61b7ce0c9299e6e1526972b37e85",
+          "bytes": 10503636
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091663.606973,
+      "state": "complete",
+      "pid": 62500,
+      "returncode": 1,
+      "wall_s": 3.220632553100586,
+      "outputs": {
+        "stderr.log": "b128aa264d8e04455304146fbfaadda2c5310ea286b9a6b598bd3a267f871abe",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "9de30af93b21153bd78834695a9e5ff51081546408d6f557738146cdd1ca3739"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+        "status": "failed-closed",
+        "failure_status": "insufficient-pseudorange",
+        "failure_reason": "insufficient-pseudorange-satellites",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1382,
+        "evaluated_epoch_count": 1222,
+        "accepted_epoch_count": 1221,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-04-27-21-55-us-ca-ebf-ww/mi8": {
+      "dataset_id": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-21-55-us-ca-ebf-ww\\mi8\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-21-55-us-ca-ebf-ww\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\22\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-21-55-us-ca-ebf-ww\\mi8\\device_gnss.csv",
+          "sha256": "6a2e8c4524aa16d6c31b33663cb9912742df3f54eae75b42280898f5e8cdb39b",
+          "bytes": 32020108
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-04-27-21-55-us-ca-ebf-ww\\brdc.nav",
+          "sha256": "90c53f8ab1df11be5933f7940a7b14c4b99c61b7ce0c9299e6e1526972b37e85",
+          "bytes": 10503636
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091666.9674673,
+      "state": "complete",
+      "pid": 34364,
+      "returncode": 0,
+      "wall_s": 4.1038498878479,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "b61a5cbc82dbc259c11601808be48c3c8d4f4c26d79d6a5ae98c27ea06895e0b"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1344,
+        "evaluated_epoch_count": 1344,
+        "accepted_epoch_count": 1344,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": {
+      "dataset_id": "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-05-12-20-19-us-ca-mtv-pe1\\samsunga325g\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-05-12-20-19-us-ca-mtv-pe1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\23\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-05-12-20-19-us-ca-mtv-pe1\\samsunga325g\\device_gnss.csv",
+          "sha256": "80ff0283d9845c1ab370194ae17b12496f9cfb9f4af9b019e272b9e035e89b8f",
+          "bytes": 17054936
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-05-12-20-19-us-ca-mtv-pe1\\brdc.nav",
+          "sha256": "91913b8faabec1a557cccfee7249e5581bb394e77a9736d33a0d11b127a26114",
+          "bytes": 10988634
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091671.2204607,
+      "state": "complete",
+      "pid": 23896,
+      "returncode": 0,
+      "wall_s": 3.1288979053497314,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "4f42a42af848a41edf0d4b763c98528ee193da41e378a29b06e1f5348112bbb9"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1435,
+        "evaluated_epoch_count": 1435,
+        "accepted_epoch_count": 1435,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": {
+      "dataset_id": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-22-20-12-us-ca-lax-hh\\samsunga325g\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-22-20-12-us-ca-lax-hh\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\24\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-22-20-12-us-ca-lax-hh\\samsunga325g\\device_gnss.csv",
+          "sha256": "c4f6759609acd55d3f964fe0e90ccd4b973ad87cbe58c879f1ef5d4f48d5a3b4",
+          "bytes": 26878046
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-22-20-12-us-ca-lax-hh\\brdc.nav",
+          "sha256": "0e9242ca05beee544cc1948052a0d0ae5432b878c55554487553d352609e5cdc",
+          "bytes": 10845498
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091674.482208,
+      "state": "complete",
+      "pid": 7124,
+      "returncode": 0,
+      "wall_s": 5.129971981048584,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "3279ec67140dc2dea8a4951453e4b57cfee2466893443a6dc7fc86795f506cbf"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1862,
+        "evaluated_epoch_count": 1862,
+        "accepted_epoch_count": 1862,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-06-28-20-56-us-ca-sjc-r/samsunga32": {
+      "dataset_id": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-28-20-56-us-ca-sjc-r\\samsunga32\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-28-20-56-us-ca-sjc-r\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\25\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-28-20-56-us-ca-sjc-r\\samsunga32\\device_gnss.csv",
+          "sha256": "886c13d4f973fa3298116e54fa47a0bd32380e93ee5a79ca8f21484c7faa47cc",
+          "bytes": 27491794
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-06-28-20-56-us-ca-sjc-r\\brdc.nav",
+          "sha256": "03b8c35dfd48cda5ced2f22b95313781feb7ef3cfcbf28eb0b87abb149e97cfe",
+          "bytes": 11378259
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091679.8027537,
+      "state": "complete",
+      "pid": 11596,
+      "returncode": 0,
+      "wall_s": 6.811306715011597,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "f9f704c73f764af6c11c6521350fc943e8065d385ed68e9242baf9791636a8a9"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1838,
+        "evaluated_epoch_count": 1838,
+        "accepted_epoch_count": 1838,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-07-12-18-37-us-ca-mtv-b/sm-a325f": {
+      "dataset_id": "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-07-12-18-37-us-ca-mtv-b\\sm-a325f\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-07-12-18-37-us-ca-mtv-b\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\26\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-07-12-18-37-us-ca-mtv-b\\sm-a325f\\device_gnss.csv",
+          "sha256": "7a5512805ec190ff49bf5397b9d2d33152933c92ba9228c681e8752d14bacd0c",
+          "bytes": 32723145
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-07-12-18-37-us-ca-mtv-b\\brdc.nav",
+          "sha256": "326314410b7b4e035132c3c4116b44e45464566d3d88de55327431ebdccb144c",
+          "bytes": 10871219
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091686.797315,
+      "state": "complete",
+      "pid": 18480,
+      "returncode": 0,
+      "wall_s": 5.708966493606567,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "4e8838fb2e934e8453b67be7d02cc7b106bdd66fc34501f83b9c3b7558533ea1"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1782,
+        "evaluated_epoch_count": 1782,
+        "accepted_epoch_count": 1782,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2022-10-06-20-46-us-ca-sjc-r/sm-a205u": {
+      "dataset_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\27\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+          "sha256": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0",
+          "bytes": 43471049
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+          "sha256": "8928c254995b9b50c233813df8aefa67c759acc21edfcd53b48d28d3d06fa2c4",
+          "bytes": 11030006
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091692.713522,
+      "state": "complete",
+      "pid": 31188,
+      "returncode": 0,
+      "wall_s": 4.696892738342285,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "006480ce62391c9aaa674d3de522de98c93dcead2fb98f5018c419b93bc12e8c"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1697,
+        "evaluated_epoch_count": 1697,
+        "accepted_epoch_count": 1697,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-04-27-19-25-us-ca-mtv-pe1/pixel5": {
+      "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-19-25-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-19-25-us-ca-mtv-pe1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\28\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-19-25-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+          "sha256": "fff8fbe35035f24afca61125decbbe56a221b01381cb5b5a31b635435e7988e9",
+          "bytes": 24736020
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-19-25-us-ca-mtv-pe1\\brdc.nav",
+          "sha256": "571643df81c88ddd582bf10abd1d7399223472bae0d7895acafe297b0621ecef",
+          "bytes": 11343190
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091697.553099,
+      "state": "complete",
+      "pid": 4840,
+      "returncode": 1,
+      "wall_s": 1.6188411712646484,
+      "outputs": {
+        "stderr.log": "8552d155a207c30ad582123149736141359e8f8cfecb8b78d0b9489ff19a88fe",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "e6f0c06ad175a30c19ee49b898feb4f9a2742777e45e7221dfd789d6b6d1b521"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+        "status": "failed-closed",
+        "failure_status": "time-gap",
+        "failure_reason": "epoch-time-gap-exceeds-limit",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1357,
+        "evaluated_epoch_count": 1,
+        "accepted_epoch_count": 0,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-04-27-20-55-us-ca-sjc-q/pixel5": {
+      "dataset_id": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-20-55-us-ca-sjc-q\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-20-55-us-ca-sjc-q\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\29\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-20-55-us-ca-sjc-q\\pixel5\\device_gnss.csv",
+          "sha256": "136fee43c85d71bd2b1a54d9a2ff5637a563a6836e7426162e7398f439193494",
+          "bytes": 29417028
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-20-55-us-ca-sjc-q\\brdc.nav",
+          "sha256": "571643df81c88ddd582bf10abd1d7399223472bae0d7895acafe297b0621ecef",
+          "bytes": 11343190
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091699.1943822,
+      "state": "complete",
+      "pid": 20864,
+      "returncode": 0,
+      "wall_s": 3.414263963699341,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "96a46dae39f0550878d225e00f2d365264cf4d9043b5308b8f8f44e272f60b6f"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1380,
+        "evaluated_epoch_count": 1380,
+        "accepted_epoch_count": 1380,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro": {
+      "dataset_id": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-19-24-us-ca-sjc-we1\\pixel7pro\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-19-24-us-ca-sjc-we1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\30\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-19-24-us-ca-sjc-we1\\pixel7pro\\device_gnss.csv",
+          "sha256": "f7d88f2d0dd0a03766166e111ee9f70fa59b330cdaa72333df1d018e1dd66729",
+          "bytes": 36685247
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-19-24-us-ca-sjc-we1\\brdc.nav",
+          "sha256": "7fb5a77bcd3233c7e3ebb38da5a156a042f69ea57881bd470a9cbb58a0d85a50",
+          "bytes": 11401965
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091702.7606034,
+      "state": "complete",
+      "pid": 22508,
+      "returncode": 1,
+      "wall_s": 2.3827333450317383,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "4a9638f37a2fdbeaf5ad5deb978461013e39acfbc38faa09ba773a22a97b03b6"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2110,
+        "evaluated_epoch_count": 184,
+        "accepted_epoch_count": 183,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro": {
+      "dataset_id": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-20-33-us-ca-mtv-xe1\\pixel7pro\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-20-33-us-ca-mtv-xe1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\31\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-20-33-us-ca-mtv-xe1\\pixel7pro\\device_gnss.csv",
+          "sha256": "87284476c5285c6551fc7e1a4153673060d3d1229a02688e5c023aefcf5d1d64",
+          "bytes": 37464780
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-02-20-33-us-ca-mtv-xe1\\brdc.nav",
+          "sha256": "7fb5a77bcd3233c7e3ebb38da5a156a042f69ea57881bd470a9cbb58a0d85a50",
+          "bytes": 11401965
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091705.213046,
+      "state": "complete",
+      "pid": 26736,
+      "returncode": 0,
+      "wall_s": 4.820193290710449,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "e86e2c60a8e67a82c7495cea35cfe23960861ee73d6907399986fa3b0abbca93"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2145,
+        "evaluated_epoch_count": 2145,
+        "accepted_epoch_count": 2145,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": {
+      "dataset_id": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-09-23-10-us-ca-sjc-r\\sm-a505u\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-09-23-10-us-ca-sjc-r\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\32\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-09-23-10-us-ca-sjc-r\\sm-a505u\\device_gnss.csv",
+          "sha256": "a9f80d89213ba2e512f63501d4b5eb0e31e2164e478b4d69da80634a18553858",
+          "bytes": 37276862
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-09-23-10-us-ca-sjc-r\\brdc.nav",
+          "sha256": "5cd8f6bfba4ac02ebfa0cc276a4a49d1601d3c7749637d9dae71263423d355cc",
+          "bytes": 11083341
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091710.2239964,
+      "state": "complete",
+      "pid": 6908,
+      "returncode": 0,
+      "wall_s": 5.295121431350708,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "3588ee6fae71a839a41474d91e80d3dda883d4ed90353994b5bef9277e9ec6ce"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 2384,
+        "evaluated_epoch_count": 2384,
+        "accepted_epoch_count": 2384,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-23-21-06-us-ca-mtv-de1/pixel5": {
+      "dataset_id": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-21-06-us-ca-mtv-de1\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-21-06-us-ca-mtv-de1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\33\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-21-06-us-ca-mtv-de1\\pixel5\\device_gnss.csv",
+          "sha256": "ab0c2348c5204c72c05cb6bebdd7f7ebb86f46dc3be73b6dc9f4f231318dfa13",
+          "bytes": 50489761
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-21-06-us-ca-mtv-de1\\brdc.nav",
+          "sha256": "589f13db3411c747e02f662266fc8f395ef6396855f2469bb9c746af48969cb0",
+          "bytes": 11830241
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091715.752481,
+      "state": "complete",
+      "pid": 33184,
+      "returncode": 0,
+      "wall_s": 5.486192464828491,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "5615b553b8986b8be235485243bacdb807495d4bd11eff71d9cc5863d988a3f5"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1975,
+        "evaluated_epoch_count": 1975,
+        "accepted_epoch_count": 1975,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro": {
+      "dataset_id": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-22-16-us-ca-mtv-ie2\\pixel6pro\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-22-16-us-ca-mtv-ie2\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\34\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-22-16-us-ca-mtv-ie2\\pixel6pro\\device_gnss.csv",
+          "sha256": "eb0dab43b61ea050980c965bd217e152d6af9ea2ab975f7e485359aeeb0e7a38",
+          "bytes": 23154352
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-23-22-16-us-ca-mtv-ie2\\brdc.nav",
+          "sha256": "589f13db3411c747e02f662266fc8f395ef6396855f2469bb9c746af48969cb0",
+          "bytes": 11830241
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091721.4766889,
+      "state": "complete",
+      "pid": 22248,
+      "returncode": 0,
+      "wall_s": 2.924166679382324,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "a3db7ef4c91cb479488e59f8d5afd078f9aef470f3da175d8c8f850b8ece1340"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1020,
+        "evaluated_epoch_count": 1020,
+        "accepted_epoch_count": 1020,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-25-17-32-us-ca-pao-j/pixel6pro": {
+      "dataset_id": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-17-32-us-ca-pao-j\\pixel6pro\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-17-32-us-ca-pao-j\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\35\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-17-32-us-ca-pao-j\\pixel6pro\\device_gnss.csv",
+          "sha256": "5299ba32326efc7cf1522894586719400f2f87f3a67b6ec9f5a0b390ac0bea0a",
+          "bytes": 22015956
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-17-32-us-ca-pao-j\\brdc.nav",
+          "sha256": "b2c17f48d23fce70d19b7580f7f70b7215d27ee887a80c587848cb42d13df9e4",
+          "bytes": 12040709
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091724.5222948,
+      "state": "complete",
+      "pid": 29368,
+      "returncode": 0,
+      "wall_s": 2.892442226409912,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "98eb8e93a114cc38afe815c855864b3c6f36bfc3a6ecd616cadabd220e2bdc85"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1292,
+        "evaluated_epoch_count": 1292,
+        "accepted_epoch_count": 1292,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b": {
+      "dataset_id": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-21-50-us-ca-sjc-ke2\\sm-s908b\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-21-50-us-ca-sjc-ke2\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\36\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-21-50-us-ca-sjc-ke2\\sm-s908b\\device_gnss.csv",
+          "sha256": "211e977b10f496c1a6aa925fe81fd4368d6d94a09c728595252f0588ec0de24c",
+          "bytes": 58415418
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-25-21-50-us-ca-sjc-ke2\\brdc.nav",
+          "sha256": "b2c17f48d23fce70d19b7580f7f70b7215d27ee887a80c587848cb42d13df9e4",
+          "bytes": 12040709
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091727.5541053,
+      "state": "complete",
+      "pid": 13276,
+      "returncode": 0,
+      "wall_s": 6.311058521270752,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "8bd1ff7421f6de0d955d58a160e6d6a7eb3c137a07f9fe77ca0b58caf7f31c71"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1728,
+        "evaluated_epoch_count": 1728,
+        "accepted_epoch_count": 1728,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-05-26-21-23-us-ca-sjc-be2/pixel5": {
+      "dataset_id": "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-26-21-23-us-ca-sjc-be2\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-26-21-23-us-ca-sjc-be2\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\37\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-26-21-23-us-ca-sjc-be2\\pixel5\\device_gnss.csv",
+          "sha256": "689e8f39c6b87a6af82d8b31aa7676bcc4ed505a5e595da2364ab1dc08a75e98",
+          "bytes": 32494453
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-26-21-23-us-ca-sjc-be2\\brdc.nav",
+          "sha256": "cf34b5b22a27e45d023fe9ce32872b49c1470ad9c9e48237e0a9d2109df8493d",
+          "bytes": 11024457
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091734.0774512,
+      "state": "complete",
+      "pid": 37392,
+      "returncode": 0,
+      "wall_s": 3.351149797439575,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "8efab49f88087779e5ca46c56b843c55e3a5b3947f129e9338bb01da4303498f"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1482,
+        "evaluated_epoch_count": 1482,
+        "accepted_epoch_count": 1482,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-06-06-22-43-us-ca-sjc-he2/pixel5": {
+      "dataset_id": "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-06-22-43-us-ca-sjc-he2\\pixel5\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-06-22-43-us-ca-sjc-he2\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\38\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-06-22-43-us-ca-sjc-he2\\pixel5\\device_gnss.csv",
+          "sha256": "b7488e07fe59959fc53c14c6a583e9509c44161ad0d65d05822ccb3f82a26f2e",
+          "bytes": 36615527
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-06-22-43-us-ca-sjc-he2\\brdc.nav",
+          "sha256": "c692f664c4dc040e17bbed5b774d126b9b94459361bbed15c2539978a4699db5",
+          "bytes": 12058217
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091737.5968616,
+      "state": "complete",
+      "pid": 59312,
+      "returncode": 0,
+      "wall_s": 4.3296051025390625,
+      "outputs": {
+        "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "a0595d97acada8fec2ab1b7974ef39efb29d8bc43b5da2ae27e594ab45bd0a06"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+        "status": "accepted",
+        "failure_status": "accepted",
+        "failure_reason": "",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1608,
+        "evaluated_epoch_count": 1608,
+        "accepted_epoch_count": 1608,
+        "rejected_epoch_count": 0,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    },
+    "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro": {
+      "dataset_id": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-15-18-49-us-ca-sjc-ce1\\pixel7pro\\device_gnss.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-15-18-49-us-ca-sjc-ce1\\brdc.nav",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--native-phase149-raw-p-seed-stage",
+        "--native-phase157-raw-p-bootstrap",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\test_raw_seed_audit_v1\\39\\summary.json"
+      ],
+      "inputs": [
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-15-18-49-us-ca-sjc-ce1\\pixel7pro\\device_gnss.csv",
+          "sha256": "cefd1ee97c4bbb0a399f1c33f51cc159571c60920681f57e974b4e8831c554ae",
+          "bytes": 26802285
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-15-18-49-us-ca-sjc-ce1\\brdc.nav",
+          "sha256": "b1cb809a8481962c8a7c911767815834f42e258af860b48507ce9dd6a39ccff6",
+          "bytes": 11878124
+        }
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "started_unix": 1790091742.107524,
+      "state": "complete",
+      "pid": 36048,
+      "returncode": 1,
+      "wall_s": 1.799966812133789,
+      "outputs": {
+        "stderr.log": "62c194e4e0edc0035db34d1acc22247445b5fd4be76c7e490085dd5cc0f420c7",
+        "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "summary.json": "719848508069c2b07c30333aa717e1c7b4ed943b6cd6ec70c569f9753505eb4e"
+      },
+      "summary": {
+        "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+        "phase": 149,
+        "dataset_id": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+        "status": "failed-closed",
+        "failure_status": "insufficient-geometry",
+        "failure_reason": "insufficient-corrected-pseudorange-geometry",
+        "collect_all_epochs_for_diagnostics": false,
+        "velocity_diagnostics_disabled": false,
+        "input_epoch_count": 1495,
+        "evaluated_epoch_count": 205,
+        "accepted_epoch_count": 204,
+        "rejected_epoch_count": 1,
+        "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+        "raw_pseudorange_only": true,
+        "doppler_consumed": false,
+        "imported_seed_files": false,
+        "fgo_entered": false,
+        "truth_used": false,
+        "mat_used": false
+      }
+    }
+  },
+  "failure_counts": {
+    "accepted": 28,
+    "insufficient-corrected-pseudorange-geometry": 7,
+    "loader": 1,
+    "epoch-time-gap-exceeds-limit": 2,
+    "insufficient-pseudorange-satellites": 2
+  },
+  "scope": "Raw-P initialization only, 40 existing test drives; not full FGO or accuracy"
+}

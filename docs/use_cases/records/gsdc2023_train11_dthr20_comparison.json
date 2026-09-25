@@ -1,0 +1,50 @@
+{
+ "status": "partial",
+ "scored": 2,
+ "mean_control_m": 0.7796731538553718,
+ "mean_offset_m": 0.779671852555524,
+ "improved": 1,
+ "heldout": false,
+ "official_score": false,
+ "note": "Development train drives previously exposed; control = offset run; control = extra-bands run; added --native-gnss-first-doppler-threshold 20.",
+ "runs": {
+  "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.4793154069016312,
+    "p95_m": 0.8579240854610684,
+    "phone_score_m": 0.6686197461813498,
+    "keys": 2162
+   },
+   "offset": {
+    "p50_m": 0.47930843656497535,
+    "p95_m": 0.8579258505983325,
+    "phone_score_m": 0.6686171435816539,
+    "keys": 2162
+   },
+   "delta_m": -2.6025996958667363e-06,
+   "wall_s": 617.1055271625519,
+   "control_solution_sha256": "632cfae5e0a2bbfa0d1c8ada7a92c0542af416a917ebb344df3145b4889032d0",
+   "offset_solution_sha256": "3d963dce82d4cfe5a308f0ebe5eb6e3a4e675f520065bbf10d7a72ce8756d3a3"
+  },
+  "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.6186150607762386,
+    "p95_m": 1.1628380622825492,
+    "phone_score_m": 0.8907265615293939,
+    "keys": 2163
+   },
+   "offset": {
+    "p50_m": 0.6186150607762386,
+    "p95_m": 1.1628380622825492,
+    "phone_score_m": 0.8907265615293939,
+    "keys": 2163
+   },
+   "delta_m": 0.0,
+   "wall_s": 668.2516362667084,
+   "control_solution_sha256": "3a60f0462163b7a0a12f9e4e649252fd54e4d966a30db521891fb66b797ecab0",
+   "offset_solution_sha256": "aeadc2c91dc2b60a4241533c7a6ce3f7244246d0df52971afc1a900cb24a7653"
+  }
+ }
+}

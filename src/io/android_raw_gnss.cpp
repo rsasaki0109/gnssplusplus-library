@@ -1,3 +1,5 @@
+#include <libgnss++/algorithms/native_leading_clock_span.hpp>
+#include <libgnss++/io/android_clock_arithmetic.hpp>
 #include <libgnss++/io/android_raw_gnss.hpp>
 
 #include <libgnss++/algorithms/android_sv_time_uncertainty.hpp>
@@ -367,8 +369,10 @@ bool parseRawRow(const std::vector<std::string>& row,
         !requiredInt("receivedsvtimenanos", output.received_sv_time_nanos)) {
         return false;
     }
-    if (output.time_nanos < 0 || output.time_nanos > kMaxReasonableTimeNanoseconds ||
-        output.received_sv_time_nanos < 0) {
+    // Signed SV times (including negative invalid GLONASS samples) are
+    // handled by the source <1e10 ns row screen after parsing. They must
+    // not abort an otherwise usable drive before that screen runs.
+    if (output.time_nanos < 0 || output.time_nanos > kMaxReasonableTimeNanoseconds) {
         error = "raw Android timing is outside the finite range";
         return false;
     }
@@ -496,78 +500,58 @@ bool rawClockToGpsTime(const RawRow& row,
                        std::int64_t base_full_bias_nanos,
                        GNSSTime& time,
                        double& clock_bias_seconds) {
-    const long double clock_ns =
-        static_cast<long double>(row.time_nanos) -
-        static_cast<long double>(base_full_bias_nanos);
-    const long double gps_seconds = clock_ns / kNanosecondsPerSecond;
-    if (!std::isfinite(static_cast<double>(gps_seconds)) || gps_seconds < 0.0L) {
-        return false;
-    }
-    const long double week_value = std::floor(gps_seconds / kSecondsPerWeek);
-    if (week_value < 0.0L || week_value > static_cast<long double>(INT_MAX)) {
-        return false;
-    }
-    const long double tow =
-        gps_seconds - week_value * kSecondsPerWeek -
-        static_cast<long double>(row.bias_nanos) / kNanosecondsPerSecond;
-    if (!std::isfinite(static_cast<double>(tow)) || tow < -1e-6L ||
-        tow >= kSecondsPerWeek + 1e-6L) {
-        return false;
-    }
-    time = GNSSTime(static_cast<int>(week_value), static_cast<double>(tow));
-    clock_bias_seconds =
-        static_cast<double>((static_cast<long double>(row.full_bias_nanos) -
-                             static_cast<long double>(base_full_bias_nanos)) /
-                            kNanosecondsPerSecond);
+    std::int64_t clock_ns = 0, bias_delta_ns = 0;
+    if (!android_clock::difference(row.time_nanos, base_full_bias_nanos, clock_ns) ||
+        clock_ns < 0 ||
+        !android_clock::difference(row.full_bias_nanos, base_full_bias_nanos,
+                                   bias_delta_ns)) return false;
+    const auto week = clock_ns / android_clock::nanos_per_week;
+    const auto tow_ns = clock_ns % android_clock::nanos_per_week;
+    const double tow = static_cast<double>(
+        (static_cast<long double>(tow_ns) - row.bias_nanos) / kNanosecondsPerSecond);
+    if (week > INT_MAX || !std::isfinite(tow) ||
+        tow < -1e-6 || tow >= kSecondsPerWeek + 1e-6) return false;
+    time = GNSSTime(static_cast<int>(week), tow);
+    clock_bias_seconds = static_cast<double>(bias_delta_ns) / 1e9;
     return std::isfinite(clock_bias_seconds);
-}
-
-double glonassTowToGps(double glonass_tow, long double gps_tow_reference) {
-    // Port of gnsslog2obs.m: GLONASS transmit time is a time-of-day value,
-    // while the receiver epoch is GPST.  The day wrap is resolved against the
-    // receiver GPST reference before the common nearest-week unwrap.
-    constexpr long double seconds_per_day = 86400.0L;
-    const long double day_of_week =
-        std::floor(gps_tow_reference / seconds_per_day);
-    long double gpst = static_cast<long double>(glonass_tow) +
-                       day_of_week * seconds_per_day - 3.0L * 3600.0L + 18.0L;
-    const long double day_offset =
-        day_of_week - std::floor(gpst / seconds_per_day);
-    gpst += day_offset * seconds_per_day;
-    return static_cast<double>(gpst);
 }
 
 bool rawPseudorange(const RawRow& row,
                     std::int64_t base_full_bias_nanos,
                     GNSSSystem system,
                     double& pseudorange_m) {
-    const long double clock_ns =
-        static_cast<long double>(row.time_nanos) -
-        static_cast<long double>(base_full_bias_nanos);
-    const long double gps_seconds = clock_ns / kNanosecondsPerSecond;
-    const long double week_value = std::floor(gps_seconds / kSecondsPerWeek);
-    long double tow_rx = gps_seconds - week_value * kSecondsPerWeek -
-                         static_cast<long double>(row.bias_nanos) /
-                             kNanosecondsPerSecond;
-    tow_rx -= static_cast<long double>(row.time_offset_nanos) /
-              kNanosecondsPerSecond;
-    long double tow_tx = static_cast<long double>(row.received_sv_time_nanos) /
-                         kNanosecondsPerSecond;
+    std::int64_t clock_ns = 0;
+    if (!android_clock::difference(row.time_nanos, base_full_bias_nanos, clock_ns) ||
+        clock_ns < 0) return false;
+    const auto rx_ns = clock_ns % android_clock::nanos_per_week;
+    auto tx_ns = row.received_sv_time_nanos % android_clock::nanos_per_week;
     if (system == GNSSSystem::GLONASS) {
-        tow_tx = static_cast<long double>(
-            glonassTowToGps(static_cast<double>(tow_tx), tow_rx));
+        // Same day alignment as gnsslog2obs.m, but retain integer ns in
+        // transmit time. Only the small receiver bias/offset is fractional.
+        const long double rx_day = std::floor(
+            (static_cast<long double>(rx_ns) - row.bias_nanos -
+             row.time_offset_nanos) / android_clock::nanos_per_day);
+        if (!std::isfinite(rx_day) || rx_day < -1 || rx_day > 7) return false;
+        const auto day = static_cast<std::int64_t>(rx_day);
+        tx_ns = day * android_clock::nanos_per_day +
+            android_clock::positiveModulo(
+                tx_ns - 10'782LL * android_clock::nanos_per_second,
+                android_clock::nanos_per_day);
     } else if (system == GNSSSystem::BeiDou) {
-        // BeiDou time is GPST+14 seconds in the upstream converter.
-        tow_tx += 14.0L;
+        tx_ns += 14LL * android_clock::nanos_per_second;
     }
-    long double delta = tow_rx - tow_tx;
-    while (delta > kHalfWeek) {
-        delta -= kSecondsPerWeek;
-    }
-    while (delta < -kHalfWeek) {
-        delta += kSecondsPerWeek;
-    }
-    pseudorange_m = static_cast<double>(delta * constants::SPEED_OF_LIGHT);
+    auto delta_ns = rx_ns - tx_ns;
+    if (delta_ns > android_clock::nanos_per_week / 2)
+        delta_ns -= android_clock::nanos_per_week;
+    if (delta_ns < -android_clock::nanos_per_week / 2)
+        delta_ns += android_clock::nanos_per_week;
+    // Difference first: converting week-sized operands separately loses
+    // sub-ns detail on Windows, even though the physical interval is ~70 ms.
+    long double delta = static_cast<long double>(delta_ns) -
+                        row.bias_nanos - row.time_offset_nanos;
+    delta = std::remainder(delta, static_cast<long double>(android_clock::nanos_per_week));
+    pseudorange_m = static_cast<double>(
+        delta * (constants::SPEED_OF_LIGHT / kNanosecondsPerSecond));
     return std::isfinite(pseudorange_m) && pseudorange_m > 0.0;
 }
 
@@ -591,11 +575,13 @@ struct EpochAccumulator {
     bool have_receiver_position = false;
     std::map<std::pair<SatelliteId, SignalType>, Observation> observations;
     std::int64_t utc_millis = 0;
+    std::int64_t base_full_bias_nanos = 0;
 };
 
 bool appendEpoch(EpochAccumulator& accumulator,
                  AndroidRawGnssResult& result,
-                 std::string& error) {
+                 std::string& error,
+                 std::int64_t* first_clock_reference = nullptr) {
     if (accumulator.observations.empty()) return true;
     ObservationData epoch(accumulator.time);
     epoch.receiver_clock_bias = accumulator.clock_bias_seconds;
@@ -613,6 +599,8 @@ bool appendEpoch(EpochAccumulator& accumulator,
         error = "selected epoch has no observations";
         return false;
     }
+    if (result.observations.epochs.empty() && first_clock_reference)
+        *first_clock_reference = accumulator.base_full_bias_nanos;
     result.observations.addEpoch(epoch);
     result.epoch_utc_time_millis.push_back(accumulator.utc_millis);
     result.epoch_hardware_clock_discontinuity_count.push_back(
@@ -624,10 +612,10 @@ bool appendEpoch(EpochAccumulator& accumulator,
 
 }  // namespace
 
-bool loadAndroidRawGnssCsv(const std::string& path,
+static bool loadAndroidRawGnssCsvImpl(const std::string& path,
                            const AndroidRawGnssConfig& config,
                            AndroidRawGnssResult& result,
-                           std::string& error) {
+                           std::string& error, bool retain_leading) {
     result = AndroidRawGnssResult{};
     std::string lowered_path = path;
     std::transform(lowered_path.begin(), lowered_path.end(), lowered_path.begin(),
@@ -696,6 +684,8 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         return false;
     }
 
+    std::vector<RawRow> prefix_clock_rows;
+    std::int64_t first_selected_clock_reference = 0;
     bool have_epoch = false;
     using FrequencyTimingKey = std::tuple<std::int64_t, int, int>;
     using FrequencyClock = std::tuple<std::int64_t, std::int64_t, double, int>;
@@ -769,6 +759,21 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             columns.has("rawpseudorangemeters")) {
             ++result.diagnostics.enriched_pseudorange_ignored_rows;
         }
+        if (retain_leading && result.observations.epochs.empty()) {
+            if (raw.utc_millis < 0 || (!prefix_clock_rows.empty() &&
+                raw.utc_millis < prefix_clock_rows.back().utc_millis)) {
+                error = "leading raw UTC keys are not monotonic"; return false;
+            }
+            if (prefix_clock_rows.empty() || raw.utc_millis != prefix_clock_rows.back().utc_millis) {
+                prefix_clock_rows.push_back(raw);
+            } else {
+                const auto& previous = prefix_clock_rows.back();
+                if (raw.time_nanos != previous.time_nanos || raw.full_bias_nanos != previous.full_bias_nanos ||
+                    raw.bias_nanos != previous.bias_nanos || raw.hardware_clock_discontinuity_count != previous.hardware_clock_discontinuity_count) {
+                    error = "leading raw epoch has inconsistent receiver clocks"; return false;
+                }
+            }
+        }
         // gnsslog2obs.m removes zero receiver times and transmit times below
         // 1e10 ns before constructing an epoch (its lines 19-22 and 83-89).
         // Treat these as invalid raw measurements, not as solver failures;
@@ -802,9 +807,8 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             previous_time_nanos = raw.time_nanos;
             previous_clock_discontinuity = raw.hardware_clock_discontinuity_count;
             have_previous = true;
-        } else if (std::abs(static_cast<long double>(raw.time_nanos) -
-                            static_cast<long double>(previous_time_nanos)) >
-                   static_cast<long double>(kTimeJumpNanoseconds)) {
+        } else if (std::abs(raw.time_nanos - previous_time_nanos) >
+                   kTimeJumpNanoseconds) {
             base_full_bias_nanos = raw.full_bias_nanos;
             ++result.diagnostics.clock_discontinuities;
         } else if (raw.hardware_clock_discontinuity_count !=
@@ -813,7 +817,7 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         }
 
         if (!have_epoch || raw.utc_millis != accumulator.utc_millis) {
-            if (have_epoch && !appendEpoch(accumulator, result, error)) return false;
+            if (have_epoch && !appendEpoch(accumulator, result, error, &first_selected_clock_reference)) return false;
             GNSSTime epoch_time;
             double clock_bias_seconds = 0.0;
             if (!rawClockToGpsTime(raw, base_full_bias_nanos, epoch_time,
@@ -823,6 +827,7 @@ bool loadAndroidRawGnssCsv(const std::string& path,
             }
             accumulator = EpochAccumulator{};
             accumulator.utc_millis = raw.utc_millis;
+            accumulator.base_full_bias_nanos = base_full_bias_nanos;
             accumulator.time = epoch_time;
             accumulator.clock_bias_seconds = clock_bias_seconds;
             accumulator.receiver_clock_drift_mps =
@@ -1075,10 +1080,46 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                 break;
         }
     }
-    if (have_epoch && !appendEpoch(accumulator, result, error)) return false;
+    if (have_epoch && !appendEpoch(accumulator, result, error, &first_selected_clock_reference)) return false;
     if (result.observations.epochs.empty()) {
         error = "raw Android GNSS CSV has no supported finite observations";
         return false;
+    }
+    if (retain_leading) {
+        std::vector<ObservationData> leading;
+        std::vector<std::int64_t> leading_keys;
+        std::vector<int> leading_clocks;
+        const auto first_time = result.observations.epochs.front().time;
+        const auto first_utc = result.epoch_utc_time_millis.front();
+        const auto first_clock = result.epoch_hardware_clock_discontinuity_count.front();
+        for (const auto& raw : prefix_clock_rows) {
+            if (raw.utc_millis >= first_utc) break;
+            GNSSTime time; double bias = 0;
+            if (raw.time_nanos <= 0 || !raw.has_drift_nanos_per_second ||
+                !std::isfinite(raw.drift_nanos_per_second) ||
+                raw.hardware_clock_discontinuity_count != first_clock ||
+                !rawClockToGpsTime(raw, first_selected_clock_reference, time, bias)) {
+                error = "leading time-only epoch has invalid receiver clock"; return false;
+            }
+            const double span = first_time - time;
+            if (!native_leading_clock::withinSpan(span, first_utc - raw.utc_millis) ||
+                (!leading.empty() && !(time - leading.back().time > 0))) {
+                error = "leading time-only epoch exceeds four-second monotonic bound"; return false;
+            }
+            ObservationData epoch(time);
+            epoch.receiver_position.setZero();
+            epoch.raw_utc_time_millis = raw.utc_millis;
+            epoch.receiver_clock_bias = bias;
+            epoch.receiver_clock_drift_mps = raw.drift_nanos_per_second * constants::SPEED_OF_LIGHT / 1e9;
+            leading.push_back(epoch); leading_keys.push_back(raw.utc_millis); leading_clocks.push_back(first_clock);
+        }
+        result.observations.epochs.insert(result.observations.epochs.begin(), leading.begin(), leading.end());
+        result.epoch_utc_time_millis.insert(result.epoch_utc_time_millis.begin(), leading_keys.begin(), leading_keys.end());
+        result.epoch_hardware_clock_discontinuity_count.insert(result.epoch_hardware_clock_discontinuity_count.begin(), leading_clocks.begin(), leading_clocks.end());
+        for (std::size_t i = 0; i < result.observations.epochs.size(); ++i)
+            result.observations.epochs[i].raw_source_index = i;
+        // selected_epochs continues to count actual observation epochs. The
+        // native caller separately reports the empty leading state count.
     }
     if (result.epoch_utc_time_millis.size() !=
         result.observations.epochs.size()) {
@@ -1091,6 +1132,18 @@ bool loadAndroidRawGnssCsv(const std::string& path,
         return false;
     }
     return true;
+}
+
+bool loadAndroidRawGnssCsv(const std::string& path,
+                          const AndroidRawGnssConfig& config,
+                          AndroidRawGnssResult& result, std::string& error) {
+    return loadAndroidRawGnssCsvImpl(path, config, result, error, false);
+}
+
+bool loadAndroidRawGnssCsvWithLeadingClockEpochs(const std::string& path,
+                          const AndroidRawGnssConfig& config,
+                          AndroidRawGnssResult& result, std::string& error) {
+    return loadAndroidRawGnssCsvImpl(path, config, result, error, true);
 }
 
 bool alignAndroidRawGnssSolutionsToUtcKeys(

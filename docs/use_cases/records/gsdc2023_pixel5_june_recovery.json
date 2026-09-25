@@ -1,0 +1,64 @@
+{
+  "status": "official-native-audit-passed",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_june_fixed_recipe_retry_plan.json",
+  "plan_sha256": "3863eb94a5490d9f05055e5422217bc1a468e5200f3db5154d12ab14e1e99ee7",
+  "original_failure": "ineligible three-second UTC clock edge in old temporal binary",
+  "validation": {
+    "schema_version": "gsdc2023-native-output-audit.v1",
+    "official_submission_keys_verified": true,
+    "official_sample_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\results\\sample_submission.csv",
+    "official_sample_normalized_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+    "pending_status_is_not_process_liveness": true,
+    "status_counts": {
+      "raw-key-coverage-verified": 1
+    },
+    "runs": {
+      "2023-06-06-22-43-us-ca-sjc-he2/pixel5": {
+        "returncode": 0,
+        "wall_s": 915.3455510139465,
+        "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+        "status": "raw-key-coverage-verified",
+        "raw_utc_groups": 1608,
+        "expected_output_keys": 1608,
+        "output_rows": 1608,
+        "missing_raw_keys": 0,
+        "extra_raw_keys": 0,
+        "duplicate_output_keys": 0,
+        "complete_ordered_raw_key_match": true,
+        "finite_phone_coordinates": true,
+        "summary_count_matches": true,
+        "key_contract": {
+          "warmup_epoch_excluded": false,
+          "raw_epoch_keys": 1608,
+          "target_epochs": 1608,
+          "exact_solution_epochs": 1608,
+          "interpolated_epochs": 0,
+          "edge_hold_epochs": 0,
+          "unresolved_epochs": 0,
+          "solution_time_tolerance_ms": 2,
+          "max_interpolation_gap_ms": 0,
+          "max_edge_hold_gap_ms": 0,
+          "coordinate_interpolation": "ECEF linear then geodetic",
+          "device_wls_coordinates_used": false
+        },
+        "position_accuracy_evaluated": false,
+        "native_estimation_contract_verified": true,
+        "native_exact_output_fraction": 1.0,
+        "output_interpolation_or_hold_count": 0,
+        "all_output_epochs_from_native_states": true,
+        "official_key_coverage": {
+          "required_keys": 1608,
+          "missing_keys": [],
+          "extra_nonofficial_keys": [],
+          "required_order_preserved": true,
+          "all_required_keys_from_native_states": true,
+          "exact_submission_key_order": true,
+          "submission_assembled": false
+        },
+        "temporal_initial_guess_count": 0,
+        "independent_spp_accepted_epochs": 1608
+      }
+    }
+  },
+  "accuracy_evaluated": false
+}

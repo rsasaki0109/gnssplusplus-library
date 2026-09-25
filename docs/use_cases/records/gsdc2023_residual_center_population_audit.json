@@ -1,0 +1,54 @@
+{
+  "status": "source-population-audit-with-arithmetic-counterexample",
+  "production_change": false,
+  "official_score": false,
+  "matlab_executed": false,
+  "source_revision": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "sources": {
+    "functions/exobs.m": "57fa4e0199beee89c62c61dab2be6ebb92f76de719bafa1fe338d106f57efefe",
+    "functions/exobs_residuals.m": "39ae0d6db90c7a1e73dc4747e043f8e368f09aa3b8977d76e5541bda0ee75bc2",
+    "functions/GobsPhone.m": "2d8083219a2eac7ab9f302b38e7c03899afcbb0106335cfc9c3d0c7bb33c0183",
+    "fgo_gnss_imu.m": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42"
+  },
+  "dependency_inspection": {
+    "repository": "taroz/MatRTKLIB",
+    "revision": "69bcbd3faebc39815adb03e4b329033a4a7deb4a",
+    "file_url": "https://raw.githubusercontent.com/taroz/MatRTKLIB/69bcbd3faebc39815adb03e4b329033a4a7deb4a/%2Bgt/Gobs.m",
+    "cached_file": "E:\\rtklib_v2_ws_output\\gsdc_native\\audit_Gobs_69bcbd3faebc39815adb03e4b329033a4a7deb4a.m",
+    "sha256": "be27fd1a075829a00f0aec5f32a0040a884077a8ac256a10a2bc26def255fc88",
+    "historical_dependency_revision_proven": false,
+    "limit": "Inspected current pinned dependency file for ordinary struct property/residual caching semantics; the dependency revision used to generate archived competition results is unknown."
+  },
+  "native_builder_sha256": "1d10b2b130ba47c946ce0dbe3f46c17f258dc621570d8cba2f9072d1dd2ed116",
+  "finding": "Pinned GSDC excludes P entries by assigning NaN to P, then centers previously computed resPc-clk by system/band median. With inspected ordinary struct fields those P writes do not recompute resPc. Native builder instead centers only P rows surviving elevation and adjacent masks. The population difference can change admission even with identical thresholds. Historical runtime effect remains unmeasured.",
+  "doppler_order": "Pinned exobs_residuals masks Doppler before adjacent P/D and L/D checks; the v2 refinement pre-mask order is consistent with this source ordering.",
+  "counterexample": {
+    "cached_residual_m": [
+      -100.0,
+      -90.0,
+      0.0,
+      20.0,
+      30.0
+    ],
+    "eligible_after_elevation_or_adjacent_mask": [
+      false,
+      false,
+      true,
+      true,
+      true
+    ],
+    "threshold_m": 20.0,
+    "source_cached_center_m": 0.0,
+    "native_survivor_center_m": 20.0,
+    "source_admitted_indices": [
+      2,
+      3
+    ],
+    "native_admitted_indices": [
+      2,
+      3,
+      4
+    ]
+  },
+  "next_measurement": "Instrument separate uncorrected pre-elevation/pre-adjacent residual-center population from final factor admission when implementing phase-specific raw observation rebuild; compare exact populations and centers before changing thresholds. Keep base correction after residual selection as in source. No production inference may read cached external estimates or truth."
+}

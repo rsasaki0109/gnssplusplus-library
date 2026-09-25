@@ -235,6 +235,11 @@ enum class SeedAdapterStatus {
  * the exact original epoch's finite raw receiver_clock_drift_mps field.
  */
 struct RawPNoDopplerSeed {
+    // A numerical starting value from bracketing same-run SPP solutions,
+    // never an independently solved SPP epoch or a position observation.
+    bool temporal_initial_guess = false;
+    std::size_t initial_guess_left_source = std::numeric_limits<std::size_t>::max();
+    std::size_t initial_guess_right_source = std::numeric_limits<std::size_t>::max();
     std::size_t epoch_index = std::numeric_limits<std::size_t>::max();
     GNSSTime time;
     std::size_t raw_source_index = std::numeric_limits<std::size_t>::max();
@@ -275,6 +280,7 @@ struct RawPNoDopplerSeed {
  * adapter success into graph admission without checking retained rows.
  */
 struct RawPNoDopplerSeedAdapterResult {
+    std::size_t temporal_initial_guess_count = 0;
     bool ok = false;
     bool graph_compatible = false;
     std::string graph_disabled_reason;
@@ -307,6 +313,27 @@ int c7ClockComponentFor(GNSSSystem system, SignalType signal);
 RawPNoDopplerSeedAdapterResult adaptSameRunNoDopplerSeeds(
     const std::vector<ObservationData>& input_epochs,
     const Result& raw_p_result);
+
+// Explicit initialization-only completion. Original SPP statuses/coordinates
+// are not changed. Only interior geometry/solver failures may be completed;
+// exact identities, finite same-epoch raw D, GPS reference at both brackets,
+// and a bounded bracket span in both GPS and UTC are required. C[0] at a
+// completed epoch is an available numerical guess, not a measured clock.
+RawPNoDopplerSeedAdapterResult initializeShortGaps(
+    const std::vector<ObservationData>& input_epochs,
+    const Result& diagnostic_result,
+    double maximum_bracket_span_s = 4.0);
+
+// Explicit numerical initialization for time-only leading graph states. Uses
+// two later accepted native SPP anchors within four seconds, retaining every
+// original rejected SPP diagnostic. Trailing gaps remain forbidden. Callers
+// must verify continuous mapped IMU coverage and full native graph estimation;
+// these guesses must never be emitted directly as final positions.
+RawPNoDopplerSeedAdapterResult initializeWithLeadingGuesses(
+    const std::vector<ObservationData>& input_epochs,
+    const Result& diagnostic_result,
+    double maximum_bracket_span_s = 4.0);
+
 
 /**
  * @brief Compute the four-column position/shared-clock geometry rank.

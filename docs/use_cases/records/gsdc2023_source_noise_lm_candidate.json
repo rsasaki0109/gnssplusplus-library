@@ -1,0 +1,89 @@
+{
+  "status": "paired-development-comparison-complete-not-promoted",
+  "reference_control": "E:/rtklib_v2_ws_output/gsdc_native/source_imu_noise_regression_v1/pixel5_candidate/run.json",
+  "candidate_root": "E:/rtklib_v2_ws_output/gsdc_native/source_noise_lm_regression_v1",
+  "only_changed_argument": "--native-source-lm-tolerances",
+  "scope": "previously exposed Pixel5 development route; add source stopping tolerances to source IMU noise",
+  "official_score": false,
+  "promoted": false,
+  "matched_binary_results": {
+    "pixel5": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.32097948881834953,
+          "p95_m": 0.784105505577422,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5525424971978857
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.32097948881834953,
+          "p95_m": 0.7841380246781797,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5525587567482646
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.32171152908839135,
+          "p95_m": 0.7857565808940515,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5537340549912214
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.32171152908839135,
+          "p95_m": 0.7858815924091109,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5537965607487512
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3413156075956444,
+          "p95_m": 0.7884142289135483,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5648649182545964
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3413156075956444,
+          "p95_m": 0.7884395483557087,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5648775779756765
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.3416403208191972,
+          "p95_m": 0.7894446745670473,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5655424976931223
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.3416403208191972,
+          "p95_m": 0.7894649422682979,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5655526315437476
+        }
+      },
+      "delta_haversine_linear_m": 0.012322421056710664,
+      "runtimes_s": {
+        "control": 632.4576511383057,
+        "candidate": 172.19988441467285
+      },
+      "solution_hashes": {
+        "control": "20b33e800304feaaf73f1f73abcf7a9e29738fe73f60cf685593e1644335fbd0",
+        "candidate": "295d553859aa3c46cda25bd1d4d8f7d221478dee021d5351cbf774b0b10ca3e3"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    }
+  },
+  "position_accuracy_evaluated": true,
+  "accuracy_scope": "one previously exposed development route; no official or taroz score"
+}

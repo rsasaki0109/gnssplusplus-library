@@ -1,0 +1,233 @@
+{
+  "status": "source-imu-observation-stages-two-phone-comparison-validated-small-mixed-effects",
+  "files": {
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\run_fgo.m": "6f3a8d1fe099e5de305ea4fae1a62b8cd4b0ad5ef3eaebd0f24d99fd16be0336",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\parameters.m": "cc9e8ee178c79fd8c1853d1e1d0a91db12e951872d1773e279068c02f146a331",
+    "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp": "e429edef886ad7eb822ef7c7a151b11fd044ec5c9efd7d058049b033167fbdd9"
+  },
+  "source_cold_start": [
+    "GNSS-only initialization",
+    "GNSS+IMU attitude initialization",
+    "GNSS+IMU final pass seeded by the preceding IMU result"
+  ],
+  "source_final_refresh": [
+    "position, velocity, seven clock biases, clock drift and attitude from previous IMU pass; optional RPYReset",
+    "recompute satellite receiver geometry and observation residuals",
+    "apply final residual rejection thresholds: P L1/L5 20/15 m instead of 50/30 m; D 3/3 m/s instead of 20/20 m/s",
+    "add zero-velocity priors and height constraints only in final pass; stationary pose between-factors exist in both passes with the source time-gap gate"
+  ],
+  "native_current": "Default remains single main IMU solve. Same-binary opt-in refinement worsens exposed MI8 1.1482535404 to 1.1750020780 m, improves exposed A205U 2.0497405522 to 1.9617046208 m. Both initial GNSS/IMU stages are byte-identical. No global or phone-wide promotion.",
+  "next_implementation_requirements": [
+    "explicit opt-in; default and live all40 recipe unchanged",
+    "handoff only in-memory states from successful same-run native solve with exact raw epoch identity",
+    "preserve all original UTC output keys; output positions are optimized states, never interpolated",
+    "recompute receiver-dependent geometry and residual masks with documented source phase thresholds",
+    "retain independently validated units, frames and clock policies per phone",
+    "no cached MAT positions or reference-height file in inference; relative-height experiment separately documented",
+    "source phone position offset applied once at final output, never twice through recycled corrected positions",
+    "report per-stage convergence, factor counts and epochs; reject incomplete/nonfinite handoff",
+    "paired same-binary control and candidate with fixed raw inputs; score only after native provenance audit"
+  ],
+  "limits": "Matched exposed MI8 and A205U routes prove native provenance and exact initial-stage equality, with opposite accuracy effects. The added pass retains native CombinedIMU/noise/prior and first-pass masks. Exact source initflag distinctions, RPYReset and height constraints remain different. This is not a paired pinned taroz execution or official score.",
+  "integration_findings": {
+    "current_main_call": "apps/native/gnss_fgo_imu_no_base.cpp:14090, processor.optimizeProblem(problem)",
+    "builder": "src/algorithms/fgo_problems.cpp:buildPseudorangeProblem",
+    "builder_seed_behavior": "With use_spp_seed=false the builder can consume ObservationData receiver_position/receiver_clock_bias. The latter is seconds and is explicitly multiplied by c; optimized C7 states are metres and cannot be assigned directly. SPP-enabled rebuilding would discard warm seeds.",
+    "existing_p_remasking": "native_pseudorange_remasking selects from a stored pool with fixed measurements and sigma before main; not a complete second source pass.",
+    "doppler_geometry": "Builder computes receiver-only corrected range-rate, not a residual centred at an arbitrary warm velocity. Final residual screening must separately use optimized velocity/drift in consistent coordinates.",
+    "attitude_export": "FGOResult.epoch_attitude_rpy_rad stores exact GTSAM rotation angles; epoch_attitude_rpy_deg uses display heading convention and must not be recycled as Rot3 angles.",
+    "base_correction": "Rebuilt P factors require the existing base correction exactly once; reapplying to an already corrected pool would double subtract.",
+    "open_work": "Connect the initial GNSS-state observation refresh, separate cached residual-center population from final factor admission, then test phase-specific masks. Exact source cold-start equivalence and pinned taroz runtime comparison remain unproven."
+  },
+  "handoff_implementation": {
+    "header": "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp",
+    "test": "tests/test_native_imu_refinement_handoff.cpp",
+    "tests_passed": 5,
+    "test_xml_sha256": "9661f7a3c4e6b1148ce30370b491a2502d7b7a229548fb7810acbc7c42755221",
+    "source_files_sha256": {
+      "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp": "da1c00274074841b7bbe7032176efd89541134dd2cac9edc7a086d3021cf5a2a",
+      "include/libgnss++/algorithms/native_imu_refinement_rebuild.hpp": "36f4f78a04182aeaded33f4b95b921eecbe6f9f8eb875f96e93c2b8c32ab0dd2",
+      "include/libgnss++/algorithms/fgo.hpp": "44175b5d7773fabc1d7eb54b782fc205f135629d082119e0d443144355c155f8",
+      "src/algorithms/fgo_problems.cpp": "1d10b2b130ba47c946ce0dbe3f46c17f258dc621570d8cba2f9072d1dd2ed116",
+      "src/algorithms/fgo_gtsam_backend.cpp": "46c5858867df7111443844bf07e59652a850d0c0aba16cf438b37287952a6acc",
+      "apps/native/gnss_fgo_imu_no_base.cpp": "e429edef886ad7eb822ef7c7a151b11fd044ec5c9efd7d058049b033167fbdd9",
+      "tests/test_native_imu_refinement_handoff.cpp": "b7f8ee97aabe04f82be82c62b7ceee78503cb856c4e6d3b05c5c0693c5937b46",
+      "tests/test_fgo_gtsam_backend.cpp": "9d99bb664db32d2de094cf220ea57e51fe86406c41ee089b9de88ee8fe363606",
+      "tests/test_fgo.cpp": "ed5e6e927c79067611f3dd4cc9d45f9ef6254d412ff50ba624bbfb18125a938f"
+    },
+    "production_connected": true,
+    "measurement_refresh_implemented": true,
+    "accuracy_claim": false,
+    "full_build_verified": true,
+    "backend_integration_tests_passed": true,
+    "real_data_validated": true,
+    "test_scope": "5 helper, 12 integration, 8 legacy regression and 6 CLI cases passed; matched MI8 and A205U real-data pairs audited and scored."
+  },
+  "build_work": {
+    "session": 2799,
+    "log": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_imu_refinement_forced_source_build.log",
+    "incremental_rebuild_required_after_current_build": false,
+    "forced_translation_units": [
+      "src/algorithms/fgo_problems.cpp",
+      "apps/native/gnss_fgo_imu_no_base.cpp"
+    ],
+    "verified_executable_sha256": "baa3bfcbe3b5c5988f595ce6774f0190a69fa93aa6a402a74c8ac2676fb64c99",
+    "required_test_filter": "FGOGtsamPhase171*:FGOGtsamPhase213*:FGORefinementBuilderTest.*",
+    "incremental_build_verified": true
+  },
+  "validation": {
+    "tests": {
+      "refinement_handoff_tests.xml": {
+        "passed": 5,
+        "sha256": "9661f7a3c4e6b1148ce30370b491a2502d7b7a229548fb7810acbc7c42755221",
+        "cases": [
+          "NativeImuRefinementHandoff.PreservesRawDataAndConvertsStateUnitsAndFrames",
+          "NativeImuRefinementHandoff.RejectsEpochMismatchWithoutNearestTimeOrMissingStateFill",
+          "NativeImuRefinementHandoff.RejectsInvalidSolveFrameAndState",
+          "NativeImuRefinementHandoff.DopplerMaskUsesOptimizedVelocityAndRetainsExactBoundary",
+          "NativeImuRefinementHandoff.DopplerMaskRejectsBrokenGeometryBeforeMutation"
+        ]
+      },
+      "refinement_backend_tests_v2.xml": {
+        "passed": 12,
+        "sha256": "290f9dfcd96ad0ef76590973fbdf3237ecf86370ce0fd24656e0a584fab59fb2",
+        "cases": [
+          "FGOGtsamPhase171EcefDopplerGraphTest.UsesCorrectedEcefRowsAndKeepsVelocityFrameUnrotated",
+          "FGOGtsamPhase171EcefDopplerGraphTest.MissingOrInvalidCorrectedDopplerRowsFailClosed",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SelectorOffRetainsEmptyDopplerPhase164Behavior",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SparsePDefaultRejectsDespiteValidSeedsAndDoppler",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SparsePOptInConnectedGraphAndDisconnectedClockControl",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SparsePRejectsAllSparseAndUnsupportedMode",
+          "FGOGtsamPhase171EcefDopplerTransferTest.RemapsOnlyDWithExactRawIdentityAndRejectsInvalidTransfers",
+          "FGOGtsamPhase171NoDopplerImuMainTest.SameRunC7DHandOffAdmitsEmptyDopplerAndGaugesAbsentClockSlots",
+          "FGOGtsamPhase171NoDopplerImuMainTest.RejectsMissingNonfiniteClockHandoffAndLeavesLegacySelectorOff",
+          "FGOGtsamPhase213MainDopplerFrameTest.CorrectedEcefRowPreservesLikelihoodAfterOneEnuRotation",
+          "FGOGtsamPhase171RefinementBuilderTest.RejectsMissingVelocityAndSppReplacement",
+          "FGORefinementBuilderTest.KeepsFirstAndPostGapDopplerWithIndependentClockDrift"
+        ]
+      },
+      "refinement_legacy_builder_tests_v2.xml": {
+        "passed": 8,
+        "sha256": "b06d6c2013e33e8012e840d91fe474470e21ecd77eb5ccf53db6141b39db3f11",
+        "cases": [
+          "FGOTest.SparseEpochRecoveryIsOptInAndRetainsBelowFloorEpochs",
+          "FGOTest.OfficialTdcpWeightingPreservesAcceptedPairStructure",
+          "FGOTest.SourceMeterTdcpWeightingPreservesAcceptedPairStructure",
+          "FGOTest.SourceReslObservablePreservesPairsAndDynamicSigma",
+          "FGOTest.SourceMeterTdcpRejectsMixedSelectors",
+          "FGOTest.CorrectedUndifferencedDopplerUsesClockBiasDifference",
+          "FGOTest.BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos",
+          "FGOTest.ReportsSignedCommonGpsPseudorangeDeltaForClockAudit"
+        ]
+      }
+    },
+    "cli_negatives": {
+      "passed": 6,
+      "sha256": "ce06dcbf9b28e82308fd1f10503900e8207deb5f7928c7011d62528dc0f3abca"
+    },
+    "executable_sha256": "baa3bfcbe3b5c5988f595ce6774f0190a69fa93aa6a402a74c8ac2676fb64c99",
+    "build_logs": {
+      "native_imu_refinement_forced_source_build.log": "fae58a040e7a6a24cf138d3ab350937900ce83edc8a8365dcadbbeda9c2c411d",
+      "refinement_backend_test_relink_v2.log": "fbe250f519a02f84bdb8463f0f7519399fa098e2db9a8576960a9d4891f688b5"
+    },
+    "official_score": false,
+    "real_data_validated": true,
+    "scope": "Two exposed route/phone groups, same-binary pairs with native provenance and exact initial-stage equality; mixed accuracy effects, no official score or phone-wide adoption.",
+    "comparison_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_refinement_candidate_v2\\paired_comparison.json",
+    "comparison_sha256": "f0d3a6b404306ab15a3735d71acfd8151d912ca1fb183c36376dde22df4d54b1",
+    "paired_reports": {
+      "mi8": {
+        "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_refinement_candidate_v2\\paired_comparison.json",
+        "sha256": "f0d3a6b404306ab15a3735d71acfd8151d912ca1fb183c36376dde22df4d54b1",
+        "control_mean_m": 1.148253540398437,
+        "candidate_mean_m": 1.1750020780235926,
+        "delta_m": 0.0267485376251555,
+        "initial_stages_byte_identical": true
+      },
+      "a205u": {
+        "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_refinement_candidate_v2\\paired_comparison.json",
+        "sha256": "8be0cd7d01b964fc964f064b3af024734b2808573b6694ca4c03f6af9976992e",
+        "control_mean_m": 2.049740552185463,
+        "candidate_mean_m": 1.9617046207890705,
+        "delta_m": -0.08803593139639254,
+        "initial_stages_byte_identical": true
+      }
+    }
+  },
+  "superseded_v1_validation": {
+    "record": "gsdc2023_mi8_refinement_experiment.json",
+    "reason": "App source was edited while compilation was in flight; incremental build kept old app object. Missing refinement_base_application_passes counter caused paired audit to fail. Both affected translation units were touched and rebuilt; v2 executable contains the counter and per-row correction guard. Old runs preserved, not promoted."
+  },
+  "next_source_stage_experiment": {
+    "status": "implemented-opt-in-compared-no-promotion",
+    "reason": "Adding a second pass alone did not improve MI8; isolate source initialization-stage semantics before combining further changes.",
+    "source_initial_P_thresholds_m": {
+      "L1": 50,
+      "L5": 30
+    },
+    "source_final_P_thresholds_m": {
+      "L1": 20,
+      "L5": 15
+    },
+    "source_initial_D_thresholds_mps": {
+      "L1": 20,
+      "L5": 20
+    },
+    "source_final_D_thresholds_mps": {
+      "L1": 3,
+      "L5": 3
+    },
+    "source_stop_and_height_constraints": "Source zero-velocity prior and height constraints apply only in final pass; stationary Pose3 between-factor remains in both passes with strict raw UTC delta < 1500 ms. Native stop-phase opt-in was validated independently; observation-stage integration additionally disables native relative height in the initial pass. External reference-height inputs remain excluded.",
+    "candidate_scope": "Explicit opt-in phase-aware masks and separate zero-velocity/pose stop gating, preserve GNSS-first defaults and keep relative/external-height choices separate.",
+    "acceptance": [
+      "Same frozen binary/raw inputs for paired control and candidate.",
+      "Unchanged GNSS stage, all raw keys and base-correction-once proof.",
+      "Record initial/final mask and factor counts, finite state and full convergence.",
+      "Test first-pass zero-velocity exclusion independently from retained stop-pose factors and time-gap rejection.",
+      "Evaluate both exposed MI8 and A205U route groups; do not call these held out.",
+      "No promotion based on one route or mixed recipes; native all40 and official evaluation remain separate."
+    ]
+  },
+  "source_stop_phase_comparison": {
+    "record": "gsdc2023_source_imu_stop_phases_experiment.json",
+    "native_zero_velocity_initial_final_and_pose_utc_gating_tested": true,
+    "material_accuracy_improvement": false,
+    "promoted": false
+  },
+  "initial_observation_refresh_preparation": {
+    "record": "gsdc2023_initial_imu_handoff.json",
+    "helper_tests_passed": 3,
+    "production_connected": true,
+    "residual_center_population_audit": "gsdc2023_residual_center_population_audit.json",
+    "integration_record": "gsdc2023_source_imu_observation_stages_experiment.json",
+    "integration_validated": true
+  },
+  "additional_mi8_refinement_route": {
+    "record": "gsdc2023_second_mi8_route_experiment.json",
+    "control_mean_m": 2.07692676035781,
+    "candidate_mean_m": 2.0985087634259476,
+    "all_native_and_truth_keys": 1699,
+    "promoted": false
+  },
+  "stage_conditional_audit": {
+    "record": "gsdc2023_imu_stage_conditionals_audit.json",
+    "train_rpy_reset_cases": 0,
+    "test_rpy_reset_cases": [
+      "2022-02-24-15-10-us-ca-lax-p/pixel5"
+    ],
+    "current_comparison_needs_rpy_reset": false,
+    "remaining_source_parity_work": "Support and verify the source attitude-reset setting before claiming complete test-recipe parity."
+  },
+  "cold_gnss_observation_phase_gap": "gsdc2023_cold_gnss_observation_phase_gap.json",
+  "source_observation_stage_comparison": {
+    "record": "gsdc2023_source_imu_observation_stages_experiment.json",
+    "binary_sha256": "d0cabb6c2f6b36305c84e5fbaa5f37ea3356d2a7a54a4b575ff545fbc794abca",
+    "mi8_delta_m": 0.001308932925284445,
+    "a205u_delta_m": -0.003442825600035171,
+    "gnss_stage_unchanged": true,
+    "all_controls_reproduce_previous_binary": true,
+    "all_native_and_base_once_audits_passed": true,
+    "promoted": false
+  }
+}

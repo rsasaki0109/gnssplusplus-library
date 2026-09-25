@@ -1,0 +1,96 @@
+{
+  "status": "native-stage-export-validated",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_gnss_stage_probe_plan.json",
+  "plan_sha256": "ad4026be479bee772ef8bfe097d7e31323698e14fecdbe24ed42a8be8164c376",
+  "binary_sha256": "493eb2f5f45de1a522c29931ef5ee7d896ec3b2a3b65de48d65206646381d3cd",
+  "flag": "--native-export-gnss-stage",
+  "sidecar_suffix": ".gnss-first.csv",
+  "export_policy": "all raw original keys including leading states; exact epoch-time identity; reject nonfinite/out-of-Earth; never interpolate",
+  "inference_reads_sidecar": false,
+  "runtime_validation_complete": true,
+  "admission_tests": {
+    "passed": 4,
+    "no_outputs_created": true,
+    "cases": [
+      {
+        "removed": "--summary-json",
+        "returncode": 2,
+        "message": "--native-export-gnss-stage requires raw-clock Phase171 ECEF-D and --summary-json"
+      },
+      {
+        "removed": "--android-raw-clock-only",
+        "returncode": 2,
+        "message": "--native-export-gnss-stage requires raw-clock Phase171 ECEF-D and --summary-json"
+      },
+      {
+        "removed": "--native-phase171-raw-p-ecef-doppler-gnss-first",
+        "returncode": 2,
+        "message": "--native-export-gnss-stage requires raw-clock Phase171 ECEF-D and --summary-json"
+      },
+      {
+        "removed": "--native-phase171-raw-p-no-doppler-imu-main",
+        "returncode": 2,
+        "message": "--native-export-gnss-stage requires raw-clock Phase171 ECEF-D and --summary-json"
+      }
+    ]
+  },
+  "validation_supervisor": "E:/rtklib_v2_ws_output/gsdc_native/pending_pair_supervisor.json",
+  "result": {
+    "status": "native-stage-export-validated",
+    "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "sidecar_sha256": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+    "rows": 1213,
+    "exact_original_keys": true,
+    "main_output_byte_identical_to_pre_export_binary": true,
+    "full_key_gnss_stage_score": {
+      "p50_m": 1.8947256950239566,
+      "p95_m": 3.870999593225566,
+      "mean_m": 2.8828626441247613,
+      "earth_radius_m": 6371008.8,
+      "percentile": "linear_n_minus_1"
+    },
+    "common_keys": 1208,
+    "common_gnss_stage_score": {
+      "p50_m": 1.892665072951571,
+      "p95_m": 3.812517861545512,
+      "mean_m": 2.8525914672485415,
+      "earth_radius_m": 6371008.8,
+      "percentile": "linear_n_minus_1"
+    },
+    "common_final_offset_score": {
+      "p50_m": 1.313051571276019,
+      "p95_m": 2.7670399444164397,
+      "mean_m": 2.0400457578462294,
+      "earth_radius_m": 6371008.8,
+      "percentile": "linear_n_minus_1"
+    },
+    "provisional_archived_scores": {
+      "result_gnss.mat": {
+        "p50_m": 1.7760173520198843,
+        "p95_m": 2.8727007932498743,
+        "mean_m": 2.3243590726348793,
+        "earth_radius_m": 6371008.8,
+        "percentile": "linear_n_minus_1"
+      },
+      "result_gnss_imu.mat": {
+        "p50_m": 0.8866870054991804,
+        "p95_m": 2.14837473518335,
+        "mean_m": 1.5175308703412653,
+        "earth_radius_m": 6371008.8,
+        "percentile": "linear_n_minus_1"
+      },
+      "native": {
+        "p50_m": 1.3778061088956561,
+        "p95_m": 2.921764592202812,
+        "mean_m": 2.149785350549234,
+        "earth_radius_m": 6371008.8,
+        "percentile": "linear_n_minus_1"
+      }
+    },
+    "stage_position_offset_applied": false,
+    "final_position_offset_applied": true,
+    "comparison_limitation": "archived GNSS result already has source phone offset; native stage export is uncorrected. Archived generating settings/commit unverified. No pinned runtime parity claim.",
+    "official_score": false,
+    "reference_height_input_caveat": "October archive includes ref_hight.mat that pinned noninitial IMU source may consume; native does not. Actual archived use and provenance unverified; final-stage score gap cannot be attributed solely to algorithm."
+  }
+}

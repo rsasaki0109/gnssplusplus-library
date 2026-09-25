@@ -1,0 +1,103 @@
+{
+  "status": "paired-development-comparison-complete-not-promoted",
+  "reference_control": "E:/rtklib_v2_ws_output/gsdc_native/source_lm_tolerance_regression_v1/pixel5_control/run.json",
+  "candidate_root": "E:/rtklib_v2_ws_output/gsdc_native/source_imu_noise_regression_v1",
+  "only_changed_argument": "--native-phase194-source-utc-fallback-imu-noise",
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_files": [
+    "parameters.m:178-200",
+    "functions/imuprocessing.m:7-20",
+    "fgo_gnss_imu.m:139-140"
+  ],
+  "source_sigma": [
+    0.05,
+    0.001
+  ],
+  "control_sigma": [
+    0.025,
+    0.0005
+  ],
+  "scope": "previously exposed Pixel5 development route; existing executable restricts this selector to Pixel5",
+  "official_score": false,
+  "promoted": false,
+  "matched_binary_results": {
+    "pixel5": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854260386959835,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.576375694726723
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854944052893353,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5764098780233989
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7872752160481221,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5772728370829892
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7873437393618148,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5773070987398354
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.32097948881834953,
+          "p95_m": 0.784105505577422,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5525424971978857
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.32097948881834953,
+          "p95_m": 0.7841380246781797,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5525587567482646
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.32171152908839135,
+          "p95_m": 0.7857565808940515,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5537340549912214
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.32171152908839135,
+          "p95_m": 0.7858815924091109,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5537965607487512
+        }
+      },
+      "delta_haversine_linear_m": -0.02383319752883728,
+      "runtimes_s": {
+        "control": 616.8690736293793,
+        "candidate": 632.4576511383057
+      },
+      "solution_hashes": {
+        "control": "efc8779e5852b6839d776e24e2ee44fc20f5c5d0e23a00830053f0532ee28746",
+        "candidate": "20b33e800304feaaf73f1f73abcf7a9e29738fe73f60cf685593e1644335fbd0"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    }
+  },
+  "position_accuracy_evaluated": true,
+  "accuracy_scope": "one previously exposed development route; no official or taroz score"
+}

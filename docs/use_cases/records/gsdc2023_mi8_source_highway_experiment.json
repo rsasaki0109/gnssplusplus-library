@@ -1,0 +1,56 @@
+{
+  "status": "matched-source-preset-comparison-complete",
+  "official_score": false,
+  "promoted": false,
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_source_highway_plan.json",
+  "plan_sha256": "f92f701b275b41db3939a17a6f6f0db360f09c4444e9ad218eeb02b59be0a0c6",
+  "control_plan_sha256": "85166c728b0d81be7aaf644ad0922e018d2930dfd98b0f6430b0b920d2bbc307",
+  "binary_sha256": "1a0f6628edeb8a7acd7dd025b35af3d274a268b6d9ce339354ba5742f35b1e0d",
+  "scope": "one exposed MI8 development route; source Highway/L5 preset only; no main Doppler or new external input",
+  "result": {
+    "status": "matched-source-preset-comparison-complete",
+    "case": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "same_binary_inputs_other_args_verified": true,
+    "runs": {
+      "control": {
+        "gnss_stage": {
+          "p50_m": 0.792796994643657,
+          "p95_m": 1.7373769974989006,
+          "mean_m": 1.265086996071279
+        },
+        "final": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.8947760505588985,
+          "p95_m": 1.423393785609381,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.1590849180841398
+        },
+        "wall_s": 677.6475667953491,
+        "gnss_iterations": 65,
+        "solution_sha256": "4a8c86b4445421abf3cc57d894464d50c3829506ab2ab7cc0c50bfd4f782bc00"
+      },
+      "candidate": {
+        "gnss_stage": {
+          "p50_m": 0.7431962358331159,
+          "p95_m": 1.9639925333742045,
+          "mean_m": 1.3535943846036602
+        },
+        "final": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.8246629733262016,
+          "p95_m": 1.5337504511530513,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.1792067122396266
+        },
+        "wall_s": 520.8179013729095,
+        "gnss_iterations": 47,
+        "solution_sha256": "e0ee1987f84138f7ae7e0118801d2c8c10f8436b6862186b5501444f5307809f"
+      }
+    },
+    "final_delta_m": 0.02012179415548676,
+    "stage_delta_m": 0.08850738853238127,
+    "official_score": false,
+    "promoted": false,
+    "scope": "one exposed development route; source Type/L5 preset as a unit, not individual parameter attribution"
+  }
+}

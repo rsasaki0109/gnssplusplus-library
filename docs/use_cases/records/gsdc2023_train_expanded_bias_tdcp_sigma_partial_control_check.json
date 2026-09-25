@@ -1,0 +1,155 @@
+{
+  "status": "partial-controls-reproduced",
+  "checked_unix": 1790176709.569443,
+  "plan_sha256": "9d2b82e35d68bc6518f81c38d67ed3d4a03f334efa813783efb0b044d7facbea",
+  "validation_sha256": "10e8b0949a897bb57d36657ba8c316f140ec8c6159f652249eb8a32837a21ab1",
+  "verified_count": 10,
+  "planned_count": 11,
+  "runs": {
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.4546566128864969,
+        "p95_m": 0.7975510850403802,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.6261038489634385
+      },
+      "wall_s": 497.54633355140686,
+      "solution_sha256": "e60d989461542f33a763f029a3618a0eba8d2e950e442a82e4bbe4ee360573af"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.7711075537254555,
+        "p95_m": 1.1197943497239309,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.9454509517246932
+      },
+      "wall_s": 708.8854877948761,
+      "solution_sha256": "0ff5c5992385ad2e914021b589002907a0d92b3ab994373fadb8855d05264240"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.8619685628371849,
+        "p95_m": 1.7294026678622219,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.2956856153497034
+      },
+      "wall_s": 755.1205682754517,
+      "solution_sha256": "0cfd5bd24fb05a200733c3e9fb7b0bdaba919b15c25010107fe6c09fe39597a1"
+    },
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.3326803498916532,
+        "p95_m": 0.684374131925014,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5085272409083336
+      },
+      "wall_s": 331.8743488788605,
+      "solution_sha256": "1fcc0fad9441d68748ad55e735768104589bd2378995972a0e56bd24e625e372"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.8029464518880836,
+        "p95_m": 1.124946051179537,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.9639462515338103
+      },
+      "wall_s": 196.29520988464355,
+      "solution_sha256": "8a3993bc3e9515fec152946a0fa174791eb2ef7b32264b0f4409e1d2fff5b7a1"
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.6021609895988409,
+        "p95_m": 1.1112591583068705,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.8567100739528557
+      },
+      "wall_s": 727.8451449871063,
+      "solution_sha256": "113146a5261799f11c1d1cd53b22fc750980644b037bed3bfd75a1b10e1adff1"
+    },
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.30260029453524095,
+        "p95_m": 0.5569036862688171,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.42975199040202905
+      },
+      "wall_s": 263.40463876724243,
+      "solution_sha256": "a4ed3db9cf928366d071b2c02835703ebd1197d0edb3f79097990abe47e298ab"
+    },
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.9297729128480485,
+        "p95_m": 1.237668510253288,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.0837207115506682
+      },
+      "wall_s": 489.17585587501526,
+      "solution_sha256": "82d80a094ca32d9da1ab531bbdaeeec6202a78d26dd350872f66af3f4c2bb9d3"
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.7145458230395427,
+        "p95_m": 0.8851975871219311,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.7998717050807369
+      },
+      "wall_s": 1059.5469002723694,
+      "solution_sha256": "455c63e95bbc5a91e4206e3ca2b1eb3a702e0110e081bc2bc6d26ce5630ce1d4"
+    },
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+      "native_audit_passed": true,
+      "solution_byte_identical_to_parent": true,
+      "initialization_byte_identical_to_parent": true,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.7158974623255253,
+        "p95_m": 1.5300846707700977,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.1229910665478116
+      },
+      "wall_s": 491.2545680999756,
+      "solution_sha256": "09978b8c723d864e85fa1a44084e4b0559f1c317efffeb2327991d0d9935c0ab"
+    }
+  },
+  "complete": false,
+  "candidate_accuracy_available": false,
+  "heldout": false,
+  "promoted": false,
+  "scope": "Partial checkpoint only; the pipeline full comparator remains authoritative."
+}

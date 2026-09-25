@@ -1,0 +1,275 @@
+{
+  "schema": "gsdc-train40-source-sigma-admission-scope.v1",
+  "checked_unix": 1790169594.595941,
+  "status": "static-source-and-cli-scope-audit",
+  "inputs": {
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_plan.json": "67efef7c87fc883ffe56fb28974692f96a8f77ee7ed51a47fe1ad0d61554a7f3",
+    "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp": "4851c50c3c6ee44cc0dcb6086e3b6b505ac066d170b195a4e8b0e832f9a331ce",
+    "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\include\\libgnss++\\algorithms\\smartphone_temporal_recipe.hpp": "43e6b82049526911e846a80da14b1414b346d8b2e49191cab471a31faafd5888"
+  },
+  "admitted_phone_names": [
+    "mi8",
+    "pixel4",
+    "pixel4xl",
+    "pixel5",
+    "xiaomimi8"
+  ],
+  "counts": {
+    "bias-difference-cli-admitted": 23,
+    "bias-difference-cli-not-admitted": 11,
+    "integrated-drift-needs-separate-validation": 4,
+    "source-disabled": 2
+  },
+  "runs": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+      "phone": "mi8",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/mi8": {
+      "phone": "mi8",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": {
+      "phone": "mi8",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": {
+      "phone": "pixel4xl",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+      "phone": "pixel4",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "phone": "sm-g988b",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "phone": "pixel4",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8": {
+      "phone": "mi8",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "phone": "pixel6pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "phone": "sm-g988b",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g": {
+      "phone": "samsunga325g",
+      "category": "integrated-drift-needs-separate-validation",
+      "source_route_type": "Highway",
+      "source_l5": "0"
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/mi8": {
+      "phone": "mi8",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "phone": "sm-a325f",
+      "category": "source-disabled",
+      "source_route_type": "Highway",
+      "source_l5": "0"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "phone": "sm-a205u",
+      "category": "integrated-drift-needs-separate-validation",
+      "source_route_type": "Highway",
+      "source_l5": "0"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m": {
+      "phone": "sm-a217m",
+      "category": "integrated-drift-needs-separate-validation",
+      "source_route_type": "Highway",
+      "source_l5": "0"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "phone": "sm-a325f",
+      "category": "source-disabled",
+      "source_route_type": "Highway",
+      "source_l5": "0"
+    },
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+      "phone": "pixel7pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+      "phone": "pixel6pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "phone": "pixel7pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g": {
+      "phone": "sm-a505g",
+      "category": "integrated-drift-needs-separate-validation",
+      "source_route_type": "Street",
+      "source_l5": "0"
+    },
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+      "phone": "pixel7pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+      "phone": "sm-s908b",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "phone": "pixel7pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-09-05-23-07-us-ca-routen/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+      "phone": "pixel6pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Street",
+      "source_l5": "1"
+    },
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+      "phone": "pixel7pro",
+      "category": "bias-difference-cli-not-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    },
+    "2023-09-07-18-59-us-ca/pixel5": {
+      "phone": "pixel5",
+      "category": "bias-difference-cli-admitted",
+      "source_route_type": "Highway",
+      "source_l5": "1"
+    }
+  },
+  "next_implementation_scope": "Validate and admit the eleven currently excluded bias-difference runs (G988B, Pixel6Pro, Pixel7Pro, S908B) with positive inserted TDCP factor checks. Keep the four integrated-drift runs separate; do not admit the two source-disabled A325F runs. Run matched controls before any all40 policy promotion.",
+  "limitations": [
+    "Static CLI admission is not runtime factor/weight parity or accuracy evidence.",
+    "Existing corrected replay remains frozen and unchanged.",
+    "Previously exposed development inputs; no heldout claim.",
+    "Source Type/L5 metadata and actual inserted factor counts must be checked alongside sigma and Huber settings."
+  ],
+  "truth_read": false,
+  "promoted": false,
+  "external_submission": false
+}

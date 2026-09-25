@@ -1,0 +1,60 @@
+{
+  "status": "matched-refinement-comparison-complete",
+  "binary_sha256": "baa3bfcbe3b5c5988f595ce6774f0190a69fa93aa6a402a74c8ac2676fb64c99",
+  "official_score": false,
+  "promoted": false,
+  "scope": "A205U matched second native IMU pass with four leading raw states, identical inputs and initial stages; phone offset once after final solve",
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_refinement_control_plan_v2.json",
+      "sha256": "87d3aed34ed3f2a4a99a1562d0ca4a41046eb11feb24eed6c53fe18ea799e96e"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_refinement_candidate_plan_v2.json",
+      "sha256": "daafb53687075b0d098f13b580a6fc5cc0aa7cdfb98b07ca0e83a492b071917b"
+    }
+  },
+  "result": {
+    "status": "matched-refinement-comparison-complete",
+    "same_binary_inputs_other_args_verified": true,
+    "initial_stages_byte_identical": true,
+    "stage_hashes": {
+      "gnss-first": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+      "imu-initial": "66fea7efa65a0f40ab39e2620be23fcb6ce7015c183b41d05d09361ba8de8199"
+    },
+    "runs": {
+      "control": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.3315488932161896,
+          "p95_m": 2.7679322111547364,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.049740552185463
+        },
+        "wall_s": 191.53990054130554,
+        "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "solution_sha256": "f221792994b4879da790d7b3b3c96b040e8fbb86180d5bdbebc2fed8b65f9c03",
+        "initial_iterations": 0,
+        "final_p_rows": 0
+      },
+      "candidate": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.2882757858405927,
+          "p95_m": 2.6351334557375483,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.9617046207890705
+        },
+        "wall_s": 293.77348041534424,
+        "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "solution_sha256": "5ca3c9cd26ff47468b24849c06ba9197108089a61f4b6c257f8014bd7aef4057",
+        "initial_iterations": 107,
+        "final_p_rows": 20836
+      }
+    },
+    "delta_m": -0.08803593139639254,
+    "control_matches_previous_binary": true,
+    "official_score": false,
+    "promoted": false
+  }
+}

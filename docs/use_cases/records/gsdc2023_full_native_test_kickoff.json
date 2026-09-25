@@ -1,0 +1,21 @@
+{
+  "schema_version": "gsdc2023-full-native-test-kickoff.v1",
+  "goal_achieved": false,
+  "state": "running",
+  "session": 49715,
+  "binary_sha256": "a87d1775f3dc403e58c6237a5f00fca10d5059f5dba1a0baf76485d19f2c1b3b",
+  "input_manifest_sha256": "3d6a0f9db4c79ec228e71a0ace515068f298c2d968ed957ce42034df10aed0cc",
+  "replay_plan_sha256": "259a65bb02d575bd438222356dfec2d90fa5cfcb44aef77cf2b4c8e454873214",
+  "runs": 40,
+  "workers": 2,
+  "temporal_initialization_runs": 10,
+  "additional_extracted_bytes": 1701037579,
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "test_truth_used": false,
+  "mat_used": false,
+  "per_run_input_hash_verification": true,
+  "recipe": "Pixel4 reduced same-run raw GNSS/IMU; temporal plus sparse-P only for 10 explicitly diagnosed short-gap drives",
+  "s20_pilot_validated": true,
+  "official_submission_keys_verified": false,
+  "output_root": "E:/rtklib_v2_ws_output/gsdc_native/test_full_native_temporal_v1"
+}

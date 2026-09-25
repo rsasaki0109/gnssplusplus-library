@@ -1,0 +1,52 @@
+{
+  "status": "complete-native-raw-key-coverage-verified",
+  "dataset_id": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+  "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_april27_regression_v1\\mi8_april27\\run.json",
+  "binary_sha256": "1d2665469ff5f7186c69e9f6a4f9a00869430b3f82196782424c69b2772ced78",
+  "input_hashes_verified": true,
+  "prior_failure": "same-run-raw-clock-drift-missing",
+  "candidate_changes": [
+    "existing source MI8 clock-gradient preprocessing",
+    "retain sparse native states",
+    "source velocity attitude with zero initial IMU bias"
+  ],
+  "official_submission_keys_verified": false,
+  "position_accuracy_evaluated": false,
+  "audit": {
+    "returncode": 0,
+    "wall_s": 371.36749744415283,
+    "binary_sha256": "1d2665469ff5f7186c69e9f6a4f9a00869430b3f82196782424c69b2772ced78",
+    "status": "raw-key-coverage-verified",
+    "raw_utc_groups": 1344,
+    "expected_output_keys": 1343,
+    "output_rows": 1343,
+    "missing_raw_keys": 0,
+    "extra_raw_keys": 0,
+    "duplicate_output_keys": 0,
+    "complete_ordered_raw_key_match": true,
+    "finite_phone_coordinates": true,
+    "summary_count_matches": true,
+    "key_contract": {
+      "warmup_epoch_excluded": true,
+      "raw_epoch_keys": 1344,
+      "target_epochs": 1343,
+      "exact_solution_epochs": 1343,
+      "interpolated_epochs": 0,
+      "edge_hold_epochs": 0,
+      "unresolved_epochs": 0,
+      "solution_time_tolerance_ms": 2,
+      "max_interpolation_gap_ms": 0,
+      "max_edge_hold_gap_ms": 0,
+      "coordinate_interpolation": "ECEF linear then geodetic",
+      "device_wls_coordinates_used": false
+    },
+    "position_accuracy_evaluated": false,
+    "native_estimation_contract_verified": true,
+    "native_exact_output_fraction": 1.0,
+    "output_interpolation_or_hold_count": 0,
+    "all_output_epochs_from_native_states": true,
+    "temporal_initial_guess_count": 0,
+    "independent_spp_accepted_epochs": 1344
+  },
+  "official_submission_complete": false
+}

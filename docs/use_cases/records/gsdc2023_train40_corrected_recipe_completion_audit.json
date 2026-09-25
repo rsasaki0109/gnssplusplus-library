@@ -1,0 +1,51 @@
+{
+  "status": "all40-fixed-corrected-native-development-audit-complete",
+  "checked_unix": 1790173624.840624,
+  "evidence": {
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_plan.json": "67efef7c87fc883ffe56fb28974692f96a8f77ee7ed51a47fe1ad0d61554a7f3",
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_v1\\validation.json": "c1af67ea099ae15af480ee75b76bb715f988b7f69c332aac57185c7b7c0e6974",
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_summary.json": "850f5042bb4c9338436f64c939f86569398a6cb736c3d48ddcfcc7c0baf1023e",
+    "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train40_corrected_recipe_evaluation.json": "7cb673d81ed9dca9ea777199960981cc60fcdd198c708c23d44782926e42a85b",
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_pipeline.json": "f7cd8298dbd18504620400b7d84900e01aa3a3d52fc26846d880addfffb93997"
+  },
+  "overall": {
+    "planned_drives": 40,
+    "scored_drives": 40,
+    "status_counts": {
+      "scored-native-development": 40
+    },
+    "complete": true,
+    "full_scope_mean_drive_score_m": 0.9743933949452525,
+    "completed_subset_mean_drive_score_m": 0.9743933949452525,
+    "completed_subset_mean_drive_p50_m": 0.6741798630000844,
+    "completed_subset_mean_drive_p95_m": 1.2746069268904205,
+    "completed_subset_raw_epochs": 65702,
+    "completed_subset_truth_epochs": 65520,
+    "completed_subset_unscored_native_epochs": 182,
+    "completed_subset_truth_coverage_fraction_of_raw_epochs": 0.997229916897507,
+    "completed_subset_missing_raw_key_rate": 0.0,
+    "completed_subset_output_interpolation_or_hold_rate": 0.0,
+    "completed_subset_temporal_initial_guess_count": 83,
+    "completed_subset_wall_s_sum": 31295.490482091904
+  },
+  "route_groups": 29,
+  "mean_route_group_score_m": 0.933090889324813,
+  "mean_drive_score_m": 0.9743933949452523,
+  "reference_official_score": {
+    "submission": 56491795,
+    "public_m": 1.396,
+    "private_m": 1.333,
+    "artifact_sha256": "c318140ed183290e07101ce877860de8807f3c3ac8b636dfd6d62cdb215837ef"
+  },
+  "goal_achieved": false,
+  "heldout": false,
+  "official_score": false,
+  "limitations": [
+    "Existing exposed train40, not heldout; local sphere percentile metric is not established as exact official evaluation.",
+    "Native raw-key coverage does not prove source-stage parity.",
+    "Input clock repair and bounded IMU tail handling remain explicit in per-run audit; zero coordinate interpolation does not mean zero input repair.",
+    "Official scores refer to the previously submitted test candidate, not these train outputs.",
+    "Four baseline failures have no valid accuracy delta; 36 valid pairs retain a subset comparison."
+  ],
+  "next_experiment": "train_expanded_bias_tdcp_sigma, eleven controls then eleven sigma-only candidates with same-binary control proof before candidates."
+}

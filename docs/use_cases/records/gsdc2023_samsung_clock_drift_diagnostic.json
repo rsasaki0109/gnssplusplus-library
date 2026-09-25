@@ -1,0 +1,62 @@
+{
+  "schema": "gsdc-samsung-drift-diagnostic.v1",
+  "dataset_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+  "epoch_count": 1697,
+  "finite_medians": 1697,
+  "raw_drift_mps": {
+    "min": 18518.775031318844,
+    "median": 18522.72737329443,
+    "p95": 18523.860963526244,
+    "max": 18524.471088020844
+  },
+  "native_gps_l1_median_mps": {
+    "min": 191.67759969177624,
+    "median": 206.59216546646311,
+    "p95": 210.7452944685874,
+    "max": 217.07854928636192
+  },
+  "abs_difference_mps": {
+    "min": 18307.37145957728,
+    "median": 18315.80065949027,
+    "p95": 18319.539164341022,
+    "max": 18327.817636164844
+  },
+  "raw_minus_median_mps": {
+    "min": 18307.37145957728,
+    "median": 18315.80065949027,
+    "p95": 18319.539164341022,
+    "max": 18327.817636164844
+  },
+  "median_jump_pairs_over_50mps": 0,
+  "provenance": {
+    "argv": [
+      "E:/rtklib_v2_ws_tmp/gsdc-loader-test/build/Release/samsung_drift_probe.exe",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+      "sm-a205u"
+    ],
+    "input_hashes": {
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav": "8928c254995b9b50c233813df8aefa67c759acc21edfcd53b48d28d3d06fa2c4"
+    },
+    "binary_sha256": "9da6234d9e88a70544972ed6dfdc334439d2e62bda981fe925795115a2282149",
+    "probe_source_sha256": "5577ce466fa99e877b4d429995357ddb7f444bfd6e3767c56f96e2302496592e",
+    "source_trajectory": "same-invocation native raw-P SPP plus position gradient",
+    "estimator_modified": false,
+    "truth_used": false,
+    "source_equivalence": "diagnostic hypothesis; not a paired upstream residual reproduction",
+    "started_unix": 1790099958.9096563,
+    "pid": 43108,
+    "state": "complete",
+    "returncode": 0,
+    "wall_s": 8.89552617073059,
+    "output_sha256": "d421af0054af03271b2732cb81bae845559620309e60a2ad5489d8a5e02bb13e"
+  },
+  "estimator_changed": false,
+  "paired_upstream_equivalence_proven": false,
+  "limitations": [
+    "Native raw-P position gradients replace upstream device WLS initial trajectory",
+    "Diagnostic uses existing FGO transmit-time/sagnac geometry; paired upstream residual sign and geometry still need independent verification",
+    "No jump masking or fill applied; this is a diagnostic, not a proposed raw-drift replacement"
+  ]
+}

@@ -1,0 +1,406 @@
+{
+  "status": "three-original-runs-scored-one-failed-retry-scored-separately",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_phone_group_plan.json",
+  "plan_sha256": "a77e92740be4dbfcdf3c50ff43e82520a60bc9cfaba41be3c1883d1dbe66f23f",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "cases": [
+    "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f"
+  ],
+  "route_groups": [
+    "2022-08-04-20-07-us-ca-sjc-q",
+    "2022-10-06-21-51-us-ca-mtv-n"
+  ],
+  "external_download": false,
+  "new_external_dataset": false,
+  "prior_usage": "unknown; development only, not claimed unused or heldout",
+  "truth_read_for_this_experiment": true,
+  "scoring_policy": "freeze native outputs before extracting truth; exact truth key subset only; reject missing truth keys; no interpolation; keep phones grouped by route",
+  "source_settings_used_as_runtime_type_or_l5_switches": false,
+  "test_recipe_unchanged": true,
+  "initial_run_records": [
+    {
+      "case": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+      "pid": 39680,
+      "state": "running",
+      "input_hashes_verified": true
+    },
+    {
+      "case": "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+      "pid": 53344,
+      "state": "running",
+      "input_hashes_verified": true
+    }
+  ],
+  "validator": "E:/rtklib_v2_ws_tmp/validate_gsdc_existing_train_phone_groups.py",
+  "truth_read_cases": [
+    "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f"
+  ],
+  "latest_validation": {
+    "status": "incomplete",
+    "runs": {
+      "2022-08-04-20-07-us-ca-sjc-q/mi8": {
+        "status": "scored-native-development",
+        "route_group": "2022-08-04-20-07-us-ca-sjc-q",
+        "audit": {
+          "returncode": 0,
+          "wall_s": 976.2952070236206,
+          "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+          "status": "raw-key-coverage-verified",
+          "raw_utc_groups": 1417,
+          "expected_output_keys": 1417,
+          "output_rows": 1417,
+          "missing_raw_keys": 0,
+          "extra_raw_keys": 0,
+          "duplicate_output_keys": 0,
+          "complete_ordered_raw_key_match": true,
+          "finite_phone_coordinates": true,
+          "summary_count_matches": true,
+          "key_contract": {
+            "warmup_epoch_excluded": false,
+            "raw_epoch_keys": 1417,
+            "target_epochs": 1417,
+            "exact_solution_epochs": 1417,
+            "interpolated_epochs": 0,
+            "edge_hold_epochs": 0,
+            "unresolved_epochs": 0,
+            "solution_time_tolerance_ms": 2,
+            "max_interpolation_gap_ms": 0,
+            "max_edge_hold_gap_ms": 0,
+            "coordinate_interpolation": "ECEF linear then geodetic",
+            "device_wls_coordinates_used": false
+          },
+          "position_accuracy_evaluated": false,
+          "native_estimation_contract_verified": true,
+          "native_exact_output_fraction": 1.0,
+          "output_interpolation_or_hold_count": 0,
+          "all_output_epochs_from_native_states": true,
+          "temporal_initial_guess_count": 0,
+          "independent_spp_accepted_epochs": 1417
+        },
+        "native_solution_sha256": "86894a1cd207712a6e5911201cf020b3a5a252991ac1508f17a88df6dbbfaae9",
+        "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+        "evaluation_subset_sha256": "c8144e8e99c14689b929f38e2bd044df1d316c52c8638bacf9e5de9b6b779089",
+        "dropped_nontruth_native_keys": 17,
+        "truth_key_count": 1400,
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7351657144501761,
+            "p95_m": 1.6910648018088565,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.2131152581295164
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7351120074571306,
+            "p95_m": 1.6910556998271569,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 1.2130838536421438
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 0.7358323923680485,
+            "p95_m": 1.6950406097300659,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.2154365010490573
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 0.7357844658933926,
+            "p95_m": 1.6950315598797678,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 1.2154080128865803
+          }
+        },
+        "official_score": false
+      },
+      "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+        "status": "scored-native-development",
+        "route_group": "2022-08-04-20-07-us-ca-sjc-q",
+        "audit": {
+          "returncode": 0,
+          "wall_s": 793.3078730106354,
+          "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+          "status": "raw-key-coverage-verified",
+          "raw_utc_groups": 1452,
+          "expected_output_keys": 1452,
+          "output_rows": 1452,
+          "missing_raw_keys": 0,
+          "extra_raw_keys": 0,
+          "duplicate_output_keys": 0,
+          "complete_ordered_raw_key_match": true,
+          "finite_phone_coordinates": true,
+          "summary_count_matches": true,
+          "key_contract": {
+            "warmup_epoch_excluded": false,
+            "raw_epoch_keys": 1452,
+            "target_epochs": 1452,
+            "exact_solution_epochs": 1452,
+            "interpolated_epochs": 0,
+            "edge_hold_epochs": 0,
+            "unresolved_epochs": 0,
+            "solution_time_tolerance_ms": 2,
+            "max_interpolation_gap_ms": 0,
+            "max_edge_hold_gap_ms": 0,
+            "coordinate_interpolation": "ECEF linear then geodetic",
+            "device_wls_coordinates_used": false
+          },
+          "position_accuracy_evaluated": false,
+          "native_estimation_contract_verified": true,
+          "native_exact_output_fraction": 1.0,
+          "output_interpolation_or_hold_count": 0,
+          "all_output_epochs_from_native_states": true,
+          "temporal_initial_guess_count": 0,
+          "independent_spp_accepted_epochs": 1452
+        },
+        "native_solution_sha256": "82aacc304f5194018dec6e7766e8e709b95e2b5a27b92acb7817efc75c52b7a5",
+        "truth_sha256": "db4662651c4da981b06d370121aa21a685f33eac0154161ceedee6c319db18e1",
+        "evaluation_subset_sha256": "65695d6729d438f75d4cecc22ef1780b140851c7a5cf38c17261644f6991279a",
+        "dropped_nontruth_native_keys": 18,
+        "truth_key_count": 1434,
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.4250581693336182,
+            "p95_m": 3.021433800067477,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.2232459847005477
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.4248504632168315,
+            "p95_m": 3.021480438751161,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 2.223165450983996
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 1.4245516445586144,
+            "p95_m": 3.016843590823414,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.2206976176910143
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 1.422568306122614,
+            "p95_m": 3.0168517712404825,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 2.2197100386815483
+          }
+        },
+        "official_score": false
+      },
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+        "status": "native-audit-failed",
+        "audit": {
+          "returncode": 1,
+          "wall_s": 2.446964740753174,
+          "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+          "status": "execution-failed",
+          "failure_reason": null,
+          "stderr_tail": [
+            "failed to convert raw Android GNSS: leading time-only epoch exceeds four-second monotonic bound"
+          ]
+        }
+      },
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+        "status": "scored-native-development",
+        "route_group": "2022-10-06-21-51-us-ca-mtv-n",
+        "audit": {
+          "returncode": 0,
+          "wall_s": 959.7744853496552,
+          "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+          "status": "raw-key-coverage-verified",
+          "raw_utc_groups": 1230,
+          "expected_output_keys": 1230,
+          "output_rows": 1230,
+          "missing_raw_keys": 0,
+          "extra_raw_keys": 0,
+          "duplicate_output_keys": 0,
+          "complete_ordered_raw_key_match": true,
+          "finite_phone_coordinates": true,
+          "summary_count_matches": true,
+          "key_contract": {
+            "warmup_epoch_excluded": false,
+            "raw_epoch_keys": 1230,
+            "target_epochs": 1230,
+            "exact_solution_epochs": 1230,
+            "interpolated_epochs": 0,
+            "edge_hold_epochs": 0,
+            "unresolved_epochs": 0,
+            "solution_time_tolerance_ms": 2,
+            "max_interpolation_gap_ms": 0,
+            "max_edge_hold_gap_ms": 0,
+            "coordinate_interpolation": "ECEF linear then geodetic",
+            "device_wls_coordinates_used": false
+          },
+          "position_accuracy_evaluated": false,
+          "native_estimation_contract_verified": true,
+          "native_exact_output_fraction": 1.0,
+          "output_interpolation_or_hold_count": 0,
+          "all_output_epochs_from_native_states": true,
+          "temporal_initial_guess_count": 1,
+          "independent_spp_accepted_epochs": 1229
+        },
+        "native_solution_sha256": "8ed7c788a4811815191f829355b452da4b4a9f3c0fddefe4de93bbabd3f12f92",
+        "truth_sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+        "evaluation_subset_sha256": "8ed7c788a4811815191f829355b452da4b4a9f3c0fddefe4de93bbabd3f12f92",
+        "dropped_nontruth_native_keys": 0,
+        "truth_key_count": 1230,
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.276711742535844,
+            "p95_m": 2.7526515410815446,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.0146816418086946
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2749700402389315,
+            "p95_m": 2.7573900015891764,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 2.016180020914054
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 1.274887868772657,
+            "p95_m": 2.7581892913703348,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 2.016538580071496
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 1.273120065062971,
+            "p95_m": 2.76222484309337,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 2.0176724540781708
+          }
+        },
+        "official_score": false
+      }
+    },
+    "prior_usage": "unknown; development only; not heldout",
+    "official_score": false,
+    "groups": {
+      "2022-08-04-20-07-us-ca-sjc-q": {
+        "cases": [
+          "2022-08-04-20-07-us-ca-sjc-q/mi8",
+          "2022-08-04-20-07-us-ca-sjc-q/sm-a325f"
+        ],
+        "complete": true,
+        "mean_phone_score_m": 1.7181806214150321
+      },
+      "2022-10-06-21-51-us-ca-mtv-n": {
+        "cases": [
+          "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+          "2022-10-06-21-51-us-ca-mtv-n/sm-a325f"
+        ],
+        "complete": false,
+        "mean_phone_score_m": null
+      }
+    }
+  },
+  "leading_clock_retry_validation": {
+    "status": "complete",
+    "runs": {
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+        "status": "scored-native-development",
+        "route_group": "2022-10-06-21-51-us-ca-mtv-n",
+        "audit": {
+          "returncode": 0,
+          "wall_s": 339.4472441673279,
+          "binary_sha256": "bf7eaaa18732928d61703145ef8a01626c603a9ebc804b7f538787f1f56a8af6",
+          "status": "raw-key-coverage-verified",
+          "raw_utc_groups": 1213,
+          "expected_output_keys": 1213,
+          "output_rows": 1213,
+          "missing_raw_keys": 0,
+          "extra_raw_keys": 0,
+          "duplicate_output_keys": 0,
+          "complete_ordered_raw_key_match": true,
+          "finite_phone_coordinates": true,
+          "summary_count_matches": true,
+          "key_contract": {
+            "warmup_epoch_excluded": false,
+            "raw_epoch_keys": 1213,
+            "target_epochs": 1213,
+            "exact_solution_epochs": 1213,
+            "interpolated_epochs": 0,
+            "edge_hold_epochs": 0,
+            "unresolved_epochs": 0,
+            "solution_time_tolerance_ms": 2,
+            "max_interpolation_gap_ms": 0,
+            "max_edge_hold_gap_ms": 0,
+            "coordinate_interpolation": "ECEF linear then geodetic",
+            "device_wls_coordinates_used": false
+          },
+          "position_accuracy_evaluated": false,
+          "native_estimation_contract_verified": true,
+          "native_exact_output_fraction": 1.0,
+          "output_interpolation_or_hold_count": 0,
+          "all_output_epochs_from_native_states": true,
+          "long_gap_mapped_imu_max_sample_gap_s": 0.018000003357883543,
+          "temporal_initial_guess_count": 4,
+          "independent_spp_accepted_epochs": 1209,
+          "leading_clock_only_epochs": 4
+        },
+        "native_solution_sha256": "76b2e89299bb48d54d5ed920d42dd28c683733e8f73495d6368ee9a5ae2ac4aa",
+        "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "evaluation_subset_sha256": "76b2e89299bb48d54d5ed920d42dd28c683733e8f73495d6368ee9a5ae2ac4aa",
+        "dropped_nontruth_native_keys": 0,
+        "truth_key_count": 1213,
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 7.573757571425344,
+            "p95_m": 100.23004833236598,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 53.901902951895664
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 7.573757571425344,
+            "p95_m": 100.23165848164841,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 53.90270802653688
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 7.564824075287623,
+            "p95_m": 100.05021830619748,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 53.80752119074255
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 7.564824075287623,
+            "p95_m": 100.05182294550228,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 53.80832351039495
+          }
+        },
+        "official_score": false
+      }
+    },
+    "prior_usage": "unknown; development only; not heldout",
+    "official_score": false,
+    "groups": {
+      "2022-10-06-21-51-us-ca-mtv-n": {
+        "cases": [
+          "2022-10-06-21-51-us-ca-mtv-n/sm-a205u"
+        ],
+        "complete": true,
+        "mean_phone_score_m": 53.901902951895664
+      }
+    },
+    "mean_route_group_score_m": 53.901902951895664
+  }
+}

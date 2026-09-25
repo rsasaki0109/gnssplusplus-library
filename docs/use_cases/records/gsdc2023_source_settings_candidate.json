@@ -1,0 +1,453 @@
+{
+  "status": "paired-development-comparison-complete-not-promoted",
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "binary": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\source_settings_fixed.exe",
+  "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+  "options": [
+    "--native-source-route-type Highway|Street|Mix",
+    "--native-source-l5 0|1"
+  ],
+  "scope": [
+    "Explicit metadata overrides geographic route-name heuristic",
+    "P and D Huber values including Pixel4 D=0.2 exception",
+    "P/D/L elevation mask from L5 capability",
+    "Velocity-motion sigma by source Type with Mi8 exception",
+    "Existing explicit TDCP-Huber selectors resolve Type using same metadata; new options alone do not enable them"
+  ],
+  "default_unchanged": true,
+  "tests": {
+    "unit_passed": 4,
+    "unit_failed": 0,
+    "xml": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_route_settings_tests.xml",
+    "invalid_cli_cases_rejected": 3,
+    "cli_evidence": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_cli_rejections.json"
+  },
+  "runs_root": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_regression_v1",
+  "source_settings_csv": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\settings_train.csv",
+  "source_settings_sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+  "development_rows": [
+    {
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "Type": "Highway",
+      "L5": 1
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "Type": "Street",
+      "L5": 1
+    }
+  ],
+  "position_accuracy_evaluated": true,
+  "remaining_parity": [
+    "phone-specific IMU noise",
+    "initflag-specific P/D residual screens",
+    "source multi-pass IMU attitude schedule",
+    "same-input upstream execution",
+    "official test keys and score",
+    "all40 completion including long gaps"
+  ],
+  "pixel5_candidate_completed": {
+    "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_regression_v1\\pixel5_candidate\\run.json",
+    "wall_s": 499.3564705848694,
+    "solution_sha256": "efc8779e5852b6839d776e24e2ee44fc20f5c5d0e23a00830053f0532ee28746",
+    "actual_settings": {
+      "enabled": true,
+      "direct_no_pdc": true,
+      "pdc_bridge": false,
+      "native_pdc_state_bridge": false,
+      "environment": "Street",
+      "p_and_d_huber": {
+        "pseudorange_sigma": 0.1,
+        "doppler_sigma": 0.4
+      },
+      "config": {
+        "use_upstream_observable_quality": true,
+        "upstream_snr_percentile": 85.0,
+        "upstream_min_snr_dbhz": 20.0,
+        "upstream_min_elevation_deg": 5,
+        "velocity_motion_sigma_m": 0.05,
+        "explicit_source_type_l5": true,
+        "source_l5": 1,
+        "upstream_max_adjacent_gap_s": 1.5,
+        "pseudorange_huber_threshold_sigma": 0.1,
+        "undifferenced_doppler_huber_threshold_sigma": 0.4,
+        "tdcp_sigma_m_unchanged": 0.03,
+        "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+        "doppler_sigma_contract": "snr_scale/12",
+        "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+        "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+        "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+      },
+      "counts": {
+        "pseudorange_candidates": 105188,
+        "pseudorange_factors": 101928,
+        "doppler_candidates": 0,
+        "doppler_factors": 0,
+        "doppler_graph_factors": 0,
+        "pseudorange_residual_rejections": 3260,
+        "doppler_residual_rejections": 0
+      }
+    },
+    "local_score_variants": {
+      "haversine_sphere__linear_n_minus_1": 0.576375694726723,
+      "haversine_sphere__nearest_rank_ceiling": 0.5764098780233989,
+      "wgs84_vincenty__linear_n_minus_1": 0.5772728370829892,
+      "wgs84_vincenty__nearest_rank_ceiling": 0.5773070987398354
+    },
+    "local_per_phone": {
+      "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+        "prediction_rows": 3139,
+        "primary_score_m": null,
+        "primary_score_status": "undetermined-from-public-primary-sources",
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.3673253507574625,
+            "p95_m": 0.7854260386959835,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.576375694726723
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.3673253507574625,
+            "p95_m": 0.7854944052893353,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 0.5764098780233989
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 0.36727045811785614,
+            "p95_m": 0.7872752160481221,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5772728370829892
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 0.36727045811785614,
+            "p95_m": 0.7873437393618148,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 0.5773070987398354
+          }
+        }
+      }
+    },
+    "raw_key_audit": {
+      "returncode": 0,
+      "wall_s": 499.3564705848694,
+      "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+      "status": "raw-key-coverage-verified",
+      "raw_utc_groups": 3140,
+      "expected_output_keys": 3139,
+      "output_rows": 3139,
+      "missing_raw_keys": 0,
+      "extra_raw_keys": 0,
+      "duplicate_output_keys": 0,
+      "complete_ordered_raw_key_match": true,
+      "finite_phone_coordinates": true,
+      "summary_count_matches": true,
+      "key_contract": {
+        "warmup_epoch_excluded": true,
+        "raw_epoch_keys": 3140,
+        "target_epochs": 3139,
+        "exact_solution_epochs": 3139,
+        "interpolated_epochs": 0,
+        "edge_hold_epochs": 0,
+        "unresolved_epochs": 0,
+        "solution_time_tolerance_ms": 2,
+        "max_interpolation_gap_ms": 0,
+        "max_edge_hold_gap_ms": 0,
+        "coordinate_interpolation": "ECEF linear then geodetic",
+        "device_wls_coordinates_used": false
+      },
+      "position_accuracy_evaluated": false,
+      "native_estimation_contract_verified": true,
+      "native_exact_output_fraction": 1.0,
+      "output_interpolation_or_hold_count": 0,
+      "all_output_epochs_from_native_states": true,
+      "temporal_initial_guess_count": 0,
+      "local_score": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_regression_v1\\pixel5_candidate\\local_score.json"
+    },
+    "matched_binary_control_pending": true,
+    "development_exposure": "previously used development route"
+  },
+  "pixel4_candidate_completed": {
+    "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_regression_v1\\pixel4_candidate\\run.json",
+    "wall_s": 577.5013315677643,
+    "solution_sha256": "e5842c5eff5c5eb0981f5de5a8b7fa9481d5c6cd3acce30a3937148b36b17308",
+    "actual_settings": {
+      "enabled": true,
+      "direct_no_pdc": true,
+      "pdc_bridge": false,
+      "native_pdc_state_bridge": false,
+      "environment": "Highway",
+      "p_and_d_huber": {
+        "pseudorange_sigma": 0.2,
+        "doppler_sigma": 0.2
+      },
+      "config": {
+        "use_upstream_observable_quality": true,
+        "upstream_snr_percentile": 85.0,
+        "upstream_min_snr_dbhz": 20.0,
+        "upstream_min_elevation_deg": 5,
+        "velocity_motion_sigma_m": 0.01,
+        "explicit_source_type_l5": true,
+        "source_l5": 1,
+        "upstream_max_adjacent_gap_s": 1.5,
+        "pseudorange_huber_threshold_sigma": 0.2,
+        "undifferenced_doppler_huber_threshold_sigma": 0.2,
+        "tdcp_sigma_m_unchanged": 0.03,
+        "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+        "doppler_sigma_contract": "snr_scale/12",
+        "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+        "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+        "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+      },
+      "counts": {
+        "pseudorange_candidates": 69329,
+        "pseudorange_factors": 67745,
+        "doppler_candidates": 0,
+        "doppler_factors": 0,
+        "doppler_graph_factors": 0,
+        "pseudorange_residual_rejections": 1584,
+        "doppler_residual_rejections": 0
+      }
+    },
+    "local_score_variants": {
+      "haversine_sphere__linear_n_minus_1": 0.8453631252684605,
+      "haversine_sphere__nearest_rank_ceiling": 0.8455448494104396,
+      "wgs84_vincenty__linear_n_minus_1": 0.8453398019164247,
+      "wgs84_vincenty__nearest_rank_ceiling": 0.8455123302784521
+    },
+    "local_per_phone": {
+      "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+        "prediction_rows": 1677,
+        "primary_score_m": null,
+        "primary_score_status": "undetermined-from-public-primary-sources",
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.722791230558703,
+            "p95_m": 0.967935019978218,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8453631252684605
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.722791230558703,
+            "p95_m": 0.9682984682621762,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 0.8455448494104396
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 0.7236058603114409,
+            "p95_m": 0.9670737435214083,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8453398019164247
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 0.7236058603114409,
+            "p95_m": 0.9674188002454632,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 0.8455123302784521
+          }
+        }
+      }
+    },
+    "raw_key_audit": {
+      "returncode": 0,
+      "wall_s": 577.5013315677643,
+      "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+      "status": "raw-key-coverage-verified",
+      "raw_utc_groups": 1678,
+      "expected_output_keys": 1677,
+      "output_rows": 1677,
+      "missing_raw_keys": 0,
+      "extra_raw_keys": 0,
+      "duplicate_output_keys": 0,
+      "complete_ordered_raw_key_match": true,
+      "finite_phone_coordinates": true,
+      "summary_count_matches": true,
+      "key_contract": {
+        "warmup_epoch_excluded": true,
+        "raw_epoch_keys": 1678,
+        "target_epochs": 1677,
+        "exact_solution_epochs": 1677,
+        "interpolated_epochs": 0,
+        "edge_hold_epochs": 0,
+        "unresolved_epochs": 0,
+        "solution_time_tolerance_ms": 2,
+        "max_interpolation_gap_ms": 0,
+        "max_edge_hold_gap_ms": 0,
+        "coordinate_interpolation": "ECEF linear then geodetic",
+        "device_wls_coordinates_used": false
+      },
+      "position_accuracy_evaluated": false,
+      "native_estimation_contract_verified": true,
+      "native_exact_output_fraction": 1.0,
+      "output_interpolation_or_hold_count": 0,
+      "all_output_epochs_from_native_states": true,
+      "temporal_initial_guess_count": 0,
+      "local_score": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_regression_v1\\pixel4_candidate\\local_score.json"
+    },
+    "matched_binary_control_pending": true,
+    "development_exposure": "previously used development route",
+    "assessment": "Worse than source-IMU candidate (0.707909m Haversine/linear); do not claim improvement or promote from this result."
+  },
+  "matched_binary_results": {
+    "pixel4": {
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.6312931637598078,
+          "p95_m": 0.7845251987815618,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.7079091812706848
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.6312931637598078,
+          "p95_m": 0.7845387584171557,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.7079159610884818
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.6310196874855543,
+          "p95_m": 0.7841227181317888,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.7075712028086716
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.6310196874855543,
+          "p95_m": 0.7843277135023379,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.7076737004939461
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.967935019978218,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453631252684605
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.9682984682621762,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455448494104396
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9670737435214083,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453398019164247
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9674188002454632,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455123302784521
+        }
+      },
+      "delta_haversine_linear_m": 0.13745394399777566,
+      "runtimes_s": {
+        "control": 750.7279005050659,
+        "candidate": 577.5013315677643
+      },
+      "solution_hashes": {
+        "control": "773b37176dbd3077b4bb78a2e54edea0f93ffc59d7c6f5a9d3290366a6f800ab",
+        "candidate": "e5842c5eff5c5eb0981f5de5a8b7fa9481d5c6cd3acce30a3937148b36b17308"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    },
+    "pixel5": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.36715946344949324,
+          "p95_m": 0.7856783591572387,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.576418911303366
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.36715946344949324,
+          "p95_m": 0.7857471054805752,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5764532844650343
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.3675778071837004,
+          "p95_m": 0.7875281577856231,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5775529824846618
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.3675778071837004,
+          "p95_m": 0.7875969902816586,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5775873987326795
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854260386959835,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.576375694726723
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854944052893353,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5764098780233989
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7872752160481221,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5772728370829892
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7873437393618148,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5773070987398354
+        }
+      },
+      "delta_haversine_linear_m": -4.3216576642968185e-05,
+      "runtimes_s": {
+        "control": 446.028196811676,
+        "candidate": 499.3564705848694
+      },
+      "solution_hashes": {
+        "control": "f4534939a07d557a3b18ddaa1c9444e5a84da04d674ed2ecc80224be888d70e9",
+        "candidate": "efc8779e5852b6839d776e24e2ee44fc20f5c5d0e23a00830053f0532ee28746"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    }
+  },
+  "accuracy_scope": "two previously exposed development routes; no official or taroz score"
+}

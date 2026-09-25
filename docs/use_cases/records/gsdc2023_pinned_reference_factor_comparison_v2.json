@@ -1,0 +1,57 @@
+{
+  "status": "pinned-factor-agreements-and-nonlinear-p-model-gap-verified",
+  "reference_commit": "e679b72b620fc6800723578e4077dd157587d129",
+  "reference_headers_sha256": {
+    "ClockFactor_CCDD.h": "be36e9644d18a95d000c62640c4cbfd08ff571d94418937716c4d18a4f086459",
+    "MotionFactor_XXVV.h": "26dab9f5e8a11d170d53514dfe508f362da4115304b29ce45f7c54978350add5",
+    "DopplerFactor_VD.h": "23af721b84ab9f2f43fcb6a1aff44a0b0c8656ab06c8b8e6342ab1e3c5367e71",
+    "PseudorangeFactor_XC.h": "889150d303ee51edd95ac250414c8d6bbefc1c37697a9f75a12794d0b7a76b23",
+    "TDCPFactor_XXCC.h": "11de55db0a5f298523902bd7b963afae687447d716556db11bd746fbc5d221ca"
+  },
+  "native_source_sha256": {
+    "src/algorithms/fgo_gtsam_internal.hpp": "c19aee64292ad196df1156a1bfcca0219a1eeed9e9220fdcc69cef7b7c149493",
+    "include/libgnss++/algorithms/fgo.hpp": "730734765055485f9d654d91eb354edade84347195fa70be0150d1fe252542d0",
+    "include/libgnss++/algorithms/fgo_config.hpp": "3090896b0027886edfa53f24161b61def86503bc220b0be9d745e871f2eeb1d1",
+    "tests/reference_gsdc_factors/test_reference_factors.cpp": "84eca8ba4189b5842a8d575ee64fab041744e2588c6efc8dc48ca22463d36a52",
+    "tests/reference_gsdc_factors/CMakeLists.txt": "b224329c05eccc7cb839e740292ea53c16c62299af69663d0ca00a87588d2f4f"
+  },
+  "executable_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\pinned_reference_factor_tests_v2.exe",
+  "executable_sha256": "fd155617daf76fb98ff7783088ef596760eaff2073f3112b54701c2c3dded813",
+  "gtsam_dll_sha256": "926bc5f93c09874c89aaf208fa63226e5fb720e21449795b4ae52ae5b9ed9cdf",
+  "tests_passed": 6,
+  "residual_and_jacobian_absolute_tolerance": {
+    "clock": 1e-12,
+    "motion": 1e-12,
+    "doppler_residual": 1e-10,
+    "doppler_jacobian": 1e-12,
+    "optional_affine_p": 1e-12,
+    "optional_affine_tdcp": 1e-12
+  },
+  "xml_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\pinned_reference_factor_tests_v2.xml",
+  "xml_sha256": "ee9f01a85a5f71eeed364a505ac7b852055ab4ffcc82ddbf7644fbd20f2cb538",
+  "truth_used": false,
+  "accuracy_claim": false,
+  "paired_matlab_runtime": false,
+  "scope": "Direct execution of original pinned C++ headers and native classes on identical states; Doppler residual-origin convention explicitly converted.",
+  "limitations": [
+    "The 66 matching state cases include optional affine P/TDCP classes; this does not mean those classes are selected by the submitted/default recipe.",
+    "The sixth test verifies an expected nonlinear P model difference; passing it does not establish P model equivalence.",
+    "Unwhitened residual/Jacobian evaluation only; no graph-selection, preprocessing, IMU/height, convergence, MATLAB or trajectory accuracy parity."
+  ],
+  "matching_state_cases": {
+    "clock": 15,
+    "motion": 15,
+    "doppler": 12,
+    "optional_affine_p": 21,
+    "optional_affine_tdcp": 3
+  },
+  "model_gap_case": {
+    "native": "PseudorangeFactorSourceClock",
+    "source": "PseudorangeFactor_XC",
+    "anchor_agreement_tolerance_m": 1e-08,
+    "transverse_displacement_m": 1000,
+    "observed_residual_difference_m": 0.014711357473686348,
+    "synthetic": true,
+    "accuracy_claim": false
+  }
+}

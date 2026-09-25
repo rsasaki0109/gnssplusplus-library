@@ -1,0 +1,43 @@
+{
+  "status": "candidate-scored-native-development",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_expanded_bias_tdcp_sigma_plan.json",
+  "plan_sha256": "c8d22ed873da10b0d906e80bd018fe5b5e15d75bd3d4ae4112a43ed2a8553218",
+  "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+  "drive_count": 11,
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "created_unix": 1790170089.3444915,
+  "scope": "All eleven existing train drives of four newly admitted bias-difference phones; sigma-only matched development comparison.",
+  "legacy_control_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_plan.json",
+  "legacy_control_plan_sha256": "67efef7c87fc883ffe56fb28974692f96a8f77ee7ed51a47fe1ad0d61554a7f3",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_expanded_bias_tdcp_sigma_control_plan.json",
+  "baseline_plan_sha256": "9d2b82e35d68bc6518f81c38d67ed3d4a03f334efa813783efb0b044d7facbea",
+  "control_check_complete": true,
+  "paired_validation_complete": true,
+  "comparison_record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_expanded_bias_tdcp_sigma_comparison.json",
+  "comparison_record_sha256": "e09a0aa805c06666b8ab9f35aa459a2e9a74b9fd810640f6a69eec6985f13537",
+  "runner_pid": 39664,
+  "started_unix": 1790177357.5974965,
+  "native_returncodes": {
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 0,
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": 0,
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": 0,
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": 0,
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": 0,
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": 0,
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": 0,
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": 0,
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": 0,
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": 0,
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": 0
+  },
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_expanded_bias_tdcp_sigma_v1\\validation.json",
+  "validation_sha256": "f94d36d7079fd154a4ce6abb65e0da5cbe95a06a8868524dee5e3935fc851c85",
+  "status_counts": {
+    "scored-native-development": 11
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.8790585473246254,
+  "mean_route_group_score_m": 0.8935113453676754
+}

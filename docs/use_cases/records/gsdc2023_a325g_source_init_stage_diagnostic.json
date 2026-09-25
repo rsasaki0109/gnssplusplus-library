@@ -1,0 +1,32 @@
+{
+  "schema": "gsdc-a325g-source-init-stage-diagnostic.v1",
+  "gnss_first_summary_identical": true,
+  "results": {
+    "control": {
+      "summary_sha256": "ae7a5d08bd59ac0e61810d846d6ce0e61e1206c267e2aca5d206f5ddaa038c5e",
+      "main_iterations": 114,
+      "main_initial_cost": 208528954.0239128,
+      "main_final_cost": 326799.22274990554,
+      "tdcp": {
+        "optimized_accel_bias_max_norm_mps2": 19.624158181727598,
+        "optimized_gyro_bias_max_norm_radps": 0.014764251397682632,
+        "residual_rms_m": 0.33276673173552995,
+        "factors_inserted": 19656
+      }
+    },
+    "candidate": {
+      "summary_sha256": "1f5f0dbc50db1de24fa1d8998023cd6bb6dc145fc0699fdacd53caded6bd35d3",
+      "main_iterations": 107,
+      "main_initial_cost": 25635140.664900795,
+      "main_final_cost": 40928.569365524614,
+      "tdcp": {
+        "optimized_accel_bias_max_norm_mps2": 0.27414266512460994,
+        "optimized_gyro_bias_max_norm_radps": 0.015234922767888863,
+        "residual_rms_m": 0.20012712731098908,
+        "factors_inserted": 19656
+      }
+    }
+  },
+  "scope": "Matched source initialization option changes attitude and bias initialization together; identical GNSS summary and seed metadata do not separate those two components or prove identical unexported GNSS state arrays. One exposed development route, not official test accuracy.",
+  "checked_unix": 1790145107.044806
+}

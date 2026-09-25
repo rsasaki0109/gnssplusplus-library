@@ -1,0 +1,20 @@
+{
+  "schema": "gsdc-raw-clock-seed-export-build-incident.v1",
+  "binary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\source_raw_clock_cleanup_fixed.exe",
+  "binary_sha256": "c3abb65f98098f4be611426285e743d2ebe8e7a48b3e61718e3a0d4a24f4a9b3",
+  "seed_rows_missing_required_numeric_export": 1259,
+  "seed_source_label": "source-raw-clock-drift-jump-mask-fill",
+  "binary_contains_required_export_label": false,
+  "sidecar_filled_values": 5,
+  "sidecar_jump_masks": 0,
+  "diagnosis": "The serializer numeric-export edit was made while the first compile was running. Incremental build subsequently skipped recompilation; the binary exports the source label but not the newly added per-seed numeric field. Force source timestamp newer than completed build and compile again before freezing a new binary.",
+  "original_run_preserved": true,
+  "audit_not_weakened": true,
+  "accuracy_accepted": false,
+  "checked_unix": 1790150458.6220214,
+  "rebuilt_binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "rebuilt_binary_contains_required_export_label": true,
+  "new_run_plan_sha256": "e1a946684fe8a25a915fd8c25b11737338d0b19937a2d46d8654027561be13b9",
+  "runtime_export_reverification": "queued-after-original-native-run",
+  "audit_regression_tests_passed": 6
+}

@@ -1,0 +1,43 @@
+{
+  "status": "paired-native-development-comparison-complete",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_a205u_source_init_plan.json",
+  "plan_sha256": "58a6f4f921395cf718ffc5a5086b8109b85c432a94ccbdfa278846e5ceabc6aa",
+  "hypothesis": "source per-epoch attitude and zero-bias initialization may avoid poor main-graph solution; not yet established",
+  "baseline_score_m": 53.901902951895664,
+  "baseline_accel_bias_max_norm_mps2": 19.689686433829284,
+  "candidate_flag": "--native-source-imu-initialization",
+  "same_binary_and_inputs": true,
+  "development_truth_already_exposed": true,
+  "promotion": false,
+  "result": {
+    "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "same_binary_inputs_other_args_verified": true,
+    "gnss_first_summary_identical": true,
+    "scores": {
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 7.573757571425344,
+        "p95_m": 100.23004833236598,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 53.901902951895664
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.378026257358728,
+        "p95_m": 2.9248657168359653,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.151445987097347
+      }
+    },
+    "delta_m": -51.75045696479832,
+    "wall_s": {
+      "control": 339.4472441673279,
+      "candidate": 245.49069333076477
+    },
+    "official_score": false,
+    "promotion": false,
+    "scope": "single exposed development route; initialization experiment only"
+  },
+  "interpretation": "same-input same-binary experiment isolates composite IMU initialization option after identical GNSS-first summary; does not isolate zero-bias versus epoch attitude seeding individually",
+  "candidate_accel_bias_max_norm_mps2": 0.3147075994522414
+}

@@ -1,0 +1,308 @@
+{
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_files": [
+    "parameters.m:178-200",
+    "functions/imuprocessing.m:7-20"
+  ],
+  "source_literal_sm_g325f_preserved": true,
+  "note": "The source substring is sm-g325f, not sm-a325f; the latter takes the remaining-sm branch. This record does not implement, promote, or measure phone-specific settings. Elapsed availability must be checked per drive.",
+  "phones": {
+    "pixel4xl": {
+      "source_branch": "pixel",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 1
+    },
+    "pixel5": {
+      "source_branch": "pixel",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 17
+    },
+    "sm-g988b": {
+      "source_branch": "source-explicit-samsung-substrings",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 2
+    },
+    "pixel4": {
+      "source_branch": "pixel",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 2
+    },
+    "mi8": {
+      "source_branch": "mi",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 4
+    },
+    "pixel6pro": {
+      "source_branch": "pixel",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 3
+    },
+    "xiaomimi8": {
+      "source_branch": "mi",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 1
+    },
+    "samsunga325g": {
+      "source_branch": "source-explicit-samsung-substrings",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 2
+    },
+    "samsunga32": {
+      "source_branch": "source-explicit-samsung-substrings",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 1
+    },
+    "sm-a325f": {
+      "source_branch": "remaining-sm",
+      "base_accel_sigma": 0.1,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.05,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.1,
+        0.001
+      ],
+      "drive_count": 1
+    },
+    "sm-a205u": {
+      "source_branch": "remaining-sm",
+      "base_accel_sigma": 0.1,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.05,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.1,
+        0.001
+      ],
+      "drive_count": 1
+    },
+    "pixel7pro": {
+      "source_branch": "pixel",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 3
+    },
+    "sm-a505u": {
+      "source_branch": "remaining-sm",
+      "base_accel_sigma": 0.1,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.05,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.1,
+        0.001
+      ],
+      "drive_count": 1
+    },
+    "sm-s908b": {
+      "source_branch": "source-explicit-samsung-substrings",
+      "base_accel_sigma": 0.05,
+      "base_gyro_sigma": 0.001,
+      "with_elapsed_time": [
+        0.025,
+        0.0005
+      ],
+      "without_elapsed_time": [
+        0.05,
+        0.001
+      ],
+      "drive_count": 1
+    }
+  },
+  "all_test_drives": 40,
+  "accuracy_evaluated": false,
+  "implementation": "opt-in --native-source-phone-imu-noise; defaults unchanged; Phase194 override mutually exclusive",
+  "tests": {
+    "source_phone_noise_cpp": 2,
+    "preset_and_clock_cases": 32,
+    "legacy_phase194_python": 4,
+    "diff_check_passed": true
+  },
+  "build_status": "passed",
+  "pixel4_pair_root": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_phone_noise_regression_v1",
+  "pixel4_pair_status": "complete-not-promoted",
+  "pixel4_candidate_only_scores": {
+    "haversine_sphere__linear_n_minus_1": 0.8977679586016627,
+    "haversine_sphere__nearest_rank_ceiling": 0.898005859014068,
+    "wgs84_vincenty__linear_n_minus_1": 0.8971276019502064,
+    "wgs84_vincenty__nearest_rank_ceiling": 0.8976058336722371
+  },
+  "pixel4_matched_delta_available": true,
+  "matched_binary_results": {
+    "pixel4": {
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.967935019978218,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453631252684605
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.9682984682621762,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455448494104396
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9670737435214083,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453398019164247
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9674188002454632,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455123302784521
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.7582939271278263,
+          "p95_m": 1.037241990075499,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8977679586016627
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.7582939271278263,
+          "p95_m": 1.03771779090031,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.898005859014068
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7585251132557345,
+          "p95_m": 1.0357300906446782,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8971276019502064
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7585251132557345,
+          "p95_m": 1.0366865540887398,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8976058336722371
+        }
+      },
+      "delta_haversine_linear_m": 0.05240483333320223,
+      "runtimes_s": {
+        "control": 719.8164331912994,
+        "candidate": 650.8363711833954
+      },
+      "solution_hashes": {
+        "control": "e5842c5eff5c5eb0981f5de5a8b7fa9481d5c6cd3acce30a3937148b36b17308",
+        "candidate": "4f7244095cb9c60213001d422a0a930d14962454f612b3220fda1eeaee6817b3"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    }
+  },
+  "status": "paired-development-comparison-complete-not-promoted",
+  "position_accuracy_evaluated": true,
+  "accuracy_scope": "one previously exposed development route; no official or taroz score",
+  "promotion_decision": "Do not promote source phone noise globally: paired Pixel4 worsens by 0.0524048333 m while paired Pixel5 improves by 0.0238331975 m on different previously exposed development routes."
+}

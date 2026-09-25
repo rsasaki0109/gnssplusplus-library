@@ -1,0 +1,22 @@
+{
+  "status": "candidate-scored-native-development",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_source_tdcp_noise_control_plan.json",
+  "plan_sha256": "c416d6e6ec8d8dfc19ba14ac7c043653ef5795e693c0d8df7661ce87dcfc9ea9",
+  "binary_sha256": "04a853b3af950229b3fa4aadadbfc48edbf2340cc72bc8b61a7b6cae5039b6f1",
+  "scope": "Two A325F Highway/L5=0 main-Doppler routes; matched new executable; source metre sigma plus source Huber is the only candidate option bundle.",
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "official_score": false,
+  "promoted": false,
+  "created_unix": 1790157003.823655,
+  "legacy_control_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_doppler_source_route_plan.json",
+  "legacy_control_plan_sha256": "f4f296384cabaa7b5d856c72ac9e7d9ffdd66d251aaaa075c188813fc858fc3a",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_source_tdcp_noise_control_v1\\validation.json",
+  "validation_sha256": "d5c1fe88ddf3d30ba0c5cd40a4fb580cec7823eb1d8c94b412c447d45670db1e",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.9199599306314146,
+  "mean_route_group_score_m": 1.9199599306314146
+}

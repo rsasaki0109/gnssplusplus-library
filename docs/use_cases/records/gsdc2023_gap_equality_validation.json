@@ -1,0 +1,93 @@
+{
+  "schema_version": "gsdc2023-gap-equality-validation.v1",
+  "goal_achieved": false,
+  "change": "Use existing 1 us time-equality tolerance at raw seed max-gap boundary; preserve timestamp and max-gap setting",
+  "tests": {
+    "raw_seed_tests": 35,
+    "failures": 0,
+    "boundary_excess_seconds": [
+      -5e-07,
+      0,
+      6.4e-08,
+      5e-07,
+      2e-06,
+      0.001
+    ],
+    "first_four_accepted_last_two_rejected": true
+  },
+  "binary_sha256": "0dc022156675b50f72933363026194ed2114b6f1b2dafe554de1657e1bec0833",
+  "raw_seed_audit": {
+    "complete": true,
+    "runs": 40,
+    "accepted": 29,
+    "failure_reasons": {
+      "insufficient-corrected-pseudorange-geometry": 7,
+      "epoch-time-gap-exceeds-limit": 1,
+      "insufficient-pseudorange-satellites": 3
+    }
+  },
+  "samsung_full": {
+    "returncode": 0,
+    "wall_s": 202.2141137123108,
+    "solution_sha256": "0243c6a6215377f46fcdff881e4271e6b2e3c430f0da9621f6553bebb38a7591",
+    "csv_rows": 1696,
+    "finite_phone_coordinates_checked": true,
+    "raw_utc_key_contract": {
+      "warmup_epoch_excluded": true,
+      "raw_epoch_keys": 1697,
+      "target_epochs": 1696,
+      "exact_solution_epochs": 1696,
+      "interpolated_epochs": 0,
+      "edge_hold_epochs": 0,
+      "unresolved_epochs": 0,
+      "solution_time_tolerance_ms": 2,
+      "max_interpolation_gap_ms": 0,
+      "max_edge_hold_gap_ms": 0,
+      "coordinate_interpolation": "ECEF linear then geodetic",
+      "device_wls_coordinates_used": false
+    },
+    "drift_factor_residual_rows": 10756,
+    "test_truth_used": false,
+    "csv_exact_loader_selected_raw_keys_after_warmup": true,
+    "all_original_csv_raw_keys_after_warmup": false,
+    "original_csv_raw_groups": 1699,
+    "loader_selected_raw_groups": 1697
+  },
+  "development_replays": {
+    "pixel4": {
+      "binary_sha256": "5ef26fa03a121632c59f2079d68216bb84f8f717a7e23296bafcf783d8780aaf",
+      "returncode": 0,
+      "wall_s": 628.3199627399445,
+      "solution_sha256": "9288265dce429ae806ad4c2a760d189eb3179f0286f8578fc058e79a3b5bfb2d",
+      "key_validation": {
+        "allow_gaps": false,
+        "complete_key_match": true,
+        "extra_submission_keys": 0,
+        "missing_truth_keys": 0,
+        "missing_truth_keys_by_phone": {},
+        "submission_keys": 1677,
+        "truth_keys": 1677
+      },
+      "local_score_file_sha256": "e5cad4d627e90fca9e6292471a4907e2137cdac0f116ac7214fb2533bb30d05a",
+      "haversine_linear_m": 1.0339169238941996
+    },
+    "pixel5": {
+      "binary_sha256": "5ef26fa03a121632c59f2079d68216bb84f8f717a7e23296bafcf783d8780aaf",
+      "returncode": 0,
+      "wall_s": 256.96863555908203,
+      "solution_sha256": "22248d3af7e012bbc8e672f073f91d50f8aa5b900c46b86cbc1eb1d8c286062c",
+      "key_validation": {
+        "allow_gaps": false,
+        "complete_key_match": true,
+        "extra_submission_keys": 0,
+        "missing_truth_keys": 0,
+        "missing_truth_keys_by_phone": {},
+        "submission_keys": 3139,
+        "truth_keys": 3139
+      },
+      "local_score_file_sha256": "67d19af923a85d17152415f492ee9eb44c6772fd13d8e1bf30174b741d8f19ca",
+      "haversine_linear_m": 0.576232064
+    }
+  },
+  "remaining": "11 drives still fail raw seed stage; full native completion demonstrated on only 2 development and 1 test drive, not all40; paired taroz and official evaluation incomplete"
+}

@@ -1,0 +1,180 @@
+{
+  "status": "paired-development-comparison-complete-not-promoted",
+  "option": "--native-source-lm-tolerances",
+  "default_changed": false,
+  "native_default_relative_tolerance": 1e-08,
+  "native_default_absolute_tolerance": 1e-10,
+  "candidate_relative_tolerance": 1e-05,
+  "candidate_absolute_tolerance": 1e-05,
+  "applies_to": [
+    "GNSS-first",
+    "IMU-main"
+  ],
+  "source_evidence": [
+    "upstream-source/fgo_gnss.m leaves LM tolerances at library defaults",
+    "upstream-source/fgo_gnss_imu.m leaves LM tolerances at library defaults",
+    "E:/gtsam/install/include/gtsam/nonlinear/NonlinearOptimizerParams.h sets both defaults to 1e-5"
+  ],
+  "matlab_runtime_reproduction": false,
+  "max_iterations_changed": false,
+  "development_scope": "two previously exposed Pixel4/Pixel5 routes, same binary and inputs, explicit Type/L5/source IMU controls",
+  "runner": "E:/rtklib_v2_ws_tmp/run_gsdc_source_lm_tolerances.py",
+  "position_accuracy_evaluated": true,
+  "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517",
+  "replay_root": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_lm_tolerance_regression_v1",
+  "matched_binary_results": {
+    "pixel4": {
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.967935019978218,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453631252684605
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.9682984682621762,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455448494104396
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9670737435214083,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453398019164247
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9674188002454632,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455123302784521
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.7253961838417429,
+          "p95_m": 0.9713788853207013,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8483875345812221
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.7253961838417429,
+          "p95_m": 0.9717068609006992,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.848551522371221
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7254475527645476,
+          "p95_m": 0.9705258462551609,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8479866995098543
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7254475527645476,
+          "p95_m": 0.9708353954839388,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8481414741242432
+        }
+      },
+      "delta_haversine_linear_m": 0.0030244093127616,
+      "runtimes_s": {
+        "control": 697.8131444454193,
+        "candidate": 290.940997838974
+      },
+      "solution_hashes": {
+        "control": "e5842c5eff5c5eb0981f5de5a8b7fa9481d5c6cd3acce30a3937148b36b17308",
+        "candidate": "918d3c3ec14c17463b9cc15d05ce90065c795b85eaa340d601d4f01a36691ce4"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    },
+    "pixel5": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854260386959835,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.576375694726723
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854944052893353,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5764098780233989
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7872752160481221,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5772728370829892
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7873437393618148,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5773070987398354
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3739352837411251,
+          "p95_m": 0.7972013661149024,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5855683249280138
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3739352837411251,
+          "p95_m": 0.7972817547183761,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5856085192297507
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.37332674455923714,
+          "p95_m": 0.7986200643383674,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5859734044488023
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.37332674455923714,
+          "p95_m": 0.7986240108739112,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5859753777165742
+        }
+      },
+      "delta_haversine_linear_m": 0.009192630201290797,
+      "runtimes_s": {
+        "control": 616.8690736293793,
+        "candidate": 159.149897813797
+      },
+      "solution_hashes": {
+        "control": "efc8779e5852b6839d776e24e2ee44fc20f5c5d0e23a00830053f0532ee28746",
+        "candidate": "4293025352e95b9e51c7b2adff5a5f239fc628a3d06a58aabdcdcff023d88cca"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    }
+  },
+  "accuracy_scope": "two previously exposed development routes; no official or taroz score"
+}

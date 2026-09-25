@@ -1,0 +1,24 @@
+{
+  "schema": "gsdc-a217m-coverage-diagnostic-run.v1",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_coverage_diagnostic_plan.json",
+  "plan_sha256": "796a3e0ef0bd1234959ddc42eb9d11b59fd22c835210895169f0b242e8ce0a1f",
+  "binary_sha256": "979f7882dcbe6a8601dcf0ca148da8e08f8d2694ffccf079b06c0cb1f4adc944",
+  "policy_changed": false,
+  "external_submission": false,
+  "source_sha256": "f4935fd20edc7bd6a40ddb52ddeb9a6bd5f223ab477389f9e5ae0368cdb823b6",
+  "status": "failure-bounds-verified",
+  "coverage": {
+    "time_origin": "first_gnss_epoch",
+    "required_begin_relative_s": 0,
+    "required_end_relative_s": 1219.9987840430113,
+    "first_sample_relative_s": -2.563251953921281,
+    "last_sample_relative_s": 1219.9692237828276,
+    "loaded_samples": 60848,
+    "verified": false
+  },
+  "trailing_shortfall_s": 0.02956026018364355,
+  "run_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a217m_coverage_diagnostic_v1\\00\\run.json",
+  "run_sha256": "daf1ba3492512f79042cf01045b8f0513c6f60c5211d89881f1434fb79c55623",
+  "summary_sha256": "ebaff1be078969a3c06f18354e59e293967a5a959c9a7b25afb48dd84fbe2253",
+  "wall_s": 92.65403127670288
+}

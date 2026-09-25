@@ -214,4 +214,12 @@ bool loadAndroidRawGnssCsv(const std::string& path,
                            AndroidRawGnssResult& result,
                            std::string& error);
 
+// Explicit leading time-only states (at most four seconds, same hardware
+// clock), with no invalid observations admitted. Requires a native estimator
+// with bounded leading initialization and verified continuous mapped IMU.
+bool loadAndroidRawGnssCsvWithLeadingClockEpochs(
+    const std::string& path, const AndroidRawGnssConfig& config,
+    AndroidRawGnssResult& result, std::string& error);
+
+
 }  // namespace libgnss::io

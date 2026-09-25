@@ -1,0 +1,92 @@
+{
+  "schema_version": "gsdc2023-integer-clock-validation.v1",
+  "goal_achieved": false,
+  "binary_sha256": "5ef26fa03a121632c59f2079d68216bb84f8f717a7e23296bafcf783d8780aaf",
+  "changes": [
+    "Subtract Android int64 nanoseconds before floating conversion; preserve week/day integer remainders",
+    "Fit GNSS/UTC mapping against relative GPS time and convert mapped IMU time from a split week/remainder reference",
+    "Fix synthetic raw test timestamps to avoid floating input rounding; retain existing numerical tolerances"
+  ],
+  "tests": {
+    "raw_integer_time_tests.xml": {
+      "tests": "23",
+      "failures": "0",
+      "errors": "0"
+    },
+    "imu_relative_mapping_tests.xml": {
+      "tests": "23",
+      "failures": "0",
+      "errors": "0"
+    }
+  },
+  "raw_seed_audit": {
+    "complete": true,
+    "runs": 40,
+    "accepted": 28,
+    "failures": {
+      "insufficient-corrected-pseudorange-geometry": 7,
+      "epoch-time-gap-exceeds-limit": 3,
+      "insufficient-pseudorange-satellites": 2
+    },
+    "changed_outcomes": [
+      {
+        "dataset": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+        "before_returncode": 1,
+        "after_returncode": 0,
+        "after_reason": ""
+      },
+      {
+        "dataset": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "before_returncode": 0,
+        "after_returncode": 1,
+        "after_reason": "epoch-time-gap-exceeds-limit"
+      }
+    ]
+  },
+  "full_replays": {
+    "integer_clock_regression_v1/pixel4": {
+      "state": "running",
+      "pid": 28420
+    },
+    "integer_clock_regression_v1/pixel5": {
+      "state": "complete",
+      "pid": 10148,
+      "returncode": 0,
+      "wall_s": 256.96863555908203
+    },
+    "samsung_integer_clock_v6": {
+      "state": "complete",
+      "pid": 41816,
+      "returncode": 1,
+      "wall_s": 4.705699443817139
+    }
+  },
+  "samsung_boundary_diagnosis": {
+    "epoch_index": 1618,
+    "gps_dt_s": 2.0000000639702193,
+    "raw_utc_dt_ms": 2000,
+    "strict_max_gap_s": 2.0,
+    "status": "unresolved; no tolerance or gap semantics changed in this revision"
+  },
+  "limitations": [
+    "No new test truth or evaluation datasets used",
+    "Not official Kaggle score or paired taroz comparison",
+    "Full native results with this binary remain pending; earlier Samsung complete run used prior binary"
+  ],
+  "pixel5_local_score": {
+    "before_haversine_linear_m": 0.576432757964,
+    "after_haversine_linear_m": 0.576232064,
+    "after_wgs84_linear_m": 0.577181414,
+    "key_validation": {
+      "allow_gaps": false,
+      "complete_key_match": true,
+      "extra_submission_keys": 0,
+      "missing_truth_keys": 0,
+      "missing_truth_keys_by_phone": {},
+      "submission_keys": 3139,
+      "truth_keys": 3139
+    },
+    "official_score": false,
+    "same_input_taroz_comparison": false
+  }
+}

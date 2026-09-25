@@ -1,0 +1,44 @@
+{
+  "status": "two-phone-control-regression-passed",
+  "checked_unix": 1790139042.2140822,
+  "plan_sha256": "c3c82bd68a4b231bbc770ab8242731441be565a62cbabca394e9538d7b92dfee",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_control_v1\\validation.json",
+  "validation_sha256": "4c4c1bdb49e3474ddb048a055c424ef875284d8860ccbcdc35adaf9fb0dcb347",
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "results": {
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": {
+      "same_final_solution_bytes": true,
+      "same_initial_metadata_bytes": true,
+      "new_run_sha256": "c4c9f69f0d604360ed722236eca8a87803e32f4cf26ecdcb563b61051c6bdfeb",
+      "historical_run_sha256": "816d7c827b08c5ee76c3a7f13843f84344f27520edefc1f52197d9df283bc556",
+      "native_rows": 1302,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.39846141368347665,
+        "p95_m": 1.1350577719432686,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.7667595928133726
+      },
+      "wall_s": 384.8627417087555
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+      "same_final_solution_bytes": true,
+      "same_initial_metadata_bytes": true,
+      "new_run_sha256": "3148ff80cddb4c1b566217d298ff863039369ab9258ebf6d17e2cc6cb93fa76c",
+      "historical_run_sha256": "464078fb3a0ae2abf18057392d47fe0f2e4e48887e71fdebcfb53a951adf9e42",
+      "native_rows": 1188,
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.25403256719963185,
+        "p95_m": 0.6789319762677022,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.466482271733667
+      },
+      "wall_s": 318.2170548439026
+    }
+  },
+  "scope": "Exact-output controls on these two exposed routes only, not all-phone equivalence or candidate accuracy.",
+  "candidate_accuracy_evaluated": false,
+  "official_score": false,
+  "promoted": false
+}

@@ -1,0 +1,233 @@
+{
+  "status": "partial-mi8-scored-a205u-candidate-failed",
+  "scope": "Opt-in cold GNSS observation rebuild from same-run native raw-P seeds and source-style nominal-interval position gradient; initial P/D thresholds, cached centers, exact-once base, full raw UTC coverage. Compared on top of the previously tested but unpromoted source IMU observation-stage recipe.",
+  "flag": "--native-source-gnss-initial-observations",
+  "control_binary_reference": "d0cabb6c2f6b36305c84e5fbaa5f37ea3356d2a7a54a4b575ff545fbc794abca",
+  "helper_tests_passed": 3,
+  "helper_xml_sha256": "e508f2132ba1751f820f9a1664ad27c01a06a22a96f0ce92e5ea38acdf78e992",
+  "source_files_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "2f3ef284e26ca85b912591433ceaef84484471bb1098f169b46639c1692885a4",
+    "src/algorithms/fgo_problems.cpp": "b871165ae4c5e372825caf4f6691cd98c577ebb6a104e4da1fe2dbbc6ed0f315",
+    "src/algorithms/fgo_gtsam_backend.cpp": "dc73366aaf74f7b6647dfb88194cd2ff46bb77f090d124061c7259d3780daee9",
+    "include/libgnss++/algorithms/fgo.hpp": "730734765055485f9d654d91eb354edade84347195fa70be0150d1fe252542d0",
+    "include/libgnss++/algorithms/fgo_config.hpp": "3090896b0027886edfa53f24161b61def86503bc220b0be9d745e871f2eeb1d1",
+    "include/libgnss++/algorithms/native_imu_observation_phase.hpp": "84232bc41af8204e811577fffe52483bd96635f8cbed44dcc66881671b28c1cb",
+    "include/libgnss++/algorithms/native_imu_stop_phase.hpp": "1ddf68516174b328b5b42b32812c630aaea4c6987beb1866be989f2621058ba3",
+    "include/libgnss++/algorithms/native_imu_refinement_rebuild.hpp": "b0f5aeea69316bb9b6730b7e1cc4ab4d488fb1f1b53b350eeaec180ba337533f",
+    "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp": "da1c00274074841b7bbe7032176efd89541134dd2cac9edc7a086d3021cf5a2a",
+    "include/libgnss++/algorithms/native_gnss_imu_initial_handoff.hpp": "5fe518de58c54caae4c34f21b9248370d39689c27bf50636c8941a869a9c78cd",
+    "tests/test_fgo.cpp": "15f2a170da535ec750f9647672ef2cacad21e8d597e4b9c78e0ac57270c05d8e",
+    "tests/test_fgo_gtsam_backend.cpp": "de3affe3351009c76f624292116ffac2fae5463bc54a7e89b156134feba006e4",
+    "tests/test_native_imu_refinement_handoff.cpp": "0623ca11d36927ea1d63790a9144e3de32038569fea58bce66c4540b01f04d97",
+    "tests/test_native_gnss_imu_initial_handoff.cpp": "41d1d87d58fcb3412c82b57f4541d7d687c1b186aa53396fcfe2b8b7ca6e3eca",
+    "include/libgnss++/algorithms/native_gnss_initial_observations.hpp": "6bd403db5322db629728a2a122032d1236dbca4bf8a32d689e6f7ffb8437aa4b",
+    "tests/test_native_gnss_initial_observations.cpp": "6a036c0c20fe3128416cc3c4745f93ead02ee284e2fefedd798bf605790f1691"
+  },
+  "test_filter": "FGOGtsamPhase171*:FGOGtsamPhase213*:FGORefinementBuilderTest.*:NativeImuStopPhaseTest.*:NativeImuRefinementHandoff.*:NativeGnssImuInitialHandoff.*:NativeGnssInitialObservations.*",
+  "accuracy_validated": false,
+  "real_data_comparison_complete": false,
+  "promoted": false,
+  "submitted": false,
+  "external_submission": false,
+  "scope_limits": [
+    "Native raw-P seed positions are used instead of archived source posbl; exact source cold-start accuracy is not established.",
+    "Current initial C7/D seed policy and phone clock contracts are preserved.",
+    "Current same-input controls must reproduce d0cabb candidate CSV output with the new selector disabled.",
+    "Current all40 local submission artifacts remain frozen and unsubmitted."
+  ],
+  "build_pid": 44932,
+  "build_log": "E:\\rtklib_v2_ws_output\\gsdc_native\\cold_gnss_initial_build.log",
+  "pipeline": {
+    "script": "E:/rtklib_v2_ws_tmp/run_gsdc_cold_gnss_pipeline.py",
+    "state_file": "E:/rtklib_v2_ws_output/gsdc_native/cold_gnss_initial_pipeline.json",
+    "initial_build_pid": 44932,
+    "policy": "Wait for the same build handle; verify frozen sources; require focused/legacy/CLI tests before freezing and paired native replays. No external submission."
+  },
+  "binary_sha256": "36fb14b834260918c68993040304d60823b042281ea08b25703effc3f233f7e2",
+  "plans": {
+    "mi8_cold_gnss_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_cold_gnss_control_plan.json",
+      "sha256": "49d7819c5e5093cea3ae79810d922fff80b1dea6b4b4c203136249365dcd561b"
+    },
+    "mi8_cold_gnss_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_cold_gnss_candidate_plan.json",
+      "sha256": "db9417519b2d9d00776c07fabd3d9efcc122236508c9c76c9a07cdfe362f839e"
+    },
+    "a205u_cold_gnss_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_cold_gnss_control_plan.json",
+      "sha256": "c4fcc05770dea1d4c1c372454becff9beea08dcab0833508009bfa9a7b9c0990"
+    },
+    "a205u_cold_gnss_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_cold_gnss_candidate_plan.json",
+      "sha256": "fa2ea90d7f6468f2526c3b654127efe6ebbb69ea48a373551708b33c52437677"
+    }
+  },
+  "tests": {
+    "focused_passed": 26,
+    "focused_xml_sha256": "c6ceda66895f19aa690959ce52cc37d97d38d8e96909de40848c33d68c2c149a",
+    "cli_negatives_passed": 10,
+    "cli_report_sha256": "e2dfd3d566eec8b5156b1f8a8b7aa546b14016dbe79a569eaace07454ad1cf38",
+    "legacy_passed": 8,
+    "legacy_xml_sha256": "1e2cbc40c542e2ab84c39bdcb3307ca11fd8365cbc63a7dbf9ac52725f492437"
+  },
+  "official_score": false,
+  "partial_results": {
+    "mi8": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8928576624974007,
+            "p95_m": 1.459770571755551,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1763141171264757
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 0.792796994643657,
+              "p95_m": 1.7373769974989006,
+              "phone_score_m": 1.265086996071279,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17
+            },
+            "imu-initial": {
+              "p50_m": 0.7769209989913937,
+              "p95_m": 1.7073878317990885,
+              "phone_score_m": 1.242154415395241,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17
+            }
+          },
+          "wall_s": 202.00067400932312,
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "solution_sha256": "c31a5956ad05cab11d5c72bcd7b36aa5f85d26b08d7307b4fda3719157309ac0",
+          "gnss_initial_counts": {
+            "gnss_initial_p_rows": 0,
+            "gnss_initial_doppler_candidates": 0,
+            "gnss_initial_doppler_retained": 0,
+            "gnss_initial_gradient_interval_s": 0,
+            "gnss_initial_code_residual_centers": []
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.892848327132735,
+            "p95_m": 1.4597937728664923,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1763210499996135
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 0.7265206124934735,
+              "p95_m": 1.7690035416332859,
+              "phone_score_m": 1.2477620770633797,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17
+            },
+            "imu-initial": {
+              "p50_m": 0.7770082019987652,
+              "p95_m": 1.7074502543257095,
+              "phone_score_m": 1.2422292281622374,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17
+            }
+          },
+          "wall_s": 175.632976770401,
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "solution_sha256": "472cd2b9f77cde89c62af4f90a459992614681acc66f153fb5c5e7c224358c67",
+          "gnss_initial_counts": {
+            "gnss_initial_p_rows": 33141,
+            "gnss_initial_doppler_candidates": 58512,
+            "gnss_initial_doppler_retained": 44121,
+            "gnss_initial_gradient_interval_s": 1,
+            "gnss_initial_code_residual_centers": [
+              {
+                "system": 1,
+                "band": 1,
+                "cached_rows": 12992,
+                "admitted_rows": 12714,
+                "cached_center_m": 0.032565543163400434,
+                "admitted_center_m": 0.01233696664735362,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 1,
+                "band": 5,
+                "cached_rows": 4776,
+                "admitted_rows": 4615,
+                "cached_center_m": -1.1893548163407104,
+                "admitted_center_m": -1.2437837350917107,
+                "selected_threshold_m": 30
+              },
+              {
+                "system": 2,
+                "band": 1,
+                "cached_rows": 6203,
+                "admitted_rows": 6169,
+                "cached_center_m": 14.236123982584104,
+                "admitted_center_m": 14.216060644226673,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 4,
+                "band": 1,
+                "cached_rows": 7626,
+                "admitted_rows": 7588,
+                "cached_center_m": -0.3883859894631314,
+                "admitted_center_m": -0.3883859894631314,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 4,
+                "band": 5,
+                "cached_rows": 6910,
+                "admitted_rows": 6877,
+                "cached_center_m": 0.3911968937727579,
+                "admitted_center_m": 0.3876763151019986,
+                "selected_threshold_m": 30
+              },
+              {
+                "system": 8,
+                "band": 1,
+                "cached_rows": 6148,
+                "admitted_rows": 6080,
+                "cached_center_m": 10.61352848987599,
+                "admitted_center_m": 10.590851811959055,
+                "selected_threshold_m": 50
+              }
+            ]
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "gnss-first": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "imu-initial": "fe485248bb13b0a0c3f99c65ab10f8e527cd746cf9d7209e3c9e55110c3a9b7f"
+        },
+        "candidate": {
+          "gnss-first": "23d9f5e8ce59570711d523ffa055b2c2307da7cf160b13a6dde2a95590bd2c10",
+          "imu-initial": "31af7a04208b7987ff6150225b995c37dbe73931d31dc785f062894355ba9493"
+        }
+      },
+      "gnss_stage_identical": false,
+      "same_native_seed_metadata": true,
+      "control_matches_previous_binary": true,
+      "delta_m": 6.9328731377993336e-06,
+      "gnss_stage_delta_m": -0.01732491900789923
+    }
+  },
+  "a205u_failure": {
+    "returncode": 1,
+    "reason": "Phase171 ECEF raw-P+D staging requires the complete Point3/V/C7/D recipe and corrected direct-quality rows",
+    "retained_doppler_rows": 0,
+    "run_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_cold_gnss_candidate_v1\\00\\run.json",
+    "run_sha256": "bbd6eb368c3924d2b37b69d38a56fbe0493b2627aa6f18799c8199a7e74b899c",
+    "control_matches_previous_binary": true,
+    "native_seed_metadata_identical": true,
+    "accuracy_scored": false
+  },
+  "interpretation": "MI8 GNSS-only local score improved 0.017325 m, but final score worsened 0.00000693 m. A205u cold GNSS had no retained Doppler rows with its raw clock drift. No all-phone improvement or promotion.",
+  "next_experiment": "gsdc2023_cold_gnss_samsung_drift_experiment.json",
+  "checked_unix": 1790129059.6648436
+}

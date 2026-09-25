@@ -1,0 +1,50 @@
+{
+  "status": "two-planned-control-regressions-passed-candidates-running",
+  "created_unix": 1790137467.6865342,
+  "binary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\source_sigma_phone_admission_fixed.exe",
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "build_log_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_sigma_phone_admission_build.log",
+  "build_log_sha256": "d33c4fe45d85bc1071c8736151bf7ab937eacfef27d2cb4890aa36e0af9bacc6",
+  "cli_report_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_sigma_phone_cli\\report.json",
+  "cli_report_sha256": "7e075fae8cc6559d488fc09ca055099d351d444e05343b2db023e1ebc37a1ee2",
+  "cli_checks_passed": 12,
+  "admitted_phones": [
+    "pixel5",
+    "pixel4",
+    "pixel4xl",
+    "mi8",
+    "xiaomimi8"
+  ],
+  "change": "Only source TDCP metre-sigma CLI admission expanded. Formula, factors and default selection unchanged. Drift-clock and disabled-TDCP phone lanes remain rejected.",
+  "source_path": "gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp",
+  "source_sha256": "6fd9a13124bf84c80bd5bd64c79d029906ab5889af7f7117f47a2c3e28ab4bc7",
+  "planned_comparisons": [
+    "2021-01-05-21-12-us-ca-mtv-d/mi8",
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4"
+  ],
+  "native_regression_verified": true,
+  "position_accuracy_evaluated": false,
+  "promoted": false,
+  "official_score": false,
+  "limitations": [
+    "Accepted CLI probes stop at an intentionally missing GNSS input; these are admission checks, not native solves.",
+    "Same-new-binary controls must reproduce previous frozen baseline solution bytes before accuracy interpretation.",
+    "Existing development routes are already exposed, not heldout."
+  ],
+  "native_regression_verified_phones": [
+    "mi8",
+    "pixel4"
+  ],
+  "native_regression_partial_evidence": {
+    "path": "gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_sigma_phone_mi8_default_regression.json",
+    "sha256": "f269ed61544fe7537dfaeee0a84923146a424e3d0af22a59fa8719d1053a9378"
+  },
+  "native_regression_scope": [
+    "2021-01-05-21-12-us-ca-mtv-d/mi8",
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4"
+  ],
+  "native_regression_evidence": {
+    "path": "gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_sigma_phone_control_regression.json",
+    "sha256": "fd6ee2411141ab24f4e06d6b374732aec320095fd11d38fd2af465fd50e58e70"
+  }
+}

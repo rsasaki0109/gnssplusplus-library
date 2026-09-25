@@ -1,0 +1,146 @@
+{
+  "schema": "gsdc-long-gap-sensor-coverage.v1",
+  "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+  "inputs": {
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\pixel5\\device_gnss.csv": "5f4030c1614c29062a0cab37a733b3f56d7262576f27f8081c73d79dcdf7124e",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\pixel5\\device_imu.csv": "20f8ca185e771697b54289333fff7a0e1341fd7b8bb0f4e35c6abc3657a418f4"
+  },
+  "original_raw_epochs": 2805,
+  "sensor_samples": {
+    "UncalAccel": 205739,
+    "UncalGyro": 147430
+  },
+  "gnss_gaps": [
+    {
+      "left_utc": 1645656474438,
+      "right_utc": 1645656484438,
+      "gap_ms": 10000,
+      "raw_gps_delta_s": 10.000000314712524,
+      "local_clock_rate_difference_ppm": 0.0314712524929206,
+      "imu": {
+        "UncalAccel": {
+          "unique_samples": 509,
+          "maximum_uncovered_interval_ms": 20
+        },
+        "UncalGyro": {
+          "unique_samples": 509,
+          "maximum_uncovered_interval_ms": 20
+        }
+      }
+    },
+    {
+      "left_utc": 1645656484438,
+      "right_utc": 1645656529438,
+      "gap_ms": 45000,
+      "raw_gps_delta_s": 45.00000141620636,
+      "local_clock_rate_difference_ppm": 0.0314712524929206,
+      "imu": {
+        "UncalAccel": {
+          "unique_samples": 2822,
+          "maximum_uncovered_interval_ms": 24
+        },
+        "UncalGyro": {
+          "unique_samples": 2292,
+          "maximum_uncovered_interval_ms": 20
+        }
+      }
+    },
+    {
+      "left_utc": 1645657946438,
+      "right_utc": 1645657956438,
+      "gap_ms": 10000,
+      "raw_gps_delta_s": 10.000000080183147,
+      "local_clock_rate_difference_ppm": 0.00801831467889258,
+      "imu": {
+        "UncalAccel": {
+          "unique_samples": 509,
+          "maximum_uncovered_interval_ms": 20
+        },
+        "UncalGyro": {
+          "unique_samples": 509,
+          "maximum_uncovered_interval_ms": 20
+        }
+      }
+    },
+    {
+      "left_utc": 1645657956438,
+      "right_utc": 1645657986438,
+      "gap_ms": 30000,
+      "raw_gps_delta_s": 30.000000240504743,
+      "local_clock_rate_difference_ppm": 0.008016824759593533,
+      "imu": {
+        "UncalAccel": {
+          "unique_samples": 1527,
+          "maximum_uncovered_interval_ms": 20
+        },
+        "UncalGyro": {
+          "unique_samples": 1527,
+          "maximum_uncovered_interval_ms": 20
+        }
+      }
+    }
+  ],
+  "native_seed_bracket_57s_coverage": {
+    "left_utc": 1645656473438,
+    "right_utc": 1645656530438,
+    "span_ms": 57000,
+    "sensors": {
+      "UncalAccel": {
+        "unique_samples": 3483,
+        "maximum_uncovered_interval_ms": 24
+      },
+      "UncalGyro": {
+        "unique_samples": 2902,
+        "maximum_uncovered_interval_ms": 20
+      }
+    }
+  },
+  "diagnostic_only": true,
+  "estimator_changed": false,
+  "truth_used": false,
+  "wide_anchor_gap_mapping_diagnostic": {
+    "production_source_changed": false,
+    "only_diagnostic_copy_change": "maximum permitted UTC/GPS anchor gap 5000 -> 60000 ms",
+    "probe_binary_sha256": "6789db127bfc10e5aedbdd9abd7cfcc5059eb863dc5e5790e1b53a435ccb0236",
+    "diagnostic_imu_source_sha256": "f908aa7be2ca3655cbc292af8f870e4c29f9c194063b9cbecfb6e497e1d79af6",
+    "stdout": "ok=1 error= anchors=2805 drift_ppm=0.0091178740113662116 max_fit_residual_ms=0.0090753491210937495 max_anchor_gap_ms=45000 hardware_clock_constant=1",
+    "ok": true,
+    "anchors": 2805,
+    "drift_ppm": 0.009117874011366212,
+    "maximum_fit_residual_ms": 0.00907534912109375,
+    "maximum_anchor_gap_ms": 45000,
+    "hardware_clock_constant": true
+  },
+  "paired_mapped_imu_diagnostic": {
+    "artifact": "E:\\rtklib_v2_ws_output\\gsdc_native\\long_gap_paired_imu_diagnostic.txt",
+    "sha256": "83405baab31e3f1fc51f98ba95dd6304fab5353bafc9de0f0a1a1ab3a40a31dd",
+    "source": "E:\\rtklib_v2_ws_tmp\\gsdc-loader-test\\paired_gap_probe.cpp",
+    "source_sha256": "d54486f2dc9c96eab72a905755bf5d38f3e432d70e2b901e4f498c411abc0b7b",
+    "mapping_anchor_gap_bound_s": 60,
+    "production_source_changed": false,
+    "paired_rows": 147430,
+    "omitted_rows": 0,
+    "utc_fallback_applied": true,
+    "nonpositive_sample_deltas": 0,
+    "overall_max_gap_s": 0.021000000182539225,
+    "window_utc_ms": [
+      1645656473438,
+      1645656530438
+    ],
+    "window_samples": 2902,
+    "window_max_gap_s": 0.020000000193249434,
+    "both_endpoints_covered": true,
+    "final_native_solution_proven": false
+  },
+  "whole_graph_interval_diagnostic": {
+    "artifact": "E:\\rtklib_v2_ws_output\\gsdc_native\\long_gap_full_interval_imu_diagnostic.json",
+    "sha256": "873769afd9d4c671266e9cceb06c2bba2ebf5e1e17645eca7eb3881105740095",
+    "returncode": 0,
+    "mapped_samples_in_interval": 147383,
+    "maximum_sample_gap_s": 0.021000000182539225,
+    "both_endpoints_covered": true,
+    "all_paired_rows": 147430,
+    "omitted_rows": 0,
+    "full_production_replay_verified": false
+  }
+}

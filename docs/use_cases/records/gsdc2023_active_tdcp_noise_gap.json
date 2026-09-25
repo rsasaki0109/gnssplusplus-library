@@ -1,0 +1,42 @@
+{
+  "status": "active-recipe-source-route-and-tdcp-noise-gaps-confirmed",
+  "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "source_setting": {
+    "Course": "2021-01-04-22-40-us-ca-mtv-a",
+    "Phone": "pixel5",
+    "Type": "Highway",
+    "Nepoch": "1855",
+    "IdxStart": "1",
+    "IdxEnd": "1855",
+    "RPYReset": "0",
+    "L5": "1",
+    "BDS": "1",
+    "Base1": "SLAC",
+    "RINEX": "V2"
+  },
+  "native_summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\03\\summary.json",
+  "native_summary_sha256": "bc514cb3c652c080eb02598c4ca5af9219ef7ad0dd854c37fdb899df846ada3f",
+  "native": {
+    "direct_quality_environment": "Street",
+    "fixed_sigma_m": 0.03,
+    "huber_k": 4
+  },
+  "pinned_source": {
+    "route_type": "Highway",
+    "carrier_sigma_ratio_m": 0.0025,
+    "snr_percentile": 85,
+    "snr_denominator": 20,
+    "huber_k": 0.5
+  },
+  "source_files_sha256": {
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\parameters.m": "cc9e8ee178c79fd8c1853d1e1d0a91db12e951872d1773e279068c02f146a331",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\functions\\obserrmodel.m": "5914ceeb39de54fe9824fcfe08b6e8a4200589447ea04ab4bda2152f43d4a4fe"
+  },
+  "interpretation": "Native uses Street environment although the archive settings row is Highway. Source carrier sigma ratio is type independent, but Huber-k is 0.5 for this route, not the Street/Mix value 0.2. Both noise and route selection differ; arithmetic differences are not accuracy evidence.",
+  "active_plan": "gsdc2023_train_pixel5_january04_tdcp_sigma.json",
+  "next_decision": "Keep active affine and sigma-only plans unchanged. After matched results, compare explicit Highway/L5 source settings separately; do not confuse default Street Phase184 with this route source Huber-k.",
+  "truth_read_for_this_audit": false,
+  "accuracy_claim": false
+}

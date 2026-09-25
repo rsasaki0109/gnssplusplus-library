@@ -2,6 +2,7 @@
 
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/android_raw_gnss.hpp>
+#include <libgnss++/io/android_clock_arithmetic.hpp>
 #include <libgnss++/algorithms/source_transmission_clock.hpp>
 
 #include <cstdint>
@@ -12,7 +13,11 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 namespace libgnss::io {
 namespace {
@@ -28,7 +33,19 @@ constexpr const char* kHeader =
 std::filesystem::path fixturePath(const char* stem) {
     return std::filesystem::temp_directory_path() /
            (std::string("libgnss_android_raw_") + stem + "_" +
-            std::to_string(static_cast<long long>(::getpid())) + ".csv");
+            std::to_string(static_cast<long long>(
+#ifdef _WIN32
+                ::_getpid()
+#else
+                ::getpid()
+#endif
+            )) + ".csv");
+}
+
+std::int64_t receiverTimeNs(std::int64_t full_bias, int week, double tow) {
+    // Construct synthetic input without first rounding a ~1e18 ns float.
+    return full_bias + static_cast<std::int64_t>(week) * 604800LL * 1000000000LL +
+           static_cast<std::int64_t>(std::llround(tow * 1e9));
 }
 
 void writeRow(std::ostream& output,
@@ -64,6 +81,154 @@ void writeRow(std::ostream& output,
     output << ',';
     if (include_raw_pseudorange) output << raw_pseudorange;
     output << '\n';
+}
+
+void writeLeadingClockFixture(const std::filesystem::path& path, int lead_seconds,
+                              bool missing_drift = false, bool changed_clock = false,
+                              std::int64_t extra_gps_lead_ns = 0) {
+    constexpr std::int64_t base = -1'300'000'000'000'000'000LL;
+    std::ofstream out(path); std::string header(kHeader); header.pop_back();
+    out << header << ",DriftNanosPerSecond\n";
+    for (int i = 0; i < 3; ++i) {
+        const int offset = i == 0 ? -lead_seconds : i - 1;
+        const auto time = receiverTimeNs(base, 2200, 100000. + offset) -
+                          (i == 0 ? extra_gps_lead_ns : 0);
+        std::ostringstream row;
+        writeRow(row, 1700000000000LL + offset * 1000LL, time,
+                 i == 0 ? base - 2000000 : base,
+                 i == 0 ? 1000000 : (100000LL + offset) * 1000000000LL - 70000000LL,
+                 3, 1, -10., 1, 100., 1575.42e6, 40., "GPS_L1_CA");
+        std::string text = row.str(); text.pop_back();
+        if (i == 0 && changed_clock) {
+            const auto pos = text.find(",7,3,1,");
+            ASSERT_NE(pos, std::string::npos); text.replace(pos, 7, ",8,3,1,");
+        }
+        out << text << ',' << (i == 0 && missing_drift ? "" : "1.0") << '\n';
+    }
+}
+
+TEST(AndroidRawGnssTest, LeadingClockBoundaryAllowsSubMillisecondGpsJitterButKeepsUtcBound) {
+    const auto path = fixturePath("leading_clock_jitter");
+    AndroidRawGnssConfig config; config.verify_enriched_pseudorange = false;
+    AndroidRawGnssResult result; std::string error;
+    writeLeadingClockFixture(path, 4, false, false, 3000);
+    ASSERT_TRUE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error)) << error;
+    ASSERT_EQ(result.observations.epochs.size(), 3U);
+    EXPECT_GT(result.observations.epochs[1].time - result.observations.epochs[0].time, 4.0);
+    EXPECT_EQ(result.epoch_utc_time_millis[1] - result.epoch_utc_time_millis[0], 4000);
+    writeLeadingClockFixture(path, 4, false, false, 2000000);
+    EXPECT_FALSE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error));
+    writeLeadingClockFixture(path, 5, false, false, -1000000000);
+    EXPECT_FALSE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error));
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, LeadingClockStatesDoNotAdmitInvalidObservationsOrShiftValidClocks) {
+    const auto path = fixturePath("leading_clock"); writeLeadingClockFixture(path, 2);
+    AndroidRawGnssConfig config; config.verify_enriched_pseudorange = false;
+    AndroidRawGnssResult baseline, candidate; std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), config, baseline, error)) << error;
+    ASSERT_TRUE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, candidate, error)) << error;
+    ASSERT_EQ(baseline.observations.epochs.size(), 2U);
+    ASSERT_EQ(candidate.observations.epochs.size(), 3U);
+    EXPECT_TRUE(candidate.observations.epochs[0].observations.empty());
+    EXPECT_TRUE(candidate.observations.epochs[0].receiver_position.isZero());
+    EXPECT_EQ(candidate.diagnostics.skipped_invalid_timing_rows, baseline.diagnostics.skipped_invalid_timing_rows);
+    EXPECT_EQ(candidate.diagnostics.selected_epochs, baseline.diagnostics.selected_epochs);
+    EXPECT_EQ(candidate.epoch_utc_time_millis.front(), 1699999998000LL);
+    for (std::size_t i = 0; i < 2; ++i) {
+        const auto& before = baseline.observations.epochs[i];
+        const auto& after = candidate.observations.epochs[i+1];
+        EXPECT_DOUBLE_EQ(before.time - after.time, 0.);
+        EXPECT_DOUBLE_EQ(before.receiver_clock_bias, after.receiver_clock_bias);
+        EXPECT_DOUBLE_EQ(before.observations[0].pseudorange, after.observations[0].pseudorange);
+        EXPECT_EQ(after.raw_source_index, i+1);
+    }
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, LeadingClockStatesRejectUnsupportedClockAndSpan) {
+    const auto path = fixturePath("leading_clock_bounds");
+    AndroidRawGnssConfig config; config.verify_enriched_pseudorange = false;
+    AndroidRawGnssResult result; std::string error;
+    writeLeadingClockFixture(path, 4);
+    ASSERT_TRUE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error)) << error;
+    writeLeadingClockFixture(path, 5);
+    EXPECT_FALSE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error));
+    writeLeadingClockFixture(path, 2, true);
+    EXPECT_FALSE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error));
+    writeLeadingClockFixture(path, 2, false, true);
+    EXPECT_FALSE(loadAndroidRawGnssCsvWithLeadingClockEpochs(path.string(), config, result, error));
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, IntegerClockDifferenceRejectsOverflow) {
+    std::int64_t value = 0;
+    EXPECT_FALSE(android_clock::difference(std::numeric_limits<std::int64_t>::max(), -1, value));
+    EXPECT_FALSE(android_clock::difference(std::numeric_limits<std::int64_t>::min(), 1, value));
+    EXPECT_TRUE(android_clock::difference(1'300'000'000'000'000'001LL,
+                                        1'300'000'000'000'000'000LL, value));
+    EXPECT_EQ(value, 1);
+}
+
+TEST(AndroidRawGnssTest, PreservesNanosecondRangeAcrossConstellationClocks) {
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr std::int64_t tow_ns = 100000LL * 1000000000LL;
+    const auto path = fixturePath("integer_constellation_time");
+    for (const int constellation : {1, 3, 5}) {
+        SCOPED_TRACE(constellation);
+        const auto tx_gps = tow_ns - 70000000LL;
+        const auto tx = constellation == 3
+            ? android_clock::positiveModulo(tx_gps + 10782LL * 1000000000LL,
+                                             android_clock::nanos_per_day)
+            : constellation == 5 ? tx_gps - 14LL * 1000000000LL : tx_gps;
+        {
+            std::ofstream out(path);
+            out << kHeader;
+            for (int delta = 0; delta < 2; ++delta)
+                writeRow(out, 1700000000000LL,
+                         full_bias + 2200LL * android_clock::nanos_per_week + tow_ns,
+                         full_bias, tx + delta, 3 + delta, constellation,
+                         0, 1, 42, constellation == 3 ? 1602000000.0 : constellation == 5 ? constants::BDS_B1I_FREQ : constants::GPS_L1_FREQ,
+                         40, constellation == 3 ? "GLO_G1_CA" : constellation == 5 ? "BDS_B1I" : "GPS_L1_CA");
+        }
+        AndroidRawGnssResult result;
+        std::string error;
+        ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{}, result, error)) << error;
+        ASSERT_EQ(result.observations.epochs.size(), 1U);
+        const auto& observations = result.observations.epochs.front().observations;
+        ASSERT_EQ(observations.size(), 2U);
+        for (std::size_t i = 0; i < observations.size(); ++i)
+            EXPECT_NEAR(observations[i].pseudorange,
+                        (70000000.0 - i) * 1e-9 * constants::SPEED_OF_LIGHT, 1e-5);
+    }
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, NegativeSvTimeIsSkippedWithoutLosingValidEpoch) {
+    constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
+    constexpr std::int64_t time_nanos =
+        full_bias + (2200LL * 604800 + 100000) * 1000000000LL;
+    const auto path = fixturePath("negative_sv_time");
+    {
+        std::ofstream out(path);
+        out << kHeader;
+        writeRow(out, 1700000000000LL, time_nanos, full_bias, -79885011,
+                 20, 3, 0, 0, 0, 1603125000, 17.6, "GLO_L1_CA");
+        writeRow(out, 1700000000000LL, time_nanos, full_bias,
+                 100000LL * 1000000000LL - 70000000LL,
+                 3, 1, 0, 1, 42, constants::GPS_L1_FREQ, 40, "GPS_L1_CA");
+    }
+    AndroidRawGnssResult result;
+    std::string error;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), AndroidRawGnssConfig{},
+                                     result, error)) << error;
+    ASSERT_EQ(result.observations.epochs.size(), 1U);
+    ASSERT_EQ(result.observations.epochs[0].observations.size(), 1U);
+    EXPECT_EQ(result.diagnostics.skipped_invalid_timing_rows, 1U);
+    ASSERT_EQ(result.raw_row_diagnostics.size(), 2U);
+    EXPECT_EQ(result.raw_row_diagnostics.front().loader_reason, "invalid_raw_timing");
+    std::filesystem::remove(path);
 }
 
 TEST(AndroidRawGnssTest, OptionalAdrUncertaintyDoesNotChangeAdmissionOrCarrierUnits) {
@@ -194,22 +359,10 @@ TEST(AndroidRawGnssTest, ReconstructsRawClockAndObservableSigns) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     constexpr double transmit_delay = 0.070;
-    const auto transmit_nanos = static_cast<std::int64_t>(
-        (tow - transmit_delay) * 1.0e9);
-    const long double gps_seconds =
-        (static_cast<long double>(time_nanos) -
-         static_cast<long double>(full_bias)) /
-        1.0e9L;
-    const long double week_start =
-        std::floor(gps_seconds / 604'800.0L) * 604'800.0L;
-    const double pseudorange = static_cast<double>(
-        (gps_seconds - week_start -
-         static_cast<long double>(transmit_nanos) / 1.0e9L) *
-        constants::SPEED_OF_LIGHT);
+    const auto transmit_nanos = static_cast<std::int64_t>(std::llround(tow * 1e9)) - 70'000'000LL;
+    const double pseudorange = 0.070 * constants::SPEED_OF_LIGHT;
 
     {
         std::ofstream output(path);
@@ -258,9 +411,7 @@ TEST(AndroidRawGnssTest, ConvertsReceivedSvTimeUncertaintyToMetresAndFailsClosed
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     const auto transmit_nanos = static_cast<std::int64_t>((tow - 0.070) * 1.0e9);
     {
         std::ofstream output(path);
@@ -309,9 +460,7 @@ TEST(AndroidRawGnssTest, RawClockOnlyIgnoresMalformedEnrichedPseudorange) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     const auto transmit_nanos = static_cast<std::int64_t>((tow - 0.070) * 1.0e9);
     {
         std::ofstream output(path);
@@ -356,20 +505,9 @@ TEST(AndroidRawGnssTest, RawClockOnlyIgnoresDisagreeingEnrichedPseudorange) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
-    const auto transmit_nanos = static_cast<std::int64_t>((tow - 0.070) * 1.0e9);
-    const long double gps_seconds =
-        (static_cast<long double>(time_nanos) -
-         static_cast<long double>(full_bias)) /
-        1.0e9L;
-    const long double week_start =
-        std::floor(gps_seconds / 604'800.0L) * 604'800.0L;
-    const double raw_clock_pseudorange = static_cast<double>(
-        (gps_seconds - week_start -
-         static_cast<long double>(transmit_nanos) / 1.0e9L) *
-        constants::SPEED_OF_LIGHT);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
+    const auto transmit_nanos = static_cast<std::int64_t>(std::llround(tow * 1e9)) - 70'000'000LL;
+    const double raw_clock_pseudorange = 0.070 * constants::SPEED_OF_LIGHT;
     {
         std::ofstream output(path);
         ASSERT_TRUE(output.is_open());
@@ -418,18 +556,14 @@ TEST(AndroidRawGnssTest, UnwrapsTransmitWeekAcrossBoundaryWithExactNanoseconds) 
     constexpr int week = 2200;
     constexpr double first_tow = 604'799.950;
     constexpr double second_tow = 0.050;
-    const auto first_time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + first_tow) * 1.0e9L);
-    const auto second_time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week + 1) * 604'800.0L + second_tow) * 1.0e9L);
+    const auto first_time_nanos = receiverTimeNs(full_bias, week, first_tow);
+    const auto second_time_nanos = receiverTimeNs(full_bias, week + 1, second_tow);
     const auto first_transmit_nanos =
-        static_cast<std::int64_t>((first_tow - 0.070) * 1.0e9);
+        604'799'880'000'000LL;
     // The second transmit time is in the preceding week while the receiver
     // TOW has wrapped to the start of the next week.
     const auto second_transmit_nanos =
-        static_cast<std::int64_t>((604'799.980) * 1.0e9);
+        604'799'980'000'000LL;
     {
         std::ofstream output(path);
         ASSERT_TRUE(output.is_open());
@@ -465,9 +599,7 @@ TEST(AndroidRawGnssTest, ResetsRawClockSegmentOnlyAfterStrictlyGreaterOneSecond)
     constexpr std::int64_t full_bias1 = full_bias0 + 1'000;
     constexpr int week = 2200;
     constexpr double tow0 = 100'000.123;
-    const auto time0 = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias0) +
-        (static_cast<long double>(week) * 604'800.0L + tow0) * 1.0e9L);
+    const auto time0 = receiverTimeNs(full_bias0, week, tow0);
     const auto time1 = time0 + 1'000'000'000LL;
     const auto time2 = time1 + 1'000'000'001LL;
     const auto tx0 = static_cast<std::int64_t>((tow0 - 0.070) * 1.0e9);
@@ -509,9 +641,7 @@ TEST(AndroidRawGnssTest, RetainsRawReceiverClockDriftInEpoch) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     const auto transmit_nanos = static_cast<std::int64_t>(
         (tow - 0.070) * 1.0e9);
     {
@@ -549,9 +679,7 @@ TEST(AndroidRawGnssTest, DropsNonPositiveRawClockRangeLikeUpstreamCodeMask) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     const auto valid_tx = static_cast<std::int64_t>((tow - 0.070) * 1.0e9);
     const auto invalid_tx = static_cast<std::int64_t>((tow + 0.070) * 1.0e9);
     {
@@ -669,23 +797,11 @@ TEST(AndroidRawGnssTest, AppliesTimeOffsetAndUpstreamBiasQualityGate) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     constexpr double transmit_delay = 0.070;
-    const auto transmit_nanos = static_cast<std::int64_t>(
-        (tow - transmit_delay) * 1.0e9);
+    const auto transmit_nanos = static_cast<std::int64_t>(std::llround(tow * 1e9)) - 70'000'000LL;
     constexpr double time_offset_nanos = 1'000'000.0;
-    const long double gps_seconds =
-        (static_cast<long double>(time_nanos) -
-         static_cast<long double>(full_bias)) / 1.0e9L;
-    const long double week_start =
-        std::floor(gps_seconds / 604'800.0L) * 604'800.0L;
-    const double pseudorange = static_cast<double>(
-        (gps_seconds - week_start -
-         static_cast<long double>(transmit_nanos) / 1.0e9L -
-         static_cast<long double>(time_offset_nanos) / 1.0e9L) *
-        constants::SPEED_OF_LIGHT);
+    const double pseudorange = 0.069 * constants::SPEED_OF_LIGHT;
     {
         std::ofstream output(path);
         ASSERT_TRUE(output.is_open());
@@ -718,9 +834,7 @@ TEST(AndroidRawGnssTest, AppliesPublishedStateAndMultipathMasks) {
     constexpr std::int64_t full_bias = -1'300'000'000'000'000'000LL;
     constexpr int week = 2200;
     constexpr double tow = 100'000.123;
-    const auto time_nanos = static_cast<std::int64_t>(
-        static_cast<long double>(full_bias) +
-        (static_cast<long double>(week) * 604'800.0L + tow) * 1.0e9L);
+    const auto time_nanos = receiverTimeNs(full_bias, week, tow);
     constexpr auto transmit_nanos = static_cast<std::int64_t>(
         (tow - 0.070) * 1.0e9);
     {

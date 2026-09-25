@@ -346,7 +346,17 @@ public:
         std::size_t rejected_invalid_weight = 0;
     };
 
+    struct PseudorangeCenterAudit {
+        GNSSSystem system = GNSSSystem::GPS;
+        int band = 1;
+        std::size_t cached_rows = 0, admitted_rows = 0;
+        double cached_center_m = std::numeric_limits<double>::quiet_NaN();
+        double admitted_center_m = std::numeric_limits<double>::quiet_NaN();
+        double selected_threshold_m = 0.0;
+    };
+
     struct FGOProblemDiagnostics {
+        std::vector<PseudorangeCenterAudit> native_pseudorange_center_audit;
         // A summary-boundary snapshot used by the native application to copy
         // the already-computed Phase131 base-report telemetry into the
         // top-level FGO diagnostics object.  This is deliberately a plain
@@ -701,6 +711,9 @@ public:
         // No serialized positioning input; consumed only by explicit selector.
         std::vector<Matrix3d> epoch_heading_attitudes_body_to_nav;
         std::vector<GNSSTime> epoch_heading_attitude_times;
+        // Complete optimized same-run IMU velocities for a second solve.
+        // Empty for the historical initializer; never populated by raw WLS.
+        std::vector<Vector3d> refinement_velocity_seeds_nav;
         Vector3d init_velocity_nav = Vector3d::Zero();
         // Optional raw GNSS-first ENU velocity sequence used by the upstream
         // stationary-stop gate.  It is populated only by the Android
@@ -1294,6 +1307,8 @@ public:
         std::size_t first_imu_velocity_priors_omitted = 0;
         std::size_t relative_height_pairs_selected = 0;
         std::size_t relative_height_factors_inserted = 0;
+        std::size_t height_map_points = 0;
+        std::size_t height_map_factors_inserted = 0;
         // Phase118 official route-Type Huber-k metadata.  These fields are
         // provenance only; the selected threshold is applied only to ordinary
         // TDCP factors and never changes sigma, equations, admission, or any
@@ -1603,6 +1618,8 @@ public:
         std::size_t upstream_stop_epochs = 0;
         std::size_t upstream_stop_velocity_factors = 0;
         std::size_t upstream_stop_pose_factors = 0;
+        std::size_t upstream_stop_velocity_phase_omissions = 0;
+        std::size_t upstream_stop_pose_gap_rejections = 0;
         std::size_t upstream_stop_imu_samples = 0;
         // Per-detected-epoch accounting for the upstream stop gate.  These
         // counters are scalar diagnostics only; they do not alter the gate
@@ -2177,6 +2194,20 @@ public:
         // Same-run diagnostic handoff only; empty when disabled. Never an
         // input to a later solver invocation or serialized seed trajectory.
         std::vector<TdcpFrequencyCorrection> tdcp_frequency_corrections;
+        struct TdcpFactorResidual {
+            std::size_t previous_epoch_index = 0;
+            std::size_t current_epoch_index = 0;
+            SatelliteId satellite;
+            SignalType signal = SignalType::GPS_L1CA;
+            // Actual inserted factor's prediction-minus-measurement error,
+            // evaluated at the initial and optimized Values, in metres.
+            double initial_m = 0.0;
+            double final_m = 0.0;
+        };
+        // Drift-family diagnostic export only. Ordered exactly as the
+        // problem TDCP rows; never consumed as solver input.
+        std::vector<TdcpFactorResidual> tdcp_drift_factor_residuals;
+
         Solution solution;
         FGODiagnostics diagnostics;
         std::vector<AmbiguityEstimate> ambiguity_estimates;
@@ -2281,6 +2312,12 @@ public:
 
     FGOProblem buildPseudorangeProblem(const std::vector<ObservationData>& epochs,
                                        const NavigationData& nav) const;
+    // Rebuild from same-run optimized receiver positions/clocks in epochs.
+    // The velocity sequence is ECEF m/s and replaces the initial Doppler
+    // median proxy with the source absolute residual screen. SPP must be off.
+    FGOProblem buildPseudorangeProblem(const std::vector<ObservationData>& epochs,
+                                      const NavigationData& nav,
+                                      const std::vector<Vector3d>& receiver_velocities_ecef) const;
 
     FGOProblem buildDoubleDifferenceProblem(
         const std::vector<ObservationData>& rover_epochs,

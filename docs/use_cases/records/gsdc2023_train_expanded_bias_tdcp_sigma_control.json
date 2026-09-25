@@ -1,0 +1,37 @@
+{
+  "status": "candidate-scored-native-development",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_expanded_bias_tdcp_sigma_control_plan.json",
+  "plan_sha256": "9d2b82e35d68bc6518f81c38d67ed3d4a03f334efa813783efb0b044d7facbea",
+  "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+  "drive_count": 11,
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "created_unix": 1790170089.2299595,
+  "scope": "All eleven existing train drives of four newly admitted bias-difference phones; sigma-only matched development comparison.",
+  "legacy_control_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_plan.json",
+  "legacy_control_plan_sha256": "67efef7c87fc883ffe56fb28974692f96a8f77ee7ed51a47fe1ad0d61554a7f3",
+  "runner_pid": 20088,
+  "started_unix": 1790173614.429474,
+  "native_returncodes": {
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 0,
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": 0,
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": 0,
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": 0,
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": 0,
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": 0,
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": 0,
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": 0,
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": 0,
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": 0,
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": 0
+  },
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_expanded_bias_tdcp_sigma_control_v1\\validation.json",
+  "validation_sha256": "b611d4bcd910f3e0e6abb8b295566ca687713c73e6f41c26622f5f4da9e1781f",
+  "status_counts": {
+    "scored-native-development": 11
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.8807192620178949,
+  "mean_route_group_score_m": 0.8567343598659644
+}

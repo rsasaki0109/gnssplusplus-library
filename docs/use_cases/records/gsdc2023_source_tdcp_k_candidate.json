@@ -1,0 +1,169 @@
+{
+  "status": "paired-development-comparison-complete-not-promoted",
+  "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+  "reference_root": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_settings_regression_v1",
+  "candidate_root": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_tdcp_regression_v1",
+  "only_new_inference_flag": "--native-phase184-source-tdcp-huber-k",
+  "pixel4_source_type": "Highway",
+  "pixel4_candidate_k": 0.5,
+  "pixel5_source_type": "Street",
+  "pixel5_candidate_k": 0.2,
+  "control_k": 4,
+  "max_workers": 1,
+  "position_accuracy_evaluated": true,
+  "matched_binary_results": {
+    "pixel4": {
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.967935019978218,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453631252684605
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.722791230558703,
+          "p95_m": 0.9682984682621762,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455448494104396
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9670737435214083,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.8453398019164247
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7236058603114409,
+          "p95_m": 0.9674188002454632,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.8455123302784521
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.7761700082114469,
+          "p95_m": 1.0657148008905981,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.9209424045510225
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.7761700082114469,
+          "p95_m": 1.0669045630221214,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.9215372856167842
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7760405008980428,
+          "p95_m": 1.0642045422470543,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.9201225215725486
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.7760405008980428,
+          "p95_m": 1.0658381880808254,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.920939344489434
+        }
+      },
+      "delta_haversine_linear_m": 0.07557927928256203,
+      "runtimes_s": {
+        "control": 577.5013315677643,
+        "candidate": 1062.4121136665344
+      },
+      "solution_hashes": {
+        "control": "e5842c5eff5c5eb0981f5de5a8b7fa9481d5c6cd3acce30a3937148b36b17308",
+        "candidate": "2b2b75fdf3ab2bedc7f72290b3abd329eb0c4bacd0c66430a1fee04b39a198ac"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    },
+    "pixel5": {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "binary_sha256": "35e61a609b9ccb714e2065c5a4f7ef662c8f9082bc5ed42a3db3253d7269335a",
+      "same_binary_same_inputs_verified": true,
+      "control_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854260386959835,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.576375694726723
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.3673253507574625,
+          "p95_m": 0.7854944052893353,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5764098780233989
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7872752160481221,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.5772728370829892
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.36727045811785614,
+          "p95_m": 0.7873437393618148,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.5773070987398354
+        }
+      },
+      "candidate_scores": {
+        "haversine_sphere__linear_n_minus_1": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.418094104610119,
+          "p95_m": 0.8034473571910257,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.6107707309005723
+        },
+        "haversine_sphere__nearest_rank_ceiling": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.418094104610119,
+          "p95_m": 0.8035064201761574,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.6108002623931381
+        },
+        "wgs84_vincenty__linear_n_minus_1": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.4176783489574491,
+          "p95_m": 0.804581418129056,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 0.6111298835432526
+        },
+        "wgs84_vincenty__nearest_rank_ceiling": {
+          "distance_variant": "wgs84_vincenty",
+          "p50_m": 0.4176783489574491,
+          "p95_m": 0.8046213183614823,
+          "percentile_variant": "nearest_rank_ceiling",
+          "phone_score_m": 0.6111498336594657
+        }
+      },
+      "delta_haversine_linear_m": 0.034395036173849314,
+      "runtimes_s": {
+        "control": 499.3564705848694,
+        "candidate": 1625.771443605423
+      },
+      "solution_hashes": {
+        "control": "efc8779e5852b6839d776e24e2ee44fc20f5c5d0e23a00830053f0532ee28746",
+        "candidate": "0015517637344d9a4f02102ed7b89f7cedc7a16634224240b4969fb29ca9c408"
+      },
+      "official_score": false,
+      "previously_exposed_development_data": true
+    }
+  },
+  "accuracy_scope": "two previously exposed development routes; no official or taroz score"
+}

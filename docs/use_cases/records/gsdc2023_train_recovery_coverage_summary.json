@@ -1,0 +1,161 @@
+{
+  "schema": "gsdc-train-recovery-coverage-summary.v1",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "baseline_validation_sha256": "5b1710866b754f52532e8a48b3239ebbeb4f0cdcce3b5cdc9c41b65cfeedcc93",
+  "checked_unix": 1790156501.191535,
+  "official_score": false,
+  "heldout": false,
+  "single_fixed_recipe": false,
+  "full_scope_accuracy_score": null,
+  "scope": "Failure recoveries on identical raw inputs, independently re-audited; separate binaries and policies, not a unified recipe evaluation.",
+  "fixed_recipe_scored_drives": 36,
+  "failed_fixed_recipe_drives": 4,
+  "individually_recovered_drives": 4,
+  "scored_candidates_with_pending_baseline": 0,
+  "scored_candidates_with_scored_baseline": 1,
+  "distinct_drives_with_native_coverage_evidence_across_recipes": 40,
+  "remaining_drives_without_scored_native_evidence": [],
+  "limitations": [
+    "Original failures are retained, not silently replaced in fixed-recipe metrics.",
+    "A217M uses a bounded terminal IMU measurement hold; zero coordinate interpolation does not mean zero sensor or initializer gap handling.",
+    "Same source implementation has not yet been replayed as a unified corrected recipe across all 40 train drives."
+  ],
+  "individually_audited_candidates": {
+    "2021-01-04-22-40-us-ca-mtv-a/mi8": {
+      "correction": "IMU-supported temporal initialization across long GNSS gaps",
+      "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_mi8_january04_long_gap.json",
+      "record_sha256": "069827953c91b7abd0767dbfb197fd6b986db1fd920bd74fd97770e53b801857",
+      "plan_sha256": "8fe97457e12c4e834cba98b92ec77d918b2eeb09083e1deba87131b5bff0500b",
+      "validation_sha256": "2b29ef9dd8d346a0b972566c78e06e264c10fb29f9f8b1a62f2067a662f52ed1",
+      "run_sha256": "3c12553568277edc6247c390404429e6c22562c67a3214a83b7fbf0f76bbb10e",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.23512422038751174,
+        "p95_m": 0.9426276537129176,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5888759370502147
+      },
+      "wall_s": 1916.5647575855255,
+      "raw_epochs": 1856,
+      "native_output_rows": 1856,
+      "missing_raw_keys": 0,
+      "coordinate_interpolation_or_hold_count": 0,
+      "temporal_initial_guess_count": 37,
+      "imu_measurement_hold": null,
+      "clock_cleanup": null,
+      "baseline_status_preserved": "native-audit-failed"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "correction": "Correct leading GPS time-boundary handling; updated executable",
+      "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a205u_fixed_recipe_recovery.json",
+      "record_sha256": "9e6bfa041f7f70849c6a8d860026b366c4c6f0d00bb7c487f6d89f5d4a2287ad",
+      "plan_sha256": "caa25bfd7bc4a56f24638dbc316d7a329103f4aa7ede16bee6f50191146e511a",
+      "validation_sha256": "9e949375963b40620b1580434c631dcefeca5cad718b1aea3b4dc922e5950502",
+      "run_sha256": "3aa796efb2fcc4e683f6ab32d94d6ba921b069127c256a595645e62ccd3d1c94",
+      "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.3181052110818825,
+        "p95_m": 2.51500752137633,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.916556366229106
+      },
+      "wall_s": 227.664644241333,
+      "raw_epochs": 1213,
+      "native_output_rows": 1213,
+      "missing_raw_keys": 0,
+      "coordinate_interpolation_or_hold_count": 0,
+      "temporal_initial_guess_count": 4,
+      "imu_measurement_hold": null,
+      "clock_cleanup": null,
+      "baseline_status_preserved": "native-audit-failed"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m": {
+      "correction": "Leading native states with explicit bounded terminal IMU measurement hold",
+      "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a217m_bounded_tail.json",
+      "record_sha256": "0e5b6d7d8a04cef99968a4a9ca84ad66c462e0d79186eb2f153b1f7618dbc44c",
+      "plan_sha256": "7f041c56338ee6eb4dc4e3baeab4fadaedcb22f811225418439a9e50731fb243",
+      "validation_sha256": "c5531d065fd92145c86f450c544cf2a7eb7518094b2325100f509092045c407a",
+      "run_sha256": "551750999310c25335d598d0b997a18206ce2c02cbe8756cf2d3846b4c4b95e6",
+      "binary_sha256": "d122fbeecd8d7295c5f37b3660f699aa3cc37993e586a7a55e49182503bdc43d",
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.4209790871168606,
+        "p95_m": 2.617140502723216,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.019059794920038
+      },
+      "wall_s": 208.27556443214417,
+      "raw_epochs": 1222,
+      "native_output_rows": 1222,
+      "missing_raw_keys": 0,
+      "coordinate_interpolation_or_hold_count": 0,
+      "temporal_initial_guess_count": 2,
+      "imu_measurement_hold": {
+        "policy": "bounded-terminal-measurement-hold",
+        "real_samples_bracket_full_interval": false,
+        "terminal_measurement_hold_s": 0.02956026018364355,
+        "maximum_sample_gap_s": 0.03899998334236443
+      },
+      "clock_cleanup": null,
+      "baseline_status_preserved": "native-audit-failed"
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "correction": "Source common clock-drift cleanup with numeric seed provenance",
+      "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel7pro_may25_clock_cleanup_verified.json",
+      "record_sha256": "9621169e7998eadef4a3eb2f9534a11ee544bc435b522a769c59a90eca3202a2",
+      "plan_sha256": "e1a946684fe8a25a915fd8c25b11737338d0b19937a2d46d8654027561be13b9",
+      "validation_sha256": "ee570086fa268f95291c2b8e9595fc80eba35344c5cae9968b6da6f9b6a7eebc",
+      "run_sha256": "4525c82ec1189b5703bd47c4075abaf2a160c49c649a0200d946c928981d1e04",
+      "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.7145458230395427,
+        "p95_m": 0.8851975871219311,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.7998717050807369
+      },
+      "wall_s": 1505.2338078022003,
+      "raw_epochs": 1259,
+      "native_output_rows": 1259,
+      "missing_raw_keys": 0,
+      "coordinate_interpolation_or_hold_count": 0,
+      "temporal_initial_guess_count": 0,
+      "imu_measurement_hold": null,
+      "clock_cleanup": {
+        "epochs": 1259,
+        "jump_masks": 0,
+        "filled_values": 5,
+        "verified_against_original_raw_csv": true,
+        "output_coordinate_interpolation": false
+      },
+      "baseline_status_preserved": "native-audit-failed"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "correction": "Source IMU initialization; baseline status recorded below",
+      "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_g988b_may13_source_init.json",
+      "record_sha256": "bfe0900a88d039fdce9ca566e29b3bf4efb67182165100005d01a046e32e8472",
+      "plan_sha256": "77ee0b394e17d1ce95649f33c06b87163a5fa394b661c8d596a294631a4f0078",
+      "validation_sha256": "865203c977726fca9e22a35690b94652e7bfdef8d45d3e75d2ef23a3c52ea5ac",
+      "run_sha256": "198702a8aa0f0244203392a0e6d048a82d17f09190122752043d954c5052d906",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+      "score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.8619685628371849,
+        "p95_m": 1.7294026678622219,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.2956856153497034
+      },
+      "wall_s": 1059.8011481761932,
+      "raw_epochs": 2182,
+      "native_output_rows": 2182,
+      "missing_raw_keys": 0,
+      "coordinate_interpolation_or_hold_count": 0,
+      "temporal_initial_guess_count": 0,
+      "imu_measurement_hold": null,
+      "clock_cleanup": null,
+      "baseline_status_preserved": "scored-native-development"
+    }
+  }
+}

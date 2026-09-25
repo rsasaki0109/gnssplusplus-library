@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-23",
+  "goal_status": "active-not-achieved",
+  "existing_data": {
+    "user_instruction": "Location unknown; download if absent.",
+    "archive_path": "E:/rtklib_v2_ws_data/gsdc2023/cache/dataset_2023.zip",
+    "previously_verified_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+    "download_url": "https://www.taroz.net/data/dataset_2023.zip",
+    "state": "Already downloaded and used for audited all40 replays; no new evaluation dataset needed."
+  },
+  "matlab": {
+    "user_answer": "No usable alternative MATLAB environment.",
+    "local_previous_failure": "R2024a LicenseError -1: license file unavailable",
+    "paired_reference_runtime": "unproven",
+    "action": "Continue pinned source inspection and native C++ evaluations; do not repeat requests for another MATLAB host or claim executed reference parity."
+  },
+  "historical_submission": {
+    "submission_ref": 56309958,
+    "payload_state": "Recovered from authenticated Kaggle using the correct submissionId request field.",
+    "action": "Recover through authenticated Kaggle if available; retain original score/composition as historical reported evidence until verified.",
+    "authenticated_scores_verified": true,
+    "payload_download_http_status": 200,
+    "payload": {
+      "status": "downloaded",
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_payload_audit_only\\56309958.csv",
+      "sha256": "3bc8388a8e95b3ae5581833418409430bb2d8a283b5b172551da265746d03559",
+      "bytes": 6156637,
+      "rows": 71936
+    },
+    "composition_record": "gsdc2023_recovered_historical_payload_composition.json"
+  },
+  "new_submission": {
+    "user_selected": "Kaggle\u63a5\u7d9a\u3092\u7528\u610f\u3057\u3066\u63d0\u51fa\u3092\u6307\u793a\u3059\u308b",
+    "artifact": "E:/rtklib_v2_ws_output/gsdc_native/all40_a205u_source_init_submission_v1/submission.csv",
+    "sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+    "connection": "Authenticated using official CLI OAuth",
+    "submitted": true,
+    "scope": "Only the reviewed artifact above; later experimental outputs are not substituted. Verify authentication, manifest and CSV hash before submission.",
+    "submission_ref": 56479759,
+    "public_score_m": 1.698,
+    "private_score_m": 1.333,
+    "evidence_record": "gsdc2023_all40_official_submission_v1.json",
+    "server_payload_roundtrip_verified": true
+  }
+}

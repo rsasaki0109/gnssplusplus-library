@@ -1,0 +1,60 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325g_samsung_drift_plan.json",
+  "plan_sha256": "6dd3e29ea81d65146699ae1ae8e0b36e638f6257350289afd3a26a2b50965078",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "isolated_added_flag": "--native-samsung-clock-drift",
+  "paired_validation_complete": true,
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "dependency": "train_a325g_source_init",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325g_samsung_drift_v1\\validation.json",
+  "validation_sha256": "42f9a20b7f1154788e1c1bfb164d4bf8880ccd06b00491245883c8e773159dbf",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 11.929479400958476,
+  "mean_route_group_score_m": 11.929479400958476,
+  "results": {
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 2.903674679428252,
+            "p95_m": 20.9552841224887,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 11.929479400958476
+          },
+          "truth_sha256": "1ed96775d792358180092145051d2f7af7910a856a5b5af489bb78c8719136b7",
+          "solution_sha256": "6a0142425d09427419ff9c5d389d39fede4b6d6df42d673804a0d06c544856cc",
+          "native_epochs": 1512,
+          "wall_s": 436.33097434043884,
+          "seed_metadata_sha256": "25dbab8e1ed0d61acdce7d1cc475d162a827be045aa56343dea12bb3ac8c187d"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 2.903674679428252,
+            "p95_m": 20.9552841224887,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 11.929479400958476
+          },
+          "truth_sha256": "1ed96775d792358180092145051d2f7af7910a856a5b5af489bb78c8719136b7",
+          "solution_sha256": "f0269ec4e139e89e991c5a4f8221feaaa2439a3b0b39088ac7532b6c612a57a6",
+          "native_epochs": 1512,
+          "wall_s": 365.15976190567017,
+          "seed_metadata_sha256": "25dbab8e1ed0d61acdce7d1cc475d162a827be045aa56343dea12bb3ac8c187d"
+        }
+      },
+      "delta_m": 0.0
+    }
+  },
+  "checked_unix": 1790145423.7157094,
+  "scope_limitation": "One exposed development route. Clock drift may alter seed metadata by design. Shared-load runtime; no MATLAB runtime equivalence claim."
+}

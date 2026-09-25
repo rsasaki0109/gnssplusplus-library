@@ -1,0 +1,42 @@
+{
+  "schema": "gsdc-bounded-imu-tail-policy-tests.v1",
+  "status": "matched-a217m-runtime-and-native-recovery-verified",
+  "checked_unix": 1790147684.5051138,
+  "files": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\include\\libgnss++\\algorithms\\imu_continuous_coverage.hpp",
+      "sha256": "b50267940dcab1f64a5f88c9b4087c36ea486ab9166632413b92445667422df9"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_imu_csv.cpp",
+      "sha256": "058cdc5a4b77766c0ba0801437e5bcd772282760ab7307f6a222b6f799d809ee"
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_tmp\\bounded_tail_coverage_test.log",
+      "sha256": "ad7c978000432e4aa4bc1e2c152844b1761139dd9682f7151b985b1ce77ec791"
+    }
+  ],
+  "tests_passed": 27,
+  "new_test_cases": 3,
+  "default_strict_check_changed": false,
+  "inference_policy_changed": "Only with explicit --native-leading-imu-bounded-tail; strict default unchanged.",
+  "maximum_tail_s": 0.05,
+  "basis": "Use the existing 50 ms IMU continuity bound as an explicit ceiling on terminal measurement reuse; this is a modeling policy to evaluate, not a claim of source equivalence or measured accuracy.",
+  "requirements": [
+    "Real samples must cover recovered leading states through their first supported anchor.",
+    "The entire sample stream must have finite strictly increasing timestamps.",
+    "Sample gaps intersecting the real supported graph interval cannot exceed the existing continuity bound.",
+    "Trailing measurement hold must be reported separately and must never certify full real-sample bracketing."
+  ],
+  "remaining": [
+    "Assess accuracy across additional routes before any default promotion."
+  ],
+  "external_submission": false,
+  "audit_tests_passed": 11,
+  "cli_incompatible_combinations_rejected": 3,
+  "build_success": true,
+  "binary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\leading_bounded_tail_fixed.exe",
+  "binary_sha256": "d122fbeecd8d7295c5f37b3660f699aa3cc37993e586a7a55e49182503bdc43d",
+  "test_runner_note": "Initial pytest invocation failed before collection because auto-loaded xonsh plugin requires a console. Same unittest suite passed through standard unittest discovery.",
+  "runtime_result_record": "gsdc2023_train_a217m_bounded_tail.json"
+}

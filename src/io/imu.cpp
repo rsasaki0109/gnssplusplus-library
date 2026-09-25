@@ -1,3 +1,4 @@
+#include <libgnss++/io/android_clock_arithmetic.hpp>
 #include <libgnss++/io/imu.hpp>
 
 #include <algorithm>
@@ -54,8 +55,9 @@ std::vector<std::string> splitCsvLine(const std::string& line) {
     while (std::getline(stream, field, ',')) {
         fields.push_back(field);
     }
-    // std::getline drops a trailing empty field after the last comma; CSV
-    // rows here never end with a trailing comma, so no fix-up needed.
+    // Preserve the final empty CSV field. Smartphone logs commonly end
+    // with unavailable optional metadata (including position columns).
+    if (!line.empty() && line.back() == ',') fields.emplace_back();
     return fields;
 }
 
@@ -142,20 +144,26 @@ GNSSTime androidUtcToGpsTime(double utc_time_ms, double leap_seconds) {
     return GNSSTime(week, gps_seconds - static_cast<double>(week) * kSecondsPerGpsWeek);
 }
 
-GNSSTime gpsNanosToGpsTime(long double gps_time_nanos) {
-    if (!std::isfinite(static_cast<double>(gps_time_nanos))) {
-        return GNSSTime();
-    }
-    const long double gps_seconds = gps_time_nanos / 1.0e9L;
-    const long double week_value = std::floor(gps_seconds / kSecondsPerGpsWeek);
-    if (!std::isfinite(static_cast<double>(week_value)) ||
-        week_value < static_cast<long double>(std::numeric_limits<int>::min()) ||
-        week_value > static_cast<long double>(std::numeric_limits<int>::max())) {
-        return GNSSTime();
-    }
-    const int week = static_cast<int>(week_value);
-    return GNSSTime(week, static_cast<double>(
-        gps_seconds - static_cast<long double>(week) * kSecondsPerGpsWeek));
+GNSSTime mappedUtcToGpsTime(const AndroidGnssUtcGpsMapping& mapping,
+                            std::int64_t utc_ms) {
+    std::int64_t dt_ms = 0;
+    if (!io::android_clock::difference(utc_ms, mapping.reference_utc_time_ms, dt_ms) ||
+        mapping.reference_gps_time_nanos < 0)
+        return GNSSTime(0, std::numeric_limits<double>::quiet_NaN());
+    const auto week = mapping.reference_gps_time_nanos / io::android_clock::nanos_per_week;
+    const auto remainder = mapping.reference_gps_time_nanos % io::android_clock::nanos_per_week;
+    const long double relative_ns = static_cast<long double>(remainder) +
+        mapping.intercept_offset_nanos +
+        static_cast<long double>(dt_ms) * mapping.slope_nanos_per_ms;
+    const long double extra_weeks =
+        std::floor(relative_ns / io::android_clock::nanos_per_week);
+    const long double final_week = week + extra_weeks;
+    if (!std::isfinite(final_week) || final_week < 0 ||
+        final_week > std::numeric_limits<int>::max())
+        return GNSSTime(0, std::numeric_limits<double>::quiet_NaN());
+    const long double tow_ns = relative_ns -
+        extra_weeks * io::android_clock::nanos_per_week;
+    return GNSSTime(static_cast<int>(final_week), static_cast<double>(tow_ns / 1e9L));
 }
 
 bool validateAndroidGnssTimeAnchors(
@@ -491,8 +499,19 @@ AndroidGnssTimeAnchorLoadResult loadAndroidGnssTimeAnchors(
 AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
     const std::string& path,
     AndroidGnssUtcGpsMapping& mapping) {
+    return loadAndroidGnssUtcGpsMapping(path, mapping, 5000.0);
+}
+
+AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
+    const std::string& path, AndroidGnssUtcGpsMapping& mapping,
+    double maximum_anchor_gap_ms) {
     AndroidGnssUtcGpsMappingLoadResult result;
     mapping = AndroidGnssUtcGpsMapping{};
+    if (!std::isfinite(maximum_anchor_gap_ms) || maximum_anchor_gap_ms <= 0 ||
+        maximum_anchor_gap_ms > 60000.0) {
+        result.error = "UTC/GPS anchor-gap bound must be in (0, 60000] ms";
+        return result;
+    }
     if (hasMatExtension(path)) {
         result.error = "MATLAB .mat inputs are forbidden by the raw/native IMU contract";
         return result;
@@ -544,7 +563,8 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
 
     struct RawAnchor {
         std::int64_t utc_time_ms = 0;
-        long double gps_time_nanos = 0.0L;
+        std::int64_t gps_integer_nanos = 0;
+        double bias_nanos = 0.0;
         int discontinuity_count = 0;
     };
     std::map<std::int64_t, RawAnchor> by_utc;
@@ -598,10 +618,10 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
             }
             anchor.discontinuity_count = static_cast<int>(count);
         }
-        anchor.gps_time_nanos = static_cast<long double>(time_nanos) -
-                                static_cast<long double>(full_bias_nanos) -
-                                static_cast<long double>(bias_nanos);
-        if (!std::isfinite(static_cast<double>(anchor.gps_time_nanos))) {
+        anchor.bias_nanos = bias_nanos;
+        if (!io::android_clock::difference(time_nanos, full_bias_nanos,
+                                          anchor.gps_integer_nanos) ||
+            anchor.gps_integer_nanos < 0) {
             result.error = "raw Android GNSS UTC/GPS mapping contains a non-finite GPS time";
             return result;
         }
@@ -633,29 +653,35 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
         mapping.hardware_clock_count_constant = true;
         mapping.hardware_clock_discontinuity_count = expected_count;
     }
+    const auto gpsDifference = [](const RawAnchor& a, const RawAnchor& b) {
+        std::int64_t delta = 0;
+        if (!io::android_clock::difference(a.gps_integer_nanos, b.gps_integer_nanos, delta))
+            return std::numeric_limits<long double>::quiet_NaN();
+        return static_cast<long double>(delta) - a.bias_nanos + b.bias_nanos;
+    };
     long double max_gap_ms = 0.0L;
     for (std::size_t i = 1U; i < anchors.size(); ++i) {
         if (anchors[i - 1U].utc_time_ms >= anchors[i].utc_time_ms ||
-            anchors[i - 1U].gps_time_nanos >= anchors[i].gps_time_nanos) {
+            !(gpsDifference(anchors[i], anchors[i - 1U]) > 0.0L)) {
             result.error = "raw Android UTC/GPS mapping anchors must be strictly increasing";
             return result;
         }
         max_gap_ms = std::max(max_gap_ms, static_cast<long double>(
             anchors[i].utc_time_ms - anchors[i - 1U].utc_time_ms));
     }
-    constexpr long double kMaximumAnchorGapMs = 5000.0L;
+    const long double kMaximumAnchorGapMs = maximum_anchor_gap_ms;
     if (max_gap_ms > kMaximumAnchorGapMs) {
-        result.error = "raw Android UTC/GPS mapping anchor gap exceeds 5000 ms";
+        result.error = "raw Android UTC/GPS mapping anchor gap exceeds " +
+                       std::to_string(maximum_anchor_gap_ms) + " ms";
         return result;
     }
 
     const long double utc0 = static_cast<long double>(anchors.front().utc_time_ms);
-    const long double gps0 = anchors.front().gps_time_nanos;
     long double sum_xx = 0.0L;
     long double sum_xy = 0.0L;
     for (const RawAnchor& anchor : anchors) {
         const long double x = static_cast<long double>(anchor.utc_time_ms) - utc0;
-        const long double y = anchor.gps_time_nanos - gps0;
+        const long double y = gpsDifference(anchor, anchors.front());
         sum_xx += x * x;
         sum_xy += x * y;
     }
@@ -668,7 +694,7 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
     long double sum_residual = 0.0L;
     for (const RawAnchor& anchor : anchors) {
         const long double x = static_cast<long double>(anchor.utc_time_ms) - utc0;
-        const long double y = anchor.gps_time_nanos - gps0;
+        const long double y = gpsDifference(anchor, anchors.front());
         sum_residual += y - slope * x;
     }
     const long double intercept = sum_residual / static_cast<long double>(anchors.size());
@@ -677,7 +703,7 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
     long double max_residual_ms = 0.0L;
     for (const RawAnchor& anchor : anchors) {
         const long double x = static_cast<long double>(anchor.utc_time_ms) - utc0;
-        const long double y = anchor.gps_time_nanos - gps0;
+        const long double y = gpsDifference(anchor, anchors.front());
         const long double residual_ms = (intercept + slope * x - y) / 1.0e6L;
         if (!std::isfinite(static_cast<double>(residual_ms))) {
             result.error = "raw Android UTC/GPS mapping fit is non-finite";
@@ -704,17 +730,11 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
         result.error = "raw Android UTC/GPS mapping violates fixed drift/residual bounds";
         return result;
     }
-    const long double ref_gps_rounded = std::round(gps0);
-    if (ref_gps_rounded < static_cast<long double>(std::numeric_limits<std::int64_t>::min()) ||
-        ref_gps_rounded > static_cast<long double>(std::numeric_limits<std::int64_t>::max())) {
-        result.error = "raw Android UTC/GPS mapping reference GPS time is out of range";
-        return result;
-    }
     mapping.valid = true;
     mapping.reference_utc_time_ms = anchors.front().utc_time_ms;
-    mapping.reference_gps_time_nanos = static_cast<std::int64_t>(ref_gps_rounded);
+    mapping.reference_gps_time_nanos = anchors.front().gps_integer_nanos;
     mapping.intercept_offset_nanos = static_cast<double>(
-        (gps0 - ref_gps_rounded) + intercept);
+        -anchors.front().bias_nanos + intercept);
     mapping.slope_nanos_per_ms = static_cast<double>(slope);
     mapping.drift_ppm = static_cast<double>(drift_ppm);
     mapping.maximum_fit_residual_ms = static_cast<double>(max_residual_ms);
@@ -1117,9 +1137,8 @@ AndroidImuCsvLoadResult loadAndroidImuCsv(
                 result.utc_wall_clock_fallback_offset_applied = true;
                 result.utc_wall_clock_fallback_effective_offset_ms = offset_ms;
             }
-            const long double mapped_gps_nanos =
-                utc_gps_mapping->gpsNanosAtUtc(mapped_utc_time_ms);
-            synchronized_gps_time = gpsNanosToGpsTime(mapped_gps_nanos);
+            synchronized_gps_time =
+                mappedUtcToGpsTime(*utc_gps_mapping, mapped_utc_time_ms);
         } else {
             synchronized_gps_time = androidUtcToGpsTime(
                 synchronized_utc_ms, config.gps_utc_leap_seconds);

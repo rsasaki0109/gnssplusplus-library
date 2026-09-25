@@ -1,0 +1,142 @@
+{
+  "status": "matched-a205u-samsung-drift-cold-gnss-comparison-complete",
+  "created_unix": 1790128842.7637923,
+  "hypothesis": "Raw Android A205u drift near 18520 m/s is incompatible with its Doppler residual population; test the existing native GPS L1 median drift preprocessing before cold GNSS residual masks.",
+  "scope": "Existing exposed October A205u train route; not heldout. Same frozen binary and raw inputs. Both arms enable native Samsung clock drift; only candidate enables cold GNSS observations.",
+  "binary_sha256": "36fb14b834260918c68993040304d60823b042281ea08b25703effc3f233f7e2",
+  "promoted": false,
+  "official_score": false,
+  "external_submission": false,
+  "plans": {
+    "a205u_cold_gnss_samsung_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_cold_gnss_samsung_control_plan.json",
+      "sha256": "a37aff8405f36d249d5a0c03b5419380b555f1bf11129205a11be10ae63156d7"
+    },
+    "a205u_cold_gnss_samsung_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_cold_gnss_samsung_candidate_plan.json",
+      "sha256": "b6447dffe7fc13ad58ea55221023964dff28da5269da2ebd30ca9a1c62006a87"
+    }
+  },
+  "results": {
+    "a205u": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2955688161605592,
+            "p95_m": 2.6208972639088994,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9582330400347292
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 1.8946186677872157,
+              "p95_m": 3.871009676802515,
+              "phone_score_m": 2.8828141722948653,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0
+            },
+            "imu-initial": {
+              "p50_m": 1.4146581252557187,
+              "p95_m": 2.8149550742906215,
+              "phone_score_m": 2.11480659977317,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0
+            }
+          },
+          "wall_s": 420.4479238986969,
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "solution_sha256": "6125d805a98c1cdd586003f682053499298809f8836027e09849b9c7387968ae",
+          "gnss_initial_counts": {
+            "gnss_initial_p_rows": 0,
+            "gnss_initial_doppler_candidates": 0,
+            "gnss_initial_doppler_retained": 0,
+            "gnss_initial_gradient_interval_s": 0,
+            "gnss_initial_code_residual_centers": []
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2948749192134765,
+            "p95_m": 2.6208378711535794,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.957856395183528
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 1.8493117037658204,
+              "p95_m": 3.2625680972139417,
+              "phone_score_m": 2.5559399004898813,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0
+            },
+            "imu-initial": {
+              "p50_m": 1.4091234050969137,
+              "p95_m": 2.8141718903979425,
+              "phone_score_m": 2.111647647747428,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0
+            }
+          },
+          "wall_s": 372.5700650215149,
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "solution_sha256": "2830ad2ea526605042478f97d8ca9479db40e426f95cf3e60b3ecc2a1d4f74bb",
+          "gnss_initial_counts": {
+            "gnss_initial_p_rows": 21554,
+            "gnss_initial_doppler_candidates": 22591,
+            "gnss_initial_doppler_retained": 21762,
+            "gnss_initial_gradient_interval_s": 1,
+            "gnss_initial_code_residual_centers": [
+              {
+                "system": 1,
+                "band": 1,
+                "cached_rows": 8267,
+                "admitted_rows": 8267,
+                "cached_center_m": -0.15755116144264836,
+                "admitted_center_m": -0.15755116144264836,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 2,
+                "band": 1,
+                "cached_rows": 7714,
+                "admitted_rows": 7714,
+                "cached_center_m": 7.783221932752969,
+                "admitted_center_m": 7.783221932752969,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 4,
+                "band": 1,
+                "cached_rows": 5786,
+                "admitted_rows": 5786,
+                "cached_center_m": -1.1083026548290515,
+                "admitted_center_m": -1.1083026548290515,
+                "selected_threshold_m": 50
+              }
+            ]
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "gnss-first": "990da7ba181666d7f2355fe72325dd96ebe4340ded8c1f07d491928da68d8ff9",
+          "imu-initial": "fe5580115e7e5f73d751939017379647c4887be7dc45e1c08f7a03c9dc4b5977"
+        },
+        "candidate": {
+          "gnss-first": "cd0c67cc7af82c9054bafe560506b674cade8ac535b4a9cdb649542b98f16681",
+          "imu-initial": "27db2125c2ffced26698f80feb105b6c0a3dd6812f58065198daa53b0d687993"
+        }
+      },
+      "gnss_stage_identical": false,
+      "same_native_seed_metadata": true,
+      "same_samsung_drift_preprocessing": true,
+      "delta_m": -0.0003766448512012577,
+      "gnss_stage_delta_m": -0.32687427180498396
+    }
+  },
+  "real_data_comparison_complete": true,
+  "accuracy_validated": true,
+  "scope_limitation": "One exposed A205u development route; both arms enable native Samsung clock drift; not heldout, official or pinned MATLAB runtime parity. Stage/final differences include phone output offset and are not isolated IMU effects."
+}

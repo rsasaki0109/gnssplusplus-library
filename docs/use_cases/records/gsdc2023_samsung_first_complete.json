@@ -1,0 +1,341 @@
+{
+  "pixel_regression": [
+    {
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_gnss.csv",
+        "--android-imu",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_imu.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\brdc.nav",
+        "--native-base-rinex",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\SLAC_rnx2.obs",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-phase157-raw-p-bootstrap",
+        "--native-phase165-raw-p-no-doppler-graph",
+        "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+        "--native-phase171-raw-p-no-doppler-imu-main",
+        "--native-phase171-raw-p-ecef-doppler-gnss-first",
+        "--native-upstream-stop-constraints",
+        "--native-lm-lambda-floor",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-rinex-sha256",
+        "34ade4a1b540ebaff7ca00d43053c009e080834e91318b0219d04f6d32ab7602",
+        "--native-base-position-ecef",
+        "-2703116.3177",
+        "-4291766.7551",
+        "3854248.0736",
+        "--out",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\pixel4\\solution.csv",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\pixel4\\summary.json"
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "state": "complete",
+      "started_unix": 1790091376.266287,
+      "previous_solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\initialization_v1\\pixel4-reduced\\solution.csv",
+      "previous_solution_sha256": "bbd56009699e7cbba5f58c65c685156490eda6ea9f32a27c305567221cfd6672",
+      "pid": 63372,
+      "returncode": 0,
+      "wall_s": 608.7436797618866,
+      "outputs": {
+        "solution.csv": "bbd56009699e7cbba5f58c65c685156490eda6ea9f32a27c305567221cfd6672",
+        "stderr.log": "eca7ec681e9aadf03f0ea96a310397f7927c4b06798d9f40d217dc9a9b4ee67d",
+        "stdout.log": "3d8f0e21eb5d575276e9f684c1bb618f495190904e6e20fb23aa0badc87fca45",
+        "summary.json": "563df5c65394b8e838b8beb680021429e5f0dc5e09bb853ecab35385a96b2eb7"
+      },
+      "solution_byte_identical": true
+    },
+    {
+      "argv": [
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\gnss_fgo_imu_no_base.exe",
+        "--dataset-id",
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_gnss.csv",
+        "--android-imu",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_imu.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\brdc.nav",
+        "--native-base-rinex",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\P221_rnx2.obs",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-phase157-raw-p-bootstrap",
+        "--native-phase165-raw-p-no-doppler-graph",
+        "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+        "--native-phase171-raw-p-no-doppler-imu-main",
+        "--native-phase171-raw-p-ecef-doppler-gnss-first",
+        "--native-phase197-source-utc-fallback-imu-offset",
+        "--native-phase217-main-pose3-motion",
+        "--native-upstream-stop-constraints",
+        "--native-phase213-main-doppler",
+        "--native-source-tdcp-meter-sigma",
+        "--native-lm-lambda-floor",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-rinex-sha256",
+        "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+        "--native-base-position-ecef",
+        "-2698117.9416",
+        "-4301326.2649",
+        "3847286.2750",
+        "--out",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\pixel5\\solution.csv",
+        "--summary-json",
+        "E:\\rtklib_v2_ws_output\\gsdc_native\\phone_graph_regression_v1\\pixel5\\summary.json"
+      ],
+      "binary_sha256": "10f19a939476d0372ad63bf52b17303e1300e3fa2283ea6fb512ab13995d17bd",
+      "state": "complete",
+      "started_unix": 1790091376.266287,
+      "previous_solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_stack8m_v1\\solution.csv",
+      "previous_solution_sha256": "7ed9f8bf62130df81fdd64cf7feb59fdd76497eb8eff6cbeed971babb3cc6e7b",
+      "pid": 66392,
+      "returncode": 0,
+      "wall_s": 268.75333523750305,
+      "outputs": {
+        "solution.csv": "7ed9f8bf62130df81fdd64cf7feb59fdd76497eb8eff6cbeed971babb3cc6e7b",
+        "stderr.log": "03af1b0d3313ad99dcc50d62f4f6bfa6bc9632a4c719b4f11092786c81bb2cf6",
+        "stdout.log": "be8a90f021c1a08f4beefc4d4eac2a78741fe298ce3d250fa22102101cbd3f3b",
+        "summary.json": "f02c7a5033588c4a9c945fa1367d4a719eaa2b8797f56d939083ac87ab54cbaf"
+      },
+      "solution_byte_identical": true
+    }
+  ],
+  "parser_tests": {
+    "android": {
+      "baseline": {
+        "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\android_loader_baseline_tests.xml",
+        "sha256": "299ae278c454b46c941aead49ed4c48a4c33bd8feb1d41d0d3bd44651a3e76ac",
+        "tests": "20",
+        "failures": {
+          "AndroidRawGnssTest.ReconstructsRawClockAndObservableSigns": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:275\nThe difference between result.observations.epochs.front().time.tow and tow is 9.3466951511800289e-08, which exceeds 1e-9, where\nresult.observations.epochs.front().time.tow evaluates to 100000.12299990654,\ntow evaluates to 100000.12300000001, and\n1e-9 evaluates to 1.0000000000000001e-09.\n",
+          "AndroidRawGnssTest.UnwrapsTransmitWeekAcrossBoundaryWithExactNanoseconds": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:490\nThe difference between result.observations.epochs[0].observations.front().pseudorange and expected is 14.293822351843119, which exceeds 0.03, where\nresult.observations.epochs[0].observations.front().pseudorange evaluates to 20985486.353822354,\nexpected evaluates to 20985472.060000002, and\n0.03 evaluates to 0.029999999999999999.\n",
+          "AndroidRawGnssTest.ResetsRawClockSegmentOnlyAfterStrictlyGreaterOneSecond": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:537\nThe difference between result.observations.epochs[1].receiver_clock_bias and 1.0e-6 is 2.4000000000000109e-08, which exceeds 1e-15, where\nresult.observations.epochs[1].receiver_clock_bias evaluates to 1.0240000000000001e-06,\n1.0e-6 evaluates to 9.9999999999999995e-07, and\n1e-15 evaluates to 1.0000000000000001e-15.\n",
+          "AndroidRawGnssTest.AppliesTimeOffsetAndUpstreamBiasQualityGate": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:745\nThe difference between result.observations.epochs.front().observations.front().pseudorange and pseudorange is 0.0011517144739627838, which exceeds 1e-5, where\nresult.observations.epochs.front().observations.front().pseudorange evaluates to 20685651.582255177,\npseudorange evaluates to 20685651.583406892, and\n1e-5 evaluates to 1.0000000000000001e-05.\n"
+        }
+      },
+      "updated": {
+        "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\android_loader_negative_sv_tests.xml",
+        "sha256": "89711352d14ab6a88337adb87ec30bc2fa4ebb9b1bbe7bca18fc58301a5ab684",
+        "tests": "21",
+        "failures": {
+          "AndroidRawGnssTest.ReconstructsRawClockAndObservableSigns": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:275\nThe difference between result.observations.epochs.front().time.tow and tow is 9.3466951511800289e-08, which exceeds 1e-9, where\nresult.observations.epochs.front().time.tow evaluates to 100000.12299990654,\ntow evaluates to 100000.12300000001, and\n1e-9 evaluates to 1.0000000000000001e-09.\n",
+          "AndroidRawGnssTest.UnwrapsTransmitWeekAcrossBoundaryWithExactNanoseconds": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:490\nThe difference between result.observations.epochs[0].observations.front().pseudorange and expected is 14.293822351843119, which exceeds 0.03, where\nresult.observations.epochs[0].observations.front().pseudorange evaluates to 20985486.353822354,\nexpected evaluates to 20985472.060000002, and\n0.03 evaluates to 0.029999999999999999.\n",
+          "AndroidRawGnssTest.ResetsRawClockSegmentOnlyAfterStrictlyGreaterOneSecond": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:537\nThe difference between result.observations.epochs[1].receiver_clock_bias and 1.0e-6 is 2.4000000000000109e-08, which exceeds 1e-15, where\nresult.observations.epochs[1].receiver_clock_bias evaluates to 1.0240000000000001e-06,\n1.0e-6 evaluates to 9.9999999999999995e-07, and\n1e-15 evaluates to 1.0000000000000001e-15.\n",
+          "AndroidRawGnssTest.AppliesTimeOffsetAndUpstreamBiasQualityGate": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_android_raw_gnss.cpp:745\nThe difference between result.observations.epochs.front().observations.front().pseudorange and pseudorange is 0.0011517144739627838, which exceeds 1e-5, where\nresult.observations.epochs.front().observations.front().pseudorange evaluates to 20685651.582255177,\npseudorange evaluates to 20685651.583406892, and\n1e-5 evaluates to 1.0000000000000001e-05.\n"
+        }
+      },
+      "identical_failure_messages": true
+    },
+    "imu": {
+      "baseline": {
+        "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\imu_csv_baseline_tests.xml",
+        "sha256": "f1bdcef9e75714ed73923b0623299340e05aec38e51f77af4be6647267906a75",
+        "tests": "22",
+        "failures": {
+          "AndroidUtcGpsMappingTest.FitsRawHardwareGpsToUtcAndSynchronizesBlankImuClock": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_imu_csv.cpp:298\nThe difference between mapping.slope_nanos_per_ms and 1'000'000.1 is 0.0023999999975785613, which exceeds 1e-6, where\nmapping.slope_nanos_per_ms evaluates to 1000000.1024,\n1'000'000.1 evaluates to 1000000.1, and\n1e-6 evaluates to 9.9999999999999995e-07.\n",
+          "AndroidUtcGpsMappingTest.AppliesSourceMinusTwentyMsOnlyToFallbackMappedTime": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_imu_csv.cpp:434\nThe difference between mapping.slope_nanos_per_ms and kSlopeNanosPerMs is 0.032000000006519258, which exceeds 1e-6, where\nmapping.slope_nanos_per_ms evaluates to 1000499.968,\nkSlopeNanosPerMs evaluates to 1000500, and\n1e-6 evaluates to 9.9999999999999995e-07.\n"
+        }
+      },
+      "updated": {
+        "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\imu_csv_empty_tests.xml",
+        "sha256": "61b2f3de88738744e12e2f1a7a94f23caadd90277f6a4fbd47a348debdf10a7e",
+        "tests": "23",
+        "failures": {
+          "AndroidUtcGpsMappingTest.FitsRawHardwareGpsToUtcAndSynchronizesBlankImuClock": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_imu_csv.cpp:298\nThe difference between mapping.slope_nanos_per_ms and 1'000'000.1 is 0.0023999999975785613, which exceeds 1e-6, where\nmapping.slope_nanos_per_ms evaluates to 1000000.1024,\n1'000'000.1 evaluates to 1000000.1, and\n1e-6 evaluates to 9.9999999999999995e-07.\n",
+          "AndroidUtcGpsMappingTest.AppliesSourceMinusTwentyMsOnlyToFallbackMappedTime": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_imu_csv.cpp:434\nThe difference between mapping.slope_nanos_per_ms and kSlopeNanosPerMs is 0.032000000006519258, which exceeds 1e-6, where\nmapping.slope_nanos_per_ms evaluates to 1000499.968,\nkSlopeNanosPerMs evaluates to 1000500, and\n1e-6 evaluates to 9.9999999999999995e-07.\n"
+        }
+      },
+      "identical_failure_messages": true
+    }
+  },
+  "samsung_full_run": {
+    "inputs": {
+      "--android-gnss": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+        "sha256": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0"
+      },
+      "--android-imu": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_imu.csv",
+        "sha256": "b90e35248b3a2049c2db343611010002733543740f99da625833486f4cd9baf5"
+      },
+      "--nav": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+        "sha256": "8928c254995b9b50c233813df8aefa67c759acc21edfcd53b48d28d3d06fa2c4"
+      },
+      "--native-base-rinex": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\P226_rnx2.obs",
+        "sha256": "8eb96565b013041dab82b07f1facf406a2b8ae0447c249c998c6da7925d02183"
+      }
+    },
+    "purpose": "existing test data truth-free full inference, not accuracy evaluation",
+    "base_setting": {
+      "Course": "2022-10-06-20-46-us-ca-sjc-r",
+      "Phone": "sm-a205u",
+      "Type": "Mix",
+      "Nepoch": "1697",
+      "IdxStart": "2",
+      "IdxEnd": "1697",
+      "RPYReset": "0",
+      "L5": "0",
+      "BDS": "0",
+      "Base1": "P226",
+      "RINEX": "V2",
+      "SameCourse": "2023-09-07-22-48-us-ca-routebc2"
+    },
+    "argv": [
+      "E:\\gnsspp-build-gsdc-native\\apps\\Release\\gnss_fgo_imu_no_base.exe",
+      "--dataset-id",
+      "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "--android-gnss",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+      "--android-imu",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_imu.csv",
+      "--nav",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\brdc.nav",
+      "--native-base-rinex",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\P226_rnx2.obs",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-meter-state-parity",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-phase157-raw-p-bootstrap",
+      "--native-phase165-raw-p-no-doppler-graph",
+      "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+      "--native-phase171-raw-p-no-doppler-imu-main",
+      "--native-phase171-raw-p-ecef-doppler-gnss-first",
+      "--native-upstream-stop-constraints",
+      "--native-lm-lambda-floor",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-rinex-sha256",
+      "8eb96565b013041dab82b07f1facf406a2b8ae0447c249c998c6da7925d02183",
+      "--native-base-position-ecef",
+      "-2677501.0146",
+      "-4314063.5177",
+      "3847179.5753",
+      "--out",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_empty_csv_v4\\solution.csv",
+      "--summary-json",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_empty_csv_v4\\summary.json"
+    ],
+    "binary_sha256": "2c10c131854a6727b6f95b2a744b68215cad522872c4a631c5058531214510c6",
+    "state": "complete",
+    "started_unix": 1790092456.237246,
+    "pid": 27268,
+    "returncode": 0,
+    "wall_s": 195.14340806007385,
+    "outputs": {
+      "solution.csv": "181b10564cc7afd4a4824cf7e2f1d4e83bc9955b9ca612ce085fd71dcbe56197",
+      "stderr.log": "09457915267f395d5add8ba4b594a361b6a13b3165d8952e61a73b94f28398b3",
+      "stdout.log": "c17283c0ee83b1abf0d5441394217540f6aeaf672205d41ef8d6e051d7198da0",
+      "summary.json": "23c4c85855b6b6e4ea93693322998377c72605cfa16d7fc12f5287ead1a68ec8"
+    }
+  },
+  "samsung_key_verification": {
+    "rows": 1696,
+    "unique_keys": 1696,
+    "matches_accepted_raw_keys_after_first": true,
+    "phone_exact": true,
+    "finite_and_geographic_bounds": true,
+    "truth_used": false,
+    "official_submission_key_verification": false
+  },
+  "mi8_raw_seed_run": {
+    "argv": [
+      "E:/gnsspp-build-gsdc-native/apps/Release/gnss_fgo_imu_no_base.exe",
+      "--dataset-id",
+      "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "--android-gnss",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\mi8\\device_gnss.csv",
+      "--nav",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\brdc.nav",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--native-phase149-raw-p-seed-stage",
+      "--native-phase157-raw-p-bootstrap",
+      "--summary-json",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_negative_sv_fixed_v1\\summary.json"
+    ],
+    "inputs": [
+      {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\mi8\\device_gnss.csv",
+        "sha256": "9af63add3455f995e53b4584c9790a5ff9ffdf9fb11b80042e15223deed580c9",
+        "bytes": 31725741
+      },
+      {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-30-20-59-us-ca-mtv-m\\brdc.nav",
+        "sha256": "1d01308c6f915b849af9ad197404d79f33d8d091743b6907a534525267ce6142",
+        "bytes": 10560440
+      }
+    ],
+    "binary_sha256": "8906f7a899afa03773ae82461dbcd0dfdb05d49e349102d6bb967e43c1d59ebe",
+    "started_unix": 1790092209.6791246,
+    "state": "complete",
+    "pid": 53632,
+    "returncode": 0,
+    "wall_s": 3.614561080932617,
+    "outputs": {
+      "stderr.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "stdout.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "summary.json": "a14dfe2d81ea0ab4a55581a7cfb07f8201447b2c18eaf576f6fd57f47786927c"
+    }
+  },
+  "mi8_raw_seed_summary": {
+    "schema_version": "smartphone-r5-phase149-raw-p-seed-stage.v1",
+    "phase": 149,
+    "dataset_id": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+    "status": "accepted",
+    "failure_status": "accepted",
+    "failure_reason": "",
+    "collect_all_epochs_for_diagnostics": false,
+    "velocity_diagnostics_disabled": false,
+    "input_epoch_count": 1395,
+    "evaluated_epoch_count": 1395,
+    "accepted_epoch_count": 1395,
+    "rejected_epoch_count": 0,
+    "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+    "raw_pseudorange_only": true,
+    "doppler_consumed": false,
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false
+  },
+  "limitation": "Samsung postfit TDCP residual reports still reconstruct legacy clock-bias differences; must use inserted drift factor residuals before interpreting RMS or cost diagnostics. Full solver cost and finite-key output were verified; accuracy not evaluated."
+}

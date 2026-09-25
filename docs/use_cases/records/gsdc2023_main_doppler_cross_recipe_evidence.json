@@ -1,0 +1,229 @@
+{
+  "checked_unix": 1790158205.31787,
+  "scope": "Seven completed existing development comparisons from six pinned records; each pair matched, recipes differ between experiments. Summary of prior native audits with record/plan provenance checks.",
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "single_recipe": false,
+  "pooled_score_m": null,
+  "comparisons": [
+    {
+      "case_or_original_scope": "one exposed MI8 development route; same binary and raw inputs; only main Doppler differs; stage export enabled in both conditions",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_mi8_main_doppler_experiment.json",
+      "record_sha256": "292d9e22b120dca7bc77070b0c1d5c6d4920dc654f30fdbd596a7a192ffd2d36",
+      "binary_sha256": "1a0f6628edeb8a7acd7dd025b35af3d274a268b6d9ce339354ba5742f35b1e0d",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.8947760505588985,
+        "p95_m": 1.423393785609381,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.1590849180841398
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.8717086122812767,
+        "p95_m": 1.4247984685155977,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.148253540398437
+      },
+      "delta_m": {
+        "phone_score_m": -0.010831377685702748,
+        "p50_m": -0.02306743827762181,
+        "p95_m": 0.0014046829062166477
+      },
+      "wall_s": {
+        "control": 677.6475667953491,
+        "candidate": 183.42164540290833
+      }
+    },
+    {
+      "case_or_original_scope": "one exposed A205U development route; same binary, four raw inputs and args except main Doppler; no reference-height input",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_a205u_main_doppler_experiment.json",
+      "record_sha256": "3be737f84eb29170a7e5d4e2cd9e8e9dd1f69a7811de0ce59165d0ce718a2838",
+      "binary_sha256": "1a0f6628edeb8a7acd7dd025b35af3d274a268b6d9ce339354ba5742f35b1e0d",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.3130854418015072,
+        "p95_m": 2.7686512559649294,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.0408683488832184
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.3315488932161896,
+        "p95_m": 2.7679322111547364,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.049740552185463
+      },
+      "delta_m": {
+        "phone_score_m": 0.008872203302244586,
+        "p50_m": 0.01846345141468242,
+        "p95_m": -0.0007190448101930258
+      },
+      "wall_s": {
+        "control": 218.53105425834656,
+        "candidate": 213.32448768615723
+      }
+    },
+    {
+      "case_or_original_scope": "2022-08-04-20-07-us-ca-sjc-q/sm-a325f",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a325f_main_doppler_matched.json",
+      "record_sha256": "47e18ca0172c4dc0673264ad1deb7a751852c73b714e95642224595a25d2ca33",
+      "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.4181577118931417,
+        "p95_m": 3.0844132107032567,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.251285461298199
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.2495323426482385,
+        "p95_m": 2.4835009462900075,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.866516644469123
+      },
+      "delta_m": {
+        "phone_score_m": -0.38476881682907593,
+        "p50_m": -0.16862536924490312,
+        "p95_m": -0.6009122644132492
+      },
+      "wall_s": {
+        "control": 609.0027332305908,
+        "candidate": 201.55900621414185
+      }
+    },
+    {
+      "case_or_original_scope": "2022-10-06-21-51-us-ca-mtv-n/sm-a325f",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a325f_main_doppler_matched.json",
+      "record_sha256": "47e18ca0172c4dc0673264ad1deb7a751852c73b714e95642224595a25d2ca33",
+      "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.2854577189076237,
+        "p95_m": 2.725284585709374,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.005371152308499
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.0705518353180907,
+        "p95_m": 2.7728578405368163,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.9217048379274535
+      },
+      "delta_m": {
+        "phone_score_m": -0.08366631438104544,
+        "p50_m": -0.214905883589533,
+        "p95_m": 0.047573254827442124
+      },
+      "wall_s": {
+        "control": 738.2961156368256,
+        "candidate": 68.30757236480713
+      }
+    },
+    {
+      "case_or_original_scope": "2022-02-24-18-29-us-ca-lax-o/pixel5",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_lax_o_main_doppler.json",
+      "record_sha256": "dd37b1485b37d67c525c9e85c53af7fe9a0a3c8155001f9cd2e1630642e55696",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.2343322915310424,
+        "p95_m": 2.3451705407387626,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.7897514161349024
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.1563500141759702,
+        "p95_m": 2.3355616016940686,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.7459558079350193
+      },
+      "delta_m": {
+        "phone_score_m": -0.04379560819988315,
+        "p50_m": -0.07798227735507224,
+        "p95_m": -0.009608939044694065
+      },
+      "wall_s": {
+        "control": 2196.177908182144,
+        "candidate": 209.7489516735077
+      }
+    },
+    {
+      "case_or_original_scope": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_march10_huber_main_doppler.json",
+      "record_sha256": "77bceb484760e66a18ece5a9d41d77d643d64f1009b20b6e01352623f45c75e9",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.5007200555912674,
+        "p95_m": 0.5880111604114162,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5443656080013418
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.4825233107981316,
+        "p95_m": 0.5802025569182332,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5313629338581825
+      },
+      "delta_m": {
+        "phone_score_m": -0.013002674143159365,
+        "p50_m": -0.01819674479313582,
+        "p95_m": -0.0078086034931830195
+      },
+      "wall_s": {
+        "control": 4159.587830543518,
+        "candidate": 570.9635047912598
+      }
+    },
+    {
+      "case_or_original_scope": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+      "record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_january04_huber_main_doppler.json",
+      "record_sha256": "7ff52c98e95de80aaa4e92a27d2897217084c35d38951ff336265fdcff46d5cc",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.4124292314760013,
+        "p95_m": 0.6139474233907193,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5131883274333603
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.36074462556437675,
+        "p95_m": 0.5753626336379103,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.4680536296011435
+      },
+      "delta_m": {
+        "phone_score_m": -0.0451346978322168,
+        "p50_m": -0.05168460591162455,
+        "p95_m": -0.03858478975280899
+      },
+      "wall_s": {
+        "control": 4850.518833637238,
+        "candidate": 832.4418766498566
+      }
+    }
+  ],
+  "counts": {
+    "phone_score_m": {
+      "improved": 6,
+      "worsened": 1
+    },
+    "p50_m": {
+      "improved": 6,
+      "worsened": 1
+    },
+    "p95_m": {
+      "improved": 5,
+      "worsened": 2
+    }
+  },
+  "decision": "No uniform gain claim: A205U score regression and MI8/October A325F P95 regressions persist. January4 Doppler helps conditional on sigma+Huber, but remains worse than sigma alone. Unified corrected full-train replay keeps its pre-frozen options unchanged."
+}

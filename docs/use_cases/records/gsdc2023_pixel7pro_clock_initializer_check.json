@@ -1,0 +1,20 @@
+{
+  "status": "initializer-stage-verified-final-inference-pending",
+  "dataset_id": "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+  "plan_sha256": "e1a946684fe8a25a915fd8c25b11737338d0b19937a2d46d8654027561be13b9",
+  "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "raw_sha256": "8fb5393655d0f252a64cff07909ed0ef349a67c4b9a5611f04b82bd5259ecc1a",
+  "seed_metadata_sha256": "f906600c58eac7a116b5020a5cb6fc0a34f0a9f59cda05ef70d73c725f8fb063",
+  "cleanup_sidecar_sha256": "e8b1833aed9092d3ade9c3424029c73dc6ac6adf66face1d205f287a5716f911",
+  "proof": {
+    "epochs": 1259,
+    "jump_masks": 0,
+    "filled_values": 5,
+    "verified_against_original_raw_csv": true,
+    "output_coordinate_interpolation": false
+  },
+  "final_output_audited": false,
+  "accuracy_evaluated": false,
+  "truth_read": false,
+  "checked_unix": 1790151703.3785896
+}

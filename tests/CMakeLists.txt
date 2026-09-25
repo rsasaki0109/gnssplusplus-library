@@ -5,6 +5,11 @@ cmake_minimum_required(VERSION 3.10)
 find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+add_test(NAME python_gsdc_native_output_audit_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gsdc_native_output_audit.py)
+add_test(NAME python_gsdc_native_submission_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gsdc_native_submission.py)
+
 add_test(NAME python_fixed_lag_covariance_comparison_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_fixed_lag_covariance_comparison.py)
 set_tests_properties(python_fixed_lag_covariance_comparison_tests PROPERTIES LABELS core)
@@ -18,6 +23,15 @@ if(GTest_FOUND)
     add_executable(gnss_run_tests
         test_imu_csv.cpp
         test_android_raw_gnss.cpp
+        test_native_imu_refinement_handoff.cpp
+        test_native_gnss_imu_initial_handoff.cpp
+        test_native_imu_refinement_attitude_reset.cpp
+        test_native_stage_position_offset.cpp
+        test_native_gnss_initial_observations.cpp
+        test_source_route_settings.cpp
+        test_source_phone_imu_noise.cpp
+        test_source_samsung_clock_drift.cpp
+        test_source_mi8_clock_drift.cpp
         test_carrier_code_leveling.cpp
         test_smartphone_upstream_preprocessing.cpp
         test_smartphone_upstream_state_contract.cpp
@@ -32,6 +46,7 @@ if(GTest_FOUND)
         test_fusion_nhc.cpp
         test_upstream_stop_constraints.cpp
         test_stationary_gyro_initializer.cpp
+        test_source_tdcp_drift_factor.cpp
         test_tdcp_code_gate_ablation.cpp
         test_sparse_epoch_rank_control.cpp
         test_dual_frequency_tdcp_observability.cpp

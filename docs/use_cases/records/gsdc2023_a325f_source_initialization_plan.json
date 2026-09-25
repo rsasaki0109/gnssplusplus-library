@@ -1,0 +1,66 @@
+{
+  "status": "two-route-paired-comparison-complete-no-accuracy-gain",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_a325f_source_init_plan.json",
+  "plan_sha256": "0a0ea2d87155e666c8f6c47de4e61e1647a9232b12389c81b00f24b81c1540a7",
+  "only_changed_argument": "--native-source-imu-initialization",
+  "existing_development_truth_already_exposed": true,
+  "fixed_all40_recipe_unchanged": true,
+  "promotion": false,
+  "result": {
+    "runs": {
+      "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+        "status": "paired-native-development-comparison",
+        "control": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.4250581693336182,
+          "p95_m": 3.021433800067477,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.2232459847005477
+        },
+        "candidate": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.4249959260545715,
+          "p95_m": 3.0217589782521936,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.2233774521533824
+        },
+        "delta_m": 0.0001314674528347659,
+        "same_binary_inputs_and_other_arguments_verified": true,
+        "wall_s": {
+          "control": 793.3078730106354,
+          "candidate": 736.0105171203613
+        },
+        "runtime_caveat": "concurrent workloads; not controlled speed benchmark"
+      },
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+        "status": "paired-native-development-comparison",
+        "control": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.276711742535844,
+          "p95_m": 2.7526515410815446,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.0146816418086946
+        },
+        "candidate": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.2767619937883243,
+          "p95_m": 2.7527489274588657,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.014755460623595
+        },
+        "delta_m": 7.381881490031716e-05,
+        "same_binary_inputs_and_other_arguments_verified": true,
+        "wall_s": {
+          "control": 959.7744853496552,
+          "candidate": 694.4176547527313
+        },
+        "runtime_caveat": "concurrent workloads; not controlled speed benchmark"
+      }
+    },
+    "complete": true,
+    "official_score": false,
+    "taroz_runtime_comparison": false,
+    "promoted": false,
+    "scope": "two existing development route groups; source IMU initialization only"
+  }
+}

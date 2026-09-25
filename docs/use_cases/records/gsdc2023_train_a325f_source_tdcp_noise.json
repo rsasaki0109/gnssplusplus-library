@@ -1,0 +1,53 @@
+{
+  "status": "ineffective-ablation-source-intentionally-disables-tdcp",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_source_tdcp_noise_plan.json",
+  "plan_sha256": "d665b498a25c219aaf7f43262ec42435080ad0ac214433c4c1f27f77264a95ba",
+  "binary_sha256": "04a853b3af950229b3fa4aadadbfc48edbf2340cc72bc8b61a7b6cae5039b6f1",
+  "scope": "Two A325F Highway/L5=0 main-Doppler routes; matched new executable; source metre sigma plus source Huber is the only candidate option bundle.",
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "official_score": false,
+  "promoted": false,
+  "created_unix": 1790157003.869015,
+  "legacy_control_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_doppler_source_route_plan.json",
+  "legacy_control_plan_sha256": "f4f296384cabaa7b5d856c72ac9e7d9ffdd66d251aaaa075c188813fc858fc3a",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_source_tdcp_noise_control_plan.json",
+  "baseline_plan_sha256": "c416d6e6ec8d8dfc19ba14ac7c043653ef5795e693c0d8df7661ce87dcfc9ea9",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_source_tdcp_noise_v1\\validation.json",
+  "validation_sha256": "c1d847c92935e555e8eb398deca676c8c180e125f08d347c8ec79742d391db66",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.9199599306314146,
+  "mean_route_group_score_m": 1.9199599306314146,
+  "paired_validation_complete": false,
+  "effective_weighting_comparison": false,
+  "results": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "factors_built": 7290,
+      "factors_inserted": 0,
+      "omitted_by_phone_model": true,
+      "candidate_solution_equals_control": true,
+      "solution_sha256": "0ae06fd9746685d21d1acd93336dec834172d013bd2d6ee448dfe4a74df89b19",
+      "score_m": 1.9484165438592431,
+      "delta_m": 0.0
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "factors_built": 5747,
+      "factors_inserted": 0,
+      "omitted_by_phone_model": true,
+      "candidate_solution_equals_control": true,
+      "solution_sha256": "eba7837eaf063c13286b6834e7511bc52749f600574ffd675111ed6fc487f6d3",
+      "score_m": 1.8915033174035858,
+      "delta_m": 0.0
+    }
+  },
+  "source_guard": {
+    "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+    "sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "line": 301
+  },
+  "error_analysis": "The outer source phone exclusion was missed. A325F is TDCP-disabled, not an admitted bias-difference phone. CLI admission expansion was unnecessary and reverted. Comparator correctly rejected zero inserted factors; its assertion is retained.",
+  "checked_unix": 1790157569.315772
+}

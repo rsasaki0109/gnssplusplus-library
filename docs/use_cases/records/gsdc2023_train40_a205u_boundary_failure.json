@@ -1,0 +1,13 @@
+{
+  "schema": "gsdc-frozen-a205u-boundary-failure.v1",
+  "current_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\23\\run.json",
+  "current_run_sha256": "7eb7dab7b1b2ce61c810efe4b13b9d6691f71f94fdc712dab3e73cbb37084ec6",
+  "same_raw_inputs_as_known_failure": true,
+  "same_frozen_binary": true,
+  "previous_boundary_record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_leading_clock_boundary_fix.json",
+  "previous_boundary_record_sha256": "398186022c5c6a570f4755b8ab3dea3ba46685212eb2ee3fc832f0c00df9a587",
+  "full_recipe_equivalence_not_claimed": true,
+  "fixed_baseline_remains_failed": true,
+  "cause": "Known raw-loader leading GPS span boundary in frozen c779 executable. Existing UTC-bounded tolerance repair is not present in this baseline executable.",
+  "checked_unix": 1790142513.89628
+}
