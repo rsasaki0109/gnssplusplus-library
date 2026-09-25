@@ -17,13 +17,14 @@ LANE = ['--native-phase165-raw-p-no-doppler-graph',
 def invoke(args):
     env = os.environ.copy()
     env['LD_LIBRARY_PATH'] = '/home/sasaki/.local/lib:' + env.get('LD_LIBRARY_PATH', '')
-    return subprocess.run([str(ROOT / 'build/apps/gnss_fgo_imu_no_base'), *args],
+    executable = os.environ.get('GSDC_NATIVE_EXE', str(ROOT / 'build/apps/gnss_fgo_imu_no_base'))
+    return subprocess.run([executable, *args],
                           cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
 
 
 @pytest.mark.parametrize('args', [
     [FLAG],
-    ['--dataset-id', 'synthetic/pixel4', *LANE, FLAG],
+    ['--dataset-id', 'synthetic/sm-a325f', *LANE, FLAG],
     ['--dataset-id', 'synthetic/pixel5', *LANE[:-1], FLAG],
 ])
 def test_invalid_lane(args):
@@ -42,6 +43,27 @@ def test_conflicting_noise_modes(conflict):
     assert result.returncode == 2
     assert 'Source TDCP metre sigma requires' in result.stderr
     assert 'Unknown argument' not in result.stderr
+
+
+@pytest.mark.parametrize('phone', [
+    'pixel4', 'pixel4xl', 'pixel5', 'mi8', 'xiaomimi8',
+    'sm-g988b', 'pixel6pro', 'pixel7pro', 'sm-s908b',
+])
+def test_bias_difference_phone_reaches_missing_raw_recipe(phone):
+    result = invoke(['--dataset-id', 'synthetic/' + phone, *LANE, FLAG])
+    assert result.returncode == 2
+    assert 'Phase171 requires the pinned raw-clock-only Android' in result.stderr
+    assert 'Source TDCP metre sigma requires' not in result.stderr
+
+
+@pytest.mark.parametrize('phone', [
+    'sm-a205u', 'sm-a217m', 'sm-a505g', 'sm-a600t', 'sm-a505u',
+    'samsunga325g', 'sm-a325f', 'samsunga32', 'unknown',
+])
+def test_other_clock_models_and_unknown_phones_rejected(phone):
+    result = invoke(['--dataset-id', 'synthetic/' + phone, *LANE, FLAG])
+    assert result.returncode == 2
+    assert 'Source TDCP metre sigma requires' in result.stderr
 
 
 @pytest.mark.parametrize('source_k', [False, True])

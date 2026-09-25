@@ -7678,12 +7678,15 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
                         const bool epoch_heading = false,
                         const bool omit_bias_prior = false,
                         const bool omit_velocity_prior = false,
-                        const bool synthetic_relative_height = false) {
+                        const bool synthetic_relative_height = false,
+                        const std::string& phone = "pixel5") {
+    SCOPED_TRACE("handoff phone=" + phone);
     auto stage_problem = makePhase164RawNoDopplerProblem(
         true, 6, false, stage_velocity);
     auto stage_config = stage_ecef_doppler
                             ? makePhase171EcefDopplerConfig()
                             : makePhase164RawNoDopplerConfig();
+    stage_config.native_source_clock_c0d_phone = phone;
     if (stage_ecef_doppler) {
         appendPhase171SyntheticEcefDopplerRows(stage_problem);
     }
@@ -7859,6 +7862,7 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
         phase201_schedule;
     config.use_native_phase205_source_count_bias_density = phase205_density;
     config.use_native_phase209_source_separate_imu_factors = phase209_separate;
+    config.native_source_clock_c0d_phone = phone;
     config.use_native_phase213_main_doppler = phase213_main_doppler && phase213_bad_rows != 4;
     config.use_native_phase217_main_pose3_motion = phase217_motion;
     if (phase217_motion) config.use_position_motion_factors = false;
@@ -7943,6 +7947,22 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
               affine_tdcp ? 1U : 0U);
     EXPECT_EQ(result.diagnostics.epoch_heading_attitude_seeds_inserted,
               epoch_heading ? problem.epochs.size() : 0U);
+    if (epoch_heading) {
+        auto second_problem = problem;
+        second_problem.imu.refinement_velocity_seeds_nav = result.epoch_velocity_nav_mps;
+        const auto second = FGOProcessor(config).optimizeProblem(second_problem);
+        EXPECT_TRUE(second.diagnostics.converged);
+        EXPECT_EQ(second.solution.solutions.size(), problem.epochs.size());
+        second_problem.imu.refinement_velocity_seeds_nav.pop_back();
+        EXPECT_THROW(FGOProcessor(config).optimizeProblem(second_problem), std::invalid_argument);
+        second_problem.imu.refinement_velocity_seeds_nav = result.epoch_velocity_nav_mps;
+        second_problem.imu.refinement_velocity_seeds_nav[0].x() =
+            std::numeric_limits<double>::quiet_NaN();
+        EXPECT_THROW(FGOProcessor(config).optimizeProblem(second_problem), std::invalid_argument);
+        second_problem.imu.refinement_velocity_seeds_nav = result.epoch_velocity_nav_mps;
+        second_problem.imu.epoch_heading_attitude_times[0] = problem.epochs[0].time + 0.001;
+        EXPECT_THROW(FGOProcessor(config).optimizeProblem(second_problem), std::invalid_argument);
+    }
     EXPECT_EQ(result.diagnostics.first_imu_bias_priors_inserted, omit_bias_prior ? 0U : 1U);
     EXPECT_EQ(result.diagnostics.first_imu_bias_priors_omitted, omit_bias_prior ? 1U : 0U);
     EXPECT_EQ(result.diagnostics.first_imu_velocity_priors_inserted, omit_velocity_prior ? 0U : 1U);
@@ -7979,7 +7999,9 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
         EXPECT_EQ(result.diagnostics.imu_intervals, reference.diagnostics.imu_intervals);
         EXPECT_EQ(result.diagnostics.tdcp_factors_inserted, reference.diagnostics.tdcp_factors_inserted);
     }
-    EXPECT_EQ(result.diagnostics.native_source_clock_c0d_factor_count, 1U);
+    // A205U's source recipe deliberately omits inter-epoch clock factors.
+    EXPECT_EQ(result.diagnostics.native_source_clock_c0d_factor_count,
+              phone == "sm-a205u" ? 0U : 1U);
     EXPECT_EQ(result.diagnostics.imu_intervals, 1U);
     EXPECT_EQ(result.diagnostics.native_phase205_bias_density_enabled, phase205_density);
     EXPECT_EQ(result.diagnostics.native_phase217_main_motion_enabled, phase217_motion);
@@ -8069,6 +8091,46 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
                   (!moving_imu && observed_slow_gate) ? 2U : 0U);
         EXPECT_EQ(result.diagnostics.upstream_stop_pose_factors,
                   (!moving_imu && observed_slow_gate) ? 1U : 0U);
+        if (!moving_imu && observed_slow_gate && stop_seed_case == 0) {
+            auto phase_config = config;
+            phase_config.native_imu_stop_phase = NativeImuStopPhase::Initialization;
+            const auto first = FGOProcessor(phase_config).optimizeProblem(problem);
+            ASSERT_TRUE(first.diagnostics.converged);
+            EXPECT_EQ(first.diagnostics.upstream_stop_velocity_factors, 0U);
+            EXPECT_EQ(first.diagnostics.upstream_stop_velocity_phase_omissions, 2U);
+            EXPECT_EQ(first.diagnostics.upstream_stop_pose_factors, 1U);
+            EXPECT_EQ(first.diagnostics.upstream_stop_pose_gap_rejections, 0U);
+            EXPECT_EQ(first.diagnostics.graph_factors + 2U, result.diagnostics.graph_factors);
+            phase_config.native_imu_stop_phase = NativeImuStopPhase::Final;
+            const auto final = FGOProcessor(phase_config).optimizeProblem(problem);
+            ASSERT_TRUE(final.diagnostics.converged);
+            EXPECT_EQ(final.diagnostics.upstream_stop_velocity_factors, 2U);
+            EXPECT_EQ(final.diagnostics.upstream_stop_velocity_phase_omissions, 0U);
+            EXPECT_EQ(final.diagnostics.upstream_stop_pose_factors, 1U);
+            EXPECT_EQ(final.diagnostics.graph_factors, result.diagnostics.graph_factors);
+            // Keep GPS/IMU epochs one second apart: the source pose gate
+            // explicitly uses raw UTC, including the strict 1500 ms edge.
+            for (const std::int64_t utc_gap_ms : {1499LL, 1500LL}) {
+                auto boundary = problem;
+                boundary.epochs[1].raw_utc_time_millis =
+                    boundary.epochs[0].raw_utc_time_millis + utc_gap_ms;
+                boundary.native_raw_p_no_doppler_seeds[1].raw_utc_time_millis =
+                    boundary.epochs[1].raw_utc_time_millis;
+                const auto checked = FGOProcessor(phase_config).optimizeProblem(boundary);
+                ASSERT_TRUE(checked.diagnostics.converged);
+                EXPECT_EQ(checked.diagnostics.upstream_stop_velocity_factors, 2U);
+                EXPECT_EQ(checked.diagnostics.upstream_stop_pose_factors, utc_gap_ms < 1500 ? 1U : 0U);
+                EXPECT_EQ(checked.diagnostics.upstream_stop_pose_gap_rejections, utc_gap_ms < 1500 ? 0U : 1U);
+            }
+            auto invalid = problem;
+            invalid.imu.stop_velocity_seeds_nav.pop_back();
+            EXPECT_THROW(FGOProcessor(phase_config).optimizeProblem(invalid), std::invalid_argument);
+            invalid = problem;
+            invalid.imu.stop_velocity_seeds_nav[0].x() = std::numeric_limits<double>::quiet_NaN();
+            EXPECT_THROW(FGOProcessor(phase_config).optimizeProblem(invalid), std::invalid_argument);
+            phase_config.use_upstream_stop_constraints = false;
+            EXPECT_THROW(FGOProcessor(phase_config).optimizeProblem(problem), std::invalid_argument);
+        }
         EXPECT_EQ(result.diagnostics.upstream_stop_velocity_key_missing_epochs,
                   0U);
         EXPECT_EQ(result.diagnostics.upstream_stop_graph_velocity_nonfinite_epochs,
@@ -8194,6 +8256,14 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
     };
     run(false);
     run(true);
+    // Corrected ECEF Doppler rows are a geometric/unit contract, independent
+    // of phone metadata. Exercise actual stage-to-IMU solves for both clock
+    // recipes while retaining all malformed-row rejection cases below.
+    for (const std::string phone : {"mi8", "sm-a205u"}) {
+        run(false, false, Vector3d(2.0, -1.5, 0.75), false, false, 0,
+            true, false, false, false, true, 0, false, true,
+            false, false, false, false, false, phone);
+    }
     // Explicitly exercise the paired residual-state branch: Phase184 OFF,
     // ECEF staging, Phase213/217 ON, robust main, no other ablation.
     run(false, false, Vector3d(2.0, -1.5, 0.75), false, false, 0,
@@ -8656,6 +8726,27 @@ TEST(FGOGtsamPhase213MainDopplerFrameTest,
         500, 501, los_ecef, measured, noise);
     EXPECT_GT(std::abs(unrotated.evaluateError(velocity_nav, drift)(0) - error(0)), 0.1);
     EXPECT_FALSE(main.evaluateError(velocity_nav, gtsam::Vector::Zero(2)).allFinite());
+}
+
+TEST(FGOGtsamPhase171RefinementBuilderTest, RejectsMissingVelocityAndSppReplacement) {
+    std::vector<ObservationData> raw{ObservationData(GNSSTime(2300,100)),
+                                     ObservationData(GNSSTime(2300,101))};
+    std::vector<Vector3d> velocities(2,Vector3d::Zero());
+    NavigationData nav;
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed=true;
+    config.use_upstream_observable_quality=true;
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem(raw,nav,velocities),std::invalid_argument);
+    config.use_spp_seed=false;
+    config.use_native_phase171_raw_p_no_doppler_imu_main=true;
+    config.use_native_source_clock_c0d_factor=true;
+    config.use_corrected_undifferenced_doppler_factors=true;
+    velocities.pop_back();
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem(raw,nav,velocities),std::invalid_argument);
+    velocities.push_back(Vector3d::Constant(std::numeric_limits<double>::quiet_NaN()));
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem(raw,nav,velocities),std::invalid_argument);
+    velocities[1].setZero(); config.use_upstream_observable_quality=false;
+    EXPECT_THROW(FGOProcessor(config).buildPseudorangeProblem(raw,nav,velocities),std::invalid_argument);
 }
 
 TEST(FGOGtsamPhase216Pose3MotionTest, MatchesPointResidualAndPoseTangentJacobians) {

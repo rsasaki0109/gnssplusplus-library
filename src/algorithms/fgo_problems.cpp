@@ -10,6 +10,7 @@
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/doppler_contract.hpp>
 #include <libgnss++/algorithms/tdcp_contract.hpp>
+#include <libgnss++/algorithms/smartphone_temporal_recipe.hpp>
 #include <libgnss++/algorithms/tdcp_endpoint_covariance.hpp>
 #include <libgnss++/algorithms/signal_bias_contract.hpp>
 #include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
@@ -50,6 +51,35 @@ namespace upstream = observable_upstream;
 FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     const std::vector<ObservationData>& input_epochs,
     const NavigationData& nav) const {
+    return buildPseudorangeProblem(input_epochs, nav, {});
+}
+
+FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
+    const std::vector<ObservationData>& input_epochs,
+    const NavigationData& nav,
+    const std::vector<Vector3d>& receiver_velocities_ecef) const {
+    const bool refinement = !receiver_velocities_ecef.empty();
+    validateNativeImuObservationPhase(config_.native_imu_observation_phase);
+    const bool source_observations =
+        config_.native_imu_observation_phase != NativeImuObservationPhase::Legacy;
+    if (source_observations && !refinement)
+        throw std::invalid_argument("Source observation phases require explicit same-run receiver velocities");
+    const auto code_residual_threshold = [&](upstream::ObservationBand band) {
+        return nativeImuCodeResidualThreshold(config_.native_imu_observation_phase,
+                                              band == upstream::ObservationBand::L1);
+    };
+    using ResidualGroup = std::pair<GNSSSystem, upstream::ObservationBand>;
+    std::map<ResidualGroup, std::vector<double>> cached_code_residuals;
+    if (refinement && (config_.use_spp_seed || !config_.use_upstream_observable_quality ||
+        (!config_.use_native_phase171_raw_p_no_doppler_imu_main &&
+         !config_.use_native_raw_p_ecef_doppler_gnss_first) ||
+        !config_.use_native_source_clock_c0d_factor ||
+        !config_.use_corrected_undifferenced_doppler_factors ||
+        receiver_velocities_ecef.size() != input_epochs.size() ||
+        !std::all_of(receiver_velocities_ecef.begin(), receiver_velocities_ecef.end(),
+                     [](const Vector3d& v) { return v.allFinite(); }))) {
+        throw std::invalid_argument("State-based rebuild requires exact finite ECEF velocities, native corrected-D/source-clock quality and no SPP");
+    }
     if (config_.retain_native_pseudorange_remasking_pool &&
         (!config_.use_upstream_observable_quality || !config_.use_pseudorange_factors)) {
         throw std::invalid_argument("Pseudorange re-masking pool requires observable quality and P factors");
@@ -376,7 +406,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
     };
     double upstream_observation_interval_s =
         std::numeric_limits<double>::quiet_NaN();
-    if (config_.use_upstream_absolute_doppler_residual_screen) {
+    if (config_.use_upstream_absolute_doppler_residual_screen || refinement) {
         std::vector<double> intervals;
         intervals.reserve(input_epochs.size() > 1U ? input_epochs.size() - 1U : 0U);
         for (std::size_t i = 1; i < input_epochs.size(); ++i) {
@@ -701,6 +731,18 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 ionosphere_delay -
                 troposphere_delay -
                 group_delay_m;
+
+            // exobs_residuals.m changes P, but centers the resPc computed
+            // before elevation and adjacent masks. Capture that population
+            // separately; these rows are NOT admitted as graph factors.
+            if (source_observations && passes_snr_mask &&
+                upstream_band != upstream::ObservationBand::Unknown) {
+                const double residual = corrected_pseudorange -
+                    (corrected_satellite_position - seed.position_ecef).norm() -
+                    seed.receiver_clock_bias_m;
+                if (std::isfinite(residual))
+                    cached_code_residuals[{clockBiasGroup(observation.satellite.system), upstream_band}].push_back(residual);
+            }
 
             const double sin_el = std::max(0.1, std::sin(geometry.elevation));
             if (config_.use_native_phase171_raw_p_no_doppler_imu_main &&
@@ -1040,7 +1082,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             }
         }
 
-        if (config_.use_upstream_absolute_doppler_residual_screen) {
+        if (config_.use_upstream_absolute_doppler_residual_screen || refinement) {
             // The upstream residual pass uses the raw Android receiver clock
             // drift, not an epoch median proxy.  Keep this candidate isolated
             // from the broader SNR/ISB quality lane so any score change is
@@ -1050,12 +1092,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             std::vector<UndifferencedDopplerFactor> filtered_doppler;
             filtered_doppler.reserve(epoch_doppler_factors.size());
             const double dclk_mps =
-                problem.epochs.empty()
+                problem.epochs.empty() && !refinement
                     ? std::numeric_limits<double>::quiet_NaN()
                     : epoch.receiver_clock_drift_mps;
             for (const auto& factor : epoch_doppler_factors) {
+                const double centered = factor.residual_mps - (refinement
+                    ? factor.los.dot(receiver_velocities_ecef[input_epoch_index]) : 0.0);
                 const double corrected = upstream::dopplerResidualAfterReceiverClock(
-                    factor.residual_mps, dclk_mps,
+                    centered, dclk_mps,
                     upstream_observation_interval_s);
                 if (std::isfinite(corrected)) {
                     problem.diagnostics
@@ -1065,7 +1109,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                                  std::abs(corrected));
                 }
                 if (upstream::acceptsAbsoluteDopplerResidual(
-                        factor.residual_mps, dclk_mps,
+                        centered, dclk_mps,
                         upstream_observation_interval_s,
                         config_.upstream_absolute_doppler_residual_threshold_mps)) {
                     filtered_doppler.push_back(factor);
@@ -1099,8 +1143,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             std::vector<UndifferencedDopplerFactor> filtered_doppler;
             filtered_doppler.reserve(epoch_doppler_factors.size());
             for (const auto& factor : epoch_doppler_factors) {
-                const double threshold = upstream::residualThreshold(
-                    upstream::bandForSignal(factor.signal), 'D');
+                const double threshold =
+                    config_.native_doppler_residual_threshold_override_mps > 0.0
+                        ? config_.native_doppler_residual_threshold_override_mps
+                        : upstream::residualThreshold(
+                              upstream::bandForSignal(factor.signal), 'D');
                 if (std::isfinite(median) && std::isfinite(threshold) &&
                     std::isfinite(factor.residual_mps) &&
                     std::abs(factor.residual_mps - median) <= threshold) {
@@ -1175,7 +1222,14 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         }
         for (auto& factor : epoch_doppler_factors) {
             factor.epoch_index = epoch_index;
-            if (config_.use_corrected_undifferenced_doppler_factors) {
+            if (config_.use_corrected_undifferenced_doppler_factors && refinement) {
+                // The rebuilt Phase213 VD row has its own optimized drift
+                // state; it is not a difference of adjacent scalar clocks.
+                // Preserve the first epoch and rows after observation gaps.
+                factor.previous_epoch_index = epoch_index;
+                factor.dt_s = 0.0;
+                factor.includes_receiver_clock_drift = true;
+            } else if (config_.use_corrected_undifferenced_doppler_factors) {
                 if (epoch_index == 0) {
                     // A single epoch cannot identify receiver clock drift;
                     // do not silently absorb it into velocity.
@@ -1207,8 +1261,6 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         if (config_.retain_native_pseudorange_remasking_pool) {
             problem.native_pseudorange_remasking_pool = problem.pseudorange_factors;
         }
-        using ResidualGroup =
-            std::pair<GNSSSystem, upstream::ObservationBand>;
         std::map<ResidualGroup, std::vector<double>> residuals_by_group;
         for (const auto& factor : problem.pseudorange_factors) {
             const ResidualGroup group{
@@ -1222,6 +1274,26 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         std::map<ResidualGroup, double> residual_medians;
         for (const auto& [group, values] : residuals_by_group) {
             residual_medians[group] = finiteMedian(values);
+        }
+        if (source_observations) {
+            const auto admitted_medians = residual_medians;
+            residual_medians.clear();
+            for (const auto& [group, values] : cached_code_residuals) {
+                const double center = finiteMedian(values);
+                residual_medians[group] = center;
+                PseudorangeCenterAudit row;
+                row.system = group.first;
+                row.band = group.second == upstream::ObservationBand::L1 ? 1 : 5;
+                row.cached_rows = values.size();
+                row.cached_center_m = center;
+                const auto admitted = residuals_by_group.find(group);
+                if (admitted != residuals_by_group.end()) {
+                    row.admitted_rows = admitted->second.size();
+                    row.admitted_center_m = admitted_medians.at(group);
+                }
+                row.selected_threshold_m = code_residual_threshold(group.second);
+                problem.diagnostics.native_pseudorange_center_audit.push_back(row);
+            }
         }
         problem.diagnostics.upstream_pseudorange_candidates =
             problem.pseudorange_factors.size();
@@ -1237,7 +1309,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                 if (found == residual_medians.end() || !std::isfinite(found->second) ||
                     !std::isfinite(row.residual)) { ++unavailable; continue; }
                 const bool accepted = upstream::acceptsCenteredPseudorangeResidual(
-                    row.residual, found->second, upstream::residualThreshold(band, 'P'));
+                    row.residual, found->second, code_residual_threshold(band));
                 passes += accepted;
                 edge_residual += row.edge_candidate && accepted;
                 edge_retained_epoch += row.edge_candidate && accepted &&
@@ -1266,7 +1338,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             const double median = median_it == residual_medians.end()
                                       ? std::numeric_limits<double>::quiet_NaN()
                                       : median_it->second;
-            const double threshold = upstream::residualThreshold(group.second, 'P');
+            const double threshold = code_residual_threshold(group.second);
             const bool accepted = upstream::acceptsCenteredPseudorangeResidual(
                     factor.upstream_seed_residual_m, median, threshold);
             if (config_.use_native_phase171_raw_p_no_doppler_imu_main) {
@@ -1307,7 +1379,7 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
             if (median == residual_medians.end() ||
                 !upstream::acceptsCenteredPseudorangeResidual(
                     factor.upstream_seed_residual_m, median->second,
-                    upstream::residualThreshold(band, 'P'))) continue;
+                    code_residual_threshold(band))) continue;
             factor.epoch_index = retained->second;
             problem.native_code_edge_readmission_pool.push_back(factor);
         }
@@ -1752,7 +1824,15 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
                     dt, previous.loss_of_lock, current.loss_of_lock,
                     legacy_gate_delta_carrier_m, delta_code_m, max_gap,
                     config_.reject_tdcp_loss_of_lock,
-                    config_.reject_tdcp_code_phase_jump,
+                    // Drift-family phones do not share the code clock in
+                    // their carrier. The upstream P-D/L-D masks have already
+                    // screened these observations before this pairing step.
+                    config_.reject_tdcp_code_phase_jump &&
+                        !(config_.use_upstream_observable_quality &&
+                          (config_.use_native_phase171_raw_p_no_doppler_imu_main ||
+                           config_.use_native_raw_p_ecef_doppler_gnss_first) &&
+                          smartphone_temporal::forPhone(config_.upstream_device_model)
+                              .carrier_clock == smartphone_temporal::CarrierClock::IntegratedDrift),
                     config_.tdcp_code_phase_jump_threshold_m,
                     epoch_index > 0 && epoch_index - 1 < problem.clock_jumps.size() &&
                         problem.clock_jumps[epoch_index - 1],

@@ -1,3 +1,4 @@
+#include <libgnss++/algorithms/imu_continuous_coverage.hpp>
 #include <gtest/gtest.h>
 
 #include <libgnss++/io/imu.hpp>
@@ -232,6 +233,24 @@ TEST(AndroidImuCsvTest, SynchronizesUtcFromGnssElapsedAnchorsAndRequiresThem) {
     std::filesystem::remove(imu_path);
 }
 
+TEST(AndroidUtcGpsMappingTest, PreservesTrailingEmptyMetadataColumns) {
+    const auto path = std::filesystem::temp_directory_path() /
+                      "libgnss_android_trailing_empty_mapping.csv";
+    const std::string header =
+        "MessageType,utcTimeMillis,TimeNanos,FullBiasNanos,BiasNanos,OptionalA,OptionalB\n";
+    writeFile(path, header +
+        "Raw,1700000000000,1000000000000000,-1299000000000000000,0,,\n"
+        "Raw,1700000001000,1000001000000000,-1299000000000000000,0,,\n"
+        "Raw,1700000002000,1000002000000000,-1299000000000000000,0,,\n");
+    AndroidGnssUtcGpsMapping mapping;
+    const auto result = loadAndroidGnssUtcGpsMapping(path.string(), mapping);
+    std::filesystem::remove(path);
+    ASSERT_TRUE(result.ok) << result.error;
+    EXPECT_TRUE(mapping.valid);
+    EXPECT_EQ(mapping.unique_anchors, 3U);
+    EXPECT_EQ(result.raw_rows, 3U);
+}
+
 TEST(AndroidUtcGpsMappingTest, FitsRawHardwareGpsToUtcAndSynchronizesBlankImuClock) {
     constexpr std::int64_t kUtc0 = 1'700'000'000'000;
     constexpr std::int64_t kGps0 = 1'300'000'000'000'000'000LL;
@@ -360,6 +379,13 @@ TEST(AndroidUtcGpsMappingTest, RejectsClockBoundsAndMixedImuDomains) {
     result = loadAndroidGnssUtcGpsMapping(path.string(), mapping);
     EXPECT_FALSE(result.ok);
     EXPECT_NE(result.error.find("gap exceeds 5000"), std::string::npos);
+
+    result = loadAndroidGnssUtcGpsMapping(path.string(), mapping, 60000.0);
+    EXPECT_TRUE(result.ok) << result.error;
+    writeFile(path, make_rows(60001, 1'000'000.0, 0));
+    EXPECT_FALSE(loadAndroidGnssUtcGpsMapping(path.string(), mapping, 60000.0).ok);
+    EXPECT_FALSE(loadAndroidGnssUtcGpsMapping(path.string(), mapping, 60001.0).ok);
+    EXPECT_FALSE(loadAndroidGnssUtcGpsMapping(path.string(), mapping, 0.0).ok);
 
     writeFile(path, make_rows(1000, 1'000'000.0, 1));
     result = loadAndroidGnssUtcGpsMapping(path.string(), mapping);
@@ -669,6 +695,57 @@ TEST(ImuCsvTest, ParsesRtklibExplorerSelfFormattedCsv) {
     EXPECT_NEAR(series.samples[0].gyro_raw_radps.x(), -0.01, 1e-12);
     EXPECT_NEAR(series.samples[0].gyro_raw_radps.y(), 0.02, 1e-12);
     EXPECT_NEAR(series.samples[0].gyro_raw_radps.z(), -0.03, 1e-12);
+}
+
+TEST(ImuCoverageTest, RequiresContinuousRealSamplesAcrossEntireRequestedInterval) {
+    using imu_coverage::check;
+    EXPECT_TRUE(check({-.01, 0., .02, .04, .06}, 0., .05).ok);
+    EXPECT_FALSE(check({.01, .02, .04, .06}, 0., .05).ok);
+    EXPECT_FALSE(check({-.01, 0., .02, .04}, 0., .05).ok);
+    EXPECT_FALSE(check({-.01, 0., .08, .1}, 0., .09).ok);
+    EXPECT_FALSE(check({-.01, 0., 0., .04, .06}, 0., .05).ok);
+    EXPECT_FALSE(check({-.01, .03, .02, .04, .06}, 0., .05).ok);
+    EXPECT_FALSE(check({0., std::numeric_limits<double>::quiet_NaN(), .1}, 0., .1).ok);
+    EXPECT_TRUE(check({-.01, 0., .05, .1}, 0., .1).ok);
+    EXPECT_FALSE(check({0., .05001, .1}, 0., .1).ok);
+}
+
+TEST(ImuCoverageTest, BoundedTailSeparatesMeasurementHoldFromRealBracketing) {
+    const std::vector<double> times{-.01, .01, .03, .05, .07};
+    EXPECT_FALSE(imu_coverage::check(times, 0., .10).ok);
+    const auto r = imu_coverage::checkBoundedTail(times, 0., .10, .04);
+    ASSERT_TRUE(r.ok);
+    EXPECT_FALSE(r.real_samples_bracket_full_interval);
+    EXPECT_NEAR(r.trailing_measurement_hold_s, .03, 1e-12);
+    EXPECT_NEAR(r.maximum_gap_s, .02, 1e-12);
+    const auto full = imu_coverage::checkBoundedTail(times, 0., .06, .04);
+    ASSERT_TRUE(full.ok);
+    EXPECT_TRUE(full.real_samples_bracket_full_interval);
+    EXPECT_EQ(full.trailing_measurement_hold_s, 0.0);
+}
+
+TEST(ImuCoverageTest, BoundedTailRejectsMissingLeadingAndInteriorData) {
+    using imu_coverage::checkBoundedTail;
+    EXPECT_FALSE(checkBoundedTail({.01, .03, .05, .07}, 0., .10, .04).ok);
+    EXPECT_FALSE(checkBoundedTail({-.01, .01, .03}, 0., .06, .04).ok);
+    EXPECT_FALSE(checkBoundedTail({-.01, .01, .03, .09}, 0., .10, .02).ok);
+    EXPECT_FALSE(checkBoundedTail({-.01, .01, .01, .03}, 0., .06, .02).ok);
+    EXPECT_FALSE(checkBoundedTail({-.01, .03, .01, .05}, 0., .06, .02).ok);
+    EXPECT_FALSE(checkBoundedTail({-.01, .01,
+        std::numeric_limits<double>::quiet_NaN()}, 0., .06, .02).ok);
+}
+
+TEST(ImuCoverageTest, BoundedTailEnforcesExplicitDurationLimit) {
+    using imu_coverage::checkBoundedTail;
+    const std::vector<double> times{-.01, .01, .03, .05};
+    EXPECT_TRUE(checkBoundedTail(times, 0., .10, .04).ok);
+    EXPECT_FALSE(checkBoundedTail(times, 0., .10001, .04).ok);
+    EXPECT_FALSE(checkBoundedTail(times, 0., .06, .04, 0.).ok);
+    EXPECT_FALSE(checkBoundedTail(times, 0., .06, .04, -.01).ok);
+    EXPECT_FALSE(checkBoundedTail(times, 0., .06, 0.).ok);
+    EXPECT_FALSE(checkBoundedTail(times, 0., .06, .07).ok);
+    EXPECT_FALSE(checkBoundedTail({}, 0., .06, .04).ok);
+    EXPECT_FALSE(checkBoundedTail(times, 0., .06, .04, .05, 0.).ok);
 }
 
 TEST(ImuAxisConventionTest, IdentityMappingIsPassthrough) {

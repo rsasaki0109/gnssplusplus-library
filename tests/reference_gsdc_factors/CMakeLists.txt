@@ -1,0 +1,31 @@
+cmake_minimum_required(VERSION 3.20)
+project(gsdc_reference_factors LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 20)
+set(TAROZ_GTSAM_GNSS "" CACHE PATH "Pinned taroz/gtsam_gnss checkout")
+find_package(Git REQUIRED)
+execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${TAROZ_GTSAM_GNSS}" rev-parse HEAD
+  OUTPUT_VARIABLE reference_commit OUTPUT_STRIP_TRAILING_WHITESPACE RESULT_VARIABLE git_status)
+if(NOT git_status EQUAL 0 OR NOT reference_commit STREQUAL "e679b72b620fc6800723578e4077dd157587d129")
+  message(FATAL_ERROR "Reference checkout must match the audited taroz/gtsam_gnss pin")
+endif()
+execute_process(COMMAND "${GIT_EXECUTABLE}" -C "${TAROZ_GTSAM_GNSS}" diff --quiet HEAD --
+  src/ClockFactor_CCDD.h src/MotionFactor_XXVV.h src/DopplerFactor_VD.h
+  src/PseudorangeFactor_XC.h src/TDCPFactor_XXCC.h
+  RESULT_VARIABLE dirty_reference)
+if(NOT dirty_reference EQUAL 0)
+  message(FATAL_ERROR "Reference factor headers must be unmodified")
+endif()
+find_package(GTSAM REQUIRED CONFIG)
+find_package(GTest REQUIRED CONFIG)
+get_filename_component(REPO "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+add_executable(reference_factors test_reference_factors.cpp)
+target_include_directories(reference_factors PRIVATE "${REPO}/include" "${REPO}/src/algorithms"
+  "${TAROZ_GTSAM_GNSS}/src")
+target_compile_definitions(reference_factors PRIVATE GNSSPP_HAS_GTSAM NOMINMAX _USE_MATH_DEFINES)
+target_link_libraries(reference_factors PRIVATE gtsam GTest::gtest_main)
+if(MSVC)
+  target_compile_options(reference_factors PRIVATE /utf-8 /bigobj)
+  target_link_options(reference_factors PRIVATE /STACK:8388608)
+endif()
+enable_testing()
+add_test(NAME pinned_reference_factors COMMAND reference_factors)

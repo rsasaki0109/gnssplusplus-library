@@ -1,6 +1,8 @@
 #pragma once
 
 #include <libgnss++/core/types.hpp>
+#include <libgnss++/algorithms/native_imu_stop_phase.hpp>
+#include <libgnss++/algorithms/native_imu_observation_phase.hpp>
 
 #include <string>
 #include <vector>
@@ -292,6 +294,17 @@ struct Config {
         bool omit_native_first_imu_velocity_prior = false;
         // Same-run GNSS-first relative local-up pairs; never enabled by default.
         bool use_native_relative_height_pairs = false;
+        // Upstream absolute-height prior (fgo_gnss_imu.m ref_hight branch):
+        // ECEF points of a road-height map built from train ground truth.
+        // Empty disables the factor; never populated from the evaluated drive.
+        std::vector<Vector3d> native_height_map_ecef;
+        // Optional override of the upstream Doppler residual screen (m/s).
+        // Non-positive keeps the published final-pass 3 m/s; the upstream
+        // initial GNSS pass (initflag) uses 20 m/s.
+        double native_doppler_residual_threshold_override_mps = 0.0;
+        // Phase217 main XXVV motion sigma (upstream prm.sigma_motion:
+        // Street 0.05, otherwise 0.01, mi8 0.1). Default keeps 0.05.
+        double native_phase217_motion_sigma_m = 0.05;
         // Phase118 opt-in: replace only the ordinary TDCP Huber threshold
         // with the official route-setting Type mapping.  The native fixed
         // TDCP sigma, residual/key/admission contract, and every other robust
@@ -1169,6 +1182,11 @@ struct Config {
         // consulted.  This is separate from the fixed-lag ZUPT/NHC knobs above
         // so the historical batch graph remains byte-compatible by default.
         bool use_upstream_stop_constraints = false;
+        NativeImuStopPhase native_imu_stop_phase = NativeImuStopPhase::Legacy;
+        // Explicit source-state observation rebuild only. The initialization
+        // limits are shared by cold GNSS and initial IMU; callers select their
+        // own stage explicitly. Source centers precede row admission masks.
+        NativeImuObservationPhase native_imu_observation_phase = NativeImuObservationPhase::Legacy;
         int upstream_stop_window_samples = 500;
         double upstream_stop_acceleration_std_offset_mps2 = 0.08;
         double upstream_stop_gyro_std_offset_radps = 0.005;

@@ -1,3 +1,4 @@
+#include <libgnss++/algorithms/native_leading_clock_span.hpp>
 #include <libgnss++/algorithms/raw_p_seed.hpp>
 
 #include <Eigen/Dense>
@@ -656,7 +657,10 @@ Result solve(const std::vector<ObservationData>& input_epochs,
             if (!collect_all) return result;
             continue;
         }
-        if (dt > config.max_gap_s) {
+        // Use the same time equality resolution as duplicate detection.
+        // Android receiver clocks can differ from a nominal 2 s interval by
+        // tens of ns; do not turn those differences into a missing epoch.
+        if (dt - config.max_gap_s > kTimeEqualityToleranceS) {
             timestamp_valid[i] = false;
             fail(result, EpochStatus::TimeGap,
                  "epoch-time-gap-exceeds-limit",
@@ -979,6 +983,162 @@ bool exactEpochIdentity(const ObservationData& input,
 }
 
 }  // namespace
+
+static RawPNoDopplerSeedAdapterResult initializeTemporalGuesses(
+    const std::vector<ObservationData>& input,
+    const Result& diagnostic,
+    double maximum_span_s, bool allow_leading) {
+    const auto rejected = [&](const char* reason) {
+        RawPNoDopplerSeedAdapterResult result;
+        result.input_epoch_count = input.size();
+        result.rejected_epoch_count = input.size();
+        result.status = SeedAdapterStatus::RawPResultRejected;
+        result.failure_reason = reason;
+        return result;
+    };
+    if (!diagnostic.collect_all_epochs_for_diagnostics || input.size() < 2 ||
+        input.size() != diagnostic.epochs.size() ||
+        diagnostic.evaluated_epoch_count != input.size() ||
+        !std::isfinite(maximum_span_s) || maximum_span_s <= 0.0)
+        return rejected("temporal-initialization-requires-complete-diagnostics");
+    Result working = diagnostic;
+    std::vector<Vector3d> positions(input.size());
+    std::vector<double> clocks(input.size());
+    std::vector<std::size_t> left(input.size()), right(input.size());
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        const auto& raw = diagnostic.epochs[i];
+        if (!exactEpochIdentity(input[i], raw, i) ||
+            !std::isfinite(input[i].time.tow) || input[i].raw_utc_time_millis < 0 ||
+            input[i].raw_source_index == std::numeric_limits<std::size_t>::max() ||
+            !std::isfinite(input[i].receiver_clock_drift_mps))
+            return rejected("temporal-initialization-invalid-identity-time-or-raw-drift");
+        if (i && (!(input[i].time - input[i-1].time > kTimeEqualityToleranceS) ||
+                  input[i].raw_utc_time_millis <= input[i-1].raw_utc_time_millis ||
+                  input[i].raw_source_index <= input[i-1].raw_source_index))
+            return rejected("temporal-initialization-nonmonotonic-time");
+        if (raw.status == EpochStatus::Accepted) {
+            if (!raw.position_ecef.allFinite() || !std::isfinite(raw.receiver_clock_bias_m) ||
+                raw.reference_clock_group != GNSSSystem::GPS)
+                return rejected("temporal-initialization-invalid-SPP-bracket");
+            positions[i] = raw.position_ecef;
+            clocks[i] = raw.receiver_clock_bias_m;
+        } else if (raw.status != EpochStatus::InsufficientPseudorange &&
+                   raw.status != EpochStatus::InsufficientGeometry &&
+                   raw.status != EpochStatus::RankDeficient &&
+                   !(raw.status == EpochStatus::SolverRejected &&
+                     (raw.reason == "native-raw-p-bootstrap-rejected" ||
+                      raw.reason == "native-spp-rejected-epoch"))) {
+            return rejected("temporal-initialization-ineligible-failure");
+        }
+    }
+    for (std::size_t i = 0; i < input.size();) {
+        if (diagnostic.epochs[i].status == EpochStatus::Accepted) { ++i; continue; }
+        const auto start = i;
+        while (i < input.size() && diagnostic.epochs[i].status != EpochStatus::Accepted) ++i;
+        if (i == input.size() || (start == 0 && !allow_leading))
+            return rejected("temporal-initialization-unbracketed-gap");
+        if (start == 0) {
+            const auto l = i;
+            auto r = l + 1;
+            while (r < input.size() && diagnostic.epochs[r].status != EpochStatus::Accepted) ++r;
+            if (r == input.size())
+                return rejected("leading-initialization-requires-two-SPP-anchors");
+            const double lead = input[l].time - input.front().time;
+            const double anchor_span = input[r].time - input[l].time;
+            const auto utc_lead_ms = input[l].raw_utc_time_millis - input.front().raw_utc_time_millis;
+            const auto utc_anchor_span_ms = input[r].raw_utc_time_millis - input[l].raw_utc_time_millis;
+            // A separate fixed bound: opting into long interior brackets must
+            // never authorize long leading extrapolation.
+            if (!native_leading_clock::withinSpan(lead, utc_lead_ms) ||
+                !native_leading_clock::withinSpan(anchor_span, utc_anchor_span_ms))
+                return rejected("leading-initialization-span-exceeds-four-seconds");
+            for (std::size_t j = 0; j < l; ++j) {
+                const double alpha = (input[j].time - input[l].time) / anchor_span;
+                positions[j] = positions[l] + alpha * (positions[r] - positions[l]);
+                clocks[j] = clocks[l] + alpha * (clocks[r] - clocks[l]);
+                left[j] = l; right[j] = r;
+            }
+            continue;
+        }
+        const auto l = start - 1, r = i;
+        const double span = input[r].time - input[l].time;
+        const double utc_span = (input[r].raw_utc_time_millis - input[l].raw_utc_time_millis) * 0.001;
+        if (span - maximum_span_s > kTimeEqualityToleranceS ||
+            utc_span - maximum_span_s > kTimeEqualityToleranceS)
+            return rejected("temporal-initialization-bracket-span-exceeds-limit");
+        for (auto j = start; j < r; ++j) {
+            const double alpha = (input[j].time - input[l].time) / span;
+            positions[j] = positions[l] + alpha * (positions[r] - positions[l]);
+            clocks[j] = clocks[l] + alpha * (clocks[r] - clocks[l]);
+            left[j] = l;
+            right[j] = r;
+        }
+    }
+    std::vector<Vector3d> velocities(input.size());
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        const auto l = i == 0 ? i : i - 1;
+        const auto r = i + 1 == input.size() ? i : i + 1;
+        velocities[i] = (positions[r] - positions[l]) / (input[r].time - input[l].time);
+        if (!positions[i].allFinite() || !velocities[i].allFinite() || !std::isfinite(clocks[i]))
+            return rejected("temporal-initialization-nonfinite-guess");
+        // Only supply a gradient for real SPP epochs. Failed SPP rows remain
+        // failed, with their original NaN coordinates, even in this copy.
+        if (working.epochs[i].status == EpochStatus::Accepted) {
+            working.epochs[i].velocity_ecef_mps = velocities[i];
+            working.epochs[i].has_velocity = true;
+        }
+    }
+    auto result = adaptSameRunNoDopplerSeeds(input, working);
+    for (std::size_t i = 0; i < input.size(); ++i) {
+        auto& seed = result.seeds[i];
+        if (diagnostic.epochs[i].status == EpochStatus::Accepted) {
+            if (seed.status != SeedAdapterStatus::Accepted || !seed.c7_clock_mapping_supported)
+                return rejected("temporal-initialization-SPP-handoff-rejected");
+            continue;
+        }
+        seed.temporal_initial_guess = true;
+        seed.initial_guess_left_source = input[left[i]].raw_source_index;
+        seed.initial_guess_right_source = input[right[i]].raw_source_index;
+        seed.position_ecef = positions[i];
+        seed.velocity_ecef_mps = velocities[i];
+        seed.clock_bias_m = clocks[i];
+        seed.clock_rate_mps = input[i].receiver_clock_drift_mps;
+        seed.reference_clock_group = GNSSSystem::GPS;
+        seed.has_position = seed.has_velocity = seed.has_clock = seed.has_clock_rate = true;
+        seed.c7_clock_mapping_supported = true;
+        seed.clock_bias_components_m[0] = clocks[i];
+        seed.clock_bias_component_available[0] = true;
+        for (const auto& obs : input[i].observations) {
+            if (!obs.valid || !obs.has_pseudorange || !std::isfinite(obs.pseudorange) || obs.pseudorange <= 0) continue;
+            if (c7ClockComponentFor(obs.satellite.system, obs.signal) < 0)
+                ++seed.c7_unsupported_pseudorange_rows;
+            else ++seed.c7_supported_pseudorange_rows;
+        }
+        seed.status = SeedAdapterStatus::Accepted;
+        seed.reason = left[i] > i ? "same-run-leading-linear-initial-guess-not-SPP"
+                                  : "same-run-linear-initial-guess-not-SPP";
+        ++result.temporal_initial_guess_count;
+    }
+    result.ok = result.graph_compatible = true;
+    result.status = SeedAdapterStatus::Accepted;
+    result.failure_reason.clear();
+    result.graph_disabled_reason.clear();
+    result.accepted_epoch_count = input.size();
+    result.rejected_epoch_count = 0;
+    return result;
+}
+
+RawPNoDopplerSeedAdapterResult initializeShortGaps(
+    const std::vector<ObservationData>& input, const Result& diagnostic,
+    double maximum_span_s) {
+    return initializeTemporalGuesses(input, diagnostic, maximum_span_s, false);
+}
+
+RawPNoDopplerSeedAdapterResult initializeWithLeadingGuesses(
+    const std::vector<ObservationData>& input, const Result& diagnostic,
+    double maximum_span_s) {
+    return initializeTemporalGuesses(input, diagnostic, maximum_span_s, true);
+}
 
 RawPNoDopplerSeedAdapterResult adaptSameRunNoDopplerSeeds(
     const std::vector<ObservationData>& input_epochs,

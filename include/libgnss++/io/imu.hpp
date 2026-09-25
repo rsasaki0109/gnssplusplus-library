@@ -198,6 +198,13 @@ AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
     const std::string& path,
     AndroidGnssUtcGpsMapping& mapping);
 
+// Explicit bounded gap policy. Callers permitting gaps beyond the default
+// 5000 ms must independently verify mapped sensor continuity before inference.
+AndroidGnssUtcGpsMappingLoadResult loadAndroidGnssUtcGpsMapping(
+    const std::string& path, AndroidGnssUtcGpsMapping& mapping,
+    double maximum_anchor_gap_ms);
+
+
 /**
  * @brief Contract for loading the raw Android ``device_imu.csv`` streams.
  *

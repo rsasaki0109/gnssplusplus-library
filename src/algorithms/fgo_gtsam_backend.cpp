@@ -39,6 +39,8 @@
 #include <libgnss++/algorithms/native_raw_p_ecef_doppler_staging.hpp>
 #include <libgnss++/algorithms/doppler_rotation_rate.hpp>
 #include "fgo_gtsam_internal.hpp"
+#include <libgnss++/algorithms/smartphone_temporal_recipe.hpp>
+#include <libgnss++/algorithms/source_tdcp_drift_factor.hpp>
 #include "fgo_pseudorange_cauchy.hpp"
 #include <gtsam/navigation/ImuFactor.h>
 
@@ -97,6 +99,28 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         config.use_native_phase138_affine_tdcp_anchor_range_constant;
     const bool phase171_requested =
         config.use_native_phase171_raw_p_no_doppler_imu_main;
+    const auto& refinement_velocity = problem.imu.refinement_velocity_seeds_nav;
+    if (!refinement_velocity.empty()) {
+        if (!phase171_requested || !use_imu ||
+            !config.use_native_epoch_heading_attitude_seeds ||
+            refinement_velocity.size() != problem.epochs.size() ||
+            problem.imu.epoch_heading_attitude_times.size() != problem.epochs.size())
+            throw std::invalid_argument("Refinement velocity requires complete Phase171 IMU handoff");
+        for (std::size_t i = 0; i < refinement_velocity.size(); ++i) {
+            if (!refinement_velocity[i].allFinite() ||
+                (problem.imu.epoch_heading_attitude_times[i] - problem.epochs[i].time) != 0.0)
+                throw std::invalid_argument("Invalid refinement velocity or epoch identity");
+        }
+    }
+    const auto phone_temporal =
+        smartphone_temporal::forPhone(config.native_source_clock_c0d_phone);
+    const bool source_phone_recipe =
+        (use_native_raw_p_ecef_doppler_graph || phase171_requested) &&
+        config.use_upstream_observable_quality;
+    const bool source_drift_tdcp = source_phone_recipe &&
+        phone_temporal.carrier_clock == smartphone_temporal::CarrierClock::IntegratedDrift;
+    const bool source_omit_clock = source_phone_recipe &&
+        !phone_temporal.clock_between;
     const bool phase201_requested =
         config.use_native_phase201_source_inclusive_forward_imu_schedule;
     result.diagnostics.native_phase171_no_doppler_imu_main_enabled =
@@ -173,11 +197,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     if (phase213_requested) {
         if (!phase171_requested || !use_imu || phase201_requested ||
             phase205_requested || phase209_requested ||
-            config.native_source_clock_c0d_phone != "pixel5" ||
             problem.native_phase213_main_doppler_rows.empty() ||
             !std::isfinite(problem.imu.nav_origin_lat_rad) ||
             !std::isfinite(problem.imu.nav_origin_lon_rad)) {
-            throw std::invalid_argument("Phase213 requires Pixel5 Phase171 main and corrected raw D rows with legacy IMU");
+            throw std::invalid_argument("Phase213 requires Phase171 main and corrected raw D rows with legacy IMU");
         }
         std::string failure;
         if (!raw_p_ecef_doppler::remapDopplerFactors(
@@ -190,7 +213,7 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     const bool phase217_requested = config.use_native_phase217_main_pose3_motion;
     if (phase217_requested && (!phase171_requested || !use_imu || phase201_requested ||
         phase205_requested || phase209_requested ||
-        config.native_source_clock_c0d_phone != "pixel5" ||
+        !(config.native_phase217_motion_sigma_m > 0.0) ||
         config.use_position_motion_factors || !config.pose3_lever_arm_body_m.allFinite() ||
         config.pose3_lever_arm_body_m.norm() > 1e-12)) {
         throw std::invalid_argument("Phase217 requires Pixel5 Phase171 legacy IMU, zero lever arm and no duplicate position motion");
@@ -235,8 +258,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             config.use_residual_ionosphere_states ||
             config.use_native_pdc_state_bridge || config.use_fixed_lag_smoother ||
             config.native_source_clock_c0d_phone.empty() ||
-            nativeSourceClockC0DPhoneExcluded(
-                config.native_source_clock_c0d_phone) ||
+            (nativeSourceClockC0DPhoneExcluded(
+                config.native_source_clock_c0d_phone) && !source_omit_clock) ||
             (use_native_raw_p_no_doppler_graph &&
              !problem.undifferenced_doppler_factors.empty()) ||
             (use_native_raw_p_ecef_doppler_graph &&
@@ -332,14 +355,19 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 return result;
             }
             if (i > 0U) {
-                const double dt_s = problem.epochs[i].time -
-                                    problem.epochs[i - 1U].time;
+                const double dt_s = source_phone_recipe
+                    ? (problem.epochs[i].raw_utc_time_millis -
+                       problem.epochs[i - 1U].raw_utc_time_millis) / 1000.0
+                    : problem.epochs[i].time - problem.epochs[i - 1U].time;
                 const bool clock_jump =
                     i < problem.clock_jumps.size() && problem.clock_jumps[i];
-                if (!nativeSourceClockC0DEdgeDecision(
-                         dt_s, clock_jump,
-                         config.native_source_clock_c0d_phone)
-                         .eligible) {
+                const auto clock_decision = nativeSourceClockC0DEdgeDecision(
+                    dt_s, clock_jump, config.native_source_clock_c0d_phone);
+                if (!clock_decision.eligible &&
+                    !(source_omit_clock && clock_decision.reason ==
+                        NativeSourceClockC0DSkipReason::PhoneExcluded) &&
+                    !(source_phone_recipe && clock_decision.reason ==
+                        NativeSourceClockC0DSkipReason::Gap)) {
                     std::fprintf(stderr,
                         "[native-raw-staging] ineligible clock edge; clock_jump=%d; dt_s=%.9g\n",
                         clock_jump ? 1 : 0, dt_s);
@@ -720,6 +748,24 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     }
     const bool use_upstream_stop_constraints =
         use_imu && config.use_upstream_stop_constraints;
+    validateNativeImuStopPhase(config.native_imu_stop_phase);
+    if (config.native_imu_stop_phase != NativeImuStopPhase::Legacy &&
+        (!use_upstream_stop_constraints ||
+         !config.use_native_phase171_raw_p_no_doppler_imu_main ||
+         problem.imu.stop_velocity_seeds_nav.size() != problem.epochs.size() ||
+         !std::all_of(problem.imu.stop_velocity_seeds_nav.begin(),
+                      problem.imu.stop_velocity_seeds_nav.end(),
+                      [](const auto& value) { return value.allFinite(); }))) {
+        throw std::invalid_argument("Source IMU stop phases require Phase171 IMU, stop constraints and complete native velocity seeds");
+    }
+    if (config.native_imu_stop_phase != NativeImuStopPhase::Legacy) {
+        for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+            if (problem.epochs[i].raw_utc_time_millis <= 0 ||
+                (i && problem.epochs[i].raw_utc_time_millis <=
+                          problem.epochs[i - 1U].raw_utc_time_millis))
+                throw std::invalid_argument("Source IMU stop phases require increasing raw UTC keys");
+        }
+    }
     upstream_stop::Detection upstream_stop_detection;
     if (use_upstream_stop_constraints) {
         std::vector<GNSSTime> epoch_times;
@@ -1465,6 +1511,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             Vector3d vel = problem.imu.init_velocity_nav;
             const auto* pdc_seed = nativePdcSeedFor(i);
             bool have_velocity_seed = false;
+            if (!refinement_velocity.empty()) {
+                vel = refinement_velocity[i];
+                have_velocity_seed = true;
+            }
             if (use_native_direct_wls_ephemeral_main_seed) {
                 const Vector3d& direct_velocity =
                     problem.native_direct_wls_ephemeral_velocity_ecef_mps[i];
@@ -2224,6 +2274,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     // satellite.  The factor uses the same sigma/Huber contract as the Eigen
     // backend; invalid epoch indices are skipped and counted as not inserted.
     std::size_t ordinary_tdcp_inserted = 0;
+    std::vector<std::size_t> drift_tdcp_graph_indices;
+    if (source_drift_tdcp) drift_tdcp_graph_indices.reserve(problem.tdcp_factors.size());
     const bool frequency_residual_states = config.use_native_tdcp_frequency_residual_states;
     const auto no_frequency_pair = std::numeric_limits<std::size_t>::max();
     std::vector<std::size_t> frequency_pair_by_factor;
@@ -2264,7 +2316,9 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         throw std::invalid_argument("TDCP-only affine geometry requires native source-clock raw stage or Phase171 IMU main");
     }
     if ((use_pose3 || phase135_requested || use_native_raw_p_seed_graph) &&
-        config.use_tdcp_factors) {
+        config.use_tdcp_factors &&
+        !(source_phone_recipe && phone_temporal.carrier_clock ==
+            smartphone_temporal::CarrierClock::Disabled)) {
         for (const auto& factor : problem.tdcp_factors) {
             if (factor.previous_epoch_index >= num_epochs ||
                 factor.current_epoch_index >= num_epochs ||
@@ -2283,6 +2337,42 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             const auto noise = makeNoise(
                 factor.sigma_m, config.use_robust_loss,
                 ordinary_tdcp_huber_threshold_sigma);
+            if (source_drift_tdcp) {
+                const auto k1 = positionKey(factor.previous_epoch_index);
+                const auto k2 = positionKey(factor.current_epoch_index);
+                const Point3 a1 = use_native_raw_p_seed_graph
+                    ? initial.at<Point3>(k1)
+                    : gnss_lever_arm.antennaPosition(initial.at<Pose3>(k1));
+                const Point3 a2 = use_native_raw_p_seed_graph
+                    ? initial.at<Point3>(k2)
+                    : gnss_lever_arm.antennaPosition(initial.at<Pose3>(k2));
+                gtsam::Matrix13 h;
+                const double r1 = plainRange(
+                    Point3(factor.previous_satellite_position_ecef), a1, &h);
+                const double r2 = plainRange(
+                    Point3(factor.current_satellite_position_ecef), a2, nullptr);
+                const auto& e1 = problem.epochs[factor.previous_epoch_index];
+                const auto& e2 = problem.epochs[factor.current_epoch_index];
+                const double dt = (e2.raw_utc_time_millis - e1.raw_utc_time_millis) / 1000.0;
+                const double measurement =
+                    factor.delta_carrier_m - (r2 - r1) + phone_temporal.carrier_offset_m;
+                if (!std::isfinite(r1) || !std::isfinite(r2) || r1 <= 0 || r2 <= 0)
+                    throw std::invalid_argument("Invalid drift TDCP anchor range");
+                if (use_native_raw_p_seed_graph) {
+                    graph.emplace_shared<smartphone_temporal::DriftTdcpPointFactor>(
+                        k1, k2, dopplerClockDriftKey(factor.previous_epoch_index),
+                        dopplerClockDriftKey(factor.current_epoch_index),
+                        h.transpose(), a1, a2, measurement, dt, noise);
+                } else {
+                    graph.emplace_shared<smartphone_temporal::DriftTdcpPoseFactor>(
+                        k1, k2, dopplerClockDriftKey(factor.previous_epoch_index),
+                        dopplerClockDriftKey(factor.current_epoch_index),
+                        h.transpose(), a1, a2, measurement, dt, noise, gnss_lever_arm);
+                }
+                drift_tdcp_graph_indices.push_back(graph.size() - 1);
+                ++ordinary_tdcp_inserted;
+                continue;
+            }
             if (config.use_native_tdcp_only_affine_geometry) {
                 const auto k1 = positionKey(factor.previous_epoch_index);
                 const auto k2 = positionKey(factor.current_epoch_index);
@@ -2421,6 +2511,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         }
     }
     result.diagnostics.tdcp_factors_inserted = ordinary_tdcp_inserted;
+    if (source_drift_tdcp) {
+        std::fprintf(stderr, "[native-phone-temporal] drift_tdcp=%zu omit_clock=%d\n",
+                     ordinary_tdcp_inserted, source_omit_clock ? 1 : 0);
+    }
     if (frequency_residual_states && result.diagnostics.tdcp_frequency_residual_factors !=
         2*result.diagnostics.tdcp_frequency_residual_states) {
         throw std::invalid_argument("TDCP frequency pair was not inserted exactly twice");
@@ -2608,7 +2702,8 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
     // --- Position motion (random-walk) factors between consecutive epochs ---
     if (phase217_requested) {
         // Source Street sigma and time-gap threshold, not tuned to H truth.
-        const auto noise = gtsam::noiseModel::Isotropic::Sigma(3, 0.05);
+        const auto noise = gtsam::noiseModel::Isotropic::Sigma(
+            3, config.native_phase217_motion_sigma_m);
         for (std::size_t i = 1; i < num_epochs; ++i) {
             const double dt = problem.epochs[i].time - problem.epochs[i - 1].time;
             if (!std::isfinite(dt) || dt <= 0.0) {
@@ -2634,8 +2729,13 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         const auto noise = gtsam::noiseModel::Isotropic::Sigma(
             3, config.velocity_motion_sigma_m);
         for (std::size_t i = 1; i < num_epochs; ++i) {
-            const double dt_s = problem.epochs[i].time -
-                                problem.epochs[i - 1U].time;
+            const double dt_s = source_phone_recipe
+                ? (problem.epochs[i].raw_utc_time_millis -
+                   problem.epochs[i - 1U].raw_utc_time_millis) / 1000.0
+                : problem.epochs[i].time - problem.epochs[i - 1U].time;
+            if (source_phone_recipe && (!std::isfinite(dt_s) || dt_s <= 0.0))
+                throw std::invalid_argument("Invalid smartphone UTC motion interval");
+            if (source_phone_recipe && !smartphone_temporal::motionEdgeEligible(dt_s)) continue;
             graph.emplace_shared<MotionFactorXXVV>(
                 positionKey(i - 1U), positionKey(i), velocityKey(i - 1U),
                 velocityKey(i), dt_s, noise);
@@ -2685,8 +2785,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             const bool clock_jump =
                 i < problem.clock_jumps.size() && problem.clock_jumps[i];
             if (use_native_source_clock_c0d_factor) {
-                const double dt_s =
-                    problem.epochs[i].time - problem.epochs[i - 1].time;
+                const double dt_s = source_phone_recipe
+                    ? (problem.epochs[i].raw_utc_time_millis -
+                       problem.epochs[i - 1].raw_utc_time_millis) / 1000.0
+                    : problem.epochs[i].time - problem.epochs[i - 1].time;
                 if (std::isfinite(dt_s) && dt_s > 0.0) {
                     if (!have_positive_dt) {
                         result.diagnostics.native_source_clock_c0d_dt_min_s = dt_s;
@@ -2862,6 +2964,39 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             ++result.diagnostics.relative_height_factors_inserted;
         }
     }
+    // Upstream absolute-height branch: nearest map point within 15 m
+    // horizontally of the same-run seed; sigma 0.1 m, Huber 0.5.
+    if (!config.native_height_map_ecef.empty()) {
+        if (!use_pose3)
+            throw std::invalid_argument("Height map requires the Pose3 IMU main graph");
+        result.diagnostics.height_map_points = config.native_height_map_ecef.size();
+        const auto noise = gtsam::noiseModel::Robust::Create(
+            gtsam::noiseModel::mEstimator::Huber::Create(0.5),
+            gtsam::noiseModel::Isotropic::Sigma(1, 0.1));
+        const gtsam::Vector3 up =
+            ecef_T_nav.rotation().rotate(gtsam::Vector3::UnitZ());
+        constexpr double kMaxHorizontal = 15.0;
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const Vector3d& seed = problem.epochs[i].position_ecef;
+            if (!seed.allFinite()) continue;
+            double best = kMaxHorizontal;
+            const Vector3d* best_point = nullptr;
+            for (const auto& point : config.native_height_map_ecef) {
+                const Vector3d d = point - seed;
+                if (std::abs(d.x()) > 50.0 || std::abs(d.y()) > 50.0 ||
+                    std::abs(d.z()) > 50.0) continue;
+                const double horizontal = (d - up * up.dot(d)).norm();
+                if (horizontal < best) {
+                    best = horizontal;
+                    best_point = &point;
+                }
+            }
+            if (!best_point) continue;
+            graph.emplace_shared<AbsoluteHeightPoseFactor>(
+                positionKey(i), up, Point3(*best_point), gnss_lever_arm, noise);
+            ++result.diagnostics.height_map_factors_inserted;
+        }
+    }
 
     // --- Upstream stationary-stop constraints -----------------------------
     // fgo_gnss_imu.m adds a robust zero-velocity prior when the raw IMU stop
@@ -2938,6 +3073,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             if (!upstream_stop_velocity_gate_passed[i]) {
                 continue;
             }
+            if (!nativeImuStopVelocityPrior(config.native_imu_stop_phase)) {
+                ++result.diagnostics.upstream_stop_velocity_phase_omissions;
+                continue;
+            }
             graph.addPrior<gtsam::Vector3>(
                 velocityKey(i), gtsam::Vector3::Zero(), velocity_noise);
             ++result.diagnostics.upstream_stop_velocity_factors;
@@ -2957,6 +3096,12 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             if (!upstream_stop_detection.epoch_stop[i] ||
                 !upstream_stop_detection.epoch_stop[i + 1U] ||
                 !upstream_stop_velocity_gate_passed[i]) {
+                continue;
+            }
+            if (!nativeImuStopPoseUtcInterval(config.native_imu_stop_phase,
+                    problem.epochs[i].raw_utc_time_millis,
+                    problem.epochs[i + 1U].raw_utc_time_millis)) {
+                ++result.diagnostics.upstream_stop_pose_gap_rejections;
                 continue;
             }
             graph.emplace_shared<gtsam::BetweenFactor<Pose3>>(
@@ -3057,6 +3202,35 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         for (const gtsam::Key key : inserted_clock_keys) {
             graph.addPrior(key, initial.at<gtsam::Vector>(key), noise);
         }
+        if (source_omit_clock) {
+            // With no inter-epoch CCDD rows, component support is local.
+            // Add the existing weak numerical gauge only to components
+            // missing locally but not already gauged by the global pass.
+            std::vector<std::array<bool, kNativeSourceClockVectorDimension>>
+                local_support(num_epochs);
+            for (const auto& row : problem.pseudorange_factors) {
+                const int c = sourceClockComponentFor(row.satellite.system, row.signal);
+                if (c >= 0 && row.epoch_index < num_epochs)
+                    local_support[row.epoch_index][static_cast<std::size_t>(c)] = true;
+            }
+            for (std::size_t i = 0; i < num_epochs; ++i) {
+                auto local_sigmas = gtsam::Vector::Constant(
+                    kNativeSourceClockVectorDimension,
+                    std::numeric_limits<double>::infinity()).eval();
+                bool needed = false;
+                for (std::size_t c = 0; c < kNativeSourceClockVectorDimension; ++c) {
+                    if (!local_support[i][c] && (c == 0 || observed_clock_components[c])) {
+                        local_sigmas(c) = config.native_raw_p_no_doppler_unobserved_clock_gauge_sigma_m;
+                        needed = true;
+                    }
+                }
+                if (needed) {
+                    const auto key = ensureBaseClock(i);
+                    graph.addPrior(key, initial.at<gtsam::Vector>(key),
+                        gtsam::noiseModel::Diagonal::Sigmas(local_sigmas));
+                }
+            }
+        }
     }
     if (config.use_receiver_signal_bias_states &&
         config.receiver_signal_bias_prior_sigma_m > 0.0) {
@@ -3094,6 +3268,13 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 graph.addPrior(residualIonosphereKey(i), 0.0, prior_noise);
                 ++result.diagnostics.residual_ionosphere_resets;
             }
+        }
+    }
+    if (source_drift_tdcp && use_imu && !use_imu_doppler_factors) {
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const auto key = dopplerClockDriftKey(i);
+            graph.addPrior(key, initial.at<gtsam::Vector>(key),
+                gtsam::noiseModel::Isotropic::Sigma(1, 1e6));
         }
     }
     if (use_gnss_velocity_states || use_imu_doppler_factors) {
@@ -3437,6 +3618,26 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
 
     result.diagnostics.iterations = static_cast<int>(optimizer.iterations());
     result.diagnostics.converged = solved;
+    if (source_drift_tdcp) {
+        if (drift_tdcp_graph_indices.size() != problem.tdcp_factors.size())
+            throw std::runtime_error("Incomplete inserted drift TDCP diagnostic coverage");
+        result.tdcp_drift_factor_residuals.reserve(problem.tdcp_factors.size());
+        for (std::size_t i = 0; i < problem.tdcp_factors.size(); ++i) {
+            const auto model = std::dynamic_pointer_cast<gtsam::NoiseModelFactor>(
+                graph.at(drift_tdcp_graph_indices[i]));
+            if (!model) throw std::runtime_error("Missing drift TDCP noise model");
+            const auto before = model->unwhitenedError(initial);
+            const auto after = model->unwhitenedError(optimized);
+            if (before.size() != 1 || after.size() != 1 ||
+                !before.allFinite() || !after.allFinite())
+                throw std::runtime_error("Nonfinite drift TDCP diagnostic residual");
+            const auto& row = problem.tdcp_factors[i];
+            result.tdcp_drift_factor_residuals.push_back({
+                row.previous_epoch_index, row.current_epoch_index,
+                row.satellite, row.signal, before[0], after[0]});
+        }
+    }
+
     result.diagnostics.initial_cost = initial_cost;
     result.diagnostics.final_cost = final_cost;
     if (active_solve_diagnostic) {
@@ -4133,6 +4334,13 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         double sum = 0.0;
         std::size_t count = 0;
         for (const auto& factor : problem.tdcp_factors) {
+            if (source_drift_tdcp) {
+                const auto index = static_cast<std::size_t>(&factor - problem.tdcp_factors.data());
+                const double residual = result.tdcp_drift_factor_residuals.at(index).final_m;
+                sum += residual * residual;
+                ++count;
+                continue;
+            }
             if (factor.previous_epoch_index >= num_epochs ||
                 factor.current_epoch_index >= num_epochs ||
                 !optimized.exists(clockKey(factor.previous_epoch_index)) ||

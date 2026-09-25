@@ -4349,6 +4349,33 @@ class RelativeHeightPoseFactor : public gtsam::NoiseModelFactorN<Pose3, Pose3> {
     }
 };
 
+// Unary local-up prior: up . (antenna(x) - reference) = 0.
+class AbsoluteHeightPoseFactor : public gtsam::NoiseModelFactorN<Pose3> {
+    gtsam::Vector3 up_;
+    Point3 reference_;
+    gtsam::gnss::LeverArm arm_;
+ public:
+    using Base = gtsam::NoiseModelFactorN<Pose3>;
+    using Base::evaluateError;
+    AbsoluteHeightPoseFactor(gtsam::Key x, const gtsam::Vector3& up_ecef,
+                             const Point3& reference_ecef,
+                             const gtsam::gnss::LeverArm& arm,
+                             const gtsam::SharedNoiseModel& noise)
+        : Base(noise, x), up_(up_ecef), reference_(reference_ecef), arm_(arm) {
+        if (!up_.allFinite() || std::abs(up_.norm() - 1.0) > 1e-9 ||
+            !reference_.allFinite() || !noise || noise->dim() != 1)
+            throw std::invalid_argument("invalid absolute-height factor");
+    }
+    gtsam::Vector evaluateError(const Pose3& x,
+                               gtsam::OptionalMatrixType H) const override {
+        gtsam::gnss::LeverArm::PoseFrame frame;
+        const Point3 p = arm_.antennaPosition(x, H ? &frame : nullptr);
+        const gtsam::Matrix13 h = up_.transpose();
+        if (H) *H = arm_.antennaPoseJacobian(h, frame);
+        return gtsam::Vector::Constant(1, up_.dot(p - reference_));
+    }
+};
+
 class SourceAffineTdcpPoseFactor
     : public gtsam::NoiseModelFactorN<Pose3, gtsam::Vector, Pose3, gtsam::Vector> {
     gtsam::Vector3 los_;
