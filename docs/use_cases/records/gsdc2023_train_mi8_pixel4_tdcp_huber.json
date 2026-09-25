@@ -1,0 +1,136 @@
+{
+  "status": "two-phone-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_huber_plan.json",
+  "plan_sha256": "60b293ac7598b0ca6fdf42036336a7d1e31de5004ecda3cc5b0259d714a76fe9",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_candidate_plan.json",
+  "baseline_plan_sha256": "df7ba959f06d227d9a139e456a3bd041cf1a76179a6c7da84cdb3e4c488ae574",
+  "original_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_control_plan.json",
+  "original_plan_sha256": "c3c82bd68a4b231bbc770ab8242731441be565a62cbabca394e9538d7b92dfee",
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "dependency": "test_a325g_source_init",
+  "scope": "Two preselected development routes: add source Huber threshold to source TDCP metre-sigma. Same binary and inputs; compare against sigma-only and original fixed settings.",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_huber_v1\\validation.json",
+  "validation_sha256": "b6be2a224df74a4b0f534e2a985bc025b715d8dbee973a76b6b0cef843f37e92",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.5608959084969258,
+  "mean_route_group_score_m": 0.5608959084969258,
+  "results": {
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": {
+      "results": {
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4203673360248381,
+            "p95_m": 0.939751208966053,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6800592724954455
+          },
+          "truth_sha256": "7c8cace389c16ca54e041749fd500058200dcc417f3c9b49a21753f61811c8e7",
+          "solution_sha256": "dd576cea2eb159c2949f5bd8f34aa9627e324f521b0f0211cadbd0ed0fd1e69e",
+          "wall_s": 3391.4862983226776,
+          "seed_metadata_sha256": "9813605be55a18e1431523a3b71dc0e9e3a9ad3a666190de00e765106fd8f9ff",
+          "sigma_m": 0.005833472453755562,
+          "huber_k": 0.2,
+          "tdcp_factors": 25444
+        },
+        "sigma_only": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.5266245564132837,
+            "p95_m": 1.1523329257644392,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8394787410888614
+          },
+          "truth_sha256": "7c8cace389c16ca54e041749fd500058200dcc417f3c9b49a21753f61811c8e7",
+          "solution_sha256": "adf23c7367e939193961df373c9c9a353af75c094cc652341b041de5cc3becde",
+          "wall_s": 1976.952445268631,
+          "seed_metadata_sha256": "9813605be55a18e1431523a3b71dc0e9e3a9ad3a666190de00e765106fd8f9ff",
+          "sigma_m": 0.005833472453755562,
+          "huber_k": 4,
+          "tdcp_factors": 25444
+        },
+        "original": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.39846141368347665,
+            "p95_m": 1.1350577719432686,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.7667595928133726
+          },
+          "truth_sha256": "7c8cace389c16ca54e041749fd500058200dcc417f3c9b49a21753f61811c8e7",
+          "solution_sha256": "81177358e48acd3c9f7580ab83881c974eddf4091e1881bbe955d5de3c4aaf7c",
+          "wall_s": 384.8627417087555,
+          "seed_metadata_sha256": "9813605be55a18e1431523a3b71dc0e9e3a9ad3a666190de00e765106fd8f9ff",
+          "sigma_m": 0.03,
+          "huber_k": 4,
+          "tdcp_factors": 25444
+        }
+      },
+      "delta_from_sigma_only_m": -0.15941946859341594,
+      "delta_from_original_m": -0.08670032031792707
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+      "results": {
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.2702025399595372,
+            "p95_m": 0.6132625490372748,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.44173254449840604
+          },
+          "truth_sha256": "818f9db52bcc2ad6b50a7931bc09d6225d588bfd1be7fae12cf029e94227116d",
+          "solution_sha256": "003e9aef67bb2b043e3a598d79cd0c858781b1baad052b176a0c1df32de0fedd",
+          "wall_s": 3934.026197195053,
+          "seed_metadata_sha256": "7c595bb64840d415ac6e829f94e67a5405453e9424fdf209352a012dc7fdc332",
+          "sigma_m": 0.0013836619418378727,
+          "huber_k": 0.2,
+          "tdcp_factors": 21090
+        },
+        "sigma_only": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.32964789257198696,
+            "p95_m": 0.7081480925580679,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5188979925650274
+          },
+          "truth_sha256": "818f9db52bcc2ad6b50a7931bc09d6225d588bfd1be7fae12cf029e94227116d",
+          "solution_sha256": "8f905062ab6b1e5f5e89665d0f2d8ee1e2992e768c3b9fb10a1414db0616f8c0",
+          "wall_s": 1204.7946166992188,
+          "seed_metadata_sha256": "7c595bb64840d415ac6e829f94e67a5405453e9424fdf209352a012dc7fdc332",
+          "sigma_m": 0.0013836619418378727,
+          "huber_k": 4,
+          "tdcp_factors": 21090
+        },
+        "original": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.25403256719963185,
+            "p95_m": 0.6789319762677022,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.466482271733667
+          },
+          "truth_sha256": "818f9db52bcc2ad6b50a7931bc09d6225d588bfd1be7fae12cf029e94227116d",
+          "solution_sha256": "a010cdfdb1a50e6c6e5934d99082edc2b1f3fdf34e26c7edf2b89f810b98fe56",
+          "wall_s": 318.2170548439026,
+          "seed_metadata_sha256": "7c595bb64840d415ac6e829f94e67a5405453e9424fdf209352a012dc7fdc332",
+          "sigma_m": 0.03,
+          "huber_k": 4,
+          "tdcp_factors": 21090
+        }
+      },
+      "delta_from_sigma_only_m": -0.0771654480666214,
+      "delta_from_original_m": -0.024749727235260977
+    }
+  },
+  "paired_validation_complete": true,
+  "checked_unix": 1790154294.878044
+}

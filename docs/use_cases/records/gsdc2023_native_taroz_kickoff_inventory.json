@@ -1,0 +1,1024 @@
+{
+  "schema_version": "gsdc2023-native-taroz-kickoff-inventory.v1",
+  "base_commit": "832dd7991cb8d042977d1e0775fcf27deb9c422c",
+  "status": "historical-composition-plus-restored-raw-timing-audit-no-native-replay-yet",
+  "source": "docs\\use_cases\\records\\smartphone_r5_gsdc2023_native_fgo_carrier_compatibility_role_inventory_v1.json",
+  "source_sha256": "a0ba226c658936623b36e0a0d05d8861ae6cbf68f876ca310439cf86cf91b090",
+  "submission_record": "docs/use_cases/records/smartphone_native_base_surveyed_test_submission_v1.md",
+  "phone_counts": {
+    "pixel4xl": 1,
+    "pixel5": 17,
+    "sm-g988b": 2,
+    "pixel4": 2,
+    "mi8": 4,
+    "pixel6pro": 3,
+    "xiaomimi8": 1,
+    "samsunga325g": 2,
+    "samsunga32": 1,
+    "sm-a325f": 1,
+    "sm-a205u": 1,
+    "pixel7pro": 3,
+    "sm-a505u": 1,
+    "sm-s908b": 1
+  },
+  "runs": [
+    {
+      "dataset_id": "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+      "phone": "pixel4xl",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2020-12-11-19-30-us-ca-mtv-e/pixel4xl/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 44501,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1190,
+        "unique_utc_groups": 1190,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "7"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-08-17-20-37-us-ca-mtv-g/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 59167,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1676,
+        "unique_utc_groups": 1676,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1931"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+      "phone": "sm-g988b",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-08-31-20-37-us-ca-mtv-e/sm-g988b/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 46499,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1141,
+        "unique_utc_groups": 1141,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "19"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+      "phone": "pixel4",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-09-14-20-32-us-ca-mtv-k/pixel4/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 42456,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1274,
+        "unique_utc_groups": 1274,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "341"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+      "phone": "pixel4",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-09-20-19-03-us-ca-mtv-l/pixel4/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 64685,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1797,
+        "unique_utc_groups": 1797,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "13"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+      "phone": "mi8",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-09-28-21-56-us-ca-mtv-a/mi8/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 116903,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2479,
+        "unique_utc_groups": 2479,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+      "phone": "pixel6pro",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-11-05-18-28-us-ca-mtv-m/pixel6pro/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 45470,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1446,
+        "unique_utc_groups": 1446,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "5"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "phone": "mi8",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2021-11-30-20-59-us-ca-mtv-m/mi8/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 62705,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1395,
+        "unique_utc_groups": 1395,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-02-08-22-04-us-ca-sjc-r/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 56266,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1665,
+        "unique_utc_groups": 1665,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1826"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-02-23-17-46-us-ca-lax-n/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 72367,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2407,
+        "unique_utc_groups": 2407,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "22495"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-02-23-22-35-us-ca-lax-m/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 90530,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2805,
+        "unique_utc_groups": 2805,
+        "gaps_above_2s": [
+          {
+            "before_utc_ms": 1645656474438,
+            "after_utc_ms": 1645656484438,
+            "delta_ms": 10000
+          },
+          {
+            "before_utc_ms": 1645656484438,
+            "after_utc_ms": 1645656529438,
+            "delta_ms": 45000
+          },
+          {
+            "before_utc_ms": 1645657946438,
+            "after_utc_ms": 1645657956438,
+            "delta_ms": 10000
+          },
+          {
+            "before_utc_ms": 1645657956438,
+            "after_utc_ms": 1645657986438,
+            "delta_ms": 30000
+          }
+        ],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-02-24-15-10-us-ca-lax-p/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 146112,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 4515,
+        "unique_utc_groups": 4515,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-02-24-22-14-us-ca-lax-i/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 116037,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 3582,
+        "unique_utc_groups": 3582,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "73"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+      "phone": "xiaomimi8",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 77299,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1679,
+        "unique_utc_groups": 1679,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+      "phone": "sm-g988b",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-03-17-20-16-us-ca-sjc-q/sm-g988b/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 48233,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1172,
+        "unique_utc_groups": 1172,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "5"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-03-22-18-44-us-ca-mtv-pe1/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 84245,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2112,
+        "unique_utc_groups": 2112,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "13"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-04-04-16-31-us-ca-lax-x/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 80770,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2171,
+        "unique_utc_groups": 2171,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "551"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-04-22-20-11-us-ca-ebf-y/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 40121,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1400,
+        "unique_utc_groups": 1400,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "3"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-25-21-04-us-ca-ebf-x/mi8",
+      "phone": "mi8",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 82529,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1924,
+        "unique_utc_groups": 1924,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "historical_dataset_id": "2022-04-25-22-36-us-ca-ebf-z/mi8",
+      "archive_raw_member": "dataset_2023/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 48552,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1587,
+        "unique_utc_groups": 1587,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "8"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-04-27-18-16-us-ca-ebf-zz/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 46954,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1315,
+        "unique_utc_groups": 1315,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "9"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-04-27-19-23-us-ca-ebf-xx/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 42311,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1382,
+        "unique_utc_groups": 1382,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "11"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+      "phone": "mi8",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-04-27-21-55-us-ca-ebf-ww/mi8/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 56689,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1344,
+        "unique_utc_groups": 1344,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+      "phone": "samsunga325g",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 30280,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1435,
+        "unique_utc_groups": 1435,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+      "phone": "samsunga325g",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-06-22-20-12-us-ca-lax-hh/samsunga325g/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 54440,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1862,
+        "unique_utc_groups": 1862,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+      "phone": "samsunga32",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-06-28-20-56-us-ca-sjc-r/samsunga32/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 51485,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1838,
+        "unique_utc_groups": 1838,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+      "phone": "sm-a325f",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-07-12-18-37-us-ca-mtv-b/sm-a325f/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 55979,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1782,
+        "unique_utc_groups": 1782,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "phone": "sm-a205u",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2022-10-06-20-46-us-ca-sjc-r/sm-a205u/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 66962,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1699,
+        "unique_utc_groups": 1699,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-04-27-19-25-us-ca-mtv-pe1/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 36875,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1357,
+        "unique_utc_groups": 1357,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-04-27-20-55-us-ca-sjc-q/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 43723,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1380,
+        "unique_utc_groups": 1380,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "4"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+      "phone": "pixel7pro",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-02-19-24-us-ca-sjc-we1/pixel7pro/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 58343,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2110,
+        "unique_utc_groups": 2110,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+      "phone": "pixel7pro",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 59479,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2145,
+        "unique_utc_groups": 2145,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "3"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+      "phone": "sm-a505u",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 56531,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 2384,
+        "unique_utc_groups": 2384,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-23-21-06-us-ca-mtv-de1/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 75436,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1975,
+        "unique_utc_groups": 1975,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "3"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+      "phone": "pixel6pro",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 38680,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1020,
+        "unique_utc_groups": 1020,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "2"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+      "phone": "pixel6pro",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-25-17-32-us-ca-pao-j/pixel6pro/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 37500,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1292,
+        "unique_utc_groups": 1292,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "10"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+      "phone": "sm-s908b",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 88664,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1728,
+        "unique_utc_groups": 1728,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "0"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "base-surveyed-fgo",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-05-26-21-23-us-ca-sjc-be2/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 48490,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1482,
+        "unique_utc_groups": 1482,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "1"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+      "phone": "pixel5",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-06-06-22-43-us-ca-sjc-he2/pixel5/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 54551,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1608,
+        "unique_utc_groups": 1608,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "5",
+          "6"
+        ]
+      }
+    },
+    {
+      "dataset_id": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+      "phone": "pixel7pro",
+      "reported_submission_lane": "legacy-v5",
+      "classification_basis": "submission narrative, not verified against output artifacts",
+      "raw_data_path": null,
+      "execution_log_path": null,
+      "reproduced": false,
+      "failure_reason": "unknown until per-run logs or replay are available",
+      "archive_raw_member": "dataset_2023/test/2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro/device_gnss.csv",
+      "raw_utc_audit": {
+        "raw_rows": 42756,
+        "invalid_time_rows": 0,
+        "zero_TimeNanos_rows": 0,
+        "utc_groups": 1495,
+        "unique_utc_groups": 1495,
+        "gaps_above_2s": [],
+        "reverse_utc_transitions": [],
+        "reappeared_utc_groups": [],
+        "hardware_clock_values": [
+          "12"
+        ]
+      }
+    }
+  ],
+  "historical_allowlist_mismatch": {
+    "historical_only": [
+      "2022-04-25-22-36-us-ca-ebf-z/mi8"
+    ],
+    "restored_archive_only": [
+      "2022-04-25-22-36-us-ca-ebf-z/pixel5"
+    ],
+    "resolution": "Use archive identity for native replay; retain original identity as provenance. Official submission keys still need verification."
+  },
+  "restored_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "raw_timing_report": {
+    "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\test_raw_timing_inventory.json",
+    "sha256": "5e1e3c4d54050498720113d4d99245639936ac3150ebc6da984a9199a38a93ee",
+    "basis": "raw UTC groups with nonzero TimeNanos; not native accepted GPS epochs"
+  }
+}

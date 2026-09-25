@@ -1,0 +1,421 @@
+{
+  "status": "matched-development-pairs-complete",
+  "created_unix": 1790133099.4758685,
+  "scope": "Same-binary MI8/A205u development pairs; only source intermediate GNSS and IMU position offsets added. Final output offset remains once on the final optimized result. No imported coordinates or truth.",
+  "option": "--native-source-stage-position-offsets",
+  "source_files_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "173c22d73f1162c0ba8bade1e130a14bb9836e7bf31b787cf68bf22c73249089",
+    "include/libgnss++/algorithms/fgo.hpp": "730734765055485f9d654d91eb354edade84347195fa70be0150d1fe252542d0",
+    "include/libgnss++/algorithms/fgo_config.hpp": "3090896b0027886edfa53f24161b61def86503bc220b0be9d745e871f2eeb1d1",
+    "include/libgnss++/algorithms/native_gnss_imu_initial_handoff.hpp": "5fe518de58c54caae4c34f21b9248370d39689c27bf50636c8941a869a9c78cd",
+    "include/libgnss++/algorithms/native_gnss_initial_observations.hpp": "6bd403db5322db629728a2a122032d1236dbca4bf8a32d689e6f7ffb8437aa4b",
+    "include/libgnss++/algorithms/native_imu_observation_phase.hpp": "84232bc41af8204e811577fffe52483bd96635f8cbed44dcc66881671b28c1cb",
+    "include/libgnss++/algorithms/native_imu_refinement_attitude_reset.hpp": "d80cdc70b61ea5fc6ebc3bf2a6fe1888d952ba5ce7929e4990cd13ee8443c66c",
+    "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp": "da1c00274074841b7bbe7032176efd89541134dd2cac9edc7a086d3021cf5a2a",
+    "include/libgnss++/algorithms/native_imu_refinement_rebuild.hpp": "b0f5aeea69316bb9b6730b7e1cc4ab4d488fb1f1b53b350eeaec180ba337533f",
+    "include/libgnss++/algorithms/native_imu_stop_phase.hpp": "1ddf68516174b328b5b42b32812c630aaea4c6987beb1866be989f2621058ba3",
+    "include/libgnss++/algorithms/native_stage_position_offset.hpp": "b23bd6e076b3e04d268f63bb39139e76b52cc0d5d14e0aa0bcc52c75a29bdc5b",
+    "include/libgnss++/fusion/fusion_initialization.hpp": "b8767e6497bd53675733d53754677f257b2e856527a3f67a4d447c566c8b1170",
+    "src/algorithms/fgo_gtsam_backend.cpp": "dc73366aaf74f7b6647dfb88194cd2ff46bb77f090d124061c7259d3780daee9",
+    "src/algorithms/fgo_problems.cpp": "b871165ae4c5e372825caf4f6691cd98c577ebb6a104e4da1fe2dbbc6ed0f315",
+    "src/fusion/fusion_initialization.cpp": "5ce133c0113771b22d1f722e9b6fbd0e1a18fc79d4d9c5d1a497c74c7b5e83b6",
+    "tests/test_fgo.cpp": "15f2a170da535ec750f9647672ef2cacad21e8d597e4b9c78e0ac57270c05d8e",
+    "tests/test_fgo_gtsam_backend.cpp": "de3affe3351009c76f624292116ffac2fae5463bc54a7e89b156134feba006e4",
+    "tests/test_native_gnss_imu_initial_handoff.cpp": "41d1d87d58fcb3412c82b57f4541d7d687c1b186aa53396fcfe2b8b7ca6e3eca",
+    "tests/test_native_gnss_initial_observations.cpp": "6a036c0c20fe3128416cc3c4745f93ead02ee284e2fefedd798bf605790f1691",
+    "tests/test_native_imu_refinement_attitude_reset.cpp": "790507b25b535f642125055a3b847c5f0ed9d343df4f8eb5c689d9d774551c88",
+    "tests/test_native_imu_refinement_handoff.cpp": "0623ca11d36927ea1d63790a9144e3de32038569fea58bce66c4540b01f04d97",
+    "tests/test_native_stage_position_offset.cpp": "c84f9ce488a2f3f9205d2810539e837d3ec3459f5ffbd6bd68e2512ca12f2608"
+  },
+  "helper_record": "gsdc2023_intermediate_position_offset_audit.json",
+  "production_connected": true,
+  "promoted": false,
+  "official_score": false,
+  "accuracy_validated": true,
+  "binary_sha256": "d490772096f5e91791c3f2ea3574d78b4c884ec8ece251ead3454f9e57012bc0",
+  "cli_passed": 12,
+  "cli_report_sha256": "b1e69c6d3a96358a1a85a271ad88c1f7857a24fc8485894ad9179e351395fd2a",
+  "plans": {
+    "mi8_stage_offset_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_stage_offset_control_plan.json",
+      "sha256": "97ce4f4907e630577c2494ae8f328b199d9ed63eafa797ba1a1032641dc44a44"
+    },
+    "mi8_stage_offset_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_stage_offset_candidate_plan.json",
+      "sha256": "93c901700a68f76f582c775a5943544f7e72f7e9cc52e1230b0895e69f37f604"
+    },
+    "a205u_stage_offset_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_stage_offset_control_plan.json",
+      "sha256": "190d2ee0d91f0daceecc48548c24dc1dd42fb1d49d489a372b5422f423dccef5"
+    },
+    "a205u_stage_offset_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_stage_offset_candidate_plan.json",
+      "sha256": "f6d16f548dd88a066a580c06839ecff63e87832eef01a66824b1c87eae885275"
+    }
+  },
+  "build_passed": true,
+  "build_log": "E:/rtklib_v2_ws_output/gsdc_native/stage_position_offset_build.log",
+  "pipeline_path": "E:/rtklib_v2_ws_output/gsdc_native/stage_position_offset_pipeline.json",
+  "disabled_selector_regressions": {
+    "mi8": {
+      "passed": true,
+      "native_solution_and_stages_identical": true,
+      "solution_sha256": "c31a5956ad05cab11d5c72bcd7b36aa5f85d26b08d7307b4fda3719157309ac0"
+    },
+    "a205u": {
+      "passed": true,
+      "native_solution_and_stages_identical": true,
+      "solution_sha256": "21ee1d33f90b202161bb747741f0e2ba5ee1e2acaab329cf325ca892e0c11739"
+    }
+  },
+  "results": {
+    "mi8": {
+      "runs": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8928576624974007,
+            "p95_m": 1.459770571755551,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1763141171264757
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 0.792796994643657,
+              "p95_m": 1.7373769974989006,
+              "phone_score_m": 1.265086996071279,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17,
+              "phone_output_offset_applied": false
+            },
+            "imu-initial": {
+              "p50_m": 0.7769209989913937,
+              "p95_m": 1.7073878317990885,
+              "phone_score_m": 1.242154415395241,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17,
+              "phone_output_offset_applied": false
+            }
+          },
+          "wall_s": 290.59288787841797,
+          "solution_sha256": "c31a5956ad05cab11d5c72bcd7b36aa5f85d26b08d7307b4fda3719157309ac0",
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "audit": {
+            "returncode": 0,
+            "wall_s": 290.59288787841797,
+            "binary_sha256": "d490772096f5e91791c3f2ea3574d78b4c884ec8ece251ead3454f9e57012bc0",
+            "status": "raw-key-coverage-verified",
+            "raw_utc_groups": 1417,
+            "expected_output_keys": 1417,
+            "output_rows": 1417,
+            "missing_raw_keys": 0,
+            "extra_raw_keys": 0,
+            "duplicate_output_keys": 0,
+            "complete_ordered_raw_key_match": true,
+            "finite_phone_coordinates": true,
+            "summary_count_matches": true,
+            "key_contract": {
+              "warmup_epoch_excluded": false,
+              "raw_epoch_keys": 1417,
+              "target_epochs": 1417,
+              "exact_solution_epochs": 1417,
+              "interpolated_epochs": 0,
+              "edge_hold_epochs": 0,
+              "unresolved_epochs": 0,
+              "solution_time_tolerance_ms": 2,
+              "max_interpolation_gap_ms": 0,
+              "max_edge_hold_gap_ms": 0,
+              "coordinate_interpolation": "ECEF linear then geodetic",
+              "device_wls_coordinates_used": false
+            },
+            "position_accuracy_evaluated": false,
+            "native_estimation_contract_verified": true,
+            "native_exact_output_fraction": 1.0,
+            "output_interpolation_or_hold_count": 0,
+            "all_output_epochs_from_native_states": true,
+            "temporal_initial_guess_count": 0,
+            "independent_spp_accepted_epochs": 1417
+          },
+          "reconstruction": {}
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8917571584824047,
+            "p95_m": 1.4580275143712098,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1748923364268071
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 0.792796994643657,
+              "p95_m": 1.7373769974989006,
+              "phone_score_m": 1.265086996071279,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17,
+              "phone_output_offset_applied": false
+            },
+            "imu-initial": {
+              "p50_m": 0.7768961964126537,
+              "p95_m": 1.7073943199679702,
+              "phone_score_m": 1.242145258190312,
+              "truth_keys": 1400,
+              "extra_native_keys_dropped": 17,
+              "phone_output_offset_applied": false
+            }
+          },
+          "wall_s": 275.73862957954407,
+          "solution_sha256": "b2555625fe03478527453623086786f41299aad8f635f6a88f75d86767ef093c",
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "audit": {
+            "returncode": 0,
+            "wall_s": 275.73862957954407,
+            "binary_sha256": "d490772096f5e91791c3f2ea3574d78b4c884ec8ece251ead3454f9e57012bc0",
+            "status": "raw-key-coverage-verified",
+            "raw_utc_groups": 1417,
+            "expected_output_keys": 1417,
+            "output_rows": 1417,
+            "missing_raw_keys": 0,
+            "extra_raw_keys": 0,
+            "duplicate_output_keys": 0,
+            "complete_ordered_raw_key_match": true,
+            "finite_phone_coordinates": true,
+            "summary_count_matches": true,
+            "key_contract": {
+              "warmup_epoch_excluded": false,
+              "raw_epoch_keys": 1417,
+              "target_epochs": 1417,
+              "exact_solution_epochs": 1417,
+              "interpolated_epochs": 0,
+              "edge_hold_epochs": 0,
+              "unresolved_epochs": 0,
+              "solution_time_tolerance_ms": 2,
+              "max_interpolation_gap_ms": 0,
+              "max_edge_hold_gap_ms": 0,
+              "coordinate_interpolation": "ECEF linear then geodetic",
+              "device_wls_coordinates_used": false
+            },
+            "position_accuracy_evaluated": false,
+            "native_estimation_contract_verified": true,
+            "native_exact_output_fraction": 1.0,
+            "output_interpolation_or_hold_count": 0,
+            "all_output_epochs_from_native_states": true,
+            "temporal_initial_guess_count": 0,
+            "independent_spp_accepted_epochs": 1417
+          },
+          "reconstruction": {
+            "gnss": {
+              "epochs": 1417,
+              "sidecar_sha256": "30e3d6649ea3ed406ea0c342be7df084307e9d6b5b9fdf06456f82911c99414b",
+              "maximum_enu_error_m": 4.996003610813204e-16,
+              "maximum_ecef_error_m": 0.0,
+              "source_matches_uncorrected_stage_export": true
+            },
+            "imu": {
+              "epochs": 1417,
+              "sidecar_sha256": "d6911f361d79ab7b8dadaf881e4be49c92c743a674a48131f7f2357f4073c0d6",
+              "maximum_enu_error_m": 1.1102230246251565e-16,
+              "maximum_ecef_error_m": 0.0,
+              "source_matches_uncorrected_stage_export": true
+            }
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "summary.json.gnss-first.csv": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "summary.json.imu-initial.csv": "fe485248bb13b0a0c3f99c65ab10f8e527cd746cf9d7209e3c9e55110c3a9b7f",
+          "summary.json.initialization.json": "c209ee20936d1403c5e6176b08e07f93b06cc6cf2bde5a7ad9df6f89a5548594"
+        },
+        "candidate": {
+          "summary.json.gnss-first.csv": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "summary.json.imu-initial.csv": "91effcf700daa61f9d5015c6e6614154008785847e20de2446000beb9390b3c1",
+          "summary.json.initialization.json": "c209ee20936d1403c5e6176b08e07f93b06cc6cf2bde5a7ad9df6f89a5548594"
+        }
+      },
+      "delta_m": -0.0014217806996685844,
+      "stage_score_deltas_m": {
+        "gnss-first": 0.0,
+        "imu-initial": -9.157204929000073e-06
+      },
+      "same_native_seeds_and_gnss_stage": true,
+      "scope": "Previously exposed development route; shared-load runtime, not controlled timing."
+    },
+    "a205u": {
+      "runs": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2955573201137849,
+            "p95_m": 2.620913399058286,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9582353595860353
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 1.8947256950239566,
+              "p95_m": 3.870999593225566,
+              "phone_score_m": 2.8828626441247613,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0,
+              "phone_output_offset_applied": false
+            },
+            "imu-initial": {
+              "p50_m": 1.408994648269597,
+              "p95_m": 2.817561264564314,
+              "phone_score_m": 2.1132779564169555,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0,
+              "phone_output_offset_applied": false
+            }
+          },
+          "wall_s": 491.3082740306854,
+          "solution_sha256": "21ee1d33f90b202161bb747741f0e2ba5ee1e2acaab329cf325ca892e0c11739",
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "audit": {
+            "returncode": 0,
+            "wall_s": 491.3082740306854,
+            "binary_sha256": "d490772096f5e91791c3f2ea3574d78b4c884ec8ece251ead3454f9e57012bc0",
+            "status": "raw-key-coverage-verified",
+            "raw_utc_groups": 1213,
+            "expected_output_keys": 1213,
+            "output_rows": 1213,
+            "missing_raw_keys": 0,
+            "extra_raw_keys": 0,
+            "duplicate_output_keys": 0,
+            "complete_ordered_raw_key_match": true,
+            "finite_phone_coordinates": true,
+            "summary_count_matches": true,
+            "key_contract": {
+              "warmup_epoch_excluded": false,
+              "raw_epoch_keys": 1213,
+              "target_epochs": 1213,
+              "exact_solution_epochs": 1213,
+              "interpolated_epochs": 0,
+              "edge_hold_epochs": 0,
+              "unresolved_epochs": 0,
+              "solution_time_tolerance_ms": 2,
+              "max_interpolation_gap_ms": 0,
+              "max_edge_hold_gap_ms": 0,
+              "coordinate_interpolation": "ECEF linear then geodetic",
+              "device_wls_coordinates_used": false
+            },
+            "position_accuracy_evaluated": false,
+            "native_estimation_contract_verified": true,
+            "native_exact_output_fraction": 1.0,
+            "output_interpolation_or_hold_count": 0,
+            "all_output_epochs_from_native_states": true,
+            "long_gap_mapped_imu_max_sample_gap_s": 0.018000003357883543,
+            "temporal_initial_guess_count": 4,
+            "independent_spp_accepted_epochs": 1209,
+            "leading_clock_only_epochs": 4
+          },
+          "reconstruction": {}
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2986122563701732,
+            "p95_m": 2.620863612258214,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9597379343141936
+          },
+          "stage_scores": {
+            "gnss-first": {
+              "p50_m": 1.8947256950239566,
+              "p95_m": 3.870999593225566,
+              "phone_score_m": 2.8828626441247613,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0,
+              "phone_output_offset_applied": false
+            },
+            "imu-initial": {
+              "p50_m": 1.4081636205186465,
+              "p95_m": 2.8174473831319657,
+              "phone_score_m": 2.112805501825306,
+              "truth_keys": 1213,
+              "extra_native_keys_dropped": 0,
+              "phone_output_offset_applied": false
+            }
+          },
+          "wall_s": 510.65210914611816,
+          "solution_sha256": "ecf0d428a2f13763d1d3b621982a4eadadcd3d15a88026b20250fbf5c2ba91a1",
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "audit": {
+            "returncode": 0,
+            "wall_s": 510.65210914611816,
+            "binary_sha256": "d490772096f5e91791c3f2ea3574d78b4c884ec8ece251ead3454f9e57012bc0",
+            "status": "raw-key-coverage-verified",
+            "raw_utc_groups": 1213,
+            "expected_output_keys": 1213,
+            "output_rows": 1213,
+            "missing_raw_keys": 0,
+            "extra_raw_keys": 0,
+            "duplicate_output_keys": 0,
+            "complete_ordered_raw_key_match": true,
+            "finite_phone_coordinates": true,
+            "summary_count_matches": true,
+            "key_contract": {
+              "warmup_epoch_excluded": false,
+              "raw_epoch_keys": 1213,
+              "target_epochs": 1213,
+              "exact_solution_epochs": 1213,
+              "interpolated_epochs": 0,
+              "edge_hold_epochs": 0,
+              "unresolved_epochs": 0,
+              "solution_time_tolerance_ms": 2,
+              "max_interpolation_gap_ms": 0,
+              "max_edge_hold_gap_ms": 0,
+              "coordinate_interpolation": "ECEF linear then geodetic",
+              "device_wls_coordinates_used": false
+            },
+            "position_accuracy_evaluated": false,
+            "native_estimation_contract_verified": true,
+            "native_exact_output_fraction": 1.0,
+            "output_interpolation_or_hold_count": 0,
+            "all_output_epochs_from_native_states": true,
+            "long_gap_mapped_imu_max_sample_gap_s": 0.018000003357883543,
+            "temporal_initial_guess_count": 4,
+            "independent_spp_accepted_epochs": 1209,
+            "leading_clock_only_epochs": 4
+          },
+          "reconstruction": {
+            "gnss": {
+              "epochs": 1213,
+              "sidecar_sha256": "d9c77eb856696e0ffd4460625bb92216cf399157c281fb3bc37b7bdcdd1083f5",
+              "maximum_enu_error_m": 7.771561172376096e-16,
+              "maximum_ecef_error_m": 0.0,
+              "source_matches_uncorrected_stage_export": true
+            },
+            "imu": {
+              "epochs": 1213,
+              "sidecar_sha256": "89c214711268f123112c905d83dc0094cdca2bfa5879a7839bb9f426f233dd7f",
+              "maximum_enu_error_m": 1.1102230246251565e-16,
+              "maximum_ecef_error_m": 0.0,
+              "source_matches_uncorrected_stage_export": true
+            }
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "summary.json.gnss-first.csv": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+          "summary.json.imu-initial.csv": "2e8e4157e71e9a2db507524598d42b3c54e28a0669f96d075f19e61a986ca2f8",
+          "summary.json.initialization.json": "c2730367d26606faa006a8a23a91507ae1b335701b9175ca9191b469530e00fb"
+        },
+        "candidate": {
+          "summary.json.gnss-first.csv": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+          "summary.json.imu-initial.csv": "309999405a113c9408d1e783d58ea0a258134ae08505a553e79446d276d6ee66",
+          "summary.json.initialization.json": "c2730367d26606faa006a8a23a91507ae1b335701b9175ca9191b469530e00fb"
+        }
+      },
+      "delta_m": 0.0015025747281582902,
+      "stage_score_deltas_m": {
+        "gnss-first": 0.0,
+        "imu-initial": -0.0004724545916494627
+      },
+      "same_native_seeds_and_gnss_stage": true,
+      "scope": "Previously exposed development route; shared-load runtime, not controlled timing."
+    }
+  }
+}

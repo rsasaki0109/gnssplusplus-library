@@ -1,0 +1,122 @@
+{
+  "status": "server-payloads-recovered-composition-audited-per-run-provenance-partial",
+  "checked_unix": 1790123334.1893258,
+  "latest_submission_ref": 56309958,
+  "latest_reported_public_score": "3.460",
+  "latest_reported_private_score": "3.344",
+  "latest_narrative_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\smartphone_native_base_surveyed_test_submission_v1.md",
+  "latest_narrative_sha256": "9a750ed6a1e6b57fa7181d0bba76432b398d15607a96f16933f7831cc3fa228a",
+  "latest_narrative_commit": "7a5923cd8a7f76a52d027ee12c9950af07cc4b2a",
+  "v5_submission_ref": 55900482,
+  "v5_reported_public_score": "3.952",
+  "v5_reported_private_score": "4.276",
+  "v5_expected_csv_sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+  "v5_recorded_server_payload_matches_local": true,
+  "record_chain": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\smartphone_r5_native_fgo_v5_kaggle_submission_v1.json",
+      "expected_record_sha256": "8bf5079e82b0ec00022a765dc6039fc9beb20bc9c8c4ff8d78c47ae0af1c4722",
+      "current_bytes_sha256": "164684cbb9edb389188854b6eb4a8e791e05166c6edf32879ae7da033bfb2026",
+      "normalized_lf_sha256": "8bf5079e82b0ec00022a765dc6039fc9beb20bc9c8c4ff8d78c47ae0af1c4722",
+      "bytes_match": false,
+      "normalized_content_match": true
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_v1.json",
+      "expected_record_sha256": "ff90e3f9e2164765503a7a5c4ea2a794851db532e9e89a257b40e9dd6840ca8e",
+      "current_bytes_sha256": "868331c50996ad75ca09657d87141b4094a005532b8984355d9b058ae8431f6a",
+      "normalized_lf_sha256": "ff90e3f9e2164765503a7a5c4ea2a794851db532e9e89a257b40e9dd6840ca8e",
+      "bytes_match": false,
+      "normalized_content_match": true
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\smartphone_r5_gsdc2023_native_fgo_test_submission_source_seam_bridge_freeze_v1.json",
+      "expected_record_sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48",
+      "current_bytes_sha256": "8315a6d8ee5ccc1a760eb06d9bca591e165763c3a3b15afe138aa118fb5f7611",
+      "normalized_lf_sha256": "eef25620633cdd7086dbc78b22a6705f4e5043b81301ef7eea03528f8f794f48",
+      "bytes_match": false,
+      "normalized_content_match": true
+    }
+  ],
+  "recorded_v5_provenance": {
+    "sample_coordinate_fallback_rows": 0,
+    "source_seam_interpolation_replaced_rows": 7,
+    "source_seam_rule": "timestamp-weighted ECEF linear interpolation between same-lane bracketing endpoints followed by WGS84 conversion",
+    "source_lanes": [
+      "native_fgo",
+      "wls"
+    ],
+    "all_rows_are_optimized_native_states_proven": false
+  },
+  "known_artifact_paths_checked": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\output\\smartphone-r5\\native-fgo-test-v5-source-seam-bridge\\submission.csv",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\smartphone-r5\\native-fgo-test-v5-source-seam-bridge\\submission.csv",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-covariance-pr\\output\\smartphone-r5\\native-fgo-test-v5-source-seam-bridge\\submission.csv",
+      "exists": false
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-ffrt-shadow\\output\\smartphone-r5\\native-fgo-test-v5-source-seam-bridge\\submission.csv",
+      "exists": false
+    }
+  ],
+  "limits": [
+    "Authenticated server payloads establish exact historical CSV bytes and scores. The recovered v5 hash matches the historical record.",
+    "The 3.344 hybrid changes exactly 16330 rows on eight Pixel5 drives and retains 55606 v5 rows across 32 drives. Six record-identified v5 interpolated rows remain unchanged.",
+    "Original per-run logs and full source-lane manifests remain unavailable; coordinate equality alone does not prove solver provenance for every row.",
+    "Recovered files remain audit-only, outside all estimator input plans."
+  ],
+  "next_required_artifacts": [
+    "Original base-surveyed per-run outputs and exact merge/source manifests for complete per-row inference provenance."
+  ],
+  "browser_access_check": {
+    "checked_unix": 1790125766.1763837,
+    "mechanism": "cua.getState() enabled-surface inventory",
+    "enabled_apps": 0,
+    "enabled_browsers": 0,
+    "submission_history_accessed": false,
+    "payload_downloaded": false,
+    "scope": "No enabled browser surface or Kaggle connector was exposed in this session. This does not establish that the user has no signed-in browser or credentials elsewhere."
+  },
+  "authenticated_server_verification": {
+    "checked_unix": 1790129919.418902,
+    "evidence_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_submission_server_evidence.json",
+    "evidence_sha256": "7da2d12dd0f9bde83ca0ab6a196982439440544155e1e12ade9e840938462083",
+    "scores_verified": true,
+    "latest_original_payload_download_http_status": 200,
+    "actual_latest_original_payload_verified": true,
+    "previous_403_cause": "Incorrect request ref field, corrected to submissionId from official historical SDK."
+  },
+  "payload_evidence_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_submission_payload_evidence.json",
+  "payload_evidence_sha256": "caa28c24406db7c217ff63c5fc2f6315f74da8ae092f95e4ef5073d379569e4e",
+  "recovered_payloads": {
+    "56479759": {
+      "status": "downloaded",
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_payload_audit_only\\56479759.csv",
+      "sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+      "bytes": 5862276,
+      "rows": 71936
+    },
+    "56309958": {
+      "status": "downloaded",
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_payload_audit_only\\56309958.csv",
+      "sha256": "3bc8388a8e95b3ae5581833418409430bb2d8a283b5b172551da265746d03559",
+      "bytes": 6156637,
+      "rows": 71936
+    },
+    "55900482": {
+      "status": "downloaded",
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_payload_audit_only\\55900482.csv",
+      "sha256": "89de0e03ff8eb687c9228ac19a1e62d160400b317352652cf8665b22591eef26",
+      "bytes": 6150020,
+      "rows": 71936
+    }
+  },
+  "composition_record": "gsdc2023_recovered_historical_payload_composition.json"
+}

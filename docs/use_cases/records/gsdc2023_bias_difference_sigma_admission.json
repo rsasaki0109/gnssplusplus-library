@@ -1,0 +1,39 @@
+{
+  "status": "all-eleven-native-controls-reproduced-sigma-candidates-running",
+  "checked_unix": 1790169990.1567922,
+  "binary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\source_bias_difference_sigma_admission_fixed.exe",
+  "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+  "source_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp",
+  "source_sha256": "33d05dce41b69856d6c0869a61a61a6cfb888694b1237a67e0b919607401189b",
+  "test_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_smartphone_source_tdcp_meter_sigma.py",
+  "test_sha256": "b439f96db6027c9d0d46f6395024520985c31f6c4d9e2458e1bcdc8d7f3ba0df",
+  "pytest_passed": 26,
+  "pytest_environment_note": "PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 bypasses unrelated installed xonsh plugin NoConsoleScreenBufferError; GSDC_NATIVE_EXE selects the built executable.",
+  "full_recipe_cli_report": "E:\\rtklib_v2_ws_output\\gsdc_native\\bias_difference_sigma_admission_cli_v1\\report.json",
+  "full_recipe_cli_report_sha256": "cc47c8750ad37ccbe356e4596043dc34cf187ac1b1ef113d0fa43354d4422ed6",
+  "full_recipe_cli_tests_passed": 22,
+  "added_phones": [
+    "sm-g988b",
+    "pixel6pro",
+    "pixel7pro",
+    "sm-s908b"
+  ],
+  "changed_behavior": "Only explicit --native-source-tdcp-meter-sigma CLI admission expanded for four bias-difference phone names. No default or solver formula change.",
+  "source_disabled_and_integrated_drift_phones_rejected": true,
+  "required_next_checks": [
+    "Same-binary controls must reproduce existing fixed corrected outputs.",
+    "Each candidate must actually insert positive TDCP factors and use the source metre sigma.",
+    "Audit full native raw-key coverage, truth keys, P50/P95, runtime, and initialization provenance before drawing accuracy conclusions."
+  ],
+  "native_validation_complete": false,
+  "promoted": false,
+  "official_score": false,
+  "external_submission": false,
+  "active_corrected_train40_unchanged": true,
+  "build_log": "E:/rtklib_v2_ws_tmp/build_gsdc_bias_difference_sigma_admission.log",
+  "build_note": "Build successful with existing GTSAM duplicate-symbol /FORCE link warnings.",
+  "native_control_check_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_expanded_bias_tdcp_sigma_control_check.json",
+  "native_control_check_sha256": "517b25b6c74497b77eba81815194ed22302410a8ccf00c202a78112c740ba6f6",
+  "native_control_drives_verified": 11,
+  "sigma_candidate_accuracy_verified": false
+}

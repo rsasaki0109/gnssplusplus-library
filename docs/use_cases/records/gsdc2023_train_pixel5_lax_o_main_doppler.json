@@ -1,0 +1,127 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "created_unix": 1790139193.9928117,
+  "dataset_id": "2022-02-24-18-29-us-ca-lax-o/pixel5",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_lax_o_main_doppler_plan.json",
+  "plan_sha256": "0e616596bf23b38e4e5fd08118c4d0b4334aabf6cf4ae4970e899947bcda0e5a",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "baseline_run_sha256": "ccf09074e4de829283be8b5a238e87d8ce6e5d95a2f43bb09ca1076b28730e85",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "LAX-o Pixel5: only add main ECEF Doppler factors, preserving frozen baseline native Highway mapping, TDCP sigma/k, input/executable/initialization. Exposed development route.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "rationale": "Fixed baseline scored 1.789751416 m. Source final GNSS/IMU graph contains Doppler; native baseline inserts 47507 GNSS-first Doppler but zero Phase213 main Doppler factors.",
+  "source_type": "Street",
+  "baseline_native_type": "Highway",
+  "limitations": [
+    "Source/native route-type mismatch intentionally remains fixed; label mismatch is not evidence of accuracy loss.",
+    "One already exposed route. No uniform gain, official score, or source-runtime parity claim."
+  ],
+  "source_doppler_evidence": {
+    "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+    "sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "lines": [
+      214,
+      217
+    ]
+  },
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_lax_o_main_doppler_v1\\validation.json",
+  "validation_sha256": "0a13a9f64717f96ca6ef86ec5462da96738ece9889982ed5719a06a2b4982939",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.7459558079350193,
+  "mean_route_group_score_m": 1.7459558079350193,
+  "results": {
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2343322915310424,
+            "p95_m": 2.3451705407387626,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.7897514161349024
+          },
+          "truth_sha256": "73875990485f43d36ce7608762b4071267d8361847ee5b9a171d3459ab2ba154",
+          "solution_sha256": "20c575efc4ec68c0c8aa0e2973ae9aaf7a0032bd79777e38e7199714518fa76f",
+          "wall_s": 2196.177908182144,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": false,
+              "enabled": false,
+              "factors": 0
+            },
+            "gnss_first_doppler": 47507,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.2,
+              "undifferenced_doppler_huber_threshold_sigma": 0.8,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "ac1707c874edeec09417d9af74296dd049415d534bcc4c06dea76e6be9a6dae3"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.1563500141759702,
+            "p95_m": 2.3355616016940686,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.7459558079350193
+          },
+          "truth_sha256": "73875990485f43d36ce7608762b4071267d8361847ee5b9a171d3459ab2ba154",
+          "solution_sha256": "ba33e3d8207ff3f7da476f6e02e560215c91ffc332b5d26fa44fa48e99533401",
+          "wall_s": 209.7489516735077,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": true,
+              "enabled": true,
+              "factors": 47507
+            },
+            "gnss_first_doppler": 47507,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.2,
+              "undifferenced_doppler_huber_threshold_sigma": 0.8,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "ac1707c874edeec09417d9af74296dd049415d534bcc4c06dea76e6be9a6dae3"
+        }
+      },
+      "delta_m": -0.04379560819988315
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "One existing development route group, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790146608.97019
+}

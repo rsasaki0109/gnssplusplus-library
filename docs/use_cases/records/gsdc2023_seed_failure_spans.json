@@ -1,0 +1,489 @@
+{
+  "schema_version": "gsdc2023-seed-failure-spans.v1",
+  "diagnostic_only": true,
+  "initialization": "independent cold-start per epoch; differs from sequential native run",
+  "interpolated_seeds_created": false,
+  "runs": [
+    {
+      "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+      "summary_sha256": "e9cfa0fbcd7c4839b0675d6251159a68ec6dfbf5b127a3a94f17567840a32c38",
+      "input_epochs": 1141,
+      "accepted_epochs": 1140,
+      "failed_epochs": 1,
+      "failure_spans": [
+        {
+          "start_epoch": 787,
+          "end_epoch": 787,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "summary_sha256": "e74d6eb161e74e8ca6ea4a0c3659f66666587a15c5d899f7ef105e7f867bdf94",
+      "input_epochs": 2805,
+      "accepted_epochs": 2768,
+      "failed_epochs": 37,
+      "failure_spans": [
+        {
+          "start_epoch": 75,
+          "end_epoch": 77,
+          "failed_epochs": 3,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 3
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 4000
+        },
+        {
+          "start_epoch": 80,
+          "end_epoch": 86,
+          "failed_epochs": 7,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 7
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 8000
+        },
+        {
+          "start_epoch": 89,
+          "end_epoch": 95,
+          "failed_epochs": 7,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 7
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 8000
+        },
+        {
+          "start_epoch": 98,
+          "end_epoch": 98,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 100,
+          "end_epoch": 100,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 103,
+          "end_epoch": 104,
+          "failed_epochs": 2,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 3000
+        },
+        {
+          "start_epoch": 111,
+          "end_epoch": 111,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 114,
+          "end_epoch": 114,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 116,
+          "end_epoch": 116,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 126,
+          "end_epoch": 126,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 131,
+          "end_epoch": 131,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 135,
+          "end_epoch": 135,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 252,
+          "end_epoch": 252,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 254,
+          "end_epoch": 254,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 258,
+          "end_epoch": 258,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 730,
+          "end_epoch": 732,
+          "failed_epochs": 3,
+          "reasons": {
+            "insufficient-pseudorange-satellites": 1,
+            "epoch-time-gap-exceeds-limit": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 57000
+        },
+        {
+          "start_epoch": 871,
+          "end_epoch": 871,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 2149,
+          "end_epoch": 2151,
+          "failed_epochs": 3,
+          "reasons": {
+            "insufficient-pseudorange-satellites": 1,
+            "epoch-time-gap-exceeds-limit": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 42000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "summary_sha256": "9e1959f40008f109636166367fdf601136d58b62c39825cc425ccd8ec4666e31",
+      "input_epochs": 4515,
+      "accepted_epochs": 4510,
+      "failed_epochs": 5,
+      "failure_spans": [
+        {
+          "start_epoch": 1324,
+          "end_epoch": 1324,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1326,
+          "end_epoch": 1326,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 2751,
+          "end_epoch": 2752,
+          "failed_epochs": 2,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 3000
+        },
+        {
+          "start_epoch": 3572,
+          "end_epoch": 3572,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "summary_sha256": "b3c46f9025398917fdd846d9b07fd22282a5906788ef5ab14ecd07e80986fbe5",
+      "input_epochs": 2112,
+      "accepted_epochs": 2108,
+      "failed_epochs": 4,
+      "failure_spans": [
+        {
+          "start_epoch": 937,
+          "end_epoch": 937,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 941,
+          "end_epoch": 941,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1998,
+          "end_epoch": 1999,
+          "failed_epochs": 2,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 3000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "summary_sha256": "5b5327891abdcd42132f34df4f9504e693b94559b811404f7223986ad6ccec91",
+      "input_epochs": 1400,
+      "accepted_epochs": 1397,
+      "failed_epochs": 3,
+      "failure_spans": [
+        {
+          "start_epoch": 640,
+          "end_epoch": 640,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1221,
+          "end_epoch": 1221,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1224,
+          "end_epoch": 1224,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "summary_sha256": "09a496bec3979c75f3bfbb8c3b7339dd9bb5b9dc31e4b0bba2ad1399c8afc400",
+      "input_epochs": 1587,
+      "accepted_epochs": 1585,
+      "failed_epochs": 2,
+      "failure_spans": [
+        {
+          "start_epoch": 240,
+          "end_epoch": 241,
+          "failed_epochs": 2,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 3000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "summary_sha256": "507a6a7e3b96686e33dcc369bd3f682f5df0c489bfab9ea09d3a53ca6ca1754f",
+      "input_epochs": 1315,
+      "accepted_epochs": 1313,
+      "failed_epochs": 2,
+      "failure_spans": [
+        {
+          "start_epoch": 290,
+          "end_epoch": 291,
+          "failed_epochs": 2,
+          "reasons": {
+            "insufficient-pseudorange-satellites": 2
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 3000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "summary_sha256": "94b382324ccd1eae77f3689236735a24de1c66f69041022c5c34c7a6a1bdd664",
+      "input_epochs": 1382,
+      "accepted_epochs": 1381,
+      "failed_epochs": 1,
+      "failure_spans": [
+        {
+          "start_epoch": 1221,
+          "end_epoch": 1221,
+          "failed_epochs": 1,
+          "reasons": {
+            "insufficient-pseudorange-satellites": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "summary_sha256": "55ab306a4c587b02b8f1259a639c46277e931cbc265f4ef6912e16e9ece4500f",
+      "input_epochs": 1357,
+      "accepted_epochs": 1356,
+      "failed_epochs": 1,
+      "failure_spans": [
+        {
+          "start_epoch": 118,
+          "end_epoch": 118,
+          "failed_epochs": 1,
+          "reasons": {
+            "insufficient-pseudorange-satellites": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 3000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+      "summary_sha256": "feff49a7e2879e2e1fed7a6b992ad74508d6dfa2c5c0bd26d219490c97601199",
+      "input_epochs": 2110,
+      "accepted_epochs": 2105,
+      "failed_epochs": 5,
+      "failure_spans": [
+        {
+          "start_epoch": 183,
+          "end_epoch": 183,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1309,
+          "end_epoch": 1309,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1409,
+          "end_epoch": 1411,
+          "failed_epochs": 3,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 3
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 4000
+        }
+      ]
+    },
+    {
+      "dataset_id": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+      "summary_sha256": "87f974cebb6545d47b785c766f6d82b723526f1bdde032eb758e25e5ed157235",
+      "input_epochs": 1495,
+      "accepted_epochs": 1493,
+      "failed_epochs": 2,
+      "failure_spans": [
+        {
+          "start_epoch": 204,
+          "end_epoch": 204,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        },
+        {
+          "start_epoch": 1137,
+          "end_epoch": 1137,
+          "failed_epochs": 1,
+          "reasons": {
+            "native-raw-p-bootstrap-rejected": 1
+          },
+          "bracketed_by_accepted_epochs": true,
+          "accepted_bracket_utc_span_ms": 2000
+        }
+      ]
+    }
+  ]
+}

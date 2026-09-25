@@ -1,0 +1,47 @@
+{
+  "schema": "gsdc-a217m-imu-tail-semantics.v1",
+  "checked_unix": 1790146190.370751,
+  "evidence": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\src\\algorithms\\fgo_gtsam_backend.cpp",
+      "sha256": "dc73366aaf74f7b6647dfb88194cd2ff46bb77f090d124061c7259d3780daee9"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp",
+      "sha256": "6fd9a13124bf84c80bd5bd64c79d029906ab5889af7f7117f47a2c3e28ab4bc7"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\scripts\\analysis\\audit_gsdc_native_outputs.py",
+      "sha256": "3c670cc03adbe8a29c72522f33c1970ef2e316a5771d7ca0f79f72de199b2c40"
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+      "sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42"
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\functions\\imuprocessing.m",
+      "sha256": "03238a6dddfd294d82ad05e0598d34eecb49f20093adf03548114ef7b9ce70a1"
+    }
+  ],
+  "native_default": {
+    "location": "fgo_gtsam_backend.cpp:1424-1447",
+    "integration": "Samples before t1 are integrated using sample.time minus previous time; when at least one sample was integrated, the final sample is reused for t1 minus previous time. This also applies when the stream ends before t1.",
+    "output_coordinate_hold": false,
+    "imu_measurement_tail_hold": true
+  },
+  "source_pinned": {
+    "commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+    "selection": "fgo_gnss_imu.m:281 selects inclusive UTC interval endpoints",
+    "duration": "imuprocessing.m:37-40 uses forward timestamp differences, repeating the last duration at stream end",
+    "equivalent_to_native_default": false,
+    "matlab_runtime_verified": false
+  },
+  "leading_recovery_gate": {
+    "location": "gnss_fgo_imu_no_base.cpp:14135 and 6403",
+    "scope": "Leading recovery and extended gaps both invoke strict full graph IMU bracketing.",
+    "audit_dependency": "audit_gsdc_native_outputs.py:132-143 requires the same coverage proof for both flags."
+  },
+  "decision": "Do not silently relax the existing coverage proof or label a shortened interval full-graph-covered. Before a new opt-in policy, export exact failed-run mapped bounds and separately prove coverage of recovered leading states and diagnose trailing integration support. Preserve frozen runs and current default.",
+  "policy_changed": false,
+  "accuracy_claim": null
+}

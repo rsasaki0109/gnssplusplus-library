@@ -1,0 +1,62 @@
+{
+  "status": "matched-main-doppler-comparison-complete",
+  "binary_sha256": "1a0f6628edeb8a7acd7dd025b35af3d274a268b6d9ce339354ba5742f35b1e0d",
+  "official_score": false,
+  "promoted": false,
+  "scope": "one exposed MI8 development route; same binary and raw inputs; only main Doppler differs; stage export enabled in both conditions",
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_main_doppler_control_plan.json",
+      "sha256": "85166c728b0d81be7aaf644ad0922e018d2930dfd98b0f6430b0b920d2bbc307"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_main_doppler_candidate_plan.json",
+      "sha256": "bb77837f9f4d29877690b827f5299c09278b6481e393f57d3cff578b4667a32e"
+    }
+  },
+  "result": {
+    "status": "matched-main-doppler-comparison-complete",
+    "same_binary_inputs_other_args_verified": true,
+    "gnss_stage_byte_identical": true,
+    "gnss_stage_sha256": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+    "runs": {
+      "control": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.8947760505588985,
+          "p95_m": 1.423393785609381,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.1590849180841398
+        },
+        "doppler": {
+          "requested": false,
+          "enabled": false,
+          "factors": 0
+        },
+        "wall_s": 677.6475667953491,
+        "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+        "solution_sha256": "4a8c86b4445421abf3cc57d894464d50c3829506ab2ab7cc0c50bfd4f782bc00"
+      },
+      "candidate": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.8717086122812767,
+          "p95_m": 1.4247984685155977,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.148253540398437
+        },
+        "doppler": {
+          "requested": true,
+          "enabled": true,
+          "factors": 20384
+        },
+        "wall_s": 183.42164540290833,
+        "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+        "solution_sha256": "67df060d575c6b4d2e92856db19ea347bbf94d5470a3441cafb2eccbca550e20"
+      }
+    },
+    "delta_m": -0.010831377685702748,
+    "official_score": false,
+    "promoted": false
+  }
+}

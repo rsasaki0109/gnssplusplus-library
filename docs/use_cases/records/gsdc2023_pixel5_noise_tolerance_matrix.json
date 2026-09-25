@@ -1,0 +1,65 @@
+{
+  "status": "four-paired-combinations-verified-not-promoted",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517",
+  "same_inputs_and_other_arguments_verified": true,
+  "rows": {
+    "baseline": {
+      "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_lm_tolerance_regression_v1\\pixel5_control\\run.json",
+      "p50_m": 0.3673253507574625,
+      "p95_m": 0.7854260386959835,
+      "score_m": 0.576375694726723,
+      "wall_s": 616.8690736293793,
+      "main_iterations": 40,
+      "gnss_first_iterations": 69,
+      "main_final_cost": 306442.2922740474,
+      "solution_sha256": "efc8779e5852b6839d776e24e2ee44fc20f5c5d0e23a00830053f0532ee28746",
+      "noise_enabled": false,
+      "source_tolerances_enabled": false
+    },
+    "source_noise": {
+      "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_imu_noise_regression_v1\\pixel5_candidate\\run.json",
+      "p50_m": 0.32097948881834953,
+      "p95_m": 0.784105505577422,
+      "score_m": 0.5525424971978857,
+      "wall_s": 632.4576511383057,
+      "main_iterations": 46,
+      "gnss_first_iterations": 69,
+      "main_final_cost": 305311.10199695156,
+      "solution_sha256": "20b33e800304feaaf73f1f73abcf7a9e29738fe73f60cf685593e1644335fbd0",
+      "noise_enabled": true,
+      "source_tolerances_enabled": false
+    },
+    "source_tolerances": {
+      "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_lm_tolerance_regression_v1\\pixel5_candidate\\run.json",
+      "p50_m": 0.3739352837411251,
+      "p95_m": 0.7972013661149024,
+      "score_m": 0.5855683249280138,
+      "wall_s": 159.149897813797,
+      "main_iterations": 10,
+      "gnss_first_iterations": 14,
+      "main_final_cost": 306447.98064940533,
+      "solution_sha256": "4293025352e95b9e51c7b2adff5a5f239fc628a3d06a58aabdcdcff023d88cca",
+      "noise_enabled": false,
+      "source_tolerances_enabled": true
+    },
+    "source_noise_and_tolerances": {
+      "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_noise_lm_regression_v1\\pixel5_candidate\\run.json",
+      "p50_m": 0.3413156075956444,
+      "p95_m": 0.7884142289135483,
+      "score_m": 0.5648649182545964,
+      "wall_s": 172.19988441467285,
+      "main_iterations": 10,
+      "gnss_first_iterations": 14,
+      "main_final_cost": 305314.9358184139,
+      "solution_sha256": "295d553859aa3c46cda25bd1d4d8f7d221478dee021d5351cbf774b0b10ca3e3",
+      "noise_enabled": true,
+      "source_tolerances_enabled": true
+    }
+  },
+  "metric": "local Haversine sphere P50/P95 linear percentile average",
+  "previously_exposed_development_route": true,
+  "official_score": false,
+  "wall_time_caveat": "concurrent workloads differ; observed wall times do not establish controlled speedup",
+  "fixed_all40_recipe_changed": false
+}

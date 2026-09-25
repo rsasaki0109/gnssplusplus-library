@@ -1,0 +1,73 @@
+{
+  "status": "official-scored-goal-not-achieved",
+  "checked_unix": 1790129919.402024,
+  "competition": "smartphone-decimeter-2023",
+  "submission_ref": 56479759,
+  "public_score_m": 1.698,
+  "private_score_m": 1.333,
+  "submission_sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+  "submission_bytes": 5862276,
+  "submission_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_source_init_submission_v1\\submission.csv",
+  "receipt_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\selected_submission_kaggle_receipt.json",
+  "receipt_sha256": "665e000b658f9a8a2b213cd76870723d969bdf7b0b745cf1440ea1d9b90dc6a3",
+  "server_evidence_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_submission_server_evidence.json",
+  "server_evidence_sha256": "7da2d12dd0f9bde83ca0ab6a196982439440544155e1e12ade9e840938462083",
+  "server_metadata": {
+    "ref": 56479759,
+    "total_bytes": 5862276,
+    "description": "libgnss++ native C++ all40 A205u source init sha256:152ead0ed97cca96",
+    "file_name": "submission.csv",
+    "public_score": "1.698",
+    "private_score": "1.333",
+    "error_description": "",
+    "status": "SubmissionStatus.COMPLETE",
+    "date": "2026-09-23 02:16:09.530000",
+    "download": {
+      "status": "failed",
+      "error_type": "HTTPError",
+      "http_status": 403
+    }
+  },
+  "native_drives": 40,
+  "official_rows": 71936,
+  "sample_coordinates_used": false,
+  "export_interpolated_or_held_rows": 0,
+  "prior_native_submission": {
+    "ref": 56309958,
+    "total_bytes": 6156637,
+    "description": "libgnss++ native FGO + base-surveyed (8 pixel5 trips on v5 base)",
+    "file_name": "submission_hybrid.csv",
+    "public_score": "3.460",
+    "private_score": "3.344",
+    "error_description": "",
+    "status": "SubmissionStatus.COMPLETE",
+    "date": "2026-09-17 16:53:49.757000",
+    "download": {
+      "status": "failed",
+      "error_type": "HTTPError",
+      "http_status": 403
+    }
+  },
+  "reference_goal_public_m": 0.789,
+  "reference_goal_private_m": 0.928,
+  "public_gap_m": 0.909,
+  "private_gap_m": 0.405,
+  "private_improvement_vs_prior_m": 2.011,
+  "goal_complete": false,
+  "limitations": [
+    "The first DownloadSubmission attempt used the wrong ref field and returned HTTP 403. Official SDK 0.1.37 identified the correct submissionId contract; corrected requests downloaded all three payloads.",
+    "Historical payload composition is now audited; original per-run logs and merge manifests remain unavailable.",
+    "No paired MATLAB runtime comparison; no alternative MATLAB environment exists per user.",
+    "Archived assembly manifest describes the pre-submission state and is retained unchanged; this record is the current submission state."
+  ],
+  "server_payload_roundtrip_verified": true,
+  "payload_evidence_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_submission_payload_evidence.json",
+  "payload_evidence_sha256": "caa28c24406db7c217ff63c5fc2f6315f74da8ae092f95e4ef5073d379569e4e",
+  "downloaded_server_payload": {
+    "status": "downloaded",
+    "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\kaggle_payload_audit_only\\56479759.csv",
+    "sha256": "152ead0ed97cca96e6b2e645434ec36ef588be0a5a13b73a0317fffda61a8206",
+    "bytes": 5862276,
+    "rows": 71936
+  }
+}

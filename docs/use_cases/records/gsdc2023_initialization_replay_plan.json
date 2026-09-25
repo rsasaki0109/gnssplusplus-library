@@ -1,0 +1,209 @@
+{
+  "source_base": "832dd7991cb8d042977d1e0775fcf27deb9c422c",
+  "recipe_source": "smartphone_base_surveyed_route_results_v1.md",
+  "data_archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "runs": [
+    {
+      "name": "pixel5-control",
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "argv_without_binary_or_outputs": [
+        "--dataset-id",
+        "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_gnss.csv",
+        "--android-imu",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_imu.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\brdc.nav",
+        "--native-base-rinex",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\P221_rnx2.obs",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-phase157-raw-p-bootstrap",
+        "--native-phase165-raw-p-no-doppler-graph",
+        "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+        "--native-phase171-raw-p-no-doppler-imu-main",
+        "--native-phase171-raw-p-ecef-doppler-gnss-first",
+        "--native-phase197-source-utc-fallback-imu-offset",
+        "--native-phase217-main-pose3-motion",
+        "--native-upstream-stop-constraints",
+        "--native-phase213-main-doppler",
+        "--native-source-tdcp-meter-sigma",
+        "--native-lm-lambda-floor",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-rinex-sha256",
+        "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150",
+        "--native-base-position-ecef",
+        "-2698117.9416",
+        "-4301326.2649",
+        "3847286.2750"
+      ],
+      "inputs": {
+        "--android-gnss": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_gnss.csv",
+          "sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7"
+        },
+        "--android-imu": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_imu.csv",
+          "sha256": "fa3f17d07570fdbb8030f307130f33ca3613e8125475c2a907c48f7db3455480"
+        },
+        "--nav": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\brdc.nav",
+          "sha256": "147d948f0eba3bf09e295e7f67fbe8db60c25e236bc3c7d958dc933483f10909"
+        },
+        "--native-base-rinex": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\P221_rnx2.obs",
+          "sha256": "4d3e37cbe0347fa56216db54ede9e0f30731885f337f1653ab5a86afb2bb2150"
+        }
+      },
+      "removed_pixel5_flags": [],
+      "purpose": "initialization diagnosis only; no accuracy claim"
+    },
+    {
+      "name": "pixel4-exact-guard",
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "argv_without_binary_or_outputs": [
+        "--dataset-id",
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_gnss.csv",
+        "--android-imu",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_imu.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\brdc.nav",
+        "--native-base-rinex",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\SLAC_rnx2.obs",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-phase157-raw-p-bootstrap",
+        "--native-phase165-raw-p-no-doppler-graph",
+        "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+        "--native-phase171-raw-p-no-doppler-imu-main",
+        "--native-phase171-raw-p-ecef-doppler-gnss-first",
+        "--native-phase197-source-utc-fallback-imu-offset",
+        "--native-phase217-main-pose3-motion",
+        "--native-upstream-stop-constraints",
+        "--native-phase213-main-doppler",
+        "--native-source-tdcp-meter-sigma",
+        "--native-lm-lambda-floor",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-rinex-sha256",
+        "34ade4a1b540ebaff7ca00d43053c009e080834e91318b0219d04f6d32ab7602",
+        "--native-base-position-ecef",
+        "-2703116.3177",
+        "-4291766.7551",
+        "3854248.0736"
+      ],
+      "inputs": {
+        "--android-gnss": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_gnss.csv",
+          "sha256": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594"
+        },
+        "--android-imu": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_imu.csv",
+          "sha256": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8"
+        },
+        "--nav": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\brdc.nav",
+          "sha256": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+        },
+        "--native-base-rinex": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\SLAC_rnx2.obs",
+          "sha256": "34ade4a1b540ebaff7ca00d43053c009e080834e91318b0219d04f6d32ab7602"
+        }
+      },
+      "removed_pixel5_flags": [],
+      "purpose": "initialization diagnosis only; no accuracy claim"
+    },
+    {
+      "name": "pixel4-reduced",
+      "dataset_id": "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+      "argv_without_binary_or_outputs": [
+        "--dataset-id",
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4",
+        "--android-gnss",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_gnss.csv",
+        "--android-imu",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_imu.csv",
+        "--nav",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\brdc.nav",
+        "--native-base-rinex",
+        "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\SLAC_rnx2.obs",
+        "--all-epochs",
+        "--android-raw-utc-keys",
+        "--android-raw-clock-only",
+        "--android-utc-wall-clock-fallback",
+        "--native-pdc-imu-tdcp-no-bridge",
+        "--native-source-direct-observable-quality",
+        "--native-source-clock-c0d-factor",
+        "--native-source-clock-c0d-meter-state-parity",
+        "--native-source-clock-c0d-active-solve-diagnostic",
+        "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+        "--native-source-clock-c0d-epoch-vector-parity",
+        "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+        "--native-phase157-raw-p-bootstrap",
+        "--native-phase165-raw-p-no-doppler-graph",
+        "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+        "--native-phase171-raw-p-no-doppler-imu-main",
+        "--native-phase171-raw-p-ecef-doppler-gnss-first",
+        "--native-upstream-stop-constraints",
+        "--native-lm-lambda-floor",
+        "--native-base-pseudorange-compensation",
+        "--native-base-pseudorange-source-miss-mask",
+        "--native-base-rinex-sha256",
+        "34ade4a1b540ebaff7ca00d43053c009e080834e91318b0219d04f6d32ab7602",
+        "--native-base-position-ecef",
+        "-2703116.3177",
+        "-4291766.7551",
+        "3854248.0736"
+      ],
+      "inputs": {
+        "--android-gnss": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_gnss.csv",
+          "sha256": "b7c192323455c36e76ea44831dc21a0cb661e5ca160e6072bd0d3682c907e594"
+        },
+        "--android-imu": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\pixel4\\device_imu.csv",
+          "sha256": "86b31f2ac9c4e80c675c01a8c86146efd7f67d1a5960ac58723605c1c2bf33a8"
+        },
+        "--nav": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\brdc.nav",
+          "sha256": "cf48ab5fe78edd49a182655ed4b99f1938972c40ab95bea3c78939d3eb98b5c5"
+        },
+        "--native-base-rinex": {
+          "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-27-19-49-us-ca-mtv-b\\SLAC_rnx2.obs",
+          "sha256": "34ade4a1b540ebaff7ca00d43053c009e080834e91318b0219d04f6d32ab7602"
+        }
+      },
+      "removed_pixel5_flags": [
+        "--native-phase197-source-utc-fallback-imu-offset",
+        "--native-phase213-main-doppler",
+        "--native-phase217-main-pose3-motion",
+        "--native-source-tdcp-meter-sigma"
+      ],
+      "purpose": "initialization diagnosis only; no accuracy claim"
+    }
+  ]
+}

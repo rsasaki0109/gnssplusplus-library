@@ -1,0 +1,43 @@
+{
+  "status": "source-cold-gnss-observation-phase-gap-identified",
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_files_sha256": {
+    "run_fgo.m": "6f3a8d1fe099e5de305ea4fae1a62b8cd4b0ad5ef3eaebd0f24d99fd16be0336",
+    "fgo_gnss.m": "0c0b747dd90b801b11b60db0aef296d0eaa8c92978e69a02ffa8140927a88bee",
+    "parameters.m": "cc9e8ee178c79fd8c1853d1e1d0a91db12e951872d1773e279068c02f146a331",
+    "functions/exobs_residuals.m": "39ae0d6db90c7a1e73dc4747e043f8e368f09aa3b8977d76e5541bda0ee75bc2"
+  },
+  "source_chain": [
+    "Cold start run_fgo calls fgo_gnss(..., true).",
+    "fgo_gnss forwards initflag to parameters, initializes position from posbl and velocity from its gradient.",
+    "fgo_gnss runs exobs_residuals before base compensation with initial P L1/L5 50/30 and D 20 m/s limits."
+  ],
+  "native_current": [
+    "GNSS-first observation selection remains Legacy in the new IMU observation-stage experiment.",
+    "The new 50/30 and 20 thresholds apply only after GNSS-first output, immediately before initial IMU.",
+    "Matched MI8 native replay preserves GNSS-first CSV bytes, confirming this experiment does not resolve GNSS-stage accuracy differences."
+  ],
+  "next_experiment_requirements": [
+    "Keep current IMU-only experiment separate and complete its paired evaluation first.",
+    "Build the cold GNSS residuals from same-run native raw-data position/clock seeds and an explicitly defined source velocity-gradient equivalent; never use archived posbl or cached coordinates.",
+    "Use cached residual-center population and initial-phase thresholds, then exact-once base compensation; preserve all native UTC keys and phone clock contracts.",
+    "Compare GNSS-only stage as well as final output against a frozen same-input control; record grouping and prior usage."
+  ],
+  "accuracy_claim": false,
+  "scope": "Source and native control-flow inspection. The accuracy effect is unmeasured; wider thresholds alone are not a verified source-equivalent cold GNSS initializer.",
+  "gradient_dependency_inspection": {
+    "repository": "taroz/MatRTKLIB",
+    "commit": "69bcbd3faebc39815adb03e4b329033a4a7deb4a",
+    "url": "https://raw.githubusercontent.com/taroz/MatRTKLIB/69bcbd3faebc39815adb03e4b329033a4a7deb4a/%2Bgt/Gpos.m",
+    "downloaded_source_sha256": "7decc5920dfb1a6c858f3bbb76bec2444431633473aaba7c4813ee9b550139b8",
+    "method_lines": [
+      410,
+      442
+    ],
+    "behavior": "Gpos.gradient applies MATLAB gradient separately to each position component, divides by the supplied single scalar dt, and preserves the origin if present. It uses XYZ when available, otherwise ENU. It does not substitute pairwise raw UTC gaps for dt.",
+    "historical_competition_dependency_revision_verified": false,
+    "new_evaluation_data_downloaded": false
+  },
+  "implementation_status": "opt-in-source-connected-native-seed-helper-tested-integrated-validation-pending",
+  "implementation_record": "gsdc2023_cold_gnss_initial_experiment.json"
+}

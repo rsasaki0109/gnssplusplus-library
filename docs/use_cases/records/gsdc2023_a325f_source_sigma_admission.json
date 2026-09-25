@@ -1,0 +1,31 @@
+{
+  "status": "reverted-unnecessary-admission",
+  "created_unix": 1790156938.3803043,
+  "binary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\a325f_source_sigma_admission_fixed.exe",
+  "binary_sha256": "04a853b3af950229b3fa4aadadbfc48edbf2340cc72bc8b61a7b6cae5039b6f1",
+  "change": "Default-off source TDCP metre sigma CLI admission adds only sm-a325f, already a bias-difference TDCP source family. Solver and default recipe unchanged.",
+  "tests_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a325f_source_sigma_phone_cli\\report.json",
+  "tests_sha256": "c25c2a56fa86b4a5411e8f2f626e62aa1032a8f6ca0ca0ec02ca63bf782be75e",
+  "tests_passed": 14,
+  "scope": "CLI admission/rejection only; no same-binary control/candidate native replay or accuracy verification yet.",
+  "source_evidence": {
+    "file": "E:/rtklib_v2_ws_data/gsdc2023/upstream-source/fgo_gnss_imu.m",
+    "lines": [
+      308,
+      316
+    ],
+    "obserrmodel": "E:/rtklib_v2_ws_data/gsdc2023/upstream-source/functions/obserrmodel.m"
+  },
+  "official_score": false,
+  "promoted": false,
+  "next": "Replay both completed A325F source-Type/L5/Doppler controls on this executable, then add source metre sigma plus source Huber as a paired source-noise candidate. Both routes and same executable required; retain all failures.",
+  "superseded_reason": "The outer source phone exclusion was missed. A325F is TDCP-disabled, not an admitted bias-difference phone. CLI admission expansion was unnecessary and reverted. Comparator correctly rejected zero inserted factors; its assertion is retained.",
+  "native_replay_record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a325f_source_tdcp_noise.json",
+  "experimental_binary_retained_for_provenance": true,
+  "restored_cli_tests": {
+    "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a325f_source_sigma_reverted_cli\\report.json",
+    "sha256": "88ac22c6c57ad8e2cf9548acb468e8215d5e844e29b130639cbfe22682d50f57",
+    "tests_passed": 14,
+    "canonical_binary_sha256": "7fa8b2a9d602ce3f98f99807eba75a1666a2991382e2653dad9cecaff1e2e2ba"
+  }
+}

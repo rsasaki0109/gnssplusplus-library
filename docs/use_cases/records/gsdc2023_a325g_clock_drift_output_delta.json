@@ -1,0 +1,19 @@
+{
+  "schema": "gsdc-a325g-clock-drift-output-delta.v1",
+  "files": [
+    {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\19\\solution.csv",
+      "sha256": "6a0142425d09427419ff9c5d389d39fede4b6d6df42d673804a0d06c544856cc"
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325g_samsung_drift_v1\\00\\solution.csv",
+      "sha256": "f0269ec4e139e89e991c5a4f8221feaaa2439a3b0b39088ac7532b6c612a57a6"
+    }
+  ],
+  "native_keys": 1512,
+  "changed_coordinate_rows": 197,
+  "maximum_horizontal_delta_m": 1.4209227702869224e-05,
+  "local_score_delta_m": 0,
+  "interpretation": "Same local score does not imply byte-identical CSV. No accuracy benefit established from clock-drift-only change on this exposed route.",
+  "checked_unix": 1790145486.1945157
+}

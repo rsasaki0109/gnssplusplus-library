@@ -1,0 +1,18 @@
+{
+  "scope": "First route only; matched comparison record remains authoritative for accuracy.",
+  "solution_paths": [
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\01\\solution.csv",
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_source_init_v1\\00\\solution.csv"
+  ],
+  "solution_sha256": [
+    "7eb303fff1e04bd9a47143a9b9f3fcbb4258c5b79e551c7c5841c0da301247bf",
+    "2496b77369af850e156f0ef9945969a3fb915baa1afaa0c340aefcc08c75c6aa"
+  ],
+  "native_rows": 2002,
+  "maximum_coordinate_delta_m": 1.419895948238144e-05,
+  "mean_coordinate_delta_m": 2.465488976928333e-06,
+  "changed_coordinate_rows": 471,
+  "official_score": false,
+  "promoted": false,
+  "checked_unix": 1790136471.6265616
+}

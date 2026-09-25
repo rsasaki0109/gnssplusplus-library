@@ -1,0 +1,36 @@
+{
+  "schema": "gsdc-a205u-historical-recipe-difference.v1",
+  "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+  "plans": [
+    {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+      "sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1"
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_a205u_source_init_plan.json",
+      "sha256": "58a6f4f921395cf718ffc5a5086b8109b85c432a94ccbdfa278846e5ceabc6aa"
+    }
+  ],
+  "same_raw_input_manifest": true,
+  "other_normalized_arguments_identical": true,
+  "boolean_flag_order_ignored": [
+    "--native-leading-imu-states",
+    "--native-source-imu-initialization"
+  ],
+  "current_base_ecef_m": [
+    -2677501.0146,
+    -4314063.5177,
+    3847179.5753
+  ],
+  "historical_base_ecef_m": [
+    -2677500.6681,
+    -4314063.8942,
+    3847179.4082
+  ],
+  "base_ecef_difference_norm_m": 0.5382721525771611,
+  "different_executable": true,
+  "historical_local_score_m": 2.151445987097347,
+  "can_substitute_for_frozen_baseline": false,
+  "limitation": "Historical corrected initialization output is not a paired recovery of current frozen recipe: base coordinates also differ. No causal attribution of score to station displacement.",
+  "checked_unix": 1790142636.1274977
+}

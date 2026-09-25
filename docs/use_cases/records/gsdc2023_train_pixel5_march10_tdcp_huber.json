@@ -1,0 +1,78 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_march10_tdcp_huber_plan.json",
+  "plan_sha256": "14bb4b2bef52a349d1439a7d8c192266da3134e083706b1e7f3bd8e32c05f89f",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_march10_tdcp_sigma_plan.json",
+  "baseline_plan_sha256": "498fd81d57bd5a43543a71f0417ce5636e48640ca1cf4c7d155faaf379b26392",
+  "baseline_run_sha256": "179a32172ff34bc75ffcba0e93ad5f864a868d161531d8f780f6b7c4fce0025d",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "Conditional Huber-k effect after source metre sigma on March 10 Pixel5: only add Phase184 Street k=0.2. Native/source Type agree. No explicit route preset or motion-sigma change.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "original_recipe_score_m": 0.6779106294218623,
+  "sigma_only_score_m": 1.0359009354593491,
+  "limitations": [
+    "Control is the sigma-only regression, not original recipe. Beating control alone does not imply beating original recipe.",
+    "Source-prescribed Huber coefficient, not a tuned numerical search."
+  ],
+  "created_unix": 1790138327.1378298,
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_march10_tdcp_huber_v1\\validation.json",
+  "validation_sha256": "2c79c1cdb8624a25ad919a652104b4b5452e3c14a8c19c5546cfc36205185c38",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.5443656080013418,
+  "mean_route_group_score_m": 0.5443656080013418,
+  "candidate_delta_from_original_recipe_m": -0.1335450214205205,
+  "results": {
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8715290366869226,
+            "p95_m": 1.2002728342317757,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.0359009354593491
+          },
+          "truth_sha256": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+          "solution_sha256": "88fa94a3b544af6df9b041dc8c57881e900f52d87a3e01f705aaff87fdfac493",
+          "wall_s": 1147.5606558322906,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.0016827902832903905,
+            "fixed_sigma_m": null,
+            "factors_inserted": 24947,
+            "official_huber_k": 4
+          },
+          "seed_metadata_sha256": "9859a6c7c92e87c026b492a6e3d2f6c86cbefd433004091ff56b3a69724d31db"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.5007200555912674,
+            "p95_m": 0.5880111604114162,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5443656080013418
+          },
+          "truth_sha256": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+          "solution_sha256": "b75522d01e962b68b4a79790b8557cf7ca3a92b5f6e77b6710ef9a7b22547a0b",
+          "wall_s": 4159.587830543518,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.0016827902832903905,
+            "fixed_sigma_m": null,
+            "factors_inserted": 24947,
+            "official_huber_k": 0.2
+          },
+          "seed_metadata_sha256": "9859a6c7c92e87c026b492a6e3d2f6c86cbefd433004091ff56b3a69724d31db"
+        }
+      },
+      "delta_m": -0.4915353274580073
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "One existing development route group, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790146381.262621
+}

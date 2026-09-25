@@ -1,0 +1,100 @@
+{
+  "status": "paired-native-development-comparison-complete",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_a205u_position_offset_plan.json",
+  "plan_sha256": "f8a70df7f39c48d857ea45df47c9769a95c8423608361d05cfde8de2d5e6f00f",
+  "only_added_flag": "--native-upstream-position-offset",
+  "fixed_offset_m": {
+    "RL": 0.3,
+    "UD": -0.25
+  },
+  "source": "pinned functions/add_position_offset.m; optimized native attitude only",
+  "baseline_score_m": 2.151445987097347,
+  "official_score": false,
+  "promoted": false,
+  "v1_outcome": "CLI rejected by historical Pixel5-only admission before inference",
+  "v2_plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_offset_control_plan_v2.json",
+      "sha256": "952d0fe8b652aa594a843a3682d69444ada16b3f029c1d4eb9dcd673110164b1"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_offset_candidate_plan_v2.json",
+      "sha256": "9bb03d84a216ff8133955426b0492c9846ab196369a45f1f888fbd20531cce39"
+    }
+  },
+  "v2_binary_sha256": "9fbb0a0e73b0bde6bb27a6910c499598dbd69e8bfdf942aa5f15f983be51f878",
+  "native_build_passed": true,
+  "helper_cpp_tests_passed": 5,
+  "legacy_python_tests": {
+    "passed": 9,
+    "errors": 5,
+    "error_causes": [
+      "missing pinned official reference file",
+      "fixed historical manifest/hash mismatch"
+    ],
+    "all_passed": false
+  },
+  "result": {
+    "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "same_binary_inputs_other_args_verified": true,
+    "gnss_first_summary_identical": true,
+    "scores": {
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.378026257358728,
+        "p95_m": 2.9248657168359653,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.151445987097347
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.3130854418015072,
+        "p95_m": 2.7686512559649294,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.0408683488832184
+      }
+    },
+    "delta_m": -0.11057763821412836,
+    "wall_s": {
+      "control": 249.09579157829285,
+      "candidate": 248.97880578041077
+    },
+    "official_score": false,
+    "promotion": false,
+    "scope": "single exposed development route; post-solve source phone offset only"
+  },
+  "solve_invariance": {
+    "all_recorded_costs_iterations_identical": true,
+    "compared_values": {
+      "/native_pdc_state_bridge_report/iterations": 0,
+      "/native_pdc_state_bridge_report/initial_cost": 0,
+      "/native_pdc_state_bridge_report/final_cost": 0,
+      "/native_source_clock_c0d_factor/active_solve_initial_cost": 52947716.932318926,
+      "/native_source_clock_c0d_factor/active_solve_final_cost": 12311.281401084321,
+      "/graph/iterations": 132,
+      "/graph/initial_cost": 52947716.932318926,
+      "/graph/final_cost": 12311.281401084321,
+      "/gnss_first/iterations": 284,
+      "/gnss_first/initial_cost": 21588011430.827618,
+      "/gnss_first/final_cost": 19033.546586350905,
+      "/phase143_termination/main/initial_cost": 52947716.932318926,
+      "/phase143_termination/main/final_cost": 12311.281401084321,
+      "/phase143_termination/gnss_first/initial_cost": 21588011430.827618,
+      "/phase143_termination/gnss_first/final_cost": 19033.546586350905
+    },
+    "control_csv_identical_to_pre_gate_change_binary": true,
+    "offset_provenance": {
+      "enabled": true,
+      "applied": true,
+      "phone": "sm-a205u",
+      "corrected_epochs": 1213,
+      "application_passes": 1,
+      "offset_rl_m": 0.3,
+      "offset_ud_m": -0.25,
+      "max_offset_enu_m": 0.39051248379533277,
+      "rotation_contract": "Rx*Ry*Rz(rpy-[0,0,pi])",
+      "source": "in-memory optimized GTSAM Rot3::rpy; raw-only",
+      "failure": ""
+    }
+  }
+}

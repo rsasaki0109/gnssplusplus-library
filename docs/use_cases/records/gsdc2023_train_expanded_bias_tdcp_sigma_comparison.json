@@ -1,0 +1,1363 @@
+{
+  "status": "all-eleven-matched-sigma-comparisons-complete",
+  "checked_unix": 1790189926.4311798,
+  "planned_count": 11,
+  "compared_count": 11,
+  "unscored": {},
+  "results": {
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4546566128864969,
+            "p95_m": 0.7975510850403802,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6261038489634385
+          },
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "truth_keys": 1165,
+          "raw_keys": 1165,
+          "solution_sha256": "e60d989461542f33a763f029a3618a0eba8d2e950e442a82e4bbe4ee360573af",
+          "seed_metadata_sha256": "2fc3110e82322137f06fedd84e16b403ad6f35737df96fa9635bfb94b2256791",
+          "wall_s": 497.54633355140686,
+          "tdcp_factors_inserted": 22408,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 35252,
+              "pseudorange_factors": 35029,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 223,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4716991610975178,
+            "p95_m": 0.8334203510428706,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6525597560701942
+          },
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "truth_keys": 1165,
+          "raw_keys": 1165,
+          "solution_sha256": "5156eb3cbf2c4a6aceda821a3fa89c04948939d0fe9ae0a39f0ca4e87799eb40",
+          "seed_metadata_sha256": "2fc3110e82322137f06fedd84e16b403ad6f35737df96fa9635bfb94b2256791",
+          "wall_s": 910.603296995163,
+          "tdcp_factors_inserted": 22408,
+          "representative_sigma_m": 0.001153494181723202,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 35252,
+              "pseudorange_factors": 35029,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 223,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.026455907106755716,
+        "p50_m": 0.017042548211020914,
+        "p95_m": 0.03586926600249041
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7711075537254555,
+            "p95_m": 1.1197943497239309,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.9454509517246932
+          },
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "truth_keys": 2162,
+          "raw_keys": 2180,
+          "solution_sha256": "0ff5c5992385ad2e914021b589002907a0d92b3ab994373fadb8855d05264240",
+          "seed_metadata_sha256": "b23c635db85df44ff22450a7a2eaa1100edf8436ea2f83195d40b8254633cec4",
+          "wall_s": 708.8854877948761,
+          "tdcp_factors_inserted": 33122,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53403,
+              "pseudorange_factors": 52208,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1195,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.49338788056340965,
+            "p95_m": 0.8009763426156067,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6471821115895082
+          },
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "truth_keys": 2162,
+          "raw_keys": 2180,
+          "solution_sha256": "6a87efe850a5bddf437dbddc60e0660311659f7f322c5551b5a7899685454fd6",
+          "seed_metadata_sha256": "b23c635db85df44ff22450a7a2eaa1100edf8436ea2f83195d40b8254633cec4",
+          "wall_s": 2583.4473741054535,
+          "tdcp_factors_inserted": 33122,
+          "representative_sigma_m": 0.004729201053364944,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53403,
+              "pseudorange_factors": 52208,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1195,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": -0.29826884013518495,
+        "p50_m": -0.2777196731620458,
+        "p95_m": -0.3188180071083242
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8619685628371849,
+            "p95_m": 1.7294026678622219,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.2956856153497034
+          },
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "truth_keys": 2163,
+          "raw_keys": 2182,
+          "solution_sha256": "0cfd5bd24fb05a200733c3e9fb7b0bdaba919b15c25010107fe6c09fe39597a1",
+          "seed_metadata_sha256": "35e34b589a282f0a559e072b09dbe821676cd9e3fe037034f1967b6fb8754d2a",
+          "wall_s": 755.1205682754517,
+          "tdcp_factors_inserted": 41148,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 62791,
+              "pseudorange_factors": 62239,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 552,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7263179587107611,
+            "p95_m": 0.917440085686724,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8218790221987425
+          },
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "truth_keys": 2163,
+          "raw_keys": 2182,
+          "solution_sha256": "596af8e4ace7eaa1ef60b83b436a63710bd989b309fa0c5c5bb59cfbc47e86b1",
+          "seed_metadata_sha256": "35e34b589a282f0a559e072b09dbe821676cd9e3fe037034f1967b6fb8754d2a",
+          "wall_s": 2342.3712272644043,
+          "tdcp_factors_inserted": 41148,
+          "representative_sigma_m": 0.003243299403347804,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 62791,
+              "pseudorange_factors": 62239,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 552,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": -0.47380659315096085,
+        "p50_m": -0.13565060412642382,
+        "p95_m": -0.8119625821754979
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.3326803498916532,
+            "p95_m": 0.684374131925014,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5085272409083336
+          },
+          "truth_sha256": "c4704b43e6b742e889482aea80f6ba7c0242b2c857952da3f7ca054583174fe6",
+          "truth_keys": 1193,
+          "raw_keys": 1231,
+          "solution_sha256": "1fcc0fad9441d68748ad55e735768104589bd2378995972a0e56bd24e625e372",
+          "seed_metadata_sha256": "80157bdf31c88c1a92d7581bfc0a528c1fa3d93bc59cf631f08998d41f744a02",
+          "wall_s": 331.8743488788605,
+          "tdcp_factors_inserted": 22619,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 32813,
+              "pseudorange_factors": 32364,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 449,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.3327719181730338,
+            "p95_m": 0.7674361444238248,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5501040312984293
+          },
+          "truth_sha256": "c4704b43e6b742e889482aea80f6ba7c0242b2c857952da3f7ca054583174fe6",
+          "truth_keys": 1193,
+          "raw_keys": 1231,
+          "solution_sha256": "4576fbcec8e2cafc139d502d11a45ff9cff6a9137ee63d077d0a8539f6fe6460",
+          "seed_metadata_sha256": "80157bdf31c88c1a92d7581bfc0a528c1fa3d93bc59cf631f08998d41f744a02",
+          "wall_s": 1840.7020683288574,
+          "tdcp_factors_inserted": 22619,
+          "representative_sigma_m": 0.009089946631154063,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 32813,
+              "pseudorange_factors": 32364,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 449,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.041576790390095764,
+        "p50_m": 9.156828138062734e-05,
+        "p95_m": 0.08306201249881084
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8029464518880836,
+            "p95_m": 1.124946051179537,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.9639462515338103
+          },
+          "truth_sha256": "97086f2ba80289ddb37e8d415b8f3b8db516b9c8e0870f911b33c1924636842c",
+          "truth_keys": 1102,
+          "raw_keys": 1102,
+          "solution_sha256": "8a3993bc3e9515fec152946a0fa174791eb2ef7b32264b0f4409e1d2fff5b7a1",
+          "seed_metadata_sha256": "950c1e97c53ac9425bfce4098c191b722f8c92add6415da4784060826d9e145d",
+          "wall_s": 196.29520988464355,
+          "tdcp_factors_inserted": 15195,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 28134,
+              "pseudorange_factors": 27432,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 702,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.5359813310120132,
+            "p95_m": 2.134377549007184,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.3351794400095987
+          },
+          "truth_sha256": "97086f2ba80289ddb37e8d415b8f3b8db516b9c8e0870f911b33c1924636842c",
+          "truth_keys": 1102,
+          "raw_keys": 1102,
+          "solution_sha256": "8874f59de6553018d3328b73129322d15f37a8ccc7ccb1718617bb1ec73890e8",
+          "seed_metadata_sha256": "950c1e97c53ac9425bfce4098c191b722f8c92add6415da4784060826d9e145d",
+          "wall_s": 446.9246561527252,
+          "tdcp_factors_inserted": 15195,
+          "representative_sigma_m": 0.0016140023975005358,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 28134,
+              "pseudorange_factors": 27432,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 702,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.37123318847578834,
+        "p50_m": -0.2669651208760704,
+        "p95_m": 1.0094314978276469
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.6021609895988409,
+            "p95_m": 1.1112591583068705,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8567100739528557
+          },
+          "truth_sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+          "truth_keys": 2323,
+          "raw_keys": 2323,
+          "solution_sha256": "113146a5261799f11c1d1cd53b22fc750980644b037bed3bfd75a1b10e1adff1",
+          "seed_metadata_sha256": "af11afd99a3316c364bd24970039ba27296fc4cdb5b6c38a238c65cbb8e350b3",
+          "wall_s": 727.8451449871063,
+          "tdcp_factors_inserted": 35607,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 55731,
+              "pseudorange_factors": 54501,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1230,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.6636775878770494,
+            "p95_m": 1.3331153244160256,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.9983964561465375
+          },
+          "truth_sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+          "truth_keys": 2323,
+          "raw_keys": 2323,
+          "solution_sha256": "440f001d213b528dab5a0d328cda7edc1603e9d50cab7f383a443047e4efacad",
+          "seed_metadata_sha256": "af11afd99a3316c364bd24970039ba27296fc4cdb5b6c38a238c65cbb8e350b3",
+          "wall_s": 2950.416167497635,
+          "tdcp_factors_inserted": 35607,
+          "representative_sigma_m": 0.0030217209337004536,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 55731,
+              "pseudorange_factors": 54501,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1230,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.1416863821936818,
+        "p50_m": 0.061516598278208545,
+        "p95_m": 0.22185616610915515
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.30260029453524095,
+            "p95_m": 0.5569036862688171,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.42975199040202905
+          },
+          "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+          "truth_keys": 1383,
+          "raw_keys": 1384,
+          "solution_sha256": "a4ed3db9cf928366d071b2c02835703ebd1197d0edb3f79097990abe47e298ab",
+          "seed_metadata_sha256": "8c841b8c6ae0b050b869fe814b8b9e38b2c107a93bc227ca1cf8cc767ba38699",
+          "wall_s": 263.40463876724243,
+          "tdcp_factors_inserted": 23399,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 39317,
+              "pseudorange_factors": 37661,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1656,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.6291434230575245,
+            "p95_m": 1.0574323730934003,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8432878980754623
+          },
+          "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+          "truth_keys": 1383,
+          "raw_keys": 1384,
+          "solution_sha256": "762f3a69b3a5d69e4bef8a9df987abadbc4433ca0208d1ff042ad54eaebcde22",
+          "seed_metadata_sha256": "8c841b8c6ae0b050b869fe814b8b9e38b2c107a93bc227ca1cf8cc767ba38699",
+          "wall_s": 1641.0702390670776,
+          "tdcp_factors_inserted": 23399,
+          "representative_sigma_m": 0.0020289888121606055,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 39317,
+              "pseudorange_factors": 37661,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1656,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.4135359076734333,
+        "p50_m": 0.3265431285222835,
+        "p95_m": 0.5005286868245832
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.9297729128480485,
+            "p95_m": 1.237668510253288,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.0837207115506682
+          },
+          "truth_sha256": "9c1200d8ae3c378ec9173bffffe4544af3a4fccaf785964b7a74f40cf8720a14",
+          "truth_keys": 1399,
+          "raw_keys": 1399,
+          "solution_sha256": "82d80a094ca32d9da1ab531bbdaeeec6202a78d26dd350872f66af3f4c2bb9d3",
+          "seed_metadata_sha256": "c37899b6b41582cbd0635c483c940ee9b90674bd93c9766d6cdf1ac337c3fcac",
+          "wall_s": 489.17585587501526,
+          "tdcp_factors_inserted": 23993,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53472,
+              "pseudorange_factors": 51927,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1545,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8472793112950755,
+            "p95_m": 1.2233873255421275,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.0353333184186015
+          },
+          "truth_sha256": "9c1200d8ae3c378ec9173bffffe4544af3a4fccaf785964b7a74f40cf8720a14",
+          "truth_keys": 1399,
+          "raw_keys": 1399,
+          "solution_sha256": "2d14172d552fbe325afdb7ade36ce29f817bc91e81d2263ce8012369e0a2b492",
+          "seed_metadata_sha256": "c37899b6b41582cbd0635c483c940ee9b90674bd93c9766d6cdf1ac337c3fcac",
+          "wall_s": 2475.3476831912994,
+          "tdcp_factors_inserted": 23993,
+          "representative_sigma_m": 0.0027291665128986835,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53472,
+              "pseudorange_factors": 51927,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 1545,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": -0.048387393132066636,
+        "p50_m": -0.08249360155297303,
+        "p95_m": -0.014281184711160577
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7145458230395427,
+            "p95_m": 0.8851975871219311,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.7998717050807369
+          },
+          "truth_sha256": "626dc58b297e8a21fb5c5b9a9161f9f94b52bb1ebd18e58b9a7e7a16e5590660",
+          "truth_keys": 1258,
+          "raw_keys": 1259,
+          "solution_sha256": "455c63e95bbc5a91e4206e3ca2b1eb3a702e0110e081bc2bc6d26ce5630ce1d4",
+          "seed_metadata_sha256": "f906600c58eac7a116b5020a5cb6fc0a34f0a9f59cda05ef70d73c725f8fb063",
+          "wall_s": 1059.5469002723694,
+          "tdcp_factors_inserted": 25454,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 37306,
+              "pseudorange_factors": 36715,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 591,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.2999822259288755,
+            "p95_m": 0.6854798819486996,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.4927310539387876
+          },
+          "truth_sha256": "626dc58b297e8a21fb5c5b9a9161f9f94b52bb1ebd18e58b9a7e7a16e5590660",
+          "truth_keys": 1258,
+          "raw_keys": 1259,
+          "solution_sha256": "dff58dfc1fa3090259fe4d1fba0c0a159baaed32162bc2eb933ef097bb839ee4",
+          "seed_metadata_sha256": "f906600c58eac7a116b5020a5cb6fc0a34f0a9f59cda05ef70d73c725f8fb063",
+          "wall_s": 2277.5661771297455,
+          "tdcp_factors_inserted": 25454,
+          "representative_sigma_m": 0.002568538488398188,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 37306,
+              "pseudorange_factors": 36715,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 591,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": -0.30714065114194933,
+        "p50_m": -0.4145635971106672,
+        "p95_m": -0.1997177051732315
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.7158974623255253,
+            "p95_m": 1.5300846707700977,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1229910665478116
+          },
+          "truth_sha256": "56cb263ecdc624b41cc42ed484baf3cc0a27c42c32789476015d64e07605ed7c",
+          "truth_keys": 1650,
+          "raw_keys": 1650,
+          "solution_sha256": "09978b8c723d864e85fa1a44084e4b0559f1c317efffeb2327991d0d9935c0ab",
+          "seed_metadata_sha256": "d23a098015e2c4feefb63bced01921e1c1df9c6af170bba6f0a65645a4d8480c",
+          "wall_s": 491.2545680999756,
+          "tdcp_factors_inserted": 25648,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53124,
+              "pseudorange_factors": 51107,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 2017,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.6606909738836515,
+            "p95_m": 1.4038756051926304,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.032283289538141
+          },
+          "truth_sha256": "56cb263ecdc624b41cc42ed484baf3cc0a27c42c32789476015d64e07605ed7c",
+          "truth_keys": 1650,
+          "raw_keys": 1650,
+          "solution_sha256": "bd629fc6baf3ef4657cb34bb6e6934f2a31993c7bdc334f8116a8a4d43bbcdcc",
+          "seed_metadata_sha256": "d23a098015e2c4feefb63bced01921e1c1df9c6af170bba6f0a65645a4d8480c",
+          "wall_s": 3028.020161151886,
+          "tdcp_factors_inserted": 25648,
+          "representative_sigma_m": 0.0034809575059277283,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 53124,
+              "pseudorange_factors": 51107,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 2017,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": -0.09070777700967048,
+        "p50_m": -0.05520648844187381,
+        "p95_m": -0.12620906557746725
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    },
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.5446666362309458,
+            "p95_m": 1.5656382161345792,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.0551524261827625
+          },
+          "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+          "truth_keys": 1601,
+          "raw_keys": 1602,
+          "solution_sha256": "855b79b2cc41605f0cc2e77c91ff87961f78bc0e7a725b836ddf21788d969abb",
+          "seed_metadata_sha256": "bff720fd74be879b1af4f41e6e3579601f7a838ba4d6bb55f3791d36731e6276",
+          "wall_s": 1217.9879894256592,
+          "tdcp_factors_inserted": 37527,
+          "representative_sigma_m": 0.03,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 58595,
+              "pseudorange_factors": 57761,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 834,
+              "doppler_residual_rejections": 0
+            }
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.3872155236196352,
+            "p95_m": 2.1341997629541183,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.2607076432868767
+          },
+          "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+          "truth_keys": 1601,
+          "raw_keys": 1602,
+          "solution_sha256": "55c30e42404aa45be3414d5cf97746fa8ffd43e5c28de2420bf592ab2ef0a26a",
+          "seed_metadata_sha256": "bff720fd74be879b1af4f41e6e3579601f7a838ba4d6bb55f3791d36731e6276",
+          "wall_s": 3609.5345253944397,
+          "tdcp_factors_inserted": 37527,
+          "representative_sigma_m": 0.0014807853985256802,
+          "huber_k": 4,
+          "route_config": {
+            "enabled": true,
+            "direct_no_pdc": true,
+            "pdc_bridge": false,
+            "native_pdc_state_bridge": false,
+            "environment": "Street",
+            "p_and_d_huber": {
+              "pseudorange_sigma": 0.1,
+              "doppler_sigma": 0.4
+            },
+            "config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            },
+            "counts": {
+              "pseudorange_candidates": 58595,
+              "pseudorange_factors": 57761,
+              "doppler_candidates": 0,
+              "doppler_factors": 0,
+              "doppler_graph_factors": 0,
+              "pseudorange_residual_rejections": 834,
+              "doppler_residual_rejections": 0
+            }
+          }
+        }
+      },
+      "delta_m": {
+        "phone_score_m": 0.20555521710411417,
+        "p50_m": -0.15745111261131062,
+        "p95_m": 0.5685615468195391
+      },
+      "new_binary_control_reproduces_legacy_solution_and_seed": true
+    }
+  },
+  "heldout": false,
+  "official_score": false,
+  "promoted": false,
+  "paired_mean_delta_m": {
+    "phone_score_m": -0.0016607146932693787,
+    "p50_m": -0.08953239587167919,
+    "p95_m": 0.08621096648514037
+  },
+  "limitations": [
+    "Eleven selected-by-phone development drives; this mean is not all40 performance.",
+    "Source route and Huber settings unchanged; not full source parity."
+  ]
+}

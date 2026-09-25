@@ -1,0 +1,85 @@
+{
+  "status": "matched-stage-comparison-complete",
+  "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+  "results": {
+    "control": {
+      "stages": {
+        "gnss-first": {
+          "p50_m": 0.6246456639849871,
+          "p95_m": 0.9311225537857957,
+          "phone_score_m": 0.7778841088853914,
+          "raw_epochs": 1855,
+          "truth_epochs": 1854,
+          "extra_native_keys_dropped": 1,
+          "stage_sha256": "c10a85cc08f77a4f9e042bbdde839c26f4df8cfee07e3049e945851966a31f85",
+          "phone_output_offset_applied": false
+        },
+        "imu-initial": {
+          "p50_m": 0.492371414295783,
+          "p95_m": 0.6966495200746653,
+          "phone_score_m": 0.5945104671852242,
+          "raw_epochs": 1855,
+          "truth_epochs": 1854,
+          "extra_native_keys_dropped": 1,
+          "stage_sha256": "c8ab8648fe38d8b5923bbfd808657aef9ae8688fb7940793ef07d58c18b4e22e",
+          "phone_output_offset_applied": false
+        }
+      },
+      "final_score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.49237200610566645,
+        "p95_m": 0.696646926380243,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5945094662429546
+      },
+      "final_solution_sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a",
+      "historical_final_bytes_reproduced": true,
+      "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+      "wall_s": 868.7192087173462
+    },
+    "candidate": {
+      "stages": {
+        "gnss-first": {
+          "p50_m": 0.6113372280460918,
+          "p95_m": 0.8499300533122143,
+          "phone_score_m": 0.730633640679153,
+          "raw_epochs": 1855,
+          "truth_epochs": 1854,
+          "extra_native_keys_dropped": 1,
+          "stage_sha256": "3c06c5840b1f09e557b49bc3e8d2334542753f5760cc1bfc11dee2df1b196940",
+          "phone_output_offset_applied": false
+        },
+        "imu-initial": {
+          "p50_m": 0.33609508449808784,
+          "p95_m": 0.4573596555900035,
+          "phone_score_m": 0.3967273700440457,
+          "raw_epochs": 1855,
+          "truth_epochs": 1854,
+          "extra_native_keys_dropped": 1,
+          "stage_sha256": "89da68153df8921a54940710336962c6146ae19a0f13bf279099c3fedf16b6e6",
+          "phone_output_offset_applied": false
+        }
+      },
+      "final_score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.3360972175859003,
+        "p95_m": 0.45735586169846887,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.3967265396421846
+      },
+      "final_solution_sha256": "3e2ab558844990ff8674f5bd6a92fa6f0348865c4cec396dad48f6104a23d893",
+      "historical_final_bytes_reproduced": true,
+      "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+      "wall_s": 866.9442203044891
+    }
+  },
+  "stage_delta_m": {
+    "gnss-first": -0.04725046820623835,
+    "imu-initial": -0.19778309714117848
+  },
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "scope": "Native sigma attribution on an exposed route; not MATLAB runtime parity. Stage exports precede optional final phone-output offset.",
+  "checked_unix": 1790144630.553642
+}

@@ -1,0 +1,132 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_huber_main_doppler_plan.json",
+  "plan_sha256": "1e8433097bfe0079082994f8e07cb94ef8679ee4250a2171bdbb38bc66b45237",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_huber_plan.json",
+  "baseline_plan_sha256": "b5040939ec05ea0a7e289157ac4a99706f463844dbfa088a30fd9a14443e1c2b",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "Second-route conditional final-graph Doppler comparison on the January4 source metre-sigma plus native-context Huber recipe. Only main Doppler differs from running control.",
+  "control_context": {
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "native_environment": "Street",
+      "tdcp_sigma_m": 0.002798401423210426,
+      "tdcp_factors": 40347
+    }
+  },
+  "expected_tdcp_diagnostics_source_plan_sha256": "99f3796f465dd29588eafaa19b66d71bf1d7b0f2b1ddf654c18f3c15f53e6dd8",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "source_evidence": {
+    "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+    "sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "lines": [
+      214,
+      217
+    ]
+  },
+  "baseline_score_m": null,
+  "limitations": [
+    "Control is still running; accuracy comparison waits for its completed audit.",
+    "Fixed native context is Street, while source settings label Highway. No full route-preset equivalence claimed.",
+    "Already exposed development route. Shared-load runtime is not a controlled speed benchmark."
+  ],
+  "created_unix": 1790155193.4588468,
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_huber_main_doppler_v1\\validation.json",
+  "validation_sha256": "72bb5964253aed3e3a302f07eee3c75cfcd0f4fe55f72c4d389e769a59751320",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.4680536296011435,
+  "mean_route_group_score_m": 0.4680536296011435,
+  "results": {
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4124292314760013,
+            "p95_m": 0.6139474233907193,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5131883274333603
+          },
+          "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+          "solution_sha256": "5ea0b6a9f5d97b3db5d8d56cc765cc66c6c6788f3495e2b6da4340168596f75e",
+          "wall_s": 4850.518833637238,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": false,
+              "enabled": false,
+              "factors": 0
+            },
+            "gnss_first_doppler": 19529,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "91d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.36074462556437675,
+            "p95_m": 0.5753626336379103,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.4680536296011435
+          },
+          "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+          "solution_sha256": "7ba52dadcea683999ba6024b9c5fea754fb25b8e307c274e5d4e1dff35fa8a70",
+          "wall_s": 832.4418766498566,
+          "doppler_diagnostics": {
+            "main_doppler": {
+              "requested": true,
+              "enabled": true,
+              "factors": 19529
+            },
+            "gnss_first_doppler": 19529,
+            "quality_config": {
+              "use_upstream_observable_quality": true,
+              "upstream_snr_percentile": 85.0,
+              "upstream_min_snr_dbhz": 20.0,
+              "upstream_min_elevation_deg": 5,
+              "velocity_motion_sigma_m": 0.01,
+              "explicit_source_type_l5": false,
+              "source_l5": -1,
+              "upstream_max_adjacent_gap_s": 1.5,
+              "pseudorange_huber_threshold_sigma": 0.1,
+              "undifferenced_doppler_huber_threshold_sigma": 0.4,
+              "tdcp_sigma_m_unchanged": 0.03,
+              "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+              "doppler_sigma_contract": "snr_scale/12",
+              "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+              "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+              "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+            }
+          },
+          "seed_metadata_sha256": "91d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242"
+        }
+      },
+      "delta_m": -0.0451346978322168
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "One existing development route group, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790158162.6954806
+}

@@ -1,0 +1,46 @@
+{
+  "status": "legacy-executable-phone-admission-rejected",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_main_doppler_plan.json",
+  "plan_sha256": "6b4ed121e94fda243f0362de40d50cefe4ed64abee0e87245170c324bd0b9724",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "Two exposed A325F train routes, only add final-graph ECEF Doppler factors; same frozen c779 executable, raw inputs, initializer and all other options.",
+  "isolated_added_flag": "--native-phase213-main-doppler",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "control_context": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "native_environment": "Street",
+      "source_type": "Highway",
+      "run_sha256": "ea55b5914463dfd80c55a7644514bcf2b7884b2fa3971b20e3e2059c79433b11",
+      "gnss_first_doppler_factors": 13150
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "native_environment": "Street",
+      "source_type": "Highway",
+      "run_sha256": "fd587125bf521bce25fb554dfd580415e1a36bdfcea81ec908349172707cb53c",
+      "gnss_first_doppler_factors": 12235
+    }
+  },
+  "source_evidence": {
+    "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+    "sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "lines": [
+      214,
+      217
+    ]
+  },
+  "limitations": [
+    "Source/native route presets are retained as frozen; this isolates main Doppler insertion, not full source parity.",
+    "Previous A325F initialization-only comparison had no gain.",
+    "Two already exposed development route groups."
+  ],
+  "created_unix": 1790154233.169761,
+  "inference_started": false,
+  "accuracy_evaluated": false,
+  "reason": "Frozen c779 CLI restricts Phase213 to Pixel5. Both A325F arms returned 2 before inference.",
+  "next_action": "Matched controls and candidates using d73f779 executable; no change to original failed records."
+}

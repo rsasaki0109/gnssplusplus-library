@@ -1,0 +1,34 @@
+{
+  "schema": "gsdc-mi8-sigma-solver-diagnostic.v1",
+  "dataset_id": "2021-01-05-21-12-us-ca-mtv-d/mi8",
+  "results": {
+    "control": {
+      "summary_sha256": "2d35db3f0ad78c19aa637e4287b61225eaf9d1a3010041e8f654a1044cf40fc6",
+      "gnss_iterations": 42,
+      "main_iterations": 22,
+      "gnss_converged": true,
+      "main_converged": true,
+      "tdcp_factors": 25444,
+      "tdcp_residual_rms_m": 0.026546391373844132,
+      "normalized_tdcp_rms": 0.8848797124614717,
+      "huber_tail_count": 71,
+      "optimized_accel_bias_max_norm_mps2": 0.14419812162425544,
+      "optimized_gyro_bias_max_norm_radps": 0.00013965909602740113
+    },
+    "candidate": {
+      "summary_sha256": "3f236d4174c1b3b04d16cb567f9521ea0ba7dd763cc8c2eded0bd235c5dd6174",
+      "gnss_iterations": 78,
+      "main_iterations": 125,
+      "gnss_converged": true,
+      "main_converged": true,
+      "tdcp_factors": 25444,
+      "tdcp_residual_rms_m": 0.027469179181139457,
+      "normalized_tdcp_rms": 11.849671205394014,
+      "huber_tail_count": 6151,
+      "optimized_accel_bias_max_norm_mps2": 0.14809244844574337,
+      "optimized_gyro_bias_max_norm_radps": 0.00014196519245864803
+    }
+  },
+  "limitation": "Iterations across differently weighted objectives do not prove accuracy or identify the cause. Residual statistics are native post-solve reconstructions, not MATLAB comparisons. Wall times use shared CPU load.",
+  "checked_unix": 1790141204.563227
+}

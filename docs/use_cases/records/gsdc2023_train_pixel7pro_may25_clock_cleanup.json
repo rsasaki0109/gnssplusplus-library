@@ -1,0 +1,48 @@
+{
+  "status": "prepared",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel7pro_may25_clock_cleanup_plan.json",
+  "plan_sha256": "3ef9e1e4f9e059d1b479c1a405f943a50a25f8d834ed44cead7f97b3b16e23aa",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel7pro_may25_clock_cleanup_control_plan.json",
+  "baseline_plan_sha256": "a012b20776ca627f2b80048d42c997556bb9bb735ddbaae71c0812b285a4874e",
+  "historical_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "binary_sha256": "c3abb65f98098f4be611426285e743d2ebe8e7a48b3e61718e3a0d4a24f4a9b3",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "baseline_score": null,
+  "policy": "source common clock drift cleanup with explicit raw/donor/seed provenance",
+  "tests": {
+    "cpp": 6,
+    "raw_clock_audit": 5,
+    "legacy_output_audit": 11
+  },
+  "implementation_evidence": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp",
+      "sha256": "a22e221648f2f06ce38426e11ccc7287d5f1708f52724f75dfc5448af6a2ed0e"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\include\\libgnss++\\algorithms\\source_samsung_clock_drift.hpp",
+      "sha256": "ee0c63c6200314fda9beea5a60ba9196e1d75000cd976d8e98d28bc3824ef7ca"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\scripts\\analysis\\audit_raw_clock_cleanup.py",
+      "sha256": "5d03aa15b77aef5beec1290e3e6df671c7b7f0837110e2fe409d970fcd67223d"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\scripts\\analysis\\audit_gsdc_native_outputs.py",
+      "sha256": "fa89ebf218ab71989d8227828c21d347fd685eb0b3818ee719a367e3e19a0f16"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_gsdc_raw_clock_cleanup_audit.py",
+      "sha256": "e68377f5de011a067237506262cf6a5d8243811d3ccd26f8094c7decaf5b17a9"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_source_samsung_clock_drift.cpp",
+      "sha256": "38e8c5609de42a816e185e3e0fb2b6c20e6854fd5da2c6ae95104c0615dd061d"
+    }
+  ],
+  "cli_rejection_checks_passed": 2,
+  "runtime_status": "strict-control-failure-reproduced-candidate-running",
+  "checked_unix": 1790150120.0610619
+}

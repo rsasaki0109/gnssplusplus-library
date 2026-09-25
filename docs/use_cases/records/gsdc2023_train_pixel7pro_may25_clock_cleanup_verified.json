@@ -1,0 +1,40 @@
+{
+  "status": "native-clock-cleanup-recovery-verified",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel7pro_may25_clock_cleanup_verified_plan.json",
+  "plan_sha256": "e1a946684fe8a25a915fd8c25b11737338d0b19937a2d46d8654027561be13b9",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel7pro_may25_clock_cleanup_verified_control_plan.json",
+  "baseline_plan_sha256": "7a2f38d4d51666294d006fd42c98af050d761b7380afd0fab9ff7cbe799e4abc",
+  "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "baseline_score": null,
+  "policy": "source common clock cleanup with actual numeric seed export and independent CSV/donor/seed audit",
+  "supersedes_incomplete_diagnostic_binary": "c3abb65f98098f4be611426285e743d2ebe8e7a48b3e61718e3a0d4a24f4a9b3",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel7pro_may25_clock_cleanup_verified_v1\\validation.json",
+  "validation_sha256": "ee570086fa268f95291c2b8e9595fc80eba35344c5cae9968b6da6f9b6a7eebc",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.7998717050807369,
+  "mean_route_group_score_m": 0.7998717050807369,
+  "score": {
+    "distance_variant": "haversine_sphere",
+    "p50_m": 0.7145458230395427,
+    "p95_m": 0.8851975871219311,
+    "percentile_variant": "linear_n_minus_1",
+    "phone_score_m": 0.7998717050807369
+  },
+  "output_rows": 1259,
+  "clock_cleanup": {
+    "epochs": 1259,
+    "jump_masks": 0,
+    "filled_values": 5,
+    "verified_against_original_raw_csv": true,
+    "output_coordinate_interpolation": false
+  },
+  "baseline_remains_failed": true,
+  "wall_s": 1505.2338078022003,
+  "checked_unix": 1790153128.1024947
+}

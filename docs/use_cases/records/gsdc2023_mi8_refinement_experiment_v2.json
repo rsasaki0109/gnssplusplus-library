@@ -1,0 +1,60 @@
+{
+  "status": "matched-refinement-comparison-complete",
+  "binary_sha256": "baa3bfcbe3b5c5988f595ce6774f0190a69fa93aa6a402a74c8ac2676fb64c99",
+  "official_score": false,
+  "promoted": false,
+  "scope": "same-binary MI8 second native IMU pass; same raw inputs, GNSS stage and initial IMU stage; source phone offset once after final solve",
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_refinement_control_plan_v2.json",
+      "sha256": "da933f647b6c4ed27efb842bb3a21b02031f116923920946fb02cf137f3c3639"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_refinement_candidate_plan_v2.json",
+      "sha256": "1bfd8461b33ccf3baae5fa2822a046989c615d50ff2a59e584330ffa4b9b210a"
+    }
+  },
+  "result": {
+    "status": "matched-refinement-comparison-complete",
+    "same_binary_inputs_other_args_verified": true,
+    "initial_stages_byte_identical": true,
+    "stage_hashes": {
+      "gnss-first": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+      "imu-initial": "d832a912f1497241c338e86c6acb244523f40945f8ea8e7b8f7958bb33160aab"
+    },
+    "runs": {
+      "control": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.8717086122812767,
+          "p95_m": 1.4247984685155977,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.148253540398437
+        },
+        "wall_s": 157.7575922012329,
+        "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+        "solution_sha256": "67df060d575c6b4d2e92856db19ea347bbf94d5470a3441cafb2eccbca550e20",
+        "initial_iterations": 0,
+        "final_p_rows": 0
+      },
+      "candidate": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 0.8927280251094925,
+          "p95_m": 1.4572761309376927,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 1.1750020780235926
+        },
+        "wall_s": 270.56491589546204,
+        "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+        "solution_sha256": "39dcd695abf7281be407157ad5705ecc3a48fbbda8a9de6efdb2655096e4233d",
+        "initial_iterations": 47,
+        "final_p_rows": 32683
+      }
+    },
+    "delta_m": 0.0267485376251555,
+    "control_matches_previous_binary": true,
+    "official_score": false,
+    "promoted": false
+  }
+}

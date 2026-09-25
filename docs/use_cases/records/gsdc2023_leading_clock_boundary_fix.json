@@ -1,0 +1,206 @@
+{
+  "status": "full-native-audit-passed-position-accuracy-poor",
+  "failed_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_phone_groups_v1\\02\\run.json",
+  "raw_utc_lead_ms": 3993,
+  "raw_TimeNanos_span_ns": 4000002688,
+  "truth_for_failed_case_read": true,
+  "change": "GPS leading-bound tolerance 1 ms plus 1 us; strict UTC maximum 4000 ms and continuous IMU requirement unchanged",
+  "loader_tests_passed": 26,
+  "seed_tests_passed": 39,
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_leading_clock_plan.json",
+  "plan_sha256": "4bc4c4c9ea8c8e803625b444386ecdd4cfa79e57b081828fb504fe8f45ab1bfa",
+  "binary_sha256": "bf7eaaa18732928d61703145ef8a01626c603a9ebc804b7f538787f1f56a8af6",
+  "fixed_test40_plan_unchanged": true,
+  "run_record": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_leading_clock_v2\\00\\run.json",
+  "pid": 54884,
+  "truth_read_timing": "only after corrected native output frozen and audited",
+  "validation": {
+    "status": "complete",
+    "runs": {
+      "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+        "status": "scored-native-development",
+        "route_group": "2022-10-06-21-51-us-ca-mtv-n",
+        "audit": {
+          "returncode": 0,
+          "wall_s": 339.4472441673279,
+          "binary_sha256": "bf7eaaa18732928d61703145ef8a01626c603a9ebc804b7f538787f1f56a8af6",
+          "status": "raw-key-coverage-verified",
+          "raw_utc_groups": 1213,
+          "expected_output_keys": 1213,
+          "output_rows": 1213,
+          "missing_raw_keys": 0,
+          "extra_raw_keys": 0,
+          "duplicate_output_keys": 0,
+          "complete_ordered_raw_key_match": true,
+          "finite_phone_coordinates": true,
+          "summary_count_matches": true,
+          "key_contract": {
+            "warmup_epoch_excluded": false,
+            "raw_epoch_keys": 1213,
+            "target_epochs": 1213,
+            "exact_solution_epochs": 1213,
+            "interpolated_epochs": 0,
+            "edge_hold_epochs": 0,
+            "unresolved_epochs": 0,
+            "solution_time_tolerance_ms": 2,
+            "max_interpolation_gap_ms": 0,
+            "max_edge_hold_gap_ms": 0,
+            "coordinate_interpolation": "ECEF linear then geodetic",
+            "device_wls_coordinates_used": false
+          },
+          "position_accuracy_evaluated": false,
+          "native_estimation_contract_verified": true,
+          "native_exact_output_fraction": 1.0,
+          "output_interpolation_or_hold_count": 0,
+          "all_output_epochs_from_native_states": true,
+          "long_gap_mapped_imu_max_sample_gap_s": 0.018000003357883543,
+          "temporal_initial_guess_count": 4,
+          "independent_spp_accepted_epochs": 1209,
+          "leading_clock_only_epochs": 4
+        },
+        "native_solution_sha256": "76b2e89299bb48d54d5ed920d42dd28c683733e8f73495d6368ee9a5ae2ac4aa",
+        "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "evaluation_subset_sha256": "76b2e89299bb48d54d5ed920d42dd28c683733e8f73495d6368ee9a5ae2ac4aa",
+        "dropped_nontruth_native_keys": 0,
+        "truth_key_count": 1213,
+        "score_variants": {
+          "haversine_sphere__linear_n_minus_1": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 7.573757571425344,
+            "p95_m": 100.23004833236598,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 53.901902951895664
+          },
+          "haversine_sphere__nearest_rank_ceiling": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 7.573757571425344,
+            "p95_m": 100.23165848164841,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 53.90270802653688
+          },
+          "wgs84_vincenty__linear_n_minus_1": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 7.564824075287623,
+            "p95_m": 100.05021830619748,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 53.80752119074255
+          },
+          "wgs84_vincenty__nearest_rank_ceiling": {
+            "distance_variant": "wgs84_vincenty",
+            "p50_m": 7.564824075287623,
+            "p95_m": 100.05182294550228,
+            "percentile_variant": "nearest_rank_ceiling",
+            "phone_score_m": 53.80832351039495
+          }
+        },
+        "official_score": false
+      }
+    },
+    "prior_usage": "unknown; development only; not heldout",
+    "official_score": false,
+    "groups": {
+      "2022-10-06-21-51-us-ca-mtv-n": {
+        "cases": [
+          "2022-10-06-21-51-us-ca-mtv-n/sm-a205u"
+        ],
+        "complete": true,
+        "mean_phone_score_m": 53.901902951895664
+      }
+    },
+    "mean_route_group_score_m": 53.901902951895664
+  },
+  "error_localization": {
+    "scope": "existing exposed development truth; diagnostic error localization only",
+    "bins_120_epochs": [
+      {
+        "first_index": 0,
+        "count": 120,
+        "utc_start": 1665093124006,
+        "median_m": 86.71261451409,
+        "max_m": 116.46464228057603
+      },
+      {
+        "first_index": 120,
+        "count": 120,
+        "utc_start": 1665093245000,
+        "median_m": 3.2430427561249218,
+        "max_m": 13.888083050294766
+      },
+      {
+        "first_index": 240,
+        "count": 120,
+        "utc_start": 1665093365000,
+        "median_m": 2.0811168990980047,
+        "max_m": 4.884444049633999
+      },
+      {
+        "first_index": 360,
+        "count": 120,
+        "utc_start": 1665093485000,
+        "median_m": 5.0572759796468745,
+        "max_m": 7.900188409723057
+      },
+      {
+        "first_index": 480,
+        "count": 120,
+        "utc_start": 1665093605000,
+        "median_m": 10.524935687494889,
+        "max_m": 35.40711911819169
+      },
+      {
+        "first_index": 600,
+        "count": 120,
+        "utc_start": 1665093724999,
+        "median_m": 9.920145004440762,
+        "max_m": 57.91159283703527
+      },
+      {
+        "first_index": 720,
+        "count": 120,
+        "utc_start": 1665093844999,
+        "median_m": 7.337751386958304,
+        "max_m": 29.150437029268303
+      },
+      {
+        "first_index": 840,
+        "count": 120,
+        "utc_start": 1665093964999,
+        "median_m": 2.4711221794947873,
+        "max_m": 4.027461898261659
+      },
+      {
+        "first_index": 960,
+        "count": 120,
+        "utc_start": 1665094085000,
+        "median_m": 16.95338692213443,
+        "max_m": 126.07206596399858
+      },
+      {
+        "first_index": 1080,
+        "count": 120,
+        "utc_start": 1665094204999,
+        "median_m": 72.08465555815934,
+        "max_m": 101.71376180220972
+      },
+      {
+        "first_index": 1200,
+        "count": 13,
+        "utc_start": 1665094325000,
+        "median_m": 10.325929663031665,
+        "max_m": 10.383981719107336
+      }
+    ],
+    "first_four_errors_m": [
+      78.20092939687541,
+      80.82717752651521,
+      82.9140810842738,
+      84.49912301794416
+    ],
+    "worst": [
+      1665094180000,
+      126.07206596399858
+    ],
+    "above_50m_epochs": 185,
+    "above_100m_epochs": 93
+  }
+}

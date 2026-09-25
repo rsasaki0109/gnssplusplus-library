@@ -1,0 +1,389 @@
+{
+  "status": "matched-two-phone-comparison-complete",
+  "scope": "Opt-in GNSS-to-initial-IMU raw observation rebuild, phase residual thresholds, cached residual centering before P admission; defaults remain legacy.",
+  "accuracy_validated": true,
+  "real_data_comparison_complete": true,
+  "external_submission": false,
+  "source_files_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "b629f491c01dc5156e2f3ded79d1bd8259b5605e2e4ed94a606f2a95f3292062",
+    "src/algorithms/fgo_problems.cpp": "ee82db99a67088163c2d5ed6f26c61da2a28b111843dd5151824a0f01a9857f2",
+    "src/algorithms/fgo_gtsam_backend.cpp": "dc73366aaf74f7b6647dfb88194cd2ff46bb77f090d124061c7259d3780daee9",
+    "include/libgnss++/algorithms/fgo.hpp": "730734765055485f9d654d91eb354edade84347195fa70be0150d1fe252542d0",
+    "include/libgnss++/algorithms/fgo_config.hpp": "730bf20da9f7725712e110738dd43ef7b69e617292b3971b65aff900ceb9170e",
+    "include/libgnss++/algorithms/native_imu_observation_phase.hpp": "84232bc41af8204e811577fffe52483bd96635f8cbed44dcc66881671b28c1cb",
+    "include/libgnss++/algorithms/native_imu_stop_phase.hpp": "1ddf68516174b328b5b42b32812c630aaea4c6987beb1866be989f2621058ba3",
+    "include/libgnss++/algorithms/native_imu_refinement_rebuild.hpp": "b0f5aeea69316bb9b6730b7e1cc4ab4d488fb1f1b53b350eeaec180ba337533f",
+    "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp": "da1c00274074841b7bbe7032176efd89541134dd2cac9edc7a086d3021cf5a2a",
+    "include/libgnss++/algorithms/native_gnss_imu_initial_handoff.hpp": "5fe518de58c54caae4c34f21b9248370d39689c27bf50636c8941a869a9c78cd",
+    "tests/test_fgo.cpp": "eb23c983f62dd8e1afa1f763d84478a154b0f763489345691bf5b3c17f81b296",
+    "tests/test_fgo_gtsam_backend.cpp": "de3affe3351009c76f624292116ffac2fae5463bc54a7e89b156134feba006e4",
+    "tests/test_native_imu_refinement_handoff.cpp": "0623ca11d36927ea1d63790a9144e3de32038569fea58bce66c4540b01f04d97",
+    "tests/test_native_gnss_imu_initial_handoff.cpp": "41d1d87d58fcb3412c82b57f4541d7d687c1b186aa53396fcfe2b8b7ca6e3eca"
+  },
+  "test_filter": "FGOGtsamPhase171*:FGOGtsamPhase213*:FGORefinementBuilderTest.*:NativeImuStopPhaseTest.*:NativeImuRefinementHandoff.*:NativeGnssImuInitialHandoff.*",
+  "build_pid": 46304,
+  "build_log": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_imu_observation_stages_build.log",
+  "initial_test_failure": {
+    "passed": 22,
+    "failed": 1,
+    "xml": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_imu_observation_stages_backend_tests.xml",
+    "xml_sha256": "35e294b09792577673da2471e5e9429c4e0fc0ff1cab42c37e0e9219f3e914fc",
+    "cause": "Synthetic raw P omits Earth-rotation correction; calibration erroneously expected every row to survive final residual rejection. Corrected fixture calibrates using the pre-residual pool. Production code unchanged.",
+    "previous_test_source_sha256": "4db11ee473e301f85e306cb7dbb511c6c1ebcb6cc4293c7325ad7f7b5c2866ba"
+  },
+  "build_returncode": 0,
+  "build_log_sha256": "f857b488a457fd9878c174ef4d6eabcdf0357796d0d4aa005595d23e4b19cee4",
+  "binary_sha256": "d0cabb6c2f6b36305c84e5fbaa5f37ea3356d2a7a54a4b575ff545fbc794abca",
+  "plans": {
+    "mi8_observation_stages_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_observation_stages_control_plan.json",
+      "sha256": "6f5b8cd544d7e6c1e41d8ba08ea4db97d67ba0d8f7eb9f866159935b3dd5a112"
+    },
+    "mi8_observation_stages_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_observation_stages_candidate_plan.json",
+      "sha256": "e99546eebcf3dea9f3559ecaf937b2e450579984830176513d7fa9799a6203e9"
+    },
+    "a205u_observation_stages_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_observation_stages_control_plan.json",
+      "sha256": "1bf22a5edd885d4ea4043b43074a9e484989879fda65fe414332be08cb30a8cc"
+    },
+    "a205u_observation_stages_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_observation_stages_candidate_plan.json",
+      "sha256": "43ae3b259b9cb3ddd821616f633a06c72cfa3bc4565dacf9c18fbb7e25d370dd"
+    }
+  },
+  "tests": {
+    "focused_passed": 23,
+    "focused_xml_sha256": "52a179783890475ae269989abb0aa42285155330bc02a22de5622978f7e1a70e",
+    "cli_negatives_passed": 9,
+    "cli_report_sha256": "eab191817371b2baba76a7ad959e37020f357188d18ac505ceae6b6f5aab0490",
+    "legacy_passed": 8,
+    "legacy_xml_sha256": "b62ca2f5fddbf52bcafba6a30683528990fc0177b72d4bba61404e0745eb4a93"
+  },
+  "results": {
+    "mi8": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.892731283966527,
+            "p95_m": 1.4572790844358556,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1750051842011913
+          },
+          "wall_s": 237.0821657180786,
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "solution_sha256": "66cc7deb0332f03fbffef51b2cbb03187caba0a1f9cab6301e491cb220dd4396",
+          "observation_counts": {
+            "initial_p_rows": 0,
+            "initial_doppler_candidates": 0,
+            "initial_doppler_retained": 0,
+            "refinement_p_rows": 32683,
+            "refinement_doppler_candidates": 58512,
+            "refinement_doppler_retained": 43675,
+            "initial_code_residual_centers": [],
+            "final_code_residual_centers": [],
+            "initial_stop_velocity_factors": 0,
+            "initial_stop_pose_factors": 292,
+            "initial_stop_velocity_phase_omissions": 300,
+            "initial_stop_pose_gap_rejections": 0,
+            "upstream_stop_velocity_factors": 300,
+            "upstream_stop_pose_factors": 292,
+            "final_stop_pose_gap_rejections": 0
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8928576624974007,
+            "p95_m": 1.459770571755551,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1763141171264757
+          },
+          "wall_s": 214.81839871406555,
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "solution_sha256": "c31a5956ad05cab11d5c72bcd7b36aa5f85d26b08d7307b4fda3719157309ac0",
+          "observation_counts": {
+            "initial_p_rows": 33142,
+            "initial_doppler_candidates": 58512,
+            "initial_doppler_retained": 44121,
+            "refinement_p_rows": 32685,
+            "refinement_doppler_candidates": 58512,
+            "refinement_doppler_retained": 43677,
+            "initial_code_residual_centers": [
+              {
+                "system": 1,
+                "band": 1,
+                "cached_rows": 12992,
+                "admitted_rows": 12714,
+                "cached_center_m": 6.84202382633066,
+                "admitted_center_m": 6.8423482484186025,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 1,
+                "band": 5,
+                "cached_rows": 4776,
+                "admitted_rows": 4615,
+                "cached_center_m": 5.48086926742053,
+                "admitted_center_m": 5.486481094352712,
+                "selected_threshold_m": 30
+              },
+              {
+                "system": 2,
+                "band": 1,
+                "cached_rows": 6203,
+                "admitted_rows": 6169,
+                "cached_center_m": 20.75967252020564,
+                "admitted_center_m": 20.751701187075014,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 4,
+                "band": 1,
+                "cached_rows": 7626,
+                "admitted_rows": 7588,
+                "cached_center_m": 6.4238451877608895,
+                "admitted_center_m": 6.431493078560379,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 4,
+                "band": 5,
+                "cached_rows": 6910,
+                "admitted_rows": 6877,
+                "cached_center_m": 7.402253653087428,
+                "admitted_center_m": 7.404058570324196,
+                "selected_threshold_m": 30
+              },
+              {
+                "system": 8,
+                "band": 1,
+                "cached_rows": 6148,
+                "admitted_rows": 6080,
+                "cached_center_m": 17.43819550686203,
+                "admitted_center_m": 17.4193509943143,
+                "selected_threshold_m": 50
+              }
+            ],
+            "final_code_residual_centers": [
+              {
+                "system": 1,
+                "band": 1,
+                "cached_rows": 12992,
+                "admitted_rows": 12714,
+                "cached_center_m": 6.836268021344495,
+                "admitted_center_m": 6.839536569879783,
+                "selected_threshold_m": 20
+              },
+              {
+                "system": 1,
+                "band": 5,
+                "cached_rows": 4776,
+                "admitted_rows": 4615,
+                "cached_center_m": 5.446908382205493,
+                "admitted_center_m": 5.461172704279306,
+                "selected_threshold_m": 15
+              },
+              {
+                "system": 2,
+                "band": 1,
+                "cached_rows": 6203,
+                "admitted_rows": 6172,
+                "cached_center_m": 20.752784945107123,
+                "admitted_center_m": 20.736419904327704,
+                "selected_threshold_m": 20
+              },
+              {
+                "system": 4,
+                "band": 1,
+                "cached_rows": 7626,
+                "admitted_rows": 7588,
+                "cached_center_m": 6.377112577900334,
+                "admitted_center_m": 6.381700371959141,
+                "selected_threshold_m": 20
+              },
+              {
+                "system": 4,
+                "band": 5,
+                "cached_rows": 6910,
+                "admitted_rows": 6877,
+                "cached_center_m": 7.3579039485794056,
+                "admitted_center_m": 7.362254201517317,
+                "selected_threshold_m": 15
+              },
+              {
+                "system": 8,
+                "band": 1,
+                "cached_rows": 6148,
+                "admitted_rows": 6082,
+                "cached_center_m": 17.407153174008272,
+                "admitted_center_m": 17.390923947718875,
+                "selected_threshold_m": 20
+              }
+            ],
+            "initial_stop_velocity_factors": 0,
+            "initial_stop_pose_factors": 292,
+            "initial_stop_velocity_phase_omissions": 300,
+            "initial_stop_pose_gap_rejections": 0,
+            "upstream_stop_velocity_factors": 300,
+            "upstream_stop_pose_factors": 292,
+            "final_stop_pose_gap_rejections": 0
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "gnss-first": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "imu-initial": "67ad1e5aa7b9fb090dc30f2adbc4a916a93402f97fba6ce9c1e69e9a13d1974c"
+        },
+        "candidate": {
+          "gnss-first": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "imu-initial": "fe485248bb13b0a0c3f99c65ab10f8e527cd746cf9d7209e3c9e55110c3a9b7f"
+        }
+      },
+      "gnss_stage_identical": true,
+      "control_matches_previous_binary": true,
+      "delta_m": 0.001308932925284445
+    },
+    "a205u": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2886546929135856,
+            "p95_m": 2.634701677458555,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9616781851860705
+          },
+          "wall_s": 242.59198331832886,
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "solution_sha256": "f0654ff8d49446ce9036588a94d7818d96353aca81cb843bac9422327be78dbc",
+          "observation_counts": {
+            "initial_p_rows": 0,
+            "initial_doppler_candidates": 0,
+            "initial_doppler_retained": 0,
+            "refinement_p_rows": 20840,
+            "refinement_doppler_candidates": 22591,
+            "refinement_doppler_retained": 21508,
+            "initial_code_residual_centers": [],
+            "final_code_residual_centers": [],
+            "initial_stop_velocity_factors": 0,
+            "initial_stop_pose_factors": 216,
+            "initial_stop_velocity_phase_omissions": 224,
+            "initial_stop_pose_gap_rejections": 1,
+            "upstream_stop_velocity_factors": 313,
+            "upstream_stop_pose_factors": 304,
+            "final_stop_pose_gap_rejections": 0
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2955573201137849,
+            "p95_m": 2.620913399058286,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9582353595860353
+          },
+          "wall_s": 307.0552613735199,
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "solution_sha256": "21ee1d33f90b202161bb747741f0e2ba5ee1e2acaab329cf325ca892e0c11739",
+          "observation_counts": {
+            "initial_p_rows": 21493,
+            "initial_doppler_candidates": 22591,
+            "initial_doppler_retained": 21707,
+            "refinement_p_rows": 20834,
+            "refinement_doppler_candidates": 22591,
+            "refinement_doppler_retained": 21527,
+            "initial_code_residual_centers": [
+              {
+                "system": 1,
+                "band": 1,
+                "cached_rows": 8267,
+                "admitted_rows": 8267,
+                "cached_center_m": 4.913422526968084,
+                "admitted_center_m": 4.913422526968084,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 2,
+                "band": 1,
+                "cached_rows": 7714,
+                "admitted_rows": 7714,
+                "cached_center_m": 13.203566129640972,
+                "admitted_center_m": 13.203566129640972,
+                "selected_threshold_m": 50
+              },
+              {
+                "system": 4,
+                "band": 1,
+                "cached_rows": 5786,
+                "admitted_rows": 5786,
+                "cached_center_m": 2.773720364610835,
+                "admitted_center_m": 2.773720364610835,
+                "selected_threshold_m": 50
+              }
+            ],
+            "final_code_residual_centers": [
+              {
+                "system": 1,
+                "band": 1,
+                "cached_rows": 8267,
+                "admitted_rows": 8267,
+                "cached_center_m": 4.897204221879237,
+                "admitted_center_m": 4.897204221879237,
+                "selected_threshold_m": 20
+              },
+              {
+                "system": 2,
+                "band": 1,
+                "cached_rows": 7714,
+                "admitted_rows": 7714,
+                "cached_center_m": 13.195612901910794,
+                "admitted_center_m": 13.195612901910794,
+                "selected_threshold_m": 20
+              },
+              {
+                "system": 4,
+                "band": 1,
+                "cached_rows": 5786,
+                "admitted_rows": 5786,
+                "cached_center_m": 2.750134233571423,
+                "admitted_center_m": 2.750134233571423,
+                "selected_threshold_m": 20
+              }
+            ],
+            "initial_stop_velocity_factors": 0,
+            "initial_stop_pose_factors": 216,
+            "initial_stop_velocity_phase_omissions": 224,
+            "initial_stop_pose_gap_rejections": 1,
+            "upstream_stop_velocity_factors": 313,
+            "upstream_stop_pose_factors": 304,
+            "final_stop_pose_gap_rejections": 0
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "gnss-first": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+          "imu-initial": "6668f90c7c6d362cbe45806f6f3bf5134bb40e669623c826c12fd725596d4654"
+        },
+        "candidate": {
+          "gnss-first": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+          "imu-initial": "2e8e4157e71e9a2db507524598d42b3c54e28a0669f96d075f19e61a986ca2f8"
+        }
+      },
+      "gnss_stage_identical": true,
+      "control_matches_previous_binary": true,
+      "delta_m": -0.003442825600035171
+    }
+  },
+  "official_score": false,
+  "promoted": false,
+  "scope_limitation": "Two previously exposed development routes; not heldout or official, not pinned MATLAB runtime parity",
+  "interpretation": "The complete IMU observation refresh passes provenance and same-binary controls, but its small mixed score changes do not support promotion. This composite comparison changes initial raw geometry/masks, phase thresholds and residual-centering population together. GNSS-first remains unchanged and is the next separately identified source-parity gap.",
+  "comparison_artifact": {
+    "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_imu_observation_stages_comparison.json",
+    "sha256": "422b4278ea0a732f23c0efb111d143f9a1ca4d18c5c13c50846c7676a1c927f0"
+  }
+}

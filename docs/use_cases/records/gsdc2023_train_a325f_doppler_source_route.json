@@ -1,0 +1,173 @@
+{
+  "status": "two-route-matched-comparison-complete",
+  "created_unix": 1790156407.6460538,
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_doppler_source_route_plan.json",
+  "plan_sha256": "f4f296384cabaa7b5d856c72ac9e7d9ffdd66d251aaaa075c188813fc858fc3a",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_main_doppler_matched_plan.json",
+  "baseline_plan_sha256": "3a0be226b365e79256f86ac2da1549aea065b4717bacc9847364445446ad5ce3",
+  "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "settings_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\settings_train.csv",
+  "settings_sha256": "3e6ae65388b2809088b16732b87744e673f860c24a1fe0f709ef903a87397f39",
+  "scope": "Same binary A325F source Type/L5 settings conditional on enabled final Doppler; two exposed development groups.",
+  "official_score": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "promoted": false,
+  "limitations": [
+    "Source Type/L5 changes observable selection/weights and initialization; not a final-graph-only ablation.",
+    "Other source parity gaps remain; no heldout or official accuracy claim."
+  ],
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a325f_doppler_source_route_v1\\validation.json",
+  "validation_sha256": "85ba28574a60d0d4d43c13d361262f3c3e12bab4b4357cc8259b40e5b14e5bc4",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.9199599306314146,
+  "mean_route_group_score_m": 1.9199599306314146,
+  "results": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "same_native_seed_metadata": true,
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2495323426482385,
+            "p95_m": 2.4835009462900075,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.866516644469123
+          },
+          "truth_sha256": "db4662651c4da981b06d370121aa21a685f33eac0154161ceedee6c319db18e1",
+          "solution_sha256": "225be8bdf8133d9f1306d6bd7664f2bb9d4f803ca76c078ff2ceae86526a45c3",
+          "wall_s": 201.55900621414185,
+          "quality_config": {
+            "use_upstream_observable_quality": true,
+            "upstream_snr_percentile": 85.0,
+            "upstream_min_snr_dbhz": 20.0,
+            "upstream_min_elevation_deg": 5,
+            "velocity_motion_sigma_m": 0.01,
+            "explicit_source_type_l5": false,
+            "source_l5": -1,
+            "upstream_max_adjacent_gap_s": 1.5,
+            "pseudorange_huber_threshold_sigma": 0.1,
+            "undifferenced_doppler_huber_threshold_sigma": 0.4,
+            "tdcp_sigma_m_unchanged": 0.03,
+            "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+            "doppler_sigma_contract": "snr_scale/12",
+            "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+            "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+            "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+          },
+          "native_environment": "Street",
+          "seed_metadata_sha256": "e51b6a929c68a9883596125ac6a1c107c87f7131f87c01f8ebcf23808eb3afe7"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.3245818158497742,
+            "p95_m": 2.572251271868712,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9484165438592431
+          },
+          "truth_sha256": "db4662651c4da981b06d370121aa21a685f33eac0154161ceedee6c319db18e1",
+          "solution_sha256": "0ae06fd9746685d21d1acd93336dec834172d013bd2d6ee448dfe4a74df89b19",
+          "wall_s": 167.19149661064148,
+          "quality_config": {
+            "use_upstream_observable_quality": true,
+            "upstream_snr_percentile": 85.0,
+            "upstream_min_snr_dbhz": 20.0,
+            "upstream_min_elevation_deg": 10,
+            "velocity_motion_sigma_m": 0.01,
+            "explicit_source_type_l5": true,
+            "source_l5": 0,
+            "upstream_max_adjacent_gap_s": 1.5,
+            "pseudorange_huber_threshold_sigma": 0.2,
+            "undifferenced_doppler_huber_threshold_sigma": 0.8,
+            "tdcp_sigma_m_unchanged": 0.03,
+            "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+            "doppler_sigma_contract": "snr_scale/12",
+            "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+            "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+            "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+          },
+          "native_environment": "Highway",
+          "seed_metadata_sha256": "e51b6a929c68a9883596125ac6a1c107c87f7131f87c01f8ebcf23808eb3afe7"
+        }
+      },
+      "delta_m": 0.0818998993901201
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "same_native_seed_metadata": true,
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.0705518353180907,
+            "p95_m": 2.7728578405368163,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9217048379274535
+          },
+          "truth_sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+          "solution_sha256": "64920b0011231dda873a39ec676a547a5ae1496260eded831361152eebb37d74",
+          "wall_s": 68.30757236480713,
+          "quality_config": {
+            "use_upstream_observable_quality": true,
+            "upstream_snr_percentile": 85.0,
+            "upstream_min_snr_dbhz": 20.0,
+            "upstream_min_elevation_deg": 5,
+            "velocity_motion_sigma_m": 0.01,
+            "explicit_source_type_l5": false,
+            "source_l5": -1,
+            "upstream_max_adjacent_gap_s": 1.5,
+            "pseudorange_huber_threshold_sigma": 0.1,
+            "undifferenced_doppler_huber_threshold_sigma": 0.4,
+            "tdcp_sigma_m_unchanged": 0.03,
+            "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+            "doppler_sigma_contract": "snr_scale/12",
+            "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+            "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+            "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+          },
+          "native_environment": "Street",
+          "seed_metadata_sha256": "5696df78b1a9a420ba64e2621f67ec8ee7c2594548eedee8b80c4ffc3f5e47af"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.169435330922341,
+            "p95_m": 2.6135713038848305,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.8915033174035858
+          },
+          "truth_sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+          "solution_sha256": "eba7837eaf063c13286b6834e7511bc52749f600574ffd675111ed6fc487f6d3",
+          "wall_s": 45.08729290962219,
+          "quality_config": {
+            "use_upstream_observable_quality": true,
+            "upstream_snr_percentile": 85.0,
+            "upstream_min_snr_dbhz": 20.0,
+            "upstream_min_elevation_deg": 10,
+            "velocity_motion_sigma_m": 0.01,
+            "explicit_source_type_l5": true,
+            "source_l5": 0,
+            "upstream_max_adjacent_gap_s": 1.5,
+            "pseudorange_huber_threshold_sigma": 0.2,
+            "undifferenced_doppler_huber_threshold_sigma": 0.8,
+            "tdcp_sigma_m_unchanged": 0.03,
+            "pseudorange_sigma_contract": "snr_scale*signal_type_factor",
+            "doppler_sigma_contract": "snr_scale/12",
+            "adjacent_mask_contract": "applyAdjacentMasks Pmask_dDP/Lmask_dDL unchanged",
+            "pseudorange_residual_screen": "Pmask_res L1=20m/L5=15m",
+            "doppler_residual_screen": "Dmask_res 3m/s; non-initializer"
+          },
+          "native_environment": "Highway",
+          "seed_metadata_sha256": "5696df78b1a9a420ba64e2621f67ec8ee7c2594548eedee8b80c4ffc3f5e47af"
+        }
+      },
+      "delta_m": -0.03020152052386771
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "Two existing development route groups, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790156640.6852677
+}

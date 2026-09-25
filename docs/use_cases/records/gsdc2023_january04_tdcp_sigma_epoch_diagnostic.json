@@ -1,0 +1,41 @@
+{
+  "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+  "inputs": {
+    "truth": {
+      "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\scoring\\train\\2021-01-04-22-40-us-ca-mtv-a\\pixel5\\ground_truth.csv",
+      "sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4"
+    },
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\03\\solution.csv",
+      "sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_sigma_v1\\00\\solution.csv",
+      "sha256": "3e2ab558844990ff8674f5bd6a92fa6f0348865c4cec396dad48f6104a23d893"
+    }
+  },
+  "scored_truth_epochs": 1854,
+  "unscored_extra_native_keys": {
+    "control": [
+      1609800004433
+    ],
+    "candidate": [
+      1609800004433
+    ]
+  },
+  "improved_epochs": 1465,
+  "worsened_epochs": 389,
+  "unchanged_epochs": 0,
+  "median_epoch_error_delta_m": -0.13242063531443954,
+  "mean_epoch_error_delta_m": -0.11834225007503263,
+  "over_1m_epochs": {
+    "control": 0,
+    "candidate": 0
+  },
+  "p50_p95_reproduced": true,
+  "metric": "haversine_sphere radius=6371008.8, linear_n_minus_1",
+  "scope": "Posthoc diagnostic of the already exposed one-route paired comparison; not an independent validation or parameter selection rule.",
+  "official_score": false,
+  "promoted": false,
+  "checked_unix": 1790137732.9276297
+}

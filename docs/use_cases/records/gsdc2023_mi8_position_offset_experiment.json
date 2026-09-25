@@ -1,0 +1,89 @@
+{
+  "status": "paired-native-development-comparison-complete",
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_offset_control_plan_v1.json",
+      "sha256": "82609105e3520bb98a3e2ee91a09fc4e5485fec93e210ed2548c3b753e5d39d5"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_offset_candidate_plan_v1.json",
+      "sha256": "04d655d4597ff5c048fe55bc3b8745b4634778fab904830b3e619f67e9f065d0"
+    }
+  },
+  "binary_sha256": "9fbb0a0e73b0bde6bb27a6910c499598dbd69e8bfdf942aa5f15f983be51f878",
+  "case": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+  "only_added_flag": "--native-upstream-position-offset",
+  "source_fixed_offset_m": {
+    "RL": 0.25,
+    "UD": -0.35
+  },
+  "source": "pinned functions/add_position_offset.m; native optimized attitude only",
+  "baseline_score_m": 1.2131152581295164,
+  "official_score": false,
+  "promoted": false,
+  "previously_exposed_development_route": true,
+  "fixed_all40_recipe_unchanged": true,
+  "result": {
+    "case": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+    "same_binary_inputs_other_args_verified": true,
+    "gnss_first_summary_identical": true,
+    "scores": {
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.7351657144501761,
+        "p95_m": 1.6910648018088565,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.2131152581295164
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.8947760505588985,
+        "p95_m": 1.423393785609381,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 1.1590849180841398
+      }
+    },
+    "delta_m": -0.054030340045376546,
+    "wall_s": {
+      "control": 801.917548418045,
+      "candidate": 798.4467780590057
+    },
+    "official_score": false,
+    "promotion": false,
+    "scope": "single exposed development route; post-solve source phone offset only"
+  },
+  "solve_invariance": {
+    "all_recorded_costs_iterations_identical": true,
+    "compared_values": {
+      "/native_pdc_state_bridge_report/iterations": 0,
+      "/native_pdc_state_bridge_report/initial_cost": 0,
+      "/native_pdc_state_bridge_report/final_cost": 0,
+      "/native_source_clock_c0d_factor/active_solve_initial_cost": 34890958.77584891,
+      "/native_source_clock_c0d_factor/active_solve_final_cost": 21319.643113133443,
+      "/graph/iterations": 33,
+      "/graph/initial_cost": 34890958.77584891,
+      "/graph/final_cost": 21319.643113133443,
+      "/gnss_first/iterations": 65,
+      "/gnss_first/initial_cost": 223551742.13439074,
+      "/gnss_first/final_cost": 22091.61014940316,
+      "/phase143_termination/main/initial_cost": 34890958.77584891,
+      "/phase143_termination/main/final_cost": 21319.643113133443,
+      "/phase143_termination/gnss_first/initial_cost": 223551742.13439074,
+      "/phase143_termination/gnss_first/final_cost": 22091.61014940316
+    },
+    "control_csv_identical_to_pre_gate_change_binary": true,
+    "offset_provenance": {
+      "enabled": true,
+      "applied": true,
+      "phone": "mi8",
+      "corrected_epochs": 1417,
+      "application_passes": 1,
+      "offset_rl_m": 0.25,
+      "offset_ud_m": -0.35,
+      "max_offset_enu_m": 0.43011626335213143,
+      "rotation_contract": "Rx*Ry*Rz(rpy-[0,0,pi])",
+      "source": "in-memory optimized GTSAM Rot3::rpy; raw-only",
+      "failure": ""
+    }
+  }
+}

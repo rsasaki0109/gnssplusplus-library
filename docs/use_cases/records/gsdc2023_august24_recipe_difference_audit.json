@@ -1,0 +1,45 @@
+{
+  "status": "different-recipes-not-an-isolated-regression",
+  "checked_unix": 1790139418.1844304,
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "run_records": {
+    "historical": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_lm_tolerance_regression_v1\\pixel5_control\\run.json",
+      "sha256": "4977aeb5a0e66dedea83aaf6a0640f458a79855f2ef859ebcbf75a5009d4f508",
+      "binary_sha256": "d835bab7f987b4fb33f42035aa6fc7afc85a10958868ab2031faf0333a2e3517"
+    },
+    "fixed_train": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\12\\run.json",
+      "sha256": "2738443516e268669b21dc8bddc8b5a9fcf2972b4b2a862a81095ca312b8f748",
+      "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45"
+    }
+  },
+  "all_four_input_hashes_verified_equal": true,
+  "historical_only_flags": [
+    "--native-phase197-source-utc-fallback-imu-offset",
+    "--native-phase213-main-doppler",
+    "--native-phase217-main-pose3-motion",
+    "--native-source-imu-initialization",
+    "--native-source-l5",
+    "--native-source-route-type",
+    "--native-source-tdcp-meter-sigma"
+  ],
+  "fixed_train_only_flags": [
+    "--android-include-first-native-epoch",
+    "--native-sparse-p-staging",
+    "--native-temporal-seed-initialization"
+  ],
+  "output_keys": {
+    "historical": 3139,
+    "fixed_train": 3140
+  },
+  "historical_keys_not_in_fixed": [],
+  "fixed_keys_not_in_historical": [
+    1629837160437
+  ],
+  "historical_score_m": 0.576375694726723,
+  "fixed_train_score_m": 0.8188626378857397,
+  "limitation": "Multiple model/initialization/time/coverage flags and executable differ. Neither score difference nor same input hashes isolates a cause. Archived outputs are diagnostic only, not new inference inputs.",
+  "official_score": false,
+  "promoted": false
+}

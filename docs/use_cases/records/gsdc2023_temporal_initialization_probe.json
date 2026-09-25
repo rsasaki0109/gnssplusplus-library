@@ -1,0 +1,107 @@
+{
+  "schema_version": "gsdc2023-temporal-initialization-probe.v1",
+  "goal_achieved": false,
+  "full_native_replay_verified": false,
+  "probe_binary_sha256": "e0cb96f020a0c83fefd1d97f4dce467890e04c04d3811f37cba25ec53c0af06f",
+  "tests": {
+    "raw_seed_tests": 36,
+    "failures": 0
+  },
+  "maximum_bracket_span_s": 4,
+  "original_SPP_statuses_preserved": true,
+  "input_observation_rows_changed": false,
+  "clock_rate_source": "exact original raw epoch; never interpolated",
+  "accepted_initialization_drives": 10,
+  "tested_drives": 11,
+  "initial_guess_epochs": 26,
+  "runs": {
+    "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": {
+      "ok": true,
+      "epochs": 1141,
+      "spp_accepted": 1140,
+      "initial_guesses": 1,
+      "reason": ""
+    },
+    "2022-02-23-22-35-us-ca-lax-m/pixel5": {
+      "ok": false,
+      "epochs": 2805,
+      "spp_accepted": 2768,
+      "initial_guesses": 0,
+      "reason": "temporal-initialization-ineligible-failure"
+    },
+    "2022-02-24-15-10-us-ca-lax-p/pixel5": {
+      "ok": true,
+      "epochs": 4515,
+      "spp_accepted": 4510,
+      "initial_guesses": 5,
+      "reason": ""
+    },
+    "2022-03-22-18-44-us-ca-mtv-pe1/pixel5": {
+      "ok": true,
+      "epochs": 2112,
+      "spp_accepted": 2108,
+      "initial_guesses": 4,
+      "reason": ""
+    },
+    "2022-04-22-20-11-us-ca-ebf-y/pixel5": {
+      "ok": true,
+      "epochs": 1400,
+      "spp_accepted": 1397,
+      "initial_guesses": 3,
+      "reason": ""
+    },
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5": {
+      "ok": true,
+      "epochs": 1587,
+      "spp_accepted": 1585,
+      "initial_guesses": 2,
+      "reason": ""
+    },
+    "2022-04-27-18-16-us-ca-ebf-zz/pixel5": {
+      "ok": true,
+      "epochs": 1315,
+      "spp_accepted": 1313,
+      "initial_guesses": 2,
+      "reason": ""
+    },
+    "2022-04-27-19-23-us-ca-ebf-xx/pixel5": {
+      "ok": true,
+      "epochs": 1382,
+      "spp_accepted": 1381,
+      "initial_guesses": 1,
+      "reason": ""
+    },
+    "2023-04-27-19-25-us-ca-mtv-pe1/pixel5": {
+      "ok": true,
+      "epochs": 1357,
+      "spp_accepted": 1356,
+      "initial_guesses": 1,
+      "reason": ""
+    },
+    "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro": {
+      "ok": true,
+      "epochs": 2110,
+      "spp_accepted": 2105,
+      "initial_guesses": 5,
+      "reason": ""
+    },
+    "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro": {
+      "ok": true,
+      "epochs": 1495,
+      "spp_accepted": 1493,
+      "initial_guesses": 2,
+      "reason": ""
+    }
+  },
+  "build": {
+    "session": 59828,
+    "status_at_checkpoint": "running; source ABI change requires canonical full rebuild"
+  },
+  "next_replay_plan": "E:/rtklib_v2_ws_data/gsdc2023/s20_temporal_replay_plan.json",
+  "limitations": [
+    "Independent SPP cold-start diagnostic then initialization-only completion; not full FGO coverage",
+    "Long LAX gap remains rejected",
+    "No official score or executable same-input taroz comparison",
+    "S20 IMU/base extracted from existing archive only; no test truth"
+  ]
+}

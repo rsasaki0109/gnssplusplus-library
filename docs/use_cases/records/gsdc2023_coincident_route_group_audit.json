@@ -1,0 +1,30 @@
+{
+  "schema": "gsdc-coincident-route-group-audit.v1",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "cases": {
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "input_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-05-16-19-54-us-ca-mtv-xe1\\pixel5\\device_gnss.csv",
+      "input_sha256": "4da62fcfa19286b0e3e451d5f5ffbc35f58861aef75fba4e7c2c1ec333a8f61b",
+      "raw_epoch_count": 2323,
+      "first_utc_ms": 1684266899447,
+      "last_utc_ms": 1684269221447,
+      "frozen_route_group": "2023-05-16-19-54-us-ca-mtv-xe1"
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "input_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-05-16-19-55-us-ca-mtv-xe1\\pixel7pro\\device_gnss.csv",
+      "input_sha256": "5f88c372c8c8a3b03e2871bae2503656d28d4de8894e7da35956c4d0d4c69c57",
+      "raw_epoch_count": 2323,
+      "first_utc_ms": 1684266901000,
+      "last_utc_ms": 1684269223000,
+      "frozen_route_group": "2023-05-16-19-55-us-ca-mtv-xe1"
+    }
+  },
+  "shared_utc_interval_ms": 2320447,
+  "shared_fraction_of_shorter_interval": 0.9993311800172265,
+  "recommended_evaluation_group": "2023-05-16-us-ca-mtv-xe1",
+  "basis": "Same date, same route identifier xe1, strongly overlapping raw observation intervals despite one-minute difference in course directory names. Conservatively group for evaluation independence; no trajectory fusion or claim of independently collected routes.",
+  "inference_plan_modified": false,
+  "truth_read": false,
+  "checked_unix": 1790147391.692789
+}

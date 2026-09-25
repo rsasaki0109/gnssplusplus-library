@@ -1,0 +1,75 @@
+{
+  "dataset_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "baseline_run_sha256": "3e2481f4edbb869abcf340e43d27c895ddd25a18c4dca9dcb578d48f92137a56",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "status": "one-route-matched-comparison-complete",
+  "created_unix": 1790136937.5888424,
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_march10_tdcp_sigma_plan.json",
+  "plan_sha256": "498fd81d57bd5a43543a71f0417ce5636e48640ca1cf4c7d155faaf379b26392",
+  "scope": "Replication on separate March 10 Street Pixel5 route: only source TDCP metre sigma; native route mapping and Huber k=4 remain unchanged.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "rationale": "First January 4 sigma-only development result improved by 0.197782927 m; repeat identical selector on another existing route group with Street source type. No parameter fitting.",
+  "limitations": [
+    "Previously exposed development route, not heldout.",
+    "Sigma-only effect; not combined with source route preset, source Huber, affine geometry or source IMU initialization."
+  ],
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_march10_tdcp_sigma_v1\\validation.json",
+  "validation_sha256": "fcea3dbec303a770a6c8f0170fc74185a03c7501efa0547aa001b4207a258207",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.0359009354593491,
+  "mean_route_group_score_m": 1.0359009354593491,
+  "results": {
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.5471429430390149,
+            "p95_m": 0.8086783158047097,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.6779106294218623
+          },
+          "truth_sha256": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+          "solution_sha256": "248034bd275cf6df31ce86667e127b6d358831507723fda5e45c650c653dc2e3",
+          "wall_s": 407.70796513557434,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.03,
+            "fixed_sigma_m": 0.03,
+            "factors_inserted": 24947
+          },
+          "seed_metadata_sha256": "9859a6c7c92e87c026b492a6e3d2f6c86cbefd433004091ff56b3a69724d31db"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8715290366869226,
+            "p95_m": 1.2002728342317757,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.0359009354593491
+          },
+          "truth_sha256": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+          "solution_sha256": "88fa94a3b544af6df9b041dc8c57881e900f52d87a3e01f705aaff87fdfac493",
+          "wall_s": 1147.5606558322906,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.0016827902832903905,
+            "fixed_sigma_m": null,
+            "factors_inserted": 24947
+          },
+          "seed_metadata_sha256": "9859a6c7c92e87c026b492a6e3d2f6c86cbefd433004091ff56b3a69724d31db"
+        }
+      },
+      "delta_m": 0.3579903060374868
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "One existing development route group, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790138238.7763255
+}

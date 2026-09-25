@@ -1,0 +1,234 @@
+{
+  "status": "matched-two-phone-comparison-complete",
+  "scope": "Isolate source initial/final IMU stop semantics; both conditions retain the previously tested second IMU pass and unchanged observation masks. GNSS-first must be byte-identical. New masks require a separate native GNSS-to-initial-IMU observation rebuild and remain future work.",
+  "official_score": false,
+  "promoted": false,
+  "source_revision": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_files_sha256": {
+    "include/libgnss++/algorithms/native_imu_stop_phase.hpp": "1ddf68516174b328b5b42b32812c630aaea4c6987beb1866be989f2621058ba3",
+    "include/libgnss++/algorithms/fgo_config.hpp": "7c69e000724068dd7648ccf3f8dcf92b687e29b5b6b688be2edf4ade71726b50",
+    "include/libgnss++/algorithms/fgo.hpp": "21551cdca6e525d3d829e7e1770a3668e23d81c863ccbcd5ef2361d45e245474",
+    "src/algorithms/fgo_gtsam_backend.cpp": "dc73366aaf74f7b6647dfb88194cd2ff46bb77f090d124061c7259d3780daee9",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "890f8faff6902faac294f1cce12ec6ce30927c3431c3869fab10ec7a96778236",
+    "tests/test_fgo.cpp": "c2deef6acb17b29e681dd7d6e7996a330122d5107361e6ea4d37db67c06a0371",
+    "tests/test_fgo_gtsam_backend.cpp": "de3affe3351009c76f624292116ffac2fae5463bc54a7e89b156134feba006e4"
+  },
+  "pinned_source_sha256": {
+    "fgo_gnss_imu.m": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "parameters.m": "cc9e8ee178c79fd8c1853d1e1d0a91db12e951872d1773e279068c02f146a331"
+  },
+  "source_rules": {
+    "initial_velocity_prior": false,
+    "final_velocity_prior": true,
+    "pose_factor_both_passes": true,
+    "pose_max_interval_exclusive_s": 1.5,
+    "interval_clock": "strictly increasing positive raw UTC integer milliseconds, not GPS floating-point time"
+  },
+  "build_session": 79856,
+  "build_pid": 4112,
+  "build_log": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_imu_stop_phases_build.log",
+  "test_filter": "FGOGtsamPhase171*:FGOGtsamPhase213*:FGORefinementBuilderTest.*:NativeImuStopPhaseTest.*",
+  "test_claim": "13 focused cases, including source stop-phase graph counts and strict raw-UTC boundary behavior, 8 legacy builder regressions, and 8 CLI rejection cases passed. Full repository suite not run.",
+  "live_all40_binary_unchanged": true,
+  "external_submission": false,
+  "build_status": "Forced rebuild and test relink succeeded after the UTC correction; source hashes verified before freezing binary. Initial in-flight build was not used for benchmark inference.",
+  "pipeline": "E:/rtklib_v2_ws_tmp/run_gsdc_stop_phase_pipeline.py",
+  "binary_sha256": "ffba0bde697dfd01a5a60930e6cf8391766d5d7c7aa0433867fa63db5211ea53",
+  "plans": {
+    "mi8_stop_phases_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_stop_phases_control_plan.json",
+      "sha256": "79795ac3c62210d7fee8111fb9bd2acb37ad4526ecf5ad446c32b1a9d170fee5"
+    },
+    "mi8_stop_phases_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_stop_phases_candidate_plan.json",
+      "sha256": "b93003669b8a52e7a16072daec0a62fb6ad98c713a45ff2597f68b061abc57dd"
+    },
+    "a205u_stop_phases_control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_stop_phases_control_plan.json",
+      "sha256": "8c33bcca236a56a9aae4fb8f1f4a065e70cd85da70a775045bc402d6a78d966e"
+    },
+    "a205u_stop_phases_candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_stop_phases_candidate_plan.json",
+      "sha256": "dc4d5a71df330e9df2b0aad326461334f06f151d1602f3cf59296c1ae4bd8dea"
+    }
+  },
+  "tests": {
+    "focused_passed": 13,
+    "focused_xml_sha256": "68a30b013873a2c1110bb50f0efeeaba8e3e101866a28a60eef54bda67d5818f",
+    "cli_negatives_passed": 8,
+    "cli_report_sha256": "95d20903c70e6448c439d16fb4cf605dd4d8f11334e3c3545eb0876fcafe7c95"
+  },
+  "validation": {
+    "binary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\source_imu_stop_phases_fixed.exe",
+    "binary_sha256": "ffba0bde697dfd01a5a60930e6cf8391766d5d7c7aa0433867fa63db5211ea53",
+    "tests": {
+      "source_imu_stop_phases_backend_tests.xml": {
+        "passed": 13,
+        "sha256": "68a30b013873a2c1110bb50f0efeeaba8e3e101866a28a60eef54bda67d5818f",
+        "cases": [
+          "FGOGtsamPhase171EcefDopplerGraphTest.UsesCorrectedEcefRowsAndKeepsVelocityFrameUnrotated",
+          "FGOGtsamPhase171EcefDopplerGraphTest.MissingOrInvalidCorrectedDopplerRowsFailClosed",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SelectorOffRetainsEmptyDopplerPhase164Behavior",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SparsePDefaultRejectsDespiteValidSeedsAndDoppler",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SparsePOptInConnectedGraphAndDisconnectedClockControl",
+          "FGOGtsamPhase171EcefDopplerGraphTest.SparsePRejectsAllSparseAndUnsupportedMode",
+          "FGOGtsamPhase171EcefDopplerTransferTest.RemapsOnlyDWithExactRawIdentityAndRejectsInvalidTransfers",
+          "FGOGtsamPhase171NoDopplerImuMainTest.SameRunC7DHandOffAdmitsEmptyDopplerAndGaugesAbsentClockSlots",
+          "FGOGtsamPhase171NoDopplerImuMainTest.RejectsMissingNonfiniteClockHandoffAndLeavesLegacySelectorOff",
+          "FGOGtsamPhase213MainDopplerFrameTest.CorrectedEcefRowPreservesLikelihoodAfterOneEnuRotation",
+          "FGOGtsamPhase171RefinementBuilderTest.RejectsMissingVelocityAndSppReplacement",
+          "NativeImuStopPhaseTest.PreservesLegacyAndSeparatesSourceVelocityFromPose",
+          "FGORefinementBuilderTest.KeepsFirstAndPostGapDopplerWithIndependentClockDrift"
+        ]
+      },
+      "source_imu_stop_phases_legacy_tests.xml": {
+        "passed": 8,
+        "sha256": "dc937a19f7f068c49ca0d8130202f62f74648cc78c47ea6214e157efe036b41e",
+        "cases": [
+          "FGOTest.SparseEpochRecoveryIsOptInAndRetainsBelowFloorEpochs",
+          "FGOTest.OfficialTdcpWeightingPreservesAcceptedPairStructure",
+          "FGOTest.SourceMeterTdcpWeightingPreservesAcceptedPairStructure",
+          "FGOTest.SourceReslObservablePreservesPairsAndDynamicSigma",
+          "FGOTest.SourceMeterTdcpRejectsMixedSelectors",
+          "FGOTest.CorrectedUndifferencedDopplerUsesClockBiasDifference",
+          "FGOTest.BuiltSingleDifferenceTdcpFactorsUseCurrentEpochLos",
+          "FGOTest.ReportsSignedCommonGpsPseudorangeDeltaForClockAudit"
+        ]
+      }
+    },
+    "cli": {
+      "passed": 8,
+      "sha256": "95d20903c70e6448c439d16fb4cf605dd4d8f11334e3c3545eb0876fcafe7c95"
+    },
+    "logs": {
+      "source_imu_stop_phases_forced_build.log": "e326649fe9e662303e9b35d367c96ee188b80547e5347bc7e48ec9b805e4f18a",
+      "source_imu_stop_phases_test_build.log": "bfc0acd079bef4a650acf53ddc86deea50fad8107ff8d9a0e8c3869577e794aa"
+    },
+    "real_data_comparison_complete": true
+  },
+  "results": {
+    "mi8": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.8927280251094925,
+            "p95_m": 1.4572761309376927,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1750020780235926
+          },
+          "wall_s": 256.9609799385071,
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "solution_sha256": "39dcd695abf7281be407157ad5705ecc3a48fbbda8a9de6efdb2655096e4233d",
+          "stop_counts": {
+            "initial_stop_velocity_factors": 300,
+            "initial_stop_pose_factors": 292,
+            "initial_stop_velocity_phase_omissions": 0,
+            "initial_stop_pose_gap_rejections": 0,
+            "upstream_stop_velocity_factors": 300,
+            "upstream_stop_pose_factors": 292,
+            "final_stop_pose_gap_rejections": 0
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.892731283966527,
+            "p95_m": 1.4572790844358556,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.1750051842011913
+          },
+          "wall_s": 256.00188422203064,
+          "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+          "solution_sha256": "66cc7deb0332f03fbffef51b2cbb03187caba0a1f9cab6301e491cb220dd4396",
+          "stop_counts": {
+            "initial_stop_velocity_factors": 0,
+            "initial_stop_pose_factors": 292,
+            "initial_stop_velocity_phase_omissions": 300,
+            "initial_stop_pose_gap_rejections": 0,
+            "upstream_stop_velocity_factors": 300,
+            "upstream_stop_pose_factors": 292,
+            "final_stop_pose_gap_rejections": 0
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "gnss-first": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "imu-initial": "d832a912f1497241c338e86c6acb244523f40945f8ea8e7b8f7958bb33160aab"
+        },
+        "candidate": {
+          "gnss-first": "28138f39a471a1988d5ace94641d39746fbf9365938d096dc5a83dc82118dd01",
+          "imu-initial": "67ad1e5aa7b9fb090dc30f2adbc4a916a93402f97fba6ce9c1e69e9a13d1974c"
+        }
+      },
+      "gnss_stage_identical": true,
+      "control_matches_previous_binary": true,
+      "delta_m": 3.1061775986884754e-06
+    },
+    "a205u": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2882757858405927,
+            "p95_m": 2.6351334557375483,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9617046207890705
+          },
+          "wall_s": 305.6459505558014,
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "solution_sha256": "5ca3c9cd26ff47468b24849c06ba9197108089a61f4b6c257f8014bd7aef4057",
+          "stop_counts": {
+            "initial_stop_velocity_factors": 224,
+            "initial_stop_pose_factors": 217,
+            "initial_stop_velocity_phase_omissions": 0,
+            "initial_stop_pose_gap_rejections": 0,
+            "upstream_stop_velocity_factors": 314,
+            "upstream_stop_pose_factors": 305,
+            "final_stop_pose_gap_rejections": 0
+          }
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 1.2886546929135856,
+            "p95_m": 2.634701677458555,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 1.9616781851860705
+          },
+          "wall_s": 305.73347067832947,
+          "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+          "solution_sha256": "f0654ff8d49446ce9036588a94d7818d96353aca81cb843bac9422327be78dbc",
+          "stop_counts": {
+            "initial_stop_velocity_factors": 0,
+            "initial_stop_pose_factors": 216,
+            "initial_stop_velocity_phase_omissions": 224,
+            "initial_stop_pose_gap_rejections": 1,
+            "upstream_stop_velocity_factors": 313,
+            "upstream_stop_pose_factors": 304,
+            "final_stop_pose_gap_rejections": 0
+          }
+        }
+      },
+      "stage_hashes": {
+        "control": {
+          "gnss-first": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+          "imu-initial": "66fea7efa65a0f40ab39e2620be23fcb6ce7015c183b41d05d09361ba8de8199"
+        },
+        "candidate": {
+          "gnss-first": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+          "imu-initial": "6668f90c7c6d362cbe45806f6f3bf5134bb40e669623c826c12fd725596d4654"
+        }
+      },
+      "gnss_stage_identical": true,
+      "control_matches_previous_binary": true,
+      "delta_m": -2.6435602999974606e-05
+    }
+  },
+  "interpretation": "Both matched same-binary pairs pass native coverage and base-correction-once proof, preserve GNSS-stage bytes and reproduce previous control outputs. Initial zero-velocity factors are omitted while pose factors remain, with one A205U initial pose pair rejected at the raw-UTC gap gate. Absolute local mean changes are below 0.00003 m; no material accuracy gain and no promotion.",
+  "comparison_file": {
+    "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\source_imu_stop_phases_comparison.json",
+    "sha256": "0a7d3830dd2235742fcdaa610e33e5e586fdf792953afe459f62cbf6efc60540"
+  }
+}

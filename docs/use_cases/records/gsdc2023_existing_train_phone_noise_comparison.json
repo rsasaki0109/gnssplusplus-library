@@ -1,0 +1,57 @@
+{
+  "runs": {
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "status": "paired-native-development-comparison",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.4250581693336182,
+        "p95_m": 3.021433800067477,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.2232459847005477
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.3597840409408946,
+        "p95_m": 3.3773967048313454,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.36859037288612
+      },
+      "delta_m": 0.14534438818557227,
+      "same_binary_inputs_and_other_arguments_verified": true,
+      "wall_s": {
+        "control": 793.3078730106354,
+        "candidate": 728.450208902359
+      },
+      "runtime_caveat": "concurrent workloads; not controlled speed benchmark"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "status": "paired-native-development-comparison",
+      "control": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.276711742535844,
+        "p95_m": 2.7526515410815446,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.0146816418086946
+      },
+      "candidate": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 1.1991166451312714,
+        "p95_m": 3.1538589709864526,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 2.176487808058862
+      },
+      "delta_m": 0.1618061662501673,
+      "same_binary_inputs_and_other_arguments_verified": true,
+      "wall_s": {
+        "control": 959.7744853496552,
+        "candidate": 785.2784812450409
+      },
+      "runtime_caveat": "concurrent workloads; not controlled speed benchmark"
+    }
+  },
+  "complete": true,
+  "official_score": false,
+  "taroz_runtime_comparison": false,
+  "promoted": false,
+  "scope": "two existing development route groups; phone noise source preset only"
+}

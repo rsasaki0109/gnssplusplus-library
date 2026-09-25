@@ -1,0 +1,46 @@
+{
+  "status": "partial-stage-diagnostic",
+  "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+  "results": {
+    "control": {
+      "stages": {
+        "gnss-first": {
+          "p50_m": 0.6246456639849871,
+          "p95_m": 0.9311225537857957,
+          "phone_score_m": 0.7778841088853914,
+          "raw_epochs": 1855,
+          "truth_epochs": 1854,
+          "extra_native_keys_dropped": 1,
+          "stage_sha256": "c10a85cc08f77a4f9e042bbdde839c26f4df8cfee07e3049e945851966a31f85",
+          "phone_output_offset_applied": false
+        },
+        "imu-initial": {
+          "p50_m": 0.492371414295783,
+          "p95_m": 0.6966495200746653,
+          "phone_score_m": 0.5945104671852242,
+          "raw_epochs": 1855,
+          "truth_epochs": 1854,
+          "extra_native_keys_dropped": 1,
+          "stage_sha256": "c8ab8648fe38d8b5923bbfd808657aef9ae8688fb7940793ef07d58c18b4e22e",
+          "phone_output_offset_applied": false
+        }
+      },
+      "final_score": {
+        "distance_variant": "haversine_sphere",
+        "p50_m": 0.49237200610566645,
+        "p95_m": 0.696646926380243,
+        "percentile_variant": "linear_n_minus_1",
+        "phone_score_m": 0.5945094662429546
+      },
+      "final_solution_sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a",
+      "historical_final_bytes_reproduced": true,
+      "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+      "wall_s": 868.7192087173462
+    }
+  },
+  "paired_validation_complete": false,
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "checked_unix": 1790143788.748419
+}

@@ -1,0 +1,35 @@
+{
+  "status": "mixed-two-route-result-not-promoted",
+  "checked_unix": 1790138377.4522414,
+  "sources": [
+    {
+      "path": "gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_january04_tdcp_sigma.json",
+      "sha256": "4eeee0641ca73a8a863ac31b3746eaf4915793f6bc2b38e20fdb1356fdf0ff84"
+    },
+    {
+      "path": "gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_march10_tdcp_sigma.json",
+      "sha256": "2a97e25e9cd8c25e6fcaad279cd2b870bbbeec100987c1f3dbe5a215c7db7a53"
+    }
+  ],
+  "routes": [
+    {
+      "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+      "control_score_m": 0.5945094662429546,
+      "candidate_score_m": 0.3967265396421846,
+      "delta_m": -0.19778292660077007
+    },
+    {
+      "dataset_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "control_score_m": 0.6779106294218623,
+      "candidate_score_m": 1.0359009354593491,
+      "delta_m": 0.3579903060374868
+    }
+  ],
+  "mean_control_score_m": 0.6362100478324084,
+  "mean_candidate_score_m": 0.7163137375507669,
+  "mean_delta_m": 0.08010368971835838,
+  "promoted": false,
+  "official_score": false,
+  "heldout": false,
+  "limitation": "Two exposed Pixel5 development route groups, neither a full train aggregate nor evidence of official score improvement. Do not select sigma by individual known route score."
+}

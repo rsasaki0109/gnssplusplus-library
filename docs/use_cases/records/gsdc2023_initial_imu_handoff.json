@@ -1,0 +1,38 @@
+{
+  "status": "initial-handoff-opt-in-source-connected-integration-and-two-phone-replay-validated",
+  "production_connected": true,
+  "changes_live_inference": false,
+  "official_score": false,
+  "accuracy_claim": false,
+  "source_files_sha256": {
+    "include/libgnss++/algorithms/native_gnss_imu_initial_handoff.hpp": "5fe518de58c54caae4c34f21b9248370d39689c27bf50636c8941a869a9c78cd",
+    "tests/test_native_gnss_imu_initial_handoff.cpp": "41d1d87d58fcb3412c82b57f4541d7d687c1b186aa53396fcfe2b8b7ca6e3eca"
+  },
+  "tests": {
+    "passed": 3,
+    "xml_sha256": "be8b42e0fdf8bf767cf28df1f556c8fbdf6780a56f6a006e4b158505de33d507",
+    "cases": [
+      "NativeGnssImuInitialHandoff.PreservesRawMeasurementsAndCombinesDistinctStageStates",
+      "NativeGnssImuInitialHandoff.RejectsWrongStageMissingEpochsAndTimeJoins",
+      "NativeGnssImuInitialHandoff.RejectsFrameClockPositionAndRotationInconsistency"
+    ]
+  },
+  "scope": "The initial handoff is integrated in the opt-in observation-stage rebuild. All 23 focused cases, eight legacy cases, nine CLI cases and matched MI8/A205u replays passed. The frozen live all40 recipe remains unchanged; small mixed development score changes do not support promotion.",
+  "contracts": [
+    "Converged GNSS-only result; reject IMU results and synthetic attitude filling.",
+    "Complete raw index, integer UTC, GPS time and initialized attitude-time identity; no nearest-time joins.",
+    "Clock handoff agrees exactly, receiver clock field converted metres to seconds.",
+    "Initial problem position agrees exactly with native GNSS output; ECEF and navigation-frame velocity agree within 1e-7 m/s.",
+    "Finite Earth positions and clock states, bounded frame angles, proper orthonormal attitude matrix.",
+    "Raw observations remain unchanged; no phone offset, base correction, cache or truth input."
+  ],
+  "remaining_work": [
+    "Broader route-group validation and paired pinned reference runtime before claiming source parity or all-phone accuracy."
+  ],
+  "build_logs": {
+    "initial_handoff_configure.log": "21091c2077e68b045763d0a41e7302c781078cb5cda494dd0b61fa0d5e62e48d",
+    "initial_handoff_build.log": "0b638891ad7cb21d9a9106553bda8ceae9c4f3117ad3d61c281c6a48142fb3b7"
+  },
+  "runtime_note": "Test executable requires the existing GTest runtime DLL directory in PATH; rerun with standard runtime PATH passed.",
+  "integration_record": "gsdc2023_source_imu_observation_stages_experiment.json"
+}

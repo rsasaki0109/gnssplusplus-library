@@ -1,0 +1,32 @@
+{
+  "status": "local-artifact-assembled-not-submitted",
+  "script": "scripts/analysis/assemble_gsdc_native_submission.py",
+  "tests_passed": 7,
+  "verification": "All40 frozen native runs completed with rc0; input/executable/argument/output digests and raw/official native keys verified during successful local assembly. 71936 official keys, no exported interpolation/hold, no sample coordinates; not externally submitted.",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_plan.json",
+  "plan_sha256": "c5f1364f5d39a625cbb46d9a1112598b0763060bf9b3b38659da20b067cf6cda",
+  "official_sample_normalized_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+  "output_dir": "E:\\rtklib_v2_ws_output\\gsdc_native\\fixed_all40_submission_v1",
+  "submitted": false,
+  "all_output_rows_native_verified": true,
+  "ctest": {
+    "passed": 2,
+    "failed": 0,
+    "tests": [
+      "python_gsdc_native_output_audit_tests",
+      "python_gsdc_native_submission_tests"
+    ],
+    "python_cases": 15,
+    "canonical_build_directory": "E:/gnsspp-build-gsdc-native"
+  },
+  "supervisor": {
+    "script": "E:/rtklib_v2_ws_tmp/watch_gsdc_fixed40.py",
+    "status_record": "E:/rtklib_v2_ws_output/gsdc_native/native_all40_fixed_recipe_v1/supervisor.json",
+    "process_id": 5488,
+    "policy": "audit newly completed records; assemble locally only after all40 pass; never external submit; no process restarts"
+  },
+  "manifest": "E:\\rtklib_v2_ws_output\\gsdc_native\\fixed_all40_submission_v1\\manifest.json",
+  "submission_sha256": "4267205e472005629ee3269dc636dc833b2c4ee89ae253feb2258d7d138b30e5",
+  "official_key_rows": 71936,
+  "historical_verification": "synthetic 40-drive end-to-end export; real frozen plan rejected because all 40 currently pending; no output directory created"
+}

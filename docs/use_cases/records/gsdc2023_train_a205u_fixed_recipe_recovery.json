@@ -1,0 +1,33 @@
+{
+  "status": "native-fixed-input-recovery-verified",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a205u_fixed_recipe_recovery_plan.json",
+  "plan_sha256": "caa25bfd7bc4a56f24638dbc316d7a329103f4aa7ede16bee6f50191146e511a",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "baseline_binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "baseline_remains_failed": true,
+  "scope_limitation": "Executable contains additional default-off changes; this is not a pure single-code-change causal comparison. All input files, base coordinates and option values are fixed.",
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_a205u_fixed_recipe_recovery_v1\\validation.json",
+  "validation_sha256": "9e949375963b40620b1580434c631dcefeca5cad718b1aea3b4dc922e5950502",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 1.916556366229106,
+  "mean_route_group_score_m": 1.916556366229106,
+  "candidate_score": {
+    "distance_variant": "haversine_sphere",
+    "p50_m": 1.3181052110818825,
+    "p95_m": 2.51500752137633,
+    "percentile_variant": "linear_n_minus_1",
+    "phone_score_m": 1.916556366229106
+  },
+  "output_rows": 1213,
+  "wall_s": 227.664644241333,
+  "baseline_score": null,
+  "checked_unix": 1790145848.4199374
+}

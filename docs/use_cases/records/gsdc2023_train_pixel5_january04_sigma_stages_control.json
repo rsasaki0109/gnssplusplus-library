@@ -1,0 +1,60 @@
+{
+  "status": "native-stages-audited-and-scored",
+  "created_unix": 1790138133.637831,
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_sigma_stages_control_plan.json",
+  "plan_sha256": "c48196d658f9ca36052875b23ee72e4d798d8608e1e053b3245e6a6252057d7f",
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "historical_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "historical_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "historical_run_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\03\\run.json",
+  "historical_run_sha256": "9560a66b265d715925092db574d9627bb89242d13780c65acd71fd134519b870",
+  "expected_final_solution_sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a",
+  "scope": "Replay frozen January 4 sigma pair with new binary and read-only GNSS/IMU stage exports; require final CSV byte identity with each historical arm.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_sigma_stages_control_v1\\validation.json",
+  "validation_sha256": "d185d51c2db2c80fd21c5003c08a7888ea5f6dea202ac2cc63ab65c3579da3ad",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.5945094662429546,
+  "mean_route_group_score_m": 0.5945094662429546,
+  "stage_results": {
+    "stages": {
+      "gnss-first": {
+        "p50_m": 0.6246456639849871,
+        "p95_m": 0.9311225537857957,
+        "phone_score_m": 0.7778841088853914,
+        "raw_epochs": 1855,
+        "truth_epochs": 1854,
+        "extra_native_keys_dropped": 1,
+        "stage_sha256": "c10a85cc08f77a4f9e042bbdde839c26f4df8cfee07e3049e945851966a31f85",
+        "phone_output_offset_applied": false
+      },
+      "imu-initial": {
+        "p50_m": 0.492371414295783,
+        "p95_m": 0.6966495200746653,
+        "phone_score_m": 0.5945104671852242,
+        "raw_epochs": 1855,
+        "truth_epochs": 1854,
+        "extra_native_keys_dropped": 1,
+        "stage_sha256": "c8ab8648fe38d8b5923bbfd808657aef9ae8688fb7940793ef07d58c18b4e22e",
+        "phone_output_offset_applied": false
+      }
+    },
+    "final_score": {
+      "distance_variant": "haversine_sphere",
+      "p50_m": 0.49237200610566645,
+      "p95_m": 0.696646926380243,
+      "percentile_variant": "linear_n_minus_1",
+      "phone_score_m": 0.5945094662429546
+    },
+    "final_solution_sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a",
+    "historical_final_bytes_reproduced": true,
+    "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+    "wall_s": 868.7192087173462
+  }
+}

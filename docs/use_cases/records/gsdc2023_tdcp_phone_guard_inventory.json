@@ -1,0 +1,453 @@
+{
+  "status": "source-phone-guards-match-existing-native-graphs",
+  "source_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\fgo_gnss_imu.m",
+  "source_sha256": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+  "plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "validation_sha256": "5b1710866b754f52532e8a48b3239ebbeb4f0cdcce3b5cdc9c41b65cfeedcc93",
+  "source_disabled_phones": [
+    "samsunga32",
+    "sm-a325f"
+  ],
+  "source_drift_phones": [
+    "samsunga325g",
+    "sm-a205u",
+    "sm-a217m",
+    "sm-a505g",
+    "sm-a505u",
+    "sm-a600t"
+  ],
+  "runs": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+      "phone": "mi8",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 40693,
+      "factors_inserted": 40693,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\00\\summary.json",
+      "summary_sha256": "c3775caa9574932881b1a52cc88243a34fa203cdb4b3c1d32ef92919a313cfd0"
+    },
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 39339,
+      "factors_inserted": 39339,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\01\\summary.json",
+      "summary_sha256": "4b27568c01a278daf9502e751e09d83e47ddfce5ab2aea78ec10f936068e87ab"
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/mi8": {
+      "phone": "mi8",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "native-audit-failed",
+      "graph_available": false,
+      "reason": "No final TDCP contract in failed run summary"
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 40347,
+      "factors_inserted": 40347,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\03\\summary.json",
+      "summary_sha256": "bc514cb3c652c080eb02598c4ca5af9219ef7ad0dd854c37fdb899df846ada3f"
+    },
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": {
+      "phone": "mi8",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 25444,
+      "factors_inserted": 25444,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\04\\summary.json",
+      "summary_sha256": "4fa310d743988a4c4b1fde847cbccb0b26162abdfefc4e1e8f171be114721d94"
+    },
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 24947,
+      "factors_inserted": 24947,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\05\\summary.json",
+      "summary_sha256": "22114691a1d6a835a24ae14da03d0b21ccd7c65c432c30d482b8f014146d44ff"
+    },
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 46481,
+      "factors_inserted": 46481,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\06\\summary.json",
+      "summary_sha256": "be7516918c32902732c7ffd4d22e696c78cd8162de0d8bed133496b6f135ab70"
+    },
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": {
+      "phone": "pixel4xl",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 33117,
+      "factors_inserted": 33117,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\07\\summary.json",
+      "summary_sha256": "2cd88bd8f27e354707d0474b2b9650cd2aa572264539651b268d94a1069c1157"
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+      "phone": "pixel4",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 21090,
+      "factors_inserted": 21090,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\08\\summary.json",
+      "summary_sha256": "31258d4e7e27e45d6352b7877802fe18b05acfe2e3170c76f7b7725154c3524e"
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "phone": "sm-g988b",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 22408,
+      "factors_inserted": 22408,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\09\\summary.json",
+      "summary_sha256": "cfb85197bf0109bd61b343f3d7aac367d86886db83ce17d975b174742cb7ef1b"
+    },
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 45573,
+      "factors_inserted": 45573,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\10\\summary.json",
+      "summary_sha256": "cb6a4585864ad75bffd802c23c9c8267775a323f562697f1734853043b3f9d10"
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "phone": "pixel4",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 34560,
+      "factors_inserted": 34560,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\11\\summary.json",
+      "summary_sha256": "eb59ae8a4876efe4f44bb1c41c4fcb2e6570577ab56e9461635d90d3d470c49b"
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 69269,
+      "factors_inserted": 69269,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\12\\summary.json",
+      "summary_sha256": "feb465959c0f6e667dbbecdf43ae0345e536853c2cea3dbbd9f43adcbe15a345"
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8": {
+      "phone": "mi8",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 37656,
+      "factors_inserted": 37656,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\13\\summary.json",
+      "summary_sha256": "ad5e93432fb2780c3c518f182367341a06cf5ca829ab0c41d2a75f1dbbfcae2b"
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 31462,
+      "factors_inserted": 31462,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\14\\summary.json",
+      "summary_sha256": "58974f7673cd917c08d724ccfd81051982772553c52776499b39e41b29849ca6"
+    },
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 39326,
+      "factors_inserted": 39326,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\15\\summary.json",
+      "summary_sha256": "f6f987b6e5eb457ef87e15bb92f0f5f33122c02f3a6ebe6eb60684f00cfe00e0"
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 24964,
+      "factors_inserted": 24964,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\16\\summary.json",
+      "summary_sha256": "ef0eb03fc5d09395285dc759a44d0abee264d836be4562f27c66b55cbf6f9785"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "phone": "pixel6pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 33122,
+      "factors_inserted": 33122,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\17\\summary.json",
+      "summary_sha256": "cbcef86ed7a6a100efe6c59d3fff6b8315ccb308a608e5f4bb5d7a27ea28d879"
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "phone": "sm-g988b",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 41148,
+      "factors_inserted": 41148,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\18\\summary.json",
+      "summary_sha256": "9509f1bf8668d323c24cab9497e170d7f325af4ecf328c4c6e51222b1d9b9871"
+    },
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g": {
+      "phone": "samsunga325g",
+      "source_tdcp_model": "integrated-drift",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 19656,
+      "factors_inserted": 19656,
+      "drift_rows": 19656,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\19\\summary.json",
+      "summary_sha256": "ae7a5d08bd59ac0e61810d846d6ce0e61e1206c267e2aca5d206f5ddaa038c5e"
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/mi8": {
+      "phone": "mi8",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 27647,
+      "factors_inserted": 27647,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\20\\summary.json",
+      "summary_sha256": "18bff8235915aa2684893ad2b4e3789d3f79feb53f009fd58cd2c76672e02e56"
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 26292,
+      "factors_inserted": 26292,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\21\\summary.json",
+      "summary_sha256": "f6a735dc56591eba186e89331b38b134f128c0c52bd6d0a3d0b9c08d7e3fac43"
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "phone": "sm-a325f",
+      "source_tdcp_model": "disabled",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 7615,
+      "factors_inserted": 0,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\22\\summary.json",
+      "summary_sha256": "814b6d6a42dece9f6803c7f2d096c3793f2fbda5c72c87c8bee911e134442fb4"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "phone": "sm-a205u",
+      "source_tdcp_model": "integrated-drift",
+      "baseline_validation_status": "native-audit-failed",
+      "graph_available": false,
+      "reason": "No final summary"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m": {
+      "phone": "sm-a217m",
+      "source_tdcp_model": "integrated-drift",
+      "baseline_validation_status": "native-audit-failed",
+      "graph_available": true,
+      "factors_built": 7295,
+      "factors_inserted": 7295,
+      "drift_rows": 7295,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\24\\summary.json",
+      "summary_sha256": "02e04fc86f58efc6a009936d4ec08e6ddabba1fe7102d3d39558185c99511189"
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "phone": "sm-a325f",
+      "source_tdcp_model": "disabled",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 5857,
+      "factors_inserted": 0,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\25\\summary.json",
+      "summary_sha256": "1b34bc125af75d91306f0d7b3d32a034cd7fdfea87dda019d3734f9eb4a6ec4b"
+    },
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+      "phone": "pixel7pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 22619,
+      "factors_inserted": 22619,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\26\\summary.json",
+      "summary_sha256": "e73ac9cf5e271208cdb8f787a1f1c10d0e3f9e146acbcb626877e55e6f83aaa6"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 17289,
+      "factors_inserted": 17289,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\27\\summary.json",
+      "summary_sha256": "2139f892b38962c338efd34a367073974610a2f859903fee4821669bd220cb45"
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+      "phone": "pixel6pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 15195,
+      "factors_inserted": 15195,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\28\\summary.json",
+      "summary_sha256": "c5b974af08908eaa9571cc100d57afa7cb44173a720847ccc19dff8667f5af89"
+    },
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 33624,
+      "factors_inserted": 33624,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\29\\summary.json",
+      "summary_sha256": "1cf40c81e37215746fdd2924c9a7e612be1625205a6f863eae8b67eaa637c37b"
+    },
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 33598,
+      "factors_inserted": 33598,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\30\\summary.json",
+      "summary_sha256": "d09b91c405e2c0cf82bc07454b9be10ea85d565007abe150ee84f767c1f26dad"
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "phone": "pixel7pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 35607,
+      "factors_inserted": 35607,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\31\\summary.json",
+      "summary_sha256": "890e163ef2aeaa54826de9f61d076659121dcfc1f528e7ea01ada9067e4792d3"
+    },
+    "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g": {
+      "phone": "sm-a505g",
+      "source_tdcp_model": "integrated-drift",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 7817,
+      "factors_inserted": 7817,
+      "drift_rows": 7817,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\32\\summary.json",
+      "summary_sha256": "1f329f291ffd528df57970321d51a2554cacf993599df818c26e632832649b14"
+    },
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+      "phone": "pixel7pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 23399,
+      "factors_inserted": 23399,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\33\\summary.json",
+      "summary_sha256": "6a9713e2bc1318f116cb69578fc3e9fea79296347e707b2e0982f3cf5748536f"
+    },
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+      "phone": "sm-s908b",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 23993,
+      "factors_inserted": 23993,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\34\\summary.json",
+      "summary_sha256": "6b97457b711cd274250cb57d06d010de9ec6aaf81af6e40f8168475d205c50c9"
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "phone": "pixel7pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "native-audit-failed",
+      "graph_available": false,
+      "reason": "No final TDCP contract in failed run summary"
+    },
+    "2023-09-05-23-07-us-ca-routen/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 25569,
+      "factors_inserted": 25569,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\36\\summary.json",
+      "summary_sha256": "a607fdba54787d6179f15610fc3c5b0109caf14088a2b2481baf2f9714646419"
+    },
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+      "phone": "pixel6pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 25648,
+      "factors_inserted": 25648,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\37\\summary.json",
+      "summary_sha256": "041683b56826eb4eeca2d093ad25096e3f9a57efe2e5b2dc5066f9b823198a2a"
+    },
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+      "phone": "pixel7pro",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 37527,
+      "factors_inserted": 37527,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\38\\summary.json",
+      "summary_sha256": "8ed526f55a0fd412ae9c3e1f766fcbd2dec7c6468f765f8d59b2346742f38360"
+    },
+    "2023-09-07-18-59-us-ca/pixel5": {
+      "phone": "pixel5",
+      "source_tdcp_model": "bias-difference",
+      "baseline_validation_status": "scored-native-development",
+      "graph_available": true,
+      "factors_built": 24426,
+      "factors_inserted": 24426,
+      "drift_rows": 0,
+      "summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_v1\\39\\summary.json",
+      "summary_sha256": "2bda8008d38496c37d58909169d8b306bd27deb74a8406252a8ceafb5bcef04b"
+    }
+  },
+  "graph_count": 37,
+  "scope": "Recorded graph diagnostics checked against enclosing pinned source phone guards. This does not prove measurement values, weighting or source runtime parity. Failed coverage remains marked even when a graph exists.",
+  "experiment_preflight": "Check enclosing source guards and nonzero baseline insertion before factor weighting experiments; built counts alone are insufficient.",
+  "checked_unix": 1790158303.2655995
+}

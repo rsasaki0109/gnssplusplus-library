@@ -1,0 +1,57 @@
+{
+  "schema": "gsdc-source-sigma-four-route-summary.v1",
+  "rows": [
+    {
+      "case": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+      "route_group": "2021-01-04-22-40-us-ca-mtv-a",
+      "control_m": 0.5945094662429546,
+      "candidate_m": 0.3967265396421846,
+      "delta_m": -0.19778292660077007
+    },
+    {
+      "case": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "route_group": "2021-03-10-23-13-us-ca-mtv-h",
+      "control_m": 0.6779106294218623,
+      "candidate_m": 1.0359009354593491,
+      "delta_m": 0.3579903060374868
+    },
+    {
+      "case": "2021-01-05-21-12-us-ca-mtv-d/mi8",
+      "route_group": "2021-01-05-21-12-us-ca-mtv-d",
+      "control_m": 0.7667595928133726,
+      "candidate_m": 0.8394787410888614,
+      "delta_m": 0.07271914827548887
+    },
+    {
+      "case": "2021-07-14-20-50-us-ca-mtv-e/pixel4",
+      "route_group": "2021-07-14-20-50-us-ca-mtv-e",
+      "control_m": 0.466482271733667,
+      "candidate_m": 0.5188979925650274,
+      "delta_m": 0.052415720831360424
+    }
+  ],
+  "mean_control_m": 0.6264154900529642,
+  "mean_candidate_m": 0.6977510521888557,
+  "improved_routes": 1,
+  "worsened_routes": 3,
+  "inputs": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_january04_tdcp_sigma.json",
+      "sha256": "4eeee0641ca73a8a863ac31b3746eaf4915793f6bc2b38e20fdb1356fdf0ff84"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel5_march10_tdcp_sigma.json",
+      "sha256": "2a97e25e9cd8c25e6fcaad279cd2b870bbbeec100987c1f3dbe5a215c7db7a53"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_mi8_pixel4_tdcp_sigma_candidate.json",
+      "sha256": "b8817b531c73a2733582099f72faf2a3fe1cbd32aaf82367d2a81b18d644105f"
+    }
+  ],
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "decision": "Do not promote uniform source TDCP sigma alone. Complete source Huber interaction experiments before considering any combined recipe. No per-route selection from these exposed scores.",
+  "limitation": "Four exposed development route groups across three phone models; this is not a full-train or official test score. Each pair uses a matched binary; binaries differ between Pixel5 and newly admitted Mi8/Pixel4 pairs, whose default regression is separately verified.",
+  "checked_unix": 1790142261.78057
+}

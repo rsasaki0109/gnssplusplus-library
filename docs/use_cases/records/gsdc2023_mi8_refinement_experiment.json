@@ -1,0 +1,25 @@
+{
+  "status": "native-runs-complete-comparison-incomplete-missing-diagnostic",
+  "binary_sha256": "0aa861babeb08aaeec35cc0225f9db2ac33ccd778edaa12dc8ce547192213b61",
+  "official_score": false,
+  "promoted": false,
+  "scope": "same-binary MI8 second native IMU pass; same raw inputs, GNSS stage and initial IMU stage; source phone offset once after final solve",
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_refinement_control_plan.json",
+      "sha256": "eeda74f9e648d32cc037f9b53506f34b1af61a0be5b6f13a4686b847ef92d018"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\mi8_refinement_candidate_plan.json",
+      "sha256": "1d30d4d111df7080a07a712cf2a74e56539793499588f73f5fc7030898388fe1"
+    }
+  },
+  "validation_failure": {
+    "missing_field": "refinement_base_application_passes",
+    "both_native_audits_passed": true,
+    "initial_stages_byte_identical": true,
+    "current_app_source_snapshot_not_proven_in_binary": true,
+    "v1_binary_contains_counter_string": false,
+    "response": "Preserve v1 outputs; force app and builder recompile; rerun matched pair under v2 names without weakening comparison gate."
+  }
+}

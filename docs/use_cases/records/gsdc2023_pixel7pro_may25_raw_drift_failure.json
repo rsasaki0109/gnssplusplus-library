@@ -1,0 +1,33 @@
+{
+  "schema": "gsdc-pixel7pro-raw-drift-input-audit.v1",
+  "dataset_id": "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+  "input_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-05-25-20-11-us-ca-sjc-he2\\pixel7pro\\device_gnss.csv",
+  "input_sha256": "8fb5393655d0f252a64cff07909ed0ef349a67c4b9a5611f04b82bd5259ecc1a",
+  "raw_rows": 40230,
+  "raw_utc_groups": 1259,
+  "nonfinite_drift_epochs": {
+    "1685045480000": 32,
+    "1685045481000": 32,
+    "1685045482000": 32,
+    "1685045483000": 32,
+    "1685045484000": 32
+  },
+  "failure_reason": "temporal-initialization-invalid-identity-time-or-raw-drift",
+  "native_returncode": 1,
+  "all_raw_spp_accepted": true,
+  "policy_changed": false,
+  "truth_read": false,
+  "checked_unix": 1790149624.7876778,
+  "source_preprocessing_path": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\preprocessing.m",
+  "source_preprocessing_sha256": "5252640a14c5ad68ff0f974bc418a422d2759cac06e46f5b863e7efe8be9b9f6",
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_lines": "161-171",
+  "missing_scope": "first five raw UTC epochs",
+  "first_finite_drift_ns_per_s": 15.0,
+  "source_nearest_fill_expected_mps": 4.49688687,
+  "adjacent_finite_drift_jumps_above_50_mps": 0,
+  "source_recipe": "For every phone, mask both sides of >50 m/s drift jumps and linear-fill when jumps exist; then nearest-fill remaining NaNs. This trace has no jumps and requires only leading nearest fill.",
+  "native_gap": "Android loader accepts missing DriftNanosPerSecond as unavailable; the native temporal seed adapter then requires every raw drift finite. The common source fill has not been applied on this Pixel7 Pro path.",
+  "next_implementation": "Explicit opt-in raw-drift preprocessing before seed handoff; retain original values and source-index provenance in a sidecar and distinguish preprocessed drift from exact original raw drift. Preserve all finite values for this no-jump case. Add matched strict/control replay and audit all 1259 native keys before scoring.",
+  "matlab_runtime_verified": false
+}

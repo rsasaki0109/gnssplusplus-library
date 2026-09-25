@@ -1,0 +1,148 @@
+{
+  "status": "goal-not-achieved",
+  "checked_unix": 1790133391.1463509,
+  "scope": "Evidence snapshot, not a completion certificate. Re-evaluate artifacts at their full required scope before goal completion.",
+  "goal_complete": false,
+  "requirements": [
+    {
+      "requirement": "Audit the original reported 3.460/3.344 submission composition",
+      "status": "payload-composition-audited-per-run-provenance-partial",
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_recovered_historical_payload_composition.json",
+          "sha256": "cabc89ad2a65bb75cb298e4086b53b9ac064e456258ea04601fcdb001d61ecfe"
+        },
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_historical_submission_provenance_audit.json",
+          "sha256": "0ef8aa43675511ccd50ccbb222a29da41e8ceb2f115d311459ec0e0d57ca2245"
+        }
+      ],
+      "limit": "Authenticated CSV downloads verify the historical payload hashes: 16330 changed rows on eight drives, 55606 retained v5 rows across 32 drives, and six retained record-identified interpolated rows. Original per-run logs and full source-lane manifests remain unavailable."
+    },
+    {
+      "requirement": "Assess all 40 test drives and diagnose phone-specific initialization/time failures",
+      "status": "all40-native-end-to-end-audited",
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_test_raw_seed_audit.json",
+          "sha256": "349fc8355ba843416ad7eb92661ef819b2cbad1ee2fef23e409ecf20191e625b"
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_v1\\validation.json",
+          "sha256": "d66e82536e0458e5cb5171e2fad294ac17f5078f112870ba9ee72caaed59d665"
+        }
+      ],
+      "limit": "A completed seed audit is narrower than successful full GNSS/IMU inference."
+    },
+    {
+      "requirement": "Run all 40 drives through one fixed native executable and recipe, with native states for every official key",
+      "status": "proven",
+      "completed_drives": 40,
+      "required_drives": 40,
+      "evidence": [
+        {
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_plan.json",
+          "sha256": "c5f1364f5d39a625cbb46d9a1112598b0763060bf9b3b38659da20b067cf6cda"
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_v1\\validation.json",
+          "sha256": "d66e82536e0458e5cb5171e2fad294ac17f5078f112870ba9ee72caaed59d665"
+        }
+      ],
+      "limit": "Running/queued records do not prove liveness or completion; mixed-variant 40/40 coverage does not satisfy this requirement."
+    },
+    {
+      "requirement": "Compare pinned taroz preprocessing, base corrections, GNSS initialization, IMU attitude and final optimization on matched inputs and keys",
+      "status": "incomplete",
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_cold_start_stage_gap.json",
+          "sha256": "01d719adc71f109869c2a2a69b36e9a0ee4b9da8e0eca25feb4a326fd0b0ec6b"
+        },
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_reference_height_input_audit.json",
+          "sha256": "d90454fff532a339e06895c98b6585571ae8fb9cce4181a94999409f441b6868"
+        },
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_residual_center_population_audit.json",
+          "sha256": "0daf5e24e7b3cdde612e1d9ec08de0a8520e39cc8ec1ba0ae04c8cd8150b0d40"
+        }
+      ],
+      "limit": "Source inspection and archived coordinates are not an executed paired reference. User confirmed no alternative MATLAB environment; local R2024a previously failed licensing. Archived reference-height inputs and historical dependency versions remain unresolved."
+    },
+    {
+      "requirement": "Fix the recipe and verify official public/private score at least as good as the reference",
+      "status": "official-scored-target-not-met",
+      "public_score_m": 1.698,
+      "private_score_m": 1.333,
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_all40_official_submission_v1.json",
+          "sha256": "3746dc26de56947f4c32c1a4a1712c12abf0494d89d49c6316c8749354aa5b37"
+        }
+      ],
+      "local_manifest_exists": true,
+      "limit": "Local Haversine/percentile diagnostics are not official leaderboard scores. Authenticated official Public 1.698 m and Private 1.333 m exceed the 0.789/0.928 m goal; paired reference superiority remains unproven."
+    },
+    {
+      "requirement": "Measure phone/route P50/P95, missing keys, fallback and execution time at the scope of the final recipe",
+      "status": "partial",
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_mi8_refinement_experiment_v2.json",
+          "sha256": "c349ca888c59d2a49c9c7704e802eba2fa657d7d9f49868c61285f2e73019872"
+        },
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_a205u_refinement_experiment_v2.json",
+          "sha256": "aa3d3e657db099f8a11cca35ada53f2c60dd1c095e2ca34736bd4bc58c1ff75e"
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_v1\\validation.json",
+          "sha256": "d66e82536e0458e5cb5171e2fad294ac17f5078f112870ba9ee72caaed59d665"
+        }
+      ],
+      "limit": "Development paired scores and test coverage use different frozen binaries/recipes. Shared-load wall times are not controlled performance comparisons; results do not establish all-phone accuracy."
+    },
+    {
+      "requirement": "Record prior usage and group phones from the same route together",
+      "status": "recorded-for-current-development-experiments",
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_existing_train_phone_groups.json",
+          "sha256": "f094d7f3ed796da532add06a6eedf8642fa13bd0cec22fac8327bd69e9ba4c8e"
+        },
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_second_mi8_route_experiment.json",
+          "sha256": "0a11dc2cdb162c0a4a0e6a5d25b6c9e6a45b90030bb0a19dec98b518251500a7"
+        }
+      ],
+      "limit": "Prior project usage is unknown, so no held-out or unused-data claim is allowed. A205U has only one train route in source settings."
+    },
+    {
+      "requirement": "Use only existing evaluation data, excluding external precomputed/sample coordinates from native inference",
+      "status": "verified-for-audited-current-native-runs",
+      "evidence": [
+        {
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_plan.json",
+          "sha256": "c5f1364f5d39a625cbb46d9a1112598b0763060bf9b3b38659da20b067cf6cda"
+        },
+        {
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\native_all40_fixed_recipe_v1\\validation.json",
+          "sha256": "d66e82536e0458e5cb5171e2fad294ac17f5078f112870ba9ee72caaed59d665"
+        }
+      ],
+      "limit": "The input archive is the previously used hash-pinned dataset. Official sample keys are allowed for coverage; its coordinates and archived outputs are not estimator inputs. Verification currently covers only audited runs."
+    },
+    {
+      "requirement": "Prepare a concrete reviewed local submission and obtain explicit instruction before external submission",
+      "status": "officially-submitted-and-scored",
+      "evidence": [
+        {
+          "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_all40_official_submission_v1.json",
+          "sha256": "3746dc26de56947f4c32c1a4a1712c12abf0494d89d49c6316c8749354aa5b37"
+        }
+      ],
+      "limit": "User-authorized reviewed artifact submitted as 56479759; no additional submission is authorized by this checklist."
+    }
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_huber_plan.json",
+  "plan_sha256": "b5040939ec05ea0a7e289157ac4a99706f463844dbfa088a30fd9a14443e1c2b",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_sigma_plan.json",
+  "baseline_plan_sha256": "99f3796f465dd29588eafaa19b66d71bf1d7b0f2b1ddf654c18f3c15f53e6dd8",
+  "baseline_run_sha256": "1e951d8cce806ae20e164fd519416855a918656fb844ad863652e04c74d772cd",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "Conditional TDCP Huber-only ablation on source metre sigma, retaining frozen native Street context (k=0.2). Source settings classify this drive Highway; this is not full source-route parity.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "original_recipe_score_m": 0.5945094662429546,
+  "sigma_only_score_m": 0.3967265396421846,
+  "limitations": [
+    "Existing exposed development route, not heldout.",
+    "Source Type Highway differs from frozen native Street. This ablation keeps native context; source Highway bundle already tested separately.",
+    "Only Huber flag changes; motion and other route options stay fixed."
+  ],
+  "created_unix": 1790151624.5071654,
+  "recorded_native_pid": 19592,
+  "scheduling": {
+    "reason": "Pixel7Pro verified cleanup completed; a native slot became free",
+    "prior_wait_supervisor_pid": 26536,
+    "replacement_supervisor_pid": 36512,
+    "archived_prior_state": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_huber_pipeline_wait_archived.json",
+    "native_inference_restarted": false,
+    "plan_unchanged": true,
+    "checked_unix": 1790153362.180886
+  },
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_tdcp_huber_v1\\validation.json",
+  "validation_sha256": "326d3df8917575e60b53c8b19b188ad2c766bca99dfc014f27cb78a357b508bb",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.5131883274333603,
+  "mean_route_group_score_m": 0.5131883274333603,
+  "candidate_delta_from_original_recipe_m": -0.08132113880959435,
+  "results": {
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.3360972175859003,
+            "p95_m": 0.45735586169846887,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.3967265396421846
+          },
+          "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+          "solution_sha256": "3e2ab558844990ff8674f5bd6a92fa6f0348865c4cec396dad48f6104a23d893",
+          "wall_s": 1020.3679857254028,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.002798401423210426,
+            "fixed_sigma_m": null,
+            "factors_inserted": 40347,
+            "official_huber_k": 4
+          },
+          "seed_metadata_sha256": "91d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4124292314760013,
+            "p95_m": 0.6139474233907193,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5131883274333603
+          },
+          "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+          "solution_sha256": "5ea0b6a9f5d97b3db5d8d56cc765cc66c6c6788f3495e2b6da4340168596f75e",
+          "wall_s": 4850.518833637238,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.002798401423210426,
+            "fixed_sigma_m": null,
+            "factors_inserted": 40347,
+            "official_huber_k": 0.2
+          },
+          "seed_metadata_sha256": "91d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242"
+        }
+      },
+      "delta_m": 0.11646178779117572
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "One existing development route group, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790158138.094405
+}

@@ -1,0 +1,215 @@
+{
+  "status": "provisional-four-phone-archived-reference-comparison",
+  "archive_sha256": "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408",
+  "decoder_sha256": "57c4996471d5e085c6baf6e51d6d54b31dd18f2aec13987f677f1a5bf369752e",
+  "runs": {
+    "2022-08-04-20-07-us-ca-sjc-q/mi8": {
+      "native_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_phone_groups_v1\\00\\run.json",
+      "native_solution_sha256": "86894a1cd207712a6e5911201cf020b3a5a252991ac1508f17a88df6dbbfaae9",
+      "member_sha256": {
+        "phone_data.mat": "ed050267589b02983c43b0936dece2a64a46a748ff27ef1a916af9dcb5828367",
+        "result_gnss.mat": "15011cc8842284e159700937aba0cb844d941abfd81ecd0ab1369521520ca381",
+        "result_gnss_imu.mat": "469094f1924ddc06577b45f010fdb04617525f72c72e41b00176791ec9fe2215"
+      },
+      "llh_xyz_max_disagreement_m": {
+        "result_gnss.mat": 2.9849578646081213e-08,
+        "result_gnss_imu.mat": 2.969298244813431e-08
+      },
+      "archived_observation_keys": 1417,
+      "truth_keys": 1400,
+      "common_finite_keys": 1400,
+      "excluded_truth_keys": [],
+      "common_scores": {
+        "result_gnss.mat": {
+          "p50_m": 0.5649632774546671,
+          "p95_m": 0.9875901104925396,
+          "mean_m": 0.7762766939736034,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "result_gnss_imu.mat": {
+          "p50_m": 0.5475680880105254,
+          "p95_m": 0.898158084917182,
+          "mean_m": 0.7228630864638537,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "native": {
+          "p50_m": 0.7351657144501761,
+          "p95_m": 1.6910648018088565,
+          "mean_m": 1.2131152581295164,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        }
+      },
+      "reference_height_input": {
+        "present_in_archive": false,
+        "member": null,
+        "sha256": null,
+        "used_by_native": false,
+        "used_to_generate_archived_result": "unverified",
+        "origin": "unverified"
+      }
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "native_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_phone_groups_v1\\01\\run.json",
+      "native_solution_sha256": "82aacc304f5194018dec6e7766e8e709b95e2b5a27b92acb7817efc75c52b7a5",
+      "member_sha256": {
+        "phone_data.mat": "cafd8db5419d7ebe829521426a67635c5843df82f5c4a30fd76fcde1ba15cc83",
+        "result_gnss.mat": "5b55b398fdf68688e63f3367a20f644b998dcc66dc10ca316535e7fc3667b5e8",
+        "result_gnss_imu.mat": "e0992f6780c8beeb11064a895bd7ad10e51a535dd425b3826f6af8795cddc0e3"
+      },
+      "llh_xyz_max_disagreement_m": {
+        "result_gnss.mat": 2.9849578646081213e-08,
+        "result_gnss_imu.mat": 3.017111439802696e-08
+      },
+      "archived_observation_keys": 1452,
+      "truth_keys": 1434,
+      "common_finite_keys": 1434,
+      "excluded_truth_keys": [],
+      "common_scores": {
+        "result_gnss.mat": {
+          "p50_m": 1.127630837694598,
+          "p95_m": 2.301191963260943,
+          "mean_m": 1.7144114004777706,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "result_gnss_imu.mat": {
+          "p50_m": 1.357130880532357,
+          "p95_m": 2.500704397104429,
+          "mean_m": 1.928917638818393,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "native": {
+          "p50_m": 1.4250581693336182,
+          "p95_m": 3.021433800067477,
+          "mean_m": 2.2232459847005477,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        }
+      },
+      "reference_height_input": {
+        "present_in_archive": false,
+        "member": null,
+        "sha256": null,
+        "used_by_native": false,
+        "used_to_generate_archived_result": "unverified",
+        "origin": "unverified"
+      }
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "native_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_a205u_source_init_v1\\00\\run.json",
+      "native_solution_sha256": "9e49695aad8054dbd7861781ff0355a336936a20cfb22fcdc9731e81b8509b1d",
+      "member_sha256": {
+        "phone_data.mat": "a56a68c83be340c6e4d2f03770b699c54b2d4b15ef1201be4e6b573dbc38af7a",
+        "result_gnss.mat": "8e15f23ff245bc52081302953de90b29f49da84a5d7b02b697e22f1c49b2ab9f",
+        "result_gnss_imu.mat": "713b55a607ae4495b19e75714b2addfc8743dd5d572d0c2376d6a0ec38b6ec6f"
+      },
+      "llh_xyz_max_disagreement_m": {
+        "result_gnss.mat": 3.0023418962610644e-08,
+        "result_gnss_imu.mat": 2.996196587038303e-08
+      },
+      "archived_observation_keys": 1209,
+      "truth_keys": 1213,
+      "common_finite_keys": 1208,
+      "excluded_truth_keys": [
+        1665093124006,
+        1665093124999,
+        1665093125997,
+        1665093127005,
+        1665093127999
+      ],
+      "common_scores": {
+        "result_gnss.mat": {
+          "p50_m": 1.7760173520198843,
+          "p95_m": 2.8727007932498743,
+          "mean_m": 2.3243590726348793,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "result_gnss_imu.mat": {
+          "p50_m": 0.8866870054991804,
+          "p95_m": 2.14837473518335,
+          "mean_m": 1.5175308703412653,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "native": {
+          "p50_m": 1.3778061088956561,
+          "p95_m": 2.921764592202812,
+          "mean_m": 2.149785350549234,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        }
+      },
+      "reference_height_input": {
+        "present_in_archive": true,
+        "member": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/ref_hight.mat",
+        "sha256": "9daa8820bd61de72a9c351d9dcd7050cc9b7120dd46e5409ccfd32707f7fd83c",
+        "used_by_native": false,
+        "used_to_generate_archived_result": "unverified",
+        "origin": "unverified"
+      }
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "native_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\existing_train_phone_groups_v1\\03\\run.json",
+      "native_solution_sha256": "8ed7c788a4811815191f829355b452da4b4a9f3c0fddefe4de93bbabd3f12f92",
+      "member_sha256": {
+        "phone_data.mat": "693ebfa26d410cd16632616d56060721fd46e5107dd58f0d4098d96a07d4a179",
+        "result_gnss.mat": "e920a4720b7d420650a1c1b6f18c49a394f2f18d88849cafd255898375c8c6ad",
+        "result_gnss_imu.mat": "517d3401c09bd4b567c9664d763350e6ffe761117a40aea22976876de7712815"
+      },
+      "llh_xyz_max_disagreement_m": {
+        "result_gnss.mat": 3.0023418962610644e-08,
+        "result_gnss_imu.mat": 2.996196587038303e-08
+      },
+      "archived_observation_keys": 1230,
+      "truth_keys": 1230,
+      "common_finite_keys": 1230,
+      "excluded_truth_keys": [],
+      "common_scores": {
+        "result_gnss.mat": {
+          "p50_m": 0.9872342616250616,
+          "p95_m": 2.673700042444425,
+          "mean_m": 1.8304671520347433,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "result_gnss_imu.mat": {
+          "p50_m": 0.9869911430949394,
+          "p95_m": 2.3938210550563266,
+          "mean_m": 1.6904060990756329,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        },
+        "native": {
+          "p50_m": 1.276711742535844,
+          "p95_m": 2.7526515410815446,
+          "mean_m": 2.0146816418086946,
+          "earth_radius_m": 6371008.8,
+          "percentile": "linear_n_minus_1"
+        }
+      },
+      "reference_height_input": {
+        "present_in_archive": true,
+        "member": "dataset_2023/train/2022-10-06-21-51-us-ca-mtv-n/ref_hight.mat",
+        "sha256": "9daa8820bd61de72a9c351d9dcd7050cc9b7120dd46e5409ccfd32707f7fd83c",
+        "used_by_native": false,
+        "used_to_generate_archived_result": "unverified",
+        "origin": "unverified"
+      }
+    }
+  },
+  "paired_pinned_source_execution": false,
+  "official_score": false,
+  "native_inference_uses_archived_results": false,
+  "limitations": [
+    "Archived generation settings/commit not proven",
+    "MCOS v4 layout inferred from named metadata; llh/xyz independently verified within 0.001 m",
+    "Common finite-key subsets exclude archived missing output; not full-key parity",
+    "Native variants differ by documented initialization rules and binaries; not one homogeneous accuracy recipe",
+    "October reference-height MAT exists and pinned source can use it on non-initial passes; native input inventory excludes it. Archived final gaps are not same-input algorithm-only evidence."
+  ]
+}

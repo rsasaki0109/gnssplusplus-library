@@ -1,0 +1,73 @@
+{
+  "status": "one-route-matched-comparison-complete",
+  "created_unix": 1790134929.3238835,
+  "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_affine_tdcp_plan.json",
+  "plan_sha256": "2208a2d427d1113e98313bcc716a0f9c01a200261cb16e99ee3b540bc1fc3726",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "baseline_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "baseline_run_sha256": "9560a66b265d715925092db574d9627bb89242d13780c65acd71fd134519b870",
+  "binary_sha256": "c779bfbb4a4e4832259a013a5fa03363d7aa88b033ae54ac95feec66b3c67b45",
+  "scope": "One existing Pixel5 train route; same c779 executable, raw inputs and settings as completed baseline. Only TDCP previous-LOS affine geometry enabled in GNSS-first and main graphs. No stage position offsets or IMU-init changes.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "limitations": [
+    "Already exposed development route; candidate flag selected from pinned source model audit, not an unseen validation split.",
+    "Uses native satellite/anchor range convention; optional affine-class equality is not full source geodist or preprocessing parity.",
+    "Previous Phase254 experiment used another exposed Pixel5 route and has only structural evidence."
+  ],
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_pixel5_january04_affine_tdcp_v1\\validation.json",
+  "validation_sha256": "80dcd09f04ac1641ecd9ca1c4a3c08ee99a44943fb5aa52c512b9ee80ec67601",
+  "status_counts": {
+    "scored-native-development": 1
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.5955071141678703,
+  "mean_route_group_score_m": 0.5955071141678703,
+  "results": {
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.49237200610566645,
+            "p95_m": 0.696646926380243,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5945094662429546
+          },
+          "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+          "solution_sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a",
+          "wall_s": 763.495448589325,
+          "affine_factor_counts": {
+            "tdcp_only_affine_factors_inserted": 0,
+            "gnss_first_tdcp_only_affine_factors_inserted": 0
+          },
+          "seed_metadata_sha256": "91d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.4933800377865617,
+            "p95_m": 0.6976341905491789,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5955071141678703
+          },
+          "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+          "solution_sha256": "4a9f90385a325329dc758801654278a6809419c65706b3b216fd8a8ab8ff8096",
+          "wall_s": 849.9095540046692,
+          "affine_factor_counts": {
+            "tdcp_only_affine_factors_inserted": 40347,
+            "gnss_first_tdcp_only_affine_factors_inserted": 40347
+          },
+          "seed_metadata_sha256": "91d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242"
+        }
+      },
+      "delta_m": 0.0009976479249156345
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "One existing development route group, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790135827.5068207
+}

@@ -1,0 +1,177 @@
+{
+  "schema": "gsdc-a325g-source-init-diagnostic.v1",
+  "dataset_id": "2022-07-26-21-01-us-ca-sjc-s/samsunga325g",
+  "truth_used_only_for_posthoc_diagnostic": true,
+  "development_not_heldout": true,
+  "official_score": false,
+  "solution_sha256": "f4e4168c0ae6055fce4ddad3486b2bd892109ac28c4fd4aad400c7d8eee88d6f",
+  "truth_sha256": "1ed96775d792358180092145051d2f7af7910a856a5b5af489bb78c8719136b7",
+  "summary_sha256": "1f5f0dbc50db1de24fa1d8998023cd6bb6dc145fc0699fdacd53caded6bd35d3",
+  "raw_keys": 1512,
+  "truth_keys": 1487,
+  "unscored_native_keys": 25,
+  "score_m": 1.3177720642577269,
+  "all": {
+    "count": 1487,
+    "first_utc_ms": 1658869299000,
+    "last_utc_ms": 1658870784999,
+    "p50_m": 0.9741154804862077,
+    "p95_m": 1.661428648029246,
+    "max_m": 2.717253498111975,
+    "above_10m_count": 0
+  },
+  "two_minute_bins": [
+    {
+      "start_elapsed_s": 0,
+      "count": 120,
+      "first_utc_ms": 1658869299000,
+      "last_utc_ms": 1658869418000,
+      "p50_m": 1.6005273829441244,
+      "p95_m": 1.650133968287294,
+      "max_m": 2.717253498111975,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 120,
+      "count": 120,
+      "first_utc_ms": 1658869419000,
+      "last_utc_ms": 1658869538000,
+      "p50_m": 1.1067541180232188,
+      "p95_m": 1.443893451918505,
+      "max_m": 1.5268093637955475,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 240,
+      "count": 120,
+      "first_utc_ms": 1658869539000,
+      "last_utc_ms": 1658869658000,
+      "p50_m": 1.4624129357177384,
+      "p95_m": 2.015497254657345,
+      "max_m": 2.0490473068853285,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 360,
+      "count": 120,
+      "first_utc_ms": 1658869659000,
+      "last_utc_ms": 1658869778001,
+      "p50_m": 1.563734881423047,
+      "p95_m": 1.7447702477383256,
+      "max_m": 1.870922140245199,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 480,
+      "count": 120,
+      "first_utc_ms": 1658869779001,
+      "last_utc_ms": 1658869898000,
+      "p50_m": 0.9244741245109425,
+      "p95_m": 1.0171140131650758,
+      "max_m": 1.0333271356494718,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 600,
+      "count": 120,
+      "first_utc_ms": 1658869899000,
+      "last_utc_ms": 1658870018000,
+      "p50_m": 1.037904587216348,
+      "p95_m": 1.562198151872829,
+      "max_m": 1.5872085172060233,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 720,
+      "count": 120,
+      "first_utc_ms": 1658870019000,
+      "last_utc_ms": 1658870138000,
+      "p50_m": 0.5502869550506065,
+      "p95_m": 0.6506727958257013,
+      "max_m": 0.7485783717948122,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 840,
+      "count": 121,
+      "first_utc_ms": 1658870139000,
+      "last_utc_ms": 1658870258999,
+      "p50_m": 0.8299862035844809,
+      "p95_m": 1.417355785716776,
+      "max_m": 1.429616919219716,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 960,
+      "count": 120,
+      "first_utc_ms": 1658870259999,
+      "last_utc_ms": 1658870378999,
+      "p50_m": 1.252963391997431,
+      "p95_m": 1.7745792630519368,
+      "max_m": 1.786540069989709,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 1080,
+      "count": 119,
+      "first_utc_ms": 1658870379999,
+      "last_utc_ms": 1658870498000,
+      "p50_m": 0.6247981797285306,
+      "p95_m": 1.2078176815730197,
+      "max_m": 1.537242605165052,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 1200,
+      "count": 121,
+      "first_utc_ms": 1658870499000,
+      "last_utc_ms": 1658870618999,
+      "p50_m": 0.7391621899018777,
+      "p95_m": 1.1178287259128712,
+      "max_m": 1.198128392624161,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 1320,
+      "count": 120,
+      "first_utc_ms": 1658870619999,
+      "last_utc_ms": 1658870738999,
+      "p50_m": 0.864206167524437,
+      "p95_m": 0.9799336675367654,
+      "max_m": 1.1643560720555008,
+      "above_10m_count": 0
+    },
+    {
+      "start_elapsed_s": 1440,
+      "count": 46,
+      "first_utc_ms": 1658870739999,
+      "last_utc_ms": 1658870784999,
+      "p50_m": 1.2576389174511946,
+      "p95_m": 1.4166638254478685,
+      "max_m": 1.5936812782807366,
+      "above_10m_count": 0
+    }
+  ],
+  "stationary_truth_speed_below_0_5_mps": {
+    "count": 330,
+    "first_utc_ms": 1658869299000,
+    "last_utc_ms": 1658870784999,
+    "p50_m": 0.9853912248368251,
+    "p95_m": 1.6380985695168035,
+    "max_m": 2.717253498111975,
+    "above_10m_count": 0
+  },
+  "moving_truth_speed_at_least_0_5_mps": {
+    "count": 1157,
+    "first_utc_ms": 1658869413000,
+    "last_utc_ms": 1658870766999,
+    "p50_m": 0.9716617487152668,
+    "p95_m": 1.6974344449042327,
+    "max_m": 2.0490473068853285,
+    "above_10m_count": 0
+  },
+  "source_imu_initialization": true,
+  "samsung_clock_drift": false,
+  "causal_attribution": "Unproven: localization and disabled flags do not identify the cause.",
+  "checked_unix": 1790145108.7896047
+}

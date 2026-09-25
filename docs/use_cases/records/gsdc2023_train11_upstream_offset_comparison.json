@@ -1,0 +1,221 @@
+{
+ "status": "complete",
+ "scored": 11,
+ "mean_control_m": 0.8807192620857609,
+ "mean_offset_m": 0.775571312618493,
+ "improved": 9,
+ "heldout": false,
+ "official_score": false,
+ "note": "Development train drives previously exposed; single flag change --native-upstream-position-offset on identical binary/argv.",
+ "runs": {
+  "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.4546566127482394,
+    "p95_m": 0.7975510847899363,
+    "phone_score_m": 0.6261038487690879,
+    "keys": 1165
+   },
+   "offset": {
+    "p50_m": 0.37351932692771755,
+    "p95_m": 0.8156645177108409,
+    "phone_score_m": 0.5945919223192793,
+    "keys": 1165
+   },
+   "delta_m": -0.0315119264498086,
+   "wall_s": 894.2238767147064,
+   "control_solution_sha256": "e60d989461542f33a763f029a3618a0eba8d2e950e442a82e4bbe4ee360573af",
+   "offset_solution_sha256": "284aea53108bdaba014ad1361b2c5941a0c98fa050db8c06f43096c82c797164"
+  },
+  "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.7711075532932139,
+    "p95_m": 1.1197943492824993,
+    "phone_score_m": 0.9454509512878566,
+    "keys": 2162
+   },
+   "offset": {
+    "p50_m": 0.6421283593780374,
+    "p95_m": 1.0017909948694592,
+    "phone_score_m": 0.8219596771237483,
+    "keys": 2162
+   },
+   "delta_m": -0.12349127416410832,
+   "wall_s": 1335.280014514923,
+   "control_solution_sha256": "0ff5c5992385ad2e914021b589002907a0d92b3ab994373fadb8855d05264240",
+   "offset_solution_sha256": "43c9e5f62f792e0ca4283e697d15b5ba0a5168161ae90c8f6ef457a5874cf238"
+  },
+  "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.8619685621382425,
+    "p95_m": 1.7294026687265953,
+    "phone_score_m": 1.295685615432419,
+    "keys": 2163
+   },
+   "offset": {
+    "p50_m": 0.6381567507046356,
+    "p95_m": 1.385620794900083,
+    "phone_score_m": 1.0118887728023593,
+    "keys": 2163
+   },
+   "delta_m": -0.28379684263005966,
+   "wall_s": 2019.7072846889496,
+   "control_solution_sha256": "0cfd5bd24fb05a200733c3e9fb7b0bdaba919b15c25010107fe6c09fe39597a1",
+   "offset_solution_sha256": "bbb2eebb7b65c489ee39b4947dcad70f0cf83383c8a1a14806669eead7b59318"
+  },
+  "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.3326803502242312,
+    "p95_m": 0.6843741320487394,
+    "phone_score_m": 0.5085272411364853,
+    "keys": 1193
+   },
+   "offset": {
+    "p50_m": 0.3493115179625788,
+    "p95_m": 0.7098205557323005,
+    "phone_score_m": 0.5295660368474396,
+    "keys": 1193
+   },
+   "delta_m": 0.02103879571095435,
+   "wall_s": 801.1184861660004,
+   "control_solution_sha256": "1fcc0fad9441d68748ad55e735768104589bd2378995972a0e56bd24e625e372",
+   "offset_solution_sha256": "f8791f479b4333eb35fb31a61f54cfa320222765c6993dbdf481d4a83c18eae0"
+  },
+  "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.8029464509097826,
+    "p95_m": 1.124946052305761,
+    "phone_score_m": 0.9639462516077718,
+    "keys": 1102
+   },
+   "offset": {
+    "p50_m": 0.7150268169123086,
+    "p95_m": 1.058793981525183,
+    "phone_score_m": 0.8869103992187458,
+    "keys": 1102
+   },
+   "delta_m": -0.077035852389026,
+   "wall_s": 604.4890193939209,
+   "control_solution_sha256": "8a3993bc3e9515fec152946a0fa174791eb2ef7b32264b0f4409e1d2fff5b7a1",
+   "offset_solution_sha256": "a31c42301f40154161b8d657899f8f8fb1f9177cb11905b0609fd6f7fc972825"
+  },
+  "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.6021609894148877,
+    "p95_m": 1.1112591584818434,
+    "phone_score_m": 0.8567100739483655,
+    "keys": 2323
+   },
+   "offset": {
+    "p50_m": 0.5072881114040758,
+    "p95_m": 0.9538440302296703,
+    "phone_score_m": 0.7305660708168731,
+    "keys": 2323
+   },
+   "delta_m": -0.12614400313149243,
+   "wall_s": 2754.805084705353,
+   "control_solution_sha256": "113146a5261799f11c1d1cd53b22fc750980644b037bed3bfd75a1b10e1adff1",
+   "offset_solution_sha256": "38588dc929d05211f640394810d34e3b79ab0aa903768196b26c02bf16b739e5"
+  },
+  "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.3026002934345086,
+    "p95_m": 0.5569036853572851,
+    "phone_score_m": 0.42975198939589687,
+    "keys": 1383
+   },
+   "offset": {
+    "p50_m": 0.3435855214163931,
+    "p95_m": 0.6782786604517261,
+    "phone_score_m": 0.5109320909340596,
+    "keys": 1383
+   },
+   "delta_m": 0.08118010153816269,
+   "wall_s": 1064.818513393402,
+   "control_solution_sha256": "a4ed3db9cf928366d071b2c02835703ebd1197d0edb3f79097990abe47e298ab",
+   "offset_solution_sha256": "f2a89f68fa19993a724afb9fcd22319436822750177a547eeddf502b569112dc"
+  },
+  "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.9297729145213423,
+    "p95_m": 1.2376685100123583,
+    "phone_score_m": 1.0837207122668504,
+    "keys": 1399
+   },
+   "offset": {
+    "p50_m": 0.7662985603627998,
+    "p95_m": 1.0464340483114478,
+    "phone_score_m": 0.9063663043371237,
+    "keys": 1399
+   },
+   "delta_m": -0.17735440792972668,
+   "wall_s": 2056.946284532547,
+   "control_solution_sha256": "82d80a094ca32d9da1ab531bbdaeeec6202a78d26dd350872f66af3f4c2bb9d3",
+   "offset_solution_sha256": "4095c4f0512080bab1bb89d0b8fc69f5ecfa04d5002c76f015f3bdb7493b2e65"
+  },
+  "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.7145458238711746,
+    "p95_m": 0.8851975875250876,
+    "phone_score_m": 0.799871705698131,
+    "keys": 1258
+   },
+   "offset": {
+    "p50_m": 0.5624744630381473,
+    "p95_m": 0.833987669899299,
+    "phone_score_m": 0.6982310664687231,
+    "keys": 1258
+   },
+   "delta_m": -0.10164063922940791,
+   "wall_s": 3066.49601149559,
+   "control_solution_sha256": "455c63e95bbc5a91e4206e3ca2b1eb3a702e0110e081bc2bc6d26ce5630ce1d4",
+   "offset_solution_sha256": "ff4a313621b9677da681a207ce416e9f9e39de56b91c8bc5e1361d265b8f4397"
+  },
+  "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.715897462766554,
+    "p95_m": 1.5300846714898129,
+    "phone_score_m": 1.1229910671281833,
+    "keys": 1650
+   },
+   "offset": {
+    "p50_m": 0.5975980522202629,
+    "p95_m": 1.2841416707667714,
+    "phone_score_m": 0.9408698614935171,
+    "keys": 1650
+   },
+   "delta_m": -0.18212120563466616,
+   "wall_s": 1578.5931494235992,
+   "control_solution_sha256": "09978b8c723d864e85fa1a44084e4b0559f1c317efffeb2327991d0d9935c0ab",
+   "offset_solution_sha256": "06076ac1032e274c3757f3b44f70d76abc38475647a6af3f1e81e3af8154fe53"
+  },
+  "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.5446666361496283,
+    "p95_m": 1.5656382163950162,
+    "phone_score_m": 1.0551524262723222,
+    "keys": 1601
+   },
+   "offset": {
+    "p50_m": 0.42489807457908735,
+    "p95_m": 1.373906398304021,
+    "phone_score_m": 0.8994022364415541,
+    "keys": 1601
+   },
+   "delta_m": -0.15575018983076805,
+   "wall_s": 2099.028881788254,
+   "control_solution_sha256": "855b79b2cc41605f0cc2e77c91ff87961f78bc0e7a725b836ddf21788d969abb",
+   "offset_solution_sha256": "5e541a9656520ea14ba6710d00d5a80b2cb2bd909288372211e6c1185b8f05dd"
+  }
+ }
+}

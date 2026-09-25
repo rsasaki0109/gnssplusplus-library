@@ -1,0 +1,38 @@
+{
+  "status": "application-connected-disabled-selector-regression-and-source-setting-pair-audited",
+  "production_connected": true,
+  "accuracy_claim": false,
+  "source_setting_case": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+  "settings_audit": "gsdc2023_imu_stage_conditionals_audit.json",
+  "source_files_sha256": {
+    "include/libgnss++/algorithms/native_imu_refinement_attitude_reset.hpp": "d80cdc70b61ea5fc6ebc3bf2a6fe1888d952ba5ce7929e4990cd13ee8443c66c",
+    "tests/test_native_imu_refinement_attitude_reset.cpp": "790507b25b535f642125055a3b847c5f0ed9d343df4f8eb5c689d9d774551c88"
+  },
+  "tests": {
+    "passed": 3,
+    "xml_sha256": "6dd7f269ca08604345eeffe4e4cffcd6a7b12b114dd91de5a25d18fdc36e9cda",
+    "cases": [
+      "ChangesOnlyAttitudeAndPreservesUnsmoothVelocityAndClock",
+      "UsesNearestHeadingThroughSmoothedLowSpeedGap",
+      "RejectsUnobservableOrIncompleteStatesWithoutChangingInput"
+    ]
+  },
+  "contracts": [
+    "Validate the complete previous same-run IMU result through the existing handoff.",
+    "Source velocityToRpy settings: window 20, 3D speed threshold 0.5, nearest interior/end fill and 180-degree course offset.",
+    "Smoothed velocity supplies only attitude; original optimized velocity, position, raw observations and C7/D clock states remain unchanged.",
+    "No input files, archived coordinates, truth or new evaluation data."
+  ],
+  "remaining_work": [
+    "Test accuracy remains unavailable; do not promote from coverage or source setting alone."
+  ],
+  "integration_record": "gsdc2023_refinement_attitude_reset_experiment.json",
+  "comparison_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\refinement_attitude_reset_comparison.json",
+  "comparison_sha256": "b88664e5811f3b5c64f05331722dcde3971fb093fa150e98cc8ba460239f34ea",
+  "attitude_reconstruction": {
+    "epochs": 4515,
+    "low_speed_nearest_filled": 1441,
+    "max_rotation_element_error": 1.27675647831893e-15,
+    "sidecar_sha256": "85162b5570f38cb5a699797c4f84d14f9108a91fbd4e3352fe30b80dfc6602dc"
+  }
+}

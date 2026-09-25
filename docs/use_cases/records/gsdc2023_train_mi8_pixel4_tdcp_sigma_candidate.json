@@ -1,0 +1,116 @@
+{
+  "status": "two-phone-matched-comparison-complete",
+  "created_unix": 1790137411.6786559,
+  "binary_sha256": "76010f6c5e9a9296b06f8f389554f786c8d5ba8727543c7008f8e90f716ca08d",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_candidate_plan.json",
+  "plan_sha256": "df7ba959f06d227d9a139e456a3bd041cf1a76179a6c7da84cdb3e4c488ae574",
+  "baseline_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_control_plan.json",
+  "baseline_plan_sha256": "c3c82bd68a4b231bbc770ab8242731441be565a62cbabca394e9538d7b92dfee",
+  "historical_plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_fixed_recipe_plan.json",
+  "historical_plan_sha256": "8496dfc7e9910e6809ef9ff64d7205a3c3f78efa008d86eac19d9ed847d5a1d1",
+  "scope": "Matched new-executable Mi8/Pixel4 source TDCP sigma experiment; control must reproduce frozen submitted-recipe output. Candidate changes only source metre-sigma flag.",
+  "official_score": false,
+  "promoted": false,
+  "heldout": false,
+  "prior_truth_exposure": true,
+  "limitations": [
+    "Two existing exposed route groups; no heldout claim.",
+    "Admission expansion does not prove accuracy; output auditing and matched controls are required.",
+    "Drift-clock and TDCP-disabled phones remain excluded from this flag."
+  ],
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train_mi8_pixel4_tdcp_sigma_candidate_v1\\validation.json",
+  "validation_sha256": "0ab6790fc60b10b650312760a0f38acfc363fbe4e4fc259473616dfb0bf2f4fd",
+  "status_counts": {
+    "scored-native-development": 2
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.6791883668269445,
+  "mean_route_group_score_m": 0.6791883668269445,
+  "results": {
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.39846141368347665,
+            "p95_m": 1.1350577719432686,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.7667595928133726
+          },
+          "truth_sha256": "7c8cace389c16ca54e041749fd500058200dcc417f3c9b49a21753f61811c8e7",
+          "solution_sha256": "81177358e48acd3c9f7580ab83881c974eddf4091e1881bbe955d5de3c4aaf7c",
+          "wall_s": 384.8627417087555,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.03,
+            "fixed_sigma_m": 0.03,
+            "factors_inserted": 25444
+          },
+          "seed_metadata_sha256": "9813605be55a18e1431523a3b71dc0e9e3a9ad3a666190de00e765106fd8f9ff"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.5266245564132837,
+            "p95_m": 1.1523329257644392,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.8394787410888614
+          },
+          "truth_sha256": "7c8cace389c16ca54e041749fd500058200dcc417f3c9b49a21753f61811c8e7",
+          "solution_sha256": "adf23c7367e939193961df373c9c9a353af75c094cc652341b041de5cc3becde",
+          "wall_s": 1976.952445268631,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.005833472453755562,
+            "fixed_sigma_m": null,
+            "factors_inserted": 25444
+          },
+          "seed_metadata_sha256": "9813605be55a18e1431523a3b71dc0e9e3a9ad3a666190de00e765106fd8f9ff"
+        }
+      },
+      "delta_m": 0.07271914827548887
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+      "results": {
+        "control": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.25403256719963185,
+            "p95_m": 0.6789319762677022,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.466482271733667
+          },
+          "truth_sha256": "818f9db52bcc2ad6b50a7931bc09d6225d588bfd1be7fae12cf029e94227116d",
+          "solution_sha256": "a010cdfdb1a50e6c6e5934d99082edc2b1f3fdf34e26c7edf2b89f810b98fe56",
+          "wall_s": 318.2170548439026,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.03,
+            "fixed_sigma_m": 0.03,
+            "factors_inserted": 21090
+          },
+          "seed_metadata_sha256": "7c595bb64840d415ac6e829f94e67a5405453e9424fdf209352a012dc7fdc332"
+        },
+        "candidate": {
+          "score": {
+            "distance_variant": "haversine_sphere",
+            "p50_m": 0.32964789257198696,
+            "p95_m": 0.7081480925580679,
+            "percentile_variant": "linear_n_minus_1",
+            "phone_score_m": 0.5188979925650274
+          },
+          "truth_sha256": "818f9db52bcc2ad6b50a7931bc09d6225d588bfd1be7fae12cf029e94227116d",
+          "solution_sha256": "8f905062ab6b1e5f5e89665d0f2d8ee1e2992e768c3b9fb10a1414db0616f8c0",
+          "wall_s": 1204.7946166992188,
+          "tdcp_weight_diagnostics": {
+            "sigma_m": 0.0013836619418378727,
+            "fixed_sigma_m": null,
+            "factors_inserted": 21090
+          },
+          "seed_metadata_sha256": "7c595bb64840d415ac6e829f94e67a5405453e9424fdf209352a012dc7fdc332"
+        }
+      },
+      "delta_m": 0.052415720831360424
+    }
+  },
+  "paired_validation_complete": true,
+  "scope_limitation": "Two existing development route groups, not heldout. Shared-load wall time is not a controlled runtime benchmark.",
+  "checked_unix": 1790142189.5480716
+}

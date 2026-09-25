@@ -1,0 +1,53 @@
+{
+  "schema": "gsdc-a217m-missing-keys.v1",
+  "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a217m",
+  "raw_keys": 1222,
+  "native_keys": 1220,
+  "first_output_utc_ms": 1665093115304,
+  "last_output_utc_ms": 1665094334000,
+  "missing": [
+    {
+      "utc_ms": 1665093113990,
+      "before_first_output": true,
+      "after_last_output": false,
+      "raw_rows": 19,
+      "constellations": {
+        "1": 8,
+        "5": 6,
+        "3": 3,
+        "6": 2
+      },
+      "time_nanos": [
+        "2350403384"
+      ],
+      "full_bias_nanos": [
+        "-1349128329640434176"
+      ]
+    },
+    {
+      "utc_ms": 1665093115004,
+      "before_first_output": true,
+      "after_last_output": false,
+      "raw_rows": 23,
+      "constellations": {
+        "1": 9,
+        "5": 7,
+        "3": 3,
+        "6": 4
+      },
+      "time_nanos": [
+        "3359564726"
+      ],
+      "full_bias_nanos": [
+        "-1349128329644729344"
+      ]
+    }
+  ],
+  "leading_imu_states_requested": false,
+  "solution_sha256": "29217bd92919112b705696882906416cdfb6864c423685befefeb166b2ea1296",
+  "raw_input_sha256": "ee6f9645d0af045e9b4270405700c377b650e62c4b4b9214c86df3323e4756e5",
+  "scored": false,
+  "truth_read_by_this_diagnostic": false,
+  "interpretation": "Missing raw epochs are excluded by loader before native key contract. Leading-state admission is a candidate only if epochs precede the first output and same-stream clock plus continuous IMU can support initialization.",
+  "checked_unix": 1790142674.5228152
+}

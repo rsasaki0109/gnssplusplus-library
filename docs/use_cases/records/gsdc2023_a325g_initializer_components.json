@@ -1,0 +1,41 @@
+{
+  "schema": "gsdc-a325g-initializer-components.v1",
+  "checked_unix": 1790148709.2794366,
+  "control_summary_sha256": "ae7a5d08bd59ac0e61810d846d6ce0e61e1206c267e2aca5d206f5ddaa038c5e",
+  "candidate_summary_sha256": "1f5f0dbc50db1de24fa1d8998023cd6bb6dc145fc0699fdacd53caded6bd35d3",
+  "control": {
+    "epoch_heading_attitude_seeds_inserted": 0,
+    "velocity_heading_low_speed_count": 280,
+    "velocity_heading_linear_fill_count": 244,
+    "velocity_heading_nearest_fill_count": 36
+  },
+  "candidate": {
+    "epoch_heading_attitude_seeds_inserted": 1512,
+    "velocity_heading_low_speed_count": 280,
+    "velocity_heading_linear_fill_count": 0,
+    "velocity_heading_nearest_fill_count": 280
+  },
+  "code_evidence": [
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\apps\\native\\gnss_fgo_imu_no_base.cpp",
+      "sha256": "0a63c805becd47f60e2a7cf2ae726f2683e2933103ccf434b28ba2c9267ffba2"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\src\\fusion\\fusion_initialization.cpp",
+      "sha256": "5ce133c0113771b22d1f722e9b6fbd0e1a18fc79d4d9c5d1a497c74c7b5e83b6"
+    },
+    {
+      "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\src\\algorithms\\fgo_gtsam_backend.cpp",
+      "sha256": "dc73366aaf74f7b6647dfb88194cd2ff46bb77f090d124061c7259d3780daee9"
+    }
+  ],
+  "findings": [
+    "For Android, both paths replace the static-alignment attitude with GNSS velocity heading before constructing the IMU problem.",
+    "Default per-epoch pose attitudes are then propagated with IMU delta rotations; source initialization overwrites every epoch attitude with velocity-derived orientation.",
+    "Source initialization also switches low-speed interior heading fill to nearest and sets both initial biases to zero.",
+    "The approximately 19.6 m/s2 reported bias is an optimized maximum, not a measured initial bias. alignStatic sets acceleration bias to (norm(accel_mean)-g)*unit(accel_mean); that code does not initialize a 2g bias from a near-g stationary vector."
+  ],
+  "causal_attribution": "The completed source-initialization experiment is composite; per-epoch attitude and bias contributions remain unidentified.",
+  "existing_isolation_option": "--native-epoch-heading-attitude-seeds currently rejects non-Pixel5 phones, so it cannot be silently added to an A325G run. A narrowly reviewed admission extension plus matched executable controls would be needed.",
+  "inference_changed": false
+}

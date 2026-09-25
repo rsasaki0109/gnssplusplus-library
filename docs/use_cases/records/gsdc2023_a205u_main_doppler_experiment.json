@@ -1,0 +1,76 @@
+{
+  "status": "matched-main-doppler-comparison-complete",
+  "binary_sha256": "1a0f6628edeb8a7acd7dd025b35af3d274a268b6d9ce339354ba5742f35b1e0d",
+  "official_score": false,
+  "promoted": false,
+  "scope": "one exposed A205U development route; same binary, four raw inputs and args except main Doppler; no reference-height input",
+  "plans": {
+    "control": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_main_doppler_control_plan.json",
+      "sha256": "1e86ec41cca7cf643ca396c83c469b285b8867d42ad04569256ceae24b94df74"
+    },
+    "candidate": {
+      "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_main_doppler_candidate_plan.json",
+      "sha256": "44d1c2cdb673c939e21d0ed01535bf3c870098aa3c839f0f5323495bf73a5eb3"
+    }
+  },
+  "tests": {
+    "cases": 10,
+    "passed": 10,
+    "xml_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\multiphone_backend_tests.xml",
+    "xml_sha256": "d5b92540362887bccdf386e494aca45d470446f0d59d8d582b510e9c37b70e91",
+    "filter": "FGOGtsamPhase171*:FGOGtsamPhase213*",
+    "coverage": "same-run corrected Doppler transfer including MI8 and A205U; one ENU rotation; malformed rows and absent handoff rejection",
+    "first_attempt": "9/10 passed; existing Pixel5 clock-count expectation updated to zero for A205U to match its existing no-clock-between recipe; solver unchanged by this test fix"
+  },
+  "implementation": {
+    "change": "remove Pixel5-only gate from opt-in Phase213 main Doppler admission",
+    "default_enabled": false,
+    "existing_raw_imu_remap_validation_retained": true
+  },
+  "result": {
+    "status": "matched-main-doppler-comparison-complete",
+    "same_binary_inputs_other_args_verified": true,
+    "gnss_stage_byte_identical": true,
+    "gnss_stage_sha256": "666d8efae1d0f49796fe947d3af3d2841f442991d355ca8e0f0e803433d51bdd",
+    "runs": {
+      "control": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.3130854418015072,
+          "p95_m": 2.7686512559649294,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.0408683488832184
+        },
+        "doppler": {
+          "requested": false,
+          "enabled": false,
+          "factors": 0
+        },
+        "wall_s": 218.53105425834656,
+        "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "solution_sha256": "af51f80102a21f8c98cd95f0af196c1297bec575106ea7abb7b1b1bb1476a8cf"
+      },
+      "candidate": {
+        "score": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.3315488932161896,
+          "p95_m": 2.7679322111547364,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.049740552185463
+        },
+        "doppler": {
+          "requested": true,
+          "enabled": true,
+          "factors": 12041
+        },
+        "wall_s": 213.32448768615723,
+        "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+        "solution_sha256": "f221792994b4879da790d7b3b3c96b040e8fbb86180d5bdbebc2fed8b65f9c03"
+      }
+    },
+    "delta_m": 0.008872203302244586,
+    "official_score": false,
+    "promoted": false
+  }
+}

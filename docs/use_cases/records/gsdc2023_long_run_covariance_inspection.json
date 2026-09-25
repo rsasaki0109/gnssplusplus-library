@@ -1,0 +1,23 @@
+{
+  "status": "source-inspection-only-no-runtime-change",
+  "candidate": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+  "observed_live_pid": 6924,
+  "observed_cpu_seconds": 12597.44,
+  "observation_not_a_completion_claim": true,
+  "marginals_guard": "solved && config.use_lambda_ambiguity_fix && !problem.double_difference_carrier_factors.empty()",
+  "native_phase171_requires_empty_double_difference_carrier_factors": true,
+  "conclusion": "Marginals/ambiguity fixing is outside this native lane; no covariance-disable optimization applied. CPU attribution within optimize() has not been profiled.",
+  "sources": [
+    "src/algorithms/fgo_gtsam_backend.cpp:3749",
+    "src/algorithms/fgo_gtsam_backend.cpp:149",
+    "src/algorithms/fgo_gtsam_internal.hpp:1020"
+  ],
+  "trace_note": "LM trace is captured in an ostringstream during optimize and finalized afterward; absence of live iteration logs does not prove inactivity.",
+  "terminal_followup": {
+    "returncode": 0,
+    "wall_s": 13672.180906534195,
+    "main_iterations": 147,
+    "official_keys_verified": 4514,
+    "record": "gsdc2023_long_lax_native_replay.json"
+  }
+}

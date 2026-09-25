@@ -1,0 +1,62 @@
+{
+  "status": "matched-source-preset-comparison-complete",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\a205u_source_highway_plan.json",
+  "plan_sha256": "b9ff8e09ef45ba4423cf651fdc298786caa28eeff6c6c4c04f79983f4e0c05ed",
+  "binary_sha256": "493eb2f5f45de1a522c29931ef5ee7d896ec3b2a3b65de48d65206646381d3cd",
+  "baseline_final_score_m": 2.0408683488832184,
+  "baseline_environment": "Street",
+  "candidate_source_environment": "Highway",
+  "candidate_source_l5": 0,
+  "source_setting_asserted": true,
+  "source_guided_preset_not_numeric_sweep": true,
+  "position_offset_enabled_both": true,
+  "stage_export_enabled_both": true,
+  "promotion": false,
+  "official_score": false,
+  "result": {
+    "status": "matched-source-preset-comparison-complete",
+    "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "same_binary_inputs_other_args_verified": true,
+    "runs": {
+      "control": {
+        "gnss_stage": {
+          "p50_m": 1.8947256950239566,
+          "p95_m": 3.870999593225566,
+          "mean_m": 2.8828626441247613
+        },
+        "final": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.3130854418015072,
+          "p95_m": 2.7686512559649294,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.0408683488832184
+        },
+        "wall_s": 252.70565271377563,
+        "gnss_iterations": 284,
+        "solution_sha256": "af51f80102a21f8c98cd95f0af196c1297bec575106ea7abb7b1b1bb1476a8cf"
+      },
+      "candidate": {
+        "gnss_stage": {
+          "p50_m": 2.1077728963299815,
+          "p95_m": 3.734019508513427,
+          "mean_m": 2.9208962024217042
+        },
+        "final": {
+          "distance_variant": "haversine_sphere",
+          "p50_m": 1.6297434939073376,
+          "p95_m": 2.811847056770455,
+          "percentile_variant": "linear_n_minus_1",
+          "phone_score_m": 2.2207952753388964
+        },
+        "wall_s": 226.48260736465454,
+        "gnss_iterations": 287,
+        "solution_sha256": "f13c06b59a8d99678dfa2964d16a54a864062d2aa8c165b7dc91d8a17e81dda7"
+      }
+    },
+    "final_delta_m": 0.17992692645567798,
+    "stage_delta_m": 0.03803355829694288,
+    "official_score": false,
+    "promoted": false,
+    "scope": "one exposed development route; source Type/L5 preset as a unit, not individual parameter attribution"
+  }
+}

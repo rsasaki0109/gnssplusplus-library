@@ -1,0 +1,171 @@
+{
+  "status": "completed-read-only-segment-diagnostic",
+  "official_score": false,
+  "promoted": false,
+  "inference_changes": false,
+  "scope": "Chronological quarters of already exposed truth keys for the frozen v2 refinement pairs. These diagnostic subsets are neither held out nor additive components of the whole-route percentile score. No threshold or route setting is tuned from this report.",
+  "phones": {
+    "mi8": {
+      "case": "2022-08-04-20-07-us-ca-sjc-q/mi8",
+      "paired_comparison_sha256": "f0d3a6b404306ab15a3735d71acfd8151d912ca1fb183c36376dde22df4d54b1",
+      "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+      "truth_keys": 1400,
+      "segments": [
+        {
+          "quarter": 1,
+          "keys": 350,
+          "first_utc_ms": 1659643672999,
+          "last_utc_ms": 1659644021999,
+          "control": {
+            "p50_m": 1.1360875053461397,
+            "p95_m": 1.5674177187749894,
+            "mean_p50_p95_m": 1.3517526120605645
+          },
+          "candidate": {
+            "p50_m": 1.171619194183669,
+            "p95_m": 1.5870558886520925,
+            "mean_p50_p95_m": 1.3793375414178808
+          },
+          "delta_mean_p50_p95_m": 0.027584929357316268,
+          "pointwise_improved_fraction": 0.0
+        },
+        {
+          "quarter": 2,
+          "keys": 350,
+          "first_utc_ms": 1659644022999,
+          "last_utc_ms": 1659644371999,
+          "control": {
+            "p50_m": 1.01755506193741,
+            "p95_m": 1.2176730288331652,
+            "mean_p50_p95_m": 1.1176140453852876
+          },
+          "candidate": {
+            "p50_m": 0.9536899267056469,
+            "p95_m": 1.1805205693535339,
+            "mean_p50_p95_m": 1.0671052480295904
+          },
+          "delta_mean_p50_p95_m": -0.050508797355697244,
+          "pointwise_improved_fraction": 0.6857142857142857
+        },
+        {
+          "quarter": 3,
+          "keys": 350,
+          "first_utc_ms": 1659644372999,
+          "last_utc_ms": 1659644721999,
+          "control": {
+            "p50_m": 0.39804910328648513,
+            "p95_m": 0.8586519258655112,
+            "mean_p50_p95_m": 0.6283505145759982
+          },
+          "candidate": {
+            "p50_m": 0.4587105286469697,
+            "p95_m": 0.9638543701802258,
+            "mean_p50_p95_m": 0.7112824494135978
+          },
+          "delta_mean_p50_p95_m": 0.08293193483759953,
+          "pointwise_improved_fraction": 0.17714285714285713
+        },
+        {
+          "quarter": 4,
+          "keys": 350,
+          "first_utc_ms": 1659644722999,
+          "last_utc_ms": 1659645071999,
+          "control": {
+            "p50_m": 0.8287655768056749,
+            "p95_m": 1.047905753381797,
+            "mean_p50_p95_m": 0.938335665093736
+          },
+          "candidate": {
+            "p50_m": 0.8254413208059841,
+            "p95_m": 1.137929128865232,
+            "mean_p50_p95_m": 0.981685224835608
+          },
+          "delta_mean_p50_p95_m": 0.043349559741872046,
+          "pointwise_improved_fraction": 0.6
+        }
+      ],
+      "whole_route_pointwise_improved_fraction": 0.3657142857142857
+    },
+    "a205u": {
+      "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+      "paired_comparison_sha256": "8be0cd7d01b964fc964f064b3af024734b2808573b6694ca4c03f6af9976992e",
+      "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+      "truth_keys": 1213,
+      "segments": [
+        {
+          "quarter": 1,
+          "keys": 304,
+          "first_utc_ms": 1665093124006,
+          "last_utc_ms": 1665093427999,
+          "control": {
+            "p50_m": 1.8427463693458446,
+            "p95_m": 2.7449779241493344,
+            "mean_p50_p95_m": 2.2938621467475895
+          },
+          "candidate": {
+            "p50_m": 2.2994443289158175,
+            "p95_m": 2.635962153412652,
+            "mean_p50_p95_m": 2.4677032411642346
+          },
+          "delta_mean_p50_p95_m": 0.17384109441664508,
+          "pointwise_improved_fraction": 0.4605263157894737
+        },
+        {
+          "quarter": 2,
+          "keys": 303,
+          "first_utc_ms": 1665093429000,
+          "last_utc_ms": 1665093730999,
+          "control": {
+            "p50_m": 2.1279357517581947,
+            "p95_m": 2.8235088844184886,
+            "mean_p50_p95_m": 2.4757223180883416
+          },
+          "candidate": {
+            "p50_m": 2.074355888603479,
+            "p95_m": 2.7099830545534997,
+            "mean_p50_p95_m": 2.392169471578489
+          },
+          "delta_mean_p50_p95_m": -0.08355284650985251,
+          "pointwise_improved_fraction": 1.0
+        },
+        {
+          "quarter": 3,
+          "keys": 303,
+          "first_utc_ms": 1665093732000,
+          "last_utc_ms": 1665094034000,
+          "control": {
+            "p50_m": 0.9251698847497963,
+            "p95_m": 2.0193593349620667,
+            "mean_p50_p95_m": 1.4722646098559315
+          },
+          "candidate": {
+            "p50_m": 0.8514268297642791,
+            "p95_m": 1.9068035312662772,
+            "mean_p50_p95_m": 1.3791151805152781
+          },
+          "delta_mean_p50_p95_m": -0.0931494293406534,
+          "pointwise_improved_fraction": 0.8844884488448845
+        },
+        {
+          "quarter": 4,
+          "keys": 303,
+          "first_utc_ms": 1665094035000,
+          "last_utc_ms": 1665094337000,
+          "control": {
+            "p50_m": 0.9123077595020298,
+            "p95_m": 2.6066733468110206,
+            "mean_p50_p95_m": 1.7594905531565252
+          },
+          "candidate": {
+            "p50_m": 0.85664044743963,
+            "p95_m": 2.2059894482534617,
+            "mean_p50_p95_m": 1.5313149478465458
+          },
+          "delta_mean_p50_p95_m": -0.2281756053099795,
+          "pointwise_improved_fraction": 0.66996699669967
+        }
+      ],
+      "whole_route_pointwise_improved_fraction": 0.7535037098103875
+    }
+  }
+}

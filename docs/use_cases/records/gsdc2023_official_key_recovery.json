@@ -1,0 +1,31 @@
+{
+  "status": "historical-official-artifact-hash-verified",
+  "source": "E:\\rtklib_v2_ws_data\\gsdc2023\\upstream-source\\results\\sample_submission.csv",
+  "source_raw_sha256": "cf7c8aa017a58deafe91e712b3350adfc9e9471a17882d84271b4675fedcaa84",
+  "normalized_lf_sha256": "b0c4853076f715d6bdca46e5c8c99e575f7982d8ee4fc9c0fe417507badcb780",
+  "normalized_lf_bytes": 5286788,
+  "authority_record": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\smartphone_r5_kaggle_official_sample_promotion_v1.json",
+  "authority_record_sha256": "459834ac570ed746d1d4f3a0739879de8e80a0cb499d5a37f23933c4301376b0",
+  "key_artifact": "E:\\rtklib_v2_ws_output\\gsdc_native\\official_submission_keys.json",
+  "key_artifact_sha256": "5a155ed195ebadf65025c3a849d8cbec0849853aa379cac3db2760c4bd6541b0",
+  "key_count": 71936,
+  "drive_count": 40,
+  "sample_coordinates_used_for_estimation": false,
+  "new_network_download": false,
+  "normalization": "CRLF to LF only",
+  "coverage_artifact": "E:\\rtklib_v2_ws_output\\gsdc_native\\official_key_coverage.json",
+  "verified_native_official_complete_drive_count": 10,
+  "verified_native_official_complete_drives": [
+    "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+    "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+    "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+    "2022-02-23-17-46-us-ca-lax-n/pixel5",
+    "2022-02-24-22-14-us-ca-lax-i/pixel5",
+    "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+    "2022-04-04-16-31-us-ca-lax-x/pixel5",
+    "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+    "2023-04-27-19-25-us-ca-mtv-pe1/pixel5"
+  ],
+  "first_epoch_replay": "E:/rtklib_v2_ws_output/gsdc_native/official_first_epoch_regression_v1/mi8_november/run.json"
+}

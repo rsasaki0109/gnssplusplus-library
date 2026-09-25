@@ -1,0 +1,19 @@
+{
+  "submission_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\all40_a205u_a325g_g988b_source_init_submission_v1\\submission.csv",
+  "submission_sha256": "c318140ed183290e07101ce877860de8807f3c3ac8b636dfd6d62cdb215837ef",
+  "competition": "smartphone-decimeter-2023",
+  "description": "libgnss++ native all40 A205u A325G G988B source init sha256:c318140ed183290e",
+  "attempted_unix": 1790163014.247322,
+  "status": "server-accepted",
+  "submitted": true,
+  "authorization": "User explicitly instructed submission of this exact reviewed candidate in chat. No browser login authorized.",
+  "submission_ref": 56491795,
+  "server_message": "Successfully submitted to Google Smartphone Decimeter Challenge 2023-2024",
+  "official_status": "SubmissionStatus.COMPLETE",
+  "public_score_m": 1.396,
+  "private_score_m": 1.333,
+  "checked_unix": 1790163062.0660374,
+  "goal_achieved": false,
+  "reference_target_public_m": 0.789,
+  "reference_target_private_m": 0.928
+}

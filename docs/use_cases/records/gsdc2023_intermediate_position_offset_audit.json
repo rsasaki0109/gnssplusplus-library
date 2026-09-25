@@ -1,0 +1,44 @@
+{
+  "status": "application-connected-matched-pairs-audited-not-promoted",
+  "production_connected": true,
+  "accuracy_claim": false,
+  "promoted": false,
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_files_sha256": {
+    "fgo_gnss.m": "0c0b747dd90b801b11b60db0aef296d0eaa8c92978e69a02ffa8140927a88bee",
+    "fgo_gnss_imu.m": "33a6124c1779ad1995bb5afbd142c2c8822f1e53e069a2af33c61e0e76349d42",
+    "run_fgo.m": "6f3a8d1fe099e5de305ea4fae1a62b8cd4b0ad5ef3eaebd0f24d99fd16be0336",
+    "functions/add_position_offset.m": "6316a8ab0105a072d5299898eb773da1068ca2157d49198a60d10eb301ab01f5",
+    "functions/eul2rotm.m": "27a6801539c89e16589a1ee46f11eeb04515f58b3c3cc4db8dd4ae0fd34ea380",
+    "functions/vel2rpy.m": "cc80f2e51071bf5bccc6e0bb0ddc0ba741ef467e32d18d1bbfa1d452eeee7a5b"
+  },
+  "native_files_sha256": {
+    "include/libgnss++/algorithms/native_stage_position_offset.hpp": "b23bd6e076b3e04d268f63bb39139e76b52cc0d5d14e0aa0bcc52c75a29bdc5b",
+    "tests/test_native_stage_position_offset.cpp": "c84f9ce488a2f3f9205d2810539e837d3ec3459f5ffbd6bd68e2512ca12f2608"
+  },
+  "gap": "Pinned source saves corrected position after GNSS and initial IMU; native handoffs currently use uncorrected optimized positions. Final-only output offset is not an equivalent stage transition.",
+  "native_diagnostic": {
+    "case": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+    "input": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_laxp_attitude_reset_candidate_v1\\00\\summary.json.attitude-reset-input.json",
+    "input_sha256": "85162b5570f38cb5a699797c4f84d14f9108a91fbd4e3352fe30b80dfc6602dc",
+    "epochs": 4515,
+    "horizontal_displacement_min_m": 0.12916723485789097,
+    "horizontal_displacement_max_m": 0.3162277627531917,
+    "vertical_displacement_min_m": -0.28864480843965723,
+    "vertical_displacement_max_m": 0.21680424731787742,
+    "truth_used": false,
+    "optimized_again": false
+  },
+  "remaining": [
+    "Optional reset-plus-offset composition still lacks a matched real-data test.",
+    "No paired MATLAB runtime evidence; no phone-wide or official improvement proved."
+  ],
+  "tests": {
+    "passed": 3,
+    "xml_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\stage_position_offset_tests.xml",
+    "xml_sha256": "3af66067e5f472f496d965859868261913b49c072eb61752b35bb48490263d57",
+    "first_attempt": "2/3 passed; expected-vector fixture used an Eigen lazy expression referencing a temporary. Changed expected to an evaluated Vector3d; production helper unchanged.",
+    "runtime": "First test launch lacked DLL PATH; rerun with existing GTSAM/vcpkg runtime directories."
+  },
+  "integration_record": "gsdc2023_stage_position_offset_experiment.json"
+}

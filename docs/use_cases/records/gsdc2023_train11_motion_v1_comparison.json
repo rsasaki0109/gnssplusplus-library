@@ -1,0 +1,202 @@
+{
+ "status": "partial",
+ "scored": 10,
+ "mean_control_m": 0.7461219418228315,
+ "mean_offset_m": 0.7423987658588882,
+ "improved": 7,
+ "heldout": false,
+ "official_score": false,
+ "note": "Development train drives previously exposed; control = offset run; control = extra-bands run; added Phase217 main XXVV motion with upstream sigma.",
+ "runs": {
+  "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.4793154069016312,
+    "p95_m": 0.8579240854610684,
+    "phone_score_m": 0.6686197461813498,
+    "keys": 2162
+   },
+   "offset": {
+    "p50_m": 0.4739573841285574,
+    "p95_m": 0.8394765262788401,
+    "phone_score_m": 0.6567169552036988,
+    "keys": 2162
+   },
+   "delta_m": -0.011902790977651012,
+   "wall_s": 659.5198647975922,
+   "control_solution_sha256": "632cfae5e0a2bbfa0d1c8ada7a92c0542af416a917ebb344df3145b4889032d0",
+   "offset_solution_sha256": "5899f5b31f4793013c56f5fd49e7e797eeeea130c14cb76da570a18adc9f6282"
+  },
+  "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.6186150607762386,
+    "p95_m": 1.1628380622825492,
+    "phone_score_m": 0.8907265615293939,
+    "keys": 2163
+   },
+   "offset": {
+    "p50_m": 0.6070024190063875,
+    "p95_m": 1.133298369236528,
+    "phone_score_m": 0.8701503941214577,
+    "keys": 2163
+   },
+   "delta_m": -0.02057616740793622,
+   "wall_s": 639.3407323360443,
+   "control_solution_sha256": "3a60f0462163b7a0a12f9e4e649252fd54e4d966a30db521891fb66b797ecab0",
+   "offset_solution_sha256": "9e466c5e45c8ac9eba617b463d4e59c5d838b5d36dec234e32d3b7276095c2f4"
+  },
+  "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.30813004286404144,
+    "p95_m": 0.7489384695345347,
+    "phone_score_m": 0.5285342561992881,
+    "keys": 1193
+   },
+   "offset": {
+    "p50_m": 0.42611054186449815,
+    "p95_m": 0.854801545947776,
+    "phone_score_m": 0.6404560439061371,
+    "keys": 1193
+   },
+   "delta_m": 0.11192178770684902,
+   "wall_s": 281.3956079483032,
+   "control_solution_sha256": "7c025113f6e4f28f773a8d11851afeb5eeea5f4ad3ec5ec05b9525506af9fcaa",
+   "offset_solution_sha256": "43b6fcb430d68916f728aa8801dd149bd81a639578e60c373bfd14d7b3f0b1b4"
+  },
+  "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.7170031072613399,
+    "p95_m": 1.1995816707294744,
+    "phone_score_m": 0.9582923889954071,
+    "keys": 1102
+   },
+   "offset": {
+    "p50_m": 0.7424998785176025,
+    "p95_m": 1.1887698994543632,
+    "phone_score_m": 0.9656348889859828,
+    "keys": 1102
+   },
+   "delta_m": 0.007342499990575679,
+   "wall_s": 208.23994946479797,
+   "control_solution_sha256": "e9d64c3fb5871f77a476426c0cee2d6c9fc56e9b43b168ee3e05ea91a5db88d1",
+   "offset_solution_sha256": "a470d14bee2d7b25b4983142d09fbc2fa98578d271ba298bf44ce397d1809799"
+  },
+  "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.47457029338097056,
+    "p95_m": 0.8277300250846712,
+    "phone_score_m": 0.6511501592328208,
+    "keys": 2323
+   },
+   "offset": {
+    "p50_m": 0.4658536758118428,
+    "p95_m": 0.8433563823246967,
+    "phone_score_m": 0.6546050290682697,
+    "keys": 2323
+   },
+   "delta_m": 0.0034548698354488483,
+   "wall_s": 3545.239224910736,
+   "control_solution_sha256": "c6ecd505c6b9bf1d1c1fb348c4b74a91502396b2a2b0109dd9a4a52a982503a0",
+   "offset_solution_sha256": "82a2d6802239ab826e82aa12e5a05edf7dcf0d5e3b55d599f99b31857eb4eee4"
+  },
+  "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.3256021992110392,
+    "p95_m": 0.5890347578698758,
+    "phone_score_m": 0.4573184785404575,
+    "keys": 1383
+   },
+   "offset": {
+    "p50_m": 0.327518888029996,
+    "p95_m": 0.5705369849781821,
+    "phone_score_m": 0.449027936504089,
+    "keys": 1383
+   },
+   "delta_m": -0.008290542036368476,
+   "wall_s": 283.7355442047119,
+   "control_solution_sha256": "6752eac1c387fbb10d9494d8fa5f2d3b4fd8ee8256d472d384cec74b2d4c50fc",
+   "offset_solution_sha256": "019067890f505c0281724369a1e22cbcd393caba6d31eb670312b76570757984"
+  },
+  "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.592296488112717,
+    "p95_m": 0.9017698174563309,
+    "phone_score_m": 0.747033152784524,
+    "keys": 1399
+   },
+   "offset": {
+    "p50_m": 0.5915129399719572,
+    "p95_m": 0.868026711563339,
+    "phone_score_m": 0.7297698257676482,
+    "keys": 1399
+   },
+   "delta_m": -0.01726332701687583,
+   "wall_s": 748.6723279953003,
+   "control_solution_sha256": "c7bab2fa115a8535f830635fc31942aa3966975347bbdaa21acda4d08f524232",
+   "offset_solution_sha256": "fae8e55fb5ca32bf78e5c1f47074660a6c90be5ae0e1b8e36aa237f753051009"
+  },
+  "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.5614793858065465,
+    "p95_m": 0.8409541248095255,
+    "phone_score_m": 0.701216755308036,
+    "keys": 1258
+   },
+   "offset": {
+    "p50_m": 0.5582089016994496,
+    "p95_m": 0.8255493451772498,
+    "phone_score_m": 0.6918791234383497,
+    "keys": 1258
+   },
+   "delta_m": -0.00933763186968628,
+   "wall_s": 518.7725865840912,
+   "control_solution_sha256": "74511e28b3059da1783178426bd681f36b14b35b24d56cf21e597444d9877a18",
+   "offset_solution_sha256": "aaf288d386bf53ababf3f0290bbcb1c6d45ff82c450a926311832b4a48a81366"
+  },
+  "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.8658973009510144,
+    "p95_m": 1.14757087989193,
+    "phone_score_m": 1.006734090421472,
+    "keys": 1650
+   },
+   "offset": {
+    "p50_m": 0.8564326529195398,
+    "p95_m": 1.1337416136857443,
+    "phone_score_m": 0.9950871333026421,
+    "keys": 1650
+   },
+   "delta_m": -0.011646957118830015,
+   "wall_s": 622.901374578476,
+   "control_solution_sha256": "4747c27fe0127a74e2060165b95f69c0efd0023a67f3335d3c2a61e2a21d2a4d",
+   "offset_solution_sha256": "e2fe5111e5a77a3d8c8b3c0100dbaa99f5d24b27d869fd7638782fc8e25dcad5"
+  },
+  "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+   "status": "scored",
+   "control": {
+    "p50_m": 0.3617498185611534,
+    "p95_m": 1.341437839509978,
+    "phone_score_m": 0.8515938290355657,
+    "keys": 1601
+   },
+   "offset": {
+    "p50_m": 0.3413882019022621,
+    "p95_m": 1.1999324546789503,
+    "phone_score_m": 0.7706603282906062,
+    "keys": 1601
+   },
+   "delta_m": -0.08093350074495953,
+   "wall_s": 1433.3608102798462,
+   "control_solution_sha256": "6bba6fdbfb468cc6b2366ba542e27a5c6b3481d6af1b451b9605246d2be71042",
+   "offset_solution_sha256": "0a2c334565bafe90edb08ade5dd2b797e9de1300cffd610b09da28f1e9874ef4"
+  }
+ }
+}

@@ -1,0 +1,105 @@
+{
+  "status": "all40-scored-native-development",
+  "plan_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_plan.json",
+  "plan_sha256": "67efef7c87fc883ffe56fb28974692f96a8f77ee7ed51a47fe1ad0d61554a7f3",
+  "binary_sha256": "d73f779ea848a7409a5e12d0c1e6e129cf0b8f004a7e9e2fcf7f9a44d6f231f5",
+  "drive_count": 40,
+  "route_group_count": 29,
+  "original_directory_group_count": 30,
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "scope": "All 40 existing train drives replayed with one frozen executable and fixed corrected recipe. Four explicit input-handling repairs; phone-wide source initialization policy. No per-drive best-output selection.",
+  "policy": {
+    "source_imu_initialization_phones": [
+      "mi8",
+      "xiaomimi8",
+      "sm-a205u",
+      "samsunga325g",
+      "sm-g988b"
+    ],
+    "input_handling_repairs": [
+      {
+        "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_mi8_january04_long_gap.json",
+        "record_sha256": "069827953c91b7abd0767dbfb197fd6b986db1fd920bd74fd97770e53b801857",
+        "plan_sha256": "8fe97457e12c4e834cba98b92ec77d918b2eeb09083e1deba87131b5bff0500b",
+        "case": "2021-01-04-22-40-us-ca-mtv-a/mi8"
+      },
+      {
+        "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a205u_fixed_recipe_recovery.json",
+        "record_sha256": "9e6bfa041f7f70849c6a8d860026b366c4c6f0d00bb7c487f6d89f5d4a2287ad",
+        "plan_sha256": "caa25bfd7bc4a56f24638dbc316d7a329103f4aa7ede16bee6f50191146e511a",
+        "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u"
+      },
+      {
+        "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_a217m_bounded_tail.json",
+        "record_sha256": "0e5b6d7d8a04cef99968a4a9ca84ad66c462e0d79186eb2f153b1f7618dbc44c",
+        "plan_sha256": "7f041c56338ee6eb4dc4e3baeab4fadaedcb22f811225418439a9e50731fb243",
+        "case": "2022-10-06-21-51-us-ca-mtv-n/sm-a217m"
+      },
+      {
+        "record_path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\docs\\use_cases\\records\\gsdc2023_train_pixel7pro_may25_clock_cleanup_verified.json",
+        "record_sha256": "9621169e7998eadef4a3eb2f9534a11ee544bc435b522a769c59a90eca3202a2",
+        "plan_sha256": "e1a946684fe8a25a915fd8c25b11737338d0b19937a2d46d8654027561be13b9",
+        "case": "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro"
+      }
+    ],
+    "additional_doppler_or_noise_tuning": false,
+    "selection": "Existing diagnosed coverage failures and completed phone initialization comparisons; all train routes exposed. Fixed before this replay. Not a heldout evaluation."
+  },
+  "created_unix": 1790157725.0618424,
+  "runner_pid": 55560,
+  "started_unix": 1790157733.5379388,
+  "native_returncodes": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": 0,
+    "2021-01-04-22-40-us-ca-mtv-a/mi8": 0,
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": 0,
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": 0,
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": 0,
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": 0,
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": 0,
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": 0,
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": 0,
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": 0,
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": 0,
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": 0,
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8": 0,
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5": 0,
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": 0,
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": 0,
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": 0,
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": 0,
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": 0,
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g": 0,
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": 0,
+    "2022-08-04-20-07-us-ca-sjc-q/mi8": 0,
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": 0,
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": 0,
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m": 0,
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": 0,
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": 0,
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": 0,
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": 0,
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": 0,
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": 0,
+    "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g": 0,
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": 0,
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": 0,
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": 0,
+    "2023-09-05-23-07-us-ca-routen/pixel5": 0,
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": 0,
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": 0,
+    "2023-09-07-18-59-us-ca/pixel5": 0,
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": 0
+  },
+  "validation_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_v1\\validation.json",
+  "validation_sha256": "c1af67ea099ae15af480ee75b76bb715f988b7f69c332aac57185c7b7c0e6974",
+  "status_counts": {
+    "scored-native-development": 40
+  },
+  "complete": true,
+  "mean_drive_score_m": 0.9743933949452523,
+  "mean_route_group_score_m": 0.933090889324813,
+  "grouped_summary_path": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_summary.json",
+  "grouped_summary_sha256": "850f5042bb4c9338436f64c939f86569398a6cb736c3d48ddcfcc7c0baf1023e"
+}

@@ -1,0 +1,140 @@
+{
+  "status": "paired-replay-complete-original-raw-key-coverage-failed",
+  "option": "--native-samsung-clock-drift",
+  "scope": "source-listed Samsung phones, Android Phase171 native raw-P graph; default unchanged",
+  "input_trajectory": "same-invocation native raw-P SPP/temporal initialization with its provenance",
+  "source_commit": "29923f9f370f09ebc00f96d8cca375007a18e7d5",
+  "source_reference": "preprocessing.m GPS L1 median drift and adjacent-jump mask/fill",
+  "binary_sha256": "3e6a92978c3042554126a7535c2e900ac1799bc667993ee99730dff0bd2ee474",
+  "same_binary_and_inputs_verified": true,
+  "only_inference_argument_difference": "--native-samsung-clock-drift",
+  "unit_tests": {
+    "passed": 5,
+    "failed": 0,
+    "xml": "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_drift_tests.xml"
+  },
+  "independent_diagnostic_medians_exact_match_epochs": 1697,
+  "jump_masks": 0,
+  "filled_values": 0,
+  "candidate_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_drift_regression_v1\\candidate\\run.json",
+  "control_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\samsung_drift_regression_v1\\control\\run.json",
+  "paired_upstream_equivalence_proven": false,
+  "position_accuracy_evaluated": false,
+  "limitations": [
+    "Uses native Doppler satellite geometry and native initial trajectory, not a paired upstream satellite/trajectory execution",
+    "Source receiver clock bias median replacement is not part of this drift-only change",
+    "Raw seed adapter still requires a finite incoming clock drift before this preprocessing stage"
+  ],
+  "runs": {
+    "control": {
+      "audit": {
+        "returncode": 0,
+        "wall_s": 367.04781460762024,
+        "binary_sha256": "3e6a92978c3042554126a7535c2e900ac1799bc667993ee99730dff0bd2ee474",
+        "status": "coverage-failed",
+        "raw_utc_groups": 1699,
+        "expected_output_keys": 1698,
+        "output_rows": 1696,
+        "missing_raw_keys": 2,
+        "extra_raw_keys": 0,
+        "duplicate_output_keys": 0,
+        "complete_ordered_raw_key_match": false,
+        "finite_phone_coordinates": true,
+        "summary_count_matches": false,
+        "key_contract": {
+          "warmup_epoch_excluded": true,
+          "raw_epoch_keys": 1697,
+          "target_epochs": 1696,
+          "exact_solution_epochs": 1696,
+          "interpolated_epochs": 0,
+          "edge_hold_epochs": 0,
+          "unresolved_epochs": 0,
+          "solution_time_tolerance_ms": 2,
+          "max_interpolation_gap_ms": 0,
+          "max_edge_hold_gap_ms": 0,
+          "coordinate_interpolation": "ECEF linear then geodetic",
+          "device_wls_coordinates_used": false
+        },
+        "position_accuracy_evaluated": false,
+        "native_exact_output_fraction": 1.0,
+        "output_interpolation_or_hold_count": 0,
+        "all_output_epochs_from_native_states": false,
+        "temporal_initial_guess_count": 0
+      },
+      "wall_s": 367.04781460762024,
+      "graph_iterations": 95,
+      "graph_final_cost": 392169.991620695,
+      "tdcp_rms_m": 8.94334091184299,
+      "tdcp_max_abs_m": 883.1675252663465,
+      "solution_sha256": "0243c6a6215377f46fcdff881e4271e6b2e3c430f0da9621f6553bebb38a7591"
+    },
+    "candidate": {
+      "audit": {
+        "returncode": 0,
+        "wall_s": 393.80170702934265,
+        "binary_sha256": "3e6a92978c3042554126a7535c2e900ac1799bc667993ee99730dff0bd2ee474",
+        "status": "coverage-failed",
+        "raw_utc_groups": 1699,
+        "expected_output_keys": 1698,
+        "output_rows": 1696,
+        "missing_raw_keys": 2,
+        "extra_raw_keys": 0,
+        "duplicate_output_keys": 0,
+        "complete_ordered_raw_key_match": false,
+        "finite_phone_coordinates": true,
+        "summary_count_matches": false,
+        "key_contract": {
+          "warmup_epoch_excluded": true,
+          "raw_epoch_keys": 1697,
+          "target_epochs": 1696,
+          "exact_solution_epochs": 1696,
+          "interpolated_epochs": 0,
+          "edge_hold_epochs": 0,
+          "unresolved_epochs": 0,
+          "solution_time_tolerance_ms": 2,
+          "max_interpolation_gap_ms": 0,
+          "max_edge_hold_gap_ms": 0,
+          "coordinate_interpolation": "ECEF linear then geodetic",
+          "device_wls_coordinates_used": false
+        },
+        "position_accuracy_evaluated": false,
+        "native_exact_output_fraction": 1.0,
+        "output_interpolation_or_hold_count": 0,
+        "all_output_epochs_from_native_states": false,
+        "temporal_initial_guess_count": 0,
+        "samsung_clock_drift": {
+          "epochs": 1697,
+          "jump_masks": 0,
+          "filled_values": 0,
+          "trajectory": "same-invocation-native-raw-P-initial-trajectory",
+          "missing_original_raw_keys": 2
+        }
+      },
+      "wall_s": 393.80170702934265,
+      "graph_iterations": 94,
+      "graph_final_cost": 392169.98381710745,
+      "tdcp_rms_m": 8.942814728574223,
+      "tdcp_max_abs_m": 883.1148837179983,
+      "solution_sha256": "3f7315a58ef021f1aae8fe8a5f5e2224129feb15a28f382b14a08b6d97eb106d"
+    }
+  },
+  "candidate_control_coordinate_difference_m": {
+    "median": 4.447789048178663e-05,
+    "max": 0.00025723046497547745,
+    "not_position_error": true
+  },
+  "raw_key_scope": {
+    "original_csv_groups": 1699,
+    "loader_selected_groups": 1697,
+    "output_rows": 1696,
+    "omitted_raw_groups": [
+      1665089219996,
+      1665089221001
+    ],
+    "omitted_groups_have_valid_received_sv_time_rows": false,
+    "omitted_groups_bias_uncertainty_nanos": 2000021.75,
+    "upstream_preprocessing_bias_uncertainty_limit_nanos": 10000,
+    "source_setting_Nepoch": 1697,
+    "official_submission_keys_verified": false
+  }
+}
