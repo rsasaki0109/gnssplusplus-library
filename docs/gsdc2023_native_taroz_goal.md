@@ -3178,3 +3178,16 @@ A line-by-line reading of upstream `fgo_gnss_imu.m` (non-init) against the nativ
 Other upstream final-pass items verified present natively: P (SNR-sigma, Huber), TDCP, IMU preintegration with bias random walk, stop velocity/pose factors, height factors (added), and the post-solve phone offset (added). Main-graph Doppler remains absent. Adding it via Phase213 or the refinement pass breaks July14 SM-G988B, whose raw Doppler is clean against truth (GPS L1 MAD 0.055 m/s), so the failure lies in native processing around two short stops at minutes 4-9. It is not yet diagnosed.
 
 July14 SM-G988B main-Doppler breakdown characterized (truth used for diagnosis only). Relative to truth, the Phase213 solution carries an approximately constant **world-frame position offset of about 5 m** over the whole segment between the U-turn stop at t≈255 s and the next U-turn stop at t≈550 s. Its along/cross components flip sign with the 180° heading reversals while the ENU vector stays the same, so this is not an along-track Doppler time-tag effect (correlation with acceleration +0.06) or a heading error. It vanishes after the third U-turn. The initial IMU pass of the refinement run already shows it (3.75 m). Interpretation: with main-graph Doppler (VD + receiver drift), a stop-bounded segment slides as a rigid block that Huber-weighted pseudorange does not pull back (local minimum). Candidate causes to check next: segment-wise drift/clock coupling through the VD factor at stop boundaries, and stop pose factors interacting with the Doppler velocity. Not yet resolved.
+
+### Checkpoint and pause (2026-09-25 evening)
+
+Paused on user instruction. **The goal is not achieved.** Best official: ref 56536540, `cf4a73e3...`, **Public 1.133 m / Private 1.055 m** (taroz 0.789 / 0.928; Private gap 0.127 m). Progress this cycle: Private 1.333 → 1.219 (upstream phone offset) → 1.088 (base GPS L5 retained) → 1.055 (train-GT height map + relative height).
+
+Additional G988B main-Doppler checks: removing stop constraints does not change the breakdown (3.016 m); raw epochs are clean (one 1001 ms step); the Phase213 VD factor uses an absolute receiver-only range rate with ENU LOS, matching upstream `DopplerFactor_VD`. Best explanation: a stop/U-turn-bounded segment converging to a rigidly shifted local minimum once velocities are strongly constrained. Unresolved.
+
+Open items when resuming:
+1. Main-graph Doppler / three-pass refinement: roughly -0.01 m on 10/11 drives, but blocked by July14 SM-G988B (above).
+2. Relative-height pairs on long drives (test lax-p) densify elimination and do not finish; bound or subsample long-range pairs.
+3. Main-graph XXVV motion: neutral (-0.004 m on 10 drives) and slow; kept as an opt-in only.
+4. Test-side height map coverage is 40% (three upstream-covered courses lack 2023 train GT).
+Scripts and binaries for every experiment are under `E:/rtklib_v2_ws_tmp` and `E:/rtklib_v2_ws_output/gsdc_native/binaries`.
