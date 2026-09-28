@@ -1,8 +1,0 @@
-{
-  "old": "E:/rtklib_v2_ws_output/gsdc_native/continuous_raw_clock_train_samsung_20260926/runs/00/control/solution.csv",
-  "official_score": false,
-  "new_sha256": "9ec3ee88c20777241b466f62f538a0bf1c9c93c4719311348d34751886b76d44",
-  "old_sha256": "9ec3ee88c20777241b466f62f538a0bf1c9c93c4719311348d34751886b76d44",
-  "new": "E:/rtklib_v2_ws_output/gsdc_native/continuous_raw_clock_v2_a205u_20260926/runs/00/control/solution.csv",
-  "byte_identical": true
-}
