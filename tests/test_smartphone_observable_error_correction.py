@@ -13,7 +13,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps" / "commands"))
 sys.path.insert(0, str(ROOT / "apps" / "commands" / "benchmarks"))
 import gnss_smartphone_observable_error_correction as correction  # noqa: E402
-import gnss_smartphone_observable_error_correction_eval as evaluation  # noqa: E402
 
 
 FIELDS = ["MessageType", *correction.RAW_FEATURE_FIELDS]
@@ -141,34 +140,6 @@ class SmartphoneObservableCorrectionTests(unittest.TestCase):
             self.assertTrue((root / "output" / "corrected.pos").is_file())
             self.assertEqual(manifest["truth_used"], False)
             self.assertEqual(list((root / "output").glob("*.tmp")), [])
-
-    @staticmethod
-    def _metrics(h50: float, h95: float, v95: float, diag: float) -> dict:
-        variants = {key: diag for key in evaluation.DIAGNOSTIC_KEYS}
-        return {
-            "availability_ratio": 1.0,
-            "truth_coverage_ratio": 1.0,
-            "horizontal_wgs84_m": {"p50_m": h50, "p95_m": h95},
-            "vertical_p95_abs_m": v95,
-            "kaggle_diagnostic_score_variants_m": variants,
-        }
-
-    def test_train_gate_requires_strict_aggregate_improvement(self) -> None:
-        baseline = self._metrics(2.0, 4.0, 8.0, 3.0)
-        same = {"baseline": baseline, "candidate": baseline}
-        gate = evaluation._gate({"route/phone": same})
-        self.assertFalse(gate["passed"])
-        self.assertIn("aggregate_h_p95_not_strictly_improved", gate["strict_failures"])
-        self.assertIn("aggregate_diagnostic_mean_not_strictly_improved", gate["strict_failures"])
-
-    def test_train_gate_reports_non_regression_failures(self) -> None:
-        baseline = self._metrics(2.0, 4.0, 8.0, 3.0)
-        candidate = self._metrics(2.2, 4.1, 8.1, 3.1)
-        failures = evaluation._non_regression(candidate, baseline)
-        self.assertIn("h_p50_regression", failures)
-        self.assertIn("h_p95_regression", failures)
-        self.assertIn("v_p95_regression", failures)
-        self.assertTrue(any(item.endswith("regression") for item in failures))
 
 
 if __name__ == "__main__":

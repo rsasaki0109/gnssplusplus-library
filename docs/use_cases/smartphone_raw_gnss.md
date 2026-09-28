@@ -901,10 +901,7 @@ required files were materialized.  The designated holdout was not opened.
 
 Run the reproducible evaluation with:
 
-```bash
-python3 apps/gnss.py smartphone-segment-stability-eval \
-  --output-dir output/smartphone-r5/segment-stability-v1
-```
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 Candidate `segment_r15_d15` was selected (all three tied on this data and the
 fixed candidate ID tie-break selected the smallest ID) and promoted only to
@@ -1716,8 +1713,9 @@ falls back to the exact base position on any failure.  `--ground-truth` is not
 accepted by this lane; position, trajectory, summary, and manifest outputs are
 published atomically.
 
-The fixed train-only evaluator was run with
-`python3 apps/gnss.py smartphone-tdcp-trajectory-eval --selection-record docs/use_cases/records/smartphone_r5_tdcp_trajectory_selection.json --output-dir output/smartphone-r5/tdcp-trajectory-evaluation`.
+The fixed train-only evaluator (since retired; restore from tag
+`archive/research-phase-2026-09-28`) was run against
+`docs/use_cases/records/smartphone_r5_tdcp_trajectory_selection.json`.
 The sealed result is
 `docs/use_cases/records/smartphone_r5_tdcp_trajectory_evaluation.json` (SHA-256
 `0b405b314cbd70b2de15297b71fe58524f292aca132e117806d56bd7f143d9bf`) and the
@@ -1971,12 +1969,7 @@ this phase.
 
 To reproduce the local result (no Kaggle/token access and no holdout access):
 
-```bash
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 apps/commands/benchmarks/gnss_smartphone_observable_error_correction_eval.py
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 tests/test_smartphone_observable_error_correction.py
-```
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The truth-free and evaluation artifact hashes, the selection hash, and the
 test/source hashes are fixed in
@@ -2107,10 +2100,11 @@ python3 apps/gnss.py smartphone-raw-quality-control \
   --device-gnss <device_gnss.csv> --output-dir <route-output> \
   --obs <rover.obs> --nav <brdc.nav> --fallback-position <wls.pos> \
   --dataset-id <route/phone>
-python3 apps/gnss.py smartphone-raw-quality-control-eval \
-  --selection-record docs/use_cases/records/smartphone_r5_raw_quality_control_selection.json \
-  --output-dir output/smartphone-r5/raw-quality-control-v1 --role train
 ```
+
+The development evaluation command (`smartphone-raw-quality-control-eval`) was
+retired in the research cleanup; restore it from tag
+`archive/research-phase-2026-09-28` if needed.
 
 The three frozen train routes were generated truth-free before exactly three
 train truth files were opened for scoring.  The candidate failed the frozen
@@ -2199,26 +2193,16 @@ and the existing default Huber loss. It explicitly disables
 single-difference Doppler/TDCP, all double-difference factors, carrier-phase
 ambiguity factors, and velocity states because there is no handset base
 stream. A per-route 900-second/8-GiB safety bound, finite-output checks, and
-same-filesystem atomic publish are enforced by
-`apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py`; an invalid FGO
+same-filesystem atomic publish were enforced by
+the native-FGO evaluator (since retired; restore from tag
+`archive/research-phase-2026-09-28`); an invalid FGO
 run is retained as a failure artifact and never silently substituted with
 WLS.
 
 Run the first truth-free route, then the remaining frozen train routes with
 the exact route strings from the selection record:
 
-~~~bash
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py run \
-  --selection-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json \
-  --route '<dataset_id>|<obs>|<nav>|<seed_pos>|<device_gnss>|<truth>' \
-  --output-root output/smartphone-r5/native-fgo-v1 \
-  --binary build/apps/gnss_fgo
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_eval.py train-score \
-  --selection-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_selection.json \
-  --output-root output/smartphone-r5/native-fgo-v1
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 `run` opens no truth. `train-score` first verifies all three sealed route
 manifests and only then reads each train truth file once. It requires route
@@ -2249,14 +2233,7 @@ are cross-referenced by the evaluation manifest.
 
 Focused regression and final checks are:
 
-~~~bash
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 tests/test_smartphone_native_fgo_eval.py -v
-cmake --build build --config Release -j$(nproc)
-LD_LIBRARY_PATH=/home/sasaki/.local/lib:$LD_LIBRARY_PATH \
-  ctest --test-dir build -j1 --output-on-failure
-git diff --check
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 ### Native FGO future holdout and truth-free test batch
 
@@ -2277,13 +2254,7 @@ Because that gate passed, the test authorization froze a 40-route allowlist,
 the archive/inventory/sample hashes, the native-FGO recipe, Release binaries,
 and an explicit WLS fallback. Run the truth-free batch with:
 
-~~~bash
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_batch.py \
-  --authorization docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_batch_freeze_recovery_v2.json \
-  --authorization-manifest docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_batch_freeze_recovery_v2_manifest.json \
-  --output-dir output/smartphone-r5/native-fgo-test-v2
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The completed batch processed all 40 routes and published an exact official
 sample-key/order CSV with 71,936 rows, zero duplicate/missing/extra/nonfinite
@@ -2327,12 +2298,7 @@ positions; none uses the old formal dummy.
 
 Reproduce the truth-free recovery and independent key/hash checks with:
 
-~~~bash
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_recovery.py
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 tests/test_smartphone_native_fgo_test_submission_recovery.py -v
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The resulting local development artifact is
 `output/smartphone-r5/native-fgo-test-v3-recovered/submission.csv` (71,936
@@ -2379,12 +2345,7 @@ development-only artifact, not a replacement of v3 or a production default.
 
 Reproduce from the sealed v3 artifact with:
 
-~~~bash
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_test_submission_continuity.py
-PYTHONPATH=apps/commands:apps/commands/benchmarks \
-  python3 -m unittest -v tests/test_smartphone_native_fgo_test_submission_continuity.py
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The freeze, result record, and hash manifests are
 `docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_test_submission_continuity_freeze_v1.json`,
@@ -2481,11 +2442,7 @@ observability records the frozen native-FGO-v1 fallback.
 
 Reproduce the sealed truth-free train smoke with:
 
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_v2_smoke.py \\
-  --output-root output/smartphone-r5/native-fgo-v2-processed
-python3 tests/test_smartphone_native_fgo_v2_smoke.py -v
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 All three new-train two-epoch runs passed the structural gate: adapter truth
 use was false, finite IMU samples were loaded, one IMU interval was inserted,
@@ -2586,14 +2543,7 @@ rotation. Focused execution passed 6/6.
 
 Reproduce the truth-free route artifacts with the frozen wrapper:
 
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge.py \
-  --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_corrected_freeze_v1.json \
-  --corrected-undifferenced-doppler \
-  --candidate-id native-fgo-pdc-corrected-v1 \
-  --route <fixed-train-route> --max-epochs 0 \
-  --output-root output/smartphone-r5/native-fgo-pdc-corrected-v1
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 All three fixed train routes produced finite, complete, truth-free outputs and
 monotonically decreasing costs, with 32,715/26,252/29,011 corrected Doppler
@@ -2610,11 +2560,7 @@ with the companion hash manifest
 
 The truth-free real-data witness can be reproduced without a truth file:
 
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_witness.py \
-  --device-gnss <development-device_gnss.csv> \
-  --route-id <route/device> --output-json <witness.json>
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 It uses only raw handset WLS ECEF and broadcast-state-derived satellite
 position/velocity/clock fields, removes a per-epoch common clock term for this
@@ -2646,11 +2592,7 @@ The freeze and exact input/source/binary hashes are in
 `docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_freeze_v1.json`.
 Reproduce a truth-free short smoke with:
 
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_wls.py \
-  --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_wls_freeze_v1.json \
-  --route <frozen-train-route> --max-epochs 30
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The three 30-epoch structural smokes passed with WLS valid/rejected counts
 30/0, 30/0, and 30/0; max condition numbers were 8.48, 9.01, and 8.42; max
@@ -2728,12 +2670,7 @@ authorized by this audit.
 
 Reproduce the sealed audit with:
 
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_factor_audit.py \
-  --freeze-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_audit_freeze_v1.json \
-  --output-root output/smartphone-r5/native-fgo-pdc-factor-audit-v1 \
-  --binary build/apps/gnss_fgo
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The follow-up hypothesis audit is sealed at
 `docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_factor_hypothesis_audit_v1.json`
@@ -2763,8 +2700,8 @@ this candidate is the no-base Eigen P/D/TDCP/carrier graph. Exact source lines
 and hashes are recorded in
 `docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_freeze_v1.json`.
 
-The development-only wrapper
-`apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed.py` therefore
+The development-only windowed wrapper (since retired; restore from tag
+`archive/research-phase-2026-09-28`) therefore
 solves independent 120-epoch windows with 60-epoch overlap and deterministic
 interior-row stitching. Each invocation resets clock, velocity initialization,
 TDCP history, and float ambiguity arcs. It uses the existing corrected native
@@ -2775,11 +2712,7 @@ native-FGO route positions; sample coordinates and truth are forbidden.
 
 Run the structural lane only with the explicit guard:
 
-~~~bash
-GNSSPP_WINDOWED_PDC_NO_TRUTH=1 \
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed.py \
-  --no-truth
-~~~
+_Retired: this reproduction command was removed in the research cleanup. Restore it from tag `archive/research-phase-2026-09-28` if needed._
 
 The freeze hash manifest is
 `docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_freeze_v1_manifest.json`.
