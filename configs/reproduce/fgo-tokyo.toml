@@ -1,9 +1,283 @@
-# README row "GNSS/IMU FGO | PPC Tokyo vs tightly-coupled-gnss-imu-fgo".
-# Planned: needs a GTSAM-enabled build and the PPC IMU replays.
+# README row "GNSS/IMU FGO | PPC Tokyo vs tightly-coupled-gnss-imu-fgo" and the
+# README section "GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo".
+#
+# Needs a GTSAM 4.3 build of gnss_fgo_parity (configure with -DGTSAM_DIR=...).
+# On Windows set GTSAM_BIN_DIR to the directory holding the GTSAM DLLs; the run
+# wrapper prepends it to PATH.
+#
+# Steps: the README preset with --gf-slip-reset ("gf_reset", the README
+# comparison table) and the same preset without it ("baseline", the left side of
+# the GF-reset table), one gnss_fgo_parity process at a time, then scoring and
+# the three per-run figures.
+#
+# The README "Surplus-satellite rescue integrity" table is not reproduced: it was
+# measured in commit 6ede956c with an earlier preset (--imu-preset-tactical,
+# --cp-hold-res 2.0, --fix-demote-dist 5) and an unrecorded "before"
+# configuration, and the solver has changed since.
+
 [lane]
 name = "fgo-tokyo"
-status = "planned"
+status = "ready"
 title = "PPC Tokyo GNSS/IMU tightly-coupled FGO vs tightly-coupled-gnss-imu-fgo"
-readme_row = "GNSS/IMU FGO: higher <50 cm (+5.6 pp) and fix rate (+8.2 pp) on all 3 Tokyo runs"
-runtime_estimate = "planned"
+readme_row = "GNSS/IMU FGO: higher fix rate on all 3 Tokyo runs (avg +10.7 pp); <50 cm (avg +7.9 pp) and fixed RMS win 2 of 3"
+runtime_estimate = "~35 min"
 docs = "README.md#gnssimu-tightly-coupled-fgo-vs-tightly-coupled-gnss-imu-fgo"
+
+[datasets.ppc]
+required = [
+  "tokyo/run1/rover.obs", "tokyo/run1/base.obs", "tokyo/run1/base.nav", "tokyo/run1/imu.csv", "tokyo/run1/reference.csv",
+  "tokyo/run2/rover.obs", "tokyo/run2/base.obs", "tokyo/run2/base.nav", "tokyo/run2/imu.csv", "tokyo/run2/reference.csv",
+  "tokyo/run3/rover.obs", "tokyo/run3/base.obs", "tokyo/run3/base.nav", "tokyo/run3/imu.csv", "tokyo/run3/reference.csv",
+]
+
+[tools.gtsam]
+version = "4.3.x (gtsam/navigation/CarrierPhaseFactor.h is required)"
+build = "cmake -DGTSAM_DIR=<gtsam>/lib/cmake/GTSAM ...; cmake --build <build> --target gnss_fgo_parity"
+runtime = "Linux: LD_LIBRARY_PATH must include the GTSAM libs; Windows: set GTSAM_BIN_DIR to the GTSAM DLL directory"
+
+[tools.tightly_coupled_gnss_imu_fgo]
+repository = "https://github.com/inuex35/tightly-coupled-gnss-imu-fgo"
+note = "Reference columns are the published values, kept as constants in scripts/experiments/ppc/fgo_tokyo_reproduce.py"
+
+# 1. README preset with --gf-slip-reset (README comparison table and the right
+#    side of the GF-reset table).
+[[steps]]
+name = "fgo-gf_reset-tokyo_{run}"
+foreach = [{ run = "run1" }, { run = "run2" }, { run = "run3" }]
+argv = [
+  "{python}", "scripts/experiments/ppc/fgo_tokyo_reproduce.py", "run",
+  "--label", "tokyo_{run}",
+  "--log", "{work_dir}/gf_reset/tokyo_{run}.log",
+  "--summary-json", "{work_dir}/gf_reset/tokyo_{run}_summary.json",
+  "--",
+  "{bin:gnss_fgo_parity}",
+  "--rover", "{ppc_root}/tokyo/{run}/rover.obs",
+  "--base", "{ppc_root}/tokyo/{run}/base.obs",
+  "--nav", "{ppc_root}/tokyo/{run}/base.nav",
+  "--imu", "{ppc_root}/tokyo/{run}/imu.csv",
+  "--ref", "{ppc_root}/tokyo/{run}/reference.csv",
+  "--dump-csv", "{work_dir}/gf_reset/tokyo_{run}.csv",
+  "--fixed-lag", "5", "--multi-freq", "--partial-ar", "--hold",
+  "--elev-mask", "25", "--snr-mask", "30", "--cmc", "--cmc-level", "0.75", "--cp-hold",
+  "--exc-recovery", "--ddpr-anchor", "--fde", "--varerr", "--fix-demote",
+  "--fix-demote-res", "25", "--fix-demote-posthold", "5",
+  "--fix-demote-surplus-crosscheck", "--fix-demote-surplus-anchor-reprieve",
+  "--fix-demote-spp-model-reprieve", "--surplus-validation",
+  "--surplus-validation-min-n", "3",
+  "--surplus-validation-aperture-lt1", "0.15", "--surplus-validation-aperture-1to2", "0.3",
+  "--surplus-validation-aperture-gt2", "0.45", "--anchor-gated-unfix-reset",
+  "--imu-ratio-relaxed", "1.5", "--gf-slip-reset",
+]
+
+# 2. Same preset without --gf-slip-reset (the "baseline" side of the GF-reset table).
+[[steps]]
+name = "fgo-baseline-tokyo_{run}"
+foreach = [{ run = "run1" }, { run = "run2" }, { run = "run3" }]
+argv = [
+  "{python}", "scripts/experiments/ppc/fgo_tokyo_reproduce.py", "run",
+  "--label", "tokyo_{run}",
+  "--log", "{work_dir}/baseline/tokyo_{run}.log",
+  "--summary-json", "{work_dir}/baseline/tokyo_{run}_summary.json",
+  "--",
+  "{bin:gnss_fgo_parity}",
+  "--rover", "{ppc_root}/tokyo/{run}/rover.obs",
+  "--base", "{ppc_root}/tokyo/{run}/base.obs",
+  "--nav", "{ppc_root}/tokyo/{run}/base.nav",
+  "--imu", "{ppc_root}/tokyo/{run}/imu.csv",
+  "--ref", "{ppc_root}/tokyo/{run}/reference.csv",
+  "--dump-csv", "{work_dir}/baseline/tokyo_{run}.csv",
+  "--fixed-lag", "5", "--multi-freq", "--partial-ar", "--hold",
+  "--elev-mask", "25", "--snr-mask", "30", "--cmc", "--cmc-level", "0.75", "--cp-hold",
+  "--exc-recovery", "--ddpr-anchor", "--fde", "--varerr", "--fix-demote",
+  "--fix-demote-res", "25", "--fix-demote-posthold", "5",
+  "--fix-demote-surplus-crosscheck", "--fix-demote-surplus-anchor-reprieve",
+  "--fix-demote-spp-model-reprieve", "--surplus-validation",
+  "--surplus-validation-min-n", "3",
+  "--surplus-validation-aperture-lt1", "0.15", "--surplus-validation-aperture-1to2", "0.3",
+  "--surplus-validation-aperture-gt2", "0.45", "--anchor-gated-unfix-reset",
+  "--imu-ratio-relaxed", "1.5",
+]
+
+# 3. Score both variants against the PPC reference and the published
+#    tightly-coupled-gnss-imu-fgo values.
+[[steps]]
+name = "score-fgo-tokyo"
+argv = [
+  "{python}", "scripts/experiments/ppc/fgo_tokyo_reproduce.py", "score",
+  "--dataset-root", "{ppc_root}",
+  "--work-dir", "{work_dir}",
+  "--variants", "gf_reset", "baseline",
+  "--match-tolerance-s", "0.11",
+  "--output-json", "{work_dir}/fgo_tokyo_metrics.json",
+  "--markdown-output", "{work_dir}/fgo_tokyo_tables.md",
+]
+
+# 4. Per-run figures (README embeds the docs/ copies; see docs_steps).
+[[steps]]
+name = "plot-fgo-tokyo-runs"
+argv = [
+  "{python}", "scripts/plot_fgo_parity_runs.py",
+  "{work_dir}/gf_reset/tokyo_run1.csv",
+  "{work_dir}/gf_reset/tokyo_run2.csv",
+  "{work_dir}/gf_reset/tokyo_run3.csv",
+  "{work_dir}/figures",
+]
+
+[[docs_steps]]
+name = "update-docs-fgo-tokyo-figures"
+argv = [
+  "{python}", "scripts/plot_fgo_parity_runs.py",
+  "{work_dir}/gf_reset/tokyo_run1.csv",
+  "{work_dir}/gf_reset/tokyo_run2.csv",
+  "{work_dir}/gf_reset/tokyo_run3.csv",
+  "docs",
+]
+
+# Local reproduction (2026-09-28, MSVC Release + GTSAM 4.3, Windows): every
+# gf_reset value and the GF guard demotions match the README exactly, and the
+# replay is deterministic (a second baseline run3 produced a byte-identical dump),
+# so the tolerances below only absorb the README's display rounding.
+
+# README claims, gated: "libgnss++ exceeds the reference on raw FIX rate (all
+# runs) and on <50 cm / fixed RMS (two of three)".
+[[metrics]]
+name = "runs with higher fix rate than tc-fgo"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "vs_reference.runs_better.fix_rate_pct"
+min = 3
+readme = "higher FIX rate on all 3 runs"
+
+[[metrics]]
+name = "runs with higher all-epoch <50 cm than tc-fgo"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "vs_reference.runs_better.under50_pct"
+min = 2
+readme = "higher <50 cm on 2 of 3 runs"
+
+[[metrics]]
+name = "runs with lower fixed RMS than tc-fgo"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "vs_reference.runs_better.fixed_rms_h_m"
+min = 2
+readme = "lower fixed RMS on 2 of 3 runs"
+
+# README results row: "avg +10.7 pp" fix rate and "avg +7.9 pp" <50 cm.
+[[metrics]]
+name = "mean {field} delta vs tc-fgo (pp)"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "vs_reference.mean_delta.{field}"
+readme = "README results row averages"
+foreach = [
+  { field = "fix_rate_pct", expected = 10.7, abs_tol = 0.05 },
+  { field = "under50_pct", expected = 7.9, abs_tol = 0.05 },
+]
+
+# README comparison table, libgnss++ columns.
+[[metrics]]
+name = "table: {run} {field}"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.gf_reset.runs[label={run}].{field}"
+readme = "README comparison table"
+foreach = [
+  { run = "tokyo_run1", field = "under50_pct", expected = 54.9, abs_tol = 0.05 },
+  { run = "tokyo_run1", field = "fix_rate_pct", expected = 53.8, abs_tol = 0.05 },
+  { run = "tokyo_run1", field = "fixed_rms_h_m", expected = 1.180, abs_tol = 0.001 },
+  { run = "tokyo_run2", field = "under50_pct", expected = 85.7, abs_tol = 0.05 },
+  { run = "tokyo_run2", field = "fix_rate_pct", expected = 78.6, abs_tol = 0.05 },
+  { run = "tokyo_run2", field = "fixed_rms_h_m", expected = 0.109, abs_tol = 0.001 },
+  { run = "tokyo_run3", field = "under50_pct", expected = 77.5, abs_tol = 0.05 },
+  { run = "tokyo_run3", field = "fix_rate_pct", expected = 69.3, abs_tol = 0.05 },
+  { run = "tokyo_run3", field = "fixed_rms_h_m", expected = 0.125, abs_tol = 0.001 },
+]
+
+# README GF-reset table: the reset must raise the aggregate official score and
+# cut the aggregate wrong-FIX distance.
+[[metrics]]
+name = "GF reset aggregate official score gain (pp)"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.gf_reset.aggregate.official_score_pct"
+minus_path = "variants.baseline.aggregate.official_score_pct"
+min = 0.0
+readme = "GF reset improves the PPC official score"
+
+[[metrics]]
+name = "GF reset aggregate wrong-FIX distance change (pp)"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.gf_reset.aggregate.wrong_fix_distance_pct"
+minus_path = "variants.baseline.aggregate.wrong_fix_distance_pct"
+max = 0.0
+readme = "Wrong FIX falls with the GF reset"
+
+[[metrics]]
+name = "GF table: {variant} {row} {field}"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.{variant}.{row}.{field}"
+readme = "README GF-reset table"
+foreach = [
+  { variant = "baseline", row = "runs[label=tokyo_run1]", field = "correct_fix_distance_pct", expected = 25.656, abs_tol = 0.002 },
+  { variant = "baseline", row = "runs[label=tokyo_run1]", field = "wrong_fix_distance_pct", expected = 23.765, abs_tol = 0.002 },
+  { variant = "baseline", row = "runs[label=tokyo_run1]", field = "official_score_pct", expected = 30.823, abs_tol = 0.002 },
+  { variant = "baseline", row = "runs[label=tokyo_run2]", field = "correct_fix_distance_pct", expected = 60.304, abs_tol = 0.002 },
+  { variant = "baseline", row = "runs[label=tokyo_run2]", field = "wrong_fix_distance_pct", expected = 12.573, abs_tol = 0.002 },
+  { variant = "baseline", row = "runs[label=tokyo_run2]", field = "official_score_pct", expected = 65.264, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run1]", field = "correct_fix_distance_pct", expected = 33.322, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run1]", field = "wrong_fix_distance_pct", expected = 21.221, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run1]", field = "official_score_pct", expected = 39.375, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run2]", field = "correct_fix_distance_pct", expected = 74.599, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run2]", field = "wrong_fix_distance_pct", expected = 1.386, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run2]", field = "official_score_pct", expected = 81.615, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run3]", field = "correct_fix_distance_pct", expected = 65.099, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run3]", field = "wrong_fix_distance_pct", expected = 1.818, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "runs[label=tokyo_run3]", field = "official_score_pct", expected = 71.207, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "aggregate", field = "correct_fix_distance_pct", expected = 57.409, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "aggregate", field = "wrong_fix_distance_pct", expected = 7.650, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "aggregate", field = "official_score_pct", expected = 63.692, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "aggregate", field = "wrong_fix_over_fix_distance_pct", expected = 11.759, abs_tol = 0.002 },
+  { variant = "gf_reset", row = "aggregate", field = "matched_distance_pct", expected = 99.682, abs_tol = 0.002 },
+  { variant = "baseline", row = "aggregate", field = "matched_distance_pct", expected = 99.682, abs_tol = 0.002 },
+]
+
+# README baseline Tokyo run3 row and the aggregates it feeds, refreshed
+# 2026-09-29 to the reproduced values (the previous 59.175 / 7.918 / 64.081%
+# row was measured before the GF-reset commit 9b058572 with an unrecorded tree).
+[[metrics]]
+name = "GF table: baseline {row} {field}"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.baseline.{row}.{field}"
+readme = "README GF-reset table baseline"
+foreach = [
+  { row = "runs[label=tokyo_run3]", field = "correct_fix_distance_pct", expected = 59.712, abs_tol = 0.002 },
+  { row = "runs[label=tokyo_run3]", field = "wrong_fix_distance_pct", expected = 7.726, abs_tol = 0.002 },
+  { row = "runs[label=tokyo_run3]", field = "official_score_pct", expected = 65.446, abs_tol = 0.002 },
+  { row = "aggregate", field = "correct_fix_distance_pct", expected = 49.440, abs_tol = 0.002 },
+  { row = "aggregate", field = "wrong_fix_distance_pct", expected = 13.649, abs_tol = 0.002 },
+  { row = "aggregate", field = "official_score_pct", expected = 54.837, abs_tol = 0.002 },
+  { row = "aggregate", field = "wrong_fix_over_fix_distance_pct", expected = 21.634, abs_tol = 0.002 },
+]
+
+[[metrics]]
+name = "GF table: {row} GF guard demotions"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.gf_reset.{row}.gf_guard_demotions"
+readme = "README GF-reset table"
+foreach = [
+  { row = "runs[label=tokyo_run1]", expected = 14, abs_tol = 0 },
+  { row = "runs[label=tokyo_run2]", expected = 0, abs_tol = 0 },
+  { row = "runs[label=tokyo_run3]", expected = 17, abs_tol = 0 },
+  { row = "aggregate", expected = 31, abs_tol = 0 },
+]
+
+# Wall time per run, reported only (README: 463.5/584.6/844.9 s on its Linux
+# validation host).
+[[metrics]]
+name = "wall time {variant} {run} (s)"
+source = "{work_dir}/fgo_tokyo_metrics.json"
+path = "variants.{variant}.runs[label={run}].wall_time_s"
+min = 0
+gate = false
+readme = "README wall times 463.5/584.6/844.9 s"
+foreach = [
+  { variant = "gf_reset", run = "tokyo_run1" },
+  { variant = "gf_reset", run = "tokyo_run2" },
+  { variant = "gf_reset", run = "tokyo_run3" },
+]
