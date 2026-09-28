@@ -297,20 +297,6 @@ private:
                                    const std::vector<Vector3d>& satellite_positions) const;
     
     /**
-     * @brief Calculate weight matrix based on elevation angles
-     */
-    MatrixXd calculateWeightMatrix(const std::vector<double>& elevations,
-                                 const std::vector<double>& snr_values) const;
-    
-    /**
-     * @brief Apply atmospheric corrections to observations
-     */
-    void applyAtmosphericCorrections(std::vector<Observation>& observations,
-                                   const NavigationData& nav,
-                                   const Vector3d& receiver_pos,
-                                   const GNSSTime& time) const;
-    
-    /**
      * @brief Detect and remove outlier observations
      */
     std::vector<SPPObservation> detectOutliers(const std::vector<SPPObservation>& observations,
@@ -357,25 +343,6 @@ private:
         const GNSSTime& time) const;
     
     /**
-     * @brief Apply relativistic corrections
-     */
-    double calculateRelativisticCorrection(const Vector3d& satellite_pos,
-                                         const Vector3d& satellite_vel) const;
-    
-    /**
-     * @brief Calculate Earth rotation correction
-     */
-    Vector3d applyEarthRotationCorrection(const Vector3d& satellite_pos,
-                                        double signal_travel_time) const;
-    
-    /**
-     * @brief Estimate inter-system clock biases
-     */
-    void estimateInterSystemBiases(const std::vector<Observation>& observations,
-                                 const std::map<SatelliteId, SatelliteState>& sat_states,
-                                 const Vector3d& receiver_pos);
-    
-    /**
      * @brief Calculate covariance matrix
      */
     Matrix3d calculatePositionCovariance(const MatrixXd& geometry_matrix,
@@ -413,21 +380,6 @@ namespace spp_utils {
      */
     Vector3d geodeticToEcef(const GeodeticCoord& geodetic_pos);
     
-    /**
-     * @brief Calculate geometric distance
-     */
-    double calculateGeometricDistance(const Vector3d& receiver_pos, const Vector3d& satellite_pos);
-    
-    /**
-     * @brief Apply elevation-dependent weighting
-     */
-    double calculateElevationWeight(double elevation_rad, double min_elevation_rad = 0.0);
-    
-    /**
-     * @brief Apply SNR-dependent weighting
-     */
-    double calculateSNRWeight(double snr_db, double min_snr_db = 35.0);
-
     /** Match the CLAS benchmark rover SNR mask used by MRTKLIB testsnr(). */
     double mrtklibClasSnrThresholdDbHz(double elevation_rad);
 
@@ -479,13 +431,6 @@ namespace spp_utils {
                                const std::vector<double>& candidate_rms_values,
                                double min_improvement_ratio,
                                double min_improvement_m);
-    
-    /**
-     * @brief Check satellite visibility
-     */
-    bool isSatelliteVisible(const Vector3d& receiver_pos, 
-                          const Vector3d& satellite_pos,
-                          double min_elevation_rad);
 }
 
 } // namespace libgnss

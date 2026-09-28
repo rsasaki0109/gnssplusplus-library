@@ -318,14 +318,6 @@ Options parseArguments(int argc, char* argv[]) {
     return options;
 }
 
-void writeCsvDouble(std::ostream& output, double value) {
-    if (std::isfinite(value)) {
-        output << value;
-    } else {
-        output << "NaN";
-    }
-}
-
 int positionColumn(std::size_t epoch_index, int component) {
     return static_cast<int>(kStateStride * epoch_index +
                             static_cast<std::size_t>(component));

@@ -506,14 +506,6 @@ void L6Decoder::decodeSubtype9(BitReader& reader) {
     for (const auto& [k, v] : tokens) merged_atmos_[k] = v;
 }
 
-SatelliteId L6Decoder::maskIndexToSatId(int index) const {
-    if (index >= 0 && index < static_cast<int>(mask_.satellites.size())) {
-        const auto& s = mask_.satellites[static_cast<size_t>(index)];
-        return SatelliteId(s.system, s.prn);
-    }
-    return {};
-}
-
 std::vector<CssrEpoch> L6Decoder::feedFrame(const uint8_t* frame_data, int gps_week) {
     completed_epochs_.clear();
 

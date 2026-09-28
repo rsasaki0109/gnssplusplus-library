@@ -313,22 +313,6 @@ bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
     return computed.valid;
 }
 
-std::map<SatelliteId, Vector3d> NavigationData::calculateSatellitePositions(
-    const std::vector<SatelliteId>& satellites,
-    const GNSSTime& time) const {
-    std::map<SatelliteId, Vector3d> positions;
-    
-    for (const auto& sat : satellites) {
-        Vector3d pos, vel;
-        double clock_bias, clock_drift;
-        if (calculateSatelliteState(sat, time, pos, vel, clock_bias, clock_drift)) {
-            positions[sat] = pos;
-        }
-    }
-    
-    return positions;
-}
-
 NavigationData::SatelliteGeometry NavigationData::calculateGeometry(
     const Vector3d& receiver_pos,
     const Vector3d& satellite_pos) const {
@@ -365,18 +349,6 @@ NavigationData::SatelliteGeometry NavigationData::calculateGeometry(
 
 bool NavigationData::hasEphemeris(const SatelliteId& sat, const GNSSTime& time) const {
     return getEphemeris(sat, time) != nullptr;
-}
-
-std::vector<SatelliteId> NavigationData::getAvailableSatellites(const GNSSTime& time) const {
-    std::vector<SatelliteId> satellites;
-    
-    for (const auto& pair : ephemeris_data) {
-        if (hasEphemeris(pair.first, time)) {
-            satellites.push_back(pair.first);
-        }
-    }
-    
-    return satellites;
 }
 
 NavigationData::NavigationData() = default;

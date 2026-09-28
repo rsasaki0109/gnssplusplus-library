@@ -64,18 +64,6 @@ const Observation* ObservationData::getObservation(const SatelliteId& sat, Signa
     return nullptr;
 }
 
-std::vector<Observation> ObservationData::filterByElevation(double min_elevation, 
-                                                          const Vector3d& receiver_pos) const {
-    std::vector<Observation> result;
-    // Simplified implementation - would need satellite positions to calculate elevation
-    for (const auto& obs : observations) {
-        if (obs.valid) {
-            result.push_back(obs);
-        }
-    }
-    return result;
-}
-
 std::vector<Observation> ObservationData::filterBySNR(double min_snr) const {
     std::vector<Observation> result;
     for (const auto& obs : observations) {

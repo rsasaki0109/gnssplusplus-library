@@ -139,9 +139,6 @@ private:
     void decodeSubtype9(BitReader& reader);
     void decodeSubtype11(BitReader& reader);
 
-    SatelliteId maskIndexToSatId(int index) const;
-    double computeTow(int epoch_time) const;
-
     CssrMaskState mask_;
     CssrEpoch current_epoch_;
     /// Persistent atmos tokens accumulated across subframes

@@ -30,7 +30,6 @@ enum class CompactSsrSubtype : std::uint8_t {
     Ura = 7,
 };
 
-std::optional<CompactSsrSystemId> compactSsrSystemId(int id);
 GNSSSystem gnssSystemForCompactSsrId(int id);
 std::optional<int> compactSsrIdForGnssSystem(GNSSSystem system, bool beidou3 = false);
 std::string_view compactSsrSystemName(int id);

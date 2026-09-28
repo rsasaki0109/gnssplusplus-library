@@ -674,7 +674,6 @@ bool RTKProcessor::validateAmbiguityResolution(const VectorXd& fixed_ambiguities
     const double norm = diff.transpose() * solver.solve(diff);
     return std::isfinite(norm) && norm >= 0.0;
 }
-void RTKProcessor::updateAmbiguityStates(const std::vector<DoubleDifference>&) {}
 Vector3d RTKProcessor::calculateBaseline() const {
     if (!filter_initialized_ || filter_state_.state.size() < 3) {
         return Vector3d::Zero();
@@ -723,7 +722,6 @@ bool RTKProcessor::hasSufficientSatellites(
     }
     return satellites.size() >= 4;
 }
-void RTKProcessor::resetAmbiguity(const SatelliteId&, SignalType) {}
 bool RTKProcessor::applyFixedAmbiguities(const VectorXd& fixed_n1,
                                          const VectorXd& fixed_n2,
                                          const std::map<SatelliteId, SatelliteData>& sat_data) {
@@ -761,16 +759,6 @@ void RTKProcessor::solvePositionWithAmbiguities(const std::map<SatelliteId, Sate
     if (has_fixed_solution_ && filter_initialized_ && filter_state_.state.size() >= 3) {
         filter_state_.state.head<3>() = fixed_baseline_;
     }
-}
-bool RTKProcessor::trySingleEpochAR(const std::map<SatelliteId, SatelliteData>& sat_data) {
-    if (!filter_initialized_) {
-        return false;
-    }
-    current_sat_data_ = sat_data;
-    if (!resolveAmbiguities(buildDoubleDifferencePairs(sat_data, 0))) {
-        return false;
-    }
-    return has_fixed_solution_ && validateFixedSolution(sat_data, last_epoch_time_);
 }
 
 } // namespace libgnss

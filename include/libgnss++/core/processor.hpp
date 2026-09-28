@@ -117,11 +117,6 @@ public:
      * @brief Create processor based on positioning mode
      */
     static std::unique_ptr<ProcessorBase> create(PositioningMode mode);
-    
-    /**
-     * @brief Get list of available processor types
-     */
-    static std::vector<std::string> getAvailableTypes();
 };
 
 } // namespace libgnss

@@ -444,14 +444,6 @@ inline bool isBetterClasAtmosCandidate(
     return isBetterGridFirstCandidate(candidate, best);
 }
 
-/// Saastamoinen troposphere model with Niell mapping function
-inline double troposphereDelay(const Vector3d& receiver_pos, double elevation, double trop_zenith) {
-    if (elevation < 0.05) return trop_zenith * 10.0;  // near-horizon penalty
-    // Simplified Niell dry mapping
-    const double m = 1.0 / std::sin(std::max(elevation, 0.05));
-    return trop_zenith * m;
-}
-
 /// Relativistic correction: only Shapiro delay.
 /// The periodic relativity and gravitational redshift are already in the
 /// broadcast clock polynomial, so we only need the signal propagation delay

@@ -10,7 +10,6 @@ directory.
 - `plot_trajectory.py`: status-colored 2D trajectory comparison.
 - `rtk_geometry.py`: shared WGS84/ECEF/ENU implementation used by the RTK
   tools above; it is a library helper, not a user-facing command.
-- `ubx_reader.cpp` and `gnss_data_generator.cpp`: native receiver-data tools.
 
 Generated plots, `.pos` files, and logs should be written below `output/`.
 Keep reusable code here; keep experiment-specific orchestration in `scripts/`

@@ -39,12 +39,6 @@ GNSSProcessor::GNSSProcessor() : pImpl(std::make_unique<Impl>()) {}
 
 GNSSProcessor::~GNSSProcessor() = default;
 
-bool GNSSProcessor::loadConfig(const std::string& config_file) {
-    // Simple implementation - in real version would parse YAML/JSON config
-    (void)config_file; // Suppress unused parameter warning
-    return true;
-}
-
 void GNSSProcessor::setMode(Mode mode) {
     pImpl->setMode(mode);
 }

@@ -445,7 +445,6 @@ private:
     std::map<SatelliteId, int> est_stec_outage_;   ///< Epochs since last seen (est-stec pruning)
     std::map<SatelliteId, std::map<uint8_t, int>> prev_phase_bias_discnt_;  ///< Last-seen SSR phase-bias discontinuity counters (GNSS_PPP_SSR_DISCNT_SLIP)
     std::map<SatelliteId, CLASPhaseBiasRepairInfo> clas_phase_bias_repair_;
-    ppp_clas_sd::SdFilterState clas_sd_state_;  ///< Clock-free SD filter
     ppp_clas_sd::DdAmbAccumulator clas_dd_accumulator_;  ///< Multi-epoch DD amb accumulator
     std::unique_ptr<ppp_clas_dd::DdFilterScaffold> clas_dd_filter_;
     PPPState last_clas_constrained_fixed_state_;
@@ -723,22 +722,11 @@ private:
         const SatelliteId& satellite,
         const PPPAmbiguityInfo& ambiguity,
         ppp_ar::FixedNlObservation& fixed_observation) const;
-    bool buildFixedCarrierObservation(
-        const IonosphereFreeObs& observation,
-        ppp_ar::FixedCarrierObservation& fixed_observation) const;
 
     /// CLAS-PPP mode: process epoch using OSR-corrected observations
     PositionSolution processEpochCLAS(const ObservationData& obs, const NavigationData& nav);
     bool solveFixedPosition(const ObservationData& obs, const NavigationData& nav,
                             Vector3d& fixed_position);
-    
-    /**
-     * @brief Calculate tropospheric delay
-     */
-    double calculateTroposphericDelay(const Vector3d& receiver_pos,
-                                      const Vector3d& satellite_pos,
-                                      const GNSSTime& time,
-                                      double zenith_delay) const;
     
     /**
      * @brief Calculate tropospheric mapping function
@@ -847,11 +835,6 @@ private:
                                     const std::vector<IonosphereFreeObs>& observations);
     
     /**
-     * @brief Calculate position accuracy
-     */
-    Vector3d calculatePositionAccuracy() const;
-    
-    /**
      * @brief Update ambiguity states
      */
     void updateAmbiguityStates(const ObservationData& obs);
@@ -895,9 +878,6 @@ private:
      */
     void constrainStaticAnchorPosition();
 
-    bool solveFixedCarrierPhasePosition(const std::vector<IonosphereFreeObs>& observations,
-                                        Vector3d& fixed_position) const;
-
     static double modeledZenithTroposphereDelayMeters(
         const Vector3d& receiver_position, const GNSSTime& time);
 
@@ -920,41 +900,6 @@ namespace ppp_utils {
     double calculateMelbourneWubbena(double l1_phase, double l2_phase,
                                    double p1_range, double p2_range,
                                    double f1, double f2);
-    
-    /**
-     * @brief Calculate geometry-free combination
-     */
-    double calculateGeometryFree(double l1_phase, double l2_phase);
-    
-    /**
-     * @brief Interpolate precise orbits
-     */
-    bool interpolatePreciseOrbit(const std::vector<PreciseOrbitClock>& orbit_data,
-                               const GNSSTime& time,
-                               Vector3d& position,
-                               Vector3d& velocity);
-    
-    /**
-     * @brief Interpolate precise clocks
-     */
-    bool interpolatePreciseClock(const std::vector<PreciseOrbitClock>& clock_data,
-                               const GNSSTime& time,
-                               double& clock_bias,
-                               double& clock_drift);
-    
-    /**
-     * @brief Calculate satellite antenna phase center offset
-     */
-    Vector3d calculateSatelliteAntennaPCO(const SatelliteId& satellite,
-                                        const Vector3d& satellite_pos,
-                                        const Vector3d& sun_pos);
-    
-    /**
-     * @brief Calculate receiver antenna phase center offset
-     */
-    Vector3d calculateReceiverAntennaPCO(const Vector3d& receiver_pos,
-                                       const Vector3d& satellite_pos,
-                                       const std::string& antenna_type);
     
     /**
      * @brief Calculate phase windup correction (Wu et al. 1993).

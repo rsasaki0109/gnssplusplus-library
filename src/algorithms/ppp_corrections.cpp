@@ -1723,24 +1723,6 @@ double PPPProcessor::measurementVariance(const IonosphereFreeObs& observation,
         carrier_phase ? 1e-8 : 1e-6);
 }
 
-double PPPProcessor::calculateTroposphericDelay(const Vector3d& receiver_pos,
-                                                const Vector3d& satellite_pos,
-                                                const GNSSTime& time,
-                                                double zenith_delay) const {
-    double lat = 0.0;
-    double lon = 0.0;
-    double h = 0.0;
-    ecef2geodetic(receiver_pos, lat, lon, h);
-    const Vector3d los_enu = ecef2enu(satellite_pos - receiver_pos, lat, lon);
-    const double horizontal = std::hypot(los_enu.x(), los_enu.y());
-    const double elevation = std::atan2(los_enu.z(), horizontal);
-    if (!ppp_config_.estimate_troposphere) {
-        return modeledTroposphereDelayMeters(receiver_pos, elevation, time);
-    }
-    const double mapping = calculateMappingFunction(receiver_pos, elevation, time);
-    return mapping * zenith_delay;
-}
-
 double PPPProcessor::calculateMappingFunction(const Vector3d& receiver_pos,
                                               double elevation,
                                               const GNSSTime& time) const {
