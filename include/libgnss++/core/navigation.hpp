@@ -590,7 +590,36 @@ public:
     void clear();
 
 private:
+    struct HeldTokenCacheEntry {
+        GNSSTime time;
+        double max_age_seconds = 0.0;
+        int network_id = 0;
+        int minimum_grid_count = 0;
+        bool found = false;
+        std::map<std::string, std::string> tokens;
+        GNSSTime reference_time;
+    };
+
+    bool heldAtmosTokensForNetworkUncached(int network_id,
+                                           const GNSSTime& time,
+                                           double max_age_seconds,
+                                           std::map<std::string, std::string>& atmos_tokens,
+                                           GNSSTime* atmos_reference_time) const;
+    bool heldClasTropTokensUncached(const GNSSTime& time,
+                                    double max_age_seconds,
+                                    int network_id,
+                                    int minimum_grid_count,
+                                    std::map<std::string, std::string>& atmos_tokens,
+                                    GNSSTime* atmos_reference_time) const;
+    void invalidateHeldTokenCaches() const;
+
     bool orbit_corrections_are_rac_ = false;
+    // Memoized held-token lookups for the current epoch. The lookups are pure
+    // functions of their arguments and the stored corrections, but CLAS OSR
+    // repeats them per satellite and per filter pass; every mutation of the
+    // correction containers clears these caches.
+    mutable std::vector<HeldTokenCacheEntry> held_atmos_token_cache_;
+    mutable std::vector<HeldTokenCacheEntry> held_trop_token_cache_;
 };
 
 /**

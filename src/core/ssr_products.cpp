@@ -19,6 +19,7 @@ namespace libgnss {
 using namespace navigation_internal;
 
 void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
+    invalidateHeldTokenCaches();
     auto& entries = orbit_clock_corrections[correction.satellite];
     auto lower = std::lower_bound(
         entries.begin(),
@@ -58,6 +59,7 @@ void SSRProducts::addCorrection(const SSROrbitClockCorrection& correction) {
 }
 
 void SSRProducts::addCorrections(const std::vector<SSROrbitClockCorrection>& corrections) {
+    invalidateHeldTokenCaches();
     if (corrections.empty()) {
         return;
     }
@@ -1454,11 +1456,12 @@ bool SSRProducts::heldClasPhaseBiasForServiceNetwork(
     return !phase_bias_m->empty();
 }
 
-bool SSRProducts::heldAtmosTokensForNetwork(int network_id,
-                                            const GNSSTime& time,
-                                            double max_age_seconds,
-                                            std::map<std::string, std::string>& atmos_tokens,
-                                            GNSSTime* atmos_reference_time) const {
+bool SSRProducts::heldAtmosTokensForNetworkUncached(
+    int network_id,
+    const GNSSTime& time,
+    double max_age_seconds,
+    std::map<std::string, std::string>& atmos_tokens,
+    GNSSTime* atmos_reference_time) const {
     if (network_id <= 0) {
         return false;
     }
@@ -1499,7 +1502,7 @@ bool SSRProducts::heldAtmosTokensForNetwork(int network_id,
     return true;
 }
 
-bool SSRProducts::heldClasTropTokens(
+bool SSRProducts::heldClasTropTokensUncached(
     const GNSSTime& time,
     double max_age_seconds,
     int network_id,
@@ -1610,6 +1613,89 @@ bool SSRProducts::heldClasTropTokens(
     return true;
 }
 
+namespace {
+
+// Held-token caches only ever hold entries for one receiver epoch.
+constexpr std::size_t kMaxHeldTokenCacheEntries = 8;
+
+}  // namespace
+
+void SSRProducts::invalidateHeldTokenCaches() const {
+    held_atmos_token_cache_.clear();
+    held_trop_token_cache_.clear();
+}
+
+bool SSRProducts::heldAtmosTokensForNetwork(int network_id,
+                                            const GNSSTime& time,
+                                            double max_age_seconds,
+                                            std::map<std::string, std::string>& atmos_tokens,
+                                            GNSSTime* atmos_reference_time) const {
+    auto& cache = held_atmos_token_cache_;
+    if (!cache.empty() && (cache.front().time.week != time.week ||
+                           cache.front().time.tow != time.tow)) {
+        cache.clear();
+    }
+    for (const auto& entry : cache) {
+        if (entry.network_id == network_id && entry.max_age_seconds == max_age_seconds) {
+            if (!entry.found) return false;
+            atmos_tokens = entry.tokens;
+            if (atmos_reference_time != nullptr) *atmos_reference_time = entry.reference_time;
+            return true;
+        }
+    }
+    HeldTokenCacheEntry entry;
+    entry.time = time;
+    entry.max_age_seconds = max_age_seconds;
+    entry.network_id = network_id;
+    entry.found = heldAtmosTokensForNetworkUncached(
+        network_id, time, max_age_seconds, entry.tokens, &entry.reference_time);
+    const bool found = entry.found;
+    if (found) {
+        atmos_tokens = entry.tokens;
+        if (atmos_reference_time != nullptr) *atmos_reference_time = entry.reference_time;
+    }
+    if (cache.size() < kMaxHeldTokenCacheEntries) cache.push_back(std::move(entry));
+    return found;
+}
+
+bool SSRProducts::heldClasTropTokens(
+    const GNSSTime& time,
+    double max_age_seconds,
+    int network_id,
+    int minimum_grid_count,
+    std::map<std::string, std::string>& atmos_tokens,
+    GNSSTime* atmos_reference_time) const {
+    auto& cache = held_trop_token_cache_;
+    if (!cache.empty() && (cache.front().time.week != time.week ||
+                           cache.front().time.tow != time.tow)) {
+        cache.clear();
+    }
+    for (const auto& entry : cache) {
+        if (entry.network_id == network_id && entry.max_age_seconds == max_age_seconds &&
+            entry.minimum_grid_count == minimum_grid_count) {
+            if (!entry.found) return false;
+            atmos_tokens = entry.tokens;
+            if (atmos_reference_time != nullptr) *atmos_reference_time = entry.reference_time;
+            return true;
+        }
+    }
+    HeldTokenCacheEntry entry;
+    entry.time = time;
+    entry.max_age_seconds = max_age_seconds;
+    entry.network_id = network_id;
+    entry.minimum_grid_count = minimum_grid_count;
+    entry.found = heldClasTropTokensUncached(time, max_age_seconds, network_id,
+                                             minimum_grid_count, entry.tokens,
+                                             &entry.reference_time);
+    const bool found = entry.found;
+    if (found) {
+        atmos_tokens = entry.tokens;
+        if (atmos_reference_time != nullptr) *atmos_reference_time = entry.reference_time;
+    }
+    if (cache.size() < kMaxHeldTokenCacheEntries) cache.push_back(std::move(entry));
+    return found;
+}
+
 const std::map<std::string, std::string>* SSRProducts::heldClasAtmosBankTokens(
     const GNSSTime& time,
     double max_age_seconds,
@@ -1631,6 +1717,7 @@ const std::map<std::string, std::string>* SSRProducts::heldClasAtmosBankTokens(
 }
 
 bool SSRProducts::loadCSVFile(const std::string& filename) {
+    invalidateHeldTokenCaches();
     std::ifstream input(filename);
     if (!input.is_open()) {
         return false;
@@ -1901,6 +1988,7 @@ bool SSRProducts::hasData(const SatelliteId& sat, const GNSSTime& time) const {
 }
 
 void SSRProducts::clear() {
+    invalidateHeldTokenCaches();
     orbit_clock_corrections.clear();
     clas_trop_bank_corrections.clear();
     orbit_corrections_are_rac_ = false;
