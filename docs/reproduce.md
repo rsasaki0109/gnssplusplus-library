@@ -20,9 +20,9 @@ runner adds no scoring logic of its own.
 
 | README row | Lane | Status | Runtime (local) | Local result (2026-09-28) |
 |---|---|---|---:|---|
-| RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Drift.** Numbers differ from the README; see [Known discrepancies](#known-discrepancies) |
+| RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
 | CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | >60 min | **Not verified locally yet.** L6/SSR expansion takes ~14 min; the six `gnss_ppp` runs dominate the runtime |
-| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | 3 of 4 claims pass; the `--preset odaiba` Hmed claim fails |
+| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | planned | - | Needs a GTSAM build and IMU replay lane |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | planned | - | See [PPC reproduction](ppc_reproduction.md) |
@@ -156,45 +156,43 @@ Placeholders: `{gnss}` (Python + `apps/gnss.py`), `{python}`, `{work_dir}`,
 `{bin:NAME}` (a built binary from `--build-dir`). A `foreach` row defines
 additional placeholders for its step or metric.
 
-## Known discrepancies
+## README refresh (2026-09-28)
 
-These are the latest local results (2026-09-28, develop `bcb1aac` + this lane
-framework, MSVC Release build, demo5 b34k). The README text has not been
-changed; the lanes keep the README values as their expectations, so
-`--check` fails for these rows until the README is updated or the historical
-inputs are recovered.
+The first local run (develop `bcb1aac`, MSVC Release, demo5 b34k) did not
+reproduce two README rows, because their RTKLIB baselines had been produced
+outside the repository with an unrecorded configuration. The README rows and
+`docs/benchmarks.md` now show the reproduced values, and the lanes gate on them.
 
 **`rtk-demo5`.**
 
-| Metric | README | Reproduced |
+| Metric | Previous README | Reproduced (now in README) |
 |---|---:|---:|
-| Avg Positioning delta vs demo5 | +17.0 pp | **-9.47 pp** |
-| Avg PPC official-score delta | +28.1 pp | **+45.42 pp** |
+| Avg Fix-rate delta vs demo5 | - | **+56.8 pp** |
+| Avg PPC official-score delta | +28.1 pp | **+45.4 pp** |
 | Avg P95 H delta | -11.96 m | **-11.44 m** |
+| Avg Positioning delta | +17.0 pp | **-9.5 pp** |
 
-The historical RTKLIB solutions (`output/benchmark/<run>/rtklib.pos`) were made
-outside the repository with an unrecorded configuration. With the tracked b34k
-config, demo5 outputs a float or single solution for 98.6-100% of epochs,
-against 65.8-93.1% in the historical table, but it fixes rarely (5.6-43.6%).
-The Positioning lead therefore flips sign, while the official-score lead grows.
-Current gnssplusplus also differs from the historical table: for example,
-Tokyo run1 Fix is 83.7% against 54.4%, and Nagoya run3 Positioning is 83.0%
-against 93.8%. Variants tried without matching the historical demo5 columns
-include GPS-only, GPS+GAL+QZS, fix-and-hold, a 10 degree mask, and base time
-interpolation off.
+With the tracked b34k config, demo5 publishes a FLOAT or SINGLE solution for
+98.6-100% of epochs (historical table: 65.8-93.1%) but fixes only 5.6-43.6%.
+The Positioning comparison therefore flips sign while the Fix-rate and
+official-score leads grow. Variants tried to recover the historical demo5
+columns (GPS-only, GPS+GAL+QZS, fix-and-hold, 10 degree mask, base time
+interpolation off) did not match.
 
-**`odaiba`.** The README claims are gated on all matched epochs:
+**`odaiba`.**
 
-| Claim | demo5 b34k | libgnss++ default | libgnss++ `--preset odaiba` | Result |
-|---|---:|---:|---:|---|
-| More fixes | 209 | **922** | 54 | pass (default) |
-| Lower Hp95 | 26.26 m | **5.10 m** | 5.11 m | pass |
-| Lower Vp95 | 43.29 m | **15.10 m** | 15.18 m | pass |
-| `--preset odaiba` closes Hmed | **0.684 m** | 0.696 m | 0.709 m | **fail** (+0.024 m) |
+| Claim | demo5 b34k | libgnss++ default | Result |
+|---|---:|---:|---|
+| More fixes | 209 | **922** | pass |
+| Lower Hp95 | 26.26 m | **5.10 m** | pass |
+| Lower Vp95 | 43.29 m | **15.10 m** | pass |
+| Lower Hmed on common epochs (7,996) | 0.671 m | **0.659 m** | pass |
 
-On common epochs, the preset does beat demo5 on Hmed (0.632 m vs 0.673 m).
-The docs/benchmarks.md snapshot table (demo5 595 fixes, default 1268, preset
-735) does not reproduce with the current solver and demo5 b34k.
+The previous claim "`--preset odaiba` closes Hmed" no longer holds on all
+matched epochs (0.709 m vs 0.684 m) and the preset now yields only 54 fixes,
+so the README no longer cites it; the lane still runs it as a reported
+diagnostic. The previous snapshot table (demo5 595 fixes, default 1268, preset
+735) was likewise produced with an unrecorded RTKLIB build.
 
 **`spp-policy`.** The README claim reproduces. The historical per-run policy
 P95 H values in `docs/references/spp-accuracy-improvement.md` are within
