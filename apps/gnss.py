@@ -644,11 +644,6 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_trajectory_smoother_eval.py"),
         "summary": "Select and validate frozen truth-free smartphone trajectory smoother parameters on development only.",
     },
-    "smartphone-trajectory-imu-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_trajectory_imu_eval.py"),
-        "summary": "Select development-only causal IMU motion-adaptive process-noise parameters without attitude integration.",
-    },
     "smartphone-tdcp-trajectory": {
         "kind": "python",
         "target": python_target("gnss_smartphone_tdcp_trajectory.py"),
@@ -673,11 +668,6 @@ COMMANDS = {
         "kind": "python",
         "target": python_target("gnss_smartphone_doppler_position.py"),
         "summary": "Run a truth-free bounded pseudorange-rate Doppler position update around handset WLS.",
-    },
-    "smartphone-doppler-position-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_doppler_position_eval.py"),
-        "summary": "Evaluate the frozen Doppler position-update candidate on route-disjoint train/validation roles.",
     },
     "smartphone-imu-motion-q-eval": {
         "kind": "python",
@@ -763,11 +753,6 @@ COMMANDS = {
         "kind": "python",
         "target": python_target("gnss_performance_report.py"),
         "summary": "Summarize native per-epoch SPP/RTK timing CSVs by GPST interval.",
-    },
-    "performance-baseline": {
-        "kind": "python",
-        "target": python_target("gnss_performance_baseline.py"),
-        "summary": "Run a reproducible Release SPP/RTK baseline with interval timing artifacts.",
     },
     "uav-mars-acquire": {
         "kind": "python",

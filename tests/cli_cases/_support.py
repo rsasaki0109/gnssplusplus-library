@@ -2210,10 +2210,6 @@ def build_skytraq_epoch_message(*, iod: int = 7, week: int = 2200, tow_ms: int =
     )
 
 
-def build_skytraq_raw_message(*, iod: int = 7, nsat: int = 12) -> bytes:
-    return build_skytraq_frame(0xDD, bytes([iod, nsat]))
-
-
 def build_skytraq_rawx_message(
     *,
     version: int = 1,

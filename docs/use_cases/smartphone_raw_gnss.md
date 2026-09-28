@@ -77,9 +77,7 @@ python3 apps/gnss.py smartphone-gnss-workflow \
   --performance --performance-interval-s 60
 ```
 
-The generic `performance-baseline` command also records the Release CMake
-configuration, source revision/status, solver binary hash, input hashes, and
-exact command for SPP or RTK. Its interval report measures only native
+The interval performance report measures only native
 `processEpoch`/`processRTKEpoch` calls; workflow stage timings remain separate
 so archive extraction, adapter, sign-off, and visualization costs are not
 mistaken for solver cost. The repository does not contain Kaggle's hidden-test
@@ -509,19 +507,9 @@ the baseline `q=1.0` process noise is multiplied by a fixed gain. A stale
 window, IMU sample gap over 250 ms, non-finite value, or elapsed/UTC clock
 discontinuity forces multiplier `1.0`. The motion profile is reset at the
 830/553 filter boundary, and future IMU samples are excluded. The explicit
-development-only selector is:
-
-```bash
-python3 apps/gnss.py smartphone-trajectory-imu-eval \
-  --experimental-motion-adaptive-q-selection --role development \
-  --position output/smartphone-r5/hatch-full-w30/libgnsspp_spp.pos \
-  --device-gnss data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_gnss.csv \
-  --device-imu data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/device_imu.csv \
-  --ground-truth data/gsdc2023/materialized/dataset_2023/train/2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro/ground_truth.csv \
-  --profile configs/benchmarks/smartphone_r5_gsdc2023.json \
-  --output-dir output/smartphone-r5/trajectory-imu-development \
-  --phone pixel7pro --dataset-id 2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro
-```
+development-only selector (the `smartphone-trajectory-imu-eval` command has
+since been removed; its frozen inputs and outputs remain in the record below)
+produced the following results.
 
 Five predeclared one-second candidates were ranked on train by H median, H
 P95, V P95, and the mean of the four local diagnostics. Validation required
@@ -2551,12 +2539,10 @@ and its manifest.  The three development identities were
 read by an earlier development experiment; that historical reuse is recorded
 in the corrected truth-use inventory and is not represented as a fresh split.
 All truth-free candidate and exact P/TDCP/motion baseline artifacts were
-sealed before the score.  Reproduce the fixed comparison with:
-
-~~~bash
-python3 apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_bridge_train_score.py \
-  --gate-record docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_train_gate_v1.json
-~~~
+sealed before the score.  The fixed comparison was scored once against the
+gate record
+`docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_bridge_train_gate_v1.json`
+(the one-shot scorer has since been removed from the tree).
 
 The resulting report is
 `output/smartphone-r5/native-fgo-pdc-bridge-v1/train_evaluation.json` (SHA
@@ -2853,7 +2839,8 @@ scored exactly once against its sealed v5 route position using all four
 official diagnostic variants.  The score authorization and evaluator are
 `docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_pdc_windowed_stitch_train_score_authorization_v1.json`
 and
-`apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch_eval.py`.
+`apps/commands/benchmarks/gnss_smartphone_native_fgo_pdc_windowed_stitch_eval.py`
+(since removed; the sealed result record is authoritative).
 The score read the already-authorized truth file once (SHA256
 `7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d`) and never
 opened validation, holdout, or test truth.  v5 → stitch was H P50
