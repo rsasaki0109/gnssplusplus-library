@@ -23,7 +23,9 @@ class CorrectionDiagnosticsTest(unittest.TestCase):
                              source.index('    const TdcpRuntimeReport tdcp_report = evaluateTdcpRuntime('))
         guard = source[start:source.index('    if (options.native_pdc_imu_tdcp &&', start)]
         code = r'''
+#include <libgnss++/algorithms/adjacent_residual_moments.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/smartphone_temporal_recipe.hpp>
 #include <cmath>
 #include <limits>
 #include <cassert>
