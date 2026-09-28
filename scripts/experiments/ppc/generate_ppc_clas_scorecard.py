@@ -355,6 +355,7 @@ def build_gnss_ppp_command(
     ssr_csv: Path,
     out_pos: Path,
     parity: bool = False,
+    progress: bool = True,
 ) -> list[str]:
     cmd = [
         str(gnss_ppp_bin),
@@ -392,6 +393,8 @@ def build_gnss_ppp_command(
                 "2.0",
             ]
         )
+    if progress:
+        cmd.extend(["--progress-interval", "30"])
     return cmd
 
 
@@ -409,24 +412,20 @@ def run_logged(
             parity_keys = [key for key in PARITY_ENV if env.get(key) == "1"]
             if parity_keys:
                 handle.write(f"# env parity keys: {', '.join(parity_keys)}\n")
-    completed = subprocess.run(
-        list(command),
-        cwd=ROOT_DIR,
-        env=dict(env) if env is not None else None,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    elapsed = time.monotonic() - started
-    combined = completed.stdout
-    if completed.stderr:
-        if combined and not combined.endswith("\n"):
-            combined += "\n"
-        combined += completed.stderr
+    # Stream stdout/stderr straight into the log so long runs (e.g. gnss_ppp
+    # --progress) can be followed while they execute.
     with log_path.open("a", encoding="utf-8") as handle:
-        handle.write(combined)
-        if combined and not combined.endswith("\n"):
-            handle.write("\n")
+        completed = subprocess.run(
+            list(command),
+            cwd=ROOT_DIR,
+            env=dict(env) if env is not None else None,
+            text=True,
+            stdout=handle,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    elapsed = time.monotonic() - started
+    with log_path.open("a", encoding="utf-8") as handle:
         handle.write(f"# exit={completed.returncode} elapsed_s={elapsed:.3f}\n\n")
     return completed
 

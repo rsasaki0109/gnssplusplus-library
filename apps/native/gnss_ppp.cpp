@@ -4,6 +4,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <sstream>
@@ -97,6 +98,74 @@ struct Options {
     std::string atm_tidal_loading_file;
     bool use_iers_atm_tidal_loading = false;
     bool quiet = false;
+    double progress_interval_s = 0.0;
+};
+
+// Periodic stderr progress for long post-processing runs (--progress).
+class ProgressReporter {
+public:
+    ProgressReporter(double interval_s, const libgnss::GNSSTime& first_obs,
+                     const libgnss::GNSSTime& last_obs)
+        : interval_s_(interval_s),
+          first_obs_(first_obs),
+          span_s_(first_obs.week > 0 && last_obs.week > 0 ? last_obs - first_obs : 0.0),
+          started_(std::chrono::steady_clock::now()),
+          next_report_(started_ + toDuration(interval_s)) {}
+
+    void update(int epochs, const libgnss::GNSSTime& epoch_time, int valid, int fixed) {
+        if (interval_s_ <= 0.0) {
+            return;
+        }
+        if (first_obs_.week == 0) {
+            first_obs_ = epoch_time;
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (now < next_report_) {
+            return;
+        }
+        next_report_ = now + toDuration(interval_s_);
+        const double elapsed_s = secondsSince(now);
+        const double data_s = epoch_time - first_obs_;
+        std::ostringstream line;
+        line << std::fixed << std::setprecision(1) << "[gnss_ppp] progress: epoch " << epochs
+             << ", data " << data_s << " s";
+        if (span_s_ > 0.0) {
+            const double fraction = std::clamp(data_s / span_s_, 0.0, 1.0);
+            line << " / " << span_s_ << " s (" << fraction * 100.0 << "%)";
+            if (fraction > 0.0) {
+                line << ", eta " << elapsed_s * (1.0 - fraction) / fraction << " s";
+            }
+        }
+        line << ", valid " << valid << " (fixed " << fixed << "), elapsed " << elapsed_s
+             << " s, " << epochs / elapsed_s << " epoch/s";
+        std::cerr << line.str() << std::endl;
+    }
+
+    void finish(int epochs, int valid, int fixed) const {
+        if (interval_s_ <= 0.0) {
+            return;
+        }
+        std::cerr << std::fixed << std::setprecision(1) << "[gnss_ppp] progress: done, "
+                  << epochs << " epochs, valid " << valid << " (fixed " << fixed
+                  << "), elapsed " << secondsSince(std::chrono::steady_clock::now()) << " s"
+                  << std::endl;
+    }
+
+private:
+    static std::chrono::steady_clock::duration toDuration(double seconds) {
+        return std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+            std::chrono::duration<double>(seconds));
+    }
+
+    double secondsSince(std::chrono::steady_clock::time_point now) const {
+        return std::chrono::duration<double>(now - started_).count();
+    }
+
+    double interval_s_;
+    libgnss::GNSSTime first_obs_;
+    double span_s_;
+    std::chrono::steady_clock::time_point started_;
+    std::chrono::steady_clock::time_point next_report_;
 };
 
 void printUsage(const char* program_name) {
@@ -264,6 +333,8 @@ void printUsage(const char* program_name) {
         << "  --no-iers-atm-tidal-loading\n"
         << "                          Skip atmospheric tidal loading (default).\n"
         << "  --quiet                  Suppress per-run summary output\n"
+        << "  --progress               Print processing progress to stderr every 10 s\n"
+        << "  --progress-interval <s>  Print processing progress to stderr every <s> seconds\n"
         << "  -h, --help               Show this help\n";
 }
 
@@ -448,6 +519,13 @@ Options parseArguments(int argc, char* argv[]) {
             options.use_iers_atm_tidal_loading = false;
         } else if (arg == "--quiet") {
             options.quiet = true;
+        } else if (arg == "--progress") {
+            options.progress_interval_s = 10.0;
+        } else if (arg == "--progress-interval" && i + 1 < argc) {
+            options.progress_interval_s = std::stod(argv[++i]);
+            if (!(options.progress_interval_s > 0.0)) {
+                argumentError("--progress-interval must be positive", argv[0]);
+            }
         } else {
             argumentError("unknown or incomplete argument: " + arg, argv[0]);
         }
@@ -784,6 +862,7 @@ int main(int argc, char* argv[]) {
                 {"--no-ionosphere-free", ""},
                 {"--use-dynamics-model", ""},
                 {"--quiet", ""},
+                {"--progress", ""},
             },
             {
                 {"--estimate-troposphere", "--no-estimate-troposphere"},
@@ -1239,10 +1318,23 @@ int main(int argc, char* argv[]) {
             processor_config.elevation_mask = 10.0;
         }
 
+        const auto init_started = std::chrono::steady_clock::now();
+        if (options.progress_interval_s > 0.0) {
+            std::cerr << "[gnss_ppp] progress: initializing processor (loading corrections)"
+                      << std::endl;
+        }
         libgnss::PPPProcessor processor(ppp_config);
         if (!processor.initialize(processor_config)) {
             std::cerr << "Error: failed to initialize PPP processor\n";
             return 1;
+        }
+        if (options.progress_interval_s > 0.0) {
+            std::cerr << std::fixed << std::setprecision(1)
+                      << "[gnss_ppp] progress: processor initialized in "
+                      << std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                                       init_started)
+                             .count()
+                      << " s" << std::endl;
         }
         if (!options.ssr_rtcm_path.empty() &&
             !processor.loadRTCMSSRProducts(
@@ -1337,6 +1429,8 @@ int main(int argc, char* argv[]) {
         const char* skip_until_env = std::getenv("GNSS_PPP_SKIP_UNTIL_TOW");
         const double skip_until_tow =
             skip_until_env != nullptr ? std::atof(skip_until_env) : -1.0;
+        ProgressReporter progress(options.progress_interval_s, obs_header.first_obs,
+                                  obs_header.last_obs);
         while ((options.max_epochs == 0 || processed_epochs < options.max_epochs) &&
                obs_reader.readObservationEpoch(observation_data)) {
             if (skip_until_tow >= 0.0 &&
@@ -1384,6 +1478,8 @@ int main(int argc, char* argv[]) {
                 ++clas_hybrid_fallback_reasons[processor.getLastClasHybridFallbackReason()];
             }
             processed_epochs++;
+            progress.update(processed_epochs, observation_data.time, valid_solutions,
+                            ppp_fixed_solutions);
             if (solution.isValid()) {
                 solutions.addSolution(solution);
                 if (live_stream.is_open()) {
@@ -1399,6 +1495,8 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
+
+        progress.finish(processed_epochs, valid_solutions, ppp_fixed_solutions);
 
         if (solutions.isEmpty()) {
             std::cerr << "Error: PPP processing produced no valid solutions\n";
