@@ -9,8 +9,10 @@ import numpy as np
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 SCRIPTS_DIR = ROOT_DIR / "scripts"
-if str(SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPTS_DIR))
+PPC_SCRIPTS_DIR = SCRIPTS_DIR / "experiments" / "ppc"
+for script_dir in (SCRIPTS_DIR, PPC_SCRIPTS_DIR):
+    if str(script_dir) not in sys.path:
+        sys.path.insert(0, str(script_dir))
 
 import apply_ppc_integrity_consensus as consensus  # noqa: E402
 import generate_driving_comparison as comparison  # noqa: E402
@@ -166,3 +168,10 @@ def test_healthy_recovery_candidate_is_provisional_fixed() -> None:
     assert ledger[1]["state"] == consensus.RECOVERY
     assert ledger[1]["provisional_recovery_fixed"] is True
     assert ledger[1]["promote_joint_anchor"] is False
+
+
+if __name__ == "__main__":
+    for _name, _func in list(globals().items()):
+        if _name.startswith("test_") and callable(_func):
+            _func()
+            print(f"ok {_name}")

@@ -12,6 +12,7 @@ class PairedEpochStatesCliTest(unittest.TestCase):
     def args(self):
         manifest = ROOT / 'docs/use_cases/records/smartphone_r5_phase234_h_native_phase233_meter_sigma_manifest_v1.json'
         args = json.loads(manifest.read_text())['argv'].copy()
+        args[0] = os.environ.get('GSDC_NATIVE_EXE', args[0])
         for flag in ('--android-gnss', '--android-imu', '--nav', '--out', '--summary-json'):
             args[args.index(flag) + 1] = '/nonexistent/gnss-paired-preflight/' + flag[2:]
         return args + [
@@ -96,10 +97,12 @@ class PairedEpochStatesCliTest(unittest.TestCase):
             self.assertIn('failed to open raw Android GNSS CSV', self.run_cli(
                 args + ['--native-sparse-p-staging'] + extra))
 
-    def test_sparse_p_rejects_h(self):
+    def test_sparse_p_admits_h_route(self):
+        # The LAX-T-only / base-off restriction was lifted when sparse-P
+        # staging was generalised to the base-surveyed routes.
         args = self.args()
         args = args[:args.index('--native-paired-epoch-states')]
-        self.assertIn('requires raw LAX-T all-epoch Phase171 base-off recipe', self.run_cli(
+        self.assertIn('failed to open raw Android GNSS CSV', self.run_cli(
             args + ['--native-sparse-p-staging']))
 
     def test_tdcp_code_gate_rejects_unlisted_route(self):

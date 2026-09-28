@@ -121,3 +121,18 @@ def test_reference_loader_accepts_comma_space_urbannav_header(tmp_path: Path) ->
         encoding="utf-8",
     )
     assert audit.load_reference(reference) == {(2300, 1.1): (1.0, 2.0, 3.0)}
+
+
+if __name__ == "__main__":
+    import inspect
+    import tempfile
+
+    for _name, _func in list(globals().items()):
+        if not (_name.startswith("test_") and callable(_func)):
+            continue
+        if "tmp_path" in inspect.signature(_func).parameters:
+            with tempfile.TemporaryDirectory() as _tmp:
+                _func(Path(_tmp))
+        else:
+            _func()
+        print(f"ok {_name}")

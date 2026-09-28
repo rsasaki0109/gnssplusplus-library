@@ -39,3 +39,7 @@ class EvaluationGroupingTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "route group changed"):
             summarize(self.plan, self.validation,
                       {case: "same-drive" for case in self.plan["runs"]})
+
+
+if __name__ == "__main__":
+    unittest.main()

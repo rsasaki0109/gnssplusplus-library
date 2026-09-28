@@ -17,7 +17,8 @@ import numpy as np
 ROOT_DIR = Path(__file__).resolve().parents[2]
 SCRIPTS_DIR = ROOT_DIR / "scripts"
 ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
-for script_dir in (SCRIPTS_DIR, ANALYSIS_DIR):
+PPC_SCRIPTS_DIR = SCRIPTS_DIR / "experiments" / "ppc"
+for script_dir in (SCRIPTS_DIR, ANALYSIS_DIR, PPC_SCRIPTS_DIR):
     if str(script_dir) not in sys.path:
         sys.path.insert(0, str(script_dir))
 

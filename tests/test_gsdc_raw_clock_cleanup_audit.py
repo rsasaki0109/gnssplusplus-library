@@ -68,3 +68,7 @@ class RawClockCleanupAuditTest(unittest.TestCase):
         proof["epochs"][2]["right_epoch_index"] = 0
         with self.assertRaises(ValueError):
             audit_raw_clock_cleanup(list(range(5)), originals, proof, seeds)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -17,7 +17,8 @@ LANE = ['--native-phase165-raw-p-no-doppler-graph',
 def invoke(args):
     env = os.environ.copy()
     env['LD_LIBRARY_PATH'] = '/home/sasaki/.local/lib:' + env.get('LD_LIBRARY_PATH', '')
-    return subprocess.run([str(ROOT / 'build/apps/gnss_fgo_imu_no_base'), *args],
+    executable = os.environ.get('GSDC_NATIVE_EXE', str(ROOT / 'build/apps/gnss_fgo_imu_no_base'))
+    return subprocess.run([executable, *args],
                           cwd=ROOT, env=env, capture_output=True, text=True, timeout=10)
 
 

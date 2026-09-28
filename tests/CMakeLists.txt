@@ -682,6 +682,98 @@ if(GTest_FOUND)
         python_packaging_tests
         PROPERTIES ENVIRONMENT "GNSSPP_BINARY_DIR=${CMAKE_BINARY_DIR}"
     )
+    # Pure-Python unit tests (no build artifacts, datasets or network).
+    # Registered as python_<module>_tests and labelled core below.
+    set(GNSSPP_PURE_PYTHON_TEST_MODULES
+        convert_gici_nmea_to_pos
+        fgo_motion_constraint_ab
+        gnss_next
+        gsdc_evaluation_grouping
+        gsdc_frozen_runner
+        gsdc_raw_clock_cleanup_audit
+        integrity_consensus_replay
+        ppc_clas_scorecard
+        ppc_kinematic_integrity_loo
+        ppc_residual_integrity_policy
+        ppc_status_demotion
+        ppc_wrong_fix_residuals
+        sinex
+        smartphone_gnss_adapter
+        smartphone_gnss_signoff
+        smartphone_gnss_workflow
+        static_metrics
+        uav_mars_acquire
+        uav_mars_adapter
+        uav_mars_signoff
+        uav_mars_workflow
+    )
+    set(GNSSPP_PURE_PYTHON_TESTS)
+    foreach(module IN LISTS GNSSPP_PURE_PYTHON_TEST_MODULES)
+        add_test(
+            NAME python_${module}_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_${module}.py
+        )
+        list(APPEND GNSSPP_PURE_PYTHON_TESTS python_${module}_tests)
+    endforeach()
+
+    # These compile a helper extracted from apps/native/gnss_fgo_imu_no_base.cpp
+    # with the host C++ compiler against the public headers and system Eigen.
+    if(NOT WIN32)
+        foreach(module IN ITEMS native_tdcp_correction_diagnostics native_tdcp_huber_reconstruction)
+            add_test(
+                NAME python_${module}_tests
+                COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_${module}.py
+            )
+            set_tests_properties(
+                python_${module}_tests
+                PROPERTIES ENVIRONMENT "CXX=${CMAKE_CXX_COMPILER}"
+            )
+            list(APPEND GNSSPP_PURE_PYTHON_TESTS python_${module}_tests)
+        endforeach()
+    endif()
+
+    # CLI admission tests for the GTSAM-only no-base smartphone research binary.
+    # They are pytest-style (parametrized) and need the built executable.
+    if(TARGET gnss_fgo_imu_no_base)
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE} -c "import pytest"
+            RESULT_VARIABLE GNSSPP_PYTEST_IMPORT_RESULT
+            OUTPUT_QUIET ERROR_QUIET
+        )
+        set(GNSSPP_NO_BASE_CLI_TESTS)
+        add_test(
+            NAME python_smartphone_paired_epoch_states_cli_tests
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_smartphone_paired_epoch_states_cli.py
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        )
+        list(APPEND GNSSPP_NO_BASE_CLI_TESTS python_smartphone_paired_epoch_states_cli_tests)
+        if(GNSSPP_PYTEST_IMPORT_RESULT EQUAL 0)
+            foreach(module IN ITEMS
+                    smartphone_epoch_heading_seeds
+                    smartphone_include_first_native_epoch
+                    smartphone_omit_first_bias_prior
+                    smartphone_omit_first_velocity_prior
+                    smartphone_pseudorange_remasking
+                    smartphone_relative_height_pairs
+                    smartphone_source_tdcp_meter_sigma
+                    smartphone_source_tdcp_resl_observable
+                    smartphone_tdcp_only_affine_geometry)
+                add_test(
+                    NAME python_${module}_tests
+                    COMMAND ${Python3_EXECUTABLE} -m pytest -q -p no:cacheprovider
+                            ${CMAKE_CURRENT_SOURCE_DIR}/test_${module}.py
+                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                )
+                list(APPEND GNSSPP_NO_BASE_CLI_TESTS python_${module}_tests)
+            endforeach()
+        endif()
+        set_tests_properties(
+            ${GNSSPP_NO_BASE_CLI_TESTS}
+            PROPERTIES ENVIRONMENT "GSDC_NATIVE_EXE=$<TARGET_FILE:gnss_fgo_imu_no_base>"
+                       LABELS optional
+        )
+    endif()
+
     if(TARGET gnss_solution_node)
         add_test(
             NAME python_ros2_node_tests
@@ -790,6 +882,7 @@ if(GTest_FOUND)
     if(TARGET gnss_solution_node)
         list(APPEND GNSSPP_EXTENDED_TESTS python_ros2_node_tests)
     endif()
+    list(APPEND GNSSPP_CORE_TESTS ${GNSSPP_PURE_PYTHON_TESTS})
     set_tests_properties(${GNSSPP_CORE_TESTS} PROPERTIES LABELS core)
     set_tests_properties(${GNSSPP_EXTENDED_TESTS} PROPERTIES LABELS extended)
     set_tests_properties(${GNSSPP_OPTIONAL_TESTS} PROPERTIES LABELS optional)
