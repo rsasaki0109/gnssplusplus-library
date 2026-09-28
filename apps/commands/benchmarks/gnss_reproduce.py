@@ -38,7 +38,10 @@ DATASET_ENV = {
     "urbannav": "GNSSPP_URBANNAV_ROOT",
     "gsdc": "GNSSPP_GSDC_ROOT",
     "gsdc_truth": "GNSSPP_GSDC_TRUTH_ROOT",
+    "ppc_goal_inputs": "GNSSPP_PPC_GOAL_INPUTS",
 }
+# CLI option that sets each dataset root (default: --<name>-root).
+DATASET_OPTION = {"ppc_goal_inputs": "--ppc-goal-inputs"}
 # A dataset root that is set neither by option nor by environment variable
 # falls back to another dataset's root (GSDC ground truth usually ships inside
 # the GSDC tree itself).
@@ -529,6 +532,7 @@ DEFAULT_DATA_SUBDIRS = {
     "ppc": Path("data") / "PPC-Dataset",
     "urbannav": Path("data") / "driving" / "Tokyo_Data",
     "gsdc": Path("data") / "gsdc2023" / "dataset_2023",
+    "ppc_goal_inputs": Path("data") / "ppc_goal_inputs",
 }
 
 
@@ -551,6 +555,10 @@ def build_context(manifest: Mapping[str, Any], args: argparse.Namespace) -> dict
     return context
 
 
+def dataset_option(name: str) -> str:
+    return DATASET_OPTION.get(name, f"--{name.replace('_', '-')}-root")
+
+
 def validate_inputs(manifest: Mapping[str, Any], context: Mapping[str, str], rendered: Sequence[Mapping[str, Any]]) -> list[str]:
     problems: list[str] = []
     for name, spec in manifest.get("datasets", {}).items():
@@ -559,7 +567,7 @@ def validate_inputs(manifest: Mapping[str, Any], context: Mapping[str, str], ren
         if missing:
             env_name = DATASET_ENV[name]
             problems.append(
-                f"dataset `{name}` incomplete under {root} (set --{name.replace('_', '-')}-root or {env_name}); missing: "
+                f"dataset `{name}` incomplete under {root} (set {dataset_option(name)} or {env_name}); missing: "
                 + ", ".join(missing[:6])
                 + (" ..." if len(missing) > 6 else "")
             )
@@ -639,6 +647,9 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--gsdc-truth-root", type=Path, default=None,
                         help="Where ground_truth.csv lives if not inside --gsdc-root "
                              "(default: $GNSSPP_GSDC_TRUTH_ROOT, then the GSDC root).")
+    parser.add_argument("--ppc-goal-inputs", dest="ppc_goal_inputs_root", type=Path, default=None,
+                        help="Frozen PPC goal-matrix tier inputs for the ppc-goal lane "
+                             "(default: $GNSSPP_PPC_GOAL_INPUTS or <data-root>/ppc_goal_inputs).")
     parser.add_argument("--build-dir", type=Path, default=os.environ.get("GNSSPP_BUILD_DIR"),
                         help="CMake build directory holding apps/gnss_* binaries (default: $GNSSPP_BUILD_DIR or <repo>/build*).")
     parser.add_argument("--rtklib-bin", type=Path, default=None,

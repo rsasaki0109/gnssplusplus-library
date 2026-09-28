@@ -24,8 +24,8 @@ sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "benchmarks"))
 import gnss_reproduce as reproduce  # noqa: E402
 
 
-READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes"}
-PLANNED_LANES = {"ppc-goal", "gsdc-official"}
+READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal"}
+PLANNED_LANES = {"gsdc-official"}
 
 
 def write_manifest(directory: Path, text: str, name: str = "lane.toml") -> Path:
@@ -386,6 +386,88 @@ class GsdcDevRoutesLaneTest(unittest.TestCase):
         finally:
             route["sha256"].clear()
             route["sha256"].update(original)
+
+
+class PpcGoalLaneTest(unittest.TestCase):
+    @staticmethod
+    def _import(name: str):
+        path = str(ROOT_DIR / "scripts" / "experiments" / "ppc")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        return __import__(name)
+
+    def test_manifest_inputs_match_pinned_stager_table(self) -> None:
+        stager = self._import("stage_ppc_goal_inputs")
+        manifest = reproduce.discover_manifests()["ppc-goal"]
+        required = manifest["datasets"]["ppc_goal_inputs"]["required"]
+        self.assertEqual(set(required), set(stager.FROZEN_INPUTS))
+        self.assertEqual(len(required), 26)
+        for relative, (sha, _role) in stager.FROZEN_INPUTS.items():
+            self.assertRegex(sha, r"^[0-9a-f]{64}$", relative)
+        # Every frozen input is consumed by some step.
+        rendered = " ".join(item for step in manifest["steps"] for item in step["argv"])
+        for relative in required:
+            self.assertIn("{ppc_goal_inputs_root}/" + relative, rendered)
+
+    def test_dry_run_uses_inputs_option_and_env(self) -> None:
+        base = [
+            sys.executable, str(GNSS_CLI), "reproduce", "ppc-goal", "--dry-run", "--update-docs",
+            "--ppc-root", "/datasets/PPC-Dataset",
+            "--work-dir", "output/reproduce/test-ppc-goal-dry-run",
+        ]
+        result = subprocess.run(
+            [*base, "--ppc-goal-inputs", "/archive/ppc_goal_inputs"],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        self.assertIn("stage_ppc_goal_inputs.py --inputs-root /archive/ppc_goal_inputs", out)
+        self.assertIn("--baseline-pos /archive/ppc_goal_inputs/tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos", out)
+        self.assertIn("apply_ppc_fgo_position_consensus.py", out)
+        self.assertIn("--residual-streak-buffer-prefix", out)
+        self.assertIn("ppc-demo --dataset-root /datasets/PPC-Dataset --city nagoya --run run1", out)
+        self.assertIn("--use-existing-solution", out)
+        self.assertIn("--summary-json docs/ppc_kf_fgo_goal_metrics.json", out)
+        self.assertIn("--output docs/ppc_kf_fgo_fix_status_xy.png", out)
+        self.assertIn("warning: dataset `ppc_goal_inputs` incomplete", out)
+        self.assertIn("--ppc-goal-inputs or GNSSPP_PPC_GOAL_INPUTS", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-ppc-goal-dry-run").exists())
+
+        env = {**os.environ, "GNSSPP_PPC_GOAL_INPUTS": "/env/ppc_goal_inputs"}
+        from_env = subprocess.run(base, cwd=ROOT_DIR, check=False, capture_output=True, text=True, env=env)
+        self.assertEqual(from_env.returncode, 0, from_env.stderr)
+        self.assertIn("--inputs-root /env/ppc_goal_inputs", from_env.stdout)
+
+    def test_stager_verifies_and_exports(self) -> None:
+        import hashlib
+
+        stager = self._import("stage_ppc_goal_inputs")
+        original = dict(stager.FROZEN_INPUTS)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "output"
+            pins = {}
+            for relative, (_sha, role) in original.items():
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                data = f"{relative}\n".encode()
+                path.write_bytes(data)
+                pins[relative] = (hashlib.sha256(data).hexdigest(), role)
+            stager.FROZEN_INPUTS.clear()
+            stager.FROZEN_INPUTS.update(pins)
+            try:
+                summary = Path(tmp) / "verify.json"
+                out = Path(tmp) / "export"
+                self.assertEqual(
+                    stager.main(["--inputs-root", str(root), "--summary-json", str(summary), "--out", str(out)]), 0
+                )
+                self.assertTrue(json.loads(summary.read_text(encoding="utf-8"))["passed"])
+                self.assertTrue((out / "gici_common" / "tokyo1.pos").is_file())
+                (root / "tc_m3_full_t1_on" / "rtk.pos").write_bytes(b"corrupted\n")
+                self.assertEqual(stager.main(["--inputs-root", str(root), "--summary-json", str(summary)]), 1)
+                self.assertFalse(json.loads(summary.read_text(encoding="utf-8"))["passed"])
+            finally:
+                stager.FROZEN_INPUTS.clear()
+                stager.FROZEN_INPUTS.update(original)
 
 
 class CheckTest(unittest.TestCase):

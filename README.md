@@ -172,6 +172,9 @@ The [Nagoya 3 root-cause analysis](docs/ppc_nagoya3_wrong_fix_root_cause.md)
 documents the catastrophic float-KF wrong basin. See the
 [reproduction commands](docs/ppc_reproduction.md) for the gate design,
 external replay, event ledger, machine-readable metrics, and licensing details.
+`gnss reproduce ppc-goal` rescores this section (about 1 min) from 26
+SHA-256-pinned tier inputs that are not published; see
+[reproduce](docs/reproduce.md#ppc-goal-frozen-inputs).
 
 ### GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo
 

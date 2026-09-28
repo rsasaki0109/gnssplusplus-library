@@ -25,7 +25,7 @@ runner adds no scoring logic of its own.
 | Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
-| PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | planned | - | See [PPC reproduction](ppc_reproduction.md) |
+| PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
 | Smartphone GSDC official submission | `gsdc-official` | planned | - | The score comes from Kaggle and cannot be recomputed locally |
 
@@ -36,17 +36,18 @@ Release build. Lanes that run in parallel slow each other down.
 
 | Dataset | Used by | Get it | Expected layout |
 |---|---|---|---|
-| [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy`, `fgo-tokyo` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}`; `fgo-tokyo` also reads `tokyo/run{1,2,3}/imu.csv` |
+| [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy`, `fgo-tokyo`, `ppc-goal` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}`; `fgo-tokyo` also reads `tokyo/run{1,2,3}/imu.csv` |
 | [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) | `odaiba` | UrbanNav Tokyo data release (Trimble rover/base RINEX + Applanix reference) | `<urbannav-root>/Odaiba/{rover_trimble.obs,base_trimble.obs,base.nav,reference.csv}` |
 | [GSDC 2023 `dataset_2023`](https://github.com/taroz/gsdc2023) (Kaggle Google Smartphone Decimeter Challenge 2023 train set with CORS base RINEX and `brdc.nav`) | `gsdc-dev-routes` | Kaggle GSDC 2023 data as repackaged by taroz/gsdc2023 (`dataset_2023.zip`, SHA-256 `bda30ab4...`) | `<gsdc-root>/train/<drive>/{brdc.nav,<BASE>_rnx2.obs,pixel5/{device_gnss.csv,device_imu.csv,ground_truth.csv}}`, or the zip itself; see [gsdc-dev-routes inputs](#gsdc-dev-routes-inputs-and-base-provenance) |
+| PPC goal-matrix frozen tier inputs | `ppc-goal` | Not published; the 26 files (~33 MB) exist only in the `output/` tree of the checkout that produced the README. See [ppc-goal inputs](#ppc-goal-frozen-inputs) | `<ppc-goal-inputs>/` in the historical `output/` layout (`tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos`, `gici_common/tokyo1.pos`, ...); SHA-256 pinned in `scripts/experiments/ppc/stage_ppc_goal_inputs.py` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
 Dataset roots are resolved in this order:
 
-1. `--ppc-root` / `--urbannav-root` / `--gsdc-root` / `--gsdc-truth-root`
-2. `GNSSPP_PPC_DATASET_ROOT` / `GNSSPP_URBANNAV_ROOT` / `GNSSPP_GSDC_ROOT` / `GNSSPP_GSDC_TRUTH_ROOT`
-3. `--data-root <dir>` expands to `<dir>/PPC-Dataset`, `<dir>/driving/Tokyo_Data` and `<dir>/gsdc2023/dataset_2023`
-4. `data/PPC-Dataset`, `data/driving/Tokyo_Data` and `data/gsdc2023/dataset_2023` inside the repository
+1. `--ppc-root` / `--urbannav-root` / `--gsdc-root` / `--gsdc-truth-root` / `--ppc-goal-inputs`
+2. `GNSSPP_PPC_DATASET_ROOT` / `GNSSPP_URBANNAV_ROOT` / `GNSSPP_GSDC_ROOT` / `GNSSPP_GSDC_TRUTH_ROOT` / `GNSSPP_PPC_GOAL_INPUTS`
+3. `--data-root <dir>` expands to `<dir>/PPC-Dataset`, `<dir>/driving/Tokyo_Data`, `<dir>/gsdc2023/dataset_2023` and `<dir>/ppc_goal_inputs`
+4. `data/PPC-Dataset`, `data/driving/Tokyo_Data`, `data/gsdc2023/dataset_2023` and `data/ppc_goal_inputs` inside the repository
 
 The GSDC ground-truth root falls back to the GSDC root when neither
 `--gsdc-truth-root` nor `GNSSPP_GSDC_TRUTH_ROOT` is set.
@@ -124,6 +125,9 @@ python3 apps/gnss.py reproduce spp-policy --ppc-root /datasets/PPC-Dataset --che
 # GNSS/IMU tightly-coupled FGO vs tightly-coupled-gnss-imu-fgo (GTSAM build)
 python3 apps/gnss.py reproduce fgo-tokyo --ppc-root /datasets/PPC-Dataset   --build-dir build-gtsam --check
 
+# PPC 2024 goal matrix vs gici-open (score-only; frozen tier inputs, no solver)
+python3 apps/gnss.py reproduce ppc-goal --ppc-root /datasets/PPC-Dataset   --ppc-goal-inputs /archive/ppc_goal_inputs --check
+
 # GSDC Pixel5 base-surveyed dev routes H/U/A/LAX-T (GTSAM build)
 python3 apps/gnss.py reproduce gsdc-dev-routes --gsdc-root /datasets/gsdc2023/dataset_2023 \
   --build-dir build-gtsam --check
@@ -139,7 +143,7 @@ Common options:
 | `--dry-run` | Print the rendered commands and dataset warnings without running anything |
 | `--check` | Exit with status 3 when a gated metric drifts from the manifest expectation |
 | `--check-only` | Skip the steps and re-check the metrics already in `--work-dir` |
-| `--update-docs` | Also regenerate the tracked docs artifacts the lane owns, such as the `docs/benchmarks.md` coverage block, `docs/ppc_rtk_demo5_scorecard.png`, `docs/ppc_clas_full_*`, the Odaiba figures, `docs/gnss_imu_fgo_tokyo_run{1,2,3}.png`, and `docs/gsdc_base_surveyed_osm.png` (downloads OpenStreetMap tiles) |
+| `--update-docs` | Also regenerate the tracked docs artifacts the lane owns, such as the `docs/benchmarks.md` coverage block, `docs/ppc_rtk_demo5_scorecard.png`, `docs/ppc_clas_full_*`, the Odaiba figures, `docs/gnss_imu_fgo_tokyo_run{1,2,3}.png`, `docs/ppc_kf_fgo_goal_metrics.json` with `docs/ppc_libgnss_gici_comparison.png`, `docs/ppc_public_targets.png` and `docs/ppc_kf_fgo_fix_status_xy.png`, and `docs/gsdc_base_surveyed_osm.png` (downloads OpenStreetMap tiles) |
 
 Every run writes `<work-dir>/reproduce_result.json` with per-step wall times,
 observed values, and the pass or fail state of each metric. It also writes
@@ -344,3 +348,69 @@ tracks. The tracks and worst-epoch insets match the tracked figure (H 0.81 m,
 U 0.95 m, A 0.52 m, LAX-T 5.74 m vs 5.72 m). The panel titles show the
 reproduced scores; the tracked figure was replaced with this redraw so it
 matches the refreshed README table.
+
+## ppc-goal frozen inputs
+
+The README goal matrix is the end of a long chain of truth-free selectors
+built on July 2026 solver outputs. The final steps of that chain are
+documented in [PPC reproduction](ppc_reproduction.md), but the commands that
+produced its bottom layer were never recorded. That layer includes the tier-2
+selected KF trajectories, the tightly-coupled candidates, the FGO shadow
+windows, the gici-open runs and the Nagoya 1 FIX-target solution. The lane
+therefore starts from 26 frozen files and pins each with SHA-256 in
+`scripts/experiments/ppc/stage_ppc_goal_inputs.py`:
+
+| Group | Files | Size |
+|---|---|---:|
+| Tier-2 / selected KF trajectories | `{tokyo1,tokyo2,tokyo3,nagoya2}_selected_quality_rtkbaseline_tier2_truthfree.pos`, `nagoya3_selected_quality_rtkbaseline_truthfree.pos`, `hybrid_nagoya1_multistage_m4_fixedpos_bridge05_vertical025_veld_vertical10_truthfree.pos` | 9.4 MB |
+| Tightly-coupled candidates | `tc_m3_full_t1_on/rtk.pos` (Tokyo 1), `probe_fuse_nagoya2_full_tc_m4.pos` (Nagoya 2) | 2.7 MB |
+| FGO shadow windows | Nagoya 3 `fgo_partial_noreset_ddpranchor_*` (2), Tokyo 3 `fgo_shipping_tokyo3_start*` (2), Tokyo 1 `fgo_shipping_{,nhc_}tokyo1_*` (5), Tokyo 2 `fgo_shipping_{,nhc_}tokyo2_*` (2) | 13.3 MB |
+| gici-open `e7666110` trajectories | `gici_common/{tokyo,nagoya}{1,2,3}.pos` | 5.7 MB |
+| Nagoya 1 FIX-target profile | `goal_kf_current_r2_min8_rate20_rescue29_8/solution.pos` | 1.2 MB |
+
+`--ppc-goal-inputs` takes a directory in the historical `output/` layout, so
+the `output/` directory of the checkout that produced the README can be passed
+as is. `stage_ppc_goal_inputs.py --inputs-root <output> --out <dir>` copies
+the verified set into a standalone directory for archiving. The files are not
+committed and not published. They are
+larger than the repository's figure assets, and the gici-open trajectories are
+the output of a GPL-3.0 program.
+
+The lane then replays, in order, the Tokyo 1 tier-3 selection, the Nagoya 2
+wrong-basin escape, the Nagoya 3 causal consensus, the kinematic status
+demotion, the Tokyo 3 two-window FGO consensus, the Tokyo 1 / Tokyo 2
+multi-shadow position consensus, and the staged residual policy. It then scores
+both matrices, rescores the Nagoya 1 profile with `gnss ppc-demo
+--use-existing-solution`, and draws the figures, the wrong-FIX ledger, and the
+goal contract. Every step is a Python post-processing script, so no solver runs.
+
+## ppc-goal local result (2026-09-29)
+
+First local run: develop `2f919306` plus this lane, Windows 11, inputs from
+the original checkout's `output/` tree. The whole lane took 51 s.
+
+- All 26 inputs matched their pinned SHA-256.
+- Every replayed intermediate was byte-identical to the historical file. This
+  covers the tier-3 Tokyo 1, the Nagoya 2 escape, the Nagoya 3 consensus, the
+  six kinematic-advanced POS files, the Tokyo 3 consensus, the Tokyo 1 / 2
+  position consensus, and the three final Nagoya POS files that survived
+  locally. The final Tokyo POS files no longer exist locally.
+- Both scored matrices match `output/kf_fgo_staged_integrity_full_matrix.json`
+  and `output/gici_reproduction_ppc_matrix.json` field for field.
+- All 78 gated metrics pass. They cover 78.845491%, every libgnss++ and
+  gici-open cell of the README table, the macro row, +16.613 / 1.025 pp,
+  Nagoya 1 85.100974% / 0.913% / 1.460 m, 574 wrong FIX (42 > 5 m, 5 > 10 m,
+  188 events), and the goal contract.
+
+`--update-docs` regenerated byte-identical copies of the three PNGs.
+`docs/ppc_kf_fgo_goal_metrics.json` changed only in its provenance paths.
+Those were Windows paths such as `output\kf_fgo_...json`, with gici-open run
+paths left empty. They are now portable paths under `output/reproduce/ppc-goal/`,
+and the metric values are unchanged. The README was not modified.
+
+The Tokyo 1 / Tokyo 2 multi-shadow position consensus argv was not recorded.
+It was reconstructed from the thresholds, primary POS, and shadow list stored
+in the historical summary JSONs, and the replay matched byte for byte. The
+lane does not regenerate any solver output below the frozen layer. See
+"Tier provenance" in [PPC reproduction](ppc_reproduction.md#tier-provenance)
+for what is and is not recorded there.
