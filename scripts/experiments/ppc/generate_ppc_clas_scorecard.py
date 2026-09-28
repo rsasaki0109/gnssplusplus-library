@@ -803,6 +803,7 @@ def write_report(
     run_results: list[dict[str, Any]],
     work_dir: Path,
     l6_cache: Path,
+    apply_lever_arm: bool = False,
 ) -> None:
     lines: list[str] = []
     lines.append("# PPC kinematic CLAS PPP-RTK baseline")
@@ -813,7 +814,10 @@ def write_report(
     lines.append(f"- L6 cache: `{l6_cache}` (per-run concatenations under `{work_dir}`)")
     lines.append(f"- SSR CSV recipe: {csv_recipe}")
     lines.append("- Observation rate: 5 Hz (0.2 s); SSR expanded rows are time-stamped (1 s class sampling in compact expansion). MW/AR windows in PPP are time-based on receiver epochs, but any epoch-count heuristics in the CLAS path should be checked against 5 Hz density.")
-    lines.append("- Ground truth: city-specific vehicle/IMU-to-antenna lever arm rotated by each `reference.csv` attitude sample and added to the published ECEF; horizontal error in local ENU at each matched epoch.")
+    if apply_lever_arm:
+        lines.append("- Ground truth: city-specific vehicle/IMU-to-antenna lever arm rotated by each `reference.csv` attitude sample and added to the published ECEF (`--apply-lever-arm`, historical double-corrected mode); horizontal error in local ENU at each matched epoch.")
+    else:
+        lines.append("- Ground truth: raw published `reference.csv` ECEF (already antenna-positioned; no lever-arm transform); horizontal error in local ENU at each matched epoch.")
     lines.append("- PPP `.pos` rows carry GPS week/TOW from the receiver epoch; legacy rows with `GPS_Week=0` fall back to rover.obs `>` header alignment when counts match.")
     lines.append("- Match tolerance: 0.25 s; discard first 60 matched epochs; PPP fixed status = 6; TTFF requires 30 consecutive FIX epochs; 1sigma is the FIX horizontal-error 68th percentile.")
     lines.append("")
@@ -1125,6 +1129,7 @@ def main() -> int:
         run_results=run_results,
         work_dir=args.work_dir,
         l6_cache=args.l6_cache,
+        apply_lever_arm=args.apply_lever_arm,
     )
     print(f"Wrote report: {args.report}", flush=True)
     return 0

@@ -91,10 +91,10 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | Area | Public comparison | Evidence / status |
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` | +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta |
-| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher <50 cm fraction (avg +5.6 pp) and fix-rate (avg +8.2 pp) on all 3 runs; fixed-only RMS also wins 2 of 3 runs |
+| GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher fix rate on all 3 runs (avg +10.7 pp); <50 cm fraction higher on 2 of 3 runs (avg +7.9 pp, run1 -1.8 pp); fixed-only RMS wins 2 of 3 runs |
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.121% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
-| SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
+| SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
 | Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.984 m / Public 0.915 m**; 40 drives, 71,936 native output rows |
 
 ### Smartphone GNSS/IMU
@@ -190,6 +190,10 @@ on the same rover/base/IMU data:
 ![Tokyo run2 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run2.png)
 ![Tokyo run3 GNSS/IMU FGO](docs/gnss_imu_fgo_tokyo_run3.png)
 
+The figures are rendered by
+[`scripts/plot_fgo_parity_runs.py`](scripts/plot_fgo_parity_runs.py) from the
+per-run `gnss_fgo_parity --dump-csv` outputs.
+
 With the geometry-free reset, libgnss++ exceeds the reference on raw FIX rate
 (all runs) and on <50 cm / fixed RMS (two of three), and improves the PPC
 official score:
@@ -257,9 +261,12 @@ antenna by >=1 m), and `--fix-demote-spp-model-reprieve` (fresh candidate,
 <=2 cm IMU separation, <=8 m SPP separation). Full replays added correct fixes
 with zero wrong; correct-FIX distance reached ~58.28% (+1.2 pp).
 `--surplus-validation-veto` is false-alarm dominated - leave it off;
-`--problem-cache` speeds repeated validation. Counterfactual fixed-lag-QR
-auditing moved `--fix-demote-res` to 40 (tokyo fix 67.23/77.71/75.14%, fixed
-RMS 0.797/0.742/1.054 m).
+`--problem-cache` speeds repeated validation. The tables above use the
+fixed-lag-5 preset shown earlier (`--fix-demote-res 25`). Separately, a
+counterfactual audit of a different fixed-lag-1 `--fixed-lag-qr`
+configuration used `--fix-demote-res 40` (tokyo fix 67.23/77.71/75.14%, fixed
+RMS 0.797/0.742/1.054 m); that setting is not part of the preset or tables
+here.
 
 ### Moving CLAS PPP vs MRTKLIB
 

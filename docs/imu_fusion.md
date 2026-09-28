@@ -175,9 +175,9 @@ therefore changed to safe shadow-carrier evaluation. On the same 600 epochs,
 baseline versus safe-shadow p50/p95/p99 ECEF error was
 1.171/3.480/27.031 m versus 1.123/3.480/30.447 m; 301 epochs used the
 carrier-to-code fallback, partial AR and soft resets were both zero. This is
-near-neutral safety evidence, not adoption evidence; use
-`scripts/experiments/run_tight_dd_imu_ablation.py` for the full-six and blocked-span
-comparison.
+near-neutral safety evidence, not adoption evidence. The full-six and
+blocked-span ablation driver used for this comparison was never committed to
+the repository, so there is no in-tree reproduction script for it.
 
 The complementary RTK-hosted tightly-coupled path is specified in
 [`tight_coupling.md`](tight_coupling.md). It keeps baseline, ambiguity, and AR

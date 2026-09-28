@@ -23,10 +23,12 @@ python3 apps/gnss.py public-rtk-benchmarks --format markdown
 
 to print the current public benchmark inventory and caveats.
 
-## Bundled PPC-Dataset
+## PPC-Dataset
 
-The repo includes a PPC-Dataset checkout under `data/PPC-Dataset`. Each run has
-the same structure:
+The PPC-Dataset is not bundled with this repository (`data/` is gitignored).
+Download or clone [taroz/PPC-Dataset](https://github.com/taroz/PPC-Dataset)
+and place it under `data/PPC-Dataset` (or pass another path via
+`--dataset-root`). Each run has the same structure:
 
 ```text
 data/PPC-Dataset/<city>/<run>/

@@ -101,15 +101,17 @@ python3 scripts/experiments/ppc/generate_ppc_clas_full_comparison.py \
   --metric-figure docs/ppc_clas_full_comparison.png
 ```
 
-Scoring rotates the dataset's city-specific body-frame lever arm through each
-PPC attitude sample to compare at the antenna phase center: Tokyo uses
-`[0.31, 0.0, -0.55]` m and Nagoya uses
-`[0.593, -0.670, -1.216]` m in the PPC vehicle FRD convention (x forward,
-y right, z down). The first 60
-matched epochs are discarded independently per run, status 6 is FIX, and TTFF
-starts at the first 30 consecutive FIX epochs. MRTKLIB's published v0.4.2
-figures use the unmodified reference point, so README comparisons label that
-reference-definition difference explicitly.
+Scoring compares directly against the raw PPC `reference.csv` position, which
+is already antenna-positioned; no lever-arm transform is applied by default.
+MRTKLIB's published v0.4.2 figures use the same unmodified reference point, so
+the README precision columns are directly comparable. Both scripts keep an
+opt-in `--apply-lever-arm` flag that rotates a city-specific body-frame lever
+arm (Tokyo `[0.31, 0.0, -0.55]` m, Nagoya `[0.593, -0.670, -1.216]` m, PPC
+vehicle FRD convention: x forward, y right, z down) through each attitude
+sample; it only reproduces historical double-corrected numbers and is not
+used for the README table. The first 60 matched epochs are discarded
+independently per run, status 6 is FIX, and TTFF starts at the first 30
+consecutive FIX epochs.
 
 ## Audited KF/FGO Goal Matrix And gici-open
 
