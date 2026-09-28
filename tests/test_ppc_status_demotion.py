@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT_DIR / "scripts"))
+sys.path.insert(0, str(ROOT_DIR / "scripts" / "experiments" / "ppc"))
 
 import apply_ppc_status_demotion as status_demotion  # noqa: E402
 

@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -874,9 +874,17 @@ def main() -> int:
     rinex_writer: StreamingRinexWriter | None = None
 
     try:
-        with tempfile.TemporaryDirectory(
-            prefix=".smartphone-adapter-", dir=str(args.output_dir)
-        ) as temporary_name:
+        with ExitStack() as staging_stack:
+            temporary_name = staging_stack.enter_context(
+                tempfile.TemporaryDirectory(
+                    prefix=".smartphone-adapter-", dir=str(args.output_dir)
+                )
+            )
+            # Close the staged RINEX handle before the staging directory is
+            # removed; Windows cannot delete a directory holding an open file.
+            staging_stack.callback(
+                lambda: rinex_writer.close() if rinex_writer is not None else None
+            )
             temporary_dir = Path(temporary_name)
             normalized_tmp = temporary_dir / normalized_path.name
             rinex_tmp = temporary_dir / rinex_path.name

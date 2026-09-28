@@ -59,3 +59,10 @@ def test_advanced_mask_extends_plateau_and_uses_secondary_telemetry() -> None:
     mask = loo.advanced_candidate_mask(rows, 0.1, 5, (5.0, 10.0, 10, 13))
 
     assert mask.tolist() == [False, True, True, True, True, False, True, True]
+
+
+if __name__ == "__main__":
+    for _name, _func in list(globals().items()):
+        if _name.startswith("test_") and callable(_func):
+            _func()
+            print(f"ok {_name}")
