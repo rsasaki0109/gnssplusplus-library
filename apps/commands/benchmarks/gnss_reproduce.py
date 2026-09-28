@@ -633,7 +633,8 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--check", action="store_true",
                         help="Compare produced metrics with the manifest expectations; exit 3 on drift.")
     parser.add_argument("--check-only", action="store_true",
-                        help="Skip the steps and only check metrics already present in --work-dir.")
+                        help="Skip the steps and only check metrics already present in --work-dir "
+                             "(with --update-docs, still re-render the lane's docs from those outputs).")
     parser.add_argument("--update-docs", action="store_true",
                         help="Also regenerate the tracked docs artifacts owned by this lane.")
     parser.add_argument("--dry-run", action="store_true",
@@ -720,6 +721,9 @@ def run_lane(manifest: Mapping[str, Any], args: argparse.Namespace) -> int:
             return 1
         work_dir.mkdir(parents=True, exist_ok=True)
         timings = run_steps([*steps, *docs_steps], build_dir=build_dir, log_dir=work_dir / "logs")
+    elif docs_steps:
+        # --check-only --update-docs: re-render tracked docs from existing outputs.
+        timings = run_steps(docs_steps, build_dir=build_dir, log_dir=work_dir / "logs")
     elapsed = time.monotonic() - started
 
     results = check_metrics(manifest["metrics"], context)

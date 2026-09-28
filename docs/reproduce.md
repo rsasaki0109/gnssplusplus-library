@@ -21,7 +21,7 @@ runner adds no scoring logic of its own.
 | README row | Lane | Status | Runtime (local) | Local result (2026-09-28) |
 |---|---|---|---:|---|
 | RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Drift.** Numbers differ from the README; see [Known discrepancies](#known-discrepancies) |
-| CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | CLAS_RUNTIME | CLAS_RESULT |
+| CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | >60 min | **Not verified locally yet.** L6/SSR expansion takes ~14 min; the six `gnss_ppp` runs dominate the runtime |
 | Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | 3 of 4 claims pass; the `--preset odaiba` Hmed claim fails |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | planned | - | Needs a GTSAM build and IMU replay lane |

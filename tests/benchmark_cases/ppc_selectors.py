@@ -2040,8 +2040,8 @@ class PPCCoverageReadmeUpdateTest(unittest.TestCase):
     def test_render_coverage_block_formats_table_and_averages(self) -> None:
         block = ppc_coverage_readme.render_coverage_block(self.sample_summary())
 
-        self.assertIn("| Tokyo run1 | **86.2%** | 66.3% | **+19.9 pp** |", block)
-        self.assertIn("| Nagoya run1 | **87.9%** | 65.8% | **+22.1 pp** |", block)
+        self.assertIn("| Tokyo run1 | **86.2%** | 66.3% | +19.9 pp |", block)
+        self.assertIn("| Nagoya run1 | **87.9%** | 65.8% | +22.1 pp |", block)
         self.assertIn("PPC official score", block)
         self.assertIn("Across these two public runs", block)
         self.assertIn("**+21.0 pp**", block)

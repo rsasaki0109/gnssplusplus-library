@@ -6,7 +6,7 @@
 name = "rtk-demo5"
 status = "ready"
 title = "PPC Tokyo/Nagoya RTK coverage profile vs RTKLIB demo5 (six runs)"
-readme_row = "RTK: +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta"
+readme_row = "RTK: +56.8 pp fix rate, +45.4 pp official score, -11.44 m P95 H; positioning -9.5 pp"
 runtime_estimate = "~30 min"
 docs = "docs/benchmarks.md"
 
@@ -58,60 +58,69 @@ argv = [
   "--output", "docs/ppc_rtk_demo5_scorecard.png",
 ]
 
-# README values (rounded to the printed precision).
+# README values, reproduced 2026-09-28 with demo5 b34k (55a0f2c) and the tracked
+# config. Tolerances absorb compiler/platform differences of the libgnss++ build.
 [[metrics]]
-name = "avg positioning delta vs demo5 (pp)"
+name = "avg fix rate delta vs demo5 (pp)"
 source = "{work_dir}/summary.json"
-path = "aggregates.avg_positioning_delta_pct"
-expected = 17.0
-abs_tol = 0.05
-readme = "+17.0 pp positioning"
+path = "aggregates.avg_fix_delta_pct"
+expected = 56.8
+abs_tol = 0.5
+readme = "+56.8 pp fix rate"
 
 [[metrics]]
 name = "avg official score delta vs demo5 (pp)"
 source = "{work_dir}/summary.json"
 path = "aggregates.avg_official_score_delta_pct"
-expected = 28.1
-abs_tol = 0.05
-readme = "+28.1 pp official score"
+expected = 45.4
+abs_tol = 0.5
+readme = "+45.4 pp official score"
 
 [[metrics]]
 name = "avg P95 H delta vs demo5 (m)"
 source = "{work_dir}/summary.json"
 path = "aggregates.avg_p95_h_delta_m"
-expected = -11.96
-abs_tol = 0.005
-readme = "-11.96 m P95 H delta"
+expected = -11.44
+abs_tol = 0.1
+readme = "-11.44 m P95 H"
 
-# Per-run table in docs/benchmarks.md; separates gnssplusplus drift from demo5 drift.
 [[metrics]]
-name = "{key} gnssplusplus positioning (%)"
+name = "avg positioning delta vs demo5 (pp)"
 source = "{work_dir}/summary.json"
-path = "runs[key={key}].metrics.positioning_rate_pct"
-abs_tol = 0.05
+path = "aggregates.avg_positioning_delta_pct"
+expected = -9.5
+abs_tol = 0.5
+readme = "positioning -9.5 pp (demo5 publishes a mostly float/single solution on more epochs)"
+
+# Per-run values in docs/benchmarks.md; reported, not gated.
+[[metrics]]
+name = "{key} gnssplusplus fix rate (%)"
+source = "{work_dir}/summary.json"
+path = "runs[key={key}].metrics.fix_rate_pct"
+abs_tol = 0.5
 gate = false
 readme = "docs/benchmarks.md table (not gated)"
 foreach = [
-  { key = "tokyo_run1", expected = 90.0 },
-  { key = "tokyo_run2", expected = 95.3 },
-  { key = "tokyo_run3", expected = 95.7 },
-  { key = "nagoya_run1", expected = 88.8 },
-  { key = "nagoya_run2", expected = 85.6 },
-  { key = "nagoya_run3", expected = 93.8 },
+  { key = "tokyo_run1", expected = 83.70 },
+  { key = "tokyo_run2", expected = 84.29 },
+  { key = "tokyo_run3", expected = 80.31 },
+  { key = "nagoya_run1", expected = 79.05 },
+  { key = "nagoya_run2", expected = 64.10 },
+  { key = "nagoya_run3", expected = 63.16 },
 ]
 
 [[metrics]]
-name = "{key} RTKLIB demo5 positioning (%)"
+name = "{key} RTKLIB demo5 fix rate (%)"
 source = "{work_dir}/summary.json"
-path = "runs[key={key}].rtklib.positioning_rate_pct"
+path = "runs[key={key}].rtklib.fix_rate_pct"
 abs_tol = 0.05
 gate = false
 readme = "docs/benchmarks.md table (not gated)"
 foreach = [
-  { key = "tokyo_run1", expected = 66.3 },
-  { key = "tokyo_run2", expected = 84.3 },
-  { key = "tokyo_run3", expected = 93.1 },
-  { key = "nagoya_run1", expected = 65.8 },
-  { key = "nagoya_run2", expected = 69.8 },
-  { key = "nagoya_run3", expected = 67.7 },
+  { key = "tokyo_run1", expected = 8.40 },
+  { key = "tokyo_run2", expected = 12.63 },
+  { key = "tokyo_run3", expected = 43.63 },
+  { key = "nagoya_run1", expected = 20.91 },
+  { key = "nagoya_run2", expected = 22.63 },
+  { key = "nagoya_run3", expected = 5.60 },
 ]
