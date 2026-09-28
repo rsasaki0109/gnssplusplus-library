@@ -148,5 +148,6 @@ readme = "reported"
 # Local verification (2026-09-29, develop 2f919306, MSVC Release + GTSAM 4.3):
 # 6/40 final drives (all three groups) and 2/25 stage-0 drives rerun
 # byte-identical; 25/25 height maps and the cbd1fde1... submission rebuild
-# from the research solutions. The full 40-drive run is still pending
-# (estimate 12-18 h single-process); see docs/reproduce.md.
+# from the research solutions. Routine verification is intentionally limited
+# to this subset; the full 40-drive run (estimate 12-18 h single-process) is
+# available through the same command; see docs/reproduce.md.
