@@ -1,10 +1,152 @@
-# README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission".
-# Kaggle scoring is external; a lane can rebuild the submission CSV but the
-# Private/Public scores come from the Kaggle leaderboard readback record.
+# README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
+# Kaggle ref 56625084, Private 0.984 m / Public 0.915 m, 40 drives, 71,936 rows
+# (readback record docs/use_cases/records/
+# gsdc2023_heading_modern_official_readback_20260928.json).
+#
+# This lane never talks to Kaggle. It rebuilds the submitted CSV from the raw
+# test drives and gates on its SHA-256; the Kaggle score is external and only
+# reported from the readback record.
+#
+# Recipe: configs/reproduce/gsdc_official_recipe.json pins every input
+# (SHA-256), every gnss_fgo_imu_no_base argv and every research output
+# SHA-256. The chain that the research assembler
+# (scripts/analysis/assemble_gsdc_heading_modern_test.py) consumed is unrolled:
+#   stage0  25 offset + extra-band replays (test40_offset_extra_bands_v1)
+#           whose trajectories select the height-map points;
+#   maps    per-drive height maps from Kaggle train ground truth within 30 m
+#           of those trajectories (25 maps, SHA-pinned);
+#   final   40 replays: 17 Pixel5 heading + 9 modern clock (both new in
+#           56625084) and 14 height-map/relative-height drives retained
+#           from 56536540;
+#   assemble on the official key list (Kaggle sample_submission order).
+# Stage 0 is skipped for a drive whose height map is already present with
+# the pinned SHA-256, and every run step resumes from completed drives.
+#
+# Needs a GTSAM 4.3 build of gnss_fgo_imu_no_base; on Windows set
+# GTSAM_BIN_DIR to the GTSAM DLL directory. Runs one solver at a time.
+# The height-map step needs numpy, pandas and scipy.
+
 [lane]
 name = "gsdc-official"
-status = "planned"
-title = "GSDC 2023-2024 official submission rebuild (Kaggle-scored)"
+status = "ready"
+title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
 readme_row = "Smartphone GNSS/IMU: Private 0.984 m / Public 0.915 m; 40 drives, 71,936 rows"
-runtime_estimate = "planned"
+runtime_estimate = "~12-18 h"
 docs = "docs/use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json"
+
+[datasets.gsdc]
+required = [
+  "test/2021-08-17-20-37-us-ca-mtv-g/pixel5/device_gnss.csv",
+  "test/2022-10-06-20-46-us-ca-sjc-r/sm-a205u/device_gnss.csv",
+  "test/2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro/device_gnss.csv",
+  "test/2023-06-15-18-49-us-ca-sjc-ce1/brdc.nav",
+]
+
+[tools.gtsam]
+version = "4.3.x"
+build = "cmake -DGTSAM_DIR=<gtsam>/lib/cmake/GTSAM ...; cmake --build <build> --target gnss_fgo_imu_no_base"
+runtime = "Linux: LD_LIBRARY_PATH must include the GTSAM libs; Windows: set GTSAM_BIN_DIR to the GTSAM DLL directory"
+
+[tools.gsdc2023]
+dataset = "taroz dataset_2023 (GSDC 2023 test drives + CORS base RINEX + brdc.nav), https://github.com/taroz/gsdc2023"
+archive_sha256 = "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
+truth = "Kaggle smartphone-decimeter-2023 train ground_truth.csv (156 files, SHA-256 pinned in the recipe), via --gsdc-truth-root"
+
+# 1. Check every raw input and (unless the maps are already pinned) the train truth.
+[[steps]]
+name = "verify-gsdc-official-inputs"
+argv = [
+  "{python}", "scripts/experiments/gsdc/gsdc_official_reproduce.py", "verify-inputs",
+  "--work-dir", "{work_dir}",
+  "--gsdc-root", "{gsdc_root}",
+  "--gsdc-truth-root", "{gsdc_truth_root}",
+]
+
+# 2. Stage-0 trajectories for the height maps (skipped for pinned maps).
+[[steps]]
+name = "run-gsdc-official-stage0"
+argv = [
+  "{python}", "scripts/experiments/gsdc/gsdc_official_reproduce.py", "run",
+  "--stage", "stage0",
+  "--work-dir", "{work_dir}",
+  "--gsdc-root", "{gsdc_root}",
+  "--bin", "{bin:gnss_fgo_imu_no_base}",
+]
+
+# 3. Height maps from the stage-0 trajectories + Kaggle train ground truth.
+[[steps]]
+name = "build-gsdc-official-height-maps"
+argv = [
+  "{python}", "scripts/experiments/gsdc/gsdc_official_reproduce.py", "height-maps",
+  "--work-dir", "{work_dir}",
+  "--gsdc-truth-root", "{gsdc_truth_root}",
+  "--allow-mismatch",
+]
+
+# 4. The 40 final replays, one process at a time.
+[[steps]]
+name = "run-gsdc-official-final"
+argv = [
+  "{python}", "scripts/experiments/gsdc/gsdc_official_reproduce.py", "run",
+  "--stage", "final",
+  "--work-dir", "{work_dir}",
+  "--gsdc-root", "{gsdc_root}",
+  "--bin", "{bin:gnss_fgo_imu_no_base}",
+]
+
+# 5. Assemble on the official key list and compare with the submitted CSV.
+[[steps]]
+name = "assemble-gsdc-official-submission"
+argv = [
+  "{python}", "scripts/experiments/gsdc/gsdc_official_reproduce.py", "assemble",
+  "--work-dir", "{work_dir}",
+  "--out", "{work_dir}/submission.csv",
+  "--metrics-json", "{work_dir}/gsdc_official_metrics.json",
+]
+
+[[metrics]]
+name = "submission.csv SHA-256 equals Kaggle ref 56625084 (cbd1fde1...)"
+source = "{work_dir}/gsdc_official_metrics.json"
+path = "submission.sha256_match"
+expected = true
+readme = "README Smartphone GNSS/IMU official row"
+
+[[metrics]]
+name = "submission rows"
+source = "{work_dir}/gsdc_official_metrics.json"
+path = "submission.rows"
+expected = 71936
+abs_tol = 0
+readme = "71,936 rows"
+
+[[metrics]]
+name = "drives whose solution.csv is byte-identical to the research run"
+source = "{work_dir}/gsdc_official_metrics.json"
+path = "drives_identical"
+expected = 40
+abs_tol = 0
+readme = "40 drives"
+
+# Reported only.
+[[metrics]]
+name = "{group} drives identical"
+source = "{work_dir}/gsdc_official_metrics.json"
+path = "groups.{group}.identical"
+min = 0
+gate = false
+readme = "per recipe group"
+foreach = [{ group = "pixel5-heading" }, { group = "modern-clock" }, { group = "retained-height" }]
+
+[[metrics]]
+name = "final replay wall time s"
+source = "{work_dir}/gsdc_official_metrics.json"
+path = "final_wall_s"
+min = 0
+gate = false
+readme = "reported"
+
+# Local verification (2026-09-29, develop 2f919306, MSVC Release + GTSAM 4.3):
+# 6/40 final drives (all three groups) and 2/25 stage-0 drives rerun
+# byte-identical; 25/25 height maps and the cbd1fde1... submission rebuild
+# from the research solutions. The full 40-drive run is still pending
+# (estimate 12-18 h single-process); see docs/reproduce.md.

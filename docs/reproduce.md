@@ -27,7 +27,7 @@ runner adds no scoring logic of its own.
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
-| Smartphone GSDC official submission | `gsdc-official` | planned | - | The score comes from Kaggle and cannot be recomputed locally |
+| Smartphone GSDC official submission | `gsdc-official` | ready | ~12-18 h (estimate) | **Subset verified; full run not yet done.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 56625084 (`cbd1fde1...`), and the Kaggle score is readback-only. 6 of 40 final drives and 2 of 25 stage-0 drives were rerun, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -38,7 +38,8 @@ Release build. Lanes that run in parallel slow each other down.
 |---|---|---|---|
 | [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy`, `fgo-tokyo`, `ppc-goal` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}`; `fgo-tokyo` also reads `tokyo/run{1,2,3}/imu.csv` |
 | [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) | `odaiba` | UrbanNav Tokyo data release (Trimble rover/base RINEX + Applanix reference) | `<urbannav-root>/Odaiba/{rover_trimble.obs,base_trimble.obs,base.nav,reference.csv}` |
-| [GSDC 2023 `dataset_2023`](https://github.com/taroz/gsdc2023) (Kaggle Google Smartphone Decimeter Challenge 2023 train set with CORS base RINEX and `brdc.nav`) | `gsdc-dev-routes` | Kaggle GSDC 2023 data as repackaged by taroz/gsdc2023 (`dataset_2023.zip`, SHA-256 `bda30ab4...`) | `<gsdc-root>/train/<drive>/{brdc.nav,<BASE>_rnx2.obs,pixel5/{device_gnss.csv,device_imu.csv,ground_truth.csv}}`, or the zip itself; see [gsdc-dev-routes inputs](#gsdc-dev-routes-inputs-and-base-provenance) |
+| [GSDC 2023 `dataset_2023`](https://github.com/taroz/gsdc2023) (Kaggle Google Smartphone Decimeter Challenge 2023 train and test sets with CORS base RINEX and `brdc.nav`) | `gsdc-dev-routes`, `gsdc-official` | Kaggle GSDC 2023 data as repackaged by taroz/gsdc2023 (`dataset_2023.zip`, SHA-256 `bda30ab4...`) | `<gsdc-root>/train/<drive>/{brdc.nav,<BASE>_rnx2.obs,pixel5/{device_gnss.csv,device_imu.csv,ground_truth.csv}}`, or the zip itself; see [gsdc-dev-routes inputs](#gsdc-dev-routes-inputs-and-base-provenance). `gsdc-official` reads `<gsdc-root>/test/<drive>/{brdc.nav,<BASE>_rnx2.obs,<phone>/{device_gnss.csv,device_imu.csv}}` |
+| Kaggle GSDC 2023 train `ground_truth.csv` | `gsdc-official` (height maps) | Kaggle `smartphone-decimeter-2023` competition data (156 train files, SHA-256 pinned in the recipe) | `--gsdc-truth-root` holding `train/<course>/<phone>/ground_truth.csv` or flat `<course>__<phone>__ground_truth.csv` |
 | PPC goal-matrix frozen tier inputs | `ppc-goal` | Not published; the 26 files (~33 MB) exist only in the `output/` tree of the checkout that produced the README. See [ppc-goal inputs](#ppc-goal-frozen-inputs) | `<ppc-goal-inputs>/` in the historical `output/` layout (`tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos`, `gici_common/tokyo1.pos`, ...); SHA-256 pinned in `scripts/experiments/ppc/stage_ppc_goal_inputs.py` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
@@ -71,8 +72,8 @@ The dispatcher also looks up `gnss spp` / `gnss solve` binaries through
 vcpkg toolchain (`-DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake
 -DVCPKG_TARGET_TRIPLET=x64-windows`).
 
-**GTSAM build (`fgo-tokyo`, `gsdc-dev-routes`).** `gnss_fgo_parity` and
-`gnss_fgo_imu_no_base` (build that target for `gsdc-dev-routes`) need GTSAM 4.3.x
+**GTSAM build (`fgo-tokyo`, `gsdc-dev-routes`, `gsdc-official`).** `gnss_fgo_parity` and
+`gnss_fgo_imu_no_base` (build that target for the `gsdc-*` lanes) need GTSAM 4.3.x
 (see `AGENTS.md`). Build it in a separate tree and pass that tree with
 `--build-dir`:
 
@@ -131,6 +132,10 @@ python3 apps/gnss.py reproduce ppc-goal --ppc-root /datasets/PPC-Dataset   --ppc
 # GSDC Pixel5 base-surveyed dev routes H/U/A/LAX-T (GTSAM build)
 python3 apps/gnss.py reproduce gsdc-dev-routes --gsdc-root /datasets/gsdc2023/dataset_2023 \
   --build-dir build-gtsam --check
+
+# GSDC 2023-2024 Kaggle submission rebuild, SHA-256 gate (GTSAM build; hours)
+python3 apps/gnss.py reproduce gsdc-official --gsdc-root /datasets/gsdc2023/dataset_2023 \
+  --gsdc-truth-root /datasets/gsdc2023/kaggle_train_gt --build-dir build-gtsam --check
 ```
 
 Common options:
@@ -414,3 +419,77 @@ in the historical summary JSONs, and the replay matched byte for byte. The
 lane does not regenerate any solver output below the frozen layer. See
 "Tier provenance" in [PPC reproduction](ppc_reproduction.md#tier-provenance)
 for what is and is not recorded there.
+
+## gsdc-official: rebuilding the Kaggle submission
+
+The README "Smartphone GNSS/IMU" official row is Kaggle submission 56625084
+(Private 0.984 m / Public 0.915 m, 40 test drives, 71,936 rows; readback
+record
+[gsdc2023_heading_modern_official_readback_20260928.json](use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json)).
+Kaggle scores it against hidden ground truth, so no local run can recompute
+the score. The lane therefore gates on the file itself: the rebuilt
+`submission.csv` must have the SHA-256 of the submitted file,
+`cbd1fde10f0f317f7803871b7d00b64a73398498f967b86f2130d8ba8acc26f8`. The lane
+never submits to Kaggle.
+
+**Recipe.** `configs/reproduce/gsdc_official_recipe.json` unrolls the chain
+that the research assembler
+(`scripts/analysis/assemble_gsdc_heading_modern_test.py`) consumed. It pins,
+per drive, the input files relative to `--gsdc-root` with their SHA-256, the
+exact `gnss_fgo_imu_no_base` argv (placeholders `{bin}`, `{gsdc_root}`,
+`{work_dir}`), and the SHA-256 of the solution the research run wrote:
+
+| Stage | Drives | What it is | Research runtime |
+|---|---:|---|---:|
+| `stage0` | 25 | Offset + extra-band replays (`test40_offset_extra_bands_v1`). Their trajectories select the height-map points | ~9.1 h |
+| height maps | 25 | Kaggle train `ground_truth.csv` points (156 files) within 30 m of the stage-0 trajectory, written as `lat_deg,lon_deg,height_m` | ~1 min |
+| `final` | 17 | Pixel5 with epoch heading seeds (new in 56625084) | ~3.8 h |
+| `final` | 9 | Modern phones with the continuous raw-clock recipe (new in 56625084) | ~1.9 h |
+| `final` | 14 | Height-map or relative-height replays retained from submission 56536540 | ~2.8 h |
+| assemble | 40 | Official key list (Kaggle `sample_submission.csv` order, stored run-length encoded in the recipe); each coordinate is copied verbatim from the native row with the same `UnixTimeMillis`, and extra native rows are dropped | seconds |
+
+The research runtimes were measured with two replays in parallel. The
+research used four frozen MSVC builds (named with their SHA-256 in the
+recipe). The lane instead runs one build of the current tree for every
+drive.
+
+**Steps.** `scripts/experiments/gsdc/gsdc_official_reproduce.py` runs
+`verify-inputs` (SHA-256 of 160 raw inputs and 156 truth files),
+`run --stage stage0`, `height-maps`, `run --stage final` (one solver process
+at a time) and `assemble`. Both `run` steps resume: a drive whose `run.json`
+records exit 0 and whose `solution.csv` still has the recorded SHA-256 is
+skipped. Stage 0 is also skipped for a drive whose height map is already in
+`<work-dir>/height_maps/` with the pinned SHA-256. The height-map step needs
+numpy, pandas and scipy. Use `--drives <tripId> ...` on the script for a
+subset. `assemble --reference-submission <csv>` (or
+`$GSDC_OFFICIAL_REFERENCE_SUBMISSION`) adds per-drive row differences
+against the submitted file, and `--allow-partial` fills drives that have not
+run yet from that file, so a subset can be checked end to end.
+
+**Gates.** The `submission.csv` SHA-256 match, 71,936 rows, and 40/40 drives
+byte-identical to the research solutions. The per-group identity counts and
+the final wall time are reported without gating.
+
+### gsdc-official local result (2026-09-29)
+
+Develop `2f919306` (native sources unchanged since `4b22fe43`) was built with
+MSVC Release and GTSAM 4.3 on Windows 11, and the solver ran one process at a
+time.
+
+| Check | Result |
+|---|---|
+| `verify-inputs` | 160 raw inputs and 156 truth files match their SHA-256 (12 s) |
+| Recipe against the research outputs | With the 40 research `solution.csv` files and the 25 research stage-0 trajectories placed in the work-dir layout, `height-maps` rebuilds 25/25 maps byte-identically and `assemble` writes `cbd1fde1...` (71,936 rows), which **matches the submitted file** |
+| Stage 0, current build | `sjc-r/sm-a205u` 238 s and `mtv-ie2/pixel6pro` 311 s: both byte-identical to the research output of `source_bias_difference_sigma_admission_fixed.exe`. Their rebuilt height maps match the pinned SHA-256 |
+| Final, current build | `mtv-pe1/samsunga325g` (retained, map) 260 s, `sjc-he2/pixel5` (Pixel5 heading) 711 s, `mtv-e/sm-g988b` (modern) 375 s, `mtv-ie2/pixel6pro` (modern) 607 s, `sjc-r/sm-a205u` (retained, map) 287 s, `lax-hh/samsunga325g` (retained, relative height) 254 s: 6/6 byte-identical to the research outputs of three frozen binaries |
+| Partial assembly | Three drives rebuilt through the lane driver plus 37 drives filled from the submitted file (`--allow-partial`) give `cbd1fde1...` |
+
+The current tree therefore reproduces all four frozen research binaries
+byte for byte on every drive tried, and this subset showed no MSVC-vs-GCC
+drift of the kind seen in `gsdc-dev-routes`, because every research binary
+was also an MSVC build. The research runtimes sum to about 9.1 h (stage 0)
+plus 8.4 h (final), measured two replays at a time. The replays here ran at
+0.9-2.4x their research wall time. A full single-process run is therefore
+estimated at 12-18 h, or about 8-10 h when the height maps are already
+pinned in the work dir. The full 40-drive run and the resulting SHA-256 gate
+are still to be done.

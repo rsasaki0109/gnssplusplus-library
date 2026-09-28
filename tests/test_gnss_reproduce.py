@@ -24,8 +24,11 @@ sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "benchmarks"))
 import gnss_reproduce as reproduce  # noqa: E402
 
 
-READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal"}
-PLANNED_LANES = {"gsdc-official"}
+READY_LANES = {
+    "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
+    "gsdc-official",
+}
+PLANNED_LANES: set[str] = set()
 
 
 def write_manifest(directory: Path, text: str, name: str = "lane.toml") -> Path:
@@ -197,11 +200,19 @@ class RenderTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         lanes = {row["lane"]: row for row in json.loads(result.stdout)["lanes"]}
         self.assertTrue(READY_LANES | PLANNED_LANES <= set(lanes))
-        self.assertEqual(lanes["gsdc-official"]["status"], "planned")
-        planned = subprocess.run(
-            [sys.executable, str(GNSS_CLI), "reproduce", "gsdc-official"],
-            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
-        )
+        self.assertEqual(lanes["gsdc-official"]["status"], "ready")
+        # Every tracked lane is ready now; a planned lane still refuses to run.
+        with tempfile.TemporaryDirectory() as tmp:
+            manifest = write_manifest(Path(tmp), """
+                [lane]
+                name = "synthetic-planned"
+                status = "planned"
+                title = "planned lane"
+            """)
+            planned = subprocess.run(
+                [sys.executable, str(GNSS_CLI), "reproduce", "synthetic-planned", "--manifest", str(manifest)],
+                cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+            )
         self.assertEqual(planned.returncode, 2)
         self.assertIn("planned", planned.stderr)
 
@@ -565,6 +576,183 @@ class CheckTest(unittest.TestCase):
                 self.assertEqual(result.returncode, code, result.stdout + result.stderr)
                 report = json.loads((work / "reproduce_result.json").read_text(encoding="utf-8"))
                 self.assertEqual(report["passed"], code == 0)
+
+
+class GsdcOfficialLaneTest(unittest.TestCase):
+    @staticmethod
+    def _import():
+        path = str(ROOT_DIR / "scripts" / "experiments" / "gsdc")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        return __import__("gsdc_official_reproduce")
+
+    def test_tracked_recipe_is_complete_and_portable(self) -> None:
+        driver = self._import()
+        recipe = driver.load_recipe(driver.DEFAULT_RECIPE)
+        text = driver.DEFAULT_RECIPE.read_text(encoding="utf-8")
+        self.assertNotIn("E:/", text)
+        self.assertNotIn("E:\\\\", text)
+        submission = recipe["submission"]
+        self.assertEqual(submission["kaggle_ref"], 56625084)
+        self.assertTrue(submission["sha256"].startswith("cbd1fde1"))
+        self.assertEqual(len(recipe["drives"]), 40)
+        groups: dict[str, int] = {}
+        for drive in recipe["drives"]:
+            groups[drive["group"]] = groups.get(drive["group"], 0) + 1
+        self.assertEqual(groups, {"pixel5-heading": 17, "modern-clock": 9, "retained-height": 14})
+        total = sum(len(driver.expand_keys(runs)) for runs in recipe["keys"]["runs"].values())
+        self.assertEqual(total, submission["rows"])
+        self.assertEqual(total, 71936)
+        maps = recipe["height_maps"]["maps"]
+        self.assertEqual({entry["id"] for entry in recipe["stage0"]}, set(maps))
+        for entry in [*recipe["stage0"], *recipe["drives"]]:
+            self.assertEqual(entry["argv"][0], "{bin}")
+            self.assertEqual(len(entry["output_sha256"]), 64)
+            argv = entry["argv"]
+            self.assertEqual(argv[argv.index("--dataset-id") + 1], entry["id"])
+            self.assertEqual(argv[argv.index("--out") + 1], entry["output"])
+            for item in argv:
+                if item.startswith("{gsdc_root}/"):
+                    self.assertIn(item[len("{gsdc_root}/"):], entry["inputs"])
+                self.assertFalse(":/" in item or ":\\" in item, item)
+            if "--native-height-map" in argv:
+                self.assertEqual(argv[argv.index("--native-height-map") + 1], maps[entry["id"]]["path"])
+        self.assertEqual(len(recipe["height_maps"]["truth_files"]), 156)
+
+    def test_dry_run_renders_the_five_steps(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "gsdc-official", "--dry-run",
+                "--gsdc-root", "/datasets/gsdc2023/dataset_2023",
+                "--gsdc-truth-root", "/datasets/gsdc2023/kaggle_train_gt",
+                "--work-dir", "output/reproduce/test-gsdc-official-dry-run",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for fragment in (
+            "gsdc_official_reproduce.py verify-inputs",
+            "gsdc_official_reproduce.py run --stage stage0",
+            "gsdc_official_reproduce.py height-maps",
+            "gsdc_official_reproduce.py run --stage final",
+            "gsdc_official_reproduce.py assemble",
+            "--gsdc-truth-root /datasets/gsdc2023/kaggle_train_gt",
+            "gnss_fgo_imu_no_base",
+        ):
+            self.assertIn(fragment, result.stdout)
+        self.assertNotIn("kaggle competitions submit", result.stdout)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-gsdc-official-dry-run").exists())
+
+    def test_key_run_length_round_trip(self) -> None:
+        driver = self._import()
+        keys = [1000, 2000, 3000, 3999, 4999, 50000, 95000, 96000]
+        runs = driver.encode_keys(keys)
+        self.assertEqual(driver.expand_keys(runs), keys)
+        self.assertEqual(driver.encode_keys([7]), [[7, 1000, 1]])
+
+    def _synthetic_recipe(self, tmp: Path) -> tuple[dict, Path]:
+        driver = self._import()
+        drives = []
+        runs = {}
+        solutions = {}
+        for index, trip in enumerate(["a-course/phone1", "b-course/phone2"]):
+            slug = trip.replace("/", "__")
+            path = tmp / "work" / "final" / slug / "solution.csv"
+            path.parent.mkdir(parents=True)
+            lines = ["phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees"]
+            for step in range(4):  # native writes one extra epoch (step 3)
+                lines.append(f"{trip},{1000 * (step + 1)},37.{index}{step}0000000,-122.0000000000")
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            solutions[trip] = path
+            runs[trip] = driver.encode_keys([1000, 2000, 3000])
+            drives.append({
+                "id": trip, "group": "pixel5-heading" if index == 0 else "retained-height",
+                "output": "{work_dir}/final/" + slug + "/solution.csv",
+                "output_sha256": driver.sha256_file(path),
+            })
+        recipe = {
+            "schema": "gsdc_official_recipe.v1",
+            "submission": {"sha256": "", "kaggle_ref": 56625084},
+            "keys": {"runs": runs},
+            "drives": drives, "stage0": [], "height_maps": {"maps": {}, "truth_files": {}},
+        }
+        return recipe, tmp / "work"
+
+    def test_assembly_sha_gate_and_per_drive_diffs(self) -> None:
+        driver = self._import()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            recipe, work = self._synthetic_recipe(tmp_path)
+            rows, sources = driver.assemble_rows(recipe, {
+                d["id"]: work / "final" / d["id"].replace("/", "__") / "solution.csv" for d in recipe["drives"]})
+            self.assertEqual(len(rows), 6)  # the extra native epoch is dropped
+            self.assertEqual(rows[0], ["a-course/phone1", "1000", "37.000000000", "-122.0000000000"])
+            self.assertEqual(set(sources.values()), {"native"})
+            reference = tmp_path / "reference.csv"
+            reference_sha = driver.write_submission(rows, reference)
+            self.assertTrue(reference.read_bytes().startswith(
+                b"tripId,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\na-course/phone1,1000,"))
+            recipe["submission"]["sha256"] = reference_sha
+            recipe_path = tmp_path / "recipe.json"
+            recipe_path.write_text(json.dumps(recipe), encoding="utf-8")
+            metrics = tmp_path / "metrics.json"
+            common = ["--recipe", str(recipe_path), "assemble", "--work-dir", str(work),
+                      "--out", str(tmp_path / "submission.csv"), "--metrics-json", str(metrics),
+                      "--reference-submission", str(reference)]
+            self.assertEqual(driver.main(common), 0)
+            payload = json.loads(metrics.read_text(encoding="utf-8"))
+            self.assertTrue(payload["submission"]["sha256_match"])
+            self.assertFalse(payload["submitted_to_kaggle"])
+            self.assertEqual(payload["drives_identical"], 2)
+            self.assertEqual(payload["drives_rows_identical"], 2)
+            # Move one coordinate by ~1.1 m of latitude in the second drive.
+            second = work / "final" / "b-course__phone2" / "solution.csv"
+            second.write_text(second.read_text(encoding="utf-8").replace(
+                "37.100000000,", "37.100010000,"), encoding="utf-8")
+            self.assertEqual(driver.main(common), 0)
+            payload = json.loads(metrics.read_text(encoding="utf-8"))
+            self.assertFalse(payload["submission"]["sha256_match"])
+            self.assertEqual(payload["drives_identical"], 1)
+            drive = next(d for d in payload["drives"] if d["id"] == "b-course/phone2")
+            self.assertFalse(drive["solution_identical"])
+            self.assertEqual(drive["rows_differing"], 1)
+            self.assertAlmostEqual(drive["max_horizontal_diff_m"], 1.112, places=2)
+            # A missing drive fails unless --allow-partial takes it from the reference.
+            second.unlink()
+            with self.assertRaises(SystemExit):
+                driver.main(common)
+            self.assertEqual(driver.main([*common, "--allow-partial"]), 0)
+            payload = json.loads(metrics.read_text(encoding="utf-8"))
+            self.assertTrue(payload["submission"]["partial"])
+            self.assertTrue(payload["submission"]["sha256_match"])
+            self.assertEqual(payload["drives_native"], 1)
+
+    def test_run_resume_skips_completed_drives(self) -> None:
+        driver = self._import()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            recipe, work = self._synthetic_recipe(tmp_path)
+            fake = tmp_path / "fake_solver.py"
+            fake.write_text(textwrap.dedent("""
+                import sys
+                out = sys.argv[sys.argv.index('--out') + 1]
+                open(out, 'w').write('phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\\n')
+            """), encoding="utf-8")
+            for drive in recipe["drives"]:
+                drive["argv"] = ["{bin}", str(fake), "--dataset-id", drive["id"], "--out", drive["output"]]
+                drive["research_source"] = {"record_wall_s": 1.0}
+            recipe_path = tmp_path / "recipe.json"
+            recipe_path.write_text(json.dumps(recipe), encoding="utf-8")
+            argv = ["--recipe", str(recipe_path), "run", "--stage", "final", "--work-dir", str(work),
+                    "--bin", sys.executable, "--drives", "a-course/phone1"]
+            self.assertEqual(driver.main(argv), 0)
+            record_path = work / "final" / "a-course__phone1" / "run.json"
+            record = json.loads(record_path.read_text(encoding="utf-8"))
+            self.assertEqual(record["returncode"], 0)
+            self.assertFalse(record["identical"])  # the fake solver writes no rows
+            record_path.write_text(json.dumps({**record, "wall_s": 123.0}), encoding="utf-8")
+            self.assertEqual(driver.main(argv), 0)  # resumed: not rerun
+            self.assertEqual(json.loads(record_path.read_text(encoding="utf-8"))["wall_s"], 123.0)
 
 
 if __name__ == "__main__":
