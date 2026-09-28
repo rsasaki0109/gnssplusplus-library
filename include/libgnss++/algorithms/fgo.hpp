@@ -2254,6 +2254,9 @@ public:
         // post-processing ports cannot accidentally use a heading remap.
         std::vector<Vector3d> epoch_attitude_rpy_rad;
         std::vector<Vector3d> epoch_velocity_nav_mps;
+        // Opt-in post-solve diagnostics in body FLU axes, no estimator feedback.
+        std::vector<Vector3d> epoch_accel_bias_mps2;
+        std::vector<Vector3d> epoch_gyro_bias_radps;
     };
 
     FGOProcessor() = default;

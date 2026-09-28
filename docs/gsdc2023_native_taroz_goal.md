@@ -3191,3 +3191,3365 @@ Open items when resuming:
 3. Main-graph XXVV motion: neutral (-0.004 m on 10 drives) and slow; kept as an opt-in only.
 4. Test-side height map coverage is 40% (three upstream-covered courses lack 2023 train GT).
 Scripts and binaries for every experiment are under `E:/rtklib_v2_ws_tmp` and `E:/rtklib_v2_ws_output/gsdc_native/binaries`.
+
+### Resumed: main-Doppler residual localization (2026-09-26)
+
+Resumed on user instruction toward official Private <= 0.928 m; the last
+recorded official result remains 1.055 m. Work branch:
+`fix/gsdc-doppler-segment-drift`, based on merged revision `6ef6514`.
+No native experiment process was running when the work resumed.
+
+Read-only inspection found a previously unlocalized TDCP residual anomaly on
+July14 SM-G988B: maximum residual 3.4365 m without main Doppler versus
+23,363.2208 m with it, with the same 22,408 inserted factors. The backend and
+CLI reconstructed RMS agree (0.03929 m versus 156.07422 m). R1 and the
+no-stop Doppler ablation also have the extreme residual; R2 does not, despite
+its remaining position regression. This is evidence for investigation, not
+proof of the cause or a complete explanation of the segment displacement.
+Frozen summary hashes and values are in
+`use_cases/records/gsdc2023_doppler_tdcp_residual_audit_20260926.json`.
+
+Added report-only maximum-residual endpoint indices, system/signal, signed
+residual and carrier difference. The canonical MSVC Release native target
+built successfully. Started a sequential same-binary control/Doppler replay
+using `scripts/analysis/run_gsdc_doppler_segment_diagnostic.py`, with pinned
+raw-input and executable hashes and no truth input. Output root:
+`E:/rtklib_v2_ws_output/gsdc_native/doppler_segment_diagnostic_20260926`.
+The runner records the live child PID and final status in each `run.json`.
+Results and position-stream preservation are pending; no solver correction,
+promotion or official submission has been made.
+
+Raw carrier/Doppler cross-check: 24,303 same-satellite/signal adjacent pairs
+with valid ADR and neither reset nor cycle-slip at either endpoint have a
+maximum absolute `delta ADR - trapezoidal integrated Doppler` of 1.6654 m.
+This check uses only raw measurements; its population is not asserted to be
+the 22,408 admitted native TDCP factors. It argues against a raw 23 km carrier
+jump in this valid population, but cannot establish whether geometry,
+measurement preparation, clock states, or optimization causes the native
+residual. Reproduce with `scripts/analysis/audit_gsdc_raw_carrier_doppler.py`;
+input hash and largest pairs are retained in
+`use_cases/records/gsdc2023_g988b_raw_carrier_doppler_20260926.json`.
+
+The diagnostic no-D control completed successfully in 478.74 s and exactly
+reproduces the historical position CSV SHA-256 `9f94aaf9...`. Its largest
+TDCP residual is 3.4365 m on epochs 568->569. The paired main-D replay is
+running; its largest-residual location remains pending.
+
+Prepared a separate continuation experiment:
+`--native-refinement-no-doppler-initialization` requires the existing complete
+IMU-refinement recipe, solves the initial IMU pass with a copy of the problem
+whose main-D rows are omitted, and then executes the existing final observation
+rebuild and Doppler solve. Default behavior is unchanged. This is not a claim
+of upstream parity or a fixed-final-factor-set comparison: final admission
+can change because it is rebuilt around the different initial trajectory.
+Telemetry records initial main-D factor count and the selected option.
+MSVC build and three negative CLI admission checks passed.
+
+A same-binary R1 control/candidate pair is running under
+`E:/rtklib_v2_ws_output/gsdc_native/doppler_continuation_20260926`, executable
+SHA-256 `82ef0163...`. The candidate is selected by one additional flag;
+inputs, source recipe, and executable are pinned. The companion
+`compare_gsdc_doppler_diagnostic.py` audits hashes, sole-flag difference, all
+raw UTC keys, native output contracts and (for continuation) identical
+GNSS-first stage output and the initial/final Doppler factor counts before
+scoring existing development truth. It has been syntax checked; the pending
+pair has not yet exercised its complete comparison path.
+Plan and source hashes: `use_cases/records/gsdc2023_doppler_continuation_20260926.json`.
+
+### Main-D replay completed; endpoint isolated (2026-09-26)
+
+Both diagnostic arms completed, with byte-identical position streams to their
+historical counterparts. The audited same-binary comparison covers all 1,165
+raw UTC keys and all 1,165 existing development truth keys. No output key is
+interpolated, held or unresolved. P50/P95 phone score changes from
+0.559146909 m to 3.015469947 m; candidate P95 is 5.390315051 m.
+Evidence: `use_cases/records/gsdc2023_doppler_segment_comparison_20260926.json`.
+
+The -23,363.220845 m residual is at epochs 556->557, GPS L1, with prepared
+carrier difference 704.670450 m. Raw GPS 5 is the sole continuous valid GPS-L1
+ADR pair across these endpoints, with delta ADR about 704.684420 m and
+hardware clock-discontinuity count unchanged at 55. The graph has all 1,164
+C0/D clock links and zero clock-jump skips. The archived R1 initial position
+step across this second is 12.379 m. The active exact-range/code-clock TDCP
+factor and reconstructed diagnostic use the same equation. These checks
+localize the anomaly but do not yet distinguish prepared satellite geometry
+from optimized clock change.
+
+The continuation control also completed: final, GNSS-first, and initial-IMU
+CSVs are byte-identical to archived R1. Its initial main-D count is 12,762;
+the no-D-initialization candidate is running. In parallel, a report-only replay
+under `E:/rtklib_v2_ws_output/gsdc_native/doppler_residual_components_20260926`
+adds maximum-residual PRN, geometric range change and code-clock change. The
+diagnostic explicitly labels integrated-drift phones, whose code-clock change
+is not their TDCP clock term. Its build succeeded after correcting a summary
+scope error. Results remain pending; no accuracy improvement is established.
+
+### Clock-jump decomposition and continuation v2 (2026-09-26)
+
+The report-only decomposition replay completed successfully. At GPS 5 L1,
+epochs 556->557, the signed TDCP residual is -23363.220845 m. Its prepared
+carrier delta is 704.670450 m, geometric range change 594.859019 m and
+optimized code-clock change -23253.409415 m. The output position stream
+matches the earlier main-D replay. The anomaly is therefore in the optimized
+clock term; the underlying cause is not yet established.
+
+Continuation v1 failed before its final solve: rebuilding from the no-D
+initial IMU states discarded all Doppler rows. No final solution or score
+exists for that arm. V2 reuses the complete same-run GNSS-first drift vector
+when rebuilding the final observations. Eight focused handoff tests pass,
+including an alternating-drift rejection/replacement case and strict source
+identity checks. Both v2 native arms are running with frozen binary SHA-256
+`5fcee465a87646971e887725072c2e430fa37b8d2e4e1f2aa83f33792b9d4d13`.
+The candidate has exported its initial IMU clocks: around the diagnostic
+endpoint, C0 advances normally by approximately 110.4 m/s while the no-D
+drift alternates near -33896 and +34117 m/s. This confirms the problematic
+unobserved drift mode on real data, without yet proving a position benefit.
+
+An independent small diagnostic links the existing native base correction
+model and uses the exact raw RINEX/navigation inputs, explicit station and
+ordinary 1 s / 151-sample smoothing recipe. GPS 5 correction changes from
+-1.320568 m to -1.317266 m at the TDCP endpoint (about +0.003302 m).
+The maximum adjacent GPS-L1 correction change over the sampled route is
+0.039703 m. This rejects a large base-correction jump as a direct explanation
+of the optimized 23 km clock jump. Source, executable, input and output
+hashes and initial clock excerpt are recorded in
+`use_cases/records/gsdc2023_base_clock_audit_20260926.json`.
+
+A uniform 15-Pixel5 source-TDCP/main-D comparison has also been prepared, but
+has not launched while the two v2 native processes occupy the experiment
+slots. All cases use the same three candidate flags; maps exclude the entire
+evaluated course across phones. No candidate is promoted and the recorded
+official Private remains 1.055 m.
+
+V2 control subsequently completed (rc=0, wall 852.172 s). Its final position
+CSV is byte-identical to the v1 control. The v2 candidate remains live; no
+candidate score is claimed. `score_gsdc_frozen_pairs.py` is now prepared for
+the subsequent Pixel5 benchmark: it verifies completion of the entire frozen
+plan, exact planned command/input hashes, and each comparison's native/raw
+key contracts before writing the full mean and regression count. Only syntax
+and CLI parsing have been checked so far; the real batch is not yet launched.
+
+### V2 rejected; observation-based drift candidate prepared (2026-09-26)
+
+Both v2 arms completed and passed the frozen-input/binary/argv, native-key,
+convergence and identical GNSS-first stage audits. All 1,165 truth timestamps
+were scored. The control phone score is 1.151969228 m (P50 0.482294481,
+P95 1.821643974); no-D initialization plus cached GNSS drift gives
+2.824781066 m (P50 0.626959020, P95 5.022603111). Delta +1.672811838 m:
+a regression, not promoted. Candidate final main-D count is 31,895, but its
+maximum TDCP residual remains 23,336.379 m at the same 556->557 GPS 5 pair.
+Evidence: `use_cases/records/gsdc2023_doppler_continuation_v2_comparison_20260926.json`.
+
+The stage audit also found GNSS-only position spikes at epochs 264, 389, 557,
+with adjacent 7.7, 18.7, 20.8 km steps. The corresponding GNSS drift has large
+outliers. No-D IMU suppresses those position spikes (maximum step 36.65 m),
+but has a 46.65 km clock step at epoch 423. See
+`use_cases/records/gsdc2023_doppler_stage_clock_audit_20260926.json`.
+
+An explicit, default-off `--native-refinement-observed-clock-drift` candidate
+now estimates drift from corrected raw D minus LOS-projected IMU velocity,
+before the final Doppler mask. It takes per-satellite medians before the
+across-satellite median, requires at least three satellites at every epoch,
+and has no time fill or GNSS drift fallback. It reuses the existing native
+orbit/atmosphere geometry and residual thresholds. The original v2 path
+remains available and unchanged when the new selector is off. Ten focused
+tests pass; native build and real-data evaluation are pending.
+
+The full frozen 15-Pixel5 batch is now running with one worker (session 98677,
+runner PID 18808), leaving one native slot for the Samsung investigation.
+The immutable plan hash is unchanged. No batch score is available yet.
+
+V3 build completed and was frozen as
+`E:/rtklib_v2_ws_output/gsdc_native/binaries/doppler_continuation_v3_20260926.exe`,
+SHA-256 `0ebe47f530bfc5dff57f815f78f86a35ebd61a369a02e28fb029bd7e1890656a`.
+The CLI rejects the new selector without no-D initialization (exit 2).
+The candidate-only replay now runs from the unchanged R1 control recipe with
+exactly the two declared additional flags, under
+`E:/rtklib_v2_ws_output/gsdc_native/doppler_continuation_v3_20260926/candidate_arm/observed_drift`
+(session 91065). Same-binary v3 control is still pending; do not claim an
+improvement until the native output and comparison audits complete.
+Provenance: `use_cases/records/gsdc2023_doppler_continuation_v3_20260926.json`.
+
+A supervisor now waits on the verified live v3 candidate process (PID 27492,
+creation time pinned), then launches the same-binary control only after a
+successful candidate exit and terminal run record. It audits/scores the pair
+after the control completes. Supervisor session 95272; authoritative gate
+state is `doppler_continuation_v3_20260926/control_gate.json`. Its source hash
+and process identity are stored in the v3 record. Do not start a third native
+run while this gate and the one-worker Pixel5 batch own the two slots.
+
+Read-only follow-up on relative-height cost confirmed that the native source
+selector emits every qualifying pair (<15 m separation, cumulative speed
+sample sum >100, neither endpoint stopped), without an edge budget. The
+interrupted test lax-p artifact has no exported seed coordinates or completed
+summary, so its exact inserted graph cannot be reconstructed from that record
+alone. No topology change or claimed runtime fix has been made.
+
+V3's GNSS-first position CSV, clock CSV and initialization metadata are
+byte-identical to v2, confirming no pre-refinement seed difference in the
+candidate replay. Its initial IMU/final stages are still running. Pixel5
+case 00 control completed successfully in 1015.971 s (2,002 native epochs);
+the batch advanced automatically to case 00 candidate. No pair score or
+whole-batch mean is available yet.
+
+### V3 pre-screen failure fixed; v4 and first Pixel5 pair (2026-09-26)
+
+V3 stopped before its final solve (rc=1, 741.096 s), reporting fewer than
+three satellites at epoch 0. Its IMU-initial position/clock exports exactly
+match v2. Source inspection identifies the actual cause: passing receiver
+velocities makes `refinement` true, and the builder applies its absolute
+Doppler screen regardless of `use_upstream_absolute_doppler_residual_screen`.
+The no-D drift therefore removes measurements before drift estimation.
+This is not evidence that epoch zero requires a special exception.
+
+V4 keeps the three-satellite requirement. Only its temporary geometry build
+uses the maximum finite residual threshold, retaining finite SNR/elevation-
+qualified Doppler before clock estimation. The subsequent mask and final
+build retain the original thresholds; the temporary graph is never optimized.
+A new integration regression test actually calls the builder/rebuild path:
+legacy +/-60000 m/s drift rejects all rows; the new path estimates 110 m/s,
+retains 8 valid rows and rejects the two injected 50 m/s outliers, including
+correct handling of the first epoch. All 3 builder tests and 10 handoff tests
+pass. V4 executable SHA-256:
+`a73457093141c87cb4689a8debe9c14c2f8de8a467b75d419c1ddc0d2f26d639`.
+Candidate runs first, followed automatically by the control and paired audit
+on success (session 81051). Record:
+`use_cases/records/gsdc2023_doppler_continuation_v4_20260926.json`.
+
+Pixel5 first pair (2021-01-04 highway280) completed with all 2,002 native UTC
+keys and all 2,001 available truth keys verified. Control 0.503787651 m,
+candidate 0.503595939 m, delta -0.000191712 m: practically neutral on this
+one route. The fixed 15-case plan continues on case 01; no whole-batch mean
+or promotion is claimed. Partial evidence:
+`use_cases/records/gsdc2023_pixel5_source_recipe_progress_20260926.json`.
+
+A read-only Kaggle score-list attempt could not authenticate in the current
+CLI environment. No login or submission was attempted. The local submitted
+CSV still hashes to the recorded `cf4a73e3...` receipt (Private 1.055 m).
+This is a recorded score, not a fresh server verification. Readback record:
+`use_cases/records/gsdc2023_official_score_readback_20260926.json`.
+
+### Native-effect audit and live official readback (2026-09-26)
+
+The all-pair scorer now requires native telemetry to confirm the requested
+TDCP metre-sigma mode, source Huber k for the resolved route type, and actual
+main-D factor insertion. Case 00 passes: TDCP sigma is data-derived rather
+than fixed 0.03 m, source Highway Huber k is 0.5, and candidate main-D count
+is 21,941 versus zero in control. This does not change its nearly neutral
+score or justify any promotion. The whole 15-case aggregate remains pending.
+
+The earlier CLI authentication failure was resolved using the same saved
+OAuth credential/refresh mechanism as the previously successful submission
+script. Browser login was disabled, credentials were not printed, and only
+the submission-list endpoint was read. Server readback confirms latest
+submission ref 56536540 is COMPLETE, Public 1.133 m / Private 1.055 m.
+No submission was made. Evidence:
+`use_cases/records/gsdc2023_official_score_oauth_readback_20260926.json`.
+The earlier failed-read record remains as history and is superseded by this
+successful server readback; authentication is not a current blocker.
+
+### Conditional test plan reconciled with the published artifact (2026-09-26)
+
+Prepared (not executed) a paired test plan for all 17 Pixel5 phones, retaining
+the 23 other phones from the published native sources. All 71,936 published
+coordinates exactly match their declared completed native output rows. Raw
+input hashes are checked against the historical native run manifests; every
+existing input-file argument is pinned. The 17 selected phones preserve the
+published height policy: 8 maps, 8 relative-height recipes, and lax-p's
+explicit no-height fallback. No stopped/failed lax-p height output is used.
+Plan SHA-256 `0c22f0f0b045aeb95a364876bf9226e1a8ec442a1f13bf7c3cfb6cdcd633de4f`.
+Execution requires review of the complete frozen development comparison;
+assembly would additionally require control replay parity against the
+published native outputs. Record:
+`use_cases/records/gsdc2023_pixel5_submitted_test_recipe_plan_20260926.json`.
+
+V4 now has completed initial IMU exports that are byte-identical to v3 and
+has proceeded past the previous reconstruction failure into the final solve.
+The live process continues; the completed summary and score are not yet
+available. Both native experiment slots remain occupied.
+
+### Native input clock-reference reset localized (2026-09-26)
+
+V4 candidate completed and passed the 1,165-key native output audit, scoring
+2.609281705 m on the exposed development route. The approximately 23 km
+TDCP residual remains, so the candidate is not promoted. Its same-binary
+control remains live. Pixel5 case 01 control completed successfully and its
+candidate is live; only the first pair has a completed paired audit.
+
+A small executable linked to the actual native Android loader now isolates
+the origin of the large initial-IMU clock step: at epoch 423, UTC
+1626296265000, the loader changes its FullBias reference because the raw
+TimeNanos interval exceeds one second. HardwareClockDiscontinuityCount
+remains unchanged. The resulting input code-clock change is -46649.805012 m,
+matching the optimized initial-IMU change (-46649.75666 m) within 5 cm.
+This is an input reference discontinuity, not evidence of a physical clock
+jump or a solver prior. It does not yet prove the cause of the later epoch
+557 residual or the five-metre position displacement. The next experiment
+should explicitly compare continuous raw-clock reference handling against
+legacy ingestion, retaining default upstream parity and testing actual
+hardware/time discontinuities. Evidence:
+`use_cases/records/gsdc2023_native_input_clock_reset_20260926.json`.
+
+The conditional test submission assembler has passed syntax and negative
+incomplete-development gating, and all 23 retained native sources passed
+hash/output-contract preflight. No complete positive assembly or test-plan
+execution is claimed. Evidence:
+`use_cases/records/gsdc2023_pixel5_test_assembly_preflight_20260926.json`.
+
+### Continuous raw-clock experiment built and tested (2026-09-26)
+
+Added default-off `--android-continuous-clock-reference` (requires raw-clock
+Android input). It retains the first FullBias reference across forward gaps
+and rejects backward TimeNanos or changed hardware clock counts. Legacy
+upstream reference-reset behavior is unchanged unless explicitly enabled.
+All 27 Android-loader tests pass, including unchanged default reset behavior,
+continuous pseudorange/time/clock consistency and discontinuity rejection.
+On the actual 1,165-epoch G988B input, all UTC keys match; the epoch-423 clock
+step changes from -46649.805012 m to +110.623417 m, with maximum adjacent step
+111.223002 m and no reference resets. These are input diagnostics, not a
+position score or proof that the five-metre position error is fixed.
+
+Frozen binary and source/test hashes are recorded in
+`use_cases/records/gsdc2023_continuous_raw_clock_20260926.json`.
+Supervisor session 29398 waits for verified native v4-control PID 49040 to
+finish, then runs candidate first and same-binary control against the original
+main-D recipe (no refinement), differing only by the new clock flag. A full
+native-contract and truth scoring audit follows successful pair completion.
+Pixel5 continues in the other slot; at most two inference processes run.
+
+V4 paired audit has now completed: control 1.151969228 m, observed-drift
+candidate 2.609281705 m (regression +1.457312477 m), not promoted.
+The continuous-clock candidate has started, verified live PID 17168, after
+v4 control completed. Pixel5 candidate PID 60536 remains live. The queued
+supervisor's final scoring command contains an incorrect truth-file path;
+inference is unaffected. Re-run the comparator after both native runs finish
+with the pinned `scoring/train/.../sm-g988b/ground_truth.csv` path recorded
+in the experiment manifest; do not repeat inference because of this scoring
+path error.
+
+### Continuous-clock candidate evidence and applicability (2026-09-26)
+
+The original main-D recipe with continuous reference completed in 86.644 s.
+All 1,165 native UTC and truth keys pass the output audit. Development score
+is 0.560819250 m (P50 0.373595689, P95 0.748042811), near the historical
+no-D 0.5591469 m baseline. Maximum TDCP residual falls to 3.436765 m and RMS
+0.039275478 m, versus approximately 23 km / 156 m previously with main D.
+The same-binary legacy control remains live as PID 56232, so the paired
+comparison and default output parity still need verification. Candidate
+record: `use_cases/records/gsdc2023_continuous_raw_clock_candidate_20260926.json`.
+
+A hash-verified inventory of the 40 published native summaries finds six
+phones with loader clock-discontinuity counts. Read-only raw scans show
+five have only forward TimeNanos gaps and unchanged hardware counters. The
+2023-06-06 Pixel5 has an actual counter change plus backward TimeNanos and
+must not use the new single-clock-segment mode. Raw scans do not reproduce
+native quality gates; they are diagnostics, not an inference eligibility
+certificate. Inventory:
+`use_cases/records/gsdc2023_test_clock_reset_inventory_20260926.json`.
+
+Supervisor session 43903 waits for the current legacy control, reruns the
+original pair audit with the correct separate scoring truth path, then runs
+the refinement recipe with continuous reference, candidate first followed
+by its own same-binary control. No truth is passed to either inference run.
+This also repairs the earlier supervisor's scoring-only path error without
+repeating inference. The refinement plan is recorded in
+`use_cases/records/gsdc2023_continuous_raw_clock_refinement_20260926.json`.
+
+Pixel5 case 01 now passes the frozen-plan and native-effect audits:
+0.551327829 -> 0.482478924 m (delta -0.068848905 m). Together with the nearly
+neutral case 00 this is 2/15 completed pairs, not a whole-plan estimate or
+promotion. Case 02 control PID 4316 is the next running native process.
+
+### Segment displacement check (2026-09-26)
+
+A truth-free comparison of all 1,165 output positions against the previously
+audited no-D trajectory confirms that the metre-scale displacement is absent
+in the continuous-clock candidate: whole-route P95 displacement falls from
+5.492681 m (legacy main D) to 0.155023 m, and maximum from 5.723469 m to
+0.232699 m. In the second chronological quarter, the median displacement
+falls from 4.594186 m to 0.060574 m. These are distances between solutions,
+not errors against truth. Historical reference runs use their previously
+frozen binary; the current same-binary control is still pending.
+Record: `use_cases/records/gsdc2023_clock_segment_displacement_20260926.json`.
+The plotted trajectories were visually checked at
+`E:/rtklib_v2_ws_output/gsdc_native/continuous_raw_clock_20260926/displacement.png`.
+The current legacy control PID 56232 and Pixel5 case-02 control PID 4316 were
+both verified live; no restart or third inference job was issued.
+
+### Native admission and wider development coverage (2026-09-26)
+
+Completed loader-only paired checks on all 15 fixed Pixel5 development cases
+and all six submitted test phones with native clock-discontinuity telemetry.
+All 15 Pixel5 development clock exports are byte-identical between modes.
+Five affected test phones preserve their observation UTC keys under continuous
+reference; the June06 Pixel5 with a real hardware counter change/backward
+TimeNanos is rejected, as required. This is input admission, not optimizer
+validation or a test-side accuracy claim. Evidence:
+`use_cases/records/gsdc2023_clock_admission_20260926.json`.
+
+An inventory of all 40 completed corrected-development summaries identifies
+three affected phones: July14 G988B and Oct06 SM-A205U / SM-A325F. The latter
+two pass the loader's continuous mode. A205U currently resets its reference
+at all 1,208 inter-epoch intervals; continuous mode retains the reference and
+all observation keys. A325F still has an approximately 600 km input-bias step
+under continuous mode; that event is not resolved by removing reference resets
+and must not be described as fixed. Source counts and native loader evidence:
+`use_cases/records/gsdc2023_train40_clock_reset_inventory_20260926.json` and
+`use_cases/records/gsdc2023_train_samsung_clock_admission_20260926.json`.
+
+Prepared, not executed, a frozen comparison of both additional affected
+Samsung phones, selected by input diagnostics only, with no score filtering.
+Their original corrected no-main-D recipes differ only by the clock flag.
+A205U's application adds four native leading clock states beyond the helper's
+1,209 observation epochs; final inference must pass all 1,213 raw UTC keys.
+Plan SHA-256 `70d173439a77c40959a548cbb755998d089b9168d46e79018f594da8d169cc17`.
+Run with one worker only after the queued July14 refinement comparison ends.
+Record: `use_cases/records/gsdc2023_continuous_raw_clock_train_samsung_plan_20260926.json`.
+
+### Same-binary clock repair confirmed (2026-09-26)
+
+The original main-D comparison is complete and fully audited on all 1,165
+raw UTC/truth keys: legacy reference 3.015469947 m, continuous reference
+0.560819250 m, delta -2.454650697 m. Only the continuous-clock flag differs.
+The new-binary legacy control's position CSV is byte-identical to the
+historical component diagnostic (`066cf1b6...`), confirming default output
+parity on this route. No official-score claim or recipe promotion follows
+from this exposed single-route result. Paired evidence:
+`use_cases/records/gsdc2023_continuous_raw_clock_comparison_20260926.json`.
+
+The original supervisor ended with its known scoring-path error after both
+successful native runs; corrected supervisor 43903 subsequently completed
+the audit using the separate scoring path. No inference was repeated. It
+has now started the refinement candidate as native PID 9484; Pixel5 case 02
+candidate PID 64080 remains the other native run. The prepared two-phone
+Samsung no-D plan is not yet launched.
+
+### Refinement candidate and third Pixel5 result (2026-09-26)
+
+The continuous-clock refinement candidate completed successfully in 152.65 s,
+with all 1,165 native keys audited. Development score 0.561445425 m, TDCP RMS
+0.039249053 m and max residual 3.436653 m. This is essentially neutral against
+the continuous non-refined candidate (0.560819250 m); no additional accuracy
+gain is claimed. The matched legacy refinement control is live as PID 56624.
+Stage audit confirms the GNSS-first kilometre-scale spikes are gone: maximum
+ECEF step is 36.653 m and clock step 117.675 m; initial-IMU max clock step is
+110.940 m. Both stages have zero >100 m position or >1000 m clock steps.
+These thresholds are diagnostic only. Records:
+`use_cases/records/gsdc2023_continuous_raw_clock_refinement_candidate_20260926.json`
+and `use_cases/records/gsdc2023_continuous_clock_stage_audit_20260926.json`.
+
+The two additional Samsung pairs are now queued via session 93925, waiting
+for the verified refinement supervisor PID 31068 and requiring its complete
+paired audit before launching one worker. This preserves the two-inference
+limit while Pixel5 runs in the other slot.
+
+Pixel5 case 02 (March10) completed with a -0.065107889 m score delta. The
+new `scripts/analysis/record_gsdc_frozen_pairs_progress.py` re-audits native
+artifacts, fixed plan arguments, actual setting effects and pinned truth
+hashes before recording partial progress. It passes on all 3/15 completed
+pairs and deliberately emits no partial aggregate. The whole-plan scorer
+now also verifies scoring truth files against the frozen GT manifest when
+provided. Pixel5 case 03 control is running as PID 23668.
+
+### A325F remaining clock changes localized (2026-09-26)
+
+The approximately 599.6 km input-bias step is at startup, observation epoch
+0->1 (a 0.5 s interval), with a 2,000,128 ns FullBias update while the hardware
+counter stays zero. Constant-reference raw GPS L1 code differences also show
+the roughly 599 km change. None of the five common GPS L1 satellites has
+valid, reset-free, cycle-slip-free ADR at both startup endpoints, so these
+rows do not establish a valid TDCP continuity violation. Several later
+approximately -299.8 km FullBias-derived steps remain in both modes.
+Continuous reference removes the separate reference reset at epoch 9 but
+does not purport to remove these other raw clock changes. No extra data mask
+or inference correction was introduced from this diagnostic.
+Evidence: `use_cases/records/gsdc2023_a325f_raw_clock_event_20260926.json`.
+The paired A325F/A205U experiment remains queued behind the current refinement
+comparison; its scope and frozen inputs have not changed.
+
+### Fixed eleven-case policy reconstruction (2026-09-26)
+
+Recomputed scores from hash-verified saved native outputs for all eleven
+original offset/extra-band cases. Replace only July14 G988B, the sole case
+with reference-reset telemetry, with its completed continuous-clock output;
+retain the other ten saved trajectories. Selection is input-diagnostic based,
+not per-route score selection. The result is a reconstructed policy audit,
+not a fresh all-eleven same-binary experiment, not held out, and not the
+height recipe or official test set:
+
+- No-main-D reference mean: 0.729124212 m.
+- Clock-repaired main D: 0.729344433 m (+0.000220222 m; essentially neutral).
+- Clock-repaired refinement: 0.722669496 m (-0.006454716 m; modest).
+
+Thus repairing the catastrophic main-D case does not itself establish the
+0.127 m official gap has been closed. Keep broader Pixel5/noise-recipe and
+Samsung comparisons as the next evidence sources; do not promote main D
+alone from its dramatic single-case recovery. Artifact hashes and per-case
+recomputed values are in
+`use_cases/records/gsdc2023_train11_clock_repaired_policy_20260926.json`.
+
+The matched refinement control was confirmed live as PID 56624 and the
+supervisor session 43903 remains running. Pixel5 case 03 has advanced from
+control to candidate, PID 66168. No failed or live job was restarted.
+
+### Refinement comparison completed; Samsung pairs started (2026-09-26)
+
+Same-binary refinement pair completed and passed the full native-contract
+and scoring audit: legacy clock 1.151969228 m, continuous clock 0.561445425 m,
+delta -0.590523802 m. The control position CSV is byte-identical to the
+historical train11 refinement output. Record:
+`use_cases/records/gsdc2023_continuous_raw_clock_refinement_comparison_20260926.json`.
+No further July14 inference is queued from this result; its regression is
+resolved in the tested recipes, while broad accuracy gains remain modest.
+
+The gated Samsung plan has started with one worker: parent PID 42228,
+SM-A205U control native PID 6548. Pixel5 case 03 candidate PID 66168 is the
+other native solve. The plan remains exactly its frozen hash `70d17343...`;
+no concurrent third inference or task restart was introduced.
+
+### IMPORTANT: same-drive alias found in one unexecuted Pixel5 height map (2026-09-26)
+
+The existing raw-UTC route-group audit identifies May16 xe1 Pixel5 (19:54)
+and Pixel7 Pro (19:55) as the same evaluation group (99.93% temporal overlap).
+The old height builder excluded only the literal course-directory name.
+Pixel5 case 12's map contained 2,318 exact coordinate/height rows from the
+same-drive Pixel7 Pro truth file. Case 12 had NOT started inference. This
+violates the intended exclusion of all phones from the evaluated drive.
+
+To prevent evaluation-data reuse, only that unused map was renamed to
+`.../pixel5_source_recipe_20260926/maps/2023-05-16-19-54-us-ca-mtv-xe1__pixel5.invalid_same_group.csv`.
+Its bytes/hash are preserved. The immutable original runner will now fail
+closed before inference for case 12, then continue cases 13/14. This failure
+is intentional; do not restore the unsafe map or restart that original pair.
+The other fourteen maps and live processes are unchanged.
+
+Built a replacement map excluding BOTH aliases: 16,247 points, 65.6048%
+coverage. Replacement one-pair plan SHA `26fa7bf4...`; composite 15-case
+`evaluation_plan.json` SHA `00854b27...`, both under
+`E:/rtklib_v2_ws_output/gsdc_native/pixel5_height_group_repair_20260926`.
+The composite audit reuses exactly fourteen original pairs and the one
+predetermined replacement, with explicit per-entry source-plan hashes.
+No score-based route selection or fabricated execution manifest is used.
+
+New `gsdc_development_plan_audit.py` checks group exclusions, the fixed cohort,
+and source-plan provenance. Original metadata rejects exactly case 12; all
+fifteen corrected entries pass. The full scorer supports this explicit repair
+and requires every selected native pair to finish; the original batch's
+intentional failed case is never included. Submission assembly now requires
+`height_map_group_independence_verified`. The old prepared test17 plan must
+be rebased to the corrected development evidence before execution/promotion.
+Evidence: `use_cases/records/gsdc2023_pixel5_height_group_overlap_20260926.json`.
+
+Replacement supervisor session 21361 waits for verified Samsung supervisor
+PID 48012 (created 12:51:37.607798 JST), accepts its terminal failed experiment
+as a completed slot, verifies no prior native process is live, then runs the
+replacement pair with one worker. Binary remains `82ef0163...`, matching the
+other fourteen Pixel5 pairs. The new current progress record is
+`use_cases/records/gsdc2023_pixel5_group_safe_progress_20260926.json` (4/15).
+Case 03 completed with delta -0.183039876 m; case 04 control PID 43944 runs.
+
+SM-A205U continuous-clock candidate failed in 6.41 s before IMU/main inference:
+`temporal-initialization-ineligible-failure`; raw seed status `time-gap`,
+reason `epoch-time-gap-exceeds-limit`, 1208/1213 independent SPP epochs.
+Do not treat the observation-only loader admission as full application
+admission (four native leading epochs are added by this recipe). No retry or
+threshold relaxation has been made. SM-A325F's paired computation continues.
+Investigate the precise GPST/UTC gap and raw-P limit before any fix.
+
+Historical review also confirms sigma-only weighting on the eleven modern
+phones was roughly neutral (-0.00166 m), and explicit Type/L5 overrides
+regressed the 39 completed pairs. These old ablations should not be repeated
+unchanged; the joint sigma/Huber/main-D recipe remains a distinct experiment.
+
+### Continuous clock v2: raw-P gap admission correction under validation (2026-09-26)
+
+Located A205U's rejection at a 2.000001405016519 s receiver-reference gap.
+Its raw receiver-clock offset changes by 1.28 us; the clock-corrected interval
+is 2.000000125016519 s, within the existing 2 s plus 1 us equality tolerance.
+Evidence: `use_cases/records/gsdc2023_a205u_clock_gap_admission_20260926.json`.
+
+Added default-off `receiver_clock_corrected_gap_checks` to raw-P seed Config,
+activated at the three app seed call sites only by the continuous-reference
+Android option. Only gap admission subtracts the raw receiver clock change;
+epochs, observations, and thresholds remain unchanged. Invalid corrected
+intervals fail closed. Added synthetic regression coverage for default
+rejection, corrected admission with preserved timestamps, true excessive
+gaps, nonmonotonic intervals, and nonfinite clock metadata.
+
+Native build session 40126 is still running. The external raw_p_clock_test
+target is configured but has not yet been built/run against the new libraries.
+No v2 frozen executable or native replay exists yet. Original Pixel5 case 04
+control completed successfully (727.397 s), candidate PID 27984 is running;
+Samsung A325F candidate PID 22032 remains active. Group-safe audited progress
+remains 4/15. The queued group-safe height-map replacement retains priority
+for the next available Samsung inference slot.
+
+### Additional Samsung clock comparison terminal (2026-09-26)
+
+The Samsung supervisor exited 1 as expected because A205U failed admission;
+A325F completed both arms successfully and its pair was audited independently.
+A325F score is 2.005371153 -> 2.014966128 m (delta +0.009594975 m), with all
+1,230 truth/native keys present. The single loader reference reset disappears,
+but this does not establish a benefit for the no-main-D recipe. No blanket
+promotion is justified. Pair evidence:
+`use_cases/records/gsdc2023_continuous_clock_a325f_comparison_20260926.json`.
+The planned group-safe Pixel5 height replacement started automatically in the
+freed slot (control PID 14096); original case 04 candidate PID 27984 continues.
+
+### V2 validation queued behind the verified native build (2026-09-26)
+
+Validation supervisor session 91527 runs
+`E:/rtklib_v2_ws_tmp/validate_continuous_clock_v2.ps1`. It waits for native
+CMake PID 21224 (creation 13:28:53.660732 JST), then verifies the incremental
+native build exit status, builds and runs the complete raw_p_clock_test suite,
+and only on success freezes a new, unique continuous_raw_clock_v2_20260926.exe.
+It will record source hashes, executable hash, and test-report hash in
+`use_cases/records/gsdc2023_continuous_raw_clock_v2_build_20260926.json`.
+This supervisor does not launch inference. Existing v1 and Pixel5 binaries are
+unchanged. Next replay should be the previously failed A205U same-binary pair,
+using the exact original recipe and inputs with v2; reserve its inference slot
+only after the group-safe height replacement finishes. No v2 result is claimed
+until the supervisor and subsequent native replay actually pass.
+
+### Continuous-clock v2 built; full raw-P suite passes (2026-09-26)
+
+Native build session 40126 and validation session 91527 both completed with
+exit code 0. All 40 tests in test_raw_p_seed.cpp passed, including the new
+clock-corrected gap admission test and existing time boundary/leading-state
+checks. Frozen v2 SHA is
+`7c5417bbc3a2d29f1ed7c7ace3ffbb91650fb8a8ce7595eac23813644b5d1316`.
+The build/source/test hash record is
+`use_cases/records/gsdc2023_continuous_raw_clock_v2_build_20260926.json`.
+This proves synthetic coverage, not A205U native success or score improvement.
+
+Prepared `continuous_raw_clock_v2_a205u_20260926/plan.json`, SHA
+`ebb2c312f970751c6e7902943b69f333aef73c85ada481c17dff2d4721b95f90`.
+It replays the predetermined A205U v1 admission failure using exactly the old
+inputs/recipe with v2, both arms sharing the new executable. Supervisor session
+54898 (`E:/rtklib_v2_ws_tmp/launch_continuous_clock_v2_a205u.ps1`) waits for
+verified height-replacement supervisor PID 34424 (creation 13:21:22.233502 JST),
+checks terminal state and a free native slot, then runs one worker, audits the
+pair, and checks v2 default trajectory byte parity with the completed v1
+control. The plan is prepared but native inference has NOT started yet.
+
+Pixel5 case 04 comparison completed: score delta +0.010377030 m. Group-safe
+progress is now 5/15 audited pairs, with no partial aggregate. Case 05 control
+PID 32748 and repaired-height case 12 control PID 14096 are running. This
+mixed result reinforces waiting for the complete fixed cohort before policy
+promotion. No official submission or score change occurred.
+
+### Test17 preparation now rejects unsafe development provenance (2026-09-26)
+
+The Pixel5 test-plan preparer now requires the complete 15-case Pixel5 cohort
+metadata and audits every height-map exclusion and source-plan provenance
+before preparing a test plan. The original unsafe development plan is rejected
+before creating output; the corrected composite passes. Prepared, but did NOT
+execute, `pixel5_submitted_test_recipe_group_safe_20260926/plan.json`, SHA
+`22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e`.
+
+All seventeen paired inference recipes/input manifests match the old test
+plan after normalizing only output paths; all twenty-three retained published
+sources are unchanged, and all 71,936 submitted rows reconcile. The assembler
+also rejects the current partial 5/15 development report before producing
+output. Record: `use_cases/records/gsdc2023_pixel5_group_safe_test_plan_20260926.json`.
+The old test plan record is marked superseded-never-executed, with its frozen
+plan bytes retained. Neither test plan is authorized for automatic execution
+or promotion by these preparatory checks; inspect the full fixed development
+comparison first.
+
+The group-safe height replacement control completed successfully in 635.406 s;
+its candidate is next/running under the existing supervisor. A205U v2 remains
+queued behind that supervisor. Original Pixel5 case 05 control PID 32748 is
+still live. Official Private remains 1.055 m.
+
+### Fixed eleven-phone joint source recipe prepared and conditionally queued (2026-09-26)
+
+Prepared all eleven cases from the pre-existing expanded-bias cohort (G988B,
+Pixel6 Pro, Pixel7 Pro, S908B), without score-dependent selection. This is a
+new joint sigma/source-Huber/main-D experiment; the historical sigma-only
+ablation was nearly neutral and is not being repeated unchanged. Both arms
+use v2 continuous-reference clocks, upstream offset, extra bands, and the
+same group-excluded height policy. The input-clock fix is therefore common,
+not confounded with the three candidate flags. Eight maps and three relative
+height cases were chosen using the established 10% coverage rule. May16
+Pixel7 Pro's map excludes both same-drive aliases, unlike the old maps.
+
+Plan `modern11_source_recipe_20260926/plan.json`, SHA
+`7a69e33ad1fc34977c37052a2fc87c91a72e9a17d8f871c074fe858a4264ae8c`;
+all eleven paired argv/input hashes/group exclusions pass preflight. The
+shared native auditor now verifies actual continuous-clock telemetry whenever
+that option is present in either arm; the existing A325F pair passes this
+strengthened audit. No modern11 inference or result exists yet.
+
+Supervisor session 37542 (`E:/rtklib_v2_ws_tmp/launch_modern11_source_recipe.ps1`)
+waits for A205U v2 supervisor PID 24288 (13:42:58.152688 JST), and requires a
+successful complete native pair, score audit, and byte-identical default
+control before starting one worker. Any failure stops the queue. It also
+checks no previous native child is live and at most one other native process
+exists. Pixel5 remains the other worker; never start a third native inference.
+Record: `use_cases/records/gsdc2023_modern11_source_recipe_plan_20260926.json`.
+
+### Group-safe height replacement completed; A205U v2 starts (2026-09-26)
+
+Replacement supervisor session 21361 completed with exit code 0. The fixed
+May16 Pixel5 pair improved from 1.144799484 to 1.016689746 m (delta
+-0.128109738 m), with all raw native keys and 2,322 evaluation truth keys
+accounted for. The actual sigma/Huber/main-D effects and height-map evaluation
+group exclusion pass the full one-pair scorer. This is development evidence,
+not held-out or official performance. Report:
+`use_cases/records/gsdc2023_pixel5_height_group_replacement_comparison_20260926.json`.
+Composite progress is now 6/15 audited pairs; no partial aggregate is reported.
+The unsafe original map remains quarantined and must never be restored.
+
+A205U v2 supervisor 54898 started its control (PID 33268) in the freed slot;
+its plan/executable remain the previously frozen ebb2c312/7c5417bb versions.
+Original Pixel5 case 05 control completed successfully in 1062.819 s and its
+candidate is now PID 18524. Two native processes remain active; modern11
+supervisor 37542 still waits for the complete A205U v2 audit and default parity.
+Official Private is unchanged at 1.055 m.
+
+### A205U v2 clears the previous admission failure (2026-09-26)
+
+V2 control completed in 187.748 s. Actual solution.csv AND summary.json hashes
+match the v1 control exactly, establishing default behavior parity for this
+real-data replay. The v2 continuous-reference candidate (PID 42724) passed the
+previously failing seed admission: 1,209 independent SPP epochs plus the same
+four explicitly supported native leading guesses account for all 1,213 states.
+Its initialization metadata is accepted/graph-compatible, without imported
+seeds or truth. raw_p_seed_ok remains false because the four leading epochs
+still lack independent SPP; the existing supported adapter handles them, not
+any new filling policy. Native factor construction proceeds. Final convergence,
+raw-key coverage, and score are still pending; modern11 remains gated.
+Evidence: `use_cases/records/gsdc2023_continuous_clock_v2_a205u_execution_20260926.json`.
+
+### A205U v2 full pair passes; modern11 computation starts (2026-09-26)
+
+Supervisor 54898 completed successfully. Candidate wall time 249.455 s; all
+1,213 native raw keys and all 1,213 truth keys are audited, graph convergence
+passes, and actual continuous-clock telemetry reports 0 reference resets
+versus 1,208 in the control. Score: 1.916556366 -> 1.912326145 m, delta
+-0.004230221 m. P50 improves by 0.009283 m but P95 worsens by 0.000822 m.
+This validates the admission correction and near-neutral accuracy; it does
+not substantiate a large official-score gain or blanket clock-only promotion.
+Both control solution and summary byte parity with v1 were verified.
+Full report: `use_cases/records/gsdc2023_continuous_clock_v2_a205u_comparison_20260926.json`.
+
+The pre-registered modern11 supervisor 37542 then started one native worker:
+runner PID 61500, first G988B control PID 65456. The frozen plan remains SHA
+7a69e33a..., binary 7c5417bb..., with common continuous-clock/height/offset/extra
+bands and candidate sigma+source-Huber+main-D. Original Pixel5 case 05 candidate
+PID 18524 continues in the other slot. Neither cohort is fully scored; no
+partial aggregate or official improvement is claimed.
+
+### Pixel5 composite evaluation watcher active (2026-09-26)
+
+Added `scripts/analysis/watch_gsdc_completed_pairs.py`. It never launches native
+inference: it scores only complete selected pairs, reuses existing comparison
+artifacts, updates the audited progress record on newly completed pairs, and
+runs the full scorer only after all fifteen pairs and their source execution
+manifests are complete. It checks frozen-plan identity and map/source-group
+provenance, fails on any selected native failure, and holds a Windows handle
+to the original runner so a stopped batch cannot be mistaken for a live wait.
+The intentionally failed original case 12 is not a selected source pair.
+
+Syntax check and a one-pass check against the actual 6/15 composite passed.
+Watcher session 48833 is now active, observing original runner PID 18808.
+Full output will be
+`use_cases/records/gsdc2023_pixel5_group_safe_full_comparison_20260926.json`.
+Do not start a duplicate watcher or manually rewrite comparison artifacts it
+is producing. This automates audits only; it does not execute test17, assemble
+a submission, publish, or change candidate policies. Native inference remains
+two processes: Pixel5 case05 candidate and modern11 case00 control.
+
+### Modern11 first completed pair: G988B joint recipe regresses (2026-09-26)
+
+Both July14 G988B arms completed and passed native/output/hash/group-exclusion
+and actual-factor audits. With the same continuous-clock and group-safe height
+recipe in both arms, the joint source sigma/source Huber/main-D candidate scores
+0.606051984 m versus control 0.564669084 m (delta +0.041382900 m).
+P50: 0.384617709 -> 0.389747741 m; P95: 0.744720459 -> 0.822356227 m.
+All 1,165 raw/truth epochs are accounted for. Candidate telemetry confirms
+sigma 0.001153494 m (control 0.03), Huber 0.2 (control 4), and 12,762 main-D
+factors (control 0). This is a real small regression after the clock fix, not
+the old roughly 5 m clock-reset failure. Do not promote the joint policy from
+this result or select route winners; continue the predetermined eleven cases.
+
+Evidence: `modern11_source_recipe_20260926/runs/00/comparison.json` and
+`use_cases/records/gsdc2023_modern11_source_recipe_progress_20260926.json` (1/11,
+no partial aggregate). This pair was scored with the watcher in one-pass mode;
+no second persistent watcher was started, avoiding a race with the modern11
+supervisor's final full scorer. Next Pixel6 Pro control PID 25956 is live;
+original Pixel5 case05 candidate PID 18524 continues and its existing watcher
+48833 owns its comparison output. Official Private remains 1.055 m.
+
+### Pixel5 case 05 completed and watcher verified seven pairs (2026-09-26)
+
+August24 Pixel5 joint recipe improves 0.644545664 -> 0.521612640 m (delta
+-0.122933024 m). P50 0.438325349 -> 0.388337419 m, P95 0.850765978 ->
+0.654887862 m; all native raw keys and 3,139 truth keys pass the comparator.
+Candidate wall time was 1510.986 s. Watcher 48833 produced the comparison and
+completed the full provenance/hash/native-effect/group-exclusion progress
+audit: 7/15 pairs, with no partial aggregate. Evidence remains the current
+`use_cases/records/gsdc2023_pixel5_group_safe_progress_20260926.json` and
+`pixel5_source_recipe_20260926/runs/05/comparison.json`.
+
+Original case06 January26 Pixel5 control PID 58336 is now running. Modern11
+case01 May13 Pixel6 Pro control PID 25956 is the second native process. The
+previous modern11 G988B comparison remains the sole completed modern11 pair;
+no policy promotion or official-score change has been made.
+
+### Offline forty-case directional-error diagnostic (2026-09-26)
+
+Added and ran `scripts/analysis/diagnose_gsdc_directional_error.py` against all
+40 completed frozen corrected-recipe outputs. Every solution/summary hash,
+convergence marker, native raw-key count, and truth-key alignment is checked.
+Velocity/direction comes only from adjacent native coordinates and timestamps;
+truth is used only to measure errors afterward. No native inference was run,
+no coordinates were changed, and no fitted coefficient enters any solver.
+
+The baseline predates the upstream phone position-offset and height policy,
+so its constant directional errors cannot be treated as new current-policy
+errors. Descriptive along-error versus speed slopes have mixed signs: Pixel5
+has 5 positive and 10 negative route slopes (median -0.00603 s); Pixel7 Pro has
+2 positive and 3 negative (-0.00478 s); Mi8 has 3 positive and 2 negative
+(+0.00073 s). One/two-route Samsung estimates are insufficient to identify a
+phone-wide timing delay. This does not support adding a blanket time shift.
+Route/multipath/antenna-offset confounding remains; continue the already frozen
+joint-factor comparisons rather than applying these descriptive fits.
+Record: `use_cases/records/gsdc2023_train40_directional_error_20260926.json`.
+Current inference remains Pixel5 case06 control and modern11 case01 control.
+
+### Modern11 Pixel6 Pro control reproduces historical height trajectory (2026-09-26)
+
+Case01 May13 Pixel6 Pro control completed successfully in 774.258 s. Native
+artifact audit passes with 2,180 exact raw keys, converged graph, truth_used
+false, and zero continuous-reference resets. Its actual solution.csv is byte
+identical to `train11_heightmap_v1/01/solution.csv` (SHA 9e6f6bed...), confirming
+that the common v2 clock convention and regenerated group-safe height policy
+preserve this no-reset case's historical trajectory. Candidate PID 584 is now
+running. Pixel5 case06 control PID 58336 remains the other native process.
+No new paired score or promotion is implied by this single-arm check.
+
+### Pixel6 Pro and January26 Pixel5 pairs improve (2026-09-26)
+
+Modern11 case01 May13 Pixel6 Pro joint recipe passed the complete native,
+clock-mode, factor-effect, input/output-hash, and height-group audit. Score
+0.618045078 -> 0.482040421 m (delta -0.136004657 m); P50 0.455041321 ->
+0.376047906, P95 0.781048835 -> 0.588032936. All 2,180 native raw keys and
+2,162 truth keys are present. Candidate wall time 816.377 s. Modern11 progress
+is 2/11 audited pairs with no partial aggregate. Next case02 May13 G988B
+control PID 29140 runs under the existing supervisor.
+
+Pixel5 case06 January26 also completed and was independently processed by
+watcher 48833: 0.377190017 -> 0.357164006 m (delta -0.020026011 m), with all
+1,698 raw/truth epochs. P50 slightly worsens 0.257998702 -> 0.258509152, while
+P95 improves 0.496381332 -> 0.455818861. Candidate wall time 747.669 s. The
+watcher audited the composite progress to 8/15; no partial mean is reported.
+Next original case07 February24 lax-o Pixel5 control PID 65708 is running.
+
+Evidence: the two cohorts' runs/01 and runs/06 comparison.json respectively,
+and the existing modern11_source_recipe_progress and pixel5_group_safe_progress
+records. These exposed development improvements do not alter the official
+Private 1.055 m score; both fixed cohorts must finish before policy decisions.
+
+### Modern11 May13 G988B control also reproduces historical output (2026-09-26)
+
+Case02 control completed in 718.650 s; native artifact audit verifies 2,182
+exact raw keys, convergence, and truth_used=false. Its actual trajectory is
+byte identical to `train11_heightmap_v1/02/solution.csv` (SHA 1fcbbb38...).
+This is a second no-reset real-data parity check for the common v2 clock and
+regenerated height setup. Candidate PID 34448 now runs; Pixel5 case07 control
+PID 65708 remains live. No new paired score is available yet.
+
+### Modern11 May13 G988B joint recipe improves (2026-09-26)
+
+Case02 candidate completed successfully in 829.849 s. The comparison and
+frozen-plan progress audit passed: score 0.892321729 -> 0.740056246 m
+(delta -0.152265483 m), P50 0.615723745 -> 0.612194937 m, and P95
+1.168919714 -> 0.867917555 m. Both runs retain all 2,182 native raw keys;
+evaluation covers 2,163 truth keys. Input/output hashes, factor effects,
+continuous-clock telemetry, and height-group independence were validated.
+
+Evidence: modern11_source_recipe_20260926/runs/02/comparison.json and
+use_cases/records/gsdc2023_modern11_source_recipe_progress_20260926.json.
+Progress is 3/11 audited pairs, with no partial aggregate or policy promotion.
+The existing supervisor advanced to case03 November15 Pixel7 Pro control
+(PID 38384); Pixel5 case07 control (PID 65708) remains the other native run.
+The official Private score is unchanged at 1.055 m.
+
+### Modern11 November15 Pixel7 Pro control parity (2026-09-26)
+
+Case03 control completed in 264.816 s. The native artifact auditor verifies
+all 1,231 raw UTC keys, convergence, truth_used=false, continuous-clock
+telemetry, and input/output hashes. Its solution.csv is byte identical to
+train11_heightmap_v1/03/solution.csv. Candidate PID 62176 has started under
+the existing supervisor; Pixel5 case07 control PID 65708 remains live.
+This is a single-arm parity result, not a new paired score or promotion.
+
+### Modern11 November15 Pixel7 Pro joint recipe regresses (2026-09-26)
+
+Case03 candidate completed in 491.171 s and passed the native artifact,
+factor-effect, continuous-clock, input/output-hash, and height-group audits.
+Score worsens 0.464387009 -> 0.527052500 m (delta +0.062665491 m).
+P50 improves 0.319768966 -> 0.307917901 m, but P95 worsens
+0.609005051 -> 0.746187098 m. Both trajectories contain all 1,231 raw keys;
+evaluation uses 1,193 truth keys. This is a real tail-error regression in
+the fixed joint-factor comparison, not missing epochs or failed convergence.
+
+Evidence: modern11_source_recipe_20260926/runs/03/comparison.json and
+use_cases/records/gsdc2023_modern11_source_recipe_progress_20260926.json.
+Progress is 4/11 audited pairs; no partial aggregate or route-specific
+selection is used. The supervisor continues case04 March08 Pixel6 Pro
+control (PID 51688). Pixel5 case07 control PID 65708 remains live.
+Official Private remains 1.055 m; no policy has been promoted or submitted.
+
+### Modern11 March08 Pixel6 Pro control audit (2026-09-26)
+
+Case04 control completed in 682.930 s. The native artifact auditor verifies
+all 1,102 raw UTC keys, convergence, truth_used=false, continuous-clock
+telemetry, and input/output hashes. No historical byte-parity claim is made:
+train11_heightmap_v1/04/solution.csv does not exist at the checked location.
+Candidate PID 65456 started under the existing supervisor. Pixel5 case07
+control PID 65708 remains live. Paired progress remains 4/11; this single-arm
+audit does not establish an accuracy change or alter the official score.
+
+### Modern11 March08 Pixel6 Pro joint recipe improves (2026-09-26)
+
+Case04 candidate completed in 387.415 s. Comparison and frozen-plan progress
+audits passed, including native raw keys, convergence, factor effects,
+continuous-clock telemetry, input/output hashes, and height-group independence.
+Score improves 0.947582764 -> 0.817610733 m (delta -0.129972032 m).
+P50 improves 0.714737163 -> 0.603049559 m and P95 improves
+1.180428366 -> 1.032171906 m. Both trajectories and evaluation contain all
+1,102 epochs. Evidence: modern11_source_recipe_20260926/runs/04/comparison.json
+and use_cases/records/gsdc2023_modern11_source_recipe_progress_20260926.json.
+
+Progress is 5/11 audited pairs, with no partial aggregate or route selection.
+The supervisor advanced to case05 May16 Pixel7 Pro control (PID 50096), using
+the frozen height map that excludes both May16 same-drive aliases. Pixel5
+case07 control PID 65708 remains live. Official Private remains 1.055 m;
+no policy has been promoted or submitted.
+
+### Modern11 May16 Pixel7 Pro control audit (2026-09-26)
+
+Case05 control completed in 940.663 s. The native artifact auditor verifies
+all 2,323 raw UTC keys, convergence, truth_used=false, continuous-clock
+telemetry, and input/output hashes. The frozen-plan height-independence and
+provenance checks also pass for this May16 case, with both same-drive aliases
+excluded. Candidate PID 29968 started under the existing supervisor; Pixel5
+case07 control PID 65708 remains live. Paired progress remains 5/11. This
+single-arm check establishes no accuracy improvement or official score change.
+
+### Modern11 May16 Pixel7 Pro joint recipe improves (2026-09-26)
+
+Case05 candidate completed in 820.628 s. Comparison and frozen-plan progress
+audits passed, including native raw keys, convergence, factor effects,
+continuous-clock telemetry, input/output hashes, and height-group independence.
+Score improves 0.636489016 -> 0.577922279 m (delta -0.058566738 m).
+P50 improves 0.440379438 -> 0.365591994 m and P95 improves
+0.832598595 -> 0.790252563 m. Both trajectories and evaluation contain all
+2,323 epochs. Both arms use the same group-safe map excluding both May16
+same-drive aliases; this comparison does not reuse the contaminated old map.
+
+Evidence: modern11_source_recipe_20260926/runs/05/comparison.json and
+use_cases/records/gsdc2023_modern11_source_recipe_progress_20260926.json.
+Progress is 6/11 audited pairs, without partial aggregate or route selection.
+The supervisor advanced to case06 May24 Pixel7 Pro control (PID 20252).
+Pixel5 case07 control PID 65708 remains live. Official Private remains
+1.055 m; no policy has been promoted or submitted.
+
+### Modern11 May24 Pixel7 Pro control audit (2026-09-26)
+
+Case06 control completed in 335.266 s. The native artifact auditor verifies
+all 1,384 raw UTC keys, convergence, truth_used=false, continuous-clock
+telemetry, and input/output hashes. Candidate PID 41740 started under the
+existing supervisor; Pixel5 case07 control PID 65708 remains live. Paired
+progress remains 6/11. This single-arm check establishes no accuracy change
+or official score improvement.
+
+### Modern11 May24 Pixel7 Pro joint recipe slightly improves (2026-09-26)
+
+Case06 candidate completed in 480.776 s and passed the comparison and
+frozen-plan progress audits, including keys, convergence, factor effects,
+continuous-clock telemetry, input/output hashes, and height-group independence.
+Score improves 0.443964063 -> 0.431920802 m (delta -0.012043261 m).
+P50 improves 0.340356560 -> 0.291452312 m, while P95 worsens
+0.547571565 -> 0.572389291 m. Both trajectories retain all 1,384 raw epochs;
+evaluation covers 1,383 truth epochs. Evidence is the case06 comparison.json
+under modern11_source_recipe_20260926 and the modern11 progress record.
+
+Progress is 7/11 audited pairs, with no partial aggregate or route selection.
+The supervisor advanced to case07 May25 SM-S908B control (PID 64496).
+Pixel5 case07 control PID 65708 remains live. Official Private remains
+1.055 m; no policy has been promoted or submitted.
+
+### Complete development cohorts audited; Pixel5 test execution started (2026-09-27)
+
+Both development supervisors finished while the conversation was idle. The
+Pixel5 watcher and modern11 supervisor exited successfully. All selected
+development pairs were re-audited against current artifacts on September27.
+Pixel5 fixed15: mean 0.736483004 -> 0.644028218 m, delta -0.092454786 m,
+13 improved and two regressed. Modern fixed11: mean 0.699758890 ->
+0.628204040 m, delta -0.071554850 m, nine improved and two regressed.
+These are exposed development results, not held-out or official scores.
+Both complete reports verify native factor effects and height-group
+independence. Pixel5's original case12 preflight failure is expected: the
+selected composite uses the previously completed group-safe replacement.
+
+Evidence: use_cases/records/gsdc2023_pixel5_group_safe_full_comparison_reaudit_20260927.json
+and use_cases/records/gsdc2023_modern11_source_recipe_reaudit_20260927.json.
+The full Pixel5 cohort supports proceeding with the already frozen test17
+plan, without choosing per-route winners. Plan SHA 22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e
+is unchanged. After confirming no native processes remained, launched the
+test pairs with two workers under exec session67526. The supervisor script
+is E:/rtklib_v2_ws_tmp/launch_pixel5_test_group_safe_20260927.ps1.
+
+After all17 pairs succeed, the supervisor invokes the existing assembler,
+which requires byte-identical reproduction of published control sources,
+23 unchanged native sources, and exact 71,936 output keys. Its output is
+E:/rtklib_v2_ws_output/gsdc_native/pixel5_joint_submission_20260927.
+This is local inference and candidate preparation under the continuing goal;
+the supervisor has no submission command. Official Private remains 1.055 m.
+
+### Pixel5 test first four pairs audited (2026-09-27)
+
+The frozen test17 runner (PID58468, supervisor session67526) remains active.
+Four pairs completed: August17 mtv-g, February08 sjc-r, February23 lax-n,
+and February23 lax-m. The native artifact and factor-effect audits pass for
+all four. Five completed controls, including February24 lax-i, reproduce
+their published native source solution.csv byte for byte. Current processes
+are February24 lax-p control PID42212 and lax-i candidate PID32628.
+
+Candidate-versus-control displacement P95 values are 0.329791, 0.248122,
+0.704829, and 0.611975 m respectively; maximum displacement across these
+four is 1.560016 m. These are trajectory differences, not accuracy estimates.
+No test truth is loaded or scored. Evidence:
+use_cases/records/gsdc2023_pixel5_test_progress_20260927.json, produced by
+E:/rtklib_v2_ws_tmp/audit_pixel5_test_progress_20260927.py. Final assembly
+still requires all17 pairs and the full existing assembler audit.
+
+### Pixel5 test lax-i pair audited (2026-09-27)
+
+February24 lax-i candidate completed in 1,350.665 s. Native artifact and
+factor-effect checks pass with all 3,582 raw keys, convergence, no truth use,
+and a control trajectory byte identical to its published source. Candidate
+versus control displacement is P50 0.223103 m, P95 0.742002 m, maximum
+1.229382 m; no accuracy claim follows from these differences. The test
+progress record now contains 5/17 audited pairs. The same runner continues
+February24 lax-p control PID42212 and March22 mtv-pe1 control PID51932.
+Supervisor session67526 remains live. No submission has been assembled yet.
+
+### Pixel5 test March22 control reproduced (2026-09-27)
+
+March22 mtv-pe1 control completed in 670.766 s. The refreshed test progress
+artifact audit passes: six completed controls reproduce their published
+native source solutions byte for byte, with five complete candidate pairs.
+The same two-worker runner has advanced March22 to its candidate arm while
+February24 lax-p control remains running. No test accuracy is evaluated;
+official Private remains 1.055 m. Evidence is the refreshed
+use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+
+### Modern test cohort source audit prepared (2026-09-27)
+
+While the Pixel5 two-worker queue remains active, audited all nine test
+phones matching the four models in the fixed modern development cohort.
+The new audit_gsdc_modern_test_sources.py checks recorded published source
+hashes, executable hashes, convergence, no truth use, and exact raw UTC keys
+without interpolation or holds. All nine pass. This does not establish
+replay parity or candidate accuracy and starts no additional inference.
+
+November05 Pixel6 Pro is the only one of these nine with a legacy loader
+reference reset. Its existing loader-only admission artifacts were rehashed:
+both modes preserve the same 1,446 keys, while maximum input clock step
+changes from 21,770.629 to 157.391 m. Full continuous-mode solver execution
+is still required. A subsequent frozen experiment must distinguish the
+continuous-clock change from the three recipe flags, retaining a published
+control replay; the Pixel5 plan and candidate assembly remain unchanged.
+Evidence: use_cases/records/gsdc2023_modern9_test_source_audit_20260927.json.
+
+### Modern9 three-arm test plan frozen, not started (2026-09-27)
+
+Prepared modern9_submitted_test_three_arm_20260927/plan.json under the native
+output root; SHA256 6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565.
+All nine model-matched test phones receive three same-binary arms:
+published settings, continuous-clock only, then continuous-clock plus the
+three uniformly selected source-recipe flags. Binary is frozen continuous
+raw clock v2 (7c5417bbc3a2d29f1ed7c7ace3ffbb91650fb8a8ce7595eac23813644b5d1316).
+This separates clock changes from recipe changes, including November05
+Pixel6 Pro's loader reset. Height settings retain published per-phone policy.
+
+prepare_gsdc_modern_test_recipe.py verified complete development evidence,
+height-group exclusion, the source audit evidence, published source hashes,
+and all declared native inputs before writing the plan. An independent argv
+check verified all 27 commands differ only by declared arm flags and output
+paths. No execution.started.json exists. A three-arm-aware runner and complete
+native/parity audits are still needed; the existing runner supports pairs only.
+Do not pass this plan to it unchanged. The active Pixel5 two-worker experiment
+continues unmodified, with no third native process launched and no submission.
+
+### Three-arm runner support verified (2026-09-27)
+
+run_gsdc_frozen_pairs.py now honors an explicitly declared control,
+clock_only, candidate arm order, retaining the existing two-arm default.
+It rejects undeclared or mismatched arms before creating the execution
+marker and requires every declared arm for completion. This supersedes the
+previous note that a three-arm-aware runner was still missing. Existing
+Pixel5 Python workers already loaded their code and continue unchanged.
+
+Five simulated-child lifecycle tests pass in tests/test_gsdc_frozen_runner.py:
+legacy pair completion and exclusive restart rejection, three-arm ordering
+and completion, clock-only failure preventing candidate launch, changed
+input rejection before child launch, and undeclared third-arm rejection.
+These tests launch no GNSS inference and establish no positioning accuracy.
+Modern9 remains prepared, not started; capacity is still occupied by Pixel5.
+
+### Pixel5 test March22 pair audited (2026-09-27)
+
+March22 mtv-pe1 candidate completed in 806.916 s. The refreshed artifact
+and factor-effect audits pass for all 2,112 native raw UTC keys, convergence,
+no truth use, and a control solution byte identical to its published source.
+Candidate versus control displacement is P50 0.166683 m, P95 0.501901 m,
+maximum 0.630442 m. These trajectory differences do not establish accuracy.
+The progress record now contains 6/17 audited pairs. The same two-worker
+runner continues; no submission has been assembled or sent. Official
+Private remains 1.055 m. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+
+### Modern9 three-arm output auditor prepared (2026-09-27)
+
+Added audit_gsdc_modern_test_recipe.py. It requires the complete nine-case,
+three-arm terminal manifest, frozen provenance and exact argv/input/binary
+hashes, full native artifact audits, published-control solution hash parity,
+continuous-clock telemetry and native recipe effects. It reports clock-only
+versus control, recipe versus clock-only, and total candidate displacement
+separately, with no test truth or accuracy claim. It creates no submission.
+
+The actual not-yet-started plan is rejected with "native experiment not
+finished" and no output report is created. This checks only the incomplete
+execution gate; successful full auditing remains pending the 27 real runs.
+Pixel5's live two-worker run is still occupying both native inference slots.
+
+### Pixel5 test lax-p published control reproduced (2026-09-27)
+
+February24 lax-p control finished successfully in 7,168.777 s. The refreshed
+native artifact audit confirms full raw key coverage, convergence, no truth
+use, and a solution byte identical to the published source. Seven completed
+controls now reproduce their published solutions; complete pairs remain 6/17.
+The existing runner advanced lax-p to its candidate arm while April04 lax-x
+control continues. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+No official accuracy claim or submission follows from this control replay.
+
+### Pixel5 test lax-x published control reproduced (2026-09-27)
+
+April04 lax-x control completed successfully in 4,185.967 s. The refreshed
+native artifact audit confirms full raw key coverage, convergence, no truth
+use, and a solution byte identical to its published source. Eight completed
+controls now reproduce published solutions; complete pairs remain 6/17.
+The same two-worker runner advanced lax-x to its candidate while lax-p
+candidate continues. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+No candidate assembly or new official result exists yet.
+
+### Pixel5 test lax-x pair audited (2026-09-27)
+
+April04 lax-x candidate completed in 1,156.991 s and passes the native and
+factor-effect audits, with all 2,171 raw UTC keys, convergence, no truth use,
+and a published-control byte-identical replay. Progress is now 7/17 complete
+pairs and eight reproduced controls. Candidate solution SHA256 is
+493e54a978b3953d3afd01ad970cdcfaf230cb3f2687cc6337c438999c2726ff.
+
+Candidate-versus-control displacement is P50 0.329908 m, P95 3.301476 m,
+maximum 4.043247 m. This is larger than earlier completed pairs and should
+receive trajectory/solver-diagnostic review before assembly is presented.
+It is not test accuracy and does not justify choosing a per-route winner.
+Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+The existing runner continues lax-p candidate and the next planned control;
+no submission or official score change has occurred.
+
+### Lax-x larger trajectory disagreement diagnosed without truth (2026-09-27)
+
+The read-only diagnostic gsdc2023_pixel5_test_laxx_displacement_diagnostic_20260927.json
+re-audits both native artifacts. Maximum disagreement 4.043247 m occurs at
+epoch130 (UTC1649089992434). Disagreement above2 m is confined to epochs1-3
+and10-202, chiefly the first203 seconds. All2,171 epochs are exactly one second
+apart. The largest adjacent change in the displacement vector is0.406809 m,
+so the4 m magnitude is not a single-epoch4 m step.
+
+Both arms have zero loader clock resets, zero C0D clock/gap skips, and exactly
+identical raw-P initialization bytes. Both stop by outer convergence tolerance
+with zero indeterminate solves. This does not reproduce July14's artificial
+FullBias reset failure. GNSS-first summaries differ in iterations and costs;
+the combined recipe also changes TDCP weighting, so it does not isolate main
+Doppler causality. Costs across differently weighted graphs are not comparable.
+TDCP RMS is0.214769 ->0.216267 m; both have their largest TDCP residual at
+2107->2108, far from the early large-disagreement segment. Output maximum
+speed is27.518399 ->27.519378 m/s. These diagnostics establish neither test
+accuracy nor a preferred arm. No settings, route selection, or candidate
+coordinates were changed; the frozen experiment continues.
+
+### Pixel5 test ebf-y published control reproduced (2026-09-27)
+
+April22 ebf-y control completed successfully in454.702 s. The refreshed
+native artifact audit confirms exact raw UTC keys, convergence, no truth use,
+and a solution byte identical to its published source. Nine completed
+controls now reproduce published solutions; complete pairs remain7/17.
+The same two-worker runner advanced ebf-y to its candidate while lax-p
+candidate continues. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+No candidate assembly or new official result exists yet.
+
+### Pixel5 test ebf-y pair audited (2026-09-27)
+
+April22 ebf-y candidate completed in453.153 s. Native artifact and factor-effect
+audits pass with all1,400 raw UTC keys, convergence, no truth use, and published
+control byte parity. Progress is8/17 pairs and nine reproduced controls.
+Candidate-versus-control displacement is P50 0.198197 m, P95 0.520647 m,
+maximum0.898955 m; these are not accuracy estimates. Candidate solution SHA256
+b3443bf3c8fdd7d1ededb297284df57f493a4c134fc3bddeba1a0db9f374e7d1.
+Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+The same runner continues lax-p candidate and the next planned control.
+No candidate assembly or new official result exists yet.
+
+### Pixel5 test ebf-z published control reproduced (2026-09-27)
+
+April25 ebf-z control completed successfully in320.901 s. The refreshed
+native artifact audit confirms exact raw UTC keys, convergence, no truth use,
+and a solution byte identical to its published source. Ten completed
+controls now reproduce published solutions; complete pairs remain8/17.
+The existing two-worker runner advanced ebf-z to its candidate while lax-p
+candidate continues. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+No candidate assembly or new official result exists yet.
+
+### Pixel5 test lax-p pair audited; large tail disagreement needs investigation (2026-09-27)
+
+Lax-p candidate completed in5,049.526 s. Native artifact and factor-effect
+audits pass with all4,515 raw UTC keys, convergence, no truth use, and published
+control byte parity. Progress is9/17 pairs and ten reproduced controls.
+Candidate SHA256 fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17.
+Disagreement P50 0.529192 m, P95 6.258649 m, maximum350.199980 m is material:
+passing provenance/key checks alone is not sufficient for submission review.
+
+The read-only lax-p diagnostic localizes the maximum to epoch4499; the final
+265 epochs (4250-4514) have disagreement above2 m, with other smaller mid-run
+segments. All epochs are one second apart, both loader reset counts and C0D
+gap/clock skips are zero, and raw-P initialization bytes are identical. Thus
+this is not the July14 FullBias-reset failure. Both arms converge with no
+indeterminate solves, but maximum optimized acceleration bias is already
+18.493567 m/s2 in the published control and18.625443 m/s2 in the candidate.
+Maximum output step speed is54.394738 and43.643655 m/s respectively. TDCP
+RMS is1.257488 and1.035460 m, with residual maxima near the tail. These facts
+do not identify the more accurate trajectory. Investigate tail IMU/observable
+support before presenting a candidate; do not select a per-route winner from
+trajectory differences. The active frozen test queue continues unchanged.
+Evidence: gsdc2023_pixel5_test_progress_20260927.json and
+gsdc2023_pixel5_test_laxp_displacement_diagnostic_20260927.json in use_cases/records.
+
+### Lax-p raw sensor tail and stationary pose contract (2026-09-27)
+
+Read-only raw sensor summaries rehash both input files against the completed
+candidate run. No truth or device positions are consumed. During the last
+35 seconds, median satellite count is21, median C/N0 is32.8 dB-Hz, and ADR
+valid fraction is0.858; IMU sample gaps remain below30 ms. Acceleration norm
+P95 is10.221 m/s2, while gyro norm P95 rises to1.371 rad/s and mean measured
+acceleration changes from predominantly the Y axis toward the Z axis. This
+supports a late phone reorientation hypothesis, not a demonstrated cause of
+the trajectory disagreement (which starts earlier, at epoch4250).
+
+Code inspection finds full identity Pose3 between-factors for admitted stops
+in src/algorithms/fgo_gtsam_backend.cpp. However, upstream_stop_constraints.hpp
+requires acceleration/gyro norm moving standard deviations below adaptive
+thresholds AND instantaneous gyro norm below0.05 rad/s. Thus reorientation
+does not by itself establish erroneous stop admission. Exact epoch-level
+stop admission and attitude/bias behavior remain to be checked before any
+solver change. The frozen queue, binary, and route policy are unchanged.
+Evidence: use_cases/records/gsdc2023_pixel5_test_laxp_sensor_tail_20260927.json.
+
+### Pixel5 test ebf-z pair and ebf-zz control audited (2026-09-27)
+
+The refreshed artifact audit passes10/17 complete pairs and11 reproduced
+published controls. April25 ebf-z candidate completed in508.021 s with1,587
+raw UTC keys; disagreement P50 is0.183000 m, P95 0.491593 m, maximum0.541775 m.
+Candidate SHA256 is67343bf2324d7c7719510a13156b7cc87d9038724f7e0e13942fec89603c932a.
+April27 ebf-zz control completed in379.966 s and reproduces its published
+solution bytes. The existing two-worker queue continues ebf-zz candidate
+and ebf-xx control. No accuracy was evaluated on test data and no submission
+was made. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+
+### Lax-p stationary detector replay narrows the hypothesis (2026-09-27)
+
+A read-only Python replay uses raw IMU measurements with first-UTC deduplication,
+gyro-clock acceleration interpolation, the500-sample centered N-1 standard
+deviation, and nearest UTC epoch mapping. All229,839 paired samples and1,619
+stop epochs match native aggregate telemetry; both adaptive thresholds agree
+within1e-9. No truth is consumed. This is a detector replay before the speed
+gate, not a reconstruction of all admitted pose factors.
+
+There are no stop epochs4250-4349 or4450-4479. In the final35 seconds, only
+epochs4498-4505 pass. These measurements are already nearly motionless in the
+new orientation (acceleration predominantly positive Z, gyro norm below0.01
+rad/s at those epoch samples). Thus the maximum trajectory difference at4499
+coincides with a plausible post-reorientation stop, not demonstrated freezing
+through the rotation itself. Removing stop constraints is not justified by
+this evidence. Inspect attitude initialization and bias evolution next; saved
+summary telemetry alone does not expose their per-epoch optimized states.
+Evidence: use_cases/records/gsdc2023_pixel5_test_laxp_stop_replay_20260927.json.
+Replay helper: E:/rtklib_v2_ws_tmp/replay_laxp_stop_20260927.py.
+
+### Lax-p initialization and saved-state limitations (2026-09-27)
+
+The raw replay now reconstructs rotation-invariant norms from the first250
+paired IMU samples, following alignStatic and the app's gravity9.80665 m/s2:
+acceleration mean norm9.758790082722, initial acceleration bias norm0.047859917278
+m/s2, initial gyro bias norm0.001011320508 rad/s. The gravity norm matches
+the native summary. Therefore the roughly18.5 m/s2 optimized maximum is not
+already present in the static bias seed.
+
+The frozen run has source initialization and per-epoch velocity-heading
+attitude seeds disabled. The app retains alignStatic biases but replaces
+initial attitude with the first GNSS-first velocity-derived RPY; the backend
+then propagates per-epoch attitude seeds through preintegrated deltaRij.
+This identifies initialization sensitivity as an open hypothesis, not proof
+of an incorrect optimum. The backend currently records only maximum optimized
+bias norms; per-epoch optimized attitude exists in memory but is not saved
+by this ordinary run. A diagnostic rerun/export is required to locate the
+bias growth. No solver or frozen experiment changes were made.
+
+### Opt-in optimized IMU state export prepared (2026-09-27)
+
+Added --native-imu-state-diagnostic for the Phase171 main IMU entrypoint.
+The flag requests post-solve bias vectors from the GTSAM backend and writes
+optimized_imu_states in the ordinary summary: graph epoch index/raw UTC,
+Rot3::rpy radians, ENU velocity, and body-FLU acceleration/gyro biases.
+It is disabled by default, changes no factors or initial states, and never
+feeds exported values back into inference. Serialization rejects incomplete,
+nonfinite, fallback, or unconverged state exports.
+
+Extended the existing synthetic Phase171 handoff test to solve with export
+off/on, require exact position/attitude/cost/iteration parity, and compare
+exported bias maxima to aggregate diagnostics. Build of gnss_fgo_imu_no_base
+and gnss_run_tests started (session21622); log is
+E:/rtklib_v2_ws_tmp/imu_state_diagnostic_build_20260927.log. Tests and real-data
+export/trajectory parity remain pending. This new build is not eligible for
+candidate inference until validated. Existing frozen binaries and the active
+two-worker Pixel5 queue are unchanged. Diagnostic lax-p reruns must wait for
+native capacity and use separate output directories.
+
+### Diagnostic auditor prepared; ebf-zz pair audited (2026-09-27)
+
+scripts/analysis/audit_gsdc_imu_state_diagnostic.py checks completed native
+manifests, input hashes, inference options, exact frozen trajectory byte
+parity, graph epoch indices/UTC keys, finite3-vectors, and bias maxima against
+native aggregates. It reports first/last/maximum bias norms and first/last
+epochs above fixed diagnostic thresholds; it has no truth input. A synthetic
+valid export and four corruption cases (wrong UTC, nonfinite attitude,
+inconsistent aggregate, estimator feedback enabled) passed their expected
+accept/reject checks. Actual native export audit remains pending the build
+and a capacity-safe diagnostic rerun. Build session21622 remains live.
+
+The completed Pixel5 test audit is now11/17 pairs, with11 reproduced controls.
+April27 ebf-zz candidate finished in540.600 s with1,315 keys, solution SHA256
+ffbd7f68330912465127bb47d88b3c7f0ffa5531d8b875bebbabe2c050b3a6f4.
+Disagreement P50=0.189854 m, P95=0.658694 m, maximum=0.738682 m; these are
+not accuracy estimates. Artifact audit session51847 completed successfully.
+The frozen queue session67526 remains live; no submission was performed.
+
+### Pixel5 ebf-xx control reproduced; diagnostic build verified live (2026-09-27)
+
+April27 ebf-xx control completed in765.980 s. Artifact audit session53845
+finished successfully:11/17 complete pairs and12 controls reproducing the
+published solution bytes, with exact raw keys and no truth use. The existing
+runner advanced to its candidate. The diagnostic build session21622 remains
+live in code generation; compiler PID12012 CPU advanced from308.66 to516.89 s.
+No restart was attempted. Synthetic C++ and real-data diagnostic checks remain
+pending build completion. The export auditor now also requires the replay's
+source_run_sha256 to match the exact reference run manifest.
+
+### Pixel5 April2023 mtv-pe1 control reproduced (2026-09-27)
+
+2023-04-27-19-25-us-ca-mtv-pe1/pixel5 control completed in459.214 s.
+Artifact audit session12267 completed successfully, bringing reproduced
+published controls to13 and complete pairs to11/17. The existing frozen
+runner continues the candidate. Diagnostic build session21622 is still
+live in compiler code generation; new-binary C++ tests have not yet run.
+
+### Pixel5 development bias inventory (2026-09-27)
+
+Read all30 completed summaries from the pinned group-safe15-case development
+plan; run argv, completion, summary hashes, no-truth flags, and convergence
+were checked. No truth was loaded or rescored. Every optimized acceleration
+bias maximum is below0.081 m/s2. The largest is0.080705 m/s2 for January04
+highway candidate; the long lax-o pair is0.051883 ->0.053883 m/s2. Thus these
+development cases do not reproduce lax-p's roughly18.5 m/s2 state anomaly.
+Do not interpret the15-case development improvement as validation of that
+failure mode. Evidence: use_cases/records/gsdc2023_pixel5_development_bias_inventory_20260927.json.
+
+### Diagnostic build parser limit corrected (2026-09-27)
+
+Build session21622 ended with exit1 after successfully compiling/linking
+gnss_lib_solvers. MSVC C1061 in the app reported excessive block nesting:
+the added diagnostic else-if crossed the existing long parser chain limit.
+Moved only the new flag to a standalone if/continue beside other standalone
+flags. Rebuild session5807 is running; log
+E:/rtklib_v2_ws_tmp/imu_state_diagnostic_build_retry_20260927.log.
+The original failure log is retained. No new binary has passed validation yet.
+The frozen test queue continues; ebf-xx candidate completed in653.766 s and
+its artifact audit is now running.
+
+### Diagnostic app built; targeted test rebuild underway (2026-09-27)
+
+The parser fix compiled and linked gnss_fgo_imu_no_base successfully.
+Invoking --native-imu-state-diagnostic alone rejects missing Phase171 main
+graph with exit2 and the intended message. The binary is frozen at
+E:/rtklib_v2_ws_output/gsdc_native/binaries/imu_state_diagnostic_20260927.exe,
+SHA2560630b4eb46432f96db589ee7deba2dc17dddc001f7b34581ae27c9fbf2332575.
+This is built but not yet validated for real-data diagnostic use.
+
+The combined build session5807 ended exit1 because gnss_run_tests explicitly
+depends on unrelated native apps, including gnss_pos_vel_pdc.cpp, whose
+unistd.h include fails on Windows. After that build terminated, started
+gnss_run_tests with /p:BuildProjectReferences=false against the already-built
+libraries (session68021, log E:/rtklib_v2_ws_tmp/imu_state_diagnostic_tests_build_20260927.log).
+No unrelated source changes were made to accommodate this build dependency.
+
+Artifact audit6393 passed ebf-xx:12/17 pairs and13 reproduced controls,
+1,382 raw keys, candidate SHA1d7275922bcfbdb355c41224e6e2ab42429700c53997d56e9804c3157847fc0f,
+disagreement P50=0.142640 m, P95=0.665057 m, max=2.793219 m (not accuracy).
+April2023 mtv-pe1 candidate also finished in651.711 s; its audit is pending.
+
+### Pixel5 April2023 mtv-pe1 pair audited; diagnostic launch prepared (2026-09-27)
+
+Audit session99996 passed:13/17 pairs and13 reproduced controls. April2023
+mtv-pe1 has1,357 exact raw keys, candidate SHA256
+0a637e8be755a0bf40085f2e495545bdd315225aff87a396b4c846d640783ed2,
+disagreement P50=0.113798 m, P95=0.262500 m, max=0.311032 m (not accuracy).
+
+Prepared but did not launch E:/rtklib_v2_ws_tmp/launch_laxp_imu_state_diagnostic_20260927.ps1.
+PowerShell syntax parsing passes. It requires a passed diagnostic test record
+and hashed JUnit XML for the frozen binary, finished Pixel5 execution manifest,
+and a free native slot. It replays both lax-p arms sequentially with only the
+diagnostic flag added, in separate directories, auditing exact frozen output
+byte parity and state exports after each arm. Expected test evidence path is
+use_cases/records/gsdc2023_imu_state_diagnostic_tests_20260927.json; this does
+not exist yet because test build session68021 is still running. Modern9 and
+diagnostic jobs must continue respecting the global two-native-process cap.
+
+### Pixel5 April2023 sjc-q control reproduced (2026-09-27)
+
+2023-04-27-20-55-us-ca-sjc-q/pixel5 control completed in590.119 s.
+Artifact audit56491 completed successfully:13/17 pairs and14 controls
+reproducing published solution bytes with exact raw keys and no truth use.
+The frozen runner continues the candidate. Diagnostic test build68021 is
+live in code generation; no new-binary C++ test result exists yet.
+
+### Optimized IMU export synthetic tests passed (2026-09-27)
+
+Targeted test build68021 completed exit0. Ran
+FGOGtsamPhase171NoDopplerImuMainTest.* on the new test binary:2/2 passed,
+zero failures/errors/disabled tests. The handoff test exercises diagnostic
+off/on parity across its valid synthetic branches, checking position and
+attitude components, final cost, iteration count, bias vector finiteness,
+and agreement with existing aggregate bias maxima. The missing/nonfinite
+handoff rejection test also passed. JUnit and source/binary hashes are pinned
+in use_cases/records/gsdc2023_imu_state_diagnostic_tests_20260927.json.
+Real-data trajectory parity and JSON export audit remain pending; the
+prepared lax-p launcher must wait for the frozen Pixel5 queue to finish.
+
+### Partial Pixel5 test bias inventory (2026-09-27)
+
+Read27 completed arms from the frozen17-case test plan, checking run argv,
+completion, summary hashes, convergence, and no-truth flags. Lax-p remains
+the clear outlier:18.493567 /18.625443 m/s2 maximum acceleration bias.
+Ebf-xx is next at0.372469 /0.406264 m/s2; every other completed arm is below
+0.052 m/s2. This inventory is incomplete (27/34 arms), does not evaluate
+accuracy, and does not change route selection or inference settings.
+Evidence: use_cases/records/gsdc2023_pixel5_test_bias_inventory_20260927.json.
+The two-worker queue remains live; no additional native inference was started.
+
+### Pixel5 April2023 sjc-q pair audited (2026-09-27)
+
+Candidate completed in564.946 s. Audit83110 passed:14/17 pairs and14
+reproduced published controls. The sjc-q pair has1,380 exact raw keys,
+candidate SHA25615c314816302fffe31df65a0865da5142e00c231cf8439b15d6412c71068ff6a,
+disagreement P50=0.091300 m, P95=0.210376 m, maximum=0.376642 m.
+These are trajectory differences, not accuracy. The existing queue continues
+unchanged. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+
+### Pixel5 May2023 mtv-de1 control reproduced (2026-09-27)
+
+2023-05-23-21-06-us-ca-mtv-de1/pixel5 control completed in1,114.313 s.
+Artifact audit42306 passed:14/17 pairs and15 reproduced published controls,
+with exact raw keys, converged native solutions, and no truth use. The
+existing two-worker queue continues mtv-de1 candidate and sjc-be2 control.
+No new official submission or additional inference queue was started.
+
+### Pixel5 May2023 sjc-be2 control reproduced (2026-09-27)
+
+2023-05-26-21-23-us-ca-sjc-be2/pixel5 control completed in322.361 s.
+Artifact audit86357 passed:14/17 pairs and16 reproduced published controls,
+with exact raw keys, convergence, and no truth use. The same two-worker
+queue continues mtv-de1 and sjc-be2 candidates. No diagnostic or Modern9
+native inference has started yet; the two slots remain occupied.
+
+### Pixel5 May2023 mtv-de1 and sjc-be2 pairs audited (2026-09-27)
+
+Candidates completed in669.898 and495.249 s respectively. Audit66601 passed:
+16/17 complete pairs and16 reproduced controls. Mtv-de1 has1,975 keys,
+candidate SHA690ec08acada6519046f3fb4b5d64a8d5c7f26ea238653ff2f24792049231328,
+disagreement P50=0.117892 m, P95=0.650861 m, max=0.726472 m. Sjc-be2 has
+1,482 keys, SHA3d6ec5146039ef736f88d927b7a80c01c81e2a7276f427f822702d40a9203e59,
+disagreement P50=0.194857 m, P95=0.588616 m, max=0.626398 m. No test accuracy
+was evaluated. Evidence: use_cases/records/gsdc2023_pixel5_test_progress_20260927.json.
+
+Only last-case June06 sjc-he2 control remains active (PID46372 at observation).
+Although a native slot is free, the frozen Modern9 execution gate explicitly
+requires waiting until the active Pixel5 queue finishes. It was re-read and
+no Modern9 launch occurred. The prepared diagnostic launcher has the same
+finished-Pixel5 precondition. Keep both plans intact.
+
+### Pixel5 June2023 sjc-he2 control reproduced (2026-09-27)
+
+Last-case control completed in816.050 s. Audit50473 passed:all17 published
+controls reproduce their solution bytes, while complete pairs remain16/17.
+Exact raw UTC keys, convergence, and no-truth contracts pass. The existing
+runner advanced to sjc-he2 candidate (PID64924 at observation); it is the
+only remaining native arm. Diagnostic and Modern9 launches still wait for
+the authoritative completed Pixel5 manifest.
+
+### Pixel5 test17 complete and locally assembled; next jobs launched (2026-09-27)
+
+Sjc-he2 (2023-06-06-22-43-us-ca-sjc-he2/pixel5) candidate completed in370.531 s.
+Final audit89858 passes17/17 pairs and all17 reproduced controls. Last case
+has1,608 raw keys, candidate SHA0d10bd10f8fb86f69a6d9cc1279f88fcc2f93614dcec50dce9d565645c9215e3,
+disagreement P50=0.398675 m, P95=3.482897 m, max=3.636268 m (not accuracy).
+Pixel5 execution.done.json confirms native_execution_complete=true for the
+frozen plan. Supervisor67526 finished exit0 after the assembler passed.
+
+Local candidate is E:/rtklib_v2_ws_output/gsdc_native/pixel5_joint_submission_20260927/submission.csv,
+SHA2568faeea3e1bc91e8c6a3ba07617b28ca0f1ad2d0451ef21ef8807f5ee6dc9c245,
+with71936 rows/40 drives,17 replaced and23 retained. Manifest status is
+assembled-locally-not-submitted, all rows native, all controls reproduced,
+no evaluation truth used. Lax-p's350 m disagreement and large bias remain
+unresolved: local assembly is not evidence of accuracy or readiness to submit.
+
+After native Pixel5 execution ended, launched lax-p diagnostic replay with
+the prepared gated script (session37013; control PID65392 at observation),
+then Modern9 frozen three-arm plan with one worker (session33150; runner40552,
+first native PID1396). Modern launcher:
+E:/rtklib_v2_ws_tmp/launch_modern9_test_20260927.ps1. It verifies pinned plan,
+binary, development report/plan, source audit, reference submission, completed
+Pixel5 manifest and capacity. Global native count is two: one diagnostic,
+one Modern9. No submission command was run. Both supervisors perform audits
+after completion; do not restart either from an observation timeout.
+
+### Sjc-he2 disagreement localized without lax-p bias anomaly (2026-09-27)
+
+Read-only audited trajectory diagnostic places all differences above2 m
+in epochs0-201, maximum3.636268 m at epoch30. Maximum adjacent change in the
+disagreement vector is0.330615 m, with exact1 s raw UTC intervals. Raw-P
+initialization bytes match. Both arms converge with zero indeterminate solves;
+maximum acceleration bias is0.019419 ->0.019911 m/s2 and gyro bias remains
+about0.00015 rad/s. TDCP RMS is0.012302 ->0.013963 m; its largest residual is
+at1000->1001, away from the early disagreement. One loader reset is reported
+in both arms, but this does not establish causality or justify changing the
+frozen clock policy. This case does not reproduce lax-p's large bias anomaly.
+No test truth was consumed, accuracy inferred, or per-route selection made.
+Evidence: use_cases/records/gsdc2023_pixel5_test_sjche2_displacement_diagnostic_20260927.json.
+
+### Modern9 first control and clock-only arms audited (2026-09-27)
+
+August31 SM-G988B control completed in164.583 s and reproduces the published
+solution bytes across1,141 exact raw keys. Clock-only completed in156.262 s;
+audited argv differs only by --android-continuous-clock-reference, both
+reset counts are zero, and its solution is byte-identical to control.
+Thus this no-reset test case shows no trajectory change from clock-only.
+The candidate with the additional three recipe flags is next in the frozen
+queue; no accuracy is evaluated. Evidence: use_cases/records/
+gsdc2023_modern9_first_control_audit_20260927.json and
+gsdc2023_modern9_first_clock_only_audit_20260927.json.
+Lax-p diagnostic supervisor37013 remains live; Modern9 supervisor33150 remains live.
+
+### Complete Pixel5 bias inventory and first Modern9 triplet (2026-09-27)
+
+The completed Pixel5 plan now has all34 saved summaries hash-checked in
+use_cases/records/gsdc2023_pixel5_test_bias_inventory_complete_20260927.json.
+Lax-p alone has acceleration bias maxima18.493567/18.625443 m/s2.
+Ebf-xx follows at0.372469/0.406264; all other15 cases remain below0.052.
+This supersedes the earlier27-arm partial inventory without changing it.
+No test truth was loaded and these magnitudes do not measure accuracy.
+
+Modern9 first August31 SM-G988B candidate completed in401.800 s; all three
+arms pass input/argv/binary/raw-key/convergence and recipe-effect audits.
+The control reproduces published solution bytes; clock-only is identical.
+Adding the frozen three recipe flags changes positions by P50=0.236246 m,
+P95=0.483284 m, max=0.606517 m across1141 keys. These are disagreements,
+not accuracy estimates. Evidence: use_cases/records/
+gsdc2023_modern9_first_three_arm_audit_20260927.json.
+Modern9 supervisor33150 continues the remaining eight triplets;
+lax-p diagnostic supervisor37013 continues its control replay. Official
+Private remains1.055 m; target<=0.928 m remains active. No submission.
+
+### Lax-p bias-prior and interval coverage inspection (2026-09-27)
+
+The frozen control summary reports first_imu_bias_priors_inserted=1,
+first_imu_bias_priors_omitted=0, and imu_intervals=4514 for4515 epochs.
+Phase209 separate factors are disabled. Current source constructs a Gaussian
+first bias prior (accel sigma0.1 m/s2) and CombinedImuFactors with accel bias
+random-walk sigma0.00025. The app's initial acceleration bias norm is only
+0.04786 m/s2 (earlier raw replay). Thus an absent first-bias prior is not
+supported by this evidence; the time evolution of the optimized state is
+still required before choosing a fix. Both native supervisors were polled
+live; no diagnostic replay has yet completed and no solver changes were made.
+
+### Modern9 November05 Pixel6Pro control reproduced (2026-09-27)
+
+The second Modern9 case,2021-11-05-18-28-us-ca-mtv-m/pixel6pro,
+completed its control in2873.800 s. Input/argv/binary/provenance and native
+solution audits pass across1446 keys. Solution SHA256
+8b2e5037a262d009667e19fde9101fdd93ec70881170eb5c32d05be0100a1a17
+matches the published source bytes. The legacy loader reports one clock
+discontinuity. Clock-only and candidate outcomes remain pending; the raw
+loader jump diagnostic must not be confused with an optimized accuracy gain.
+Evidence: use_cases/records/gsdc2023_modern9_nov05_control_audit_20260927.json.
+No truth was consumed and no submission was made. Lax-p diagnostic remains
+running under supervisor37013; Modern9 supervisor33150 continues its plan.
+
+### Modern9 November05 Pixel6Pro clock-only audited (2026-09-27)
+
+Clock-only completed in4075.844 s. The audit verifies unchanged inputs,
+frozen argv/binary/plan provenance,1446 raw keys and converged native output.
+Clock discontinuities drop1->0. Control-to-clock-only displacement is
+P50=0.006903 m, P95=0.133501 m, max=0.221190 m; this is not accuracy.
+Control/candidate here refers only to this clock ablation, not the pending
+three-flag candidate. Control iterations166, clock-only255. Initial cost
+changes8.896291806e11->8.091748918e6, final cost13785.988->14459.294;
+TDCP finite residual count24403->24416, so costs are not identical-objective
+comparisons. TDCP RMS0.023736->0.023819 m; max acceleration bias
+0.102333->0.102341 m/s2. No lax-p-scale bias anomaly is present.
+Clock-only solution SHA256c285ee55ee989578adb2915f89b4901b4c26a908d9fc69e8edfe6b6db2bf51e4.
+Evidence: use_cases/records/gsdc2023_modern9_nov05_clock_only_audit_20260927.json.
+The frozen queue proceeds to the additional three recipe flags; lax-p
+state diagnostic remains running. No evaluation truth or submission used.
+
+### Lax-p control state export passes real-data parity (2026-09-27)
+
+The control diagnostic completed in 8169.904 s. The new binary exports
+4515 optimized IMU states and its solution bytes exactly match the frozen
+control. The automated audit checks input/argv/source provenance, raw epoch
+keys, finite state vectors and aggregate bias consistency. Summary SHA256:
+589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae.
+Evidence: use_cases/records/gsdc2023_laxp_imu_state_control_20260927.json.
+The supervisor subsequently started the candidate diagnostic; its parity
+and state comparison remain pending. Modern9 November05 candidate also
+continues, with the two-native-process limit maintained.
+
+Optimized control acceleration bias is already 1.009872 m/s2 at epoch 0
+(distinct from the initial seed norm 0.04786), crosses 5 at epoch 1543 and
+10 at epoch 2441, and peaks at 18.493567 at epoch 4343. The largest adjacent
+bias-vector change is only 0.007760 m/s2. This is an extended state drift,
+not a bias jump first appearing during the final phone reorientation.
+Selected low-speed epochs show roll progressing from 8.18 degrees at 0
+to 87.59 at 3000 and 135.18 at 4000. These are coordinate summaries, not
+rotation distances or independently observed physical attitude.
+
+Read-only raw-IMU checks use +/- 2 s UTC windows and the source's frozen
+RzRyRx mounting rotation; they do not replay native admitted IMU factors.
+At epoch 4000, mean acceleration norm is 9.776 m/s2 and gyro norm P95
+is 0.006104 rad/s. Raw mean specific force differs by 130.85 degrees from
+the gravity direction implied by optimized attitude. The vector discrepancy
+is 17.809 m/s2, but falls to 0.0863 after subtracting the optimized bias.
+Earlier selected quiet windows exhibit the same growing compensation.
+This supports investigating coupled attitude/bias drift; it does not prove
+the underlying solver/initialization cause or establish a remedy.
+Evidence: use_cases/records/gsdc2023_laxp_control_state_evolution_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/analyze_laxp_control_state_evolution_20260927.py.
+No inference settings changed, truth consumed, accuracy claim, or submission.
+
+### Historical lax-p initialization evidence rechecked (2026-09-27)
+
+Rechecked the two completed September23 source-initialization/multipass
+lax-p runs: binary, every recorded output hash, argv against the prior
+experiment record, and all four raw-input hashes against today's diagnostic.
+Their maximum optimized acceleration bias is 0.0543865/0.0543842 m/s2,
+with 4515 per-epoch attitude seeds. They use different composite settings
+and an older executable, so this is evidence for an initialization ablation,
+not isolated causality or a replacement submission route.
+Evidence: use_cases/records/gsdc2023_laxp_historical_initialization_audit_20260927.json.
+
+The existing --native-epoch-heading-attitude-seeds option admits this Pixel5
+recipe and changes attitude initialization/nearest heading filling without
+changing bias initialization or factor/noise settings (lever-arm translation
+seeds follow the selected rotation). After the active control/candidate
+diagnostic pair finishes and passes parity, isolate this option against a
+frozen diagnostic reference. Preserve the two-native-process limit.
+The prior H development experiment was effectively neutral (+0.000100 m),
+and the separate stationary-gyro initializer was also neutral; neither is
+an established general accuracy improvement. Do not tune against H or
+promote a test-route winner. Any useful ablation requires fixed-group
+development transfer before changing the submitted recipe.
+
+### Modern9 November05 Pixel6Pro full triplet audited (2026-09-27)
+
+The candidate completed in 799.638 s. All three arms pass native output,
+input/argv/binary/plan provenance and recipe-effect checks for 1446 keys;
+control reproduces the published solution bytes. Candidate SHA256:
+4be238425d379455c7e66fc72105d5133aecdbfeef253da6df323a70a6dcc3dd.
+Position differences (P50/P95/max metres): clock-only versus control
+0.006903/0.133501/0.221190; recipe versus clock-only
+0.156343/0.417355/0.546482; candidate versus control
+0.161247/0.458990/0.547933. These differences do not measure accuracy.
+Candidate max acceleration bias is 0.104255 m/s2, with no lax-p-scale
+anomaly. Evidence: use_cases/records/gsdc2023_modern9_nov05_three_arm_audit_20260927.json.
+Modern9 now has two completed triplets (6/27 native runs); the supervisor
+advanced to case02 control. Lax-p candidate diagnostic remains live.
+No truth accessed or submission made; official Private remains 1.055 m.
+
+### Heading-only ablation prepared, not started (2026-09-27)
+
+Prepared E:/rtklib_v2_ws_tmp/launch_laxp_heading_seed_ablation_20260927.ps1.
+It requires both current diagnostic arms to complete and pass trajectory
+byte parity, then runs heading-only ablations sequentially against each
+same-binary diagnostic reference. It adds only the existing
+--native-epoch-heading-attitude-seeds flag, retains state export, and refuses
+to launch when two native processes are present or an output already exists.
+It does not use historical multipass solutions as solver input.
+
+scripts/analysis/audit_gsdc_heading_seed_ablation.py verifies exact argument
+delta, binary/input/source hashes, complete raw keys, convergence, diagnostic
+states, unchanged raw initialization bytes, graph/TDCP/stop/height factor
+counts and bias-prior counts. It reports trajectory differences and bias
+evolution without reading truth. Python and PowerShell syntax checks pass;
+real-data ablation validation is pending, not claimed passed. No launcher
+execution or extra native process was started while the current jobs run.
+
+### Modern9 March17 SM-G988B control reproduced (2026-09-27)
+
+Case02, 2022-03-17-20-16-us-ca-sjc-q/sm-g988b, completed its control
+in 312.041 s. The audit verifies frozen plan/argv/binary/input provenance,
+native coverage of all 1172 raw epochs and exact published solution bytes.
+Solution SHA256 d46002dd620e724eb630d2142c54d2cee246cd23101a5e83467f922cfc1aebc6.
+The loader reports zero clock discontinuities. Clock-only is running;
+its result must be checked rather than inferred from this reset count.
+Evidence: use_cases/records/gsdc2023_modern9_mar17_control_audit_20260927.json.
+Modern9 has 7/27 native runs complete. Lax-p candidate diagnostic is still
+live; the heading ablation launcher remains unstarted. No accuracy claim
+or submission follows from this control reproduction.
+
+### Modern9 March17 clock-only reproduces control bytes (2026-09-27)
+
+Case02 clock-only completed in 311.708 s. The frozen argument/input/binary
+and raw-key audits pass; all 1172 output rows are byte-identical to control
+(solution SHA256 d46002dd620e724eb630d2142c54d2cee246cd23101a5e83467f922cfc1aebc6).
+Both arms report zero clock discontinuities, 19 iterations and identical
+costs and TDCP residual statistics. Acceleration bias max is 0.253067 m/s2.
+This establishes no trajectory change for this case, not accuracy improvement.
+Evidence: use_cases/records/gsdc2023_modern9_mar17_clock_only_audit_20260927.json.
+The supervisor proceeds to the additional recipe flags; Modern9 has 8/27
+completed native runs. Lax-p candidate diagnostic remains running.
+
+### Modern9 March17 SM-G988B triplet audited (2026-09-27)
+
+Case02 candidate completed in 428.759 s. All three arms pass pinned
+argv/input/binary/plan, native coverage and recipe-effect audits for 1172
+raw epochs. Candidate SHA256:
+5242e55607789d782cc811b4e84d2782bdf6749500a0df1f01144e2c714bf948.
+Clock-only is byte-identical to control. Additional recipe versus either
+has displacement P50 0.200795 m, P95 0.372750 m, max 0.470681 m.
+These are trajectory differences, not accuracy measurements.
+Evidence: use_cases/records/gsdc2023_modern9_mar17_three_arm_audit_20260927.json.
+The fixed queue has now completed 3/9 triplets (9/27 runs) and started
+case03 control. Lax-p candidate diagnostic is still live. No submission.
+
+### Modern9 May02 Pixel7Pro control reproduced (2026-09-27)
+
+Case03, 2023-05-02-19-24-us-ca-sjc-we1/pixel7pro, completed its control
+in 3525.351 s. Frozen plan/argv/binary/input provenance and native coverage
+audits pass for all 2110 raw epochs. Solution bytes reproduce the published
+source, SHA256 c011b806b646a71cf3a8221b50e19a88281d7308b28c5538c076a3d2f6357131.
+The loader reports zero clock discontinuities. Clock-only has started;
+its optimized result remains pending. Evidence:
+use_cases/records/gsdc2023_modern9_may02_control_audit_20260927.json.
+Modern9 has 10/27 completed runs. Lax-p candidate diagnostic remains live
+under supervisor37013; heading ablation is still unstarted. No truth used,
+accuracy evaluated, or official submission made.
+
+### Lax-p candidate state export completed; heading admission corrected (2026-09-27)
+
+Diagnostic candidate completed in 5033.516 s and passed trajectory byte
+parity with the frozen candidate. All 4515 state rows pass provenance,
+keys, finite-value and aggregate consistency checks. Acceleration bias norm
+starts at 0.937704, crosses 5 at epoch1556 and 10 at epoch2422, and peaks
+at 18.625443 at epoch4321. Thus both arms exhibit long-duration bias drift.
+Evidence: use_cases/records/gsdc2023_laxp_imu_state_candidate_20260927.json.
+Diagnostic supervisor37013 is terminal with exit0; do not poll or restart it.
+
+The prepared heading launcher was attempted after that completion, but
+exited2 before inference: sparse-P staging separately rejected epoch heading
+seeds. Earlier notes claiming this full combination was admitted were
+incomplete. Preserve the failed output under laxp_heading_seed_ablation_20260927;
+do not rerun that old launcher. Source review shows sparse staging preserves
+epoch identities/admits sparse GNSS initialization, whereas heading seeds
+are disabled in GNSS-first and applied only to the IMU initialization.
+Removed only this CLI conflict; the raw/all-epoch/Phase171 and Pixel5 heading
+guards remain. No solver factors or initialization implementation changed.
+
+New frozen binary heading_sparse_admission_20260927.exe SHA256:
+533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53.
+Release app build succeeded. Seven CLI tests pass, including reaching
+missing-input ingress for the combination and rejecting non-all-epoch input.
+Pytest plugin autoload was disabled after unrelated xonsh console failure;
+the negative test was corrected to assert the earlier Phase171 guard.
+Evidence: use_cases/records/gsdc2023_heading_sparse_admission_build_20260927.json.
+
+Started supervisor84907: new-binary control-only replay from the completed
+diagnostic control, output laxp_heading_sparse_admission_20260927/control_baseline/control.
+Require byte parity against the diagnostic control before running heading
+from this new reference. The later heading run must use the same new binary
+and source-run hash chain; existing heading ablation auditor then applies.
+The candidate recipe requires its own same-binary baseline subsequently.
+Modern9 clock-only remains live under33150, using its original frozen binary;
+the two-native-process limit is preserved. No truth or submission used.
+
+### Lax-p exported state pair compared (2026-09-27)
+
+Both completed exports were rechecked for raw input/binary hashes, exact
+three-recipe-flag difference, complete 4515 keys, diagnostic byte-parity
+evidence and state consistency. Both arms show similar growing acceleration
+bias well before the final reorientation: epoch2441..4249 median bias norm
+15.126/15.395 m/s2. Additional recipe flags do not remove the anomaly.
+The maximum absolute optimized vertical velocity is 99.075/94.719 m/s at
+the final epoch4514. These are optimized-state diagnostics, not measured
+vehicle velocities or truth errors. Evidence:
+use_cases/records/gsdc2023_laxp_imu_state_pair_20260927.json.
+The new-binary baseline replay remains live under84907; the original
+Modern9 supervisor33150 continues May02 clock-only. No extra native job,
+new inference setting, or official submission was introduced by this audit.
+
+### Baseline replay audit prepared (2026-09-27)
+
+Added scripts/analysis/audit_gsdc_imu_baseline_replay.py for the pending
+new-binary replay. It checks source-run chaining, binary/input/output hashes,
+identical inference arguments, native epoch coverage, byte-identical trajectory
+and raw initialization, and exact exported IMU states with aggregate validation.
+Python syntax check passed; the real replay audit is pending completion.
+Both supervisors remain live:84907 baseline PID21492 and33150 May02
+clock-only PID60960. Latest CPU samples increased to941.344/1303.359 seconds;
+neither run is complete. Do not launch a third native process or reuse the
+failed old heading launcher. Official Private remains1.055 m; goal active.
+
+### Gated heading continuation started (2026-09-27)
+
+Prepared and syntax-checked E:/rtklib_v2_ws_tmp/continue_laxp_heading_sparse_20260927.ps1.
+Supervisor26254 is live, waiting for the existing control baseline process;
+it does not start another native process while that baseline is running.
+Its current stage is stored in laxp_heading_sparse_admission_20260927/continuation.json.
+It verifies both original diagnostic audits, frozen binary and source chain,
+then requires the new baseline replay audit before starting control heading.
+Only after that heading audit passes does it run the candidate recipe's new
+baseline, require its parity, and run/audit candidate heading. All outputs
+use fresh folders control_heading, candidate_baseline, candidate_heading.
+The maximum remains two native jobs, including Modern9. A persistent
+exclusive creation lock prevents duplicate launch; failures stop without
+retry. Do not manually launch these followups while26254 remains active.
+Existing84907 and33150 remain live; no inference results or official scores
+have changed yet. This is scheduling of the already planned paired ablation,
+not automatic submission or candidate promotion.
+
+### May02 Pixel7Pro clock-only completed (2026-09-27)
+
+Modern9 case03 clock_only completed in3606.209 seconds, return0. Audited
+exact frozen argv/plan/binary/input hashes, all2110 native keys, convergence,
+and published-control provenance. The clock-only solution is byte-identical
+to control/published output (SHA256 c011b806b646a71cf3a8221b50e19a88281d7308b28c5538c076a3d2f6357131).
+Both arms have zero clock discontinuities,150 iterations and identical
+costs/TDCP residuals/bias aggregates. Displacement is zero; this verifies
+neutrality on this case, not test accuracy. Clock-only summary SHA256:
+e358e99d8ba77ab98bffca4c32cb70671d8d47ced78ebb734f8c3d3d5471d535.
+Evidence: use_cases/records/gsdc2023_modern9_may02_clock_only_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may02_clock_only_20260927.py.
+Modern9 now has11/27 native runs complete; case03 candidate is running
+under the original supervisor33150, new native PID45876. Previous clock-only
+PID60960 is terminal. Lax-p baseline21492/84907 and gated continuation26254
+remain live. No additional native job or official submission was started.
+
+### May02 sjc-we1 Pixel7Pro three-arm comparison completed (2026-09-27)
+
+Case03 candidate completed in1022.468 seconds, return0. All three arms
+pass frozen plan/argv/binary/input provenance, native2110-key coverage,
+convergence and published-control byte-parity checks. The three candidate
+recipe effects were verified in the summaries. Clock-only remains identical
+to control; candidate displacement from either is P50=0.172486 m,
+P95=0.403508 m,max=0.710477 m. These are trajectory differences, not truth
+errors or evidence of improved test accuracy. Candidate solution SHA256:
+6758a1ba1ace089226aabc4bf1c65fdb2af3a0c1b25aec6567738ee97c198780;
+summary SHA256 c4d65da37ceb762a49147fbabcc8760aaebc0ce54e799bdb821afcbb3ff6c266.
+Evidence: use_cases/records/gsdc2023_modern9_may02_three_arm_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may02_three_arm_20260927.py.
+Modern9 now has12/27 native runs complete (four complete triplets).
+Supervisor33150 advanced to case04 control:
+2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro, native PID56000.
+Case03 candidate PID45876 is terminal. Lax-p baseline21492/84907 and
+continuation26254 remain live. No truth evaluation or official submission.
+
+### May02 mtv-xe1 Pixel7Pro control reproduced (2026-09-27)
+
+Modern9 case04 control completed in946.889 seconds, return0. Audited frozen
+plan/argv/binary/input hashes, native2145-key coverage and convergence, and
+byte-identical published trajectory. Solution SHA256:
+be26652733f3e13b35e8d93406b5633bf4a9c4526b8330c7c9fdd28d9fc6706c;
+summary SHA256 c1c9ee51f0c8cb7c76a325830e95492c78c3f4422f44baa4b02ace4417afa9c7.
+Control has zero raw clock discontinuities. Evidence:
+use_cases/records/gsdc2023_modern9_may02_mtv_control_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may02_mtv_control_20260927.py.
+Modern9 now has13/27 native runs complete. Supervisor33150 is running
+case04 clock_only, native PID12808; previous control PID56000 is terminal.
+Lax-p baseline21492/84907 and continuation26254 remain live. No truth
+evaluation, candidate promotion or official submission was performed.
+
+### May02 mtv-xe1 Pixel7Pro clock-only reproduced (2026-09-27)
+
+Case04 clock_only completed in953.011 seconds, return0. The paired audit
+passes frozen plan/argv/binary/input hashes, native2145-key coverage,
+convergence and published-control provenance. Clock-only is byte-identical
+to control (solution SHA256 be26652733f3e13b35e8d93406b5633bf4a9c4526b8330c7c9fdd28d9fc6706c).
+Both arms have zero clock discontinuities,39 iterations and identical
+cost/residual/bias aggregates. Clock-only summary SHA256:
+1ee018be7ea987f061df50680f1eca942433ae2caca69cb0b1cd84ea1fd680c3.
+Evidence: use_cases/records/gsdc2023_modern9_may02_mtv_clock_only_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may02_mtv_clock_only_20260927.py.
+Modern9 now has14/27 native runs complete. Supervisor33150 advanced to
+case04 candidate, native PID55216; clock-only PID12808 is terminal.
+Lax-p baseline21492/84907 and continuation26254 remain live. This proves
+trajectory neutrality for this case, not test accuracy. No official submission.
+
+### May02 mtv-xe1 Pixel7Pro three-arm comparison completed (2026-09-27)
+
+Case04 candidate completed in1071.473 seconds, return0. All three arms pass
+frozen plan/argv/binary/input provenance, native2145-key coverage,
+convergence and published-control byte-parity checks. The requested recipe
+effects were verified. Clock-only remains identical to control; candidate
+displacement from either is P50=0.223901 m,P95=0.381069 m,max=0.480045 m.
+These are trajectory differences, not truth errors. Candidate solution SHA256:
+1f54be74ddc79d1738ac907650014cc73a7a67944168218b01b4f75d34d40105;
+summary SHA256 d5bd8cfb4b30c30e29b0eccd0c684aee6f0e26292aaa34d4a573d83142652000.
+Evidence: use_cases/records/gsdc2023_modern9_may02_mtv_three_arm_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may02_mtv_three_arm_20260927.py.
+Modern9 now has15/27 native runs complete (five complete triplets).
+Supervisor33150 advanced to case05 control:
+2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro, native PID39344.
+Case04 candidate PID55216 is terminal. Lax-p baseline21492/84907 and
+continuation26254 remain live. No truth evaluation or official submission.
+
+### May23 Pixel6Pro control reproduced (2026-09-27)
+
+Modern9 case05 control completed in278.128 seconds, return0. Audited frozen
+plan/argv/binary/input hashes, native1020-key coverage, convergence and
+byte-identical published trajectory. Solution SHA256:
+913debe206e43939251e0a1cf2a06505d066226de0c795cd15a904dc5834a370;
+summary SHA256 d28a7aca3e1e4ebc8ac15f8e0b93aec82025996ddca6f9ea708aacd0f53d262d.
+Control has zero raw clock discontinuities. Evidence:
+use_cases/records/gsdc2023_modern9_may23_control_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may23_control_20260927.py.
+Modern9 now has16/27 native runs complete. Supervisor33150 is running
+case05 clock_only, native PID29180; previous control PID39344 is terminal.
+Lax-p baseline21492/84907 and continuation26254 remain live. No truth
+evaluation, candidate promotion or official submission was performed.
+
+### May23 Pixel6Pro clock-only reproduced (2026-09-27)
+
+Case05 clock_only completed in281.243 seconds, return0. The paired audit
+passes frozen plan/argv/binary/input hashes, native1020-key coverage,
+convergence and published-control provenance. Clock-only is byte-identical
+to control (solution SHA256 913debe206e43939251e0a1cf2a06505d066226de0c795cd15a904dc5834a370).
+Both arms have zero clock discontinuities,17 iterations and identical
+cost/residual/bias aggregates. Clock-only summary SHA256:
+c1be6d655bc1fac6af1a66da8f4dc57f1a23cbeac99ba1c6ac62850cbd96f9f9.
+Evidence: use_cases/records/gsdc2023_modern9_may23_clock_only_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may23_clock_only_20260927.py.
+Modern9 now has17/27 native runs complete. Supervisor33150 advanced to
+case05 candidate, native PID24156; clock-only PID29180 is terminal.
+Lax-p baseline21492/84907 and continuation26254 remain live. This proves
+trajectory neutrality for this case, not test accuracy. No official submission.
+
+### May23 Pixel6Pro three-arm comparison completed (2026-09-27)
+
+Case05 candidate completed in505.523 seconds, return0. All three arms pass
+frozen plan/argv/binary/input provenance, native1020-key coverage,
+convergence and published-control byte-parity checks. Recipe effects pass.
+Clock-only remains identical to control; candidate displacement from either
+is P50=0.174751 m,P95=0.326762 m,max=0.409326 m. These are trajectory
+differences, not truth errors. Candidate solution SHA256:
+8bd4d93d62472c5e7c3ea80f82a476d57524a0e5868d13baaf6d478e58cfd354;
+summary SHA256 3a4c1feb93ae96e054d0d1406e1951b7d302ba26012dfa9199cb20b6602c1ca3.
+Evidence: use_cases/records/gsdc2023_modern9_may23_three_arm_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may23_three_arm_20260927.py.
+Modern9 now has18/27 native runs complete (six complete triplets).
+Supervisor33150 advanced to case06 control:
+2023-05-25-17-32-us-ca-pao-j/pixel6pro, native PID43312.
+Case05 candidate PID24156 is terminal. Lax-p baseline21492/84907 and
+continuation26254 remain live. No truth evaluation or official submission.
+
+### Lax-p new-binary control replay passed exact parity (2026-09-27)
+
+The heading-admission binary control replay completed in9236.265 seconds,
+return0. The baseline auditor verified all4515 native keys, frozen input
+and source provenance, trajectory byte parity, raw-initialization byte
+parity and exact equality of every exported optimized IMU state against
+the original diagnostic control. Both summary hashes are identical:
+589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae.
+Replay run SHA256:
+eabc04c69c5200b30227c3d77fbcac3ebd8e1b14bce5391fa2168c96343ae97f.
+Solution SHA256:
+1dc1773eee36296944a163c634dc06f54aba188effc88f9be8bec7a4a7be4bf8.
+Evidence: use_cases/records/gsdc2023_laxp_heading_baseline_control_20260927.json;
+auditor: scripts/analysis/audit_gsdc_imu_baseline_replay.py.
+The CLI admission change is therefore neutral for this control replay;
+the candidate baseline replay remains pending. Original large optimized
+acceleration-bias drift is reproduced, not fixed by the admission change.
+Continuation26254 passed this gate and started control_heading/heading,
+native PID44440, adding only --native-epoch-heading-attitude-seeds to the
+new baseline argv. Existing baseline84907/PID21492 is terminal0 and must
+not be polled/restarted. Modern9 remains18/27 complete, case06 control
+PID43312 live. No accuracy claim or official submission.
+
+### May25 Pixel6Pro control reproduced (2026-09-27)
+
+Modern9 case06 control completed in1644.900 seconds, return0. The audit
+passes frozen plan/argv/binary/input hashes, native1292-key coverage,
+convergence and byte-identical published trajectory. Solution SHA256:
+cc67e73e774b3609afd096ad36cd3422d7a62722b1ba80969038c206dc091757;
+summary SHA256 2f40776faa99276c2e74f67e5b17356f8fc3418d1ca3c9a0bfe9edc424dc5d9e.
+Control has zero raw clock discontinuities. Evidence:
+use_cases/records/gsdc2023_modern9_may25_control_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may25_control_20260927.py.
+Modern9 now has19/27 native runs complete. Supervisor33150 advanced to
+case06 clock_only, native PID58236; previous control PID43312 is terminal.
+Lax-p control-heading PID44440/continuation26254 remains live.
+No truth evaluation, candidate promotion or official submission.
+
+### Lax-p control heading ablation removes large optimized bias drift (2026-09-27)
+
+Control-heading completed in1204.135 seconds, return0, with4515 native keys.
+The one-option audit passes identical binary/inputs, exact baseline argv
+plus --native-epoch-heading-attitude-seeds, raw-initialization byte parity,
+convergence and invariant factor counts/noise. Graph222438 factors,
+stop velocity1608, stop pose1555, TDCP80373 with sigma0.03, one first bias
+prior, no height factors. This option changes attitude/lever-arm seeds and
+low-speed heading fill; no zero-bias initialization was enabled.
+Optimized acceleration-bias maximum18.493567 -> 0.053551 m/s2; all heading
+states are below0.1 m/s2. Last bias18.077615 -> 0.032515 m/s2.
+Optimized gyro-bias maximum0.003431428 -> 0.000469876 rad/s.
+Trajectory displacement P50=0.293697 m,P95=8.842109 m,max=292.052068 m.
+These are changes from an anomalous baseline, not measured accuracy.
+Additional audited state inspection shows max absolute optimized vertical
+velocity99.074619 -> 0.815822 m/s and horizontal maximum54.984264 ->
+20.782192 m/s. These are optimizer states, not measured physical velocity.
+Heading solution SHA256:
+4137e61b89de201fe21a555a6152edc3823ef95830577282d6a3affe64ce257d;
+summary SHA256 437ce05492a76432ba88cbd4b8acceb87a5af1fcb0b77551fc0c0bf5c1b897a5;
+run SHA256 a2d5783a6944e2cb2f0fb4508c897d69301932d243af99b68004d85d1ab4c111.
+Evidence: use_cases/records/gsdc2023_laxp_heading_seed_control_20260927.json
+and gsdc2023_laxp_control_heading_velocity_20260927.json.
+Velocity reproducer: E:/rtklib_v2_ws_tmp/analyze_laxp_control_heading_states_20260927.py.
+This supports initialization sensitivity as a cause of the large optimized
+state drift. It does not yet prove candidate-pair stability or test accuracy.
+Continuation26254 advanced to candidate_baseline/control, native PID59840,
+source run SHA256 f542e21a047c2e2ba5cc32fc44d48ae39ca034fec7f6b4cd3d6a99ff1c030d56.
+Previous heading PID44440 is terminal. Modern9 clock-only PID58236 remains
+live,19/27 complete. No route-selected promotion or official submission.
+
+### Fixed Pixel5 heading development comparison prepared (2026-09-27)
+
+Prepared all15 previously exposed Pixel5 development cases from the audited
+height-group-safe candidate recipe. No route filtering or winner selection.
+Plan: E:/rtklib_v2_ws_output/gsdc_native/pixel5_heading_development_20260927/plan.json
+SHA256 669ca34e677db460f44f2652946bdfd560787a28881000e1295f0d890ff65586.
+The30 planned native runs use the frozen heading-admission binary. Control
+replays the prior candidate recipe plus report-only IMU export; candidate
+adds only epoch-heading seeds. Each old candidate source was audited and
+pinned for later trajectory parity. Height-map group exclusions, input
+hashes and maps are preserved. Source zero-bias initialization is absent
+in every argv and original summary. This is exposed development, not heldout.
+Preparation script: scripts/analysis/prepare_gsdc_pixel5_heading_development.py;
+record: use_cases/records/gsdc2023_pixel5_heading_development_plan_20260927.json.
+Not launched: existing Modern9 and lax-p jobs occupy both native slots.
+Before launch, provide a development heading auditor for runner plan-hash
+provenance (the lax-p auditor expects direct baseline-run provenance),
+then require source parity, heading telemetry/invariants and whole-set
+truth scoring separately after inference. No candidate selection or submission.
+
+### Pixel5 heading development auditor verified (2026-09-27)
+
+Added scripts/analysis/audit_gsdc_pixel5_heading_development.py for the
+runner's plan-hash provenance. It requires all15 completed native pairs,
+parent-plan/source hashes, unchanged maps and evaluation-group exclusions,
+exact old-candidate control trajectory parity, same-binary heading-only
+argv changes, raw initialization parity, heading telemetry, factor/noise
+invariants and finite exported IMU states. Only after all native audits
+pass does it open pinned development truth and aggregate every case.
+Seven checks pass: the completed real lax-p control-heading contract;
+rejection of missing heading request/seed, changed sigma/factor count,
+zero-bias initialization and an unstarted experiment before truth access.
+Auditor SHA256 01b56eccfc5f0756e115d7b8b1bbf2063e4f937b3b254445a7ec46a8430de9fa.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_auditor_tests_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/test_pixel5_heading_development_audit_20260927.py.
+The full15-case development audit/scoring remains unrun pending inference.
+No extra native job was launched; Modern9 and lax-p candidate baseline
+remain live. Next: verify the development truth-root paths, then queue
+one-worker execution after an existing native slot is released.
+
+### Fixed15 heading development queued behind Modern9 (2026-09-27)
+
+Verified all15 scoring-only truth files under
+E:/rtklib_v2_ws_data/gsdc2023/scoring/train against the frozen plan hashes.
+These scoring paths are separate from the frozen inference arguments; no
+truth coordinates were loaded for inference. Launched a gated continuation, session51207, waiting
+on the existing Modern9 launcher PID3008 (command identity checked).
+Launcher: E:/rtklib_v2_ws_tmp/launch_pixel5_heading_development_20260927.ps1
+SHA256 e67a2b483a71293ad6fefa443eaf585d2507ac6f57f61e0db78e37bc065d1a33.
+PowerShell syntax validation passed. Exclusive creation lock prevents
+relaunch. The continuation pins plan, binary, parent evidence, runner and
+auditor; it requires Modern9 execution completion and full27-arm audit,
+then checks fewer than2 native processes before starting one worker.
+It runs30 fixed development inferences and only afterward invokes the
+heading-specific auditor/scorer. It fails without automatic retry and
+contains no assembly, selection or submission action.
+Current stage waiting-modern9-launcher; no additional native process yet.
+Do not manually launch this plan or duplicate session51207.
+
+### May25 Pixel6Pro clock-only reproduced (2026-09-27)
+
+Case06 clock_only completed in1406.931 seconds, return0. The paired audit
+passes frozen plan/argv/binary/input hashes, native1292-key coverage,
+convergence and published-control provenance. Clock-only is byte-identical
+to control (solution SHA256 cc67e73e774b3609afd096ad36cd3422d7a62722b1ba80969038c206dc091757).
+Both arms have zero clock discontinuities,69 iterations and identical
+cost/residual/bias aggregates. Clock-only summary SHA256:
+31d89bdbbb2605f164fa16d946341fa353d5b40af95adf028b00c4e27382f090.
+Evidence: use_cases/records/gsdc2023_modern9_may25_clock_only_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may25_clock_only_20260927.py.
+Modern9 now has20/27 native runs complete. Supervisor33150 advanced to
+case06 candidate, native PID23520; clock-only PID58236 is terminal.
+Lax-p candidate-baseline PID59840/continuation26254 remains live.
+Fixed15 development continuation51207 remains waiting for Modern9.
+This establishes trajectory neutrality for this case, not accuracy.
+No candidate promotion or official submission.
+
+### May25 Pixel6Pro three-arm comparison completed (2026-09-27)
+
+Case06 candidate completed in467.315 seconds, return0. All three arms pass
+frozen plan/argv/binary/input provenance, native1292-key coverage,
+convergence and published-control byte-parity checks. Recipe effects pass.
+Clock-only remains identical to control; candidate displacement from either
+is P50=0.285395 m,P95=0.634017 m,max=0.836197 m. These are trajectory
+differences, not truth errors. Candidate solution SHA256:
+b67a972296138a7d92b0a9d1d504df33501de980df7e286540fa0071af321dcd;
+summary SHA256 6e74c7a5642aa8416bcd4ca7bc1363aec983c27daf741a5186b10a4120e36a88.
+Evidence: use_cases/records/gsdc2023_modern9_may25_three_arm_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may25_three_arm_20260927.py.
+Modern9 now has21/27 native runs complete (seven complete triplets).
+Supervisor33150 advanced to case07 control:
+2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b, native PID63980.
+Case06 candidate PID23520 is terminal. Lax-p candidate baseline59840 and
+continuations26254/51207 remain live. No official submission.
+
+### May25 SM-S908B control reproduced (2026-09-27)
+
+Modern9 case07 control completed in1719.230 seconds, return0. The audit
+passes frozen plan/argv/binary/input hashes, native1728-key coverage,
+convergence and byte-identical published trajectory. Solution SHA256:
+a7ed0de0e336d34b955eff3037a3ea78b75ba65d5d16608b18cb2f7a56272fd5;
+summary SHA256 bb5de09ca33ca562f5b06ba7f3d8fb8d53f8ea6db08e1e96b0afd7a2f779d1e4.
+Control has zero raw clock discontinuities. Evidence:
+use_cases/records/gsdc2023_modern9_may25_samsung_control_audit_20260927.json;
+reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may25_samsung_control_20260927.py.
+Modern9 now has22/27 native runs complete. Supervisor33150 advanced to
+case07 clock_only, native PID22268; previous control PID63980 is terminal.
+Lax-p candidate-baseline PID59840/continuation26254 remains live.
+Fixed15 development continuation51207 remains waiting for Modern9.
+No accuracy claim, candidate promotion or official submission.
+
+### Lax-p candidate baseline replay passed exact parity (2026-09-27)
+
+Candidate baseline completed in4016.327 seconds, return0. All4515 native
+keys, frozen inputs/source provenance, trajectory bytes, raw initialization
+bytes and every optimized IMU state match the original diagnostic candidate.
+Both summaries have SHA256:
+0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88.
+Replay run SHA256:
+f6efda0ba37ce89b0da79b6cd2e2ec6e1edaa73ad841c454494a4b4174ac475c.
+Solution SHA256:
+fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17.
+Evidence: use_cases/records/gsdc2023_laxp_heading_baseline_candidate_20260927.json.
+Both baseline replay audits now pass; output hashes were rechecked and
+linked in gsdc2023_heading_sparse_admission_real_parity_20260927.json.
+This completes the CLI admission change's two-arm lax-p parity evidence,
+not accuracy validation. Candidate acceleration-bias maximum18.625443 m/s2
+is reproduced. Continuation26254 advanced to candidate_heading/heading,
+native PID21596, adding only the heading option. Candidate baseline
+PID59840 is terminal. Modern9 clock-only PID22268 and fixed15 waiting
+continuation51207 remain live;22/27 Modern9 runs complete. No submission.
+
+### May25 SM-S908B clock-only parity verified (2026-09-27)
+
+Case07 clock_only completed in1665.106 seconds, return0. Frozen plan,
+binary/input/source provenance, native1728-key coverage and convergence
+audit pass. Its solution is byte-identical to control (SHA256
+a7ed0de0e336d34b955eff3037a3ea78b75ba65d5d16608b18cb2f7a56272fd5),
+with zero clock discontinuities in both arms. Summary SHA256:
+0ca615d2ecd6b1e552c6df89ee19677b6e08320bc5de09731b45d789d3bf7a1b.
+Evidence: use_cases/records/gsdc2023_modern9_may25_samsung_clock_only_audit_20260927.json.
+Modern9 now has23/27 runs complete; supervisor33150 advanced to case07
+candidate. Clock-only PID22268 is terminal. Lax-p candidate-heading
+PID21596 remains live; fixed15 supervisor51207 still awaits Modern9.
+Prepared case08 Jun15 Pixel7Pro partial-audit reproducers in the temp folder.
+
+Added scripts/analysis/audit_gsdc_heading_recipe_quartet.py to audit both
+heading ablations and compare the recipe pair before/after heading seeds.
+Syntax and the exact three-flag recipe argv delta pass on recorded runs.
+The complete quartet audit is pending candidate-heading completion; it
+reports trajectory displacement and optimized velocities without truth.
+No accuracy claim, promotion or official submission. Official Private
+remains1.055 m; the0.928 m goal remains active.
+
+### Quartet audit queued behind live heading supervisor (2026-09-27)
+
+The new quartet auditor correctly rejects the currently incomplete
+candidate-heading run with `run incomplete`, without writing a result.
+Auditor SHA256 e4800497408d2682a2b937043965038856239fffdb15179c5965149e97b964c5.
+Queued audit-only launcher
+E:/rtklib_v2_ws_tmp/audit_laxp_quartet_after_heading_20260927.ps1
+is live under session39816, waiting for verified-live supervisor65412.
+It requires complete-both-heading-pairs-audited, verifies the auditor hash,
+and uses an exclusive CreateNew lock before writing
+use_cases/records/gsdc2023_laxp_heading_recipe_quartet_20260927.json.
+No native inference, retry, scoring-truth read or submission is added.
+Native jobs51392 (Modern9 case07 candidate) and21596 (lax-p heading)
+remain active; fixed15 supervisor51207 is waiting for Modern9 completion.
+
+### Lax-p heading quartet complete; fixed15 development started (2026-09-27)
+
+Candidate-heading completed in1643.786 seconds, return0. Both heading
+ablations and the four-run recipe comparison pass native4515-key coverage,
+convergence, identical input/binary checks and exact recipe argv checks.
+Candidate heading solution SHA256:
+cdee067b0527607041bc9a0b5e07f0d2f611500d874cde56d194d4ed1864e5fb;
+summary fc0a4f302cb81db83578b16cb7e24eb6cc8310bb2d404c58b5fc7a1fa0f9db51.
+Candidate acceleration-bias maximum18.625443 becomes0.055132 m/s2;
+absolute optimized vertical velocity maximum94.718965 becomes0.842726 m/s.
+Control-versus-candidate displacement before/after heading in both arms:
+P50 0.529192 ->0.328019 m, P95 6.258649 ->0.732266 m,
+maximum350.199980 ->0.971174 m. These are trajectory differences and
+optimized states, not truth errors or physical velocity measurements.
+This supports initialization sensitivity as the cause of the large
+recipe-dependent discrepancy; it does not establish test accuracy.
+Records: gsdc2023_laxp_heading_seed_candidate_20260927.json and
+gsdc2023_laxp_heading_recipe_quartet_20260927.json under use_cases/records.
+Quartet record SHA256 f87b1c1450db561fb2234afa7fff29c9432e5b5a396863a75824afc06785bf5c.
+Sessions26254 and39816 exited0; native21596 is terminal.
+
+One inference slot became free. Replaced only the verified unstarted
+fixed15 waiting supervisor62576 (session51207, intentional exit-1) to avoid
+waiting on unrelated Modern9 completion. execution.started.json was absent
+before and after stopping that queue; its original state is preserved in
+continuation_original_wait_preserved.json. Original launcher/lock preserved.
+New launcher E:/rtklib_v2_ws_tmp/launch_pixel5_heading_development_after_laxp_20260927.ps1
+SHA256 5e67ec3622294cfc9c1ff2e6bc52948bd56496580350e6d4494a4a4843747161
+requires completed lax-p audits, pinned quartet record, terminated old queue,
+unchanged plan/binary/runner/auditor/parent hashes and fewer than2 native jobs.
+The same fixed15 plan now runs under session65602, supervisor39092,
+first native35688. Modern9 case07 candidate51392 remains live,23/27 complete.
+Only scheduling changed; no case/recipe selection, new truth input,
+promotion or submission. Official Private remains1.055 m and goal active.
+
+### May25 SM-S908B three-arm comparison completed (2026-09-27)
+
+Case07 candidate completed in1457.944 seconds, return0. All three arms
+pass frozen plan/argv/binary/input/source checks, native1728-key coverage,
+convergence and published-control byte parity. Clock-only equals control;
+candidate displacement from either is P50=0.143700 m,P95=0.258259 m,
+maximum=0.323285 m. Recipe-effect checks pass. These are trajectory
+differences, not truth errors. Candidate solution SHA256:
+b990413fcd31afb130d7881c981eff8de930bbc8f9d8b3082d3cd8629cfff79a;
+summary d6a342e532417dfa5d8e918d8f0306bfe517320e619791dfe313cad9b3410ff1.
+Evidence: use_cases/records/gsdc2023_modern9_may25_samsung_three_arm_audit_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_may25_samsung_three_arm_20260927.py.
+Modern9 has24/27 runs complete (eight full triplets). Supervisor33150
+advanced to final case08 control:2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro.
+Case07 native51392 is terminal. Fixed15 development supervisor65602
+and first native35688 remain live. No promotion or official submission.
+
+### Fixed15 heading development first control reproduced (2026-09-27)
+
+First case2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5 control
+completed in595.489 seconds, return0. Partial audit verifies frozen
+plan/binary/parent hashes, input/map group independence, exact source argv
+plus diagnostic option, convergence, native2002-key coverage and byte-equal
+source trajectory. Solution SHA256:
+858e4ef703489c87a80b93ac35d99c371182b89ade2e1475d0c9eb2fa3df8864;
+summary7bb82bafb8d5915c90309a332b6c07c720a64c1fe2e8f1abec5d6b3b3653b082.
+All optimized acceleration biases below0.1 m/s2; maximum0.0807046.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_first_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_first_control_20260927.py.
+Fixed15 supervisor65602 now runs the first heading candidate, native13308;
+native35688 is terminal.1/30 development runs complete. Modern9 final
+case08 control21600 remains live,24/27 complete. No partial truth scoring
+or recipe selection; full15 scoring awaits all native audits. No submission.
+
+### First heading development pair passed native audit (2026-09-27)
+
+Case00 heading candidate completed in679.573 seconds, return0. The pair
+passes frozen plan/parent/binary/input/map provenance, source-control byte
+parity, native2002-key coverage, convergence, exact one-option heading
+delta, all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization remains byte-identical (SHA256
+b450d8867430f9efac58e6999fea861f0b0d0761c1660b8350da597545a307aa).
+Trajectory displacement P50=0.000201895 m,P95=0.000840728 m,
+maximum=0.002869090 m; this is not a truth error. Acceleration-bias
+maximum remains approximately0.080705 m/s2 in both arms.
+Candidate solution SHA256:
+9ec3d142282fe49eead9fecf72494e24ee03dac848b1b37e3f095cebddeed6a7;
+summary e891971d674479b2a1cc5177f0453ca5146d061aee13e6d8f4bdb2db6a98ce40.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_first_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_first_pair_20260927.py.
+Fixed15 has2/30 runs complete; supervisor65602 advanced to case01 control,
+native9508. Case00 candidate13308 is terminal. Modern9 final control21600
+remains live,24/27 complete. Full15 scoring pending; no submission.
+
+### Jun15 Pixel7Pro control reproduced (2026-09-27)
+
+Modern9 final case08 control completed in941.120 seconds, return0. Audit
+passes frozen plan/argv/binary/input/source checks, native1495-key coverage,
+convergence and byte-identical published-control trajectory. Solution SHA256:
+c1bfeb93c3f085b78125fc4eba2fa9f01f4643f97e430b2dbd63ecd7826d237a;
+summary60380290fdd70119ce0a310b691f0148c62052dd055f7d13241c72e2e8401146.
+Zero raw clock discontinuities. Evidence:
+use_cases/records/gsdc2023_modern9_jun15_control_audit_20260927.json.
+Reproducer E:/rtklib_v2_ws_tmp/audit_modern9_jun15_control_20260927.py;
+its copied status label was corrected to pixel7pro and rerun; actual
+dataset/argv validation already targeted the correct Pixel7Pro case.
+Modern9 now25/27 complete; supervisor33150 advanced to final clock_only.
+Control21600 is terminal. Fixed15 case01 control9508/supervisor65602
+remains live,2/30 complete. No truth scoring or official submission.
+
+### Second heading development control reproduced (2026-09-27)
+
+Case01 2021-01-04-22-40-us-ca-mtv-a/pixel5 control completed in787.079
+seconds, return0. Frozen plan/binary/parent/input/map checks, native1855-key
+coverage, convergence, diagnostic-only argv delta and exact source trajectory
+parity pass. Acceleration-bias maximum0.05512335 m/s2, all states below0.1.
+Solution SHA2568d21b77be693be7bc2df13148e096219e6ec598673708da336ea370d2117283e;
+summary91a4d7f396e8ae4942e5b25d9ad261dbd83d835655363017cef5b24dcf07bc25.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_second_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_second_control_20260927.py.
+Fixed15 now3/30 complete; supervisor65602 advanced to case01 candidate,
+native23612. Previous control9508 is terminal. Modern9 final clock_only
+27856 remains live,25/27 complete. No truth scoring or submission.
+
+### Jun15 Pixel7Pro clock-only parity verified (2026-09-27)
+
+Final case08 clock_only completed in1071.538 seconds, return0. Audit passes
+frozen plan/argv/binary/input/source, native1495-key coverage, convergence
+and published-control parity. Clock-only solution bytes equal control;
+both have zero clock discontinuities and identical solver cost/residual/bias
+aggregates. Solution SHA256:
+c1bfeb93c3f085b78125fc4eba2fa9f01f4643f97e430b2dbd63ecd7826d237a;
+clock-only summary04e29978f950774d77176724a29fbe2908cc943334c2c6df21ddd69a45316c8a.
+Evidence: use_cases/records/gsdc2023_modern9_jun15_clock_only_audit_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_modern9_jun15_clock_only_20260927.py.
+Modern9 has26/27 runs complete; supervisor33150 now runs final candidate,
+native33388. Clock-only27856 is terminal. Fixed15 case01 candidate23612
+remains live under65602,3/30 complete. No accuracy claim or submission.
+
+### Second heading development pair passed native audit (2026-09-27)
+
+Case01 candidate completed in768.613 seconds, return0. The pair passes
+frozen provenance, source-control byte parity, native1855-key coverage,
+convergence, exact heading-option delta, all-epoch seeds and unchanged
+graph/noise/first-bias-prior checks. Raw initialization byte parity passes
+(SHA25691d0034f24fb9eec33c7016439067a79792ca686e174566329996df30c52d242).
+Trajectory displacement P50=0.000431472 m,P95=0.001095849 m,
+maximum=0.001466649 m. These are differences, not truth errors.
+Acceleration-bias maxima remain approximately0.055124 m/s2 in both arms.
+Candidate solution SHA256:
+352b1ae67fdf63622c6e24a4c4591dc1da7db24aa0f75c542de28c922d8d00f9;
+summary020a8c3edf2390f089178b547e2b2fbef0caed0e9c878e96e0d9a1c7cb708626.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_second_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_second_pair_20260927.py.
+Fixed15 now4/30 complete; supervisor65602 advanced to case02 control.
+Candidate23612 is terminal. Modern9 final candidate33388 remains live,
+26/27 complete. Full15 truth scoring pending; no submission.
+
+### Modern9 all27 native runs and full audit completed (2026-09-27)
+
+Final Jun15 Pixel7Pro candidate completed in566.488 seconds, return0.
+Its1495-key three-arm audit passes; candidate displacement from control
+and clock_only is P50=0.294660 m,P95=0.771627 m,max=1.758642 m.
+Candidate solution SHA256:
+f5fa8c43d48ed2cce6215a239b7724367d9eace1ad45371c7265acf652577255;
+summary88ec422f1908e4b9b93f6466fae641f9602db92473146e9e6f89b5b77df3a813.
+Evidence: use_cases/records/gsdc2023_modern9_jun15_three_arm_audit_20260927.json.
+
+Supervisor33150 then exited0 after the full audit passed9 cases/27 arms.
+Full record: use_cases/records/gsdc2023_modern9_test_three_arm_audit_20260927.json.
+execution.done.json SHA256:
+90b9ca36965a574cbb15c54c6deeed8756aa6d4e57686dbdc0f673805be06718.
+Reviewed auditor coverage: complete exact case/arm set, source/development/
+reference hashes, exact plan argv/binary/input provenance, native raw keys,
+convergence, published control byte parity and requested recipe effects.
+All9 published controls reproduced. No test truth was read; these checks
+establish reproducibility and trajectory differences, not official accuracy.
+Modern native33388 is terminal. Fixed15 supervisor65602 continues case02
+control59560,4/30 complete. No assembler, promotion or submission run.
+Official Private remains1.055 m;0.928 m target remains active.
+
+### Third heading development control reproduced (2026-09-27)
+
+Case02 2021-03-10-23-13-us-ca-mtv-h/pixel5 control completed in510.272
+seconds, return0. Partial audit passes frozen provenance/input/map checks,
+native1465-key coverage, convergence, diagnostic-only argv delta and source
+trajectory byte parity. Acceleration-bias maximum0.04076448 m/s2.
+Solution SHA25615d3677d87c399af261d04baf0ea729cb864173b95ee437f101d6022ee41baad;
+summary0508126a5889853c4e7b9b330d4a8e35dbfa5ff94f620de6156d66c62afc0787.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_third_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_third_control_20260927.py.
+Fixed15 now5/30 complete; supervisor65602 advanced to case02 candidate,
+native63132. Control59560 is terminal. Modern9 remains fully audited27/27.
+Full15 scoring pending; no submission.
+
+### Third heading development pair passed native audit (2026-09-27)
+
+Case02 candidate completed in450.462 seconds, return0. Both arms pass
+frozen provenance, source-control byte parity, native1465-key coverage,
+convergence, exact heading-option delta, all-epoch seeds and unchanged
+graph/noise/first-bias-prior checks. Raw initialization byte parity passes
+(SHA2569859a6c7c92e87c026b492a6e3d2f6c86cbefd433004091ff56b3a69724d31db).
+Trajectory displacement P50=0.000274913 m,P95=0.001084046 m,
+maximum=0.001769216 m. These are differences, not truth errors.
+Acceleration-bias maxima remain approximately0.0407644 m/s2 in both arms.
+Candidate solution SHA256:
+8544dbc74d72473d19d71877a606783907ed973a34002f3c1afc224856bdf879;
+summary1dbe0ccecb84e061674517502d1b03d13285785347c798bf65983b2d20bca8ab.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_third_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_third_pair_20260927.py.
+Fixed15 now6/30 complete; supervisor65602 advanced to case03 control.
+Candidate63132 is terminal. Modern9 remains fully audited27/27.
+Full15 truth scoring pending; no submission.
+
+### Fourth heading development control reproduced (2026-09-27)
+
+Case03 2021-03-16-18-59-us-ca-mtv-a/pixel5 control completed in649.376
+seconds, return0. Frozen provenance/input/map checks, native2159-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.04147853 m/s2.
+Solution SHA256a5c782d61e2134ee6b6622b8d6fc4eb2c6b43ea73eaf6d412daf4c7467d30421;
+summaryfd9da9fe363f39b367e6788ccc7641ff9bcd7e77a19d3423008807c8b6862e24.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fourth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fourth_control_20260927.py.
+Fixed15 now7/30 complete; supervisor65602 advanced to case03 candidate.
+Control61816 is terminal. Full15 scoring pending; no submission.
+
+### Fourth heading development pair passed native audit (2026-09-27)
+
+Case03 candidate completed in517.143 seconds, return0. Both arms pass
+frozen provenance, source-control byte parity, native2159-key coverage,
+convergence, exact heading-option delta, all-epoch seeds and unchanged
+graph/noise/first-bias-prior checks. Raw initialization byte parity passes
+(SHA25678c4cb181bd934e626536abb908aabb7f44819bd32666ebd31b5b26daa9584e4).
+Trajectory displacement P50=0.000310745 m,P95=0.001693967 m,
+maximum=0.002142718 m. These are differences, not truth errors.
+Candidate solution SHA256:
+28f9d3b29fc5b2c9f8a91ffadc08d059a6ab61cdade7b4154c4011fb61e1b09c;
+summary3a9d301362eddf0fe42646b90dec4e8c064978158f62649c4accac5c0da9a987.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fourth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fourth_pair_20260927.py.
+Fixed15 now8/30 complete; supervisor65602 advanced to case04 control.
+Candidate18144 is terminal. Full15 truth scoring pending; no submission.
+
+### Fifth heading development control reproduced (2026-09-27)
+
+Case04 2021-07-19-20-49-us-ca-mtv-a/pixel5 control completed in460.834
+seconds, return0. Frozen provenance/input/map checks, native1897-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.03170458 m/s2.
+Solution SHA2565ac7fdc439005e703d73240d90ba7dc9b515f9f03dbab6c14ffffbeb2562e9f5;
+summaryfc9a44cec95fb03b9f6dedb16bb7b5b115d942eb2638d2702068d68393659d08.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fifth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fifth_control_20260927.py.
+Fixed15 now9/30 complete; supervisor65602 advanced to case04 candidate,
+native45368. Control42932 is terminal. Full15 scoring pending; no submission.
+
+### Fifth heading development pair passed native audit (2026-09-27)
+
+Case04 2021-07-19-20-49-us-ca-mtv-a/pixel5 candidate completed in
+476.590 seconds, return0. Both arms pass frozen provenance, source-control
+byte parity, native1897-key coverage, convergence, exact heading-option
+delta, all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+308fe37114a8105d5b157a565df182b8c2bc37240a0a17d242bee60887ee9d8b.
+Trajectory displacement P50=0.000536284 m, P95=0.001694190 m,
+maximum=0.002969972 m. These are differences, not truth errors.
+Candidate solution SHA256:
+f29f49ad3c8e1f5219d32347314d01f4465da4d2bddea6871b57c24ead37a3bf;
+summary10499c9b77333137297eaf6824d0c025308a3a6452e0a97d7337b5c305ba9228.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fifth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fifth_pair_20260927.py.
+Fixed15 now10/30 complete; candidate45368 is terminal.
+Full15 truth scoring pending; no submission. Official Private remains1.055 m.
+
+### Sixth heading development control reproduced (2026-09-27)
+
+Case05 2021-08-24-20-32-us-ca-mtv-h/pixel5 control completed in1066.174
+seconds, return0. Frozen provenance/input/map checks, native3140-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.05062132 m/s2.
+Solution SHA256924ebf3b2f0ce2ccb859e945845365eb7fe7bf4babdc07a04b95cc0e089e5a59;
+summaryc39e60e4699d21646d1b6c9998f1c9b9d44c0ad422e851f985cc11a948041535.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_sixth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_sixth_control_20260927.py.
+Fixed15 now11/30 complete; supervisor65602 advanced to case05 candidate.
+Control4120 is terminal. Full15 scoring pending; no submission.
+
+### Sixth heading development pair passed native audit (2026-09-27)
+
+Case05 2021-08-24-20-32-us-ca-mtv-h/pixel5 candidate completed in1081.646
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native3140-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+b0110b9cf36b15743016b032122ebf8c5da40d865c927f255483f47871308200.
+Trajectory displacement P50=0.000276323 m, P95=0.000844513 m,
+maximum=0.001156340 m. These are differences, not truth errors.
+Candidate solution SHA256:
+b88c29e674fc1b6e280e4b72b8b4ff563ae0446659b1226a8680f80b15ebda38;
+summary1ea46e524934fd5546ca79699e2d697f28ba891bfdfe0b7f9eb8e8ceed02c8a7.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_sixth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_sixth_pair_20260927.py.
+Fixed15 now12/30 complete; supervisor65602 advanced to case06 control.
+Candidate44892 is terminal. Full15 truth scoring pending; no submission.
+
+### Seventh heading development control reproduced (2026-09-27)
+
+Case06 2022-01-26-20-02-us-ca-mtv-pe1/pixel5 control completed in596.814
+seconds, return0. Frozen provenance/input/map checks, native1698-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.007704132 m/s2.
+Solution SHA25691f0a7039a849512e1bb5217c5398a879de87bd431ed21fae012134b8ee683b9;
+summarye0c3a9fc53b094dd01bb8d0206dd791f77cf0bf622f8bc432267cb77c54b2a9d.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_seventh_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_seventh_control_20260927.py.
+Fixed15 now13/30 complete; supervisor65602 advanced to case06 candidate,
+native50756. Control58540 and audit session38318 are terminal.
+Full15 scoring pending; no submission.
+
+### Seventh heading development pair passed native audit (2026-09-27)
+
+Case06 2022-01-26-20-02-us-ca-mtv-pe1/pixel5 candidate completed in698.749
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native1698-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+4f3abf57a64f5cd5aaebbede1cbc4ffe90bd90724960e94c97dd117e723d7f41.
+Trajectory displacement P50=0.000316542 m, P95=0.001034451 m,
+maximum=0.002133450 m. These are differences, not truth errors.
+Candidate solution SHA256:
+538f45ea6a70530facb925282ad001a7c103e56ddde3c6a83a9bfbb30af35f5e;
+summary4491f553c3079dd434700d6c76fe582020c0fe296e77eaf94d5eb633e59f102d.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_seventh_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_seventh_pair_20260927.py.
+Fixed15 now14/30 complete; supervisor65602 advanced to case07 control.
+Candidate50756 is terminal. Full15 truth scoring pending; no submission.
+
+### Eighth heading development control reproduced (2026-09-27)
+
+Case07 2022-02-24-18-29-us-ca-lax-o/pixel5 control completed in1226.566
+seconds, return0. Frozen provenance/input/map checks, native2439-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.05388317 m/s2.
+Solution SHA2564f278a0375e60b51322d9ee43cfa0b4f86b723fe37d6dd1add0e40a03817cc2a;
+summary123dff41c76bbd20e9a6257c2db2e9bc77337a0fe9840ad192c80e2a9bd1434b.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_eighth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_eighth_control_20260927.py.
+Fixed15 now15/30 complete; supervisor65602 advanced to case07 candidate.
+Control11240 is terminal. Full15 scoring pending; no submission.
+
+### Eighth heading development pair passed native audit (2026-09-27)
+
+Case07 2022-02-24-18-29-us-ca-lax-o/pixel5 candidate completed in805.337
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native2439-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+ac1707c874edeec09417d9af74296dd049415d534bcc4c06dea76e6be9a6dae3.
+Trajectory displacement P50=0.323873280 m, P95=1.244246969 m,
+maximum=5.245110187 m. Unlike the first seven pairs, this is a material
+trajectory change; direction of accuracy effect remains unmeasured until
+the planned full15 truth evaluation. No route-specific selection.
+Acceleration-bias maximum changes0.05388317 to0.03677177 m/s2;
+gyro-bias maximum changes0.004253433 to0.000134102 rad/s.
+Candidate solution SHA256:
+91851c439a6d83651e3ed0cb800facc47d137f324198ebfc4d0746ade133e263;
+summary3dd8df7ac147b5fa51b5a13aa4aea80cb0f7cd053f4b2352d14737ddbe2515e5.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_eighth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_eighth_pair_20260927.py.
+Fixed15 now16/30 complete; supervisor65602 advanced to case08 control.
+Candidate59308 is terminal. Full15 truth scoring pending; no submission.
+
+### Ninth heading development control reproduced (2026-09-27)
+
+Case08 2022-04-01-18-22-us-ca-lax-t/pixel5 control completed in396.831
+seconds, return0. Frozen provenance/input/map checks, native1466-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.01474573 m/s2.
+Solution SHA256d13b8973314385ceff26f5b7a8de38efb2391eb08940430d022ce2337a76f2ba;
+summary5accaa4a15c98b8fcec37320d3d83f498a9c8746d4d9815a4a9e408a642ff6ba.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_ninth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_ninth_control_20260927.py.
+Fixed15 now17/30 complete; supervisor65602 advanced to case08 candidate.
+Control17208 is terminal. Full15 scoring pending; no submission.
+
+### Ninth heading development pair passed native audit (2026-09-27)
+
+Case08 2022-04-01-18-22-us-ca-lax-t/pixel5 candidate completed in439.742
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native1466-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+77f94eb6ed65832f8708877daf5bf025a2264f09ebb175dc9f513429c2728ef3.
+Trajectory displacement P50=0.000300605 m, P95=0.001768808 m,
+maximum=0.003390444 m. These are differences, not truth errors.
+Candidate solution SHA256:
+7b0340b3a65cf667575bb2f950aa0d142d45141b9c4934c214e4b5fd5b2b9853;
+summary0bab7a8fdba59e21c5aa83d918ed16f8d436c01b08b8523386f1f0db04e4e872.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_ninth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_ninth_pair_20260927.py.
+Fixed15 now18/30 complete; supervisor65602 advanced to case09 control.
+Candidate63772 is terminal. Full15 truth scoring pending; no submission.
+
+### Tenth heading development control reproduced (2026-09-27)
+
+Case09 2022-08-04-20-07-us-ca-sjc-q/pixel5 control completed in599.579
+seconds, return0. Frozen provenance/input/map checks, native1450-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.04511097 m/s2.
+Solution SHA256b8db5c96ead16b901cdb56885f34f13f2ac16d1e09ba0a37bbef7f370ccf563a;
+summary50885ab6f51306d3b5897d21ecb77d439a7317c695f85d58b034bc1aa4be46eb.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_tenth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_tenth_control_20260927.py.
+Fixed15 now19/30 complete; supervisor65602 advanced to case09 candidate.
+Control2460 and audit session79459 are terminal. Full15 scoring pending;
+no submission.
+
+### Tenth heading development pair passed native audit (2026-09-27)
+
+Case09 2022-08-04-20-07-us-ca-sjc-q/pixel5 candidate completed in725.011
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native1450-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+149c71ad455519a14ffef095db5fe05b93027e295e36cebf3e5f10724d3e856c.
+Trajectory displacement P50=0.000196193 m, P95=0.000583407 m,
+maximum=0.001105500 m. These are differences, not truth errors.
+Candidate solution SHA256:
+a5d9cc5f485478463e98d01883164d49328d78aca0090be4857cafd42bf9a5dd;
+summaryb689a5e68b6c5609350572967a64ed8ae2ad0a9b21565f542a696e28e6e47e7e.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_tenth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_tenth_pair_20260927.py.
+Fixed15 now20/30 complete; supervisor65602 advanced to case10 control.
+Candidate26524 is terminal. Full15 truth scoring pending; no submission.
+
+### Eleventh heading development control reproduced (2026-09-27)
+
+Case10 2023-03-08-21-34-us-ca-mtv-u/pixel5 control completed in494.463
+seconds, return0. Frozen provenance/input/map checks, native1102-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.04326483 m/s2.
+Solution SHA256b3d58b5cebf23dc17f9b0d3ce07c54ac129cb40a76a8530341aaaf55a425ce34;
+summary002365ebcfeed72094da6e45e0cc18c2ac485e683094bc5edbcb5eb8414e30c1.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_eleventh_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_eleventh_control_20260927.py.
+Fixed15 now21/30 complete; supervisor65602 advanced to case10 candidate,
+native24144. Control36620 is terminal. Full15 scoring pending; no submission.
+
+### Eleventh heading development pair passed native audit (2026-09-27)
+
+Case10 2023-03-08-21-34-us-ca-mtv-u/pixel5 candidate completed in538.265
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native1102-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+b50981425e533f04982e4d626d671583b4c5d92fe3746ae80b35dd0ff567f31f.
+Trajectory displacement P50=0.000494724 m, P95=0.000826367 m,
+maximum=0.000911137 m. These are differences, not truth errors.
+Candidate solution SHA256:
+d4c3bea06ab36e136c4c09d677c9a2aa0cff1358ee2920ced13da24fdc8999aa;
+summaryf5d3e50d0c6a86c3f69145e1b43b914c430916da21bcb7e62548abe4076f5009.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_eleventh_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_eleventh_pair_20260927.py.
+Fixed15 now22/30 complete; supervisor65602 advanced to case11 control.
+Candidate24144 is terminal. Full15 truth scoring pending; no submission.
+
+### Twelfth heading development control reproduced (2026-09-27)
+
+Case11 2023-05-09-21-32-us-ca-mtv-pe1/pixel5 control completed in831.091
+seconds, return0. Frozen provenance/input/map checks, native2132-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.05261637 m/s2.
+Solution SHA25669ab31859d9f7236eaa321e03c19a3ef12f29131b822329dee9c3e5ee4c06dae;
+summary0a0701e62be9899d33ff232c6fc0b1a8cf619089824edf43357b0dd0093489c3.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_twelfth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_twelfth_control_20260927.py.
+Fixed15 now23/30 complete; supervisor65602 advanced to case11 candidate.
+Control37248 is terminal. Full15 scoring pending; no submission.
+
+### Twelfth heading development pair passed native audit (2026-09-27)
+
+Case11 2023-05-09-21-32-us-ca-mtv-pe1/pixel5 candidate completed in959.629
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native2132-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+68f6beca28d462b863b8ba890b068444cc09f6810a9d394f7625abf38d5ef637.
+Trajectory displacement P50=0.035061727 m, P95=1.212155867 m,
+maximum=3.788395989 m. These are differences, not truth errors.
+Acceleration-bias maximum changes from0.052616369 to0.018909419 m/s2.
+Candidate solution SHA256:
+7923c1212802338e6370f703cd72b2b6a38fbc5b7c48f0e126013f913505d4c3;
+summary27055d04068c336b310435e8a7e937f6fffabbcf5e5584fc39507048a64229a9.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_twelfth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_twelfth_pair_20260927.py.
+Fixed15 now24/30 complete; supervisor65602 advanced to case12 control,
+native48016. Candidate25928 is terminal. Full15 scoring pending; no submission.
+
+### Thirteenth heading development control reproduced (2026-09-28)
+
+Case12 2023-05-16-19-54-us-ca-mtv-xe1/pixel5 control completed in809.904
+seconds, return0. Frozen provenance/input/map independence checks,
+native2323-key coverage, convergence, diagnostic-only argv delta and
+source trajectory byte parity pass. Acceleration-bias maximum0.025678516 m/s2.
+Solution SHA256d25dc6ab5024f738b33f6d32e75fbc97a7b97e8db4d9572a0b47a5a47d0ac695;
+summarye06ff0d25a2a227b5183d493ddcfded995c519d132b0e31a30e9c60521d24007.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_thirteenth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_thirteenth_control_20260927.py.
+Fixed15 now25/30 complete; supervisor65602 advanced to case12 candidate,
+native65740. Control48016 is terminal. Full15 scoring pending; no submission.
+
+### Thirteenth heading development pair passed native audit (2026-09-28)
+
+Case12 2023-05-16-19-54-us-ca-mtv-xe1/pixel5 candidate completed in737.364
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native2323-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+63722d41b536813794f426b07731845aa467e1230e82f7a37577e0f404728e7d.
+Trajectory displacement P50=0.000189238 m, P95=0.001310487 m,
+maximum=0.002045795 m. These are differences, not truth errors.
+Candidate solution SHA256:
+07f9288b10bbf9a9cdee248871b778111d0cb25f3f4351ffd3fc692e2a0c5c46;
+summaryfd49adda36353114aa6f2ce603a7e2eb03684df0d8652825d0ce0bcff560e5c5.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_thirteenth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_thirteenth_pair_20260927.py.
+Fixed15 now26/30 complete; supervisor65602 advanced to case13 control,
+native11012. Candidate65740 is terminal. Full15 scoring pending; no submission.
+
+### Fourteenth heading development control reproduced (2026-09-28)
+
+Case13 2023-09-05-23-07-us-ca-routen/pixel5 control completed in524.264
+seconds, return0. Frozen provenance/input/map checks, native1564-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.018178498 m/s2.
+Solution SHA25662f7a8b803a7fe92d0800ed7526bc1d03484ecb400093ede11562158ac67f2ac;
+summary1702b9e7fd144d40536f0dbf266a06a6e93e93ed6df6b8533b9e87432cf7a304.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fourteenth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fourteenth_control_20260927.py.
+Fixed15 now27/30 complete; supervisor65602 advanced to case13 candidate,
+native11992. Control11012 is terminal. Full15 scoring pending; no submission.
+
+### Fourteenth heading development pair passed native audit (2026-09-28)
+
+Case13 2023-09-05-23-07-us-ca-routen/pixel5 candidate completed in535.075
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native1564-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+bce5ae97ee5261322dffb3073e4a61ddefcf0ace9a4f97c06affc63a53b1bc44.
+Trajectory displacement P50=0.000387748 m, P95=0.001490927 m,
+maximum=0.002170421 m. These are differences, not truth errors.
+Candidate solution SHA256:
+6310fc48046437d74a94312353859e905c75840f92e309ff7e8e94a1241727e5;
+summary905793162b69ca715c36c0cca0c83471876bf98037bd362c61f2fb8aaa9e01d5.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fourteenth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fourteenth_pair_20260927.py.
+Fixed15 now28/30 complete; supervisor65602 advanced to case14 control,
+native53252. Candidate11992 is terminal. Full15 scoring pending; no submission.
+
+### Fifteenth heading development control reproduced (2026-09-28)
+
+Case14 2023-09-07-18-59-us-ca/pixel5 control completed in336.800
+seconds, return0. Frozen provenance/input/map checks, native1172-key
+coverage, convergence, diagnostic-only argv delta and source trajectory
+byte parity pass. Acceleration-bias maximum0.017881355 m/s2.
+Solution SHA2565b956d589525156b655eb736761c9626b18eed7587dd5e71f1b6bd9aa19b1fbe;
+summary727f487b46fdc8a43994f02d926220bb3eaa10a8705902b5efdc447d732d9aea.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fifteenth_control_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fifteenth_control_20260927.py.
+Fixed15 now29/30 complete; supervisor65602 advanced to case14 candidate,
+native30700. Control53252 is terminal. Full15 scoring pending; no submission.
+
+### Fifteenth heading development pair passed native audit (2026-09-28)
+
+Case14 2023-09-07-18-59-us-ca/pixel5 candidate completed in341.240
+seconds, return0. Both arms pass frozen provenance, source-control byte
+parity, native1172-key coverage, convergence, exact heading-option delta,
+all-epoch seeds and unchanged graph/noise/first-bias-prior checks.
+Raw initialization byte parity passes; SHA256:
+09b52f3aa2d02fa59a2e8fcee0e90f9deb4ef891efa96346cb2e39b2ae08a11c.
+Trajectory displacement P50=0.000365015 m, P95=0.001081798 m,
+maximum=0.002983077 m. These are differences, not truth errors.
+Candidate solution SHA256:
+f1e49616c1aaf407841e23043d8aee73df95c891411f3191ee89019e63f20551;
+summarya8e41b396780aa78797a9bb8ca06a6784ad6bd474bb7900e22f24d9e19c3f9ec.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_fifteenth_pair_20260927.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_development_fifteenth_pair_20260927.py.
+Fixed15 now30/30 complete; supervisor65602 advanced to full audit and
+exposed-development scoring. Candidate30700 is terminal. No submission.
+
+### Full fixed15 heading development evaluation completed (2026-09-28)
+
+Supervisor65602 exited0 after all30 native runs and the pinned full auditor.
+All15 source controls reproduced; heading contracts, native coverage,
+convergence, provenance and height-map group independence passed.
+Evaluation truth was consumed only after inference audits, never for inference.
+Unweighted mean per-phone (P50+P95)/2: control0.6440282180321103 m,
+heading candidate0.590451182416754 m; delta-0.05357703561535632 m.
+Five cases improved and ten numerically regressed. All ten regressions are
+below0.000291 m; largest+0.000290414375772763 m (July19).
+Material improvements: lax-o1.5908205687504549 ->1.154353415180311 m;
+May09 mtv-pe1 1.0632277705475712 ->0.6951783239676044 m.
+This is previously exposed development, not heldout or official accuracy.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_development_comparison_20260927.json.
+Record SHA256428228e9e5b3af7991ad84ce97e2ae5b249bd0e31c1fe79d15b88cd777e05c36.
+Execution done SHA256ebcf4c6b7321bfc4b9581a19db9a3fbe8e77a2f2684d3e24820ea23e452699be.
+Next: prepare uniform heading evaluation for all17 Pixel5 test cases with
+frozen provenance and no route-specific winners; audit before any assembly.
+No official submission occurred; recorded Private remains1.055 m and goal active.
+
+### Uniform Pixel5 test17 heading comparison launched (2026-09-28)
+
+Full fixed15 heading development audit supports evaluating the same option
+uniformly on all17 Pixel5 test cases. No route-specific selection or truth
+input is used. New control is the prior recipe candidate plus diagnostic;
+new candidate adds only --native-epoch-heading-attitude-seeds. Height and
+all input options are preserved exactly. Both arms use the pinned heading
+binary533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53.
+Preparer audited all17 source candidate runs before freezing the plan.
+Plan: E:/rtklib_v2_ws_output/gsdc_native/pixel5_heading_test_20260928/plan.json.
+Plan SHA2560e9145acc1abc1f1da8922398d512f6684a8138941e491152e0be6de9f9ee6ca.
+Preflight passed exact17 cases, binary pin, all normalized argv deltas and
+rejection of an unstarted plan by the auditor. No native workers were active.
+Supervisor session73504 launched34 runs with workers2. Exclusive runner start
+marker prevents duplicate launch. On success it invokes the full test auditor.
+Auditor scripts/analysis/audit_gsdc_pixel5_heading_test.py SHA256:
+c8e1eabce190b487234ab5f682ae42dd4b841ebd03d7b4a211aa5a5bc099f0dc.
+Runner SHA25692cfaf0ed25018350f635935457342d96738c762d5f39ae33f886d76837a848a.
+Expected audit: use_cases/records/gsdc2023_pixel5_heading_test_comparison_20260928.json.
+The development supervisor65602 is terminal exit0; do not restart it.
+No assembly, official submission or official score update occurred.
+
+### Pixel5 test heading sjc-r control reproduced (2026-09-28)
+
+2022-02-08-22-04-us-ca-sjc-r/pixel5 control completed in843.287 seconds.
+Frozen provenance, exact diagnostic-only argv delta, native1665-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum0.030669248 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjcr_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjcr_control_20260928.py.
+Supervisor73504 remains active; sjc-r candidate18484 and first-case control37336
+running. One of34 runs complete. No assembly or submission.
+
+### Pixel5 test heading mtv-g control reproduced (2026-09-28)
+
+2021-08-17-20-37-us-ca-mtv-g/pixel5 control completed in1366.784 seconds.
+Frozen provenance, exact diagnostic-only argv delta, native1676-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum0.050249170 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_mtvg_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_mtvg_control_20260928.py.
+Supervisor73504 active; sjc-r candidate18484 and mtv-g candidate31508 running.
+Control37336 terminal. Two of34 runs complete. No assembly or submission.
+
+### Pixel5 test heading sjc-r pair audited (2026-09-28)
+
+2022-02-08-22-04-us-ca-sjc-r/pixel5 candidate completed in700.340 seconds.
+Both arms pass provenance, native1665-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000307964 m, P95=0.001356695 m,
+maximum=0.001891059 m. These are differences, not accuracy errors.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjcr_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjcr_pair_20260928.py.
+Supervisor73504 active; mtv-g candidate31508 and next control63000 running.
+Candidate18484 terminal. Three of34 runs complete. No assembly or submission.
+
+### Pixel5 test heading mtv-g pair audited (2026-09-28)
+
+2021-08-17-20-37-us-ca-mtv-g/pixel5 candidate completed in1259.959 seconds.
+Both arms pass provenance, native1676-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000634780 m, P95=0.001226713 m,
+maximum=0.002886176 m. These are differences, not accuracy errors.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_mtvg_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_mtvg_pair_20260928.py.
+Supervisor73504 active; controls63000 and22944 running.
+Candidate31508 terminal. Four of34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-n control reproduced (2026-09-28)
+
+2022-02-23-17-46-us-ca-lax-n/pixel5 control completed in1197.244 seconds.
+Frozen provenance, exact diagnostic-only argv delta, native2407-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum0.047156147 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxn_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxn_control_20260928.py.
+Supervisor73504 active; control22944 and lax-n candidate61572 running.
+Control63000 terminal. Five of34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-n pair audited (2026-09-28)
+
+2022-02-23-17-46-us-ca-lax-n/pixel5 candidate completed in 1179.523 seconds.
+Both arms pass provenance, native 2407-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000179388 m, P95=0.000746814 m,
+maximum=0.000900083 m. These are differences, not accuracy errors.
+Acceleration-bias maximum remains 0.04716 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxn_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxn_pair_20260928.py.
+Supervisor 73504 active; lax-m control 22944 and lax-p control 61484 running.
+Candidate 61572 terminal. Six of 34 runs complete. No assembly or submission.
+Official Private remains 1.055 m; goal <=0.928 m remains active.
+
+### Combined heading/modern local assembler prepared (2026-09-28)
+
+Added scripts/analysis/assemble_gsdc_heading_modern_test.py for the fixed 17
+Pixel5 heading candidates plus 9 modern clock/recipe candidates and 14 retained
+native sources. It requires both execution.done records, reruns both full native
+audits, verifies disjoint case sets, provenance, published Pixel5 parent controls,
+reference hash and exact native lookup for all 71936 reference keys / 40 drives.
+Retained output coordinates must equal the reference. No inference or submission
+is performed by this assembler; test truth is never loaded.
+Validation: Python syntax compilation passed. Running against the current plans
+failed as expected at the missing Pixel5 execution.done.json; the proposed output
+E:/rtklib_v2_ws_output/gsdc_native/heading_modern_joint_submission_20260928
+remained absent. Full end-to-end assembly remains pending all native runs.
+Supervisor 73504 remains live; current native PIDs 22944 and 61484.
+
+### Retained14 preflight and lax-m heading control audited (2026-09-28)
+
+Combined-assembly retained14 preflight passed for 23986 reference rows. Source
+solution/run/summary hashes, dataset identities, native/converged/no-truth
+contracts, and exact coordinate equality at every reference UTC key passed.
+Evidence: use_cases/records/gsdc2023_heading_modern_retained14_preflight_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_heading_modern_retained14_20260928.py.
+This is an independent partial check, not proof of complete combined assembly.
+
+2022-02-23-22-35-us-ca-lax-m/pixel5 control completed in 1698.453 seconds.
+Frozen provenance, diagnostic-only argv delta, native 2805-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.043727052 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxm_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxm_control_20260928.py.
+Supervisor 73504 active; lax-m candidate 61588 and lax-p control 61484 running.
+Control 22944 terminal. Seven of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-m pair audited (2026-09-28)
+
+2022-02-23-22-35-us-ca-lax-m/pixel5 candidate completed in 1394.704 seconds.
+Both arms pass provenance, native 2805-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.001021880 m, P95=0.001834063 m,
+maximum=0.002243017 m. These are differences, not accuracy errors.
+Acceleration-bias maxima: control 0.043727052, candidate 0.043728059 m/s2.
+No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxm_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxm_pair_20260928.py.
+Supervisor 73504 active; lax-p control 61484 and next control 62236 running.
+Candidate 61588 terminal. Eight of 34 runs complete. No assembly or submission.
+Official Private remains 1.055 m; goal <=0.928 m remains active.
+
+### Pixel5 test heading lax-i control reproduced (2026-09-28)
+
+2022-02-24-22-14-us-ca-lax-i/pixel5 control completed in 1301.199 seconds.
+Frozen provenance, diagnostic-only argv delta, native 3582-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.039761220 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxi_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxi_control_20260928.py.
+Supervisor 73504 active; lax-p control 61484 and lax-i candidate 22556 running.
+Control 62236 terminal. Nine of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-p control reproduced (2026-09-28)
+
+2022-02-24-15-10-us-ca-lax-p/pixel5 control completed in 3855.926 seconds.
+Frozen provenance, diagnostic-only argv delta, native 4515-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+The known large acceleration bias is reproduced: maximum 18.625443499 m/s2,
+2093 epochs above 10 m/s2. Passing provenance is not an accuracy/stability claim.
+No truth consumed. The uniform heading candidate is now running.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxp_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxp_control_20260928.py.
+Supervisor 73504 active; lax-p candidate 63228 and lax-i candidate 22556 running.
+Control 61484 terminal. Ten of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-i pair audited (2026-09-28)
+
+2022-02-24-22-14-us-ca-lax-i/pixel5 candidate completed in 1242.655 seconds.
+Both arms pass provenance, native 3582-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000164403 m, P95=0.000993722 m,
+maximum=0.001776964 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.039762 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxi_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxi_pair_20260928.py.
+Supervisor 73504 active; lax-p candidate 63228 and next control 52508 running.
+Candidate 22556 terminal. Eleven of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading March22 control reproduced (2026-09-28)
+
+2022-03-22-18-44-us-ca-mtv-pe1/pixel5 control completed in 739.119 seconds.
+Frozen provenance, diagnostic-only argv delta, native 2112-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.015108385 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_march22_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_march22_control_20260928.py.
+Supervisor 73504 active; lax-p candidate 63228 and March22 candidate 22796 running.
+Control 52508 terminal. Twelve of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-p pair audited (2026-09-28)
+
+2022-02-24-15-10-us-ca-lax-p/pixel5 candidate completed in 1646.471 seconds.
+Both arms pass provenance, native 4515-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Acceleration-bias maximum falls from 18.625443499 to 0.055132341 m/s2;
+candidate has no epochs above 0.1 m/s2. Candidate solution and summary hashes
+exactly match candidate_heading in the earlier audited lax-p quartet record.
+Trajectory displacement P50=0.521081611 m, P95=5.989445782 m,
+maximum=269.939508158 m. These are output differences, not accuracy errors.
+No test truth consumed. The bias change supports the initialization diagnosis;
+accuracy and official Private improvement remain unproven.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxp_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxp_pair_20260928.py.
+Supervisor 73504 active; March22 candidate 22796 and next control 28744 running.
+Candidate 63228 terminal. Thirteen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading March22 pair audited (2026-09-28)
+
+2022-03-22-18-44-us-ca-mtv-pe1/pixel5 candidate completed in 699.470 seconds.
+Both arms pass provenance, native 2112-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000316016 m, P95=0.001344719 m,
+maximum=0.001947538 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.015110 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_march22_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_march22_pair_20260928.py.
+Supervisor 73504 active; controls 28744 and 33880 running.
+Candidate 22796 terminal. Fourteen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-y control reproduced (2026-09-28)
+
+2022-04-22-20-11-us-ca-ebf-y/pixel5 control completed in 371.001 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1400-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.027350049 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfy_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfy_control_20260928.py.
+Supervisor 73504 active; control 28744 and ebf-y candidate 55128 running.
+Control 33880 terminal. Fifteen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-x control reproduced (2026-09-28)
+
+2022-04-04-16-31-us-ca-lax-x/pixel5 control completed in 933.355 seconds.
+Frozen provenance, diagnostic-only argv delta, native 2171-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.013398412 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxx_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxx_control_20260928.py.
+Supervisor 73504 active; lax-x candidate 48464 and ebf-y candidate 55128 running.
+Control 28744 terminal. Sixteen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-y pair audited (2026-09-28)
+
+2022-04-22-20-11-us-ca-ebf-y/pixel5 candidate completed in 388.208 seconds.
+Both arms pass provenance, native 1400-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000237620 m, P95=0.000508983 m,
+maximum=0.000969928 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.027351 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfy_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfy_pair_20260928.py.
+Supervisor 73504 active; lax-x candidate 48464 and next control 58708 running.
+Candidate 55128 terminal. Seventeen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-z control reproduced (2026-09-28)
+
+2022-04-25-22-36-us-ca-ebf-z/pixel5 control completed in 381.920 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1587-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.033115515 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfz_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfz_control_20260928.py.
+Supervisor 73504 active; lax-x candidate 48464 and ebf-z candidate 16884 running.
+Control 58708 terminal. Eighteen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-z pair audited (2026-09-28)
+
+2022-04-25-22-36-us-ca-ebf-z/pixel5 candidate completed in 330.042 seconds.
+Both arms pass provenance, native 1587-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.135122627 m, P95=0.876175800 m,
+maximum=0.951427299 m. These are differences, not accuracy errors.
+Acceleration-bias maximum increases from 0.033115514 to 0.214557085 m/s2;
+candidate exceeds 0.1 m/s2 for 858 epochs (0 through 857), with none above 1.
+This merits joint review; it does not establish an accuracy regression and
+must not drive route-specific selection. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfz_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfz_pair_20260928.py.
+Supervisor 73504 active; lax-x candidate 48464 and next control 52228 running.
+Candidate 16884 terminal. Nineteen of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading lax-x pair audited (2026-09-28)
+
+2022-04-04-16-31-us-ca-lax-x/pixel5 candidate completed in 895.744 seconds.
+Both arms pass provenance, native 2171-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000349979 m, P95=0.001804423 m,
+maximum=0.002455626 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.013399 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_laxx_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_laxx_pair_20260928.py.
+Supervisor 73504 active; controls 52228 and 37980 running.
+Candidate 48464 terminal. Twenty of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-zz control reproduced (2026-09-28)
+
+2022-04-27-18-16-us-ca-ebf-zz/pixel5 control completed in 395.648 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1315-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.027119385 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfzz_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfzz_control_20260928.py.
+Supervisor 73504 active; ebf-xx control 37980 and ebf-zz candidate 61204 running.
+Control 52228 terminal. Twenty-one of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-xx control reproduced (2026-09-28)
+
+2022-04-27-19-23-us-ca-ebf-xx/pixel5 control completed in 453.612 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1382-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.406263790 m/s2; all 1382 epochs exceed 0.1,
+none exceed 1 m/s2. This reproduces the existing control behavior.
+No truth consumed; candidate comparison remains pending.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfxx_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfxx_control_20260928.py.
+Supervisor 73504 active; ebf-xx candidate 32480 and ebf-zz candidate 61204 running.
+Control 37980 terminal. Twenty-two of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-zz pair audited (2026-09-28)
+
+2022-04-27-18-16-us-ca-ebf-zz/pixel5 candidate completed in 396.453 seconds.
+Both arms pass provenance, native 1315-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000184841 m, P95=0.000998266 m,
+maximum=0.001458786 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.027121 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfzz_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfzz_pair_20260928.py.
+Supervisor 73504 active; ebf-xx candidate 32480 and next control 52748 running.
+Candidate 61204 terminal. Twenty-three of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading ebf-xx pair audited (2026-09-28)
+
+2022-04-27-19-23-us-ca-ebf-xx/pixel5 candidate completed in 456.174 seconds.
+Both arms pass provenance, native 1382-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000289642 m, P95=0.002436857 m,
+maximum=0.002717955 m. These are differences, not accuracy errors.
+Acceleration-bias maximum 0.406263789 -> 0.406270333 m/s2, effectively
+unchanged; both arms exceed 0.1 for all epochs and never exceed 1 m/s2.
+No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_ebfxx_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_ebfxx_pair_20260928.py.
+Supervisor 73504 active; controls 52748 and 21744 running.
+Candidate 32480 terminal. Twenty-four of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading April27 mtv control reproduced (2026-09-28)
+
+2023-04-27-19-25-us-ca-mtv-pe1/pixel5 control completed in 452.808 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1357-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.023696434 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_apr27mtv_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_apr27mtv_control_20260928.py.
+Supervisor 73504 active; sjc-q control 21744 and mtv-pe1 candidate 39712 running.
+Control 52748 terminal. Twenty-five of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading sjc-q control reproduced (2026-09-28)
+
+2023-04-27-20-55-us-ca-sjc-q/pixel5 control completed in 507.308 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1380-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.019758628 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjcq_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjcq_control_20260928.py.
+Supervisor 73504 active; sjc-q candidate 30384 and mtv-pe1 candidate 39712 running.
+Control 21744 terminal. Twenty-six of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading April27 mtv pair audited (2026-09-28)
+
+2023-04-27-19-25-us-ca-mtv-pe1/pixel5 candidate completed in 451.721 seconds.
+Both arms pass provenance, native 1357-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000412276 m, P95=0.000940310 m,
+maximum=0.001257384 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.023697 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_apr27mtv_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_apr27mtv_pair_20260928.py.
+Supervisor 73504 active; sjc-q candidate 30384 and next control 17772 running.
+Candidate 39712 terminal. Twenty-seven of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading sjc-q pair audited (2026-09-28)
+
+2023-04-27-20-55-us-ca-sjc-q/pixel5 candidate completed in 458.677 seconds.
+Both arms pass provenance, native 1380-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000386167 m, P95=0.001759285 m,
+maximum=0.002409850 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.019761 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjcq_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjcq_pair_20260928.py.
+Supervisor 73504 active; controls 17772 and 18472 running.
+Candidate 30384 terminal. Twenty-eight of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading mtv-de1 control reproduced (2026-09-28)
+
+2023-05-23-21-06-us-ca-mtv-de1/pixel5 control completed in 634.160 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1975-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.022847224 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_mtvde1_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_mtvde1_control_20260928.py.
+Supervisor 73504 active; sjc-be2 control 18472 and mtv-de1 candidate 19160 running.
+Control 17772 terminal. Twenty-nine of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading sjc-be2 control reproduced (2026-09-28)
+
+2023-05-26-21-23-us-ca-sjc-be2/pixel5 control completed in 468.319 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1482-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.036933377 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjcbe2_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjcbe2_control_20260928.py.
+Supervisor 73504 active; sjc-be2 candidate 23520 and mtv-de1 candidate 19160 running.
+Control 18472 terminal. Thirty of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading sjc-be2 pair audited (2026-09-28)
+
+2023-05-26-21-23-us-ca-sjc-be2/pixel5 candidate completed in 443.466 seconds.
+Both arms pass provenance, native 1482-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000551218 m, P95=0.002163530 m,
+maximum=0.002301790 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.036935 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjcbe2_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjcbe2_pair_20260928.py.
+Supervisor 73504 active; mtv-de1 candidate 19160 and sjc-he2 control 59584 running.
+Candidate 23520 terminal. Thirty-one of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading mtv-de1 pair audited (2026-09-28)
+
+2023-05-23-21-06-us-ca-mtv-de1/pixel5 candidate completed in 619.091 seconds.
+Both arms pass provenance, native 1975-key coverage, control-source parity,
+raw initialization parity and heading contract checks (exact option delta,
+all-epoch seeds, unchanged graph/noise/first-bias-prior, no zero-bias init).
+Trajectory displacement P50=0.000146962 m, P95=0.001274897 m,
+maximum=0.002244323 m. These are differences, not accuracy errors.
+Acceleration-bias maxima remain below 0.022848 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_mtvde1_pair_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_mtvde1_pair_20260928.py.
+Supervisor 73504 active; final case sjc-he2 control 59584 running.
+Candidate 19160 terminal. Thirty-two of 34 runs complete. No assembly or submission.
+
+### Pixel5 test heading sjc-he2 control reproduced (2026-09-28)
+
+2023-06-06-22-43-us-ca-sjc-he2/pixel5 control completed in 334.423 seconds.
+Frozen provenance, diagnostic-only argv delta, native 1608-key coverage,
+convergence and source-candidate trajectory byte parity pass.
+Acceleration-bias maximum 0.019911058 m/s2. No truth consumed.
+Evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjche2_control_20260928.json.
+Reproducer: E:/rtklib_v2_ws_tmp/audit_pixel5_heading_test_sjche2_control_20260928.py.
+Supervisor 73504 active; final candidate 39208 running.
+Control 59584 terminal. Thirty-three of 34 runs complete. No assembly or submission.
+
+### Pixel5 heading test full audit complete (2026-09-28)
+
+All 34 runs completed; supervisor 73504 exited 0 after the full 17-pair audit.
+All controls reproduce their frozen sources, and all heading contracts pass.
+No evaluation truth consumed; no official score or test accuracy established.
+Execution done SHA256: 63f120d5922cb32ccc5770b3ed337f76996f1b1b3ce5b79527817682208b3047.
+Full evidence: use_cases/records/gsdc2023_pixel5_heading_test_comparison_20260928.json.
+Final sjc-he2 pair: 1608 native keys, candidate 293.341 seconds;
+trajectory difference P50=0.000715594 m, P95=0.001931174 m, max=0.003235528 m.
+Pair evidence: use_cases/records/gsdc2023_pixel5_heading_test_sjche2_pair_20260928.json.
+Combined local assembly started in session 51901 using
+scripts/analysis/assemble_gsdc_heading_modern_test.py: all 17 Pixel5 candidates,
+all 9 modern candidates, and 14 retained native sources. No submission.
+
+### Combined heading + modern candidate assembled (2026-09-28)
+
+Session 51901 exited 0. The assembler reran all Pixel5 and modern audits and
+verified provenance, published control parity, retained source hashes,
+native output keys, and exact retained coordinate parity.
+Output: E:/rtklib_v2_ws_output/gsdc_native/heading_modern_joint_submission_20260928/submission.csv
+SHA256: cbd1fde10f0f317f7803871b7d00b64a73398498f967b86f2130d8ba8acc26f8.
+Manifest: same directory, manifest.json.
+71936 rows / 40 drives, 26 replaced (17 Pixel5 + 9 modern), 14 retained.
+All rows native; no evaluation truth or reference coordinates used for inference.
+Development evidence remains exposed development, not an official score:
+Pixel5 heading fixed15 mean 0.644028218 -> 0.590451182 m;
+modern fixed11 mean 0.699758890 -> 0.628204040 m.
+Review caveat: ebf-z heading raises estimated accel-bias max to 0.214557085 m/s2;
+this is not proof of accuracy regression. Uniform recipe retained across all 17.
+No submission performed. Official Private remains 1.055 m; goal remains active.
+Concrete candidate is ready for user review and explicit submission approval
+under the previously recorded conversation preference.
+
+### User authorizes submission and removes confirmation preference (2026-09-28)
+
+User explicitly said: 提出していいよ。その希望いらない
+This authorizes submission of the reviewed heading + modern candidate and
+revokes the prior preference to ask before official submissions.
+Do not ask for that confirmation again for continued work toward this goal.
+Submission script: E:/rtklib_v2_ws_tmp/submit_gsdc_heading_modern_20260928.py.
+Exact authorized SHA256: cbd1fde10f0f317f7803871b7d00b64a73398498f967b86f2130d8ba8acc26f8.
+Submission session 49839 started; check its result/receipt before any retry.
+
+### Official heading + modern result confirmed (2026-09-28)
+
+Submission 56625084 accepted and COMPLETE, verified from Kaggle submissions API.
+Private: 1.055 -> 0.984 m (improvement 0.071 m).
+Public: 1.133 -> 0.915 m (improvement 0.218 m).
+Goal <=0.928 m remains NOT achieved; remaining Private gap 0.056 m.
+Receipt: E:/rtklib_v2_ws_output/gsdc_native/heading_modern_joint_submission_20260928/kaggle_receipt.json.
+Readback: use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json.
+Submission session 49839 exited 0. Do not resubmit this exact candidate.
+The user's prior submission-confirmation preference is revoked; future
+submissions within this goal do not require repeating that permission request.

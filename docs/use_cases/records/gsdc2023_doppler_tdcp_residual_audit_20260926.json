@@ -1,0 +1,64 @@
+{
+  "status": "historical-artifact-diagnostic",
+  "official_score": false,
+  "inference_changes": false,
+  "cause_established": false,
+  "runs": [
+    {
+      "folder": "train11_offset_extra_bands_v1/00",
+      "summary_sha256": "c715ad56d0584078f576dfe81d24dfbd3b487d15fb3d17c0c772108bd2eeb72b",
+      "tdcp": {
+        "factors_inserted": 22408,
+        "residual_rms_m": 0.039291962581824824,
+        "backend_residual_rms_m": 0.039291962581808476,
+        "max_abs_residual_m": 3.4365354410820146,
+        "reconstructed_huber_cost_sum": 6137.416227660195
+      }
+    },
+    {
+      "folder": "train11_maindop_v1/00",
+      "summary_sha256": "820f1c5b6e00e39ccb9dac51bccfbb007933723c5670454a259e81acfe044d81",
+      "tdcp": {
+        "factors_inserted": 22408,
+        "residual_rms_m": 156.07422267037109,
+        "backend_residual_rms_m": 156.07422267037109,
+        "max_abs_residual_m": 23363.220845418655,
+        "reconstructed_huber_cost_sum": 3121857.204036399
+      }
+    },
+    {
+      "folder": "train11_refine_v1/00",
+      "summary_sha256": "3a83e13c13da62a0270e5883f3fec23268cdc7ccd3839761dbd68d0f44a62511",
+      "tdcp": {
+        "factors_inserted": 22408,
+        "residual_rms_m": 156.15367268986455,
+        "backend_residual_rms_m": 156.15367268986455,
+        "max_abs_residual_m": 23375.11398630256,
+        "reconstructed_huber_cost_sum": 3122834.9857124113
+      }
+    },
+    {
+      "folder": "train11_refine_stages_v1/00",
+      "summary_sha256": "4fb589ff1c806ed9704c3d21aa5d0e7ab08214351d1580807c03274734d7482e",
+      "tdcp": {
+        "factors_inserted": 22408,
+        "residual_rms_m": 0.039254383626415555,
+        "backend_residual_rms_m": 0.03925438362641726,
+        "max_abs_residual_m": 3.437591417126896,
+        "reconstructed_huber_cost_sum": 6100.585629263471
+      }
+    },
+    {
+      "folder": "g988b_ablation/maindop_nostop",
+      "summary_sha256": "da677f7d691a82610c7b40b1f2973846b5a677798c1aff37a8450dda9295a784",
+      "tdcp": {
+        "factors_inserted": 22408,
+        "residual_rms_m": 156.07416180696518,
+        "backend_residual_rms_m": 156.07416180696518,
+        "max_abs_residual_m": 23363.211734599943,
+        "reconstructed_huber_cost_sum": 3121855.7745629577
+      }
+    }
+  ],
+  "interpretation": "Extreme residual is present in main-Doppler and R1 but absent in baseline and R2. Backend and reconstructed RMS agree; largest-row epoch diagnostics are needed before attributing causality. R2 still has position regression, so this does not explain every failure."
+}

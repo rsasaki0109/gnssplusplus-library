@@ -1,0 +1,47 @@
+{
+  "status": "audited-control-heading-optimized-velocity-comparison",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "heading_audit_sha256": "a43538dad6e22671c6b8d9a8571debd25aad1d96eafd0fd0fbe3f2bd35caa78a",
+  "runs": {
+    "reference": {
+      "velocity_mps": {
+        "absolute_vertical": {
+          "p50": 0.050166901261748116,
+          "p95": 0.44639316150098723,
+          "maximum": 99.07461891151813,
+          "maximum_epoch": 4514,
+          "maximum_utc": 1645719927429
+        },
+        "horizontal": {
+          "p50": 2.3089343011792747,
+          "p95": 18.032165861401403,
+          "maximum": 54.98426351079005,
+          "maximum_epoch": 4489,
+          "maximum_utc": 1645719902429
+        }
+      },
+      "summary_sha256": "589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae"
+    },
+    "heading": {
+      "velocity_mps": {
+        "absolute_vertical": {
+          "p50": 0.008007966379439591,
+          "p95": 0.15401265106091563,
+          "maximum": 0.8158223587964519,
+          "maximum_epoch": 1759,
+          "maximum_utc": 1645717172429
+        },
+        "horizontal": {
+          "p50": 2.060020674877673,
+          "p95": 17.97476291674206,
+          "maximum": 20.78219227969928,
+          "maximum_epoch": 3659,
+          "maximum_utc": 1645719072429
+        }
+      },
+      "summary_sha256": "437ce05492a76432ba88cbd4b8acceb87a5af1fcb0b77551fc0c0bf5c1b897a5"
+    }
+  },
+  "scope": "Optimized velocity state diagnostics, not measured physical velocity or position accuracy."
+}

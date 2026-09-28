@@ -1,0 +1,57 @@
+{
+  "status": "candidate-audited-same-binary-control-pending",
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "score": {
+    "truth_keys": 1165,
+    "p50_m": 0.5865507503262913,
+    "p95_m": 4.632012659099934,
+    "phone_score_m": 2.609281704713113
+  },
+  "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+  "native_raw_keys": 1165,
+  "binary_sha256": "a73457093141c87cb4689a8debe9c14c2f8de8a467b75d419c1ddc0d2f26d639",
+  "solution_sha256": "0f747b9d680d6caedbd4295bf071c4e697c6c03236234cf2c7786a5efcf69d7c",
+  "summary_sha256": "cc045f27177cc527567cda9fc1c01820aac9d742b6e3f67feb1827b8f08c2207",
+  "tdcp": {
+    "max_arc_length_epochs": 153,
+    "max_gap_s": 2,
+    "residual_rms_m": 156.11360695515515,
+    "max_abs_residual_m": 23369.116400756742,
+    "max_residual_previous_epoch": 556,
+    "max_residual_current_epoch": 557,
+    "max_residual_system": 1,
+    "max_residual_signal": 0,
+    "max_residual_prn": 5,
+    "max_residual_signed_m": -23369.116400756742,
+    "max_residual_delta_carrier_m": 704.6830838909373,
+    "max_residual_geometric_range_change_m": 594.814130499959,
+    "max_residual_code_clock_change_m": -23259.247447366626,
+    "max_residual_uses_integrated_drift": false
+  },
+  "refinement": {
+    "refinement_requested": true,
+    "refinement_attitude_reset_requested": false,
+    "refinement_attitude_reset_applied": false,
+    "refinement_attitude_reset_low_speed": 0,
+    "refinement_attitude_reset_nearest_fill": 0,
+    "refinement_applied": true,
+    "refinement_initial_iterations": 31,
+    "refinement_no_doppler_initialization_requested": true,
+    "refinement_initial_main_doppler_factors": 0,
+    "refinement_gnss_drift_handoff": false,
+    "refinement_observed_clock_drift_requested": true,
+    "refinement_observed_drift_epochs": 1165,
+    "refinement_doppler_candidates": 48163,
+    "refinement_doppler_retained": 35076,
+    "refinement_p_rows": 25278,
+    "refinement_base_corrected_rows": 25278,
+    "refinement_base_application_passes": 1
+  },
+  "main_doppler": {
+    "requested": true,
+    "enabled": true,
+    "factors": 35076
+  }
+}

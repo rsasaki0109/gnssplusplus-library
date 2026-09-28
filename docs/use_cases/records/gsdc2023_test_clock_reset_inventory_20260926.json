@@ -1,0 +1,362 @@
+{
+  "status": "completed-published-native-summary-inventory",
+  "truth_consumed": false,
+  "official_score": false,
+  "phones": 40,
+  "phones_with_loader_clock_discontinuities": 6,
+  "scope": "Native loader reset counts; these combine threshold-triggered reference resets and hardware count changes, so do not imply physical clock resets or continuous-mode eligibility.",
+  "rows": [
+    {
+      "dataset_id": "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1190,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\00\\summary.json",
+      "summary_sha256": "584b71b70d3ba597c62509eeedc3e147a51c58952d6c1777d003c6f5fd67f23f"
+    },
+    {
+      "dataset_id": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1676,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\01\\summary.json",
+      "summary_sha256": "e8cef7c16396559eebb3c7933d3aa26472348b9647d26fe60d79e749c521cd9e"
+    },
+    {
+      "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1141,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\02\\summary.json",
+      "summary_sha256": "9f96eca19b65dad5d05fed3e6381ef82acf5240fa43004c6d95d13c331f0fe0e"
+    },
+    {
+      "dataset_id": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1274,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\03\\summary.json",
+      "summary_sha256": "5b42263160458aaf18c95467ad0b1c0e58722e9331cb704c46e37bb62a11ef12"
+    },
+    {
+      "dataset_id": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1797,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\04\\summary.json",
+      "summary_sha256": "ffe863233b1afe2d66c1f3e815d547e31b8da2508ec5ab187cd2a8ca4bdb0e40"
+    },
+    {
+      "dataset_id": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+      "clock_discontinuities": 0,
+      "selected_epochs": 2479,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\05\\summary.json",
+      "summary_sha256": "21dc6623b722c12f0b73f02c859159ec3e6c2c1474835d50d7ad0ecf4ebf5b58"
+    },
+    {
+      "dataset_id": "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+      "clock_discontinuities": 1,
+      "selected_epochs": 1446,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\06\\summary.json",
+      "summary_sha256": "60615505f21dc16c8337efb13b3565cd999bf2f4704328bbce93065f29cfed64",
+      "raw_clock_scan": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\pixel6pro\\device_gnss.csv",
+        "sha256": "385554d11c17d0e4606ae2e66f6a9c65aa6bb8bd667235dac456f51196d0d271",
+        "raw_rows": 45470,
+        "utc_epochs": 1446,
+        "backward_time_rows": 0,
+        "changed_hardware_rows": 0,
+        "forward_gaps_over_1s": 1,
+        "min_epoch_interval_ns": 1000000000.0,
+        "max_epoch_interval_ns": 1001000000.0,
+        "qualification": "Read-only all-raw-row diagnostic; native loader quality/selection gates are not reproduced."
+      }
+    },
+    {
+      "dataset_id": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1395,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\07\\summary.json",
+      "summary_sha256": "7622dad759cc3a380d50b79e9d874e917585f4a5f827ec170f55f00422be804c"
+    },
+    {
+      "dataset_id": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1665,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\08\\summary.json",
+      "summary_sha256": "d93ba4df553709793e527f663a5d2521cac33498f6a059a89345e820245d4eeb"
+    },
+    {
+      "dataset_id": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 2407,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\09\\summary.json",
+      "summary_sha256": "0eb56d622cb3f1c466769561d499c2d96a643da468de0933913777f00b2ccc4d"
+    },
+    {
+      "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "clock_discontinuities": 4,
+      "selected_epochs": 2805,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\10\\summary.json",
+      "summary_sha256": "d2d2d8411f013afd73b741ac3a45128601e5671690f815663b1c5ad5652b77b9",
+      "raw_clock_scan": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\pixel5\\device_gnss.csv",
+        "sha256": "5f4030c1614c29062a0cab37a733b3f56d7262576f27f8081c73d79dcdf7124e",
+        "raw_rows": 90530,
+        "utc_epochs": 2805,
+        "backward_time_rows": 0,
+        "changed_hardware_rows": 0,
+        "forward_gaps_over_1s": 4,
+        "min_epoch_interval_ns": 1000000000.0,
+        "max_epoch_interval_ns": 45000000000.0,
+        "qualification": "Read-only all-raw-row diagnostic; native loader quality/selection gates are not reproduced."
+      }
+    },
+    {
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 4515,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_offset_extra_bands_v1\\11\\summary.json",
+      "summary_sha256": "7dab1f83b6e13aa85ba5388c0db065076da5cada183e8136672954ebbc2d1e52"
+    },
+    {
+      "dataset_id": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 3582,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\12\\summary.json",
+      "summary_sha256": "fa1cd3ec16ca13ea59cf7d0e610022e6041ae9f55d4b4784025383e7d5dd0b35"
+    },
+    {
+      "dataset_id": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1679,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\13\\summary.json",
+      "summary_sha256": "270874864dc37f774bd1edcd52dd91fd7b7f4aaccc69288aca5339b11c82cf94"
+    },
+    {
+      "dataset_id": "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1172,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\14\\summary.json",
+      "summary_sha256": "d05fdd033e202eec567258a82146d773d0ddfae32dcfd9ed8c34d1a1a38b5d03"
+    },
+    {
+      "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 2112,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\15\\summary.json",
+      "summary_sha256": "e40f77c56940487a435f82bd927be4d96ceaa86e4471ecb78b8d0fd7b9f74c8a"
+    },
+    {
+      "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 2171,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\16\\summary.json",
+      "summary_sha256": "a725746439c5ed6b347d773dddb6493089a77b594fda9221b32b8d6149e83da7"
+    },
+    {
+      "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1400,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\17\\summary.json",
+      "summary_sha256": "adb3aa3e9a61334e55af2fed6d56284c768b909b583a12ba237fc8c069d9a218"
+    },
+    {
+      "dataset_id": "2022-04-25-21-04-us-ca-ebf-x/mi8",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1924,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\18\\summary.json",
+      "summary_sha256": "27d62a0ef52bc54f72bc947a2ad64affd35cf11b70c7b252feef0c68787693bd"
+    },
+    {
+      "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1587,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\19\\summary.json",
+      "summary_sha256": "e3d1a0cd59016d1de916f8da5d6fc9e04458f9e1b7590d63c6387454513620f1"
+    },
+    {
+      "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1315,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\20\\summary.json",
+      "summary_sha256": "b4f21fe92088144d716a4e5d1ee6ba315f24e38d69b18bc7a47285ee1e78c8b5"
+    },
+    {
+      "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1382,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\21\\summary.json",
+      "summary_sha256": "705f0c0fc3ef0153e43d2292f755354ab72cf5322cf8331ac5e26e588a56c241"
+    },
+    {
+      "dataset_id": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1344,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\22\\summary.json",
+      "summary_sha256": "b1a1605bce28842449f16791bb1629054d5711288382b426ad25fc1839021ee1"
+    },
+    {
+      "dataset_id": "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1435,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\23\\summary.json",
+      "summary_sha256": "704f6e102e4581045597fb7b5b263d1f30831217d4aa98e7d8cb9e0f5d74ec0b"
+    },
+    {
+      "dataset_id": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1862,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\24\\summary.json",
+      "summary_sha256": "914cee3b0c6df36cd206f9ffbbad3a866ceed417c58a3f5c7ff39d0b6b2b939c"
+    },
+    {
+      "dataset_id": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1838,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\25\\summary.json",
+      "summary_sha256": "2f2346cfad7f19b326c2245e6b2645fdb5a9064b16445460ca3c8b64b3b20be3"
+    },
+    {
+      "dataset_id": "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1782,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\26\\summary.json",
+      "summary_sha256": "0ad13381b3f31acf5ab7eaa2806be8581740afaf87250d93ed1058c12fe5f3db"
+    },
+    {
+      "dataset_id": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+      "clock_discontinuities": 1696,
+      "selected_epochs": 1697,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\27\\summary.json",
+      "summary_sha256": "8af921ec8dcb7506f11f3ad8902c390188bee61a1da1b0c419e5a4c88dc5b012",
+      "raw_clock_scan": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+        "sha256": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0",
+        "raw_rows": 66962,
+        "utc_epochs": 1699,
+        "backward_time_rows": 0,
+        "changed_hardware_rows": 0,
+        "forward_gaps_over_1s": 1697,
+        "min_epoch_interval_ns": 995743845.0,
+        "max_epoch_interval_ns": 2000001344.0,
+        "qualification": "Read-only all-raw-row diagnostic; native loader quality/selection gates are not reproduced."
+      }
+    },
+    {
+      "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "clock_discontinuities": 1,
+      "selected_epochs": 1357,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\28\\summary.json",
+      "summary_sha256": "7ca46f279c5b678cfdc56312d2a6652c1ed2ac99d88796e7670ceeb1bfe274f2",
+      "raw_clock_scan": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-19-25-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+        "sha256": "fff8fbe35035f24afca61125decbbe56a221b01381cb5b5a31b635435e7988e9",
+        "raw_rows": 36875,
+        "utc_epochs": 1357,
+        "backward_time_rows": 0,
+        "changed_hardware_rows": 0,
+        "forward_gaps_over_1s": 1,
+        "min_epoch_interval_ns": 1000000000.0,
+        "max_epoch_interval_ns": 2000000000.0,
+        "qualification": "Read-only all-raw-row diagnostic; native loader quality/selection gates are not reproduced."
+      }
+    },
+    {
+      "dataset_id": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1380,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\29\\summary.json",
+      "summary_sha256": "34e569dc4c6a85392f3c5abd686d6b713cbd55b8de07347ff87176039240617e"
+    },
+    {
+      "dataset_id": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+      "clock_discontinuities": 0,
+      "selected_epochs": 2110,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\30\\summary.json",
+      "summary_sha256": "5237aed995829598de1e22e4672a6f87ade1f60b0c02eb26d0d8950ac7fbf682"
+    },
+    {
+      "dataset_id": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+      "clock_discontinuities": 0,
+      "selected_epochs": 2145,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\31\\summary.json",
+      "summary_sha256": "87f57ebae679c6ccc8928bfa902388822402a56d73301f02ba06d12e8d2b528e"
+    },
+    {
+      "dataset_id": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+      "clock_discontinuities": 2383,
+      "selected_epochs": 2384,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\32\\summary.json",
+      "summary_sha256": "b354dbf565e73318bb868155a55b797710f2768b1b81981719788898f906690e",
+      "raw_clock_scan": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-09-23-10-us-ca-sjc-r\\sm-a505u\\device_gnss.csv",
+        "sha256": "a9f80d89213ba2e512f63501d4b5eb0e31e2164e478b4d69da80634a18553858",
+        "raw_rows": 56531,
+        "utc_epochs": 2384,
+        "backward_time_rows": 0,
+        "changed_hardware_rows": 0,
+        "forward_gaps_over_1s": 2383,
+        "min_epoch_interval_ns": 1000000122.0,
+        "max_epoch_interval_ns": 1000000184.0,
+        "qualification": "Read-only all-raw-row diagnostic; native loader quality/selection gates are not reproduced."
+      }
+    },
+    {
+      "dataset_id": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1975,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\33\\summary.json",
+      "summary_sha256": "e7e2bc91136f24a486066d6acf470a7d83b93ceac40ea938596a650a91bf573c"
+    },
+    {
+      "dataset_id": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1020,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\34\\summary.json",
+      "summary_sha256": "f9faea70662aeb15f14217e648107653828b5dfa6eea64128ea805ecec2c6f15"
+    },
+    {
+      "dataset_id": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1292,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\35\\summary.json",
+      "summary_sha256": "f21e53a5e9b210590b24da78833717b87ed310f89c310f1a3d91e9d104435d86"
+    },
+    {
+      "dataset_id": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1728,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\36\\summary.json",
+      "summary_sha256": "6c99c2c936ef5aab745b784dd624116bc8dacd6e40105fc1131412decf67b462"
+    },
+    {
+      "dataset_id": "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1482,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\37\\summary.json",
+      "summary_sha256": "e1c0308306b24391e6c82bab6a7177ac73b2fa84b934073808b3cf143a9b7679"
+    },
+    {
+      "dataset_id": "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+      "clock_discontinuities": 1,
+      "selected_epochs": 1608,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\38\\summary.json",
+      "summary_sha256": "a7a17d53ddd02a6fdb5bf9daa6700ae6e69a9c3f04f00ef8670ef17c8566f3ec",
+      "raw_clock_scan": {
+        "path": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-06-22-43-us-ca-sjc-he2\\pixel5\\device_gnss.csv",
+        "sha256": "b7488e07fe59959fc53c14c6a583e9509c44161ad0d65d05822ccb3f82a26f2e",
+        "raw_rows": 54551,
+        "utc_epochs": 1608,
+        "backward_time_rows": 1,
+        "changed_hardware_rows": 1,
+        "forward_gaps_over_1s": 0,
+        "min_epoch_interval_ns": -4294966296000000.0,
+        "max_epoch_interval_ns": 1000000000.0,
+        "qualification": "Read-only all-raw-row diagnostic; native loader quality/selection gates are not reproduced."
+      }
+    },
+    {
+      "dataset_id": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+      "clock_discontinuities": 0,
+      "selected_epochs": 1495,
+      "summary": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\39\\summary.json",
+      "summary_sha256": "dad73bc536feec071a011e557f409e6ff9a858a420c47c2fcccaa0b7cb277a17"
+    }
+  ]
+}

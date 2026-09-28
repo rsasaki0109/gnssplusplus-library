@@ -4147,6 +4147,10 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
         result.epoch_attitude_rpy_deg.resize(num_epochs);
         result.epoch_attitude_rpy_rad.resize(num_epochs);
         result.epoch_velocity_nav_mps.resize(num_epochs);
+        if (config.export_imu_bias_diagnostic) {
+            result.epoch_accel_bias_mps2.resize(num_epochs);
+            result.epoch_gyro_bias_radps.resize(num_epochs);
+        }
         constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
         for (std::size_t i = 0; i < num_epochs; ++i) {
             const Rot3 R_body_to_nav = optimized.at<Pose3>(positionKey(i)).rotation();
@@ -4163,6 +4167,11 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                 std::asin(std::max(-1.0, std::min(1.0, fwd.z()))) * kRadToDeg;
             const double roll = std::atan2(left.z(), R.col(2).z()) * kRadToDeg;
             result.epoch_attitude_rpy_deg[i] = Vector3d(roll, pitch, heading);
+            if (config.export_imu_bias_diagnostic) {
+                const auto& bias = optimized.at<gtsam::imuBias::ConstantBias>(biasKey(i));
+                result.epoch_accel_bias_mps2[i] = bias.accelerometer();
+                result.epoch_gyro_bias_radps[i] = bias.gyroscope();
+            }
             result.epoch_attitude_rpy_rad[i] =
                 Vector3d(rpy.x(), rpy.y(), rpy.z());
             result.epoch_velocity_nav_mps[i] =

@@ -106,6 +106,7 @@ struct Options {
     std::string native_base_rinex_sha256;
     std::string out_path;
     std::string summary_path;
+    bool native_imu_state_diagnostic = false;
     std::string dataset_id = "native-fgo-v2-imu-no-base";
     int max_epochs = kDefaultEpochLimit;
     int skip_epochs = 0;
@@ -113,6 +114,7 @@ struct Options {
     bool android_raw_utc_key_contract = false;
     bool android_include_first_native_epoch = false;
     bool android_raw_clock_only = false;
+    bool android_continuous_clock_reference = false;
     bool android_utc_wall_clock_fallback = false;
     bool fgo_imu_sparse_recovery = false;
     bool native_pdc_state_bridge = false;
@@ -326,6 +328,8 @@ struct Options {
     bool native_export_gnss_stage_factors = false;
     bool native_export_imu_stage = false;
     bool native_imu_refinement_pass = false;
+    bool native_refinement_no_doppler_initialization = false;
+    bool native_refinement_observed_clock_drift = false;
     bool native_refinement_attitude_reset = false;
     bool native_source_stage_position_offsets = false;
     bool native_source_imu_stop_phases = false;
@@ -474,6 +478,7 @@ void usage(const char* program) {
                  " | --android-gnss <device_gnss.csv> --android-imu <device_imu.csv>)"
                  " --nav <brdc.nav>"
                  " --out <submission.csv> --summary-json <summary.json>"
+                 " [--native-imu-state-diagnostic]"
                  " [--dataset-id <id>] [--skip-epochs <n>]"
                  " [--max-epochs 10..30 | --all-epochs]"
                  " [--android-raw-utc-keys] [--android-include-first-native-epoch] [--android-raw-clock-only]"
@@ -560,6 +565,8 @@ void usage(const char* program) {
                  " [--native-source-imu-observation-stages]"
                  " [--native-source-gnss-initial-observations]"
                  " [--native-imu-refinement-pass]"
+                 " [--native-refinement-no-doppler-initialization]"
+                 " [--native-refinement-observed-clock-drift]"
                  " [--native-refinement-attitude-reset]"
                  " [--native-source-stage-position-offsets]"
                  " [--native-temporal-seed-initialization]"
@@ -806,8 +813,20 @@ bool parseArguments(int argc, char** argv, Options& options) {
             if (!(options.native_gnss_first_doppler_threshold_mps > 0.0)) return false;
             continue;
         }
+        if (arg == "--android-continuous-clock-reference") {
+            options.android_continuous_clock_reference = true;
+            continue;
+        }
         if (arg == "--native-imu-refinement-pass") {
             options.native_imu_refinement_pass = true;
+            continue;
+        }
+        if (arg == "--native-refinement-no-doppler-initialization") {
+            options.native_refinement_no_doppler_initialization = true;
+            continue;
+        }
+        if (arg == "--native-refinement-observed-clock-drift") {
+            options.native_refinement_observed_clock_drift = true;
             continue;
         }
         if (arg == "--native-source-stage-position-offsets") {
@@ -832,6 +851,10 @@ bool parseArguments(int argc, char** argv, Options& options) {
         }
         if (arg == "--native-export-imu-stage") {
             options.native_export_imu_stage = true;
+            continue;
+        }
+        if (arg == "--native-imu-state-diagnostic") {
+            options.native_imu_state_diagnostic = true;
             continue;
         }
         if (arg == "--help" || arg == "-h") {
@@ -1224,6 +1247,16 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "--native-imu-refinement-pass requires exported Phase171 source-IMU/main-D stages and ordinary exact-stream base corrections\n";
         return false;
     }
+    if (options.native_refinement_no_doppler_initialization &&
+        !options.native_imu_refinement_pass) {
+        std::cerr << "--native-refinement-no-doppler-initialization requires --native-imu-refinement-pass\n";
+        return false;
+    }
+    if (options.native_refinement_observed_clock_drift &&
+        !options.native_refinement_no_doppler_initialization) {
+        std::cerr << "--native-refinement-observed-clock-drift requires --native-refinement-no-doppler-initialization\n";
+        return false;
+    }
     if (options.native_source_stage_position_offsets &&
         (!options.native_source_imu_observation_stages || !options.native_upstream_position_offset)) {
         std::cerr << "--native-source-stage-position-offsets requires --native-source-imu-observation-stages and --native-upstream-position-offset\n";
@@ -1509,6 +1542,11 @@ bool parseArguments(int argc, char** argv, Options& options) {
         }
     }
     const bool has_observation_file = !options.obs_path.empty();
+    if (options.native_imu_state_diagnostic &&
+        (!options.native_phase171_raw_p_no_doppler_imu_main || raw_only_stage || phase180_clock_preflight)) {
+        std::cerr << "IMU state diagnostic requires the native Phase171 main IMU graph\n";
+        return false;
+    }
     const bool ordinary_input_shape =
         !options.nav_path.empty() &&
         (options.imu_path.empty() != options.android_imu_path.empty()) &&
@@ -1684,6 +1722,11 @@ bool parseArguments(int argc, char** argv, Options& options) {
         std::cerr << "--android-raw-utc-keys requires the Android raw GNSS/IMU path\n";
         return false;
     }
+    if (options.android_continuous_clock_reference &&
+        (!android_raw || !options.android_raw_clock_only)) {
+        std::cerr << "--android-continuous-clock-reference requires Android raw input and --android-raw-clock-only\n";
+        return false;
+    }
     if (options.android_raw_clock_only && !android_raw) {
         std::cerr << "--android-raw-clock-only requires Android raw GNSS/IMU input\n";
         return false;
@@ -1777,7 +1820,7 @@ bool parseArguments(int argc, char** argv, Options& options) {
          !options.android_raw_utc_key_contract || !options.all_epochs ||
          options.skip_epochs != 0 || !phase171_imu_main || !phase171_ecef_doppler ||
          options.native_main_p_cauchy ||
-         options.native_stationary_gyro_initializer || options.native_epoch_heading_attitude_seeds)) {
+         options.native_stationary_gyro_initializer)) {
         std::cerr << "--native-sparse-p-staging requires raw all-epoch Phase171 recipe\n";
         return false;
     }
@@ -3589,6 +3632,9 @@ struct ImuBuildReport {
     std::size_t refinement_attitude_reset_low_speed = 0;
     std::size_t refinement_attitude_reset_nearest_fill = 0;
     std::size_t refinement_initial_iterations = 0;
+    std::size_t refinement_initial_main_doppler_factors = 0;
+    bool refinement_gnss_drift_handoff = false;
+    std::size_t refinement_observed_drift_epochs = 0;
     std::size_t refinement_doppler_candidates = 0, refinement_doppler_retained = 0;
     std::size_t refinement_p_rows = 0, refinement_base_corrected_rows = 0;
     std::size_t refinement_base_application_passes = 0;
@@ -4891,6 +4937,16 @@ struct TdcpRuntimeReport {
     double residual_rms_m = 0.0;
     double normalized_residual_rms = 0.0;
     double max_abs_residual_m = 0.0;
+    std::size_t max_residual_previous_epoch = 0;
+    std::size_t max_residual_current_epoch = 0;
+    int max_residual_system = 0;
+    int max_residual_signal = 0;
+    int max_residual_prn = 0;
+    double max_residual_signed_m = 0.0;
+    double max_residual_delta_carrier_m = 0.0;
+    double max_residual_range_change_m = 0.0;
+    double max_residual_clock_change_m = 0.0;
+    bool uses_integrated_drift = false;
 };
 
 // Phase116 is deliberately a read-only incidence/cost report for the
@@ -5111,7 +5167,17 @@ bool exportNativeGnssStage(
             << solution.position_ecef.x() << ',' << solution.position_ecef.y()
             << ',' << solution.position_ecef.z() << '\n';
     }
-    return atomicWrite(options.summary_path + "." + stage_name + ".csv", csv.str());
+    if (stage.epoch_clock_drift_mps.size() != raw_keys.size()) return false;
+    std::ostringstream clocks;
+    clocks << "UnixTimeMillis,CodeClock_m,Drift_mps\n" << std::setprecision(17);
+    for (std::size_t i = 0; i < raw_keys.size(); ++i) {
+        const double bias = stage.solution.solutions[i].receiver_clock_bias * libgnss::constants::SPEED_OF_LIGHT;
+        const double drift = stage.epoch_clock_drift_mps[i];
+        if (!std::isfinite(bias) || !std::isfinite(drift)) return false;
+        clocks << raw_keys[i] << ',' << bias << ',' << drift << '\n';
+    }
+    return atomicWrite(options.summary_path + "." + stage_name + ".csv", csv.str()) &&
+           atomicWrite(options.summary_path + "." + stage_name + ".clocks.csv", clocks.str());
 }
 
 // Diagnostic-only dump of the pseudorange factors consumed by the GNSS-first
@@ -5555,6 +5621,7 @@ TdcpRuntimeReport evaluateTdcpRuntime(
     TdcpRuntimeReport report;
     report.enabled = enabled;
     if (!enabled) return report;
+    report.uses_integrated_drift = usesDriftTdcpDiagnostics(config);
     report.factors_built = problem.tdcp_factors.size();
     if (config.use_native_tdcp_frequency_residual_states) {
         if (result.tdcp_frequency_corrections.size()!=problem.tdcp_factors.size()) {
@@ -5679,8 +5746,19 @@ TdcpRuntimeReport evaluateTdcpRuntime(
         } else {
             ++report.robust_cost_nonfinite_count;
         }
-        report.max_abs_residual_m =
-            std::max(report.max_abs_residual_m, std::abs(residual));
+        if (std::abs(residual) > report.max_abs_residual_m) {
+            report.max_abs_residual_m = std::abs(residual);
+            report.max_residual_previous_epoch = factor.previous_epoch_index;
+            report.max_residual_current_epoch = factor.current_epoch_index;
+            report.max_residual_system = static_cast<int>(factor.satellite.system);
+            report.max_residual_signal = static_cast<int>(factor.signal);
+            report.max_residual_prn = static_cast<int>(factor.satellite.prn);
+            report.max_residual_signed_m = residual;
+            report.max_residual_delta_carrier_m = factor.delta_carrier_m;
+            report.max_residual_range_change_m = current_range - previous_range;
+            report.max_residual_clock_change_m = libgnss::constants::SPEED_OF_LIGHT *
+                (current.receiver_clock_bias - previous.receiver_clock_bias);
+        }
         if (report.finite_residuals == 1U) report.sigma_m = factor.sigma_m;
     }
     for (const auto& [key, arc] : active_arcs) {
@@ -10614,6 +10692,16 @@ std::string makeSummary(const Options& options,
     }
     out << "],\n"
         << "    \"max_abs_residual_m\": " << tdcp_report.max_abs_residual_m << ",\n"
+        << "    \"max_residual_previous_epoch\": " << tdcp_report.max_residual_previous_epoch << ",\n"
+        << "    \"max_residual_current_epoch\": " << tdcp_report.max_residual_current_epoch << ",\n"
+        << "    \"max_residual_system\": " << tdcp_report.max_residual_system << ",\n"
+        << "    \"max_residual_signal\": " << tdcp_report.max_residual_signal << ",\n"
+        << "    \"max_residual_prn\": " << tdcp_report.max_residual_prn << ",\n"
+        << "    \"max_residual_signed_m\": " << tdcp_report.max_residual_signed_m << ",\n"
+        << "    \"max_residual_delta_carrier_m\": " << tdcp_report.max_residual_delta_carrier_m << ",\n"
+        << "    \"max_residual_geometric_range_change_m\": " << tdcp_report.max_residual_range_change_m << ",\n"
+        << "    \"max_residual_code_clock_change_m\": " << tdcp_report.max_residual_clock_change_m << ",\n"
+        << "    \"max_residual_uses_integrated_drift\": " << (tdcp_report.uses_integrated_drift ? "true" : "false") << ",\n"
         << "    \"pair_key\": \"(satellite,signal)\",\n"
         << "    \"adr_state_slip_fail_closed\": true,\n"
         << "    \"standalone_carrier_ambiguity_factors\": false,\n"
@@ -11664,6 +11752,11 @@ std::string makeSummary(const Options& options,
         << "    \"final_stop_pose_gap_rejections\": " << result.diagnostics.upstream_stop_pose_gap_rejections << ",\n"
         << "    \"refinement_applied\": " << (imu_report.refinement_applied ? "true" : "false") << ",\n"
         << "    \"refinement_initial_iterations\": " << imu_report.refinement_initial_iterations << ",\n"
+        << "    \"refinement_no_doppler_initialization_requested\": " << (options.native_refinement_no_doppler_initialization ? "true" : "false") << ",\n"
+        << "    \"refinement_initial_main_doppler_factors\": " << imu_report.refinement_initial_main_doppler_factors << ",\n"
+        << "    \"refinement_gnss_drift_handoff\": " << (imu_report.refinement_gnss_drift_handoff ? "true" : "false") << ",\n"
+        << "    \"refinement_observed_clock_drift_requested\": " << (options.native_refinement_observed_clock_drift ? "true" : "false") << ",\n"
+        << "    \"refinement_observed_drift_epochs\": " << imu_report.refinement_observed_drift_epochs << ",\n"
         << "    \"refinement_doppler_candidates\": " << imu_report.refinement_doppler_candidates << ",\n"
         << "    \"refinement_doppler_retained\": " << imu_report.refinement_doppler_retained << ",\n"
         << "    \"refinement_p_rows\": " << imu_report.refinement_p_rows << ",\n"
@@ -11863,6 +11956,35 @@ std::string makeSummary(const Options& options,
             out, imu_report.gnss_first_phase143_termination);
         out << ",\n    \"no_solution_or_accuracy_fields\": true\n  }";
     }
+    if (options.native_imu_state_diagnostic) {
+        const auto count = problem.epochs.size();
+        if (fallback || !result.diagnostics.converged ||
+            result.epoch_attitude_rpy_rad.size() != count ||
+            result.epoch_velocity_nav_mps.size() != count ||
+            result.epoch_accel_bias_mps2.size() != count ||
+            result.epoch_gyro_bias_radps.size() != count) {
+            throw std::runtime_error("Incomplete optimized IMU state diagnostic");
+        }
+        out << ",\n  \"optimized_imu_states\": {\"schema_version\": 1, "
+               "\"truth_used\": false, \"estimator_feedback\": false, "
+               "\"attitude_convention\": \"body FLU to nav ENU Rot3::rpy radians\", "
+               "\"bias_axes\": \"body FLU\", \"epochs\": [";
+        for (std::size_t i = 0; i < count; ++i) {
+            if (i) out << ',';
+            out << "{\"index\":" << i << ",\"raw_utc_time_millis\":"
+                << problem.epochs[i].raw_utc_time_millis;
+            const auto vector = [&](const char* name, const libgnss::Vector3d& v) {
+                if (!v.allFinite()) throw std::runtime_error("Nonfinite IMU state diagnostic");
+                out << ",\"" << name << "\":[" << v.x() << ',' << v.y() << ',' << v.z() << ']';
+            };
+            vector("rpy_rad", result.epoch_attitude_rpy_rad[i]);
+            vector("velocity_enu_mps", result.epoch_velocity_nav_mps[i]);
+            vector("accel_bias_mps2", result.epoch_accel_bias_mps2[i]);
+            vector("gyro_bias_radps", result.epoch_gyro_bias_radps[i]);
+            out << '}';
+        }
+        out << "]}";
+    }
     if (options.native_phase141_telemetry_schema ||
         options.native_phase144_telemetry_schema) {
         out << ",\n  \""
@@ -11928,6 +12050,8 @@ int main(int argc, char** argv) {
     if (android_raw) {
         libgnss::io::AndroidRawGnssConfig android_gnss_config;
         android_gnss_config.device_model = phoneFromDatasetId(options.dataset_id);
+        android_gnss_config.continuous_clock_reference =
+            options.android_continuous_clock_reference;
         android_gnss_config.require_frequency_pair_timing =
             options.native_tdcp_frequency_residual_states;
         android_gnss_config.verify_enriched_pseudorange =
@@ -12364,6 +12488,8 @@ int main(int argc, char** argv) {
         // any corrected factor geometry is selected; no serialized seed or
         // previous result can enter this lane.
         libgnss::raw_p_seed::Config seed_config;
+        seed_config.receiver_clock_corrected_gap_checks =
+            options.android_continuous_clock_reference;
         if (options.native_imu_supported_long_gaps) seed_config.max_gap_s = 60.0;
         seed_config.processor_config.elevation_mask = 0.0;
         seed_config.processor_config.snr_mask = 0.0;
@@ -12494,6 +12620,8 @@ int main(int argc, char** argv) {
         // derives only same-run position-gradient velocities, emits structural
         // metadata, and exits before any FGO/IMU path is entered.
         libgnss::raw_p_seed::Config seed_config;
+        seed_config.receiver_clock_corrected_gap_checks =
+            options.android_continuous_clock_reference;
         if (options.native_imu_supported_long_gaps) seed_config.max_gap_s = 60.0;
         seed_config.processor_config.elevation_mask = 0.0;
         seed_config.processor_config.snr_mask = 0.0;
@@ -12523,6 +12651,8 @@ int main(int argc, char** argv) {
         // vector remains the sole source of an exact raw receiver clock rate.
         // No serialized seed, coordinate, or graph path is consulted here.
         libgnss::raw_p_seed::Config seed_config;
+        seed_config.receiver_clock_corrected_gap_checks =
+            options.android_continuous_clock_reference;
         if (options.native_imu_supported_long_gaps) seed_config.max_gap_s = 60.0;
         seed_config.processor_config.elevation_mask = 0.0;
         seed_config.processor_config.snr_mask = 0.0;
@@ -13061,6 +13191,7 @@ int main(int argc, char** argv) {
         config.use_native_phase209_source_separate_imu_factors =
             options.native_phase209_source_separate_imu_factors;
         config.use_native_phase213_main_doppler = options.native_phase213_main_doppler;
+        config.export_imu_bias_diagnostic = options.native_imu_state_diagnostic;
         config.use_native_phase217_main_pose3_motion = options.native_phase217_main_pose3_motion;
         config.native_phase217_motion_sigma_m = options.native_phase217_motion_sigma_m;
         config.use_source_tdcp_meter_sigma = options.native_source_tdcp_meter_sigma;
@@ -14653,7 +14784,19 @@ int main(int argc, char** argv) {
             }
             if (options.native_source_imu_observation_stages && phase94_diagnostics.enabled)
                 phase94_diagnostics.main_preflight = makePhase94C0DPreflight(problem, initial_config);
-            result = libgnss::FGOProcessor(initial_config).optimizeProblem(problem);
+            if (options.native_refinement_no_doppler_initialization) {
+                // Continuation experiment: initialize with the native no-D
+                // IMU graph. Keep the original problem and final config for
+                // the existing same-run observation rebuild below.
+                auto no_doppler_problem = problem;
+                no_doppler_problem.native_phase213_main_doppler_rows.clear();
+                initial_config.use_native_phase213_main_doppler = false;
+                result = libgnss::FGOProcessor(initial_config).optimizeProblem(no_doppler_problem);
+            } else {
+                result = libgnss::FGOProcessor(initial_config).optimizeProblem(problem);
+            }
+            imu_report.refinement_initial_main_doppler_factors =
+                result.diagnostics.native_phase213_main_doppler_factors;
             imu_report.initial_stop_velocity_factors = result.diagnostics.upstream_stop_velocity_factors;
             imu_report.initial_stop_pose_factors = result.diagnostics.upstream_stop_pose_factors;
             imu_report.initial_stop_velocity_phase_omissions = result.diagnostics.upstream_stop_velocity_phase_omissions;
@@ -14666,6 +14809,11 @@ int main(int argc, char** argv) {
                 // Freeze a diagnostic copy before any final phone offset. The
                 // second pass consumes only the in-memory result above.
                 imu_report.refinement_initial_iterations = result.diagnostics.iterations;
+                if (options.native_refinement_no_doppler_initialization &&
+                    !options.native_refinement_observed_clock_drift) {
+                    libgnss::native_imu_refinement::useSameRunGnssClockDrift(problem, result);
+                    imu_report.refinement_gnss_drift_handoff = true;
+                }
                 auto final_config = config;
                 if (options.native_source_imu_stop_phases)
                     final_config.native_imu_stop_phase = libgnss::NativeImuStopPhase::Final;
@@ -14683,9 +14831,11 @@ int main(int argc, char** argv) {
                         if (shifted)
                             return libgnss::native_imu_refinement::rebuildHandoff(
                                 epochs, nav, problem, std::move(shifted->states),
-                                result.epoch_velocity_nav_mps, result.epoch_clock_drift_mps, final_config);
+                                result.epoch_velocity_nav_mps, result.epoch_clock_drift_mps, final_config,
+                                options.native_refinement_observed_clock_drift);
                         return libgnss::native_imu_refinement::rebuild(
-                            epochs, nav, problem, result, final_config);
+                            epochs, nav, problem, result, final_config,
+                            options.native_refinement_observed_clock_drift);
                     }
                     auto reset = libgnss::native_imu_refinement::fromResultWithAttitudeReset(
                         epochs, problem, result);
@@ -14725,10 +14875,12 @@ int main(int argc, char** argv) {
                         throw std::invalid_argument("Failed to export native attitude-reset provenance");
                     return libgnss::native_imu_refinement::rebuildHandoff(
                         epochs, nav, problem, std::move(reset.states),
-                        result.epoch_velocity_nav_mps, result.epoch_clock_drift_mps, final_config);
+                        result.epoch_velocity_nav_mps, result.epoch_clock_drift_mps, final_config,
+                        options.native_refinement_observed_clock_drift);
                 }();
                 const auto correction = applyFreshNativeBase(refreshed.problem,base_pseudorange_model);
                 imu_report.refinement_doppler_candidates = refreshed.doppler_mask.candidates;
+                imu_report.refinement_observed_drift_epochs = refreshed.observed_drift_epochs;
                 imu_report.refinement_doppler_retained = refreshed.doppler_mask.retained;
                 imu_report.refinement_p_rows = refreshed.problem.pseudorange_factors.size();
                 imu_report.refinement_base_corrected_rows = correction.corrected_rows;

@@ -1,0 +1,233 @@
+{
+  "status": "saved-development-imu-bias-inventory",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "plan_sha256": "00854b2747c56545fda39335019b69e4c580a20d4bb8fe2bedaddc77d4f609fc",
+  "cases": [
+    {
+      "dataset_id": "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "c6ef19f3e41ed435877d89ffa3c105798c6540e49b80eff96176460ef4b5399b",
+          "accel_bias_max_mps2": 0.07445989338152603,
+          "gyro_bias_max_radps": 0.0008843276233526663
+        },
+        "candidate": {
+          "summary_sha256": "39783e61fea846b044c667be7627433a81d4933140faa53b0d7a3682f0d901f7",
+          "accel_bias_max_mps2": 0.08070459651989076,
+          "gyro_bias_max_radps": 0.000886397578924892
+        }
+      }
+    },
+    {
+      "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "3a6034098b3b1936a26685bd4b0287c6910db3e045e67c552163ee193e205c13",
+          "accel_bias_max_mps2": 0.052711807320647994,
+          "gyro_bias_max_radps": 0.00010131299787798221
+        },
+        "candidate": {
+          "summary_sha256": "d67e26427b24e99a9171ebf4d804a6d22c0b93b9c0b2a3a256354d0998ca3451",
+          "accel_bias_max_mps2": 0.05512334658651225,
+          "gyro_bias_max_radps": 0.00010024886320066572
+        }
+      }
+    },
+    {
+      "dataset_id": "2022-02-24-18-29-us-ca-lax-o/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "4daada240014401d743bf849a8a43df4f4c7e15e71919530b510f4ba9c993969",
+          "accel_bias_max_mps2": 0.05188287388027841,
+          "gyro_bias_max_radps": 0.004255174630513351
+        },
+        "candidate": {
+          "summary_sha256": "24ba90b421fa05a9c0c1f65158d2ac9eff5adcbc5881264b78fe75e349b4fa67",
+          "accel_bias_max_mps2": 0.0538831669560382,
+          "gyro_bias_max_radps": 0.004253433040515262
+        }
+      }
+    },
+    {
+      "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "24aee2d12e8c0fe710433fa76a4f1491642ecf308caec651135373f20fbaf695",
+          "accel_bias_max_mps2": 0.05283243227203267,
+          "gyro_bias_max_radps": 0.0011613155509154237
+        },
+        "candidate": {
+          "summary_sha256": "a32991697b6da93da4355cbd59c11e20d852a596c6f8faeac8efeed763420d31",
+          "accel_bias_max_mps2": 0.050621319179878936,
+          "gyro_bias_max_radps": 0.0011623340317672133
+        }
+      }
+    },
+    {
+      "dataset_id": "2023-05-09-21-32-us-ca-mtv-pe1/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "f2db87cdb9ebbffd413c034e87377013bca277a424f1d7ae6ca6f4c81625b7ef",
+          "accel_bias_max_mps2": 0.05255930875307624,
+          "gyro_bias_max_radps": 0.0047293555044885
+        },
+        "candidate": {
+          "summary_sha256": "3afdd558d573a06a11fd55501e4eafc235071240ba9c3ad6c2d00e484e50fa20",
+          "accel_bias_max_mps2": 0.052616369147889724,
+          "gyro_bias_max_radps": 0.00471167517935927
+        }
+      }
+    },
+    {
+      "dataset_id": "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "db7191b5724541f6f2a25fbbaf1bcfebc6c1bbc19bbf906e2fc264b699ff98a7",
+          "accel_bias_max_mps2": 0.04331973920289555,
+          "gyro_bias_max_radps": 0.0008942279350719196
+        },
+        "candidate": {
+          "summary_sha256": "9ec8edcc6e9677521b99f22696eb252fb74b292c0317b454a57ffdcb9d3ebb0b",
+          "accel_bias_max_mps2": 0.04511097047567977,
+          "gyro_bias_max_radps": 0.0008944628251655249
+        }
+      }
+    },
+    {
+      "dataset_id": "2023-03-08-21-34-us-ca-mtv-u/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "73705e12a4b70a9a27cbbb21676380e5be3ff67c9d7e1cbc28daf3e699ebfd15",
+          "accel_bias_max_mps2": 0.04005209957763927,
+          "gyro_bias_max_radps": 0.0001861106716600771
+        },
+        "candidate": {
+          "summary_sha256": "7afa2ef96530d4ad85df3eead5396322112e05368477de245e4bed366585305e",
+          "accel_bias_max_mps2": 0.04326483090306381,
+          "gyro_bias_max_radps": 0.00018578593275177688
+        }
+      }
+    },
+    {
+      "dataset_id": "2021-03-16-18-59-us-ca-mtv-a/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "4be6ed0312da08d8dbfd9d2b4c3a8ea133320b50bc54a708198840a1545e7e6c",
+          "accel_bias_max_mps2": 0.037756608553153395,
+          "gyro_bias_max_radps": 0.0013192019966576467
+        },
+        "candidate": {
+          "summary_sha256": "9b04e822bbf45a65486b795422d441bbff8a67b8ffedaa1f0855c2e5009c607a",
+          "accel_bias_max_mps2": 0.041478529177282855,
+          "gyro_bias_max_radps": 0.0013162149092135881
+        }
+      }
+    },
+    {
+      "dataset_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "7a59ea824a356b221eeeaa8d69aaefd3f54d773bc5a41696740bb03efc582048",
+          "accel_bias_max_mps2": 0.039240414369000665,
+          "gyro_bias_max_radps": 0.00037343991072527003
+        },
+        "candidate": {
+          "summary_sha256": "8d4795077909f2fffe255eae8dd4a959fcd6172dbcd8f85860b39ef56d3acd8a",
+          "accel_bias_max_mps2": 0.04076448327066313,
+          "gyro_bias_max_radps": 0.00037365041458856243
+        }
+      }
+    },
+    {
+      "dataset_id": "2021-07-19-20-49-us-ca-mtv-a/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "089c936557a3876f8185c05e4e77d71e195aabfa91f8fb0c8925e242a189474e",
+          "accel_bias_max_mps2": 0.03361342778318005,
+          "gyro_bias_max_radps": 0.0006878778220459864
+        },
+        "candidate": {
+          "summary_sha256": "f61df97be2365f8c8102b0afa06158725da4765e25a267db71f5c1e3b193073d",
+          "accel_bias_max_mps2": 0.031704579713519254,
+          "gyro_bias_max_radps": 0.0006885399817945759
+        }
+      }
+    },
+    {
+      "dataset_id": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "4c8c6a8c3a376f0f28a4db8da0dc9718f070b87f9487e168f36ddc4c5b740b68",
+          "accel_bias_max_mps2": 0.029114292704440506,
+          "gyro_bias_max_radps": 0.0003305161439382358
+        },
+        "candidate": {
+          "summary_sha256": "8cf2445c8e12c567560ab4ab4588b67d1de5fb874d2412c11020d01e54c62844",
+          "accel_bias_max_mps2": 0.02567851636090609,
+          "gyro_bias_max_radps": 0.0003298524402364585
+        }
+      }
+    },
+    {
+      "dataset_id": "2023-09-05-23-07-us-ca-routen/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "0431d01ad9a76696caa1d72577e317735bee860948d26d10de39d7944817e7d9",
+          "accel_bias_max_mps2": 0.018471936382947633,
+          "gyro_bias_max_radps": 0.0002149290233530285
+        },
+        "candidate": {
+          "summary_sha256": "3036dff746faad78acc108d06ed5e1d3774fd03ab4fdecfc853514ca6f6026c9",
+          "accel_bias_max_mps2": 0.01817849815293775,
+          "gyro_bias_max_radps": 0.00021230277023275753
+        }
+      }
+    },
+    {
+      "dataset_id": "2022-04-01-18-22-us-ca-lax-t/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "e32ebef3bf6730e4d485e918ca5d35b6e16ef8cad3eb86e8b11d3656d3c543f5",
+          "accel_bias_max_mps2": 0.01817167289508435,
+          "gyro_bias_max_radps": 0.000744410268970102
+        },
+        "candidate": {
+          "summary_sha256": "ff98d006a99f9141148731064354397e4b7f860e100c4b159c0ecc0ab9d27625",
+          "accel_bias_max_mps2": 0.014745729325341541,
+          "gyro_bias_max_radps": 0.0007457083386813774
+        }
+      }
+    },
+    {
+      "dataset_id": "2023-09-07-18-59-us-ca/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "1f2aa4e7bfe7a89860be6233b357638f4e288f85eb8b970e9b76dfe26ee50e18",
+          "accel_bias_max_mps2": 0.016271855798493162,
+          "gyro_bias_max_radps": 0.000704927382426987
+        },
+        "candidate": {
+          "summary_sha256": "d4eb25f296186ddb6f38503203e7abea585ead2129b5fcb546df97116a1ee8fc",
+          "accel_bias_max_mps2": 0.01788135468390288,
+          "gyro_bias_max_radps": 0.0007057579668763616
+        }
+      }
+    },
+    {
+      "dataset_id": "2022-01-26-20-02-us-ca-mtv-pe1/pixel5",
+      "arms": {
+        "control": {
+          "summary_sha256": "3f1689cdea937a36b5c61ca548cb7459f4e9246fce4f5ed85cdca78b6e16f9b8",
+          "accel_bias_max_mps2": 0.010588237799523203,
+          "gyro_bias_max_radps": 8.636649531441807e-05
+        },
+        "candidate": {
+          "summary_sha256": "2b6d033cfb8abe0fa1a650c9f4aa4b9595aab4a8b63e7da963dc90fd8a3a79f4",
+          "accel_bias_max_mps2": 0.007704131763462157,
+          "gyro_bias_max_radps": 8.733523688070054e-05
+        }
+      }
+    }
+  ]
+}

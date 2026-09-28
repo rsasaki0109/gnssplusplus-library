@@ -1,0 +1,50 @@
+{
+  "status": "tenth-heading-development-control-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "plan_sha256": "669ca34e677db460f44f2652946bdfd560787a28881000e1295f0d890ff65586",
+  "dataset_id": "2022-08-04-20-07-us-ca-sjc-q/pixel5",
+  "keys": 1450,
+  "source_byte_parity": true,
+  "wall_s": 599.5794394016266,
+  "solution_sha256": "b8db5c96ead16b901cdb56885f34f13f2ac16d1e09ba0a37bbef7f370ccf563a",
+  "summary_sha256": "50885ab6f51306d3b5897d21ecb77d439a7317c695f85d58b034bc1aa4be46eb",
+  "states": {
+    "accel_bias_mps2": {
+      "first_norm": 0.04510644755925054,
+      "last_norm": 0.029886233358568538,
+      "maximum_norm": 0.04511097047567977,
+      "maximum_epoch": 12,
+      "maximum_utc": 1659643653437
+    },
+    "gyro_bias_radps": {
+      "first_norm": 0.0008638134676354651,
+      "last_norm": 0.0008944575325959758,
+      "maximum_norm": 0.0008944628251655249,
+      "maximum_epoch": 1312,
+      "maximum_utc": 1659644953437
+    },
+    "accel_bias_thresholds_mps2": {
+      "0.1": {
+        "count": 0,
+        "first_epoch": null,
+        "last_epoch": null
+      },
+      "1.0": {
+        "count": 0,
+        "first_epoch": null,
+        "last_epoch": null
+      },
+      "5.0": {
+        "count": 0,
+        "first_epoch": null,
+        "last_epoch": null
+      },
+      "10.0": {
+        "count": 0,
+        "first_epoch": null,
+        "last_epoch": null
+      }
+    }
+  }
+}

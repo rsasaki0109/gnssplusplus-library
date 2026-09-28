@@ -1,0 +1,56 @@
+{
+  "status": "completed-audited-development-pair",
+  "official_score": false,
+  "promoted": false,
+  "truth_consumed_by_inference": false,
+  "binary": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\continuous_raw_clock_20260926.exe",
+  "binary_sha256": "862d58966c5e88594e171d3b39d038ae947419409ab649fb42a0426e43018832",
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "d0283e3345c46bed2337ccfa431ac1e6b9a54bd0d0616b8b17b59c0973051a69",
+    "include/libgnss++/io/android_raw_gnss.hpp": "7539b7fb12c97089f96ca846612ffab533a52fb83cb113211531a4a3d63690c3",
+    "src/io/android_raw_gnss.cpp": "1c569e7efbee50bafea9595ebcc8a6a653586ba2b567d10290cb685c5f4cd553",
+    "tests/test_android_raw_gnss.cpp": "8a756d912cc2b85592787192fbf0a9783edab03c16cc068bc03e185e21ca53a2",
+    "scripts/analysis/compare_gsdc_doppler_diagnostic.py": "e898e0506e7c13667fe9982b6515c2bedd553413d0c8b677d29a52bbb0078a5a",
+    "scripts/analysis/run_gsdc_doppler_segment_diagnostic.py": "9406cf13b3f5b44921f499f61c5b9e4cb82dac53804ae3e2cf0461a85ca3af99"
+  },
+  "source_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_residual_components_20260926\\doppler\\run.json",
+  "source_run_sha256": "7b5c9ac1a64ed2296570e4da42e1bc50ec02d495654b0c4d3e38246fa44eebe6",
+  "candidate_flags": [
+    "--android-continuous-clock-reference"
+  ],
+  "candidate_name": "continuous",
+  "output_dir": "E:/rtklib_v2_ws_output/gsdc_native/continuous_raw_clock_20260926",
+  "supervisor": "E:/rtklib_v2_ws_tmp/launch_continuous_clock.ps1",
+  "supervisor_sha256": "a0ad4e795051d0b072656e7c20d32fd18ef6b38ffebfa4d2dc5092d370ee3c15",
+  "supervisor_session": 29398,
+  "gate_native_pid": 49040,
+  "tests": {
+    "tests": 27,
+    "failures": 0,
+    "report": "E:\\rtklib_v2_ws_tmp\\gsdc-drift-handoff-test\\results_continuous_clock.json",
+    "sha256": "a545a34c829d6dc09eae307a2c9d7ef1f956c6f44ae0d239ef418d0100452898"
+  },
+  "native_loader_audit": {
+    "keys": 1165,
+    "keys_unchanged": true,
+    "legacy_epoch423_step_m": -46649.805012006,
+    "continuous_epoch423_step_m": 110.62341700200341,
+    "continuous_max_step_m": 111.22300191801332,
+    "continuous_clock_discontinuities": 0,
+    "output_sha256": "42dfe33a1cb26f701f9e0ab040f679f92be16aba63df1d573417ac5e699e59a1",
+    "helper_sha256": "56a15d04ebae517a7189602c3e8b3c59ebb305512d5808f31f966e88d1c61a31"
+  },
+  "scope": "Default-off same-hardware-clock experiment. Reject backward TimeNanos or hardware counter changes. Legacy behavior unchanged by default. Main-D recipe has no refinement; compare only one flag, using identical frozen binary.",
+  "limitations": "Loader continuity is verified, position accuracy remains unproven. No score promotion or official submission.",
+  "candidate_pid": 17168,
+  "truth_path": "E:/rtklib_v2_ws_data/gsdc2023/scoring/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+  "postprocess_note": "Corrected supervisor 43903 completed the paired audit using the separate scoring path. The original supervisor scoring path failure did not require inference replay.",
+  "candidate_phone_score_m": 0.5608192497656349,
+  "candidate_audit": "gsdc2023_continuous_raw_clock_candidate_20260926.json",
+  "control_pid": 56232,
+  "corrected_audit_supervisor_session": 43903,
+  "comparison": "gsdc2023_continuous_raw_clock_comparison_20260926.json",
+  "control_phone_score_m": 3.0154699471616992,
+  "delta_phone_score_m": -2.4546506973960645,
+  "default_control_byte_identical_to_historical": true
+}

@@ -1,0 +1,82 @@
+{
+  "status": "completed-diagnostic-not-an-accuracy-experiment",
+  "official_score": false,
+  "truth_consumed": false,
+  "dataset_id": "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+  "scope": "GPS L1 exact-stream ordinary base pseudorange compensation; explicit native station; 1s samples, 151 point smoothing",
+  "files_sha256": {
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\main.cpp": "af9d4931950b592008a5088df3e50d443589380449cd9d55b31880ed523e708f",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\CMakeLists.txt": "1e8ca5861055a429125655944b6e8042197a1bc0c75c388e45e7e73b69a5ae65",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\build\\Release\\base_clock_audit.exe": "67e67cb4111e0484c5f65b89fe30fa134f8f2aa37034c41cd2576e798d90aead",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\corrections.csv": "1f4870d0e98f196fa79f07f341101e0e002e96268fffb7b6dc0499a8b5df1aa4",
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v2_20260926\\candidate_arm\\warm_start\\summary.json.imu-initial.clocks.csv": "de5d2bbecbeceb02e33b85ede534f98ab74c0cd9c8eb7c7295dd247f9d4a13a9"
+  },
+  "gps_prn5_endpoint": {
+    "previous_utc_ms": 1626296398000,
+    "current_utc_ms": 1626296399000,
+    "previous_m": -1.3205681143957653,
+    "current_m": -1.3172661744255498,
+    "difference_m": 0.0033019399702154395
+  },
+  "all_gps_max_adjacent_correction_change_m": 0.03970300443223773,
+  "correction_rows": 11675,
+  "interpretation": "The native base GPS-L1 correction has no jump capable of directly explaining the 23 km optimized code-clock discontinuity. This does not establish its root cause.",
+  "no_d_initial_clock_excerpt": [
+    {
+      "UnixTimeMillis": "1626296393000",
+      "CodeClock_m": "14172.04303561969",
+      "Drift_mps": "-33895.753947770885"
+    },
+    {
+      "UnixTimeMillis": "1626296394000",
+      "CodeClock_m": "14282.546664502785",
+      "Drift_mps": "34116.761133045431"
+    },
+    {
+      "UnixTimeMillis": "1626296395000",
+      "CodeClock_m": "14393.046784291188",
+      "Drift_mps": "-33895.760820977004"
+    },
+    {
+      "UnixTimeMillis": "1626296396000",
+      "CodeClock_m": "14503.642741923322",
+      "Drift_mps": "34116.952663749682"
+    },
+    {
+      "UnixTimeMillis": "1626296397000",
+      "CodeClock_m": "14614.281810550057",
+      "Drift_mps": "-33895.674454004642"
+    },
+    {
+      "UnixTimeMillis": "1626296398000",
+      "CodeClock_m": "14724.68443692379",
+      "Drift_mps": "34116.479634260562"
+    },
+    {
+      "UnixTimeMillis": "1626296399000",
+      "CodeClock_m": "14835.086676880612",
+      "Drift_mps": "-33895.675081855406"
+    },
+    {
+      "UnixTimeMillis": "1626296400000",
+      "CodeClock_m": "14945.915661986652",
+      "Drift_mps": "34117.332979575993"
+    },
+    {
+      "UnixTimeMillis": "1626296401000",
+      "CodeClock_m": "15056.398830246178",
+      "Drift_mps": "-33896.366570565478"
+    },
+    {
+      "UnixTimeMillis": "1626296402000",
+      "CodeClock_m": "15166.73752384322",
+      "Drift_mps": "34117.043885268125"
+    }
+  ],
+  "inputs_sha256": {
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_imu.csv": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440",
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\P178_rnx2.obs": "1ad4f12cdbd4b4780d43bb13d6291755a1c532e84cea8035598347a1303010f3"
+  }
+}

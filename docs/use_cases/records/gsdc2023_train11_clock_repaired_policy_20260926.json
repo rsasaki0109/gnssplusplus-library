@@ -1,0 +1,527 @@
+{
+  "status": "reconstructed-development-policy-comparison",
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "scope": "Re-score hash-verified saved outputs for the fixed 11-case cohort. Replace only the sole case with loader reference resets, July14 G988B, with the completed continuous-clock output. Other ten outputs are historical. This is not a fresh all-11 same-binary experiment.",
+  "selection": "Clock-reset input diagnostics, not per-route score winners",
+  "variants": {
+    "no_main_doppler": {
+      "mean_m": 0.729124211539904,
+      "runs": {
+        "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+          "score": {
+            "truth_keys": 1165,
+            "p50_m": 0.38715200002265776,
+            "p95_m": 0.7311418173986006,
+            "phone_score_m": 0.5591469087106292
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\00",
+          "solution_sha256": "9f94aaf977d436af635e4bff4430a540e8f6c67edf43ede5e3df1dddc855a41e",
+          "summary_sha256": "c715ad56d0584078f576dfe81d24dfbd3b487d15fb3d17c0c772108bd2eeb72b",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "replaced": false,
+          "historical_solution_sha256": "9f94aaf977d436af635e4bff4430a540e8f6c67edf43ede5e3df1dddc855a41e"
+        },
+        "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+          "score": {
+            "truth_keys": 2162,
+            "p50_m": 0.4793154069016312,
+            "p95_m": 0.8579240854610684,
+            "phone_score_m": 0.6686197461813498
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\01",
+          "solution_sha256": "632cfae5e0a2bbfa0d1c8ada7a92c0542af416a917ebb344df3145b4889032d0",
+          "summary_sha256": "68b7afbfcc173020831623d6cd96285f4d5b1f98c9d1f169aec1332e77be12d0",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "replaced": false,
+          "historical_solution_sha256": "632cfae5e0a2bbfa0d1c8ada7a92c0542af416a917ebb344df3145b4889032d0"
+        },
+        "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+          "score": {
+            "truth_keys": 2163,
+            "p50_m": 0.6186150607762386,
+            "p95_m": 1.1628380622825492,
+            "phone_score_m": 0.8907265615293939
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\02",
+          "solution_sha256": "3a60f0462163b7a0a12f9e4e649252fd54e4d966a30db521891fb66b797ecab0",
+          "summary_sha256": "5ae1c1fcf7c344510e56e9c6888d114f17cc73192ad121b6ae0a785decf830c6",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "replaced": false,
+          "historical_solution_sha256": "3a60f0462163b7a0a12f9e4e649252fd54e4d966a30db521891fb66b797ecab0"
+        },
+        "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+          "score": {
+            "truth_keys": 1193,
+            "p50_m": 0.30813004286404144,
+            "p95_m": 0.7489384695345347,
+            "phone_score_m": 0.5285342561992881
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\03",
+          "solution_sha256": "7c025113f6e4f28f773a8d11851afeb5eeea5f4ad3ec5ec05b9525506af9fcaa",
+          "summary_sha256": "b10a099592182494848d80ae856cdb4d466797453f4479baf1cf6e08bb7f6a6d",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "c4704b43e6b742e889482aea80f6ba7c0242b2c857952da3f7ca054583174fe6",
+          "replaced": false,
+          "historical_solution_sha256": "7c025113f6e4f28f773a8d11851afeb5eeea5f4ad3ec5ec05b9525506af9fcaa"
+        },
+        "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+          "score": {
+            "truth_keys": 1102,
+            "p50_m": 0.7170031072613399,
+            "p95_m": 1.1995816707294744,
+            "phone_score_m": 0.9582923889954071
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\04",
+          "solution_sha256": "e9d64c3fb5871f77a476426c0cee2d6c9fc56e9b43b168ee3e05ea91a5db88d1",
+          "summary_sha256": "a1897f4dd9925ee6bc0926ee4b86cdccbe39db7d918151647f01852beea267e8",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "97086f2ba80289ddb37e8d415b8f3b8db516b9c8e0870f911b33c1924636842c",
+          "replaced": false,
+          "historical_solution_sha256": "e9d64c3fb5871f77a476426c0cee2d6c9fc56e9b43b168ee3e05ea91a5db88d1"
+        },
+        "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+          "score": {
+            "truth_keys": 2323,
+            "p50_m": 0.47457029338097056,
+            "p95_m": 0.8277300250846712,
+            "phone_score_m": 0.6511501592328208
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\05",
+          "solution_sha256": "c6ecd505c6b9bf1d1c1fb348c4b74a91502396b2a2b0109dd9a4a52a982503a0",
+          "summary_sha256": "f5a59ec0d6b7e921717a30fb3ad64ef8fd629944eef040f2c7dc294c1df46e96",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+          "replaced": false,
+          "historical_solution_sha256": "c6ecd505c6b9bf1d1c1fb348c4b74a91502396b2a2b0109dd9a4a52a982503a0"
+        },
+        "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+          "score": {
+            "truth_keys": 1383,
+            "p50_m": 0.3256021992110392,
+            "p95_m": 0.5890347578698758,
+            "phone_score_m": 0.4573184785404575
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\06",
+          "solution_sha256": "6752eac1c387fbb10d9494d8fa5f2d3b4fd8ee8256d472d384cec74b2d4c50fc",
+          "summary_sha256": "cf63400670586390803b3543efa6f86f4081df75a5b49364279e69ec41b794b0",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+          "replaced": false,
+          "historical_solution_sha256": "6752eac1c387fbb10d9494d8fa5f2d3b4fd8ee8256d472d384cec74b2d4c50fc"
+        },
+        "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+          "score": {
+            "truth_keys": 1399,
+            "p50_m": 0.592296488112717,
+            "p95_m": 0.9017698174563309,
+            "phone_score_m": 0.747033152784524
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\07",
+          "solution_sha256": "c7bab2fa115a8535f830635fc31942aa3966975347bbdaa21acda4d08f524232",
+          "summary_sha256": "4297f586c9ed2064013ec5c164b704f79f65432bfa9eaeefb0508f1b427ac3c5",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "9c1200d8ae3c378ec9173bffffe4544af3a4fccaf785964b7a74f40cf8720a14",
+          "replaced": false,
+          "historical_solution_sha256": "c7bab2fa115a8535f830635fc31942aa3966975347bbdaa21acda4d08f524232"
+        },
+        "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+          "score": {
+            "truth_keys": 1258,
+            "p50_m": 0.5614793858065465,
+            "p95_m": 0.8409541248095255,
+            "phone_score_m": 0.701216755308036
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\08",
+          "solution_sha256": "74511e28b3059da1783178426bd681f36b14b35b24d56cf21e597444d9877a18",
+          "summary_sha256": "6fc4932c85d4074b418aa46a8ce8dae80294609f3b323a62e52ec988845510c6",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "626dc58b297e8a21fb5c5b9a9161f9f94b52bb1ebd18e58b9a7e7a16e5590660",
+          "replaced": false,
+          "historical_solution_sha256": "74511e28b3059da1783178426bd681f36b14b35b24d56cf21e597444d9877a18"
+        },
+        "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+          "score": {
+            "truth_keys": 1650,
+            "p50_m": 0.8658973009510144,
+            "p95_m": 1.14757087989193,
+            "phone_score_m": 1.006734090421472
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\09",
+          "solution_sha256": "4747c27fe0127a74e2060165b95f69c0efd0023a67f3335d3c2a61e2a21d2a4d",
+          "summary_sha256": "4bcdfe78a4b2391435a8b4c9cc8dfe278b59c3cdb10384423d68e7a6d4302c21",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "56cb263ecdc624b41cc42ed484baf3cc0a27c42c32789476015d64e07605ed7c",
+          "replaced": false,
+          "historical_solution_sha256": "4747c27fe0127a74e2060165b95f69c0efd0023a67f3335d3c2a61e2a21d2a4d"
+        },
+        "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+          "score": {
+            "truth_keys": 1601,
+            "p50_m": 0.3617498185611534,
+            "p95_m": 1.341437839509978,
+            "phone_score_m": 0.8515938290355657
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_offset_extra_bands_v1\\10",
+          "solution_sha256": "6bba6fdbfb468cc6b2366ba542e27a5c6b3481d6af1b451b9605246d2be71042",
+          "summary_sha256": "779804f8d61f0483a0360835c7f464e44eadd2b30a91e8ff311ca7f792022879",
+          "binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
+          "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+          "replaced": false,
+          "historical_solution_sha256": "6bba6fdbfb468cc6b2366ba542e27a5c6b3481d6af1b451b9605246d2be71042"
+        }
+      },
+      "delta_mean_vs_no_main_doppler_m": 0.0,
+      "improved_pairs_vs_no_main_doppler": 0
+    },
+    "main_doppler": {
+      "mean_m": 0.7293444333669056,
+      "runs": {
+        "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+          "score": {
+            "truth_keys": 1165,
+            "p50_m": 0.37359568860466114,
+            "p95_m": 0.7480428109266087,
+            "phone_score_m": 0.5608192497656349
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\continuous_raw_clock_20260926\\continuous",
+          "solution_sha256": "22875174dd65e218487865b9929c0383c5b2ba5f938a8f04ede0282b7d1beefc",
+          "summary_sha256": "24eb39a6e8fcff090a39d2c6697287346036b8243cc700968f4c3a02240ac103",
+          "binary_sha256": "862d58966c5e88594e171d3b39d038ae947419409ab649fb42a0426e43018832",
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "replaced": true,
+          "historical_solution_sha256": "066cf1b6b23e3e03e5e7accb5285aee79d12f6c5366ada35939c47cefab79d4d"
+        },
+        "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+          "score": {
+            "truth_keys": 2162,
+            "p50_m": 0.4755827948761713,
+            "p95_m": 0.8494444864874101,
+            "phone_score_m": 0.6625136406817906
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\01",
+          "solution_sha256": "dd1ccea05eea5043e5fd67b930650b7f04b512cefa7f0198491b13b50a1fef0e",
+          "summary_sha256": "1f6282b99bf8c095b9e734c297840b701b2d7bdb12b3835a78cac9569235ca85",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "replaced": false,
+          "historical_solution_sha256": "dd1ccea05eea5043e5fd67b930650b7f04b512cefa7f0198491b13b50a1fef0e"
+        },
+        "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+          "score": {
+            "truth_keys": 2163,
+            "p50_m": 0.6153157184473864,
+            "p95_m": 1.1499104411989371,
+            "phone_score_m": 0.8826130798231617
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\02",
+          "solution_sha256": "7527fbd252db3def08f0804f687f6dc222c44817f8c55fc5526d0bdec188f91a",
+          "summary_sha256": "a60bb1a2f008656c154387215c1259f2eeef80d6ed52d6fbb38149ca368325c9",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "replaced": false,
+          "historical_solution_sha256": "7527fbd252db3def08f0804f687f6dc222c44817f8c55fc5526d0bdec188f91a"
+        },
+        "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+          "score": {
+            "truth_keys": 1193,
+            "p50_m": 0.3229007403986025,
+            "p95_m": 0.7703149287113104,
+            "phone_score_m": 0.5466078345549564
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\03",
+          "solution_sha256": "850fa2a7b840215cc0b6dcc655161769c7c3bbb23b7e22755052ced0d70c7ac5",
+          "summary_sha256": "dcd06c0fe0634ba18f18dc99dfaf29b2259cc4ee6603bcd553aa20bb8e2b61c3",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "c4704b43e6b742e889482aea80f6ba7c0242b2c857952da3f7ca054583174fe6",
+          "replaced": false,
+          "historical_solution_sha256": "850fa2a7b840215cc0b6dcc655161769c7c3bbb23b7e22755052ced0d70c7ac5"
+        },
+        "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+          "score": {
+            "truth_keys": 1102,
+            "p50_m": 0.749850833566213,
+            "p95_m": 1.1852418324006968,
+            "phone_score_m": 0.9675463329834548
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\04",
+          "solution_sha256": "2541b85f17c165f249fb8236eb85b91ff7070b21a21a2074bbce8940ad1cf8bd",
+          "summary_sha256": "500b70cb5521afdab7936877c39c740ca69713efc00d312184086b88b5eab963",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "97086f2ba80289ddb37e8d415b8f3b8db516b9c8e0870f911b33c1924636842c",
+          "replaced": false,
+          "historical_solution_sha256": "2541b85f17c165f249fb8236eb85b91ff7070b21a21a2074bbce8940ad1cf8bd"
+        },
+        "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+          "score": {
+            "truth_keys": 2323,
+            "p50_m": 0.4663603799851024,
+            "p95_m": 0.8198151186960999,
+            "phone_score_m": 0.6430877493406011
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\05",
+          "solution_sha256": "1893fa4b9ec3c6996c401e13d2988af7895391482bba79c12bf389a8742e87c0",
+          "summary_sha256": "236314d1656241bcbaf70e30df071410b5ddfd86b0c62c70ebee728a048315a4",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+          "replaced": false,
+          "historical_solution_sha256": "1893fa4b9ec3c6996c401e13d2988af7895391482bba79c12bf389a8742e87c0"
+        },
+        "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+          "score": {
+            "truth_keys": 1383,
+            "p50_m": 0.3406957839999689,
+            "p95_m": 0.6150160520224328,
+            "phone_score_m": 0.47785591801120086
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\06",
+          "solution_sha256": "4e999e7a5bd076b555c254d7fa374cb99b8faa49efab5710b402432d16a15214",
+          "summary_sha256": "1bfe336fd0687f813701ad9a1f707a33a4ddec0515ee6b6c738cae64e603c781",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+          "replaced": false,
+          "historical_solution_sha256": "4e999e7a5bd076b555c254d7fa374cb99b8faa49efab5710b402432d16a15214"
+        },
+        "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+          "score": {
+            "truth_keys": 1399,
+            "p50_m": 0.5716110517315116,
+            "p95_m": 0.9305161982202426,
+            "phone_score_m": 0.7510636249758771
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\07",
+          "solution_sha256": "5d04ba3b18948f4612925b8f68f76b90f461a308af30acafac1efbc3afcbd9d2",
+          "summary_sha256": "e7dfff0155d013cc131dcfef84232810a4a944987a08b4cc87b4becf30fc7b89",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "9c1200d8ae3c378ec9173bffffe4544af3a4fccaf785964b7a74f40cf8720a14",
+          "replaced": false,
+          "historical_solution_sha256": "5d04ba3b18948f4612925b8f68f76b90f461a308af30acafac1efbc3afcbd9d2"
+        },
+        "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+          "score": {
+            "truth_keys": 1258,
+            "p50_m": 0.5580216684349733,
+            "p95_m": 0.8405859176735431,
+            "phone_score_m": 0.6993037930542582
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\08",
+          "solution_sha256": "ee251945deba64d8309b3e8d0177ab28effe440c775b7a6fbbc2af3bcccdadb1",
+          "summary_sha256": "aa3964f0875f3fcc3642bbc5781fbed72eafcc12580d90675ab079fbb12d7071",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "626dc58b297e8a21fb5c5b9a9161f9f94b52bb1ebd18e58b9a7e7a16e5590660",
+          "replaced": false,
+          "historical_solution_sha256": "ee251945deba64d8309b3e8d0177ab28effe440c775b7a6fbbc2af3bcccdadb1"
+        },
+        "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+          "score": {
+            "truth_keys": 1650,
+            "p50_m": 0.8544747383700451,
+            "p95_m": 1.137924290956015,
+            "phone_score_m": 0.99619951466303
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\09",
+          "solution_sha256": "72b62f1c1932ec2327d6569f4cb37e4586a42dd61121d1ae2bd6bc4f0da0fd61",
+          "summary_sha256": "2e5d3167537c88bad8104153be8d024ca765cd9a0793b784b4bb2df6b3353679",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "56cb263ecdc624b41cc42ed484baf3cc0a27c42c32789476015d64e07605ed7c",
+          "replaced": false,
+          "historical_solution_sha256": "72b62f1c1932ec2327d6569f4cb37e4586a42dd61121d1ae2bd6bc4f0da0fd61"
+        },
+        "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+          "score": {
+            "truth_keys": 1601,
+            "p50_m": 0.35491998277844683,
+            "p95_m": 1.3154360755855452,
+            "phone_score_m": 0.835178029181996
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_maindop_v1\\10",
+          "solution_sha256": "1b89279caa3ca94042c0fe95377655a4710554615877bd44ee7942981e993e50",
+          "summary_sha256": "f4bb492617fce823127d5b60c6eec293c0d3c87304634367637765631da8a778",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+          "replaced": false,
+          "historical_solution_sha256": "1b89279caa3ca94042c0fe95377655a4710554615877bd44ee7942981e993e50"
+        }
+      },
+      "delta_mean_vs_no_main_doppler_m": 0.00022022182700154325,
+      "improved_pairs_vs_no_main_doppler": 6
+    },
+    "refinement": {
+      "mean_m": 0.7226694957376479,
+      "runs": {
+        "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+          "score": {
+            "truth_keys": 1165,
+            "p50_m": 0.3846126990378745,
+            "p95_m": 0.7382781517731388,
+            "phone_score_m": 0.5614454254055067
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\continuous_raw_clock_refinement_20260926\\continuous",
+          "solution_sha256": "38675612cd3c49bfe7a196b55a3ef81c35ac8039c4bf81605bec39bae8aa2b2e",
+          "summary_sha256": "49594760e51595b079836ebc998052a6a0c2602fffb2e15ba6d0aeff579d90b1",
+          "binary_sha256": "862d58966c5e88594e171d3b39d038ae947419409ab649fb42a0426e43018832",
+          "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+          "replaced": true,
+          "historical_solution_sha256": "5a5b573115b46508cbf1cf91f1eb81baccccadc050366dbdcb9db9c58d187aad"
+        },
+        "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+          "score": {
+            "truth_keys": 2162,
+            "p50_m": 0.4782477764302169,
+            "p95_m": 0.8252333791932588,
+            "phone_score_m": 0.6517405778117378
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\01",
+          "solution_sha256": "353c99fda37eb1ef175e3ac7953e877e8149179c50c7bccbf6f870bb4f642d80",
+          "summary_sha256": "e6299f9904ae80d1bf748fe4a12022c8f4e2c0dc47deab0b4c9fdeec57aca2b2",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+          "replaced": false,
+          "historical_solution_sha256": "353c99fda37eb1ef175e3ac7953e877e8149179c50c7bccbf6f870bb4f642d80"
+        },
+        "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+          "score": {
+            "truth_keys": 2163,
+            "p50_m": 0.6064557777031917,
+            "p95_m": 1.1437773361589783,
+            "phone_score_m": 0.875116556931085
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\02",
+          "solution_sha256": "bada67944f6157f7b7719b3525421db4528c133f4187189e5bcb2280f25d5d5e",
+          "summary_sha256": "4250db7386d29e778f6240a1d9778bbf7e143b5fc724d848c442f88a6d4e5721",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+          "replaced": false,
+          "historical_solution_sha256": "bada67944f6157f7b7719b3525421db4528c133f4187189e5bcb2280f25d5d5e"
+        },
+        "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+          "score": {
+            "truth_keys": 1193,
+            "p50_m": 0.31981546572077807,
+            "p95_m": 0.7553690915767951,
+            "phone_score_m": 0.5375922786487866
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\03",
+          "solution_sha256": "9aa5a334a08d9acfad3b777044e48a3b51a778e9568266718f07acb66fe9fc71",
+          "summary_sha256": "f5e35cec0abb9ca7bf68cd59cd50f07f9685a2080fa8d71d6b2fcda504d3128d",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "c4704b43e6b742e889482aea80f6ba7c0242b2c857952da3f7ca054583174fe6",
+          "replaced": false,
+          "historical_solution_sha256": "9aa5a334a08d9acfad3b777044e48a3b51a778e9568266718f07acb66fe9fc71"
+        },
+        "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+          "score": {
+            "truth_keys": 1102,
+            "p50_m": 0.742208929105461,
+            "p95_m": 1.1553144638737267,
+            "phone_score_m": 0.9487616964895939
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\04",
+          "solution_sha256": "a87fe3e54e9bbabf23c0ab1e88e855eeb0539d034a23908db7f6b87065ccd6a1",
+          "summary_sha256": "8a1fa32a0005213684c20953be11cfe20a52e4c01d33e622353c628774cd2ea9",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "97086f2ba80289ddb37e8d415b8f3b8db516b9c8e0870f911b33c1924636842c",
+          "replaced": false,
+          "historical_solution_sha256": "a87fe3e54e9bbabf23c0ab1e88e855eeb0539d034a23908db7f6b87065ccd6a1"
+        },
+        "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+          "score": {
+            "truth_keys": 2323,
+            "p50_m": 0.44889998139759474,
+            "p95_m": 0.8336171937562736,
+            "phone_score_m": 0.6412585875769342
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\05",
+          "solution_sha256": "734d000c86ebf7c0ea4ef722bc7b6cc5544d35d8c5751ae5591021ae63c6c0b8",
+          "summary_sha256": "3cc6aa21e8a2e7e5b82dfcdfbfb7d643ad50fe9bfd2ae87a6f5c770200259cfa",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+          "replaced": false,
+          "historical_solution_sha256": "734d000c86ebf7c0ea4ef722bc7b6cc5544d35d8c5751ae5591021ae63c6c0b8"
+        },
+        "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+          "score": {
+            "truth_keys": 1383,
+            "p50_m": 0.3504864012844034,
+            "p95_m": 0.607001802045178,
+            "phone_score_m": 0.47874410166479064
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\06",
+          "solution_sha256": "0986df9e449c1f1c7724f4a4a74822996ce52471e9c77fa7e096e08563a67120",
+          "summary_sha256": "e1466f38d08a7e659cc3458c6a386b70a61cf9a5db058fb61342b6c0dae005ce",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+          "replaced": false,
+          "historical_solution_sha256": "0986df9e449c1f1c7724f4a4a74822996ce52471e9c77fa7e096e08563a67120"
+        },
+        "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+          "score": {
+            "truth_keys": 1399,
+            "p50_m": 0.5744402333804491,
+            "p95_m": 0.9398664894713197,
+            "phone_score_m": 0.7571533614258844
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\07",
+          "solution_sha256": "cb3d96aad79396101232b981815fe029717c939c201280c63ab83e607938efee",
+          "summary_sha256": "088fb4351fbf24c5ca52f0074f26f52cfabdaa15fcf66db8a3e0eb11b1a6ed0b",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "9c1200d8ae3c378ec9173bffffe4544af3a4fccaf785964b7a74f40cf8720a14",
+          "replaced": false,
+          "historical_solution_sha256": "cb3d96aad79396101232b981815fe029717c939c201280c63ab83e607938efee"
+        },
+        "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+          "score": {
+            "truth_keys": 1258,
+            "p50_m": 0.5522254569524518,
+            "p95_m": 0.838275168135438,
+            "phone_score_m": 0.6952503125439449
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\08",
+          "solution_sha256": "858cff520e3df54f0c71b46348ae309a0795a6a735c1f275f435d97fc06f97e8",
+          "summary_sha256": "33ecaedda5675069ac472687e66657cac1739e80a44b73f8e7cbc2aba65cb122",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "626dc58b297e8a21fb5c5b9a9161f9f94b52bb1ebd18e58b9a7e7a16e5590660",
+          "replaced": false,
+          "historical_solution_sha256": "858cff520e3df54f0c71b46348ae309a0795a6a735c1f275f435d97fc06f97e8"
+        },
+        "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+          "score": {
+            "truth_keys": 1650,
+            "p50_m": 0.8441101798860875,
+            "p95_m": 1.1265552716034706,
+            "phone_score_m": 0.985332725744779
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\09",
+          "solution_sha256": "c5d653f3ff8322a11298286dec5a1bc8987be04fb8fb26529265f1aa5a0558b8",
+          "summary_sha256": "0431d75adf5a111aaa21c66c02ab348d54395363ac8c2405b38f62e867944907",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "56cb263ecdc624b41cc42ed484baf3cc0a27c42c32789476015d64e07605ed7c",
+          "replaced": false,
+          "historical_solution_sha256": "c5d653f3ff8322a11298286dec5a1bc8987be04fb8fb26529265f1aa5a0558b8"
+        },
+        "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+          "score": {
+            "truth_keys": 1601,
+            "p50_m": 0.3147872821028812,
+            "p95_m": 1.3191503756392877,
+            "phone_score_m": 0.8169688288710845
+          },
+          "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\10",
+          "solution_sha256": "3d7b2720cd0d98d9184c8171bb5b8e3dc22d298967f723b07bb9ed5d091635a5",
+          "summary_sha256": "2ae1ae938f447c7ce9e4d7a5c70c84331d2f61c12a3f393f5f224992fa7e97b1",
+          "binary_sha256": "7adef1cff5513299db365c2503fcfa102063be273f536e2f4387f41490f100b8",
+          "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+          "replaced": false,
+          "historical_solution_sha256": "3d7b2720cd0d98d9184c8171bb5b8e3dc22d298967f723b07bb9ed5d091635a5"
+        }
+      },
+      "delta_mean_vs_no_main_doppler_m": -0.006454715802256095,
+      "improved_pairs_vs_no_main_doppler": 7
+    }
+  },
+  "script_sha256": "36092a49ea034ed921c05692d54507704bcfed09aebf821ca33bea09a30a5ed4"
+}

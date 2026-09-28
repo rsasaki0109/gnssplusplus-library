@@ -1,0 +1,212 @@
+{
+  "status": "completed-raw-clock-event-diagnostic",
+  "truth_consumed": false,
+  "official_score": false,
+  "epoch": 1,
+  "utc_ms": 1665093108681,
+  "input_bias_step_m": 599623.289434624,
+  "raw_sha256": "376e2d0dd3dc62e568e89706a8cd9bab5a14fa4366555d63ba33c0e08917f557",
+  "clock_export_sha256": "799dc1446ef2d7b978de8d34a8681956e4b5d8c996c75838c79eab8a873a0ef9",
+  "epochs": [
+    {
+      "utcTimeMillis": 1665093108184,
+      "TimeNanos": 1013000000,
+      "FullBiasNanos": -1349128325171000064,
+      "BiasNanos": 0.0,
+      "TimeOffsetNanos": 0.0,
+      "HardwareClockDiscontinuityCount": 0
+    },
+    {
+      "utcTimeMillis": 1665093108681,
+      "TimeNanos": 1513000000,
+      "FullBiasNanos": -1349128325168999936,
+      "BiasNanos": 0.0,
+      "TimeOffsetNanos": 0.0,
+      "HardwareClockDiscontinuityCount": 0
+    },
+    {
+      "utcTimeMillis": 1665093109181,
+      "TimeNanos": 2013000000,
+      "FullBiasNanos": -1349128325168999936,
+      "BiasNanos": 0.0,
+      "TimeOffsetNanos": 0.0,
+      "HardwareClockDiscontinuityCount": 0
+    }
+  ],
+  "gps_l1_pairs": [
+    {
+      "prn": 3,
+      "raw_code_step_constant_reference_m": 598978.435857466,
+      "adr_step_m": -140.872191067637,
+      "integrated_rate_m": -605.8052036130425,
+      "adr_state_previous": 17,
+      "adr_state_current": 20
+    },
+    {
+      "prn": 1,
+      "raw_code_step_constant_reference_m": 599327.394278578,
+      "adr_step_m": 207.79553671526605,
+      "integrated_rate_m": -257.1651156841341,
+      "adr_state_previous": 16,
+      "adr_state_current": 17
+    },
+    {
+      "prn": 4,
+      "raw_code_step_constant_reference_m": 598935.565535972,
+      "adr_step_m": -184.8466615970624,
+      "integrated_rate_m": -649.7905221826534,
+      "adr_state_previous": 16,
+      "adr_state_current": 17
+    },
+    {
+      "prn": 21,
+      "raw_code_step_constant_reference_m": 599364.868335828,
+      "adr_step_m": 240.4977000917434,
+      "integrated_rate_m": -224.511330037187,
+      "adr_state_previous": 16,
+      "adr_state_current": 16
+    },
+    {
+      "prn": 31,
+      "raw_code_step_constant_reference_m": 599334.289505112,
+      "adr_step_m": 202.7795144338467,
+      "integrated_rate_m": -262.2365047830724,
+      "adr_state_previous": 16,
+      "adr_state_current": 16
+    }
+  ],
+  "scope": "All common raw GPS L1 satellites at the largest input FullBias-derived step. No quality/admission mask or inference correction is applied; raw code differences use one fixed reference and exact integer TimeNanos/transmit-time differences.",
+  "clock_export_events": {
+    "legacy": [
+      {
+        "epoch": 1,
+        "utc_ms": 1665093108681,
+        "step_m": 599623.289434624,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 3,
+        "utc_ms": 1665093109683,
+        "step_m": -299850.018151936,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 4,
+        "utc_ms": 1665093110184,
+        "step_m": -299773.271282688,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 8,
+        "utc_ms": 1665093112502,
+        "step_m": -299926.765021184,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 9,
+        "utc_ms": 1665093114001,
+        "step_m": 299850.018151936,
+        "native_dt_s": 1.499999935971573
+      },
+      {
+        "epoch": 10,
+        "utc_ms": 1665093115002,
+        "step_m": -299850.018151936,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 259,
+        "utc_ms": 1665093364000,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 464,
+        "utc_ms": 1665093569001,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 660,
+        "utc_ms": 1665093765001,
+        "step_m": -299773.2712826879,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 863,
+        "utc_ms": 1665093968000,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 1066,
+        "utc_ms": 1665094171000,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      }
+    ],
+    "continuous": [
+      {
+        "epoch": 1,
+        "utc_ms": 1665093108681,
+        "step_m": 599623.289434624,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 3,
+        "utc_ms": 1665093109683,
+        "step_m": -299850.018151936,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 4,
+        "utc_ms": 1665093110184,
+        "step_m": -299773.271282688,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 8,
+        "utc_ms": 1665093112502,
+        "step_m": -299926.765021184,
+        "native_dt_s": 0.5
+      },
+      {
+        "epoch": 10,
+        "utc_ms": 1665093115002,
+        "step_m": -299850.018151936,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 259,
+        "utc_ms": 1665093364000,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 464,
+        "utc_ms": 1665093569001,
+        "step_m": -299773.2712826879,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 660,
+        "utc_ms": 1665093765001,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 863,
+        "utc_ms": 1665093968000,
+        "step_m": -299773.271282688,
+        "native_dt_s": 1.0
+      },
+      {
+        "epoch": 1066,
+        "utc_ms": 1665094171000,
+        "step_m": -299773.27128268825,
+        "native_dt_s": 1.0
+      }
+    ]
+  },
+  "interpretation": "The approximately 600 km positive code/bias step is at receiver startup (epoch 0 to 1), not the later reference reset. None of the five common GPS L1 pairs at startup has valid, reset-free and cycle-slip-free ADR at both endpoints. Continuous-reference handling is not a claimed repair for this startup event."
+}

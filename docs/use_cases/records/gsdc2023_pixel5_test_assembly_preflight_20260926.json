@@ -1,0 +1,11 @@
+{
+  "status": "prepared-no-candidate-produced",
+  "plan_sha256": "0c22f0f0b045aeb95a364876bf9226e1a8ec442a1f13bf7c3cfb6cdcd633de4f",
+  "assembler_sha256": "600cfedfef5b3f1d0e163e53e7118d10142dbec5a166eed8c718b28442cdde04",
+  "retained_native_sources_verified": 23,
+  "incomplete_development_report_rejected": true,
+  "negative_check_returncode": 1,
+  "negative_check_output_created": false,
+  "full_assembly_exercised": false,
+  "submitted": false
+}

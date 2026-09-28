@@ -1,0 +1,29 @@
+{
+  "status": "completed-candidate-stage-audit",
+  "truth_consumed": false,
+  "official_score": false,
+  "stages": {
+    "gnss-first": {
+      "epochs": 1165,
+      "position_sha256": "0fc842b0d49f4480098fef0048ca5c9cc1ef596bafe4432c80083fda53e7ebd3",
+      "clock_sha256": "c2ba028323c87a57d3107ba522773fa2f4b33965e9b868126ac4edaf1a6d2c3a",
+      "max_ecef_step_m": 36.65318048551689,
+      "max_abs_clock_step_m": 117.67481858142128,
+      "clock_step_epoch423_m": 110.94683523061394,
+      "position_steps_over_100m": 0,
+      "clock_steps_over_1000m": 0
+    },
+    "imu-initial": {
+      "epochs": 1165,
+      "position_sha256": "5d8c73991a7a5f0fc7fa88d5c91ce5507f67f9183b7d0ce196efe9e2f4821a6e",
+      "clock_sha256": "2c22ed87bcbf893464e1b2df5dc1498cd7183d4e0d62a649e55015354c76c13b",
+      "max_ecef_step_m": 36.652403641375955,
+      "max_abs_clock_step_m": 110.93976025113079,
+      "clock_step_epoch423_m": 110.93976025113079,
+      "position_steps_over_100m": 0,
+      "clock_steps_over_1000m": 0
+    }
+  },
+  "threshold_scope": "100 m / 1000 m are reporting thresholds only; not used in inference.",
+  "interpretation": "Stage statistics for the completed continuous-clock candidate. Compare against archived legacy stage audit; no truth or score is consumed here."
+}

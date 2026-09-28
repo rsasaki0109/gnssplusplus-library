@@ -1,0 +1,38 @@
+{
+  "status": "unsafe-map-quarantined-replacement-completed-and-audited",
+  "official_score": false,
+  "promoted": false,
+  "inference_for_affected_case_started": false,
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_source_recipe_20260926\\plan.json",
+  "plan_sha256": "84523a3170ef516793d394e669ff43ad0ff75ac7f548735ce773687495df6455",
+  "case": "2023-05-16-19-54-us-ca-mtv-xe1/pixel5",
+  "evaluation_group": "2023-05-16-us-ca-mtv-xe1",
+  "excluded_course": "2023-05-16-19-54-us-ca-mtv-xe1",
+  "included_same_group_gt": [
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\kaggle_train_gt\\2023-05-16-19-55-us-ca-mtv-xe1__pixel7pro__ground_truth.csv"
+  ],
+  "map": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_source_recipe_20260926\\maps\\2023-05-16-19-54-us-ca-mtv-xe1__pixel5.csv",
+  "map_sha256": "2321259edabf5f9002d827d5af16423a09f04f3d4ad57a6e580f23683d32f528",
+  "group_evidence": "gsdc2023_coincident_route_group_audit.json",
+  "group_evidence_sha256": "5db7873400ec151eb0819a4893cc1d431912eafaf04b0c0aa8402531325ef99b",
+  "required_action": "Quarantine only this unused map to make the immutable old runner fail closed on the affected pair; rebuild excluding both course aliases and run a replacement pair. Audit the other fourteen original pairs plus the replacement as one complete fixed cohort. No score-driven selection.",
+  "same_group_gt_points_exactly_present_in_map": 2318,
+  "quarantined_map": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_source_recipe_20260926\\maps\\2023-05-16-19-54-us-ca-mtv-xe1__pixel5.invalid_same_group.csv",
+  "replacement_plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_height_group_repair_20260926\\plan.json",
+  "evaluation_plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_height_group_repair_20260926\\evaluation_plan.json",
+  "replacement_supervisor_session": 21361,
+  "gate_supervisor_pid": 48012,
+  "replacement_plan_sha256": "26fa7bf40acbc1c2cea3ebf800ca1cbe7efd30bed8d7ebb6d5e8060c6e54b305",
+  "evaluation_plan_sha256": "00854b2747c56545fda39335019b69e4c580a20d4bb8fe2bedaddc77d4f609fc",
+  "replacement_supervisor_sha256": "824d41237fdc83434af138b4dba2aa2a3319f701822da8212019d105a81067d0",
+  "map_independence_validation": "Original plan rejects exactly one unsafe case; all fifteen repaired metadata and source-plan checks pass. Full inference results pending.",
+  "replacement_completed": {
+    "report": "docs\\use_cases\\records\\gsdc2023_pixel5_height_group_replacement_comparison_20260926.json",
+    "report_sha256": "2c8bfec3b1ab3a1c48bfecb234bcc6908b7e1a144f7d53433be574ed80ef0497",
+    "control_m": 1.1447994836848272,
+    "candidate_m": 1.016689746029431,
+    "delta_m": -0.12810973765539613,
+    "height_map_group_independence_verified": true
+  },
+  "remaining": "Complete the other fourteen original pairs and audit the fixed fifteen-case composite; original unsafe map stays absent."
+}

@@ -1,0 +1,728 @@
+{
+  "checked_unix": 1790558601.1546466,
+  "competition": "smartphone-decimeter-2023",
+  "operation": "read-only competition submissions list using existing OAuth",
+  "submitted": false,
+  "browser_login": false,
+  "status": "server-read-complete",
+  "submissions": [
+    {
+      "ref": 56625084,
+      "date": "2026-09-28 01:23:11.577000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "0.915",
+      "private_score": "0.984"
+    },
+    {
+      "ref": 56536540,
+      "date": "2026-09-25 01:21:46.617000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.133",
+      "private_score": "1.055"
+    },
+    {
+      "ref": 56517871,
+      "date": "2026-09-24 09:34:29.360000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.138",
+      "private_score": "1.088"
+    },
+    {
+      "ref": 56507225,
+      "date": "2026-09-24 00:29:00.963000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.251",
+      "private_score": "1.219"
+    },
+    {
+      "ref": 56491795,
+      "date": "2026-09-23 11:30:20.707000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.396",
+      "private_score": "1.333"
+    },
+    {
+      "ref": 56479759,
+      "date": "2026-09-23 02:16:09.530000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.698",
+      "private_score": "1.333"
+    },
+    {
+      "ref": 56309958,
+      "date": "2026-09-17 16:53:49.757000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.460",
+      "private_score": "3.344"
+    },
+    {
+      "ref": 55905742,
+      "date": "2026-08-31 03:05:56.093000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.235",
+      "private_score": "0.782"
+    },
+    {
+      "ref": 55900482,
+      "date": "2026-08-30 21:44:43.477000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.952",
+      "private_score": "4.276"
+    },
+    {
+      "ref": 55886678,
+      "date": "2026-08-30 09:04:20.407000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "4.018",
+      "private_score": "4.873"
+    },
+    {
+      "ref": 53318428,
+      "date": "2026-06-03 07:19:58.093000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "4.058",
+      "private_score": "4.806"
+    },
+    {
+      "ref": 53279778,
+      "date": "2026-06-02 06:34:19.913000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.192",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279761,
+      "date": "2026-06-02 06:33:34.603000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.192",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279746,
+      "date": "2026-06-02 06:32:53.220000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.192",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279688,
+      "date": "2026-06-02 06:30:57.210000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.192",
+      "private_score": "3.770"
+    },
+    {
+      "ref": 53279621,
+      "date": "2026-06-02 06:28:10.173000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.193",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279599,
+      "date": "2026-06-02 06:27:42.183000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.192",
+      "private_score": "3.770"
+    },
+    {
+      "ref": 53279263,
+      "date": "2026-06-02 06:16:51.310000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.192",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279209,
+      "date": "2026-06-02 06:15:26.623000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.193",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279176,
+      "date": "2026-06-02 06:14:36.483000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.193",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279121,
+      "date": "2026-06-02 06:12:47.130000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.193",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279027,
+      "date": "2026-06-02 06:09:49.097000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.194",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53279003,
+      "date": "2026-06-02 06:09:11.393000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.197",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53278978,
+      "date": "2026-06-02 06:08:24.587000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.194",
+      "private_score": "3.770"
+    },
+    {
+      "ref": 53278839,
+      "date": "2026-06-02 06:02:33.563000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.194",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53278822,
+      "date": "2026-06-02 06:01:56.190000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.194",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53278791,
+      "date": "2026-06-02 06:00:29.307000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.193",
+      "private_score": "3.772"
+    },
+    {
+      "ref": 53278775,
+      "date": "2026-06-02 05:59:53.393000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.195",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53278744,
+      "date": "2026-06-02 05:58:35.390000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.190",
+      "private_score": "3.775"
+    },
+    {
+      "ref": 53278728,
+      "date": "2026-06-02 05:57:55.603000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.199",
+      "private_score": "3.769"
+    },
+    {
+      "ref": 53278710,
+      "date": "2026-06-02 05:56:59.697000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.205",
+      "private_score": "3.772"
+    },
+    {
+      "ref": 53278664,
+      "date": "2026-06-02 05:55:07.360000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.214",
+      "private_score": "3.775"
+    },
+    {
+      "ref": 53278642,
+      "date": "2026-06-02 05:54:06.490000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.216",
+      "private_score": "3.779"
+    },
+    {
+      "ref": 53278626,
+      "date": "2026-06-02 05:53:14.427000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.220",
+      "private_score": "3.783"
+    },
+    {
+      "ref": 53278266,
+      "date": "2026-06-02 05:40:19.160000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.221",
+      "private_score": "3.781"
+    },
+    {
+      "ref": 53278201,
+      "date": "2026-06-02 05:38:22.117000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.219",
+      "private_score": "3.781"
+    },
+    {
+      "ref": 53278169,
+      "date": "2026-06-02 05:37:34.537000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.219",
+      "private_score": "3.808"
+    },
+    {
+      "ref": 52999457,
+      "date": "2026-05-24 20:54:39.577000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.227",
+      "private_score": "3.783"
+    },
+    {
+      "ref": 52999420,
+      "date": "2026-05-24 20:53:06.017000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.224",
+      "private_score": "3.783"
+    },
+    {
+      "ref": 52986274,
+      "date": "2026-05-24 12:37:25.223000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.233",
+      "private_score": "3.785"
+    },
+    {
+      "ref": 52981743,
+      "date": "2026-05-24 09:48:34.380000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.233",
+      "private_score": "3.815"
+    },
+    {
+      "ref": 52970031,
+      "date": "2026-05-24 00:45:31.160000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.338",
+      "private_score": "4.100"
+    },
+    {
+      "ref": 52968035,
+      "date": "2026-05-23 22:53:05.213000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.413",
+      "private_score": "4.152"
+    },
+    {
+      "ref": 52966484,
+      "date": "2026-05-23 21:06:18.677000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "4.020",
+      "private_score": "4.832"
+    },
+    {
+      "ref": 52966481,
+      "date": "2026-05-23 21:06:07.490000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.971",
+      "private_score": "4.798"
+    },
+    {
+      "ref": 52966479,
+      "date": "2026-05-23 21:05:56.303000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.809",
+      "private_score": "4.507"
+    },
+    {
+      "ref": 52966445,
+      "date": "2026-05-23 21:03:49.670000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.715",
+      "private_score": "4.385"
+    },
+    {
+      "ref": 52863619,
+      "date": "2026-05-20 21:06:13.523000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "4.048",
+      "private_score": "4.860"
+    },
+    {
+      "ref": 52835330,
+      "date": "2026-05-20 02:40:12.983000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.993",
+      "private_score": "4.821"
+    },
+    {
+      "ref": 52482138,
+      "date": "2026-05-09 11:46:07.320000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52482115,
+      "date": "2026-05-09 11:45:22.117000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52482094,
+      "date": "2026-05-09 11:44:35.260000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.712"
+    },
+    {
+      "ref": 52482078,
+      "date": "2026-05-09 11:43:48.443000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.685",
+      "private_score": "4.713"
+    },
+    {
+      "ref": 52481427,
+      "date": "2026-05-09 11:19:56.913000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52481403,
+      "date": "2026-05-09 11:19:11.473000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52481384,
+      "date": "2026-05-09 11:18:23.700000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52481067,
+      "date": "2026-05-09 11:06:18.383000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52481045,
+      "date": "2026-05-09 11:05:34.783000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52480605,
+      "date": "2026-05-09 10:47:42.683000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52480070,
+      "date": "2026-05-09 10:28:36.653000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52480048,
+      "date": "2026-05-09 10:27:53.027000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52480029,
+      "date": "2026-05-09 10:27:11.737000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52479615,
+      "date": "2026-05-09 10:10:47.240000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52479588,
+      "date": "2026-05-09 10:09:54.897000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52478366,
+      "date": "2026-05-09 09:17:52.743000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52478339,
+      "date": "2026-05-09 09:17:01.450000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52478311,
+      "date": "2026-05-09 09:16:10.583000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52476475,
+      "date": "2026-05-09 08:00:17.420000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52476457,
+      "date": "2026-05-09 07:59:26.967000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52476434,
+      "date": "2026-05-09 07:58:30.157000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52476417,
+      "date": "2026-05-09 07:57:42.980000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52475901,
+      "date": "2026-05-09 07:32:53.210000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52475881,
+      "date": "2026-05-09 07:32:01.070000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52475867,
+      "date": "2026-05-09 07:31:12.807000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.688",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52475849,
+      "date": "2026-05-09 07:30:19.780000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.689",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52475432,
+      "date": "2026-05-09 07:11:37.087000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52475412,
+      "date": "2026-05-09 07:10:48.377000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52473693,
+      "date": "2026-05-09 05:43:46.093000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52473375,
+      "date": "2026-05-09 05:26:32.407000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52473361,
+      "date": "2026-05-09 05:26:06.070000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52473012,
+      "date": "2026-05-09 05:06:49.040000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52473002,
+      "date": "2026-05-09 05:06:23.280000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472986,
+      "date": "2026-05-09 05:05:18.890000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472977,
+      "date": "2026-05-09 05:04:57.897000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472971,
+      "date": "2026-05-09 05:04:33.773000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472962,
+      "date": "2026-05-09 05:04:11.267000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472941,
+      "date": "2026-05-09 05:03:19.087000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472936,
+      "date": "2026-05-09 05:02:55.667000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472924,
+      "date": "2026-05-09 05:02:32.517000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472431,
+      "date": "2026-05-09 04:37:14.787000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472420,
+      "date": "2026-05-09 04:36:19.160000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472409,
+      "date": "2026-05-09 04:35:29.097000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472399,
+      "date": "2026-05-09 04:34:40.417000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472395,
+      "date": "2026-05-09 04:34:18.133000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.687",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52472377,
+      "date": "2026-05-09 04:33:29.127000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52471475,
+      "date": "2026-05-09 03:48:35.117000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52471445,
+      "date": "2026-05-09 03:47:37.167000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52471440,
+      "date": "2026-05-09 03:47:16.693000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    },
+    {
+      "ref": 52471430,
+      "date": "2026-05-09 03:46:50.810000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.710"
+    },
+    {
+      "ref": 52470911,
+      "date": "2026-05-09 03:21:41.550000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "3.686",
+      "private_score": "4.711"
+    }
+  ],
+  "candidate": [
+    {
+      "ref": 56625084,
+      "date": "2026-09-28 01:23:11.577000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "0.915",
+      "private_score": "0.984"
+    }
+  ],
+  "recorded_baseline": [
+    {
+      "ref": 56536540,
+      "date": "2026-09-25 01:21:46.617000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.133",
+      "private_score": "1.055"
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "checked_unix": 1790391437.8684433,
+  "competition": "smartphone-decimeter-2023",
+  "operation": "read-only competition submissions list using existing OAuth",
+  "submitted": false,
+  "browser_login": false,
+  "status": "server-read-complete",
+  "submissions": [
+    {
+      "ref": 56536540,
+      "date": "2026-09-25 01:21:46.617000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.133",
+      "private_score": "1.055"
+    },
+    {
+      "ref": 56517871,
+      "date": "2026-09-24 09:34:29.360000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.138",
+      "private_score": "1.088"
+    },
+    {
+      "ref": 56507225,
+      "date": "2026-09-24 00:29:00.963000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.251",
+      "private_score": "1.219"
+    },
+    {
+      "ref": 56491795,
+      "date": "2026-09-23 11:30:20.707000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.396",
+      "private_score": "1.333"
+    }
+  ],
+  "recorded_baseline": [
+    {
+      "ref": 56536540,
+      "date": "2026-09-25 01:21:46.617000",
+      "status": "SubmissionStatus.COMPLETE",
+      "public_score": "1.133",
+      "private_score": "1.055"
+    }
+  ],
+  "server_returned_submission_count": 100,
+  "history_scope": "Most recent four submissions retained; the queried baseline is the latest. Older account history omitted."
+}

@@ -1,0 +1,24 @@
+{
+  "status": "built-and-raw-p-tests-passed-native-replay-pending",
+  "binary": "E:/rtklib_v2_ws_output/gsdc_native/binaries/continuous_raw_clock_v2_20260926.exe",
+  "binary_sha256": "7c5417bbc3a2d29f1ed7c7ace3ffbb91650fb8a8ce7595eac23813644b5d1316",
+  "test_report": "E:/rtklib_v2_ws_output/gsdc_native/binaries/continuous_raw_clock_v2_raw_p_tests_20260926.json",
+  "test_report_sha256": "d142887754135ae47108039a3f3ea1566017e2ef57bdb6cecc0423033a203f8d",
+  "tests": 40,
+  "failures": 0,
+  "source_sha256": {
+    "include/libgnss++/algorithms/raw_p_seed.hpp": "72d544cab5cd14ab01f98d2da87eeb256ce0e124a26e2d5deed9951c980e55af",
+    "tests/test_native_imu_refinement_handoff.cpp": "808cd0d0f17451e4e2a9fe3de86dab12b63dfdcd6207f969d5a9544c1b098b33",
+    "include/libgnss++/algorithms/native_imu_refinement_rebuild.hpp": "da509cad5dccb3c02a2b9d8d5fcbb0e2bd2fada66304f86c3da60a6455b74012",
+    "tests/test_raw_p_seed.cpp": "7efc451055a6d7301d887e7a2dfc0bfcd964bd8b78c61972b3951cf7558999e1",
+    "include/libgnss++/io/android_raw_gnss.hpp": "7539b7fb12c97089f96ca846612ffab533a52fb83cb113211531a4a3d63690c3",
+    "apps/native/gnss_fgo_imu_no_base.cpp": "9bb8020969e30618899cae524b89118cb1c7264498ba97f6aefae770b91c5aea",
+    "src/algorithms/raw_p_seed.cpp": "e0a260dd00c035ceefaf4766cb51725dd9c5bfdd356ac5761a2f55b6335abe92",
+    "tests/test_fgo.cpp": "d453d8e289f077de2252716ee893ea2f08cbebff7fadcfb958a7ba1330b48bbc",
+    "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp": "e615af59d51c4ea4c28d38ad2af701175f41ac45cbc10a8c47c580d6bd87dc2b",
+    "tests/test_android_raw_gnss.cpp": "8a756d912cc2b85592787192fbf0a9783edab03c16cc068bc03e185e21ca53a2",
+    "src/io/android_raw_gnss.cpp": "1c569e7efbee50bafea9595ebcc8a6a653586ba2b567d10290cb685c5f4cd553"
+  },
+  "official_score": false,
+  "promoted": false
+}

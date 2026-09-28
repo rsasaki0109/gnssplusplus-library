@@ -1,0 +1,80 @@
+{
+  "status": "retained14-native-reference-parity-verified",
+  "truth_consumed": false,
+  "submission_created": false,
+  "parent_plan_sha256": "22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e",
+  "modern_plan_sha256": "6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565",
+  "reference_sha256": "cf4a73e35852c0554ab8ecb3d65e62f7f268812dc3df5168a62c812313a695cb",
+  "cases": {
+    "2020-12-11-19-30-us-ca-mtv-e/pixel4xl": {
+      "native_keys": 1190,
+      "reference_keys": 1190,
+      "solution_sha256": "5083be82237d85df1752d25bdc904674cbdaf1a1eb20f24c5f6a598760e1e9c1"
+    },
+    "2021-09-14-20-32-us-ca-mtv-k/pixel4": {
+      "native_keys": 1274,
+      "reference_keys": 1274,
+      "solution_sha256": "746360b64a68316a1f0a8f795c030c8b94ae448f60e76ad54122f12e235aa618"
+    },
+    "2021-09-20-19-03-us-ca-mtv-l/pixel4": {
+      "native_keys": 1797,
+      "reference_keys": 1796,
+      "solution_sha256": "80eb90e8422d7dfe931a6c67b50475048e6cfa18c9192aedb1ecd3f31c01bcfb"
+    },
+    "2021-09-28-21-56-us-ca-mtv-a/mi8": {
+      "native_keys": 2479,
+      "reference_keys": 2479,
+      "solution_sha256": "9d008f1c808e206cde200441c7510a13fd342fd52a2bedac3092d03193353fc9"
+    },
+    "2021-11-30-20-59-us-ca-mtv-m/mi8": {
+      "native_keys": 1395,
+      "reference_keys": 1395,
+      "solution_sha256": "68e0ad9af353a08ee3bf53feaee8068bd4d738ab4665cf90453e28f09b62155a"
+    },
+    "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8": {
+      "native_keys": 1679,
+      "reference_keys": 1633,
+      "solution_sha256": "56ffb376298eb9b18a32a4e7ca4c492d6974336767d71eeea52dffe3717e28c6"
+    },
+    "2022-04-25-21-04-us-ca-ebf-x/mi8": {
+      "native_keys": 1924,
+      "reference_keys": 1897,
+      "solution_sha256": "b70cea45ddebc472ffc14c4828d0649b9000985fd5e359a99aedb81690d8086a"
+    },
+    "2022-04-27-21-55-us-ca-ebf-ww/mi8": {
+      "native_keys": 1344,
+      "reference_keys": 1344,
+      "solution_sha256": "c4a9792ca664dda72248a2326fed49248f3cf621006d2071fec3412fdc03f1c7"
+    },
+    "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": {
+      "native_keys": 1435,
+      "reference_keys": 1423,
+      "solution_sha256": "d7cc3b4a7f217f1bb2817b453444a68817fe70a8dcc7ae72f27cf5a3b12e1e0a"
+    },
+    "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": {
+      "native_keys": 1862,
+      "reference_keys": 1861,
+      "solution_sha256": "36d3d6af9b52114760cb2a002f584a6fe0af9544d0b390c1a4710f0ed8fd2126"
+    },
+    "2022-06-28-20-56-us-ca-sjc-r/samsunga32": {
+      "native_keys": 1838,
+      "reference_keys": 1829,
+      "solution_sha256": "0884d3b930835571adf8bfe1d0f05c768d3250823eee555ddda3998a26de9b69"
+    },
+    "2022-07-12-18-37-us-ca-mtv-b/sm-a325f": {
+      "native_keys": 1782,
+      "reference_keys": 1782,
+      "solution_sha256": "bbc4e92177bcec3a69978387be39bb4cbca33b57c5e10a464e4977d21cdc8515"
+    },
+    "2022-10-06-20-46-us-ca-sjc-r/sm-a205u": {
+      "native_keys": 1699,
+      "reference_keys": 1699,
+      "solution_sha256": "b7fcf84762acfe47a83c6a1a61cbf5b5c66aacfc51234d32e559238db248a731"
+    },
+    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": {
+      "native_keys": 2384,
+      "reference_keys": 2384,
+      "solution_sha256": "51aef13c34791df8aa5b8f1032a87ed32fb3ac40dbf7dbf52a659e6abcf584bf"
+    }
+  }
+}

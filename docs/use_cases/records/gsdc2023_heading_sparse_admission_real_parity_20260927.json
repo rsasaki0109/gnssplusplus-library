@@ -1,0 +1,21 @@
+{
+  "status": "both-laxp-baseline-replays-exact-parity",
+  "accuracy_evaluated": false,
+  "arms": 2,
+  "truth_consumed": false,
+  "evidence": {
+    "control": {
+      "audit_sha256": "83bf311b0409ce754583117a10f8788bffdacc5c24e6c201d445550f3adcea91",
+      "audit": "docs/use_cases/records/gsdc2023_laxp_heading_baseline_control_20260927.json",
+      "replay_run_sha256": "eabc04c69c5200b30227c3d77fbcac3ebd8e1b14bce5391fa2168c96343ae97f"
+    },
+    "candidate": {
+      "audit_sha256": "8a643d311ac0af3e36743668560111920d9121abea2c6b7186e10e8e2f61f33b",
+      "audit": "docs/use_cases/records/gsdc2023_laxp_heading_baseline_candidate_20260927.json",
+      "replay_run_sha256": "f6efda0ba37ce89b0da79b6cd2e2ec6e1edaa73ad841c454494a4b4174ac475c"
+    }
+  },
+  "submitted": false,
+  "cases": 1,
+  "native_keys_per_arm": 4515
+}

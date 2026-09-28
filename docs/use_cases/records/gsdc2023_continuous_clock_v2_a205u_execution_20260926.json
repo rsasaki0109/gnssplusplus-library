@@ -1,0 +1,60 @@
+{
+  "status": "complete-pair-audited-default-parity-verified",
+  "official_score": false,
+  "promoted": false,
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\continuous_raw_clock_v2_a205u_20260926\\plan.json",
+  "plan_sha256": "ebb2c312f970751c6e7902943b69f333aef73c85ada481c17dff2d4721b95f90",
+  "execution_started": {
+    "pid": 30184,
+    "workers": 1,
+    "plan_sha256": "ebb2c312f970751c6e7902943b69f333aef73c85ada481c17dff2d4721b95f90",
+    "started_unix": 1790398848.1637428
+  },
+  "supervisor_session": 54898,
+  "next_gate": "Successful pair audit and byte-identical default control required before modern11 queue starts",
+  "default_parity": {
+    "solution.csv": {
+      "old_sha256": "9ec3ee88c20777241b466f62f538a0bf1c9c93c4719311348d34751886b76d44",
+      "new_sha256": "9ec3ee88c20777241b466f62f538a0bf1c9c93c4719311348d34751886b76d44",
+      "byte_identical": true
+    },
+    "summary.json": {
+      "old_sha256": "647e70a6fbe332328b19de8c13892e5f093f0bd968e6f2ac55b30bf832015dae",
+      "new_sha256": "647e70a6fbe332328b19de8c13892e5f093f0bd968e6f2ac55b30bf832015dae",
+      "byte_identical": true
+    }
+  },
+  "candidate_initialization": {
+    "schema_version": "smartphone-r5-phase163-raw-p-no-doppler-seed-stage.v1",
+    "phase": 163,
+    "dataset_id": "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "status": "accepted",
+    "adapter_status": "accepted",
+    "failure_reason": "",
+    "graph_compatible": true,
+    "graph_disabled_reason": "",
+    "input_epoch_count": 1213,
+    "temporal_initial_guess_count": 4,
+    "independent_spp_accepted_epochs": 1209,
+    "accepted_epoch_count": 1213,
+    "rejected_epoch_count": 0,
+    "raw_p_seed_ok": false,
+    "same_run_raw_p_only": true,
+    "velocity_source": "raw-p-same-run-position-gradient",
+    "velocity_endpoint_policy": "one-sided-endpoints-centered-interior",
+    "clock_rate_source": "exact-original-epoch-receiver_clock_drift_mps",
+    "c7_reference_policy": "GPS-reference-only-C0;unproven-frequency-ISBs-unavailable",
+    "imported_seed_files": false,
+    "fgo_entered": false,
+    "truth_used": false,
+    "mat_used": false
+  },
+  "candidate_initialization_sha256": "c2730367d26606faa006a8a23a91507ae1b335701b9175ca9191b469530e00fb",
+  "candidate_pid": 42724,
+  "comparison": "docs\\use_cases\\records\\gsdc2023_continuous_clock_v2_a205u_comparison_20260926.json",
+  "comparison_sha256": "dcc5d331119002e28af209b22d0782a62d1bb9c939ce9250c77f3320796f5700",
+  "control_m": 1.916556365931992,
+  "candidate_m": 1.9123261448362885,
+  "delta_m": -0.004230221095703479,
+  "interpretation": "Admission bug fixed; 1208 loader reference resets removed; only 4.23 mm score improvement, insufficient for the official target by itself."
+}

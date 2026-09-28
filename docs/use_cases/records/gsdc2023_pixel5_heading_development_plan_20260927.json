@@ -1,0 +1,14 @@
+{
+  "status": "prepared-not-started",
+  "cases": 15,
+  "native_runs": 30,
+  "plan": "E:/rtklib_v2_ws_output/gsdc_native/pixel5_heading_development_20260927/plan.json",
+  "plan_sha256": "669ca34e677db460f44f2652946bdfd560787a28881000e1295f0d890ff65586",
+  "source_zero_bias_initialization_absent": true,
+  "parent_controls_audited": true,
+  "height_group_exclusions_preserved": true,
+  "inference_started": false,
+  "submitted": false,
+  "official_score": false,
+  "heldout": false
+}

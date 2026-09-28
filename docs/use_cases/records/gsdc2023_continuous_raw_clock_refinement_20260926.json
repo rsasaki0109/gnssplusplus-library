@@ -1,0 +1,26 @@
+{
+  "status": "completed-audited-development-pair",
+  "official_score": false,
+  "promoted": false,
+  "binary": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\continuous_raw_clock_20260926.exe",
+  "binary_sha256": "862d58966c5e88594e171d3b39d038ae947419409ab649fb42a0426e43018832",
+  "source_run": "E:/rtklib_v2_ws_output/gsdc_native/train11_refine_v1/00/run.json",
+  "candidate_flags": [
+    "--android-continuous-clock-reference"
+  ],
+  "supervisor": "E:/rtklib_v2_ws_tmp/launch_continuous_clock_refinement.ps1",
+  "supervisor_session": 43903,
+  "gate_pid": 56232,
+  "output_dir": "E:/rtklib_v2_ws_output/gsdc_native/continuous_raw_clock_refinement_20260926",
+  "truth_path": "E:/rtklib_v2_ws_data/gsdc2023/scoring/train/2021-07-14-20-50-us-ca-mtv-e/sm-g988b/ground_truth.csv",
+  "source_run_sha256": "a4d5359db824f687cd8b4bebef8ffffc05fc80770d6e8d3f41eb5de4f4d411a6",
+  "supervisor_sha256": "f7bb255359971d70df523d5698a5e2710aa8ec8fe45523e797bcce5e0c3bafa9",
+  "candidate_pid": 9484,
+  "candidate_phone_score_m": 0.5614454254055067,
+  "candidate_audit": "gsdc2023_continuous_raw_clock_refinement_candidate_20260926.json",
+  "control_pid": 56624,
+  "comparison": "gsdc2023_continuous_raw_clock_refinement_comparison_20260926.json",
+  "control_phone_score_m": 1.1519692276402531,
+  "delta_phone_score_m": -0.5905238022347464,
+  "default_control_byte_identical_to_historical": true
+}

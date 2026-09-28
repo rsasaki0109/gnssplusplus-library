@@ -1,0 +1,20 @@
+{
+  "status": "passed",
+  "scope": "synthetic Phase171 handoff and opt-in post-solve diagnostic parity; real-data parity pending",
+  "binary": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\imu_state_diagnostic_20260927.exe",
+  "binary_sha256": "0630b4eb46432f96db589ee7deba2dc17dddc001f7b34581ae27c9fbf2332575",
+  "test_binary_sha256": "569c0a09604f16254fd053a17e06c01793ee587f4d21bb4a61bad981240f5ab7",
+  "junit_path": "E:\\rtklib_v2_ws_tmp\\imu_state_diagnostic_tests_20260927.xml",
+  "junit_sha256": "33d8020faa09aadcdbef73fba4c97fb4bcc7375de0f49aa0637efb2cc549c880",
+  "tests": 2,
+  "failures": 0,
+  "filter": "FGOGtsamPhase171NoDopplerImuMainTest.*",
+  "sources_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "2145e4665b3797f4f2c520c5b6fe0446620b5c08187f815357446dfd30be85c6",
+    "src/algorithms/fgo_gtsam_backend.cpp": "1b5c4e0785f1248fe9fdd013e6b879349fe6f7c36a8982cb4595a5f9ea06ed7e",
+    "include/libgnss++/algorithms/fgo.hpp": "5774faf6781dc86a89daa33424e332a3b997ad8bf47c4d12568cfa8a73e08897",
+    "include/libgnss++/algorithms/fgo_config.hpp": "884ec229c966e4e96df2c450235427187319a0cedcc9bf7eb0d23f34c768d384",
+    "tests/test_fgo_gtsam_backend.cpp": "1b55d07cba591b1c3039165c62417897b07d324617c8c7db14b0b44ee77d8e20"
+  },
+  "cli_missing_main_rejected_exit": 2
+}

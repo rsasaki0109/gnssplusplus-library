@@ -1,0 +1,14 @@
+{
+  "status": "located-clock-frame-gap-admission-failure",
+  "truth_consumed": false,
+  "official_score": false,
+  "observation_epoch": 1,
+  "raw_utc_ms": 1665093130000,
+  "receiver_reference_gap_s": 2.000001405016519,
+  "raw_bias_change_s": 1.28e-06,
+  "clock_corrected_gap_s": 2.000000125016519,
+  "raw_utc_gap_ms": 2001,
+  "max_gap_s": 2.0,
+  "existing_equality_tolerance_s": 1e-06,
+  "interpretation": "The reference-frame gap exceeds the existing limit by more than 1 us, while subtracting the raw Android clock-bias change gives a 2-second interval. The proposed opt-in gate uses that clock-corrected interval without changing stored epochs, observations, thresholds, or default behavior; native replay remains pending."
+}

@@ -1,0 +1,33 @@
+{
+  "status": "modern-may25-pixel6pro-control-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "submitted": false,
+  "plan_sha256": "6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565",
+  "dataset_id": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+  "keys": 1292,
+  "control_matches_published": true,
+  "solution_sha256": "cc67e73e774b3609afd096ad36cd3422d7a62722b1ba80969038c206dc091757",
+  "summary_sha256": "2f40776faa99276c2e74f67e5b17356f8fc3418d1ca3c9a0bfe9edc424dc5d9e",
+  "wall_s": 1644.900140285492,
+  "android_gnss_diagnostics": {
+    "source_mi8_clock_gradient": false,
+    "mi8_clock_magnitude_masks": 0,
+    "mi8_clock_jump_masks": 0,
+    "mi8_clock_filled_values": 0,
+    "input_rows": 37500,
+    "raw_rows": 37500,
+    "selected_rows": 37500,
+    "selected_epochs": 1292,
+    "carrier_rows": 16404,
+    "doppler_rows": 28072,
+    "clock_discontinuities": 0,
+    "enriched_pseudorange_checks": 0,
+    "enriched_pseudorange_mismatches": 0,
+    "enriched_pseudorange_ignored_rows": 37500,
+    "enriched_pseudorange_input_ignored": true,
+    "pseudorange_source": "raw Android clock timing only",
+    "timing_formula": "segment_base=first FullBiasNanos; reset when successive |TimeNanos delta|>1e9 ns; week=floor((TimeNanos-segment_base)/1e9/604800); epoch_tow=(TimeNanos-segment_base-week*604800e9)/1e9-BiasNanos/1e9; per-signal tow_rx=epoch_tow-TimeOffsetNanos/1e9 (long double)",
+    "no_device_wls_seed": true
+  }
+}

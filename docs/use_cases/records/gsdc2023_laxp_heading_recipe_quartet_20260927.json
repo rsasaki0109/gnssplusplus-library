@@ -1,0 +1,320 @@
+{
+  "status": "audited-heading-recipe-quartet",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "submitted": false,
+  "recipe_flags": [
+    "--native-source-tdcp-meter-sigma",
+    "--native-phase184-source-tdcp-huber-k",
+    "--native-phase213-main-doppler"
+  ],
+  "pair_displacement_m": {
+    "baseline": {
+      "p50": 0.5291921696745522,
+      "p95": 6.258649116051327,
+      "maximum": 350.19998018750346
+    },
+    "heading": {
+      "p50": 0.3280187148331432,
+      "p95": 0.7322655321417388,
+      "maximum": 0.9711744331840598
+    }
+  },
+  "runs": {
+    "control_baseline": {
+      "run_sha256": "eabc04c69c5200b30227c3d77fbcac3ebd8e1b14bce5391fa2168c96343ae97f",
+      "solution_sha256": "1dc1773eee36296944a163c634dc06f54aba188effc88f9be8bec7a4a7be4bf8",
+      "summary_sha256": "589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae",
+      "keys": 4515,
+      "max_absolute_vertical_velocity_mps": 99.07461891151813,
+      "max_horizontal_velocity_mps": 54.98426351079005,
+      "tdcp_sigma_m": 0.03
+    },
+    "candidate_baseline": {
+      "run_sha256": "f6efda0ba37ce89b0da79b6cd2e2ec6e1edaa73ad841c454494a4b4174ac475c",
+      "solution_sha256": "fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17",
+      "summary_sha256": "0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88",
+      "keys": 4515,
+      "max_absolute_vertical_velocity_mps": 94.71896509913522,
+      "max_horizontal_velocity_mps": 44.09473154837654,
+      "tdcp_sigma_m": 0.001233190003722964
+    },
+    "control_heading": {
+      "run_sha256": "a2d5783a6944e2cb2f0fb4508c897d69301932d243af99b68004d85d1ab4c111",
+      "solution_sha256": "4137e61b89de201fe21a555a6152edc3823ef95830577282d6a3affe64ce257d",
+      "summary_sha256": "437ce05492a76432ba88cbd4b8acceb87a5af1fcb0b77551fc0c0bf5c1b897a5",
+      "keys": 4515,
+      "max_absolute_vertical_velocity_mps": 0.8158223587964519,
+      "max_horizontal_velocity_mps": 20.78219227969928,
+      "tdcp_sigma_m": 0.03
+    },
+    "candidate_heading": {
+      "run_sha256": "8332e1a66d00ce3bb28247d32fef5d6722710342d2705053116f3612e8e843f0",
+      "solution_sha256": "cdee067b0527607041bc9a0b5e07f0d2f611500d874cde56d194d4ed1864e5fb",
+      "summary_sha256": "fc0a4f302cb81db83578b16cb7e24eb6cc8310bb2d404c58b5fc7a1fa0f9db51",
+      "keys": 4515,
+      "max_absolute_vertical_velocity_mps": 0.8427260395991675,
+      "max_horizontal_velocity_mps": 20.78266250520372,
+      "tdcp_sigma_m": 0.001233190003722964
+    }
+  },
+  "ablations": {
+    "control": {
+      "status": "audited-heading-seed-ablation",
+      "truth_consumed": false,
+      "accuracy_evaluated": false,
+      "submitted": false,
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "keys": 4515,
+      "binary_sha256": "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53",
+      "reference_run_sha256": "eabc04c69c5200b30227c3d77fbcac3ebd8e1b14bce5391fa2168c96343ae97f",
+      "candidate_run_sha256": "a2d5783a6944e2cb2f0fb4508c897d69301932d243af99b68004d85d1ab4c111",
+      "summaries_sha256": [
+        "589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae",
+        "437ce05492a76432ba88cbd4b8acceb87a5af1fcb0b77551fc0c0bf5c1b897a5"
+      ],
+      "solutions_sha256": [
+        "1dc1773eee36296944a163c634dc06f54aba188effc88f9be8bec7a4a7be4bf8",
+        "4137e61b89de201fe21a555a6152edc3823ef95830577282d6a3affe64ce257d"
+      ],
+      "raw_initialization_sha256": "bf2a2c45d1bdac3cac0e9774cce7933f7d31cf364e2510a48da04923431a2525",
+      "invariants": {
+        "graph": {
+          "factors": 222438,
+          "upstream_stop_velocity_factors": 1608,
+          "upstream_stop_pose_factors": 1555,
+          "phase205_bias_density": {
+            "requested": false,
+            "enabled": false,
+            "intervals": 0,
+            "inclusive_samples": 0,
+            "scale_min": 0,
+            "scale_max": 0
+          }
+        },
+        "tdcp_contract": {
+          "first_imu_bias_priors_inserted": 1,
+          "first_imu_bias_priors_omitted": 0,
+          "factors_built": 80373,
+          "factors_inserted": 80373,
+          "sigma_m": 0.03,
+          "height_map_factors_inserted": 0,
+          "relative_height_factors_inserted": 0
+        }
+      },
+      "displacement_m": {
+        "p50": 0.29369700685761513,
+        "p95": 8.842109318816123,
+        "maximum": 292.05206835211663
+      },
+      "states": {
+        "reference": {
+          "accel_bias_mps2": {
+            "first_norm": 1.0098721704416755,
+            "last_norm": 18.07761508350683,
+            "maximum_norm": 18.493567463816373,
+            "maximum_epoch": 4343,
+            "maximum_utc": 1645719756429
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0006254396360449127,
+            "last_norm": 0.003431417144046766,
+            "maximum_norm": 0.0034314279595408616,
+            "maximum_epoch": 4497,
+            "maximum_utc": 1645719910429
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 4515,
+              "first_epoch": 0,
+              "last_epoch": 4514
+            },
+            "1.0": {
+              "count": 4515,
+              "first_epoch": 0,
+              "last_epoch": 4514
+            },
+            "5.0": {
+              "count": 2972,
+              "first_epoch": 1543,
+              "last_epoch": 4514
+            },
+            "10.0": {
+              "count": 2074,
+              "first_epoch": 2441,
+              "last_epoch": 4514
+            }
+          }
+        },
+        "heading": {
+          "accel_bias_mps2": {
+            "first_norm": 0.052244476265074904,
+            "last_norm": 0.03251521093790309,
+            "maximum_norm": 0.05355104672683777,
+            "maximum_epoch": 305,
+            "maximum_utc": 1645715718429
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00046987616439205405,
+            "last_norm": 0.00038642247839309156,
+            "maximum_norm": 0.00046987616439205405,
+            "maximum_epoch": 0,
+            "maximum_utc": 1645715413429
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "scope": "One CLI option changes attitude/lever-arm seeds and low-speed heading filling. Same factors/noise, no zero-bias initialization. This does not establish test accuracy."
+    },
+    "candidate": {
+      "status": "audited-heading-seed-ablation",
+      "truth_consumed": false,
+      "accuracy_evaluated": false,
+      "submitted": false,
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "keys": 4515,
+      "binary_sha256": "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53",
+      "reference_run_sha256": "f6efda0ba37ce89b0da79b6cd2e2ec6e1edaa73ad841c454494a4b4174ac475c",
+      "candidate_run_sha256": "8332e1a66d00ce3bb28247d32fef5d6722710342d2705053116f3612e8e843f0",
+      "summaries_sha256": [
+        "0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88",
+        "fc0a4f302cb81db83578b16cb7e24eb6cc8310bb2d404c58b5fc7a1fa0f9db51"
+      ],
+      "solutions_sha256": [
+        "fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17",
+        "cdee067b0527607041bc9a0b5e07f0d2f611500d874cde56d194d4ed1864e5fb"
+      ],
+      "raw_initialization_sha256": "bf2a2c45d1bdac3cac0e9774cce7933f7d31cf364e2510a48da04923431a2525",
+      "invariants": {
+        "graph": {
+          "factors": 317867,
+          "upstream_stop_velocity_factors": 1606,
+          "upstream_stop_pose_factors": 1553,
+          "phase205_bias_density": {
+            "requested": false,
+            "enabled": false,
+            "intervals": 0,
+            "inclusive_samples": 0,
+            "scale_min": 0,
+            "scale_max": 0
+          }
+        },
+        "tdcp_contract": {
+          "first_imu_bias_priors_inserted": 1,
+          "first_imu_bias_priors_omitted": 0,
+          "factors_built": 80373,
+          "factors_inserted": 80373,
+          "sigma_m": 0.001233190003722964,
+          "height_map_factors_inserted": 0,
+          "relative_height_factors_inserted": 0
+        }
+      },
+      "displacement_m": {
+        "p50": 0.5210816113405028,
+        "p95": 5.989445782013014,
+        "maximum": 269.9395081579883
+      },
+      "states": {
+        "reference": {
+          "accel_bias_mps2": {
+            "first_norm": 0.9377035066405357,
+            "last_norm": 18.021136634792075,
+            "maximum_norm": 18.625443498951647,
+            "maximum_epoch": 4321,
+            "maximum_utc": 1645719734429
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.000627900335393472,
+            "last_norm": 0.0037165144285989517,
+            "maximum_norm": 0.0037168468287889695,
+            "maximum_epoch": 4488,
+            "maximum_utc": 1645719901429
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 4515,
+              "first_epoch": 0,
+              "last_epoch": 4514
+            },
+            "1.0": {
+              "count": 4394,
+              "first_epoch": 121,
+              "last_epoch": 4514
+            },
+            "5.0": {
+              "count": 2959,
+              "first_epoch": 1556,
+              "last_epoch": 4514
+            },
+            "10.0": {
+              "count": 2093,
+              "first_epoch": 2422,
+              "last_epoch": 4514
+            }
+          }
+        },
+        "heading": {
+          "accel_bias_mps2": {
+            "first_norm": 0.05370239878890124,
+            "last_norm": 0.031770125764145576,
+            "maximum_norm": 0.05513234120551433,
+            "maximum_epoch": 288,
+            "maximum_utc": 1645715701429
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00047045142441423904,
+            "last_norm": 0.00038776700478321404,
+            "maximum_norm": 0.00047045142441423904,
+            "maximum_epoch": 0,
+            "maximum_utc": 1645715413429
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "scope": "One CLI option changes attitude/lever-arm seeds and low-speed heading filling. Same factors/noise, no zero-bias initialization. This does not establish test accuracy."
+    }
+  },
+  "scope": "Trajectory differences and optimized states are not truth errors. Heading changes attitude/lever-arm seeds and low-speed heading filling."
+}

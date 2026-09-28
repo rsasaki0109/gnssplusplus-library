@@ -626,7 +626,11 @@ static bool loadAndroidRawGnssCsvImpl(const std::string& path,
         error = "MATLAB .mat inputs are disabled by the native-only contract";
         return false;
     }
-    result.diagnostics.timing_formula =
+    result.diagnostics.timing_formula = config.continuous_clock_reference ?
+        "segment_base=first FullBiasNanos retained across forward gaps; "
+        "reject backward TimeNanos or changed HardwareClockDiscontinuityCount; "
+        "epoch_tow=(TimeNanos-segment_base-week*604800e9-BiasNanos)/1e9; "
+        "per-signal tow_rx=epoch_tow-TimeOffsetNanos/1e9" :
         "segment_base=first FullBiasNanos; reset when successive |TimeNanos "
         "delta|>1e9 ns; week=floor((TimeNanos-segment_base)/1e9/604800); "
         "epoch_tow=(TimeNanos-segment_base-week*604800e9)/1e9-BiasNanos/1e9; "
@@ -807,6 +811,12 @@ static bool loadAndroidRawGnssCsvImpl(const std::string& path,
             previous_time_nanos = raw.time_nanos;
             previous_clock_discontinuity = raw.hardware_clock_discontinuity_count;
             have_previous = true;
+        } else if (config.continuous_clock_reference) {
+            if (raw.time_nanos < previous_time_nanos ||
+                raw.hardware_clock_discontinuity_count != previous_clock_discontinuity) {
+                error = "continuous raw clock reference requires monotonic TimeNanos and unchanged hardware clock";
+                return false;
+            }
         } else if (std::abs(raw.time_nanos - previous_time_nanos) >
                    kTimeJumpNanoseconds) {
             base_full_bias_nanos = raw.full_bias_nanos;

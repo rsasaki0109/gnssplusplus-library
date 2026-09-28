@@ -1,0 +1,537 @@
+{
+  "status": "completed-loader-only-admission-audit",
+  "truth_consumed": false,
+  "official_score": false,
+  "scope": "15 fixed Pixel5 development cases plus all six submitted test phones with loader discontinuities; no optimizer or scoring inputs",
+  "binary": "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\build\\Release\\clock_admission_v1.exe",
+  "binary_sha256": "00b558b0cdabcf7abae41bbf46f6e494b7c51d22cfe5c70378fa22f0c8cc1040",
+  "source_sha256": "c1b670760db25699af43fcbbb537cbb3bbc9d9237d4f8dbd5ab8e6e734ca66db",
+  "development_plan_sha256": "84523a3170ef516793d394e669ff43ad0ff75ac7f548735ce773687495df6455",
+  "test_inventory_sha256": "5747251e266e9dd45764d853c633d1ceed4783689c18f7e4fafb2f5e4804f55a",
+  "runs": {
+    "train/2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-01-04-21-50-us-ca-e1highway280driveroutea\\pixel5\\device_gnss.csv",
+      "raw_sha256": "eea5d820250b3b799ecae7b689e04f311a009873400878e11d95de926ecc48bd",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\00_legacy.csv",
+          "output_sha256": "56965bdecc7be734d8cdf75fa584b90b49d3a7401d38ad0907d8aeae8974b77a",
+          "diagnostic": "clock_discontinuities=0 selected_rows=72676\n",
+          "epochs": 2002,
+          "keys_sha256": "c107977c922b5d2c6cd379ad3214d5752abb967f3ff1541420861fdd0cc45704",
+          "max_abs_input_clock_step_m": 20.385887143999753
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\00_continuous.csv",
+          "output_sha256": "56965bdecc7be734d8cdf75fa584b90b49d3a7401d38ad0907d8aeae8974b77a",
+          "diagnostic": "clock_discontinuities=0 selected_rows=72676\n",
+          "epochs": 2002,
+          "keys_sha256": "c107977c922b5d2c6cd379ad3214d5752abb967f3ff1541420861fdd0cc45704",
+          "max_abs_input_clock_step_m": 20.385887143999753
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-01-04-22-40-us-ca-mtv-a\\pixel5\\device_gnss.csv",
+      "raw_sha256": "eb71080c2d7bb8ed2c4b22c511a02f2600d136f2fcf267d4f382cf503a52f7e2",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\01_legacy.csv",
+          "output_sha256": "0ac9961e99fe173dcd4d1f3d999222d5a28d3f9cf503d16b05af543d45165657",
+          "diagnostic": "clock_discontinuities=0 selected_rows=71847\n",
+          "epochs": 1855,
+          "keys_sha256": "b9eef8309d67bdd09aa2cfc4e6569319a97c7fbd85a6f5ee0fc97597dc5e38f2",
+          "max_abs_input_clock_step_m": 18.886924853999517
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\01_continuous.csv",
+          "output_sha256": "0ac9961e99fe173dcd4d1f3d999222d5a28d3f9cf503d16b05af543d45165657",
+          "diagnostic": "clock_discontinuities=0 selected_rows=71847\n",
+          "epochs": 1855,
+          "keys_sha256": "b9eef8309d67bdd09aa2cfc4e6569319a97c7fbd85a6f5ee0fc97597dc5e38f2",
+          "max_abs_input_clock_step_m": 18.886924853999517
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-03-10-23-13-us-ca-mtv-h\\pixel5\\device_gnss.csv",
+      "raw_sha256": "aa5bda7b55373c2683a1abc1b19bf96e2af2168ac383087d2c0afc8f2761bed8",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\02_legacy.csv",
+          "output_sha256": "3198196f2dcc5e15f91033354bc78ef7b76104e0995ea5f6210fdb290ff76805",
+          "diagnostic": "clock_discontinuities=0 selected_rows=50639\n",
+          "epochs": 1465,
+          "keys_sha256": "c9001d0c0274704340cb65a308d8b03c8a5f88182119ee566f2ef60589529cbb",
+          "max_abs_input_clock_step_m": 8.993773740000051
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\02_continuous.csv",
+          "output_sha256": "3198196f2dcc5e15f91033354bc78ef7b76104e0995ea5f6210fdb290ff76805",
+          "diagnostic": "clock_discontinuities=0 selected_rows=50639\n",
+          "epochs": 1465,
+          "keys_sha256": "c9001d0c0274704340cb65a308d8b03c8a5f88182119ee566f2ef60589529cbb",
+          "max_abs_input_clock_step_m": 8.993773740000051
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-03-16-18-59-us-ca-mtv-a\\pixel5\\device_gnss.csv",
+      "raw_sha256": "c7d50d5127d16586adc6c79d724758e298b385496da22c5e5dfd6ec522cbc863",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\03_legacy.csv",
+          "output_sha256": "8c1b236b917d5cdaa690a1b8f2e870331ea0421484efd9eedfda1e71ac2dbea9",
+          "diagnostic": "clock_discontinuities=0 selected_rows=84268\n",
+          "epochs": 2159,
+          "keys_sha256": "a429ccd091741952b4c05bddb763fcc236e6981fe5795006f0efe8b7bf57f144",
+          "max_abs_input_clock_step_m": 29.379660884002078
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\03_continuous.csv",
+          "output_sha256": "8c1b236b917d5cdaa690a1b8f2e870331ea0421484efd9eedfda1e71ac2dbea9",
+          "diagnostic": "clock_discontinuities=0 selected_rows=84268\n",
+          "epochs": 2159,
+          "keys_sha256": "a429ccd091741952b4c05bddb763fcc236e6981fe5795006f0efe8b7bf57f144",
+          "max_abs_input_clock_step_m": 29.379660884002078
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-19-20-49-us-ca-mtv-a\\pixel5\\device_gnss.csv",
+      "raw_sha256": "a56f52ed8a792a9a3809cfa6d46204f14da63ab64842ccd3a098e370e78de2bb",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\04_legacy.csv",
+          "output_sha256": "ad63004fb8fc7604eb1e7048f00477463da0bac723a9461a4c2b890e2066133c",
+          "diagnostic": "clock_discontinuities=0 selected_rows=76174\n",
+          "epochs": 1897,
+          "keys_sha256": "fcf11b7898a1117990b23c8fdbdf0014fe60aad0d281185f8e98e085a02d1880",
+          "max_abs_input_clock_step_m": 28.180491052000434
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\04_continuous.csv",
+          "output_sha256": "ad63004fb8fc7604eb1e7048f00477463da0bac723a9461a4c2b890e2066133c",
+          "diagnostic": "clock_discontinuities=0 selected_rows=76174\n",
+          "epochs": 1897,
+          "keys_sha256": "fcf11b7898a1117990b23c8fdbdf0014fe60aad0d281185f8e98e085a02d1880",
+          "max_abs_input_clock_step_m": 28.180491052000434
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-08-24-20-32-us-ca-mtv-h\\pixel5\\device_gnss.csv",
+      "raw_sha256": "46482b82db0992c1f063dbd9cf697268605234d3e38bcbd23525fd4b60bc17a7",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\05_legacy.csv",
+          "output_sha256": "cf53de4669f962121aecacff8eef67f0a6f48017a4fb5b793aa37efa130b4616",
+          "diagnostic": "clock_discontinuities=0 selected_rows=109747\n",
+          "epochs": 3140,
+          "keys_sha256": "212c1080e87e9e6cbe9264089d0d841702fc23669b5f1a13ee1e13deea7b96a6",
+          "max_abs_input_clock_step_m": 11.392113403999701
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\05_continuous.csv",
+          "output_sha256": "cf53de4669f962121aecacff8eef67f0a6f48017a4fb5b793aa37efa130b4616",
+          "diagnostic": "clock_discontinuities=0 selected_rows=109747\n",
+          "epochs": 3140,
+          "keys_sha256": "212c1080e87e9e6cbe9264089d0d841702fc23669b5f1a13ee1e13deea7b96a6",
+          "max_abs_input_clock_step_m": 11.392113403999701
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2022-01-26-20-02-us-ca-mtv-pe1/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2022-01-26-20-02-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+      "raw_sha256": "4625909b6892b1cf00d29d93494456cd24c52dbb47672bbe7b64536f078dc021",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\06_legacy.csv",
+          "output_sha256": "7ea904de832e3e0b300fd939e673804547b87d846e121af15085e238d3430648",
+          "diagnostic": "clock_discontinuities=0 selected_rows=54985\n",
+          "epochs": 1698,
+          "keys_sha256": "14c0f343286ec58a94a6d615a2a514cc44a8d567111e45ff905a6282f2d97729",
+          "max_abs_input_clock_step_m": 18.28733993800006
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\06_continuous.csv",
+          "output_sha256": "7ea904de832e3e0b300fd939e673804547b87d846e121af15085e238d3430648",
+          "diagnostic": "clock_discontinuities=0 selected_rows=54985\n",
+          "epochs": 1698,
+          "keys_sha256": "14c0f343286ec58a94a6d615a2a514cc44a8d567111e45ff905a6282f2d97729",
+          "max_abs_input_clock_step_m": 18.28733993800006
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2022-02-24-18-29-us-ca-lax-o\\pixel5\\device_gnss.csv",
+      "raw_sha256": "fe342d7ef0ff5bfc09a573dd27faac1761391d1f8fcc5526e215682f58ff1dae",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\07_legacy.csv",
+          "output_sha256": "cdb488aa0b134c69778807122124e9d8484da3b622cbeca7658d88a0f37a75bd",
+          "diagnostic": "clock_discontinuities=0 selected_rows=76178\n",
+          "epochs": 2439,
+          "keys_sha256": "8980dcee63e37563866d670ef3a904c6e151ac62f5d6ddc8788ebd029646d3cf",
+          "max_abs_input_clock_step_m": 10.49273603
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\07_continuous.csv",
+          "output_sha256": "cdb488aa0b134c69778807122124e9d8484da3b622cbeca7658d88a0f37a75bd",
+          "diagnostic": "clock_discontinuities=0 selected_rows=76178\n",
+          "epochs": 2439,
+          "keys_sha256": "8980dcee63e37563866d670ef3a904c6e151ac62f5d6ddc8788ebd029646d3cf",
+          "max_abs_input_clock_step_m": 10.49273603
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2022-04-01-18-22-us-ca-lax-t\\pixel5\\device_gnss.csv",
+      "raw_sha256": "50362c01bff3e0bb7088e54021164591cd750227ed97c2fd7d95d763a08798f1",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\08_legacy.csv",
+          "output_sha256": "b819b2f543e786d5af4d9cd46f698acd59ca3371954be7c9ae5ef6aa8f8b098e",
+          "diagnostic": "clock_discontinuities=0 selected_rows=51243\n",
+          "epochs": 1466,
+          "keys_sha256": "fc82b95656cd37590c343e223f3b4fbb0b6e886d31f1ce552d73631e819d780e",
+          "max_abs_input_clock_step_m": 11.0923209460002
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\08_continuous.csv",
+          "output_sha256": "b819b2f543e786d5af4d9cd46f698acd59ca3371954be7c9ae5ef6aa8f8b098e",
+          "diagnostic": "clock_discontinuities=0 selected_rows=51243\n",
+          "epochs": 1466,
+          "keys_sha256": "fc82b95656cd37590c343e223f3b4fbb0b6e886d31f1ce552d73631e819d780e",
+          "max_abs_input_clock_step_m": 11.0923209460002
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2022-08-04-20-07-us-ca-sjc-q\\pixel5\\device_gnss.csv",
+      "raw_sha256": "f493dda82bc6b3ee31e465c24abd8bf495a02cdb19a6b24f8f5bf5dad73ce617",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\09_legacy.csv",
+          "output_sha256": "eeab2ac3aeac67bc0b2dd3524740566ab66b5f101eac36fe299870c5ea8a253b",
+          "diagnostic": "clock_discontinuities=0 selected_rows=49921\n",
+          "epochs": 1450,
+          "keys_sha256": "b91f6783741bc893e194c8a0b251d332d4c67d643e8c288c3906f21dfaaa5699",
+          "max_abs_input_clock_step_m": 15.589207816000453
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\09_continuous.csv",
+          "output_sha256": "eeab2ac3aeac67bc0b2dd3524740566ab66b5f101eac36fe299870c5ea8a253b",
+          "diagnostic": "clock_discontinuities=0 selected_rows=49921\n",
+          "epochs": 1450,
+          "keys_sha256": "b91f6783741bc893e194c8a0b251d332d4c67d643e8c288c3906f21dfaaa5699",
+          "max_abs_input_clock_step_m": 15.589207816000453
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-03-08-21-34-us-ca-mtv-u\\pixel5\\device_gnss.csv",
+      "raw_sha256": "a0fc8e71bdfc03be61b99efcd7d41fbba8ffec126df78b55243f681fd211f204",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\10_legacy.csv",
+          "output_sha256": "439c39bdb982e1d8f9370445560db6ab29568fed6123b3153affc770f444d0a7",
+          "diagnostic": "clock_discontinuities=0 selected_rows=35810\n",
+          "epochs": 1102,
+          "keys_sha256": "e4a344685f0944de84a29424c4aa0be77c4c8885b4c70810324566ccfd25cb71",
+          "max_abs_input_clock_step_m": 17.387962563999736
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\10_continuous.csv",
+          "output_sha256": "439c39bdb982e1d8f9370445560db6ab29568fed6123b3153affc770f444d0a7",
+          "diagnostic": "clock_discontinuities=0 selected_rows=35810\n",
+          "epochs": 1102,
+          "keys_sha256": "e4a344685f0944de84a29424c4aa0be77c4c8885b4c70810324566ccfd25cb71",
+          "max_abs_input_clock_step_m": 17.387962563999736
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-05-09-21-32-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+      "raw_sha256": "aedcf32a4c9402a5c970aa800c6191048b1998370932378fa51eca1d5155a95a",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\11_legacy.csv",
+          "output_sha256": "940bb25c13e7ad56be3fc1b6a8dc920966b90901a7dd1c5d4c71c8d3ee439f45",
+          "diagnostic": "clock_discontinuities=0 selected_rows=68052\n",
+          "epochs": 2132,
+          "keys_sha256": "045ca7f0af02aa0dc3c2e0ea3988773bc15d6e8df99493dc4c2bfe525b857f0a",
+          "max_abs_input_clock_step_m": 21.88484943399999
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\11_continuous.csv",
+          "output_sha256": "940bb25c13e7ad56be3fc1b6a8dc920966b90901a7dd1c5d4c71c8d3ee439f45",
+          "diagnostic": "clock_discontinuities=0 selected_rows=68052\n",
+          "epochs": 2132,
+          "keys_sha256": "045ca7f0af02aa0dc3c2e0ea3988773bc15d6e8df99493dc4c2bfe525b857f0a",
+          "max_abs_input_clock_step_m": 21.88484943399999
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-05-16-19-54-us-ca-mtv-xe1\\pixel5\\device_gnss.csv",
+      "raw_sha256": "4da62fcfa19286b0e3e451d5f5ffbc35f58861aef75fba4e7c2c1ec333a8f61b",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\12_legacy.csv",
+          "output_sha256": "2f5ba59c728a99ef1e8c9926b7ad556eed1d9a2c6df4bcdf0c98053d8e7417f2",
+          "diagnostic": "clock_discontinuities=0 selected_rows=62801\n",
+          "epochs": 2323,
+          "keys_sha256": "b10df2a0d7579b628a19d1ab6edc2e1a5c1d841eae2379f9ca193a8dc9b435e0",
+          "max_abs_input_clock_step_m": 23.084019265999814
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\12_continuous.csv",
+          "output_sha256": "2f5ba59c728a99ef1e8c9926b7ad556eed1d9a2c6df4bcdf0c98053d8e7417f2",
+          "diagnostic": "clock_discontinuities=0 selected_rows=62801\n",
+          "epochs": 2323,
+          "keys_sha256": "b10df2a0d7579b628a19d1ab6edc2e1a5c1d841eae2379f9ca193a8dc9b435e0",
+          "max_abs_input_clock_step_m": 23.084019265999814
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2023-09-05-23-07-us-ca-routen/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-09-05-23-07-us-ca-routen\\pixel5\\device_gnss.csv",
+      "raw_sha256": "af525fc25c6a9fc5179646cd21f017e3ba80bc78bde3fd9906a6a60d89c89f24",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\13_legacy.csv",
+          "output_sha256": "1debc425c28927c6084917003c86e5c5acfccc46af38ad84504d06e2d877741c",
+          "diagnostic": "clock_discontinuities=0 selected_rows=65560\n",
+          "epochs": 1564,
+          "keys_sha256": "99a62e4c9f0b6b5c85934f2c9b69ea2d843c3189d42b850076b43b715b506d0f",
+          "max_abs_input_clock_step_m": 8.693981281999982
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\13_continuous.csv",
+          "output_sha256": "1debc425c28927c6084917003c86e5c5acfccc46af38ad84504d06e2d877741c",
+          "diagnostic": "clock_discontinuities=0 selected_rows=65560\n",
+          "epochs": 1564,
+          "keys_sha256": "99a62e4c9f0b6b5c85934f2c9b69ea2d843c3189d42b850076b43b715b506d0f",
+          "max_abs_input_clock_step_m": 8.693981281999982
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "train/2023-09-07-18-59-us-ca/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2023-09-07-18-59-us-ca\\pixel5\\device_gnss.csv",
+      "raw_sha256": "4f49ed6d4d636196512e12fbe4f08a98aab6f481b1da566e769c29dee089a368",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\14_legacy.csv",
+          "output_sha256": "bcb3b313b2f35cce287458a3ccdb53db624a342fed31e120ae977ef5713e3a03",
+          "diagnostic": "clock_discontinuities=0 selected_rows=43162\n",
+          "epochs": 1172,
+          "keys_sha256": "33845c220704cdb50c08349112920857cb8b866364d787162944653462b5bcbd",
+          "max_abs_input_clock_step_m": 17.387962563999963
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\14_continuous.csv",
+          "output_sha256": "bcb3b313b2f35cce287458a3ccdb53db624a342fed31e120ae977ef5713e3a03",
+          "diagnostic": "clock_discontinuities=0 selected_rows=43162\n",
+          "epochs": 1172,
+          "keys_sha256": "33845c220704cdb50c08349112920857cb8b866364d787162944653462b5bcbd",
+          "max_abs_input_clock_step_m": 17.387962563999963
+        }
+      },
+      "clock_export_byte_identical": true
+    },
+    "test/2021-11-05-18-28-us-ca-mtv-m/pixel6pro": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\pixel6pro\\device_gnss.csv",
+      "raw_sha256": "385554d11c17d0e4606ae2e66f6a9c65aa6bb8bd667235dac456f51196d0d271",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\15_legacy.csv",
+          "output_sha256": "ea72ed1a278eadb93e5503dfe4b44e4cba83768fd6bc3adb7044cd4bb1737d2c",
+          "diagnostic": "clock_discontinuities=1 selected_rows=42550\n",
+          "epochs": 1446,
+          "keys_sha256": "d921f70e4ca448817c83f8ccbe6da53672621d3d85b44d9f15b816e20cb3f889",
+          "max_abs_input_clock_step_m": 21770.628507502002
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\15_continuous.csv",
+          "output_sha256": "2edbafd9d282d4b70adc7c23a00f0dcd02210eb66ae91fc847621682b5945471",
+          "diagnostic": "clock_discontinuities=0 selected_rows=42550\n",
+          "epochs": 1446,
+          "keys_sha256": "d921f70e4ca448817c83f8ccbe6da53672621d3d85b44d9f15b816e20cb3f889",
+          "max_abs_input_clock_step_m": 157.39104045
+        }
+      },
+      "clock_export_byte_identical": false
+    },
+    "test/2022-02-23-22-35-us-ca-lax-m/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-02-23-22-35-us-ca-lax-m\\pixel5\\device_gnss.csv",
+      "raw_sha256": "5f4030c1614c29062a0cab37a733b3f56d7262576f27f8081c73d79dcdf7124e",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\16_legacy.csv",
+          "output_sha256": "90c01fd6a858b586fcc8438ce753a60e132c54bf0dac25f276562295d21535e9",
+          "diagnostic": "clock_discontinuities=4 selected_rows=90530\n",
+          "epochs": 2805,
+          "keys_sha256": "e78f5b1bdc399171790e626565d8f3958e61f6a1695c064fdb708cf99a0070f0",
+          "max_abs_input_clock_step_m": 3857.4295570860004
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\16_continuous.csv",
+          "output_sha256": "2a5b6d044fd435a69da5efd41079002fa2fae65119d69a72adb9ae2c8522e506",
+          "diagnostic": "clock_discontinuities=0 selected_rows=90530\n",
+          "epochs": 2805,
+          "keys_sha256": "e78f5b1bdc399171790e626565d8f3958e61f6a1695c064fdb708cf99a0070f0",
+          "max_abs_input_clock_step_m": 424.5061205279999
+        }
+      },
+      "clock_export_byte_identical": false
+    },
+    "test/2022-10-06-20-46-us-ca-sjc-r/sm-a205u": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2022-10-06-20-46-us-ca-sjc-r\\sm-a205u\\device_gnss.csv",
+      "raw_sha256": "26672be2098e7484dd6b1ed5ac0adaad18c9bdab5768a67d53ec29d6f6ba79c0",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\17_legacy.csv",
+          "output_sha256": "0210fcda050ba0e1be43d507105756f3a8f9a63e057911bfb0854f77b980bae4",
+          "diagnostic": "clock_discontinuities=1696 selected_rows=33367\n",
+          "epochs": 1697,
+          "keys_sha256": "dac9ae4f18a2a3fa1a17bc4b5d3bdea69765813548f076e321812135db072c69",
+          "max_abs_input_clock_step_m": 0.0
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\17_continuous.csv",
+          "output_sha256": "1edc1d4f8df2793c51bf084fbdf8dfb1f23b8af02d4aa3418bbed414daa25597",
+          "diagnostic": "clock_discontinuities=0 selected_rows=33367\n",
+          "epochs": 1697,
+          "keys_sha256": "dac9ae4f18a2a3fa1a17bc4b5d3bdea69765813548f076e321812135db072c69",
+          "max_abs_input_clock_step_m": 460.481215488
+        }
+      },
+      "clock_export_byte_identical": false
+    },
+    "test/2023-04-27-19-25-us-ca-mtv-pe1/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-04-27-19-25-us-ca-mtv-pe1\\pixel5\\device_gnss.csv",
+      "raw_sha256": "fff8fbe35035f24afca61125decbbe56a221b01381cb5b5a31b635435e7988e9",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\18_legacy.csv",
+          "output_sha256": "1414cd263a1d064c41969eb822a4a5ef4bee0829ce34ea75cfd8eaabedf1a2b6",
+          "diagnostic": "clock_discontinuities=1 selected_rows=36875\n",
+          "epochs": 1357,
+          "keys_sha256": "ab25104860890e08391883f9da634b1202ffe7d461e00374352122671bb6e80e",
+          "max_abs_input_clock_step_m": 67.45330305
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\18_continuous.csv",
+          "output_sha256": "451144febae6547448eccd1732a40f38a346e5c9d9fa4cd808c15588b5f5a91a",
+          "diagnostic": "clock_discontinuities=0 selected_rows=36875\n",
+          "epochs": 1357,
+          "keys_sha256": "ab25104860890e08391883f9da634b1202ffe7d461e00374352122671bb6e80e",
+          "max_abs_input_clock_step_m": 30.878623173999586
+        }
+      },
+      "clock_export_byte_identical": false
+    },
+    "test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-05-09-23-10-us-ca-sjc-r\\sm-a505u\\device_gnss.csv",
+      "raw_sha256": "a9f80d89213ba2e512f63501d4b5eb0e31e2164e478b4d69da80634a18553858",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\19_legacy.csv",
+          "output_sha256": "2f669fd39961078b8722b48c2a8d52554f70b1011610f598df582887c2d20cee",
+          "diagnostic": "clock_discontinuities=2383 selected_rows=56531\n",
+          "epochs": 2384,
+          "keys_sha256": "5b910e36418954dead27893581a5255ce6e60deb8acc09feb2145b0bdd5fee1c",
+          "max_abs_input_clock_step_m": 0.0
+        },
+        "continuous": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\19_continuous.csv",
+          "output_sha256": "859ab6a5756f1de67d0a6e1ed3912b2128f31e7f7ccaf01ed77313e82de7438a",
+          "diagnostic": "clock_discontinuities=0 selected_rows=56531\n",
+          "epochs": 2384,
+          "keys_sha256": "5b910e36418954dead27893581a5255ce6e60deb8acc09feb2145b0bdd5fee1c",
+          "max_abs_input_clock_step_m": 76.7468692480179
+        }
+      },
+      "clock_export_byte_identical": false
+    },
+    "test/2023-06-06-22-43-us-ca-sjc-he2/pixel5": {
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2023-06-06-22-43-us-ca-sjc-he2\\pixel5\\device_gnss.csv",
+      "raw_sha256": "b7488e07fe59959fc53c14c6a583e9509c44161ad0d65d05822ccb3f82a26f2e",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\20_legacy.csv",
+          "output_sha256": "d10aed0b444dcb76040843bdc237d4cb7aad702c9ccfc0fecf48f3fe0259b97a",
+          "diagnostic": "clock_discontinuities=1 selected_rows=54551\n",
+          "epochs": 1608,
+          "keys_sha256": "02a54f79d425bf54464baf329e88ade87e5ca6df14759aa6ba12233fb375c665",
+          "max_abs_input_clock_step_m": 193.665927868
+        },
+        "continuous": {
+          "returncode": 3,
+          "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\20_continuous.csv",
+          "output_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "diagnostic": "continuous raw clock reference requires monotonic TimeNanos and unchanged hardware clock"
+        }
+      }
+    }
+  },
+  "cases": 21,
+  "continuous_rejected": 1,
+  "script_sha256": "4f3523c31da95080b6a3414edf383ba1641bb3a6adc7c6c9d5c453f4516d0126"
+}

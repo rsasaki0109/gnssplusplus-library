@@ -26,6 +26,10 @@ struct AndroidRawGnssConfig {
     // common receiver clock fields within GPS/Galileo satellite/UTC groups.
     // Default OFF does not change legacy ingestion or measurement selection.
     bool require_frequency_pair_timing = false;
+    /// Experimental continuous FullBias reference for a single hardware-clock
+    /// segment. Gaps do not reset the reference. Backward TimeNanos or changed
+    /// HardwareClockDiscontinuityCount fail closed. Default preserves upstream.
+    bool continuous_clock_reference = false;
     /// Optional device name used only for the published ADR sign correction.
     std::string device_model;
     /// Retain the L1 observations used by taroz's FGO mapping when true.

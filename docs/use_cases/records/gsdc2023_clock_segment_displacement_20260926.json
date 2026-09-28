@@ -1,0 +1,113 @@
+{
+  "status": "completed-trajectory-displacement-audit",
+  "truth_consumed": false,
+  "official_score": false,
+  "promoted": false,
+  "reference": "historical audited no-D trajectory; displacement is not position error",
+  "keys": 1165,
+  "same_binary_current_pair_pending": true,
+  "files": {
+    "no_doppler": {
+      "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_segment_diagnostic_20260926\\control",
+      "solution_sha256": "9f94aaf977d436af635e4bff4430a540e8f6c67edf43ede5e3df1dddc855a41e",
+      "binary_sha256": "51e2c356b30ef5f07ba07f60bc24c084d4578307f505afed64894c96208f7801"
+    },
+    "legacy_doppler": {
+      "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_segment_diagnostic_20260926\\doppler",
+      "solution_sha256": "066cf1b6b23e3e03e5e7accb5285aee79d12f6c5366ada35939c47cefab79d4d",
+      "binary_sha256": "51e2c356b30ef5f07ba07f60bc24c084d4578307f505afed64894c96208f7801"
+    },
+    "continuous_doppler": {
+      "folder": "E:\\rtklib_v2_ws_output\\gsdc_native\\continuous_raw_clock_20260926\\continuous",
+      "solution_sha256": "22875174dd65e218487865b9929c0383c5b2ba5f938a8f04ede0282b7d1beefc",
+      "binary_sha256": "862d58966c5e88594e171d3b39d038ae947419409ab649fb42a0426e43018832"
+    }
+  },
+  "whole_route": {
+    "legacy_doppler": {
+      "p50_m": 0.49284040645407906,
+      "p95_m": 5.492680897910601,
+      "max_m": 5.723468666041806
+    },
+    "continuous_doppler": {
+      "p50_m": 0.023474403555305542,
+      "p95_m": 0.15502275600548046,
+      "max_m": 0.2326993958829941
+    }
+  },
+  "quarters": [
+    {
+      "quarter": 1,
+      "keys": 292,
+      "first_utc_ms": 1626295841999,
+      "last_utc_ms": 1626296132999,
+      "displacements": {
+        "legacy_doppler": {
+          "p50_m": 0.7097207501253681,
+          "p95_m": 5.2025464543018325,
+          "max_m": 5.3072770633910284
+        },
+        "continuous_doppler": {
+          "p50_m": 0.012617542481759659,
+          "p95_m": 0.14518181202433228,
+          "max_m": 0.14851205087284522
+        }
+      }
+    },
+    {
+      "quarter": 2,
+      "keys": 291,
+      "first_utc_ms": 1626296133999,
+      "last_utc_ms": 1626296424000,
+      "displacements": {
+        "legacy_doppler": {
+          "p50_m": 4.594186060343506,
+          "p95_m": 5.614255196877194,
+          "max_m": 5.723468666041806
+        },
+        "continuous_doppler": {
+          "p50_m": 0.06057430710071847,
+          "p95_m": 0.2268105933627633,
+          "max_m": 0.2326993958829941
+        }
+      }
+    },
+    {
+      "quarter": 3,
+      "keys": 291,
+      "first_utc_ms": 1626296425000,
+      "last_utc_ms": 1626296715000,
+      "displacements": {
+        "legacy_doppler": {
+          "p50_m": 0.2804834236546946,
+          "p95_m": 0.7005671371695453,
+          "max_m": 0.7612614056773623
+        },
+        "continuous_doppler": {
+          "p50_m": 0.019349419822928274,
+          "p95_m": 0.031036330790959805,
+          "max_m": 0.05216766476812205
+        }
+      }
+    },
+    {
+      "quarter": 4,
+      "keys": 291,
+      "first_utc_ms": 1626296716000,
+      "last_utc_ms": 1626297006000,
+      "displacements": {
+        "legacy_doppler": {
+          "p50_m": 0.05430557618388019,
+          "p95_m": 0.07073788483669469,
+          "max_m": 0.08076219029086032
+        },
+        "continuous_doppler": {
+          "p50_m": 0.01882595385455413,
+          "p95_m": 0.09379327204326726,
+          "max_m": 0.09630946550599559
+        }
+      }
+    }
+  ],
+  "script_sha256": "eed8f54d0b698dbcc2a18d9dec010914094ecfd49787c1eeeac8408a3d0a6377"
+}

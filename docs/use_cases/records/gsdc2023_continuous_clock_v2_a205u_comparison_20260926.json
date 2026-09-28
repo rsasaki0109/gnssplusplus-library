@@ -1,0 +1,34 @@
+{
+  "status": "all-planned-pairs-audited",
+  "official_score": false,
+  "heldout": false,
+  "plan_sha256": "ebb2c312f970751c6e7902943b69f333aef73c85ada481c17dff2d4721b95f90",
+  "expected_pairs": 1,
+  "audited_pairs": 1,
+  "native_recipe_effects_verified": true,
+  "height_map_group_independence_verified": true,
+  "aggregation": "unweighted mean of per-phone (P50 + P95) / 2",
+  "runs": {
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\continuous_raw_clock_v2_a205u_20260926\\runs\\00\\comparison.json",
+      "comparison_sha256": "fe7f57845c1bf997233da0905819a6b3a919ab1783cffe1c8db0a06a9bce610b",
+      "control": {
+        "truth_keys": 1213,
+        "p50_m": 1.3181052110008284,
+        "p95_m": 2.5150075208631555,
+        "phone_score_m": 1.916556365931992
+      },
+      "candidate": {
+        "truth_keys": 1213,
+        "p50_m": 1.3088226874391393,
+        "p95_m": 2.515829602233438,
+        "phone_score_m": 1.9123261448362885
+      },
+      "delta_phone_score_m": -0.004230221095703479
+    }
+  },
+  "control_mean_m": 1.916556365931992,
+  "candidate_mean_m": 1.9123261448362885,
+  "delta_mean_m": -0.004230221095703479,
+  "regressed_pairs": 0
+}

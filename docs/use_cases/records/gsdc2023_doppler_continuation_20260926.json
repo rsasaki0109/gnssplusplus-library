@@ -1,0 +1,57 @@
+{
+  "status": "candidate-failed-before-final-solve",
+  "official_score": false,
+  "promoted": false,
+  "hypothesis": "A no-D initial IMU pass may avoid a poor local minimum before the existing final Doppler observation rebuild. Not a fixed-final-factor-set comparison because the final rebuild uses each initial trajectory.",
+  "base_revision": "6ef6514078f27e0d829f976fb88a50ccb09eeeaa",
+  "source_sha256": {
+    "apps\\native\\gnss_fgo_imu_no_base.cpp": "d0c9c8d94add9ecc6de3a5849f8182ea5d93a05d75a07c1b506311297d703121",
+    "scripts\\analysis\\run_gsdc_doppler_segment_diagnostic.py": "e185c568b736c7b7be970d74e487d4316d1e8247b946534d74cea93059caf021",
+    "scripts\\analysis\\compare_gsdc_doppler_diagnostic.py": "bfebd3d7a231569f9c383730cddaecf66bc85a6a7ae0b23f4043c081aa342112"
+  },
+  "binary_sha256": "82ef0163cbaa8794c67e6bf391aaaaf23a206564e300b3cd06d83ce15e3c2903",
+  "output_root": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_20260926",
+  "control_source_run_sha256": "a4d5359db824f687cd8b4bebef8ffffc05fc80770d6e8d3f41eb5de4f4d411a6",
+  "candidate_flag": "--native-refinement-no-doppler-initialization",
+  "cli_checks": {
+    "binary_sha256": "82ef0163cbaa8794c67e6bf391aaaaf23a206564e300b3cd06d83ce15e3c2903",
+    "scope": "CLI negative admission only",
+    "results": [
+      {
+        "missing": "--native-imu-refinement-pass",
+        "returncode": 2,
+        "message": "--native-refinement-no-doppler-initialization requires --native-imu-refinement-pass"
+      },
+      {
+        "missing": "--native-phase213-main-doppler",
+        "returncode": 2,
+        "message": "--native-imu-refinement-pass requires exported Phase171 source-IMU/main-D stages and ordinary exact-stream base corrections"
+      },
+      {
+        "missing": "--native-export-imu-stage",
+        "returncode": 2,
+        "message": "--native-imu-refinement-pass requires exported Phase171 source-IMU/main-D stages and ordinary exact-stream base corrections"
+      }
+    ]
+  },
+  "acceptance": [
+    "same binary and inputs; sole candidate flag difference",
+    "all raw UTC keys native; no interpolated, held, unresolved output",
+    "GNSS-first stage bytes identical",
+    "control initial D factors positive; candidate initial D factors zero; final D factors positive",
+    "score all existing truth keys, report P50/P95 and any regression",
+    "single exposed development route is insufficient for promotion"
+  ],
+  "control_completed": true,
+  "control_output_matches_historical": {
+    "solution.csv": true,
+    "summary.json.gnss-first.csv": true,
+    "summary.json.imu-initial.csv": true
+  },
+  "control_run_sha256": "2a140ce23c422f381d4b2dccbbeef3d1fa0e12e2ae19ffbb3c6f171804c41ef0",
+  "candidate_run_sha256": "08f7192dc9da364330867da329e730143021ea2f63906a2ffc0a6af1d390212f",
+  "candidate_returncode": 1,
+  "candidate_scored": false,
+  "failure": "No Doppler rows survive observation rebuild after no-D initial IMU solve; Phase213 admission rejects empty rows. No final position CSV published.",
+  "candidate_stderr_sha256": "c76382860b76c8df772283fd7dc15222796b7c6f0b3df7e05441e76378f6d904"
+}

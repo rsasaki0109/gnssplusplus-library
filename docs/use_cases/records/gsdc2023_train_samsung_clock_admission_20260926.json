@@ -1,0 +1,62 @@
+{
+  "status": "native-loader-admission-complete",
+  "truth_consumed": false,
+  "official_score": false,
+  "binary_sha256": "00b558b0cdabcf7abae41bbf46f6e494b7c51d22cfe5c70378fa22f0c8cc1040",
+  "inventory_sha256": "b740d21db82de6be60132dea06205206d605e51a456457b115dd70e5e14e43cb",
+  "selection": "Both additional train40 phones with loader discontinuities; July14 G988B already audited",
+  "runs": {
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "source_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_v1\\23\\run.json",
+      "source_run_sha256": "75eaca0688c62c040772ceff1f9fc42143de302f14a68e1415d02dd60ba0ca27",
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2022-10-06-21-51-us-ca-mtv-n\\sm-a205u\\device_gnss.csv",
+      "raw_sha256": "a158d7c9327c6a039816ccb156820bc0785244d6a12011428d85f5262725a46e",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_train_samsung_20260926\\sm-a205u_legacy.csv",
+          "sha256": "d367c0b90207c38400a0899153dcfe4236355b06af8cf99a37885c85d03552ee",
+          "diagnostic": "clock_discontinuities=1208 selected_rows=22591\n",
+          "epochs": 1209,
+          "keys_sha256": "e073c6ee4ba94a0a3590c2b01b1825c81f3dd2aff612574b88ca71fb7eb1bb2d",
+          "max_abs_clock_step_m": 0.0
+        },
+        "continuous": {
+          "returncode": 0,
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_train_samsung_20260926\\sm-a205u_continuous.csv",
+          "sha256": "d26b3ae874290f13bf4e5d19dba8d019a7e5575c9366b0684f23f47400ff45cc",
+          "diagnostic": "clock_discontinuities=0 selected_rows=22591\n",
+          "epochs": 1209,
+          "keys_sha256": "e073c6ee4ba94a0a3590c2b01b1825c81f3dd2aff612574b88ca71fb7eb1bb2d",
+          "max_abs_clock_step_m": 383.73434624000004
+        }
+      }
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "source_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\train40_corrected_recipe_v1\\25\\run.json",
+      "source_run_sha256": "3095ee6ad7dc83f611935fe09baad36614da72a05d27abf9f49eabc4522f41d1",
+      "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2022-10-06-21-51-us-ca-mtv-n\\sm-a325f\\device_gnss.csv",
+      "raw_sha256": "376e2d0dd3dc62e568e89706a8cd9bab5a14fa4366555d63ba33c0e08917f557",
+      "modes": {
+        "legacy": {
+          "returncode": 0,
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_train_samsung_20260926\\sm-a325f_legacy.csv",
+          "sha256": "1e315fd6704e362eaece7afe63773390b62726406ca8e39fb831046fde5951c8",
+          "diagnostic": "clock_discontinuities=1 selected_rows=34328\n",
+          "epochs": 1230,
+          "keys_sha256": "a350107d769a9680b9bee114f1862fb4bd662a8dfeb2b339a7600e79bbf278f7",
+          "max_abs_clock_step_m": 599623.289434624
+        },
+        "continuous": {
+          "returncode": 0,
+          "path": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_train_samsung_20260926\\sm-a325f_continuous.csv",
+          "sha256": "799dc1446ef2d7b978de8d34a8681956e4b5d8c996c75838c79eab8a873a0ef9",
+          "diagnostic": "clock_discontinuities=0 selected_rows=34328\n",
+          "epochs": 1230,
+          "keys_sha256": "a350107d769a9680b9bee114f1862fb4bd662a8dfeb2b339a7600e79bbf278f7",
+          "max_abs_clock_step_m": 599623.289434624
+        }
+      }
+    }
+  }
+}

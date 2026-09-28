@@ -1,0 +1,1613 @@
+{
+  "status": "all-pixel5-heading-test-pairs-audited",
+  "official_score": false,
+  "accuracy_evaluated": false,
+  "truth_consumed": false,
+  "submitted": false,
+  "plan_sha256": "0e9145acc1abc1f1da8922398d512f6684a8138941e491152e0be6de9f9ee6ca",
+  "execution_done_sha256": "63f120d5922cb32ccc5770b3ed337f76996f1b1b3ce5b79527817682208b3047",
+  "expected_pairs": 17,
+  "audited_pairs": 17,
+  "all_control_sources_reproduced": true,
+  "heading_contracts_verified": true,
+  "runs": {
+    "2021-08-17-20-37-us-ca-mtv-g/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04981107790083164,
+            "last_norm": 0.04655333360025545,
+            "maximum_norm": 0.05024917021343478,
+            "maximum_epoch": 67,
+            "maximum_utc": 1629232708442
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00045762636451547443,
+            "last_norm": 0.00032657034952742,
+            "maximum_norm": 0.00046507970233812085,
+            "maximum_epoch": 327,
+            "maximum_utc": 1629232968442
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04981114165162177,
+            "last_norm": 0.04655134965761304,
+            "maximum_norm": 0.05024927381051407,
+            "maximum_epoch": 67,
+            "maximum_utc": 1629232708442
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00045762833917313794,
+            "last_norm": 0.0003265734628048319,
+            "maximum_norm": 0.00046508185192989875,
+            "maximum_epoch": 327,
+            "maximum_utc": 1629232968442
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0006347795466626581,
+        "p95": 0.0012267127751940258,
+        "maximum": 0.002886175768760003
+      },
+      "solution_sha256": {
+        "control": "de589adf7540042d14b44dd60be79e3d4f0c156690692b2210b7a3083f914af5",
+        "candidate": "71630e0096ced3ebd677ab45acb8f8cf116629972147eada6de950ba7aa77d2a"
+      },
+      "summary_sha256": {
+        "control": "386fec0a1e6824024f15a7b48bfdc273f46ecfd08a2a987f11024a2fa37bdbe1",
+        "candidate": "67cd2ca397beaff3901aae1437a7d943a9d0cbe1733cf11a1aee39097c296adc"
+      }
+    },
+    "2022-02-08-22-04-us-ca-sjc-r/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.030669248452705446,
+            "last_norm": 0.02194003566354907,
+            "maximum_norm": 0.030669248452705446,
+            "maximum_epoch": 0,
+            "maximum_utc": 1644357892448
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0003740416324249516,
+            "last_norm": 0.00038924111674935055,
+            "maximum_norm": 0.00038924111959765944,
+            "maximum_epoch": 1661,
+            "maximum_utc": 1644359553448
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.03067128090233324,
+            "last_norm": 0.021941778711729018,
+            "maximum_norm": 0.03067128090233324,
+            "maximum_epoch": 0,
+            "maximum_utc": 1644357892448
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00037404297145356667,
+            "last_norm": 0.00038924195681432815,
+            "maximum_norm": 0.00038924195966282276,
+            "maximum_epoch": 1661,
+            "maximum_utc": 1644359553448
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0003079642899242318,
+        "p95": 0.0013566953427136801,
+        "maximum": 0.001891058932466644
+      },
+      "solution_sha256": {
+        "control": "821312e9135a722086b8c88b3cefb5c4f371db9273674ca33edc50ec1db7d8c3",
+        "candidate": "1588a018c39085fa1eb11dbf454c0eb9f689a04661fcced083935d6326d0e9ff"
+      },
+      "summary_sha256": {
+        "control": "b2553719d439893840e7d80266ab3c1d5898f912a9cdb61048148a888d721ed2",
+        "candidate": "3c2579af05522bbf565fc3fcce441b9ef5146fd4f39612b5456582e369f6a6de"
+      }
+    },
+    "2022-02-23-17-46-us-ca-lax-n/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04715292040347023,
+            "last_norm": 0.03709488572674491,
+            "maximum_norm": 0.04715614697162412,
+            "maximum_epoch": 6,
+            "maximum_utc": 1645638414443
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0001631878807264826,
+            "last_norm": 0.00014076261012862805,
+            "maximum_norm": 0.0001650661750797922,
+            "maximum_epoch": 497,
+            "maximum_utc": 1645638905443
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04715186037219322,
+            "last_norm": 0.037095045303505415,
+            "maximum_norm": 0.047155087208942445,
+            "maximum_epoch": 6,
+            "maximum_utc": 1645638414443
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00016318754053591209,
+            "last_norm": 0.0001407625427942206,
+            "maximum_norm": 0.00016506603695734095,
+            "maximum_epoch": 497,
+            "maximum_utc": 1645638905443
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00017938792882111495,
+        "p95": 0.0007468136139492047,
+        "maximum": 0.0009000828847845439
+      },
+      "solution_sha256": {
+        "control": "681643db796a40117ce27a04a2f5dce89a1b3c7e0068a1d2e16511d44618cdbc",
+        "candidate": "14bff948ac95f89b90d152b1d4abd33ef14aa9d384708dec38adfa2e20f12a3f"
+      },
+      "summary_sha256": {
+        "control": "035476150fcbc4d10e09607c074d8f08f6093604995143009cc909c22b5ad4d0",
+        "candidate": "0dc79c22ab68ec121732057f0b44383d9dc83dff089fe892232fe2202c9ab9b9"
+      }
+    },
+    "2022-02-23-22-35-us-ca-lax-m/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.041461842979862294,
+            "last_norm": 0.04367074453489649,
+            "maximum_norm": 0.04372705193298173,
+            "maximum_epoch": 2793,
+            "maximum_utc": 1645658628438
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0001687478303562275,
+            "last_norm": 9.894875350588495e-05,
+            "maximum_norm": 0.0001687478303562275,
+            "maximum_epoch": 0,
+            "maximum_utc": 1645655744438
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.041465386139949365,
+            "last_norm": 0.04367174807042925,
+            "maximum_norm": 0.043728059261547395,
+            "maximum_epoch": 2793,
+            "maximum_utc": 1645658628438
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00016875074034219378,
+            "last_norm": 9.895009006503354e-05,
+            "maximum_norm": 0.00016875074034219378,
+            "maximum_epoch": 0,
+            "maximum_utc": 1645655744438
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0010218797393346125,
+        "p95": 0.001834063137790799,
+        "maximum": 0.002243016511080958
+      },
+      "solution_sha256": {
+        "control": "5a01a112f450540fac7ca10f4247c1d0be7c2cfdb307d38032947ba6dc2b5a61",
+        "candidate": "781eaac08fc2dd8889c0f144e40c1179cfdb9d01a87e0566bba27e72d4cf22c9"
+      },
+      "summary_sha256": {
+        "control": "344bb9ac14f388c218ffb5bc411d0bba98ef571b78bc4e7974b31a5b99feac5f",
+        "candidate": "fbe7ca5914f04a9278b8adc053498eda5fb8166c85150c5fe9ebcb1988e2e3f5"
+      }
+    },
+    "2022-02-24-15-10-us-ca-lax-p/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.9377035066405357,
+            "last_norm": 18.021136634792075,
+            "maximum_norm": 18.625443498951647,
+            "maximum_epoch": 4321,
+            "maximum_utc": 1645719734429
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.000627900335393472,
+            "last_norm": 0.0037165144285989517,
+            "maximum_norm": 0.0037168468287889695,
+            "maximum_epoch": 4488,
+            "maximum_utc": 1645719901429
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 4515,
+              "first_epoch": 0,
+              "last_epoch": 4514
+            },
+            "1.0": {
+              "count": 4394,
+              "first_epoch": 121,
+              "last_epoch": 4514
+            },
+            "5.0": {
+              "count": 2959,
+              "first_epoch": 1556,
+              "last_epoch": 4514
+            },
+            "10.0": {
+              "count": 2093,
+              "first_epoch": 2422,
+              "last_epoch": 4514
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.05370239878890124,
+            "last_norm": 0.031770125764145576,
+            "maximum_norm": 0.05513234120551433,
+            "maximum_epoch": 288,
+            "maximum_utc": 1645715701429
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00047045142441423904,
+            "last_norm": 0.00038776700478321404,
+            "maximum_norm": 0.00047045142441423904,
+            "maximum_epoch": 0,
+            "maximum_utc": 1645715413429
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.5210816113405028,
+        "p95": 5.989445782013014,
+        "maximum": 269.9395081579883
+      },
+      "solution_sha256": {
+        "control": "fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17",
+        "candidate": "cdee067b0527607041bc9a0b5e07f0d2f611500d874cde56d194d4ed1864e5fb"
+      },
+      "summary_sha256": {
+        "control": "0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88",
+        "candidate": "fc0a4f302cb81db83578b16cb7e24eb6cc8310bb2d404c58b5fc7a1fa0f9db51"
+      }
+    },
+    "2022-02-24-22-14-us-ca-lax-i/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.03975707417854918,
+            "last_norm": 0.029308109189186353,
+            "maximum_norm": 0.03976122016767236,
+            "maximum_epoch": 5,
+            "maximum_utc": 1645740893445
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00020153499144012733,
+            "last_norm": 6.001809858417641e-05,
+            "maximum_norm": 0.00020160408345910622,
+            "maximum_epoch": 90,
+            "maximum_utc": 1645740978445
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.039757197949290446,
+            "last_norm": 0.029307843388936123,
+            "maximum_norm": 0.039761343967413876,
+            "maximum_epoch": 5,
+            "maximum_utc": 1645740893445
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00020153502082521078,
+            "last_norm": 6.001568175312199e-05,
+            "maximum_norm": 0.00020160411306832044,
+            "maximum_epoch": 90,
+            "maximum_utc": 1645740978445
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00016440297347435203,
+        "p95": 0.000993721957008,
+        "maximum": 0.001776964145643162
+      },
+      "solution_sha256": {
+        "control": "41b0070797d9e393f226c119143fdf70168f2ecc7450e537f439130315386c97",
+        "candidate": "1a30f37e4df49ef9e8f56ad84e59f815e6f200c1919e9587e3490fd443177061"
+      },
+      "summary_sha256": {
+        "control": "c112fbbe220025d9db3a3bfd5d23ef5f5b55afcfcb9d5098c92384e1d1db9002",
+        "candidate": "743f606bc0a0816b208dc526804ebb238ae750723dd80944289f79d0dcf990df"
+      }
+    },
+    "2022-03-22-18-44-us-ca-mtv-pe1/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.007014460482027942,
+            "last_norm": 0.015028741932460088,
+            "maximum_norm": 0.015108384805412342,
+            "maximum_epoch": 2042,
+            "maximum_utc": 1647976738437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 6.49342649873752e-05,
+            "last_norm": 0.00010021915030257718,
+            "maximum_norm": 0.00010022238393053701,
+            "maximum_epoch": 2089,
+            "maximum_utc": 1647976785437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.0070145721780324665,
+            "last_norm": 0.015029769337972596,
+            "maximum_norm": 0.015109245080902748,
+            "maximum_epoch": 2042,
+            "maximum_utc": 1647976738437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 6.493439757856809e-05,
+            "last_norm": 0.00010021979653277799,
+            "maximum_norm": 0.00010022302964992587,
+            "maximum_epoch": 2089,
+            "maximum_utc": 1647976785437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0003160161897685429,
+        "p95": 0.0013447186185497084,
+        "maximum": 0.0019475384846560908
+      },
+      "solution_sha256": {
+        "control": "5541d38e787aa4452f192c23aa50171b391552f181c98229ef8d330c0679d60f",
+        "candidate": "c1fa256e57ccc4d3b1178fd065c911a7b7e1e34785ce054e80a3f128943e8daf"
+      },
+      "summary_sha256": {
+        "control": "613463eef77b144a0e0fdb52ee7a6a58f0fbfabee3041af7c0828b953a2d44d6",
+        "candidate": "9abc820b53bb3241a2467a31da1be22629da40e62d599940af7e784f132accee"
+      }
+    },
+    "2022-04-04-16-31-us-ca-lax-x/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.013370045993387866,
+            "last_norm": 0.011314373800271603,
+            "maximum_norm": 0.013398411523398894,
+            "maximum_epoch": 20,
+            "maximum_utc": 1649089882434
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0007155370440175401,
+            "last_norm": 0.0007539555385590228,
+            "maximum_norm": 0.0007539555405052989,
+            "maximum_epoch": 2168,
+            "maximum_utc": 1649092030434
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.013366038069358474,
+            "last_norm": 0.011311384647695155,
+            "maximum_norm": 0.013394407018646824,
+            "maximum_epoch": 20,
+            "maximum_utc": 1649089882434
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0007155381758387431,
+            "last_norm": 0.0007539553615569522,
+            "maximum_norm": 0.000753955363503419,
+            "maximum_epoch": 2168,
+            "maximum_utc": 1649092030434
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00034997937962838,
+        "p95": 0.0018044230139552633,
+        "maximum": 0.0024556262090100907
+      },
+      "solution_sha256": {
+        "control": "493e54a978b3953d3afd01ad970cdcfaf230cb3f2687cc6337c438999c2726ff",
+        "candidate": "5b127702b31eda534ef4eadaf6c7fca6666d0dc5e3713cfc4326924bf055e36f"
+      },
+      "summary_sha256": {
+        "control": "05bba521ca1d20202ada6eeef3519db70520610b940bcecebf5ec326658bdaa9",
+        "candidate": "c77655e9277ee15c79fc5247b217a8e4a8b09c29beea96c5b5ec8df39a6157e6"
+      }
+    },
+    "2022-04-22-20-11-us-ca-ebf-y/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.027350048790364737,
+            "last_norm": 0.020138730593741373,
+            "maximum_norm": 0.027350048790364737,
+            "maximum_epoch": 0,
+            "maximum_utc": 1650658261448
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002494675715472873,
+            "last_norm": 0.0002719058606438583,
+            "maximum_norm": 0.00028538633393758553,
+            "maximum_epoch": 877,
+            "maximum_utc": 1650659138448
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.027348736175139075,
+            "last_norm": 0.02013759837021986,
+            "maximum_norm": 0.027348736175139075,
+            "maximum_epoch": 0,
+            "maximum_utc": 1650658261448
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002494664343126333,
+            "last_norm": 0.0002719051933779897,
+            "maximum_norm": 0.0002853855614382431,
+            "maximum_epoch": 877,
+            "maximum_utc": 1650659138448
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00023762026736442432,
+        "p95": 0.0005089830239629642,
+        "maximum": 0.0009699282647880522
+      },
+      "solution_sha256": {
+        "control": "b3443bf3c8fdd7d1ededb297284df57f493a4c134fc3bddeba1a0db9f374e7d1",
+        "candidate": "30f4785b76951f9d7b91877b4d23b2ddadee72e460f63f4e718bb503db993438"
+      },
+      "summary_sha256": {
+        "control": "2bc0b5250990f3fb8180d288af33d94499ae25f88a36696faeefde178db44f8c",
+        "candidate": "461126cebffa3a0b5d369050b631201c77b504cbdbcabad255153daf4fea2f10"
+      }
+    },
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.03309439502305546,
+            "last_norm": 0.022829671822206132,
+            "maximum_norm": 0.03311551416630162,
+            "maximum_epoch": 25,
+            "maximum_utc": 1650926185445
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0006389186915139581,
+            "last_norm": 0.0007162051114805832,
+            "maximum_norm": 0.0007162060613702706,
+            "maximum_epoch": 1570,
+            "maximum_utc": 1650927730445
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.20504069848803774,
+            "last_norm": 0.07514187088815913,
+            "maximum_norm": 0.21455708494932807,
+            "maximum_epoch": 247,
+            "maximum_utc": 1650926407445
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.005261213592626197,
+            "last_norm": 0.0035256388161755193,
+            "maximum_norm": 0.005301772423390325,
+            "maximum_epoch": 323,
+            "maximum_utc": 1650926483445
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 858,
+              "first_epoch": 0,
+              "last_epoch": 857
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.13512262670665454,
+        "p95": 0.876175800247549,
+        "maximum": 0.951427298696666
+      },
+      "solution_sha256": {
+        "control": "67343bf2324d7c7719510a13156b7cc87d9038724f7e0e13942fec89603c932a",
+        "candidate": "105923a84931bca365048de6ba2a71be0fb5c88918db153faf6e19f3349dfe05"
+      },
+      "summary_sha256": {
+        "control": "63e209028d1b7ece5a0b0b51048770db3a758b4a5b655c4357f7392818a2b708",
+        "candidate": "ebb41557fdbc7ad6b7156cbb193cff644e3384e6e2d1563a85974cedaf013149"
+      }
+    },
+    "2022-04-27-18-16-us-ca-ebf-zz/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.027084168696783102,
+            "last_norm": 0.022779737559577493,
+            "maximum_norm": 0.027119384288300952,
+            "maximum_epoch": 39,
+            "maximum_utc": 1651083444430
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00021150254316193312,
+            "last_norm": 0.00023346000125038202,
+            "maximum_norm": 0.00023346084080919004,
+            "maximum_epoch": 1295,
+            "maximum_utc": 1651084700430
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.027085747645476513,
+            "last_norm": 0.022780579287484518,
+            "maximum_norm": 0.02712098421397938,
+            "maximum_epoch": 39,
+            "maximum_utc": 1651083444430
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00021150040098896506,
+            "last_norm": 0.000233457931846812,
+            "maximum_norm": 0.00023345877146357144,
+            "maximum_epoch": 1295,
+            "maximum_utc": 1651084700430
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00018484054332005371,
+        "p95": 0.0009982656912786564,
+        "maximum": 0.0014587862295332413
+      },
+      "solution_sha256": {
+        "control": "ffbd7f68330912465127bb47d88b3c7f0ffa5531d8b875bebbabe2c050b3a6f4",
+        "candidate": "cf8ac7bcb8d8c001f758fa6b3c9aa29c6d60c183ca10882c62074dc6b70c113a"
+      },
+      "summary_sha256": {
+        "control": "b67478d6d8c6a2db651a3a10b02b9f098a366af1a2ee16cdc55347b6bd1d9957",
+        "candidate": "5ee955fcc93072af99285702d8151a199f32e07ba4578065a9bb387315967984"
+      }
+    },
+    "2022-04-27-19-23-us-ca-ebf-xx/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.4034665010198994,
+            "last_norm": 0.10511025656436826,
+            "maximum_norm": 0.40626378922271833,
+            "maximum_epoch": 169,
+            "maximum_utc": 1651087614436
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0005979218733691818,
+            "last_norm": 0.0005500583321564251,
+            "maximum_norm": 0.0005979695913766859,
+            "maximum_epoch": 38,
+            "maximum_utc": 1651087483436
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 1382,
+              "first_epoch": 0,
+              "last_epoch": 1381
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.40347299474202875,
+            "last_norm": 0.1051132877409856,
+            "maximum_norm": 0.4062703326448497,
+            "maximum_epoch": 169,
+            "maximum_utc": 1651087614436
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0005979089474977307,
+            "last_norm": 0.000550052460420381,
+            "maximum_norm": 0.0005979566626295301,
+            "maximum_epoch": 38,
+            "maximum_utc": 1651087483436
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 1382,
+              "first_epoch": 0,
+              "last_epoch": 1381
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00028964165690910284,
+        "p95": 0.00243685691918921,
+        "maximum": 0.002717954901373236
+      },
+      "solution_sha256": {
+        "control": "1d7275922bcfbdb355c41224e6e2ab42429700c53997d56e9804c3157847fc0f",
+        "candidate": "612bad4b3becd37a3cbb6ddddb9303b7c0ccd9aa6f02dfdd21de716c2a1ca707"
+      },
+      "summary_sha256": {
+        "control": "5153be550df7292b274c91b394ad7d2e715fab19cde2e72ccd029d99dd4211c5",
+        "candidate": "e1f8e9c3fc1189921150633fe66863cd4ae3857dffec255e0404412129a65b17"
+      }
+    },
+    "2023-04-27-19-25-us-ca-mtv-pe1/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.023696433768653203,
+            "last_norm": 0.021414835781546432,
+            "maximum_norm": 0.023696433768653203,
+            "maximum_epoch": 0,
+            "maximum_utc": 1682623508440
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0013183104413297814,
+            "last_norm": 0.0013638186361739578,
+            "maximum_norm": 0.0013638186414193542,
+            "maximum_epoch": 1354,
+            "maximum_utc": 1682624863440
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.023694543332409654,
+            "last_norm": 0.021412970774441705,
+            "maximum_norm": 0.023694543332409654,
+            "maximum_epoch": 0,
+            "maximum_utc": 1682623508440
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0013183104389748164,
+            "last_norm": 0.0013638182170184333,
+            "maximum_norm": 0.0013638182222626967,
+            "maximum_epoch": 1354,
+            "maximum_utc": 1682624863440
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0004122761530770015,
+        "p95": 0.0009403102766529376,
+        "maximum": 0.0012573837615528498
+      },
+      "solution_sha256": {
+        "control": "0a637e8be755a0bf40085f2e495545bdd315225aff87a396b4c846d640783ed2",
+        "candidate": "33a6219da39b2c468cca96f39fbb148b7c4cdb1c69b495bda9de146faeb0f986"
+      },
+      "summary_sha256": {
+        "control": "ec221e257f4cec10e788a61dd5d0e7ca5ee6b366c604b1f5c1d16fc1c285cadf",
+        "candidate": "764192aa0032bfd476b6804d11ad4388311eabf670b490e64340c5bc09e23ce2"
+      }
+    },
+    "2023-04-27-20-55-us-ca-sjc-q/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.019736907994912088,
+            "last_norm": 0.014240287698952659,
+            "maximum_norm": 0.019758627655746645,
+            "maximum_epoch": 149,
+            "maximum_utc": 1682629053437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 7.271141464096646e-05,
+            "last_norm": 8.685171385078852e-05,
+            "maximum_norm": 8.685172265456045e-05,
+            "maximum_epoch": 1375,
+            "maximum_utc": 1682630279437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.019738453989899967,
+            "last_norm": 0.014240853658442807,
+            "maximum_norm": 0.01976017795524453,
+            "maximum_epoch": 149,
+            "maximum_utc": 1682629053437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 7.271090973003269e-05,
+            "last_norm": 8.685142255797044e-05,
+            "maximum_norm": 8.685143136354201e-05,
+            "maximum_epoch": 1375,
+            "maximum_utc": 1682630279437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0003861667129665448,
+        "p95": 0.0017592854384259969,
+        "maximum": 0.0024098498227492133
+      },
+      "solution_sha256": {
+        "control": "15c314816302fffe31df65a0865da5142e00c231cf8439b15d6412c71068ff6a",
+        "candidate": "d4355853bc43c592f9b816d710f5ef2cc8512d77c5d23be985ed7451820be233"
+      },
+      "summary_sha256": {
+        "control": "46382f47ac1b7f373e5f0d787327e09d78c28b47faff115d1972482c199f4e42",
+        "candidate": "919e27894c25351d54d85b66aabd287ba19e4d8151986818da4f31373834f778"
+      }
+    },
+    "2023-05-23-21-06-us-ca-mtv-de1/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.02239054014333425,
+            "last_norm": 0.019759876825246422,
+            "maximum_norm": 0.02284722354499254,
+            "maximum_epoch": 222,
+            "maximum_utc": 1684876195444
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002461313862913569,
+            "last_norm": 0.0002759447116134435,
+            "maximum_norm": 0.0002759447249335386,
+            "maximum_epoch": 1973,
+            "maximum_utc": 1684877946444
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.022380689963821976,
+            "last_norm": 0.019763364952285072,
+            "maximum_norm": 0.022839420667068625,
+            "maximum_epoch": 222,
+            "maximum_utc": 1684876195444
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002461357591488795,
+            "last_norm": 0.00027594376564632603,
+            "maximum_norm": 0.0002759437789663679,
+            "maximum_epoch": 1973,
+            "maximum_utc": 1684877946444
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.00014696232533364028,
+        "p95": 0.0012748973766396668,
+        "maximum": 0.00224432267020003
+      },
+      "solution_sha256": {
+        "control": "690ec08acada6519046f3fb4b5d64a8d5c7f26ea238653ff2f24792049231328",
+        "candidate": "0cf6c36d97bfa127018199c7e5a103931524e004a8605440885dd4baf173c8da"
+      },
+      "summary_sha256": {
+        "control": "a230425afe138a65122c5b427c70298ff583047b29f49c5352a58ca58c8459ff",
+        "candidate": "9d1e8c46f4d276c6be0cab3276672845c9992e04ea9d23e83fbc13228ce56cd8"
+      }
+    },
+    "2023-05-26-21-23-us-ca-sjc-be2/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.036681660927492615,
+            "last_norm": 0.035868175568916624,
+            "maximum_norm": 0.03693337670151219,
+            "maximum_epoch": 124,
+            "maximum_utc": 1685136355444
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0001504383821929822,
+            "last_norm": 0.00016652291571984305,
+            "maximum_norm": 0.00016652292173496448,
+            "maximum_epoch": 1480,
+            "maximum_utc": 1685137711444
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.036683154028147306,
+            "last_norm": 0.03586915958018991,
+            "maximum_norm": 0.03693477987431475,
+            "maximum_epoch": 124,
+            "maximum_utc": 1685136355444
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00015044134984597897,
+            "last_norm": 0.00016652663688190383,
+            "maximum_norm": 0.0001665266428971602,
+            "maximum_epoch": 1480,
+            "maximum_utc": 1685137711444
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0005512181133406691,
+        "p95": 0.002163530322655008,
+        "maximum": 0.0023017897935274554
+      },
+      "solution_sha256": {
+        "control": "3d6ec5146039ef736f88d927b7a80c01c81e2a7276f427f822702d40a9203e59",
+        "candidate": "e82f3d9e212c8b5e90754fc43af2945583098e041ecb0a7006e6b8c8d70d47b0"
+      },
+      "summary_sha256": {
+        "control": "3626da2659afaa7b47607353f4c03d32cd058725979b139853c9e2121845ef20",
+        "candidate": "d87e55f07c838df5d6b57a2ec46f15f7f2ce28c4b3be85b797a0f2ac2a1560dc"
+      }
+    },
+    "2023-06-06-22-43-us-ca-sjc-he2/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.01990928839605006,
+            "last_norm": 0.013374752060666203,
+            "maximum_norm": 0.019911057002213062,
+            "maximum_epoch": 10,
+            "maximum_utc": 1686091409442
+          },
+          "gyro_bias_radps": {
+            "first_norm": 9.575021164162707e-05,
+            "last_norm": 0.00014650662726071537,
+            "maximum_norm": 0.00014897997620308157,
+            "maximum_epoch": 999,
+            "maximum_utc": 1686092398442
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.019908406957008483,
+            "last_norm": 0.013378791439510927,
+            "maximum_norm": 0.019910178352022426,
+            "maximum_epoch": 10,
+            "maximum_utc": 1686091409442
+          },
+          "gyro_bias_radps": {
+            "first_norm": 9.57493572015177e-05,
+            "last_norm": 0.000146503081180833,
+            "maximum_norm": 0.0001489780085744193,
+            "maximum_epoch": 999,
+            "maximum_utc": 1686092398442
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "displacement_m": {
+        "p50": 0.0007155943326014415,
+        "p95": 0.0019311740113647955,
+        "maximum": 0.003235527602784959
+      },
+      "solution_sha256": {
+        "control": "0d10bd10f8fb86f69a6d9cc1279f88fcc2f93614dcec50dce9d565645c9215e3",
+        "candidate": "443750f9da83b699d83594f1c30cd8beca9b2b3d71162d96322dd953aa7d50c1"
+      },
+      "summary_sha256": {
+        "control": "3f03ab08245ffc6b87fb9d991803afaa41d000dc1c187575e55190c690cdbcfa",
+        "candidate": "b31d23bfc6e06de6b5db4b2139b27abb95cdd9263b2e4d351ecb49aca48bc678"
+      }
+    }
+  }
+}

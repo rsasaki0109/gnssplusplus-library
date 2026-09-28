@@ -138,3 +138,92 @@ TEST(NativeImuRefinementHandoff, InitialDopplerThresholdPreservesTwentyMetreBoun
     EXPECT_DOUBLE_EQ(nativeImuCodeResidualThreshold(NativeImuObservationPhase::Initialization,false),30);
     EXPECT_DOUBLE_EQ(nativeImuCodeResidualThreshold(NativeImuObservationPhase::Final,false),15);
 }
+
+TEST(NativeImuRefinementHandoff, NoDAlternatingDriftCannotScreenObservedDoppler) {
+    Fixture f;
+    f.result.epoch_clock_drift_mps = {100012.5, -99987.5};
+    f.problem.native_source_clock_c0d_gnss_first_d_handoff_mps = {12.5, 12.5};
+    for (auto& epoch : f.raw) epoch.observations[0].doppler = 100;
+    auto geometry = f.problem;
+    for (std::size_t i = 0; i < 2; ++i) {
+        FGOProcessor::UndifferencedDopplerFactor row;
+        row.epoch_index = i;
+        row.satellite = f.raw[i].observations[0].satellite;
+        row.signal = f.raw[i].observations[0].signal;
+        row.los = Vector3d::UnitX();
+        row.residual_mps = 4 + 12.5;
+        geometry.undifferenced_doppler_factors.push_back(row);
+    }
+    const auto before = f.handoff();
+    auto rejected = before;
+    EXPECT_EQ(native_imu_refinement::maskDoppler(rejected, geometry, 1).retained, 0U);
+    const double original_sum = f.result.epoch_clock_drift_mps[0] + f.result.epoch_clock_drift_mps[1];
+    native_imu_refinement::useSameRunGnssClockDrift(f.problem, f.result);
+    EXPECT_DOUBLE_EQ(f.result.epoch_clock_drift_mps[0] + f.result.epoch_clock_drift_mps[1], original_sum);
+    auto corrected = f.handoff();
+    EXPECT_EQ(corrected.clock_components_m, before.clock_components_m);
+    for (std::size_t i = 0; i < 2; ++i) {
+        EXPECT_EQ(corrected.observations[i].receiver_position, before.observations[i].receiver_position);
+        EXPECT_EQ(corrected.velocity_ecef_mps[i], before.velocity_ecef_mps[i]);
+        EXPECT_EQ(corrected.attitude_body_to_nav[i], before.attitude_body_to_nav[i]);
+    }
+    EXPECT_EQ(native_imu_refinement::maskDoppler(corrected, geometry, 1).retained, 2U);
+}
+
+TEST(NativeImuRefinementHandoff, NoDDriftReplacementRejectsIncompleteOrMismatchedSource) {
+    Fixture f;
+    const auto original = f.result.epoch_clock_drift_mps;
+    EXPECT_THROW(native_imu_refinement::useSameRunGnssClockDrift(f.problem, f.result), std::invalid_argument);
+    f.problem.native_source_clock_c0d_gnss_first_d_handoff_mps = {12.5, std::numeric_limits<double>::quiet_NaN()};
+    EXPECT_THROW(native_imu_refinement::useSameRunGnssClockDrift(f.problem, f.result), std::invalid_argument);
+    f.problem.native_source_clock_c0d_gnss_first_d_handoff_mps = {12.5, 12.5};
+    f.problem.epochs[1].time = f.problem.epochs[1].time + 0.001;
+    EXPECT_THROW(native_imu_refinement::useSameRunGnssClockDrift(f.problem, f.result), std::invalid_argument);
+    EXPECT_EQ(f.result.epoch_clock_drift_mps, original);
+}
+
+TEST(NativeImuRefinementHandoff, ObservedDriftRestoresMaskWithoutMultibandOverweighting) {
+    Fixture f;
+    f.result.epoch_clock_drift_mps={-33548,59531};
+    auto geometry=f.problem;
+    for (std::size_t i=0;i<2;++i) {
+        f.raw[i].observations.clear();
+        for (int prn=1;prn<=3;++prn) {
+            const auto los=prn==1 ? Vector3d::UnitX().eval() : Vector3d::UnitY().eval();
+            for (int band=0;band<(prn==3 ? 5 : 1);++band) {
+                Observation obs;
+                obs.satellite=SatelliteId(GNSSSystem::GPS,prn);
+                obs.signal=static_cast<SignalType>(band);
+                obs.doppler=100;
+                f.raw[i].observations.push_back(obs);
+                FGOProcessor::UndifferencedDopplerFactor row;
+                row.epoch_index=i; row.satellite=obs.satellite; row.signal=obs.signal;
+                row.los=los;
+                row.residual_mps=los.dot(Vector3d(4,2,3))+(prn==1 ? 110 : prn==2 ? 112 : 50000);
+                geometry.undifferenced_doppler_factors.push_back(row);
+            }
+        }
+    }
+    auto handoff=f.handoff();
+    auto rejected=handoff;
+    EXPECT_EQ(native_imu_refinement::maskDoppler(rejected,geometry,1).retained,0U);
+    const auto drift=native_imu_refinement::observedClockDrift(handoff,geometry);
+    ASSERT_EQ(drift.size(),2U);
+    EXPECT_DOUBLE_EQ(drift[0],112);
+    EXPECT_DOUBLE_EQ(drift[1],112);
+    EXPECT_DOUBLE_EQ(handoff.observations[0].receiver_clock_drift_mps,-33548);
+    for (std::size_t i=0;i<2;++i) handoff.observations[i].receiver_clock_drift_mps=drift[i];
+    EXPECT_EQ(native_imu_refinement::maskDoppler(handoff,geometry,1).retained,4U);
+    EXPECT_EQ(handoff.clock_components_m,f.result.epoch_clock_bias_components_m);
+    geometry.undifferenced_doppler_factors.push_back(geometry.undifferenced_doppler_factors.front());
+    EXPECT_THROW(native_imu_refinement::observedClockDrift(handoff,geometry),std::invalid_argument);
+}
+
+TEST(NativeImuRefinementHandoff, ObservedDriftRejectsMissingCoverageAndEpochMismatch) {
+    Fixture f;
+    auto handoff=f.handoff();
+    EXPECT_THROW(native_imu_refinement::observedClockDrift(handoff,f.problem),std::invalid_argument);
+    EXPECT_DOUBLE_EQ(handoff.observations[0].receiver_clock_drift_mps,12.5);
+    f.problem.epochs[1].raw_utc_time_millis+=1;
+    EXPECT_THROW(native_imu_refinement::observedClockDrift(handoff,f.problem),std::invalid_argument);
+}
