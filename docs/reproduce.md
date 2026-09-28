@@ -26,7 +26,7 @@ runner adds no scoring logic of its own.
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | planned | - | See [PPC reproduction](ppc_reproduction.md) |
-| Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass (5 mm cross-build tolerance).** H 0.5762 / U 0.7404 / A 0.3026 / LAX-T 0.7159 m vs README 0.577 / 0.738 / 0.302 / 0.712; the record's 5-decimal values are not reproduced exactly; see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
+| Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
 | Smartphone GSDC official submission | `gsdc-official` | planned | - | The score comes from Kaggle and cannot be recomputed locally |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
@@ -319,7 +319,7 @@ This was the first local run of the lane: develop `4b22fe43` plus this lane,
 built with MSVC Release and GTSAM 4.3 on Windows 11, one solver process at a
 time.
 
-| Route | README | Record | Reproduced | P50 | P95 | Mean | Wall time | Peak RSS |
+| Route | Previous README | Record | Reproduced (now in README) | P50 | P95 | Mean | Wall time | Peak RSS |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | H | 0.577 | 0.57738 | **0.57623** | 0.3671 | 0.7854 | 0.4245 | 293 s | 0.99 GB |
 | U | 0.738 | 0.73751 | **0.74045** | 0.6260 | 0.8549 | 0.6194 | 151 s | 0.33 GB |
@@ -331,9 +331,10 @@ record exactly. The replay is deterministic: two H runs wrote byte-identical
 solutions. A Windows build of `274ab819`, the tree that recorded the table,
 scores H at 0.57643 m. About 1 mm of the gap therefore comes from the build
 (MSVC and the Windows GTSAM build, versus the Linux GCC build used for the
-record), and about 0.2 mm from later solver changes. The lane gates the
-README values with a 5 mm cross-build tolerance. It also reports the
-5-decimal record values without gating them. U and A have no solution for
+record), and about 0.2 mm from later solver changes. The README table now
+shows the reproduced values and the lane gates them with a 2 mm
+cross-toolchain tolerance; the 5-decimal record values are reported without
+gating. U and A have no solution for
 their first truth epoch because the H/U/A recipe omits
 `--android-include-first-native-epoch`, so the join scores 1101/1102 and
 2158/2159 epochs.
@@ -341,5 +342,5 @@ their first truth epoch because the H/U/A recipe omits
 `--update-docs` redraws `docs/gsdc_base_surveyed_osm.png` from the reproduced
 tracks. The tracks and worst-epoch insets match the tracked figure (H 0.81 m,
 U 0.95 m, A 0.52 m, LAX-T 5.74 m vs 5.72 m). The panel titles show the
-reproduced scores, so the tracked figure was not replaced. It stays
-consistent with the README table.
+reproduced scores; the tracked figure was replaced with this redraw so it
+matches the refreshed README table.

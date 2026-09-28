@@ -173,19 +173,19 @@ argv = [
 # 2026-09-17). Replays are deterministic (two H runs wrote byte-identical
 # outputs). The Windows build of 274ab819 (the tree that recorded the table)
 # gives H 0.57643 m, so ~1 mm of the gap is toolchain/GTSAM-build numerics and
-# ~0.2 mm is solver drift since then. The gate therefore uses a 5 mm
-# cross-build tolerance around the README value; the exact record values are
-# reported below without gating.
+# ~0.2 mm is solver drift since then. The README table was refreshed to the
+# reproduced values (2026-09-29); the gate allows 2 mm for cross-toolchain
+# numerics. The earlier record values are reported below without gating.
 [[metrics]]
 name = "{route} (P50+P95)/2 m"
 source = "{work_dir}/gsdc_dev_routes_metrics.json"
 path = "routes[route={route}].score_m"
 readme = "README base-surveyed dev-route table"
 foreach = [
-  { route = "H", expected = 0.577, abs_tol = 0.005 },
-  { route = "U", expected = 0.738, abs_tol = 0.005 },
-  { route = "A", expected = 0.302, abs_tol = 0.005 },
-  { route = "LAX-T", expected = 0.712, abs_tol = 0.005 },
+  { route = "H", expected = 0.57623, abs_tol = 0.002 },
+  { route = "U", expected = 0.74045, abs_tol = 0.002 },
+  { route = "A", expected = 0.30265, abs_tol = 0.002 },
+  { route = "LAX-T", expected = 0.71586, abs_tol = 0.002 },
 ]
 
 [[metrics]]
