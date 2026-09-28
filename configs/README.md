@@ -5,6 +5,8 @@ Checked-in configuration files are grouped by purpose:
 - `examples/`: small runtime examples for interactive commands.
 - `signoff/`: reusable acceptance criteria for operational sign-off workflows.
 - `benchmarks/`: reproducible experiment, parity, and benchmark profiles.
+- `reproduce/`: `gnss reproduce` lane manifests for the README result rows
+  (see `docs/reproduce.md`).
 
 Files ending in `.example.*` are templates. Copy them before adding local paths
 or credentials. Benchmark profiles without the `.example` marker are pinned

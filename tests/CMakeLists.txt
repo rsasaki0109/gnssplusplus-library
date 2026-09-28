@@ -309,6 +309,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_ux.py
     )
     add_test(
+        NAME python_gnss_reproduce_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_reproduce.py
+    )
+    add_test(
         NAME python_cli_json_contract_validator_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_json_contract_validator.py
     )

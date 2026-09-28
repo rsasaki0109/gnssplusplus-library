@@ -97,6 +97,8 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
 | Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.984 m / Public 0.915 m**; 40 drives, 71,936 native output rows |
 
+Reproduce: `python3 apps/gnss.py reproduce list` shows one command per row; see [docs/reproduce.md](docs/reproduce.md) for datasets, tool pins, and the latest local results.
+
 ### Smartphone GNSS/IMU
 
 Official Google Smartphone Decimeter Challenge 2023-2024 submission

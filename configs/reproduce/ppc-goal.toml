@@ -1,0 +1,8 @@
+# README section "PPC 2024 goal matrix vs Kaiyodai and gici-open".
+[lane]
+name = "ppc-goal"
+status = "planned"
+title = "PPC 2024 goal matrix: audited KF/FGO selected profile vs public targets and gici-open"
+readme_row = "PPC goal: 78.8455% official score, Tokyo 1 FIX 80.861%, Nagoya 1 FIX 85.100974%"
+runtime_estimate = "planned"
+docs = "docs/ppc_goal_completion_audit.md"

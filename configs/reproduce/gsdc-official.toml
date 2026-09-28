@@ -1,0 +1,10 @@
+# README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission".
+# Kaggle scoring is external; a lane can rebuild the submission CSV but the
+# Private/Public scores come from the Kaggle leaderboard readback record.
+[lane]
+name = "gsdc-official"
+status = "planned"
+title = "GSDC 2023-2024 official submission rebuild (Kaggle-scored)"
+readme_row = "Smartphone GNSS/IMU: Private 0.984 m / Public 0.915 m; 40 drives, 71,936 rows"
+runtime_estimate = "planned"
+docs = "docs/use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json"

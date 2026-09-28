@@ -1,0 +1,117 @@
+# README row "RTK | PPC Tokyo/Nagoya vs RTKLIB demo5".
+# Source: docs/benchmarks.md#ppc-coverage-profile (PPC_COVERAGE_MATRIX marker block)
+# and docs/ppc_reproduction.md#coverage-matrix.
+
+[lane]
+name = "rtk-demo5"
+status = "ready"
+title = "PPC Tokyo/Nagoya RTK coverage profile vs RTKLIB demo5 (six runs)"
+readme_row = "RTK: +17.0 pp positioning, +28.1 pp official score, -11.96 m P95 H delta"
+runtime_estimate = "~30 min"
+docs = "docs/benchmarks.md"
+
+[datasets.ppc]
+required = [
+  "tokyo/run1/rover.obs", "tokyo/run1/base.obs", "tokyo/run1/base.nav", "tokyo/run1/reference.csv",
+  "tokyo/run2/rover.obs", "tokyo/run2/base.obs", "tokyo/run2/base.nav", "tokyo/run2/reference.csv",
+  "tokyo/run3/rover.obs", "tokyo/run3/base.obs", "tokyo/run3/base.nav", "tokyo/run3/reference.csv",
+  "nagoya/run1/rover.obs", "nagoya/run1/base.obs", "nagoya/run1/base.nav", "nagoya/run1/reference.csv",
+  "nagoya/run2/rover.obs", "nagoya/run2/base.obs", "nagoya/run2/base.nav", "nagoya/run2/reference.csv",
+  "nagoya/run3/rover.obs", "nagoya/run3/base.obs", "nagoya/run3/base.nav", "nagoya/run3/reference.csv",
+]
+
+[tools.rtklib_demo5]
+repository = "https://github.com/rtklibexplorer/RTKLIB"
+tag = "b34k"
+commit = "55a0f2c742a605a3d27a90b17556b2cfdf98ad50"
+binary = "app/consapp/rnx2rtkp (gcc makefile options: -DTRACE -DENAGLO -DENAQZS -DENAGAL -DENACMP -DENAIRN -DNFREQ=3 -DNEXOBS=3)"
+config = "configs/reproduce/rtklib_demo5_ppc.conf"
+
+# One command runs gnssplusplus (coverage profile: low-cost preset, --no-arfilter,
+# default guards, ratio 2.4) and RTKLIB demo5 (tracked config, `-p 2`, reference
+# window) on all six runs, then scores both against the PPC reference.
+[[steps]]
+name = "ppc-coverage-matrix"
+argv = [
+  "{gnss}", "ppc-coverage-matrix",
+  "--dataset-root", "{ppc_root}",
+  "--ratio", "2.4",
+  "--rtklib-bin", "{rtklib_bin}",
+  "--rtklib-config", "configs/reproduce/rtklib_demo5_ppc.conf",
+  "--output-dir", "{work_dir}/matrix",
+  "--summary-json", "{work_dir}/summary.json",
+  "--markdown-output", "{work_dir}/table.md",
+]
+
+[[docs_steps]]
+name = "update-benchmarks-coverage-block"
+argv = [
+  "{python}", "scripts/experiments/ppc/update_ppc_coverage_readme.py",
+  "--summary-json", "{work_dir}/summary.json",
+]
+
+[[docs_steps]]
+name = "render-ppc-rtk-demo5-scorecard"
+argv = [
+  "{python}", "scripts/experiments/ppc/generate_ppc_rtk_scorecard.py",
+  "--summary-json", "{work_dir}/summary.json",
+  "--output", "docs/ppc_rtk_demo5_scorecard.png",
+]
+
+# README values (rounded to the printed precision).
+[[metrics]]
+name = "avg positioning delta vs demo5 (pp)"
+source = "{work_dir}/summary.json"
+path = "aggregates.avg_positioning_delta_pct"
+expected = 17.0
+abs_tol = 0.05
+readme = "+17.0 pp positioning"
+
+[[metrics]]
+name = "avg official score delta vs demo5 (pp)"
+source = "{work_dir}/summary.json"
+path = "aggregates.avg_official_score_delta_pct"
+expected = 28.1
+abs_tol = 0.05
+readme = "+28.1 pp official score"
+
+[[metrics]]
+name = "avg P95 H delta vs demo5 (m)"
+source = "{work_dir}/summary.json"
+path = "aggregates.avg_p95_h_delta_m"
+expected = -11.96
+abs_tol = 0.005
+readme = "-11.96 m P95 H delta"
+
+# Per-run table in docs/benchmarks.md; separates gnssplusplus drift from demo5 drift.
+[[metrics]]
+name = "{key} gnssplusplus positioning (%)"
+source = "{work_dir}/summary.json"
+path = "runs[key={key}].metrics.positioning_rate_pct"
+abs_tol = 0.05
+gate = false
+readme = "docs/benchmarks.md table (not gated)"
+foreach = [
+  { key = "tokyo_run1", expected = 90.0 },
+  { key = "tokyo_run2", expected = 95.3 },
+  { key = "tokyo_run3", expected = 95.7 },
+  { key = "nagoya_run1", expected = 88.8 },
+  { key = "nagoya_run2", expected = 85.6 },
+  { key = "nagoya_run3", expected = 93.8 },
+]
+
+[[metrics]]
+name = "{key} RTKLIB demo5 positioning (%)"
+source = "{work_dir}/summary.json"
+path = "runs[key={key}].rtklib.positioning_rate_pct"
+abs_tol = 0.05
+gate = false
+readme = "docs/benchmarks.md table (not gated)"
+foreach = [
+  { key = "tokyo_run1", expected = 66.3 },
+  { key = "tokyo_run2", expected = 84.3 },
+  { key = "tokyo_run3", expected = 93.1 },
+  { key = "nagoya_run1", expected = 65.8 },
+  { key = "nagoya_run2", expected = 69.8 },
+  { key = "nagoya_run3", expected = 67.7 },
+]

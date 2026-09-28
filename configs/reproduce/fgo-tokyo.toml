@@ -1,0 +1,9 @@
+# README row "GNSS/IMU FGO | PPC Tokyo vs tightly-coupled-gnss-imu-fgo".
+# Planned: needs a GTSAM-enabled build and the PPC IMU replays.
+[lane]
+name = "fgo-tokyo"
+status = "planned"
+title = "PPC Tokyo GNSS/IMU tightly-coupled FGO vs tightly-coupled-gnss-imu-fgo"
+readme_row = "GNSS/IMU FGO: higher <50 cm (+5.6 pp) and fix rate (+8.2 pp) on all 3 Tokyo runs"
+runtime_estimate = "planned"
+docs = "README.md#gnssimu-tightly-coupled-fgo-vs-tightly-coupled-gnss-imu-fgo"
