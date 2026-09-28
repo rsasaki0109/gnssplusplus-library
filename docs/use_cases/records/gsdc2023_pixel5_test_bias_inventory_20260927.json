@@ -1,0 +1,199 @@
+{
+  "status": "partial-test-saved-imu-bias-inventory",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "plan_sha256": "22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e",
+  "completed_arms": 27,
+  "expected_arms": 34,
+  "runs": [
+    {
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "ab0e9c61237a41472871caab647e5445caea4f3cfdd5b6036fe2a8c61d9dda49",
+      "accel_bias_max_mps2": 18.625443498951647,
+      "gyro_bias_max_radps": 0.0037168468287889695
+    },
+    {
+      "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+      "arm": "control",
+      "summary_sha256": "7031f7a8a7741c96b88109135b9f2bb6598ed07d729ca3ba4a76c16aadb1b6a4",
+      "accel_bias_max_mps2": 18.493567463816373,
+      "gyro_bias_max_radps": 0.0034314279595408616
+    },
+    {
+      "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "81bd84bff1d8672677b8961db60d4ce503efe4132fc4917e2e326f63c4a87b62",
+      "accel_bias_max_mps2": 0.40626378922271833,
+      "gyro_bias_max_radps": 0.0005979695913766859
+    },
+    {
+      "dataset_id": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+      "arm": "control",
+      "summary_sha256": "22ce4fcab744c209f86c2bef6d4baa64de95ec288ca78c6ef306293398f9b43b",
+      "accel_bias_max_mps2": 0.3724694972389722,
+      "gyro_bias_max_radps": 0.0006080238518201702
+    },
+    {
+      "dataset_id": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "arm": "control",
+      "summary_sha256": "20941539887e9e077e0394689ce37a6e5531ae43dec1fbdd1859a707ddcbf8a8",
+      "accel_bias_max_mps2": 0.05178673452138733,
+      "gyro_bias_max_radps": 0.0004640223806647278
+    },
+    {
+      "dataset_id": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "569cf89adb37f7b813030254fa870cb4d4fd55f42eba8f6e185ce914de7ae43a",
+      "accel_bias_max_mps2": 0.05024917021343478,
+      "gyro_bias_max_radps": 0.00046507970233812085
+    },
+    {
+      "dataset_id": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "147e20a061d575c108e582202e866d11f91b38717cae470be389060e846005a1",
+      "accel_bias_max_mps2": 0.04715614697162412,
+      "gyro_bias_max_radps": 0.0001650661750797922
+    },
+    {
+      "dataset_id": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+      "arm": "control",
+      "summary_sha256": "5985dc35a2061e6b54b63b41425babb4382caa0faf74eb84d3ca104fa00d01d9",
+      "accel_bias_max_mps2": 0.0454379852582703,
+      "gyro_bias_max_radps": 0.00016499723746922796
+    },
+    {
+      "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "f2d7cd061b0517b906120ff846004223fa416aaa93abe904051d543cdec52b18",
+      "accel_bias_max_mps2": 0.04372705193298173,
+      "gyro_bias_max_radps": 0.0001687478303562275
+    },
+    {
+      "dataset_id": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+      "arm": "control",
+      "summary_sha256": "4d719cc50e396b68968d3896f47246d58530304395d18d143681c83ee51fd153",
+      "accel_bias_max_mps2": 0.04133046674363007,
+      "gyro_bias_max_radps": 0.00016822327797572784
+    },
+    {
+      "dataset_id": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "1bf6d47001831c74690b20a8a5e179f86f2813d6785a81befa449637bc2eb374",
+      "accel_bias_max_mps2": 0.03976122016767236,
+      "gyro_bias_max_radps": 0.00020160408345910622
+    },
+    {
+      "dataset_id": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+      "arm": "control",
+      "summary_sha256": "bb9dd46186fe66126c90545fdc4cac4436d9dcfddc9470914b8ec9aca306ac49",
+      "accel_bias_max_mps2": 0.03884367066526915,
+      "gyro_bias_max_radps": 0.00020050045298583585
+    },
+    {
+      "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "arm": "control",
+      "summary_sha256": "920a4b65f463015fa9daafd224bbb516fc2dd0a1306342f643196717e4438653",
+      "accel_bias_max_mps2": 0.0387204374182247,
+      "gyro_bias_max_radps": 0.0007172508655034073
+    },
+    {
+      "dataset_id": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "20aee6e6e24b22951a621e86b55d4b29ba083f3d85de268e1c5d95d79a471a8a",
+      "accel_bias_max_mps2": 0.03311551416630162,
+      "gyro_bias_max_radps": 0.0007162060613702706
+    },
+    {
+      "dataset_id": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "arm": "control",
+      "summary_sha256": "cee31c42633fa39eff0975cd5688177445447eca6164dc2cf23b5cf9c3c78171",
+      "accel_bias_max_mps2": 0.031846806435569405,
+      "gyro_bias_max_radps": 0.000388059083136801
+    },
+    {
+      "dataset_id": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "bc90dd08d71e89e0b6fe48ee6edcc40a81accf48820606b48e301630841b088b",
+      "accel_bias_max_mps2": 0.030669248452705446,
+      "gyro_bias_max_radps": 0.00038924111959765944
+    },
+    {
+      "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "arm": "control",
+      "summary_sha256": "616e43eadf14c83b75f756f4021da3ded8042ddd9f410ef539ceef468c316cd3",
+      "accel_bias_max_mps2": 0.02874266718656795,
+      "gyro_bias_max_radps": 0.00028471009539450325
+    },
+    {
+      "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "arm": "control",
+      "summary_sha256": "6fee28b1956da8a6285c922b91d3287e5913019435e0be140777441aedb13f26",
+      "accel_bias_max_mps2": 0.028375766426986526,
+      "gyro_bias_max_radps": 0.00023667480394613414
+    },
+    {
+      "dataset_id": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "2960430785ffb699ff5b67994f841f4d39bd76f13b0f2cb0230b8214e71f4b15",
+      "accel_bias_max_mps2": 0.027350048790364737,
+      "gyro_bias_max_radps": 0.00028538633393758553
+    },
+    {
+      "dataset_id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "d4515037360ccd7bbc393228a93327a0f3e9893ae8ed7c1051ae5e81c1dc7de6",
+      "accel_bias_max_mps2": 0.027119384288300952,
+      "gyro_bias_max_radps": 0.00023346084080919004
+    },
+    {
+      "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "arm": "control",
+      "summary_sha256": "5a30de56acf21bc8b19f61193b9359e0da5982c03ace439107a19f869627722e",
+      "accel_bias_max_mps2": 0.02417370031545257,
+      "gyro_bias_max_radps": 0.0013642807277480912
+    },
+    {
+      "dataset_id": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "53afc31ffa2880987b5425abc5d79d2de2aebfaa4ccb65507b3ffa457096168b",
+      "accel_bias_max_mps2": 0.023696433768653203,
+      "gyro_bias_max_radps": 0.0013638186414193542
+    },
+    {
+      "dataset_id": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+      "arm": "control",
+      "summary_sha256": "7c2ff18742d74c95a2998c2f619878e3e2ebf759e3a36bf82f0bc4081714f6b9",
+      "accel_bias_max_mps2": 0.020447373996281493,
+      "gyro_bias_max_radps": 8.590819483553504e-05
+    },
+    {
+      "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "arm": "control",
+      "summary_sha256": "029968f4a0807d0eaf3d6c7b599a3010b6f4a026dddad2527fcefdbc370ab76b",
+      "accel_bias_max_mps2": 0.018128343392718092,
+      "gyro_bias_max_radps": 9.948643733206618e-05
+    },
+    {
+      "dataset_id": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "01be53c211fe7e0af97de7be9b352c6e0b65300fbbde59579d7b52d3a9c59dcf",
+      "accel_bias_max_mps2": 0.015108384805412342,
+      "gyro_bias_max_radps": 0.00010022238393053701
+    },
+    {
+      "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "arm": "candidate",
+      "summary_sha256": "1e009107f3667eec39688d92db32c0ab61bb9488649c3577ae8978fe7397a47f",
+      "accel_bias_max_mps2": 0.013398411523398894,
+      "gyro_bias_max_radps": 0.0007539555405052989
+    },
+    {
+      "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+      "arm": "control",
+      "summary_sha256": "b3c9a37552395d99e9635d26dcd89a17d5e211bf31add354e73df4d01b0ad63f",
+      "accel_bias_max_mps2": 0.011982842427441477,
+      "gyro_bias_max_radps": 0.0007535528951585799
+    }
+  ]
+}

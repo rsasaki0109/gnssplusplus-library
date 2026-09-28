@@ -1,0 +1,17 @@
+{
+  "status": "passed",
+  "checks": [
+    "real-laxp-heading-contract",
+    "reject-missing-heading-request",
+    "reject-missing-heading-seed",
+    "reject-changed-sigma",
+    "reject-changed-factor-count",
+    "reject-zero-bias-enabled",
+    "reject-unstarted-experiment-before-truth"
+  ],
+  "count": 7,
+  "plan_sha256": "669ca34e677db460f44f2652946bdfd560787a28881000e1295f0d890ff65586",
+  "auditor_sha256": "01b56eccfc5f0756e115d7b8b1bbf2063e4f937b3b254445a7ec46a8430de9fa",
+  "truth_consumed": false,
+  "native_inference_started": false
+}

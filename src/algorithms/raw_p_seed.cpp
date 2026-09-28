@@ -660,7 +660,20 @@ Result solve(const std::vector<ObservationData>& input_epochs,
         // Use the same time equality resolution as duplicate detection.
         // Android receiver clocks can differ from a nominal 2 s interval by
         // tens of ns; do not turn those differences into a missing epoch.
-        if (dt - config.max_gap_s > kTimeEqualityToleranceS) {
+        double gap_dt = dt;
+        if (config.receiver_clock_corrected_gap_checks) {
+            gap_dt -= input_epochs[i].receiver_clock_bias -
+                      input_epochs[i - 1U].receiver_clock_bias;
+            if (!std::isfinite(gap_dt) || gap_dt <= kTimeEqualityToleranceS) {
+                timestamp_valid[i] = false;
+                fail(result, std::isfinite(gap_dt) ? EpochStatus::NonmonotonicTime
+                                                  : EpochStatus::NonfiniteTime,
+                     "invalid-clock-corrected-epoch-delta", i, collect_all);
+                if (!collect_all) return result;
+                continue;
+            }
+        }
+        if (gap_dt - config.max_gap_s > kTimeEqualityToleranceS) {
             timestamp_valid[i] = false;
             fail(result, EpochStatus::TimeGap,
                  "epoch-time-gap-exceeds-limit",

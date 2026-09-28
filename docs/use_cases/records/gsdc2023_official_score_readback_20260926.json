@@ -1,0 +1,14 @@
+{
+  "checked_unix": 1790390447.3691423,
+  "operation": "read-only competition submissions list",
+  "competition": "smartphone-decimeter-2023",
+  "returncode": 1,
+  "status": "list-unavailable-no-login-attempted",
+  "authentication_help_detected": true,
+  "missing_credentials_detected": true,
+  "http_401_detected": false,
+  "http_403_detected": false,
+  "local_submission_sha256": "cf4a73e35852c0554ab8ecb3d65e62f7f268812dc3df5168a62c812313a695cb",
+  "recorded_private_m": 1.055,
+  "score_verified_with_live_server": false
+}

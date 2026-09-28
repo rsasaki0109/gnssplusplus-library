@@ -1,0 +1,20 @@
+{
+  "status": "first-modern-clock-only-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "plan_sha256": "6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565",
+  "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+  "keys": 1141,
+  "control_clock_resets": 0,
+  "clock_only_resets": 0,
+  "solution_byte_parity": true,
+  "displacement_m": {
+    "p50": 0.0,
+    "p95": 0.0,
+    "maximum": 0.0
+  },
+  "summary_sha256": {
+    "control": "5f15a0dd8b342ee3bbb424ea0572284937fc1a9fd29c16ad7ff94aff1ec68812",
+    "clock_only": "8f5dcc6c91e07a5cba03fa53faba1028fd2516ed5f129a38cfbec42e9668f5e9"
+  }
+}

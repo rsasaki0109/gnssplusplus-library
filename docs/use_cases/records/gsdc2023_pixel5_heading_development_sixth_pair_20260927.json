@@ -1,0 +1,105 @@
+{
+  "status": "sixth-heading-development-pair-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "plan_sha256": "669ca34e677db460f44f2652946bdfd560787a28881000e1295f0d890ff65586",
+  "dataset_id": "2021-08-24-20-32-us-ca-mtv-h/pixel5",
+  "keys": 3140,
+  "source_byte_parity": true,
+  "raw_initialization_sha256": "b0110b9cf36b15743016b032122ebf8c5da40d865c927f255483f47871308200",
+  "states": {
+    "control": {
+      "accel_bias_mps2": {
+        "first_norm": 0.0498369106445428,
+        "last_norm": 0.04309165419025555,
+        "maximum_norm": 0.050621319179878936,
+        "maximum_epoch": 91,
+        "maximum_utc": 1629837251437
+      },
+      "gyro_bias_radps": {
+        "first_norm": 0.0008887092037549515,
+        "last_norm": 0.0011623340267305628,
+        "maximum_norm": 0.0011623340317672133,
+        "maximum_epoch": 3137,
+        "maximum_utc": 1629840297437
+      },
+      "accel_bias_thresholds_mps2": {
+        "0.1": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        },
+        "1.0": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        },
+        "5.0": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        },
+        "10.0": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        }
+      }
+    },
+    "candidate": {
+      "accel_bias_mps2": {
+        "first_norm": 0.049836141934718546,
+        "last_norm": 0.04309009674880792,
+        "maximum_norm": 0.050620613678645135,
+        "maximum_epoch": 91,
+        "maximum_utc": 1629837251437
+      },
+      "gyro_bias_radps": {
+        "first_norm": 0.0008887082605872556,
+        "last_norm": 0.0011623300689630467,
+        "maximum_norm": 0.001162330073999905,
+        "maximum_epoch": 3137,
+        "maximum_utc": 1629840297437
+      },
+      "accel_bias_thresholds_mps2": {
+        "0.1": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        },
+        "1.0": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        },
+        "5.0": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        },
+        "10.0": {
+          "count": 0,
+          "first_epoch": null,
+          "last_epoch": null
+        }
+      }
+    }
+  },
+  "displacement_m": {
+    "p50": 0.000276323285004303,
+    "p95": 0.0008445126561451569,
+    "maximum": 0.001156339867810691
+  },
+  "runs": {
+    "control": {
+      "wall_s": 1066.1744759082794,
+      "solution_sha256": "924ebf3b2f0ce2ccb859e945845365eb7fe7bf4babdc07a04b95cc0e089e5a59",
+      "summary_sha256": "c39e60e4699d21646d1b6c9998f1c9b9d44c0ad422e851f985cc11a948041535"
+    },
+    "candidate": {
+      "wall_s": 1081.6460111141205,
+      "solution_sha256": "b88c29e674fc1b6e280e4b72b8b4ff563ae0446659b1226a8680f80b15ebda38",
+      "summary_sha256": "1ea46e524934fd5546ca79699e2d697f28ba891bfdfe0b7f9eb8e8ceed02c8a7"
+    }
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "status": "may25_samsung-modern-three-arms-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "submitted": false,
+  "plan_sha256": "6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565",
+  "dataset_id": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+  "keys": 1728,
+  "control_matches_published": true,
+  "solution_sha256": {
+    "control": "a7ed0de0e336d34b955eff3037a3ea78b75ba65d5d16608b18cb2f7a56272fd5",
+    "clock_only": "a7ed0de0e336d34b955eff3037a3ea78b75ba65d5d16608b18cb2f7a56272fd5",
+    "candidate": "b990413fcd31afb130d7881c981eff8de930bbc8f9d8b3082d3cd8629cfff79a"
+  },
+  "run_evidence": {
+    "control": {
+      "summary_sha256": "bb5de09ca33ca562f5b06ba7f3d8fb8d53f8ea6db08e1e96b0afd7a2f779d1e4",
+      "wall_s": 1719.2302610874176
+    },
+    "clock_only": {
+      "summary_sha256": "0ca615d2ecd6b1e552c6df89ee19677b6e08320bc5de09731b45d789d3bf7a1b",
+      "wall_s": 1665.1058511734009
+    },
+    "candidate": {
+      "summary_sha256": "d6a342e532417dfa5d8e918d8f0306bfe517320e619791dfe313cad9b3410ff1",
+      "wall_s": 1457.9440965652466
+    }
+  },
+  "displacement_m": {
+    "clock_vs_control": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "maximum": 0.0
+    },
+    "recipe_vs_clock": {
+      "p50": 0.14370034969973605,
+      "p95": 0.2582585418893696,
+      "maximum": 0.32328450417812815
+    },
+    "candidate_vs_control": {
+      "p50": 0.14370034969973605,
+      "p95": 0.2582585418893696,
+      "maximum": 0.32328450417812815
+    }
+  }
+}

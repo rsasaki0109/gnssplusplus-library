@@ -1,0 +1,1596 @@
+{
+  "status": "all-pixel5-heading-development-pairs-audited",
+  "official_score": false,
+  "heldout": false,
+  "submitted": false,
+  "evaluation_truth_used_for_inference": false,
+  "plan_sha256": "669ca34e677db460f44f2652946bdfd560787a28881000e1295f0d890ff65586",
+  "execution_done_sha256": "ebcf4c6b7321bfc4b9581a19db9a3fbe8e77a2f2684d3e24820ea23e452699be",
+  "expected_pairs": 15,
+  "audited_pairs": 15,
+  "all_control_sources_reproduced": true,
+  "heading_contracts_verified": true,
+  "height_map_group_independence_verified": true,
+  "aggregation": "unweighted mean of per-phone (P50 + P95) / 2",
+  "runs": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.08070459651989076,
+            "last_norm": 0.07431155065901637,
+            "maximum_norm": 0.08070459651989076,
+            "maximum_epoch": 0,
+            "maximum_utc": 1609797015433
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.000886397578924892,
+            "last_norm": 0.0003304980619083093,
+            "maximum_norm": 0.000886397578924892,
+            "maximum_epoch": 0,
+            "maximum_utc": 1609797015433
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.08070522645370524,
+            "last_norm": 0.07431445848266513,
+            "maximum_norm": 0.08070522645370524,
+            "maximum_epoch": 0,
+            "maximum_utc": 1609797015433
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0008863996637209837,
+            "last_norm": 0.0003304995173452935,
+            "maximum_norm": 0.0008863996637209837,
+            "maximum_epoch": 0,
+            "maximum_utc": 1609797015433
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "858e4ef703489c87a80b93ac35d99c371182b89ade2e1475d0c9eb2fa3df8864",
+        "candidate": "9ec3d142282fe49eead9fecf72494e24ee03dac848b1b37e3f095cebddeed6a7"
+      },
+      "summary_sha256": {
+        "control": "7bb82bafb8d5915c90309a332b6c07c720a64c1fe2e8f1abec5d6b3b3653b082",
+        "candidate": "e891971d674479b2a1cc5177f0453ca5146d061aee13e6d8f4bdb2db6a98ce40"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 2001,
+          "p50_m": 0.31033072682081303,
+          "p95_m": 0.6968611514507941,
+          "phone_score_m": 0.5035959391358036
+        },
+        "candidate": {
+          "truth_keys": 2001,
+          "p50_m": 0.3099940850604297,
+          "p95_m": 0.6972983850585013,
+          "phone_score_m": 0.5036462350594655
+        }
+      },
+      "truth_sha256": "a5cdea300d0740cd6f93641cdc20b4a067a96231695f247703607f5009b5b803",
+      "delta_phone_score_m": 5.029592366190272e-05
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.05299821144335604,
+            "last_norm": 0.05441731645149203,
+            "maximum_norm": 0.05512334658651225,
+            "maximum_epoch": 737,
+            "maximum_utc": 1609800741433
+          },
+          "gyro_bias_radps": {
+            "first_norm": 8.22274299982987e-05,
+            "last_norm": 0.00010024698795210085,
+            "maximum_norm": 0.00010024886320066572,
+            "maximum_epoch": 1841,
+            "maximum_utc": 1609801845433
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.052999181533903976,
+            "last_norm": 0.05441664007230529,
+            "maximum_norm": 0.05512408210662413,
+            "maximum_epoch": 737,
+            "maximum_utc": 1609800741433
+          },
+          "gyro_bias_radps": {
+            "first_norm": 8.222352206287801e-05,
+            "last_norm": 0.00010024375281670635,
+            "maximum_norm": 0.00010024562790748229,
+            "maximum_epoch": 1841,
+            "maximum_utc": 1609801845433
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "8d21b77be693be7bc2df13148e096219e6ec598673708da336ea370d2117283e",
+        "candidate": "352b1ae67fdf63622c6e24a4c4591dc1da7db24aa0f75c542de28c922d8d00f9"
+      },
+      "summary_sha256": {
+        "control": "91a4d7f396e8ae4942e5b25d9ad261dbd83d835655363017cef5b24dcf07bc25",
+        "candidate": "020a8c3edf2390f089178b547e2b2fbef0caed0e9c878e96e0d9a1c7cb708626"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1854,
+          "p50_m": 0.324358579300573,
+          "p95_m": 0.6405992689014874,
+          "phone_score_m": 0.4824789241010302
+        },
+        "candidate": {
+          "truth_keys": 1854,
+          "p50_m": 0.32472868492024,
+          "p95_m": 0.6404965406793113,
+          "phone_score_m": 0.48261261279977563
+        }
+      },
+      "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+      "delta_phone_score_m": 0.00013368869874541556
+    },
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04047629856765291,
+            "last_norm": 0.04076411473292792,
+            "maximum_norm": 0.04076448327066313,
+            "maximum_epoch": 1463,
+            "maximum_utc": 1615419445440
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00020960883801983413,
+            "last_norm": 0.0003736503923182983,
+            "maximum_norm": 0.00037365041458856243,
+            "maximum_epoch": 1463,
+            "maximum_utc": 1615419445440
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04047846670902112,
+            "last_norm": 0.040764025500588476,
+            "maximum_norm": 0.04076439393193603,
+            "maximum_epoch": 1463,
+            "maximum_utc": 1615419445440
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002096112581730795,
+            "last_norm": 0.0003736521307434096,
+            "maximum_norm": 0.0003736521530134798,
+            "maximum_epoch": 1463,
+            "maximum_utc": 1615419445440
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "15d3677d87c399af261d04baf0ea729cb864173b95ee437f101d6022ee41baad",
+        "candidate": "8544dbc74d72473d19d71877a606783907ed973a34002f3c1afc224856bdf879"
+      },
+      "summary_sha256": {
+        "control": "0508126a5889853c4e7b9b330d4a8e35dbfa5ff94f620de6156d66c62afc0787",
+        "candidate": "1dbe0ccecb84e061674517502d1b03d13285785347c798bf65983b2d20bca8ab"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1464,
+          "p50_m": 0.2837109495000889,
+          "p95_m": 0.6524981702074439,
+          "phone_score_m": 0.4681045598537664
+        },
+        "candidate": {
+          "truth_keys": 1464,
+          "p50_m": 0.28388270401153365,
+          "p95_m": 0.6523149531869991,
+          "phone_score_m": 0.4680988285992663
+        }
+      },
+      "truth_sha256": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+      "delta_phone_score_m": -5.731254500096483e-06
+    },
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.03986421644561784,
+            "last_norm": 0.0385268334700416,
+            "maximum_norm": 0.041478529177282855,
+            "maximum_epoch": 495,
+            "maximum_utc": 1615921648434
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0012528301209344802,
+            "last_norm": 0.0013161145153038195,
+            "maximum_norm": 0.0013162149092135881,
+            "maximum_epoch": 2082,
+            "maximum_utc": 1615923235434
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.03986596878007754,
+            "last_norm": 0.03852287089689068,
+            "maximum_norm": 0.04147861159284025,
+            "maximum_epoch": 495,
+            "maximum_utc": 1615921648434
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0012528282062765567,
+            "last_norm": 0.0013161130554588225,
+            "maximum_norm": 0.001316213485998942,
+            "maximum_epoch": 2082,
+            "maximum_utc": 1615923235434
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "a5c782d61e2134ee6b6622b8d6fc4eb2c6b43ea73eaf6d412daf4c7467d30421",
+        "candidate": "28f9d3b29fc5b2c9f8a91ffadc08d059a6ab61cdade7b4154c4011fb61e1b09c"
+      },
+      "summary_sha256": {
+        "control": "fd9da9fe363f39b367e6788ccc7641ff9bcd7e77a19d3423008807c8b6862e24",
+        "candidate": "3a9d301362eddf0fe42646b90dec4e8c064978158f62649c4accac5c0da9a987"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 2159,
+          "p50_m": 0.36440850753579374,
+          "p95_m": 0.7023290587584817,
+          "phone_score_m": 0.5333687831471378
+        },
+        "candidate": {
+          "truth_keys": 2159,
+          "p50_m": 0.3640142624473698,
+          "p95_m": 0.7027384699943463,
+          "phone_score_m": 0.533376366220858
+        }
+      },
+      "truth_sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+      "delta_phone_score_m": 7.583073720285327e-06
+    },
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.021069008067554965,
+            "last_norm": 0.027255168418391124,
+            "maximum_norm": 0.031704579713519254,
+            "maximum_epoch": 1217,
+            "maximum_utc": 1626728974441
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0006225005568210029,
+            "last_norm": 0.0006885399782281321,
+            "maximum_norm": 0.0006885399817945759,
+            "maximum_epoch": 1894,
+            "maximum_utc": 1626729651441
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.021067936845237667,
+            "last_norm": 0.027254624948428834,
+            "maximum_norm": 0.03170543146389146,
+            "maximum_epoch": 1217,
+            "maximum_utc": 1626728974441
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0006225000799192427,
+            "last_norm": 0.000688532710927939,
+            "maximum_norm": 0.0006885327144935191,
+            "maximum_epoch": 1894,
+            "maximum_utc": 1626729651441
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "5ac7fdc439005e703d73240d90ba7dc9b515f9f03dbab6c14ffffbeb2562e9f5",
+        "candidate": "f29f49ad3c8e1f5219d32347314d01f4465da4d2bddea6871b57c24ead37a3bf"
+      },
+      "summary_sha256": {
+        "control": "fc9a44cec95fb03b9f6dedb16bb7b5b115d942eb2638d2702068d68393659d08",
+        "candidate": "10499c9b77333137297eaf6824d0c025308a3a6452e0a97d7337b5c305ba9228"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1896,
+          "p50_m": 0.32457055543179497,
+          "p95_m": 0.6323548947050684,
+          "phone_score_m": 0.4784627250684317
+        },
+        "candidate": {
+          "truth_keys": 1896,
+          "p50_m": 0.324912724204796,
+          "p95_m": 0.6325935546836129,
+          "phone_score_m": 0.47875313944420445
+        }
+      },
+      "truth_sha256": "4ee9dc9b8378a5c5f1d608e0c47c978319fad172de596b655a7109605b103e07",
+      "delta_phone_score_m": 0.00029041437577276286
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.0498369106445428,
+            "last_norm": 0.04309165419025555,
+            "maximum_norm": 0.050621319179878936,
+            "maximum_epoch": 91,
+            "maximum_utc": 1629837251437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0008887092037549515,
+            "last_norm": 0.0011623340267305628,
+            "maximum_norm": 0.0011623340317672133,
+            "maximum_epoch": 3137,
+            "maximum_utc": 1629840297437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.049836141934718546,
+            "last_norm": 0.04309009674880792,
+            "maximum_norm": 0.050620613678645135,
+            "maximum_epoch": 91,
+            "maximum_utc": 1629837251437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0008887082605872556,
+            "last_norm": 0.0011623300689630467,
+            "maximum_norm": 0.001162330073999905,
+            "maximum_epoch": 3137,
+            "maximum_utc": 1629840297437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "924ebf3b2f0ce2ccb859e945845365eb7fe7bf4babdc07a04b95cc0e089e5a59",
+        "candidate": "b88c29e674fc1b6e280e4b72b8b4ff563ae0446659b1226a8680f80b15ebda38"
+      },
+      "summary_sha256": {
+        "control": "c39e60e4699d21646d1b6c9998f1c9b9d44c0ad422e851f985cc11a948041535",
+        "candidate": "1ea46e524934fd5546ca79699e2d697f28ba891bfdfe0b7f9eb8e8ceed02c8a7"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 3139,
+          "p50_m": 0.38833741866432203,
+          "p95_m": 0.6548878616480817,
+          "phone_score_m": 0.5216126401562018
+        },
+        "candidate": {
+          "truth_keys": 3139,
+          "p50_m": 0.3886733725091004,
+          "p95_m": 0.6551258069202716,
+          "phone_score_m": 0.521899589714686
+        }
+      },
+      "truth_sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+      "delta_phone_score_m": 0.00028694955848418413
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.003345360741675373,
+            "last_norm": 0.007477664933570488,
+            "maximum_norm": 0.007704131763462157,
+            "maximum_epoch": 1605,
+            "maximum_utc": 1643228961432
+          },
+          "gyro_bias_radps": {
+            "first_norm": 8.022470691069007e-05,
+            "last_norm": 8.456274661458826e-05,
+            "maximum_norm": 8.733523688070054e-05,
+            "maximum_epoch": 643,
+            "maximum_utc": 1643227999432
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.003345656873129924,
+            "last_norm": 0.007471899085611048,
+            "maximum_norm": 0.007698255721535436,
+            "maximum_epoch": 1605,
+            "maximum_utc": 1643228961432
+          },
+          "gyro_bias_radps": {
+            "first_norm": 8.022403726874538e-05,
+            "last_norm": 8.456419164822049e-05,
+            "maximum_norm": 8.733490122087943e-05,
+            "maximum_epoch": 643,
+            "maximum_utc": 1643227999432
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "91f0a7039a849512e1bb5217c5398a879de87bd431ed21fae012134b8ee683b9",
+        "candidate": "538f45ea6a70530facb925282ad001a7c103e56ddde3c6a83a9bfbb30af35f5e"
+      },
+      "summary_sha256": {
+        "control": "e0c3a9fc53b094dd01bb8d0206dd791f77cf0bf622f8bc432267cb77c54b2a9d",
+        "candidate": "4491f553c3079dd434700d6c76fe582020c0fe296e77eaf94d5eb633e59f102d"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1698,
+          "p50_m": 0.2585091517322917,
+          "p95_m": 0.4558188606242395,
+          "phone_score_m": 0.3571640061782656
+        },
+        "candidate": {
+          "truth_keys": 1698,
+          "p50_m": 0.2584753640639825,
+          "p95_m": 0.4562292799914828,
+          "phone_score_m": 0.35735232202773265
+        }
+      },
+      "truth_sha256": "1be44b1f9ef04c508e96c23fa289c068bd24388c26a7a337c6a55aace260bcf3",
+      "delta_phone_score_m": 0.00018831584946704671
+    },
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04825095473767408,
+            "last_norm": 0.04228755734352063,
+            "maximum_norm": 0.0538831669560382,
+            "maximum_epoch": 127,
+            "maximum_utc": 1645727517440
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.004066980058403501,
+            "last_norm": 0.0016815784517112012,
+            "maximum_norm": 0.004253433040515262,
+            "maximum_epoch": 572,
+            "maximum_utc": 1645727962440
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.03625255124920429,
+            "last_norm": 0.02563712009054963,
+            "maximum_norm": 0.0367717692199068,
+            "maximum_epoch": 67,
+            "maximum_utc": 1645727457440
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00012553180240783746,
+            "last_norm": 7.120673843342927e-05,
+            "maximum_norm": 0.0001341018717472156,
+            "maximum_epoch": 1165,
+            "maximum_utc": 1645728555440
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "4f278a0375e60b51322d9ee43cfa0b4f86b723fe37d6dd1add0e40a03817cc2a",
+        "candidate": "91851c439a6d83651e3ed0cb800facc47d137f324198ebfc4d0746ade133e263"
+      },
+      "summary_sha256": {
+        "control": "123dff41c76bbd20e9a6257c2db2e9bc77337a0fe9840ad192c80e2a9bd1434b",
+        "candidate": "3dd8df7ac147b5fa51b5a13aa4aea80cb0f7cd053f4b2352d14737ddbe2515e5"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 2438,
+          "p50_m": 1.0057790662034343,
+          "p95_m": 2.1758620712974754,
+          "phone_score_m": 1.5908205687504549
+        },
+        "candidate": {
+          "truth_keys": 2438,
+          "p50_m": 0.908932798308052,
+          "p95_m": 1.3997740320525698,
+          "phone_score_m": 1.154353415180311
+        }
+      },
+      "truth_sha256": "73875990485f43d36ce7608762b4071267d8361847ee5b9a171d3459ab2ba154",
+      "delta_phone_score_m": -0.4364671535701439
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.00995874659343219,
+            "last_norm": 0.013720105406540485,
+            "maximum_norm": 0.014745729325341541,
+            "maximum_epoch": 1262,
+            "maximum_utc": 1648838608447
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0007456884902914549,
+            "last_norm": 0.0007415298687296394,
+            "maximum_norm": 0.0007457083386813774,
+            "maximum_epoch": 50,
+            "maximum_utc": 1648837396447
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.009961576458238851,
+            "last_norm": 0.013724423063057696,
+            "maximum_norm": 0.01474976072271353,
+            "maximum_epoch": 1262,
+            "maximum_utc": 1648838608447
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0007456894372187017,
+            "last_norm": 0.0007415283067175857,
+            "maximum_norm": 0.0007457092749084758,
+            "maximum_epoch": 50,
+            "maximum_utc": 1648837396447
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "d13b8973314385ceff26f5b7a8de38efb2391eb08940430d022ce2337a76f2ba",
+        "candidate": "7b0340b3a65cf667575bb2f950aa0d142d45141b9c4934c214e4b5fd5b2b9853"
+      },
+      "summary_sha256": {
+        "control": "5accaa4a15c98b8fcec37320d3d83f498a9c8746d4d9815a4a9e408a642ff6ba",
+        "candidate": "0bab7a8fdba59e21c5aa83d918ed16f8d436c01b08b8523386f1f0db04e4e872"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1465,
+          "p50_m": 0.38955331317875797,
+          "p95_m": 0.5764384347590598,
+          "phone_score_m": 0.48299587396890886
+        },
+        "candidate": {
+          "truth_keys": 1465,
+          "p50_m": 0.3897105788550332,
+          "p95_m": 0.5759195090461253,
+          "phone_score_m": 0.4828150439505793
+        }
+      },
+      "truth_sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+      "delta_phone_score_m": -0.0001808300183295808
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04510644755925054,
+            "last_norm": 0.029886233358568538,
+            "maximum_norm": 0.04511097047567977,
+            "maximum_epoch": 12,
+            "maximum_utc": 1659643653437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0008638134676354651,
+            "last_norm": 0.0008944575325959758,
+            "maximum_norm": 0.0008944628251655249,
+            "maximum_epoch": 1312,
+            "maximum_utc": 1659644953437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.04510649572354357,
+            "last_norm": 0.029885452555379954,
+            "maximum_norm": 0.04511101825334778,
+            "maximum_epoch": 12,
+            "maximum_utc": 1659643653437
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0008638137711766068,
+            "last_norm": 0.0008944580276585835,
+            "maximum_norm": 0.0008944632922334643,
+            "maximum_epoch": 1312,
+            "maximum_utc": 1659644953437
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "b8db5c96ead16b901cdb56885f34f13f2ac16d1e09ba0a37bbef7f370ccf563a",
+        "candidate": "a5d9cc5f485478463e98d01883164d49328d78aca0090be4857cafd42bf9a5dd"
+      },
+      "summary_sha256": {
+        "control": "50885ab6f51306d3b5897d21ecb77d439a7317c695f85d58b034bc1aa4be46eb",
+        "candidate": "b689a5e68b6c5609350572967a64ed8ae2ad0a9b21565f542a696e28e6e47e7e"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1431,
+          "p50_m": 0.28377163823899004,
+          "p95_m": 0.4840359243776975,
+          "phone_score_m": 0.3839037813083438
+        },
+        "candidate": {
+          "truth_keys": 1431,
+          "p50_m": 0.2837997573468431,
+          "p95_m": 0.48432048976169195,
+          "phone_score_m": 0.38406012355426755
+        }
+      },
+      "truth_sha256": "5e229f86eed48d27984718d56de26a3861e5d2bc25a55261540d4b9b7b5452d4",
+      "delta_phone_score_m": 0.00015634224592375734
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.038975438826028434,
+            "last_norm": 0.043183536396754756,
+            "maximum_norm": 0.04326483090306381,
+            "maximum_epoch": 929,
+            "maximum_utc": 1678312219448
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0001855384482725436,
+            "last_norm": 0.000159659001638446,
+            "maximum_norm": 0.00018578593275177688,
+            "maximum_epoch": 88,
+            "maximum_utc": 1678311378448
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.038976618290184124,
+            "last_norm": 0.04318392831024881,
+            "maximum_norm": 0.04326504466514133,
+            "maximum_epoch": 929,
+            "maximum_utc": 1678312219448
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00018553773690034662,
+            "last_norm": 0.00015965780221636395,
+            "maximum_norm": 0.0001857852184539592,
+            "maximum_epoch": 88,
+            "maximum_utc": 1678311378448
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "b3d58b5cebf23dc17f9b0d3ce07c54ac129cb40a76a8530341aaaf55a425ce34",
+        "candidate": "d4c3bea06ab36e136c4c09d677c9a2aa0cff1358ee2920ced13da24fdc8999aa"
+      },
+      "summary_sha256": {
+        "control": "002365ebcfeed72094da6e45e0cc18c2ac485e683094bc5edbcb5eb8414e30c1",
+        "candidate": "f5d3e50d0c6a86c3f69145e1b43b914c430916da21bcb7e62548abe4076f5009"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1102,
+          "p50_m": 0.3646379704738083,
+          "p95_m": 0.628831039612783,
+          "phone_score_m": 0.49673450504329564
+        },
+        "candidate": {
+          "truth_keys": 1102,
+          "p50_m": 0.3642378789067485,
+          "p95_m": 0.6288264552339075,
+          "phone_score_m": 0.496532167070328
+        }
+      },
+      "truth_sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+      "delta_phone_score_m": -0.00020233797296764777
+    },
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.0073683438422077864,
+            "last_norm": 0.019066724420050345,
+            "maximum_norm": 0.052616369147889724,
+            "maximum_epoch": 1703,
+            "maximum_utc": 1683669640438
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.001960483075339888,
+            "last_norm": 0.004657089745693022,
+            "maximum_norm": 0.00471167517935927,
+            "maximum_epoch": 1837,
+            "maximum_utc": 1683669774438
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.01866487328060568,
+            "last_norm": 0.016191641998327254,
+            "maximum_norm": 0.018909418668582836,
+            "maximum_epoch": 468,
+            "maximum_utc": 1683668405438
+          },
+          "gyro_bias_radps": {
+            "first_norm": 5.300359673872011e-05,
+            "last_norm": 0.0002293936883095761,
+            "maximum_norm": 0.00022939370350877415,
+            "maximum_epoch": 2129,
+            "maximum_utc": 1683670066438
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "69ab31859d9f7236eaa321e03c19a3ef12f29131b822329dee9c3e5ee4c06dae",
+        "candidate": "7923c1212802338e6370f703cd72b2b6a38fbc5b7c48f0e126013f913505d4c3"
+      },
+      "summary_sha256": {
+        "control": "0a0701e62be9899d33ff232c6fc0b1a8cf619089824edf43357b0dd0093489c3",
+        "candidate": "27055d04068c336b310435e8a7e937f6fffabbcf5e5584fc39507048a64229a9"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 2132,
+          "p50_m": 0.48962669670566006,
+          "p95_m": 1.6368288443894825,
+          "phone_score_m": 1.0632277705475712
+        },
+        "candidate": {
+          "truth_keys": 2132,
+          "p50_m": 0.4163645835217862,
+          "p95_m": 0.9739920644134226,
+          "phone_score_m": 0.6951783239676044
+        }
+      },
+      "truth_sha256": "ef29d4712204bdf51b543c8e3fba28c639d759c4b21f8438e407ba555f920967",
+      "delta_phone_score_m": -0.36804944657996685
+    },
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.019506482477136693,
+            "last_norm": 0.02549787829978982,
+            "maximum_norm": 0.02567851636090609,
+            "maximum_epoch": 2275,
+            "maximum_utc": 1684269174447
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.000274656856279292,
+            "last_norm": 0.0003298524319373943,
+            "maximum_norm": 0.0003298524402364585,
+            "maximum_epoch": 2320,
+            "maximum_utc": 1684269219447
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.019506178828349537,
+            "last_norm": 0.025498245616371887,
+            "maximum_norm": 0.025678851731693274,
+            "maximum_epoch": 2275,
+            "maximum_utc": 1684269174447
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002746595815858906,
+            "last_norm": 0.00032985801056860717,
+            "maximum_norm": 0.00032985801886270175,
+            "maximum_epoch": 2320,
+            "maximum_utc": 1684269219447
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "d25dc6ab5024f738b33f6d32e75fbc97a7b97e8db4d9572a0b47a5a47d0ac695",
+        "candidate": "07f9288b10bbf9a9cdee248871b778111d0cb25f3f4351ffd3fc692e2a0c5c46"
+      },
+      "summary_sha256": {
+        "control": "e06ff0d25a2a227b5183d493ddcfded995c519d132b0e31a30e9c60521d24007",
+        "candidate": "fd49adda36353114aa6f2ce603a7e2eb03684df0d8652825d0ce0bcff560e5c5"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 2322,
+          "p50_m": 0.7121844546259426,
+          "p95_m": 1.3211950374329193,
+          "phone_score_m": 1.016689746029431
+        },
+        "candidate": {
+          "truth_keys": 2322,
+          "p50_m": 0.7122115046977233,
+          "p95_m": 1.3211876024049958,
+          "phone_score_m": 1.0166995535513594
+        }
+      },
+      "truth_sha256": "9e21b8a984d42473aa262163cc85fc17168d54e1f28ed0788bccfb9a6f538057",
+      "delta_phone_score_m": 9.807521928362206e-06
+    },
+    "2023-09-05-23-07-us-ca-routen/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.018155702717733778,
+            "last_norm": 0.014326632002896226,
+            "maximum_norm": 0.01817849815293775,
+            "maximum_epoch": 15,
+            "maximum_utc": 1693955243436
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.00020309262930122695,
+            "last_norm": 0.00021146051333084518,
+            "maximum_norm": 0.00021230277023275753,
+            "maximum_epoch": 886,
+            "maximum_utc": 1693956114436
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.01815458533432831,
+            "last_norm": 0.014326110469010191,
+            "maximum_norm": 0.0181773208882112,
+            "maximum_epoch": 15,
+            "maximum_utc": 1693955243436
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0002030892185926032,
+            "last_norm": 0.00021145668122789953,
+            "maximum_norm": 0.00021229895686975382,
+            "maximum_epoch": 886,
+            "maximum_utc": 1693956114436
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "62f7a8b803a7fe92d0800ed7526bc1d03484ecb400093ede11562158ac67f2ac",
+        "candidate": "6310fc48046437d74a94312353859e905c75840f92e309ff7e8e94a1241727e5"
+      },
+      "summary_sha256": {
+        "control": "1702b9e7fd144d40536f0dbf266a06a6e93e93ed6df6b8533b9e87432cf7a304",
+        "candidate": "905793162b69ca715c36c0cca0c83471876bf98037bd362c61f2fb8aaa9e01d5"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1564,
+          "p50_m": 0.3589344743396948,
+          "p95_m": 0.6982177321522054,
+          "phone_score_m": 0.5285761032459501
+        },
+        "candidate": {
+          "truth_keys": 1564,
+          "p50_m": 0.3590945300558456,
+          "p95_m": 0.6981354975685578,
+          "phone_score_m": 0.5286150138122017
+        }
+      },
+      "truth_sha256": "b69eabd78c6f76087cae3e434baae3130d98e451a16724fbc22d3bcba4138358",
+      "delta_phone_score_m": 3.891056625160427e-05
+    },
+    "2023-09-07-18-59-us-ca/pixel5": {
+      "control_source_byte_parity": true,
+      "states": {
+        "control": {
+          "accel_bias_mps2": {
+            "first_norm": 0.01493847615142869,
+            "last_norm": 0.017831147388097362,
+            "maximum_norm": 0.01788135468390288,
+            "maximum_epoch": 1156,
+            "maximum_utc": 1694114354449
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.000704393207086213,
+            "last_norm": 0.0006566853867165636,
+            "maximum_norm": 0.0007057579668763616,
+            "maximum_epoch": 148,
+            "maximum_utc": 1694113346449
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        },
+        "candidate": {
+          "accel_bias_mps2": {
+            "first_norm": 0.014938506994036229,
+            "last_norm": 0.017835996777827667,
+            "maximum_norm": 0.017886200579482897,
+            "maximum_epoch": 1156,
+            "maximum_utc": 1694114354449
+          },
+          "gyro_bias_radps": {
+            "first_norm": 0.0007043928185402644,
+            "last_norm": 0.0006566859000677608,
+            "maximum_norm": 0.0007057576195812021,
+            "maximum_epoch": 148,
+            "maximum_utc": 1694113346449
+          },
+          "accel_bias_thresholds_mps2": {
+            "0.1": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "1.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "5.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            },
+            "10.0": {
+              "count": 0,
+              "first_epoch": null,
+              "last_epoch": null
+            }
+          }
+        }
+      },
+      "solution_sha256": {
+        "control": "5b956d589525156b655eb736761c9626b18eed7587dd5e71f1b6bd9aa19b1fbe",
+        "candidate": "f1e49616c1aaf407841e23043d8aee73df95c891411f3191ee89019e63f20551"
+      },
+      "summary_sha256": {
+        "control": "727f487b46fdc8a43994f02d926220bb3eaa10a8705902b5efdc447d732d9aea",
+        "candidate": "a8e41b396780aa78797a9bb8ca06a6784ad6bd474bb7900e22f24d9e19c3f9ec"
+      },
+      "scores": {
+        "control": {
+          "truth_keys": 1172,
+          "p50_m": 0.614659090214367,
+          "p95_m": 0.8907155976797562,
+          "phone_score_m": 0.7526873439470616
+        },
+        "candidate": {
+          "truth_keys": 1172,
+          "p50_m": 0.6145435925431232,
+          "p95_m": 0.8910064100542175,
+          "phone_score_m": 0.7527750012986704
+        }
+      },
+      "truth_sha256": "171382b4b189f513cfc29e1a1a36177af876ca76dbfe1187de26e1fbfabe4621",
+      "delta_phone_score_m": 8.765735160876087e-05
+    }
+  },
+  "control_mean_m": 0.6440282180321103,
+  "candidate_mean_m": 0.590451182416754,
+  "delta_mean_m": -0.05357703561535632,
+  "regressed_pairs": 10
+}

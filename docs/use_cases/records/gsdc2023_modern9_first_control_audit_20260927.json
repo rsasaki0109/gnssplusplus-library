@@ -1,0 +1,11 @@
+{
+  "status": "first-modern-control-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "dataset_id": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+  "native_keys": 1141,
+  "published_control_byte_parity": true,
+  "plan_sha256": "6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565",
+  "solution_sha256": "c515510970d32b5c9f071450f02f9d91ec94aec03450fe0b2807b01d7fb1ecf5",
+  "summary_sha256": "5f15a0dd8b342ee3bbb424ea0572284937fc1a9fd29c16ad7ff94aff1ec68812"
+}

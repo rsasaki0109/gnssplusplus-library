@@ -114,6 +114,10 @@ struct Config {
     ProcessorConfig processor_config;
     SPPProcessor::SPPConfig spp_config;
     double max_gap_s = 2.0;
+    // For continuous-reference Android epochs only: time includes the raw
+    // receiver clock offset (seconds). Remove its difference for gap admission,
+    // without changing stored epoch times, observations, or the gap limit.
+    bool receiver_clock_corrected_gap_checks = false;
     std::size_t min_pseudorange_satellites = 4;
     bool derive_velocity = true;
     // Opt-in same-run cold-start anchor.  When enabled, the first epoch is

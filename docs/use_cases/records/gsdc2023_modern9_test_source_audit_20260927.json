@@ -1,0 +1,167 @@
+{
+  "status": "published-modern-test-sources-audited",
+  "inference_started": false,
+  "truth_consumed": false,
+  "official_score": false,
+  "submitted": false,
+  "selection": "All test phones matching the four device models in the fixed development cohort",
+  "input_evidence": {
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_submitted_test_recipe_group_safe_20260926\\plan.json": "22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e",
+    "docs\\use_cases\\records\\gsdc2023_modern11_source_recipe_reaudit_20260927.json": "4829d99d4f3cb3d8827e0af79a2e729c0d5843a8b22d71552229d2084f091f24",
+    "docs\\use_cases\\records\\gsdc2023_test_clock_reset_inventory_20260926.json": "5747251e266e9dd45764d853c633d1ceed4783689c18f7e4fafb2f5e4804f55a",
+    "docs\\use_cases\\records\\gsdc2023_clock_admission_20260926.json": "e1c4e5a4fd299be1bc69e002507606cd95ab2c10f6e3fba6880fb25f8be1d7d4"
+  },
+  "runs": {
+    "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\02\\run.json",
+        "run_sha256": "fa98d33d6d62a42be4cf336e601147de2a08eff805cadde7d16c2d0c2134b829",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\02\\solution.csv",
+        "solution_sha256": "c515510970d32b5c9f071450f02f9d91ec94aec03450fe0b2807b01d7fb1ecf5",
+        "summary_sha256": "9f96eca19b65dad5d05fed3e6381ef82acf5240fa43004c6d95d13c331f0fe0e",
+        "height_mode": "map"
+      },
+      "raw_sha256": "89e37f07899025f13763e999233a34ba88d37bf5f57a846a928708b0bce7e082",
+      "native_keys": 1141,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2021-11-05-18-28-us-ca-mtv-m/pixel6pro": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\06\\run.json",
+        "run_sha256": "9ce4210103e902e1577a117a31af601558941c419558a4c2d324e08abfef835e",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\06\\solution.csv",
+        "solution_sha256": "8b2e5037a262d009667e19fde9101fdd93ec70881170eb5c32d05be0100a1a17",
+        "summary_sha256": "60615505f21dc16c8337efb13b3565cd999bf2f4704328bbce93065f29cfed64",
+        "height_mode": "map"
+      },
+      "raw_sha256": "385554d11c17d0e4606ae2e66f6a9c65aa6bb8bd667235dac456f51196d0d271",
+      "native_keys": 1446,
+      "legacy_clock_resets": 1,
+      "loader_admission": {
+        "raw": "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\test\\2021-11-05-18-28-us-ca-mtv-m\\pixel6pro\\device_gnss.csv",
+        "raw_sha256": "385554d11c17d0e4606ae2e66f6a9c65aa6bb8bd667235dac456f51196d0d271",
+        "modes": {
+          "legacy": {
+            "returncode": 0,
+            "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\15_legacy.csv",
+            "output_sha256": "ea72ed1a278eadb93e5503dfe4b44e4cba83768fd6bc3adb7044cd4bb1737d2c",
+            "diagnostic": "clock_discontinuities=1 selected_rows=42550\n",
+            "epochs": 1446,
+            "keys_sha256": "d921f70e4ca448817c83f8ccbe6da53672621d3d85b44d9f15b816e20cb3f889",
+            "max_abs_input_clock_step_m": 21770.628507502002
+          },
+          "continuous": {
+            "returncode": 0,
+            "output": "E:\\rtklib_v2_ws_output\\gsdc_native\\clock_admission_20260926\\15_continuous.csv",
+            "output_sha256": "2edbafd9d282d4b70adc7c23a00f0dcd02210eb66ae91fc847621682b5945471",
+            "diagnostic": "clock_discontinuities=0 selected_rows=42550\n",
+            "epochs": 1446,
+            "keys_sha256": "d921f70e4ca448817c83f8ccbe6da53672621d3d85b44d9f15b816e20cb3f889",
+            "max_abs_input_clock_step_m": 157.39104045
+          }
+        },
+        "clock_export_byte_identical": false
+      }
+    },
+    "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\14\\run.json",
+        "run_sha256": "4a937ec0fa2926143f7ce48dc8c0358726d7de7fb6868a307d477d5b5cd0b3d1",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\14\\solution.csv",
+        "solution_sha256": "d46002dd620e724eb630d2142c54d2cee246cd23101a5e83467f922cfc1aebc6",
+        "summary_sha256": "d05fdd033e202eec567258a82146d773d0ddfae32dcfd9ed8c34d1a1a38b5d03",
+        "height_mode": "map"
+      },
+      "raw_sha256": "6b9b3def8827baf33e0f9b813281965414e5761270438f5f3ac92aa4840860e8",
+      "native_keys": 1172,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\30\\run.json",
+        "run_sha256": "1f948a5a662eeeba8decb3d0a7e2eed2980f33f979426982f9b8cb3a60166eb0",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\30\\solution.csv",
+        "solution_sha256": "c011b806b646a71cf3a8221b50e19a88281d7308b28c5538c076a3d2f6357131",
+        "summary_sha256": "5237aed995829598de1e22e4672a6f87ade1f60b0c02eb26d0d8950ac7fbf682",
+        "height_mode": "map"
+      },
+      "raw_sha256": "f7d88f2d0dd0a03766166e111ee9f70fa59b330cdaa72333df1d018e1dd66729",
+      "native_keys": 2110,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\31\\run.json",
+        "run_sha256": "7195ba55fc2b4d47f47c227353516d6016546cc527d86e2dfb5f75fb93586315",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\31\\solution.csv",
+        "solution_sha256": "be26652733f3e13b35e8d93406b5633bf4a9c4526b8330c7c9fdd28d9fc6706c",
+        "summary_sha256": "87f57ebae679c6ccc8928bfa902388822402a56d73301f02ba06d12e8d2b528e",
+        "height_mode": "map"
+      },
+      "raw_sha256": "87284476c5285c6551fc7e1a4153673060d3d1229a02688e5c023aefcf5d1d64",
+      "native_keys": 2145,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\34\\run.json",
+        "run_sha256": "25ae793b1ffcdee83731f8cb4889bd0caadc84a4b6825596f06182da83c3921b",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\34\\solution.csv",
+        "solution_sha256": "913debe206e43939251e0a1cf2a06505d066226de0c795cd15a904dc5834a370",
+        "summary_sha256": "f9faea70662aeb15f14217e648107653828b5dfa6eea64128ea805ecec2c6f15",
+        "height_mode": "map"
+      },
+      "raw_sha256": "eb0dab43b61ea050980c965bd217e152d6af9ea2ab975f7e485359aeeb0e7a38",
+      "native_keys": 1020,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2023-05-25-17-32-us-ca-pao-j/pixel6pro": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\35\\run.json",
+        "run_sha256": "d35cf3104c4469d53a937638e8fa21d795c9cc7c74a52c7a6cb38aa095d11c3d",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\35\\solution.csv",
+        "solution_sha256": "cc67e73e774b3609afd096ad36cd3422d7a62722b1ba80969038c206dc091757",
+        "summary_sha256": "f21e53a5e9b210590b24da78833717b87ed310f89c310f1a3d91e9d104435d86",
+        "height_mode": "relative"
+      },
+      "raw_sha256": "5299ba32326efc7cf1522894586719400f2f87f3a67b6ec9f5a0b390ac0bea0a",
+      "native_keys": 1292,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\36\\run.json",
+        "run_sha256": "3cb794b15aedf26cef367a1a2e38ec7fe454f76f12fd123722a7ea196418e510",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\36\\solution.csv",
+        "solution_sha256": "a7ed0de0e336d34b955eff3037a3ea78b75ba65d5d16608b18cb2f7a56272fd5",
+        "summary_sha256": "6c99c2c936ef5aab745b784dd624116bc8dacd6e40105fc1131412decf67b462",
+        "height_mode": "relative"
+      },
+      "raw_sha256": "211e977b10f496c1a6aa925fe81fd4368d6d94a09c728595252f0588ec0de24c",
+      "native_keys": 1728,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    },
+    "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro": {
+      "published_source": {
+        "run": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\39\\run.json",
+        "run_sha256": "651c226e1a41893cc1e666a484295d2c51c2eaf64eb3f9983e186397eec3e1e4",
+        "solution": "E:\\rtklib_v2_ws_output\\gsdc_native\\test40_height_v1\\39\\solution.csv",
+        "solution_sha256": "c1bfeb93c3f085b78125fc4eba2fa9f01f4643f97e430b2dbd63ecd7826d237a",
+        "summary_sha256": "dad73bc536feec071a011e557f409e6ff9a858a420c47c2fcccaa0b7cb277a17",
+        "height_mode": "relative"
+      },
+      "raw_sha256": "cefd1ee97c4bbb0a399f1c33f51cc159571c60920681f57e974b4e8831c554ae",
+      "native_keys": 1495,
+      "legacy_clock_resets": 0,
+      "loader_admission": null
+    }
+  },
+  "next_gate": "Freeze a same-binary replay that separates continuous-clock changes from the three recipe flags; published-control parity and full native inference remain unverified."
+}

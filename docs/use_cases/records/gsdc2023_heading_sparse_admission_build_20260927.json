@@ -1,0 +1,16 @@
+{
+  "status": "built-cli-tests-passed-real-parity-pending",
+  "binary": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\heading_sparse_admission_20260927.exe",
+  "binary_sha256": "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53",
+  "junit": "E:\\rtklib_v2_ws_tmp\\heading_sparse_cli_tests_20260927.xml",
+  "junit_sha256": "37995d3656ee82367020ab799da4c4a802da71386bcd54a1f13b25b4aa9b4864",
+  "tests": 7,
+  "truth_consumed": false,
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "a3f9ca69bc4af728561614ad73916c0df37c7cf97e571868dbf8a7461e6245e3",
+    "tests/test_smartphone_epoch_heading_seeds.py": "7f66f3259d9f7e353153ac246bff34c26a22c421bc6ae56d8fca20ff0e8931dd"
+  },
+  "failed_initial_heading_run": "E:/rtklib_v2_ws_output/gsdc_native/laxp_heading_seed_ablation_20260927/control/heading/run.json",
+  "scope": "Only remove sparse-staging CLI conflict with heading seeds; retain Pixel5/Phase171/raw/all-epoch guards. No solver changes. Initial old-binary attempt exited 2 before inference.",
+  "baseline_session": 84907
+}

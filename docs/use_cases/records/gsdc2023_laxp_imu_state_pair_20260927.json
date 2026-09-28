@@ -1,0 +1,138 @@
+{
+  "status": "audited-laxp-imu-state-pair",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "arms": {
+    "control": {
+      "audit_sha256": "793ba3ab4476ce1930d1eb55301fa302c5180b380aaad2e53633d77614730ffe",
+      "summary_sha256": "589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae",
+      "states": {
+        "accel_bias_mps2": {
+          "first_norm": 1.0098721704416755,
+          "last_norm": 18.07761508350683,
+          "maximum_norm": 18.493567463816373,
+          "maximum_epoch": 4343,
+          "maximum_utc": 1645719756429
+        },
+        "gyro_bias_radps": {
+          "first_norm": 0.0006254396360449127,
+          "last_norm": 0.003431417144046766,
+          "maximum_norm": 0.0034314279595408616,
+          "maximum_epoch": 4497,
+          "maximum_utc": 1645719910429
+        },
+        "accel_bias_thresholds_mps2": {
+          "0.1": {
+            "count": 4515,
+            "first_epoch": 0,
+            "last_epoch": 4514
+          },
+          "1.0": {
+            "count": 4515,
+            "first_epoch": 0,
+            "last_epoch": 4514
+          },
+          "5.0": {
+            "count": 2972,
+            "first_epoch": 1543,
+            "last_epoch": 4514
+          },
+          "10.0": {
+            "count": 2074,
+            "first_epoch": 2441,
+            "last_epoch": 4514
+          }
+        }
+      },
+      "max_abs_vertical_velocity_mps": 99.07461891151813,
+      "max_abs_vertical_velocity_epoch": 4514
+    },
+    "candidate": {
+      "audit_sha256": "2607a2a48ceaf87a671d12b253e97b024a5d8ea74ba028fe58b69b5393f42dff",
+      "summary_sha256": "0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88",
+      "states": {
+        "accel_bias_mps2": {
+          "first_norm": 0.9377035066405357,
+          "last_norm": 18.021136634792075,
+          "maximum_norm": 18.625443498951647,
+          "maximum_epoch": 4321,
+          "maximum_utc": 1645719734429
+        },
+        "gyro_bias_radps": {
+          "first_norm": 0.000627900335393472,
+          "last_norm": 0.0037165144285989517,
+          "maximum_norm": 0.0037168468287889695,
+          "maximum_epoch": 4488,
+          "maximum_utc": 1645719901429
+        },
+        "accel_bias_thresholds_mps2": {
+          "0.1": {
+            "count": 4515,
+            "first_epoch": 0,
+            "last_epoch": 4514
+          },
+          "1.0": {
+            "count": 4394,
+            "first_epoch": 121,
+            "last_epoch": 4514
+          },
+          "5.0": {
+            "count": 2959,
+            "first_epoch": 1556,
+            "last_epoch": 4514
+          },
+          "10.0": {
+            "count": 2093,
+            "first_epoch": 2422,
+            "last_epoch": 4514
+          }
+        }
+      },
+      "max_abs_vertical_velocity_mps": 94.71896509913522,
+      "max_abs_vertical_velocity_epoch": 4514
+    }
+  },
+  "windows": [
+    {
+      "first_epoch": 0,
+      "last_epoch": 1542,
+      "bias_vector_difference_p50_mps2": 0.07317513337928219,
+      "bias_vector_difference_max_mps2": 0.0854444180552124,
+      "control_bias_norm_median": 2.7678828907922908,
+      "candidate_bias_norm_median": 2.7066755423882336
+    },
+    {
+      "first_epoch": 1543,
+      "last_epoch": 2440,
+      "bias_vector_difference_p50_mps2": 0.1129457508395513,
+      "bias_vector_difference_max_mps2": 0.2236314480445093,
+      "control_bias_norm_median": 6.91006932319924,
+      "candidate_bias_norm_median": 6.92100922688309
+    },
+    {
+      "first_epoch": 2441,
+      "last_epoch": 4249,
+      "bias_vector_difference_p50_mps2": 0.510505055503965,
+      "bias_vector_difference_max_mps2": 0.7904664230840424,
+      "control_bias_norm_median": 15.125911642087717,
+      "candidate_bias_norm_median": 15.394628231631298
+    },
+    {
+      "first_epoch": 4250,
+      "last_epoch": 4479,
+      "bias_vector_difference_p50_mps2": 0.8319230188143526,
+      "bias_vector_difference_max_mps2": 0.8746145815545711,
+      "control_bias_norm_median": 18.453555187531347,
+      "candidate_bias_norm_median": 18.57169655162301
+    },
+    {
+      "first_epoch": 4480,
+      "last_epoch": 4514,
+      "bias_vector_difference_p50_mps2": 0.8675493283400852,
+      "bias_vector_difference_max_mps2": 0.8730157581271044,
+      "control_bias_norm_median": 18.096647731804303,
+      "candidate_bias_norm_median": 18.04495503153564
+    }
+  ],
+  "interpretation": "Both independently optimized arms show large bias growth well before the terminal phone reorientation. Additional recipe flags do not remove this state anomaly. Bias differences and vertical velocities are diagnostics, not ground-truth errors or proof of the underlying cause."
+}

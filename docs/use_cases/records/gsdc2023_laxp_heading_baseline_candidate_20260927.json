@@ -1,0 +1,59 @@
+{
+  "status": "audited-imu-baseline-replay",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "trajectory_byte_parity": true,
+  "optimized_state_exact_parity": true,
+  "dataset_id": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+  "keys": 4515,
+  "reference_run_sha256": "f542e21a047c2e2ba5cc32fc44d48ae39ca034fec7f6b4cd3d6a99ff1c030d56",
+  "replay_run_sha256": "f6efda0ba37ce89b0da79b6cd2e2ec6e1edaa73ad841c454494a4b4174ac475c",
+  "binaries_sha256": [
+    "0630b4eb46432f96db589ee7deba2dc17dddc001f7b34581ae27c9fbf2332575",
+    "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53"
+  ],
+  "summaries_sha256": [
+    "0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88",
+    "0633861e8c2142fc1e1f414cd7a36f058aff3b0c85489d7471b36d6e0829cd88"
+  ],
+  "solution_sha256": "fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17",
+  "raw_initialization_sha256": "bf2a2c45d1bdac3cac0e9774cce7933f7d31cf364e2510a48da04923431a2525",
+  "states": {
+    "accel_bias_mps2": {
+      "first_norm": 0.9377035066405357,
+      "last_norm": 18.021136634792075,
+      "maximum_norm": 18.625443498951647,
+      "maximum_epoch": 4321,
+      "maximum_utc": 1645719734429
+    },
+    "gyro_bias_radps": {
+      "first_norm": 0.000627900335393472,
+      "last_norm": 0.0037165144285989517,
+      "maximum_norm": 0.0037168468287889695,
+      "maximum_epoch": 4488,
+      "maximum_utc": 1645719901429
+    },
+    "accel_bias_thresholds_mps2": {
+      "0.1": {
+        "count": 4515,
+        "first_epoch": 0,
+        "last_epoch": 4514
+      },
+      "1.0": {
+        "count": 4394,
+        "first_epoch": 121,
+        "last_epoch": 4514
+      },
+      "5.0": {
+        "count": 2959,
+        "first_epoch": 1556,
+        "last_epoch": 4514
+      },
+      "10.0": {
+        "count": 2093,
+        "first_epoch": 2422,
+        "last_epoch": 4514
+      }
+    }
+  }
+}

@@ -1,0 +1,201 @@
+{
+  "status": "partial-test-artifact-audit",
+  "official_score": false,
+  "submitted": false,
+  "accuracy_evaluated": false,
+  "checked_unix": 1790474860.4471893,
+  "plan_sha256": "22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e",
+  "expected_pairs": 17,
+  "audited_pairs": 17,
+  "reproduced_controls": [
+    "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+    "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+    "2022-02-23-17-46-us-ca-lax-n/pixel5",
+    "2022-02-23-22-35-us-ca-lax-m/pixel5",
+    "2022-02-24-15-10-us-ca-lax-p/pixel5",
+    "2022-02-24-22-14-us-ca-lax-i/pixel5",
+    "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+    "2022-04-04-16-31-us-ca-lax-x/pixel5",
+    "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+    "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+    "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+    "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+    "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+    "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+    "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+    "2023-06-06-22-43-us-ca-sjc-he2/pixel5"
+  ],
+  "completed": {
+    "2021-08-17-20-37-us-ca-mtv-g/pixel5": {
+      "native_keys": 1676,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "de589adf7540042d14b44dd60be79e3d4f0c156690692b2210b7a3083f914af5",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.19102719244104932,
+        "p95": 0.32979112013256007,
+        "maximum": 0.4156243243753613
+      }
+    },
+    "2022-02-08-22-04-us-ca-sjc-r/pixel5": {
+      "native_keys": 1665,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "821312e9135a722086b8c88b3cefb5c4f371db9273674ca33edc50ec1db7d8c3",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.12522746482418107,
+        "p95": 0.24812185728045008,
+        "maximum": 0.4331143861758393
+      }
+    },
+    "2022-02-23-17-46-us-ca-lax-n/pixel5": {
+      "native_keys": 2407,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "681643db796a40117ce27a04a2f5dce89a1b3c7e0068a1d2e16511d44618cdbc",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.2523836015899499,
+        "p95": 0.7048288844104607,
+        "maximum": 1.0707850413911026
+      }
+    },
+    "2022-02-23-22-35-us-ca-lax-m/pixel5": {
+      "native_keys": 2805,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "5a01a112f450540fac7ca10f4247c1d0be7c2cfdb307d38032947ba6dc2b5a61",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.3591264316535073,
+        "p95": 0.6119750158346045,
+        "maximum": 1.5600158645761153
+      }
+    },
+    "2022-02-24-15-10-us-ca-lax-p/pixel5": {
+      "native_keys": 4515,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "fd752bea5499963abbb046a4e2a907d401da511cb9dc808fb87679fb266ddc17",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.5291921696745522,
+        "p95": 6.258649116051327,
+        "maximum": 350.19998018750346
+      }
+    },
+    "2022-02-24-22-14-us-ca-lax-i/pixel5": {
+      "native_keys": 3582,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "41b0070797d9e393f226c119143fdf70168f2ecc7450e537f439130315386c97",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.22310334792813954,
+        "p95": 0.7420015282740066,
+        "maximum": 1.2293817149217263
+      }
+    },
+    "2022-03-22-18-44-us-ca-mtv-pe1/pixel5": {
+      "native_keys": 2112,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "5541d38e787aa4452f192c23aa50171b391552f181c98229ef8d330c0679d60f",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.16668260902761883,
+        "p95": 0.5019009944413673,
+        "maximum": 0.630441634531958
+      }
+    },
+    "2022-04-04-16-31-us-ca-lax-x/pixel5": {
+      "native_keys": 2171,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "493e54a978b3953d3afd01ad970cdcfaf230cb3f2687cc6337c438999c2726ff",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.3299084791177843,
+        "p95": 3.301476351708631,
+        "maximum": 4.043246711693951
+      }
+    },
+    "2022-04-22-20-11-us-ca-ebf-y/pixel5": {
+      "native_keys": 1400,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "b3443bf3c8fdd7d1ededb297284df57f493a4c134fc3bddeba1a0db9f374e7d1",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.1981972488222369,
+        "p95": 0.5206466274082707,
+        "maximum": 0.8989551899905599
+      }
+    },
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5": {
+      "native_keys": 1587,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "67343bf2324d7c7719510a13156b7cc87d9038724f7e0e13942fec89603c932a",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.18300039560331496,
+        "p95": 0.49159337032465833,
+        "maximum": 0.5417748943617441
+      }
+    },
+    "2022-04-27-18-16-us-ca-ebf-zz/pixel5": {
+      "native_keys": 1315,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "ffbd7f68330912465127bb47d88b3c7f0ffa5531d8b875bebbabe2c050b3a6f4",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.18985362149292978,
+        "p95": 0.658693589193569,
+        "maximum": 0.7386823780230192
+      }
+    },
+    "2022-04-27-19-23-us-ca-ebf-xx/pixel5": {
+      "native_keys": 1382,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "1d7275922bcfbdb355c41224e6e2ab42429700c53997d56e9804c3157847fc0f",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.1426402881038487,
+        "p95": 0.6650569682540055,
+        "maximum": 2.793219247258367
+      }
+    },
+    "2023-04-27-19-25-us-ca-mtv-pe1/pixel5": {
+      "native_keys": 1357,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "0a637e8be755a0bf40085f2e495545bdd315225aff87a396b4c846d640783ed2",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.11379795323138894,
+        "p95": 0.26250001998374484,
+        "maximum": 0.311032093430043
+      }
+    },
+    "2023-04-27-20-55-us-ca-sjc-q/pixel5": {
+      "native_keys": 1380,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "15c314816302fffe31df65a0865da5142e00c231cf8439b15d6412c71068ff6a",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.09130037282742606,
+        "p95": 0.21037574277320498,
+        "maximum": 0.37664196591356724
+      }
+    },
+    "2023-05-23-21-06-us-ca-mtv-de1/pixel5": {
+      "native_keys": 1975,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "690ec08acada6519046f3fb4b5d64a8d5c7f26ea238653ff2f24792049231328",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.11789151049061486,
+        "p95": 0.6508609758340127,
+        "maximum": 0.726471959043062
+      }
+    },
+    "2023-05-26-21-23-us-ca-sjc-be2/pixel5": {
+      "native_keys": 1482,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "3d6ec5146039ef736f88d927b7a80c01c81e2a7276f427f822702d40a9203e59",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.19485713245250452,
+        "p95": 0.5886163524717729,
+        "maximum": 0.6263980095350444
+      }
+    },
+    "2023-06-06-22-43-us-ca-sjc-he2/pixel5": {
+      "native_keys": 1608,
+      "control_matches_published": true,
+      "candidate_solution_sha256": "0d10bd10f8fb86f69a6d9cc1279f88fcc2f93614dcec50dce9d565645c9215e3",
+      "candidate_vs_control_displacement_m": {
+        "p50": 0.39867525845591123,
+        "p95": 3.482896947853251,
+        "maximum": 3.636267896137213
+      }
+    }
+  }
+}

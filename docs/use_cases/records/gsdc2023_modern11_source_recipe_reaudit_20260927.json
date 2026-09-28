@@ -1,0 +1,204 @@
+{
+  "status": "all-planned-pairs-audited",
+  "official_score": false,
+  "heldout": false,
+  "plan_sha256": "7a69e33ad1fc34977c37052a2fc87c91a72e9a17d8f871c074fe858a4264ae8c",
+  "expected_pairs": 11,
+  "audited_pairs": 11,
+  "native_recipe_effects_verified": true,
+  "height_map_group_independence_verified": true,
+  "aggregation": "unweighted mean of per-phone (P50 + P95) / 2",
+  "runs": {
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\00\\comparison.json",
+      "comparison_sha256": "6317da345475ab01a3098b0812323e50f71c5691d6d8fe372f38a5fc83ab966f",
+      "control": {
+        "truth_keys": 1165,
+        "p50_m": 0.38461770874556145,
+        "p95_m": 0.7447204592891215,
+        "phone_score_m": 0.5646690840173414
+      },
+      "candidate": {
+        "truth_keys": 1165,
+        "p50_m": 0.3897477408712836,
+        "p95_m": 0.8223562267235824,
+        "phone_score_m": 0.606051983797433
+      },
+      "delta_phone_score_m": 0.041382899780091575
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\01\\comparison.json",
+      "comparison_sha256": "e8495e0de7c501c3fb018b33108b969cc99a2fec86c9bde4003b269c960635fd",
+      "control": {
+        "truth_keys": 2162,
+        "p50_m": 0.45504132069020553,
+        "p95_m": 0.7810488346663994,
+        "phone_score_m": 0.6180450776783024
+      },
+      "candidate": {
+        "truth_keys": 2162,
+        "p50_m": 0.37604790562583407,
+        "p95_m": 0.588032935678196,
+        "phone_score_m": 0.482040420652015
+      },
+      "delta_phone_score_m": -0.1360046570262874
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\02\\comparison.json",
+      "comparison_sha256": "ddcccd8119e68dafd417c107d406198b7121f1fbf127956a945257082c356b62",
+      "control": {
+        "truth_keys": 2163,
+        "p50_m": 0.6157237445547542,
+        "p95_m": 1.168919714266945,
+        "phone_score_m": 0.8923217294108496
+      },
+      "candidate": {
+        "truth_keys": 2163,
+        "p50_m": 0.6121949372045766,
+        "p95_m": 0.8679175554166851,
+        "phone_score_m": 0.7400562463106308
+      },
+      "delta_phone_score_m": -0.1522654831002188
+    },
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\03\\comparison.json",
+      "comparison_sha256": "05a12d5b820dc2f51a8ffdc13b753fcc4bb398e0b608c30900f618e31cc7b999",
+      "control": {
+        "truth_keys": 1193,
+        "p50_m": 0.31976896618021106,
+        "p95_m": 0.6090050514390045,
+        "phone_score_m": 0.4643870088096078
+      },
+      "candidate": {
+        "truth_keys": 1193,
+        "p50_m": 0.3079179006318949,
+        "p95_m": 0.746187098383504,
+        "phone_score_m": 0.5270524995076995
+      },
+      "delta_phone_score_m": 0.06266549069809169
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\04\\comparison.json",
+      "comparison_sha256": "0a81e73472a25f63dffdbb83f26790fef9c227c245db330ac9e63c5b82422695",
+      "control": {
+        "truth_keys": 1102,
+        "p50_m": 0.714737162699532,
+        "p95_m": 1.1804283659090749,
+        "phone_score_m": 0.9475827643043034
+      },
+      "candidate": {
+        "truth_keys": 1102,
+        "p50_m": 0.60304955944596,
+        "p95_m": 1.0321719056147378,
+        "phone_score_m": 0.8176107325303489
+      },
+      "delta_phone_score_m": -0.12997203177395455
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\05\\comparison.json",
+      "comparison_sha256": "ca08e0dff38088ec90ee5836f2c762b919feb440aaad0d0fb7ed4788bef70e62",
+      "control": {
+        "truth_keys": 2323,
+        "p50_m": 0.4403794375720713,
+        "p95_m": 0.8325985948933882,
+        "phone_score_m": 0.6364890162327297
+      },
+      "candidate": {
+        "truth_keys": 2323,
+        "p50_m": 0.36559199388330993,
+        "p95_m": 0.7902525634671653,
+        "phone_score_m": 0.5779222786752376
+      },
+      "delta_phone_score_m": -0.05856673755749209
+    },
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\06\\comparison.json",
+      "comparison_sha256": "99394474da907b4f37d16166cbdfabaded33300b6bafba66f2562266704ed4f5",
+      "control": {
+        "truth_keys": 1383,
+        "p50_m": 0.3403565599629887,
+        "p95_m": 0.547571565199887,
+        "phone_score_m": 0.44396406258143783
+      },
+      "candidate": {
+        "truth_keys": 1383,
+        "p50_m": 0.29145231219956974,
+        "p95_m": 0.5723892914877545,
+        "phone_score_m": 0.4319208018436621
+      },
+      "delta_phone_score_m": -0.01204326073777573
+    },
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\07\\comparison.json",
+      "comparison_sha256": "a01a30270f58968f1769efb58e3e42b2dbfd02a931c8bad7637240eec8b39f5b",
+      "control": {
+        "truth_keys": 1399,
+        "p50_m": 0.5791807625910254,
+        "p95_m": 0.9082571555509914,
+        "phone_score_m": 0.7437189590710084
+      },
+      "candidate": {
+        "truth_keys": 1399,
+        "p50_m": 0.49834567494584797,
+        "p95_m": 0.9313685652017711,
+        "phone_score_m": 0.7148571200738095
+      },
+      "delta_phone_score_m": -0.028861838997198852
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\08\\comparison.json",
+      "comparison_sha256": "331ee331c47348b1f2d2543bd30fa64d0108a39bdba24f84f3ee2efd84b795cf",
+      "control": {
+        "truth_keys": 1258,
+        "p50_m": 0.5432232606335665,
+        "p95_m": 0.7684384060153744,
+        "phone_score_m": 0.6558308333244705
+      },
+      "candidate": {
+        "truth_keys": 1258,
+        "p50_m": 0.2999222877878628,
+        "p95_m": 0.5709732105122525,
+        "phone_score_m": 0.43544774915005763
+      },
+      "delta_phone_score_m": -0.22038308417441282
+    },
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\09\\comparison.json",
+      "comparison_sha256": "2da919a05e9c66fdb62e140ee47e4a9dd240840801bff389c0ab302e517b3a35",
+      "control": {
+        "truth_keys": 1650,
+        "p50_m": 0.8239636699504693,
+        "p95_m": 1.0364060015047016,
+        "phone_score_m": 0.9301848357275855
+      },
+      "candidate": {
+        "truth_keys": 1650,
+        "p50_m": 0.7479450962208467,
+        "p95_m": 0.9921852414774829,
+        "phone_score_m": 0.8700651688491647
+      },
+      "delta_phone_score_m": -0.06011966687842074
+    },
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\runs\\10\\comparison.json",
+      "comparison_sha256": "1a5e253383b8ea062bfc79437fcb6711cc67f8dfc8edcb18bc532e0019967c2f",
+      "control": {
+        "truth_keys": 1601,
+        "p50_m": 0.33640877415948206,
+        "p95_m": 1.263900067179752,
+        "phone_score_m": 0.8001544206696171
+      },
+      "candidate": {
+        "truth_keys": 1601,
+        "p50_m": 0.3346750641899071,
+        "p95_m": 1.0797638224787296,
+        "phone_score_m": 0.7072194433343184
+      },
+      "delta_phone_score_m": -0.09293497733529865
+    }
+  },
+  "control_mean_m": 0.6997588901661139,
+  "candidate_mean_m": 0.6282040404294889,
+  "delta_mean_m": -0.07155484973662507,
+  "regressed_pairs": 2
+}

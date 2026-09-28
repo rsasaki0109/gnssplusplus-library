@@ -1,0 +1,31 @@
+{
+  "status": "historical-laxp-initialization-evidence-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "prior_record_sha256": "b88664e5811f3b5c64f05331722dcde3971fb093fa150e98cc8ba460239f34ea",
+  "current_run_sha256": "81381865670c1df4a3d8f379124377989a32056a11bd264676fe1cfa59d00bfe",
+  "arms": {
+    "control": {
+      "run_sha256": "c6d89e9e315b65b26931bc0b03c7746968cf883fd8c0b983d0d8fa76de86817c",
+      "summary_sha256": "3eb90fc9bed99d48e2ef3d82fc788392e3495710e9550afaac6c9bf42db257f8",
+      "solution_sha256": "0ad3e422cb94eb4fc1ad62a34ac682bdc03ca501d5cc193a96ae1b68728cf510",
+      "binary_sha256": "61a713c180acebe091513ca9f2754ef3f699fb144f10e2c71f44bc1bae72719e",
+      "max_accel_bias_mps2": 0.0543865039516651,
+      "max_gyro_bias_radps": 0.00047071551139775343,
+      "attitude_seeds": 4515,
+      "prior_wall_s": 495.8536067008972
+    },
+    "candidate": {
+      "run_sha256": "27a5c1e11dba084d9f235e8db268702108d4320554993af32e9e9193f3481bd7",
+      "summary_sha256": "ad41876f9408b0942aeaa908e8165ff3279ccb0960549332f423632927db2e50",
+      "solution_sha256": "0c4952782239a0e98ff0be3a655d0edb1acedde03f20e7b8f77e0cd894bf82e3",
+      "binary_sha256": "61a713c180acebe091513ca9f2754ef3f699fb144f10e2c71f44bc1bae72719e",
+      "max_accel_bias_mps2": 0.054384227060993995,
+      "max_gyro_bias_radps": 0.0004716198090824303,
+      "attitude_seeds": 4515,
+      "prior_wall_s": 506.3453552722931
+    }
+  },
+  "interpretation": "Same raw inputs have completed historical source-initialized multipass solutions with low bias. Multiple settings and binary differ from the present recipe; this does not isolate initialization, prove accuracy, or justify replacing one test route.",
+  "next_isolation": "After both current diagnostic arms finish and pass parity, test the existing --native-epoch-heading-attitude-seeds alone on a pinned diagnostic reference. Preserve biases, factors, noise, and all other recipe flags. This changes heading filling and attitude/lever-arm pose seeds, not an attitude measurement constraint. Do not promote without fixed development-group comparison."
+}

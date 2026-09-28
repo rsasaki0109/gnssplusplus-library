@@ -1,0 +1,89 @@
+{
+  "status": "completed-test-trajectory-diagnostic",
+  "official_score": false,
+  "accuracy_evaluated": false,
+  "truth_consumed": false,
+  "dataset_id": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+  "interpretation": "Trajectory disagreement only; no per-route selection or correction applied",
+  "coordinate_difference_method": "local spherical north/east with mean-latitude cosine",
+  "max_displacement_epoch": 130,
+  "max_displacement_utc": 1649089992434,
+  "max_displacement_m": 4.043246711693963,
+  "max_change_in_displacement_per_epoch_m": 0.4068086456404562,
+  "dt_min_s": 1.0,
+  "dt_max_s": 1.0,
+  "segments_over_2m": [
+    {
+      "first_epoch": 1,
+      "last_epoch": 3,
+      "first_utc": 1649089863434,
+      "last_utc": 1649089865434,
+      "count": 3,
+      "maximum_m": 2.0067493438879382
+    },
+    {
+      "first_epoch": 10,
+      "last_epoch": 202,
+      "first_utc": 1649089872434,
+      "last_utc": 1649090064434,
+      "count": 193,
+      "maximum_m": 4.043246711693963
+    }
+  ],
+  "initialization_byte_identical": true,
+  "gnss_first_summary_identical": false,
+  "runs": {
+    "control": {
+      "solution_sha256": "f67c74e3c15f301b03174b3118e5bca8b78be5b677bf5202dab37df60e173328",
+      "summary_sha256": "b3c9a37552395d99e9635d26dcd89a17d5e211bf31add354e73df4d01b0ad63f",
+      "initialization_sha256": "a4d7861eed851ff536b8c73256f7231c178e5edd5e20ad52aa8ac1af7610dcb4",
+      "loader_clock_resets": 0,
+      "tdcp": {
+        "sigma_m": 0.03,
+        "official_huber_k": 4,
+        "factors_inserted": 38789,
+        "residual_rms_m": 0.21476898238935258,
+        "max_abs_residual_m": 24.680003251952257,
+        "max_residual_previous_epoch": 2107,
+        "max_residual_current_epoch": 2108,
+        "optimized_accel_bias_max_norm_mps2": 0.011982842427441477,
+        "optimized_gyro_bias_max_norm_radps": 0.0007535528951585799
+      },
+      "clock_solver": {
+        "termination_branch_reason": "outer_convergence_tolerance",
+        "accepted_outer_iterations": 23,
+        "indeterminate_linear_solve_count": 0,
+        "clock_c0d_clock_jump_skips": 0,
+        "clock_c0d_gap_skips": 0
+      },
+      "output_speed_p95_mps": 22.839408804707816,
+      "output_speed_max_mps": 27.518399383761093
+    },
+    "candidate": {
+      "solution_sha256": "493e54a978b3953d3afd01ad970cdcfaf230cb3f2687cc6337c438999c2726ff",
+      "summary_sha256": "1e009107f3667eec39688d92db32c0ab61bb9488649c3577ae8978fe7397a47f",
+      "initialization_sha256": "a4d7861eed851ff536b8c73256f7231c178e5edd5e20ad52aa8ac1af7610dcb4",
+      "loader_clock_resets": 0,
+      "tdcp": {
+        "sigma_m": 0.0011642064355417425,
+        "official_huber_k": 0.5,
+        "factors_inserted": 38789,
+        "residual_rms_m": 0.21626728576050636,
+        "max_abs_residual_m": 24.78928458585915,
+        "max_residual_previous_epoch": 2107,
+        "max_residual_current_epoch": 2108,
+        "optimized_accel_bias_max_norm_mps2": 0.013398411523398894,
+        "optimized_gyro_bias_max_norm_radps": 0.0007539555405052989
+      },
+      "clock_solver": {
+        "termination_branch_reason": "outer_convergence_tolerance",
+        "accepted_outer_iterations": 159,
+        "indeterminate_linear_solve_count": 0,
+        "clock_c0d_clock_jump_skips": 0,
+        "clock_c0d_gap_skips": 0
+      },
+      "output_speed_p95_mps": 22.839324925796163,
+      "output_speed_max_mps": 27.519377906171236
+    }
+  }
+}

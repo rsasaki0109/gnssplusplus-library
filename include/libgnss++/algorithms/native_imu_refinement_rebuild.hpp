@@ -9,6 +9,55 @@
 namespace libgnss::native_imu_refinement {
 struct DopplerMaskReport { std::size_t candidates = 0, retained = 0, rejected = 0; };
 
+// With position and velocity fixed by the IMU pass, each corrected raw D row
+// directly observes clock drift. Take one median per satellite, then a median
+// across satellites so multi-band satellites do not receive extra weight.
+// No time interpolation or GNSS-optimizer drift fallback is permitted.
+inline std::vector<double> observedClockDrift(
+        const Handoff& handoff, const FGOProcessor::FGOProblem& geometry) {
+    const auto n = handoff.observations.size();
+    if (!n || geometry.epochs.size()!=n || handoff.velocity_ecef_mps.size()!=n)
+        throw std::invalid_argument("Observed drift requires complete epoch geometry");
+    using Key = std::tuple<std::size_t,SatelliteId,SignalType>;
+    std::set<Key> raw_keys, seen;
+    std::vector<std::map<SatelliteId,std::vector<double>>> samples(n);
+    for (std::size_t i=0;i<n;++i) {
+        const auto& a=handoff.observations[i]; const auto& b=geometry.epochs[i];
+        if (a.raw_source_index!=i || b.raw_source_index!=i ||
+            a.raw_utc_time_millis!=b.raw_utc_time_millis || (a.time-b.time)!=0.0 ||
+            !handoff.velocity_ecef_mps[i].allFinite())
+            throw std::invalid_argument("Observed drift epoch identity mismatch");
+        for (const auto& row:a.observations)
+            if (!raw_keys.emplace(i,row.satellite,row.signal).second)
+                throw std::invalid_argument("Observed drift duplicate raw row");
+    }
+    for (const auto& row:geometry.undifferenced_doppler_factors) {
+        const auto i=row.epoch_index;
+        const Key key{i,row.satellite,row.signal};
+        if (i>=n || !row.los.allFinite() || std::abs(row.los.norm()-1)>1e-6 ||
+            !std::isfinite(row.residual_mps) || !raw_keys.count(key) ||
+            !seen.insert(key).second)
+            throw std::invalid_argument("Observed drift invalid corrected D row");
+        const double value=row.residual_mps-row.los.dot(handoff.velocity_ecef_mps[i]);
+        if (!std::isfinite(value)) throw std::invalid_argument("Nonfinite observed drift");
+        samples[i][row.satellite].push_back(value);
+    }
+    const auto median=[](std::vector<double> values) {
+        std::sort(values.begin(),values.end());
+        const auto m=values.size()/2;
+        return values.size()%2 ? values[m] : 0.5*values[m-1]+0.5*values[m];
+    };
+    std::vector<double> drift;
+    for (std::size_t i=0;i<n;++i) {
+        if (samples[i].size()<3)
+            throw std::invalid_argument("Observed drift needs three satellites at epoch "+std::to_string(i));
+        std::vector<double> satellites;
+        for (const auto& entry:samples[i]) satellites.push_back(median(entry.second));
+        drift.push_back(median(std::move(satellites)));
+    }
+    return drift;
+}
+
 // Input D rows are corrected raw measurements, evaluated at the warm position;
 // they are not optimized velocities. Apply the source residual threshold BEFORE
 // rebuilding adjacent P/D and L/D masks. This also preserves NaNs for misses.
@@ -64,6 +113,7 @@ inline DopplerMaskReport maskDoppler(Handoff& handoff,
 struct Rebuild {
     FGOProcessor::FGOProblem problem;
     DopplerMaskReport doppler_mask;
+    std::size_t observed_drift_epochs = 0;
 };
 
 // Reconstruct receiver-dependent orbit geometry, atmosphere, SNR weights and
@@ -76,7 +126,8 @@ inline Rebuild rebuildHandoff(const std::vector<ObservationData>& raw,
                        Handoff handoff,
                        const std::vector<Vector3d>& velocity_nav,
                        const std::vector<double>& clock_drift_mps,
-                       FGOProcessor::FGOConfig config) {
+                       FGOProcessor::FGOConfig config,
+                       bool reestimate_clock_drift = false) {
     if (!config.use_native_phase171_raw_p_no_doppler_imu_main ||
         !config.use_upstream_observable_quality || !config.use_imu ||
         !config.pose3_lever_arm_body_m.allFinite() || config.pose3_lever_arm_body_m.norm()!=0.0)
@@ -96,6 +147,16 @@ inline Rebuild rebuildHandoff(const std::vector<ObservationData>& raw,
     geometry_config.native_imu_observation_phase=NativeImuObservationPhase::Legacy;
     geometry_config.use_upstream_observable_quality=true;
     geometry_config.use_upstream_absolute_doppler_residual_screen=false;
+    if (reestimate_clock_drift) {
+        // Supplying receiver velocities activates the builder's refinement
+        // screen even when the flag above is false. This geometry-only pass
+        // must retain finite D rows before estimating drift; otherwise the
+        // unobserved no-D drift would reject the very measurements needed to
+        // estimate it. The final build and mask below keep their original
+        // thresholds. This temporary problem is never optimized.
+        geometry_config.upstream_absolute_doppler_residual_threshold_mps=
+            std::numeric_limits<double>::max();
+    }
     geometry_config.retain_native_pseudorange_remasking_pool=false;
     geometry_config.use_pseudorange_factors=false;
     geometry_config.use_tdcp_factors=false;
@@ -112,6 +173,13 @@ inline Rebuild rebuildHandoff(const std::vector<ObservationData>& raw,
     const auto m=intervals.size()/2;
     const double median=intervals.size()%2 ? intervals[m] : (intervals[m-1]+intervals[m])*0.5;
     Rebuild out;
+    auto final_drift=clock_drift_mps;
+    if (reestimate_clock_drift) {
+        final_drift=observedClockDrift(handoff,geometry);
+        for (std::size_t i=0;i<raw.size();++i)
+            handoff.observations[i].receiver_clock_drift_mps=final_drift[i];
+        out.observed_drift_epochs=final_drift.size();
+    }
     out.doppler_mask=maskDoppler(handoff,geometry,std::round(median*100.0)/100.0,
                                config.upstream_absolute_doppler_residual_threshold_mps);
     out.problem=FGOProcessor(config).buildPseudorangeProblem(
@@ -135,7 +203,7 @@ inline Rebuild rebuildHandoff(const std::vector<ObservationData>& raw,
     out.problem.imu.init_accel_bias.setZero();
     out.problem.imu.init_gyro_bias.setZero();
     out.problem.native_source_clock_c0d_gnss_first_c_handoff_m=handoff.clock_components_m;
-    out.problem.native_source_clock_c0d_gnss_first_d_handoff_mps=clock_drift_mps;
+    out.problem.native_source_clock_c0d_gnss_first_d_handoff_mps=final_drift;
     out.problem.clock_jumps=source.clock_jumps;
     if (config.use_native_phase213_main_doppler)
         out.problem.native_phase213_main_doppler_rows=std::move(out.problem.undifferenced_doppler_factors);
@@ -147,9 +215,11 @@ inline Rebuild rebuild(const std::vector<ObservationData>& raw,
                        const NavigationData& nav,
                        const FGOProcessor::FGOProblem& source,
                        const FGOProcessor::FGOResult& result,
-                       FGOProcessor::FGOConfig config) {
+                       FGOProcessor::FGOConfig config,
+                       bool reestimate_clock_drift = false) {
     return rebuildHandoff(raw,nav,source,fromResult(raw,source,result),
-                          result.epoch_velocity_nav_mps,result.epoch_clock_drift_mps,config);
+                          result.epoch_velocity_nav_mps,result.epoch_clock_drift_mps,config,
+                          reestimate_clock_drift);
 }
 
 inline Rebuild rebuildInitial(const std::vector<ObservationData>& raw,

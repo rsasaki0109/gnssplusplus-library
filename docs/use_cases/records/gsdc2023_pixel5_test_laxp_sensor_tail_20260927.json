@@ -1,0 +1,386 @@
+{
+  "status": "read-only-raw-sensor-tail-diagnostic",
+  "truth_consumed": false,
+  "official_score": false,
+  "raw_sha256": "6e61db67a63224d0ba70cec8477103acda441e1167e3a374f4417b485e34ae02",
+  "imu_sha256": "1f67d314db47ad94e674c7a07424fc3b5ab68cf62a3d5c0e35cbfb0ca77a68c9",
+  "raw_first_utc": 1645715413429,
+  "raw_last_utc": 1645719927429,
+  "scope": "Raw sensor summaries; native observable selection and factor admission are not reproduced",
+  "units": {
+    "acceleration": "m/s2",
+    "gyroscope": "rad/s"
+  },
+  "windows": [
+    {
+      "from_s": 0,
+      "to_s": 300,
+      "gnss_epochs": 300,
+      "raw_rows_per_epoch_median": 31.0,
+      "unique_satellites_per_epoch_median": 20.0,
+      "cn0_median_dbhz": 33.9,
+      "cn0_p10_dbhz": 26.1,
+      "adr_valid_fraction": 0.8358963329390257,
+      "rate_uncertainty_p95_mps": 0.8585000038146973,
+      "imu": {
+        "UncalAccel": {
+          "rows": 26212,
+          "norm_p50": 9.777855266259849,
+          "norm_p95": 10.321007172274488,
+          "norm_max": 14.162683084685217,
+          "axis_mean": [
+            -0.1322017166865176,
+            9.646135588150466,
+            -1.4233473442998985
+          ],
+          "max_gap_ms": 29.0
+        },
+        "UncalGyro": {
+          "rows": 15255,
+          "norm_p50": 0.015663944862025433,
+          "norm_p95": 0.3565813328747573,
+          "norm_max": 0.6110157481785786,
+          "axis_mean": [
+            0.000948114624644379,
+            -0.015618889934077354,
+            0.002611367019801377
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 3000,
+      "to_s": 3300,
+      "gnss_epochs": 300,
+      "raw_rows_per_epoch_median": 33.0,
+      "unique_satellites_per_epoch_median": 21.0,
+      "cn0_median_dbhz": 33.5,
+      "cn0_p10_dbhz": 25.5,
+      "adr_valid_fraction": 0.8102017822390659,
+      "rate_uncertainty_p95_mps": 0.8865499734878469,
+      "imu": {
+        "UncalAccel": {
+          "rows": 26502,
+          "norm_p50": 9.782192908217667,
+          "norm_p95": 10.089379125636869,
+          "norm_max": 13.527244855482797,
+          "axis_mean": [
+            -0.22639445592082938,
+            9.653575842302468,
+            -1.5089015264556602
+          ],
+          "max_gap_ms": 24.0
+        },
+        "UncalGyro": {
+          "rows": 15273,
+          "norm_p50": 0.00489154805092836,
+          "norm_p95": 0.04977866405471407,
+          "norm_max": 0.2775377587891682,
+          "axis_mean": [
+            -0.0002922552064754795,
+            0.0003871838966424409,
+            0.0003502182978949781
+          ],
+          "max_gap_ms": 21.0
+        }
+      }
+    },
+    {
+      "from_s": 4000,
+      "to_s": 4200,
+      "gnss_epochs": 200,
+      "raw_rows_per_epoch_median": 34.0,
+      "unique_satellites_per_epoch_median": 22.0,
+      "cn0_median_dbhz": 33.5,
+      "cn0_p10_dbhz": 25.7,
+      "adr_valid_fraction": 0.8177114133648729,
+      "rate_uncertainty_p95_mps": 0.8644999861717224,
+      "imu": {
+        "UncalAccel": {
+          "rows": 15609,
+          "norm_p50": 9.78897234025363,
+          "norm_p95": 10.350881738878716,
+          "norm_max": 16.826392363875136,
+          "axis_mean": [
+            -0.22009012958930105,
+            9.66295098308668,
+            -1.4544328395900354
+          ],
+          "max_gap_ms": 24.0
+        },
+        "UncalGyro": {
+          "rows": 10182,
+          "norm_p50": 0.007350024375318953,
+          "norm_p95": 0.06958920409434416,
+          "norm_max": 0.4629305922358527,
+          "axis_mean": [
+            -0.00027235257010606957,
+            0.00028627091655175803,
+            5.636329300235713e-05
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4200,
+      "to_s": 4250,
+      "gnss_epochs": 50,
+      "raw_rows_per_epoch_median": 33.0,
+      "unique_satellites_per_epoch_median": 21.0,
+      "cn0_median_dbhz": 34.5,
+      "cn0_p10_dbhz": 25.9,
+      "adr_valid_fraction": 0.8409506398537477,
+      "rate_uncertainty_p95_mps": 0.934499979019165,
+      "imu": {
+        "UncalAccel": {
+          "rows": 4498,
+          "norm_p50": 9.786207755993363,
+          "norm_p95": 10.023412889092976,
+          "norm_max": 11.941964601954487,
+          "axis_mean": [
+            -0.2336583595932859,
+            9.701120357047575,
+            -1.21095405013546
+          ],
+          "max_gap_ms": 24.0
+        },
+        "UncalGyro": {
+          "rows": 2545,
+          "norm_p50": 0.004901074053840154,
+          "norm_p95": 0.03024910501422438,
+          "norm_max": 0.1055486107050142,
+          "axis_mean": [
+            -0.00027716142933988206,
+            0.000381509523194499,
+            -0.00011532892200392922
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4250,
+      "to_s": 4300,
+      "gnss_epochs": 50,
+      "raw_rows_per_epoch_median": 31.0,
+      "unique_satellites_per_epoch_median": 20.0,
+      "cn0_median_dbhz": 33.6,
+      "cn0_p10_dbhz": 25.490000000000002,
+      "adr_valid_fraction": 0.7872611464968153,
+      "rate_uncertainty_p95_mps": 0.934499979019165,
+      "imu": {
+        "UncalAccel": {
+          "rows": 2831,
+          "norm_p50": 9.825970290716599,
+          "norm_p95": 10.777811545236997,
+          "norm_max": 13.967412061121898,
+          "axis_mean": [
+            -0.31218453828939596,
+            9.627305111621336,
+            -1.6935381887339103
+          ],
+          "max_gap_ms": 20.0
+        },
+        "UncalGyro": {
+          "rows": 2546,
+          "norm_p50": 0.030206651764140474,
+          "norm_p95": 0.12040451594283721,
+          "norm_max": 0.40554670532840364,
+          "axis_mean": [
+            -0.0004276650927454831,
+            0.010937548865659858,
+            -0.001666814064347997
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4300,
+      "to_s": 4350,
+      "gnss_epochs": 50,
+      "raw_rows_per_epoch_median": 32.0,
+      "unique_satellites_per_epoch_median": 21.0,
+      "cn0_median_dbhz": 33.7,
+      "cn0_p10_dbhz": 25.6,
+      "adr_valid_fraction": 0.8158058494088364,
+      "rate_uncertainty_p95_mps": 0.9239999651908876,
+      "imu": {
+        "UncalAccel": {
+          "rows": 2820,
+          "norm_p50": 9.819102239968942,
+          "norm_p95": 10.907565035367142,
+          "norm_max": 14.267801086817421,
+          "axis_mean": [
+            -0.33783176794822695,
+            9.70013961464539,
+            -1.1566794332137234
+          ],
+          "max_gap_ms": 20.0
+        },
+        "UncalGyro": {
+          "rows": 2545,
+          "norm_p50": 0.039547937969059144,
+          "norm_p95": 0.38229088407001793,
+          "norm_max": 0.46445333985563514,
+          "axis_mean": [
+            -0.0012323753839056976,
+            0.021854950963359526,
+            -0.0030090528248408644
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4350,
+      "to_s": 4400,
+      "gnss_epochs": 50,
+      "raw_rows_per_epoch_median": 31.0,
+      "unique_satellites_per_epoch_median": 20.0,
+      "cn0_median_dbhz": 34.4,
+      "cn0_p10_dbhz": 24.7,
+      "adr_valid_fraction": 0.8179503500954806,
+      "rate_uncertainty_p95_mps": 1.0040000677108765,
+      "imu": {
+        "UncalAccel": {
+          "rows": 5090,
+          "norm_p50": 9.779549008541078,
+          "norm_p95": 9.875664843838967,
+          "norm_max": 9.92748031062991,
+          "axis_mean": [
+            -0.2342562792031434,
+            9.672923592337916,
+            -1.3991902309430255
+          ],
+          "max_gap_ms": 10.0
+        },
+        "UncalGyro": {
+          "rows": 2545,
+          "norm_p50": 0.0029533058229322556,
+          "norm_p95": 0.006012270168569175,
+          "norm_max": 0.009326679640839849,
+          "axis_mean": [
+            -0.00028058170615324164,
+            0.0004078515474931238,
+            0.00017623363376817288
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4400,
+      "to_s": 4450,
+      "gnss_epochs": 50,
+      "raw_rows_per_epoch_median": 32.0,
+      "unique_satellites_per_epoch_median": 20.0,
+      "cn0_median_dbhz": 33.7,
+      "cn0_p10_dbhz": 25.5,
+      "adr_valid_fraction": 0.8209606986899564,
+      "rate_uncertainty_p95_mps": 0.9239999651908876,
+      "imu": {
+        "UncalAccel": {
+          "rows": 3511,
+          "norm_p50": 9.800988065748117,
+          "norm_p95": 10.711879888437716,
+          "norm_max": 15.633186302933256,
+          "axis_mean": [
+            -0.4930824735631557,
+            9.63202198348049,
+            -1.583387343744432
+          ],
+          "max_gap_ms": 20.0
+        },
+        "UncalGyro": {
+          "rows": 2546,
+          "norm_p50": 0.04189742907859281,
+          "norm_p95": 0.3111359199975203,
+          "norm_max": 0.4942670111385762,
+          "axis_mean": [
+            -0.001432168123566379,
+            0.05982602294952081,
+            -0.009133798019560095
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4450,
+      "to_s": 4480,
+      "gnss_epochs": 30,
+      "raw_rows_per_epoch_median": 35.0,
+      "unique_satellites_per_epoch_median": 22.0,
+      "cn0_median_dbhz": 33.6,
+      "cn0_p10_dbhz": 26.7,
+      "adr_valid_fraction": 0.8602870813397129,
+      "rate_uncertainty_p95_mps": 0.8029999732971191,
+      "imu": {
+        "UncalAccel": {
+          "rows": 3054,
+          "norm_p50": 9.826198036378855,
+          "norm_p95": 10.162552469693246,
+          "norm_max": 10.791416547317807,
+          "axis_mean": [
+            -0.38691663946914207,
+            9.704144538965291,
+            -1.1817877989019647
+          ],
+          "max_gap_ms": 10.0
+        },
+        "UncalGyro": {
+          "rows": 1527,
+          "norm_p50": 0.21785281672217052,
+          "norm_p95": 0.5136517331300725,
+          "norm_max": 0.6093702817944698,
+          "axis_mean": [
+            -0.0019158482257694827,
+            0.10632642609462999,
+            -0.015492798711794369
+          ],
+          "max_gap_ms": 20.0
+        }
+      }
+    },
+    {
+      "from_s": 4480,
+      "to_s": 4515,
+      "gnss_epochs": 35,
+      "raw_rows_per_epoch_median": 34.0,
+      "unique_satellites_per_epoch_median": 21.0,
+      "cn0_median_dbhz": 32.8,
+      "cn0_p10_dbhz": 26.0,
+      "adr_valid_fraction": 0.8575085324232082,
+      "rate_uncertainty_p95_mps": 0.8636749804019929,
+      "imu": {
+        "UncalAccel": {
+          "rows": 3534,
+          "norm_p50": 9.805080200590776,
+          "norm_p95": 10.220824820637898,
+          "norm_max": 31.955851720669035,
+          "axis_mean": [
+            -0.14108716042357672,
+            2.869702412819389,
+            6.811212650037352
+          ],
+          "max_gap_ms": 11.0
+        },
+        "UncalGyro": {
+          "rows": 1767,
+          "norm_p50": 0.004716793141199404,
+          "norm_p95": 1.370974576675246,
+          "norm_max": 9.520839653899117,
+          "axis_mean": [
+            -0.034769982197498585,
+            -0.04474698163525184,
+            -0.03121794193192417
+          ],
+          "max_gap_ms": 21.0
+        }
+      }
+    }
+  ]
+}

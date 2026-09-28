@@ -1,0 +1,46 @@
+{
+  "status": "may23-modern-three-arms-audited",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "submitted": false,
+  "plan_sha256": "6c21ba66ac1692c7a763118b9e392e480e9baf0de25ad2fe0248199c70663565",
+  "dataset_id": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+  "keys": 1020,
+  "control_matches_published": true,
+  "solution_sha256": {
+    "control": "913debe206e43939251e0a1cf2a06505d066226de0c795cd15a904dc5834a370",
+    "clock_only": "913debe206e43939251e0a1cf2a06505d066226de0c795cd15a904dc5834a370",
+    "candidate": "8bd4d93d62472c5e7c3ea80f82a476d57524a0e5868d13baaf6d478e58cfd354"
+  },
+  "run_evidence": {
+    "control": {
+      "summary_sha256": "d28a7aca3e1e4ebc8ac15f8e0b93aec82025996ddca6f9ea708aacd0f53d262d",
+      "wall_s": 278.12772035598755
+    },
+    "clock_only": {
+      "summary_sha256": "c1be6d655bc1fac6af1a66da8f4dc57f1a23cbeac99ba1c6ac62850cbd96f9f9",
+      "wall_s": 281.2425081729889
+    },
+    "candidate": {
+      "summary_sha256": "3a4c1feb93ae96e054d0d1406e1951b7d302ba26012dfa9199cb20b6602c1ca3",
+      "wall_s": 505.52253770828247
+    }
+  },
+  "displacement_m": {
+    "clock_vs_control": {
+      "p50": 0.0,
+      "p95": 0.0,
+      "maximum": 0.0
+    },
+    "recipe_vs_clock": {
+      "p50": 0.17475056014514484,
+      "p95": 0.32676180900052737,
+      "maximum": 0.40932550536859924
+    },
+    "candidate_vs_control": {
+      "p50": 0.17475056014514484,
+      "p95": 0.32676180900052737,
+      "maximum": 0.40932550536859924
+    }
+  }
+}

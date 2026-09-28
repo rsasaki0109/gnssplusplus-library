@@ -1,0 +1,95 @@
+{
+  "status": "completed-stage-diagnostic",
+  "official_score": false,
+  "truth_consumed": false,
+  "stages": {
+    "gnss-first": {
+      "position_file": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v2_20260926\\candidate_arm\\warm_start\\summary.json.gnss-first.csv",
+      "position_sha256": "2740f6bdf36da3fcd7416602c7f28d14df3dd4e59bdf48e036784e5243787c38",
+      "clock_file": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v2_20260926\\candidate_arm\\warm_start\\summary.json.gnss-first.clocks.csv",
+      "clock_sha256": "3a1a8a4fc2290062a2ec860d5c4a3ae892fdd16f5667eb20aa293185e223ebd2",
+      "epochs": 1165,
+      "max_ecef_step_m": 20771.424443662287,
+      "max_abs_clock_step_m": 16722.00447556653,
+      "diagnostic_selection": "ecef step >100 m OR absolute code clock step >1000 m; reporting only, not inference thresholds",
+      "events": [
+        {
+          "epoch": 264,
+          "previous_utc_ms": 1626296104999,
+          "current_utc_ms": 1626296105999,
+          "ecef_step_m": 7720.412266925271,
+          "clock_step_m": -5911.120296506313,
+          "previous_drift_mps": 111.4460538203103,
+          "current_drift_mps": -11933.636333183786
+        },
+        {
+          "epoch": 265,
+          "previous_utc_ms": 1626296105999,
+          "current_utc_ms": 1626296106999,
+          "ecef_step_m": 7712.629633804406,
+          "clock_step_m": -5902.785033287175,
+          "previous_drift_mps": -11933.636333183786,
+          "current_drift_mps": 128.12525523867922
+        },
+        {
+          "epoch": 389,
+          "previous_utc_ms": 1626296229999,
+          "current_utc_ms": 1626296230999,
+          "ecef_step_m": 18704.09240830798,
+          "clock_step_m": -16718.08708283997,
+          "previous_drift_mps": 111.48771005035692,
+          "current_drift_mps": -33548.0514389597
+        },
+        {
+          "epoch": 390,
+          "previous_utc_ms": 1626296230999,
+          "current_utc_ms": 1626296231999,
+          "ecef_step_m": 18704.93848466512,
+          "clock_step_m": -16722.00447556653,
+          "previous_drift_mps": -33548.0514389597,
+          "current_drift_mps": 104.79155880781312
+        },
+        {
+          "epoch": 557,
+          "previous_utc_ms": 1626296398000,
+          "current_utc_ms": 1626296399000,
+          "ecef_step_m": 20771.424443662287,
+          "clock_step_m": -343.14409260190405,
+          "previous_drift_mps": 147.66761870313405,
+          "current_drift_mps": -833.9489059933819
+        },
+        {
+          "epoch": 558,
+          "previous_utc_ms": 1626296399000,
+          "current_utc_ms": 1626296400000,
+          "ecef_step_m": 20762.485338510658,
+          "clock_step_m": -362.2789758933268,
+          "previous_drift_mps": -833.9489059933819,
+          "current_drift_mps": 109.41603201704464
+        }
+      ]
+    },
+    "imu-initial": {
+      "position_file": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v2_20260926\\candidate_arm\\warm_start\\summary.json.imu-initial.csv",
+      "position_sha256": "e2a200f1d647b624e3d5be60d2abb1e9c88934067d706ac689b43392023123fe",
+      "clock_file": "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v2_20260926\\candidate_arm\\warm_start\\summary.json.imu-initial.clocks.csv",
+      "clock_sha256": "de5d2bbecbeceb02e33b85ede534f98ab74c0cd9c8eb7c7295dd247f9d4a13a9",
+      "epochs": 1165,
+      "max_ecef_step_m": 36.652660709833825,
+      "max_abs_clock_step_m": 46649.75666046353,
+      "diagnostic_selection": "ecef step >100 m OR absolute code clock step >1000 m; reporting only, not inference thresholds",
+      "events": [
+        {
+          "epoch": 423,
+          "previous_utc_ms": 1626296263999,
+          "current_utc_ms": 1626296265000,
+          "ecef_step_m": 5.95498821130349,
+          "clock_step_m": -46649.75666046353,
+          "previous_drift_mps": -59309.90124584588,
+          "current_drift_mps": -33896.40577792515
+        }
+      ]
+    }
+  },
+  "interpretation": "GNSS-only stage contains isolated kilometre-scale position spikes and clock changes. IMU suppresses these position spikes but no-D initial clock retains a large change at epoch 423. The final candidate is still running; no score or causal fix is established."
+}

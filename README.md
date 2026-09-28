@@ -95,9 +95,24 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.121% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` | More fixes, lower Hp95/Vp95; `--preset odaiba` closes Hmed |
 | SPP | PPC SPP adaptive robust + policy gate | No P95 regression with <=1 pp positioning drop |
-| Smartphone GNSS/IMU | Raw-only native FGO, base-surveyed | Sub-meter on all 4 GSDC dev routes (0.30-0.74 m); not a leaderboard result |
+| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.984 m / Public 0.915 m**; 40 drives, 71,936 native output rows |
 
 ### Smartphone GNSS/IMU
+
+Official Google Smartphone Decimeter Challenge 2023-2024 submission
+**56625084** (2026-09-28) scored **Private 0.984 m / Public 0.915 m**,
+improving the previous submission's **1.055 m / 1.133 m**. The submitted
+recipe combines Pixel5 heading initialization with Android clock handling
+and observation-model updates for supported phones. All 40 drives and
+71,936 output rows were checked against native solver results.
+
+The recipe uses raw GNSS/IMU, broadcast navigation, base observations, and
+training-derived height constraints where configured; evaluation ground
+truth is not used during inference. These official scores are separate from
+the development-route measurements below. The 0.928 m Private target remains
+unmet; work is paused at the sub-meter milestone. See the
+[official score record](docs/use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json)
+and [experiment and validation log](docs/gsdc2023_native_taroz_goal.md).
 
 Base-surveyed correction on the GSDC dev routes (Pixel5, `(P50+P95)/2` m):
 

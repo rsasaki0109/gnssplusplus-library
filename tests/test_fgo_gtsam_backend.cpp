@@ -7931,6 +7931,32 @@ TEST(FGOGtsamPhase171NoDopplerImuMainTest,
     }
     ASSERT_TRUE(result.diagnostics.converged);
     EXPECT_TRUE(result.diagnostics.native_phase171_no_doppler_imu_main_enabled);
+    EXPECT_TRUE(result.epoch_accel_bias_mps2.empty());
+    EXPECT_TRUE(result.epoch_gyro_bias_radps.empty());
+    auto diagnostic_config = config;
+    diagnostic_config.export_imu_bias_diagnostic = true;
+    const auto diagnostic = FGOProcessor(diagnostic_config).optimizeProblem(problem);
+    ASSERT_TRUE(diagnostic.diagnostics.converged);
+    ASSERT_EQ(diagnostic.epoch_accel_bias_mps2.size(), problem.epochs.size());
+    ASSERT_EQ(diagnostic.epoch_gyro_bias_radps.size(), problem.epochs.size());
+    ASSERT_EQ(diagnostic.solution.size(), result.solution.size());
+    EXPECT_DOUBLE_EQ(diagnostic.diagnostics.final_cost, result.diagnostics.final_cost);
+    EXPECT_EQ(diagnostic.diagnostics.iterations, result.diagnostics.iterations);
+    double accel_max = 0.0, gyro_max = 0.0;
+    for (std::size_t i = 0; i < problem.epochs.size(); ++i) {
+        EXPECT_TRUE(diagnostic.epoch_accel_bias_mps2[i].allFinite());
+        EXPECT_TRUE(diagnostic.epoch_gyro_bias_radps[i].allFinite());
+        accel_max = std::max(accel_max, diagnostic.epoch_accel_bias_mps2[i].norm());
+        gyro_max = std::max(gyro_max, diagnostic.epoch_gyro_bias_radps[i].norm());
+        for (int axis = 0; axis < 3; ++axis) {
+            EXPECT_DOUBLE_EQ(diagnostic.solution.solutions[i].position_ecef[axis],
+                             result.solution.solutions[i].position_ecef[axis]);
+            EXPECT_DOUBLE_EQ(diagnostic.epoch_attitude_rpy_rad[i][axis],
+                             result.epoch_attitude_rpy_rad[i][axis]);
+        }
+    }
+    EXPECT_DOUBLE_EQ(accel_max, diagnostic.diagnostics.optimized_accel_bias_max_norm_mps2);
+    EXPECT_DOUBLE_EQ(gyro_max, diagnostic.diagnostics.optimized_gyro_bias_max_norm_radps);
     EXPECT_EQ(result.diagnostics
                   .native_phase201_source_inclusive_forward_imu_schedule_enabled,
               phase201_schedule);

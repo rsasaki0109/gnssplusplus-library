@@ -19,6 +19,26 @@ struct Handoff {
     std::vector<FGOProcessor::EpochClockBiasComponentsM> clock_components_m;
 };
 
+// A no-D solve does not directly observe per-epoch drift. CCDD observes
+// adjacent drift sums, leaving an alternating mode at uniform sampling.
+// Reuse the same-run GNSS Doppler stage's complete drift vector when that
+// solve is used only to initialize a subsequent Doppler observation rebuild.
+inline void useSameRunGnssClockDrift(
+    const FGOProcessor::FGOProblem& source,
+    FGOProcessor::FGOResult& result) {
+    const auto& drift = source.native_source_clock_c0d_gnss_first_d_handoff_mps;
+    const auto n = source.epochs.size();
+    if (!n || drift.size() != n || result.solution.solutions.size() != n ||
+        result.epoch_clock_drift_mps.size() != n)
+        throw std::invalid_argument("No-D refinement needs complete same-run GNSS drift");
+    for (std::size_t i = 0; i < n; ++i) {
+        if (!std::isfinite(drift[i]) ||
+            (source.epochs[i].time - result.solution.solutions[i].time) != 0.0)
+            throw std::invalid_argument("No-D refinement GNSS drift identity/value mismatch");
+    }
+    result.epoch_clock_drift_mps = drift;
+}
+
 // This boundary accepts only complete, converged, same-run IMU output. It has
 // no file input, nearest-time join, missing-state fill, or position-offset step.
 // The caller must retain the original nav frame and rebuild with SPP disabled.

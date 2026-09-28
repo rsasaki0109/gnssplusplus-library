@@ -1,0 +1,48 @@
+{
+  "status": "audited-imu-state-export",
+  "truth_consumed": false,
+  "accuracy_evaluated": false,
+  "trajectory_byte_parity": true,
+  "reference_binary_sha256": "82ef0163cbaa8794c67e6bf391aaaaf23a206564e300b3cd06d83ce15e3c2903",
+  "diagnostic_binary_sha256": "0630b4eb46432f96db589ee7deba2dc17dddc001f7b34581ae27c9fbf2332575",
+  "reference_run_sha256": "c324d43450fa0f730c4f752f9e69b960566be66db27140af41553afb8f029559",
+  "summary_sha256": "589d253c8a0db251b9cb62061c78c6411098da3c69d959ae1ba9ed5205134fae",
+  "states": {
+    "accel_bias_mps2": {
+      "first_norm": 1.0098721704416755,
+      "last_norm": 18.07761508350683,
+      "maximum_norm": 18.493567463816373,
+      "maximum_epoch": 4343,
+      "maximum_utc": 1645719756429
+    },
+    "gyro_bias_radps": {
+      "first_norm": 0.0006254396360449127,
+      "last_norm": 0.003431417144046766,
+      "maximum_norm": 0.0034314279595408616,
+      "maximum_epoch": 4497,
+      "maximum_utc": 1645719910429
+    },
+    "accel_bias_thresholds_mps2": {
+      "0.1": {
+        "count": 4515,
+        "first_epoch": 0,
+        "last_epoch": 4514
+      },
+      "1.0": {
+        "count": 4515,
+        "first_epoch": 0,
+        "last_epoch": 4514
+      },
+      "5.0": {
+        "count": 2972,
+        "first_epoch": 1543,
+        "last_epoch": 4514
+      },
+      "10.0": {
+        "count": 2074,
+        "first_epoch": 2441,
+        "last_epoch": 4514
+      }
+    }
+  }
+}

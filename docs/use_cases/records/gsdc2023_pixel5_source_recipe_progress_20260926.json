@@ -1,0 +1,77 @@
+{
+  "status": "partial-development-evaluation",
+  "official_score": false,
+  "promoted": false,
+  "checked_unix": 1790394935.703934,
+  "expected_pairs": 15,
+  "audited_pairs": 3,
+  "aggregate_score": null,
+  "selection": "all 15 Pixel5 cases in the frozen corrected train40 plan; no per-route winner selection",
+  "plan_sha256": "84523a3170ef516793d394e669ff43ad0ff75ac7f548735ce773687495df6455",
+  "completed": [
+    {
+      "dataset_id": "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5",
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_source_recipe_20260926\\runs\\00\\comparison.json",
+      "comparison_sha256": "564d21e1f507ab043fa7d1c32a728f08eb2e5a5fd43617f91f8ee08d16b8f9dd",
+      "scores": {
+        "control": {
+          "truth_keys": 2001,
+          "p50_m": 0.2973562014358907,
+          "p95_m": 0.7102190999673226,
+          "phone_score_m": 0.5037876507016066
+        },
+        "candidate": {
+          "truth_keys": 2001,
+          "p50_m": 0.31033072682081303,
+          "p95_m": 0.6968611514507941,
+          "phone_score_m": 0.5035959391358036
+        }
+      },
+      "delta_phone_score_m": -0.00019171156580299886,
+      "native_recipe_effects_verified": true
+    },
+    {
+      "dataset_id": "2021-01-04-22-40-us-ca-mtv-a/pixel5",
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_source_recipe_20260926\\runs\\01\\comparison.json",
+      "comparison_sha256": "b2808f983d4400c375f66b435bf19009bbf9d0848ad4ab2564064a3ef36e1955",
+      "scores": {
+        "control": {
+          "truth_keys": 1854,
+          "p50_m": 0.38548827713957523,
+          "p95_m": 0.7171673804136054,
+          "phone_score_m": 0.5513278287765904
+        },
+        "candidate": {
+          "truth_keys": 1854,
+          "p50_m": 0.324358579300573,
+          "p95_m": 0.6405992689014874,
+          "phone_score_m": 0.4824789241010302
+        }
+      },
+      "delta_phone_score_m": -0.06884890467556015,
+      "native_recipe_effects_verified": true
+    },
+    {
+      "dataset_id": "2021-03-10-23-13-us-ca-mtv-h/pixel5",
+      "comparison": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_source_recipe_20260926\\runs\\02\\comparison.json",
+      "comparison_sha256": "6503836cf56a1fd9aa801e535140dd1316b156639cd75f1a5fce395a392e113e",
+      "scores": {
+        "control": {
+          "truth_keys": 1464,
+          "p50_m": 0.3249490119470039,
+          "p95_m": 0.7414758852043644,
+          "phone_score_m": 0.5332124485756842
+        },
+        "candidate": {
+          "truth_keys": 1464,
+          "p50_m": 0.2837109495000889,
+          "p95_m": 0.6524981702074439,
+          "phone_score_m": 0.4681045598537664
+        }
+      },
+      "delta_phone_score_m": -0.06510788872191775,
+      "native_recipe_effects_verified": true
+    }
+  ],
+  "recorder_sha256": "0869c58de1adbd925f1615ced03b97f65362ce9d1d092f4874d0e07c376021a6"
+}

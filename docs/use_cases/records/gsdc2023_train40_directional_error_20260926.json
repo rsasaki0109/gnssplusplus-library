@@ -1,0 +1,2512 @@
+{
+  "status": "posthoc-descriptive-diagnostic",
+  "official_score": false,
+  "heldout": false,
+  "truth_used_for_evaluation": true,
+  "truth_used_in_inference": false,
+  "coordinates_modified": false,
+  "plan_sha256": "67efef7c87fc883ffe56fb28974692f96a8f77ee7ed51a47fe1ad0d61554a7f3",
+  "analyzer_sha256": "556094980323e7442c9ff4fd1478c0847f743157e80fdba51a86b0979abd9691",
+  "baseline": "Frozen corrected train40 recipe, before upstream position offset and height policy",
+  "interpretation": "Positive along error means truth lies ahead of the native trajectory. Speed coefficients are descriptive associations, not identified timing delays or inference parameters.",
+  "cases": {
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/mi8": {
+      "solution_sha256": "f6bc8bfa272f15018a1944400426f33e59f624daee482ffc4ad4d483133076a7",
+      "summary_sha256": "eec548eba9b70ecc81ad8183c9060c60c3108a540bb44480fe91c0173a36a243",
+      "truth_sha256": "a7eeb418bd8c8bb3beb37b166371b8fc3cf709b48a8f3ab5b84a422a8c440f97",
+      "native_position_offset": false,
+      "native_keys": 2002,
+      "truth_keys": 2002,
+      "moving_samples": 1719,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 136,
+          "median_speed_mps": 7.563902546692532,
+          "median_along_error_m": -0.22743616514258225,
+          "median_across_error_m": -0.23907341622259276
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 143,
+          "median_speed_mps": 12.024438317926592,
+          "median_along_error_m": -0.10152162828930211,
+          "median_across_error_m": -0.10557605850413851
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 120,
+          "median_speed_mps": 17.650661815147938,
+          "median_along_error_m": -0.15465030706459765,
+          "median_across_error_m": -0.8241910854630874
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 213,
+          "median_speed_mps": 23.52077540586322,
+          "median_along_error_m": -0.2767220666775155,
+          "median_across_error_m": -0.28204710154149404
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 767,
+          "median_speed_mps": 28.125836521030134,
+          "median_along_error_m": -0.19533278597891524,
+          "median_across_error_m": -0.26173480576860414
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 340,
+          "median_speed_mps": 31.245027867174517,
+          "median_along_error_m": -0.2825106673729317,
+          "median_across_error_m": -0.3081042250621752
+        }
+      ],
+      "median_along_error_m": -0.22687014980355336,
+      "median_across_error_m": -0.2679838550209545,
+      "descriptive_ols": {
+        "intercept_m": -0.27941336624050694,
+        "speed_coefficient_s": 0.000733578355322453
+      }
+    },
+    "2021-01-04-21-50-us-ca-e1highway280driveroutea/pixel5": {
+      "solution_sha256": "7eb303fff1e04bd9a47143a9b9f3fcbb4258c5b79e551c7c5841c0da301247bf",
+      "summary_sha256": "fcd02be9f64e9df0dabcfcc804f7909e5ab20ec8897530eb38242272b3afda66",
+      "truth_sha256": "a5cdea300d0740cd6f93641cdc20b4a067a96231695f247703607f5009b5b803",
+      "native_position_offset": false,
+      "native_keys": 2002,
+      "truth_keys": 2001,
+      "moving_samples": 1715,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 134,
+          "median_speed_mps": 7.592253895802726,
+          "median_along_error_m": -0.3194257536878515,
+          "median_across_error_m": 0.03034421494601216
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 140,
+          "median_speed_mps": 12.06780321136553,
+          "median_along_error_m": -0.07312282008048218,
+          "median_across_error_m": -0.10681952547395547
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 120,
+          "median_speed_mps": 17.6549606465423,
+          "median_along_error_m": -0.5288008284513461,
+          "median_across_error_m": -0.17854845761368643
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 214,
+          "median_speed_mps": 23.495209400123912,
+          "median_along_error_m": -0.3319876301363744,
+          "median_across_error_m": -0.14035691800347927
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 768,
+          "median_speed_mps": 28.12605777871167,
+          "median_along_error_m": -0.29145337190911547,
+          "median_across_error_m": 0.06469783257018696
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 339,
+          "median_speed_mps": 31.25019197887491,
+          "median_along_error_m": -0.383653715961633,
+          "median_across_error_m": -0.20261141763863127
+        }
+      ],
+      "median_along_error_m": -0.3164334086846373,
+      "median_across_error_m": -0.06475677153078153,
+      "descriptive_ols": {
+        "intercept_m": -0.30265006789222454,
+        "speed_coefficient_s": -0.0005581853545284485
+      }
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/mi8": {
+      "solution_sha256": "b9a396f7ba2e0b8655cd572c364a742bf2cf8aa66bd5caa8d734393f0301189d",
+      "summary_sha256": "3049c99a06cc5f1f9a6e4033da07235bae613b9585cf982f6312d3b4f9497959",
+      "truth_sha256": "fcd2553b4d3b2de009f1f4531f33fd784308ffd14bf075805b0fbb3bf9607896",
+      "native_position_offset": false,
+      "native_keys": 1856,
+      "truth_keys": 1856,
+      "moving_samples": 1613,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 93,
+          "median_speed_mps": 7.419827399547616,
+          "median_along_error_m": -0.13089941621167625,
+          "median_across_error_m": -0.3274835064945982
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 108,
+          "median_speed_mps": 13.166758089787699,
+          "median_along_error_m": -0.12421375406335472,
+          "median_across_error_m": -0.13863068879516066
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 112,
+          "median_speed_mps": 18.30839391084833,
+          "median_along_error_m": -0.12916612584637155,
+          "median_across_error_m": -0.4828024368721999
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 246,
+          "median_speed_mps": 22.412851883011754,
+          "median_along_error_m": -0.07062062997648921,
+          "median_across_error_m": -0.425192424672033
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 406,
+          "median_speed_mps": 28.293264177209206,
+          "median_along_error_m": -0.08834659583394641,
+          "median_across_error_m": -0.15484428606224052
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 648,
+          "median_speed_mps": 32.01055442162658,
+          "median_along_error_m": 0.00026380487690032094,
+          "median_across_error_m": -0.07906720885180861
+        }
+      ],
+      "median_along_error_m": -0.05374896249557429,
+      "median_across_error_m": -0.1582140888884779,
+      "descriptive_ols": {
+        "intercept_m": -0.2719656105649751,
+        "speed_coefficient_s": 0.007037136796264269
+      }
+    },
+    "2021-01-04-22-40-us-ca-mtv-a/pixel5": {
+      "solution_sha256": "61433cadd300b3da4c31d7072e7e5b25d955ddfacd68fa1cb699e3d3fedf767a",
+      "summary_sha256": "2c98a94ffbb1d48a86785f20c3ed65869ab5efe12d7a9b22b0f72b0b3702627b",
+      "truth_sha256": "6d27a072383c9a3b52e4eea67dbf3496cd6209d99fcc5b1e6682ce472a342be4",
+      "native_position_offset": false,
+      "native_keys": 1855,
+      "truth_keys": 1854,
+      "moving_samples": 1612,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 97,
+          "median_speed_mps": 7.688858015894297,
+          "median_along_error_m": -0.2766924684742591,
+          "median_across_error_m": -0.20178798647271695
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 100,
+          "median_speed_mps": 13.301658620611285,
+          "median_along_error_m": -0.0451843852507526,
+          "median_across_error_m": 0.05320846582835494
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 115,
+          "median_speed_mps": 18.241294984432393,
+          "median_along_error_m": -0.2024526215389124,
+          "median_across_error_m": -0.30332848498365367
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 246,
+          "median_speed_mps": 22.410158015605703,
+          "median_along_error_m": -0.30243054792235424,
+          "median_across_error_m": -0.3513804666966862
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 406,
+          "median_speed_mps": 28.27232513345737,
+          "median_along_error_m": -0.2744041335677675,
+          "median_across_error_m": -0.08591726304761466
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 648,
+          "median_speed_mps": 32.04391119836312,
+          "median_along_error_m": -0.19080671482940564,
+          "median_across_error_m": -0.2724268494517777
+        }
+      ],
+      "median_along_error_m": -0.23026346514249157,
+      "median_across_error_m": -0.24319552188361176,
+      "descriptive_ols": {
+        "intercept_m": -0.19499223411105257,
+        "speed_coefficient_s": 0.0002990271842223765
+      }
+    },
+    "2021-01-05-21-12-us-ca-mtv-d/mi8": {
+      "solution_sha256": "81177358e48acd3c9f7580ab83881c974eddf4091e1881bbe955d5de3c4aaf7c",
+      "summary_sha256": "897357037ef3832195bb379e973dbeecf7c933c6abfad923c000dbfb04cf2d75",
+      "truth_sha256": "7c8cace389c16ca54e041749fd500058200dcc417f3c9b49a21753f61811c8e7",
+      "native_position_offset": false,
+      "native_keys": 1302,
+      "truth_keys": 1302,
+      "moving_samples": 876,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 89,
+          "median_speed_mps": 7.881285075832424,
+          "median_along_error_m": -0.07901039739918675,
+          "median_across_error_m": 0.26805310116011477
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 129,
+          "median_speed_mps": 12.653392501798065,
+          "median_along_error_m": -0.12490087617250009,
+          "median_across_error_m": 0.004362132446389288
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 76,
+          "median_speed_mps": 17.180389370390927,
+          "median_along_error_m": 0.010011505504621713,
+          "median_across_error_m": 0.015155484845338393
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 83,
+          "median_speed_mps": 22.37697153550741,
+          "median_along_error_m": -0.009991564319709142,
+          "median_across_error_m": 0.06355166231035098
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 233,
+          "median_speed_mps": 28.53467710597544,
+          "median_along_error_m": -0.059299992924604236,
+          "median_across_error_m": 0.23391669916617716
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 266,
+          "median_speed_mps": 32.6780076452055,
+          "median_along_error_m": -0.03458083589563252,
+          "median_across_error_m": -0.08836772904776713
+        }
+      ],
+      "median_along_error_m": -0.0421351537002325,
+      "median_across_error_m": 0.04547399771041118,
+      "descriptive_ols": {
+        "intercept_m": -0.2828966001382052,
+        "speed_coefficient_s": 0.005973905772445764
+      }
+    },
+    "2021-03-10-23-13-us-ca-mtv-h/pixel5": {
+      "solution_sha256": "248034bd275cf6df31ce86667e127b6d358831507723fda5e45c650c653dc2e3",
+      "summary_sha256": "9bc91981867284cb6e823cafe54950b9ad52e68100b7ef1784d933a835907012",
+      "truth_sha256": "bb41815fa086a1fd524f08da667210fe3537159b977de641519bc6067b9e9aa2",
+      "native_position_offset": false,
+      "native_keys": 1465,
+      "truth_keys": 1464,
+      "moving_samples": 882,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 97,
+          "median_speed_mps": 7.505846818122328,
+          "median_along_error_m": -0.4899001675197828,
+          "median_across_error_m": -0.016540401774285677
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 386,
+          "median_speed_mps": 13.48814367636356,
+          "median_along_error_m": -0.4925000773487804,
+          "median_across_error_m": -0.023831219753705085
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 399,
+          "median_speed_mps": 16.013384292816635,
+          "median_along_error_m": -0.5096984489069283,
+          "median_across_error_m": 0.11795115277897521
+        }
+      ],
+      "median_along_error_m": -0.5018649651657825,
+      "median_across_error_m": 0.034584271152991355,
+      "descriptive_ols": {
+        "intercept_m": -0.13427835212326164,
+        "speed_coefficient_s": -0.02437991951207212
+      }
+    },
+    "2021-03-16-18-59-us-ca-mtv-a/pixel5": {
+      "solution_sha256": "b77abfe37069c548cb1a890a4ed14dfacfd7e0a29ecc6e5a6b98652008affe6b",
+      "summary_sha256": "aefa2c2fd67a683847326decaeaa337ba3480112208c3fc37bcfc981ab1a4160",
+      "truth_sha256": "7c84ed6a80b1bbb08c0ffad57493513833b9d5474e22a43c5a44da82824ee22d",
+      "native_position_offset": false,
+      "native_keys": 2159,
+      "truth_keys": 2159,
+      "moving_samples": 1719,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 119,
+          "median_speed_mps": 7.652149444017359,
+          "median_along_error_m": -0.15117557481113555,
+          "median_across_error_m": 0.28387596002414184
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 112,
+          "median_speed_mps": 12.762690048146137,
+          "median_along_error_m": -0.13508941012630132,
+          "median_across_error_m": 0.2797001503940454
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 88,
+          "median_speed_mps": 17.42770786155812,
+          "median_along_error_m": -0.38075567296383395,
+          "median_across_error_m": -0.08415346351803202
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 111,
+          "median_speed_mps": 22.8371261165183,
+          "median_along_error_m": -0.3322598157857412,
+          "median_across_error_m": 0.01995586272727008
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 168,
+          "median_speed_mps": 28.507536198565212,
+          "median_along_error_m": -0.4024702909192996,
+          "median_across_error_m": 0.29089409851557746
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 987,
+          "median_speed_mps": 34.000245549158606,
+          "median_along_error_m": -0.2412207897202878,
+          "median_across_error_m": 0.1888452188799945
+        },
+        {
+          "low_mps": 40,
+          "high_mps": 50,
+          "count": 134,
+          "median_speed_mps": 41.42811850237649,
+          "median_along_error_m": -0.2851555155715475,
+          "median_across_error_m": 0.2437642840988814
+        }
+      ],
+      "median_along_error_m": -0.2693865100269523,
+      "median_across_error_m": 0.19174144093489326,
+      "descriptive_ols": {
+        "intercept_m": -0.22751920839624712,
+        "speed_coefficient_s": -0.00019447018014068194
+      }
+    },
+    "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": {
+      "solution_sha256": "8eed89f535a52732fbdb042ae09d99ea1433fcf23a7697f8ca98e711bbb84989",
+      "summary_sha256": "70cd61067aaf3dd2d2668fbf111231f6244818efecaf072243fae20ac49c53e3",
+      "truth_sha256": "f9d306319d16be4fc1653835b3b5a657630aef6990e95bca298c1efbb469fef2",
+      "native_position_offset": false,
+      "native_keys": 1476,
+      "truth_keys": 1461,
+      "moving_samples": 1318,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 95,
+          "median_speed_mps": 7.587134729767521,
+          "median_along_error_m": -0.24354132797113565,
+          "median_across_error_m": 0.011019146356264548
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 187,
+          "median_speed_mps": 12.819992981538666,
+          "median_along_error_m": -0.07973274493086423,
+          "median_across_error_m": 0.004521862755109927
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 120,
+          "median_speed_mps": 16.975620287636254,
+          "median_along_error_m": -0.18871723316460265,
+          "median_across_error_m": -0.07470864148237481
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 108,
+          "median_speed_mps": 22.93056759909119,
+          "median_along_error_m": -0.19977627785312307,
+          "median_across_error_m": -0.113783518671499
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 349,
+          "median_speed_mps": 28.273935449722053,
+          "median_along_error_m": -0.13328644267480985,
+          "median_across_error_m": -0.010782894979232285
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 448,
+          "median_speed_mps": 34.44159828420216,
+          "median_along_error_m": -0.3340367348014559,
+          "median_across_error_m": -0.055308571417823034
+        },
+        {
+          "low_mps": 40,
+          "high_mps": 50,
+          "count": 11,
+          "median_speed_mps": 40.526396984677206,
+          "median_along_error_m": -0.3408863836392988,
+          "median_across_error_m": -0.17307587828485152
+        }
+      ],
+      "median_along_error_m": -0.14896569940197285,
+      "median_across_error_m": -0.024799448171063,
+      "descriptive_ols": {
+        "intercept_m": -0.13109542895460302,
+        "speed_coefficient_s": -0.0033828901621876825
+      }
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/pixel4": {
+      "solution_sha256": "a010cdfdb1a50e6c6e5934d99082edc2b1f3fdf34e26c7edf2b89f810b98fe56",
+      "summary_sha256": "d41cabb714be86dd2791ec36f652f02920d355dd10f08a6d85a5aac0839d2ace",
+      "truth_sha256": "818f9db52bcc2ad6b50a7931bc09d6225d588bfd1be7fae12cf029e94227116d",
+      "native_position_offset": false,
+      "native_keys": 1188,
+      "truth_keys": 1188,
+      "moving_samples": 937,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 153,
+          "median_speed_mps": 7.286042761291118,
+          "median_along_error_m": -0.1189843522063032,
+          "median_across_error_m": -0.0360314699975747
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 182,
+          "median_speed_mps": 12.061510527465215,
+          "median_along_error_m": -0.20526317407273503,
+          "median_across_error_m": -0.047100967961263576
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 43,
+          "median_speed_mps": 17.618827578365494,
+          "median_along_error_m": -0.49294061093103586,
+          "median_across_error_m": -0.13767338627441233
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 67,
+          "median_speed_mps": 23.133592484742724,
+          "median_along_error_m": -0.19654734248223388,
+          "median_across_error_m": 0.053155999105368744
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 280,
+          "median_speed_mps": 28.27144161621412,
+          "median_along_error_m": -0.019393109381746404,
+          "median_across_error_m": 0.11822565686250787
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 212,
+          "median_speed_mps": 32.475388344248366,
+          "median_along_error_m": -0.5109328305594558,
+          "median_across_error_m": -0.04392659671122727
+        }
+      ],
+      "median_along_error_m": -0.15387718323344085,
+      "median_across_error_m": 0.013503734403969781,
+      "descriptive_ols": {
+        "intercept_m": -0.1354434199109577,
+        "speed_coefficient_s": -0.002657823540514721
+      }
+    },
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b": {
+      "solution_sha256": "e60d989461542f33a763f029a3618a0eba8d2e950e442a82e4bbe4ee360573af",
+      "summary_sha256": "30255a430288fb69316a980962ac00d7a0896ceeb11319e298ce68bc651a2439",
+      "truth_sha256": "164a434967f0eeefde2812a27281d39e858024fba6e82015a9dc26bdfb3ad1a8",
+      "native_position_offset": false,
+      "native_keys": 1165,
+      "truth_keys": 1165,
+      "moving_samples": 940,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 152,
+          "median_speed_mps": 7.181482878839489,
+          "median_along_error_m": 0.00908684484655237,
+          "median_across_error_m": -0.2328349031477921
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 186,
+          "median_speed_mps": 12.024936319412918,
+          "median_along_error_m": -0.24189692128607304,
+          "median_across_error_m": -0.2931290278069001
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 41,
+          "median_speed_mps": 17.561440412800675,
+          "median_along_error_m": -0.010409279236184992,
+          "median_across_error_m": -0.5150723462727745
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 67,
+          "median_speed_mps": 23.206777548844187,
+          "median_along_error_m": -0.06199024064447657,
+          "median_across_error_m": -0.2696567022082209
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 280,
+          "median_speed_mps": 28.236124509429878,
+          "median_along_error_m": 0.3142071435518724,
+          "median_across_error_m": -0.07462807666717239
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 214,
+          "median_speed_mps": 32.42622850481882,
+          "median_along_error_m": -0.2895650726992699,
+          "median_across_error_m": -0.3810659726298277
+        }
+      ],
+      "median_along_error_m": -0.06704830201239026,
+      "median_across_error_m": -0.27974446872044356,
+      "descriptive_ols": {
+        "intercept_m": 0.03205937557271319,
+        "speed_coefficient_s": -0.002800010171368057
+      }
+    },
+    "2021-07-19-20-49-us-ca-mtv-a/pixel5": {
+      "solution_sha256": "be08d19a5771326b82d5522e8ab525fe547e4ce89ddba22f831313852a266654",
+      "summary_sha256": "d86494363a50b9806e9361d4f1259fadc780a631464422a0a60209548d514f15",
+      "truth_sha256": "4ee9dc9b8378a5c5f1d608e0c47c978319fad172de596b655a7109605b103e07",
+      "native_position_offset": false,
+      "native_keys": 1897,
+      "truth_keys": 1896,
+      "moving_samples": 1677,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 90,
+          "median_speed_mps": 8.022247875421815,
+          "median_along_error_m": -0.20693087053177228,
+          "median_across_error_m": 0.20097238654852378
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 153,
+          "median_speed_mps": 12.714683193973695,
+          "median_along_error_m": -0.1219228759409884,
+          "median_across_error_m": 0.11282537692070257
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 117,
+          "median_speed_mps": 17.82094604288281,
+          "median_along_error_m": -0.15735151421745824,
+          "median_across_error_m": 0.19315925459855607
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 293,
+          "median_speed_mps": 22.277929100194235,
+          "median_along_error_m": -0.3126356184243128,
+          "median_across_error_m": 0.24949179433027394
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 468,
+          "median_speed_mps": 28.758626431078028,
+          "median_along_error_m": -0.23790854291183805,
+          "median_across_error_m": 0.24235915438373395
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 556,
+          "median_speed_mps": 31.18798560602732,
+          "median_along_error_m": -0.19317898803050138,
+          "median_across_error_m": 0.30647745919803515
+        }
+      ],
+      "median_along_error_m": -0.2136668728038549,
+      "median_across_error_m": 0.27266141657656595,
+      "descriptive_ols": {
+        "intercept_m": -0.23190690199742542,
+        "speed_coefficient_s": 0.001432717295612811
+      }
+    },
+    "2021-07-27-19-49-us-ca-mtv-b/pixel4": {
+      "solution_sha256": "6ce708e60e60e7f5502d4f61a54397d4247a0c3f97611f650de0001339062dac",
+      "summary_sha256": "736889209270a4eb84db3f3f0a6e8778e68abf8a2373601a839f7309145eee04",
+      "truth_sha256": "cc7598498eb55937e9644ccf991b5ab478533363e732b3fb44c447fff6a566cd",
+      "native_position_offset": false,
+      "native_keys": 1678,
+      "truth_keys": 1677,
+      "moving_samples": 1448,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 142,
+          "median_speed_mps": 7.8886403842383235,
+          "median_along_error_m": -0.25317936364209237,
+          "median_across_error_m": 0.034457055150756644
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 213,
+          "median_speed_mps": 11.837613862769437,
+          "median_along_error_m": -0.08603266360657617,
+          "median_across_error_m": -0.23829102110905162
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 119,
+          "median_speed_mps": 17.28248064710436,
+          "median_along_error_m": -0.32069484657625497,
+          "median_across_error_m": -0.3575616505919872
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 150,
+          "median_speed_mps": 23.7543510159678,
+          "median_along_error_m": -0.4524224416055237,
+          "median_across_error_m": -0.2979924601674053
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 538,
+          "median_speed_mps": 27.376540749728413,
+          "median_along_error_m": -0.4899019097597294,
+          "median_across_error_m": -0.2321568266295176
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 286,
+          "median_speed_mps": 32.14627103004012,
+          "median_along_error_m": -0.29981718868297286,
+          "median_across_error_m": 0.5591172872972345
+        }
+      ],
+      "median_along_error_m": -0.39296034581496375,
+      "median_across_error_m": -0.20585745028566932,
+      "descriptive_ols": {
+        "intercept_m": -0.2233607108909133,
+        "speed_coefficient_s": -0.008069016003234272
+      }
+    },
+    "2021-08-24-20-32-us-ca-mtv-h/pixel5": {
+      "solution_sha256": "39e7ef89a5c203cc79415c9a883e11322aa210d1f3a9ca546fdf39c3da79e2ac",
+      "summary_sha256": "e72de61a175b9f3f64975b5befa842002e918a83af717b8ce0efde304d5993df",
+      "truth_sha256": "a55f452e611426693677fbeacde227fc80e5f03f6040d04aef9d6a2baf08d249",
+      "native_position_offset": false,
+      "native_keys": 3140,
+      "truth_keys": 3139,
+      "moving_samples": 1691,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 223,
+          "median_speed_mps": 7.806382748076928,
+          "median_along_error_m": -0.4018122012060102,
+          "median_across_error_m": 0.14450569616200554
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 597,
+          "median_speed_mps": 13.463106031879057,
+          "median_along_error_m": -0.43215162855884776,
+          "median_across_error_m": 0.17344707543068025
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 864,
+          "median_speed_mps": 16.895508684897088,
+          "median_along_error_m": -0.575784365963479,
+          "median_across_error_m": 0.29148450360256906
+        }
+      ],
+      "median_along_error_m": -0.46617807856199894,
+      "median_across_error_m": 0.2586139353345445,
+      "descriptive_ols": {
+        "intercept_m": -0.30145460860002016,
+        "speed_coefficient_s": -0.013149759973996374
+      }
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/mi8": {
+      "solution_sha256": "f01bd65e3f6881fe3066e51440c0e1b8fc00210b48abab07b9ec042d963b558e",
+      "summary_sha256": "ca0477adf49f571d27445514dfdf2a7a23d4804954c73afbe70acd73c585e77b",
+      "truth_sha256": "1f002698508de0ce3b6bf1453685e6f55a9a197528310f9a30e9ca2726861983",
+      "native_position_offset": false,
+      "native_keys": 1699,
+      "truth_keys": 1699,
+      "moving_samples": 1340,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 43,
+          "median_speed_mps": 7.402125914227476,
+          "median_along_error_m": -0.03287650624991782,
+          "median_across_error_m": -0.05061163041667876
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 82,
+          "median_speed_mps": 13.091929174463754,
+          "median_along_error_m": 0.07085529476099732,
+          "median_across_error_m": -0.11315047658059167
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 76,
+          "median_speed_mps": 18.032183220381867,
+          "median_along_error_m": -0.1262817790690151,
+          "median_across_error_m": -0.13965655120105328
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 72,
+          "median_speed_mps": 23.269181531452013,
+          "median_along_error_m": -0.1867431280711351,
+          "median_across_error_m": -0.341919206421603
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 464,
+          "median_speed_mps": 28.96971291469997,
+          "median_along_error_m": -0.3019795490881469,
+          "median_across_error_m": -0.3518732431571807
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 603,
+          "median_speed_mps": 31.474913324961822,
+          "median_along_error_m": -0.6163581520145694,
+          "median_across_error_m": -0.354659129468591
+        }
+      ],
+      "median_along_error_m": -0.30035353314917396,
+      "median_across_error_m": -0.33974279929656104,
+      "descriptive_ols": {
+        "intercept_m": 0.3573372639921647,
+        "speed_coefficient_s": -0.026285920823085656
+      }
+    },
+    "2022-01-26-20-02-us-ca-mtv-pe1/pixel5": {
+      "solution_sha256": "c9ddb3ec500b22fbff701fb5dfab80974e81a96d4046697061d642eb00f8c9be",
+      "summary_sha256": "79a4590656d2d5defb1822177520c9fa81c111bd82051e8879df25cd56de9a54",
+      "truth_sha256": "1be44b1f9ef04c508e96c23fa289c068bd24388c26a7a337c6a55aace260bcf3",
+      "native_position_offset": false,
+      "native_keys": 1698,
+      "truth_keys": 1698,
+      "moving_samples": 1342,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 44,
+          "median_speed_mps": 7.299787918438916,
+          "median_along_error_m": -0.10749407770640987,
+          "median_across_error_m": -0.07108537928334552
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 82,
+          "median_speed_mps": 13.0153162006346,
+          "median_along_error_m": 0.010709923377280545,
+          "median_across_error_m": -0.05507925255251481
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 77,
+          "median_speed_mps": 17.919660322109667,
+          "median_along_error_m": 0.00906989098810827,
+          "median_across_error_m": 0.11325890027177896
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 72,
+          "median_speed_mps": 23.26892590153615,
+          "median_along_error_m": -0.11798609942632353,
+          "median_across_error_m": 0.08371284339543592
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 459,
+          "median_speed_mps": 28.93308803642089,
+          "median_along_error_m": -0.2639120390479161,
+          "median_across_error_m": 0.05100817937240527
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 608,
+          "median_speed_mps": 31.44464995129266,
+          "median_along_error_m": -0.22710186625581583,
+          "median_across_error_m": -0.024313813286815433
+        }
+      ],
+      "median_along_error_m": -0.21467035842787047,
+      "median_across_error_m": 0.012794546734640831,
+      "descriptive_ols": {
+        "intercept_m": 0.017945024080674072,
+        "speed_coefficient_s": -0.007002303391226938
+      }
+    },
+    "2022-02-24-18-29-us-ca-lax-o/pixel5": {
+      "solution_sha256": "20c575efc4ec68c0c8aa0e2973ae9aaf7a0032bd79777e38e7199714518fa76f",
+      "summary_sha256": "8e8fd5e3b3666fd79e8f2033fb14490dc281fed42a139e6cf89a5e55d75aaf33",
+      "truth_sha256": "73875990485f43d36ce7608762b4071267d8361847ee5b9a171d3459ab2ba154",
+      "native_position_offset": false,
+      "native_keys": 2439,
+      "truth_keys": 2438,
+      "moving_samples": 1172,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 356,
+          "median_speed_mps": 7.761612520988417,
+          "median_along_error_m": -1.0722092434626953,
+          "median_across_error_m": 0.8705263102368451
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 491,
+          "median_speed_mps": 12.155265852522232,
+          "median_along_error_m": -0.5457831808727892,
+          "median_across_error_m": 0.7943803962559559
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 307,
+          "median_speed_mps": 16.820608830568478,
+          "median_along_error_m": -0.3845818392693825,
+          "median_across_error_m": 0.6402883792775751
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 18,
+          "median_speed_mps": 20.401420171060494,
+          "median_along_error_m": 0.24156191901760754,
+          "median_across_error_m": 0.778816463255379
+        }
+      ],
+      "median_along_error_m": -0.9176185549203631,
+      "median_across_error_m": 0.7532777317905428,
+      "descriptive_ols": {
+        "intercept_m": -0.7072006787832226,
+        "speed_coefficient_s": 0.004888907478763625
+      }
+    },
+    "2022-04-01-18-22-us-ca-lax-t/pixel5": {
+      "solution_sha256": "7e29d5e593654f2e389fb6be7bace5ef30ab7d31a819daec59b92e33ce38428c",
+      "summary_sha256": "acdaf52e32c9a5a28d89eb20a0571d3793eea292e8a60f288150223e1ff281f2",
+      "truth_sha256": "29e0861dd1ecb8865c10adab69396d98ed96618e8877b09d04aa8d671edf79e8",
+      "native_position_offset": false,
+      "native_keys": 1466,
+      "truth_keys": 1465,
+      "moving_samples": 1237,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 115,
+          "median_speed_mps": 6.881307856686631,
+          "median_along_error_m": -0.20391802995835312,
+          "median_across_error_m": 0.17913341680807154
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 81,
+          "median_speed_mps": 12.4022836140682,
+          "median_along_error_m": -0.16023593634451413,
+          "median_across_error_m": 0.39306165313262714
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 60,
+          "median_speed_mps": 17.4274425087102,
+          "median_along_error_m": -0.0975111094189641,
+          "median_across_error_m": 0.3109901413700853
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 137,
+          "median_speed_mps": 23.777475914775277,
+          "median_along_error_m": -0.5076614200460133,
+          "median_across_error_m": 0.31309445660622803
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 465,
+          "median_speed_mps": 27.41021277691132,
+          "median_along_error_m": -0.5647429279117335,
+          "median_across_error_m": 0.08793869315377546
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 379,
+          "median_speed_mps": 32.65990707913073,
+          "median_along_error_m": -0.6024802947721429,
+          "median_across_error_m": 0.17358530508140532
+        }
+      ],
+      "median_along_error_m": -0.5576099821832413,
+      "median_across_error_m": 0.16769154326391372,
+      "descriptive_ols": {
+        "intercept_m": -0.0892239397782311,
+        "speed_coefficient_s": -0.015645068386086702
+      }
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro": {
+      "solution_sha256": "0ff5c5992385ad2e914021b589002907a0d92b3ab994373fadb8855d05264240",
+      "summary_sha256": "8eda7e933e104888bc7941045c4bb4197a4e72e70c5388a2f1b3e611b77c4d0f",
+      "truth_sha256": "04fedc69d09899ca7d48481f38509bc7f0458ec8c788f285c2382926edbdaa65",
+      "native_position_offset": false,
+      "native_keys": 2180,
+      "truth_keys": 2162,
+      "moving_samples": 1250,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 95,
+          "median_speed_mps": 7.215522039133882,
+          "median_along_error_m": -0.41586775551022326,
+          "median_across_error_m": 0.10158515382058476
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 84,
+          "median_speed_mps": 13.488921937257544,
+          "median_along_error_m": -0.15280740443955954,
+          "median_across_error_m": -0.21675897759685125
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 43,
+          "median_speed_mps": 17.30883866524103,
+          "median_along_error_m": -0.7234990616857332,
+          "median_across_error_m": -0.30545793945399313
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 28,
+          "median_speed_mps": 21.864196108639618,
+          "median_along_error_m": -0.30583564913826455,
+          "median_across_error_m": 0.15298619446143336
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 138,
+          "median_speed_mps": 29.49587725749023,
+          "median_along_error_m": -0.2781413021599757,
+          "median_across_error_m": 0.49041016997225073
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 862,
+          "median_speed_mps": 32.5225372651435,
+          "median_along_error_m": -0.32156139879462886,
+          "median_across_error_m": 0.344154378014356
+        }
+      ],
+      "median_along_error_m": -0.32156139879462886,
+      "median_across_error_m": 0.30532713612881135,
+      "descriptive_ols": {
+        "intercept_m": -0.3057695376929452,
+        "speed_coefficient_s": -0.0027506603126236776
+      }
+    },
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b": {
+      "solution_sha256": "0cfd5bd24fb05a200733c3e9fb7b0bdaba919b15c25010107fe6c09fe39597a1",
+      "summary_sha256": "a853ff060a75f4657e4b86f61facbb459c9c1e8ca6c13018423eb5a11bd128c5",
+      "truth_sha256": "7b80114525dce5e73729ba29155b0fdd6abe0b807ffabafc18b7f872880a3af5",
+      "native_position_offset": false,
+      "native_keys": 2182,
+      "truth_keys": 2163,
+      "moving_samples": 1250,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 95,
+          "median_speed_mps": 7.226708336281953,
+          "median_along_error_m": -0.4659480151819124,
+          "median_across_error_m": -0.6376822323546878
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 84,
+          "median_speed_mps": 13.448782920057928,
+          "median_along_error_m": 0.034935549177433925,
+          "median_across_error_m": -0.13492900448452652
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 43,
+          "median_speed_mps": 17.339330450947315,
+          "median_along_error_m": -0.032506035342226,
+          "median_across_error_m": -0.269800124623673
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 28,
+          "median_speed_mps": 21.846860796305847,
+          "median_along_error_m": -0.4828199680680654,
+          "median_across_error_m": -0.34228300425863695
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 137,
+          "median_speed_mps": 29.492767279903223,
+          "median_along_error_m": -0.3277312701410959,
+          "median_across_error_m": 0.2635370013749358
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 863,
+          "median_speed_mps": 32.51474746688505,
+          "median_along_error_m": -0.4571717785734781,
+          "median_across_error_m": 0.09841005230042843
+        }
+      ],
+      "median_along_error_m": -0.40044797654927544,
+      "median_across_error_m": -0.12237830500460656,
+      "descriptive_ols": {
+        "intercept_m": 0.14796491675932297,
+        "speed_coefficient_s": -0.018871150228988554
+      }
+    },
+    "2022-07-26-21-01-us-ca-sjc-s/samsunga325g": {
+      "solution_sha256": "f4e4168c0ae6055fce4ddad3486b2bd892109ac28c4fd4aad400c7d8eee88d6f",
+      "summary_sha256": "fa46e99a65bb8d8ac38ce3c000f9ed0b7d253d75ce17c57a7b9fb485c9298355",
+      "truth_sha256": "1ed96775d792358180092145051d2f7af7910a856a5b5af489bb78c8719136b7",
+      "native_position_offset": false,
+      "native_keys": 1512,
+      "truth_keys": 1487,
+      "moving_samples": 1083,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 60,
+          "median_speed_mps": 7.202639214379739,
+          "median_along_error_m": -0.5044950106611811,
+          "median_across_error_m": 0.23347224555576812
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 68,
+          "median_speed_mps": 12.760023715738868,
+          "median_along_error_m": -0.4303651834502099,
+          "median_across_error_m": 0.06351820482972537
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 37,
+          "median_speed_mps": 18.65541887984978,
+          "median_along_error_m": -0.43918468639347646,
+          "median_across_error_m": -0.7287524476948829
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 155,
+          "median_speed_mps": 23.998260618150965,
+          "median_along_error_m": -0.8244491848862616,
+          "median_across_error_m": -0.41010568530598424
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 513,
+          "median_speed_mps": 27.857301115411822,
+          "median_along_error_m": -0.6984437169685511,
+          "median_across_error_m": -0.3326334048386086
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 250,
+          "median_speed_mps": 31.374742090945166,
+          "median_along_error_m": -0.921880279935622,
+          "median_across_error_m": -0.19105365938710184
+        }
+      ],
+      "median_along_error_m": -0.7490387644004485,
+      "median_across_error_m": -0.22111536041631524,
+      "descriptive_ols": {
+        "intercept_m": 0.0044187444847175825,
+        "speed_coefficient_s": -0.028424498897380752
+      }
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/mi8": {
+      "solution_sha256": "f63438a838a8f0ceafe828e6b0ace87c6235f41414f3e228c87dbcbc5c123242",
+      "summary_sha256": "d2ef5f177d20653031c04a78bf4fce6d127f8f2bce7c3cc6d838ed69c3272467",
+      "truth_sha256": "86bc9a65b7aa9742ad44266ea8faeba08caf04eb5fc758daeb867f9d71819099",
+      "native_position_offset": false,
+      "native_keys": 1417,
+      "truth_keys": 1400,
+      "moving_samples": 919,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 81,
+          "median_speed_mps": 6.953036599299462,
+          "median_along_error_m": -0.25092549702017086,
+          "median_across_error_m": 0.19542597775808204
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 87,
+          "median_speed_mps": 12.42946990082347,
+          "median_along_error_m": -0.28127927891463567,
+          "median_across_error_m": -0.0509110842468325
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 76,
+          "median_speed_mps": 17.85950738368523,
+          "median_along_error_m": -0.27997506097973945,
+          "median_across_error_m": 0.21694805639533188
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 144,
+          "median_speed_mps": 21.95193700726564,
+          "median_along_error_m": -0.48235556560563464,
+          "median_across_error_m": -0.4594141526572805
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 221,
+          "median_speed_mps": 28.582386649908667,
+          "median_along_error_m": -0.5961991796559941,
+          "median_across_error_m": -0.4431036372035166
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 310,
+          "median_speed_mps": 32.291233920988866,
+          "median_along_error_m": -0.48570104678808756,
+          "median_across_error_m": -0.4351534975580795
+        }
+      ],
+      "median_along_error_m": -0.4727635652010814,
+      "median_across_error_m": -0.3857272409056051,
+      "descriptive_ols": {
+        "intercept_m": -0.21409266667824584,
+        "speed_coefficient_s": -0.010838678407424182
+      }
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/pixel5": {
+      "solution_sha256": "054bbec29c19808698b45fd1d12121e3f8285e27f03211478156ddbd57228357",
+      "summary_sha256": "d79cfe913527f4b194cf06641984365ed8099ab8a448612bf6bc1f858f3a4a6a",
+      "truth_sha256": "5e229f86eed48d27984718d56de26a3861e5d2bc25a55261540d4b9b7b5452d4",
+      "native_position_offset": false,
+      "native_keys": 1450,
+      "truth_keys": 1431,
+      "moving_samples": 920,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 84,
+          "median_speed_mps": 6.834582831759313,
+          "median_along_error_m": -0.09764316089936236,
+          "median_across_error_m": 0.015991560973531483
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 88,
+          "median_speed_mps": 12.741648212940385,
+          "median_along_error_m": -0.03134021864367112,
+          "median_across_error_m": 0.07483549550265405
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 72,
+          "median_speed_mps": 17.85507480290019,
+          "median_along_error_m": -0.01358676866100415,
+          "median_across_error_m": 0.3833385622332368
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 146,
+          "median_speed_mps": 22.029815689828542,
+          "median_along_error_m": -0.1449241967406068,
+          "median_across_error_m": 0.208044044280219
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 221,
+          "median_speed_mps": 28.58510879360423,
+          "median_along_error_m": -0.26216786969330524,
+          "median_across_error_m": 0.36319314552521453
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 309,
+          "median_speed_mps": 32.3314901879699,
+          "median_along_error_m": -0.14862167841166896,
+          "median_across_error_m": 0.142211404576559
+        }
+      ],
+      "median_along_error_m": -0.15898877918522342,
+      "median_across_error_m": 0.22215041636951405,
+      "descriptive_ols": {
+        "intercept_m": -0.020088048582284714,
+        "speed_coefficient_s": -0.006031751032316607
+      }
+    },
+    "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": {
+      "solution_sha256": "756080b65086bb9e989a3f92f57ca203fcc124548bfe3bfdd081549f8e6239df",
+      "summary_sha256": "2b3904380153a74bcd7522f56040549177e29712851632376823d77b1066b49f",
+      "truth_sha256": "db4662651c4da981b06d370121aa21a685f33eac0154161ceedee6c319db18e1",
+      "native_position_offset": false,
+      "native_keys": 1452,
+      "truth_keys": 1434,
+      "moving_samples": 921,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 82,
+          "median_speed_mps": 6.831026043416399,
+          "median_along_error_m": -1.430703688160584,
+          "median_across_error_m": -1.0563854322645896
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 88,
+          "median_speed_mps": 12.486198613253777,
+          "median_along_error_m": -1.4630168270792372,
+          "median_across_error_m": -0.787845684914475
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 76,
+          "median_speed_mps": 17.895923903013404,
+          "median_along_error_m": -1.2177511465869468,
+          "median_across_error_m": -0.7941992979677619
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 146,
+          "median_speed_mps": 22.075306115039268,
+          "median_along_error_m": -0.5031651523120348,
+          "median_across_error_m": -0.7497460800514636
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 222,
+          "median_speed_mps": 28.64431781043696,
+          "median_along_error_m": -0.5555417938975165,
+          "median_across_error_m": -0.4379501663986669
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 307,
+          "median_speed_mps": 32.3541172260374,
+          "median_along_error_m": -0.5916813978309443,
+          "median_across_error_m": -0.5956105008783494
+        }
+      ],
+      "median_along_error_m": -0.7598631663137787,
+      "median_across_error_m": -0.7001344940335381,
+      "descriptive_ols": {
+        "intercept_m": -1.7702951080084712,
+        "speed_coefficient_s": 0.03880276297977832
+      }
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u": {
+      "solution_sha256": "9ec3ee88c20777241b466f62f538a0bf1c9c93c4719311348d34751886b76d44",
+      "summary_sha256": "29de532f3ae3e4addd4ff6bf2c27faed3bb437cd60c077256ba3eeef841d5dc5",
+      "truth_sha256": "15223120e214707b125488eb3e235344b63e8428aa213a8e9e1d50fdd58fbf57",
+      "native_position_offset": false,
+      "native_keys": 1213,
+      "truth_keys": 1213,
+      "moving_samples": 711,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 116,
+          "median_speed_mps": 7.400077189403767,
+          "median_along_error_m": -0.5107266985072471,
+          "median_across_error_m": 0.3405807828776947
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 120,
+          "median_speed_mps": 12.689236852789858,
+          "median_along_error_m": -1.1820987500640499,
+          "median_across_error_m": -0.005120836503153897
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 116,
+          "median_speed_mps": 17.88327594922105,
+          "median_along_error_m": -2.1689540660734927,
+          "median_across_error_m": -0.14975987550067166
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 86,
+          "median_speed_mps": 22.90318461884273,
+          "median_along_error_m": -2.2819336439446416,
+          "median_across_error_m": -0.2943720870595625
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 155,
+          "median_speed_mps": 27.190597841665685,
+          "median_along_error_m": -2.3787048954685246,
+          "median_across_error_m": 0.1193208710203721
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 118,
+          "median_speed_mps": 33.69296183284647,
+          "median_along_error_m": -1.0488889761341262,
+          "median_across_error_m": -0.10700013529240845
+        }
+      ],
+      "median_along_error_m": -1.4583558445048777,
+      "median_across_error_m": -0.05649064047470696,
+      "descriptive_ols": {
+        "intercept_m": -0.9151045652306073,
+        "speed_coefficient_s": -0.028562457533736284
+      }
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a217m": {
+      "solution_sha256": "a80392daa2d634ef2eb9737a1f859ed6be70f225f957ef9df675c9c56fd60958",
+      "summary_sha256": "d7762250c69c1de057156be2aebb4a7cb2191f2aaf3aaddefe89a143e29d9390",
+      "truth_sha256": "e7f7bda0243cfe5cb1494bb84244cf3606f29eb90c84bd0f68d7b261851b2df9",
+      "native_position_offset": false,
+      "native_keys": 1222,
+      "truth_keys": 1221,
+      "moving_samples": 712,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 117,
+          "median_speed_mps": 7.447180700937216,
+          "median_along_error_m": -0.6641312965858895,
+          "median_across_error_m": -0.26018633374419997
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 121,
+          "median_speed_mps": 12.677387267780103,
+          "median_along_error_m": -0.6472595097177384,
+          "median_across_error_m": -0.7999374332218231
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 115,
+          "median_speed_mps": 17.86061809151376,
+          "median_along_error_m": -0.12613478261797154,
+          "median_across_error_m": -1.062844713694787
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 85,
+          "median_speed_mps": 22.855318572130514,
+          "median_along_error_m": -0.5558640567077261,
+          "median_across_error_m": -0.4430033729338944
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 155,
+          "median_speed_mps": 27.121488203567605,
+          "median_along_error_m": -1.2210333176473853,
+          "median_across_error_m": -0.06523626480345612
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 119,
+          "median_speed_mps": 33.67734245036652,
+          "median_along_error_m": -0.16760709564512094,
+          "median_across_error_m": 0.24572648032601582
+        }
+      ],
+      "median_along_error_m": -0.7544627156437975,
+      "median_across_error_m": -0.22076523518901273,
+      "descriptive_ols": {
+        "intercept_m": -0.6613545939149761,
+        "speed_coefficient_s": -0.0002412663675563833
+      }
+    },
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": {
+      "solution_sha256": "b4f52b56054b5d11baf078bafbddbb6eb94c5ea16a885be9aa9a6f414a2be00d",
+      "summary_sha256": "376b53aeb9845963e112b2fdef0924a76af0752a8794e93e8ee40990c1abd93c",
+      "truth_sha256": "1cf5712192fbac7bee14fd885bee11aa7f0334387c5ebe870480d41ac01aa639",
+      "native_position_offset": false,
+      "native_keys": 1230,
+      "truth_keys": 1230,
+      "moving_samples": 712,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 116,
+          "median_speed_mps": 7.41756435232081,
+          "median_along_error_m": -0.5351356748264045,
+          "median_across_error_m": -0.8360921230246268
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 120,
+          "median_speed_mps": 12.599741839067747,
+          "median_along_error_m": -1.0231627360869893,
+          "median_across_error_m": -0.21961746154704254
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 116,
+          "median_speed_mps": 17.83489973614567,
+          "median_along_error_m": -0.8973599723527328,
+          "median_across_error_m": -0.19417857920158565
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 88,
+          "median_speed_mps": 22.916892123150838,
+          "median_along_error_m": -0.3797158575238824,
+          "median_across_error_m": -0.028505406125986357
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 153,
+          "median_speed_mps": 27.17896808030355,
+          "median_along_error_m": -0.28823304824262336,
+          "median_across_error_m": -0.4134454499433801
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 119,
+          "median_speed_mps": 33.670347634196766,
+          "median_along_error_m": -0.21805136598769856,
+          "median_across_error_m": -1.1507887076447147
+        }
+      ],
+      "median_along_error_m": -0.4894934950955744,
+      "median_across_error_m": -0.4440841780047107,
+      "descriptive_ols": {
+        "intercept_m": -0.9275745949767641,
+        "speed_coefficient_s": 0.017499949296802535
+      }
+    },
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro": {
+      "solution_sha256": "1fcc0fad9441d68748ad55e735768104589bd2378995972a0e56bd24e625e372",
+      "summary_sha256": "7294def19c0e7cb35c0ff11cd553733b9148444c20e427486d1440bb74ef796d",
+      "truth_sha256": "c4704b43e6b742e889482aea80f6ba7c0242b2c857952da3f7ca054583174fe6",
+      "native_position_offset": false,
+      "native_keys": 1231,
+      "truth_keys": 1193,
+      "moving_samples": 803,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 105,
+          "median_speed_mps": 8.02585220299218,
+          "median_along_error_m": -0.12636678239756693,
+          "median_across_error_m": -0.11051998683032206
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 107,
+          "median_speed_mps": 12.69078136992681,
+          "median_along_error_m": -0.14625161851797056,
+          "median_across_error_m": -0.05653891929506059
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 116,
+          "median_speed_mps": 17.819293408454712,
+          "median_along_error_m": -0.13593817079995615,
+          "median_across_error_m": -0.2992748573244628
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 163,
+          "median_speed_mps": 23.109438485587603,
+          "median_along_error_m": 0.010312947523176104,
+          "median_across_error_m": 0.0033421592163107956
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 129,
+          "median_speed_mps": 26.79954474137336,
+          "median_along_error_m": -0.02183318923724635,
+          "median_across_error_m": 0.3146451411259385
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 183,
+          "median_speed_mps": 31.811921766524623,
+          "median_along_error_m": 0.004376073684132582,
+          "median_across_error_m": 0.30982245148029836
+        }
+      ],
+      "median_along_error_m": -0.045352253160686015,
+      "median_across_error_m": 0.08700032763995846,
+      "descriptive_ols": {
+        "intercept_m": -0.24059065824645465,
+        "speed_coefficient_s": 0.007788523986215413
+      }
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel5": {
+      "solution_sha256": "14ca6a7deecfb59ca304e39aaa5dbcd79b610ddeec2607bb18c885f070d821e0",
+      "summary_sha256": "666fb837d5f3b444dbdf5507e48284d86cfdf84c165d745e5bec454ddf9cb1cf",
+      "truth_sha256": "7f27caff1f87f4e43821b8efdbbbc87b75b95c0820291cc906a21ea5aee4f080",
+      "native_position_offset": false,
+      "native_keys": 1102,
+      "truth_keys": 1102,
+      "moving_samples": 874,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 95,
+          "median_speed_mps": 8.423601669640133,
+          "median_along_error_m": -0.2151440666397235,
+          "median_across_error_m": 0.11502089829681729
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 106,
+          "median_speed_mps": 11.51890548643597,
+          "median_along_error_m": -0.24418033154555047,
+          "median_across_error_m": 0.0775822232154714
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 149,
+          "median_speed_mps": 18.56017281111235,
+          "median_along_error_m": -0.29142392711828025,
+          "median_across_error_m": -0.26817645356534175
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 395,
+          "median_speed_mps": 22.6696293703514,
+          "median_along_error_m": -0.3448563261461994,
+          "median_across_error_m": -0.28716705269262155
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 129,
+          "median_speed_mps": 26.370502198562292,
+          "median_along_error_m": -0.3735093643760159,
+          "median_across_error_m": -0.11472126936887335
+        }
+      ],
+      "median_along_error_m": -0.3381509573953042,
+      "median_across_error_m": -0.2140701324617168,
+      "descriptive_ols": {
+        "intercept_m": -0.14737715078935232,
+        "speed_coefficient_s": -0.007888156155243617
+      }
+    },
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro": {
+      "solution_sha256": "8a3993bc3e9515fec152946a0fa174791eb2ef7b32264b0f4409e1d2fff5b7a1",
+      "summary_sha256": "e88cf995fa335f99640cf9425a59d4832aafcffca6a15494cecd41b96583b1e0",
+      "truth_sha256": "97086f2ba80289ddb37e8d415b8f3b8db516b9c8e0870f911b33c1924636842c",
+      "native_position_offset": false,
+      "native_keys": 1102,
+      "truth_keys": 1102,
+      "moving_samples": 874,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 97,
+          "median_speed_mps": 8.350883522433545,
+          "median_along_error_m": -0.18660087067472003,
+          "median_across_error_m": 0.3388278272560465
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 103,
+          "median_speed_mps": 11.608586955103068,
+          "median_along_error_m": -0.6357000864781615,
+          "median_across_error_m": 0.2499688805415629
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 152,
+          "median_speed_mps": 18.508413033519286,
+          "median_along_error_m": -0.4258153151623698,
+          "median_across_error_m": 0.12018228881042398
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 395,
+          "median_speed_mps": 22.677380623579584,
+          "median_along_error_m": -0.47384691616837243,
+          "median_across_error_m": 0.00725254281756356
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 127,
+          "median_speed_mps": 26.390295565741013,
+          "median_along_error_m": -0.9622499432187738,
+          "median_across_error_m": -0.08982699832622017
+        }
+      ],
+      "median_along_error_m": -0.5451356596886461,
+      "median_across_error_m": 0.04212305690832385,
+      "descriptive_ols": {
+        "intercept_m": -0.0883988284564763,
+        "speed_coefficient_s": -0.025655093573971364
+      }
+    },
+    "2023-05-09-21-32-us-ca-mtv-pe1/pixel5": {
+      "solution_sha256": "a25b3de1b07ad956733a2f4f6d56fab7b870e9bc1684c78953729f85a55d867d",
+      "summary_sha256": "caab4464e0e33cf41205964574a9b2aa6c235e14bd087bfbb3e5658835d420a5",
+      "truth_sha256": "ef29d4712204bdf51b543c8e3fba28c639d759c4b21f8438e407ba555f920967",
+      "native_position_offset": false,
+      "native_keys": 2132,
+      "truth_keys": 2132,
+      "moving_samples": 1811,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 131,
+          "median_speed_mps": 7.105064488664934,
+          "median_along_error_m": -0.348441950618692,
+          "median_across_error_m": -0.1654821599555322
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 115,
+          "median_speed_mps": 13.202533941027403,
+          "median_along_error_m": -0.4091949080000143,
+          "median_across_error_m": 0.09772893645816574
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 152,
+          "median_speed_mps": 17.186006017224184,
+          "median_along_error_m": -0.23340670423133714,
+          "median_across_error_m": -0.09804806331916832
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 158,
+          "median_speed_mps": 22.93045604208809,
+          "median_along_error_m": -0.8030384254208919,
+          "median_across_error_m": 0.04279550886081142
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 982,
+          "median_speed_mps": 28.044378450987892,
+          "median_along_error_m": -0.3614251228795906,
+          "median_across_error_m": -0.3852763820728654
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 273,
+          "median_speed_mps": 30.930212444540786,
+          "median_along_error_m": -0.4018816083581176,
+          "median_across_error_m": -0.29938149032807304
+        }
+      ],
+      "median_along_error_m": -0.4160359012179143,
+      "median_across_error_m": -0.25439952438384694,
+      "descriptive_ols": {
+        "intercept_m": -0.43586386408988015,
+        "speed_coefficient_s": 0.0007602813615721384
+      }
+    },
+    "2023-05-16-19-54-us-ca-mtv-xe1/pixel5": {
+      "solution_sha256": "85a02e3923f52760d21ec9a1fcbd656b6a1a37095d0ac9f62ca28d93a8a30aa2",
+      "summary_sha256": "cfaf7cc23b9b94a543de44b17100bede8e02f8c9fcf736b626684c982434f171",
+      "truth_sha256": "9e21b8a984d42473aa262163cc85fc17168d54e1f28ed0788bccfb9a6f538057",
+      "native_position_offset": false,
+      "native_keys": 2323,
+      "truth_keys": 2322,
+      "moving_samples": 2092,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 61,
+          "median_speed_mps": 8.400422673336864,
+          "median_along_error_m": -0.1935516433822914,
+          "median_across_error_m": -0.19045922451491382
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 145,
+          "median_speed_mps": 11.613490098712735,
+          "median_along_error_m": -0.1751709487404101,
+          "median_across_error_m": -0.2042978900768123
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 27,
+          "median_speed_mps": 18.919357509975107,
+          "median_along_error_m": -0.2137731903811812,
+          "median_across_error_m": -0.7017690998013829
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 813,
+          "median_speed_mps": 23.83366104589673,
+          "median_along_error_m": -0.3863895492266487,
+          "median_across_error_m": -0.7540914882145321
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 1040,
+          "median_speed_mps": 26.482952654615577,
+          "median_along_error_m": -0.483430526214235,
+          "median_across_error_m": -0.8051920790104673
+        }
+      ],
+      "median_along_error_m": -0.37545565436933354,
+      "median_across_error_m": -0.7387157563303595,
+      "descriptive_ols": {
+        "intercept_m": 0.22790757846945572,
+        "speed_coefficient_s": -0.02738250493866759
+      }
+    },
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro": {
+      "solution_sha256": "113146a5261799f11c1d1cd53b22fc750980644b037bed3bfd75a1b10e1adff1",
+      "summary_sha256": "1d79006dd94fa7cf5fd9bd1484f52a382d4ca1a58f0df59159b1f19434d0ee14",
+      "truth_sha256": "8df14918056d511939e0c5001cdc78be79d95852e7c7594b92eae94aa61cf021",
+      "native_position_offset": false,
+      "native_keys": 2323,
+      "truth_keys": 2323,
+      "moving_samples": 2093,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 59,
+          "median_speed_mps": 8.282871195497151,
+          "median_along_error_m": -0.253398727296609,
+          "median_across_error_m": 0.17131337398878815
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 147,
+          "median_speed_mps": 11.586004732953917,
+          "median_along_error_m": -0.4596783189019776,
+          "median_across_error_m": 0.009693467318947139
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 27,
+          "median_speed_mps": 18.518902476900426,
+          "median_along_error_m": -0.47239945191427346,
+          "median_across_error_m": -0.14202867188052493
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 822,
+          "median_speed_mps": 23.838057117971623,
+          "median_along_error_m": -0.5921780862235941,
+          "median_across_error_m": -0.11267491195290558
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 1031,
+          "median_speed_mps": 26.499815920507295,
+          "median_along_error_m": -0.592100190065608,
+          "median_across_error_m": -0.03238618954659832
+        }
+      ],
+      "median_along_error_m": -0.5878703840937147,
+      "median_across_error_m": -0.055417276106115174,
+      "descriptive_ols": {
+        "intercept_m": -0.2559264648904866,
+        "speed_coefficient_s": -0.014266789588770357
+      }
+    },
+    "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g": {
+      "solution_sha256": "3cf9edc69fa13217f9578b6e3fded2712a0589f5c29938d751f6b0b3925898a5",
+      "summary_sha256": "cdc61e91713d4ea77f3fc8ec2df5e72e6d09f6305979ff8bb419abd224864d52",
+      "truth_sha256": "bbe8c7f5b04b527b05f59af038ae7bec352367e752505f5e37383c49b4be525d",
+      "native_position_offset": false,
+      "native_keys": 1114,
+      "truth_keys": 1114,
+      "moving_samples": 500,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 257,
+          "median_speed_mps": 7.5150554360322985,
+          "median_along_error_m": -1.2085739573095255,
+          "median_across_error_m": 0.2783355275480152
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 166,
+          "median_speed_mps": 12.408923864080034,
+          "median_along_error_m": -1.1292083980786352,
+          "median_across_error_m": 0.022052591416580208
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 77,
+          "median_speed_mps": 16.71554433694654,
+          "median_along_error_m": -0.9458779954743773,
+          "median_across_error_m": 0.33252819481488033
+        }
+      ],
+      "median_along_error_m": -1.1292083980786352,
+      "median_across_error_m": 0.19431777843101725,
+      "descriptive_ols": {
+        "intercept_m": -1.2599841555344315,
+        "speed_coefficient_s": 0.01183920342697497
+      }
+    },
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro": {
+      "solution_sha256": "a4ed3db9cf928366d071b2c02835703ebd1197d0edb3f79097990abe47e298ab",
+      "summary_sha256": "9e824f71f920f2f7328b660040faf8ecef08b7a1ee2b962e1a5b394fa5b3b83b",
+      "truth_sha256": "d32d01082e6bf3c2e5b59af9c57d47e881627155eb7d77bfbdceeab3b981638a",
+      "native_position_offset": false,
+      "native_keys": 1384,
+      "truth_keys": 1383,
+      "moving_samples": 643,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 291,
+          "median_speed_mps": 7.606655174406172,
+          "median_along_error_m": -0.14031888310842844,
+          "median_across_error_m": -0.032111496781224276
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 289,
+          "median_speed_mps": 12.421008905260067,
+          "median_along_error_m": -0.10833869538525406,
+          "median_across_error_m": 0.06671303979648716
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 63,
+          "median_speed_mps": 16.152190117798597,
+          "median_along_error_m": -0.04110795419313122,
+          "median_across_error_m": -0.01391547008786968
+        }
+      ],
+      "median_along_error_m": -0.11430820715961088,
+      "median_across_error_m": -0.0026090080059999413,
+      "descriptive_ols": {
+        "intercept_m": -0.06592813338636884,
+        "speed_coefficient_s": -0.004775154527925665
+      }
+    },
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b": {
+      "solution_sha256": "82d80a094ca32d9da1ab531bbdaeeec6202a78d26dd350872f66af3f4c2bb9d3",
+      "summary_sha256": "4a34333efc3334594015d298a3ceb61ce5f551bc0f25781af5adca5848b02886",
+      "truth_sha256": "9c1200d8ae3c378ec9173bffffe4544af3a4fccaf785964b7a74f40cf8720a14",
+      "native_position_offset": false,
+      "native_keys": 1399,
+      "truth_keys": 1399,
+      "moving_samples": 900,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 175,
+          "median_speed_mps": 6.720314480064897,
+          "median_along_error_m": -0.30470864622003757,
+          "median_across_error_m": 0.0030871629262139264
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 236,
+          "median_speed_mps": 13.28258192026589,
+          "median_along_error_m": -0.13896229656806883,
+          "median_across_error_m": -0.38775853491849643
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 466,
+          "median_speed_mps": 16.953895712963828,
+          "median_along_error_m": -0.06302104063181423,
+          "median_across_error_m": -0.2736364288047287
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 23,
+          "median_speed_mps": 21.33484815341117,
+          "median_along_error_m": 0.44206077195597204,
+          "median_across_error_m": -0.33020906302333775
+        }
+      ],
+      "median_along_error_m": -0.11665467298582316,
+      "median_across_error_m": -0.29176996907572084,
+      "descriptive_ols": {
+        "intercept_m": -0.49716116952281514,
+        "speed_coefficient_s": 0.01923554463011035
+      }
+    },
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro": {
+      "solution_sha256": "455c63e95bbc5a91e4206e3ca2b1eb3a702e0110e081bc2bc6d26ce5630ce1d4",
+      "summary_sha256": "66891959e6852de3fd1f6c24cfae93a69281096743a7723020b004e42da9107a",
+      "truth_sha256": "626dc58b297e8a21fb5c5b9a9161f9f94b52bb1ebd18e58b9a7e7a16e5590660",
+      "native_position_offset": false,
+      "native_keys": 1259,
+      "truth_keys": 1258,
+      "moving_samples": 720,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 114,
+          "median_speed_mps": 7.7617973000364024,
+          "median_along_error_m": -0.5518170297013041,
+          "median_across_error_m": -0.030979697558192527
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 245,
+          "median_speed_mps": 13.140105296231692,
+          "median_along_error_m": -0.5534525154746016,
+          "median_across_error_m": 0.058755727940136934
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 287,
+          "median_speed_mps": 16.71161785573139,
+          "median_along_error_m": -0.5903431839878681,
+          "median_across_error_m": -0.20141052371061616
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 74,
+          "median_speed_mps": 20.85036491708725,
+          "median_along_error_m": -0.6125250308644414,
+          "median_across_error_m": -0.11656177335613227
+        }
+      ],
+      "median_along_error_m": -0.568277442942575,
+      "median_across_error_m": -0.09933881227763032,
+      "descriptive_ols": {
+        "intercept_m": -0.4544665939376806,
+        "speed_coefficient_s": -0.00877048459865089
+      }
+    },
+    "2023-09-05-23-07-us-ca-routen/pixel5": {
+      "solution_sha256": "ff9715eb7916baf7546b20a6b00b68455ca0a363f8450fa6386445f8b8d82d51",
+      "summary_sha256": "b06e504c6bb206a7c55c3e2308eb79e0a994e8c8301447852050cdec2e85b080",
+      "truth_sha256": "b69eabd78c6f76087cae3e434baae3130d98e451a16724fbc22d3bcba4138358",
+      "native_position_offset": false,
+      "native_keys": 1564,
+      "truth_keys": 1564,
+      "moving_samples": 929,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 236,
+          "median_speed_mps": 8.074869335395206,
+          "median_along_error_m": -0.23390579908960327,
+          "median_across_error_m": -0.20717697612861735
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 434,
+          "median_speed_mps": 12.470573955450387,
+          "median_along_error_m": -0.3086083667942858,
+          "median_across_error_m": -0.24079626341387683
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 254,
+          "median_speed_mps": 16.162028489974247,
+          "median_along_error_m": -0.23797656138501266,
+          "median_across_error_m": -0.07466769765698594
+        }
+      ],
+      "median_along_error_m": -0.27350352197574035,
+      "median_across_error_m": -0.20923110597191347,
+      "descriptive_ols": {
+        "intercept_m": -0.1259395381737743,
+        "speed_coefficient_s": -0.008700830459491344
+      }
+    },
+    "2023-09-06-00-01-us-ca-routen/pixel6pro": {
+      "solution_sha256": "09978b8c723d864e85fa1a44084e4b0559f1c317efffeb2327991d0d9935c0ab",
+      "summary_sha256": "38d1a4a137b031864fd8248f0d585a1bfb1b6316a534359dfdde2fd44e00f494",
+      "truth_sha256": "56cb263ecdc624b41cc42ed484baf3cc0a27c42c32789476015d64e07605ed7c",
+      "native_position_offset": false,
+      "native_keys": 1650,
+      "truth_keys": 1650,
+      "moving_samples": 940,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 233,
+          "median_speed_mps": 8.178023297187508,
+          "median_along_error_m": -0.44720685516841735,
+          "median_across_error_m": 0.3746867216872108
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 464,
+          "median_speed_mps": 12.002129437964115,
+          "median_along_error_m": -0.42088206019916524,
+          "median_across_error_m": 0.4016297999331617
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 243,
+          "median_speed_mps": 16.094369128051106,
+          "median_along_error_m": -0.4583054216045545,
+          "median_across_error_m": 0.4630127499027234
+        }
+      ],
+      "median_along_error_m": -0.4388764566876051,
+      "median_across_error_m": 0.41335060791522305,
+      "descriptive_ols": {
+        "intercept_m": -0.5263576127584557,
+        "speed_coefficient_s": 0.004825355531401924
+      }
+    },
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro": {
+      "solution_sha256": "855b79b2cc41605f0cc2e77c91ff87961f78bc0e7a725b836ddf21788d969abb",
+      "summary_sha256": "9b1575e1b6989b2a96142a95d0cab7d11445840038d790bc5764227a2017aa13",
+      "truth_sha256": "abb4076259100afa716cba5f845f285a719b19e17d16c6f2903355bbe58879a7",
+      "native_position_offset": false,
+      "native_keys": 1602,
+      "truth_keys": 1601,
+      "moving_samples": 1295,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 136,
+          "median_speed_mps": 8.37007549501179,
+          "median_along_error_m": -1.4810840882369853,
+          "median_across_error_m": 0.05028894420004028
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 194,
+          "median_speed_mps": 12.224847467637602,
+          "median_along_error_m": -0.5589667580901476,
+          "median_across_error_m": 0.051027726441673464
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 153,
+          "median_speed_mps": 17.977477128531067,
+          "median_along_error_m": -0.6075198288380783,
+          "median_across_error_m": 0.14120862582543672
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 176,
+          "median_speed_mps": 23.65486762256452,
+          "median_along_error_m": -0.423029737289969,
+          "median_across_error_m": 0.1252569519478684
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 493,
+          "median_speed_mps": 27.5585295132091,
+          "median_along_error_m": -0.4569351641044579,
+          "median_across_error_m": 0.010510475972928243
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 143,
+          "median_speed_mps": 30.845455533967883,
+          "median_along_error_m": -0.8353562993587755,
+          "median_across_error_m": 0.24403606165276898
+        }
+      ],
+      "median_along_error_m": -0.48886292612749976,
+      "median_across_error_m": 0.06975817369640487,
+      "descriptive_ols": {
+        "intercept_m": -0.6841571262169786,
+        "speed_coefficient_s": 0.004472516599307947
+      }
+    },
+    "2023-09-07-18-59-us-ca/pixel5": {
+      "solution_sha256": "2da66de19b08d7b573454cfff5a41309463f9c39e4715edb47bcde828d583faa",
+      "summary_sha256": "df1cb71e86469c4ff61b8551da66360414b7e918a4270a60bbe36f06c3b88f26",
+      "truth_sha256": "171382b4b189f513cfc29e1a1a36177af876ca76dbfe1187de26e1fbfabe4621",
+      "native_position_offset": false,
+      "native_keys": 1172,
+      "truth_keys": 1172,
+      "moving_samples": 849,
+      "speed_bins": [
+        {
+          "low_mps": 5,
+          "high_mps": 10,
+          "count": 79,
+          "median_speed_mps": 7.321260072223698,
+          "median_along_error_m": -0.411881421390962,
+          "median_across_error_m": 0.2874760301386167
+        },
+        {
+          "low_mps": 10,
+          "high_mps": 15,
+          "count": 57,
+          "median_speed_mps": 12.932113267007544,
+          "median_along_error_m": -0.6691780320616642,
+          "median_across_error_m": -0.9883510981723843
+        },
+        {
+          "low_mps": 15,
+          "high_mps": 20,
+          "count": 40,
+          "median_speed_mps": 17.130433063932244,
+          "median_along_error_m": -0.22887057647043024,
+          "median_across_error_m": -0.5492415300828333
+        },
+        {
+          "low_mps": 20,
+          "high_mps": 25,
+          "count": 116,
+          "median_speed_mps": 23.387556362248745,
+          "median_along_error_m": -0.5539944882793564,
+          "median_across_error_m": -0.28736882501374494
+        },
+        {
+          "low_mps": 25,
+          "high_mps": 30,
+          "count": 544,
+          "median_speed_mps": 27.30339988129615,
+          "median_along_error_m": -0.39724320751558434,
+          "median_across_error_m": -0.17958578651161128
+        },
+        {
+          "low_mps": 30,
+          "high_mps": 40,
+          "count": 13,
+          "median_speed_mps": 30.111608964345994,
+          "median_along_error_m": -0.2663334141572957,
+          "median_across_error_m": -0.11769415701729079
+        }
+      ],
+      "median_along_error_m": -0.40034575983362014,
+      "median_across_error_m": -0.2844171257535694,
+      "descriptive_ols": {
+        "intercept_m": -0.4630396930419123,
+        "speed_coefficient_s": 0.0026621749412078077
+      }
+    }
+  },
+  "phones": {
+    "mi8": {
+      "cases": 5,
+      "estimable_cases": 5,
+      "median_route_speed_coefficient_s": 0.000733578355322453,
+      "positive_slopes": 3,
+      "negative_slopes": 2,
+      "median_route_along_error_m": -0.22687014980355336
+    },
+    "pixel5": {
+      "cases": 15,
+      "estimable_cases": 15,
+      "median_route_speed_coefficient_s": -0.006031751032316607,
+      "positive_slopes": 5,
+      "negative_slopes": 10,
+      "median_route_along_error_m": -0.3381509573953042
+    },
+    "pixel4xl": {
+      "cases": 1,
+      "estimable_cases": 1,
+      "median_route_speed_coefficient_s": -0.0033828901621876825,
+      "positive_slopes": 0,
+      "negative_slopes": 1,
+      "median_route_along_error_m": -0.14896569940197285
+    },
+    "pixel4": {
+      "cases": 2,
+      "estimable_cases": 2,
+      "median_route_speed_coefficient_s": -0.005363419771874496,
+      "positive_slopes": 0,
+      "negative_slopes": 2,
+      "median_route_along_error_m": -0.27341876452420233
+    },
+    "sm-g988b": {
+      "cases": 2,
+      "estimable_cases": 2,
+      "median_route_speed_coefficient_s": -0.010835580200178305,
+      "positive_slopes": 0,
+      "negative_slopes": 2,
+      "median_route_along_error_m": -0.23374813928083285
+    },
+    "pixel6pro": {
+      "cases": 3,
+      "estimable_cases": 3,
+      "median_route_speed_coefficient_s": -0.0027506603126236776,
+      "positive_slopes": 1,
+      "negative_slopes": 2,
+      "median_route_along_error_m": -0.4388764566876051
+    },
+    "samsunga325g": {
+      "cases": 1,
+      "estimable_cases": 1,
+      "median_route_speed_coefficient_s": -0.028424498897380752,
+      "positive_slopes": 0,
+      "negative_slopes": 1,
+      "median_route_along_error_m": -0.7490387644004485
+    },
+    "sm-a325f": {
+      "cases": 2,
+      "estimable_cases": 2,
+      "median_route_speed_coefficient_s": 0.028151356138290427,
+      "positive_slopes": 2,
+      "negative_slopes": 0,
+      "median_route_along_error_m": -0.6246783307046766
+    },
+    "sm-a205u": {
+      "cases": 1,
+      "estimable_cases": 1,
+      "median_route_speed_coefficient_s": -0.028562457533736284,
+      "positive_slopes": 0,
+      "negative_slopes": 1,
+      "median_route_along_error_m": -1.4583558445048777
+    },
+    "sm-a217m": {
+      "cases": 1,
+      "estimable_cases": 1,
+      "median_route_speed_coefficient_s": -0.0002412663675563833,
+      "positive_slopes": 0,
+      "negative_slopes": 1,
+      "median_route_along_error_m": -0.7544627156437975
+    },
+    "pixel7pro": {
+      "cases": 5,
+      "estimable_cases": 5,
+      "median_route_speed_coefficient_s": -0.004775154527925665,
+      "positive_slopes": 2,
+      "negative_slopes": 3,
+      "median_route_along_error_m": -0.48886292612749976
+    },
+    "sm-a505g": {
+      "cases": 1,
+      "estimable_cases": 1,
+      "median_route_speed_coefficient_s": 0.01183920342697497,
+      "positive_slopes": 1,
+      "negative_slopes": 0,
+      "median_route_along_error_m": -1.1292083980786352
+    },
+    "sm-s908b": {
+      "cases": 1,
+      "estimable_cases": 1,
+      "median_route_speed_coefficient_s": 0.01923554463011035,
+      "positive_slopes": 1,
+      "negative_slopes": 0,
+      "median_route_along_error_m": -0.11665467298582316
+    }
+  }
+}

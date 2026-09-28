@@ -1,0 +1,52 @@
+{
+  "status": "running",
+  "official_score": false,
+  "heldout": false,
+  "promoted": false,
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\modern11_source_recipe_20260926\\plan.json",
+  "plan_sha256": "7a69e33ad1fc34977c37052a2fc87c91a72e9a17d8f871c074fe858a4264ae8c",
+  "binary_sha256": "7c5417bbc3a2d29f1ed7c7ace3ffbb91650fb8a8ce7595eac23813644b5d1316",
+  "cases": [
+    "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+    "2022-05-13-20-57-us-ca-mtv-pe1/pixel6pro",
+    "2022-05-13-20-57-us-ca-mtv-pe1/sm-g988b",
+    "2022-11-15-00-53-us-ca-mtv-a/pixel7pro",
+    "2023-03-08-21-34-us-ca-mtv-u/pixel6pro",
+    "2023-05-16-19-55-us-ca-mtv-xe1/pixel7pro",
+    "2023-05-24-20-26-us-ca-sjc-ge2/pixel7pro",
+    "2023-05-25-19-10-us-ca-sjc-be2/sm-s908b",
+    "2023-05-25-20-11-us-ca-sjc-he2/pixel7pro",
+    "2023-09-06-00-01-us-ca-routen/pixel6pro",
+    "2023-09-06-22-49-us-ca-routebb1/pixel7pro"
+  ],
+  "selection": "All eleven cases from the established expanded-bias cohort; no per-route score selection",
+  "common_flags": [
+    "--native-upstream-position-offset",
+    "--native-base-pseudorange-preserve-additional-frequency-bands",
+    "--android-continuous-clock-reference"
+  ],
+  "candidate_flags": [
+    "--native-source-tdcp-meter-sigma",
+    "--native-phase184-source-tdcp-huber-k",
+    "--native-phase213-main-doppler"
+  ],
+  "height_modes": {
+    "map": 8,
+    "relative": 3
+  },
+  "all_paired_argv_inputs_and_height_group_exclusions_verified": true,
+  "supervisor_session": 37542,
+  "supervisor_script": "E:/rtklib_v2_ws_tmp/launch_modern11_source_recipe.ps1",
+  "supervisor_sha256": "55600b747f46494aa495420a5473d117b7498ed9e8da747a6757e4bee1492c3b",
+  "gate": "Wait for A205U v2 successful native pair, completed score audit and byte-identical default control; one worker and at most one other native process. Failure stops this queue.",
+  "execution_started": {
+    "pid": 61500,
+    "workers": 1,
+    "plan_sha256": "7a69e33ad1fc34977c37052a2fc87c91a72e9a17d8f871c074fe858a4264ae8c",
+    "started_unix": 1790399288.6429157
+  },
+  "gate_passed": {
+    "a205u_report_sha256": "dcc5d331119002e28af209b22d0782a62d1bb9c939ce9250c77f3320796f5700",
+    "default_parity_report_sha256": "2feada254b844ef87e2a0315f9693ae115f69e7a93dfd5936b2f99165659b8a6"
+  }
+}

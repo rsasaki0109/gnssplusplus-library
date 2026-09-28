@@ -1,0 +1,47 @@
+{
+  "status": "terminal-one-admission-failure-one-audited-pair",
+  "official_score": false,
+  "promoted": false,
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\continuous_raw_clock_train_samsung_20260926\\plan.json",
+  "plan_sha256": "70d173439a77c40959a548cbb755998d089b9168d46e79018f594da8d169cc17",
+  "cases": [
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a205u",
+    "2022-10-06-21-51-us-ca-mtv-n/sm-a325f"
+  ],
+  "binary_sha256": "862d58966c5e88594e171d3b39d038ae947419409ab649fb42a0426e43018832",
+  "selection": "Both additional affected phones in the frozen train40 set, selected only by loader discontinuity count; no score selection",
+  "scope": "No-main-D original corrected recipes; only continuous-clock flag differs. This tests whether the input fix helps the existing no-D family, separately from the July14 main-D repair.",
+  "admission_caveat": "The standalone admission helper exports observation epochs only. A205u application adds four native leading clock epochs via its preserved source flags; full native output audit must cover all 1213 raw keys.",
+  "supervisor_session": 93925,
+  "supervisor_script": "E:/rtklib_v2_ws_tmp/launch_continuous_clock_samsung.ps1",
+  "gate_supervisor_pid": 31068,
+  "gate_supervisor_created": "2026-09-26T12:33:59.822424+09:00",
+  "supervisor_sha256": "77dae46499c27af615b3330c1e76097c832a6dd319dc2416aa15fa15fac577cb",
+  "execution_started": {
+    "pid": 42228,
+    "workers": 1,
+    "plan_sha256": "70d173439a77c40959a548cbb755998d089b9168d46e79018f594da8d169cc17",
+    "started_unix": 1790395719.3343666
+  },
+  "a205u_failure": {
+    "returncode": 1,
+    "wall_s": 6.413342237472534,
+    "run_sha256": "329c43627f33cf7d82d1fb384754612993e1944f402a01a268b8b71fe4f6f51d",
+    "failure": "temporal-initialization-ineligible-failure",
+    "raw_failure_status": "time-gap",
+    "raw_failure_reason": "epoch-time-gap-exceeds-limit",
+    "native_inference_entered": false,
+    "independent_spp_accepted": 1208,
+    "raw_epochs": 1213
+  },
+  "execution_done_sha256": "5c30c5f357b652653e218080fd460d7facfa39d4f174698fc7b92f3945a787d9",
+  "native_execution_complete": false,
+  "a325f_result": {
+    "comparison": "docs\\use_cases\\records\\gsdc2023_continuous_clock_a325f_comparison_20260926.json",
+    "comparison_sha256": "474666c927a3d06ac1421b2f2aba30fbc1484c44623503a35aa2606f771a6699",
+    "control_m": 2.0053711530533063,
+    "candidate_m": 2.0149661276938815,
+    "delta_m": 0.009594974640575238,
+    "interpretation": "Clock reset removed; small score regression. No blanket promotion."
+  }
+}

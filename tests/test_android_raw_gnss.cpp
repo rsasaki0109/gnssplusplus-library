@@ -66,11 +66,12 @@ void writeRow(std::ostream& output,
               double time_offset_nanos = 0.0,
               double bias_uncertainty_nanos = 0.0,
               double received_sv_time_uncertainty_nanos =
-                  std::numeric_limits<double>::quiet_NaN()) {
+                  std::numeric_limits<double>::quiet_NaN(),
+              int hardware_clock_count = 7) {
     output << std::setprecision(17)
            << "Raw," << utc_millis << ',' << time_nanos << ',' << full_bias_nanos
            << ",0," << bias_uncertainty_nanos << ',' << time_offset_nanos
-           << ",7," << svid << ',' << constellation << ','
+           << ',' << hardware_clock_count << ',' << svid << ',' << constellation << ','
            << received_sv_time_nanos << ',' << pseudorange_rate << ','
            << adr_state << ',' << adr_m << ',' << frequency_hz << ',' << cn0 << ','
            << signal;
@@ -633,6 +634,44 @@ TEST(AndroidRawGnssTest, ResetsRawClockSegmentOnlyAfterStrictlyGreaterOneSecond)
     EXPECT_NEAR(result.observations.epochs[1].receiver_clock_bias, 1.0e-6, 1e-15);
     EXPECT_NEAR(result.observations.epochs[2].receiver_clock_bias, 0.0, 1e-15);
     EXPECT_EQ(result.diagnostics.clock_discontinuities, 1U);
+    AndroidRawGnssConfig continuous;
+    continuous.continuous_clock_reference = true;
+    AndroidRawGnssResult retained;
+    ASSERT_TRUE(loadAndroidRawGnssCsv(path.string(), continuous, retained, error)) << error;
+    ASSERT_EQ(retained.observations.epochs.size(), 3U);
+    EXPECT_EQ(retained.epoch_utc_time_millis, result.epoch_utc_time_millis);
+    EXPECT_EQ(retained.diagnostics.clock_discontinuities, 0U);
+    const auto& last = retained.observations.epochs.back();
+    const auto& reset = result.observations.epochs.back();
+    EXPECT_NEAR(last.receiver_clock_bias, 1e-6, 1e-15);
+    EXPECT_NEAR(last.time - reset.time, 1e-6, 1e-10);
+    EXPECT_NEAR(last.observations.front().pseudorange - reset.observations.front().pseudorange,
+                constants::SPEED_OF_LIGHT * 1e-6, 1e-6);
+    std::filesystem::remove(path);
+}
+
+TEST(AndroidRawGnssTest, ContinuousReferenceRejectsHardwareChangesAndBackwardTime) {
+    const auto path = fixturePath("continuous_clock_discontinuity");
+    constexpr std::int64_t bias = -1'300'000'000'000'000'000LL;
+    const auto t = receiverTimeNs(bias, 2200, 100000.0);
+    for (const bool hardware_change : {false, true}) {
+        {
+            std::ofstream output(path);
+            output << kHeader;
+            writeRow(output, 1700000000000LL, t, bias, 99999930000000LL, 3, 1,
+                     0, 1, 42, constants::GPS_L1_FREQ, 40, "GPS_L1_CA");
+            const auto step = hardware_change ? 1000000000LL : -1000000LL;
+            writeRow(output, 1700000001000LL, t + step, bias, 99999930000000LL + step, 3, 1,
+                     0, 1, 42, constants::GPS_L1_FREQ, 40, "GPS_L1_CA",
+                     0, false, 0, 0, std::numeric_limits<double>::quiet_NaN(), hardware_change ? 8 : 7);
+        }
+        AndroidRawGnssConfig config;
+        config.continuous_clock_reference = true;
+        AndroidRawGnssResult result;
+        std::string error;
+        EXPECT_FALSE(loadAndroidRawGnssCsv(path.string(), config, result, error));
+        EXPECT_NE(error.find("continuous raw clock reference requires"), std::string::npos);
+    }
     std::filesystem::remove(path);
 }
 

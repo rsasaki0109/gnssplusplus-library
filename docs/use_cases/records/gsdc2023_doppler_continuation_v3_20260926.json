@@ -1,0 +1,245 @@
+{
+  "status": "failed-before-final-solve",
+  "official_score": false,
+  "promoted": false,
+  "binary": "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\doppler_continuation_v3_20260926.exe",
+  "binary_sha256": "0ebe47f530bfc5dff57f815f78f86a35ebd61a369a02e28fb029bd7e1890656a",
+  "source_sha256": {
+    "apps/native/gnss_fgo_imu_no_base.cpp": "c7b498616ef3d7e96111f720ba8db77b95cad897c3335436fad16bd63b483869",
+    "include/libgnss++/algorithms/native_imu_refinement_rebuild.hpp": "1c3f0fd20264ed9d093c9bb3e5998baa4059706837417268ad70389ed4f2cbfc",
+    "include/libgnss++/algorithms/native_imu_refinement_handoff.hpp": "e615af59d51c4ea4c28d38ad2af701175f41ac45cbc10a8c47c580d6bd87dc2b",
+    "tests/test_native_imu_refinement_handoff.cpp": "808cd0d0f17451e4e2a9fe3de86dab12b63dfdcd6207f969d5a9544c1b098b33",
+    "scripts/analysis/run_gsdc_doppler_segment_diagnostic.py": "ba919588187d1cdd8dc8687a7fa95c3af7a0346c3186052b7c28c88fb07c3c72",
+    "scripts/analysis/compare_gsdc_doppler_diagnostic.py": "d6967ab6d7da6f9015b1909a98c717e340b1e3e9ab4b879651a58a6b23b272cf"
+  },
+  "source_run": "E:\\rtklib_v2_ws_output\\gsdc_native\\train11_refine_v1\\00\\run.json",
+  "source_run_sha256": "a4d5359db824f687cd8b4bebef8ffffc05fc80770d6e8d3f41eb5de4f4d411a6",
+  "candidate_flags": [
+    "--native-refinement-no-doppler-initialization",
+    "--native-refinement-observed-clock-drift"
+  ],
+  "focused_tests": {
+    "tests": 10,
+    "failures": 0,
+    "disabled": 0,
+    "errors": 0,
+    "timestamp": "2026-09-26T11:24:24Z",
+    "time": "0.001s",
+    "name": "AllTests",
+    "testsuites": [
+      {
+        "name": "NativeImuRefinementHandoff",
+        "tests": 10,
+        "failures": 0,
+        "disabled": 0,
+        "errors": 0,
+        "timestamp": "2026-09-26T11:24:24Z",
+        "time": "0.001s",
+        "testsuite": [
+          {
+            "name": "PreservesRawDataAndConvertsStateUnitsAndFrames",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 40,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "RejectsEpochMismatchWithoutNearestTimeOrMissingStateFill",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 56,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "RejectsInvalidSolveFrameAndState",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 66,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "DopplerMaskUsesOptimizedVelocityAndRetainsExactBoundary",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 78,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "DopplerMaskRejectsBrokenGeometryBeforeMutation",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 103,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "InitialDopplerThresholdPreservesTwentyMetreBoundary",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 119,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "NoDAlternatingDriftCannotScreenObservedDoppler",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 142,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "NoDDriftReplacementRejectsIncompleteOrMismatchedSource",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 173,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "ObservedDriftRestoresMaskWithoutMultibandOverweighting",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 185,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          },
+          {
+            "name": "ObservedDriftRejectsMissingCoverageAndEpochMismatch",
+            "file": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\tests\\test_native_imu_refinement_handoff.cpp",
+            "line": 222,
+            "status": "RUN",
+            "result": "COMPLETED",
+            "timestamp": "2026-09-26T11:24:24Z",
+            "time": "0s",
+            "classname": "NativeImuRefinementHandoff"
+          }
+        ]
+      }
+    ]
+  },
+  "negative_cli": {
+    "returncode": 2,
+    "stderr": "--native-refinement-observed-clock-drift requires --native-refinement-no-doppler-initialization"
+  },
+  "output_root": "E:/rtklib_v2_ws_output/gsdc_native/doppler_continuation_v3_20260926",
+  "hypothesis": "Reestimate clock drift from corrected raw Doppler at the IMU warm pose/velocity before masks and final solve; use per-satellite medians, at least three satellites at every epoch, no truth or time filling.",
+  "candidate_pid": 27492,
+  "control_gate": {
+    "supervisor_pid": 1748,
+    "candidate_pid": 27492,
+    "candidate_created": 1790389630.3269603,
+    "state": "waiting-for-live-candidate",
+    "started_unix": 1790389949.8938913
+  },
+  "control_gate_script": "E:\\rtklib_v2_ws_tmp\\finish_doppler_continuation_v3.py",
+  "control_gate_script_sha256": "c00de091eb3ed623ace86a75058538c29b1d69768fbd60711ccc1739335fcdf1",
+  "pre_refinement_stage_matches_v2": {
+    "summary.json.gnss-first.csv": true,
+    "summary.json.gnss-first.clocks.csv": true,
+    "summary.json.initialization.json": true
+  },
+  "candidate_run": {
+    "argv": [
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\binaries\\doppler_continuation_v3_20260926.exe",
+      "--dataset-id",
+      "2021-07-14-20-50-us-ca-mtv-e/sm-g988b",
+      "--android-gnss",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_gnss.csv",
+      "--android-imu",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_imu.csv",
+      "--nav",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\brdc.nav",
+      "--native-base-rinex",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\P178_rnx2.obs",
+      "--all-epochs",
+      "--android-raw-utc-keys",
+      "--android-raw-clock-only",
+      "--android-utc-wall-clock-fallback",
+      "--native-pdc-imu-tdcp-no-bridge",
+      "--native-source-direct-observable-quality",
+      "--native-source-clock-c0d-factor",
+      "--native-source-clock-c0d-meter-state-parity",
+      "--native-source-clock-c0d-active-solve-diagnostic",
+      "--native-source-clock-c0d-gnss-first-meter-state-handoff",
+      "--native-source-clock-c0d-epoch-vector-parity",
+      "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver",
+      "--native-phase157-raw-p-bootstrap",
+      "--native-phase165-raw-p-no-doppler-graph",
+      "--native-phase167-raw-p-no-doppler-lm-termination-budget",
+      "--native-phase171-raw-p-no-doppler-imu-main",
+      "--native-phase171-raw-p-ecef-doppler-gnss-first",
+      "--native-upstream-stop-constraints",
+      "--native-lm-lambda-floor",
+      "--native-base-pseudorange-compensation",
+      "--native-base-pseudorange-source-miss-mask",
+      "--native-base-rinex-sha256",
+      "1ad4f12cdbd4b4780d43bb13d6291755a1c532e84cea8035598347a1303010f3",
+      "--native-base-position-ecef",
+      "-2708471.0323",
+      "-4279023.3576",
+      "3864681.6305",
+      "--out",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v3_20260926\\candidate_arm\\observed_drift\\solution.csv",
+      "--summary-json",
+      "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v3_20260926\\candidate_arm\\observed_drift\\summary.json",
+      "--android-include-first-native-epoch",
+      "--native-temporal-seed-initialization",
+      "--native-sparse-p-staging",
+      "--native-source-imu-initialization",
+      "--native-upstream-position-offset",
+      "--native-base-pseudorange-preserve-additional-frequency-bands",
+      "--native-source-imu-initialization",
+      "--native-imu-refinement-pass",
+      "--native-phase213-main-doppler",
+      "--native-export-gnss-stage",
+      "--native-export-imu-stage",
+      "--native-refinement-no-doppler-initialization",
+      "--native-refinement-observed-clock-drift"
+    ],
+    "binary_sha256": "0ebe47f530bfc5dff57f815f78f86a35ebd61a369a02e28fb029bd7e1890656a",
+    "inputs_sha256": {
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_imu.csv": "cb7388be335d48eb7612025bc68a4ffb198bdddd2caa9f0a1b348fc06ef29c1d",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\brdc.nav": "357b8d05d2e9d9c0a2e1d5d9256120b288182d51109c2a4e01edcd0920f20440",
+      "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\P178_rnx2.obs": "1ad4f12cdbd4b4780d43bb13d6291755a1c532e84cea8035598347a1303010f3"
+    },
+    "source_run_sha256": "a4d5359db824f687cd8b4bebef8ffffc05fc80770d6e8d3f41eb5de4f4d411a6",
+    "state": "failed",
+    "pid": 27492,
+    "returncode": 1,
+    "wall_s": 741.0956966876984
+  },
+  "failure": "main optimizer exception: Observed drift needs three satellites at epoch 0",
+  "stderr_sha256": "80505fc7affc99492c661cdd2cbdacd212ba4f33512b6b04285fd193ea2130c9",
+  "control_gate_final": {
+    "supervisor_pid": 1748,
+    "candidate_pid": 27492,
+    "candidate_created": 1790389630.3269603,
+    "state": "candidate-failed-control-not-launched",
+    "started_unix": 1790389949.8938913
+  },
+  "analysis": "The builder screens D whenever receiver velocities are supplied (refinement=true), even with use_upstream_absolute_doppler_residual_screen=false. No-D drift therefore filters observations before the estimator can consume them. Do not weaken the three-satellite requirement or special-case epoch zero."
+}

@@ -4,6 +4,7 @@
 #include <libgnss++/algorithms/cn0_doppler_calibration.hpp>
 #include <libgnss++/algorithms/doppler_velocity_wls.hpp>
 #include <libgnss++/algorithms/fgo.hpp>
+#include <libgnss++/algorithms/native_imu_refinement_rebuild.hpp>
 #include <libgnss++/algorithms/pseudorange_remasking.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
@@ -1274,6 +1275,71 @@ TEST(FGORefinementBuilderTest, KeepsFirstAndPostGapDopplerWithIndependentClockDr
     ASSERT_EQ(masked.undifferenced_doppler_factors.size(),2U);
     EXPECT_EQ(masked.undifferenced_doppler_factors[0].epoch_index,0U);
     EXPECT_EQ(masked.undifferenced_doppler_factors[1].epoch_index,2U);
+}
+
+TEST(FGORefinementBuilderTest, EstimatesDriftBeforeRejectingRowsUsingUnobservedSeeds) {
+    const auto nav=makeSyntheticGpsNavigation(5);
+    const Vector3d receiver(1113194.0,-4841695.0,3985350.0);
+    const Vector3d velocity(40.0,-12.0,3.0);
+    native_imu_refinement::Handoff handoff;
+    for (std::size_t i=0;i<2;++i) {
+        ObservationData epoch(GNSSTime(2300,100100.0+i));
+        epoch.receiver_position=receiver;
+        epoch.receiver_clock_drift_mps=i ? -60000 : 60000;
+        epoch.raw_source_index=i;
+        epoch.raw_utc_time_millis=1700000000000LL+1000*i;
+        for (uint8_t prn=1;prn<=5;++prn) {
+            Observation obs;
+            ASSERT_TRUE(makeSyntheticGpsL1Observation(nav,SatelliteId(GNSSSystem::GPS,prn),
+                epoch.time,receiver,0,obs));
+            Vector3d position,sv_velocity,los; double clock=0,drift=0,rate=0;
+            ASSERT_TRUE(nav.calculateSatelliteState(obs.satellite,
+                epoch.time-obs.pseudorange/constants::SPEED_OF_LIGHT,position,sv_velocity,clock,drift));
+            ASSERT_TRUE(doppler_contract::knownSatelliteRangeRate(
+                position,sv_velocity,receiver,true,los,rate));
+            // Satellite 5 has a genuine 50 m/s outlier; the final screen must
+            // still reject it after the common drift has been estimated.
+            const double measured=rate-los.dot(velocity)-drift*constants::SPEED_OF_LIGHT+
+                110.0+(prn==5 ? 50.0 : 0.0);
+            obs.doppler=-measured/constants::GPS_L1_WAVELENGTH;
+            obs.has_doppler=true; epoch.observations.push_back(obs);
+        }
+        handoff.observations.push_back(epoch);
+        handoff.velocity_ecef_mps.push_back(velocity);
+        handoff.attitude_body_to_nav.push_back(Matrix3d::Identity());
+        handoff.clock_components_m.push_back({0,0,0,0,0,0,0});
+    }
+    FGOProcessor::FGOConfig config;
+    config.use_spp_seed=false; config.use_pseudorange_factors=false; config.use_tdcp_factors=false;
+    config.use_upstream_observable_quality=true; config.upstream_min_elevation_deg=-90;
+    config.use_native_phase171_raw_p_no_doppler_imu_main=true;
+    config.use_native_source_clock_c0d_factor=true;
+    config.use_undifferenced_doppler_factors=true;
+    config.use_corrected_undifferenced_doppler_factors=true;
+    config.retain_sparse_epochs_for_imu=true; config.min_satellites_per_epoch=0;
+    config.use_imu=true; config.use_native_phase213_main_doppler=true;
+    config.use_upstream_absolute_doppler_residual_screen=false;
+    auto source=FGOProcessor(config).buildPseudorangeProblem(
+        handoff.observations,nav,handoff.velocity_ecef_mps);
+    ASSERT_EQ(source.epochs.size(),2U);
+    EXPECT_TRUE(source.undifferenced_doppler_factors.empty());
+    const auto raw=handoff.observations;
+    const std::vector<Vector3d> velocity_nav(2,velocity);
+    const std::vector<double> seeds{60000,-60000};
+    const auto legacy=native_imu_refinement::rebuildHandoff(
+        raw,nav,source,handoff,velocity_nav,seeds,config);
+    EXPECT_EQ(legacy.doppler_mask.retained,0U);
+    const auto rebuilt=native_imu_refinement::rebuildHandoff(
+        raw,nav,source,handoff,velocity_nav,seeds,config,true);
+    EXPECT_EQ(rebuilt.observed_drift_epochs,2U);
+    EXPECT_EQ(rebuilt.doppler_mask.retained,8U);
+    EXPECT_EQ(rebuilt.doppler_mask.rejected,2U);
+    ASSERT_EQ(rebuilt.problem.native_phase213_main_doppler_rows.size(),8U);
+    for (double value:rebuilt.problem.native_source_clock_c0d_gnss_first_d_handoff_mps)
+        EXPECT_NEAR(value,110.0,1e-3);
+    for (const auto& row:rebuilt.problem.native_phase213_main_doppler_rows)
+        EXPECT_NE(row.satellite.prn,5);
+    EXPECT_EQ(rebuilt.problem.native_source_clock_c0d_gnss_first_c_handoff_m,handoff.clock_components_m);
 }
 
 TEST(FGORefinementBuilderTest, SourcePhasesCenterCachedRowsBeforeElevationAdmission) {

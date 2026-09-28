@@ -1,0 +1,23 @@
+{
+  "status": "superseded-never-executed",
+  "official_score": false,
+  "submitted": false,
+  "execution_gate": "Review the complete fixed 15-case development comparison first; no automatic promotion.",
+  "plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_submitted_test_recipe_20260926\\plan.json",
+  "plan_sha256": "0c22f0f0b045aeb95a364876bf9226e1a8ec442a1f13bf7c3cfb6cdcd633de4f",
+  "preparer_sha256": "dcea10caaf5eba5ff4e132b28af45707016b97247b8f005b056df919004f852c",
+  "selected_cases": 17,
+  "retained_cases": 23,
+  "published_rows_reconciled": 71936,
+  "historical_input_hashes_verified": true,
+  "all_existing_input_file_arguments_pinned": true,
+  "height_modes": {
+    "relative": 8,
+    "map": 8,
+    "fallback-extra-bands-no-height": 1
+  },
+  "control_gate": "Verify each replayed control against its published native source before assembling any candidate.",
+  "development_gate_update": "Do not execute/promote against the original development manifest: case12 height map included a known same-drive alias. Rebase to group-safe evaluation_plan after all 14 original + 1 replacement pairs are audited.",
+  "replacement_plan": "E:\\rtklib_v2_ws_output\\gsdc_native\\pixel5_submitted_test_recipe_group_safe_20260926\\plan.json",
+  "replacement_plan_sha256": "22ba1769b4fc3f9471a3a946250ee95392dafbd285b4b48fbf108e8998a0b74e"
+}

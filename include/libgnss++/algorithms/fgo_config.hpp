@@ -37,6 +37,8 @@ namespace fgo {
  */
 struct Config {
         FGOBackend backend = FGOBackend::Eigen;
+        // Post-solve export only; never used by graph construction or optimization.
+        bool export_imu_bias_diagnostic = false;
         int max_iterations = 8;
         double convergence_threshold_m = 1e-4;
         double relative_cost_convergence_threshold = 0.0;

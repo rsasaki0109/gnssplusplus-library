@@ -1,0 +1,31 @@
+{
+  "status": "native-loader-clock-reset-localized",
+  "truth_consumed": false,
+  "official_score": false,
+  "promoted": false,
+  "epochs": 1165,
+  "events": [
+    {
+      "epoch": 423,
+      "utc_ms": 1626296265000,
+      "native_input_clock_step_m": -46649.805012006,
+      "optimized_initial_clock_step_m": -46649.75666046353,
+      "raw_time_delta_ns": 1001000000,
+      "previous_hardware_clock": 55,
+      "current_hardware_clock": 55,
+      "full_bias_change_ns": 369,
+      "raw_drift_mps": 110.92320946,
+      "native_gpst_interval_s": 1.000844024005346
+    }
+  ],
+  "inputs_sha256": {
+    "E:\\rtklib_v2_ws_data\\gsdc2023\\inputs\\dataset_2023\\train\\2021-07-14-20-50-us-ca-mtv-e\\sm-g988b\\device_gnss.csv": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\input_clock.cpp": "7b8441c0d73f6a3e648c61ff2a99ad34e3bc7ceeb872a0aeb146c3d804b67c75",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\build\\Release\\input_clock_audit.exe": "c6241049fd79c1f4154e421407f3329d7aa3564a47ee88ff04d658541cf6c9c0",
+    "E:\\rtklib_v2_ws_tmp\\gsdc-base-clock-audit\\input_clocks.csv": "b75dcea744b8253136c76b7ed9f016585561545bd482dd149f03021d43004d3a",
+    "E:\\rtklib_v2_ws_output\\gsdc_native\\doppler_continuation_v2_20260926\\candidate_arm\\warm_start\\summary.json.imu-initial.clocks.csv": "de5d2bbecbeceb02e33b85ede534f98ab74c0cd9c8eb7c7295dd247f9d4a13a9",
+    "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library-gsdc\\src\\io\\android_raw_gnss.cpp": "c49b756c0cb7cc94c247cbfb9591a5cd304ddaf14dcd37d8ea4de26c19204757"
+  },
+  "conclusion": "The sole >1 km input clock step occurs at epoch 423 and reproduces the initial IMU clock step within 5 cm. The loader resets its FullBias reference on a TimeNanos gap >1 second despite unchanged hardware clock. This establishes the origin of that code-clock discontinuity; its causal contribution to the final epoch-557 TDCP residual and positional score remains to be tested.",
+  "next_experiment": "Compare an explicit, default-off continuous raw-clock reference with the legacy ingestion under identical main-D inference; validate monotonic time and hardware clock discontinuities before running. Do not change default upstream-parity behavior."
+}

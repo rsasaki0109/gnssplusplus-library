@@ -1004,6 +1004,31 @@ TEST(RawPSeedTest, GapBoundaryUsesExistingMicrosecondTimeEquality) {
     }
 }
 
+TEST(RawPSeedTest, ContinuousReferenceGapChecksRemoveOnlyRawClockOffset) {
+    const NavigationData nav = makeSyntheticNavigation();
+    auto epochs = makeTrajectory(nav, 2, false);
+    epochs[0].receiver_clock_bias = 0.1;
+    epochs[1].receiver_clock_bias = 0.100002;
+    epochs[1].time = epochs[0].time + 2.000002;
+    auto config = syntheticConfig();
+    const auto legacy = libgnss::raw_p_seed::solve(epochs, nav, config);
+    EXPECT_EQ(legacy.failure_status, libgnss::raw_p_seed::EpochStatus::TimeGap);
+    config.receiver_clock_corrected_gap_checks = true;
+    const auto corrected = libgnss::raw_p_seed::solve(epochs, nav, config);
+    EXPECT_TRUE(corrected.ok) << corrected.failure_reason;
+    ASSERT_EQ(corrected.epochs.size(), 2U);
+    EXPECT_DOUBLE_EQ(corrected.epochs[1].time.tow, epochs[1].time.tow);
+    epochs[1].time = epochs[0].time + 2.010002;
+    EXPECT_EQ(libgnss::raw_p_seed::solve(epochs, nav, config).failure_status,
+              libgnss::raw_p_seed::EpochStatus::TimeGap);
+    epochs[1].receiver_clock_bias = 3.0;
+    EXPECT_EQ(libgnss::raw_p_seed::solve(epochs, nav, config).failure_status,
+              libgnss::raw_p_seed::EpochStatus::NonmonotonicTime);
+    epochs[1].receiver_clock_bias = std::numeric_limits<double>::quiet_NaN();
+    EXPECT_EQ(libgnss::raw_p_seed::solve(epochs, nav, config).failure_status,
+              libgnss::raw_p_seed::EpochStatus::NonfiniteTime);
+}
+
 TEST(RawPSeedTest, AccountsForInvalidRowsAlongsideAcceptedRows) {
     const NavigationData nav = makeSyntheticNavigation();
     auto epochs = makeTrajectory(nav, 1, false);

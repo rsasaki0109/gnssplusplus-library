@@ -1,0 +1,91 @@
+{
+  "input_sha256": "9bbc9f8d7809a0ef341796fe1276fc507de1c87ccf2598d607cd12e6b635a678",
+  "raw_epochs": 1165,
+  "valid_pairs": 24303,
+  "selection": "same constellation/SVID/signal; 0 < dt < 1.5 s; both ADR valid, neither reset nor cycle-slip",
+  "scope": "Raw consistency only; no native quality, base, navigation or factor-admission masks. No truth input.",
+  "inference_changes": false,
+  "cause_established": false,
+  "largest_pairs": [
+    {
+      "epoch": 706,
+      "utc_ms": 1626296548000,
+      "constellation": "6",
+      "svid": "1",
+      "signal": "GAL_E1_C_P",
+      "adr_minus_integrated_doppler_m": -1.6653755928705323
+    },
+    {
+      "epoch": 1070,
+      "utc_ms": 1626296912000,
+      "constellation": "1",
+      "svid": "10",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": -1.3408782863027682
+    },
+    {
+      "epoch": 299,
+      "utc_ms": 1626296140999,
+      "constellation": "1",
+      "svid": "25",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": 0.6343197033736487
+    },
+    {
+      "epoch": 381,
+      "utc_ms": 1626296222999,
+      "constellation": "1",
+      "svid": "23",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": 0.6124494178762916
+    },
+    {
+      "epoch": 727,
+      "utc_ms": 1626296569000,
+      "constellation": "6",
+      "svid": "7",
+      "signal": "GAL_E1_C_P",
+      "adr_minus_integrated_doppler_m": -0.602994673409853
+    },
+    {
+      "epoch": 298,
+      "utc_ms": 1626296139999,
+      "constellation": "1",
+      "svid": "25",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": 0.5762208079484026
+    },
+    {
+      "epoch": 157,
+      "utc_ms": 1626295998999,
+      "constellation": "1",
+      "svid": "5",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": -0.5458371315469321
+    },
+    {
+      "epoch": 739,
+      "utc_ms": 1626296581000,
+      "constellation": "1",
+      "svid": "15",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": 0.484028759447483
+    },
+    {
+      "epoch": 197,
+      "utc_ms": 1626296038999,
+      "constellation": "6",
+      "svid": "13",
+      "signal": "GAL_E1_C_P",
+      "adr_minus_integrated_doppler_m": -0.4796186765274797
+    },
+    {
+      "epoch": 415,
+      "utc_ms": 1626296256999,
+      "constellation": "1",
+      "svid": "23",
+      "signal": "GPS_L1_CA",
+      "adr_minus_integrated_doppler_m": -0.4664511232060704
+    }
+  ]
+}
