@@ -24,7 +24,7 @@ runner adds no scoring logic of its own.
 | CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | >60 min | **Not verified locally yet.** L6/SSR expansion takes ~14 min; the six `gnss_ppp` runs dominate the runtime |
 | Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
-| GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | planned | - | Needs a GTSAM build and IMU replay lane |
+| GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | planned | - | See [PPC reproduction](ppc_reproduction.md) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | planned | - | - |
 | Smartphone GSDC official submission | `gsdc-official` | planned | - | The score comes from Kaggle and cannot be recomputed locally |
@@ -36,7 +36,7 @@ Release build. Lanes that run in parallel slow each other down.
 
 | Dataset | Used by | Get it | Expected layout |
 |---|---|---|---|
-| [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}` |
+| [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy`, `fgo-tokyo` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}`; `fgo-tokyo` also reads `tokyo/run{1,2,3}/imu.csv` |
 | [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) | `odaiba` | UrbanNav Tokyo data release (Trimble rover/base RINEX + Applanix reference) | `<urbannav-root>/Odaiba/{rover_trimble.obs,base_trimble.obs,base.nav,reference.csv}` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
@@ -65,6 +65,21 @@ The dispatcher also looks up `gnss spp` / `gnss solve` binaries through
 `GNSSPP_BUILD_DIR`. On Windows, configure from a `vcvars64` shell with the
 vcpkg toolchain (`-DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake
 -DVCPKG_TARGET_TRIPLET=x64-windows`).
+
+**GTSAM build (`fgo-tokyo` only).** `gnss_fgo_parity` needs GTSAM 4.3.x
+(see `AGENTS.md`). Build it in a separate tree and pass that tree with
+`--build-dir`:
+
+```bash
+cmake -S . -B build-gtsam -DCMAKE_BUILD_TYPE=Release -DGNSSPP_BUILD_PYTHON_BINDINGS=OFF   -DGTSAM_DIR=<gtsam-prefix>/lib/cmake/GTSAM
+cmake --build build-gtsam --target gnss_fgo_parity --parallel 2
+```
+
+At runtime the GTSAM shared libraries must be found: on Linux append their
+directory to `LD_LIBRARY_PATH`; on Windows set `GTSAM_BIN_DIR` to the directory
+holding the GTSAM DLLs (the lane's run wrapper prepends it to `PATH`). Each
+replay peaks at 1.8-3.1 GB resident memory, and the lane runs them one at a
+time.
 
 **RTKLIB demo5.** The `rtk-demo5` and `odaiba` lanes compare against
 [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB) pinned to
@@ -100,6 +115,9 @@ python3 apps/gnss.py reproduce odaiba --urbannav-root /datasets/UrbanNav/Tokyo_D
 
 # SPP adaptive robust weighting + 1 pp policy gate
 python3 apps/gnss.py reproduce spp-policy --ppc-root /datasets/PPC-Dataset --check
+
+# GNSS/IMU tightly-coupled FGO vs tightly-coupled-gnss-imu-fgo (GTSAM build)
+python3 apps/gnss.py reproduce fgo-tokyo --ppc-root /datasets/PPC-Dataset   --build-dir build-gtsam --check
 ```
 
 Common options:
@@ -112,7 +130,7 @@ Common options:
 | `--dry-run` | Print the rendered commands and dataset warnings without running anything |
 | `--check` | Exit with status 3 when a gated metric drifts from the manifest expectation |
 | `--check-only` | Skip the steps and re-check the metrics already in `--work-dir` |
-| `--update-docs` | Also regenerate the tracked docs artifacts the lane owns, such as the `docs/benchmarks.md` coverage block, `docs/ppc_rtk_demo5_scorecard.png`, `docs/ppc_clas_full_*`, and the Odaiba figures |
+| `--update-docs` | Also regenerate the tracked docs artifacts the lane owns, such as the `docs/benchmarks.md` coverage block, `docs/ppc_rtk_demo5_scorecard.png`, `docs/ppc_clas_full_*`, the Odaiba figures, and `docs/gnss_imu_fgo_tokyo_run{1,2,3}.png` |
 
 Every run writes `<work-dir>/reproduce_result.json` with per-step wall times,
 observed values, and the pass or fail state of each metric. It also writes
@@ -197,3 +215,52 @@ diagnostic. The previous snapshot table (demo5 595 fixes, default 1268, preset
 **`spp-policy`.** The README claim reproduces. The historical per-run policy
 P95 H values in `docs/references/spp-accuracy-improvement.md` are within
 0.07 m and are reported without gating.
+
+## fgo-tokyo local result (2026-09-28)
+
+First local run of the `fgo-tokyo` lane: develop `46c9af27` plus this lane,
+MSVC Release, GTSAM 4.3, Windows 11. The lane replays the README preset with
+`--gf-slip-reset` (`gf_reset`) and without it (`baseline`) on Tokyo runs 1-3.
+Replays are deterministic: a second baseline run3 wrote a byte-identical
+`--dump-csv`.
+
+**README comparison table** (`gf_reset`; the reference columns are the
+published tightly-coupled-gnss-imu-fgo values):
+
+| Run | <50 cm README / local | Fix README / local | Fixed RMS README / local | Wall time (Windows) |
+|---|---:|---:|---:|---:|
+| Tokyo run1 | 54.9% / 54.89% | 53.8% / 53.83% | 1.180 / 1.1806 m | 325 s |
+| Tokyo run2 | 85.7% / 85.70% | 78.6% / 78.61% | 0.109 / 0.1092 m | 241 s |
+| Tokyo run3 | 77.5% / 77.53% | 69.3% / 69.30% | 0.125 / 0.1252 m | 277 s |
+
+The claims (higher FIX rate on 3/3 runs, avg +10.7 pp; <50 cm on 2/3, avg
++7.9 pp; fixed RMS on 2/3) reproduce. The README wall times were 463.5,
+584.6, and 844.9 s on the Linux validation host.
+
+**GF-reset table.** Every `gf_reset` cell, the GF guard demotions (14/0/17),
+the aggregate Wrong FIX/FIX after the reset (11.759%), and the matched
+distance (99.682%) reproduce to three decimals. The baseline rows for runs 1-2
+also match. The baseline Tokyo run3 row does not:
+
+| Baseline Tokyo run3 | README | Local |
+|---|---:|---:|
+| Correct FIX distance | 59.175% | 59.712% |
+| Wrong FIX distance | 7.918% | 7.726% |
+| Official score | 64.081% | 65.446% |
+| Fixed-only horizontal RMS | 0.257 m | 1.517 m |
+
+That mismatch moves the aggregate baseline to 49.440 / 13.649 / 54.837%
+(README 49.181 / 13.741 / 54.178%) and the baseline Wrong FIX/FIX to 21.634%
+(README 21.839%). The README baseline was produced before the GF-reset commit
+(`9b058572`) with an unrecorded tree, so the lane reports these cells without
+gating them. It still gates the GF-reset improvement: aggregate official score
++8.855 pp and wrong-FIX distance -5.999 pp.
+
+**Surplus-satellite rescue table: not reproduced.** It was measured in commit
+`6ede956c` with an earlier preset (`--imu-preset-tactical --cp-hold-res 2.0
+--fix-demote-dist 5`). The "before" configuration was not recorded, and the
+solver has changed since then.
+
+`docs/gnss_imu_fgo_tokyo_run{1,2,3}.png` were regenerated from this run with
+`--update-docs`. The previously tracked figures predated the GF reset (for
+example, run1 showed fix 50.0%, <50 cm 56.9%, and fixed RMS 0.66 m).

@@ -24,8 +24,8 @@ sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "benchmarks"))
 import gnss_reproduce as reproduce  # noqa: E402
 
 
-READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba"}
-PLANNED_LANES = {"fgo-tokyo", "gsdc-dev-routes", "ppc-goal", "gsdc-official"}
+READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo"}
+PLANNED_LANES = {"gsdc-dev-routes", "ppc-goal", "gsdc-official"}
 
 
 def write_manifest(directory: Path, text: str, name: str = "lane.toml") -> Path:
@@ -204,6 +204,66 @@ class RenderTest(unittest.TestCase):
         )
         self.assertEqual(planned.returncode, 2)
         self.assertIn("planned", planned.stderr)
+
+
+class FgoTokyoLaneTest(unittest.TestCase):
+    def test_fgo_tokyo_dry_run_renders_both_presets(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "fgo-tokyo", "--dry-run", "--update-docs",
+                "--ppc-root", "/datasets/PPC-Dataset", "--work-dir", "output/reproduce/test-fgo-dry-run",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = [line for line in result.stdout.splitlines() if "fgo_tokyo_reproduce.py run" in line]
+        self.assertEqual(len(commands), 6)
+        gf = [line for line in commands if "/gf_reset/" in line]
+        baseline = [line for line in commands if "/baseline/" in line]
+        self.assertEqual(len(gf), 3)
+        self.assertTrue(all(line.rstrip().endswith("--gf-slip-reset") for line in gf))
+        self.assertFalse(any("--gf-slip-reset" in line for line in baseline))
+        for line in commands:
+            self.assertIn("gnss_fgo_parity", line)
+            self.assertIn("--imu /datasets/PPC-Dataset/tokyo/run", line)
+            self.assertIn("--fixed-lag 5", line)
+        self.assertIn("plot_fgo_parity_runs.py", result.stdout)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-fgo-dry-run").exists())
+
+    def test_fgo_tokyo_scorer_parses_parity_stdout(self) -> None:
+        sys.path.insert(0, str(ROOT_DIR / "scripts" / "experiments" / "ppc"))
+        import fgo_tokyo_reproduce as fgo  # noqa: E402
+
+        text = textwrap.dedent(
+            """
+            === (a4) MILESTONE 2c: IncrementalFixedLagSmoother (full-scale) ===
+              lag=5 s, epochs=11000, smoother_updates=11000, peak_window_vars=40
+              wall_clock=463.5 s (42.1 ms/epoch), nonfinite=0, NONE_epochs=0
+              per-epoch LAMBDA: attempts=9000, fixed_epochs=5918/11000 (53.8% fix-rate), best_ratio=99
+              Geometry-free slip reset: on (confirmed_resets=120, gross_spp_demotions=14)
+              horizontal error vs reference.csv:
+                FLOAT: n=5000 rms=3.5 m max=40 m
+                FIXED: n=5900 rms=1.18 m max=30 m
+                ALL (float+fixed) <50cm rate=54.9%
+            """
+        )
+        parsed = fgo.parse_parity_stdout(text)
+        self.assertEqual(parsed["epochs"], 11000)
+        self.assertEqual(parsed["gf_guard_demotions"], 14)
+        self.assertEqual(parsed["gf_confirmed_resets"], 120)
+        self.assertAlmostEqual(parsed["lambda_fix_rate_pct"], 53.8)
+        self.assertAlmostEqual(parsed["ref_fixed_rms_h_m"], 1.18)
+        self.assertAlmostEqual(parsed["ref_under50_pct"], 54.9)
+        comparison = fgo.compare_with_reference(
+            [
+                {"label": "tokyo_run1", "under50_pct": 54.9, "fix_rate_pct": 53.8, "fixed_rms_h_m": 1.180},
+                {"label": "tokyo_run2", "under50_pct": 85.7, "fix_rate_pct": 78.6, "fixed_rms_h_m": 0.109},
+                {"label": "tokyo_run3", "under50_pct": 77.5, "fix_rate_pct": 69.3, "fixed_rms_h_m": 0.125},
+            ]
+        )
+        self.assertEqual(comparison["runs_better"], {"under50_pct": 2, "fix_rate_pct": 3, "fixed_rms_h_m": 2})
+        self.assertAlmostEqual(comparison["mean_delta"]["fix_rate_pct"], 10.666667, places=5)
+        self.assertAlmostEqual(comparison["mean_delta"]["under50_pct"], 7.866667, places=5)
 
 
 class CheckTest(unittest.TestCase):
