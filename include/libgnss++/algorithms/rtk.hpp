@@ -2215,11 +2215,6 @@ private:
         int min_lock_count) const;
 
     /**
-     * Expand state vector to accommodate new states
-     */
-    void expandState(int new_size);
-
-    /**
      * Remove satellite from state
      */
     void removeSatelliteFromState(const SatelliteId& sat);
@@ -2276,7 +2271,6 @@ private:
                                    const VectorXd& float_ambiguities,
                                    const MatrixXd& covariance,
                                    double ratio);
-    void updateAmbiguityStates(const std::vector<DoubleDifference>& double_diffs);
     Vector3d calculateBaseline() const;
     VectorXd calculateResiduals(const std::vector<DoubleDifference>& measurements,
                               const Vector3d& baseline) const;
@@ -2285,28 +2279,10 @@ private:
                                  const GNSSTime& time) const;
     MatrixXd calculateMeasurementWeights(const std::vector<DoubleDifference>& measurements) const;
     bool hasSufficientSatellites(const std::vector<DoubleDifference>& measurements) const;
-    void resetAmbiguity(const SatelliteId& satellite, SignalType signal);
     bool applyFixedAmbiguities(const VectorXd& fixed_n1,
                                const VectorXd& fixed_n2,
                                const std::map<SatelliteId, SatelliteData>& sat_data);
     void solvePositionWithAmbiguities(const std::map<SatelliteId, SatelliteData>& sat_data);
-    bool trySingleEpochAR(const std::map<SatelliteId, SatelliteData>& sat_data);
-    double elevationWeight(double elevation) const;
 };
-
-namespace rtk_utils {
-    double calculateIonosphereFree(double l1_measurement, double l2_measurement,
-                                 double f1, double f2);
-    double calculateWideLane(double l1_phase, double l2_phase,
-                           double l1_range, double l2_range,
-                           double f1, double f2);
-    double calculateNarrowLane(double l1_phase, double l2_phase, double f1, double f2);
-    MatrixXd decorrelateMatrix(const MatrixXd& covariance);
-    VectorXd integerLeastSquares(const VectorXd& float_solution,
-                               const MatrixXd& covariance_matrix);
-    double calculateBaselineLength(const Vector3d& baseline);
-    bool checkBaselineConstraints(const Vector3d& baseline,
-                                double min_length, double max_length);
-}
 
 } // namespace libgnss

@@ -517,19 +517,6 @@ bool Solution::writeGeoJSON(const std::string& filename) const {
     return true;
 }
 
-bool Solution::writeNMEA(const std::string& filename) const {
-    std::ofstream file(filename);
-    if (!file.is_open()) {
-        return false;
-    }
-    
-    for (const auto& sol : solutions) {
-        file << sol.toNMEA();
-    }
-    
-    return true;
-}
-
 bool Solution::loadFromFile(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
@@ -588,15 +575,6 @@ bool Solution::loadFromFile(const std::string& filename) {
     }
 
     return !solutions.empty();
-}
-
-const PositionSolution* Solution::getSolution(const GNSSTime& time) const {
-    for (const auto& sol : solutions) {
-        if (sol.time == time) {
-            return &sol;
-        }
-    }
-    return nullptr;
 }
 
 std::vector<PositionSolution> Solution::filterByStatus(SolutionStatus status) const {

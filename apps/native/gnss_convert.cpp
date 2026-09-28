@@ -331,10 +331,6 @@ libgnss::GNSSTime bdtWeekTowToGpst(int week, double tow) {
     return libgnss::GNSSTime(week + kBdtWeekOffset, tow) + 14.0;
 }
 
-libgnss::GNSSTime gpstToBdt(const libgnss::GNSSTime& time) {
-    return time - 14.0;
-}
-
 int leapSecondsForDate(int year, int month, int day) {
     struct LeapEntry { int year; int month; int day; int leap_seconds; };
     static constexpr LeapEntry kLeapTable[] = {

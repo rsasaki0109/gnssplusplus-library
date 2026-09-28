@@ -248,7 +248,6 @@ private:
     
     // Bit manipulation utilities
     int64_t getBits(const uint8_t* data, size_t data_size, int bit_pos, int num_bits);
-    void setBits(uint8_t* data, int pos, int len, uint32_t value);
     
     // Message parsing utilities
     bool parseHeader(const uint8_t* data, RTCMMessageType& type, uint16_t& length);

@@ -274,16 +274,6 @@ private:
     SatelliteId parseSatelliteId(const std::string& sat_str, double version);
     
     /**
-     * @brief Parse observation value
-     */
-    bool parseObservationValue(const std::string& obs_str, Observation& obs);
-    
-    /**
-     * @brief Skip to next epoch
-     */
-    bool skipToNextEpoch();
-    
-    /**
      * @brief Read line from file
      */
     bool readLine(std::string& line);
@@ -342,80 +332,7 @@ private:
      * @brief Format satellite ID
      */
     std::string formatSatelliteId(const SatelliteId& sat, double version);
-    
-    /**
-     * @brief Format observation value
-     */
-    std::string formatObservationValue(const Observation& obs);
 };
-
-/**
- * @brief RINEX utility functions
- */
-namespace rinex_utils {
-    
-    /**
-     * @brief Detect RINEX file type
-     */
-    RINEXReader::FileType detectFileType(const std::string& filename);
-    
-    /**
-     * @brief Get RINEX version from file
-     */
-    double getVersion(const std::string& filename);
-    
-    /**
-     * @brief Convert observation type string to SignalType
-     */
-    SignalType stringToSignalType(const std::string& obs_type, GNSSSystem system);
-    
-    /**
-     * @brief Convert SignalType to observation type string
-     */
-    std::string signalTypeToString(SignalType signal, GNSSSystem system, double version);
-    
-    /**
-     * @brief Validate RINEX filename
-     */
-    bool validateFilename(const std::string& filename);
-    
-    /**
-     * @brief Generate RINEX filename
-     */
-    std::string generateFilename(const std::string& station,
-                               const GNSSTime& time,
-                               RINEXReader::FileType type,
-                               double version = 3.0);
-    
-    /**
-     * @brief Merge RINEX observation files
-     */
-    bool mergeObservationFiles(const std::vector<std::string>& input_files,
-                             const std::string& output_file);
-    
-    /**
-     * @brief Split RINEX file by time
-     */
-    bool splitFileByTime(const std::string& input_file,
-                       const std::string& output_prefix,
-                       double interval_hours);
-    
-    /**
-     * @brief Quality check RINEX file
-     */
-    struct QualityReport {
-        bool valid_header = false;
-        bool valid_data = false;
-        size_t total_epochs = 0;
-        size_t valid_epochs = 0;
-        size_t total_observations = 0;
-        size_t valid_observations = 0;
-        std::vector<std::string> warnings;
-        std::vector<std::string> errors;
-    };
-    
-    QualityReport checkQuality(const std::string& filename);
-}
 
 } // namespace io
 } // namespace libgnss

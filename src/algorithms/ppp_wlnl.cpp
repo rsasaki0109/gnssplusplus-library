@@ -476,24 +476,6 @@ bool PPPProcessor::solveFixedPosition(const ObservationData& obs,
     return solved;
 }
 
-bool PPPProcessor::solveFixedCarrierPhasePosition(
-    const std::vector<IonosphereFreeObs>& observations,
-    Vector3d& fixed_position) const {
-    const auto fixed_observations = ppp_ar::buildFixedCarrierObservations(
-        observations.size(),
-        [&](size_t index, ppp_ar::FixedCarrierObservation& fixed_observation) {
-            return buildFixedCarrierObservation(observations[index], fixed_observation);
-    });
-
-    return ppp_ar::solveFixedCarrierPosition(
-        fixed_observations,
-        filter_state_.state.segment(filter_state_.pos_index, 3),
-        filter_state_.state(filter_state_.clock_index),
-        ppp_config_.estimate_troposphere ? filter_state_.state(filter_state_.trop_index) : 2.3,
-        ppp_config_.estimate_troposphere,
-        fixed_position);
-}
-
 std::map<SatelliteId, OSRCorrection> PPPProcessor::computeWlnlOsrCorrections(
     const ObservationData& obs,
     const NavigationData& nav,
@@ -1097,43 +1079,6 @@ bool PPPProcessor::buildFixedNlObservationForSatellite(
     fixed_observation.sat_pos = sat_pos;
     fixed_observation.sat_clk = sat_clk;
     fixed_observation.use_trop_model = use_trop_model;
-    return true;
-}
-
-bool PPPProcessor::buildFixedCarrierObservation(
-    const IonosphereFreeObs& observation,
-    ppp_ar::FixedCarrierObservation& fixed_observation) const {
-    if (!observation.valid || !observation.has_carrier_phase) {
-        return false;
-    }
-    const auto ambiguity_it = ambiguity_states_.find(observation.satellite);
-    if (ambiguity_it == ambiguity_states_.end() || !ambiguity_it->second.is_fixed) {
-        return false;
-    }
-    const int ambiguity_index = ambiguityStateIndex(observation.satellite);
-    if (ambiguity_index < 0 || ambiguity_index >= filter_state_.total_states) {
-        return false;
-    }
-
-    double ionosphere_m = 0.0;
-    if (ppp_config_.estimate_ionosphere) {
-        const auto iono_it = filter_state_.ionosphere_indices.find(observation.satellite);
-        if (iono_it != filter_state_.ionosphere_indices.end()) {
-            ionosphere_m = filter_state_.state(iono_it->second);
-        }
-    }
-
-    fixed_observation.satellite_position = observation.satellite_position;
-    fixed_observation.satellite_clock_bias_s = observation.satellite_clock_bias;
-    fixed_observation.trop_mapping = observation.trop_mapping;
-    fixed_observation.modeled_trop_delay_m = observation.modeled_trop_delay_m;
-    fixed_observation.carrier_phase_if = observation.carrier_phase_if;
-    fixed_observation.variance_cp = observation.variance_cp;
-    fixed_observation.ambiguity_m = filter_state_.state(ambiguity_index);
-    fixed_observation.system_clock_offset_m =
-        receiverClockBiasMeters(observation.satellite) -
-        filter_state_.state(filter_state_.clock_index);
-    fixed_observation.ionosphere_m = ionosphere_m;
     return true;
 }
 

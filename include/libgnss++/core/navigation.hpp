@@ -298,13 +298,6 @@ public:
                                int desired_iode) const;
     
     /**
-     * @brief Calculate satellite positions for multiple satellites
-     */
-    std::map<SatelliteId, Vector3d> calculateSatellitePositions(
-        const std::vector<SatelliteId>& satellites,
-        const GNSSTime& time) const;
-    
-    /**
      * @brief Calculate elevation and azimuth angles
      */
     struct SatelliteGeometry {
@@ -317,34 +310,9 @@ public:
                                       const Vector3d& satellite_pos) const;
     
     /**
-     * @brief Apply atmospheric corrections
-     */
-    struct AtmosphericCorrections {
-        double ionosphere_delay = 0.0;
-        double troposphere_delay = 0.0;
-        double total_delay = 0.0;
-    };
-    
-    AtmosphericCorrections calculateAtmosphericCorrections(
-        const GeodeticCoord& receiver_pos,
-        const Vector3d& satellite_pos,
-        const GNSSTime& time,
-        double frequency) const;
-    
-    /**
      * @brief Check if navigation data is available for satellite
      */
     bool hasEphemeris(const SatelliteId& sat, const GNSSTime& time) const;
-    
-    /**
-     * @brief Get list of satellites with valid ephemeris
-     */
-    std::vector<SatelliteId> getAvailableSatellites(const GNSSTime& time) const;
-    
-    /**
-     * @brief Remove old ephemeris data
-     */
-    void cleanupOldData(const GNSSTime& current_time, double max_age_hours = 4.0);
     
     /**
      * @brief Clear all navigation data

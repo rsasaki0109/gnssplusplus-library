@@ -192,17 +192,6 @@ public:
     }
     
     /**
-     * @brief Get solution by time
-     */
-    const PositionSolution* getSolution(const GNSSTime& time) const;
-    
-    /**
-     * @brief Get solutions in time range
-     */
-    std::vector<PositionSolution> getSolutions(const GNSSTime& start, 
-                                             const GNSSTime& end) const;
-    
-    /**
      * @brief Filter solutions by status
      */
     std::vector<PositionSolution> filterByStatus(SolutionStatus status) const;
@@ -250,11 +239,6 @@ public:
      * @brief Write solutions to file
      */
     bool writeToFile(const std::string& filename, const std::string& format = "pos") const;
-    
-    /**
-     * @brief Write solutions in NMEA format
-     */
-    bool writeNMEA(const std::string& filename) const;
     
     /**
      * @brief Write solutions in KML format for visualization.
@@ -321,78 +305,6 @@ public:
     const PositionSolution* getLastSolution() const {
         return solutions.empty() ? nullptr : &solutions.back();
     }
-    
-    /**
-     * @brief Remove solutions older than specified time
-     */
-    void removeOldSolutions(const GNSSTime& cutoff_time);
-    
-    /**
-     * @brief Interpolate position at given time
-     */
-    bool interpolatePosition(const GNSSTime& time, 
-                           Vector3d& position, 
-                           Matrix3d& covariance) const;
-    
-    /**
-     * @brief Smooth solutions using post-processing
-     */
-    void applySmoothingFilter(double process_noise = 1.0, double measurement_noise = 1.0);
-    
-    /**
-     * @brief Detect and remove outliers
-     */
-    void removeOutliers(double threshold_sigma = 3.0);
-};
-
-/**
- * @brief Real-time solution monitor
- */
-class SolutionMonitor {
-public:
-    /**
-     * @brief Quality assessment result
-     */
-    struct QualityAssessment {
-        bool position_valid = false;
-        bool velocity_valid = false;
-        bool clock_valid = false;
-        
-        double position_innovation = 0.0;
-        double velocity_innovation = 0.0;
-        double clock_innovation = 0.0;
-        
-        bool geometry_adequate = false;
-        bool convergence_achieved = false;
-        
-        std::string warning_message;
-    };
-    
-    /**
-     * @brief Assess solution quality
-     */
-    QualityAssessment assessQuality(const PositionSolution& solution,
-                                  const PositionSolution* previous_solution = nullptr) const;
-    
-    /**
-     * @brief Check for position jumps
-     */
-    bool detectPositionJump(const PositionSolution& current,
-                          const PositionSolution& previous,
-                          double threshold_meters = 10.0) const;
-    
-    /**
-     * @brief Monitor convergence for PPP
-     */
-    bool checkConvergence(const std::vector<PositionSolution>& recent_solutions,
-                        double horizontal_threshold = 0.1,
-                        double vertical_threshold = 0.2,
-                        size_t min_epochs = 10) const;
-    
-    /**
-     * @brief Generate quality report
-     */
-    std::string generateQualityReport(const Solution& solution) const;
 };
 
 } // namespace libgnss

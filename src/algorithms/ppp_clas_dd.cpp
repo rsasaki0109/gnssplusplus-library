@@ -70,10 +70,6 @@ int StateLayout::receiverClockIndex(int system_index) const {
     return np() + system_index;
 }
 
-int StateLayout::macroTroposphereIndexAfterClocks() const {
-    return receiverClockIndex(0) + options.system_count;
-}
-
 int StateLayout::ionosphereIndex(int satno_one_based) const {
     return validSatelliteNumber(satno_one_based) && ni() > 0
         ? np() + satno_one_based - 1

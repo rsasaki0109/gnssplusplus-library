@@ -169,12 +169,6 @@ public:
     std::vector<Observation> getObservations(SignalType signal) const;
     
     /**
-     * @brief Filter observations by elevation angle
-     */
-    std::vector<Observation> filterByElevation(double min_elevation, 
-                                             const Vector3d& receiver_pos) const;
-    
-    /**
      * @brief Filter observations by SNR
      */
     std::vector<Observation> filterBySNR(double min_snr) const;

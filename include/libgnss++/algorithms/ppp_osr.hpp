@@ -27,9 +27,6 @@ const char* clasPhaseBiasReferenceTimePolicyName(
 const char* clasSsrTimingPolicyName(
     ppp_shared::PPPConfig::ClasSsrTimingPolicy policy);
 
-const char* clasExpandedValueConstructionPolicyName(
-    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy);
-
 bool usesClasPhaseBiasTerms(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy);
 
@@ -110,12 +107,6 @@ bool usesClasClockBoundPhaseBias(
 
 bool usesClasClockBoundAtmos(
     ppp_shared::PPPConfig::ClasSsrTimingPolicy policy);
-
-bool usesClasExpandedPolynomialTerms(
-    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy);
-
-bool usesClasExpandedResidualTerms(
-    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy);
 
 std::map<std::string, std::string> selectClasEpochAtmosTokens(
     const SSRProducts& ssr_products,

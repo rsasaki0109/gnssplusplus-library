@@ -118,23 +118,6 @@ bool RTCMProcessor::decodeNavigationData(const RTCMMessage& message, NavigationD
 }
 
 
-void RTCMProcessor::setBits(uint8_t* data, int pos, int len, uint32_t value) {
-    if (!data || len <= 0 || len > 32 || pos < 0) {
-        return;
-    }
-    for (int i = 0; i < len; ++i) {
-        const int bit_pos = pos + len - 1 - i;
-        const int byte_index = bit_pos / 8;
-        const int bit_in_byte = 7 - (bit_pos % 8);
-        const uint8_t mask = static_cast<uint8_t>(1U << bit_in_byte);
-        if ((value >> i) & 0x01U) {
-            data[byte_index] |= mask;
-        } else {
-            data[byte_index] &= static_cast<uint8_t>(~mask);
-        }
-    }
-}
-
 bool RTCMProcessor::parseHeader(const uint8_t* data, RTCMMessageType& type, uint16_t& length) {
     if (!data || data[0] != kRTCMPreamble) {
         return false;

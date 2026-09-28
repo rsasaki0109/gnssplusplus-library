@@ -1287,21 +1287,6 @@ double ddGeometry(const libgnss::Vector3d& rover_position,
             (base_reference_position - base_position).norm());
 }
 
-double elevationRad(const libgnss::Vector3d& receiver_position,
-                    const libgnss::Vector3d& satellite_position) {
-    double lat = 0.0;
-    double lon = 0.0;
-    double height = 0.0;
-    libgnss::ecef2geodetic(receiver_position, lat, lon, height);
-    const libgnss::Vector3d enu =
-        libgnss::ecef2enu(satellite_position - receiver_position, lat, lon);
-    const double range = enu.norm();
-    if (range <= 0.0) {
-        return 0.0;
-    }
-    return std::asin(std::max(-1.0, std::min(1.0, enu(2) / range)));
-}
-
 double seedPositionDivergenceMeters(
     const libgnss::Vector3d& position_ecef,
     const libgnss::FGOProcessor::EpochSeed& seed) {

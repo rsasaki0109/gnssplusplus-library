@@ -72,19 +72,6 @@ const char* clasSsrTimingPolicyName(
     return "lag-tolerant";
 }
 
-const char* clasExpandedValueConstructionPolicyName(
-    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy) {
-    switch (policy) {
-        case ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::FULL_COMPOSED:
-            return "full-composed";
-        case ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::RESIDUAL_ONLY:
-            return "residual-only";
-        case ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::POLYNOMIAL_ONLY:
-            return "polynomial-only";
-    }
-    return "full-composed";
-}
-
 bool usesClasPhaseBiasTerms(
     ppp_shared::PPPConfig::ClasPhaseContinuityPolicy policy) {
     return policy !=

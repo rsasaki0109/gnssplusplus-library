@@ -71,13 +71,6 @@ public:
     ~GNSSProcessor();
 
     /**
-     * @brief Load configuration from file
-     * @param config_file Path to configuration file
-     * @return true if successful, false otherwise
-     */
-    bool loadConfig(const std::string& config_file);
-
-    /**
      * @brief Set positioning mode
      * @param mode Positioning mode to use
      */

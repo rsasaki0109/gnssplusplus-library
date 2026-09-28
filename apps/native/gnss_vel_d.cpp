@@ -256,14 +256,6 @@ bool isHealthyForPositioning(const libgnss::Observation& observation,
     return sv_health == 0;
 }
 
-void writeCsvDouble(std::ostream& output, double value) {
-    if (std::isfinite(value)) {
-        output << value;
-    } else {
-        output << "NaN";
-    }
-}
-
 int velocityColumn(std::size_t epoch_index, int component) {
     return static_cast<int>(4 * epoch_index + static_cast<std::size_t>(component));
 }

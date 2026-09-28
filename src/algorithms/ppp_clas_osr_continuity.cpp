@@ -178,18 +178,6 @@ bool usesClasClockBoundAtmos(
            ppp_shared::PPPConfig::ClasSsrTimingPolicy::CLOCK_BOUND_ATMOS_AND_PHASE_BIAS;
 }
 
-bool usesClasExpandedPolynomialTerms(
-    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy) {
-    return policy !=
-           ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::RESIDUAL_ONLY;
-}
-
-bool usesClasExpandedResidualTerms(
-    ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy policy) {
-    return policy !=
-           ppp_shared::PPPConfig::ClasExpandedValueConstructionPolicy::POLYNOMIAL_ONLY;
-}
-
 int preferredClasNetworkId(const std::map<std::string, std::string>& atmos_tokens) {
     int network_id = 0;
     if (!ppp_atmosphere::parseAtmosTokenInt(atmos_tokens, "atmos_network_id", network_id)) {

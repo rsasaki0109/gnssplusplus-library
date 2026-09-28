@@ -985,16 +985,6 @@ PositionSolution PPPProcessor::generateSolution(const GNSSTime& time,
     return solution;
 }
 
-Vector3d PPPProcessor::calculatePositionAccuracy() const {
-    if (!filter_initialized_) {
-        return Vector3d::Constant(std::numeric_limits<double>::infinity());
-    }
-    return Vector3d(
-        std::sqrt(std::max(0.0, filter_state_.covariance(filter_state_.pos_index + 0, filter_state_.pos_index + 0))),
-        std::sqrt(std::max(0.0, filter_state_.covariance(filter_state_.pos_index + 1, filter_state_.pos_index + 1))),
-        std::sqrt(std::max(0.0, filter_state_.covariance(filter_state_.pos_index + 2, filter_state_.pos_index + 2))));
-}
-
 VectorXd PPPProcessor::calculateResiduals(const std::vector<IonosphereFreeObs>& observations,
                                           const NavigationData& nav,
                                           const GNSSTime& time) const {

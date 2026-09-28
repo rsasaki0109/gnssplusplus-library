@@ -592,19 +592,6 @@ inline SignalType decodeGlonassMsmSignal(uint8_t signal_id) {
     }
 }
 
-inline double gpsSignalWavelength(SignalType signal) {
-    switch (signal) {
-        case SignalType::GPS_L1CA:
-        case SignalType::GPS_L1P:
-            return constants::GPS_L1_WAVELENGTH;
-        case SignalType::GPS_L2C:
-        case SignalType::GPS_L2P:
-            return constants::GPS_L2_WAVELENGTH;
-        default:
-            return 0.0;
-    }
-}
-
 inline double glonassSignalWavelength(SignalType signal, int frequency_channel) {
     switch (signal) {
         case SignalType::GLO_L1CA:

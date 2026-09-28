@@ -99,9 +99,6 @@ add_executable(gnss_fuse
 )
 target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
 
-add_executable(gnss_safe_bridge gnss_safe_bridge.cpp)
-target_link_libraries(gnss_safe_bridge PRIVATE gnss_lib gnss_rtk_runtime)
-
 add_executable(gnss_vel_d ${GNSS_NATIVE_DIR}/gnss_vel_d.cpp)
 target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 

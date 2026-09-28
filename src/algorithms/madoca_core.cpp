@@ -48,18 +48,6 @@ const SignalTable& signalTableFor(int compact_ssr_system_id) {
 
 }  // namespace
 
-std::optional<CompactSsrSystemId> compactSsrSystemId(int id) {
-    switch (id) {
-        case 0: return CompactSsrSystemId::GPS;
-        case 1: return CompactSsrSystemId::GLONASS;
-        case 2: return CompactSsrSystemId::Galileo;
-        case 3: return CompactSsrSystemId::BeiDou;
-        case 4: return CompactSsrSystemId::QZSS;
-        case 7: return CompactSsrSystemId::BeiDou3;
-        default: return std::nullopt;
-    }
-}
-
 GNSSSystem gnssSystemForCompactSsrId(int id) {
     switch (id) {
         case 0: return GNSSSystem::GPS;

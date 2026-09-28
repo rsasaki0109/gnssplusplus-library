@@ -54,7 +54,6 @@ struct StateLayout {
     int nx() const;
 
     int receiverClockIndex(int system_index) const;
-    int macroTroposphereIndexAfterClocks() const;
     int ionosphereIndex(int satno_one_based) const;
     int troposphereIndex() const;
     int ambiguityIndex(int satno_one_based, int frequency_index) const;
@@ -189,14 +188,6 @@ public:
         const PositionSolution& native_float_solution,
         const ppp_shared::PPPConfig& config,
         const TropMappingFunction& trop_mapping_function);
-
-    PositionSolution processFloatPassthrough(
-        const GNSSTime& time,
-        const ppp_shared::PPPState& native_state,
-        const PositionSolution& native_float_solution,
-        const ppp_shared::PPPConfig& config,
-        const std::vector<OSRCorrection>& osr_corrections,
-        const std::map<std::string, std::string>& epoch_atmos);
 
     const StateSnapshot& snapshot() const { return snapshot_; }
     const StateSnapshot& fixedSnapshot() const { return fixed_snapshot_; }
