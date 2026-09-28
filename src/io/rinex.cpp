@@ -1159,6 +1159,13 @@ bool RINEXReader::parseHeaderLine(const std::string& line, RINEXHeader& header) 
             // Leave first_obs at its default if the optional header record is malformed.
         }
     }
+    else if (label.find("TIME OF LAST OBS") != std::string::npos) {
+        try {
+            header.last_obs = parseTime(line.substr(0, 43), header.version);
+        } catch (...) {
+            // Optional record; leave last_obs at its default if malformed.
+        }
+    }
     else if (label.find("# / TYPES OF OBSERV") != std::string::npos) {
         // RINEX 2: Parse number of observation types
         int num_types = std::stoi(line.substr(0, 6));
