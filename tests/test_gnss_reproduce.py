@@ -24,8 +24,8 @@ sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "benchmarks"))
 import gnss_reproduce as reproduce  # noqa: E402
 
 
-READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo"}
-PLANNED_LANES = {"gsdc-dev-routes", "ppc-goal", "gsdc-official"}
+READY_LANES = {"clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes"}
+PLANNED_LANES = {"ppc-goal", "gsdc-official"}
 
 
 def write_manifest(directory: Path, text: str, name: str = "lane.toml") -> Path:
@@ -264,6 +264,128 @@ class FgoTokyoLaneTest(unittest.TestCase):
         self.assertEqual(comparison["runs_better"], {"under50_pct": 2, "fix_rate_pct": 3, "fixed_rms_h_m": 2})
         self.assertAlmostEqual(comparison["mean_delta"]["fix_rate_pct"], 10.666667, places=5)
         self.assertAlmostEqual(comparison["mean_delta"]["under50_pct"], 7.866667, places=5)
+
+
+class GsdcDevRoutesLaneTest(unittest.TestCase):
+    @staticmethod
+    def _import(name: str):
+        path = str(ROOT_DIR / "scripts" / "experiments" / "gsdc")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        return __import__(name)
+
+    def test_dry_run_renders_four_routes_with_surveyed_bases(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "gsdc-dev-routes", "--dry-run", "--update-docs",
+                "--gsdc-root", "/datasets/gsdc2023/dataset_2023",
+                "--work-dir", "output/reproduce/test-gsdc-dry-run",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        commands = [line for line in result.stdout.splitlines() if "gsdc_dev_routes_reproduce.py run" in line]
+        self.assertEqual(len(commands), 4)
+        expected = {
+            "H": ("2021-08-24-20-32-us-ca-mtv-h/pixel5", "-2698117.9416 -4301326.2649 3847286.2750"),
+            "U": ("2023-03-08-21-34-us-ca-mtv-u/pixel5", "-2698117.9861 -4301326.2071 3847286.2977"),
+            "A": ("2021-03-16-18-59-us-ca-mtv-a/pixel5", "-2703116.3177 -4291766.7551 3854248.0736"),
+            "LAX-T": ("2022-04-01-18-22-us-ca-lax-t/pixel5", "-2507799.2243 -4676369.3031 3526891.0358"),
+        }
+        for route, (dataset, ecef) in expected.items():
+            line = next(line for line in commands if f"--label {route} " in line)
+            self.assertIn(f"--dataset-id {dataset}", line)
+            self.assertIn(f"--native-base-position-ecef {ecef}", line)
+            self.assertIn("gnss_fgo_imu_no_base", line)
+            self.assertEqual("--native-sparse-p-staging" in line, route == "LAX-T")
+            self.assertEqual("--native-joint-ionosphere 3 0.02 1.5" in line, route == "LAX-T")
+        # The truth root falls back to the GSDC root.
+        self.assertIn("--truth-root /datasets/gsdc2023/dataset_2023", result.stdout)
+        self.assertIn("gsdc_dev_routes_reproduce.py figure", result.stdout)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-gsdc-dry-run").exists())
+
+    def test_scorer_percentiles_and_exact_join(self) -> None:
+        scorer = self._import("gsdc_dev_routes_reproduce")
+        self.assertAlmostEqual(scorer.percentile([1.0, 2.0, 3.0, 4.0], 50.0), 2.5)
+        self.assertAlmostEqual(scorer.percentile([0.0, 10.0], 95.0), 9.5)
+        # 1e-5 deg of latitude = R * 1e-5 * pi / 180.
+        self.assertAlmostEqual(scorer.haversine_m(0.0, 0.0, 1e-5, 0.0), 6371008.8 * 1e-5 * 3.141592653589793 / 180.0)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            truth = tmp_path / "ground_truth.csv"
+            pred = tmp_path / "solution.csv"
+            step = 1.0 / (6371008.8 * 3.141592653589793 / 180.0)  # 1 m of latitude
+            truth_rows = ["MessageType,LatitudeDegrees,LongitudeDegrees,UnixTimeMillis"]
+            pred_rows = ["phone,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees"]
+            for i in range(10):
+                truth_rows.append(f"Fix,37.0,-122.0,{1000 + i * 1000}")
+                pred_rows.append(f"pixel5,{1000 + i * 1000},{37.0 + i * step:.12f},-122.0")
+            pred_rows.append("pixel5,99000,37.0,-122.0")  # not in truth
+            truth.write_text("\n".join(truth_rows) + "\n", encoding="utf-8")
+            pred.write_text("\n".join(pred_rows) + "\n", encoding="utf-8")
+            row = scorer.score_route(pred, truth)
+        self.assertEqual(row["matched_rows"], 10)
+        self.assertEqual(row["unmatched_prediction_rows"], 1)
+        self.assertEqual(row["unmatched_truth_rows"], 0)
+        self.assertAlmostEqual(row["p50_m"], 4.5, places=4)
+        self.assertAlmostEqual(row["p95_m"], 8.55, places=4)
+        self.assertAlmostEqual(row["score_m"], (4.5 + 8.55) / 2.0, places=4)
+        self.assertAlmostEqual(row["mean_m"], 4.5, places=4)
+
+    def test_stager_verifies_sha256_from_tree_and_zip(self) -> None:
+        import hashlib
+        import zipfile
+
+        stager = self._import("stage_gsdc_dev_route_inputs")
+        route = stager.ROUTES["H"]
+        members = stager.member_names(route)
+        contents = {staged: f"{staged} payload\n".encode() for staged in members}
+        pins = {staged: hashlib.sha256(data).hexdigest() for staged, data in contents.items()}
+        original = dict(route["sha256"])
+        route["sha256"].update(pins)
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                tmp_path = Path(tmp)
+                tree = tmp_path / "dataset_2023"
+                archive = tmp_path / "dataset_2023.zip"
+                with zipfile.ZipFile(archive, "w") as handle:
+                    for staged, relative in members.items():
+                        path = tree / relative
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.write_bytes(contents[staged])
+                        handle.writestr(f"dataset_2023/{relative}", contents[staged])
+                    base_csv = (
+                        "Base,Year,X,Y,Z,Lat,Lon,H\n"
+                        "P221,2021,-2698117.9416,-4301326.2649,3847286.2750,0,0,0\n"
+                    )
+                    handle.writestr("dataset_2023/base/base_position.csv", base_csv)
+                for source in (tmp_path, archive):
+                    out = tmp_path / f"out_{source.suffix or 'dir'}"
+                    code = stager.main(["--gsdc-root", str(source), "--out", str(out), "--routes", "H", "--copy"])
+                    self.assertEqual(code, 0)
+                    staging = json.loads((out / "staging.json").read_text(encoding="utf-8"))
+                    self.assertEqual(staging["routes"][0]["files"]["base.obs"]["sha256"], pins["base.obs"])
+                    self.assertEqual((out / "H" / "device_gnss.csv").read_bytes(), contents["device_gnss.csv"])
+                self.assertTrue(staging["base_position_check"]["checked"])
+                # Flat truth layout via --truth-root, and a corrupted input fails.
+                (tree / members["ground_truth.csv"]).unlink()
+                flat = tmp_path / "truth"
+                flat.mkdir()
+                (flat / f"{route['drive']}__pixel5__ground_truth.csv").write_bytes(contents["ground_truth.csv"])
+                out = tmp_path / "out_flat"
+                self.assertEqual(
+                    stager.main(["--gsdc-root", str(tree), "--truth-root", str(flat), "--out", str(out), "--routes", "H"]),
+                    0,
+                )
+                (tree / members["brdc.nav"]).write_bytes(b"corrupted\n")
+                self.assertEqual(
+                    stager.main(["--gsdc-root", str(tree), "--truth-root", str(flat),
+                                 "--out", str(tmp_path / "out_bad"), "--routes", "H"]),
+                    1,
+                )
+        finally:
+            route["sha256"].clear()
+            route["sha256"].update(original)
 
 
 class CheckTest(unittest.TestCase):

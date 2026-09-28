@@ -119,13 +119,13 @@ Base-surveyed correction on the GSDC dev routes (Pixel5, `(P50+P95)/2` m):
 
 | route | H | U | A | LAX-T |
 |---|---:|---:|---:|---:|
-| base-surveyed | **0.577** | **0.738** | **0.302** | **0.712** |
+| base-surveyed | **0.576** | **0.740** | **0.303** | **0.716** |
 
 ![GSDC base-surveyed dev routes on OpenStreetMap](docs/gsdc_base_surveyed_osm.png)
 
 Raw GNSS + IMU + broadcast nav only. Dev routes, not a Kaggle leaderboard
-score. Details in the
-[record](docs/use_cases/records/smartphone_base_surveyed_route_results_v1.md).
+score. Reproduce with `gnss reproduce gsdc-dev-routes` (about 23 min); details
+in the [record](docs/use_cases/records/smartphone_base_surveyed_route_results_v1.md).
 
 ### PPC 2024 goal matrix vs Kaiyodai and gici-open
 

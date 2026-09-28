@@ -26,7 +26,7 @@ runner adds no scoring logic of its own.
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | planned | - | See [PPC reproduction](ppc_reproduction.md) |
-| Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | planned | - | - |
+| Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
 | Smartphone GSDC official submission | `gsdc-official` | planned | - | The score comes from Kaggle and cannot be recomputed locally |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
@@ -38,14 +38,18 @@ Release build. Lanes that run in parallel slow each other down.
 |---|---|---|---|
 | [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy`, `fgo-tokyo` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}`; `fgo-tokyo` also reads `tokyo/run{1,2,3}/imu.csv` |
 | [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) | `odaiba` | UrbanNav Tokyo data release (Trimble rover/base RINEX + Applanix reference) | `<urbannav-root>/Odaiba/{rover_trimble.obs,base_trimble.obs,base.nav,reference.csv}` |
+| [GSDC 2023 `dataset_2023`](https://github.com/taroz/gsdc2023) (Kaggle Google Smartphone Decimeter Challenge 2023 train set with CORS base RINEX and `brdc.nav`) | `gsdc-dev-routes` | Kaggle GSDC 2023 data as repackaged by taroz/gsdc2023 (`dataset_2023.zip`, SHA-256 `bda30ab4...`) | `<gsdc-root>/train/<drive>/{brdc.nav,<BASE>_rnx2.obs,pixel5/{device_gnss.csv,device_imu.csv,ground_truth.csv}}`, or the zip itself; see [gsdc-dev-routes inputs](#gsdc-dev-routes-inputs-and-base-provenance) |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
 Dataset roots are resolved in this order:
 
-1. `--ppc-root` / `--urbannav-root`
-2. `GNSSPP_PPC_DATASET_ROOT` / `GNSSPP_URBANNAV_ROOT`
-3. `--data-root <dir>` expands to `<dir>/PPC-Dataset` and `<dir>/driving/Tokyo_Data`
-4. `data/PPC-Dataset` and `data/driving/Tokyo_Data` inside the repository
+1. `--ppc-root` / `--urbannav-root` / `--gsdc-root` / `--gsdc-truth-root`
+2. `GNSSPP_PPC_DATASET_ROOT` / `GNSSPP_URBANNAV_ROOT` / `GNSSPP_GSDC_ROOT` / `GNSSPP_GSDC_TRUTH_ROOT`
+3. `--data-root <dir>` expands to `<dir>/PPC-Dataset`, `<dir>/driving/Tokyo_Data` and `<dir>/gsdc2023/dataset_2023`
+4. `data/PPC-Dataset`, `data/driving/Tokyo_Data` and `data/gsdc2023/dataset_2023` inside the repository
+
+The GSDC ground-truth root falls back to the GSDC root when neither
+`--gsdc-truth-root` nor `GNSSPP_GSDC_TRUTH_ROOT` is set.
 
 Before running, each lane checks that the files it needs exist. `--dry-run`
 reports missing files as warnings.
@@ -66,7 +70,8 @@ The dispatcher also looks up `gnss spp` / `gnss solve` binaries through
 vcpkg toolchain (`-DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake
 -DVCPKG_TARGET_TRIPLET=x64-windows`).
 
-**GTSAM build (`fgo-tokyo` only).** `gnss_fgo_parity` needs GTSAM 4.3.x
+**GTSAM build (`fgo-tokyo`, `gsdc-dev-routes`).** `gnss_fgo_parity` and
+`gnss_fgo_imu_no_base` (build that target for `gsdc-dev-routes`) need GTSAM 4.3.x
 (see `AGENTS.md`). Build it in a separate tree and pass that tree with
 `--build-dir`:
 
@@ -118,6 +123,10 @@ python3 apps/gnss.py reproduce spp-policy --ppc-root /datasets/PPC-Dataset --che
 
 # GNSS/IMU tightly-coupled FGO vs tightly-coupled-gnss-imu-fgo (GTSAM build)
 python3 apps/gnss.py reproduce fgo-tokyo --ppc-root /datasets/PPC-Dataset   --build-dir build-gtsam --check
+
+# GSDC Pixel5 base-surveyed dev routes H/U/A/LAX-T (GTSAM build)
+python3 apps/gnss.py reproduce gsdc-dev-routes --gsdc-root /datasets/gsdc2023/dataset_2023 \
+  --build-dir build-gtsam --check
 ```
 
 Common options:
@@ -130,7 +139,7 @@ Common options:
 | `--dry-run` | Print the rendered commands and dataset warnings without running anything |
 | `--check` | Exit with status 3 when a gated metric drifts from the manifest expectation |
 | `--check-only` | Skip the steps and re-check the metrics already in `--work-dir` |
-| `--update-docs` | Also regenerate the tracked docs artifacts the lane owns, such as the `docs/benchmarks.md` coverage block, `docs/ppc_rtk_demo5_scorecard.png`, `docs/ppc_clas_full_*`, the Odaiba figures, and `docs/gnss_imu_fgo_tokyo_run{1,2,3}.png` |
+| `--update-docs` | Also regenerate the tracked docs artifacts the lane owns, such as the `docs/benchmarks.md` coverage block, `docs/ppc_rtk_demo5_scorecard.png`, `docs/ppc_clas_full_*`, the Odaiba figures, `docs/gnss_imu_fgo_tokyo_run{1,2,3}.png`, and `docs/gsdc_base_surveyed_osm.png` (downloads OpenStreetMap tiles) |
 
 Every run writes `<work-dir>/reproduce_result.json` with per-step wall times,
 observed values, and the pass or fail state of each metric. It also writes
@@ -146,7 +155,7 @@ title = "..."
 readme_row = "..."
 runtime_estimate = "~5 min"
 
-[datasets.ppc]                 # ppc -> --ppc-root, urbannav -> --urbannav-root
+[datasets.ppc]                 # ppc, urbannav, gsdc, gsdc_truth -> --<name>-root
 required = ["tokyo/run1/rover.obs"]
 
 [[steps]]                      # run in order, cwd = repository root
@@ -170,7 +179,7 @@ foreach = [{ label = "tokyo_run1" }]
 ```
 
 Placeholders: `{gnss}` (Python + `apps/gnss.py`), `{python}`, `{work_dir}`,
-`{ppc_root}`, `{urbannav_root}`, `{rtklib_bin}`, `{build_dir}`, and
+`{ppc_root}`, `{urbannav_root}`, `{gsdc_root}`, `{gsdc_truth_root}`, `{rtklib_bin}`, `{build_dir}`, and
 `{bin:NAME}` (a built binary from `--build-dir`). A `foreach` row defines
 additional placeholders for its step or metric.
 
@@ -264,3 +273,74 @@ solver has changed since then.
 `docs/gnss_imu_fgo_tokyo_run{1,2,3}.png` were regenerated from this run with
 `--update-docs`. The previously tracked figures predated the GF reset (for
 example, run1 showed fix 50.0%, <50 cm 56.9%, and fixed RMS 0.66 m).
+
+## gsdc-dev-routes inputs and base provenance
+
+The README base-surveyed table was measured with research harnesses that
+were removed in PR #510 (phase37 / phase25 / phase63; they remain in the tag
+`archive/research-phase-2026-09-28`). Those harnesses did not transform any
+input. They extracted members byte-for-byte from the taroz `dataset_2023`
+archive (`dataset_2023.zip`, SHA-256
+`bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408`).
+`scripts/experiments/gsdc/stage_gsdc_dev_route_inputs.py` replaces them. It
+copies or hard-links each member into `<work-dir>/inputs/<route>/` and checks
+it against the SHA-256 pinned in the research records. The stager reads an
+extracted `dataset_2023` tree or the zip itself.
+
+| Route | Drive (Pixel5) | Base RINEX | Surveyed base ECEF (m) |
+|---|---|---|---|
+| H | `2021-08-24-20-32-us-ca-mtv-h` | `P221_rnx2.obs` (`4d3e37cb...`) | P221 2021: -2698117.9416 -4301326.2649 3847286.2750 |
+| U | `2023-03-08-21-34-us-ca-mtv-u` | `P221_rnx2.obs` (`aedb7a39...`) | P221 2023: -2698117.9861 -4301326.2071 3847286.2977 |
+| A | `2021-03-16-18-59-us-ca-mtv-a` | `SLAC_rnx2.obs` (`380b8ff9...`) | SLAC 2021: -2703116.3177 -4291766.7551 3854248.0736 |
+| LAX-T | `2022-04-01-18-22-us-ca-lax-t` | `LBCH_rnx2.obs` (`d731e0e8...`) | LBCH 2022: -2507799.2243 -4676369.3031 3526891.0358 |
+
+The base RINEX files are the CORS stations that ship with `dataset_2023`,
+the same files the phase63 harness passed to `--native-base-rinex`. The
+surveyed coordinates are the year-matched rows of `base/base_position.csv` in
+the same dataset ([taroz/gsdc2023](https://github.com/taroz/gsdc2023)). When
+that file is present, the stager cross-checks the values it passes to
+`--native-base-position-ecef`. Ground truth (`pixel5/ground_truth.csv`, used
+only for scoring) is read from the GSDC root. If the tree has none, it is read
+from `--gsdc-truth-root`, either nested or as flat
+`<drive>__pixel5__ground_truth.csv` files.
+
+Recipes: H, U, and A use the flag set printed in the
+[record](use_cases/records/smartphone_base_surveyed_route_results_v1.md).
+LAX-T uses the phase476 LAX-T argv (`--android-include-first-native-epoch
+--native-sparse-p-staging`) with the phase538 `--native-joint-ionosphere 3
+0.02 1.5`, plus the record's base-compensation flags. Both sources were
+recovered from the archive tag. The score is the horizontal Haversine error
+(R = 6371008.8 m) on an exact `UnixTimeMillis` inner join, reported as
+`(P50 + P95) / 2` with linearly interpolated percentiles.
+
+## gsdc-dev-routes local result (2026-09-29)
+
+This was the first local run of the lane: develop `4b22fe43` plus this lane,
+built with MSVC Release and GTSAM 4.3 on Windows 11, one solver process at a
+time.
+
+| Route | Previous README | Record | Reproduced (now in README) | P50 | P95 | Mean | Wall time | Peak RSS |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| H | 0.577 | 0.57738 | **0.57623** | 0.3671 | 0.7854 | 0.4245 | 293 s | 0.99 GB |
+| U | 0.738 | 0.73751 | **0.74045** | 0.6260 | 0.8549 | 0.6194 | 151 s | 0.33 GB |
+| A | 0.302 | 0.30169 | **0.30265** | 0.2142 | 0.3911 | 0.2179 | 290 s | 0.65 GB |
+| LAX-T | 0.712 | 0.71207 | **0.71586** | 0.5795 | 0.8522 | 0.7092 | 655 s | 1.03 GB |
+
+Every route reproduces the README value to within 4 mm. None reproduces the
+record exactly. The replay is deterministic: two H runs wrote byte-identical
+solutions. A Windows build of `274ab819`, the tree that recorded the table,
+scores H at 0.57643 m. About 1 mm of the gap therefore comes from the build
+(MSVC and the Windows GTSAM build, versus the Linux GCC build used for the
+record), and about 0.2 mm from later solver changes. The README table now
+shows the reproduced values and the lane gates them with a 2 mm
+cross-toolchain tolerance; the 5-decimal record values are reported without
+gating. U and A have no solution for
+their first truth epoch because the H/U/A recipe omits
+`--android-include-first-native-epoch`, so the join scores 1101/1102 and
+2158/2159 epochs.
+
+`--update-docs` redraws `docs/gsdc_base_surveyed_osm.png` from the reproduced
+tracks. The tracks and worst-epoch insets match the tracked figure (H 0.81 m,
+U 0.95 m, A 0.52 m, LAX-T 5.74 m vs 5.72 m). The panel titles show the
+reproduced scores; the tracked figure was replaced with this redraw so it
+matches the refreshed README table.

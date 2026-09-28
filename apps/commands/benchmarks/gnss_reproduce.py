@@ -36,7 +36,13 @@ BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 DATASET_ENV = {
     "ppc": "GNSSPP_PPC_DATASET_ROOT",
     "urbannav": "GNSSPP_URBANNAV_ROOT",
+    "gsdc": "GNSSPP_GSDC_ROOT",
+    "gsdc_truth": "GNSSPP_GSDC_TRUTH_ROOT",
 }
+# A dataset root that is set neither by option nor by environment variable
+# falls back to another dataset's root (GSDC ground truth usually ships inside
+# the GSDC tree itself).
+DATASET_FALLBACK = {"gsdc_truth": "gsdc"}
 LANE_STATUSES = ("ready", "planned")
 PLACEHOLDER_RE = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(?::([^{}]+))?\}")
 PATH_TOKEN_RE = re.compile(r"([^.\[\]]+)|\[([^\]]+)\]")
@@ -511,6 +517,8 @@ def dataset_root(name: str, args: argparse.Namespace) -> Path | None:
     env_value = os.environ.get(DATASET_ENV[name])
     if env_value:
         return Path(env_value)
+    if name in DATASET_FALLBACK:
+        return dataset_root(DATASET_FALLBACK[name], args)
     if args.data_root is not None:
         return Path(args.data_root) / DEFAULT_DATA_SUBDIRS[name]
     default = ROOT_DIR / DEFAULT_DATA_SUBDIRS[name]
@@ -520,6 +528,7 @@ def dataset_root(name: str, args: argparse.Namespace) -> Path | None:
 DEFAULT_DATA_SUBDIRS = {
     "ppc": Path("data") / "PPC-Dataset",
     "urbannav": Path("data") / "driving" / "Tokyo_Data",
+    "gsdc": Path("data") / "gsdc2023" / "dataset_2023",
 }
 
 
@@ -550,7 +559,7 @@ def validate_inputs(manifest: Mapping[str, Any], context: Mapping[str, str], ren
         if missing:
             env_name = DATASET_ENV[name]
             problems.append(
-                f"dataset `{name}` incomplete under {root} (set --{name}-root or {env_name}); missing: "
+                f"dataset `{name}` incomplete under {root} (set --{name.replace('_', '-')}-root or {env_name}); missing: "
                 + ", ".join(missing[:6])
                 + (" ..." if len(missing) > 6 else "")
             )
@@ -624,6 +633,12 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
                         help="PPC-Dataset root (default: $GNSSPP_PPC_DATASET_ROOT or <data-root>/PPC-Dataset).")
     parser.add_argument("--urbannav-root", type=Path, default=None,
                         help="UrbanNav Tokyo_Data root holding Odaiba/ (default: $GNSSPP_URBANNAV_ROOT).")
+    parser.add_argument("--gsdc-root", type=Path, default=None,
+                        help="GSDC 2023 dataset_2023 root holding train/<drive>/ (default: $GNSSPP_GSDC_ROOT "
+                             "or <data-root>/gsdc2023/dataset_2023).")
+    parser.add_argument("--gsdc-truth-root", type=Path, default=None,
+                        help="Where ground_truth.csv lives if not inside --gsdc-root "
+                             "(default: $GNSSPP_GSDC_TRUTH_ROOT, then the GSDC root).")
     parser.add_argument("--build-dir", type=Path, default=os.environ.get("GNSSPP_BUILD_DIR"),
                         help="CMake build directory holding apps/gnss_* binaries (default: $GNSSPP_BUILD_DIR or <repo>/build*).")
     parser.add_argument("--rtklib-bin", type=Path, default=None,

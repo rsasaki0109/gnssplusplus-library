@@ -15,6 +15,7 @@ import argparse
 import csv
 import io
 import math
+import re
 import urllib.request
 from pathlib import Path
 
@@ -105,17 +106,26 @@ def draw_tracks(ax, truth, pred, zoom, lw=1.8):
         ax.plot(xs, ys, color=color, lw=width, alpha=0.9, label=label, zorder=3)
 
 
-def main():
+def split_route_spec(spec):
+    """Split ``name:pred.csv:truth.csv``; a ``:`` followed by a path separator
+    (Windows drive letter such as ``E:/``) is part of the path."""
+    parts = re.split(r":(?![\\/])", spec)
+    if len(parts) != 3:
+        raise ValueError(f"route spec must be name:pred.csv:truth.csv, got {spec!r}")
+    return parts[0], parts[1], parts[2]
+
+
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--routes", nargs="+", required=True, help="name:pred.csv:truth.csv")
     ap.add_argument("--output", type=Path, required=True)
     ap.add_argument("--inset-span-m", type=float, default=110.0)
     ap.add_argument("--dpi", type=int, default=150)
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     fig, axes = plt.subplots(2, 2, figsize=(16, 15))
     for ax, spec in zip(axes.ravel(), args.routes):
-        name, pred_path, truth_path = spec.split(":")
+        name, pred_path, truth_path = split_route_spec(spec)
         truth = read_latlon(truth_path)
         pred = read_latlon(pred_path)
         keys = sorted(set(truth) & set(pred))
