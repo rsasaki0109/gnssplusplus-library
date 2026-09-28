@@ -169,8 +169,12 @@ if(GTest_FOUND)
     set_target_properties(gnss_run_tests PROPERTIES OUTPUT_NAME run_tests)
     # Backward-compatible alias for CI/scripts that build --target run_tests.
     # Skipped for Visual Studio generators, where the name collides with
-    # CMake's auto-generated RUN_TESTS utility on a case-insensitive FS.
-    if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+    # CMake's auto-generated RUN_TESTS utility on a case-insensitive FS, and
+    # for Ninja on non-Windows hosts, where the alias's phony tests/run_tests
+    # collides with the extension-less executable ("multiple rules generate
+    # tests/run_tests"); there `--target tests/run_tests` builds the binary.
+    if(NOT CMAKE_GENERATOR MATCHES "Visual Studio" AND
+       NOT (CMAKE_GENERATOR MATCHES "Ninja" AND NOT WIN32))
         add_custom_target(run_tests DEPENDS gnss_run_tests)
     endif()
     if(NOT MSVC)
