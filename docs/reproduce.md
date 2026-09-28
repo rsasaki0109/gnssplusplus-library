@@ -27,7 +27,7 @@ runner adds no scoring logic of its own.
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
-| Smartphone GSDC official submission | `gsdc-official` | ready | ~12-18 h (estimate) | **Subset verified; full run not yet done.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 56625084 (`cbd1fde1...`), and the Kaggle score is readback-only. 6 of 40 final drives and 2 of 25 stage-0 drives were rerun, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
+| Smartphone GSDC official submission | `gsdc-official` | ready | ~30 min per drive; full run ~12-18 h | **Subset verified (by design).** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 56625084 (`cbd1fde1...`), and the Kaggle score is readback-only. 6 of 40 final drives and 2 of 25 stage-0 drives were rerun, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -491,5 +491,7 @@ was also an MSVC build. The research runtimes sum to about 9.1 h (stage 0)
 plus 8.4 h (final), measured two replays at a time. The replays here ran at
 0.9-2.4x their research wall time. A full single-process run is therefore
 estimated at 12-18 h, or about 8-10 h when the height maps are already
-pinned in the work dir. The full 40-drive run and the resulting SHA-256 gate
-are still to be done.
+pinned in the work dir. Verification is intentionally limited to this
+subset (per-drive byte identity plus `--allow-partial` assembly); the full
+40-drive run is available through the same command but is not part of the
+routine check.
