@@ -100,9 +100,8 @@ See the [v0.2.0 release highlights](docs/releases/v0.2.0.md) and
 ### Smartphone GNSS/IMU
 
 Official Google Smartphone Decimeter Challenge 2023-2024 submission
-**56625084** (2026-09-28) scored **Private 0.984 m / Public 0.915 m**,
-improving the previous submission's **1.055 m / 1.133 m**. The submitted
-recipe combines Pixel5 heading initialization with Android clock handling
+**56625084** (2026-09-28) scored **Private 0.984 m / Public 0.915 m**.
+The submitted recipe combines Pixel5 heading initialization with Android clock handling
 and observation-model updates for supported phones. All 40 drives and
 71,936 output rows were checked against native solver results.
 
