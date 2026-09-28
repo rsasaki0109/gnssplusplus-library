@@ -171,7 +171,7 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
                     },
                 },
                 "gici": {
-                    "path": portable_artifact_path(gici.get("path", "")),
+                    "path": portable_artifact_path(gici.get("path") or gici.get("pos", "")),
                     **{
                         metric: number(gici, metric, filename)
                         for metric in (
@@ -351,10 +351,14 @@ def build_payload(args: argparse.Namespace) -> dict[str, object]:
         "schema_version": 1,
         "evaluation": evaluation,
         "provenance": {
-            "lib_matrix": str(args.lib_matrix),
-            "gici_matrix": str(args.gici_matrix) if args.gici_matrix is not None else None,
+            "lib_matrix": portable_artifact_path(args.lib_matrix),
+            "gici_matrix": (
+                portable_artifact_path(args.gici_matrix) if args.gici_matrix is not None else None
+            ),
             "gici_results_dir": (
-                str(args.gici_results_dir) if args.gici_results_dir is not None else None
+                portable_artifact_path(args.gici_results_dir)
+                if args.gici_results_dir is not None
+                else None
             ),
             "gici_repository": GICI_REPOSITORY,
             "gici_commit": args.gici_commit,

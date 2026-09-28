@@ -30,7 +30,7 @@
         "positions_replaced": 0,
         "runtime_truth_used": false,
         "shadow_max_gdop": 4.0,
-        "summary": "output/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json"
+        "summary": "output/reproduce/ppc-goal/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json"
       }
     ],
     "reference_used_by_runtime_selector": false,
@@ -97,11 +97,11 @@
   "provenance": {
     "gici_commit": "e7666110a88d22e08aad24345a253564af9b8024",
     "gici_license_boundary": "GPL-3.0 external executable; NMEA output only",
-    "gici_matrix": "output\\gici_reproduction_ppc_matrix.json",
+    "gici_matrix": "output/reproduce/ppc-goal/gici_reproduction_ppc_matrix.json",
     "gici_repository": "https://github.com/inuex35/gici-open",
     "gici_results_dir": null,
     "kaiyodai_paper": "https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/pdf/content/2024okada,sasaki,ando.pdf",
-    "lib_matrix": "output\\kf_fgo_staged_integrity_full_matrix.json",
+    "lib_matrix": "output/reproduce/ppc-goal/kf_fgo_staged_integrity_full_matrix.json",
     "turing_slides": "https://www.denshi.e.kaiyodai.ac.jp/wp-content/uploads/2025/01/Turing-Inc.-Tight-coupling-Factor-Graph-%E4%BA%95%E4%B8%8A%E6%A7%98-%E5%9C%A7%E7%B8%AE.pdf"
   },
   "runs": [
@@ -111,7 +111,7 @@
         "fix_rate_pct": 46.472446,
         "p95_abs_up_m": 1.677779,
         "p95_h_m": 1.247934,
-        "path": "",
+        "path": "output/gici_common/tokyo1.pos",
         "ppc_official_score_pct": 80.262989,
         "ppc_score_3d_50cm_ref_pct": 76.478956,
         "wrong_fix_rate_pct": 1.774924
@@ -123,7 +123,7 @@
         "fix_rate_pct": 80.860848,
         "p95_abs_up_m": 3.372768,
         "p95_h_m": 2.081906,
-        "pos": "output/ppc_kf_fgo_staged_integrity_full/tokyo_run1.pos",
+        "pos": "output/reproduce/ppc-goal/staged/tokyo_run1.pos",
         "ppc_official_score_pct": 79.458337,
         "ppc_score_3d_50cm_ref_pct": 80.286169,
         "wrong_fix_rate_pct": 2.854868
@@ -135,7 +135,7 @@
         "fix_rate_pct": 76.937788,
         "p95_abs_up_m": 0.325714,
         "p95_h_m": 0.629631,
-        "path": "",
+        "path": "output/gici_common/tokyo2.pos",
         "ppc_official_score_pct": 90.652429,
         "ppc_score_3d_50cm_ref_pct": 90.820675,
         "wrong_fix_rate_pct": 0.365551
@@ -147,7 +147,7 @@
         "fix_rate_pct": 82.340402,
         "p95_abs_up_m": 1.87324,
         "p95_h_m": 1.603843,
-        "pos": "output/ppc_kf_fgo_staged_integrity_full/tokyo_run2.pos",
+        "pos": "output/reproduce/ppc-goal/staged/tokyo_run2.pos",
         "ppc_official_score_pct": 88.695533,
         "ppc_score_3d_50cm_ref_pct": 88.394711,
         "wrong_fix_rate_pct": 0.463278
@@ -159,7 +159,7 @@
         "fix_rate_pct": 73.346627,
         "p95_abs_up_m": 1.407457,
         "p95_h_m": 0.841578,
-        "path": "",
+        "path": "output/gici_common/tokyo3.pos",
         "ppc_official_score_pct": 83.786792,
         "ppc_score_3d_50cm_ref_pct": 84.667669,
         "wrong_fix_rate_pct": 0.271862
@@ -171,7 +171,7 @@
         "fix_rate_pct": 78.460617,
         "p95_abs_up_m": 2.170366,
         "p95_h_m": 1.670993,
-        "pos": "output/ppc_kf_fgo_staged_integrity_full/tokyo_run3.pos",
+        "pos": "output/reproduce/ppc-goal/staged/tokyo_run3.pos",
         "ppc_official_score_pct": 85.968869,
         "ppc_score_3d_50cm_ref_pct": 86.295013,
         "wrong_fix_rate_pct": 1.366259
@@ -183,7 +183,7 @@
         "fix_rate_pct": 67.812362,
         "p95_abs_up_m": 1.120251,
         "p95_h_m": 0.42378,
-        "path": "",
+        "path": "output/gici_common/nagoya1.pos",
         "ppc_official_score_pct": 70.85096,
         "ppc_score_3d_50cm_ref_pct": 77.976735,
         "wrong_fix_rate_pct": 0.13052
@@ -195,7 +195,7 @@
         "fix_rate_pct": 83.659044,
         "p95_abs_up_m": 2.425634,
         "p95_h_m": 1.331778,
-        "pos": "output/ppc_kf_fgo_staged_integrity_full/nagoya_run1.pos",
+        "pos": "output/reproduce/ppc-goal/staged/nagoya_run1.pos",
         "ppc_official_score_pct": 65.200926,
         "ppc_score_3d_50cm_ref_pct": 85.844988,
         "wrong_fix_rate_pct": 0.54672
@@ -207,7 +207,7 @@
         "fix_rate_pct": 39.988166,
         "p95_abs_up_m": 1.636335,
         "p95_h_m": 1.650509,
-        "path": "",
+        "path": "output/gici_common/nagoya2.pos",
         "ppc_official_score_pct": 39.84708,
         "ppc_score_3d_50cm_ref_pct": 49.105915,
         "wrong_fix_rate_pct": 1.183782
@@ -219,7 +219,7 @@
         "fix_rate_pct": 55.552882,
         "p95_abs_up_m": 26.932248,
         "p95_h_m": 18.1439,
-        "pos": "output/ppc_kf_fgo_staged_integrity_full/nagoya_run2.pos",
+        "pos": "output/reproduce/ppc-goal/staged/nagoya_run2.pos",
         "ppc_official_score_pct": 55.529496,
         "ppc_score_3d_50cm_ref_pct": 60.787218,
         "wrong_fix_rate_pct": 0.541477
@@ -231,7 +231,7 @@
         "fix_rate_pct": 21.398601,
         "p95_abs_up_m": 1.718291,
         "p95_h_m": 2.242111,
-        "path": "",
+        "path": "output/gici_common/nagoya3.pos",
         "ppc_official_score_pct": 33.495463,
         "ppc_score_3d_50cm_ref_pct": 27.744664,
         "wrong_fix_rate_pct": 11.204482
@@ -243,7 +243,7 @@
         "fix_rate_pct": 44.760623,
         "p95_abs_up_m": 3.190975,
         "p95_h_m": 1.908178,
-        "pos": "output/ppc_kf_fgo_staged_integrity_full/nagoya_run3.pos",
+        "pos": "output/reproduce/ppc-goal/staged/nagoya_run3.pos",
         "ppc_official_score_pct": 72.336255,
         "ppc_score_3d_50cm_ref_pct": 61.353586,
         "wrong_fix_rate_pct": 3.006873

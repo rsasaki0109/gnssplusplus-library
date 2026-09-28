@@ -117,7 +117,16 @@ consecutive FIX epochs.
 
 The README goal matrix uses all six public Tokyo/Nagoya runs. The selected POS
 paths and complete per-run metrics are recorded in
-[`ppc_kf_fgo_goal_metrics.json`](ppc_kf_fgo_goal_metrics.json). Its final
+[`ppc_kf_fgo_goal_metrics.json`](ppc_kf_fgo_goal_metrics.json).
+
+`gnss reproduce ppc-goal --ppc-goal-inputs <dir> --check` replays every command
+in this section from 26 SHA-256-pinned tier inputs, then scores the result and
+checks it against the README (see [reproduce](reproduce.md#ppc-goal-frozen-inputs)).
+It covers the selectors, consensus replays, status demotion, scoring, figures,
+ledger, and goal contract. The solver outputs below those inputs are frozen,
+not regenerated; see [Tier provenance](#tier-provenance).
+
+Its final
 Tokyo 1 tier is a position-only, reference-free choice between the preceding
 selected trajectory and an independently generated tightly-coupled RTK
 trajectory:
@@ -442,8 +451,21 @@ opt-in diagnostic and is not part of the selected goal matrix.
 
 ### Staged bounded-latency integrity policy
 
-After applying the frozen Tokyo 1/Tokyo 2 multi-shadow position consensus,
-apply the base confidence and residual policies in one pass. They consume only
+First apply the frozen Tokyo 1/Tokyo 2 multi-shadow position consensus to the
+kinematic-advanced Tokyo outputs. This argv was not recorded at the time. It
+was reconstructed from the thresholds, primary POS, and shadow list stored in
+the historical summary JSONs, and the replay is byte-identical to the
+historical `ppc_kf_fgo_online_consensus_fresh_kinematic_holdout/tokyo_run{1,2}.pos`.
+Tokyo 3 in that directory is the two-window consensus output above, and the
+Nagoya runs are the kinematic-advanced outputs:
+
+```bash
+python3 scripts/experiments/ppc/apply_ppc_fgo_position_consensus.py   --primary-pos output/ppc_kf_fgo_online_consensus_kinematic_advanced/tokyo_run1.pos   --shadow-csv output/fgo_shipping_tokyo1_full_ecef.csv   --shadow-csv output/fgo_shipping_nhc_tokyo1_start6500_3500_ecef.csv   --shadow-csv output/fgo_shipping_nhc_tokyo1_start7100_500_ecef.csv   --shadow-csv output/fgo_shipping_nhc_tokyo1_start8000_1000_ecef.csv   --shadow-csv output/fgo_shipping_nhc_tokyo1_start9400_700_ecef.csv   --output-pos output/tokyo1_fresh_kinematic_multi_fgo_consensus.pos   --summary-json output/tokyo1_fresh_kinematic_multi_fgo_consensus_summary.json   --min-independent-shadows 2 --shadow-agreement-aperture-m 0.25   --primary-separation-min-m 0.5 --fresh-shadow-max-age-epochs 1000   --candidate-max-prediction-error-m 2
+
+python3 scripts/experiments/ppc/apply_ppc_fgo_position_consensus.py   --primary-pos output/ppc_kf_fgo_online_consensus_kinematic_advanced/tokyo_run2.pos   --shadow-csv output/fgo_shipping_tokyo2_full_ecef.csv   --shadow-csv output/fgo_shipping_nhc_tokyo2_start3000_1000_ecef.csv   --output-pos output/tokyo2_holdout_fresh_kinematic_fgo_consensus.pos   --summary-json output/tokyo2_holdout_fresh_kinematic_fgo_consensus_summary.json   --min-independent-shadows 2 --shadow-agreement-aperture-m 0.25   --primary-separation-min-m 0.5 --fresh-shadow-max-age-epochs 1000   --candidate-max-prediction-error-m 2
+```
+
+Then apply the base confidence and residual policies in one pass. They consume only
 emitted status and RTK telemetry; the eight-epoch prefix requires at most seven
 epochs (1.4 seconds at 5 Hz) of output buffering:
 
@@ -526,6 +548,35 @@ errors above 2 m, harmed zero correct FIX, and reported
 This is active receiver-diversity safety/efficacy evidence, although the very
 low Shinjuku FIX coverage limits how broadly it can be generalized. It is the
 external gate used for the README staged-result promotion.
+
+### Tier provenance
+
+This table traces each input of the goal matrix back as far as the local
+artifacts allow. "Replayed" means `gnss reproduce ppc-goal` runs the step and
+the output is byte-identical to the historical file. "Frozen" means the lane
+consumes the file by SHA-256 (`scripts/experiments/ppc/stage_ppc_goal_inputs.py`)
+without regenerating it.
+
+| Tier / input | Produced by | Status |
+|---|---|---|
+| Staged integrity policy, scoring, scorecard, figures, ledger | commands in this section | recorded argv; replayed |
+| Tokyo 1 tier 3, Nagoya 2 escape, Nagoya 3 causal consensus, kinematic-advanced demotion, Tokyo 3 two-window consensus | commands in this section | recorded argv; replayed |
+| Tokyo 1 / Tokyo 2 multi-shadow position consensus | `apply_ppc_fgo_position_consensus.py` | argv reconstructed from summary JSON (above); replayed |
+| `fgo_shipping_tokyo3_start{10950,11150}_400_ecef.csv` | `gnss_fgo_parity` shipping preset | recorded argv (above); frozen, not rerun by the lane (GTSAM solver replay) |
+| `{tokyo1,tokyo2,tokyo3,nagoya2}_selected_quality_rtkbaseline_tier2_truthfree.pos`, `nagoya3_selected_quality_rtkbaseline_truthfree.pos` | `select_pos_candidate_quality.py` over a `hybrid_*` / tier-1 baseline and `rtk_baseline_20260712/<run>.pos` | one level recorded: each file's local summary JSON stores its baseline, candidate, and thresholds, but no argv; frozen |
+| `rtk_baseline_20260712/<run>.pos` (tier-2 candidates) | `gnss ppc-demo --preset low-cost --no-arfilter --no-kinematic-post-filter --ratio 2.4` | recorded argv in local logs (not in git); not a lane input |
+| `hybrid_*_multistage_*` baselines, including `hybrid_nagoya1_multistage_m4_fixedpos_bridge05_vertical025_veld_vertical10_truthfree.pos` | multi-stage bridge / smoothing / FGO consensus scripts (`bridge_pos_*`, `smooth_pos_*`, `fuse_kf_fgo_alignment.py`) | unrecorded (the Nagoya 1 file's summary JSON stores only its last bridge stage); frozen |
+| `tc_m3_full_t1_on/rtk.pos` | `gnss_fuse` RTK tight coupling, low-cost preset (from its stdout) | unrecorded argv; frozen |
+| `probe_fuse_nagoya2_full_tc_m4.pos` | `gnss_fuse` tight-coupling probe | unrecorded; frozen |
+| `fgo_shipping_{,nhc_}tokyo{1,2}_*_ecef.csv` (7 shadows) | `gnss_fgo_parity` shipping preset (+NHC) windows | unrecorded argv (stdout logs record only the window and CMC settings); frozen |
+| `fgo_partial_noreset_ddpranchor_nagoya3_*_ecef.csv` | `gnss_fgo_parity` partial windows | unrecorded; frozen |
+| `gici_common/*.pos` | gici-open `e7666110` `option/tcN.yaml` + `convert_gici_nmea_to_pos.py` | procedure recorded above; local GPL portability patches unrecorded; frozen |
+| `goal_kf_current_r2_min8_rate20_rescue29_8/solution.pos` (Nagoya 1 FIX target) | `gnss ppc-demo` | settings partly in its summary JSON (`rtk_*` fields), argv unrecorded; frozen and rescored with `--use-existing-solution` |
+
+Regenerating the frozen layer would take full solver replays, most without a
+recorded argv. The solvers have also changed since July 2026, so a rerun is not
+expected to give byte-identical inputs. Until that is done, the README numbers are
+reproducible only from the frozen inputs, which are not published.
 
 ## Historical Diagnostics
 

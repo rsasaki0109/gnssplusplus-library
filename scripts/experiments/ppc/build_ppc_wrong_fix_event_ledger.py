@@ -265,6 +265,12 @@ def build_ledger(
             "events_above_10m": sum(
                 event["severity"]["above_10m"] > 0 for event in all_events
             ),
+            "wrong_fix_epochs_above_5m": sum(
+                int(event["severity"].get("above_5m", 0)) for event in all_events
+            ),
+            "wrong_fix_epochs_above_10m": sum(
+                int(event["severity"]["above_10m"]) for event in all_events
+            ),
         },
         "events": all_events,
     }

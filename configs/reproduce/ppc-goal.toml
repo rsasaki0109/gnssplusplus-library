@@ -1,8 +1,576 @@
-# README section "PPC 2024 goal matrix vs Kaiyodai and gici-open".
+# README section "PPC 2024 goal matrix vs Kaiyodai and gici-open" (78.8455%
+# official score, the six-run libgnss++ / gici-open table, the Nagoya 1
+# FIX-target profile) and docs/ppc_kf_fgo_goal_metrics.json,
+# docs/ppc_libgnss_gici_comparison.png, docs/ppc_public_targets.png,
+# docs/ppc_kf_fgo_fix_status_xy.png.
+#
+# Stage: score-only from frozen tier inputs. The solver outputs at the bottom
+# of the chain (tier-2 selected KF trajectories, tightly-coupled candidates,
+# FGO shadow windows) were produced by commands that were never recorded (see
+# docs/ppc_reproduction.md "Tier provenance"), so they are frozen by SHA-256 in
+# scripts/experiments/ppc/stage_ppc_goal_inputs.py together with the six
+# gici-open trajectories and the Nagoya 1 FIX-target solution (26 files,
+# ~33 MB, not committed). Pass their directory (historical output/ layout)
+# with --ppc-goal-inputs or GNSSPP_PPC_GOAL_INPUTS.
+#
+# Everything downstream is replayed here: the truth-free selector / consensus /
+# status-demotion chain of docs/ppc_reproduction.md (pure Python, seconds),
+# then scoring, figures, the wrong-FIX event ledger and the goal contract. No
+# solver runs.
+
 [lane]
 name = "ppc-goal"
-status = "planned"
+status = "ready"
 title = "PPC 2024 goal matrix: audited KF/FGO selected profile vs public targets and gici-open"
 readme_row = "PPC goal: 78.8455% official score, Tokyo 1 FIX 80.861%, Nagoya 1 FIX 85.100974%"
-runtime_estimate = "planned"
-docs = "docs/ppc_goal_completion_audit.md"
+runtime_estimate = "~2 min"
+docs = "docs/ppc_reproduction.md#audited-kffgo-goal-matrix-and-gici-open"
+
+[datasets.ppc]
+required = [
+  "tokyo/run1/reference.csv", "tokyo/run2/reference.csv", "tokyo/run3/reference.csv",
+  "nagoya/run1/reference.csv", "nagoya/run2/reference.csv", "nagoya/run3/reference.csv",
+  "nagoya/run1/rover.obs", "nagoya/run1/base.obs", "nagoya/run1/base.nav",
+]
+
+[datasets.ppc_goal_inputs]
+required = [
+  "tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "tokyo2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "tokyo3_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "tc_m3_full_t1_on/rtk.pos",
+  "nagoya2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "probe_fuse_nagoya2_full_tc_m4.pos",
+  "hybrid_nagoya1_multistage_m4_fixedpos_bridge05_vertical025_veld_vertical10_truthfree.pos",
+  "nagoya3_selected_quality_rtkbaseline_truthfree.pos",
+  "fgo_partial_noreset_ddpranchor_nagoya3_first2100_ecef.csv",
+  "fgo_partial_noreset_ddpranchor_nagoya3_start2000_3000_ecef.csv",
+  "fgo_shipping_tokyo3_start10950_400_ecef.csv",
+  "fgo_shipping_tokyo3_start11150_400_ecef.csv",
+  "fgo_shipping_tokyo1_full_ecef.csv",
+  "fgo_shipping_nhc_tokyo1_start6500_3500_ecef.csv",
+  "fgo_shipping_nhc_tokyo1_start7100_500_ecef.csv",
+  "fgo_shipping_nhc_tokyo1_start8000_1000_ecef.csv",
+  "fgo_shipping_nhc_tokyo1_start9400_700_ecef.csv",
+  "fgo_shipping_tokyo2_full_ecef.csv",
+  "fgo_shipping_nhc_tokyo2_start3000_1000_ecef.csv",
+  "gici_common/tokyo1.pos", "gici_common/tokyo2.pos", "gici_common/tokyo3.pos",
+  "gici_common/nagoya1.pos", "gici_common/nagoya2.pos", "gici_common/nagoya3.pos",
+  "goal_kf_current_r2_min8_rate20_rescue29_8/solution.pos",
+]
+
+[tools.gici_open]
+repository = "https://github.com/inuex35/gici-open"
+commit = "e7666110a88d22e08aad24345a253564af9b8024 (forppc2024)"
+note = "GPL-3.0; only its converted NMEA output (gici_common/*.pos, SHA-256 pinned) enters this lane"
+
+# 1. Verify every frozen input against its pinned SHA-256.
+[[steps]]
+name = "verify-ppc-goal-inputs"
+argv = [
+  "{python}", "scripts/experiments/ppc/stage_ppc_goal_inputs.py",
+  "--inputs-root", "{ppc_goal_inputs_root}",
+  "--summary-json", "{work_dir}/inputs_verification.json",
+]
+
+# 2. Tokyo 1 tier 3: tightly-coupled RTK candidate positions.
+[[steps]]
+name = "tokyo1-tier3-select"
+argv = [
+  "{python}", "scripts/experiments/ppc/select_pos_candidate_quality.py",
+  "--baseline-pos", "{ppc_goal_inputs_root}/tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "--candidate-pos", "{ppc_goal_inputs_root}/tc_m3_full_t1_on/rtk.pos",
+  "--output-pos", "{work_dir}/chain/tokyo1_selected_quality_tcm3_tier3_truthfree.pos",
+  "--summary-json", "{work_dir}/chain/tokyo1_selected_quality_tcm3_tier3_truthfree.json",
+  "--candidate-status", "4", "--candidate-min-ratio", "2",
+  "--candidate-min-satellites", "8",
+  "--candidate-max-post-rms-m", "0",
+  "--candidate-max-nis-per-observation", "0",
+  "--min-position-separation-m", "2",
+]
+
+# 3. Nagoya 2 wrong-basin escape.
+[[steps]]
+name = "nagoya2-wrong-basin-escape"
+argv = [
+  "{python}", "scripts/experiments/ppc/select_pos_candidate_quality.py",
+  "--baseline-pos", "{ppc_goal_inputs_root}/nagoya2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "--candidate-pos", "{ppc_goal_inputs_root}/probe_fuse_nagoya2_full_tc_m4.pos",
+  "--output-pos", "{work_dir}/chain/nagoya2_wrong_basin_fgo_escape_truthfree.pos",
+  "--summary-json", "{work_dir}/chain/nagoya2_wrong_basin_fgo_escape_truthfree.json",
+  "--candidate-status", "3", "--candidate-min-ratio", "0",
+  "--candidate-min-satellites", "0",
+  "--candidate-max-post-rms-m", "0",
+  "--candidate-max-nis-per-observation", "0",
+  "--baseline-min-prefit-rms-m", "8",
+  "--baseline-min-outliers", "45",
+  "--replace-status",
+  "--min-position-separation-m", "0",
+]
+
+# 4. Nagoya 3 causal KF/FGO status-only consensus.
+[[steps]]
+name = "nagoya3-online-consensus"
+argv = [
+  "{python}", "scripts/experiments/ppc/apply_ppc_integrity_consensus.py",
+  "--primary-pos", "{ppc_goal_inputs_root}/nagoya3_selected_quality_rtkbaseline_truthfree.pos",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_partial_noreset_ddpranchor_nagoya3_first2100_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_partial_noreset_ddpranchor_nagoya3_start2000_3000_ecef.csv",
+  "--output-pos", "{work_dir}/chain/nagoya3_selected_online_consensus_a11_recovery.pos",
+  "--summary-json", "{work_dir}/chain/nagoya3_selected_online_consensus_a11_recovery.json",
+  "--ledger-csv", "{work_dir}/chain/nagoya3_selected_online_consensus_a11_recovery_ledger.csv",
+  "--agreement-aperture-m", "11",
+  "--allow-recovery-fixed-output",
+]
+
+# 5. Satellite gate + exoneration + staged kinematic quarantine.
+[[steps]]
+name = "kinematic-advanced-status-demotion"
+argv = [
+  "{python}", "scripts/experiments/ppc/apply_ppc_status_demotion.py",
+  "--pos", "tokyo_run1={work_dir}/chain/tokyo1_selected_quality_tcm3_tier3_truthfree.pos",
+  "--pos", "tokyo_run2={ppc_goal_inputs_root}/tokyo2_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "--pos", "tokyo_run3={ppc_goal_inputs_root}/tokyo3_selected_quality_rtkbaseline_tier2_truthfree.pos",
+  "--pos", "nagoya_run1={ppc_goal_inputs_root}/hybrid_nagoya1_multistage_m4_fixedpos_bridge05_vertical025_veld_vertical10_truthfree.pos",
+  "--pos", "nagoya_run2={work_dir}/chain/nagoya2_wrong_basin_fgo_escape_truthfree.pos",
+  "--pos", "nagoya_run3={work_dir}/chain/nagoya3_selected_online_consensus_a11_recovery.pos",
+  "--output-dir", "{work_dir}/kinematic_advanced",
+  "--min-satellites", "8",
+  "--low-satellite-ceiling", "11",
+  "--low-satellite-max-ratio", "15",
+  "--exonerate-min-satellites", "11",
+  "--exonerate-max-prefit-rms-m", "0.5",
+  "--exonerate-max-nis-per-obs", "0.2",
+  "--kinematic-max-jump-m", "12",
+  "--kinematic-min-acceleration-mps2", "200",
+  "--kinematic-hold-epochs", "3",
+  "--kinematic-plateau-max-jump-m", "0.1",
+  "--kinematic-max-hold-epochs", "8",
+  "--kinematic-secondary-min-jump-m", "5",
+  "--kinematic-secondary-min-acceleration-mps2", "100",
+  "--kinematic-secondary-min-prefit-rms-m", "5",
+  "--kinematic-secondary-max-ratio", "10",
+  "--kinematic-secondary-min-outliers", "10",
+  "--kinematic-secondary-max-satellites", "13",
+]
+
+# 6. Tokyo 3 two-window FGO status consensus.
+[[steps]]
+name = "tokyo3-online-consensus"
+argv = [
+  "{python}", "scripts/experiments/ppc/apply_ppc_integrity_consensus.py",
+  "--primary-pos", "{work_dir}/kinematic_advanced/tokyo_run3.pos",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_tokyo3_start10950_400_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_tokyo3_start11150_400_ecef.csv",
+  "--output-pos", "{work_dir}/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window.pos",
+  "--summary-json", "{work_dir}/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json",
+  "--ledger-csv", "{work_dir}/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_ledger.csv",
+  "--agreement-aperture-m", "5", "--shadow-max-gdop", "4",
+  "--allow-recovery-fixed-output",
+]
+
+# 7. Tokyo 1 / Tokyo 2 multi-shadow position consensus. argv reconstructed from
+#    the historical summary JSONs (thresholds, primary and shadow list); the
+#    replay is byte-identical to the historical holdout inputs.
+[[steps]]
+name = "tokyo1-multi-shadow-position-consensus"
+argv = [
+  "{python}", "scripts/experiments/ppc/apply_ppc_fgo_position_consensus.py",
+  "--primary-pos", "{work_dir}/kinematic_advanced/tokyo_run1.pos",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_tokyo1_full_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_nhc_tokyo1_start6500_3500_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_nhc_tokyo1_start7100_500_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_nhc_tokyo1_start8000_1000_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_nhc_tokyo1_start9400_700_ecef.csv",
+  "--output-pos", "{work_dir}/chain/tokyo1_fresh_kinematic_multi_fgo_consensus.pos",
+  "--summary-json", "{work_dir}/chain/tokyo1_fresh_kinematic_multi_fgo_consensus_summary.json",
+  "--min-independent-shadows", "2",
+  "--shadow-agreement-aperture-m", "0.25",
+  "--primary-separation-min-m", "0.5",
+  "--fresh-shadow-max-age-epochs", "1000",
+  "--candidate-max-prediction-error-m", "2",
+]
+
+[[steps]]
+name = "tokyo2-multi-shadow-position-consensus"
+argv = [
+  "{python}", "scripts/experiments/ppc/apply_ppc_fgo_position_consensus.py",
+  "--primary-pos", "{work_dir}/kinematic_advanced/tokyo_run2.pos",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_tokyo2_full_ecef.csv",
+  "--shadow-csv", "{ppc_goal_inputs_root}/fgo_shipping_nhc_tokyo2_start3000_1000_ecef.csv",
+  "--output-pos", "{work_dir}/chain/tokyo2_holdout_fresh_kinematic_fgo_consensus.pos",
+  "--summary-json", "{work_dir}/chain/tokyo2_holdout_fresh_kinematic_fgo_consensus_summary.json",
+  "--min-independent-shadows", "2",
+  "--shadow-agreement-aperture-m", "0.25",
+  "--primary-separation-min-m", "0.5",
+  "--fresh-shadow-max-age-epochs", "1000",
+  "--candidate-max-prediction-error-m", "2",
+]
+
+# 8. Staged bounded-latency integrity policy -> the six final POS files.
+[[steps]]
+name = "staged-integrity-policy"
+argv = [
+  "{python}", "scripts/experiments/ppc/apply_ppc_status_demotion.py",
+  "--pos", "tokyo_run1={work_dir}/chain/tokyo1_fresh_kinematic_multi_fgo_consensus.pos",
+  "--pos", "tokyo_run2={work_dir}/chain/tokyo2_holdout_fresh_kinematic_fgo_consensus.pos",
+  "--pos", "tokyo_run3={work_dir}/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window.pos",
+  "--pos", "nagoya_run1={work_dir}/kinematic_advanced/nagoya_run1.pos",
+  "--pos", "nagoya_run2={work_dir}/kinematic_advanced/nagoya_run2.pos",
+  "--pos", "nagoya_run3={work_dir}/kinematic_advanced/nagoya_run3.pos",
+  "--output-dir", "{work_dir}/staged",
+  "--min-satellites", "8",
+  "--low-satellite-ceiling", "11",
+  "--low-satellite-max-ratio", "15",
+  "--exonerate-min-satellites", "11",
+  "--exonerate-max-prefit-rms-m", "0.5",
+  "--exonerate-max-nis-per-obs", "0.2",
+  "--residual-streak-min-prefit-rms-m", "40",
+  "--residual-streak-max-ratio", "15",
+  "--residual-streak-min-outliers", "12",
+  "--residual-streak-min-outlier-fraction", "0.5",
+  "--residual-streak-epochs", "8",
+  "--residual-streak-buffer-prefix",
+  "--residual-spike-min-prefit-rms-m", "40",
+  "--residual-spike-max-satellites", "14",
+]
+
+# 9. Score libgnss++ and gici-open with the common metric implementation.
+[[steps]]
+name = "score-libgnss-matrix"
+argv = [
+  "{python}", "scripts/experiments/ppc/summarize_fgo_ppc_matrix.py",
+  "--dataset-root", "{ppc_root}",
+  "--pos", "tokyo/run1={work_dir}/staged/tokyo_run1.pos",
+  "--pos", "tokyo/run2={work_dir}/staged/tokyo_run2.pos",
+  "--pos", "tokyo/run3={work_dir}/staged/tokyo_run3.pos",
+  "--pos", "nagoya/run1={work_dir}/staged/nagoya_run1.pos",
+  "--pos", "nagoya/run2={work_dir}/staged/nagoya_run2.pos",
+  "--pos", "nagoya/run3={work_dir}/staged/nagoya_run3.pos",
+  "--match-tolerance-s", "0.11",
+  "--output-json", "{work_dir}/kf_fgo_staged_integrity_full_matrix.json",
+  "--markdown-output", "{work_dir}/kf_fgo_staged_integrity_full_matrix.md",
+]
+
+[[steps]]
+name = "score-gici-matrix"
+argv = [
+  "{python}", "scripts/experiments/ppc/summarize_fgo_ppc_matrix.py",
+  "--dataset-root", "{ppc_root}",
+  "--pos", "tokyo/run1={ppc_goal_inputs_root}/gici_common/tokyo1.pos",
+  "--pos", "tokyo/run2={ppc_goal_inputs_root}/gici_common/tokyo2.pos",
+  "--pos", "tokyo/run3={ppc_goal_inputs_root}/gici_common/tokyo3.pos",
+  "--pos", "nagoya/run1={ppc_goal_inputs_root}/gici_common/nagoya1.pos",
+  "--pos", "nagoya/run2={ppc_goal_inputs_root}/gici_common/nagoya2.pos",
+  "--pos", "nagoya/run3={ppc_goal_inputs_root}/gici_common/nagoya3.pos",
+  "--match-tolerance-s", "0.11",
+  "--output-json", "{work_dir}/gici_reproduction_ppc_matrix.json",
+  "--markdown-output", "{work_dir}/gici_reproduction_ppc_matrix.md",
+]
+
+# 10. Rescore the Nagoya 1 FIX-target profile (no solver run).
+[[steps]]
+name = "score-nagoya1-fix-target-profile"
+argv = [
+  "{gnss}", "ppc-demo",
+  "--dataset-root", "{ppc_root}",
+  "--city", "nagoya", "--run", "run1", "--solver", "rtk",
+  "--use-existing-solution",
+  "--out", "{ppc_goal_inputs_root}/goal_kf_current_r2_min8_rate20_rescue29_8/solution.pos",
+  "--summary-json", "{work_dir}/nagoya1_fix_target_summary.json",
+  "--match-tolerance-s", "0.25",
+]
+
+# 11. Goal scorecard and its two README figures (work-dir copies).
+[[steps]]
+name = "goal-scorecard"
+env = { MPLBACKEND = "Agg" }
+argv = [
+  "{python}", "scripts/experiments/ppc/generate_ppc_goal_scorecard.py",
+  "--lib-matrix", "{work_dir}/kf_fgo_staged_integrity_full_matrix.json",
+  "--gici-matrix", "{work_dir}/gici_reproduction_ppc_matrix.json",
+  "--nagoya1-public-summary", "{work_dir}/nagoya1_fix_target_summary.json",
+  "--summary-json", "{work_dir}/ppc_kf_fgo_goal_metrics.json",
+  "--comparison-png", "{work_dir}/figures/ppc_libgnss_gici_comparison.png",
+  "--targets-png", "{work_dir}/figures/ppc_public_targets.png",
+  "--status-demotion-min-satellites", "8",
+  "--status-demotion-low-satellite-ceiling", "11",
+  "--status-demotion-low-satellite-max-ratio", "15",
+  "--status-exonerate-min-satellites", "11",
+  "--status-exonerate-max-prefit-rms-m", "0.5",
+  "--status-exonerate-max-nis-per-obs", "0.2",
+  "--kinematic-max-jump-m", "12",
+  "--kinematic-min-acceleration-mps2", "200",
+  "--kinematic-hold-epochs", "3",
+  "--kinematic-plateau-max-jump-m", "0.1",
+  "--kinematic-max-hold-epochs", "8",
+  "--kinematic-secondary-min-jump-m", "5",
+  "--kinematic-secondary-min-acceleration-mps2", "100",
+  "--kinematic-secondary-min-prefit-rms-m", "5",
+  "--kinematic-secondary-max-ratio", "10",
+  "--kinematic-secondary-min-outliers", "10",
+  "--kinematic-secondary-max-satellites", "13",
+  "--online-consensus-summary", "{work_dir}/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json",
+  "--staged-integrity-audit", "docs/ppc_residual_integrity_external_audit.json",
+]
+
+# 12. Fix-status trajectory figure (work-dir copy).
+[[steps]]
+name = "plot-fix-status-trajectories"
+env = { MPLBACKEND = "Agg" }
+argv = [
+  "{python}", "scripts/experiments/ppc/plot_ppc_status_trajectories.py",
+  "--dataset-root", "{ppc_root}",
+  "--solution-dir", "{work_dir}/staged",
+  "--output", "{work_dir}/figures/ppc_kf_fgo_fix_status_xy.png",
+  "--title", "PPC 2024 selected trajectories by solution status",
+  "--subtitle", "Staged integrity: correct FIX, wrong FIX (>0.5 m 3D), FLOAT, and other states",
+]
+
+# 13. Contiguous wrong-FIX event ledger (README 869 -> 574 wrong FIX etc.).
+[[steps]]
+name = "wrong-fix-event-ledger"
+argv = [
+  "{python}", "scripts/experiments/ppc/build_ppc_wrong_fix_event_ledger.py",
+  "--dataset-root", "{ppc_root}",
+  "--pos", "tokyo_run1={work_dir}/staged/tokyo_run1.pos",
+  "--pos", "tokyo_run2={work_dir}/staged/tokyo_run2.pos",
+  "--pos", "tokyo_run3={work_dir}/staged/tokyo_run3.pos",
+  "--pos", "nagoya_run1={work_dir}/staged/nagoya_run1.pos",
+  "--pos", "nagoya_run2={work_dir}/staged/nagoya_run2.pos",
+  "--pos", "nagoya_run3={work_dir}/staged/nagoya_run3.pos",
+  "--output-json", "{work_dir}/ppc_wrong_fix_event_ledger.json",
+  "--markdown-output", "{work_dir}/ppc_wrong_fix_event_ledger.md",
+]
+
+# 14. Tracked goal contract (docs/ppc_goal_completion_audit.*) still holds.
+[[steps]]
+name = "verify-goal-contract"
+argv = [
+  "{python}", "scripts/experiments/ppc/verify_ppc_goal_completion.py",
+  "--summary-json", "{work_dir}/ppc_goal_completion_audit.json",
+  "--markdown-output", "{work_dir}/ppc_goal_completion_audit.md",
+]
+
+# --update-docs: regenerate the tracked metrics JSON and the three figures.
+[[docs_steps]]
+name = "update-docs-ppc-goal-scorecard"
+env = { MPLBACKEND = "Agg" }
+argv = [
+  "{python}", "scripts/experiments/ppc/generate_ppc_goal_scorecard.py",
+  "--lib-matrix", "{work_dir}/kf_fgo_staged_integrity_full_matrix.json",
+  "--gici-matrix", "{work_dir}/gici_reproduction_ppc_matrix.json",
+  "--nagoya1-public-summary", "{work_dir}/nagoya1_fix_target_summary.json",
+  "--summary-json", "docs/ppc_kf_fgo_goal_metrics.json",
+  "--comparison-png", "docs/ppc_libgnss_gici_comparison.png",
+  "--targets-png", "docs/ppc_public_targets.png",
+  "--status-demotion-min-satellites", "8",
+  "--status-demotion-low-satellite-ceiling", "11",
+  "--status-demotion-low-satellite-max-ratio", "15",
+  "--status-exonerate-min-satellites", "11",
+  "--status-exonerate-max-prefit-rms-m", "0.5",
+  "--status-exonerate-max-nis-per-obs", "0.2",
+  "--kinematic-max-jump-m", "12",
+  "--kinematic-min-acceleration-mps2", "200",
+  "--kinematic-hold-epochs", "3",
+  "--kinematic-plateau-max-jump-m", "0.1",
+  "--kinematic-max-hold-epochs", "8",
+  "--kinematic-secondary-min-jump-m", "5",
+  "--kinematic-secondary-min-acceleration-mps2", "100",
+  "--kinematic-secondary-min-prefit-rms-m", "5",
+  "--kinematic-secondary-max-ratio", "10",
+  "--kinematic-secondary-min-outliers", "10",
+  "--kinematic-secondary-max-satellites", "13",
+  "--online-consensus-summary", "{work_dir}/chain/tokyo3_advanced_online_consensus_fgo_a5_gdop4_two_window_summary.json",
+  "--staged-integrity-audit", "docs/ppc_residual_integrity_external_audit.json",
+]
+
+[[docs_steps]]
+name = "update-docs-ppc-fix-status-figure"
+env = { MPLBACKEND = "Agg" }
+argv = [
+  "{python}", "scripts/experiments/ppc/plot_ppc_status_trajectories.py",
+  "--dataset-root", "{ppc_root}",
+  "--solution-dir", "{work_dir}/staged",
+  "--output", "docs/ppc_kf_fgo_fix_status_xy.png",
+  "--title", "PPC 2024 selected trajectories by solution status",
+  "--subtitle", "Staged integrity: correct FIX, wrong FIX (>0.5 m 3D), FLOAT, and other states",
+]
+
+# Local reproduction (2026-09-29, Windows 11, develop 2f919306): every replayed
+# intermediate (tier-3 Tokyo 1, Nagoya 2 escape, Nagoya 3 consensus, the six
+# kinematic-advanced POS, Tokyo 3 consensus, Tokyo 1/2 position consensus, the
+# three surviving staged Nagoya POS) is byte-identical to the historical file,
+# and both scored matrices match the historical JSON field for field. The
+# tolerances below are the README's display rounding (3 decimals, 6 for the
+# headline values that the README quotes to 6).
+
+[[metrics]]
+name = "distance-weighted PPC official score (%)"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "weighted_official_score_pct"
+expected = 78.845491
+abs_tol = 0.0000005
+readme = "78.8455% / 78.845491%"
+
+[[metrics]]
+name = "target {key} achieved (%)"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "targets[key={key}].achieved_pct"
+readme = "public targets 80.8% / 85.1% / 78.7%"
+foreach = [
+  { key = "tokyo1_fix", expected = 80.860848, abs_tol = 0.0000005 },
+  { key = "nagoya1_fix", expected = 85.100974, abs_tol = 0.0000005 },
+  { key = "ppc_official", expected = 78.845491, abs_tol = 0.0000005 },
+]
+
+[[metrics]]
+name = "Nagoya 1 FIX-target profile {field}"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "targets[key=nagoya1_fix].{field}"
+readme = "0.913% Wrong FIX/FIX, 1.460 m P95 H"
+foreach = [
+  { field = "wrong_fix_rate_pct", expected = 0.913, abs_tol = 0.0005 },
+  { field = "p95_h_m", expected = 1.460, abs_tol = 0.0005 },
+]
+
+# README table, libgnss++ columns.
+[[metrics]]
+name = "table: {run} libgnss++ {field}"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "runs[key={run}].libgnss.{field}"
+readme = "README goal table"
+abs_tol = 0.0005
+foreach = [
+  { run = "tokyo_run1", field = "fix_rate_pct", expected = 80.861 },
+  { run = "tokyo_run1", field = "wrong_fix_rate_pct", expected = 2.855 },
+  { run = "tokyo_run1", field = "correct_fix_ref_pct", expected = 71.467 },
+  { run = "tokyo_run1", field = "ppc_score_3d_50cm_ref_pct", expected = 80.286 },
+  { run = "tokyo_run1", field = "ppc_official_score_pct", expected = 79.458 },
+  { run = "tokyo_run1", field = "p95_h_m", expected = 2.082 },
+  { run = "tokyo_run2", field = "fix_rate_pct", expected = 82.340 },
+  { run = "tokyo_run2", field = "wrong_fix_rate_pct", expected = 0.463 },
+  { run = "tokyo_run2", field = "correct_fix_ref_pct", expected = 79.827 },
+  { run = "tokyo_run2", field = "ppc_score_3d_50cm_ref_pct", expected = 88.395 },
+  { run = "tokyo_run2", field = "ppc_official_score_pct", expected = 88.696 },
+  { run = "tokyo_run2", field = "p95_h_m", expected = 1.604 },
+  { run = "tokyo_run3", field = "fix_rate_pct", expected = 78.461 },
+  { run = "tokyo_run3", field = "wrong_fix_rate_pct", expected = 1.366 },
+  { run = "tokyo_run3", field = "correct_fix_ref_pct", expected = 75.962 },
+  { run = "tokyo_run3", field = "ppc_score_3d_50cm_ref_pct", expected = 86.295 },
+  { run = "tokyo_run3", field = "ppc_official_score_pct", expected = 85.969 },
+  { run = "tokyo_run3", field = "p95_h_m", expected = 1.671 },
+  { run = "nagoya_run1", field = "fix_rate_pct", expected = 83.659 },
+  { run = "nagoya_run1", field = "wrong_fix_rate_pct", expected = 0.547 },
+  { run = "nagoya_run1", field = "correct_fix_ref_pct", expected = 78.460 },
+  { run = "nagoya_run1", field = "ppc_score_3d_50cm_ref_pct", expected = 85.845 },
+  { run = "nagoya_run1", field = "ppc_official_score_pct", expected = 65.201 },
+  { run = "nagoya_run1", field = "p95_h_m", expected = 1.332 },
+  { run = "nagoya_run2", field = "fix_rate_pct", expected = 55.553 },
+  { run = "nagoya_run2", field = "wrong_fix_rate_pct", expected = 0.541 },
+  { run = "nagoya_run2", field = "correct_fix_ref_pct", expected = 48.587 },
+  { run = "nagoya_run2", field = "ppc_score_3d_50cm_ref_pct", expected = 60.787 },
+  { run = "nagoya_run2", field = "ppc_official_score_pct", expected = 55.529 },
+  { run = "nagoya_run2", field = "p95_h_m", expected = 18.144 },
+  { run = "nagoya_run3", field = "fix_rate_pct", expected = 44.761 },
+  { run = "nagoya_run3", field = "wrong_fix_rate_pct", expected = 3.007 },
+  { run = "nagoya_run3", field = "correct_fix_ref_pct", expected = 43.415 },
+  { run = "nagoya_run3", field = "ppc_score_3d_50cm_ref_pct", expected = 61.354 },
+  { run = "nagoya_run3", field = "ppc_official_score_pct", expected = 72.336 },
+  { run = "nagoya_run3", field = "p95_h_m", expected = 1.908 },
+]
+
+# README table, gici-open columns.
+[[metrics]]
+name = "table: {run} gici-open {field}"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "runs[key={run}].gici.{field}"
+readme = "README goal table (gici-open e7666110)"
+abs_tol = 0.0005
+foreach = [
+  { run = "tokyo_run1", field = "fix_rate_pct", expected = 46.472 },
+  { run = "tokyo_run1", field = "correct_fix_ref_pct", expected = 43.528 },
+  { run = "tokyo_run1", field = "ppc_official_score_pct", expected = 80.263 },
+  { run = "tokyo_run2", field = "fix_rate_pct", expected = 76.938 },
+  { run = "tokyo_run2", field = "correct_fix_ref_pct", expected = 74.462 },
+  { run = "tokyo_run2", field = "ppc_official_score_pct", expected = 90.652 },
+  { run = "tokyo_run3", field = "fix_rate_pct", expected = 73.347 },
+  { run = "tokyo_run3", field = "correct_fix_ref_pct", expected = 71.923 },
+  { run = "tokyo_run3", field = "ppc_official_score_pct", expected = 83.787 },
+  { run = "nagoya_run1", field = "fix_rate_pct", expected = 67.812 },
+  { run = "nagoya_run1", field = "correct_fix_ref_pct", expected = 60.005 },
+  { run = "nagoya_run1", field = "ppc_official_score_pct", expected = 70.851 },
+  { run = "nagoya_run2", field = "fix_rate_pct", expected = 39.988 },
+  { run = "nagoya_run2", field = "correct_fix_ref_pct", expected = 35.330 },
+  { run = "nagoya_run2", field = "ppc_official_score_pct", expected = 39.847 },
+  { run = "nagoya_run3", field = "fix_rate_pct", expected = 21.399 },
+  { run = "nagoya_run3", field = "correct_fix_ref_pct", expected = 18.285 },
+  { run = "nagoya_run3", field = "ppc_official_score_pct", expected = 33.495 },
+]
+
+# README "Macro mean" row.
+[[metrics]]
+name = "macro mean: {tool} {field}"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "macro_mean.{tool}.{field}"
+readme = "README macro-mean row"
+abs_tol = 0.0005
+foreach = [
+  { tool = "libgnss", field = "fix_rate_pct", expected = 70.939 },
+  { tool = "gici", field = "fix_rate_pct", expected = 54.326 },
+  { tool = "libgnss", field = "wrong_fix_rate_pct", expected = 1.463 },
+  { tool = "libgnss", field = "correct_fix_ref_pct", expected = 66.287 },
+  { tool = "gici", field = "correct_fix_ref_pct", expected = 50.589 },
+  { tool = "libgnss", field = "ppc_score_3d_50cm_ref_pct", expected = 77.160 },
+  { tool = "libgnss", field = "ppc_official_score_pct", expected = 74.532 },
+  { tool = "gici", field = "ppc_official_score_pct", expected = 66.483 },
+  { tool = "libgnss", field = "p95_h_m", expected = 4.457 },
+]
+
+# README prose: "+16.613 pp" FIX macro, Wrong FIX/FIX "1.025 pp" lower.
+[[metrics]]
+name = "FIX macro advantage over gici-open (pp)"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "macro_mean.libgnss.fix_rate_pct"
+minus_path = "macro_mean.gici.fix_rate_pct"
+expected = 16.613
+abs_tol = 0.0005
+readme = "+16.613 pp"
+
+[[metrics]]
+name = "Wrong FIX/FIX macro reduction vs gici-open (pp)"
+source = "{work_dir}/ppc_kf_fgo_goal_metrics.json"
+path = "macro_mean.gici.wrong_fix_rate_pct"
+minus_path = "macro_mean.libgnss.wrong_fix_rate_pct"
+expected = 1.025
+abs_tol = 0.0005
+readme = "1.025 pp lower"
+
+# README prose: aggregate wrong FIX 574, >5 m 42, >10 m 5 (ledger: 188 events).
+[[metrics]]
+name = "wrong-FIX ledger {field}"
+source = "{work_dir}/ppc_wrong_fix_event_ledger.json"
+path = "summary.{field}"
+readme = "wrong FIX 574, >5 m 42, >10 m 5; 188 events"
+abs_tol = 0
+foreach = [
+  { field = "wrong_fix_epochs", expected = 574 },
+  { field = "wrong_fix_epochs_above_5m", expected = 42 },
+  { field = "wrong_fix_epochs_above_10m", expected = 5 },
+  { field = "events", expected = 188 },
+  { field = "events_above_10m", expected = 4 },
+]
+
+[[metrics]]
+name = "frozen inputs verified"
+source = "{work_dir}/inputs_verification.json"
+path = "passed"
+expected = true
+readme = "SHA-256 pinned tier inputs"
+
+[[metrics]]
+name = "goal contract (verify_ppc_goal_completion.py)"
+source = "{work_dir}/ppc_goal_completion_audit.json"
+path = "passed"
+expected = true
+readme = "docs/ppc_goal_completion_audit.md"
