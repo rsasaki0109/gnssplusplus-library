@@ -174,7 +174,10 @@ documents the catastrophic float-KF wrong basin. See the
 external replay, event ledger, machine-readable metrics, and licensing details.
 `gnss reproduce ppc-goal` rescores this section (about 1 min) from 26
 SHA-256-pinned tier inputs that are not published; see
-[reproduce](docs/reproduce.md#ppc-goal-frozen-inputs).
+[reproduce](docs/reproduce.md#ppc-goal-frozen-inputs). This is a score-only
+reproduction: the upstream solver tiers behind those inputs were produced with
+unrecorded commands and earlier solver revisions, so they cannot be
+regenerated from scratch.
 
 ### GNSS/IMU Tightly-Coupled FGO vs tightly-coupled-gnss-imu-fgo
 
