@@ -7,10 +7,11 @@ docs_dir: docs
 exclude_docs: |
   HANDOFF_PPC_CLAS_CODEX.md
   archive/
-  # Frozen research records and per-phase smartphone logs are retained in the
-  # repository for provenance, but they are not part of the published library
-  # surface. Keeping them out of the build stops search from surfacing raw
-  # phase logs to users; the research section indexes them explicitly.
+  # Frozen research records and smartphone native-FGO research logs are kept
+  # in the repository for provenance, but they are not part of the published
+  # library surface. Keeping them out of the build stops search from surfacing
+  # raw research logs to users. (The per-phase smartphone archive was removed;
+  # see the git tag archive/research-phase-2026-09-28.)
   use_cases/records/
   use_cases/smartphone_native_*.md
 theme:
