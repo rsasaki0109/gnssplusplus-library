@@ -4,6 +4,11 @@ Status: active. The user authorized this goal after PR #505 was merged.
 Starting revision: `832dd7991cb8d042977d1e0775fcf27deb9c422c`.
 Branch: `feat/gsdc2023-native-taroz-parity`.
 
+Note (2026-09-28): one-off audit/diagnostic scripts under `scripts/analysis/`
+mentioned in this log that are not part of the current native pipeline were
+removed in a research cleanup. Restore any of them from tag
+`archive/research-phase-2026-09-28`.
+
 ## Current verified checkpoint
 
 All 40 test drives now pass the frozen same-executable native/official-key audit.

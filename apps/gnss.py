@@ -609,20 +609,10 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_raw_quality_control.py"),
         "summary": "Audit truth-free smartphone raw GNSS observables and run the frozen robust SPP fallback candidate.",
     },
-    "smartphone-raw-quality-control-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_raw_quality_control_eval.py"),
-        "summary": "Evaluate the frozen raw-quality robust SPP candidate on development routes before any validation or holdout access.",
-    },
     "smartphone-native-gnss-pdc": {
         "kind": "python",
         "target": python_target("gnss_smartphone_native_gnss_pdc.py"),
         "summary": "Run the native raw-Android GNSS/PDC executable with an atomic raw/nav/binary provenance manifest.",
-    },
-    "smartphone-native-gnss-pdc-evaluate": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_native_gnss_pdc_eval.py"),
-        "summary": "Score one sealed raw-only native GNSS/PDC route with fixed development timestamp alignment.",
     },
     "smartphone-kaggle-submit": {
         "kind": "python",
@@ -649,30 +639,15 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_tdcp_trajectory.py"),
         "summary": "Run truth-free TDCP/ADR displacement-constrained smartphone trajectory postprocess.",
     },
-    "smartphone-tdcp-trajectory-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_tdcp_trajectory_eval.py"),
-        "summary": "Evaluate frozen truth-free TDCP smartphone trajectory on fixed train and validation routes.",
-    },
     "smartphone-observable-error-correction": {
         "kind": "python",
         "target": python_target("gnss_smartphone_observable_error_correction.py"),
         "summary": "Apply a sealed truth-free observable-feature residual correction to handset WLS ECEF positions.",
     },
-    "smartphone-observable-error-correction-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_observable_error_correction_eval.py"),
-        "summary": "Evaluate the frozen observable-feature handset-WLS correction with route-level train LOO and gated fresh validation.",
-    },
     "smartphone-doppler-position": {
         "kind": "python",
         "target": python_target("gnss_smartphone_doppler_position.py"),
         "summary": "Run a truth-free bounded pseudorange-rate Doppler position update around handset WLS.",
-    },
-    "smartphone-imu-motion-q-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_imu_motion_q_eval.py"),
-        "summary": "Evaluate the frozen truth-free causal IMU motion-adaptive process-noise alternative on route-disjoint roles.",
     },
     "smartphone-gnss-workflow": {
         "kind": "python",
@@ -694,11 +669,6 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_reacquisition_conservative_eval.py"),
         "summary": "Evaluate conservative truth-free smartphone reacquisition bounds on a frozen new validation route and byte-identical main regression.",
     },
-    "smartphone-segment-stability-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_segment_stability_eval.py"),
-        "summary": "Evaluate truth-free segment stability fallback to raw/Hatch POS with a frozen new validation route and main regression gate.",
-    },
     "smartphone-wls-position": {
         "kind": "python",
         "target": python_target("gnss_smartphone_wls.py"),
@@ -708,11 +678,6 @@ COMMANDS = {
         "kind": "python",
         "target": python_target("gnss_smartphone_wls_eval.py"),
         "summary": "Compare truth-free handset WLS against Galileo E1/Hatch and segment-stability lanes on fixed development routes.",
-    },
-    "smartphone-wls-device-family-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_device_family_eval.py"),
-        "summary": "Evaluate a frozen Pixel7Pro WLS/native route and gate a development-only device-family lane selector without opening holdout data.",
     },
     "smartphone-wls-stability-selector-eval": {
         "kind": "python",
@@ -729,20 +694,10 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_wls_residual_v2_eval.py"),
         "summary": "Run the one-shot v2 fresh validation of the frozen truth-free WLS residual median5/zero-shift lane without opening the next holdout.",
     },
-    "smartphone-wls-stability-selector-holdout-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_stability_selector_holdout_eval.py"),
-        "summary": "Run the single sealed post-freeze smartphone stability-selector holdout evaluation and emit immutable truth-free/truth-scored manifests.",
-    },
     "smartphone-wls-multi-phone-ensemble-eval": {
         "kind": "python",
         "target": python_target("gnss_smartphone_wls_multi_phone_ensemble_eval.py"),
         "summary": "Evaluate a fixed truth-free multi-phone handset-WLS ensemble on train routes and one new validation route while keeping the next holdout sealed.",
-    },
-    "smartphone-wls-multi-phone-ensemble-holdout-eval": {
-        "kind": "python",
-        "target": python_target("gnss_smartphone_wls_multi_phone_ensemble_holdout_eval.py"),
-        "summary": "Run the single sealed multi-phone WLS ensemble holdout evaluation after freeze and truth-free artifact sealing.",
     },
     "smartphone-wls-test-batch": {
         "kind": "python",

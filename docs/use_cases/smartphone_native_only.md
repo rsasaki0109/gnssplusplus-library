@@ -57,17 +57,11 @@ python3 apps/commands/benchmarks/gnss_smartphone_native_gnss_pdc.py \
   --android-raw /path/to/device_gnss.csv \
   --nav /path/to/brdc.nav --trip-id route/phone \
   --output-dir /tmp/native-gnss-pdc-run
-
-# Development-only score recovery after the truth-free run is sealed.  The
-# recovery authorization is required; its 1000 ms one-to-one time window is
-# fixed and unmatched epochs are reported, never interpolated or modified.
-python3 apps/gnss.py smartphone-native-gnss-pdc-evaluate \
-  --candidate /tmp/native-gnss-pdc-run/keyed.csv \
-  --run-manifest /tmp/native-gnss-pdc-run/run_manifest.json \
-  --ground-truth /path/to/ground_truth.csv \
-  --recovery-authorization docs/use_cases/records/smartphone_r5_gsdc2023_native_gnss_pdc_train_score_recovery_v2.json \
-  --phone route/phone --output-json /tmp/native-gnss-pdc-score.json
 ```
+
+The development-only score-recovery command (`smartphone-native-gnss-pdc-evaluate`)
+was retired in the research cleanup; restore it from tag
+`archive/research-phase-2026-09-28` if needed.
 
 The first converter component is the raw Android clock and P/L/D mapping in
 `include/libgnss++/io/android_raw_gnss.hpp` and
