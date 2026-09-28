@@ -149,6 +149,18 @@ def run_count_text(count: int) -> str:
     return NUMBER_WORDS.get(count, str(count))
 
 
+def better_pair(lib: float, rtklib: float, fmt) -> tuple[str, str]:
+    """Format a (libgnss++, RTKLIB) pair, bolding the higher value."""
+    lib_text, rtklib_text = fmt(lib), fmt(rtklib)
+    if lib >= rtklib:
+        return f"**{lib_text}**", rtklib_text
+    return lib_text, f"**{rtklib_text}**"
+
+
+def lead_word(delta: float) -> str:
+    return "lead" if delta >= 0 else "deficit"
+
+
 def render_coverage_block(payload: dict[str, Any]) -> str:
     runs = extract_runs(payload)
     lines = [
@@ -156,12 +168,13 @@ def render_coverage_block(payload: dict[str, Any]) -> str:
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for run in runs:
+        lib_pos, rtk_pos = better_pair(run.lib_positioning_pct, run.rtklib_positioning_pct, pct)
+        lib_fix, rtk_fix = better_pair(run.lib_fix_pct, run.rtklib_fix_pct, pct)
+        lib_score, rtk_score = better_pair(run.lib_official_score_pct, run.rtklib_official_score_pct, pct)
         lines.append(
-            f"| {run.label} | **{pct(run.lib_positioning_pct)}** | "
-            f"{pct(run.rtklib_positioning_pct)} | **{pp(run.positioning_delta_pct)}** | "
-            f"**{pct(run.lib_fix_pct)}** | {pct(run.rtklib_fix_pct)} | "
-            f"**{pct(run.lib_official_score_pct)}** | {pct(run.rtklib_official_score_pct)} | "
-            f"**{pp(run.official_score_delta_pct)}** | {meters(run.p95_h_delta_m)} |"
+            f"| {run.label} | {lib_pos} | {rtk_pos} | {pp(run.positioning_delta_pct)} | "
+            f"{lib_fix} | {rtk_fix} | {lib_score} | {rtk_score} | "
+            f"{pp(run.official_score_delta_pct)} | {meters(run.p95_h_delta_m)} |"
         )
 
     avg_positioning_delta = average([run.positioning_delta_pct for run in runs])
@@ -172,7 +185,8 @@ def render_coverage_block(payload: dict[str, Any]) -> str:
             "",
             f"Across these {run_count_text(len(runs))} public runs, the coverage profile averages "
             f"**{pp(avg_positioning_delta)}**",
-            f"Positioning-rate lead, **{pp(avg_official_delta)}** PPC official-score lead, and",
+            f"Positioning-rate {lead_word(avg_positioning_delta)}, **{pp(avg_official_delta)}** "
+            f"PPC official-score {lead_word(avg_official_delta)}, and",
             f"**{meters(avg_p95_delta)}** P95 horizontal-error delta versus RTKLIB `demo5`.",
         ]
     )

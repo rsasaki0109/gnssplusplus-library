@@ -923,26 +923,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--work-dir",
         type=Path,
-        default=Path("/tmp/ppc_clas_baseline"),
+        default=ROOT_DIR / "output" / "ppc_clas_baseline",
         help="Working directory for L6/SSR/pos artifacts.",
     )
     parser.add_argument(
         "--l6-cache",
         type=Path,
-        default=Path("/tmp/ppc_clas_baseline/l6_cache"),
-        help="Shared cache for downloaded hourly QZSS L6 files.",
+        default=None,
+        help="Shared cache for downloaded hourly QZSS L6 files (default: <work-dir>/l6_cache).",
     )
     parser.add_argument(
         "--gnss-ppp",
         type=Path,
-        default=ROOT_DIR / "build" / "apps" / "gnss_ppp",
+        default=ROOT_DIR / "build" / "apps" / ("gnss_ppp.exe" if os.name == "nt" else "gnss_ppp"),
         help="Path to gnss_ppp binary.",
     )
     parser.add_argument(
         "--report",
         type=Path,
-        default=Path("/tmp/gnss_ppc_clas_baseline_report.md"),
-        help="Markdown report output path.",
+        default=None,
+        help="Markdown report output path (default: <work-dir>/scorecard.md).",
     )
     parser.add_argument(
         "--runs",
@@ -962,6 +962,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-fetch", action="store_true", help="Re-download L6 even if cached.")
     parser.add_argument("--force-ssr", action="store_true", help="Re-expand SSR CSV.")
     parser.add_argument(
+        "--ssr-only",
+        action="store_true",
+        help="Stop after fetching L6 and expanding the per-run SSR CSVs (no gnss_ppp runs).",
+    )
+    parser.add_argument(
         "--apply-lever-arm",
         action="store_true",
         help=(
@@ -972,12 +977,17 @@ def parse_args() -> argparse.Namespace:
             "historical lever-arm-corrected numbers."
         ),
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.l6_cache is None:
+        args.l6_cache = args.work_dir / "l6_cache"
+    if args.report is None:
+        args.report = args.work_dir / "scorecard.md"
+    return args
 
 
 def main() -> int:
     args = parse_args()
-    if not args.gnss_ppp.exists():
+    if not args.ssr_only and not args.gnss_ppp.exists():
         raise SystemExit(f"gnss_ppp binary not found: {args.gnss_ppp}")
 
     args.work_dir.mkdir(parents=True, exist_ok=True)
@@ -1032,6 +1042,10 @@ def main() -> int:
             )
         else:
             ssr_summary = {"rows_written": "cached", "cached": True}
+
+        if args.ssr_only:
+            print(f"=== {run_key}: SSR ready at {paths.ssr_csv} ===", flush=True)
+            continue
 
         template_config = args.configs[0]
         template_pos = paths.pos_parity if template_config == "parity" else paths.pos_default
@@ -1114,6 +1128,10 @@ def main() -> int:
                 "configs": config_metrics,
             }
         )
+
+    if args.ssr_only:
+        print(f"SSR inputs ready under {args.work_dir}", flush=True)
+        return 0
 
     csv_recipe = (
         "apps/gnss_clas_ppp.expand_qzss_l6_source(): decode QZSS L6 via gnss_qzss_l6_info "

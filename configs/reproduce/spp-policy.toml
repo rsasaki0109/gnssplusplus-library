@@ -1,0 +1,118 @@
+# README row "SPP | PPC SPP adaptive robust + policy gate".
+# Source: docs/references/spp-accuracy-improvement.md (adaptive robust + 1 pp jump policy).
+
+[lane]
+name = "spp-policy"
+status = "ready"
+title = "PPC SPP adaptive robust weighting plus 1 pp jump/bridge policy gate"
+readme_row = "SPP: No P95 regression with <=1 pp positioning drop"
+runtime_estimate = "~5 min"
+docs = "docs/references/spp-accuracy-improvement.md"
+
+[datasets.ppc]
+required = [
+  "tokyo/run1/rover.obs", "tokyo/run1/base.nav", "tokyo/run1/reference.csv",
+  "nagoya/run1/rover.obs", "nagoya/run1/base.nav", "nagoya/run1/reference.csv",
+  "nagoya/run2/rover.obs", "nagoya/run2/base.nav", "nagoya/run2/reference.csv",
+  "nagoya/run3/rover.obs", "nagoya/run3/base.nav", "nagoya/run3/reference.csv",
+]
+
+[[steps]]
+name = "spp-baseline-{city}_{run}"
+foreach = [
+  { city = "tokyo", run = "run1" },
+  { city = "nagoya", run = "run1" },
+  { city = "nagoya", run = "run2" },
+  { city = "nagoya", run = "run3" },
+]
+argv = [
+  "{gnss}", "spp",
+  "--obs", "{ppc_root}/{city}/{run}/rover.obs",
+  "--nav", "{ppc_root}/{city}/{run}/base.nav",
+  "--out", "{work_dir}/ppc_{city}_{run}_spp_full.pos",
+  "--summary-json", "{work_dir}/ppc_{city}_{run}_spp_full_summary.json",
+]
+
+[[steps]]
+name = "spp-adaptive-robust-{city}_{run}"
+foreach = [
+  { city = "tokyo", run = "run1" },
+  { city = "nagoya", run = "run1" },
+  { city = "nagoya", run = "run2" },
+  { city = "nagoya", run = "run3" },
+]
+argv = [
+  "{gnss}", "spp",
+  "--obs", "{ppc_root}/{city}/{run}/rover.obs",
+  "--nav", "{ppc_root}/{city}/{run}/base.nav",
+  "--adaptive-robust-weighting",
+  "--robust-threshold-sigma", "2.0",
+  "--robust-min-weight", "0.05",
+  "--adaptive-robust-activation-threshold-sigma", "3.0",
+  "--adaptive-robust-min-tail-measurements", "2",
+  "--adaptive-robust-min-tail-fraction", "0.08",
+  "--out", "{work_dir}/ppc_{city}_{run}_spp_adaptive3_robust_t2p0_w0p05_full.pos",
+  "--summary-json", "{work_dir}/ppc_{city}_{run}_spp_adaptive3_robust_t2p0_w0p05_full_spp_summary.json",
+]
+
+# Same knobs as configs/benchmarks/ppc_spp_policy_suite.adaptive3_policy1.example.json,
+# spelled out so dataset and work roots are portable.
+[[steps]]
+name = "ppc-spp-policy-suite"
+argv = [
+  "{gnss}", "ppc-spp-policy-suite",
+  "--run", "tokyo_run1={ppc_root}/tokyo/run1,{work_dir}/ppc_tokyo_run1_spp_adaptive3_robust_t2p0_w0p05_full.pos,{work_dir}/ppc_tokyo_run1_spp_full.pos",
+  "--run", "nagoya_run1={ppc_root}/nagoya/run1,{work_dir}/ppc_nagoya_run1_spp_adaptive3_robust_t2p0_w0p05_full.pos,{work_dir}/ppc_nagoya_run1_spp_full.pos",
+  "--run", "nagoya_run2={ppc_root}/nagoya/run2,{work_dir}/ppc_nagoya_run2_spp_adaptive3_robust_t2p0_w0p05_full.pos,{work_dir}/ppc_nagoya_run2_spp_full.pos",
+  "--run", "nagoya_run3={ppc_root}/nagoya/run3,{work_dir}/ppc_nagoya_run3_spp_adaptive3_robust_t2p0_w0p05_full.pos,{work_dir}/ppc_nagoya_run3_spp_full.pos",
+  "--output-dir", "{work_dir}/suite",
+  "--prefix", "adaptive3_policy1",
+  "--rates-mps", "25,50,75,100,150,200",
+  "--min-jumps-m", "10,20,30,40,50",
+  "--match-tolerance-s", "0.25",
+  "--bridge-max-gap-s", "5",
+  "--bridge-max-anchor-speed-mps", "10",
+  "--max-positioning-drop-pct", "1.0",
+  "--max-p95-delta-m", "0",
+]
+
+# README claim: the selected policy never regresses baseline P95 H ...
+[[metrics]]
+name = "{label} p95_h_delta_m"
+source = "{work_dir}/suite/adaptive3_policy1_policy_report.json"
+path = "runs[label={label}].p95_h_delta_m"
+max = 0.0
+readme = "No P95 regression"
+foreach = [
+  { label = "tokyo_run1" }, { label = "nagoya_run1" },
+  { label = "nagoya_run2" }, { label = "nagoya_run3" },
+]
+
+# ... while dropping at most 1 pp of positioning rate.
+[[metrics]]
+name = "{label} positioning_drop_pct"
+source = "{work_dir}/suite/adaptive3_policy1_policy_report.json"
+path = "runs[label={label}].positioning_drop_pct"
+max = 1.0
+readme = "<=1 pp positioning drop"
+foreach = [
+  { label = "tokyo_run1" }, { label = "nagoya_run1" },
+  { label = "nagoya_run2" }, { label = "nagoya_run3" },
+]
+
+# Tabulated selected-policy P95 H from docs/references/spp-accuracy-improvement.md.
+# Those rows predate later SPP solver changes, so they are reported but not
+# gated; the README claim is the p95-delta / positioning-drop gate above.
+[[metrics]]
+name = "{label} policy_p95_h_m"
+source = "{work_dir}/suite/adaptive3_policy1_policy_report.json"
+path = "runs[label={label}].policy_p95_h_m"
+abs_tol = 0.05
+gate = false
+readme = "docs table (historical, not gated)"
+foreach = [
+  { label = "tokyo_run1", expected = 18.843820 },
+  { label = "nagoya_run1", expected = 9.892842 },
+  { label = "nagoya_run2", expected = 23.388052 },
+  { label = "nagoya_run3", expected = 14.405460 },
+]

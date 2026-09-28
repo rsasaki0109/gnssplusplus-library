@@ -469,6 +469,11 @@ COMMANDS = {
         "target": os.path.join(ROOT_DIR, "scripts", "generate_architecture_diagram.py"),
         "summary": "Generate a docs-friendly architecture diagram image.",
     },
+    "reproduce": {
+        "kind": "python",
+        "target": python_target("gnss_reproduce.py"),
+        "summary": "Reproduce README result numbers from tracked lane manifests and check them against expectations.",
+    },
     "odaiba-benchmark": {
         "kind": "python",
         "target": python_target("gnss_odaiba_benchmark.py"),
@@ -1168,6 +1173,10 @@ def find_binary(target_name: str) -> str | None:
     default_build = os.path.join(ROOT_DIR, "build")
     if default_build not in build_roots:
         build_roots.insert(0, default_build)
+    # GNSSPP_BUILD_DIR points at an out-of-tree build and takes precedence.
+    override_build = os.environ.get("GNSSPP_BUILD_DIR")
+    if override_build:
+        build_roots.insert(0, os.path.abspath(override_build))
 
     candidates = [
         os.path.join(APPS_DIR, filename),

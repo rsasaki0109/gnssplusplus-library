@@ -1,0 +1,119 @@
+# README row "CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS".
+# Source: docs/ppc_reproduction.md#full-moving-clas-comparison and
+# docs/ppc_clas_full_metrics.json (candidate manifest: parity stack plus
+# held-AR min DD rows 4 / max publication streak 5).
+
+[lane]
+name = "clas-ppc"
+status = "ready"
+title = "PPC Tokyo/Nagoya moving CLAS PPP-RTK (six full runs) vs MRTKLIB v0.4.2"
+readme_row = "CLAS PPP: 25.121% aggregate FIX, 0.359 m FIX RMS2D, zero FIX > 3 m over 58,259 epochs"
+runtime_estimate = "~60 min"
+docs = "docs/ppc_reproduction.md"
+
+[datasets.ppc]
+required = [
+  "tokyo/run1/rover.obs", "tokyo/run1/base.nav", "tokyo/run1/reference.csv",
+  "tokyo/run2/rover.obs", "tokyo/run2/base.nav", "tokyo/run2/reference.csv",
+  "tokyo/run3/rover.obs", "tokyo/run3/base.nav", "tokyo/run3/reference.csv",
+  "nagoya/run1/rover.obs", "nagoya/run1/base.nav", "nagoya/run1/reference.csv",
+  "nagoya/run2/rover.obs", "nagoya/run2/base.nav", "nagoya/run2/reference.csv",
+  "nagoya/run3/rover.obs", "nagoya/run3/base.nav", "nagoya/run3/reference.csv",
+]
+
+[tools.qzss_l6]
+source = "https://sys.qzss.go.jp/archives/l6 (hourly QZSS L6 CLAS archive, downloaded automatically and cached under <work-dir>/inputs/l6_cache)"
+
+# 1. Download the hourly QZSS L6 files covering each run and expand them to
+#    the dense SSR CSV consumed by gnss_ppp.
+[[steps]]
+name = "fetch-l6-expand-ssr"
+argv = [
+  "{python}", "scripts/experiments/ppc/generate_ppc_clas_scorecard.py",
+  "--dataset-root", "{ppc_root}",
+  "--work-dir", "{work_dir}/inputs",
+  "--configs", "parity",
+  "--ssr-only",
+]
+
+# 2. Run the published candidate (parity env stack + held-AR guards) on all six runs.
+[[steps]]
+name = "run-clas-candidate"
+argv = [
+  "{python}", "scripts/experiments/ppc/run_ppc_clas_candidate.py",
+  "--dataset-root", "{ppc_root}",
+  "--ssr-root", "{work_dir}/inputs",
+  "--output-root", "{work_dir}/candidate",
+  "--gnss-ppp", "{bin:gnss_ppp}",
+  "--held-min-dd-rows", "4",
+  "--held-max-publication-streak", "5",
+]
+
+# 3. Score against the PPC reference and the MRTKLIB v0.4.2 article targets.
+[[steps]]
+name = "score-full-comparison"
+argv = [
+  "{python}", "scripts/experiments/ppc/generate_ppc_clas_full_comparison.py",
+  "--dataset-root", "{ppc_root}",
+  "--results-dir", "{work_dir}/candidate",
+  "--metrics", "{work_dir}/ppc_clas_full_metrics.json",
+  "--markdown", "{work_dir}/ppc_clas_full_table.md",
+  "--trajectory-figure", "{work_dir}/ppc_clas_full_trajectories.png",
+  "--error-figure", "{work_dir}/ppc_clas_full_errors.png",
+  "--metric-figure", "{work_dir}/ppc_clas_full_comparison.png",
+]
+
+[[docs_steps]]
+name = "update-docs-clas-full-comparison"
+argv = [
+  "{python}", "scripts/experiments/ppc/generate_ppc_clas_full_comparison.py",
+  "--dataset-root", "{ppc_root}",
+  "--results-dir", "{work_dir}/candidate",
+  "--metrics", "docs/ppc_clas_full_metrics.json",
+  "--markdown", "docs/ppc_clas_full_table.md",
+  "--trajectory-figure", "docs/ppc_clas_full_trajectories.png",
+  "--error-figure", "docs/ppc_clas_full_errors.png",
+  "--metric-figure", "docs/ppc_clas_full_comparison.png",
+]
+
+[[metrics]]
+name = "aggregate FIX rate (%)"
+source = "{work_dir}/ppc_clas_full_metrics.json"
+path = "aggregate.fix_pct"
+expected = 25.121
+abs_tol = 0.0005
+readme = "25.121% aggregate FIX"
+
+[[metrics]]
+name = "aggregate FIX RMS2D (m)"
+source = "{work_dir}/ppc_clas_full_metrics.json"
+path = "aggregate.rms2d_fixed_m"
+expected = 0.359
+abs_tol = 0.0005
+readme = "0.359 m FIX RMS2D"
+
+[[metrics]]
+name = "FIX epochs above 3 m"
+source = "{work_dir}/ppc_clas_full_metrics.json"
+path = "aggregate.fixed_over_3m"
+max = 0
+readme = "zero FIX epochs above 3 m"
+
+[[metrics]]
+name = "scored epochs"
+source = "{work_dir}/ppc_clas_full_metrics.json"
+path = "aggregate.scored_epochs"
+expected = 58259
+abs_tol = 0
+readme = "58,259 scored epochs"
+
+[[metrics]]
+name = "{key} MRTKLIB v0.4.2 hard gates"
+source = "{work_dir}/ppc_clas_full_metrics.json"
+path = "signoff.runs.{key}.hard_pass"
+expected = true
+readme = "every run passes the hard gates"
+foreach = [
+  { key = "tokyo_run1" }, { key = "tokyo_run2" }, { key = "tokyo_run3" },
+  { key = "nagoya_run1" }, { key = "nagoya_run2" }, { key = "nagoya_run3" },
+]

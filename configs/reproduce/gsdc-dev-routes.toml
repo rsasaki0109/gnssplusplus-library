@@ -1,0 +1,8 @@
+# README table "Base-surveyed correction on the GSDC dev routes".
+[lane]
+name = "gsdc-dev-routes"
+status = "planned"
+title = "GSDC Pixel5 base-surveyed dev routes (P50+P95)/2"
+readme_row = "Smartphone dev routes: H 0.577 / U 0.738 / A 0.302 / LAX-T 0.712 m"
+runtime_estimate = "planned"
+docs = "docs/use_cases/records/smartphone_base_surveyed_route_results_v1.md"

@@ -1,0 +1,141 @@
+# README row "Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB demo5".
+# Source: docs/benchmarks.md#urbannav-tokyo-odaiba-snapshot.
+
+[lane]
+name = "odaiba"
+status = "ready"
+title = "UrbanNav Tokyo Odaiba RTK: libgnss++ default profile vs RTKLIB demo5"
+readme_row = "Urban RTK: 4.4x fixes, Hp95 5.10 vs 26.26 m, Vp95 15.10 vs 43.29 m; lower Hmed on common epochs"
+runtime_estimate = "~5 min"
+docs = "docs/benchmarks.md"
+
+[datasets.urbannav]
+required = [
+  "Odaiba/rover_trimble.obs",
+  "Odaiba/base_trimble.obs",
+  "Odaiba/base.nav",
+  "Odaiba/reference.csv",
+]
+
+[tools.rtklib_demo5]
+repository = "https://github.com/rtklibexplorer/RTKLIB"
+tag = "b34k"
+commit = "55a0f2c742a605a3d27a90b17556b2cfdf98ad50"
+config = "scripts/rtklib_odaiba.conf"
+
+[[steps]]
+name = "odaiba-benchmark-default"
+argv = [
+  "{gnss}", "odaiba-benchmark",
+  "--dataset-dir", "{urbannav_root}/Odaiba",
+  "--rtklib-bin", "{rtklib_bin}",
+  "--rtklib-config", "scripts/rtklib_odaiba.conf",
+  "--rtklib-pos", "{work_dir}/rtklib_demo5.pos",
+  "--lib-pos", "{work_dir}/default/rtk_solution.pos",
+  "--lib-kml", "{work_dir}/default/rtk_solution.kml",
+  "--comparison-png", "{work_dir}/default/driving_odaiba_comparison.png",
+  "--scorecard-png", "{work_dir}/default/driving_odaiba_scorecard.png",
+  "--social-card-png", "{work_dir}/default/driving_odaiba_social_card.png",
+  "--summary-json", "{work_dir}/default/summary.json",
+]
+
+[[steps]]
+name = "odaiba-benchmark-preset-odaiba"
+argv = [
+  "{gnss}", "odaiba-benchmark",
+  "--dataset-dir", "{urbannav_root}/Odaiba",
+  "--preset", "odaiba",
+  "--use-existing-rtklib-solution",
+  "--rtklib-pos", "{work_dir}/rtklib_demo5.pos",
+  "--lib-pos", "{work_dir}/preset_odaiba/rtk_solution.pos",
+  "--lib-kml", "{work_dir}/preset_odaiba/rtk_solution.kml",
+  "--comparison-png", "{work_dir}/preset_odaiba/driving_odaiba_comparison.png",
+  "--scorecard-png", "{work_dir}/preset_odaiba/driving_odaiba_scorecard.png",
+  "--social-card-png", "{work_dir}/preset_odaiba/driving_odaiba_social_card.png",
+  "--summary-json", "{work_dir}/preset_odaiba/summary.json",
+]
+
+# Regenerate the tracked Odaiba figures from the default-profile run.
+[[docs_steps]]
+name = "render-odaiba-docs-figures"
+argv = [
+  "{gnss}", "odaiba-benchmark",
+  "--dataset-dir", "{urbannav_root}/Odaiba",
+  "--use-existing-rtklib-solution",
+  "--rtklib-pos", "{work_dir}/rtklib_demo5.pos",
+  "--lib-pos", "{work_dir}/default/rtk_solution.pos",
+  "--lib-kml", "{work_dir}/default/rtk_solution.kml",
+  "--summary-json", "{work_dir}/default/summary.json",
+]
+
+# README claim, gated (reproduced 2026-09-28 with demo5 b34k):
+# "4.4x fixes, lower Hp95/Vp95 (all matched epochs); lower Hmed on common epochs".
+[[metrics]]
+name = "default fix epochs minus demo5"
+source = "{work_dir}/default/summary.json"
+path = "libgnss_all_epochs.fix_epochs"
+minus_path = "rtklib_all_epochs.fix_epochs"
+min = 1
+readme = "More fixes"
+
+[[metrics]]
+name = "default {field} minus demo5 (m)"
+source = "{work_dir}/default/summary.json"
+path = "libgnss_all_epochs.{field}"
+minus_path = "rtklib_all_epochs.{field}"
+max = 0.0
+readme = "lower Hp95/Vp95"
+foreach = [{ field = "p95_h_m" }, { field = "p95_abs_up_m" }]
+
+[[metrics]]
+name = "default common-epoch median_h_m minus demo5 (m)"
+source = "{work_dir}/default/summary.json"
+path = "libgnss_common_epochs.median_h_m"
+minus_path = "rtklib_common_epochs.median_h_m"
+max = 0.0
+readme = "lower Hmed on common epochs"
+
+# docs/benchmarks.md Odaiba snapshot values; reported, not gated.
+[[metrics]]
+name = "table: RTKLIB demo5 {field}"
+source = "{work_dir}/default/summary.json"
+path = "rtklib_all_epochs.{field}"
+gate = false
+readme = "docs/benchmarks.md table"
+foreach = [
+  { field = "fix_epochs", expected = 209.000, abs_tol = 0 },
+  { field = "fix_rate_pct", expected = 2.547, abs_tol = 0.005 },
+  { field = "median_h_m", expected = 0.684, abs_tol = 0.0005 },
+  { field = "p95_h_m", expected = 26.263, abs_tol = 0.0005 },
+  { field = "p95_abs_up_m", expected = 43.289, abs_tol = 0.0005 },
+]
+
+[[metrics]]
+name = "table: libgnss++ default {field}"
+source = "{work_dir}/default/summary.json"
+path = "libgnss_all_epochs.{field}"
+gate = false
+readme = "docs/benchmarks.md table"
+foreach = [
+  { field = "fix_epochs", expected = 922.000, abs_tol = 20 },
+  { field = "fix_rate_pct", expected = 8.415, abs_tol = 0.2 },
+  { field = "median_h_m", expected = 0.696, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 5.098, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 15.102, abs_tol = 0.2 },
+]
+
+# The historical `--preset odaiba` arm no longer improves on the default profile
+# (54 fixes); it is kept as a reported diagnostic only.
+[[metrics]]
+name = "table: libgnss++ --preset odaiba {field}"
+source = "{work_dir}/preset_odaiba/summary.json"
+path = "libgnss_all_epochs.{field}"
+gate = false
+readme = "docs/benchmarks.md table"
+foreach = [
+  { field = "fix_epochs", expected = 54.000, abs_tol = 20 },
+  { field = "fix_rate_pct", expected = 0.497, abs_tol = 0.2 },
+  { field = "median_h_m", expected = 0.709, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 5.111, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 15.177, abs_tol = 0.2 },
+]

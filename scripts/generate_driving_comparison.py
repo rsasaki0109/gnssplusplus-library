@@ -340,6 +340,7 @@ def summarize(matched: list[MatchedEpoch], fixed_status: int, label: str) -> dic
     fix_count = sum(epoch.status == fixed_status for epoch in matched)
     return {
         "epochs": len(matched),
+        "fix_epochs": int(fix_count),
         "fix_rate_pct": 100.0 * fix_count / len(matched),
         "median_h_m": float(np.median(horiz)),
         "p95_h_m": float(np.percentile(horiz, 95)),
