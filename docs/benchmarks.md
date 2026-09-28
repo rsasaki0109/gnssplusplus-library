@@ -70,9 +70,10 @@ collapse (31.3%) and `nagoya_run2 fix95%` 46.92 m. Wide-lane AR
 `fix_ok` to 1,515 and pushes `fix_wrong/fixes` to 41.5% (`tokyo_run2 fix95%`
 17.96 m). Wide-lane AR remains opt-in via `--preset odaiba`.
 
-Reproduction command and per-run table are in
-`_carryover_2026-04-26/output/baseline_comparison.md`. The scoring script is
-`_carryover_2026-04-25/scripts/score_solution_vs_truth.py`.
+The reproduction command, per-run table, and truth-scoring script for this
+baseline lived in an uncommitted local workspace and were never added to the
+repository, so the numbers above are a historical record rather than an
+in-tree reproducible artifact.
 
 ## Public Moving-RTK Benchmark Matrix
 
