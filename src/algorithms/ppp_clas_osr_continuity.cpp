@@ -366,6 +366,7 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
     constexpr double kAtmosSelectionGapSeconds = 120.0;
 
     ClasAtmosCandidate best;
+    const std::map<std::string, std::string>* best_tokens = nullptr;
 
     for (const auto& satellite : satellites) {
         const auto sat_it = ssr_products.orbit_clock_corrections.find(satellite);
@@ -411,20 +412,24 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                            : grid_reference.dlat_deg * grid_reference.dlat_deg +
                                  grid_reference.dlon_deg * grid_reference.dlon_deg)
                     : std::numeric_limits<double>::infinity();
-            const ClasAtmosCandidate candidate{
-                correction.atmos_tokens,
-                has_grid,
-                grid_distance_sq,
-                time_gap,
-                static_cast<int>(correction.atmos_tokens.size()),
-            };
+            // The ranking never reads the tokens, so compare token-less
+            // candidates and copy only the winning map after the scan.
+            ClasAtmosCandidate candidate;
+            candidate.has_grid = has_grid;
+            candidate.grid_distance_sq = grid_distance_sq;
+            candidate.time_gap = time_gap;
+            candidate.token_count = static_cast<int>(correction.atmos_tokens.size());
 
             if (!isBetterClasAtmosCandidate(candidate, best, config)) {
                 continue;
             }
 
-            best = candidate;
+            best = std::move(candidate);
+            best_tokens = &correction.atmos_tokens;
         }
+    }
+    if (best_tokens != nullptr) {
+        best.tokens = *best_tokens;
     }
 
     if (config.clas_atmos_selection_policy ==
