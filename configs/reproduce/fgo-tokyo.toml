@@ -237,25 +237,22 @@ foreach = [
   { variant = "baseline", row = "aggregate", field = "matched_distance_pct", expected = 99.682, abs_tol = 0.002 },
 ]
 
-# The README baseline Tokyo run3 row does not reproduce with the current preset
-# minus --gf-slip-reset (observed 59.712 / 7.726 / 65.446%, fixed RMS 1.517 m vs
-# the README's 0.257 m); it was measured before the GF-reset commit (9b058572)
-# with an unrecorded tree. Reported, not gated, together with the aggregates it
-# feeds.
+# README baseline Tokyo run3 row and the aggregates it feeds, refreshed
+# 2026-09-29 to the reproduced values (the previous 59.175 / 7.918 / 64.081%
+# row was measured before the GF-reset commit 9b058572 with an unrecorded tree).
 [[metrics]]
-name = "GF table (not reproduced): baseline {row} {field}"
+name = "GF table: baseline {row} {field}"
 source = "{work_dir}/fgo_tokyo_metrics.json"
 path = "variants.baseline.{row}.{field}"
-gate = false
 readme = "README GF-reset table baseline"
 foreach = [
-  { row = "runs[label=tokyo_run3]", field = "correct_fix_distance_pct", expected = 59.175, abs_tol = 0.002 },
-  { row = "runs[label=tokyo_run3]", field = "wrong_fix_distance_pct", expected = 7.918, abs_tol = 0.002 },
-  { row = "runs[label=tokyo_run3]", field = "official_score_pct", expected = 64.081, abs_tol = 0.002 },
-  { row = "aggregate", field = "correct_fix_distance_pct", expected = 49.181, abs_tol = 0.002 },
-  { row = "aggregate", field = "wrong_fix_distance_pct", expected = 13.741, abs_tol = 0.002 },
-  { row = "aggregate", field = "official_score_pct", expected = 54.178, abs_tol = 0.002 },
-  { row = "aggregate", field = "wrong_fix_over_fix_distance_pct", expected = 21.839, abs_tol = 0.002 },
+  { row = "runs[label=tokyo_run3]", field = "correct_fix_distance_pct", expected = 59.712, abs_tol = 0.002 },
+  { row = "runs[label=tokyo_run3]", field = "wrong_fix_distance_pct", expected = 7.726, abs_tol = 0.002 },
+  { row = "runs[label=tokyo_run3]", field = "official_score_pct", expected = 65.446, abs_tol = 0.002 },
+  { row = "aggregate", field = "correct_fix_distance_pct", expected = 49.440, abs_tol = 0.002 },
+  { row = "aggregate", field = "wrong_fix_distance_pct", expected = 13.649, abs_tol = 0.002 },
+  { row = "aggregate", field = "official_score_pct", expected = 54.837, abs_tol = 0.002 },
+  { row = "aggregate", field = "wrong_fix_over_fix_distance_pct", expected = 21.634, abs_tol = 0.002 },
 ]
 
 [[metrics]]

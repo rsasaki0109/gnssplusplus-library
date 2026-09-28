@@ -240,21 +240,21 @@ The claims (higher FIX rate on 3/3 runs, avg +10.7 pp; <50 cm on 2/3, avg
 **GF-reset table.** Every `gf_reset` cell, the GF guard demotions (14/0/17),
 the aggregate Wrong FIX/FIX after the reset (11.759%), and the matched
 distance (99.682%) reproduce to three decimals. The baseline rows for runs 1-2
-also match. The baseline Tokyo run3 row does not:
+also match. The baseline Tokyo run3 row did not, so the README row and the
+aggregates it feeds were refreshed on 2026-09-29 and are now gated:
 
-| Baseline Tokyo run3 | README | Local |
+| Baseline Tokyo run3 | Previous README | Reproduced (now in README) |
 |---|---:|---:|
 | Correct FIX distance | 59.175% | 59.712% |
 | Wrong FIX distance | 7.918% | 7.726% |
 | Official score | 64.081% | 65.446% |
 | Fixed-only horizontal RMS | 0.257 m | 1.517 m |
 
-That mismatch moves the aggregate baseline to 49.440 / 13.649 / 54.837%
-(README 49.181 / 13.741 / 54.178%) and the baseline Wrong FIX/FIX to 21.634%
-(README 21.839%). The README baseline was produced before the GF-reset commit
-(`9b058572`) with an unrecorded tree, so the lane reports these cells without
-gating them. It still gates the GF-reset improvement: aggregate official score
-+8.855 pp and wrong-FIX distance -5.999 pp.
+Aggregate baseline: 49.181 / 13.741 / 54.178% -> 49.440 / 13.649 / 54.837%;
+baseline Wrong FIX/FIX: 21.839% -> 21.634%. The previous baseline was produced
+before the GF-reset commit (`9b058572`) with an unrecorded tree. The lane also
+gates the GF-reset improvement: aggregate official score +8.855 pp and
+wrong-FIX distance -5.999 pp.
 
 **Surplus-satellite rescue table: not reproduced.** It was measured in commit
 `6ede956c` with an earlier preset (`--imu-preset-tactical --cp-hold-res 2.0
