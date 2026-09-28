@@ -2,6 +2,13 @@
 
 対象: `gnssplusplus-library` (`output/`, `build*`, `__pycache__`除外)
 
+!!! note "更新 (2026-09-28)"
+    smartphone phase 実験家系（`gnss_smartphone_phase*.py`、`tests/test_smartphone_phase*.py`、
+    `scripts/{run,verify,evaluate,project,audit}_phase*.py`、phase 記録・ノート）は
+    リポジトリから削除した。以下は削除前の棚卸し記録として残す。
+    アーカイブはタグ `archive/research-phase-2026-09-28` に保存されており、
+    `git checkout archive/research-phase-2026-09-28 -- <path>` で復元できる。
+
 ## 1. 総括
 
 | 言語 | 追跡ファイル数 | LOC | バイト |
