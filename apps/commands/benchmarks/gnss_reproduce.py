@@ -693,7 +693,9 @@ def run_lane(manifest: Mapping[str, Any], args: argparse.Namespace) -> int:
     build_dir = Path(args.build_dir).resolve() if args.build_dir else None
     context = build_context(manifest, args)
     strict = not args.dry_run
-    steps = render_steps(manifest["steps"], context, build_dir=build_dir, strict=strict)
+    # --check-only never runs the lane steps, so their binaries need not exist.
+    steps = render_steps(manifest["steps"], context, build_dir=build_dir,
+                         strict=strict and not args.check_only)
     docs_steps = (
         render_steps(manifest["docs_steps"], context, build_dir=build_dir, strict=strict)
         if args.update_docs

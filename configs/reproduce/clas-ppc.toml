@@ -8,7 +8,7 @@ name = "clas-ppc"
 status = "ready"
 title = "PPC Tokyo/Nagoya moving CLAS PPP-RTK (six full runs) vs MRTKLIB v0.4.2"
 readme_row = "CLAS PPP: 25.121% aggregate FIX, 0.359 m FIX RMS2D, zero FIX > 3 m over 58,259 epochs"
-runtime_estimate = "~60 min"
+runtime_estimate = "~45 min"
 docs = "docs/ppc_reproduction.md"
 
 [datasets.ppc]
