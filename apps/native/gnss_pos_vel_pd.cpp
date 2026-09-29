@@ -25,17 +25,25 @@
 #include <vector>
 
 #include "observable_measurement_helpers.hpp"
+#include "observable_pd_common.hpp"
 #include "observable_robust_loss.hpp"
 #include "observable_seed_positions.hpp"
 
 namespace {
 
+using libgnss_apps::NormalEquation;
+using libgnss_apps::PseudorangeFactor;
 using libgnss_apps::SeedPosition;
+using libgnss_apps::SolveResult;
+using libgnss_apps::addWeightedRow;
+using libgnss_apps::calculateObservationModel;
 using libgnss_apps::clockGroup;
 using libgnss_apps::findSeedPosition;
 using libgnss_apps::groupDelayCorrectionMeters;
 using libgnss_apps::isHealthyForPositioning;
 using libgnss_apps::isPrimaryPdSignal;
+using libgnss_apps::jsonBool;
+using libgnss_apps::preparePseudorangeFactor;
 using libgnss_apps::readSeedPositions;
 using libgnss_apps::robustHuberLoss;
 using libgnss_apps::robustHuberWeight;
@@ -95,25 +103,6 @@ struct DopplerFactor {
     libgnss::Vector3d los = libgnss::Vector3d::Zero();
 };
 
-struct PseudorangeFactor {
-    std::size_t epoch_index = 0;
-    libgnss::GNSSTime time;
-    libgnss::SatelliteId satellite;
-    libgnss::SignalType signal = libgnss::SignalType::GPS_L1CA;
-    std::size_t clock_group = 0;
-    double snr_dbhz = 0.0;
-    double elevation_rad = 0.0;
-    double sigma_m = 1.0;
-    double residual_m = 0.0;
-    double corrected_pseudorange_m = 0.0;
-    double modeled_range_m = 0.0;
-    double ionosphere_delay_m = 0.0;
-    double troposphere_delay_m = 0.0;
-    double satellite_clock_m = 0.0;
-    double group_delay_m = 0.0;
-    libgnss::Vector3d los = libgnss::Vector3d::Zero();
-};
-
 struct Problem {
     std::vector<libgnss::ObservationData> epochs;
     std::vector<libgnss::Vector3d> seed_positions;
@@ -123,15 +112,6 @@ struct Problem {
     std::size_t nsat = 0;
     std::size_t seed_matched_epochs = 0;
     std::size_t seed_interpolated_epochs = 0;
-};
-
-struct SolveResult {
-    Eigen::VectorXd state;
-    double initial_cost = 0.0;
-    double final_cost = 0.0;
-    double residual_rms_mps = 0.0;
-    int iterations = 0;
-    bool converged = false;
 };
 
 [[noreturn]] void usageError(const std::string& message, const char* argv0) {
@@ -152,27 +132,11 @@ struct SolveResult {
 }
 
 int parseIntArg(const std::string& value, const std::string& name, const char* argv0) {
-    try {
-        std::size_t consumed = 0;
-        const int parsed = std::stoi(value, &consumed);
-        if (consumed == value.size()) {
-            return parsed;
-        }
-    } catch (const std::exception&) {
-    }
-    usageError("invalid integer for " + name + ": " + value, argv0);
+    return libgnss_apps::parseIntArg(value, name, argv0, usageError);
 }
 
 double parseDoubleArg(const std::string& value, const std::string& name, const char* argv0) {
-    try {
-        std::size_t consumed = 0;
-        const double parsed = std::stod(value, &consumed);
-        if (consumed == value.size() && std::isfinite(parsed)) {
-            return parsed;
-        }
-    } catch (const std::exception&) {
-    }
-    usageError("invalid number for " + name + ": " + value, argv0);
+    return libgnss_apps::parseDoubleArg(value, name, argv0, usageError);
 }
 
 Options parseArguments(int argc, char* argv[]) {
@@ -402,30 +366,6 @@ double computeCost(const Problem& problem,
         cost += robustHuberLoss(error, options.huber_threshold_sigma);
     }
     return cost;
-}
-
-struct NormalEquation {
-    Eigen::SparseMatrix<double> hessian;
-    Eigen::VectorXd rhs;
-};
-
-void addWeightedRow(std::vector<Eigen::Triplet<double>>& triplets,
-                    Eigen::VectorXd& rhs,
-                    const std::vector<int>& columns,
-                    const std::vector<double>& coefficients,
-                    double residual,
-                    double sigma,
-                    double robust_weight) {
-    const double inv_variance = robust_weight / (sigma * sigma);
-    for (std::size_t a = 0; a < columns.size(); ++a) {
-        const double weighted_a = inv_variance * coefficients[a];
-        rhs(columns[a]) += weighted_a * residual;
-        for (std::size_t b = 0; b < columns.size(); ++b) {
-            triplets.emplace_back(columns[a],
-                                  columns[b],
-                                  weighted_a * coefficients[b]);
-        }
-    }
 }
 
 NormalEquation buildNormalEquation(const Problem& problem,
@@ -672,159 +612,6 @@ SolveResult solveProblem(const Problem& problem, const Options& options) {
     result.final_cost = computeCost(problem, options, result.state);
     result.residual_rms_mps = residualRms(problem, result.state);
     return result;
-}
-
-bool calculateObservationModel(const libgnss::ObservationData& epoch,
-                               const libgnss::Observation& observation,
-                               const libgnss::NavigationData& nav,
-                               const libgnss::Vector3d& receiver_position,
-                               const Options& options,
-                               libgnss::Vector3d& satellite_position,
-                               libgnss::Vector3d& satellite_velocity,
-                               double& satellite_clock_bias,
-                               double& satellite_clock_drift,
-                               const libgnss::Ephemeris*& eph,
-                               libgnss::NavigationData::SatelliteGeometry& geometry,
-                               libgnss::Vector3d& ex,
-                               double& range_m) {
-    if (!isPrimaryPdSignal(observation.signal) ||
-        !observation.valid ||
-        !observation.has_pseudorange ||
-        observation.pseudorange <= 0.0 ||
-        observation.snr < options.min_snr_dbhz) {
-        return false;
-    }
-
-    libgnss::GNSSTime transmit_time =
-        epoch.time - observation.pseudorange / libgnss::constants::SPEED_OF_LIGHT;
-    if (!nav.calculateSatelliteState(observation.satellite,
-                                     transmit_time,
-                                     satellite_position,
-                                     satellite_velocity,
-                                     satellite_clock_bias,
-                                     satellite_clock_drift)) {
-        return false;
-    }
-
-    transmit_time = transmit_time - satellite_clock_bias;
-    if (!nav.calculateSatelliteState(observation.satellite,
-                                     transmit_time,
-                                     satellite_position,
-                                     satellite_velocity,
-                                     satellite_clock_bias,
-                                     satellite_clock_drift)) {
-        return false;
-    }
-
-    eph = nav.getEphemeris(observation.satellite, transmit_time);
-    if (!eph || !isHealthyForPositioning(observation, *eph)) {
-        return false;
-    }
-
-    const libgnss::Vector3d delta = satellite_position - receiver_position;
-    range_m = delta.norm();
-    if (range_m <= 0.0) {
-        return false;
-    }
-    ex = delta / range_m;
-    geometry = nav.calculateGeometry(receiver_position, satellite_position);
-    return geometry.elevation >= options.min_elevation_deg * kDegreesToRadians;
-}
-
-bool preparePseudorangeFactor(const libgnss::ObservationData& epoch,
-                              std::size_t epoch_index,
-                              const libgnss::Observation& observation,
-                              const libgnss::NavigationData& nav,
-                              const libgnss::Vector3d& receiver_position,
-                              const Options& options,
-                              PseudorangeFactor& factor) {
-    libgnss::Vector3d satellite_position;
-    libgnss::Vector3d satellite_velocity;
-    double satellite_clock_bias = 0.0;
-    double satellite_clock_drift = 0.0;
-    const libgnss::Ephemeris* eph = nullptr;
-    libgnss::NavigationData::SatelliteGeometry geometry;
-    libgnss::Vector3d ex = libgnss::Vector3d::Zero();
-    double geometric_range = 0.0;
-    if (!calculateObservationModel(epoch,
-                                   observation,
-                                   nav,
-                                   receiver_position,
-                                   options,
-                                   satellite_position,
-                                   satellite_velocity,
-                                   satellite_clock_bias,
-                                   satellite_clock_drift,
-                                   eph,
-                                   geometry,
-                                   ex,
-                                   geometric_range)) {
-        return false;
-    }
-
-    double receiver_lat = 0.0;
-    double receiver_lon = 0.0;
-    double receiver_height = 0.0;
-    libgnss::ecef2geodetic(receiver_position,
-                           receiver_lat,
-                           receiver_lon,
-                           receiver_height);
-    double ionosphere_delay = 0.0;
-    if (nav.ionosphere_model.valid) {
-        ionosphere_delay = libgnss::models::ionoDelayKlobuchar(
-            receiver_lat,
-            receiver_lon,
-            geometry.azimuth,
-            geometry.elevation,
-            epoch.time.tow,
-            nav.ionosphere_model.alpha,
-            nav.ionosphere_model.beta);
-        const double frequency_hz =
-            libgnss::signalFrequencyHz(observation.signal, eph);
-        if (frequency_hz > 0.0) {
-            const double scale = libgnss::constants::GPS_L1_FREQ / frequency_hz;
-            ionosphere_delay *= scale * scale;
-        }
-    }
-    const double troposphere_delay =
-        libgnss::models::tropDelaySaastamoinen(receiver_position,
-                                               geometry.elevation);
-    const double satellite_clock_m =
-        satellite_clock_bias * libgnss::constants::SPEED_OF_LIGHT;
-    const double group_delay_m = groupDelayCorrectionMeters(observation, *eph);
-    const double modeled_range =
-        geometric_range + sagnacRangeCorrection(satellite_position, receiver_position);
-    const double corrected_pseudorange =
-        observation.pseudorange +
-        satellite_clock_m -
-        ionosphere_delay -
-        troposphere_delay -
-        group_delay_m;
-    const double residual = corrected_pseudorange - modeled_range;
-    const double sin_el = std::sin(geometry.elevation);
-    if (sin_el <= 0.0) {
-        return false;
-    }
-
-    factor.epoch_index = epoch_index;
-    factor.time = epoch.time;
-    factor.satellite = observation.satellite;
-    factor.signal = observation.signal;
-    factor.clock_group = clockGroup(observation.satellite.system);
-    factor.snr_dbhz = observation.snr;
-    factor.elevation_rad = geometry.elevation;
-    factor.sigma_m = options.pseudorange_sigma_zenith_m / std::sqrt(sin_el);
-    factor.residual_m = residual;
-    factor.corrected_pseudorange_m = corrected_pseudorange;
-    factor.modeled_range_m = modeled_range;
-    factor.ionosphere_delay_m = ionosphere_delay;
-    factor.troposphere_delay_m = troposphere_delay;
-    factor.satellite_clock_m = satellite_clock_m;
-    factor.group_delay_m = group_delay_m;
-    factor.los = -ex;
-    return std::isfinite(factor.residual_m) &&
-           std::isfinite(factor.sigma_m) &&
-           factor.sigma_m > 0.0;
 }
 
 bool prepareDopplerFactor(const libgnss::ObservationData& epoch,
@@ -1201,10 +988,6 @@ bool writeGraphCsv(const std::string& path,
            << problem.epochs.size() << ','
            << problem.epochs.size() << '\n';
     return true;
-}
-
-std::string jsonBool(bool value) {
-    return value ? "true" : "false";
 }
 
 bool writeSummaryJson(const std::string& path,

@@ -19,10 +19,16 @@
 #include <unistd.h>
 #endif
 
+#include "ubx_input_source.hpp"
+
 namespace {
 
+using libgnss_apps::UbxInputSource;
+using libgnss_apps::closeUbxInputSource;
+using libgnss_apps::openUbxInputSource;
+using libgnss_apps::readNextUbxEvents;
+
 constexpr double kRadToDeg = 180.0 / 3.14159265358979323846;
-constexpr int kDefaultSerialBaud = 115200;
 
 void printUsage(const char* argv0) {
     std::cerr
@@ -52,169 +58,6 @@ libgnss::io::RINEXReader::RINEXHeader makeObservationHeader(
         }
     }
     return header;
-}
-
-struct UbxInputSource {
-    bool serial = false;
-    bool eof = false;
-    std::ifstream file;
-#ifndef _WIN32
-    int serial_fd = -1;
-#endif
-};
-
-std::string resolveSerialPath(const std::string& source) {
-    constexpr const char* kPrefix = "serial://";
-    if (source.rfind(kPrefix, 0) != 0) {
-        return source;
-    }
-
-    std::string path = source.substr(std::char_traits<char>::length(kPrefix));
-    const size_t query_pos = path.find('?');
-    if (query_pos != std::string::npos) {
-        path.resize(query_pos);
-    }
-    if (!path.empty() && path.front() != '/') {
-        return path;
-    }
-    while (path.size() > 1 && path[0] == '/' && path[1] == '/') {
-        path.erase(path.begin());
-    }
-    return path;
-}
-
-int parseSerialBaud(const std::string& source) {
-    constexpr const char* kQuery = "?baud=";
-    const size_t query_pos = source.find(kQuery);
-    if (query_pos == std::string::npos) {
-        return kDefaultSerialBaud;
-    }
-    const std::string baud_text =
-        source.substr(query_pos + std::char_traits<char>::length(kQuery));
-    if (baud_text.empty()) {
-        return kDefaultSerialBaud;
-    }
-    return std::stoi(baud_text);
-}
-
-#ifndef _WIN32
-speed_t baudRateConstant(int baud) {
-    switch (baud) {
-        case 9600: return B9600;
-        case 19200: return B19200;
-        case 38400: return B38400;
-        case 57600: return B57600;
-        case 115200: return B115200;
-        case 230400: return B230400;
-        default:
-            throw std::invalid_argument("unsupported serial baud rate");
-    }
-}
-
-bool configureSerialPort(int fd, int baud) {
-    termios tio{};
-    if (tcgetattr(fd, &tio) != 0) {
-        return false;
-    }
-    cfmakeraw(&tio);
-    const speed_t speed = baudRateConstant(baud);
-    cfsetispeed(&tio, speed);
-    cfsetospeed(&tio, speed);
-    tio.c_cflag |= (CLOCAL | CREAD);
-    tio.c_cflag &= ~CSTOPB;
-    tio.c_cflag &= ~CRTSCTS;
-    tio.c_cc[VMIN] = 1;
-    tio.c_cc[VTIME] = 0;
-    return tcsetattr(fd, TCSANOW, &tio) == 0;
-}
-#endif
-
-void closeUbxInputSource(UbxInputSource& source) {
-    if (source.file.is_open()) {
-        source.file.close();
-    }
-#ifndef _WIN32
-    if (source.serial_fd >= 0) {
-        ::close(source.serial_fd);
-        source.serial_fd = -1;
-    }
-#endif
-    source.serial = false;
-    source.eof = false;
-}
-
-bool openUbxInputSource(const std::string& input_path, UbxInputSource& source) {
-    closeUbxInputSource(source);
-
-    const std::string resolved_path = resolveSerialPath(input_path);
-    std::error_code ec;
-    const auto status = std::filesystem::status(resolved_path, ec);
-    if (!ec && std::filesystem::is_regular_file(status)) {
-        source.file.open(resolved_path, std::ios::binary);
-        return source.file.is_open();
-    }
-
-#ifndef _WIN32
-    const int baud = parseSerialBaud(input_path);
-    const int fd = ::open(resolved_path.c_str(), O_RDONLY | O_NOCTTY);
-    if (fd < 0) {
-        return false;
-    }
-    if (!configureSerialPort(fd, baud)) {
-        ::close(fd);
-        return false;
-    }
-    source.serial = true;
-    source.serial_fd = fd;
-    return true;
-#else
-    (void)input_path;
-    return false;
-#endif
-}
-
-bool readNextUbxEvents(libgnss::io::UBXStreamDecoder& decoder,
-                       UbxInputSource& source,
-                       std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
-    events.clear();
-    std::array<uint8_t, 4096> chunk{};
-
-    while (true) {
-        size_t bytes_read = 0;
-        if (source.serial) {
-#ifndef _WIN32
-            const ssize_t count = ::read(source.serial_fd, chunk.data(), chunk.size());
-            if (count < 0) {
-                if (errno == EINTR) {
-                    continue;
-                }
-                source.eof = true;
-                return false;
-            }
-            if (count == 0) {
-                source.eof = true;
-                return false;
-            }
-            bytes_read = static_cast<size_t>(count);
-#else
-            source.eof = true;
-            return false;
-#endif
-        } else {
-            source.file.read(reinterpret_cast<char*>(chunk.data()),
-                             static_cast<std::streamsize>(chunk.size()));
-            bytes_read = static_cast<size_t>(source.file.gcount());
-            if (bytes_read == 0) {
-                source.eof = true;
-                return false;
-            }
-        }
-
-        decoder.pushBytes(chunk.data(), bytes_read, events);
-        if (!events.empty()) {
-            return true;
-        }
-    }
 }
 
 }  // namespace
