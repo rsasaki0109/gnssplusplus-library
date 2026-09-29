@@ -796,6 +796,30 @@ jobs:
           ion_missed_fixes="$(awk -F, 'NR > 1 && $5 == 1 && $6 != 6 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
           test "$ion_missed_fixes" -eq 8
           python3 -c 'import json; m2=json.load(open("madoca_pppar_solution_diff.json")); ion=json.load(open("madoca_pppar_ion_solution_diff.json")); assert ion["base"]["reference_rms_3d_m"] <= m2["base"]["reference_rms_3d_m"]; assert ion["candidate"]["reference_rms_3d_m"] <= m2["candidate"]["reference_rms_3d_m"]; assert ion["comparison"]["delta_rms_3d_m"] <= 0.25; assert ion["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
+          # Kinematic ionosphere-free float vs the bridge default ppp profile
+          # (MADOCALIB ppp-kine dual-freq). Both commit one measurement update
+          # per epoch; the old eight-pass native loop sat 5.3 m RMS away.
+          ./apps/gnss_madocalib_oracle \
+            --kinematic \
+            --obs "$ROOT/sample_data/data/rinex/MIZU00JPN_R_20250910000_01D_30S_MO.rnx" \
+            --nav "$ROOT/sample_data/data/rinex/BRDM00DLR_S_20250910000_01D_MN.rnx" \
+            --madoca-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.204.l6" \
+            --madoca-l6 "$ROOT/sample_data/data/l6_is-qzss-mdc-004/2025/091/2025091A.206.l6" \
+            --antex "$ROOT/sample_data/data/igs20.atx" \
+            --max-epochs 120 \
+            --emit-epoch-time \
+            --out native_kinematic_if_smoke.pos \
+            --summary-json native_kinematic_if_smoke.json \
+            --quiet
+          python3 "${GITHUB_WORKSPACE}/scripts/analysis/madoca_solution_diff.py" \
+            madocalib_bridge_smoke.pos \
+            native_kinematic_if_smoke.pos \
+            --reference-ecef -3857167.6484 3108694.9138 4004041.6876 \
+            --base-label bridge-ppp \
+            --candidate-label native-kinematic-if \
+            --json-out madoca_kinematic_if_solution_diff.json \
+            --match-csv madoca_kinematic_if_solution_matches.csv
+          python3 -c 'import json; d=json.load(open("madoca_kinematic_if_solution_diff.json")); c=d["comparison"]; assert c["matched_epochs"] == 118, c["matched_epochs"]; assert c["delta_rms_3d_m"] <= 0.75, c["delta_rms_3d_m"]; assert c["delta_last_3d_m"] <= 0.5, c["delta_last_3d_m"]; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 3.0'
 
     - name: Run required MADOCA release matrix
       run: |

@@ -23,25 +23,23 @@ inline constexpr double kDefaultZenithDelayMeters = 2.3;
 // per epoch (ppp.c restarts every residual-screening pass from rtk->x/rtk->P).
 //
 // - MADOCA uncombined (per-frequency) PPP: one update, MADOCALIB semantics.
-// - Kinematic motion (not --low-dynamics): one update. The prior position is
-//   re-seeded from SPP (or dead-reckoned by the dynamics model) every epoch,
-//   metres from the posterior, so the repeated push is metre-level; it is
-//   absorbed by the persistent troposphere and ambiguity states and the
-//   float solution settles metres off the truth.
+// - Kinematic motion (not --low-dynamics): one update, including the
+//   coherent MADOCA ionosphere-free path (MADOCALIB ppp-kine dual-freq,
+//   pppos() ppp.c:1359-1381). The prior position is re-seeded from SPP (or
+//   dead-reckoned by the dynamics model) every epoch, metres from the
+//   posterior, so the repeated push is metre-level; it is absorbed by the
+//   persistent troposphere and ambiguity states and the float solution
+//   settles metres off the truth.
 // - Static / low-dynamics motion keeps the historical pass count: the prior is
 //   the previous solution, the stale-geometry push is millimetre-level, and
-//   the passes only rescale the measurement weight the static tuning and
-//   lane gates were measured with. The coherent MADOCA ionosphere-free path
-//   also keeps it: its native-vs-MADOCALIB release baseline
-//   (docs/madoca_release_baseline.json) must be re-measured against the
-//   bridge before it moves.
+//   the passes only rescale the measurement weight the static tuning, lane
+//   gates and the MADOCA release baseline (docs/madoca_release_baseline.json,
+//   whose native ppp profile is --static) were measured with.
 inline int filterIterationCount(bool madoca_per_frequency_update,
-                                bool coherent_madoca_ssr,
                                 bool kinematic_motion,
                                 bool precise_products_loaded,
                                 int configured_iterations) {
-    if (madoca_per_frequency_update ||
-        (kinematic_motion && !coherent_madoca_ssr)) {
+    if (madoca_per_frequency_update || kinematic_motion) {
         return 1;
     }
     return precise_products_loaded ? 3 : configured_iterations;
