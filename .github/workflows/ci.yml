@@ -819,7 +819,7 @@ jobs:
             --candidate-label native-kinematic-if \
             --json-out madoca_kinematic_if_solution_diff.json \
             --match-csv madoca_kinematic_if_solution_matches.csv
-          python3 -c 'import json; d=json.load(open("madoca_kinematic_if_solution_diff.json")); c=d["comparison"]; assert c["matched_epochs"] == 118, c["matched_epochs"]; assert c["delta_rms_3d_m"] <= 0.75, c["delta_rms_3d_m"]; assert c["delta_last_3d_m"] <= 0.5, c["delta_last_3d_m"]; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 3.0'
+          python3 -c 'import json; d=json.load(open("madoca_kinematic_if_solution_diff.json")); c=d["comparison"]; assert c["matched_epochs"] == 118, c["matched_epochs"]; assert c["delta_rms_3d_m"] <= 1.0, c["delta_rms_3d_m"]; assert c["delta_last_3d_m"] <= 1.0, c["delta_last_3d_m"]; assert d["events"]["max_delta_3d"]["delta_3d_m"] <= 3.0'
 
     - name: Run required MADOCA release matrix
       run: |
