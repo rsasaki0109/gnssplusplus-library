@@ -267,6 +267,8 @@ struct SolveConfig {
     bool wide_lane_ar_set = false;
     double wide_lane_acceptance_threshold = 0.25;
     bool wide_lane_acceptance_threshold_set = false;
+    int wide_lane_min_arc_samples = 0;
+    bool wide_lane_min_arc_samples_set = false;
     bool enable_wlnl_fallback = false;
     bool enable_bsr_guided_decimation = false;
     int bsr_guided_worst_axes = 3;
@@ -1659,6 +1661,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --enable-wide-lane-ar      Enable MW wide-lane AR pre-step (default: off)\n"
         << "  --no-wide-lane-ar          Disable MW wide-lane AR, overriding presets\n"
         << "  --wide-lane-threshold <v>  WL float->int threshold in cycles (default: 0.25)\n"
+        << "  --wide-lane-min-arc-samples <n>\n"
+        << "                             Average the MW wide-lane over >= n epochs of each\n"
+        << "                             satellite arc before fixing (default: 0 = single epoch)\n"
         << "  --enable-wlnl-fallback     Enable MW WL/NL fallback after LAMBDA fails\n"
         << "  --enable-bsr-decimation    Enable BSR-guided partial AR decimation\n"
         << "                             (eigendecomposition-driven drop subsets)\n"
@@ -2063,6 +2068,23 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.min_hold_count_set) config.min_hold_count = 5;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.0;
             return;
+        case RTKTuningPreset::ODAIBA:
+            // low-cost profile plus arc-smoothed MW wide-lane AR. ODAIBA used
+            // to be a frozen copy of the early low-cost values, so it missed
+            // the later motion-aware jump gate / subset full-ratio guard /
+            // float-divergence reset, and its single-epoch MW test admitted
+            // near-random WL integers (metre-level urban code noise) as hard
+            // constraints. Falling through keeps it in lockstep with
+            // LOW_COST.
+            if (!config.wide_lane_ar_set) config.enable_wide_lane_ar = true;
+            if (!config.wide_lane_acceptance_threshold_set) {
+                config.wide_lane_acceptance_threshold = 0.12;
+            }
+            // 10 s of MW averaging at the 10 Hz UrbanNav rover rate.
+            if (!config.wide_lane_min_arc_samples_set) {
+                config.wide_lane_min_arc_samples = 100;
+            }
+            [[fallthrough]];
         case RTKTuningPreset::LOW_COST:
             if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
             if (!config.has_ar_filter_override) config.enable_ar_filter = true;
@@ -2107,18 +2129,6 @@ void applyRTKTuningPreset(SolveConfig& config) {
             if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
             if (!config.min_hold_count_set) config.min_hold_count = 8;
             if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.4;
-            return;
-        case RTKTuningPreset::ODAIBA:
-            if (!config.ratio_threshold_set) config.ratio_threshold = 3.0;
-            if (!config.has_ar_filter_override) config.enable_ar_filter = true;
-            if (!config.ar_filter_margin_set) config.ar_filter_margin = 0.35;
-            if (!config.min_satellites_for_ar_set) config.min_satellites_for_ar = 6;
-            if (!config.min_hold_count_set) config.min_hold_count = 8;
-            if (!config.hold_ratio_threshold_set) config.hold_ratio_threshold = 2.5;
-            if (!config.wide_lane_ar_set) config.enable_wide_lane_ar = true;
-            if (!config.wide_lane_acceptance_threshold_set) {
-                config.wide_lane_acceptance_threshold = 0.12;
-            }
             return;
     }
 }
@@ -2195,6 +2205,11 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         // chain below, which already sits at MSVC's C1061 nested-block
         // limit (gnss_solve is clang-only to build anyway, but there is no
         // reason to push the chain any deeper).
+        if (arg == "--wide-lane-min-arc-samples" && i + 1 < argc) {
+            config.wide_lane_min_arc_samples = std::stoi(argv[++i]);
+            config.wide_lane_min_arc_samples_set = true;
+            continue;
+        }
         if (arg == "--cmc-ref") {
             config.cmc_aware_reference_selection = true;
             continue;
@@ -2857,6 +2872,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.min_satellites_for_ar < 4) {
         argumentError("--min-ar-sats must be >= 4", argv[0]);
+    }
+    if (config.wide_lane_min_arc_samples < 0) {
+        argumentError("--wide-lane-min-arc-samples must be >= 0", argv[0]);
     }
     if (config.min_subset_pairs_for_ar < 4) {
         argumentError("--min-subset-ar-pairs must be >= 4", argv[0]);
@@ -3618,6 +3636,7 @@ int main(int argc, char* argv[]) {
         rtk_config.max_postfix_residual_rms = config.max_postfix_residual_rms;
         rtk_config.enable_wide_lane_ar = config.enable_wide_lane_ar;
         rtk_config.wide_lane_acceptance_threshold = config.wide_lane_acceptance_threshold;
+        rtk_config.wide_lane_min_arc_samples = config.wide_lane_min_arc_samples;
         rtk_config.enable_wlnl_fallback = config.enable_wlnl_fallback;
         rtk_config.enable_bsr_guided_decimation = config.enable_bsr_guided_decimation;
         rtk_config.bsr_guided_worst_axes = config.bsr_guided_worst_axes;

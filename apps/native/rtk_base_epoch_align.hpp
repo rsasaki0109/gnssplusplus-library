@@ -270,7 +270,14 @@ inline bool applyRtkConfigPreset(const std::string& preset,
         rtk_config.hold_ambiguity_ratio_threshold = 2.0;
         return true;
     }
-    if (preset == "low-cost") {
+    if (preset == "low-cost" || preset == "odaiba") {
+        // odaiba = low-cost + arc-smoothed MW wide-lane AR (see gnss_solve's
+        // applyRTKTuningPreset for the rationale).
+        if (preset == "odaiba") {
+            rtk_config.enable_wide_lane_ar = true;
+            rtk_config.wide_lane_acceptance_threshold = 0.12;
+            rtk_config.wide_lane_min_arc_samples = 100;
+        }
         rtk_config.ratio_threshold = 3.0;
         rtk_config.ambiguity_ratio_threshold = 3.0;
         rtk_config.enable_ar_filter = true;
@@ -294,18 +301,6 @@ inline bool applyRtkConfigPreset(const std::string& preset,
         rtk_config.min_satellites_for_ar = 6;
         rtk_config.min_hold_count = 8;
         rtk_config.hold_ambiguity_ratio_threshold = 2.4;
-        return true;
-    }
-    if (preset == "odaiba") {
-        rtk_config.ratio_threshold = 3.0;
-        rtk_config.ambiguity_ratio_threshold = 3.0;
-        rtk_config.enable_ar_filter = true;
-        rtk_config.ar_filter_margin = 0.35;
-        rtk_config.min_satellites_for_ar = 6;
-        rtk_config.min_hold_count = 8;
-        rtk_config.hold_ambiguity_ratio_threshold = 2.5;
-        rtk_config.enable_wide_lane_ar = true;
-        rtk_config.wide_lane_acceptance_threshold = 0.12;
         return true;
     }
     return false;

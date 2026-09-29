@@ -75,10 +75,11 @@ and estimator disagreement to advance the disagreement streak; it is opt-in.
 | `--max-consec-float-reset <N>` | Auto-reset ambiguities after N consecutive float epochs. `10` is a historical PPC official-score probe; the current PPC sign-off path is `--realtime-profile sigma-demote`. | `0` disabled |
 | `--max-consec-nonfix-reset <N>` | Auto-reset ambiguities after N consecutive FLOAT/SPP/no-solution epochs. | `0` disabled |
 | `--max-postfix-rms <m>` | Reject fix if the L1 post-fix DD phase residual RMS exceeds N meters. | `0` disabled |
-| `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. Odaiba's opt-in preset uses this to beat demo5 Hmed while still beating demo5 Fix count and tails. | `false` / `0.25` |
+| `--enable-wide-lane-ar` + `--wide-lane-threshold <cycle>` | Pre-compute MW wide-lane integers and inject them as Kalman constraints into the LAMBDA search. | `false` / `0.25` |
+| `--wide-lane-min-arc-samples <N>` | Average the MW wide-lane over each satellite's continuous arc and constrain only when both arcs hold at least N samples. `0` is the legacy single-epoch test, which admits near-random integers under urban code multipath. `--preset odaiba` uses `100`. | `0` |
 | `--enable-wlnl-fallback` | Allow the experimental MW wide-lane / narrow-lane fallback after ordinary LAMBDA failure in non-IFLC runs. It reuses `--wide-lane-threshold` for both integer checks. | `false` |
 | `--enable-bsr-decimation` + `--bsr-worst-axes <N>` + `--bsr-max-drops <N>` | Add BSR-guided subset AR decimation candidates alongside the variance-drop subset family. PPC high-wrong probes preserved FIX count but did not reduce Wrong/FIX, so this remains diagnostic. | `false` / `3` / `6` |
 
 On PPC Tokyo and Nagoya, leave these off unless reproducing a specific sweep.
-On Odaiba or other urban multipath datasets, use `--preset odaiba` for the
-explicit demo5-beating tradeoff.
+On Odaiba or other urban multipath datasets, `--preset odaiba` (low-cost +
+arc-smoothed wide-lane AR) gives the most fixes and the lowest Hp95/Vp95.

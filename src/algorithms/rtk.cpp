@@ -32,10 +32,24 @@ namespace libgnss {
 
 using namespace rtk_internal;
 
+namespace {
+
+causal_ambiguity_arc::Config wideLaneMwArcConfig(const RTKProcessor::RTKConfig& config) {
+    causal_ambiguity_arc::Config arc_config;
+    arc_config.minimum_samples = std::max(1, config.wide_lane_min_arc_samples);
+    arc_config.maximum_effective_samples =
+        std::max(arc_config.minimum_samples, config.wide_lane_arc_max_effective_samples);
+    arc_config.maximum_gap_s = config.wide_lane_arc_max_gap_s;
+    return arc_config;
+}
+
+}  // namespace
+
 RTKProcessor::RTKProcessor()
     : spp_processor_(makeRTKSppProcessor(rtk_config_)),
       l1_l5_mw_arc_bank_(
           rtk_config_.lambda_l1_l5_wlnl_causal_arc_config),
+      wide_lane_mw_arc_bank_(wideLaneMwArcConfig(rtk_config_)),
       ambiguity_arc_bank_(
           rtk_config_.lambda_causal_arc_readiness_config) {
     filter_initialized_ = false;
@@ -45,6 +59,7 @@ RTKProcessor::RTKProcessor(const RTKConfig& rtk_config)
       spp_processor_(makeRTKSppProcessor(rtk_config_)),
       l1_l5_mw_arc_bank_(
           rtk_config_.lambda_l1_l5_wlnl_causal_arc_config),
+      wide_lane_mw_arc_bank_(wideLaneMwArcConfig(rtk_config_)),
       ambiguity_arc_bank_(
           rtk_config_.lambda_causal_arc_readiness_config) {
     filter_initialized_ = false;
@@ -54,6 +69,8 @@ void RTKProcessor::setRTKConfig(const RTKConfig& config) {
     rtk_config_ = config;
     l1_l5_mw_arc_bank_ = causal_ambiguity_arc::Bank(
         rtk_config_.lambda_l1_l5_wlnl_causal_arc_config);
+    wide_lane_mw_arc_bank_ =
+        causal_ambiguity_arc::Bank(wideLaneMwArcConfig(rtk_config_));
     ambiguity_arc_bank_ = causal_ambiguity_arc::Bank(
         rtk_config_.lambda_causal_arc_readiness_config);
     syncSPPConfig();
@@ -101,6 +118,7 @@ void RTKProcessor::reset() {
     l1_l2_multifrequency_consensus_state_machine_.reset();
     satellite_par_persistent_satellites_.clear();
     l1_l5_mw_arc_bank_.reset();
+    wide_lane_mw_arc_bank_.reset();
     filter_state_ = RTKState{};
     filter_state_.next_state_idx = REAL_STATES + IONO_STATES;
     ambiguity_states_.clear();
