@@ -10,8 +10,8 @@ receiver observations, reference-station observations, broadcast navigation
 data, and reliable trajectory truth. It is not used as a proprietary
 receiver-engine comparison. Treat the UrbanNav Odaiba snapshot below as a
 Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
-profile (low-cost + arc-smoothed wide-lane AR) trades about 2 cm of Hmed for
-6.6x the default profile's fixes and lower Hp95/Vp95 on that scene.
+profile (low-cost + arc-smoothed wide-lane AR) gives 6.6x the default
+profile's fixes, Hmed 0.068 m versus 0.347 m, and lower Hp95/Vp95 on that scene.
 
 For the later PPC smoother-stack sanity check, see
 [`ppc_smoother_oracle_report.md`](ppc_smoother_oracle_report.md). That report
@@ -469,37 +469,86 @@ Dataset: [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset)
 Comparison baseline: [RTKLIB demo5](https://github.com/rtklibexplorer/RTKLIB) b34k
 (`55a0f2c`) with `scripts/rtklib_odaiba.conf`
 
-Reproduce with `gnss reproduce odaiba` (kinematic, low-cost preset). All-epoch
-statistics are over each solver's matched output epochs; libgnss++ publishes
-10,956 epochs versus 8,205 for demo5. On the 7,996 epochs both solvers publish,
-libgnss++ Hmed is **0.659 m** versus 0.671 m.
+Reproduce with `gnss reproduce odaiba` (kinematic, low-cost preset). Both
+solvers use the surveyed base position described below. All-epoch statistics
+are over each solver's matched output epochs; libgnss++ publishes 11,027 epochs
+versus 8,205 for demo5. On the 7,987 epochs both solvers publish, libgnss++
+Hmed is **0.294 m** versus 0.548 m.
 
 | Config | Fix | Rate | Hmed (m) | Hp95 (m) | Vp95 (m) |
 |---|---:|---:|:---:|:---:|:---:|
-| RTKLIB demo5 b34k | 209 | 2.55% | **0.684** | 26.263 | 43.289 |
-| libgnss++ default | 922 (+713) | 8.42% | 0.696 | 5.098 | 15.102 |
-| libgnss++ `--preset odaiba` | **6086** (+5877) | **60.62%** | 0.716 | **4.872** | **13.493** |
+| RTKLIB demo5 b34k | 205 | 2.50% | 0.567 | 25.622 | 43.375 |
+| libgnss++ default | 922 (+717) | 8.36% | 0.347 | 5.873 | 16.419 |
+| libgnss++ `--preset odaiba` | **6115** (+5910) | **62.44%** | **0.068** | **5.131** | **9.740** |
 
 `--preset odaiba` is the `low-cost` profile plus Melbourne-Wubbena wide-lane
 AR averaged over each satellite's continuous arc
 (`--wide-lane-min-arc-samples 100`, 10 s at the 10 Hz rover rate). The lane
 gates it against the default arm on Fix count, Hp95 and Vp95.
 
-Hmed is not a useful discriminator on this scene. Fixed epochs from both
-libgnss++ and demo5 cluster about 0.70 m west of `reference.csv` (median
-east error -0.70 m, north -0.02 m). The preset's fixed epochs span 0.69-0.72 m (25th-75th
-percentile), so Hmed is floored by that common offset and drops as scattered
-FLOAT epochs are added. The preset's 2 cm Hmed gap to the default profile is
-that effect, not wrong fixes.
+### Base station position
 
-The preset regressed to 54 fixes (Hmed 0.709 m) before 2026-09-29 for two
-reasons. First, it was a frozen copy of the early `low-cost` values, so it
-missed the motion-aware jump gate that ended `low-cost` fix starvation.
-Second, it fixed wide-lane integers from a single-epoch MW combination, and
-metre-level urban code noise let near-random integers in as hard LAMBDA
-constraints. It now falls through to `low-cost`, and MW is arc-averaged. The
-older snapshot (preset 735 fixes, default 1268) came from an unrecorded RTKLIB
-build and evaluation window and is not comparable.
+`gnss odaiba-benchmark` gives both solvers the surveyed base position
+(-3961904.9530, 3348993.7578, 3698211.7553) m ECEF (`--base-position surveyed`,
+the default; libgnss++ `--base-ecef`, RTKLIB `-r`). UrbanNav does not publish a
+base coordinate for Tokyo. This value comes from the data providers' own
+description of the same `base_trimble.obs` station (TUMSAT Etchujima, used for
+their Dec-2019 Odaiba collection):
+[MeijoMeguroLab/Open_data 2019_dataset.md](https://github.com/MeijoMeguroLab/Open_data/blob/main/docs/2019_dataset.md).
+`--base-position rinex-header` restores the old behaviour. With it, the base
+is taken from the `base_trimble.obs` header APPROX POSITION
+(-3961904.4341, 3348994.2660, 3698211.7067), which is 0.723 m west, 0.000 m
+north and 0.084 m below the surveyed point.
+
+With the header coordinate, every FIXED epoch from every solver sat about
+0.70 m west of `reference.csv`, so Hmed could not fall below about 0.70 m.
+The other candidate causes were checked against the fixed epochs and ruled out:
+
+| FIX-epoch error vs `reference.csv` (header base) | default (922) | preset (6086) | demo5 (209) |
+|---|---:|---:|---:|
+| median East / North / Up (m) | -0.687 / -0.019 / -0.040 | -0.699 / -0.016 / -0.055 | -0.698 / -0.004 / -0.072 |
+| fit: constant ENU offset (m) | (-0.683, -0.070) | (-0.716, -0.011) | - |
+| fit: added body-frame lever arm, fwd/right (m) | (-0.007, +0.020) | (-0.014, +0.015) | - |
+| rms residual, ENU-only / body-only model (m) | 0.069 / 0.173 | 0.118 / 0.487 | - |
+
+- **Lever arm (rejected).** The preset's fixes cover every 45-degree heading
+  bin. East error stays between -0.66 and -0.78 m in every bin, while the
+  body-frame components rotate with heading (forward +0.59 to -0.67 m).
+  A body-frame lever arm fits to about 2 cm.
+- **Time tag (rejected).** Regressing the error on the reference velocity gives
+  -0.002 s (preset), and the median East error is -0.69 to -0.72 m in every
+  speed bin from standstill to 10-30 m/s.
+- **Datum or frame (rejected on size).** A WGS84/ITRF/JGD2011 epoch difference
+  in Tokyo is a few centimetres per year, not 0.7 m due west with no north
+  component.
+- **Base coordinate (confirmed).** The surveyed-minus-header offset
+  (+0.723 E, 0.000 N, +0.084 U) matches the negated fixed-epoch error to within
+  about 4 cm horizontally. The providers' Sep-2022 coordinate for the station
+  (-3961904.9860, 3348993.7210, 3698211.7450) is 0.772 m east of the header,
+  consistent with about 2 cm/yr of station motion since Dec 2019. Their Dec-2020
+  page lists a coordinate 1.10 m lower and 0.54 m from the header in a
+  different direction, apparently a different antenna setup, and it does not
+  match the observed error.
+
+With the surveyed base, the same analysis gives fixed-epoch median errors of
+(+0.036 E, -0.019 N, +0.044 U) m for the default profile,
+(+0.024, -0.015, +0.028) m for the preset and (+0.025, -0.004, +0.011) m for
+demo5. The preset's fixed-epoch horizontal median is 0.039 m. The change
+translates each solution by about 0.70 m east (median libgnss++ shift
++0.700 E / +0.077 U on 10,894 common epochs). Fix counts barely move: default
+922 to 922, demo5 209 to 205, preset 6086 to 6115. Hmed on this scene now measures accuracy instead of the base
+offset. The `ppc-rtk-signoff` UrbanNav path below still uses the header
+coordinate.
+
+The preset regressed to 54 fixes (Hmed 0.709 m, header base) before
+2026-09-29 for two reasons. First, it was a frozen copy of the early
+`low-cost` values, so it missed the motion-aware jump gate that ended
+`low-cost` fix starvation. Second, it fixed wide-lane integers from a
+single-epoch MW combination, and metre-level urban code noise let near-random
+integers in as hard LAMBDA constraints. It now falls through to `low-cost`,
+and MW is arc-averaged. The older snapshot (preset 735 fixes, default 1268)
+came from an unrecorded RTKLIB build and evaluation window and is not
+comparable.
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|

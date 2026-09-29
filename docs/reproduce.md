@@ -22,7 +22,7 @@ runner adds no scoring logic of its own.
 |---|---|---|---:|---|
 | RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
 | CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | ~45 min | **Pass.** Reproduces 25.121% FIX, 0.359 m FIX RMS2D, 0 FIX > 3 m, 58,259 epochs, all hard gates (L6/SSR expansion ~14 min + six `gnss_ppp` runs ~30 min) |
-| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
+| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
@@ -37,7 +37,7 @@ Release build. Lanes that run in parallel slow each other down.
 | Dataset | Used by | Get it | Expected layout |
 |---|---|---|---|
 | [PPC-Dataset](https://github.com/taroz/PPC-Dataset) | `rtk-demo5`, `clas-ppc`, `spp-policy`, `fgo-tokyo`, `ppc-goal` | `git clone https://github.com/taroz/PPC-Dataset` | `<ppc-root>/{tokyo,nagoya}/run{1,2,3}/{rover.obs,base.obs,base.nav,reference.csv}`; `fgo-tokyo` also reads `tokyo/run{1,2,3}/imu.csv` |
-| [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) | `odaiba` | UrbanNav Tokyo data release (Trimble rover/base RINEX + Applanix reference) | `<urbannav-root>/Odaiba/{rover_trimble.obs,base_trimble.obs,base.nav,reference.csv}` |
+| [UrbanNav Tokyo Odaiba](https://github.com/IPNL-POLYU/UrbanNavDataset) | `odaiba` | UrbanNav Tokyo data release (Trimble rover/base RINEX + Applanix reference) | `<urbannav-root>/Odaiba/{rover_trimble.obs,base_trimble.obs,base.nav,reference.csv}`; the base coordinate is the providers' surveyed position, not the RINEX header (see [odaiba base position](#odaiba-base-position-2026-09-29)) |
 | [GSDC 2023 `dataset_2023`](https://github.com/taroz/gsdc2023) (Kaggle Google Smartphone Decimeter Challenge 2023 train and test sets with CORS base RINEX and `brdc.nav`) | `gsdc-dev-routes`, `gsdc-official` | Kaggle GSDC 2023 data as repackaged by taroz/gsdc2023 (`dataset_2023.zip`, SHA-256 `bda30ab4...`) | `<gsdc-root>/train/<drive>/{brdc.nav,<BASE>_rnx2.obs,pixel5/{device_gnss.csv,device_imu.csv,ground_truth.csv}}`, or the zip itself; see [gsdc-dev-routes inputs](#gsdc-dev-routes-inputs-and-base-provenance). `gsdc-official` reads `<gsdc-root>/test/<drive>/{brdc.nav,<BASE>_rnx2.obs,<phone>/{device_gnss.csv,device_imu.csv}}` |
 | Kaggle GSDC 2023 train `ground_truth.csv` | `gsdc-official` (height maps) | Kaggle `smartphone-decimeter-2023` competition data (156 train files, SHA-256 pinned in the recipe) | `--gsdc-truth-root` holding `train/<course>/<phone>/ground_truth.csv` or flat `<course>__<phone>__ground_truth.csv` |
 | PPC goal-matrix frozen tier inputs | `ppc-goal` | Not published; the 26 files (~33 MB) exist only in the `output/` tree of the checkout that produced the README. See [ppc-goal inputs](#ppc-goal-frozen-inputs) | `<ppc-goal-inputs>/` in the historical `output/` layout (`tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos`, `gici_common/tokyo1.pos`, ...); SHA-256 pinned in `scripts/experiments/ppc/stage_ppc_goal_inputs.py` |
@@ -234,10 +234,11 @@ arc-smoothed wide-lane AR) and gates it against the default arm:
 | Lower Vp95 | 15.10 m | **13.49 m** | pass |
 | Hmed (reported, not gated) | **0.696 m** | 0.716 m | - |
 
-Hmed is reported only. All solvers' fixed epochs sit about 0.70 m from
-`reference.csv`, so Hmed is floored by that common offset and drops as FLOAT
-epochs are added. The README's earlier claim that "`--preset odaiba` closes
-Hmed" is not restored.
+Hmed is reported only. All solvers' fixed epochs sat about 0.70 m from
+`reference.csv`, so Hmed was floored by that common offset and dropped as FLOAT
+epochs were added. The cause was the base coordinate, fixed on 2026-09-29; see
+[odaiba base position](#odaiba-base-position-2026-09-29), which supersedes the
+Odaiba numbers in this section.
 
 Before 2026-09-29 the preset produced 54 fixes. It was a stale copy of the
 early `low-cost` values, and it fixed wide-lane integers from a single noisy
@@ -248,6 +249,45 @@ produced with an unrecorded RTKLIB build.
 **`spp-policy`.** The README claim reproduces. The historical per-run policy
 P95 H values in `docs/references/spp-accuracy-improvement.md` are within
 0.07 m and are reported without gating.
+
+## odaiba base position (2026-09-29)
+
+`gnss odaiba-benchmark` now passes the surveyed TUMSAT base position
+(-3961904.9530, 3348993.7578, 3698211.7553) to libgnss++ (`--base-ecef`) and
+to RTKLIB (`-r`). The data providers publish this position for the same
+`base_trimble.obs` station
+([MeijoMeguroLab/Open_data](https://github.com/MeijoMeguroLab/Open_data/blob/main/docs/2019_dataset.md)).
+The previous runs used the `base_trimble.obs` header APPROX POSITION, which is
+0.723 m west of it. That offset was the whole 0.70 m west error of every fixed
+epoch. The error was constant in ENU across all headings and speeds, so a
+lever arm and a time-tag offset were ruled out. The evidence is in the
+[Odaiba snapshot](benchmarks.md#base-station-position).
+`--base-position rinex-header` reproduces the old numbers. The solver defaults
+are unchanged.
+
+Local run (2026-09-29): MSVC Release build of develop, demo5 b34k.
+
+| Claim | demo5 b34k | libgnss++ default | Result |
+|---|---:|---:|---|
+| More fixes | 205 | **922** | pass |
+| Lower Hp95 | 25.62 m | **5.87 m** | pass |
+| Lower Vp95 | 43.37 m | **16.42 m** | pass |
+| Lower Hmed on common epochs (7,987) | 0.548 m | **0.294 m** | pass |
+
+| Claim | libgnss++ default | `--preset odaiba` | Result |
+|---|---:|---:|---|
+| More fixes | 922 | **6115** | pass |
+| Lower Hp95 | 5.87 m | **5.13 m** | pass |
+| Lower Vp95 | 16.42 m | **9.74 m** | pass |
+| Hmed (reported, not gated) | 0.347 m | **0.068 m** | - |
+
+Against the header-base run, Hmed falls from 0.684 to 0.567 m for demo5, from
+0.696 to 0.347 m for the default profile and from 0.716 to 0.068 m for the
+preset. The default arm's Hp95 rises from 5.10 to 5.87 m and its Vp95 from 15.10
+to 16.42 m. The p95 tail is FLOAT and SPP epochs whose median east error is
+about +7 m, and the old 0.7 m west bias partly cancelled it. Shifting the old
+solution 0.723 m east gives an Hp95 of 5.72 m. The remaining difference comes
+from the two runs publishing different epochs (11,027 versus 10,956).
 
 ## fgo-tokyo local result (2026-09-28)
 

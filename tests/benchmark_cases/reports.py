@@ -1050,6 +1050,38 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             self.assertEqual(commands[4][2], "scorecard")
             self.assertEqual(commands[5][2], "social-card")
 
+    def test_main_passes_surveyed_base_position_to_both_solvers(self) -> None:
+        surveyed = [f"{value:.4f}" for value in benchmark.URBANNAV_ODAIBA_SURVEYED_BASE_ECEF]
+        cases = (
+            ({}, surveyed),
+            ({"base_position": "surveyed"}, surveyed),
+            ({"base_position": "rinex-header"}, None),
+            ({"base_position": "rinex-header", "base_ecef": [1.0, 2.0, 3.0]},
+             ["1.0000", "2.0000", "3.0000"]),
+        )
+        for overrides, expected in cases:
+            with self.subTest(overrides=overrides):
+                with tempfile.TemporaryDirectory(prefix="gnss_benchmark_base_") as temp_dir:
+                    args = self.make_benchmark_args(Path(temp_dir), **overrides)
+                    commands: list[list[str]] = []
+                    with mock.patch.object(benchmark, "parse_args", return_value=args):
+                        with mock.patch.object(benchmark, "write_summary_json"):
+                            with mock.patch.object(benchmark, "enforce_summary_requirements"):
+                                with mock.patch.object(
+                                    benchmark, "run_command", side_effect=commands.append
+                                ):
+                                    self.assertEqual(benchmark.main(), 0)
+                solve_command, rtklib_command = commands[0], commands[1]
+                if expected is None:
+                    self.assertNotIn("--base-ecef", solve_command)
+                    self.assertNotIn("-r", rtklib_command)
+                    continue
+                index = solve_command.index("--base-ecef")
+                self.assertEqual(solve_command[index + 1 : index + 4], expected)
+                index = rtklib_command.index("-r")
+                self.assertEqual(rtklib_command[index + 1 : index + 4], expected)
+                self.assertLess(rtklib_command.index("-k"), index)
+
     def test_enforce_summary_requirements_passes_and_fails(self) -> None:
         payload = {
             "common_epoch_pairs": 8123,
