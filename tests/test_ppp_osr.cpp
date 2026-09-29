@@ -99,6 +99,60 @@ TEST(PPPOSRTest, HeldClasTropTokensFindPrefixWithoutAcceptingAdjacentKeys) {
     EXPECT_EQ(held.count("atmos_troq_t00_m"), 0U);
 }
 
+TEST(PPPOSRTest, HeldClasTropTokensSkipOtherNetworksAndRefreshAfterMutation) {
+    SSRProducts products;
+    const SatelliteId satellite(GNSSSystem::GPS, 1);
+    const GNSSTime base_time(2324, 177000.0);
+
+    SSROrbitClockCorrection held = makeAtmosCorrection(satellite, base_time, 7);
+    held.atmos_tokens["atmos_trop_residuals_m"] = "0.01;0.02;0.03";
+    products.addCorrection(held);
+
+    SSROrbitClockCorrection short_grid =
+        makeAtmosCorrection(satellite, base_time + 5.0, 7);
+    short_grid.atmos_tokens["atmos_trop_residuals_m"] = "0.04";
+    products.addCorrection(short_grid);
+
+    SSROrbitClockCorrection other_network =
+        makeAtmosCorrection(satellite, base_time + 10.0, 11);
+    other_network.atmos_tokens["atmos_trop_residuals_m"] = "0.05;0.06;0.07";
+    products.addCorrection(other_network);
+
+    SSROrbitClockCorrection clock_only;
+    clock_only.satellite = satellite;
+    clock_only.time = base_time + 15.0;
+    clock_only.clock_valid = true;
+    products.addCorrection(clock_only);
+
+    const GNSSTime query_time = base_time + 20.0;
+    std::map<std::string, std::string> tokens;
+    GNSSTime reference_time;
+    ASSERT_TRUE(products.heldClasTropTokens(
+        query_time, 3600.0, 7, 3, tokens, &reference_time));
+    EXPECT_EQ(reference_time, base_time);
+    EXPECT_EQ(tokens.at("atmos_trop_residuals_m"), "0.01;0.02;0.03");
+
+    ASSERT_TRUE(products.heldClasTropTokens(
+        query_time, 3600.0, 7, 0, tokens, &reference_time));
+    EXPECT_EQ(reference_time, base_time + 5.0);
+
+    ASSERT_TRUE(products.heldClasTropTokens(
+        query_time, 3600.0, 11, 0, tokens, &reference_time));
+    EXPECT_EQ(reference_time, base_time + 10.0);
+
+    EXPECT_FALSE(products.heldClasTropTokens(
+        query_time, 12.0, 7, 3, tokens, &reference_time));
+
+    SSROrbitClockCorrection refreshed =
+        makeAtmosCorrection(satellite, base_time + 18.0, 7);
+    refreshed.atmos_tokens["atmos_trop_residuals_m"] = "0.08;0.09;0.10";
+    products.addCorrection(refreshed);
+    ASSERT_TRUE(products.heldClasTropTokens(
+        query_time, 3600.0, 7, 3, tokens, &reference_time));
+    EXPECT_EQ(reference_time, base_time + 18.0);
+    EXPECT_EQ(tokens.at("atmos_trop_residuals_m"), "0.08;0.09;0.10");
+}
+
 Vector3d receiverPositionNearClasNetwork9() {
     return geodetic2ecef(39.98056 * M_PI / 180.0, 141.22509 * M_PI / 180.0, 0.0);
 }

@@ -580,6 +580,30 @@ public:
         int network_id,
         GNSSTime* atmos_reference_time = nullptr) const;
 
+    /**
+     * @brief Integer atmosphere keys of one correction row, parsed once.
+     *
+     * Each field reproduces a std::stoi() of the named atmos token (the
+     * *_valid flag is false when the token is absent or stoi() throws).
+     */
+    struct ClasAtmosRowKeys {
+        bool has_trop = false;  ///< atmos_valid row with an atmos_trop_* token
+        bool trop_network_valid = false;
+        int trop_network_id = 0;       ///< atmos_trop_network_id, else atmos_network_id
+        int trop_residual_count = -1;  ///< ';'-separated atmos_trop_residuals_m count, -1 if absent
+        bool atmos_network_valid = false;
+        int atmos_network_id = 0;  ///< atmos_network_id
+        int atmos_grid_count = 0;  ///< atmos_grid_count, 0 when absent or invalid
+    };
+
+    /**
+     * @brief Parsed atmosphere keys aligned with orbit_clock_corrections[sat].
+     *
+     * Returns nullptr when the satellite has no corrections. The index is built
+     * lazily and rebuilt after any mutation through this class.
+     */
+    const std::vector<ClasAtmosRowKeys>* clasAtmosRowKeys(const SatelliteId& sat) const;
+
     bool loadCSVFile(const std::string& filename);
 
     bool hasData(const SatelliteId& sat, const GNSSTime& time) const;
@@ -611,7 +635,14 @@ private:
                                     int minimum_grid_count,
                                     std::map<std::string, std::string>& atmos_tokens,
                                     GNSSTime* atmos_reference_time) const;
+    struct ClasAtmosRowIndex {
+        std::size_t row_count = 0;
+        std::vector<ClasAtmosRowKeys> keys;
+        std::vector<std::size_t> trop_rows;  ///< rows with has_trop, ascending
+    };
+
     void invalidateHeldTokenCaches() const;
+    const std::map<SatelliteId, ClasAtmosRowIndex>& clasAtmosRowIndex() const;
 
     bool orbit_corrections_are_rac_ = false;
     // Memoized held-token lookups for the current epoch. The lookups are pure
@@ -620,6 +651,12 @@ private:
     // correction containers clears these caches.
     mutable std::vector<HeldTokenCacheEntry> held_atmos_token_cache_;
     mutable std::vector<HeldTokenCacheEntry> held_trop_token_cache_;
+    // Parsed atmosphere keys for every orbit_clock_corrections row, so CLAS
+    // OSR does not re-run string-keyed token lookups on every row of its
+    // 120 s atmosphere window and 3600 s held-troposphere window at every
+    // receiver epoch. Built lazily and cleared with the held-token caches.
+    mutable std::map<SatelliteId, ClasAtmosRowIndex> clas_atmos_row_index_;
+    mutable bool clas_atmos_row_index_valid_ = false;
 };
 
 /**
