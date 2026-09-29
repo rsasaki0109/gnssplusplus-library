@@ -38,18 +38,24 @@ struct PositionSolution {
     GNSSTime time;
     SolutionStatus status = SolutionStatus::NONE;
     
+    // Eigen vectors/matrices do not value-initialize their coefficients.
+    // Keep an absent position, velocity, or covariance visibly invalid (NaN)
+    // so consumers can select a documented fallback instead of accidentally
+    // treating stack garbage as a value.  A solution whose producer never
+    // assigned these fields (e.g. a failed SPP epoch) stays non-finite.
+
     // Position
-    Vector3d position_ecef;         ///< Position in ECEF coordinates
+    Vector3d position_ecef =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());  ///< Position in ECEF coordinates
     GeodeticCoord position_geodetic; ///< Position in geodetic coordinates
-    // Eigen matrices do not value-initialize their coefficients.  Keep an
-    // absent covariance visibly invalid so consumers can select a documented
-    // fallback instead of accidentally treating stack garbage as R.
     Matrix3d position_covariance =
         Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
     
-    // Velocity (if available)
-    Vector3d velocity_ecef;         ///< Velocity in ECEF coordinates
-    Vector3d velocity_ned;          ///< Velocity in NED coordinates
+    // Velocity (valid only when has_velocity is true)
+    Vector3d velocity_ecef =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());  ///< Velocity in ECEF coordinates
+    Vector3d velocity_ned =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());  ///< Velocity in NED coordinates
     Matrix3d velocity_covariance =
         Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
     bool has_velocity = false;

@@ -66,6 +66,13 @@ constexpr double kRadiansToDegrees = 180.0 / kPi;
 constexpr std::size_t kClockGroups = 5;
 constexpr std::size_t kStateStride = 12;
 
+// Norm of a native solution vector, or NaN when any coefficient is
+// non-finite (e.g. a failed SPP epoch that never assigned a position).
+double finiteNormOrNaN(const libgnss::Vector3d& vector) {
+    return vector.allFinite() ? vector.norm()
+                              : std::numeric_limits<double>::quiet_NaN();
+}
+
 struct Options {
     std::string obs_path;
     std::string android_raw_path;
@@ -1363,7 +1370,8 @@ Problem buildProblem(const Options& options) {
                 native_spp.processEpoch(spp_epoch, nav_data);
             problem.native_spp_last_satellites = spp_solution.num_satellites;
             problem.native_spp_last_iterations = spp_solution.iterations;
-            problem.native_spp_last_position_norm_m = spp_solution.position_ecef.norm();
+            problem.native_spp_last_position_norm_m =
+                finiteNormOrNaN(spp_solution.position_ecef);
             problem.native_spp_last_status = static_cast<int>(spp_solution.status);
             problem.native_spp_last_gdop = spp_solution.gdop;
             problem.native_spp_last_residual_rms_m = spp_solution.residual_rms;
@@ -1384,7 +1392,8 @@ Problem buildProblem(const Options& options) {
                 spp_solution = native_spp.processEpoch(spp_epoch, nav_data);
                 problem.native_spp_last_satellites = spp_solution.num_satellites;
                 problem.native_spp_last_iterations = spp_solution.iterations;
-                problem.native_spp_last_position_norm_m = spp_solution.position_ecef.norm();
+                problem.native_spp_last_position_norm_m =
+                    finiteNormOrNaN(spp_solution.position_ecef);
                 problem.native_spp_last_status = static_cast<int>(spp_solution.status);
                 problem.native_spp_last_gdop = spp_solution.gdop;
                 problem.native_spp_last_residual_rms_m = spp_solution.residual_rms;
@@ -1418,7 +1427,7 @@ Problem buildProblem(const Options& options) {
                     problem.native_spp_first_failure_satellites =
                         spp_solution.num_satellites;
                     problem.native_spp_first_failure_position_norm_m =
-                        spp_solution.position_ecef.norm();
+                        finiteNormOrNaN(spp_solution.position_ecef);
                     problem.native_spp_first_failure_gdop = spp_solution.gdop;
                     problem.native_spp_first_failure_residual_rms_m =
                         spp_solution.residual_rms;
@@ -2084,8 +2093,9 @@ bool writeSummaryJson(const std::string& path,
                << problem.native_spp_last_satellites << ",\n"
                << "  \"native_spp_last_iterations\": "
                << problem.native_spp_last_iterations << ",\n"
-               << "  \"native_spp_last_position_norm_m\": "
-               << problem.native_spp_last_position_norm_m << ",\n"
+               << "  \"native_spp_last_position_norm_m\": ";
+        writeJsonDoubleOrNull(output, problem.native_spp_last_position_norm_m);
+        output << ",\n"
                << "  \"native_spp_last_status\": "
                << problem.native_spp_last_status << ",\n"
                << "  \"native_spp_last_gdop\": " << problem.native_spp_last_gdop << ",\n"
@@ -2101,8 +2111,10 @@ bool writeSummaryJson(const std::string& path,
                << problem.native_spp_first_failure_status << ",\n"
                << "  \"native_spp_first_failure_satellites\": "
                << problem.native_spp_first_failure_satellites << ",\n"
-               << "  \"native_spp_first_failure_position_norm_m\": "
-               << problem.native_spp_first_failure_position_norm_m << ",\n"
+               << "  \"native_spp_first_failure_position_norm_m\": ";
+        writeJsonDoubleOrNull(output,
+                              problem.native_spp_first_failure_position_norm_m);
+        output << ",\n"
                << "  \"native_spp_first_failure_gdop\": "
                << problem.native_spp_first_failure_gdop << ",\n"
                << "  \"native_spp_first_failure_residual_rms_m\": "

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/core/types.hpp>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <limits>
@@ -91,6 +92,26 @@ TEST_F(TypesTest, PropagatedSolutionIsValidWithoutCurrentSatellitesButNeverFixed
     solution.position_ecef.x() =
         std::numeric_limits<double>::quiet_NaN();
     EXPECT_FALSE(solution.isValid());
+}
+
+TEST_F(TypesTest, DefaultPositionSolutionVectorsAreVisiblyInvalid) {
+    // Eigen does not value-initialize; an unassigned position/velocity must be
+    // NaN (never stack garbage) so failed solutions are deterministic and
+    // cannot masquerade as finite coordinates.
+    const PositionSolution solution;
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_TRUE(std::isnan(solution.position_ecef(i)));
+        EXPECT_TRUE(std::isnan(solution.velocity_ecef(i)));
+        EXPECT_TRUE(std::isnan(solution.velocity_ned(i)));
+    }
+    EXPECT_FALSE(solution.has_velocity);
+    EXPECT_FALSE(solution.isValid());
+
+    PositionSolution propagated;
+    propagated.status = SolutionStatus::PROPAGATED;
+    EXPECT_FALSE(propagated.isValid());
+    propagated.position_ecef = Vector3d(1.0, 2.0, 3.0);
+    EXPECT_TRUE(propagated.isValid());
 }
 
 TEST_F(TypesTest, PositionSolutionCovariancesDefaultToInvalid) {
