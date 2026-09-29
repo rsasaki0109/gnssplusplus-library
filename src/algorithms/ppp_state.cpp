@@ -660,7 +660,6 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
     const int filter_iterations = filterIterationCount(
         madoca_per_frequency_update,
-        require_coherent_ssr_,
         ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode,
         precise_products_loaded_,
         ppp_config_.filter_iterations);

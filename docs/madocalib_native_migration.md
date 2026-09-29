@@ -633,6 +633,20 @@ complete matrix and append schema, metric, and exact-command artifact links to
 the GitHub job summary.  Default CMake builds retain
 `MADOCALIB_PARITY_LINK=OFF`.
 
+#### Kinematic ionosphere-free: one measurement update per epoch (2026-09-30)
+
+MADOCALIB `pppos()` (`ppp.c:1359-1381`) restarts every residual-screening
+pass from `rtk->x`/`rtk->P` and commits exactly one measurement update per
+epoch.  Native `--kinematic` MADOCA without per-frequency AR (the bridge's
+default `ppp` profile: `sample.conf`, `ppp-kine`, `dual-freq`) still re-applied
+the same epoch's update up to eight times at the SPP-seeded prior geometry and
+settled metres off.  It now commits one update, like the per-frequency path
+and the other kinematic PPP lanes.  Static, `--low-dynamics` and per-frequency
+AR outputs are byte-identical, so the release baseline (native `ppp` is
+`--static`) is unchanged.  Native kinematic IF vs the bridge `ppp` profile
+(1 h / 6 h, `delta RMS 3D`): MIZU 5.326 -> 0.505 m / 8.032 -> 0.383 m,
+ALIC 2.268 -> 0.392 m / 4.971 -> 0.225 m.
+
 ### M6 -- Complete the migration
 
 - Promote native behavior only after M2--M5 pass with an explicit opt-out for
