@@ -215,6 +215,31 @@ public:
                              double sample_step_seconds = 1.0);
 
     /**
+     * @brief RTCM SSR ingestion conventions.
+     *
+     * Legacy keeps the historical conversion used by existing callers.
+     * GalileoHasIdd applies the RTCM 10403.3 conventions needed for Galileo
+     * HAS corrections delivered over the HAS Internet Data Distribution:
+     * - every sample carries the SSR IODE so PPP evaluates the broadcast
+     *   ephemeris the correction refers to;
+     * - each orbit/clock update is held (with its rates / clock polynomial)
+     *   until the next update of that satellite, at most kHasIddMaxHoldSeconds;
+     * - code biases are held per satellite independently of their (static)
+     *   message epoch, mapped from RTCM SSR signal IDs to libgnss++ signals and
+     *   converted to the internal subtract-from-pseudorange sign (RTCM biases
+     *   are added to the observation).
+     * The caller is expected to restrict Galileo to I/NAV ephemerides
+     * (NavigationData::setGalileoEphemerisSource).
+     */
+    enum class RTCMSSRProfile { Legacy, GalileoHasIdd };
+    static constexpr double kHasIddMaxHoldSeconds = 90.0;
+
+    bool loadRTCMSSRProducts(const std::string& rtcm_file,
+                             const NavigationData& nav,
+                             double sample_step_seconds,
+                             RTCMSSRProfile profile);
+
+    /**
      * @brief Interpolate a loaded SSR correction for inspection/debugging.
      */
     bool interpolateLoadedSSRCorrection(const SatelliteId& sat,
@@ -279,6 +304,7 @@ public:
      * @brief Check whether any SSR products are loaded.
      */
     bool hasLoadedSSRProducts() const { return ssr_products_loaded_; }
+    const SSRProducts& loadedSSRProducts() const { return ssr_products_; }
     bool hasLoadedIONEXProducts() const { return ionex_products_loaded_; }
     bool hasLoadedDCBProducts() const { return dcb_products_loaded_; }
     size_t getLoadedIONEXMapCount() const { return ionex_products_.tec_maps.size(); }

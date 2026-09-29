@@ -111,12 +111,21 @@ namespace {
 // Galileo orbit gap (the toe rule made no difference), whose root cause is the
 // IODE-match interacting with the I/NAV filter (separate, unsolved, ~5 cm LOS
 // impact). Kept as an opt-in for when the estimator layer is addressed.
+//
+// Separately, NavigationData::setGalileoEphemerisSource(INavOnly) applies only
+// the data-source filter (no toe rule). It is set by SSR paths whose clock
+// corrections reference the I/NAV clock (Galileo HAS via RTCM SSR), where the
+// SSR IODnav already pins the record in time.
+constexpr int kGalInavClockBit = 1 << 9;
+
 inline bool galileoSkip(const SatelliteId& sat, const Ephemeris& eph,
-                        const GNSSTime& time) {
-    if (!pppEnvOverrides().gal_inav || sat.system != GNSSSystem::Galileo) {
+                        const GNSSTime& time, bool inav_only) {
+    if (sat.system != GNSSSystem::Galileo) {
         return false;
     }
-    constexpr int kGalInavClockBit = 1 << 9;
+    if (!pppEnvOverrides().gal_inav) {
+        return inav_only && !(eph.data_source_code & kGalInavClockBit);
+    }
     if (!(eph.data_source_code & kGalInavClockBit)) {
         return true;  // not I/NAV
     }
@@ -153,7 +162,8 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat, const GNSS
     double min_age = 1e9;
 
     for (const auto& eph : it->second) {
-        if (galileoSkip(sat, eph, time)) {
+        if (galileoSkip(sat, eph, time, galileo_ephemeris_source_ ==
+                                          GalileoEphemerisSource::INavOnly)) {
             continue;
         }
         if (eph.isValid(time)) {
@@ -186,7 +196,8 @@ const Ephemeris* NavigationData::getEphemeris(const SatelliteId& sat,
     const Ephemeris* best_match = nullptr;
     double min_age = 1e9;
     for (const auto& eph : it->second) {
-        if (galileoSkip(sat, eph, time)) {
+        if (galileoSkip(sat, eph, time, galileo_ephemeris_source_ ==
+                                          GalileoEphemerisSource::INavOnly)) {
             continue;
         }
         if (!ephemerisMatchesSsrIode(sat, eph, desired_iode)) {
@@ -220,7 +231,6 @@ bool NavigationData::hasMadocaGalileoEphemeris(const SatelliteId& sat,
     if (it == ephemeris_data.end()) {
         return false;
     }
-    constexpr int kGalInavClockBit = 1 << 9;
     for (const auto& eph : it->second) {
         if (desired_iode >= 0 &&
             !ephemerisMatchesSsrIode(sat, eph, desired_iode)) {
@@ -352,6 +362,37 @@ bool NavigationData::hasEphemeris(const SatelliteId& sat, const GNSSTime& time) 
 }
 
 NavigationData::NavigationData() = default;
+
+void NavigationData::setGalileoEphemerisSource(GalileoEphemerisSource source) {
+    if (source == galileo_ephemeris_source_) {
+        return;
+    }
+    galileo_ephemeris_source_ = source;
+    satellite_state_cache_.clear();
+    ++revision_;
+}
+
+bool NavigationData::addEphemerisIfNew(const Ephemeris& eph) {
+    const auto it = ephemeris_data.find(eph.satellite);
+    if (it != ephemeris_data.end()) {
+        // Galileo I/NAV and F/NAV share IODnav but differ in clock reference
+        // (data-source bits 9 / 8); the remaining source bits vary between
+        // RINEX writers for the same broadcast record.
+        constexpr int kGalClockSourceMask = (1 << 8) | (1 << 9);
+        const bool galileo = eph.satellite.system == GNSSSystem::Galileo;
+        for (const auto& existing : it->second) {
+            if (existing.iode == eph.iode &&
+                std::abs(existing.toe - eph.toe) < 1e-3 &&
+                std::abs(existing.toc - eph.toc) < 1e-3 &&
+                (!galileo || (existing.data_source_code & kGalClockSourceMask) ==
+                                 (eph.data_source_code & kGalClockSourceMask))) {
+                return false;
+            }
+        }
+    }
+    addEphemeris(eph);
+    return true;
+}
 
 void NavigationData::clear() {
     ephemeris_data.clear();

@@ -241,10 +241,33 @@ public:
      * clear(), or otherwise avoid retaining dependent results.
      */
     std::uint64_t getRevision() const { return revision_; }
+
+    /**
+     * @brief Which Galileo broadcast ephemerides getEphemeris() may select.
+     *
+     * Galileo broadcasts I/NAV (clock referenced to E1/E5b) and F/NAV (E1/E5a)
+     * records with the same IODnav. SSR services that reference the I/NAV
+     * clock (Galileo HAS) must never be paired with an F/NAV record.
+     * Any (default) keeps the historical selection; INavOnly skips records
+     * whose data-source word lacks the I/NAV clock bit (bit 9).
+     */
+    enum class GalileoEphemerisSource { Any, INavOnly };
+    void setGalileoEphemerisSource(GalileoEphemerisSource source);
+    GalileoEphemerisSource galileoEphemerisSource() const { return galileo_ephemeris_source_; }
+
     /**
      * @brief Add ephemeris data
      */
     void addEphemeris(const Ephemeris& eph);
+
+    /**
+     * @brief Add an ephemeris unless an identical broadcast record is present.
+     *
+     * Two records are the same broadcast when satellite, IODE, toe, toc and
+     * (for Galileo) the I/NAV vs F/NAV clock source match. Returns true when added.
+     * Useful when merging ephemerides decoded from a stream that repeats them.
+     */
+    bool addEphemerisIfNew(const Ephemeris& eph);
     
     /**
      * @brief Get best ephemeris for satellite at given time
@@ -372,6 +395,7 @@ private:
     mutable std::map<SatelliteStateCacheKey, SatelliteStateCacheValue>
         satellite_state_cache_;
     std::uint64_t revision_ = 0;
+    GalileoEphemerisSource galileo_ephemeris_source_ = GalileoEphemerisSource::Any;
 };
 
 /**

@@ -244,6 +244,36 @@ std::string RTCMReader::lastError() const {
     return ntrip_client_ ? ntrip_client_->getLastError() : std::string();
 }
 
+size_t mergeRTCMEphemerides(const std::string& source, NavigationData& nav) {
+    RTCMReader reader;
+    if (!reader.open(source)) {
+        return 0;
+    }
+    RTCMProcessor processor;
+    RTCMMessage message;
+    size_t added = 0;
+    while (reader.readMessage(message)) {
+        if (message.type != RTCMMessageType::RTCM_1019 &&
+            message.type != RTCMMessageType::RTCM_1045 &&
+            message.type != RTCMMessageType::RTCM_1046) {
+            continue;
+        }
+        NavigationData decoded;
+        if (!processor.decodeNavigationData(message, decoded)) {
+            continue;
+        }
+        for (const auto& [satellite, ephemerides] : decoded.ephemeris_data) {
+            (void)satellite;
+            for (const auto& eph : ephemerides) {
+                if (nav.addEphemerisIfNew(eph)) {
+                    ++added;
+                }
+            }
+        }
+    }
+    return added;
+}
+
 
 namespace rtcm_utils {
 
@@ -281,6 +311,8 @@ std::string getMessageTypeName(RTCMMessageType type) {
         case RTCMMessageType::RTCM_1019: return "GPS Ephemeris";
         case RTCMMessageType::RTCM_1020: return "GLONASS Ephemeris";
         case RTCMMessageType::RTCM_1033: return "Receiver And Antenna Descriptor";
+        case RTCMMessageType::RTCM_1045: return "Galileo F/NAV Ephemeris";
+        case RTCMMessageType::RTCM_1046: return "Galileo I/NAV Ephemeris";
         case RTCMMessageType::RTCM_1057: return "GPS SSR Orbit Correction";
         case RTCMMessageType::RTCM_1058: return "GPS SSR Clock Correction";
         case RTCMMessageType::RTCM_1059: return "GPS SSR Code Bias";

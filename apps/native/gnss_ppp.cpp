@@ -17,6 +17,7 @@
 #include <libgnss++/external/madocalib_bridge.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/io/rtcm.hpp>
 
 #include "cli_toml_config.hpp"
 
@@ -33,6 +34,7 @@ struct Options {
     std::string clk_path;
     std::string ssr_path;
     std::string ssr_rtcm_path;
+    std::string ssr_rtcm_profile = "legacy";
     std::vector<std::string> madoca_l6_paths;
     std::vector<std::string> madoca_l6d_paths;
     std::vector<std::string> madoca_l6d_shadow_paths;
@@ -179,6 +181,11 @@ void printUsage(const char* program_name) {
         << "  --ssr <corrections.csv>  Simple SSR orbit/clock corrections CSV\n"
         << "  --ssr-rtcm <file|ntrip://...|serial://...|tcp://...>\n"
         << "                          RTCM SSR source converted/read for PPP use\n"
+        << "  --ssr-rtcm-profile <legacy|has-idd>\n"
+        << "                          RTCM SSR conventions (default: legacy). has-idd = Galileo HAS\n"
+        << "                          Internet Data Distribution: IODE-matched broadcast orbits,\n"
+        << "                          Galileo I/NAV only, held RTCM-signal-ID code biases, and\n"
+        << "                          GPS/Galileo ephemerides merged from the SSR stream\n"
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
         << "  --madoca-l6d <file>      Native MADOCA L6D STEC input (repeatable);\n"
@@ -363,6 +370,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_path = argv[++i];
         } else if (arg == "--ssr-rtcm" && i + 1 < argc) {
             options.ssr_rtcm_path = argv[++i];
+        } else if (arg == "--ssr-rtcm-profile" && i + 1 < argc) {
+            options.ssr_rtcm_profile = argv[++i];
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-l6d" && i + 1 < argc) {
@@ -548,6 +557,12 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (!options.ssr_rtcm_path.empty() && options.nav_path.empty()) {
         argumentError("--ssr-rtcm requires --nav", argv[0]);
+    }
+    if (options.ssr_rtcm_profile != "legacy" && options.ssr_rtcm_profile != "has-idd") {
+        argumentError("--ssr-rtcm-profile must be one of: legacy, has-idd", argv[0]);
+    }
+    if (options.ssr_rtcm_profile != "legacy" && options.ssr_rtcm_path.empty()) {
+        argumentError("--ssr-rtcm-profile requires --ssr-rtcm", argv[0]);
     }
     if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
         argumentError("--madoca-l6 requires --nav (broadcast ephemeris)", argv[0]);
@@ -1336,9 +1351,24 @@ int main(int argc, char* argv[]) {
                              .count()
                       << " s" << std::endl;
         }
+        const bool has_idd_profile = options.ssr_rtcm_profile == "has-idd";
+        if (has_idd_profile) {
+            // HAS corrections reference the I/NAV clock and the exact IODE;
+            // the stream carries the ephemerides it refers to.
+            const size_t merged_ephemerides =
+                libgnss::io::mergeRTCMEphemerides(options.ssr_rtcm_path, nav_data);
+            nav_data.setGalileoEphemerisSource(
+                libgnss::NavigationData::GalileoEphemerisSource::INavOnly);
+            if (!options.quiet) {
+                std::cerr << "[gnss_ppp] has-idd: merged " << merged_ephemerides
+                          << " broadcast ephemerides from the SSR stream\n";
+            }
+        }
         if (!options.ssr_rtcm_path.empty() &&
             !processor.loadRTCMSSRProducts(
-                options.ssr_rtcm_path, nav_data, options.ssr_step_seconds)) {
+                options.ssr_rtcm_path, nav_data, options.ssr_step_seconds,
+                has_idd_profile ? libgnss::PPPProcessor::RTCMSSRProfile::GalileoHasIdd
+                                : libgnss::PPPProcessor::RTCMSSRProfile::Legacy)) {
             std::cerr << "Error: failed to load RTCM SSR corrections: "
                       << options.ssr_rtcm_path << "\n";
             return 1;

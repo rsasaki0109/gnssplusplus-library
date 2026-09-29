@@ -737,12 +737,15 @@ Ephemeris makeBroadcastGpsEphemeris(uint8_t prn) {
     return eph;
 }
 
-std::vector<uint8_t> buildGps1060CombinedFrame(uint8_t prn) {
+std::vector<uint8_t> buildGps1060CombinedFrame(uint8_t prn,
+                                               uint32_t tow = 345600,
+                                               uint8_t iode = 77,
+                                               int32_t clock_c0_units = 1200) {
     constexpr int total_bits = 68 + 205;
     std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
     int bit = 0;
     setUnsignedBits(payload, bit, 12, 1060); bit += 12;
-    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 20, tow); bit += 20;
     setUnsignedBits(payload, bit, 4, 2); bit += 4;
     setUnsignedBits(payload, bit, 1, 0); bit += 1;
     setUnsignedBits(payload, bit, 1, 1); bit += 1;
@@ -751,14 +754,14 @@ std::vector<uint8_t> buildGps1060CombinedFrame(uint8_t prn) {
     setUnsignedBits(payload, bit, 4, 3); bit += 4;
     setUnsignedBits(payload, bit, 6, 1); bit += 6;
     setUnsignedBits(payload, bit, 6, prn); bit += 6;
-    setUnsignedBits(payload, bit, 8, 77); bit += 8;
+    setUnsignedBits(payload, bit, 8, iode); bit += 8;
     setSignedBits(payload, bit, 22, 800); bit += 22;
     setSignedBits(payload, bit, 20, -100); bit += 20;
     setSignedBits(payload, bit, 20, 50); bit += 20;
     setSignedBits(payload, bit, 21, 0); bit += 21;
     setSignedBits(payload, bit, 19, 0); bit += 19;
     setSignedBits(payload, bit, 19, 0); bit += 19;
-    setSignedBits(payload, bit, 22, 1200); bit += 22;
+    setSignedBits(payload, bit, 22, clock_c0_units); bit += 22;
     setSignedBits(payload, bit, 21, 0); bit += 21;
     setSignedBits(payload, bit, 27, 0); bit += 27;
     return buildRtcmFrame(payload);
@@ -783,12 +786,13 @@ std::vector<uint8_t> buildGps1062HighRateClockFrame(uint8_t prn, int32_t high_ra
 
 std::vector<uint8_t> buildGps1059CodeBiasFrame(uint8_t prn,
                                                uint8_t signal_id,
-                                               int32_t bias_centimeters) {
+                                               int32_t bias_centimeters,
+                                               uint32_t tow = 345600) {
     constexpr int total_bits = 67 + 6 + 5 + 19;
     std::vector<uint8_t> payload((total_bits + 7) / 8U, 0);
     int bit = 0;
     setUnsignedBits(payload, bit, 12, 1059); bit += 12;
-    setUnsignedBits(payload, bit, 20, 345600); bit += 20;
+    setUnsignedBits(payload, bit, 20, tow); bit += 20;
     setUnsignedBits(payload, bit, 4, 2); bit += 4;
     setUnsignedBits(payload, bit, 1, 0); bit += 1;
     setUnsignedBits(payload, bit, 4, 7); bit += 4;
@@ -2483,6 +2487,96 @@ TEST(PPPTest, ProcessorLoadsRtcmSsrCodeBiasFromFile) {
     EXPECT_NEAR(code_bias_m.at(2U), -0.12, 1e-9);
     EXPECT_DOUBLE_EQ(ura_sigma_m, 0.0);
 
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, ProcessorHasIddProfileHoldsIodeTaggedUpdatesAndRtcmCodeBiases) {
+    const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_has_idd_test.rtcm3");
+    std::filesystem::remove(rtcm_path);
+
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+
+    // HAS IDD code-bias messages carry a stale epoch; RTCM SSR signal id 0 is
+    // GPS L1 C/A and must be remapped to the libgnss++ bias key.
+    std::vector<uint8_t> frames = buildGps1059CodeBiasFrame(1, 0, -12, 300000);
+    const auto first = buildGps1060CombinedFrame(1, 345600, 77, 1200);   // 0.12 m
+    const auto second = buildGps1060CombinedFrame(1, 345610, 78, 2400);  // 0.24 m, new IODE
+    frames.insert(frames.end(), first.begin(), first.end());
+    frames.insert(frames.end(), second.begin(), second.end());
+    writeBinaryFile(rtcm_path, frames);
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::GalileoHasIdd));
+
+    const SatelliteId sat(GNSSSystem::GPS, 1);
+    Vector3d orbit = Vector3d::Zero();
+    double clock_m = 0.0;
+    std::map<uint8_t, double> code_bias_m;
+    int iode = -1;
+    const auto query = [&](const PPPProcessor& source, double tow) {
+        code_bias_m.clear();
+        return source.loadedSSRProducts().interpolateCorrection(
+            sat, GNSSTime(eph.toe.week, tow), orbit, clock_m, nullptr, &code_bias_m,
+            nullptr, nullptr, nullptr, nullptr, nullptr, 0, &iode);
+    };
+    // Held (not interpolated toward the next update) with the first IODE.
+    ASSERT_TRUE(query(processor, 345609.0));
+    EXPECT_NEAR(clock_m, 0.12, 1e-9);
+    EXPECT_EQ(iode, 77);
+    // RTCM bias -0.12 m (added to the pseudorange) on L1 C/A -> internal key 2
+    // in the subtract-from-pseudorange convention: +0.12 m.
+    ASSERT_EQ(code_bias_m.size(), 1U);
+    ASSERT_EQ(code_bias_m.count(2U), 1U);
+    EXPECT_NEAR(code_bias_m.at(2U), 0.12, 1e-9);
+    ASSERT_TRUE(query(processor, 345610.0));
+    EXPECT_NEAR(clock_m, 0.24, 1e-9);
+    EXPECT_EQ(iode, 78);
+    // The last update is held for up to kHasIddMaxHoldSeconds.
+    ASSERT_TRUE(query(processor, 345699.0));
+    EXPECT_NEAR(clock_m, 0.24, 1e-9);
+    EXPECT_EQ(iode, 78);
+
+    // The legacy profile keeps the historical conversion (no IODE tag).
+    PPPProcessor legacy;
+    ASSERT_TRUE(legacy.loadRTCMSSRProducts(rtcm_path.string(), nav_data, 1.0));
+    ASSERT_TRUE(query(legacy, 345600.0));
+    EXPECT_EQ(iode, -1);
+
+    std::filesystem::remove(rtcm_path);
+}
+
+TEST(PPPTest, HasIddCodeBiasMappingUsesRtcmSignalIdsAndDropsUnknownIds) {
+    const auto rtcm_path = tempFilePath("libgnss_ppp_ssr_rtcm_has_idd_bias_test.rtcm3");
+    std::filesystem::remove(rtcm_path);
+    NavigationData nav_data;
+    const Ephemeris eph = makeBroadcastGpsEphemeris(1);
+    nav_data.addEphemeris(eph);
+
+    std::vector<uint8_t> frames;
+    for (const auto& frame : {buildGps1059CodeBiasFrame(1, 10, 25, 300000),   // L2 P
+                              buildGps1060CombinedFrame(1, 345600, 77, 0),
+                              buildGps1059CodeBiasFrame(1, 17, 99, 300000),   // L1C (D): unmapped
+                              buildGps1060CombinedFrame(1, 345610, 77, 0)}) {
+        frames.insert(frames.end(), frame.begin(), frame.end());
+    }
+    writeBinaryFile(rtcm_path, frames);
+
+    PPPProcessor processor;
+    ASSERT_TRUE(processor.loadRTCMSSRProducts(
+        rtcm_path.string(), nav_data, 1.0, PPPProcessor::RTCMSSRProfile::GalileoHasIdd));
+    for (const double tow : {345605.0, 345615.0}) {
+        Vector3d orbit = Vector3d::Zero();
+        double clock_m = 0.0;
+        std::map<uint8_t, double> code_bias_m;
+        ASSERT_TRUE(processor.interpolateLoadedSSRCorrection(
+            SatelliteId(GNSSSystem::GPS, 1), GNSSTime(eph.toe.week, tow), orbit, clock_m,
+            nullptr, &code_bias_m));
+        ASSERT_EQ(code_bias_m.size(), 1U) << tow;
+        EXPECT_NEAR(code_bias_m.at(9U), -0.25, 1e-9) << tow;  // GPS_L2P key
+    }
     std::filesystem::remove(rtcm_path);
 }
 

@@ -48,9 +48,13 @@ constexpr double kPow2Neg29 = 1.86264514923095703125e-09;
 constexpr double kPow2Neg30 = 9.31322574615478515625e-10;
 constexpr double kPow2Neg31 = 4.65661287307739257812e-10;
 constexpr double kPow2Neg33 = 1.16415321826934814453e-10;
+constexpr double kPow2Neg32 = 2.32830643653869628906e-10;
+constexpr double kPow2Neg34 = 5.82076609134674072266e-11;
 constexpr double kPow2Neg40 = 9.09494701772928237915e-13;
 constexpr double kPow2Neg43 = 1.13686837721616029739e-13;
+constexpr double kPow2Neg46 = 1.42108547152020037174e-14;
 constexpr double kPow2Neg55 = 2.77555756156289135106e-17;
+constexpr double kPow2Neg59 = 1.73472347597680709441e-18;
 constexpr uint16_t kMinimumExpandedGpsWeek = 1560;
 constexpr double kSecondsPerDay = 86400.0;
 constexpr double kHalfDaySeconds = 43200.0;
@@ -1128,6 +1132,23 @@ inline uint8_t uraIndexFromMeters(double ura_meters) {
 
 inline double uraMetersFromIndex(uint8_t ura_index) {
     return (ura_index < 15U) ? kUraMetersTable[ura_index] : 32767.0;
+}
+
+// Galileo SISA index to metres (Galileo OS SIS ICD 5.1.12); 255 = NAPA.
+inline double galileoSisaMeters(uint8_t sisa) {
+    if (sisa <= 49U) {
+        return 0.01 * static_cast<double>(sisa);
+    }
+    if (sisa <= 74U) {
+        return 0.5 + 0.02 * static_cast<double>(sisa - 50U);
+    }
+    if (sisa <= 99U) {
+        return 1.0 + 0.04 * static_cast<double>(sisa - 75U);
+    }
+    if (sisa <= 125U) {
+        return 2.0 + 0.16 * static_cast<double>(sisa - 100U);
+    }
+    return -1.0;
 }
 
 inline double uraMetersFromSsrIndex(uint8_t ura_index) {

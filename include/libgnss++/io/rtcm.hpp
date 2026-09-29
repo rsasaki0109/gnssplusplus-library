@@ -33,6 +33,8 @@ enum class RTCMMessageType : uint16_t {
     RTCM_1019 = 1019,  ///< GPS ephemeris
     RTCM_1020 = 1020,  ///< GLONASS ephemeris
     RTCM_1033 = 1033,  ///< Receiver and antenna descriptors
+    RTCM_1045 = 1045,  ///< Galileo F/NAV ephemeris
+    RTCM_1046 = 1046,  ///< Galileo I/NAV ephemeris
     RTCM_1057 = 1057,  ///< GPS SSR orbit correction
     RTCM_1058 = 1058,  ///< GPS SSR clock correction
     RTCM_1059 = 1059,  ///< GPS SSR code bias
@@ -314,6 +316,18 @@ private:
     bool readFromSerial(const std::string& source);
     bool readFromTcp(const std::string& source);
 };
+
+/**
+ * @brief Merge the GPS (1019) and Galileo (1045/1046) broadcast ephemerides
+ * carried in an RTCM source into @p nav, skipping records already present.
+ *
+ * SSR streams such as the Galileo HAS IDD interleave the ephemerides their
+ * corrections refer to; a RINEX navigation file converted from the same
+ * stream usually keeps only the last record per satellite. GLONASS 1020 is
+ * not merged because its time tag is resolved against the wall clock.
+ * @return number of ephemerides added
+ */
+size_t mergeRTCMEphemerides(const std::string& source, NavigationData& nav);
 
 /**
  * @brief RTCM utility functions

@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <libgnss++/core/signals.hpp>
 #include <libgnss++/io/rtcm.hpp>
 
 #include <chrono>
@@ -1819,6 +1820,187 @@ TEST_F(RTCMProcessorTest, DecodesGlonass1020FrameIntoNavigationData) {
     EXPECT_NEAR((decoded_vel - input_vel).norm(), 0.0, 0.01);
     EXPECT_NEAR(decoded_clk_bias, input_clk_bias, 2.0e-9);
     EXPECT_NEAR(decoded_clk_drift, input_clk_drift, 1.0e-12);
+}
+
+namespace {
+
+struct GalileoEphemerisRaw {
+    uint8_t prn = 11;
+    int gst_week = 1251;       // GPS week 2275 (2023-08-17)
+    int iodnav = 77;
+    int sisa = 107;            // 2.0 + 7 * 0.16 m
+    int64_t idot = -120;
+    int toc_min = 5880;        // 352800 s
+    int64_t af2 = 0;
+    int64_t af1 = -1234;
+    int64_t af0 = -123456789;
+    int64_t crs = -1500;
+    int64_t delta_n = 9000;
+    int64_t m0 = 1000000000;
+    int64_t cuc = -2000;
+    uint64_t e = 2000000;      // 2.3e-4
+    int64_t cus = 3000;
+    uint64_t sqrt_a = 2852062985ULL;  // ~5440.6 m^0.5
+    int toe_min = 5880;
+    int64_t cic = 40;
+    int64_t omega0 = -700000000;
+    int64_t cis = -30;
+    int64_t i0 = 660000000;
+    int64_t crc = 4000;
+    int64_t omega = 300000000;
+    int64_t omega_dot = -1200;
+    int64_t bgd_e5a = -5;
+    int64_t bgd_e5b = -7;
+};
+
+io::RTCMMessage buildGalileoEphemerisMessage(const GalileoEphemerisRaw& raw, bool inav) {
+    std::vector<uint8_t> payload(inav ? 63U : 62U, 0);
+    int bit = 0;
+    const auto u = [&](int len, uint64_t value) { setUnsignedBits(payload, bit, len, value); bit += len; };
+    const auto s = [&](int len, int64_t value) { setSignedBits(payload, bit, len, value); bit += len; };
+    u(12, inav ? 1046U : 1045U);
+    u(6, raw.prn);
+    u(12, static_cast<uint64_t>(raw.gst_week));
+    u(10, static_cast<uint64_t>(raw.iodnav));
+    u(8, static_cast<uint64_t>(raw.sisa));
+    s(14, raw.idot);
+    u(14, static_cast<uint64_t>(raw.toc_min));
+    s(6, raw.af2);
+    s(21, raw.af1);
+    s(31, raw.af0);
+    s(16, raw.crs);
+    s(16, raw.delta_n);
+    s(32, raw.m0);
+    s(16, raw.cuc);
+    u(32, raw.e);
+    s(16, raw.cus);
+    u(32, raw.sqrt_a);
+    u(14, static_cast<uint64_t>(raw.toe_min));
+    s(16, raw.cic);
+    s(32, raw.omega0);
+    s(16, raw.cis);
+    s(32, raw.i0);
+    s(16, raw.crc);
+    s(32, raw.omega);
+    s(24, raw.omega_dot);
+    s(10, raw.bgd_e5a);
+    if (inav) {
+        s(10, raw.bgd_e5b);
+        u(2, 0);  // E5b health
+        u(1, 0);
+        u(2, 1);  // E1-B health: out of service
+        u(1, 0);
+    } else {
+        u(2, 0);
+        u(1, 1);  // E5a data validity: working without guarantee
+    }
+    return io::RTCMMessage(inav ? io::RTCMMessageType::RTCM_1046 : io::RTCMMessageType::RTCM_1045,
+                           payload);
+}
+
+}  // namespace
+
+TEST_F(RTCMProcessorTest, DecodesGalileo1046InavEphemeris) {
+    const GalileoEphemerisRaw raw;
+    const auto frame = buildRtcmFrame(buildGalileoEphemerisMessage(raw, true));
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    ASSERT_EQ(decoded_messages.front().type, io::RTCMMessageType::RTCM_1046);
+
+    NavigationData nav_data;
+    ASSERT_TRUE(processor.decodeNavigationData(decoded_messages.front(), nav_data));
+    const SatelliteId sat(GNSSSystem::Galileo, raw.prn);
+    const auto records = nav_data.getEphemeris(sat);
+    ASSERT_EQ(records.size(), 1U);
+    const Ephemeris& eph = records.front();
+    constexpr double kPi = 3.14159265358979323846;
+    EXPECT_EQ(eph.iode, 77U);
+    EXPECT_EQ(eph.week, 2275U);
+    EXPECT_DOUBLE_EQ(eph.toe.tow, 352800.0);
+    EXPECT_EQ(eph.toe.week, 2275);
+    EXPECT_DOUBLE_EQ(eph.toc.tow, 352800.0);
+    EXPECT_DOUBLE_EQ(eph.toes, 352800.0);
+    EXPECT_NEAR(eph.sv_accuracy, 3.12, 1e-12);
+    EXPECT_DOUBLE_EQ(eph.af0, -123456789.0 * std::ldexp(1.0, -34));
+    EXPECT_DOUBLE_EQ(eph.af1, -1234.0 * std::ldexp(1.0, -46));
+    EXPECT_DOUBLE_EQ(eph.sqrt_a, 2852062985.0 * std::ldexp(1.0, -19));
+    EXPECT_DOUBLE_EQ(eph.e, 2000000.0 * std::ldexp(1.0, -33));
+    EXPECT_DOUBLE_EQ(eph.m0, 1000000000.0 * std::ldexp(1.0, -31) * kPi);
+    EXPECT_DOUBLE_EQ(eph.omega_dot, -1200.0 * std::ldexp(1.0, -43) * kPi);
+    EXPECT_DOUBLE_EQ(eph.tgd, -5.0 * std::ldexp(1.0, -32));
+    EXPECT_DOUBLE_EQ(eph.tgd_secondary, -7.0 * std::ldexp(1.0, -32));
+    EXPECT_EQ(eph.data_source_code, 513);
+    EXPECT_EQ(eph.health, 2U);  // E1-B OSHS=1 -> bit 1
+
+    Vector3d pos;
+    Vector3d vel;
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    ASSERT_TRUE(eph.calculateSatelliteState(eph.toe + 60.0, pos, vel, clock_bias, clock_drift));
+    EXPECT_NEAR(pos.norm(), 29.6e6, 0.2e6);
+}
+
+TEST_F(RTCMProcessorTest, DecodesGalileo1045FnavEphemeris) {
+    const GalileoEphemerisRaw raw;
+    const auto frame = buildRtcmFrame(buildGalileoEphemerisMessage(raw, false));
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    NavigationData nav_data;
+    ASSERT_TRUE(processor.decodeNavigationData(decoded_messages.front(), nav_data));
+    const auto records = nav_data.getEphemeris(SatelliteId(GNSSSystem::Galileo, raw.prn));
+    ASSERT_EQ(records.size(), 1U);
+    EXPECT_EQ(records.front().data_source_code, 258);
+    EXPECT_EQ(records.front().health, 8U);  // E5a DVS bit
+    EXPECT_DOUBLE_EQ(records.front().tgd_secondary, 0.0);
+}
+
+TEST(RTCMEphemerisMergeTest, MergesStreamEphemeridesOnceAndSelectsInav) {
+    const GalileoEphemerisRaw raw;
+    std::vector<uint8_t> stream;
+    for (const bool inav : {true, false, true}) {  // duplicate I/NAV record
+        const auto frame = buildRtcmFrame(buildGalileoEphemerisMessage(raw, inav));
+        stream.insert(stream.end(), frame.begin(), frame.end());
+    }
+    const auto path = std::filesystem::temp_directory_path() / "libgnss_test_rtcm_gal_eph.rtcm3";
+    {
+        std::ofstream output(path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(stream.data()),
+                     static_cast<std::streamsize>(stream.size()));
+    }
+
+    NavigationData nav;
+    EXPECT_EQ(io::mergeRTCMEphemerides(path.string(), nav), 2U);
+    EXPECT_EQ(io::mergeRTCMEphemerides(path.string(), nav), 0U);
+    const SatelliteId sat(GNSSSystem::Galileo, raw.prn);
+    ASSERT_EQ(nav.getEphemeris(sat).size(), 2U);
+
+    const GNSSTime query(2275, 352900.0);
+    nav.setGalileoEphemerisSource(NavigationData::GalileoEphemerisSource::INavOnly);
+    for (int pass = 0; pass < 2; ++pass) {
+        const Ephemeris* selected = pass == 0 ? nav.getEphemeris(sat, query)
+                                              : nav.getEphemeris(sat, query, 77);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->data_source_code, 513);
+    }
+    std::filesystem::remove(path);
+}
+
+TEST(RTCMSsrSignalIdTest, MapsRtcmSsrWireIdsToSignals) {
+    int rank = -1;
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::GPS, 0, &rank), SignalType::GPS_L1CA);
+    EXPECT_EQ(rank, 0);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::GPS, 8), SignalType::GPS_L2C);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::GPS, 10, &rank), SignalType::GPS_L2P);
+    EXPECT_EQ(rank, 1);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::GPS, 11, &rank), SignalType::GPS_L2P);
+    EXPECT_EQ(rank, 0);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::GPS, 15), SignalType::GPS_L5);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::Galileo, 2), SignalType::GAL_E1);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::Galileo, 6), SignalType::GAL_E5A);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::Galileo, 9), SignalType::GAL_E5B);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::Galileo, 16), SignalType::GAL_E6);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::Galileo, 12), SignalType::SIGNAL_TYPE_COUNT);
+    EXPECT_EQ(signalTypeFromRtcmSsrSignalId(GNSSSystem::BeiDou, 0), SignalType::SIGNAL_TYPE_COUNT);
 }
 
 TEST_F(RTCMProcessorTest, DecodesGps1060CombinedSsrCorrections) {
