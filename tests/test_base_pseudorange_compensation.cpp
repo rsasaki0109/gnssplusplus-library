@@ -366,6 +366,7 @@ TEST(BasePseudorangeCompensationTest, SourceHeaderFilterSelectsHDeclaredGpsL2WOv
     EXPECT_DOUBLE_EQ(selected.carrier_phase, 110000012.0);
     ASSERT_TRUE(reader.readObservationEpoch(missing));
     EXPECT_TRUE(missing.observations.empty());
+    reader.close();  // Windows cannot remove a file that is still open.
     std::filesystem::remove(path);
 }
 
@@ -391,6 +392,8 @@ TEST(BasePseudorangeCompensationTest, SourceHeaderFilterDoesNotFallbackWhenPrefe
     ASSERT_TRUE(source.readObservationEpoch(source_epoch));
     EXPECT_FALSE(old_epoch.observations.empty());
     EXPECT_TRUE(source_epoch.observations.empty());
+    legacy.close();  // Windows cannot remove a file that is still open.
+    source.close();
     std::filesystem::remove(path);
 }
 
