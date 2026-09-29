@@ -138,9 +138,21 @@ TEST(PPPClasSeedFde, MaskedAdmissionFailureCoastsWithTooFewSatellites) {
 }
 
 TEST(PPPFilterIterations, MadocaPerFrequencyCommitsOneUpdatePerEpoch) {
-    EXPECT_EQ(ppp_internal::filterIterationCount(true, false, 8), 1);
-    EXPECT_EQ(ppp_internal::filterIterationCount(false, true, 8), 3);
-    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, 8), 8);
+    EXPECT_EQ(ppp_internal::filterIterationCount(true, true, false, false, 8), 1);
+    EXPECT_EQ(ppp_internal::filterIterationCount(true, true, true, false, 8), 1);
+}
+
+TEST(PPPFilterIterations, KinematicMotionCommitsOneUpdatePerEpoch) {
+    // Broadcast / SSR (HAS, legacy RTCM, CLAS fallback) and precise products.
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, true, false, 8), 1);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, true, true, 8), 1);
+}
+
+TEST(PPPFilterIterations, StaticAndCoherentMadocaKeepPinnedCount) {
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, false, true, 8), 3);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, false, false, false, 8), 8);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, true, true, false, 8), 8);
+    EXPECT_EQ(ppp_internal::filterIterationCount(false, true, false, true, 8), 3);
 }
 
 TEST(PPPMadocaL6dConstraints, RemovesIndependentConstellationBiases) {
