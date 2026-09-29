@@ -1553,6 +1553,10 @@ FuseOptions parseArguments(int argc, char* argv[]) {
     std::string imu_grade = "tactical";
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
+        // MSVC counts every `else if` as one more nesting level and rejects
+        // chains deeper than 128 (C1061), so the option chain is split in
+        // two: the first half `continue`s once it has consumed `arg`.
+        bool matched = true;
         if (arg == "-h" || arg == "--help") {
             printUsage(argv[0]);
             std::exit(0);
@@ -1834,7 +1838,14 @@ FuseOptions parseArguments(int argc, char* argv[]) {
         } else if (arg == "--heading-recovery-cooldown-epochs") {
             options.fusion_config.heading_recovery_cooldown_epochs =
                 std::stoi(requireValue(arg, i, argc, argv));
-        } else if (arg == "--max-position-nis") {
+        } else {
+            matched = false;
+        }
+        if (matched) {
+            continue;
+        }
+
+        if (arg == "--max-position-nis") {
             options.fusion_config.max_position_update_nis_per_observation =
                 std::stod(requireValue(arg, i, argc, argv));
         } else if (arg == "--max-velocity-nis") {

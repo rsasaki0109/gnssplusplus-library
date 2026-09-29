@@ -27,8 +27,13 @@
 #include <stdexcept>
 #include <string>
 #include <tuple>
-#include <unistd.h>
 #include <vector>
+
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include "observable_measurement_helpers.hpp"
 #include "observable_pd_common.hpp"
@@ -1826,8 +1831,13 @@ bool writeAtomicText(const std::string& path, const std::string& content) {
         std::filesystem::create_directories(destination.parent_path(), error);
         if (error) return false;
     }
+#ifdef _WIN32
+    const auto process_id = ::_getpid();
+#else
+    const auto process_id = ::getpid();
+#endif
     const std::string temporary =
-        path + ".tmp." + std::to_string(static_cast<long long>(::getpid()));
+        path + ".tmp." + std::to_string(static_cast<long long>(process_id));
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output.is_open()) return false;

@@ -138,18 +138,10 @@ if(GTest_FOUND)
         test_iers_sub_daily_eop.cpp
     )
 
-    # test_rtk_legacy.cpp uses "#define private public" before including
-    # rtk.hpp. MSVC encodes member access in mangled names, so the test's
-    # references never link against the library's private symbols; the
-    # trick only works on Itanium-ABI compilers (GCC/Clang). That mangling
-    # is a property of the target ABI, not of which compiler emits it: Clang
-    # targeting the MSVC ABI (e.g. a Windows build/clang-ninja config, where
-    # CMAKE_CXX_COMPILER_ID is "Clang" and MSVC is therefore false here)
-    # mangles member access the same way real MSVC does and hits the exact
-    # same undefined-symbol link failure, so it must be excluded too.
-    if(NOT MSVC AND NOT (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang"))
-        target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
-    endif()
+    # test_rtk_legacy.cpp reaches RTKProcessor internals through the
+    # befriended RTKProcessorTestAccess (not "#define private public", which
+    # cannot link under the MSVC ABI), so it builds on every toolchain.
+    target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
 
     # GTSAM FGO backend parity tests (guarded at both CMake and #ifdef level:
     # the source itself is a no-op TU when GNSSPP_HAS_GTSAM isn't defined, but
