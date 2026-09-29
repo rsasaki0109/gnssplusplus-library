@@ -11,6 +11,7 @@ Git; source code and small deterministic fixtures belong in the repository.
 - `experiments/`: reproducible experiment drivers and their small example inputs.
   - `experiments/ppp_ar/`: PPP-AR policy sweeps and lane-level fixtures.
   - `experiments/ppc/`: PPC benchmark drivers, offline selectors, replays, and reports.
+  - `experiments/claslib/`: CLASLIB reference-solver demos (CLAS PPP accuracy GIF).
 - `generate_*.py`: figures, scorecards, reports, and machine-readable artifacts.
 - `run_*.py`: reproducible experiment and benchmark drivers.
 - `convert_*.py`: format conversion utilities.
