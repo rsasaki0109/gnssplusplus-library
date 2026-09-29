@@ -1,0 +1,159 @@
+# Galileo HAS float PPP from the HAS Internet Data Distribution (RTCM 3 SSR).
+# Not a README row; see docs/galileo_has.md.
+#
+# Inputs: the public HAS IDD sample of hirokawa/cssrlib-data, data/doy2023-229
+# (station OBE4, 2023-08-17 01:59-03:00 GPST). The cssrlib-data license is not
+# stated, so the files are not redistributed here: download OBE42023229c.obs,
+# OBE42023229c.nav and idd2023229c.rtc and pass the directory with
+# --has-data-root (or GNSSPP_HAS_DATA_ROOT).
+#
+# Reference coordinate: the cssrlib sample value (samples/test_ppprtcm.py).
+# cssrlib (hirokawa/cssrlib main, 2026-09) on the same hour, static float PPP
+# with igs20.atx: H 0.214 / 0.162 / 0.140 / 0.152 m and U -0.487 / -0.215 /
+# -0.100 / -0.300 m at 10 / 20 / 30 / 60 min, converging to H < 0.20 m after
+# 11.0 min and |U| < 0.40 m after 12.9 min (from 02:00:00).
+
+[lane]
+name = "has-idd-ppp"
+status = "ready"
+title = "Galileo HAS (IDD) float PPP, OBE4 static hour vs surveyed coordinate"
+readme_row = "(docs) Galileo HAS float PPP via IDD: static OBE4 hour"
+runtime_estimate = "~1 min"
+docs = "docs/galileo_has.md"
+
+[datasets.has]
+required = ["OBE42023229c.obs", "OBE42023229c.nav", "idd2023229c.rtc"]
+
+[tools.cssrlib_data]
+repository = "https://github.com/hirokawa/cssrlib-data"
+path = "data/doy2023-229"
+note = "License not stated upstream; download locally, do not commit."
+
+[[steps]]
+name = "gnss-ppp-has-idd-{mode}"
+foreach = [{ mode = "static" }, { mode = "kinematic" }]
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{has_root}/OBE42023229c.obs",
+  "--nav", "{has_root}/OBE42023229c.nav",
+  "--ssr-rtcm", "{has_root}/idd2023229c.rtc",
+  "--ssr-rtcm-profile", "has-idd",
+  "--{mode}",
+  "--out", "{work_dir}/has_idd_{mode}.pos",
+  "--summary-json", "{work_dir}/has_idd_{mode}_run.json",
+  "--quiet",
+]
+
+# The pre-HAS conversion of the same stream, for comparison (reported only).
+[[steps]]
+name = "gnss-ppp-legacy-static"
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{has_root}/OBE42023229c.obs",
+  "--nav", "{has_root}/OBE42023229c.nav",
+  "--ssr-rtcm", "{has_root}/idd2023229c.rtc",
+  "--static",
+  "--out", "{work_dir}/legacy_static.pos",
+  "--quiet",
+]
+
+[[steps]]
+name = "score"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "4186704.2262", "834903.7677", "4723664.9337",
+  "--run", "has_idd_static={work_dir}/has_idd_static.pos",
+  "--run", "has_idd_kinematic={work_dir}/has_idd_kinematic.pos",
+  "--run", "legacy_static={work_dir}/legacy_static.pos",
+  "--summary-json", "{work_dir}/summary.json",
+]
+
+# Gates (reproduced 2026-09-29, MSVC Release): static float PPP with HAS IDD
+# corrections is decimetre-level horizontally within minutes and under 0.40 m
+# vertically within half an hour.
+[[metrics]]
+name = "has-idd static H at 60 min (m)"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_static.checkpoints.60min.h_m"
+max = 0.20
+readme = "docs/galileo_has.md"
+
+[[metrics]]
+name = "has-idd static |U| at 60 min (m)"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_static.checkpoints.60min.abs_up_m"
+max = 0.40
+readme = "docs/galileo_has.md"
+
+[[metrics]]
+name = "has-idd static convergence H < 0.20 m (min)"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_static.convergence_h_below_0p20_min"
+max = 10.0
+readme = "docs/galileo_has.md"
+
+[[metrics]]
+name = "has-idd static convergence |U| < 0.40 m (min)"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_static.convergence_abs_up_below_0p40_min"
+max = 30.0
+readme = "docs/galileo_has.md"
+
+# docs/galileo_has.md table values; reported, not gated.
+[[metrics]]
+name = "table: has-idd static {field} at {t}"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_static.checkpoints.{t}.{field}"
+gate = false
+abs_tol = 0.03
+readme = "docs/galileo_has.md table"
+foreach = [
+  { t = "10min", field = "h_m", expected = 0.016 },
+  { t = "10min", field = "up_m", expected = -0.490 },
+  { t = "20min", field = "h_m", expected = 0.058 },
+  { t = "20min", field = "up_m", expected = -0.421 },
+  { t = "30min", field = "h_m", expected = 0.073 },
+  { t = "30min", field = "up_m", expected = -0.082 },
+  { t = "60min", field = "h_m", expected = 0.095 },
+  { t = "60min", field = "up_m", expected = -0.135 },
+]
+
+[[metrics]]
+name = "table: has-idd static {field} (min)"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_static.{field}"
+gate = false
+abs_tol = 1.5
+readme = "docs/galileo_has.md table"
+foreach = [
+  { field = "convergence_h_below_0p20_min", expected = 4.18 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 20.95 },
+]
+
+# Kinematic float PPP keeps a pre-existing metre-level offset (also with
+# broadcast-only and legacy SSR input); reported so a fix shows up as drift.
+[[metrics]]
+name = "table: has-idd kinematic {field} at 60min"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_kinematic.checkpoints.60min.{field}"
+gate = false
+abs_tol = 0.3
+readme = "docs/galileo_has.md known limitations"
+foreach = [
+  { field = "h_m", expected = 1.873 },
+  { field = "up_m", expected = -5.614 },
+]
+
+# The same stream through the legacy RTCM SSR conversion (no IODE match,
+# mixed I/NAV/F/NAV, code biases dropped by the signal-id mismatch).
+[[metrics]]
+name = "table: legacy static {field} at 60min"
+source = "{work_dir}/summary.json"
+path = "runs.legacy_static.checkpoints.60min.{field}"
+gate = false
+abs_tol = 0.03
+readme = "docs/galileo_has.md table"
+foreach = [
+  { field = "h_m", expected = 0.160 },
+  { field = "up_m", expected = 0.088 },
+]

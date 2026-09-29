@@ -39,9 +39,10 @@ DATASET_ENV = {
     "gsdc": "GNSSPP_GSDC_ROOT",
     "gsdc_truth": "GNSSPP_GSDC_TRUTH_ROOT",
     "ppc_goal_inputs": "GNSSPP_PPC_GOAL_INPUTS",
+    "has": "GNSSPP_HAS_DATA_ROOT",
 }
 # CLI option that sets each dataset root (default: --<name>-root).
-DATASET_OPTION = {"ppc_goal_inputs": "--ppc-goal-inputs"}
+DATASET_OPTION = {"ppc_goal_inputs": "--ppc-goal-inputs", "has": "--has-data-root"}
 # A dataset root that is set neither by option nor by environment variable
 # falls back to another dataset's root (GSDC ground truth usually ships inside
 # the GSDC tree itself).
@@ -533,6 +534,7 @@ DEFAULT_DATA_SUBDIRS = {
     "urbannav": Path("data") / "driving" / "Tokyo_Data",
     "gsdc": Path("data") / "gsdc2023" / "dataset_2023",
     "ppc_goal_inputs": Path("data") / "ppc_goal_inputs",
+    "has": Path("data") / "galileo_has" / "doy2023-229",
 }
 
 
@@ -650,6 +652,10 @@ def add_common_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--ppc-goal-inputs", dest="ppc_goal_inputs_root", type=Path, default=None,
                         help="Frozen PPC goal-matrix tier inputs for the ppc-goal lane "
                              "(default: $GNSSPP_PPC_GOAL_INPUTS or <data-root>/ppc_goal_inputs).")
+    parser.add_argument("--has-data-root", dest="has_root", type=Path, default=None,
+                        help="Galileo HAS IDD sample directory holding OBE42023229c.obs/.nav and "
+                             "idd2023229c.rtc (cssrlib-data data/doy2023-229; default: "
+                             "$GNSSPP_HAS_DATA_ROOT or <data-root>/galileo_has/doy2023-229).")
     parser.add_argument("--build-dir", type=Path, default=os.environ.get("GNSSPP_BUILD_DIR"),
                         help="CMake build directory holding apps/gnss_* binaries (default: $GNSSPP_BUILD_DIR or <repo>/build*).")
     parser.add_argument("--rtklib-bin", type=Path, default=None,

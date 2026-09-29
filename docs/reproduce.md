@@ -28,6 +28,7 @@ runner adds no scoring logic of its own.
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
 | Smartphone GSDC official submission | `gsdc-official` | ready | ~30 min per drive; full run ~12-18 h | **Subset verified (by design).** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 56625084 (`cbd1fde1...`), and the Kaggle score is readback-only. 6 of 40 final drives and 2 of 25 stage-0 drives were rerun, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
+| (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -41,14 +42,15 @@ Release build. Lanes that run in parallel slow each other down.
 | [GSDC 2023 `dataset_2023`](https://github.com/taroz/gsdc2023) (Kaggle Google Smartphone Decimeter Challenge 2023 train and test sets with CORS base RINEX and `brdc.nav`) | `gsdc-dev-routes`, `gsdc-official` | Kaggle GSDC 2023 data as repackaged by taroz/gsdc2023 (`dataset_2023.zip`, SHA-256 `bda30ab4...`) | `<gsdc-root>/train/<drive>/{brdc.nav,<BASE>_rnx2.obs,pixel5/{device_gnss.csv,device_imu.csv,ground_truth.csv}}`, or the zip itself; see [gsdc-dev-routes inputs](#gsdc-dev-routes-inputs-and-base-provenance). `gsdc-official` reads `<gsdc-root>/test/<drive>/{brdc.nav,<BASE>_rnx2.obs,<phone>/{device_gnss.csv,device_imu.csv}}` |
 | Kaggle GSDC 2023 train `ground_truth.csv` | `gsdc-official` (height maps) | Kaggle `smartphone-decimeter-2023` competition data (156 train files, SHA-256 pinned in the recipe) | `--gsdc-truth-root` holding `train/<course>/<phone>/ground_truth.csv` or flat `<course>__<phone>__ground_truth.csv` |
 | PPC goal-matrix frozen tier inputs | `ppc-goal` | Not published; the 26 files (~33 MB) exist only in the `output/` tree of the checkout that produced the README. See [ppc-goal inputs](#ppc-goal-frozen-inputs) | `<ppc-goal-inputs>/` in the historical `output/` layout (`tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos`, `gici_common/tokyo1.pos`, ...); SHA-256 pinned in `scripts/experiments/ppc/stage_ppc_goal_inputs.py` |
+| Galileo HAS IDD sample ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) `data/doy2023-229`) | `has-idd-ppp` | Download `OBE42023229c.obs`, `OBE42023229c.nav` and `idd2023229c.rtc` from that directory. The upstream license is not stated, so the files are not redistributed | `<has-data-root>/{OBE42023229c.obs,OBE42023229c.nav,idd2023229c.rtc}` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
 Dataset roots are resolved in this order:
 
-1. `--ppc-root` / `--urbannav-root` / `--gsdc-root` / `--gsdc-truth-root` / `--ppc-goal-inputs`
-2. `GNSSPP_PPC_DATASET_ROOT` / `GNSSPP_URBANNAV_ROOT` / `GNSSPP_GSDC_ROOT` / `GNSSPP_GSDC_TRUTH_ROOT` / `GNSSPP_PPC_GOAL_INPUTS`
-3. `--data-root <dir>` expands to `<dir>/PPC-Dataset`, `<dir>/driving/Tokyo_Data`, `<dir>/gsdc2023/dataset_2023` and `<dir>/ppc_goal_inputs`
-4. `data/PPC-Dataset`, `data/driving/Tokyo_Data`, `data/gsdc2023/dataset_2023` and `data/ppc_goal_inputs` inside the repository
+1. `--ppc-root` / `--urbannav-root` / `--gsdc-root` / `--gsdc-truth-root` / `--ppc-goal-inputs` / `--has-data-root`
+2. `GNSSPP_PPC_DATASET_ROOT` / `GNSSPP_URBANNAV_ROOT` / `GNSSPP_GSDC_ROOT` / `GNSSPP_GSDC_TRUTH_ROOT` / `GNSSPP_PPC_GOAL_INPUTS` / `GNSSPP_HAS_DATA_ROOT`
+3. `--data-root <dir>` expands to `<dir>/PPC-Dataset`, `<dir>/driving/Tokyo_Data`, `<dir>/gsdc2023/dataset_2023`, `<dir>/ppc_goal_inputs` and `<dir>/galileo_has/doy2023-229`
+4. `data/PPC-Dataset`, `data/driving/Tokyo_Data`, `data/gsdc2023/dataset_2023`, `data/ppc_goal_inputs` and `data/galileo_has/doy2023-229` inside the repository
 
 The GSDC ground-truth root falls back to the GSDC root when neither
 `--gsdc-truth-root` nor `GNSSPP_GSDC_TRUTH_ROOT` is set.
@@ -136,6 +138,9 @@ python3 apps/gnss.py reproduce gsdc-dev-routes --gsdc-root /datasets/gsdc2023/da
 # GSDC 2023-2024 Kaggle submission rebuild, SHA-256 gate (GTSAM build; hours)
 python3 apps/gnss.py reproduce gsdc-official --gsdc-root /datasets/gsdc2023/dataset_2023 \
   --gsdc-truth-root /datasets/gsdc2023/kaggle_train_gt --build-dir build-gtsam --check
+
+# Galileo HAS float PPP from the HAS IDD sample (docs lane, not a README row)
+python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /datasets/cssrlib-data/data/doy2023-229 --check
 ```
 
 Common options:
@@ -188,7 +193,7 @@ foreach = [{ label = "tokyo_run1" }]
 ```
 
 Placeholders: `{gnss}` (Python + `apps/gnss.py`), `{python}`, `{work_dir}`,
-`{ppc_root}`, `{urbannav_root}`, `{gsdc_root}`, `{gsdc_truth_root}`, `{rtklib_bin}`, `{build_dir}`, and
+`{ppc_root}`, `{urbannav_root}`, `{gsdc_root}`, `{gsdc_truth_root}`, `{has_root}`, `{rtklib_bin}`, `{build_dir}`, and
 `{bin:NAME}` (a built binary from `--build-dir`). A `foreach` row defines
 additional placeholders for its step or metric.
 
@@ -550,3 +555,29 @@ pinned in the work dir. Verification is intentionally limited to this
 subset (per-drive byte identity plus `--allow-partial` assembly); the full
 40-drive run is available through the same command but is not part of the
 routine check.
+
+## has-idd-ppp: Galileo HAS float PPP (2026-09-29)
+
+`has-idd-ppp` is a docs lane, not a README row. It runs `gnss_ppp` with
+`--ssr-rtcm-profile has-idd` on the public Galileo HAS Internet Data
+Distribution sample of [hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data)
+(`data/doy2023-229`: station OBE4, 2023-08-17 01:59-03:00 GPST, RTCM 3 SSR
+1060 / 1059 / 1243 / 1242 plus 1019 / 1046 ephemerides), static and kinematic,
+plus the `legacy` RTCM SSR conversion of the same stream for comparison, and
+scores each `.pos` against the cssrlib reference coordinate with
+`scripts/experiments/has/has_idd_ppp_reproduce.py`.
+
+```bash
+python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /datasets/cssrlib-data/data/doy2023-229 --check
+```
+
+The cssrlib-data license is not stated upstream, so the three input files are
+not redistributed; download them into the `--has-data-root` directory.
+
+Local result (MSVC Release, 44 s): every metric passes. The static run is at
+0.095 m horizontal / -0.135 m vertical after one hour and converges below
+0.20 m horizontal after 4.2 min and below 0.40 m vertical after 21.0 min;
+the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min, and convergence within
+10 min (H) and 30 min (U). The kinematic run and the legacy conversion are
+reported, not gated. See [Galileo HAS support](galileo_has.md) for the full
+table and the cssrlib comparison.
