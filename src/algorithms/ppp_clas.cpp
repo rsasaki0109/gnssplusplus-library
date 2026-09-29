@@ -254,8 +254,15 @@ void initializeFilterState(
     filter_state.covariance = MatrixXd::Identity(base, base);
     filter_state.state.segment(0, 3) = seed_solution.position_ecef;
     if (mrtklib_pva) {
-        filter_state.state.segment(filter_state.vel_index, 3) =
-            seed_solution.velocity_ecef;
+        // Seed velocity only from a real Doppler solution; otherwise start
+        // from rest (RTKLIB's pntpos leaves rr[3..5] zero without Doppler)
+        // instead of reading an unset (NaN) PositionSolution velocity.
+        Vector3d seed_velocity = Vector3d::Zero();
+        if (seed_solution.has_velocity &&
+            seed_solution.velocity_ecef.allFinite()) {
+            seed_velocity = seed_solution.velocity_ecef;
+        }
+        filter_state.state.segment(filter_state.vel_index, 3) = seed_velocity;
         filter_state.state.segment(filter_state.accel_index, 3).setConstant(1e-6);
     }
     filter_state.state(filter_state.clock_index) = seed_solution.receiver_clock_bias;
