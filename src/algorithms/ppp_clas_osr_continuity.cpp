@@ -368,6 +368,54 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
     ClasAtmosCandidate best;
     const std::map<std::string, std::string>* best_tokens = nullptr;
 
+    // Without the atmos-lifecycle and grid-matrix gates,
+    // resolveClasGridReference() is a pure function of the receiver position
+    // and the atmos_network_id / atmos_grid_count tokens.  Every candidate row
+    // in the window repeats a handful of (network, grid count) pairs, so
+    // resolve each pair once per call instead of redoing the token parsing,
+    // geodetic conversion and grid-point sort for every row.
+    const bool memoize_grid_reference =
+        !pppEnvOverrides().clas_atmos_lifecycle &&
+        !pppEnvOverrides().clas_atmos_grid_matrix;
+    struct GridReferenceMemo {
+        int network_id = 0;
+        int grid_count = 0;
+        bool has_grid = false;
+        ppp_atmosphere::ClasGridReference reference;
+    };
+    std::vector<GridReferenceMemo> grid_reference_memo;
+    const auto resolveGridReference =
+        [&](const std::map<std::string, std::string>& atmos_tokens,
+            const SSRProducts::ClasAtmosRowKeys& keys,
+            ppp_atmosphere::ClasGridReference& grid_reference) -> bool {
+        if (!memoize_grid_reference) {
+            return ppp_atmosphere::resolveClasGridReference(
+                atmos_tokens, receiver_position, grid_reference);
+        }
+        // Same early exit as resolveClasGridReference() for a missing,
+        // unparsable or non-positive atmos_network_id.
+        const int network_id = keys.atmos_network_id;
+        if (!keys.atmos_network_valid || network_id <= 0) {
+            grid_reference = ppp_atmosphere::ClasGridReference{};
+            return false;
+        }
+        const int grid_count = keys.atmos_grid_count;
+        for (const auto& memo : grid_reference_memo) {
+            if (memo.network_id == network_id && memo.grid_count == grid_count) {
+                grid_reference = memo.reference;
+                return memo.has_grid;
+            }
+        }
+        GridReferenceMemo memo;
+        memo.network_id = network_id;
+        memo.grid_count = grid_count;
+        memo.has_grid = ppp_atmosphere::resolveClasGridReference(
+            atmos_tokens, receiver_position, memo.reference);
+        grid_reference = memo.reference;
+        grid_reference_memo.push_back(memo);
+        return memo.has_grid;
+    };
+
     for (const auto& satellite : satellites) {
         const auto sat_it = ssr_products.orbit_clock_corrections.find(satellite);
         if (sat_it == ssr_products.orbit_clock_corrections.end()) {
@@ -387,6 +435,8 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
                const SSROrbitClockCorrection& correction) {
                 return epoch < correction.time;
             });
+        const std::vector<SSRProducts::ClasAtmosRowKeys>* row_keys =
+            memoize_grid_reference ? ssr_products.clasAtmosRowKeys(satellite) : nullptr;
         for (auto correction_it = first; correction_it != last; ++correction_it) {
             const auto& correction = *correction_it;
             if (!correction.atmos_valid || correction.atmos_tokens.empty()) {
@@ -402,8 +452,13 @@ std::map<std::string, std::string> selectClasEpochAtmosTokens(
             }
 
             ppp_atmosphere::ClasGridReference grid_reference;
-            const bool has_grid = ppp_atmosphere::resolveClasGridReference(
-                correction.atmos_tokens, receiver_position, grid_reference);
+            static const SSRProducts::ClasAtmosRowKeys kNoRowKeys;
+            const bool has_grid = resolveGridReference(
+                correction.atmos_tokens,
+                row_keys != nullptr
+                    ? (*row_keys)[static_cast<size_t>(correction_it - sat_it->second.begin())]
+                    : kNoRowKeys,
+                grid_reference);
             const double grid_distance_sq =
                 has_grid
                     ? (pppEnvOverrides().clas_atmos_lifecycle
