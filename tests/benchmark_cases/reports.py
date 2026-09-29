@@ -893,6 +893,8 @@ class SegmentedBenchmarkTest(unittest.TestCase):
             "segment_epochs": 0,
             "warmup_epochs": 300,
             "jobs": 4,
+            "preset": None,
+            "use_existing_rtklib_solution": False,
         }
         defaults.update(overrides)
         return argparse.Namespace(**defaults)
