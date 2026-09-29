@@ -22,13 +22,18 @@
 #include <tuple>
 #include <vector>
 
+#include "observable_pd_common.hpp"
 #include "observable_robust_loss.hpp"
 #include "observable_seed_positions.hpp"
 
 namespace {
 
+using libgnss_apps::NormalEquation;
 using libgnss_apps::SeedPosition;
+using libgnss_apps::SolveResult;
+using libgnss_apps::addWeightedRow;
 using libgnss_apps::findSeedPosition;
+using libgnss_apps::jsonBool;
 using libgnss_apps::readSeedPositions;
 using libgnss_apps::robustHuberLoss;
 using libgnss_apps::robustHuberWeight;
@@ -86,15 +91,6 @@ struct Problem {
     std::size_t seed_interpolated_epochs = 0;
 };
 
-struct SolveResult {
-    Eigen::VectorXd state;
-    double initial_cost = 0.0;
-    double final_cost = 0.0;
-    double residual_rms_mps = 0.0;
-    int iterations = 0;
-    bool converged = false;
-};
-
 [[noreturn]] void usageError(const std::string& message, const char* argv0) {
     std::cerr << "Error: " << message << "\n\n"
               << "Usage: " << argv0 << " --obs rover.obs --nav base.nav "
@@ -113,27 +109,11 @@ struct SolveResult {
 }
 
 int parseIntArg(const std::string& value, const std::string& name, const char* argv0) {
-    try {
-        std::size_t consumed = 0;
-        const int parsed = std::stoi(value, &consumed);
-        if (consumed == value.size()) {
-            return parsed;
-        }
-    } catch (const std::exception&) {
-    }
-    usageError("invalid integer for " + name + ": " + value, argv0);
+    return libgnss_apps::parseIntArg(value, name, argv0, usageError);
 }
 
 double parseDoubleArg(const std::string& value, const std::string& name, const char* argv0) {
-    try {
-        std::size_t consumed = 0;
-        const double parsed = std::stod(value, &consumed);
-        if (consumed == value.size() && std::isfinite(parsed)) {
-            return parsed;
-        }
-    } catch (const std::exception&) {
-    }
-    usageError("invalid number for " + name + ": " + value, argv0);
+    return libgnss_apps::parseDoubleArg(value, name, argv0, usageError);
 }
 
 Options parseArguments(int argc, char* argv[]) {
@@ -301,30 +281,6 @@ double computeCost(const Problem& problem,
         cost += robustHuberLoss(error, options.huber_threshold_sigma);
     }
     return cost;
-}
-
-struct NormalEquation {
-    Eigen::SparseMatrix<double> hessian;
-    Eigen::VectorXd rhs;
-};
-
-void addWeightedRow(std::vector<Eigen::Triplet<double>>& triplets,
-                    Eigen::VectorXd& rhs,
-                    const std::vector<int>& columns,
-                    const std::vector<double>& coefficients,
-                    double residual,
-                    double sigma,
-                    double robust_weight) {
-    const double inv_variance = robust_weight / (sigma * sigma);
-    for (std::size_t a = 0; a < columns.size(); ++a) {
-        const double weighted_a = inv_variance * coefficients[a];
-        rhs(columns[a]) += weighted_a * residual;
-        for (std::size_t b = 0; b < columns.size(); ++b) {
-            triplets.emplace_back(columns[a],
-                                  columns[b],
-                                  weighted_a * coefficients[b]);
-        }
-    }
 }
 
 NormalEquation buildNormalEquation(const Problem& problem,
@@ -774,10 +730,6 @@ bool writeGraphCsv(const std::string& path,
            << result.iterations << ','
            << problem.epochs.size() << '\n';
     return true;
-}
-
-std::string jsonBool(bool value) {
-    return value ? "true" : "false";
 }
 
 bool writeSummaryJson(const std::string& path,

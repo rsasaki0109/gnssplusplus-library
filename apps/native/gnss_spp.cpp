@@ -14,7 +14,11 @@
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include "json_output_helpers.hpp"
+
 namespace {
+
+using libgnss_apps::jsonEscape;
 
 struct Options {
     std::string obs_path;
@@ -162,21 +166,6 @@ std::string requireValue(const std::string& arg, int& i, int argc, char* argv[])
         throw std::invalid_argument("missing value for " + arg);
     }
     return argv[++i];
-}
-
-std::string jsonEscape(const std::string& value) {
-    std::ostringstream escaped;
-    for (char ch : value) {
-        switch (ch) {
-            case '\\': escaped << "\\\\"; break;
-            case '"': escaped << "\\\""; break;
-            case '\n': escaped << "\\n"; break;
-            case '\r': escaped << "\\r"; break;
-            case '\t': escaped << "\\t"; break;
-            default: escaped << ch; break;
-        }
-    }
-    return escaped.str();
 }
 
 void printUsage(const char* program_name) {

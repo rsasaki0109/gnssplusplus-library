@@ -28,7 +28,11 @@
 #include <string>
 #include <unistd.h>
 
+#include "json_output_helpers.hpp"
+
 namespace {
+
+using libgnss_apps::jsonEscape;
 
 constexpr double kGpsEpochUnixSeconds = 315964800.0;
 constexpr double kGpsUtcLeapSeconds = 18.0;
@@ -165,21 +169,6 @@ long long unixMillis(const libgnss::GNSSTime& time) {
                                 static_cast<double>(time.week) * kSecondsPerWeek +
                                 time.tow - kGpsUtcLeapSeconds;
     return static_cast<long long>(std::llround(unix_seconds * 1000.0));
-}
-
-std::string jsonEscape(const std::string& value) {
-    std::ostringstream output;
-    for (const char character : value) {
-        switch (character) {
-            case '\\': output << "\\\\"; break;
-            case '"': output << "\\\""; break;
-            case '\n': output << "\\n"; break;
-            case '\r': output << "\\r"; break;
-            case '\t': output << "\\t"; break;
-            default: output << character; break;
-        }
-    }
-    return output.str();
 }
 
 std::string makeSummary(const Options& options,

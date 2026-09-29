@@ -18,7 +18,11 @@
 #include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include "json_output_helpers.hpp"
+
 namespace {
+
+using libgnss_apps::jsonEscape;
 
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kRadToDeg = 180.0 / kPi;
@@ -108,21 +112,6 @@ Options parseArguments(int argc, char* argv[]) {
         argumentError("--min-elevation-deg must be within [-90, 90]", argv[0]);
     }
     return options;
-}
-
-std::string jsonEscape(const std::string& value) {
-    std::ostringstream escaped;
-    for (char ch : value) {
-        switch (ch) {
-            case '\\': escaped << "\\\\"; break;
-            case '"': escaped << "\\\""; break;
-            case '\n': escaped << "\\n"; break;
-            case '\r': escaped << "\\r"; break;
-            case '\t': escaped << "\\t"; break;
-            default: escaped << ch; break;
-        }
-    }
-    return escaped.str();
 }
 
 std::string systemName(libgnss::GNSSSystem system) {

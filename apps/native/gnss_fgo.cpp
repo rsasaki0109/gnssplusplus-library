@@ -38,7 +38,11 @@
 #include <tuple>
 #include <vector>
 
+#include "json_output_helpers.hpp"
+
 namespace {
+
+using libgnss_apps::jsonEscape;
 
 struct Options {
     std::string obs_path;
@@ -913,21 +917,6 @@ void applySystemFilter(libgnss::ObservationData& epoch, const Options& options) 
                                observation.satellite.system);
                        }),
         epoch.observations.end());
-}
-
-std::string jsonEscape(const std::string& value) {
-    std::ostringstream escaped;
-    for (char ch : value) {
-        switch (ch) {
-            case '\\': escaped << "\\\\"; break;
-            case '"': escaped << "\\\""; break;
-            case '\n': escaped << "\\n"; break;
-            case '\r': escaped << "\\r"; break;
-            case '\t': escaped << "\\t"; break;
-            default: escaped << ch; break;
-        }
-    }
-    return escaped.str();
 }
 
 const char* jsonBool(bool value) {
