@@ -16,9 +16,13 @@
 #include <string>
 #include <vector>
 
+#include "correction_products_internal.hpp"
+
 namespace libgnss {
 namespace ppp_atmosphere {
 namespace {
+
+using correction_products_internal::dayOfYearFromTime;
 
 constexpr double kDegreesToRadians = M_PI / 180.0;
 constexpr double kClasMaxGridDistanceM = 120000.0;
@@ -48,18 +52,6 @@ bool tryParseDouble(const std::string& text, double& value) {
     } catch (const std::exception&) {
         return false;
     }
-}
-
-int dayOfYearFromTime(const GNSSTime& time) {
-    const auto system_time = time.toSystemTime();
-    const std::time_t utc_seconds = std::chrono::system_clock::to_time_t(system_time);
-    std::tm utc_tm{};
-#if defined(_WIN32)
-    gmtime_s(&utc_tm, &utc_seconds);
-#else
-    gmtime_r(&utc_seconds, &utc_tm);
-#endif
-    return utc_tm.tm_yday + 1;
 }
 
 bool usePolynomialTerms(
