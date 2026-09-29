@@ -1586,6 +1586,9 @@ public:
     static int ionoStateIndex(const SatelliteId& sat) { return II(sat); }
 
 private:
+    // White-box unit-test access (defined in tests/test_rtk_legacy.cpp).
+    friend struct RTKProcessorTestAccess;
+
     RTKConfig rtk_config_;
     SPPProcessor spp_processor_;
     EpochDebugTelemetry debug_telemetry_;

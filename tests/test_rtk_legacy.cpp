@@ -8,17 +8,57 @@
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/io/rinex.hpp>
 
-#define private public
 #include <libgnss++/algorithms/rtk.hpp>
-#undef private
 
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <string>
+#include <utility>
 #include <vector>
 
+namespace libgnss {
+
+// Befriended by RTKProcessor. This replaces the former "#define private
+// public" trick, which cannot link under the MSVC ABI (MSVC -- and Clang
+// targeting it -- encodes member access in mangled names). Each accessor is
+// named after the private member it exposes.
+struct RTKProcessorTestAccess {
+#define GNSSPP_RTK_TEST_MEMBER(name) \
+    static auto& name(RTKProcessor& processor) { return processor.name; }
+#define GNSSPP_RTK_TEST_METHOD(name)                                   \
+    template <typename... Args>                                        \
+    static decltype(auto) name(RTKProcessor& processor, Args&&... args) { \
+        return processor.name(std::forward<Args>(args)...);            \
+    }
+    GNSSPP_RTK_TEST_MEMBER(filter_state_)
+    GNSSPP_RTK_TEST_MEMBER(filter_initialized_)
+    GNSSPP_RTK_TEST_MEMBER(current_sat_data_)
+    GNSSPP_RTK_TEST_MEMBER(fixed_baseline_)
+    GNSSPP_RTK_TEST_MEMBER(has_fixed_solution_)
+    GNSSPP_RTK_TEST_MEMBER(last_fixed_position_)
+    GNSSPP_RTK_TEST_MEMBER(has_last_fixed_position_)
+    GNSSPP_RTK_TEST_MEMBER(consecutive_fix_count_)
+    GNSSPP_RTK_TEST_METHOD(formDoubleDifferences)
+    GNSSPP_RTK_TEST_METHOD(calculateBaseline)
+    GNSSPP_RTK_TEST_METHOD(calculateResiduals)
+    GNSSPP_RTK_TEST_METHOD(formMeasurementMatrix)
+    GNSSPP_RTK_TEST_METHOD(calculateMeasurementWeights)
+    GNSSPP_RTK_TEST_METHOD(hasSufficientSatellites)
+    GNSSPP_RTK_TEST_METHOD(applyFixedAmbiguities)
+    GNSSPP_RTK_TEST_METHOD(solvePositionWithAmbiguities)
+    GNSSPP_RTK_TEST_METHOD(solveLAMBDA)
+    GNSSPP_RTK_TEST_METHOD(validateAmbiguityResolution)
+    GNSSPP_RTK_TEST_METHOD(varerr)
+    GNSSPP_RTK_TEST_METHOD(tryHoldFix)
+#undef GNSSPP_RTK_TEST_METHOD
+#undef GNSSPP_RTK_TEST_MEMBER
+};
+
+}  // namespace libgnss
+
 using namespace libgnss;
+using Peer = RTKProcessorTestAccess;
 
 namespace {
 
@@ -90,11 +130,12 @@ protected:
 };
 
 TEST_F(RTKLegacyCompatibilityTest, FormsDoubleDifferencesAndLinearizedHelpersStayConsistent) {
-    const auto measurements = processor_.formDoubleDifferences(rover_obs_, base_obs_, nav_data_);
+    const auto measurements =
+        Peer::formDoubleDifferences(processor_, rover_obs_, base_obs_, nav_data_);
 
     ASSERT_GE(measurements.size(), 4u);
-    EXPECT_TRUE(processor_.filter_initialized_);
-    EXPECT_FALSE(processor_.current_sat_data_.empty());
+    EXPECT_TRUE(Peer::filter_initialized_(processor_));
+    EXPECT_FALSE(Peer::current_sat_data_(processor_).empty());
 
     for (const auto& measurement : measurements) {
         EXPECT_TRUE(measurement.valid);
@@ -105,20 +146,20 @@ TEST_F(RTKLegacyCompatibilityTest, FormsDoubleDifferencesAndLinearizedHelpersSta
         EXPECT_GT(measurement.variance, 0.0);
     }
 
-    const Vector3d baseline = processor_.calculateBaseline();
+    const Vector3d baseline = Peer::calculateBaseline(processor_);
     EXPECT_TRUE(baseline.array().isFinite().all());
 
-    const VectorXd residuals = processor_.calculateResiduals(measurements, baseline);
+    const VectorXd residuals = Peer::calculateResiduals(processor_, measurements, baseline);
     ASSERT_EQ(residuals.size(), static_cast<int>(measurements.size()));
     EXPECT_TRUE(residuals.array().isFinite().all());
 
     const MatrixXd H =
-        processor_.formMeasurementMatrix(measurements, nav_data_, rover_obs_.time);
+        Peer::formMeasurementMatrix(processor_, measurements, nav_data_, rover_obs_.time);
     ASSERT_EQ(H.rows(), static_cast<int>(measurements.size()));
     ASSERT_EQ(H.cols(), 3);
     EXPECT_TRUE(H.array().isFinite().all());
 
-    const MatrixXd W = processor_.calculateMeasurementWeights(measurements);
+    const MatrixXd W = Peer::calculateMeasurementWeights(processor_, measurements);
     ASSERT_EQ(W.rows(), static_cast<int>(measurements.size()));
     ASSERT_EQ(W.cols(), static_cast<int>(measurements.size()));
     for (int i = 0; i < W.rows(); ++i) {
@@ -131,7 +172,7 @@ TEST_F(RTKLegacyCompatibilityTest, FormsDoubleDifferencesAndLinearizedHelpersSta
         }
     }
 
-    EXPECT_TRUE(processor_.hasSufficientSatellites(measurements));
+    EXPECT_TRUE(Peer::hasSufficientSatellites(processor_, measurements));
 }
 
 TEST_F(RTKLegacyCompatibilityTest, AssemblesRealRowsForTightlyCoupledDDIMUBridge) {
@@ -168,7 +209,7 @@ TEST(RTKLegacyCompatibilityStandaloneTest, LambdaCompatibilityProducesValidatedI
     float_ambiguities << 1.02, -2.97, 5.01;
     MatrixXd covariance = MatrixXd::Identity(3, 3) * 0.01;
 
-    const auto result = processor.solveLAMBDA(float_ambiguities, covariance);
+    const auto result = Peer::solveLAMBDA(processor, float_ambiguities, covariance);
 
     ASSERT_TRUE(result.success);
     ASSERT_EQ(result.fixed_ambiguities.size(), float_ambiguities.size());
@@ -179,25 +220,28 @@ TEST(RTKLegacyCompatibilityStandaloneTest, LambdaCompatibilityProducesValidatedI
                     1e-9);
     }
 
-    EXPECT_TRUE(processor.validateAmbiguityResolution(result.fixed_ambiguities,
-                                                      float_ambiguities,
-                                                      covariance,
-                                                      3.5));
-    EXPECT_FALSE(processor.validateAmbiguityResolution(result.fixed_ambiguities,
-                                                       float_ambiguities,
-                                                       covariance,
-                                                       0.5));
+    EXPECT_TRUE(Peer::validateAmbiguityResolution(processor,
+                                                  result.fixed_ambiguities,
+                                                  float_ambiguities,
+                                                  covariance,
+                                                  3.5));
+    EXPECT_FALSE(Peer::validateAmbiguityResolution(processor,
+                                                   result.fixed_ambiguities,
+                                                   float_ambiguities,
+                                                   covariance,
+                                                   0.5));
 }
 
 TEST_F(RTKLegacyCompatibilityTest, AppliesFixedAmbiguitiesAndPublishesFixedBaseline) {
-    const auto measurements = processor_.formDoubleDifferences(rover_obs_, base_obs_, nav_data_);
+    const auto measurements =
+        Peer::formDoubleDifferences(processor_, rover_obs_, base_obs_, nav_data_);
 
     ASSERT_GE(measurements.size(), 4u);
-    ASSERT_TRUE(processor_.filter_initialized_);
+    ASSERT_TRUE(Peer::filter_initialized_(processor_));
 
     std::vector<SatelliteId> satellites;
-    satellites.reserve(processor_.current_sat_data_.size());
-    for (const auto& [satellite, sat_data] : processor_.current_sat_data_) {
+    satellites.reserve(Peer::current_sat_data_(processor_).size());
+    for (const auto& [satellite, sat_data] : Peer::current_sat_data_(processor_)) {
         if (sat_data.has_l1 || sat_data.has_l2) {
             satellites.push_back(satellite);
         }
@@ -207,10 +251,10 @@ TEST_F(RTKLegacyCompatibilityTest, AppliesFixedAmbiguitiesAndPublishesFixedBasel
     int n1_count = 0;
     int n2_count = 0;
     for (const auto& satellite : satellites) {
-        if (processor_.filter_state_.n1_indices.count(satellite) > 0) {
+        if (Peer::filter_state_(processor_).n1_indices.count(satellite) > 0) {
             ++n1_count;
         }
-        if (processor_.filter_state_.n2_indices.count(satellite) > 0) {
+        if (Peer::filter_state_(processor_).n2_indices.count(satellite) > 0) {
             ++n2_count;
         }
     }
@@ -227,36 +271,36 @@ TEST_F(RTKLegacyCompatibilityTest, AppliesFixedAmbiguitiesAndPublishesFixedBasel
         fixed_n2(i) = 200.0 + i;
     }
 
-    ASSERT_TRUE(processor_.applyFixedAmbiguities(fixed_n1, fixed_n2, processor_.current_sat_data_));
+    ASSERT_TRUE(Peer::applyFixedAmbiguities(
+        processor_, fixed_n1, fixed_n2, Peer::current_sat_data_(processor_)));
 
     int n1_index = 0;
     int n2_index = 0;
     for (const auto& satellite : satellites) {
-        const auto n1_it = processor_.filter_state_.n1_indices.find(satellite);
-        if (n1_it != processor_.filter_state_.n1_indices.end()) {
-            EXPECT_DOUBLE_EQ(processor_.filter_state_.state(n1_it->second), fixed_n1(n1_index));
+        const auto n1_it = Peer::filter_state_(processor_).n1_indices.find(satellite);
+        if (n1_it != Peer::filter_state_(processor_).n1_indices.end()) {
+            EXPECT_DOUBLE_EQ(Peer::filter_state_(processor_).state(n1_it->second), fixed_n1(n1_index));
             ++n1_index;
         }
-        const auto n2_it = processor_.filter_state_.n2_indices.find(satellite);
-        if (n2_it != processor_.filter_state_.n2_indices.end()) {
-            EXPECT_DOUBLE_EQ(processor_.filter_state_.state(n2_it->second), fixed_n2(n2_index));
+        const auto n2_it = Peer::filter_state_(processor_).n2_indices.find(satellite);
+        if (n2_it != Peer::filter_state_(processor_).n2_indices.end()) {
+            EXPECT_DOUBLE_EQ(Peer::filter_state_(processor_).state(n2_it->second), fixed_n2(n2_index));
             ++n2_index;
         }
     }
 
-    processor_.fixed_baseline_ = Vector3d(1.0, 2.0, 3.0);
-    processor_.has_fixed_solution_ = true;
-    processor_.solvePositionWithAmbiguities(processor_.current_sat_data_);
+    Peer::fixed_baseline_(processor_) = Vector3d(1.0, 2.0, 3.0);
+    Peer::has_fixed_solution_(processor_) = true;
+    Peer::solvePositionWithAmbiguities(processor_, Peer::current_sat_data_(processor_));
 
-    EXPECT_TRUE(processor_.filter_state_.state.head<3>().isApprox(processor_.fixed_baseline_, 1e-12));
+    EXPECT_TRUE(Peer::filter_state_(processor_).state.head<3>().isApprox(
+        Peer::fixed_baseline_(processor_), 1e-12));
 }
 
 // ============================================================
 // (Phase 1 GNSS/IMU coupling unit tests for RTKProcessor::
-// setExternalPositionPrior() live in tests/test_rtk_ins_prior.cpp instead of
-// here: this file's "#define private public" trick doesn't link on the
-// clang-targeting-MSVC-ABI toolchain -- see the tests/CMakeLists.txt guard
-// right above where this file is added to gnss_run_tests.)
+// setExternalPositionPrior() live in tests/test_rtk_ins_prior.cpp, which
+// exercises RTKProcessor through its public API only.)
 // ============================================================
 
 // ============================================================
@@ -289,11 +333,11 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyExtendedDefaultBehaviorUnchan
     ext_cfg.ar_policy = RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     ext_cfg.min_hold_count = 3;
     processor.setRTKConfig(ext_cfg);
-    processor.consecutive_fix_count_ = 3;
-    processor.has_last_fixed_position_ = true;
+    Peer::consecutive_fix_count_(processor) = 3;
+    Peer::has_last_fixed_position_(processor) = true;
     // The relaxed hold-ratio path exists under EXTENDED; verify config reads correctly.
     EXPECT_EQ(processor.getRTKConfig().ar_policy, RTKProcessor::RTKConfig::ARPolicy::EXTENDED);
-    EXPECT_GE(processor.consecutive_fix_count_, processor.getRTKConfig().min_hold_count);
+    EXPECT_GE(Peer::consecutive_fix_count_(processor), processor.getRTKConfig().min_hold_count);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesSubsetFallback) {
@@ -509,8 +553,8 @@ TEST(RTKLegacyCompatibilityStandaloneTest, SnrWeightingDefaultDisabledAndConfigu
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_min_baseline_m, 0.0);
 
     const double elevation = 30.0 * M_PI / 180.0;
-    const double default_variance = processor.varerr(elevation, true, 30.0);
-    EXPECT_DOUBLE_EQ(default_variance, processor.varerr(elevation, true, 45.0));
+    const double default_variance = Peer::varerr(processor, elevation, true, 30.0);
+    EXPECT_DOUBLE_EQ(default_variance, Peer::varerr(processor, elevation, true, 45.0));
 
     RTKProcessor::RTKConfig cfg;
     cfg.enable_snr_weighting = true;
@@ -523,13 +567,13 @@ TEST(RTKLegacyCompatibilityStandaloneTest, SnrWeightingDefaultDisabledAndConfigu
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_reference_dbhz, 45.0);
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_max_variance_scale, 10.0);
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_min_baseline_m, 0.0);
-    EXPECT_DOUBLE_EQ(processor.varerr(elevation, true, 50.0), default_variance);
-    EXPECT_NEAR(processor.varerr(elevation, true, 35.0), default_variance * 10.0, 1e-12);
+    EXPECT_DOUBLE_EQ(Peer::varerr(processor, elevation, true, 50.0), default_variance);
+    EXPECT_NEAR(Peer::varerr(processor, elevation, true, 35.0), default_variance * 10.0, 1e-12);
 
     cfg.snr_min_baseline_m = 7000.0;
     processor.setRTKConfig(cfg);
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_min_baseline_m, 7000.0);
-    EXPECT_DOUBLE_EQ(processor.varerr(elevation, true, 35.0), default_variance);
+    EXPECT_DOUBLE_EQ(Peer::varerr(processor, elevation, true, 35.0), default_variance);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, DynamicSlipThresholdFloorConfigurable) {
@@ -772,9 +816,9 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFi
     processor.setRTKConfig(cfg);
 
     // Set up state as if hold is active.
-    processor.consecutive_fix_count_ = 5;
-    processor.has_last_fixed_position_ = true;
-    processor.last_fixed_position_ = Eigen::Vector3d(-3961832.0, 3354966.0, 3697065.0);
+    Peer::consecutive_fix_count_(processor) = 5;
+    Peer::has_last_fixed_position_(processor) = true;
+    Peer::last_fixed_position_(processor) = Eigen::Vector3d(-3961832.0, 3354966.0, 3697065.0);
 
     // tryHoldFix should return false because last_dd_fixed_ is empty (no held integers).
     // This is the baseline behavior; the DEMO5_CONTINUOUS gate in processRTKEpoch
@@ -784,7 +828,7 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFi
     dummy_time.tow = 0.0;
     libgnss::PositionSolution sol;
     // tryHoldFix itself checks hasHeldIntegers(); with no held state it returns false.
-    EXPECT_FALSE(processor.tryHoldFix(processor.current_sat_data_, dummy_time, 0, sol));
+    EXPECT_FALSE(Peer::tryHoldFix(processor, Peer::current_sat_data_(processor), dummy_time, 0, sol));
 
     // Confirm policy is correctly set.
     EXPECT_EQ(processor.getRTKConfig().ar_policy,
