@@ -10,7 +10,8 @@ receiver observations, reference-station observations, broadcast navigation
 data, and reliable trajectory truth. It is not used as a proprietary
 receiver-engine comparison. Treat the UrbanNav Odaiba snapshot below as a
 Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
-profile beats demo5 on Fix count, rate, Hmed, Hp95, and Vp95 for that scene.
+profile (low-cost + arc-smoothed wide-lane AR) trades about 2 cm of Hmed for
+6.6x the default profile's fixes and lower Hp95/Vp95 on that scene.
 
 For the later PPC smoother-stack sanity check, see
 [`ppc_smoother_oracle_report.md`](ppc_smoother_oracle_report.md). That report
@@ -68,7 +69,8 @@ adding wrong-FIX, and disabling it returns to the pre-stack `fix_wrong/fixes`
 collapse (31.3%) and `nagoya_run2 fix95%` 46.92 m. Wide-lane AR
 (`--enable-wide-lane-ar`) was tested as a default and rejected: it cuts
 `fix_ok` to 1,515 and pushes `fix_wrong/fixes` to 41.5% (`tokyo_run2 fix95%`
-17.96 m). Wide-lane AR remains opt-in via `--preset odaiba`.
+17.96 m). Wide-lane AR remains opt-in via `--preset odaiba`, which since
+2026-09-29 averages MW over each satellite arc instead of using one epoch.
 
 The reproduction command, per-run table, and truth-scoring script for this
 baseline lived in an uncommitted local workspace and were never added to the
@@ -475,11 +477,29 @@ libgnss++ Hmed is **0.659 m** versus 0.671 m.
 | Config | Fix | Rate | Hmed (m) | Hp95 (m) | Vp95 (m) |
 |---|---:|---:|:---:|:---:|:---:|
 | RTKLIB demo5 b34k | 209 | 2.55% | **0.684** | 26.263 | 43.289 |
-| libgnss++ default | **922** (+713) | **8.42%** | 0.696 | **5.098** | **15.102** |
+| libgnss++ default | 922 (+713) | 8.42% | 0.696 | 5.098 | 15.102 |
+| libgnss++ `--preset odaiba` | **6086** (+5877) | **60.62%** | 0.716 | **4.872** | **13.493** |
 
-The earlier `--preset odaiba` arm (wide-lane AR) no longer improves on the
-default profile (54 fixes, Hmed 0.709 m); the lane still runs it as a
-reported diagnostic.
+`--preset odaiba` is the `low-cost` profile plus Melbourne-Wubbena wide-lane
+AR averaged over each satellite's continuous arc
+(`--wide-lane-min-arc-samples 100`, 10 s at the 10 Hz rover rate). The lane
+gates it against the default arm on Fix count, Hp95 and Vp95.
+
+Hmed is not a useful discriminator on this scene. Fixed epochs from both
+libgnss++ and demo5 cluster about 0.70 m west of `reference.csv` (median
+east error -0.70 m, north -0.02 m). The preset's fixed epochs span 0.69-0.72 m (25th-75th
+percentile), so Hmed is floored by that common offset and drops as scattered
+FLOAT epochs are added. The preset's 2 cm Hmed gap to the default profile is
+that effect, not wrong fixes.
+
+The preset regressed to 54 fixes (Hmed 0.709 m) before 2026-09-29 for two
+reasons. First, it was a frozen copy of the early `low-cost` values, so it
+missed the motion-aware jump gate that ended `low-cost` fix starvation.
+Second, it fixed wide-lane integers from a single-epoch MW combination, and
+metre-level urban code noise let near-random integers in as hard LAMBDA
+constraints. It now falls through to `low-cost`, and MW is arc-averaged. The
+older snapshot (preset 735 fixes, default 1268) came from an unrecorded RTKLIB
+build and evaluation window and is not comparable.
 
 | RTKLIB 2D | libgnss++ 2D |
 |---|---|

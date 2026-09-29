@@ -224,11 +224,26 @@ interpolation off) did not match.
 | Lower Vp95 | 43.29 m | **15.10 m** | pass |
 | Lower Hmed on common epochs (7,996) | 0.671 m | **0.659 m** | pass |
 
-The previous claim "`--preset odaiba` closes Hmed" no longer holds on all
-matched epochs (0.709 m vs 0.684 m) and the preset now yields only 54 fixes,
-so the README no longer cites it; the lane still runs it as a reported
-diagnostic. The previous snapshot table (demo5 595 fixes, default 1268, preset
-735) was likewise produced with an unrecorded RTKLIB build.
+The lane also runs `--preset odaiba` (the `low-cost` profile plus
+arc-smoothed wide-lane AR) and gates it against the default arm:
+
+| Claim | libgnss++ default | `--preset odaiba` | Result |
+|---|---:|---:|---|
+| More fixes | 922 | **6086** | pass |
+| Lower Hp95 | 5.10 m | **4.87 m** | pass |
+| Lower Vp95 | 15.10 m | **13.49 m** | pass |
+| Hmed (reported, not gated) | **0.696 m** | 0.716 m | - |
+
+Hmed is reported only. All solvers' fixed epochs sit about 0.70 m from
+`reference.csv`, so Hmed is floored by that common offset and drops as FLOAT
+epochs are added. The README's earlier claim that "`--preset odaiba` closes
+Hmed" is not restored.
+
+Before 2026-09-29 the preset produced 54 fixes. It was a stale copy of the
+early `low-cost` values, and it fixed wide-lane integers from a single noisy
+MW epoch. See the [Odaiba snapshot](benchmarks.md#urbannav-tokyo-odaiba-snapshot).
+The previous snapshot table (demo5 595 fixes, default 1268, preset 735) was
+produced with an unrecorded RTKLIB build.
 
 **`spp-policy`.** The README claim reproduces. The historical per-run policy
 P95 H values in `docs/references/spp-accuracy-improvement.md` are within

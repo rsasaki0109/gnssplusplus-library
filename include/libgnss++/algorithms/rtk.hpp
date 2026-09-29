@@ -434,6 +434,22 @@ public:
         /// default; only referenced when enable_wide_lane_ar = true.
         double wide_lane_acceptance_threshold = 0.25;
 
+        /// Causal Melbourne-Wubbena arc smoothing for the WL AR pre-step.
+        /// 0 (default) keeps the legacy single-epoch MW test. When > 0, each
+        /// satellite's single-difference MW is averaged over its continuous
+        /// arc (reset on confirmed L1/L2 slips or a gap longer than
+        /// wide_lane_arc_max_gap_s), and a WL integer is only constrained
+        /// once both the reference and the satellite arc hold at least this
+        /// many samples with a stable rounded value. Single-epoch MW carries
+        /// metre-level code noise in urban canyons, so the legacy test admits
+        /// near-random integers as hard constraints.
+        int wide_lane_min_arc_samples = 0;
+        /// Upper bound on the effective averaging window (samples) of the
+        /// WL MW arc; only referenced when wide_lane_min_arc_samples > 0.
+        int wide_lane_arc_max_effective_samples = 100;
+        /// Maximum gap between MW samples before the WL arc restarts.
+        double wide_lane_arc_max_gap_s = 1.0;
+
         /// Enable MW wide-lane / narrow-lane fallback after ordinary LAMBDA
         /// fails for non-IFLC runs. IFLC keeps its historical fallback path.
         /// This reuses wide_lane_acceptance_threshold for MW and NL acceptance.
@@ -1931,6 +1947,8 @@ private:
     std::set<SatelliteId> current_epoch_slips_l2_;
     std::set<SatelliteId> current_epoch_slips_l5_;
     causal_ambiguity_arc::Bank l1_l5_mw_arc_bank_;
+    // Per-satellite L1/L2 MW arcs for the opt-in smoothed WL AR pre-step.
+    causal_ambiguity_arc::Bank wide_lane_mw_arc_bank_;
     causal_ambiguity_arc::Bank ambiguity_arc_bank_;
 
     struct TdcpHistory {

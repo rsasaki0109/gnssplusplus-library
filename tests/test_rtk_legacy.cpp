@@ -667,6 +667,8 @@ TEST(RTKLegacyCompatibilityStandaloneTest, WideLaneArDefaultDisabled) {
 
     // Default wide_lane_acceptance_threshold must be 0.25.
     EXPECT_DOUBLE_EQ(processor.getRTKConfig().wide_lane_acceptance_threshold, 0.25);
+    // MW arc smoothing is opt-in; 0 keeps the legacy single-epoch WL test.
+    EXPECT_EQ(processor.getRTKConfig().wide_lane_min_arc_samples, 0);
 
     // Explicitly set false and confirm round-trip.
     RTKProcessor::RTKConfig cfg;

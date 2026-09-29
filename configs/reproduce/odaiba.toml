@@ -124,8 +124,30 @@ foreach = [
   { field = "p95_abs_up_m", expected = 15.102, abs_tol = 0.2 },
 ]
 
-# The historical `--preset odaiba` arm no longer improves on the default profile
-# (54 fixes); it is kept as a reported diagnostic only.
+# `--preset odaiba` = low-cost profile + arc-smoothed MW wide-lane AR
+# (--wide-lane-min-arc-samples 100). Gated against the default arm: more fixes
+# and lower Hp95/Vp95. Its Hmed is reported only: every fixed epoch on Odaiba
+# sits ~0.70 m (mostly east-west) from reference.csv for all solvers, so Hmed
+# is floored by that common offset and falls as FLOAT epochs are added.
+[[metrics]]
+name = "preset odaiba fix epochs minus default"
+source = "{work_dir}/preset_odaiba/summary.json"
+path = "libgnss_all_epochs.fix_epochs"
+minus_source = "{work_dir}/default/summary.json"
+minus_path = "libgnss_all_epochs.fix_epochs"
+min = 1
+readme = "docs/benchmarks.md preset row"
+
+[[metrics]]
+name = "preset odaiba {field} minus default (m)"
+source = "{work_dir}/preset_odaiba/summary.json"
+path = "libgnss_all_epochs.{field}"
+minus_source = "{work_dir}/default/summary.json"
+minus_path = "libgnss_all_epochs.{field}"
+max = 0.0
+readme = "docs/benchmarks.md preset row"
+foreach = [{ field = "p95_h_m" }, { field = "p95_abs_up_m" }]
+
 [[metrics]]
 name = "table: libgnss++ --preset odaiba {field}"
 source = "{work_dir}/preset_odaiba/summary.json"
@@ -133,9 +155,9 @@ path = "libgnss_all_epochs.{field}"
 gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
-  { field = "fix_epochs", expected = 54.000, abs_tol = 20 },
-  { field = "fix_rate_pct", expected = 0.497, abs_tol = 0.2 },
-  { field = "median_h_m", expected = 0.709, abs_tol = 0.01 },
-  { field = "p95_h_m", expected = 5.111, abs_tol = 0.1 },
-  { field = "p95_abs_up_m", expected = 15.177, abs_tol = 0.2 },
+  { field = "fix_epochs", expected = 6086.000, abs_tol = 120 },
+  { field = "fix_rate_pct", expected = 60.618, abs_tol = 1.2 },
+  { field = "median_h_m", expected = 0.716, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 4.872, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 13.493, abs_tol = 0.2 },
 ]
