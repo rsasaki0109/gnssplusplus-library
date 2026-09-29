@@ -70,7 +70,7 @@ argv = [
 
 # Gates (reproduced 2026-09-29, MSVC Release): static float PPP with HAS IDD
 # corrections is decimetre-level horizontally within minutes and under 0.40 m
-# vertically within half an hour.
+# vertically within half an hour; kinematic float PPP is gated further below.
 [[metrics]]
 name = "has-idd static H at 60 min (m)"
 source = "{work_dir}/summary.json"
@@ -130,18 +130,41 @@ foreach = [
   { field = "convergence_abs_up_below_0p40_min", expected = 20.95 },
 ]
 
-# Kinematic float PPP keeps a pre-existing metre-level offset (also with
-# broadcast-only and legacy SSR input); reported so a fix shows up as drift.
+# Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
+# one measurement update per epoch). Before that fix it settled at
+# H 1.87 m / U -5.61 m after one hour.
 [[metrics]]
-name = "table: has-idd kinematic {field} at 60min"
+name = "has-idd kinematic H at {t} (m)"
 source = "{work_dir}/summary.json"
-path = "runs.has_idd_kinematic.checkpoints.60min.{field}"
+path = "runs.has_idd_kinematic.checkpoints.{t}.h_m"
+max = 0.30
+readme = "docs/galileo_has.md"
+foreach = [{ t = "30min" }, { t = "60min" }]
+
+[[metrics]]
+name = "has-idd kinematic |U| at {t} (m)"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_kinematic.checkpoints.{t}.abs_up_m"
+max = 0.60
+readme = "docs/galileo_has.md"
+foreach = [{ t = "30min" }, { t = "60min" }]
+
+[[metrics]]
+name = "table: has-idd kinematic {field} at {t}"
+source = "{work_dir}/summary.json"
+path = "runs.has_idd_kinematic.checkpoints.{t}.{field}"
 gate = false
-abs_tol = 0.3
-readme = "docs/galileo_has.md known limitations"
+abs_tol = 0.05
+readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "h_m", expected = 1.873 },
-  { field = "up_m", expected = -5.614 },
+  { t = "10min", field = "h_m", expected = 0.035 },
+  { t = "10min", field = "up_m", expected = -0.195 },
+  { t = "20min", field = "h_m", expected = 0.064 },
+  { t = "20min", field = "up_m", expected = -0.127 },
+  { t = "30min", field = "h_m", expected = 0.136 },
+  { t = "30min", field = "up_m", expected = 0.058 },
+  { t = "60min", field = "h_m", expected = 0.018 },
+  { t = "60min", field = "up_m", expected = -0.390 },
 ]
 
 # The same stream through the legacy RTCM SSR conversion (no IODE match,

@@ -28,7 +28,7 @@ runner adds no scoring logic of its own.
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
 | Smartphone GSDC official submission | `gsdc-official` | ready | ~30 min per drive; full run ~12-18 h | **Subset verified (by design).** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 56625084 (`cbd1fde1...`), and the Kaggle score is readback-only. 6 of 40 final drives and 2 of 25 stage-0 drives were rerun, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
-| (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
+| (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -578,6 +578,9 @@ Local result (MSVC Release, 44 s): every metric passes. The static run is at
 0.095 m horizontal / -0.135 m vertical after one hour and converges below
 0.20 m horizontal after 4.2 min and below 0.40 m vertical after 21.0 min;
 the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min, and convergence within
-10 min (H) and 30 min (U). The kinematic run and the legacy conversion are
-reported, not gated. See [Galileo HAS support](galileo_has.md) for the full
-table and the cssrlib comparison.
+10 min (H) and 30 min (U). The kinematic run is at 0.136 / +0.058 m after
+30 min and 0.018 / -0.390 m after one hour, gated at H <= 0.30 m and
+|U| <= 0.60 m at 30 and 60 min (before the one-measurement-update-per-epoch
+fix of the kinematic PPP filter it stayed at about 1.9 m / -5.6 m). The legacy
+conversion is reported, not gated. See [Galileo HAS support](galileo_has.md)
+for the full table and the cssrlib comparison.

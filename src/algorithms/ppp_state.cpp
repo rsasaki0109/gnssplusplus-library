@@ -652,12 +652,16 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
     // MADOCALIB restarts each residual-screening pass from rtk->x/rtk->P and
     // commits one measurement update per epoch. Re-applying the same epoch's
     // rows to the already-updated covariance makes the native uncombined
-    // MADOCA filter overconfident before PPP-AR (ppp.c:1359-1378).
+    // MADOCA filter overconfident before PPP-AR (ppp.c:1359-1378), and, because
+    // the rows keep the prior-position geometry, pushes a kinematic position
+    // again by the innovation it already absorbed (see filterIterationCount).
     const bool madoca_per_frequency_update =
         require_coherent_ssr_ && ssr_products_loaded_ &&
         !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
     const int filter_iterations = filterIterationCount(
         madoca_per_frequency_update,
+        require_coherent_ssr_,
+        ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode,
         precise_products_loaded_,
         ppp_config_.filter_iterations);
     const PPPState pre_update_state = filter_state_;
