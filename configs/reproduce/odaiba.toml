@@ -5,7 +5,7 @@
 name = "odaiba"
 status = "ready"
 title = "UrbanNav Tokyo Odaiba RTK: libgnss++ default profile vs RTKLIB demo5"
-readme_row = "Urban RTK: 4.4x fixes, Hp95 5.10 vs 26.26 m, Vp95 15.10 vs 43.29 m; lower Hmed on common epochs"
+readme_row = "Urban RTK: 4.5x fixes, Hp95 5.87 vs 25.62 m, Vp95 16.42 vs 43.37 m; lower Hmed on common epochs"
 runtime_estimate = "~5 min"
 docs = "docs/benchmarks.md"
 
@@ -55,6 +55,13 @@ argv = [
   "--summary-json", "{work_dir}/preset_odaiba/summary.json",
 ]
 
+# Base station coordinate: gnss odaiba-benchmark defaults to --base-position
+# surveyed, i.e. the provider-published TUMSAT base position
+# (-3961904.9530, 3348993.7578, 3698211.7553), passed to libgnss++ as
+# --base-ecef and to RTKLIB as -r. The base_trimble.obs header APPROX POSITION
+# is 0.723 m west / 0.084 m below it; with the header every FIXED epoch of every
+# solver sat ~0.70 m west of reference.csv. See docs/benchmarks.md.
+
 # Regenerate the tracked Odaiba figures from the default-profile run.
 [[docs_steps]]
 name = "render-odaiba-docs-figures"
@@ -68,8 +75,8 @@ argv = [
   "--summary-json", "{work_dir}/default/summary.json",
 ]
 
-# README claim, gated (reproduced 2026-09-28 with demo5 b34k):
-# "4.4x fixes, lower Hp95/Vp95 (all matched epochs); lower Hmed on common epochs".
+# README claim, gated (reproduced 2026-09-29 with demo5 b34k, surveyed base):
+# "4.5x fixes, lower Hp95/Vp95 (all matched epochs); lower Hmed on common epochs".
 [[metrics]]
 name = "default fix epochs minus demo5"
 source = "{work_dir}/default/summary.json"
@@ -103,11 +110,11 @@ path = "rtklib_all_epochs.{field}"
 gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
-  { field = "fix_epochs", expected = 209.000, abs_tol = 0 },
-  { field = "fix_rate_pct", expected = 2.547, abs_tol = 0.005 },
-  { field = "median_h_m", expected = 0.684, abs_tol = 0.0005 },
-  { field = "p95_h_m", expected = 26.263, abs_tol = 0.0005 },
-  { field = "p95_abs_up_m", expected = 43.289, abs_tol = 0.0005 },
+  { field = "fix_epochs", expected = 205.000, abs_tol = 0 },
+  { field = "fix_rate_pct", expected = 2.498, abs_tol = 0.005 },
+  { field = "median_h_m", expected = 0.567, abs_tol = 0.0005 },
+  { field = "p95_h_m", expected = 25.622, abs_tol = 0.0005 },
+  { field = "p95_abs_up_m", expected = 43.375, abs_tol = 0.0005 },
 ]
 
 [[metrics]]
@@ -118,17 +125,15 @@ gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
   { field = "fix_epochs", expected = 922.000, abs_tol = 20 },
-  { field = "fix_rate_pct", expected = 8.415, abs_tol = 0.2 },
-  { field = "median_h_m", expected = 0.696, abs_tol = 0.01 },
-  { field = "p95_h_m", expected = 5.098, abs_tol = 0.1 },
-  { field = "p95_abs_up_m", expected = 15.102, abs_tol = 0.2 },
+  { field = "fix_rate_pct", expected = 8.361, abs_tol = 0.2 },
+  { field = "median_h_m", expected = 0.347, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 5.873, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 16.419, abs_tol = 0.2 },
 ]
 
 # `--preset odaiba` = low-cost profile + arc-smoothed MW wide-lane AR
 # (--wide-lane-min-arc-samples 100). Gated against the default arm: more fixes
-# and lower Hp95/Vp95. Its Hmed is reported only: every fixed epoch on Odaiba
-# sits ~0.70 m (mostly east-west) from reference.csv for all solvers, so Hmed
-# is floored by that common offset and falls as FLOAT epochs are added.
+# and lower Hp95/Vp95. Its Hmed is reported only.
 [[metrics]]
 name = "preset odaiba fix epochs minus default"
 source = "{work_dir}/preset_odaiba/summary.json"
@@ -155,9 +160,9 @@ path = "libgnss_all_epochs.{field}"
 gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
-  { field = "fix_epochs", expected = 6086.000, abs_tol = 120 },
-  { field = "fix_rate_pct", expected = 60.618, abs_tol = 1.2 },
-  { field = "median_h_m", expected = 0.716, abs_tol = 0.01 },
-  { field = "p95_h_m", expected = 4.872, abs_tol = 0.1 },
-  { field = "p95_abs_up_m", expected = 13.493, abs_tol = 0.2 },
+  { field = "fix_epochs", expected = 6115.000, abs_tol = 120 },
+  { field = "fix_rate_pct", expected = 62.436, abs_tol = 1.2 },
+  { field = "median_h_m", expected = 0.068, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 5.131, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 9.740, abs_tol = 0.2 },
 ]
