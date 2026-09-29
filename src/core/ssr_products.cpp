@@ -1531,7 +1531,12 @@ bool SSRProducts::heldClasTropTokensUncached(
         best_time = entry.time;
         break;
     }
+    const auto& row_index = clasAtmosRowIndex();
+    auto row_index_it = row_index.begin();
     for (const auto& sat_entry : orbit_clock_corrections) {
+        const ClasAtmosRowIndex& sat_rows = (row_index_it++)->second;
+        const auto& trop_rows = sat_rows.trop_rows;
+        if (trop_rows.empty()) continue;
         // Correction histories are appended in epoch order.  Only the newest
         // compatible trop row in each satellite history can win, so avoid a
         // full-history scan on every satellite at every observation epoch.
@@ -1541,43 +1546,26 @@ bool SSRProducts::heldClasTropTokensUncached(
                const SSROrbitClockCorrection& entry) {
                 return epoch < entry.time;
             });
-        for (auto entry_it = std::make_reverse_iterator(first_future);
-             entry_it != sat_entry.second.rend(); ++entry_it) {
-            const auto& entry = *entry_it;
+        // Visit only the rows that carry atmos_trop_* tokens.  Rows are time
+        // ordered, so the age cut-off hit on the first too-old trop row is the
+        // same cut-off a walk over every row would have hit before reaching it.
+        const auto trop_rows_end = std::lower_bound(
+            trop_rows.begin(), trop_rows.end(),
+            static_cast<std::size_t>(first_future - sat_entry.second.begin()));
+        for (auto row_it = std::make_reverse_iterator(trop_rows_end);
+             row_it != trop_rows.rend(); ++row_it) {
+            const auto& entry = sat_entry.second[*row_it];
             if (time - entry.time > max_age_seconds + 1e-9) break;
-            if (!entry.atmos_valid || entry.atmos_tokens.empty()) continue;
-            // atmos_tokens is an ordered map. Jump to the prefix range instead
-            // of walking every string token for every satellite and receiver
-            // epoch; dense CLAS histories make that linear scan dominant.
-            static const std::string trop_prefix = "atmos_trop_";
-            const auto trop_it = entry.atmos_tokens.lower_bound(trop_prefix);
-            const bool has_trop =
-                trop_it != entry.atmos_tokens.end() &&
-                trop_it->first.compare(0, trop_prefix.size(), trop_prefix) == 0;
-            if (!has_trop) continue;
+            const ClasAtmosRowKeys& keys = sat_rows.keys[*row_it];
             if (network_id > 0) {
-                auto network_it =
-                    entry.atmos_tokens.find("atmos_trop_network_id");
-                if (network_it == entry.atmos_tokens.end()) {
-                    network_it = entry.atmos_tokens.find("atmos_network_id");
-                }
-                if (network_it == entry.atmos_tokens.end()) continue;
-                try {
-                    if (std::stoi(network_it->second) != network_id) continue;
-                } catch (const std::exception&) {
-                    continue;
-                }
+                // atmos_trop_network_id, else atmos_network_id; rows whose
+                // network token is missing or unparsable never match.
+                if (!keys.trop_network_valid || keys.trop_network_id != network_id) continue;
             }
             if (minimum_grid_count > 0) {
-                const auto residual_it =
-                    entry.atmos_tokens.find("atmos_trop_residuals_m");
-                if (residual_it == entry.atmos_tokens.end()) continue;
-                const int residual_count = residual_it->second.empty()
-                    ? 0
-                    : 1 + static_cast<int>(std::count(
-                          residual_it->second.begin(),
-                          residual_it->second.end(), ';'));
-                if (residual_count < minimum_grid_count) continue;
+                // -1 marks a row without atmos_trop_residuals_m.
+                if (keys.trop_residual_count < 0) continue;
+                if (keys.trop_residual_count < minimum_grid_count) continue;
             }
             if (best == nullptr || entry.time > best_time) {
                 best = &entry;
@@ -1623,6 +1611,106 @@ constexpr std::size_t kMaxHeldTokenCacheEntries = 8;
 void SSRProducts::invalidateHeldTokenCaches() const {
     held_atmos_token_cache_.clear();
     held_trop_token_cache_.clear();
+    clas_atmos_row_index_.clear();
+    clas_atmos_row_index_valid_ = false;
+}
+
+namespace {
+
+bool stoiAtmosToken(const std::map<std::string, std::string>& tokens,
+                    const char* key,
+                    int& value) {
+    const auto it = tokens.find(key);
+    if (it == tokens.end()) {
+        return false;
+    }
+    try {
+        value = std::stoi(it->second);
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+}
+
+SSRProducts::ClasAtmosRowKeys parseClasAtmosRowKeys(const SSROrbitClockCorrection& entry) {
+    static const std::string trop_prefix = "atmos_trop_";
+    SSRProducts::ClasAtmosRowKeys keys;
+    const auto& tokens = entry.atmos_tokens;
+    if (tokens.empty()) {
+        return keys;
+    }
+    keys.atmos_network_valid =
+        stoiAtmosToken(tokens, "atmos_network_id", keys.atmos_network_id);
+    int grid_count = 0;
+    if (stoiAtmosToken(tokens, "atmos_grid_count", grid_count)) {
+        keys.atmos_grid_count = grid_count;
+    }
+    if (!entry.atmos_valid) {
+        return keys;
+    }
+    // atmos_tokens is an ordered map: the trop keys form one prefix range.
+    const auto trop_it = tokens.lower_bound(trop_prefix);
+    keys.has_trop = trop_it != tokens.end() &&
+                    trop_it->first.compare(0, trop_prefix.size(), trop_prefix) == 0;
+    if (!keys.has_trop) {
+        return keys;
+    }
+    const char* network_key =
+        tokens.find("atmos_trop_network_id") != tokens.end() ? "atmos_trop_network_id"
+                                                              : "atmos_network_id";
+    keys.trop_network_valid = stoiAtmosToken(tokens, network_key, keys.trop_network_id);
+    const auto residual_it = tokens.find("atmos_trop_residuals_m");
+    if (residual_it != tokens.end()) {
+        keys.trop_residual_count = residual_it->second.empty()
+            ? 0
+            : 1 + static_cast<int>(std::count(
+                  residual_it->second.begin(), residual_it->second.end(), ';'));
+    }
+    return keys;
+}
+
+}  // namespace
+
+const std::map<SatelliteId, SSRProducts::ClasAtmosRowIndex>&
+SSRProducts::clasAtmosRowIndex() const {
+    // Guard against direct edits of the public containers that bypassed the
+    // mutators: any change in the per-satellite row counts forces a rebuild.
+    bool valid = clas_atmos_row_index_valid_ &&
+                 clas_atmos_row_index_.size() == orbit_clock_corrections.size();
+    if (valid) {
+        auto index_it = clas_atmos_row_index_.begin();
+        for (const auto& [sat, entries] : orbit_clock_corrections) {
+            if (!(index_it->first == sat) || index_it->second.row_count != entries.size()) {
+                valid = false;
+                break;
+            }
+            ++index_it;
+        }
+    }
+    if (valid) {
+        return clas_atmos_row_index_;
+    }
+    clas_atmos_row_index_.clear();
+    for (const auto& [sat, entries] : orbit_clock_corrections) {
+        ClasAtmosRowIndex& index = clas_atmos_row_index_[sat];
+        index.row_count = entries.size();
+        index.keys.reserve(entries.size());
+        for (std::size_t row = 0; row < entries.size(); ++row) {
+            index.keys.push_back(parseClasAtmosRowKeys(entries[row]));
+            if (index.keys.back().has_trop) {
+                index.trop_rows.push_back(row);
+            }
+        }
+    }
+    clas_atmos_row_index_valid_ = true;
+    return clas_atmos_row_index_;
+}
+
+const std::vector<SSRProducts::ClasAtmosRowKeys>* SSRProducts::clasAtmosRowKeys(
+    const SatelliteId& sat) const {
+    const auto& index = clasAtmosRowIndex();
+    const auto it = index.find(sat);
+    return it == index.end() ? nullptr : &it->second.keys;
 }
 
 bool SSRProducts::heldAtmosTokensForNetwork(int network_id,
