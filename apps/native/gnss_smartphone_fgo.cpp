@@ -26,7 +26,12 @@
 #include <limits>
 #include <sstream>
 #include <string>
+
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 #include "json_output_helpers.hpp"
 
@@ -148,7 +153,12 @@ bool atomicWrite(const std::string& path, const std::string& content) {
         std::filesystem::create_directories(destination.parent_path(), error);
         if (error) return false;
     }
-    const std::string temporary = path + ".tmp." + std::to_string(static_cast<long long>(::getpid()));
+#ifdef _WIN32
+    const auto process_id = ::_getpid();
+#else
+    const auto process_id = ::getpid();
+#endif
+    const std::string temporary = path + ".tmp." + std::to_string(static_cast<long long>(process_id));
     {
         std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
         if (!output.is_open()) return false;
