@@ -7,6 +7,7 @@ These tests need no datasets or built binaries.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import subprocess
@@ -26,7 +27,7 @@ import gnss_reproduce as reproduce  # noqa: E402
 
 READY_LANES = {
     "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
-    "gsdc-official",
+    "gsdc-official", "has-idd-ppp",
 }
 PLANNED_LANES: set[str] = set()
 
@@ -275,6 +276,71 @@ class FgoTokyoLaneTest(unittest.TestCase):
         self.assertEqual(comparison["runs_better"], {"under50_pct": 2, "fix_rate_pct": 3, "fixed_rms_h_m": 2})
         self.assertAlmostEqual(comparison["mean_delta"]["fix_rate_pct"], 10.666667, places=5)
         self.assertAlmostEqual(comparison["mean_delta"]["under50_pct"], 7.866667, places=5)
+
+
+class HasIddPppLaneTest(unittest.TestCase):
+    @staticmethod
+    def _scorer():
+        path = str(ROOT_DIR / "scripts" / "experiments" / "has")
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        import has_idd_ppp_reproduce  # noqa: E402
+
+        return has_idd_ppp_reproduce
+
+    def test_dry_run_uses_has_data_root_option_and_env(self) -> None:
+        base = [
+            sys.executable, str(GNSS_CLI), "reproduce", "has-idd-ppp", "--dry-run",
+            "--work-dir", "output/reproduce/test-has-idd-dry-run",
+        ]
+        result = subprocess.run(
+            [*base, "--has-data-root", "/data/cssrlib-data/data/doy2023-229"],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        commands = [line for line in out.splitlines() if "--ssr-rtcm /data/" in line]
+        self.assertEqual(len(commands), 3)
+        has_runs = [line for line in commands if "--ssr-rtcm-profile has-idd" in line]
+        self.assertEqual(len(has_runs), 2)
+        self.assertTrue(any("--static" in line for line in has_runs))
+        self.assertTrue(any("--kinematic" in line for line in has_runs))
+        self.assertIn("--obs /data/cssrlib-data/data/doy2023-229/OBE42023229c.obs", out)
+        self.assertIn("has_idd_ppp_reproduce.py score", out)
+        self.assertIn("--reference-ecef 4186704.2262 834903.7677 4723664.9337", out)
+        self.assertIn("warning: dataset `has` incomplete", out)
+        self.assertIn("--has-data-root or GNSSPP_HAS_DATA_ROOT", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-has-idd-dry-run").exists())
+
+        env = {**os.environ, "GNSSPP_HAS_DATA_ROOT": "/env/has"}
+        from_env = subprocess.run(base, cwd=ROOT_DIR, check=False, capture_output=True, text=True, env=env)
+        self.assertEqual(from_env.returncode, 0, from_env.stderr)
+        self.assertIn("--obs /env/has/OBE42023229c.obs", from_env.stdout)
+
+    def test_scorer_checkpoints_and_convergence(self) -> None:
+        scorer = self._scorer()
+        reference = (4186704.2262, 834903.7677, 4723664.9337)
+        lat, lon = scorer.ecef_to_geodetic_rad(*reference)
+        self.assertAlmostEqual(math.degrees(lat), 48.0848, places=3)
+        self.assertAlmostEqual(math.degrees(lon), 11.2779, places=3)
+        # Unit up vector in ECEF at the reference.
+        up = (math.cos(lat) * math.cos(lon), math.cos(lat) * math.sin(lon), math.sin(lat))
+        with tempfile.TemporaryDirectory() as tmp:
+            pos = Path(tmp) / "run.pos"
+            lines = ["% header"]
+            for second in range(0, 3601):
+                # 1 m high at the start, 0.1 m high from 25 min on.
+                offset = 1.0 if second < 1500 else 0.1
+                x, y, z = (reference[i] + offset * up[i] for i in range(3))
+                lines.append(f"2275 {352800 + second}.000000 {x:.4f} {y:.4f} {z:.4f} 0 0 0 5 10")
+            pos.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            run = scorer.score_run(pos, reference)
+        self.assertEqual(run["epochs"], 3601)
+        self.assertAlmostEqual(run["checkpoints"]["10min"]["up_m"], 1.0, places=3)
+        self.assertAlmostEqual(run["checkpoints"]["30min"]["up_m"], 0.1, places=3)
+        self.assertAlmostEqual(run["checkpoints"]["60min"]["h_m"], 0.0, places=3)
+        self.assertEqual(run["convergence_h_below_0p20_min"], 0.0)
+        self.assertEqual(run["convergence_abs_up_below_0p40_min"], 25.0)
 
 
 class GsdcDevRoutesLaneTest(unittest.TestCase):

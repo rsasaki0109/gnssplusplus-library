@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/coordinates.hpp>
+#include <libgnss++/core/signals.hpp>
 #include <libgnss++/iers/earth_rotation.hpp>
 #include <libgnss++/iers/sub_daily_eop.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
@@ -111,6 +112,36 @@ void mergeRtcmSsrCorrection(const io::RTCMSSRCorrection& input,
         merged.high_rate_clock_m = input.high_rate_clock_m;
         merged.has_high_rate_clock = true;
     }
+}
+
+// Convert RTCM SSR code biases (wire signal IDs, RTCM sign: added to the
+// pseudorange) to the PPP bias map (internal rtcmSsrSignalId keys, subtracted
+// from the pseudorange on the non-MADOCA SSR path). When several wire IDs map
+// to one libgnss++ signal, the preferred tracking mode wins.
+std::map<uint8_t, double> rtcmCodeBiasesToInternal(
+    GNSSSystem system,
+    const std::map<uint8_t, double>& rtcm_code_bias_m) {
+    std::map<uint8_t, std::pair<int, double>> ranked;
+    for (const auto& [wire_id, bias_m] : rtcm_code_bias_m) {
+        int rank = 0;
+        const SignalType signal = signalTypeFromRtcmSsrSignalId(system, wire_id, &rank);
+        if (signal == SignalType::SIGNAL_TYPE_COUNT) {
+            continue;
+        }
+        const uint8_t key = rtcmSsrSignalId(system, signal);
+        if (key == 0U) {
+            continue;
+        }
+        const auto it = ranked.find(key);
+        if (it == ranked.end() || rank < it->second.first) {
+            ranked[key] = {rank, -bias_m};
+        }
+    }
+    std::map<uint8_t, double> internal;
+    for (const auto& [key, value] : ranked) {
+        internal[key] = value.second;
+    }
+    return internal;
 }
 
 }  // namespace
@@ -448,6 +479,162 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
                 if (merged.has_code_bias) {
                     sampled.code_bias_m = merged.code_bias_m;
                     sampled.code_bias_valid = !sampled.code_bias_m.empty();
+                }
+                sampled.orbit_valid = true;
+                sampled.clock_valid = true;
+                ssr_products_.addCorrection(sampled);
+                ++sampled_corrections;
+            }
+        }
+    }
+
+    ssr_products_loaded_ = sampled_corrections > 0U;
+    return ssr_products_loaded_;
+}
+
+bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
+                                       const NavigationData& nav,
+                                       double sample_step_seconds,
+                                       RTCMSSRProfile profile) {
+    if (profile == RTCMSSRProfile::Legacy) {
+        return loadRTCMSSRProducts(rtcm_file, nav, sample_step_seconds);
+    }
+
+    ssr_products_.clear();
+    require_coherent_ssr_ = false;
+    ssr_products_loaded_ = false;
+    if (rtcm_file.empty() || sample_step_seconds <= 0.0) {
+        return false;
+    }
+    io::RTCMReader reader;
+    if (!reader.open(rtcm_file)) {
+        return false;
+    }
+
+    // Pass 1: decode the stream into per-satellite orbit/clock updates, each
+    // tagged with the code biases held at that point of the stream. HAS IDD
+    // code-bias messages carry a fixed, stale epoch, so biases are held by
+    // stream order rather than merged by epoch.
+    struct HeldUpdate {
+        io::RTCMSSRCorrection correction;
+        std::map<uint8_t, double> code_bias_m;
+    };
+    io::RTCMProcessor rtcm_processor;
+    std::map<SatelliteId, io::RTCMSSRCorrection> pending_corrections;
+    std::map<SatelliteId, std::map<uint8_t, double>> held_code_bias;
+    std::map<SatelliteId, std::vector<HeldUpdate>> updates;
+    io::RTCMMessage message;
+    while (reader.readMessage(message)) {
+        std::vector<io::RTCMSSRCorrection> decoded_corrections;
+        if (!rtcm_processor.decodeSSRCorrections(message, decoded_corrections)) {
+            continue;
+        }
+        for (const auto& correction : decoded_corrections) {
+            if (correction.has_code_bias) {
+                held_code_bias[correction.satellite] = rtcmCodeBiasesToInternal(
+                    correction.satellite.system, correction.code_bias_m);
+            }
+            if (!correction.has_orbit && !correction.has_clock &&
+                !correction.has_ura && !correction.has_high_rate_clock) {
+                continue;
+            }
+            io::RTCMSSRCorrection aligned_correction = correction;
+            aligned_correction.has_code_bias = false;
+            aligned_correction.code_bias_m.clear();
+            aligned_correction.time =
+                alignSsrTimeToNavigationWeek(nav, aligned_correction.satellite, aligned_correction.time);
+
+            auto& merged = pending_corrections[aligned_correction.satellite];
+            const bool same_group =
+                merged.satellite == aligned_correction.satellite &&
+                std::abs(merged.time - aligned_correction.time) < 1e-6 &&
+                merged.issue_of_data == aligned_correction.issue_of_data &&
+                merged.provider_id == aligned_correction.provider_id &&
+                merged.solution_id == aligned_correction.solution_id;
+            if (!same_group) {
+                merged = io::RTCMSSRCorrection{};
+            }
+            mergeRtcmSsrCorrection(aligned_correction, merged);
+            if (!merged.has_orbit || !merged.has_clock) {
+                continue;
+            }
+            auto& satellite_updates = updates[merged.satellite];
+            const auto bias_it = held_code_bias.find(merged.satellite);
+            HeldUpdate update{merged, bias_it != held_code_bias.end()
+                                          ? bias_it->second
+                                          : std::map<uint8_t, double>{}};
+            if (!satellite_updates.empty() &&
+                std::abs(satellite_updates.back().correction.time - merged.time) < 1e-6) {
+                satellite_updates.back() = std::move(update);
+            } else {
+                satellite_updates.push_back(std::move(update));
+            }
+        }
+    }
+
+    // Pass 2: hold each update until the next one for the satellite (bounded
+    // by kHasIddMaxHoldSeconds), sampling on the step grid so PPP epochs hit
+    // an exact sample and never interpolate across an IODE change.
+    size_t sampled_corrections = 0;
+    for (auto& [satellite, satellite_updates] : updates) {
+        std::stable_sort(satellite_updates.begin(), satellite_updates.end(),
+                         [](const HeldUpdate& lhs, const HeldUpdate& rhs) {
+                             return lhs.correction.time < rhs.correction.time;
+                         });
+        for (size_t index = 0; index < satellite_updates.size(); ++index) {
+            const auto& update = satellite_updates[index];
+            const io::RTCMSSRCorrection& correction = update.correction;
+            double hold_seconds = kHasIddMaxHoldSeconds;
+            if (index + 1 < satellite_updates.size()) {
+                hold_seconds = std::min(
+                    hold_seconds, satellite_updates[index + 1].correction.time - correction.time);
+            }
+            const int sample_count = std::max(
+                1, static_cast<int>(std::ceil(hold_seconds / sample_step_seconds - 1e-9)));
+            for (int sample_index = 0; sample_index < sample_count; ++sample_index) {
+                const double dt = sample_step_seconds * static_cast<double>(sample_index);
+                const GNSSTime sample_time = correction.time + dt;
+                Vector3d position = Vector3d::Zero();
+                Vector3d velocity = Vector3d::Zero();
+                double clock_bias = 0.0;
+                double clock_drift = 0.0;
+                // The RAC frame only needs the orbit geometry; fall back to
+                // the default ephemeris when the referenced IODE is not
+                // loaded. PPP still rejects the satellite at that epoch because
+                // it requires the IODE-matched broadcast record.
+                if (!nav.calculateSatelliteState(satellite, sample_time, position, velocity,
+                                                 clock_bias, clock_drift, correction.iode) &&
+                    !nav.calculateSatelliteState(satellite, sample_time, position, velocity,
+                                                 clock_bias, clock_drift)) {
+                    continue;
+                }
+
+                SSROrbitClockCorrection sampled;
+                sampled.satellite = satellite;
+                sampled.time = sample_time;
+                sampled.orbit_reference_time = correction.time;
+                sampled.clock_reference_time = correction.time;
+                sampled.iode = correction.iode;
+                sampled.ssr_orbit_iod = correction.issue_of_data;
+                sampled.ssr_clock_iod = correction.issue_of_data;
+                sampled.orbit_correction_ecef = ssrRacToEcef(
+                    position,
+                    velocity,
+                    correction.orbit_delta_rac_m + correction.orbit_rate_rac_mps * dt);
+                sampled.clock_correction_m =
+                    correction.clock_delta_poly.x() +
+                    correction.clock_delta_poly.y() * dt +
+                    correction.clock_delta_poly.z() * dt * dt;
+                if (correction.has_high_rate_clock) {
+                    sampled.clock_correction_m += correction.high_rate_clock_m;
+                }
+                if (correction.has_ura) {
+                    sampled.ura_sigma_m = correction.ura_sigma_m;
+                    sampled.ura_valid = true;
+                }
+                if (!update.code_bias_m.empty()) {
+                    sampled.code_bias_m = update.code_bias_m;
+                    sampled.code_bias_valid = true;
                 }
                 sampled.orbit_valid = true;
                 sampled.clock_valid = true;
