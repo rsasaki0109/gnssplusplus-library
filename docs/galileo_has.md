@@ -6,7 +6,7 @@ Status of Galileo High Accuracy Service (HAS) support in libgnss++.
 |---|---|
 | Float PPP with HAS corrections from the HAS Internet Data Distribution (IDD, RTCM 3 SSR) | **Supported** (`gnss_ppp --ssr-rtcm <idd.rtc> --ssr-rtcm-profile has-idd`) |
 | Static float PPP validated against a known coordinate | **Validated** on the public OBE4 / 2023-08-17 IDD sample, lane `gnss reproduce has-idd-ppp` |
-| Kinematic float PPP | **Validated** on the same sample (white-noise position, no motion prior): 0.02 m horizontal / -0.39 m up after one hour, gated by the lane |
+| Kinematic float PPP | **Validated** on the same sample (white-noise position, no motion prior): 0.12 m horizontal / +0.06 m up after one hour (hour RMS 0.09 m / 0.10 m), gated by the lane |
 | HAS signal-in-space (Galileo E6-B page) decoder | **Planned** (stage B): Reed-Solomon page recovery, MT1 mask / orbit / clock / bias decoding into the same SSR products |
 | HAS phase biases and PPP-AR | **Not available**: the HAS Service Level 1 corrections used here carry no phase biases, so ambiguities stay float |
 
@@ -69,24 +69,26 @@ a SEPCHOKE_B3E6 antenna).
 python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /data/cssrlib-data/data/doy2023-229 --check
 ```
 
-Lane result (2026-09-29, MSVC Release, elapsed time from the first epoch
+Lane result (2026-09-29, kinematic rows 2026-09-30, MSVC Release, elapsed time from the first epoch
 01:59:12 GPST):
 
 | Run | H / U at 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
 | `has-idd`, static | 0.016 / -0.490 m | 0.058 / -0.421 m | 0.073 / -0.082 m | **0.095 / -0.135 m** | **4.2 min** | **21.0 min** |
 | `legacy` conversion of the same stream, static | 0.374 / -0.537 m | 0.261 / -0.219 m | 0.267 / +0.282 m | 0.160 / +0.088 m | 57.5 min | 53.1 min |
-| `has-idd`, kinematic | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.136 / +0.058 m | **0.018 / -0.390 m** | 45.0 min | never (-0.44 m at the last epoch) |
+| `has-idd`, kinematic | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.059 / +0.015 m | **0.115 / +0.059 m** | 59.6 min | 6.0 min |
+| `has-idd`, kinematic, before the residual screening | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.136 / +0.058 m | 0.018 / -0.390 m | 45.0 min | never (-0.44 m at the last epoch) |
 | `has-idd`, kinematic, before the one-update fix | 3.03 / -5.95 m | 2.47 / -5.13 m | 2.20 / -5.71 m | 1.87 / -5.61 m | never | never |
 
 The lane gates the static run (H at 60 min <= 0.20 m, |U| at 60 min <= 0.40 m,
 horizontal convergence <= 10 min, vertical convergence <= 30 min) and the
 kinematic run (H <= 0.30 m and |U| <= 0.60 m at 30 and 60 min), and reports
-the other rows. The kinematic horizontal error peaks at 0.27 m between 30 and
-45 min and the up error drifts from +0.3 m to -0.44 m over the last five
-minutes; the static run follows the same excursions with less amplitude, so
-they come from the corrections / observations of this hour rather than from
-the kinematic model.
+the other rows. With the kinematic post-fit residual screening (see
+[Broadcast kinematic PPP](broadcast_kinematic_ppp.md)) the kinematic run stays
+within 0.21 m horizontally and 0.24 m vertically after the first 10 minutes
+(RMS 0.086 m / 0.099 m, against 0.156 m / 0.206 m and peaks of 0.27 m /
+0.48 m before); it crosses 0.20 m horizontally once more just before the end
+of the hour, hence the late horizontal convergence time.
 
 Comparison with [cssrlib](https://github.com/hirokawa/cssrlib) (main,
 `samples/test_ppprtcm.py` case 1, which processes the same files from
@@ -105,9 +107,9 @@ error. cssrlib's kinematic mode in that sample uses a 0.01 m/sqrt(s) position
 random walk and gives the same numbers as its static mode. The libgnss++
 kinematic filter re-seeds the position from SPP every epoch (white-noise
 position, no motion prior); from 02:00:00 it gives 0.051 / -0.183, 0.072 /
--0.143, 0.178 / +0.099 and 0.024 / -0.456 m at 10 / 20 / 30 / 60 min (with
-`--antex igs20.atx`: 0.052 / -0.290, 0.072 / -0.251, 0.178 / -0.008 and
-0.023 / -0.563 m).
+-0.143, 0.064 / +0.009 and 0.099 / +0.114 m at 10 / 20 / 30 / 60 min (with
+`--antex igs20.atx`: 0.052 / -0.290, 0.072 / -0.251, 0.063 / -0.098 and
+0.099 / +0.007 m).
 
 H is the horizontal error and U the up error at the given time after the
 first epoch; convergence is the first time after which H stays below 0.20 m
@@ -125,7 +127,9 @@ applied; with `--antex igs20.atx` the up error shifts by about -0.1 m.
   float ambiguities soaked up the difference. Kinematic PPP now commits one
   update per epoch, as RTKLIB / MADOCALIB do. Static and `--low-dynamics`
   runs keep the historical pass count (their prior is the previous solution,
-  so the stale-geometry push is millimetre-level).
+  so the stale-geometry push is millimetre-level). Kinematic PPP also screens
+  its post-fit residuals (w-test, 4 sigma); see
+  [Broadcast kinematic PPP](broadcast_kinematic_ppp.md).
 - **Galileo inter-system bias.** Galileo shares the GPS receiver clock unless
   `GNSS_PPP_ESTIMATE_ISB=gal` is set (as on the other non-MADOCA PPP paths).
   On this sample Galileo code residuals sit about 2 m below GPS; estimating

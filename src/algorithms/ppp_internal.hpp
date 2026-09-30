@@ -45,6 +45,52 @@ inline int filterIterationCount(bool madoca_per_frequency_update,
     return precise_products_loaded ? 3 : configured_iterations;
 }
 
+// Post-fit residual screening for kinematic PPP. RTKLIB/MADOCALIB ppp.c
+// (ppp_res(), THRES_REJECT = 4) excludes the satellite with the largest
+// post-fit residual beyond four sigmas and redoes the epoch's update from the
+// predicted state. The native kinematic filter had no equivalent (its code
+// gate only rejects kilometre-level blunders), so urban NLOS code rows tens of
+// metres long were committed and carried into the persistent troposphere and
+// float-ambiguity states. The residuals are standardized by their own
+// covariance (Baarda w-test) rather than by the measurement sigma alone: the
+// native phase sigma (~1 cm, no broadcast signal-in-space term) would otherwise
+// make the phase rows of healthy satellites the "worst" rows whenever one code
+// outlier bends the solution. Used for kinematic motion (not --low-dynamics),
+// which commits one update per epoch; coherent MADOCA keeps the MADOCALIB
+// bridge semantics it is pinned against, and the CLAS OSR lane never reaches
+// this filter.
+inline constexpr double kPostfitRejectSigma = 4.0;
+
+inline bool usePostfitResidualScreening(bool kinematic_motion,
+                                        bool coherent_madoca_ssr,
+                                        bool clas_osr_filter) {
+    return kinematic_motion && !coherent_madoca_ssr && !clas_osr_filter;
+}
+
+// Index of the row with the largest standardized post-fit residual
+// w_i = (S^-1 r)_i / sqrt((S^-1)_ii), S = H P H' + R the innovation covariance
+// and r the innovations (for a Kalman update the post-fit residual is
+// R S^-1 r with covariance R S^-1 R); -1 when every |w_i| <= threshold_sigma.
+inline int worstStandardizedResidualRow(const Eigen::VectorXd& innovations,
+                                        const Eigen::MatrixXd& innovation_inverse,
+                                        double threshold_sigma) {
+    const Eigen::VectorXd weighted = innovation_inverse * innovations;
+    int worst = -1;
+    double worst_ratio = threshold_sigma;
+    for (int i = 0; i < weighted.size(); ++i) {
+        const double variance = innovation_inverse(i, i);
+        if (!(variance > 0.0) || !std::isfinite(weighted(i))) {
+            continue;
+        }
+        const double ratio = std::abs(weighted(i)) / std::sqrt(variance);
+        if (ratio > worst_ratio) {
+            worst_ratio = ratio;
+            worst = i;
+        }
+    }
+    return worst;
+}
+
 inline double geometryFreeSlipThresholdMeters(
     bool madoca_per_frequency,
     double configured_threshold_m) {
@@ -456,6 +502,70 @@ inline std::vector<SignalType> secondarySignals(GNSSSystem system) {
         default: return {};
     }
 }
+
+// Ionosphere-free PPP whose satellite clocks come from the broadcast
+// ephemeris, with no precise, SSR or DCB/OSB products supplying code biases.
+inline bool broadcastClockIonosphereFree(bool use_ionosphere_free,
+                                         bool precise_products_loaded,
+                                         bool ssr_products_loaded,
+                                         bool dcb_products_loaded) {
+    return use_ionosphere_free && !precise_products_loaded &&
+           !ssr_products_loaded && !dcb_products_loaded;
+}
+
+// Broadcast (D1/D2) BeiDou satellite clocks are referenced to B3I; the B1I and
+// B2I codes carry the broadcast group delays TGD1 / TGD2 (BDS-SIS-ICD-2.1
+// 5.2.4.10, RTKLIB pntpos.c prange()), which reach -45 ns (-13.5 m) on BDS-3
+// satellites and are amplified by the ionosphere-free combination. The BDS-3
+// B1C / B2a signals have no group delay in D1/D2 (only in B-CNAV1/2), so they
+// cannot be used against a D1/D2 clock.
+inline const std::vector<SignalType>& broadcastBeiDouPrimarySignals() {
+    static const std::vector<SignalType> signals{SignalType::BDS_B1I};
+    return signals;
+}
+
+inline const std::vector<SignalType>& broadcastBeiDouSecondarySignals() {
+    static const std::vector<SignalType> signals{
+        SignalType::BDS_B2I, SignalType::BDS_B3I};
+    return signals;
+}
+
+inline double broadcastBeiDouGroupDelayMeters(SignalType signal, const Ephemeris& eph) {
+    switch (signal) {
+        case SignalType::BDS_B1I:
+            return constants::SPEED_OF_LIGHT * eph.tgd;
+        case SignalType::BDS_B2I:
+            return constants::SPEED_OF_LIGHT * eph.tgd_secondary;
+        default:
+            return 0.0;  // B3I is the clock reference.
+    }
+}
+
+// Broadcast group delay (metres) to subtract from a single-frequency primary
+// code (the satellite's secondary frequency is missing this epoch). GPS/QZSS
+// LNAV and Galileo clocks are ionosphere-free references, so their L1 / E1
+// code carries TGD / BGD; this is the SPP single-frequency model
+// (spp.cpp groupDelayCorrectionMeters, legacy Galileo field). GLONASS
+// broadcasts no L1 group delay.
+inline double broadcastSingleFrequencyGroupDelayMeters(const SatelliteId& satellite,
+                                                       SignalType signal,
+                                                       const Ephemeris& eph) {
+    switch (satellite.system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::QZSS:
+        case GNSSSystem::Galileo:
+            return constants::SPEED_OF_LIGHT * eph.tgd;
+        case GNSSSystem::BeiDou:
+            return broadcastBeiDouGroupDelayMeters(signal, eph);
+        default:
+            return 0.0;
+    }
+}
+
+// Error factor of the broadcast (Klobuchar) ionosphere model applied to the
+// single-frequency rows of a broadcast ionosphere-free solution: sigma = 0.5 *
+// delay, as RTKLIB ERR_BRDCI.
+inline constexpr double kBroadcastIonosphereErrorFactor = 0.5;
 
 inline const Observation* findObservationForSignals(const ObservationData& obs,
                                                     const SatelliteId& sat,

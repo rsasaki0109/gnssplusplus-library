@@ -676,9 +676,44 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         filter_state_ = pre_update_state;
         pre_anchor_covariance_ = filter_state_.covariance;
     };
+    const bool postfit_screening = usePostfitResidualScreening(
+        ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode,
+        require_coherent_ssr_,
+        ppp_config_.use_clas_osr_filter);
+    std::set<SatelliteId> screened_satellites;
+    const auto dropScreenedSatellites = [&](MeasurementEquation& equation) {
+        std::vector<int> keep;
+        keep.reserve(equation.row_satellites.size());
+        for (int i = 0; i < static_cast<int>(equation.row_satellites.size()); ++i) {
+            if (screened_satellites.count(equation.row_satellites[static_cast<size_t>(i)]) == 0) {
+                keep.push_back(i);
+            }
+        }
+        const int rows = static_cast<int>(keep.size());
+        MeasurementEquation reduced;
+        reduced.design_matrix = MatrixXd::Zero(rows, equation.design_matrix.cols());
+        reduced.observations = VectorXd::Zero(rows);
+        reduced.predicted = VectorXd::Zero(rows);
+        reduced.weight_matrix = MatrixXd::Zero(rows, rows);
+        reduced.residuals = VectorXd::Zero(rows);
+        for (int r = 0; r < rows; ++r) {
+            const int i = keep[static_cast<size_t>(r)];
+            reduced.design_matrix.row(r) = equation.design_matrix.row(i);
+            reduced.observations(r) = equation.observations(i);
+            reduced.predicted(r) = equation.predicted(i);
+            reduced.weight_matrix(r, r) = equation.weight_matrix(i, i);
+            reduced.residuals(r) = equation.residuals(i);
+            reduced.row_satellites.push_back(equation.row_satellites[static_cast<size_t>(i)]);
+            reduced.row_is_phase.push_back(equation.row_is_phase[static_cast<size_t>(i)]);
+        }
+        equation = std::move(reduced);
+    };
     int completed_filter_iterations = 0;
     for (int iteration = 0; iteration < filter_iterations; ++iteration) {
         MeasurementEquation meas_eq = formMeasurementEquations(if_obs, nav, obs.time);
+        if (!screened_satellites.empty()) {
+            dropScreenedSatellites(meas_eq);
+        }
 
         if (meas_eq.observations.size() < config_.min_satellites) {
             if (pppDebugEnabled()) {
@@ -702,6 +737,34 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         const VectorXd delta_state = gain * meas_eq.residuals;
         const double position_delta_norm =
             delta_state.segment(filter_state_.pos_index, 3).norm();
+
+        if (postfit_screening) {
+            const int worst_row = worstStandardizedResidualRow(
+                meas_eq.residuals, innovation_inverse, kPostfitRejectSigma);
+            if (worst_row >= 0) {
+                const SatelliteId worst_satellite =
+                    meas_eq.row_satellites[static_cast<size_t>(worst_row)];
+                std::set<SatelliteId> remaining(
+                    meas_eq.row_satellites.begin(), meas_eq.row_satellites.end());
+                remaining.erase(worst_satellite);
+                if (pppDebugEnabled()) {
+                    std::cerr << "[PPP] postfit reject " << worst_satellite.toString()
+                              << (meas_eq.row_is_phase[static_cast<size_t>(worst_row)]
+                                      ? " phase" : " code")
+                              << " innovation=" << meas_eq.residuals(worst_row)
+                              << " excluded=" << screened_satellites.size() + 1
+                              << " remaining=" << remaining.size() << "\n";
+                }
+                if (remaining.size() < static_cast<size_t>(config_.min_satellites)) {
+                    // Not enough satellites left to screen further (RTKLIB
+                    // "iteration overflows"): commit no update this epoch.
+                    return false;
+                }
+                screened_satellites.insert(worst_satellite);
+                --iteration;  // redo this pass from the predicted state
+                continue;
+            }
+        }
 
         if (madoca_static_spike_guard &&
             std::isfinite(position_delta_norm) &&

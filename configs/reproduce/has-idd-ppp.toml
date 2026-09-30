@@ -131,8 +131,10 @@ foreach = [
 ]
 
 # Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
-# one measurement update per epoch). Before that fix it settled at
-# H 1.87 m / U -5.61 m after one hour.
+# one measurement update per epoch, post-fit residual screening). Before the
+# one-update fix it settled at H 1.87 m / U -5.61 m after one hour; before the
+# screening it read 0.136 / +0.058 m at 30 min and 0.018 / -0.390 m at 60 min
+# (hour RMS after 10 min: H 0.156 m, U 0.206 m; now 0.086 m, 0.099 m).
 [[metrics]]
 name = "has-idd kinematic H at {t} (m)"
 source = "{work_dir}/summary.json"
@@ -161,10 +163,10 @@ foreach = [
   { t = "10min", field = "up_m", expected = -0.195 },
   { t = "20min", field = "h_m", expected = 0.064 },
   { t = "20min", field = "up_m", expected = -0.127 },
-  { t = "30min", field = "h_m", expected = 0.136 },
-  { t = "30min", field = "up_m", expected = 0.058 },
-  { t = "60min", field = "h_m", expected = 0.018 },
-  { t = "60min", field = "up_m", expected = -0.390 },
+  { t = "30min", field = "h_m", expected = 0.059 },
+  { t = "30min", field = "up_m", expected = 0.015 },
+  { t = "60min", field = "h_m", expected = 0.115 },
+  { t = "60min", field = "up_m", expected = 0.059 },
 ]
 
 # The same stream through the legacy RTCM SSR conversion (no IODE match,

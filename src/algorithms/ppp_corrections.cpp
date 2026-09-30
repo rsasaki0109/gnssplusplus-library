@@ -14,6 +14,7 @@
 #include <libgnss++/iers/earth_rotation.hpp>
 #include <libgnss++/iers/ephemeris.hpp>
 #include <libgnss++/iers/tides.hpp>
+#include <libgnss++/models/ionosphere.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
 #include <algorithm>
@@ -1342,6 +1343,41 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         if (!std::isfinite(geometry.distance) || geometry.elevation < elevation_mask) {
             observation.valid = false;
             continue;
+        }
+
+        // Single-frequency rows of a broadcast ionosphere-free solution carry
+        // the full first-order ionospheric delay (metres to tens of metres);
+        // correct it with the broadcast Klobuchar model and its error
+        // (RTKLIB ERR_BRDCI) unless IONEX is loaded (handled below).
+        if (observation.secondary_signal == SignalType::SIGNAL_TYPE_COUNT &&
+            !ionex_products_loaded_ &&
+            broadcastClockIonosphereFree(
+                ppp_config_.use_ionosphere_free,
+                precise_products_loaded_,
+                ssr_products_loaded_,
+                dcb_products_loaded_)) {
+            const double frequency_hz =
+                signalFrequencyHz(observation.primary_signal, eph);
+            if (!nav.ionosphere_model.valid || !(frequency_hz > 0.0)) {
+                observation.valid = false;
+                continue;
+            }
+            double latitude = 0.0;
+            double longitude = 0.0;
+            double height = 0.0;
+            ecef2geodetic(receiver_position, latitude, longitude, height);
+            const double frequency_ratio = constants::GPS_L1_FREQ / frequency_hz;
+            const double ionosphere_delay_m =
+                models::ionoDelayKlobuchar(
+                    latitude, longitude, geometry.azimuth, geometry.elevation,
+                    time.tow,
+                    nav.ionosphere_model.alpha,
+                    nav.ionosphere_model.beta) *
+                frequency_ratio * frequency_ratio;
+            observation.pseudorange_if -= ionosphere_delay_m;
+            const double ionosphere_sigma_m =
+                ppp_internal::kBroadcastIonosphereErrorFactor * ionosphere_delay_m;
+            deferred_variance_pr += ionosphere_sigma_m * ionosphere_sigma_m;
         }
 
         if (!applied_ssr_code_bias && dcb_products_loaded_) {

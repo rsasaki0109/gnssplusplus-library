@@ -75,8 +75,18 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             continue;
         }
 
+        const bool broadcast_clock = broadcastClockIonosphereFree(
+            ppp_config_.use_ionosphere_free,
+            precise_products_loaded_,
+            ssr_products_loaded_,
+            dcb_products_loaded_);
+        const bool broadcast_beidou_clock =
+            broadcast_clock && sat.system == GNSSSystem::BeiDou;
         const Observation* primary =
-            findObservationForSignals(obs, sat, primarySignals(sat.system));
+            findObservationForSignals(
+                obs, sat,
+                broadcast_beidou_clock ? broadcastBeiDouPrimarySignals()
+                                       : primarySignals(sat.system));
         if (require_coherent_ssr_) {
             primary =
                 algorithms::ppp_bias_identity::madocaFrequencySlotObservation(
@@ -158,9 +168,15 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
 
         const bool prefer_qzss_l5 =
             require_coherent_ssr_ && env_overrides_.madoca_qzss_l5;
+        if (broadcast_beidou_clock && eph == nullptr) {
+            continue;
+        }
         const Observation* secondary = findObservationForSignals(
-            obs, sat, secondarySignalsForObservation(
-                sat, prefer_qzss_l5, require_coherent_ssr_));
+            obs, sat,
+            broadcast_beidou_clock
+                ? broadcastBeiDouSecondarySignals()
+                : secondarySignalsForObservation(
+                      sat, prefer_qzss_l5, require_coherent_ssr_));
         if (require_coherent_ssr_) {
             secondary =
                 algorithms::ppp_bias_identity::madocaFrequencySlotObservation(
@@ -280,13 +296,25 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
 
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
+            if (broadcast_clock) {
+                if (eph == nullptr) {
+                    continue;
+                }
+                // Single-frequency row in a broadcast ionosphere-free solution:
+                // remove the broadcast group delay here and the broadcast
+                // ionosphere in applyPreciseCorrections(). Its raw carrier
+                // phase is not ionosphere-free, so it must not be tied to the
+                // satellite's ionosphere-free ambiguity state: code only.
+                entry.pseudorange_if -= broadcastSingleFrequencyGroupDelayMeters(
+                    sat, primary->signal, *eph);
+            }
             captureObservationIdentity(entry, *primary, true);
             entry.primary_code_bias_coeff = 1.0;
             entry.secondary_code_bias_coeff = 0.0;
             if (capture_shadow_metadata) {
                 entry.primary_frequency_hz = signalFrequencyHz(primary->signal, eph);
             }
-            if (primary->has_carrier_phase) {
+            if (primary->has_carrier_phase && !broadcast_clock) {
                 const double wavelength = signalWavelengthMeters(primary->signal, eph);
                 if (wavelength > 0.0) {
                     entry.carrier_phase_if = primary->carrier_phase * wavelength;
@@ -312,6 +340,13 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         const auto coefficients = ppp_utils::getIonosphereFreeCoefficients(f1, f2);
         entry.pseudorange_if =
             coefficients.first * primary->pseudorange + coefficients.second * secondary->pseudorange;
+        if (broadcast_beidou_clock) {
+            entry.pseudorange_if -=
+                coefficients.first *
+                    broadcastBeiDouGroupDelayMeters(primary->signal, *eph) +
+                coefficients.second *
+                    broadcastBeiDouGroupDelayMeters(secondary->signal, *eph);
+        }
         captureObservationIdentity(entry, *primary, true);
         captureObservationIdentity(entry, *secondary, false);
         entry.primary_code_bias_coeff = coefficients.first;
