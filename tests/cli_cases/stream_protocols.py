@@ -1046,10 +1046,10 @@ class StreamProtocolCases:
             self.assertIn("exported_sfrbx_messages=1", result.stdout)
             exported = output_path.read_text(encoding="ascii")
             self.assertIn(
-                "system,sv_id,frequency_id,channel,version,frame_kind,frame_id,page_id,word_count,words_hex",
+                "system,sv_id,signal_id,frequency_id,channel,version,frame_kind,frame_id,page_id,word_count,words_hex",
                 exported,
             )
-            self.assertIn("GPS,12,0,1,2,GPS_LNAV,5,,3,8B0000AA;00000500;CAFEBABE", exported)
+            self.assertIn("GPS,12,0,0,1,2,GPS_LNAV,5,,3,8B0000AA;00000500;CAFEBABE", exported)
     def test_convert_exports_gps_nav_from_ubx_sfrbx(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_convert_nav_test_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1207,3 +1207,69 @@ class StreamProtocolCases:
             self.assertIn("E05", exported)
             self.assertIn("5.440588203430D+03", exported)
             self.assertIn("1.094304025173D-08", exported)
+    def test_convert_exports_nav_from_real_x20_sfrbx(self) -> None:
+        # Real u-blox X20 frames: only the L1 C/A LNAV, E1-B I/NAV and B3I D1
+        # frames may feed the ephemeris decoders; CNAV / F/NAV / E6 / B-CNAV
+        # frames of the same satellites and constellations must not.
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_x20_nav_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "x20.ubx"
+            output_path = temp_root / "x20.nav"
+            csv_path = temp_root / "x20_sfrbx.csv"
+            input_path.write_bytes(build_x20_sfrbx_excerpt())
+
+            result = self.run_gnss(
+                "convert",
+                "--format",
+                "ubx",
+                "--input",
+                str(input_path),
+                "--nav-out",
+                str(output_path),
+                "--sfrbx-out",
+                str(csv_path),
+                "--quiet",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("summary: processed_messages=19", result.stdout)
+            self.assertIn("exported_nav_messages=3", result.stdout)
+            self.assertIn("exported_sfrbx_messages=19", result.stdout)
+
+            # Values identical to the IGS BRDC00WRD 2025-189 records.
+            exported = output_path.read_text(encoding="ascii")
+            self.assertIn("G10 2025  7  8 20  0  0-4.758099094033D-04", exported)
+            self.assertIn("5.153654279709D+03", exported)
+            self.assertIn("E04 2025  7  8 19 20  0-2.803717507049D-04", exported)
+            self.assertIn("5.440617601395D+03", exported)
+            self.assertIn("C27 2025  7  8 19  0  0 5.004175473005D-04", exported)
+            self.assertIn("5.282620653152D+03", exported)
+
+            rows = csv_path.read_text(encoding="ascii").splitlines()
+            self.assertEqual(len(rows), 20)
+            self.assertTrue(rows[1].startswith("GPS,10,0,0,60,2,GPS_LNAV,1,,10,"))
+            self.assertTrue(rows[5].startswith("Galileo,4,1,0,89,2,GAL_INAV,1,,8,"))
+            self.assertTrue(rows[10].startswith("BeiDou,27,4,0,44,2,BDS_D1,1,,10,"))
+            self.assertTrue(rows[14].startswith("GPS,18,6,0,1,2,UNKNOWN,,,10,"))
+            self.assertTrue(rows[16].startswith("Galileo,19,3,0,29,2,UNKNOWN,,,8,"))
+            self.assertTrue(rows[18].startswith("BeiDou,49,6,0,77,2,UNKNOWN,,,9,"))
+
+    def test_ubx_info_decodes_real_x20_sfrbx(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ubx_info_x20_test_") as temp_dir:
+            input_path = Path(temp_dir) / "x20.ubx"
+            input_path.write_bytes(build_x20_sfrbx_excerpt())
+
+            result = self.run_gnss("ubx-info", "--input", str(input_path), "--decode-nav")
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("sfrbx=19", result.stdout)
+            for expected in (
+                "subframe: system=GPS sv=10 words=10 kind=GPS_LNAV frame_id=3 sig_id=0",
+                "subframe: system=Galileo sv=4 words=8 kind=GAL_INAV frame_id=0 sig_id=1",
+                "subframe: system=BeiDou sv=27 words=10 kind=BDS_D1 frame_id=2 sig_id=4",
+                "subframe: system=GPS sv=18 words=10 kind=UNKNOWN sig_id=4",
+                "subframe: system=SBAS sv=135 words=8 kind=SBAS frame_id=0 sig_id=0",
+                "subframe: system=Galileo sv=19 words=16 kind=UNKNOWN sig_id=8",
+                "subframe: system=BeiDou sv=49 words=9 kind=UNKNOWN sig_id=8",
+            ):
+                self.assertIn(expected, result.stdout)

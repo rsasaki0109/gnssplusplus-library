@@ -86,8 +86,10 @@ is included.
 
 The same test embeds two HAS messages (1.3 kB) decoded from the u-blox X20
 recording `drive_0708/gnss_1934.ubx` of
-[rtklibexplorer/GNSS_IMU](https://github.com/rtklibexplorer/GNSS_IMU), under
-the BSD 3-Clause License:
+[rtklibexplorer/GNSS_IMU](https://github.com/rtklibexplorer/GNSS_IMU), and
+`tests/test_ubx.cpp` and `tests/cli_cases/_support.py` embed nineteen
+UBX-RXM-SFRBX frames (1.0 kB) from the same recording, under the BSD 3-Clause
+License:
 
 > Copyright (c) 2025, rtklibexplorer
 >

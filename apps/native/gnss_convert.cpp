@@ -192,7 +192,7 @@ const char* systemName(libgnss::GNSSSystem system) {
 }
 
 bool writeSfrbxCsvHeader(std::ofstream& output) {
-    output << "system,sv_id,frequency_id,channel,version,frame_kind,frame_id,page_id,word_count,words_hex\n";
+    output << "system,sv_id,signal_id,frequency_id,channel,version,frame_kind,frame_id,page_id,word_count,words_hex\n";
     return static_cast<bool>(output);
 }
 
@@ -201,6 +201,7 @@ bool writeSfrbxCsvRow(std::ofstream& output, const libgnss::io::UBXSfrbx& sfrbx)
     const bool has_frame_info = libgnss::io::ubx_utils::decodeSfrbxFrameInfo(sfrbx, frame_info);
     output << systemName(sfrbx.system) << ","
            << static_cast<int>(sfrbx.sv_id) << ","
+           << static_cast<int>(sfrbx.signal_id) << ","
            << static_cast<int>(sfrbx.frequency_id) << ","
            << static_cast<int>(sfrbx.channel) << ","
            << static_cast<int>(sfrbx.version) << ","
@@ -726,7 +727,7 @@ int32_t mergeSignedFields3(int32_t upper, uint32_t middle, int middle_bits, uint
 bool buildBeiDouD1Subframe(const libgnss::io::UBXSfrbx& sfrbx,
                            std::array<uint8_t, 38>& subframe,
                            int& subframe_id) {
-    if (sfrbx.words.size() < 10 || sfrbx.sv_id <= 5) {
+    if (sfrbx.words.size() < 10 || libgnss::io::ubx_utils::isSfrbxBeiDouD2(sfrbx)) {
         return false;
     }
 
@@ -873,7 +874,7 @@ bool decodeBeiDouD1Ephemeris(const libgnss::SatelliteId& satellite,
 bool buildBeiDouD2Page(const libgnss::io::UBXSfrbx& sfrbx,
                        std::array<uint8_t, 38>& page,
                        int& page_id) {
-    if (sfrbx.words.size() < 10 || sfrbx.sv_id > 5) {
+    if (sfrbx.words.size() < 10 || !libgnss::io::ubx_utils::isSfrbxBeiDouD2(sfrbx)) {
         return false;
     }
 
@@ -1432,7 +1433,14 @@ int runUBXConversion(const ConvertConfig& config) {
                 has_nav_time_hint = true;
             }
 
-            if (!config.nav_out_path.empty() && event.has_sfrbx &&
+            // Only legacy navigation signals (L1 C/A LNAV, I/NAV, D1/D2,
+            // GLONASS strings) feed the frame decoders below; CNAV, F/NAV,
+            // E6 and B-CNAV subframes share the gnssId but not the layout.
+            const bool legacy_nav_sfrbx =
+                event.has_sfrbx &&
+                libgnss::io::ubx_utils::isSfrbxLegacyNavigation(event.sfrbx);
+
+            if (!config.nav_out_path.empty() && legacy_nav_sfrbx &&
                 (event.sfrbx.system == libgnss::GNSSSystem::GPS ||
                  event.sfrbx.system == libgnss::GNSSSystem::QZSS)) {
                 const libgnss::SatelliteId satellite(event.sfrbx.system, event.sfrbx.sv_id);
@@ -1486,7 +1494,7 @@ int runUBXConversion(const ConvertConfig& config) {
                 }
             }
 
-            if (!config.nav_out_path.empty() && event.has_sfrbx &&
+            if (!config.nav_out_path.empty() && legacy_nav_sfrbx &&
                 event.sfrbx.system == libgnss::GNSSSystem::GLONASS) {
                 const libgnss::SatelliteId satellite(event.sfrbx.system, event.sfrbx.sv_id);
                 std::array<uint8_t, 10> string_data{};
@@ -1554,7 +1562,7 @@ int runUBXConversion(const ConvertConfig& config) {
                 }
             }
 
-            if (!config.nav_out_path.empty() && event.has_sfrbx &&
+            if (!config.nav_out_path.empty() && legacy_nav_sfrbx &&
                 event.sfrbx.system == libgnss::GNSSSystem::Galileo) {
                 const libgnss::SatelliteId satellite(event.sfrbx.system, event.sfrbx.sv_id);
                 std::array<uint8_t, 16> word{};
@@ -1606,9 +1614,9 @@ int runUBXConversion(const ConvertConfig& config) {
                 }
             }
 
-            if (!config.nav_out_path.empty() && event.has_sfrbx &&
+            if (!config.nav_out_path.empty() && legacy_nav_sfrbx &&
                 event.sfrbx.system == libgnss::GNSSSystem::BeiDou &&
-                event.sfrbx.sv_id > 5) {
+                !libgnss::io::ubx_utils::isSfrbxBeiDouD2(event.sfrbx)) {
                 const libgnss::SatelliteId satellite(event.sfrbx.system, event.sfrbx.sv_id);
                 std::array<uint8_t, 38> subframe{};
                 int subframe_id = 0;
@@ -1660,9 +1668,9 @@ int runUBXConversion(const ConvertConfig& config) {
                 }
             }
 
-            if (!config.nav_out_path.empty() && event.has_sfrbx &&
+            if (!config.nav_out_path.empty() && legacy_nav_sfrbx &&
                 event.sfrbx.system == libgnss::GNSSSystem::BeiDou &&
-                event.sfrbx.sv_id <= 5) {
+                libgnss::io::ubx_utils::isSfrbxBeiDouD2(event.sfrbx)) {
                 const libgnss::SatelliteId satellite(event.sfrbx.system, event.sfrbx.sv_id);
                 std::array<uint8_t, 38> page{};
                 int page_id = 0;
