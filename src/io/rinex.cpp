@@ -1013,6 +1013,22 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             return;
         }
 
+        if (active_header.system == 'R' &&
+            !rinex4::isPlausibleGlonassFdmaState(eph.glonass_position,
+                                                 eph.glonass_velocity)) {
+            // A record assembled from immediate-data strings of two frames
+            // (e.g. stale Z/Vz/Az or TauN after a tb change) is not on any
+            // GLONASS orbit; using it puts the satellite thousands of km off.
+            const std::string epoch =
+                body.front().size() >= 23 ? body.front().substr(4, 19) : std::string();
+            std::cerr << "Skipping RINEX 4 GLONASS EPH " << active_header.source << ' '
+                      << active_header.message_type << ' ' << epoch
+                      << ": broadcast state vector is not on a GLONASS orbit (|r|="
+                      << eph.glonass_position.norm() * 1e-3 << " km)" << std::endl;
+            body.clear();
+            return;
+        }
+
         if (active_header.system == 'E') {
             const bool inav_e1b_source = (eph.data_source_code & (1 << 0)) != 0;
             const bool fnav_e5a_source = (eph.data_source_code & (1 << 1)) != 0;
