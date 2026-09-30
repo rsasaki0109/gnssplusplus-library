@@ -1,0 +1,171 @@
+# Galileo HAS float PPP from the HAS signal-in-space (E6-B C/NAV pages)
+# decoded natively (gnss_ppp --has-pages). Not a README row; see
+# docs/galileo_has.md.
+#
+# Inputs: the public HAS SIS samples of hirokawa/cssrlib-data (Kamakura,
+# Japan, Septentrio mosaic-X5 + JAVRINGANT_DM):
+#   data/doy2025-046/{046r_rnx.obs, 046r_gale6.txt}  2025-02-15 17:00-18:00 GPST
+#   data/doy2025-233/{233h_rnx.obs, 233h_gale6.txt}  2025-08-21 07:00-08:00 GPST
+# plus the IGS merged broadcast navigation files of those days from
+# https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/<doy>/, uncompressed next to
+# them (BRDC00WRD_S_20250460000_01D_MN.rnx, BRDC00WRD_S_20252330000_01D_MN.rnx).
+# The cssrlib-data license is not stated, so nothing is redistributed: pass
+# the cssrlib-data data/ directory with --has-sis-data-root (or
+# GNSSPP_HAS_SIS_DATA_ROOT).
+#
+# Japan lies outside the HAS service area (HAS SDD 1.0 section 3.1 excludes
+# 60S-60N / 90E-180E), so these accuracies are indicative only.
+#
+# Reference coordinate: the cssrlib sample value for Kamakura
+# (samples/test_ppphas.py, 2025 datasets).
+# cssrlib (hirokawa/cssrlib main, 2026-09) on the same hours, static float
+# PPP with its HAS SIS decoder and igs20.atx: 2025-046 H 0.531 / 0.220 /
+# 0.077 / 0.153 m and U +0.450 / -0.033 / +0.193 / -0.065 m at 10 / 20 / 30 /
+# 60 min; 2025-233 H 0.303 / 0.112 / 0.079 / 0.079 m and U -0.663 / -0.501 /
+# -0.186 / +0.212 m.
+
+[lane]
+name = "has-sis-ppp"
+status = "ready"
+title = "Galileo HAS (signal-in-space E6-B pages) float PPP, Kamakura static hours vs reference"
+readme_row = "(docs) Galileo HAS float PPP via SIS: static Kamakura hours"
+runtime_estimate = "~1 min"
+docs = "docs/galileo_has.md"
+
+[datasets.has_sis]
+required = [
+  "doy2025-046/046r_rnx.obs",
+  "doy2025-046/046r_gale6.txt",
+  "doy2025-046/BRDC00WRD_S_20250460000_01D_MN.rnx",
+  "doy2025-233/233h_rnx.obs",
+  "doy2025-233/233h_gale6.txt",
+  "doy2025-233/BRDC00WRD_S_20252330000_01D_MN.rnx",
+]
+
+[tools.cssrlib_data]
+repository = "https://github.com/hirokawa/cssrlib-data"
+path = "data/doy2025-046, data/doy2025-233"
+note = "License not stated upstream; download locally, do not commit."
+
+[tools.igs_brdc]
+repository = "https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/"
+path = "046/BRDC00WRD_S_20250460000_01D_MN.rnx.gz, 233/BRDC00WRD_S_20252330000_01D_MN.rnx.gz"
+note = "IGS merged broadcast ephemerides; gunzip next to the cssrlib-data files."
+
+# Decoder check: page / message statistics of both hours.
+[[steps]]
+name = "gnss-has-info-{hour}"
+foreach = [{ hour = "046r", doy = "046" }, { hour = "233h", doy = "233" }]
+argv = [
+  "{bin:gnss_has_info}",
+  "--input", "{has_sis_root}/doy2025-{doy}/{hour}_gale6.txt",
+  "--format", "cssrlib",
+  "--json-out", "{work_dir}/has_info_{hour}.json",
+]
+
+[[steps]]
+name = "gnss-ppp-has-sis-{hour}-{mode}"
+foreach = [
+  { hour = "046r", doy = "046", mode = "static" },
+  { hour = "046r", doy = "046", mode = "kinematic" },
+  { hour = "233h", doy = "233", mode = "static" },
+  { hour = "233h", doy = "233", mode = "kinematic" },
+]
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{has_sis_root}/doy2025-{doy}/{hour}_rnx.obs",
+  "--nav", "{has_sis_root}/doy2025-{doy}/BRDC00WRD_S_2025{doy}0000_01D_MN.rnx",
+  "--has-pages", "{has_sis_root}/doy2025-{doy}/{hour}_gale6.txt",
+  "--has-pages-format", "cssrlib",
+  "--{mode}",
+  "--out", "{work_dir}/has_sis_{hour}_{mode}.pos",
+  "--summary-json", "{work_dir}/has_sis_{hour}_{mode}_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "score"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "-3962108.6836", "3381309.5672", "3668678.6720",
+  "--run", "sis_046r_static={work_dir}/has_sis_046r_static.pos",
+  "--run", "sis_046r_kinematic={work_dir}/has_sis_046r_kinematic.pos",
+  "--run", "sis_233h_static={work_dir}/has_sis_233h_static.pos",
+  "--run", "sis_233h_kinematic={work_dir}/has_sis_233h_kinematic.pos",
+  "--summary-json", "{work_dir}/summary.json",
+]
+
+# Decoder gates: every page passes the CRC and all 432 MT1 messages of each
+# hour are recovered (72 mask/orbit/code-bias + 360 clock messages).
+[[metrics]]
+name = "{hour} HAS MT1 messages decoded"
+source = "{work_dir}/has_info_{hour}.json"
+path = "mt1_ok"
+min = 432
+readme = "docs/galileo_has.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+[[metrics]]
+name = "{hour} C/NAV CRC failures"
+source = "{work_dir}/has_info_{hour}.json"
+path = "crc_failures"
+max = 0
+readme = "docs/galileo_has.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+# PPP gates (reproduced 2026-09-30, MSVC Release) on the 2025-046 hour:
+# static float PPP with the decoded HAS SIS corrections.
+[[metrics]]
+name = "has-sis 046r static H at {t} (m)"
+source = "{work_dir}/summary.json"
+path = "runs.sis_046r_static.checkpoints.{t}.h_m"
+max = 0.20
+readme = "docs/galileo_has.md"
+foreach = [{ t = "30min" }, { t = "60min" }]
+
+[[metrics]]
+name = "has-sis 046r static |U| at {t} (m)"
+source = "{work_dir}/summary.json"
+path = "runs.sis_046r_static.checkpoints.{t}.abs_up_m"
+max = 0.40
+readme = "docs/galileo_has.md"
+foreach = [{ t = "30min" }, { t = "60min" }]
+
+# docs/galileo_has.md table values; reported, not gated.
+[[metrics]]
+name = "table: has-sis {run} {field} at {t}"
+source = "{work_dir}/summary.json"
+path = "runs.{run}.checkpoints.{t}.{field}"
+gate = false
+abs_tol = 0.05
+readme = "docs/galileo_has.md table"
+foreach = [
+  { run = "sis_046r_static", t = "10min", field = "h_m", expected = 0.452 },
+  { run = "sis_046r_static", t = "10min", field = "up_m", expected = 0.479 },
+  { run = "sis_046r_static", t = "30min", field = "h_m", expected = 0.045 },
+  { run = "sis_046r_static", t = "30min", field = "up_m", expected = 0.268 },
+  { run = "sis_046r_static", t = "60min", field = "h_m", expected = 0.074 },
+  { run = "sis_046r_static", t = "60min", field = "up_m", expected = 0.113 },
+  { run = "sis_046r_kinematic", t = "30min", field = "h_m", expected = 0.084 },
+  { run = "sis_046r_kinematic", t = "30min", field = "up_m", expected = 0.292 },
+  { run = "sis_046r_kinematic", t = "60min", field = "h_m", expected = 0.245 },
+  { run = "sis_046r_kinematic", t = "60min", field = "up_m", expected = -0.235 },
+  { run = "sis_233h_static", t = "30min", field = "h_m", expected = 0.605 },
+  { run = "sis_233h_static", t = "30min", field = "up_m", expected = -0.958 },
+  { run = "sis_233h_static", t = "60min", field = "h_m", expected = 0.516 },
+  { run = "sis_233h_static", t = "60min", field = "up_m", expected = -1.165 },
+  { run = "sis_233h_kinematic", t = "60min", field = "h_m", expected = 0.378 },
+  { run = "sis_233h_kinematic", t = "60min", field = "up_m", expected = -0.959 },
+]
+
+[[metrics]]
+name = "table: has-sis 046r static {field} (min)"
+source = "{work_dir}/summary.json"
+path = "runs.sis_046r_static.{field}"
+gate = false
+abs_tol = 1.5
+readme = "docs/galileo_has.md table"
+foreach = [
+  { field = "convergence_h_below_0p20_min", expected = 19.43 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 23.73 },
+]

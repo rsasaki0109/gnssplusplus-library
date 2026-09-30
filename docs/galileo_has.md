@@ -7,8 +7,10 @@ Status of Galileo High Accuracy Service (HAS) support in libgnss++.
 | Float PPP with HAS corrections from the HAS Internet Data Distribution (IDD, RTCM 3 SSR) | **Supported** (`gnss_ppp --ssr-rtcm <idd.rtc> --ssr-rtcm-profile has-idd`) |
 | Static float PPP validated against a known coordinate | **Validated** on the public OBE4 / 2023-08-17 IDD sample, lane `gnss reproduce has-idd-ppp` |
 | Kinematic float PPP | **Validated** on the same sample (white-noise position, no motion prior): 0.12 m horizontal / +0.06 m up after one hour (hour RMS 0.09 m / 0.10 m), gated by the lane |
-| HAS signal-in-space (Galileo E6-B page) decoder | **Planned** (stage B): Reed-Solomon page recovery, MT1 mask / orbit / clock / bias decoding into the same SSR products |
-| HAS phase biases and PPP-AR | **Not available**: the HAS Service Level 1 corrections used here carry no phase biases, so ambiguities stay float |
+| HAS signal-in-space (Galileo E6-B C/NAV page) decoder | **Supported** (`gnss_ppp --has-pages <log>`, `gnss has-info`): u-blox RXM-SFRBX, Septentrio SBF GALRawCNAV and cssrlib page text; CRC-24Q, Reed-Solomon (HPVRS) page recovery, MT1 mask / orbit / clock full-set / clock subset / code bias / phase bias decoding |
+| SIS decoder parity with cssrlib | **Exact**: every decoded orbit, clock and code-bias value of three public recordings (1 x 9 min u-blox X20, 2 x 1 h Septentrio mosaic-X5; 95 k values) equals cssrlib's `cssr_has` decoder |
+| Static float PPP with SIS corrections | **Validated, indicative** on the Kamakura 2025-02-15 hour (Japan, outside the HAS service area), lane `gnss reproduce has-sis-ppp`: 0.07 m horizontal / +0.11 m up after one hour |
+| HAS phase biases and PPP-AR | **Not available**: phase biases are decoded (`gnss has-info`) but not applied; the HAS Service Level 1 streams used here carry none, so ambiguities stay float |
 
 ## Using HAS IDD corrections
 
@@ -52,6 +54,138 @@ Orbit corrections are applied with the RTCM convention
 (`x = x_brdc - R_rac->ecef * dRAC`, clock `dt = dt_brdc + dC / c`) and refer
 to the antenna phase centre of the broadcast orbit, so no satellite antenna
 offset is applied.
+
+## Using HAS signal-in-space pages
+
+HAS corrections are broadcast on the Galileo E6-B signal as 448-bit HAS pages
+inside the C/NAV pages. `gnss_ppp --has-pages` decodes a receiver log of those
+pages and feeds the corrections to float PPP with the same conventions as the
+`has-idd` profile (IODE-matched broadcast orbits, Galileo I/NAV only, held
+updates, code biases instead of TGD / BGD):
+
+```bash
+gnss_ppp --obs 046r_rnx.obs --nav BRDC00WRD_S_20250460000_01D_MN.rnx \
+  --has-pages 046r_gale6.txt --static --out has_sis_static.pos
+```
+
+| Page log | `--has-pages-format` | Notes |
+|---|---|---|
+| u-blox UBX (`.ubx`) | `ubx` | RXM-SFRBX with gnssId 2 / sigId 8 (E6-B, 16 words), e.g. X20 / F9 E6 firmware; page time = latest RXM-RAWX epoch |
+| Septentrio SBF (`.sbf`, `*.yy_`) | `sbf` | GALRawCNAV (block 4024); pages the receiver flags as CRC-failed are dropped |
+| cssrlib page text | `cssrlib` (default for other extensions) | `wn tow prn type len hex` lines as in [cssrlib-data](https://github.com/hirokawa/cssrlib-data) `*_gale6.txt` |
+
+`gnss has-info --input <log>` prints the page / message statistics, the masks
+(satellites and signals), the flag patterns and validity intervals, and dumps
+`--messages-csv`, `--corrections-csv` (every decoded orbit / clock / bias
+value with its HAS sign) and `--updates-csv` (the held per-satellite updates
+PPP uses).
+
+Decoding follows the HAS SIS ICD Issue 1.0:
+
+- **Pages.** CRC-24Q over the 462 reserved + HAS page bits; dummy pages
+  (`0xAF3BC3`) are skipped. HASS 0 (test) and 1 (operational) pages are used,
+  HASS 3 ("don't use") discards every received message and truncates the held
+  corrections at that time.
+- **High Parity Vertical Reed-Solomon.** Pages are collected per message ID;
+  any MS distinct page IDs recover the message by inverting the k x k
+  sub-matrix of the RS(255,32) generator matrix over GF(256) (primitive
+  polynomial 0x11D). The generator matrix of ICD Annex B is derived from the
+  generator polynomial (checked against the Annex B file and the Annex C
+  decoding example in the unit tests). Later pages of a decoded message are
+  checked by re-encoding, so a reused message ID starts a new collection.
+- **MT1.** Mask, orbit, clock full-set, clock subset, code-bias and phase-bias
+  blocks, with Mask ID / IOD Set ID caches: a clock-only message is paired with
+  the orbit block of the same Mask ID and IOD Set ID. DCC "not available" and
+  "do not use" values end the satellite's held correction.
+- **Time and validity.** TOH is resolved to GST (= GPST seconds of week) from
+  the page reception time (ICD Eq. 28 / 29). Each orbit + clock pair becomes a
+  held update from the later of the two reference times until the next update
+  of the satellite, at most until the end of the shorter validity interval
+  (the recorded streams use 300 s for orbits and biases, 60 s for clocks).
+- **Conventions.** HAS orbit corrections are added to the broadcast position
+  (ICD Eq. 22), so they are stored negated in the RTCM-convention SSR
+  container; the clock correction is DCC x DCM added to the broadcast clock
+  (Eq. 23); code biases are added to the pseudoranges (Eq. 25) and are mapped
+  from the HAS signal index (ICD Table 20) to the RTCM SSR signal IDs. GPS L2
+  biases follow the tracked RINEX code: C2W / C2P / C2Y use the HAS L2 P bias,
+  C2L / C2S / C2X the L2 CL bias.
+- **Coverage.** HAS corrects GPS and Galileo only; with `--has-pages` any
+  satellite without a valid HAS orbit / clock at the epoch (other
+  constellations, expired validity, missing IODref ephemeris) is excluded
+  instead of falling back to its broadcast orbit.
+
+## Validation (HAS SIS, Kamakura, 2025)
+
+Data: the public HAS SIS samples of
+[hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data)
+(`data/doy2025-046`: 2025-02-15 17:00-18:00 GPST, `data/doy2025-233`:
+2025-08-21 07:00-08:00 GPST; Septentrio mosaic-X5 with a JAVRINGANT_DM, E6-B
+pages `*_gale6.txt`, RINEX observations) and the IGS merged broadcast
+navigation files of those days (`BRDC00WRD_S_2025{046,233}0000_01D_MN.rnx`
+from `https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/`). The reference
+coordinate is the cssrlib sample value `(-3962108.6836, 3381309.5672,
+3668678.6720)` m. Kamakura is **outside the HAS service area** (the HAS SDD
+excludes 60S-60N / 90E-180E), so these numbers are indicative only.
+
+```bash
+python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /data/cssrlib-data/data --check
+```
+
+Decoder parity with cssrlib (`cssr_has`, hirokawa/cssrlib main, 2026-09):
+every message of the three recordings was decoded by both, and all values
+agree exactly.
+
+| Recording | Pages (dummy) | MT1 messages | Orbit / clock / code-bias values compared | Max difference |
+|---|---:|---:|---:|---:|
+| u-blox X20, Boulder CO, 2025-07-08 19:34-19:43 GPST (rtklibexplorer/GNSS_IMU `drive_0708`) | 3214 (1772) | 67 (66 usable; the first clock message precedes any mask) | 2288 / 2564 / 1949 | 0 |
+| mosaic-X5, Kamakura, 2025-08-21 07h | 34026 (14151) | 432 | 14896 / 18620 / 12721 | 0 |
+| mosaic-X5, Kamakura, 2025-02-15 17h | 33451 (17839) | 432 | 13596 / 16995 / 11669 | 0 |
+
+The HAS-corrected satellite positions and clocks at 2025-08-21 07:30:00 also
+agree with cssrlib's `satposs()` to 0.1 mm in clock and to about 2 cm in position
+(transmission-time differences). The MRTKLIB mosaic-G5 SBF sample
+(`tests/data/has/has_testdata.tar.gz`, Tokyo 2026-06-10, 15 min) decodes to
+109 MT1 messages (3 receiver-flagged CRC failures); it carries no RINEX
+observations, so it is used for decoding only.
+
+Static and kinematic float PPP (`--has-pages`, IGS BRDC navigation, default
+15 degree elevation mask), H / U error at the given time after the first
+epoch; convergence as in the IDD table below:
+
+| Run | 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
+|---|---|---|---|---|---:|---:|
+| 2025-02-15 17h, libgnss++ SIS, static | 0.452 / +0.479 m | 0.174 / +0.245 m | **0.045 / +0.268 m** | **0.074 / +0.113 m** | **19.4 min** | **23.7 min** |
+| 2025-02-15 17h, libgnss++ SIS, kinematic | 0.560 / +0.343 m | 0.177 / +0.171 m | 0.084 / +0.292 m | 0.245 / -0.235 m | never | 5.3 min |
+| 2025-02-15 17h, cssrlib SIS, static (10 deg, E29 excluded, igs20.atx) | 0.531 / +0.450 m | 0.220 / -0.033 m | 0.077 / +0.193 m | 0.153 / -0.065 m | 48.4 min | 45.1 min |
+| 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.520 / +0.423 m | 0.275 / +0.472 m | 0.228 / +0.330 m | 0.260 / +0.327 m | never | 50.7 min |
+| 2025-08-21 07h, libgnss++ SIS, static | 0.764 / +0.246 m | 0.607 / -0.258 m | 0.605 / -0.958 m | 0.516 / -1.165 m | never | never |
+| 2025-08-21 07h, libgnss++ SIS, kinematic | 0.407 / -0.070 m | 0.358 / +0.111 m | 0.366 / -0.079 m | 0.378 / -0.959 m | never | never |
+| 2025-08-21 07h, cssrlib SIS, static (10 deg, L1 C/A + L2 CL) | 0.303 / -0.663 m | 0.112 / -0.501 m | 0.079 / -0.186 m | 0.079 / +0.212 m | 18.1 min | 22.2 min |
+| 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
+| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.623 / -0.670 m | 0.536 / -0.699 m | 0.499 / -0.797 m | 0.445 / -0.892 m | never | never |
+| 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.690 / -0.866 m | 0.656 / -0.797 m | 0.583 / -0.838 m | 0.477 / -1.081 m | never | never |
+| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.016 / -0.490 m | 0.058 / -0.421 m | 0.073 / -0.082 m | 0.095 / -0.135 m | 4.2 min | 21.0 min |
+
+The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
+30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
+failure), and reports the other rows. On the 2025-08-21 hour libgnss++ sits
+about 1 m low in every configuration, whatever the correction source (HAS SIS,
+JPL GDGPS, broadcast only), while cssrlib on the same corrections ends the
+hour within 0.6 m; only 11-13 GPS / Galileo satellites carry HAS corrections
+above 15 degrees there, and the offset is a libgnss++ PPP-model issue on that
+hour (it follows the troposphere estimation: with a 10 degree mask the static
+run ends at -1.36 m, and at -0.54 m with the troposphere fixed to its model),
+not a decoding one.
+
+Smoke test on the u-blox X20 drive (rtklibexplorer/GNSS_IMU `drive_0708`,
+Boulder CO, inside the service area, 9 min, RXM-RAWX converted to RINEX,
+IGS BRDC navigation): kinematic float PPP runs on all 549 1-Hz epochs with
+the 2850 HAS updates decoded from the same UBX file. The RTK track shipped
+with the data set is relative to a base of unknown absolute coordinate
+(constant offset E +6.0 / N +4.7 / U -23.0 m for both HAS and broadcast PPP),
+so it cannot validate absolute accuracy; after removing that offset the HAS
+kinematic track scatters 0.46 m (H RMS) / 1.25 m (U RMS) after 5 min against
+0.31 m / 1.33 m broadcast only, as expected for an unconverged 9-minute run.
 
 ## Validation (OBE4, 2023-08-17 02:00-03:00 GPST)
 
@@ -117,6 +251,24 @@ first epoch; convergence is the first time after which H stays below 0.20 m
 applied; with `--antex igs20.atx` the up error shifts by about -0.1 m.
 
 ## Known limitations
+
+- **SIS: service area.** Both public SIS hours are from Japan, outside the HAS
+  service area; the in-area X20 recording is 9 minutes of driving with an
+  RTK track of unknown absolute datum. There is no in-area static SIS
+  validation yet.
+- **SIS: navigation data.** The RINEX 4 navigation file shipped with the
+  2025-02-15 cssrlib-data hour is not usable by the libgnss++ RINEX reader
+  (every satellite is rejected with ~100 km residuals, also without HAS), and
+  the RINEX navigation files of both hours hold only the ephemerides received
+  during the hour, so earlier IODrefs cannot be matched. The lane uses the IGS
+  merged BRDC files instead.
+- **SIS: phase biases** are decoded and dumped but not applied (float PPP).
+- **SIS: SBF observations.** SBF input is used for the HAS pages only; the
+  observations must be converted to RINEX separately.
+- **IDD profile unchanged.** The `has-idd` profile keeps its stage-A
+  behaviour: GPS L2 code biases are chosen by the coarse signal (L2C) even for
+  C2W observations, and satellites without corrections keep their broadcast
+  orbit. `--has-pages` does both the tracked-code selection and the exclusion.
 
 - **Kinematic PPP (fixed).** Until the one-update fix, `--kinematic` settled
   about 2 m horizontal / 5.6 m vertical off on this hour with HAS, legacy SSR
