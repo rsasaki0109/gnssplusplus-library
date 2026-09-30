@@ -1716,6 +1716,112 @@ TEST(PPPTest, PreciseProductsInterpolateAtClockOnlyTimestampUsesSP3Bracket) {
     std::filesystem::remove(clk_path);
 }
 
+TEST(PPPTest, PreciseClockRelativisticCorrectionMatchesBroadcastEccentricityTerm) {
+    // IGS SP3 / CLK clocks exclude the periodic relativistic effect, which
+    // users add as -2 r.v / c^2. On a Kepler orbit r.v = sqrt(mu a) e sin(E),
+    // so the term must equal the broadcast F e sqrt(A) sin(E) with
+    // F = -2 sqrt(mu) / c^2 = -4.442807633e-10 s/sqrt(m) (IS-GPS-200).
+    constexpr double kMu = 3.986005e14;
+    constexpr double kF = -4.442807633e-10;
+    const double a = 26'560'000.0;
+    const double e = 0.02;
+    const double b = a * std::sqrt(1.0 - e * e);
+    const double mean_motion = std::sqrt(kMu / (a * a * a));
+    // Perifocal -> ECI rotation (argument of perigee, inclination, node).
+    const Eigen::Matrix3d rotation =
+        (Eigen::AngleAxisd(0.7, Vector3d::UnitZ()) *
+         Eigen::AngleAxisd(55.0 * M_PI / 180.0, Vector3d::UnitX()) *
+         Eigen::AngleAxisd(1.1, Vector3d::UnitZ()))
+            .toRotationMatrix();
+    for (const double eccentric_anomaly : {0.0, 0.4, M_PI / 2.0, 2.5, -1.3}) {
+        const double sin_e = std::sin(eccentric_anomaly);
+        const double cos_e = std::cos(eccentric_anomaly);
+        const Vector3d r_pf(a * (cos_e - e), b * sin_e, 0.0);
+        const double e_dot = mean_motion / (1.0 - e * cos_e);
+        const Vector3d v_pf(-a * sin_e * e_dot, b * cos_e * e_dot, 0.0);
+        const Vector3d r_eci = rotation * r_pf;
+        const Vector3d v_eci = rotation * v_pf;
+
+        const double expected = kF * e * std::sqrt(a) * sin_e;
+        EXPECT_NEAR(preciseClockRelativisticCorrection(r_eci, v_eci), expected, 1e-15)
+            << "E=" << eccentric_anomaly;
+
+        // The Earth-rotation part of an ECEF velocity is perpendicular to r,
+        // so the ECEF state gives the same correction.
+        const Vector3d omega(0.0, 0.0, constants::OMEGA_E);
+        const Vector3d v_ecef = v_eci - omega.cross(r_eci);
+        EXPECT_NEAR(preciseClockRelativisticCorrection(r_eci, v_ecef), expected, 1e-15);
+    }
+    // Magnitude check: e = 0.02 at sin(E) = 1 is about -45.8 ns (-13.7 m).
+    const Vector3d r_pf(a * (0.0 - e), b, 0.0);
+    const double e_dot = mean_motion;
+    const Vector3d v_pf(-a * e_dot, 0.0, 0.0);
+    EXPECT_NEAR(preciseClockRelativisticCorrection(r_pf, v_pf) * constants::SPEED_OF_LIGHT,
+                -13.73, 0.01);
+    // Hand-computed state: r.v = 2e10 m^2/s -> -4e10 / c^2 s.
+    EXPECT_NEAR(preciseClockRelativisticCorrection(
+                    Vector3d(15.0e6, 20.0e6, 5.0e6), Vector3d(1000.0, -500.0, 3000.0)),
+                -4.0e10 / (constants::SPEED_OF_LIGHT * constants::SPEED_OF_LIGHT),
+                1e-20);
+}
+
+TEST(PPPTest, PreciseProductsCentralDifferenceVelocityAndClockAvailability) {
+    // Ten 15-min SP3 epochs of a uniformly accelerated track. The central
+    // difference derivative of the interpolating polynomial is exact for it;
+    // the former forward difference was off by a*h/2. Clocks are present
+    // for the first two epochs only (999999.999999 = missing afterwards).
+    const auto sp3_path = tempFilePath("libgnss_ppp_precise_velocity_test.sp3");
+    std::filesystem::remove(sp3_path);
+
+    const Vector3d p0(15'000'000.0, 20'000'000.0, 5'000'000.0);
+    const Vector3d v0(1000.0, -500.0, 3000.0);
+    const Vector3d acc(-0.3, -0.4, -0.1);
+    std::string sp3_text;
+    for (int k = 0; k < 10; ++k) {
+        const double t = 900.0 * k;
+        const Vector3d p = p0 + v0 * t + 0.5 * acc * t * t;
+        const int hour = (15 * k) / 60;
+        const int minute = (15 * k) % 60;
+        char line[160];
+        std::snprintf(line, sizeof(line), "*  2026 03 26 %02d %02d 00.00000000\n", hour, minute);
+        sp3_text += line;
+        const double clock_us = k < 2 ? 100.0 + k : 999999.999999;
+        std::snprintf(line, sizeof(line), "PG01 %14.6f %14.6f %14.6f %14.6f\n",
+                      p.x() / 1000.0, p.y() / 1000.0, p.z() / 1000.0, clock_us);
+        sp3_text += line;
+    }
+    writeTextFile(sp3_path, sp3_text);
+
+    PreciseProducts precise_products;
+    ASSERT_TRUE(precise_products.loadSP3File(sp3_path.string()));
+
+    Vector3d position = Vector3d::Zero();
+    Vector3d velocity = Vector3d::Zero();
+    double clock_bias = 0.0;
+    double clock_drift = 0.0;
+    bool clock_available = false;
+
+    const double t_query = 4.0 * 900.0 + 437.0;
+    ASSERT_TRUE(precise_products.interpolateOrbitClock(
+        SatelliteId(GNSSSystem::GPS, 1), makeTime(2026, 3, 26, 1, 7, 17.0),
+        position, velocity, clock_bias, clock_drift, &clock_available));
+    const Vector3d expected_position = p0 + v0 * t_query + 0.5 * acc * t_query * t_query;
+    const Vector3d expected_velocity = v0 + acc * t_query;
+    EXPECT_LT((position - expected_position).norm(), 1e-3);
+    EXPECT_LT((velocity - expected_velocity).norm(), 1e-5);
+    // No clock sample within 900 s of the query.
+    EXPECT_FALSE(clock_available);
+    EXPECT_EQ(clock_bias, 0.0);
+
+    ASSERT_TRUE(precise_products.interpolateOrbitClock(
+        SatelliteId(GNSSSystem::GPS, 1), makeTime(2026, 3, 26, 0, 7, 30.0),
+        position, velocity, clock_bias, clock_drift, &clock_available));
+    EXPECT_TRUE(clock_available);
+    EXPECT_NEAR(clock_bias, 100.5e-6, 1e-12);
+
+    std::filesystem::remove(sp3_path);
+}
+
 TEST(PPPTest, CalculatePhaseWindupResolvesAmbiguityAgainstPriorAccumulator) {
     using libgnss::ppp_utils::calculatePhaseWindup;
     using libgnss::Vector3d;

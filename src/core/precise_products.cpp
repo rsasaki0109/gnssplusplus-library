@@ -189,7 +189,11 @@ bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
                                             Vector3d& position,
                                             Vector3d& velocity,
                                             double& clock_bias,
-                                            double& clock_drift) const {
+                                            double& clock_drift,
+                                            bool* clock_available) const {
+    if (clock_available != nullptr) {
+        *clock_available = false;
+    }
     const auto sat_it = orbit_clock_data.find(sat);
     if (sat_it == orbit_clock_data.end() || sat_it->second.empty()) {
         return false;
@@ -261,42 +265,45 @@ bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
             xs.push_back(entries[indices[start + k]].time - t_ref - dt_query);
         }
 
-        // For derivative computation: evaluate the same polynomial at query+h
-        // (i.e. shift the x-axis by -h so the new origin is at original x=h).
-        // dp/dt = (P(h) - P(0))/h.
+        // Derivative: evaluate the same polynomial at query-h and query+h
+        // (shift the x-axis by +/-h) and take the central difference
+        // dp/dt = (P(h) - P(-h)) / 2h. A one-sided difference would carry
+        // a*h/2 (~0.3 m/s towards the Earth for GNSS orbits) into the
+        // velocity, i.e. ~2 cm in the light-time correction and ~5 cm in
+        // the -2 r.v/c^2 relativistic clock term.
         const double h_deriv = 1.0;
-        std::vector<double> xs_deriv = xs;
-        for (auto& x : xs_deriv) x -= h_deriv;
+        std::vector<double> xs_plus = xs;
+        std::vector<double> xs_minus = xs;
+        for (auto& x : xs_plus) x -= h_deriv;
+        for (auto& x : xs_minus) x += h_deriv;
 
         using value_t = decltype(accessor(entries[indices[0]]));
         if constexpr (std::is_same_v<value_t, Vector3d>) {
             for (int axis = 0; axis < 3; ++axis) {
                 std::vector<double> ys_value;
-                std::vector<double> ys_deriv;
                 ys_value.reserve(n_use);
-                ys_deriv.reserve(n_use);
                 for (int k = 0; k < n_use; ++k) {
-                    const double v = accessor(entries[indices[start + k]])(axis);
-                    ys_value.push_back(v);
-                    ys_deriv.push_back(v);
+                    ys_value.push_back(accessor(entries[indices[start + k]])(axis));
                 }
+                std::vector<double> ys_plus = ys_value;
+                std::vector<double> ys_minus = ys_value;
                 out_value(axis) = nevillePolynomial(xs, ys_value, n_use);
-                const double v_shift = nevillePolynomial(xs_deriv, ys_deriv, n_use);
-                out_rate(axis) = (v_shift - out_value(axis)) / h_deriv;
+                const double v_plus = nevillePolynomial(xs_plus, ys_plus, n_use);
+                const double v_minus = nevillePolynomial(xs_minus, ys_minus, n_use);
+                out_rate(axis) = (v_plus - v_minus) / (2.0 * h_deriv);
             }
         } else {
             std::vector<double> ys_value;
-            std::vector<double> ys_deriv;
             ys_value.reserve(n_use);
-            ys_deriv.reserve(n_use);
             for (int k = 0; k < n_use; ++k) {
-                const double v = accessor(entries[indices[start + k]]);
-                ys_value.push_back(v);
-                ys_deriv.push_back(v);
+                ys_value.push_back(accessor(entries[indices[start + k]]));
             }
+            std::vector<double> ys_plus = ys_value;
+            std::vector<double> ys_minus = ys_value;
             out_value = nevillePolynomial(xs, ys_value, n_use);
-            const double v_shift = nevillePolynomial(xs_deriv, ys_deriv, n_use);
-            out_rate = (v_shift - out_value) / h_deriv;
+            const double v_plus = nevillePolynomial(xs_plus, ys_plus, n_use);
+            const double v_minus = nevillePolynomial(xs_minus, ys_minus, n_use);
+            out_rate = (v_plus - v_minus) / (2.0 * h_deriv);
         }
         return true;
     };
@@ -308,12 +315,35 @@ bool PreciseProducts::interpolateOrbitClock(const SatelliteId& sat,
         return false;
     }
 
-    if (!interpolateLagrange(
-            clk_indices, clk_at_or_before,
-            [](const PreciseOrbitClock& e) -> double { return e.clock_bias; },
-            clock_bias, clock_drift)) {
+    // A clock is usable only if a valid sample lies within one SP3 interval
+    // (kPreciseInterpolationGapSeconds) of the query; beyond that the
+    // polynomial would extrapolate a random-walk clock (RTKLIB pephclk()
+    // likewise refuses queries more than MAXDTE = 900 s outside the data).
+    bool clock_ok = false;
+    if (!clk_indices.empty()) {
+        double nearest_clock_gap = std::numeric_limits<double>::infinity();
+        if (clk_at_or_before >= 0) {
+            nearest_clock_gap = std::min(
+                nearest_clock_gap,
+                std::abs(time - entries[clk_indices[clk_at_or_before]].time));
+        }
+        if (clk_at_or_before + 1 < static_cast<int>(clk_indices.size())) {
+            nearest_clock_gap = std::min(
+                nearest_clock_gap,
+                std::abs(entries[clk_indices[clk_at_or_before + 1]].time - time));
+        }
+        clock_ok = nearest_clock_gap <= kPreciseInterpolationGapSeconds &&
+            interpolateLagrange(
+                clk_indices, clk_at_or_before,
+                [](const PreciseOrbitClock& e) -> double { return e.clock_bias; },
+                clock_bias, clock_drift);
+    }
+    if (!clock_ok) {
         clock_bias = 0.0;
         clock_drift = 0.0;
+    }
+    if (clock_available != nullptr) {
+        *clock_available = clock_ok;
     }
     return true;
 }

@@ -419,6 +419,24 @@ struct PreciseOrbitClock {
 };
 
 /**
+ * @brief Periodic relativistic satellite clock correction for precise clocks
+ *
+ * IGS SP3 and RINEX clock products exclude the periodic relativistic effect
+ * of the satellite clock (IGS conventions; IERS Conventions 2010 eq. 10.17),
+ * which users add as dt_rel = -2 (r . v) / c^2 with the satellite position
+ * and velocity in ECEF at transmission time (RTKLIB peph2pos() does the
+ * same). Broadcast clocks carry the equivalent term through the
+ * eccentric-anomaly expression of the navigation message instead.
+ *
+ * @return correction in seconds, to be added to the product clock bias
+ */
+inline double preciseClockRelativisticCorrection(const Vector3d& position,
+                                                 const Vector3d& velocity) {
+    return -2.0 * position.dot(velocity) /
+        (constants::SPEED_OF_LIGHT * constants::SPEED_OF_LIGHT);
+}
+
+/**
  * @brief Precise products manager
  */
 class PreciseProducts {
@@ -432,13 +450,20 @@ public:
     
     /**
      * @brief Interpolate precise orbit and clock
+     *
+     * Returns true when the orbit can be interpolated. The clock is the
+     * product clock as published (SP3 / RINEX clock), i.e. without the
+     * periodic relativistic term; see preciseClockRelativisticCorrection().
+     * When no clock sample is usable for the query, clock_bias and
+     * clock_drift are zero and *clock_available (if given) is false.
      */
     bool interpolateOrbitClock(const SatelliteId& sat,
                              const GNSSTime& time,
                              Vector3d& position,
                              Vector3d& velocity,
                              double& clock_bias,
-                             double& clock_drift) const;
+                             double& clock_drift,
+                             bool* clock_available = nullptr) const;
     
     /**
      * @brief Load SP3 orbit file
