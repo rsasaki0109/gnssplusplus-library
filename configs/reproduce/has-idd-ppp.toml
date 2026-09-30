@@ -99,8 +99,8 @@ path = "runs.has_idd_static.convergence_abs_up_below_0p40_min"
 max = 30.0
 readme = "docs/galileo_has.md"
 
-# docs/galileo_has.md table values (re-measured 2026-09-30 after the
-# solid-earth-tide frame fix); reported, not gated.
+# docs/galileo_has.md table values (re-measured 2026-10-01 after the static
+# one-update-per-epoch fix); reported, not gated.
 [[metrics]]
 name = "table: has-idd static {field} at {t}"
 source = "{work_dir}/summary.json"
@@ -109,14 +109,14 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.018 },
-  { t = "10min", field = "up_m", expected = -0.503 },
-  { t = "20min", field = "h_m", expected = 0.057 },
-  { t = "20min", field = "up_m", expected = -0.432 },
-  { t = "30min", field = "h_m", expected = 0.072 },
-  { t = "30min", field = "up_m", expected = -0.090 },
-  { t = "60min", field = "h_m", expected = 0.097 },
-  { t = "60min", field = "up_m", expected = -0.136 },
+  { t = "10min", field = "h_m", expected = 0.056 },
+  { t = "10min", field = "up_m", expected = -0.147 },
+  { t = "20min", field = "h_m", expected = 0.067 },
+  { t = "20min", field = "up_m", expected = -0.170 },
+  { t = "30min", field = "h_m", expected = 0.092 },
+  { t = "30min", field = "up_m", expected = 0.049 },
+  { t = "60min", field = "h_m", expected = 0.014 },
+  { t = "60min", field = "up_m", expected = 0.050 },
 ]
 
 [[metrics]]
@@ -127,8 +127,8 @@ gate = false
 abs_tol = 1.5
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "convergence_h_below_0p20_min", expected = 4.23 },
-  { field = "convergence_abs_up_below_0p40_min", expected = 21.47 },
+  { field = "convergence_h_below_0p20_min", expected = 0.85 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 5.77 },
 ]
 
 # Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
@@ -180,6 +180,6 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "h_m", expected = 0.162 },
-  { field = "up_m", expected = 0.087 },
+  { field = "h_m", expected = 0.105 },
+  { field = "up_m", expected = 0.284 },
 ]

@@ -586,8 +586,10 @@ The cssrlib-data license is not stated upstream, so the three input files are
 not redistributed; download them into the `--has-data-root` directory.
 
 Local result (MSVC Release, 44 s): every metric passes. The static run is at
-0.095 m horizontal / -0.135 m vertical after one hour and converges below
-0.20 m horizontal after 4.2 min and below 0.40 m vertical after 21.0 min;
+0.014 m horizontal / +0.050 m vertical after one hour and converges below
+0.20 m horizontal after 0.8 min and below 0.40 m vertical after 5.8 min
+(0.095 / -0.135 m, 4.2 / 21.0 min before the static filter committed one
+measurement update per epoch, see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01));
 the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min, and convergence within
 10 min (H) and 30 min (U). The kinematic run is at 0.059 / +0.015 m after
 30 min and 0.115 / +0.059 m after one hour, gated at H <= 0.30 m and
@@ -612,11 +614,14 @@ the cssrlib reference coordinate.
 python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
 ```
 
-Local result (MSVC Release): every metric passes. Each hour yields 432 MT1
-messages without a CRC failure. The 2025-02-15 static run is at
-0.045 / +0.268 m after 30 min and 0.074 / +0.113 m after one hour (gates:
-H <= 0.20 m, |U| <= 0.40 m at 30 and 60 min). The 2025-08-21 hour is reported
-only: libgnss++ ends about 1 m low there with any correction source. Kamakura
+Local result (MSVC Release, 2026-10-01): every metric passes. Each hour
+yields 432 MT1 messages without a CRC failure. The 2025-02-15 static run is at
+0.031 / +0.126 m after 30 min and 0.184 / -0.123 m after one hour (gates:
+H <= 0.20 m, |U| <= 0.40 m at 30 and 60 min; before the static
+one-update-per-epoch fix 0.026 / +0.184 m and 0.010 / +0.041 m; the kinematic
+run, unchanged, ends at 0.184 / -0.256 m). The 2025-08-21 hour is reported
+only: libgnss++ ends 0.1-0.4 m low there depending on the correction source
+(0.7-0.8 m before the static fix, about 1 m before the solid-earth-tide fix). Kamakura
 is outside the HAS service area, so the numbers are indicative. See
 [Galileo HAS support](galileo_has.md) for the decoder parity with cssrlib and
 the full comparison.
@@ -641,15 +646,19 @@ constellations of the multi-GNSS observation files are dropped (satellites
 without a precise orbit and clock are excluded rather than mixed in on
 broadcast clocks, as RTKLIB does with `sateph = precise`).
 
-Local result (MSVC Release, 117 s), H / U in metres after 10 / 30 / 60 min,
-with RTKLIB demo5 b34j PPP-static on the same observations, products and
-ANTEX (GPS, L1+L2 ionosphere-free, estimated ZTD, 10 degrees, tides):
+Local result (MSVC Release, 2026-10-01, 168 s), H / U in metres after
+10 / 30 / 60 min, with RTKLIB demo5 b34j PPP-static on the same observations,
+products and ANTEX (GPS, L1+L2 ionosphere-free, estimated ZTD, 10 degrees,
+tides):
 
-| Run | libgnss++ | RTKLIB demo5 | libgnss++ before the fix |
-|---|---|---|---|
-| Kamakura 2025-08-21 07h | 0.490 / -0.646, 0.168 / -0.222, **0.120 / -0.265** | 0.434 / -0.488, 0.154 / -0.179, 0.099 / -0.212 | 1.391 / +0.870, 1.453 / +1.384, 1.502 / +0.889 |
-| Kamakura 2025-02-15 17h | 0.611 / -0.007, 0.454 / -0.205, **0.315 / +0.027** | 0.717 / -0.147, 0.418 / -0.202, 0.267 / -0.017 | 1.459 / +0.502, 1.226 / +1.164, 1.466 / +0.747 |
-| OBE4 2023-08-17 02h | 0.171 / -0.341, 0.209 / -0.165, **0.199 / -0.057** | 0.426 / -0.245, 0.315 / -0.127, 0.280 / -0.054 | 2.773 / -2.974, 2.353 / -0.779, 1.561 / -0.623 |
+| Run | libgnss++ | RTKLIB demo5 | before the static one-update fix | before the precise-product fix |
+|---|---|---|---|---|
+| Kamakura 2025-08-21 07h | 0.455 / -0.630, 0.182 / -0.241, **0.099 / -0.223** | 0.434 / -0.488, 0.154 / -0.179, 0.099 / -0.212 | 0.490 / -0.646, 0.168 / -0.222, 0.120 / -0.265 | 1.391 / +0.870, 1.453 / +1.384, 1.502 / +0.889 |
+| Kamakura 2025-02-15 17h | 0.576 / -0.164, 0.297 / -0.204, **0.151 / -0.007** | 0.717 / -0.147, 0.418 / -0.202, 0.267 / -0.017 | 0.611 / -0.007, 0.454 / -0.205, 0.315 / +0.027 | 1.459 / +0.502, 1.226 / +1.164, 1.466 / +0.747 |
+| OBE4 2023-08-17 02h | 0.172 / -0.192, 0.172 / -0.126, **0.135 / -0.053** | 0.426 / -0.245, 0.315 / -0.127, 0.280 / -0.054 | 0.171 / -0.341, 0.209 / -0.165, 0.199 / -0.057 | 2.773 / -2.974, 2.353 / -0.779, 1.561 / -0.623 |
+
+Convergence (H < 0.20 m / |U| < 0.40 m, staying there): Kamakura 08-21
+29.1 / 21.0 min, 02-15 51.4 / 7.7 min, OBE4 28.2 / 0.8 min.
 
 The gates are H <= 0.40 m and |U| <= 0.40 m at 60 min for the Kamakura hours
 and 0.30 m for OBE4. Before the fix, precise-product PPP omitted the periodic
@@ -658,3 +667,74 @@ exclude), fell back to broadcast orbits and clocks for satellites missing
 from the SP3, and did not apply the satellite antenna PCO to the
 centre-of-mass SP3 orbits; with GPS-only observations the 2025-08-21 hour
 ended at E -5.5 / N -3.3 / U +4.3 m.
+
+### Static filter: one measurement update per epoch (2026-10-01)
+
+Until 2026-10-01 the static and `--low-dynamics` PPP filter applied each
+epoch's measurement update up to eight times (three with SP3/CLK products).
+`applyPreciseCorrections()` evaluates the observation geometry once, at the
+prior position, so every pass after the first read the position innovation
+the state had already absorbed and pushed the position again on an
+already-shrunk covariance; the clock, troposphere and ambiguity terms were
+re-evaluated each pass and took up the overshoot. On the first epochs, where
+the prior is the SPP seed metres away, this moved the solution tens to
+hundreds of metres (the first broadcast epoch of the Kamakura hour moved the
+position 70 m cumulatively and the zenith delay to 4.66 m) before the phase
+rows pulled it back, and with 30 s data the filter wandered for the first
+hour. RTKLIB and MADOCALIB commit one update per epoch (`pppos()` restarts
+every residual-screening pass from the prior state), and a single update
+linearized at the prior is exact to well below a millimetre for GNSS ranges.
+Kinematic PPP was moved to one update per epoch earlier; static and
+`--low-dynamics` PPP now do the same. Only the coherent MADOCA static
+ionosphere-free profile keeps its passes: its position is re-blended with the
+SPP anchor after each pass and its native-vs-MADOCALIB delta
+(`docs/madoca_release_baseline.json`) grows with a single update
+(MIZU 1 h 1.63 -> 2.21 m RMS), so it is left byte-identical until that anchor
+blend is reworked.
+
+Two static-only gaps showed up once the start-up push was gone, and are fixed
+with it: static ionosphere-free PPP without SSR ran without geometry-free /
+Melbourne-Wubbena slip detection (RTKLIB `detslp_gf` / `detslp_mw`), relying
+on the LLI flag alone; and with SP3/CLK products a satellite whose second
+frequency dropped out stayed in the filter on raw L1 code (ionosphere
+uncorrected) with its L1 phase tied to the ionosphere-free ambiguity (RTKLIB
+skips such a satellite). On TSK2 G22 lost L2 for four epochs at 21:52 GPST;
+when it came back with a new L2 ambiguity the IF phase residual was -7.6 m and
+the position ended the day 0.96 m east.
+
+Static PPP, IGS finals, 30 s data (H / U in metres at 10 / 60 min; end of
+day E / N / U for the 24 h runs; max 3D over the run):
+
+| Run | before | after | RTKLIB demo5 |
+|---|---|---|---|
+| Kamakura 2025-08-21 07h decimated to 30 s, GPS only | 19.18 / -42.74, 3.99 / +9.96; max 252 m | 0.321 / -0.615, **0.046 / -0.154**; max 7.6 m (first epoch) | 0.204 / -0.322, 0.088 / -0.142 |
+| TSK2 2024-01-01 24 h (multi-GNSS file, GPS used) | 31.3 / +135.5, 4.16 / +5.88; end -0.972 / +0.216 / +0.238; max 931 m | 0.763 / +0.567, 0.072 / +0.013; end **+0.007 / +0.004 / -0.042**; max 1.7 m | 0.569 / +0.291, 0.095 / +0.054; end -0.010 / +0.003 / +0.002 |
+| TSK2 2024-01-01 24 h, GPS-only file | 22.0 / -92.7, 2.57 / -4.21; end -0.865 / +0.137 / -0.146 | 0.749 / +0.550, 0.072 / +0.013; end +0.007 / +0.004 / -0.042 | (as above) |
+| TSKB 2025-08-21 24 h vs CODE daily SINEX | 145.6 / -78.1, 4.24 / -8.87; end +0.122 / -0.092 / -0.115; max 438 m | 1.106 / -0.987, 0.054 / -0.018; end **-0.006 / +0.012 / +0.001**; max 2.5 m | - |
+
+Convergence (H < 0.20 m / |U| < 0.40 m): TSK2 27.0 / 19.5 min (before: never /
+1,362 min; RTKLIB 31.0 / 2.0 min), TSKB 31.0 / 22.5 min (before: 492 /
+438 min). Of the three parts, the single update removes the start-up
+excursion and the 30 s divergence; the slip detection removes the TSK2
+end-of-day 0.96 m; dropping single-frequency satellites removes a 7.9 m
+excursion at 30 min on TSKB.
+
+Broadcast-only static PPP on the Kamakura hours (1 Hz, H / U at 60 min):
+
+| Run | before | after |
+|---|---|---|
+| 2025-08-21 GPS | 0.388 / -0.531 | 0.411 / -0.889 (RTKLIB demo5 broadcast PPP-static: 0.523 / -0.784) |
+| 2025-08-21 GPS + Galileo | 0.430 / -0.655 | 0.651 / -0.246 |
+| 2025-02-15 GPS + Galileo | 0.212 / +0.252 | 0.319 / +0.123 |
+| 2025-08-21 all systems | 0.631 / -5.109 | 1.079 / -9.259 |
+| 2025-02-15 all systems | 1.081 / +1.804 | 0.489 / +1.505 |
+| 2025-08-21 all systems, decimated to 30 s | 1.043 / -2.979 (10 min: 16.2 / -16.9) | 0.424 / -0.191 (10 min: 0.957 / -0.678) |
+| 2025-08-21 all systems, `--kinematic --low-dynamics` | 0.620 / -3.516 | 0.071 / -0.600 |
+| OBE4 2023-08-17 GPS + Galileo | 0.364 / -0.195 | 0.187 / -0.102 |
+
+The all-system broadcast rows are dominated by BeiDou-3, not by the update
+count: GPS + BDS-3 alone ends 5.0 m low before and 13.2 m low after, GPS +
+BDS-2 1.46 m low before and 0.00 m after, while GPS + GLONASS, GPS + QZSS and
+GPS + Galileo + QZSS end within 0.52 m in up with one update. The
+multi-pass filter damped that BeiDou-3 broadcast bias; its cause is left open.
+

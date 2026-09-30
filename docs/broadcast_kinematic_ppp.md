@@ -122,7 +122,11 @@ Other suspects checked and ruled out on this data:
   2.80 m). Candidate causes are BeiDou / GLONASS broadcast clock errors, the
   GLONASS inter-frequency code biases (one GLONASS clock, no per-channel
   bias) and the BeiDou receiver inter-system bias; none of them is a
-  one-line fix.
+  one-line fix. Static broadcast PPP shows the same BeiDou-3 effect on the
+  Kamakura 2025-08-21 hour (GPS + BDS-3 ends 5 m low with the former
+  multi-pass static filter and 13 m low with one update per epoch, GPS +
+  BDS-2 or GLONASS / QZSS / Galileo within 0.52 m); see
+  [the static filter note](reproduce.md#static-filter-one-measurement-update-per-epoch-2026-10-01).
 - **Urban canyons with few satellites.** Below 15 satellites the Tokyo error
   is 2-8 m median, above 20 satellites 0.6-0.9 m (H95 about 2 m): the
   remaining tail is geometry and NLOS the screening cannot identify.
