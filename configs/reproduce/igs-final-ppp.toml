@@ -156,18 +156,18 @@ gate = false
 abs_tol = 0.05
 readme = "docs/reproduce.md table"
 foreach = [
-  { run = "igs_046r_static", t = "10min", field = "h_m", expected = 0.611 },
-  { run = "igs_046r_static", t = "10min", field = "up_m", expected = -0.007 },
-  { run = "igs_046r_static", t = "30min", field = "h_m", expected = 0.454 },
-  { run = "igs_046r_static", t = "30min", field = "up_m", expected = -0.205 },
-  { run = "igs_046r_static", t = "60min", field = "h_m", expected = 0.315 },
-  { run = "igs_046r_static", t = "60min", field = "up_m", expected = 0.027 },
-  { run = "igs_233h_static", t = "10min", field = "h_m", expected = 0.490 },
-  { run = "igs_233h_static", t = "10min", field = "up_m", expected = -0.646 },
-  { run = "igs_233h_static", t = "30min", field = "h_m", expected = 0.168 },
-  { run = "igs_233h_static", t = "30min", field = "up_m", expected = -0.222 },
-  { run = "igs_233h_static", t = "60min", field = "h_m", expected = 0.120 },
-  { run = "igs_233h_static", t = "60min", field = "up_m", expected = -0.265 },
+  { run = "igs_046r_static", t = "10min", field = "h_m", expected = 0.576 },
+  { run = "igs_046r_static", t = "10min", field = "up_m", expected = -0.164 },
+  { run = "igs_046r_static", t = "30min", field = "h_m", expected = 0.297 },
+  { run = "igs_046r_static", t = "30min", field = "up_m", expected = -0.204 },
+  { run = "igs_046r_static", t = "60min", field = "h_m", expected = 0.151 },
+  { run = "igs_046r_static", t = "60min", field = "up_m", expected = -0.007 },
+  { run = "igs_233h_static", t = "10min", field = "h_m", expected = 0.455 },
+  { run = "igs_233h_static", t = "10min", field = "up_m", expected = -0.630 },
+  { run = "igs_233h_static", t = "30min", field = "h_m", expected = 0.182 },
+  { run = "igs_233h_static", t = "30min", field = "up_m", expected = -0.241 },
+  { run = "igs_233h_static", t = "60min", field = "h_m", expected = 0.099 },
+  { run = "igs_233h_static", t = "60min", field = "up_m", expected = -0.223 },
 ]
 
 [[metrics]]
@@ -178,10 +178,10 @@ gate = false
 abs_tol = 0.05
 readme = "docs/reproduce.md table"
 foreach = [
-  { run = "igs_obe4_static", t = "10min", field = "h_m", expected = 0.171 },
-  { run = "igs_obe4_static", t = "10min", field = "up_m", expected = -0.341 },
-  { run = "igs_obe4_static", t = "30min", field = "h_m", expected = 0.209 },
-  { run = "igs_obe4_static", t = "30min", field = "up_m", expected = -0.165 },
-  { run = "igs_obe4_static", t = "60min", field = "h_m", expected = 0.199 },
-  { run = "igs_obe4_static", t = "60min", field = "up_m", expected = -0.057 },
+  { run = "igs_obe4_static", t = "10min", field = "h_m", expected = 0.172 },
+  { run = "igs_obe4_static", t = "10min", field = "up_m", expected = -0.192 },
+  { run = "igs_obe4_static", t = "30min", field = "h_m", expected = 0.172 },
+  { run = "igs_obe4_static", t = "30min", field = "up_m", expected = -0.126 },
+  { run = "igs_obe4_static", t = "60min", field = "h_m", expected = 0.135 },
+  { run = "igs_obe4_static", t = "60min", field = "up_m", expected = -0.053 },
 ]

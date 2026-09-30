@@ -149,28 +149,40 @@ agree with cssrlib's `satposs()` to 0.1 mm in clock and to about 2 cm in positio
 observations, so it is used for decoding only.
 
 Static and kinematic float PPP (`--has-pages`, IGS BRDC navigation, default
-15 degree elevation mask; 2026-09-30, after the solid-earth-tide frame fix
-described below), H / U error at the given time after the first epoch;
-convergence as in the IDD table below:
+15 degree elevation mask; 2026-10-01, after the solid-earth-tide frame fix
+described below and the one-measurement-update-per-epoch fix of the static
+filter), H / U error at the given time after the first epoch; convergence as
+in the IDD table below:
 
 | Run | 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| 2025-02-15 17h, libgnss++ SIS, static | 0.415 / +0.399 m | 0.131 / +0.159 m | **0.026 / +0.184 m** | **0.010 / +0.041 m** | **18.2 min** | **10.0 min** |
+| 2025-02-15 17h, libgnss++ SIS, static | 0.473 / +0.257 m | 0.102 / +0.075 m | **0.031 / +0.126 m** | **0.184 / -0.123 m** | 58.7 min | **4.0 min** |
 | 2025-02-15 17h, libgnss++ SIS, kinematic | 0.521 / +0.290 m | 0.117 / +0.123 m | 0.052 / +0.250 m | 0.184 / -0.256 m | 59.4 min | 5.2 min |
 | 2025-02-15 17h, cssrlib SIS, static (10 deg, E29 excluded, igs20.atx) | 0.531 / +0.450 m | 0.220 / -0.033 m | 0.077 / +0.193 m | 0.153 / -0.065 m | 48.4 min | 45.1 min |
-| 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.479 / +0.335 m | 0.217 / +0.379 m | 0.164 / +0.241 m | 0.212 / +0.252 m | never | 27.3 min |
-| 2025-08-21 07h, libgnss++ SIS, static | 0.628 / +0.724 m | 0.491 / +0.177 m | 0.515 / -0.519 m | 0.447 / -0.732 m | never | never |
+| 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.454 / -0.145 m | 0.122 / +0.214 m | 0.192 / +0.086 m | 0.319 / +0.123 m | never | 9.3 min |
+| 2025-08-21 07h, libgnss++ SIS, static | 0.849 / -0.317 m | 0.641 / +0.014 m | 0.668 / -0.066 m | 0.520 / -0.400 m | never | never |
 | 2025-08-21 07h, libgnss++ SIS, kinematic | 0.404 / +0.314 m | 0.368 / +0.504 m | 0.385 / +0.322 m | 0.372 / -0.540 m | never | never |
 | 2025-08-21 07h, cssrlib SIS, static (10 deg, L1 C/A + L2 CL) | 0.303 / -0.663 m | 0.112 / -0.501 m | 0.079 / -0.186 m | 0.079 / +0.212 m | 18.1 min | 22.2 min |
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
-| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.556 / +0.038 m | 0.497 / -0.605 m | 0.494 / -0.711 m | 0.466 / -0.809 m | never | never |
-| 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.643 / -0.464 m | 0.612 / -0.387 m | 0.538 / -0.419 m | 0.430 / -0.655 m | never | never |
-| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | 0.097 / -0.136 m | 4.2 min | 21.5 min |
+| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 1.050 / +0.886 m | 0.719 / -0.007 m | 0.640 / +0.092 m | 0.524 / -0.113 m | never | 17.8 min |
+| 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.874 / +0.774 m | 0.710 / +0.069 m | 0.699 / +0.067 m | 0.651 / -0.246 m | never | 17.8 min |
+| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | 0.014 / +0.050 m | 0.8 min | 5.8 min |
 
 The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
 30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
 failure), and reports the other rows. The JPL and broadcast-only rows use the
 observation file limited to GPS and Galileo.
+
+**Static filter: one measurement update per epoch (2026-10-01).** The static
+rows above used to re-apply each epoch's rows eight times with the geometry
+frozen at the prior position (see the
+[igs-final-ppp lane](reproduce.md#igs-final-ppp-precise-product-ppp-2026-10-01)).
+With one update per epoch the static runs follow the kinematic ones more
+closely: the 2025-02-15 SIS static run ends at 0.184 / -0.123 m instead of
+0.010 / +0.041 m (the kinematic run ends at 0.184 / -0.256 m; H at 60 min is
+still inside the 0.20 m gate), and on 2025-08-21 every static source ends
+higher (SIS -0.732 -> -0.400 m, JPL -0.809 -> -0.113 m, broadcast -0.655 ->
+-0.246 m) and 0.06-0.22 m worse horizontally.
 
 **2025-08-21 vertical offset: solid-earth tide.** Before the fix libgnss++
 ended this hour about 1 m low whatever the correction source (HAS SIS static
@@ -190,7 +202,8 @@ by 0.42-0.44 m at 60 min, and the 2025-02-15 static run ends at +0.04 m. The
 CLAS lane (own tide model) and the per-frequency MADOCA profiles (Step-1 model)
 do not use this path; the static ionosphere-free MADOCA `ppp` profile does.
 
-The hour still ends 0.5-0.7 m low. What was checked:
+Before the static one-update fix the hour still ended 0.5-0.7 m low; after it
+the static runs end 0.11-0.40 m low. What was checked (before that fix):
 
 - *Reference coordinate.* RTKLIB demo5 b34k PPP-static with IGS final orbits
   and clocks (GPS only, `igs20.atx`) ends the hour at -0.21 m (10 degree mask)
@@ -245,14 +258,15 @@ a SEPCHOKE_B3E6 antenna).
 python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /data/cssrlib-data/data/doy2023-229 --check
 ```
 
-Lane result (2026-09-30, after the solid-earth-tide frame fix, MSVC Release,
-elapsed time from the first epoch 01:59:12 GPST; the historical rows keep the
-values of their time):
+Lane result (2026-10-01, after the solid-earth-tide frame fix and the static
+one-update-per-epoch fix, MSVC Release, elapsed time from the first epoch
+01:59:12 GPST; the historical rows keep the values of their time):
 
 | Run | H / U at 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| `has-idd`, static | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | **0.097 / -0.136 m** | **4.2 min** | **21.5 min** |
-| `legacy` conversion of the same stream, static | 0.370 / -0.550 m | 0.258 / -0.230 m | 0.266 / +0.274 m | 0.162 / +0.087 m | 57.5 min | 46.7 min |
+| `has-idd`, static | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | **0.014 / +0.050 m** | **0.8 min** | **5.8 min** |
+| `has-idd`, static, before the one-update fix | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | 0.097 / -0.136 m | 4.2 min | 21.5 min |
+| `legacy` conversion of the same stream, static | 0.517 / -0.120 m | 0.207 / +0.072 m | 0.273 / +0.551 m | 0.105 / +0.284 m | 57.8 min | 58.7 min |
 | `has-idd`, kinematic | 0.033 / -0.201 m | 0.064 / -0.128 m | 0.057 / +0.018 m | **0.114 / +0.077 m** | 59.6 min | 6.1 min |
 | `has-idd`, kinematic, before the residual screening | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.136 / +0.058 m | 0.018 / -0.390 m | 45.0 min | never (-0.44 m at the last epoch) |
 | `has-idd`, kinematic, before the one-update fix | 3.03 / -5.95 m | 2.47 / -5.13 m | 2.20 / -5.71 m | 1.87 / -5.61 m | never | never |
@@ -321,10 +335,12 @@ applied; with `--antex igs20.atx` the up error shifts by about -0.1 m.
   at the prior (SPP-seeded) position, so every extra pass pushed the position
   again by the innovation it had already absorbed and the troposphere and
   float ambiguities soaked up the difference. Kinematic PPP now commits one
-  update per epoch, as RTKLIB / MADOCALIB do. Static and `--low-dynamics`
-  runs keep the historical pass count (their prior is the previous solution,
-  so the stale-geometry push is millimetre-level). Kinematic PPP also screens
-  its post-fit residuals (w-test, 4 sigma); see
+  update per epoch, as RTKLIB / MADOCALIB do, and since 2026-10-01 so do
+  static and `--low-dynamics` runs (only the coherent MADOCA static
+  ionosphere-free profile keeps the historical passes); at start-up the
+  repeated push had moved static solutions tens to hundreds of metres. See
+  the [igs-final-ppp lane](reproduce.md#igs-final-ppp-precise-product-ppp-2026-10-01).
+  Kinematic PPP also screens its post-fit residuals (w-test, 4 sigma); see
   [Broadcast kinematic PPP](broadcast_kinematic_ppp.md).
 - **Galileo inter-system bias.** Galileo shares the GPS receiver clock unless
   `GNSS_PPP_ESTIMATE_ISB=gal` is set (as on the other non-MADOCA PPP paths).

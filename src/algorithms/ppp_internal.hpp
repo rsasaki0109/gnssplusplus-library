@@ -19,30 +19,40 @@ inline constexpr double kDefaultZenithDelayMeters = 2.3;
 // per epoch. applyPreciseCorrections() materializes the observation geometry
 // once, at the prior position, so every pass after the first re-reads the
 // position innovation the state has already absorbed and pushes the position
-// again on an already-shrunk covariance. RTKLIB/MADOCALIB commit one update
-// per epoch (ppp.c restarts every residual-screening pass from rtk->x/rtk->P).
+// again on an already-shrunk covariance, while the clock, troposphere and
+// ambiguity rows are re-evaluated and take up whatever the overshoot leaves.
+// RTKLIB/MADOCALIB commit one update per epoch (ppp.c pppos() restarts every
+// residual-screening pass from rtk->x/rtk->P). A single update linearized at
+// the prior is also all the geometry needs: a position error of 100 m changes
+// the line of sight by ~5e-6 rad, a sub-millimetre range term.
 //
-// - MADOCA uncombined (per-frequency) PPP: one update, MADOCALIB semantics.
-// - Kinematic motion (not --low-dynamics): one update, including the
-//   coherent MADOCA ionosphere-free path (MADOCALIB ppp-kine dual-freq,
-//   pppos() ppp.c:1359-1381). The prior position is re-seeded from SPP (or
-//   dead-reckoned by the dynamics model) every epoch, metres from the
-//   posterior, so the repeated push is metre-level; it is absorbed by the
-//   persistent troposphere and ambiguity states and the float solution
-//   settles metres off the truth.
-// - Static / low-dynamics motion keeps the historical pass count: the prior is
-//   the previous solution, the stale-geometry push is millimetre-level, and
-//   the passes only rescale the measurement weight the static tuning, lane
-//   gates and the MADOCA release baseline (docs/madoca_release_baseline.json,
-//   whose native ppp profile is --static) were measured with.
-inline int filterIterationCount(bool madoca_per_frequency_update,
-                                bool kinematic_motion,
-                                bool precise_products_loaded,
+// One update per epoch everywhere (static, --low-dynamics and kinematic;
+// broadcast, SP3/CLK, HAS / legacy RTCM SSR and MADOCA uncombined), except the
+// coherent MADOCA ionosphere-free *static* path. At start-up the repeated
+// push moved a static solution tens to hundreds of metres (TSK2 IGS-final
+// first hour 930 m 3D, 30 s GPS-only Kamakura 250 m) before the phase rows
+// pulled it back. The coherent MADOCA static IF path keeps the historical
+// passes: its position is re-blended with the SPP anchor after every pass
+// (constrainStaticAnchorPosition()), and its native-vs-MADOCALIB bridge delta
+// (docs/madoca_release_baseline.json) grows with a single update (MIZU 1 h
+// 1.63 -> 2.21 m RMS) until that anchor blend is reworked.
+inline int filterIterationCount(bool coherent_madoca_ionosphere_free_static,
                                 int configured_iterations) {
-    if (madoca_per_frequency_update || kinematic_motion) {
-        return 1;
-    }
-    return precise_products_loaded ? 3 : configured_iterations;
+    return coherent_madoca_ionosphere_free_static ? configured_iterations : 1;
+}
+
+// Geometry-free and Melbourne-Wubbena cycle-slip detection (RTKLIB
+// detslp_gf() / detslp_mw(), used by every RTKLIB PPP mode). Static
+// ionosphere-free PPP on broadcast or SP3/CLK products used to rely on the
+// receiver LLI flag alone, so a slip without LLI -- typically on a second
+// frequency that drops out for a few epochs and comes back with a new
+// ambiguity -- was absorbed by the float ambiguity and the position (TSK2
+// 2024-01-01: 0.96 m east at the end of the day). SSR ionosphere-free and
+// kinematic PPP already used these detectors; CLAS kinematic OSR has its own.
+inline bool useCombinationSlipDetection(bool kinematic_mode,
+                                        bool clas_kinematic_osr,
+                                        bool use_ionosphere_free) {
+    return (kinematic_mode && !clas_kinematic_osr) || use_ionosphere_free;
 }
 
 // Post-fit residual screening for kinematic PPP. RTKLIB/MADOCALIB ppp.c
@@ -505,6 +515,19 @@ inline std::vector<SignalType> secondarySignals(GNSSSystem system) {
 
 // Ionosphere-free PPP whose satellite clocks come from the broadcast
 // ephemeris, with no precise, SSR or DCB/OSB products supplying code biases.
+// Ionosphere-free PPP on SP3/CLK products (no SSR) needs both frequencies of a
+// satellite. With only the primary signal the code row would carry the full
+// first-order ionospheric delay (no broadcast Klobuchar term is applied on this
+// path) and the raw L1 carrier phase would be tied to the satellite's
+// ionosphere-free ambiguity state, so a satellite that drops its second
+// frequency for a few epochs corrupts that ambiguity (metres) when the second
+// frequency returns. RTKLIB/MADOCALIB (IONOOPT_IFLC) skip such a satellite;
+// do the same. Broadcast and SSR paths keep their own single-frequency rows.
+inline bool dropSingleFrequencyPreciseProductSatellite(bool precise_products_loaded,
+                                                       bool ssr_products_loaded) {
+    return precise_products_loaded && !ssr_products_loaded;
+}
+
 inline bool broadcastClockIonosphereFree(bool use_ionosphere_free,
                                          bool precise_products_loaded,
                                          bool ssr_products_loaded,

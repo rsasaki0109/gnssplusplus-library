@@ -649,19 +649,19 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
         return false;
     }
 
-    // MADOCALIB restarts each residual-screening pass from rtk->x/rtk->P and
-    // commits one measurement update per epoch. Re-applying the same epoch's
-    // rows to the already-updated covariance makes the native uncombined
-    // MADOCA filter overconfident before PPP-AR (ppp.c:1359-1378), and, because
-    // the rows keep the prior-position geometry, pushes a kinematic position
-    // again by the innovation it already absorbed (see filterIterationCount).
+    // One committed measurement update per epoch (RTKLIB/MADOCALIB pppos():
+    // every residual-screening pass restarts from rtk->x/rtk->P). The rows
+    // keep the prior-position geometry, so re-applying them pushes the
+    // position again by the innovation it already absorbed; see
+    // filterIterationCount() for the coherent MADOCA static exception.
     const bool madoca_per_frequency_update =
         require_coherent_ssr_ && ssr_products_loaded_ &&
         !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
+    const bool static_motion =
+        !ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode;
     const int filter_iterations = filterIterationCount(
-        madoca_per_frequency_update,
-        ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode,
-        precise_products_loaded_,
+        require_coherent_ssr_ && ssr_products_loaded_ &&
+            !madoca_per_frequency_update && static_motion,
         ppp_config_.filter_iterations);
     const PPPState pre_update_state = filter_state_;
     const bool madoca_static_spike_guard =
@@ -941,14 +941,16 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
     }
 
     constexpr double kMinimumMwSlipThresholdMeters = 10.0;
-    // Enable combination (GF/MW) slip detection in SSR mode even for static,
-    // because MW averaging is needed for Wide-Lane AR. CLAS kinematic OSR uses
-    // OSR-corrected GF/MW in detectClasCycleSlips instead.
+    // Geometry-free / Melbourne-Wubbena slip detection for every
+    // ionosphere-free solution (static included) and for kinematic motion;
+    // CLAS kinematic OSR uses OSR-corrected GF/MW in detectClasCycleSlips.
+    // The MW averages also feed wide-lane AR.
     const bool clas_kinematic_osr =
         ppp_config_.use_clas_osr_filter && ppp_config_.kinematic_mode;
-    const bool use_combination_slip_detection =
-        (ppp_config_.kinematic_mode && !clas_kinematic_osr) ||
-        (ssr_products_loaded_ && ppp_config_.use_ionosphere_free);
+    const bool use_combination_slip_detection = useCombinationSlipDetection(
+        ppp_config_.kinematic_mode,
+        clas_kinematic_osr,
+        ppp_config_.use_ionosphere_free);
 
     for (const auto& satellite : obs.getSatellites()) {
         const std::vector<SignalType> primary_candidates =
