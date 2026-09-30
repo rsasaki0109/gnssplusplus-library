@@ -174,6 +174,21 @@ The frozen executions on 2026-08-24 produced:
 | 2024-01-02 sealed holdout | Relative | FIX 99.861% | 0.0084 / 0.0106 m | max epoch 3D 0.0250 m | demonstration only: RTK ANTEX is not applied |
 | 2024-01-02 sealed holdout | PPP | solution 100% | 1.945 / 0.409 m | converged after 3,780 s; max epoch 3D 625 m | candidate after convergence; authority review required |
 
+The PPP rows above predate the precise-product fix of 2026-10-01 (SP3/CLK
+clocks now get the periodic relativistic term -2 r.v/c^2, satellites without
+a precise orbit and clock are dropped instead of running on broadcast clocks,
+and the satellite antenna PCO from ANTEX is applied to the centre-of-mass
+SP3 orbits). IGS0OPSFIN is GPS-only, so the PPP lane now uses only the GPS
+satellites of the multi-GNSS rover file. Re-running the development-day PPP
+sign-off with the same inputs (Windows, MSVC Release, local RINEX conversion)
+gives horizontal / vertical 0.563 / 0.826 m and convergence after 5,520 s
+(the same build before the fix: 1.345 / 0.064 m, 5,940 s), but a start-up
+excursion up to 930 m 3D (before: 45 m). The GPS-only 30-second static filter
+diverges for the first hour on this station (it also does on the fixed-rate
+Kamakura data decimated to 30 s, while RTKLIB demo5 converges on the same
+TSK2 inputs to 1 cm after 24 h); that start-up weakness predates the fix and
+is tracked separately. The sealed holdout was not re-run.
+
 The holdout was run once with unchanged gates and was not used for tuning.
 The large pre-convergence PPP errors prohibit treating the first valid
 solution as a measured control point. Neither lane is promoted here as a

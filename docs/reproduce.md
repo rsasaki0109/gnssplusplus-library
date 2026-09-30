@@ -30,6 +30,7 @@ runner adds no scoring logic of its own.
 | Smartphone GSDC official submission | `gsdc-official` | ready | ~30 min per drive; full run ~12-18 h | **Subset verified (by design).** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 56625084 (`cbd1fde1...`), and the Kaggle score is readback-only. 6 of 40 final drives and 2 of 25 stage-0 drives were rerun, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
+| (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
 
 Runtimes were measured on a 12-thread Windows 11 workstation with an MSVC
 Release build. Lanes that run in parallel slow each other down.
@@ -45,6 +46,7 @@ Release build. Lanes that run in parallel slow each other down.
 | PPC goal-matrix frozen tier inputs | `ppc-goal` | Not published; the 26 files (~33 MB) exist only in the `output/` tree of the checkout that produced the README. See [ppc-goal inputs](#ppc-goal-frozen-inputs) | `<ppc-goal-inputs>/` in the historical `output/` layout (`tokyo1_selected_quality_rtkbaseline_tier2_truthfree.pos`, `gici_common/tokyo1.pos`, ...); SHA-256 pinned in `scripts/experiments/ppc/stage_ppc_goal_inputs.py` |
 | Galileo HAS IDD sample ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) `data/doy2023-229`) | `has-idd-ppp` | Download `OBE42023229c.obs`, `OBE42023229c.nav` and `idd2023229c.rtc` from that directory. The upstream license is not stated, so the files are not redistributed | `<has-data-root>/{OBE42023229c.obs,OBE42023229c.nav,idd2023229c.rtc}` |
 | Galileo HAS SIS samples ([hirokawa/cssrlib-data](https://github.com/hirokawa/cssrlib-data) `data/doy2025-046`, `data/doy2025-233`) plus IGS BRDC navigation | `has-sis-ppp` | Download `046r_rnx.obs`, `046r_gale6.txt`, `233h_rnx.obs`, `233h_gale6.txt` from those directories and the IGS merged navigation files `BRDC00WRD_S_2025{046,233}0000_01D_MN.rnx.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/BRDC/2025/{046,233}/` (gunzip next to them). The cssrlib-data license is not stated, so nothing is redistributed | `<has-sis-data-root>/doy2025-046/{046r_rnx.obs,046r_gale6.txt,BRDC00WRD_S_20250460000_01D_MN.rnx}`, same for `doy2025-233/233h_*` |
+| IGS final orbits/clocks and `igs20.atx` (public, IGS) on top of the two cssrlib-data sets above | `igs-final-ppp` | `IGS0OPSFIN_{20250460000,20252330000,20232290000}_01D_{15M_ORB.SP3,30S_CLK.CLK}.gz` from `https://igs.bkg.bund.de/root_ftp/IGS/products/{2353,2380,2275}/` (gunzip next to the observations of that day) and `igs20.atx` from `https://files.igs.org/pub/station/general/igs20.atx` | `<has-sis-data-root>/igs20.atx`, `<has-sis-data-root>/doy2025-{046,233}/IGS0OPSFIN_2025{046,233}0000_01D_*` next to `{046r,233h}_rnx.obs`, and `<has-data-root>/IGS0OPSFIN_20232290000_01D_*` next to `OBE42023229c.obs` |
 | QZSS L6 CLAS archive | `clas-ppc` | Downloaded automatically from `https://sys.qzss.go.jp/archives/l6` | Cached under `<work-dir>/inputs/l6_cache` (about 1.7 GB of expanded SSR CSV per run) |
 
 Dataset roots are resolved in this order:
@@ -146,6 +148,10 @@ python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /datasets/cssrlib-dat
 
 # Galileo HAS float PPP from decoded E6-B signal-in-space pages (docs lane)
 python3 apps/gnss.py reproduce has-sis-ppp --has-sis-data-root /datasets/cssrlib-data/data --check
+
+# Static float PPP with IGS final orbits/clocks on the same hours (docs lane)
+python3 apps/gnss.py reproduce igs-final-ppp --has-sis-data-root /datasets/cssrlib-data/data \
+  --has-data-root /datasets/cssrlib-data/data/doy2023-229 --check
 ```
 
 Common options:
@@ -614,3 +620,41 @@ only: libgnss++ ends about 1 m low there with any correction source. Kamakura
 is outside the HAS service area, so the numbers are indicative. See
 [Galileo HAS support](galileo_has.md) for the decoder parity with cssrlib and
 the full comparison.
+
+## igs-final-ppp: precise-product PPP (2026-10-01)
+
+`igs-final-ppp` is a docs lane, not a README row. It runs `gnss_ppp --sp3
+--clk --antex --static --elevation-mask 10` with IGS final orbits and clocks
+(`IGS0OPSFIN`, 15 min SP3, 30 s CLK) on the two Kamakura hours of
+`has-sis-ppp` and the OBE4 hour of `has-idd-ppp`, and scores each `.pos`
+against the same reference coordinates.
+
+```bash
+python3 apps/gnss.py reproduce igs-final-ppp --has-sis-data-root /datasets/cssrlib-data/data \
+  --has-data-root /datasets/cssrlib-data/data/doy2023-229 --check
+```
+
+The IGS products and `igs20.atx` are public but large, so they are not
+committed: download them as listed in [Datasets](#datasets) and gunzip them
+next to the observations. IGS0OPSFIN carries GPS only, so the other
+constellations of the multi-GNSS observation files are dropped (satellites
+without a precise orbit and clock are excluded rather than mixed in on
+broadcast clocks, as RTKLIB does with `sateph = precise`).
+
+Local result (MSVC Release, 117 s), H / U in metres after 10 / 30 / 60 min,
+with RTKLIB demo5 b34j PPP-static on the same observations, products and
+ANTEX (GPS, L1+L2 ionosphere-free, estimated ZTD, 10 degrees, tides):
+
+| Run | libgnss++ | RTKLIB demo5 | libgnss++ before the fix |
+|---|---|---|---|
+| Kamakura 2025-08-21 07h | 0.490 / -0.646, 0.168 / -0.222, **0.120 / -0.265** | 0.434 / -0.488, 0.154 / -0.179, 0.099 / -0.212 | 1.391 / +0.870, 1.453 / +1.384, 1.502 / +0.889 |
+| Kamakura 2025-02-15 17h | 0.611 / -0.007, 0.454 / -0.205, **0.315 / +0.027** | 0.717 / -0.147, 0.418 / -0.202, 0.267 / -0.017 | 1.459 / +0.502, 1.226 / +1.164, 1.466 / +0.747 |
+| OBE4 2023-08-17 02h | 0.171 / -0.341, 0.209 / -0.165, **0.199 / -0.057** | 0.426 / -0.245, 0.315 / -0.127, 0.280 / -0.054 | 2.773 / -2.974, 2.353 / -0.779, 1.561 / -0.623 |
+
+The gates are H <= 0.40 m and |U| <= 0.40 m at 60 min for the Kamakura hours
+and 0.30 m for OBE4. Before the fix, precise-product PPP omitted the periodic
+relativistic satellite clock term (-2 r.v/c^2, which IGS SP3/CLK clocks
+exclude), fell back to broadcast orbits and clocks for satellites missing
+from the SP3, and did not apply the satellite antenna PCO to the
+centre-of-mass SP3 orbits; with GPS-only observations the 2025-08-21 hour
+ended at E -5.5 / N -3.3 / U +4.3 m.
