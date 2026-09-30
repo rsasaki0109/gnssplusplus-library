@@ -1353,11 +1353,13 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
         // PCO has to be added (RTKLIB satantoff(), cssrlib). The body-frame
         // PCO is rotated into ECEF with the yaw-steering attitude and
         // shifts sat_position so geodist() returns the antenna range.
-        // Broadcast and SSR-corrected broadcast orbits already refer to the
-        // antenna phase centre; apply_satellite_antenna_pco forces the shift
-        // there as well.
+        // Broadcast and SSR-corrected broadcast orbits, and SP3 files marked
+        // as antenna-phase-centre orbits (gnss nav-products), already refer
+        // to the antenna phase centre; apply_satellite_antenna_pco forces
+        // the shift there as well.
         if (satellite_antex_loaded_ &&
-            (have_precise || ppp_config_.apply_satellite_antenna_pco)) {
+            ((have_precise && !precise_products_.orbits_at_antenna_phase_center) ||
+             ppp_config_.apply_satellite_antenna_pco)) {
             Vector3d pco_body_if = Vector3d::Zero();
             bool have_pco = false;
             for (const auto& entry : satellite_antex_offsets_) {

@@ -442,7 +442,13 @@ inline double preciseClockRelativisticCorrection(const Vector3d& position,
 class PreciseProducts {
 public:
     std::map<SatelliteId, std::vector<PreciseOrbitClock>> orbit_clock_data;
-    
+
+    /// SP3 positions refer to the antenna phase centre instead of the
+    /// centre of mass (set by loadSP3File() for an SP3 whose "/*" comment
+    /// says "ANTENNA PHASE CENTER", as `gnss nav-products` writes); PPP then
+    /// skips the satellite PCO.
+    bool orbits_at_antenna_phase_center = false;
+
     /**
      * @brief Add precise orbit/clock data
      */

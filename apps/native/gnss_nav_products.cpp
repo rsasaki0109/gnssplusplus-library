@@ -176,6 +176,12 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        // Broadcast orbits refer to the antenna phase centre (IGS SP3: centre
+        // of mass); the marker lets the PPP loader skip the satellite PCO.
+        // Clocks follow the IGS product convention and exclude the periodic
+        // relativistic term, which PPP adds back as -2 r.v / c^2.
+        sp3_output << "/* libgnss++ nav-products: broadcast orbits at the ANTENNA PHASE CENTER\n";
+        sp3_output << "/* clocks exclude the periodic relativistic term (IGS convention)\n";
         clk_output << "     3.00           C                   RINEX VERSION / TYPE\n";
         clk_output << "END OF HEADER\n";
 
@@ -207,6 +213,7 @@ int main(int argc, char* argv[]) {
                         satellite, epoch.time, position, velocity, clock_bias, clock_drift)) {
                     continue;
                 }
+                clock_bias -= libgnss::preciseClockRelativisticCorrection(position, velocity);
 
                 char sp3_line[160];
                 std::snprintf(

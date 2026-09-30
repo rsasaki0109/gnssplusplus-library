@@ -1818,6 +1818,18 @@ TEST(PPPTest, PreciseProductsCentralDifferenceVelocityAndClockAvailability) {
         position, velocity, clock_bias, clock_drift, &clock_available));
     EXPECT_TRUE(clock_available);
     EXPECT_NEAR(clock_bias, 100.5e-6, 1e-12);
+    // Plain SP3: centre-of-mass orbits.
+    EXPECT_FALSE(precise_products.orbits_at_antenna_phase_center);
+
+    // gnss nav-products marks its broadcast (antenna phase centre) orbits.
+    writeTextFile(sp3_path,
+                  "/* libgnss++ nav-products: broadcast orbits at the ANTENNA PHASE CENTER\n" +
+                      sp3_text);
+    PreciseProducts marked_products;
+    ASSERT_TRUE(marked_products.loadSP3File(sp3_path.string()));
+    EXPECT_TRUE(marked_products.orbits_at_antenna_phase_center);
+    marked_products.clear();
+    EXPECT_FALSE(marked_products.orbits_at_antenna_phase_center);
 
     std::filesystem::remove(sp3_path);
 }

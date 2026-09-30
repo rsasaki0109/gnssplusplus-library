@@ -56,6 +56,12 @@ bool PreciseProducts::loadSP3File(const std::string& filename) {
         if (line.empty()) {
             continue;
         }
+        if (line.rfind("/*", 0) == 0) {
+            if (line.find("ANTENNA PHASE CENTER") != std::string::npos) {
+                orbits_at_antenna_phase_center = true;
+            }
+            continue;
+        }
         if (line[0] == '*') {
             have_epoch = parseSp3EpochLine(line, current_time);
             continue;
@@ -358,5 +364,6 @@ bool PreciseProducts::hasData(const SatelliteId& sat, const GNSSTime& time) cons
 
 void PreciseProducts::clear() {
     orbit_clock_data.clear();
+    orbits_at_antenna_phase_center = false;
 }
 } // namespace libgnss
