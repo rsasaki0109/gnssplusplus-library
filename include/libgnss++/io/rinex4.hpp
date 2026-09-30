@@ -159,6 +159,24 @@ bool parseSbasEphemerisRecord(
     const std::vector<std::string>& body,
     SbasEphemerisRecord& record);
 
+/**
+ * @brief Physical plausibility of a GLONASS FDMA broadcast state vector.
+ *
+ * GLONASS satellites fly a near-circular orbit with a nominal semi-major
+ * axis of 25510 km and eccentricity below 0.01 (ICD), so the PZ-90 position
+ * of a genuine broadcast record lies within a few hundred km of that radius
+ * and its radial velocity is a few tens of m/s at most (the ECEF radial
+ * velocity equals the inertial one because (w x r).r = 0).  A record that
+ * combines immediate-data strings of two different frames (for example the
+ * X/Y lines of one frame with the Z line of the previous one) violates both
+ * by hundreds of km and hundreds of m/s.
+ *
+ * @param position_m PZ-90 position in metres.
+ * @param velocity_mps PZ-90 velocity in metres per second.
+ * @return true when |r| is within 25000..26000 km and |r.v|/|r| <= 100 m/s.
+ */
+bool isPlausibleGlonassFdmaState(const Vector3d& position_m, const Vector3d& velocity_mps);
+
 struct SystemTimeOffsetRecord {
     NavigationRecordHeader header;
     CalendarTime reference_epoch;

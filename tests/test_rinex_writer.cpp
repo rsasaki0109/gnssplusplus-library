@@ -110,15 +110,12 @@ void writeSbasBody(std::ofstream& file) {
 }
 
 std::vector<std::string> rinex4GlonassFdmaBody() {
-    std::istringstream stream(rinex4GpsLnavBody());
-    std::vector<std::string> body;
-    std::string line;
-    for (int i = 0; i < 4 && std::getline(stream, line); ++i) {
-        if (i == 0) {
-            line.replace(0, 3, "R26");
-        }
-        body.push_back(line);
-    }
+    // The first four lines of the CDMA record carry the same epoch/clock and
+    // X/Y/Z position-velocity-acceleration layout as an FDMA record, and a
+    // state vector on the GLONASS orbit shell (the reader rejects FDMA
+    // records whose state vector is not on a GLONASS orbit).
+    std::vector<std::string> body = rinex4GlonassCdmaBody();
+    body.resize(4);
     return body;
 }
 

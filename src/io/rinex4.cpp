@@ -1150,6 +1150,23 @@ bool parseObservationEpochHeader(const std::string& line,
     return validCalendar(epoch);
 }
 
+bool isPlausibleGlonassFdmaState(const Vector3d& position_m, const Vector3d& velocity_mps) {
+    // Nominal GLONASS radius 25510 km, eccentricity < 0.01: |r| stays within
+    // about +/-255 km and |v_r| <= e * sqrt(mu / a) ~ 40 m/s.  The bounds keep
+    // a wide margin (IGS merged BRDC records: 25445..25571 km, |v_r| < 10 m/s).
+    constexpr double kMinRadiusM = 25000.0e3;
+    constexpr double kMaxRadiusM = 26000.0e3;
+    constexpr double kMaxRadialSpeedMps = 100.0;
+    if (!position_m.allFinite() || !velocity_mps.allFinite()) {
+        return false;
+    }
+    const double radius = position_m.norm();
+    if (radius < kMinRadiusM || radius > kMaxRadiusM) {
+        return false;
+    }
+    return std::abs(position_m.dot(velocity_mps) / radius) <= kMaxRadialSpeedMps;
+}
+
 bool isCompactRinexPath(const std::string& filename) {
     std::string lower = filename;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
