@@ -46,33 +46,47 @@ struct OceanLoadingBlq {
 /// to the station's nominal ITRS coordinates to obtain the tidally
 /// displaced instantaneous position.
 ///
-/// FRAME NOTE: although the IERS Conventions 2010 routine
-/// documentation describes all inputs as "ECEF", the published
-/// reference test case actually uses ICRS positions for Sun and Moon
-/// while keeping the station in ITRS. The libgnss::iers wrapper
-/// follows the *test-case convention* (which defines the routine's
-/// behavior in practice), so:
-///
-///   - `xsta_itrs` should be the station's ITRS / ECEF position.
-///   - `xsun_icrs` and `xmon_icrs` should be Sun / Moon positions in
-///     the ICRS / GCRS — *not* rotated to ITRS.
-///
-/// `libgnss::iers::sunPositionIcrs` and `moonPositionIcrs` (in
-/// libgnss++/iers/ephemeris.hpp) return values in the correct frame
-/// for direct use here.
+/// FRAME: all three vectors must be in the same Earth-fixed frame
+/// (ITRS / ECEF), as the IERS Conventions 2010 routine documents. The
+/// Step-1 terms depend on the angle between the station and the Sun /
+/// Moon, so passing inertial (ICRS) Sun / Moon vectors with an ITRS
+/// station puts the tidal bulge at the wrong local hour angle: the
+/// resulting radial displacement barely varies over the day and can
+/// have the wrong sign (e.g. +0.28 m instead of -0.10..-0.14 m at
+/// Kamakura, 2025-08-21 07-08 GPST). The published IERS reference test
+/// case happens to use ICRS-like Sun / Moon inputs; it checks the
+/// arithmetic of the routine only. Use solidEarthTideDisplacementAt()
+/// to get the Sun / Moon in ITRS from the SOFA ephemerides.
 ///
 /// @param mjd_utc        UTC modified Julian date of the epoch.
 /// @param xsta_itrs      Station nominal ITRS / ECEF coordinates [m].
-/// @param xsun_icrs      Sun ICRS / GCRS coordinates [m] at this epoch.
-/// @param xmon_icrs      Moon ICRS / GCRS coordinates [m] at this epoch.
+/// @param xsun_itrs      Sun ITRS / ECEF coordinates [m] at this epoch.
+/// @param xmon_itrs      Moon ITRS / ECEF coordinates [m] at this epoch.
 /// @return Displacement vector [m] in the station's ITRS frame; add
 ///         to `xsta_itrs` to obtain the instantaneously displaced
 ///         station position.
 Eigen::Vector3d solidEarthTideDisplacement(
     double mjd_utc,
     const Eigen::Vector3d& xsta_itrs,
-    const Eigen::Vector3d& xsun_icrs,
-    const Eigen::Vector3d& xmon_icrs);
+    const Eigen::Vector3d& xsun_itrs,
+    const Eigen::Vector3d& xmon_itrs);
+
+/// @brief Solid-earth-tide displacement with Sun / Moon from SOFA.
+///
+/// Computes the geocentric Sun (`sunPositionIcrs`) and Moon
+/// (`moonPositionIcrs`), rotates them to ITRS with
+/// `icrsToItrs(mjd_utc, eop)` and evaluates
+/// solidEarthTideDisplacement(). Zero EOP (UT1 = UTC, no polar motion)
+/// changes the displacement by well under a millimetre.
+///
+/// @param mjd_utc        UTC modified Julian date of the epoch.
+/// @param xsta_itrs      Station nominal ITRS / ECEF coordinates [m].
+/// @param eop            Earth orientation parameters at this epoch.
+/// @return Displacement vector [m] in ITRS (add to `xsta_itrs`).
+Eigen::Vector3d solidEarthTideDisplacementAt(
+    double mjd_utc,
+    const Eigen::Vector3d& xsta_itrs,
+    const EarthOrientationParams& eop = EarthOrientationParams{});
 
 /// @brief Pole-tide station displacement (IERS Conventions 2010 §7.1.4).
 ///

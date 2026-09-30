@@ -70,6 +70,47 @@ TEST(IersTides, SolidEarthTideAmplitudeIsBounded) {
     EXPECT_LT(dxyz.cwiseAbs().maxCoeff(), 0.5);
 }
 
+TEST(IersTides, SolidEarthTideAtUsesEarthFixedSunAndMoon) {
+    // Kamakura (35.339 N, 139.522 E, the cssrlib-data HAS SIS site).
+    // Reference east / up displacements from an independent
+    // implementation (cssrlib tidedispIERS2010 / tidedisp, which follow
+    // RTKLIB tide_solid() with Earth-fixed Sun and Moon). The north
+    // component is not compared: those implementations leave out the
+    // permanent tide (about -2.4 cm north at this latitude), which the
+    // IERS routine keeps (conventional tide-free coordinates).
+    const Eigen::Vector3d xsta(-3962108.6836, 3381309.5672, 3668678.6720);
+    const double lat = std::atan2(xsta.z(), std::hypot(xsta.x(), xsta.y()) * (1.0 - 6.69438e-3));
+    const double lon = std::atan2(xsta.y(), xsta.x());
+    const Eigen::Vector3d east(-std::sin(lon), std::cos(lon), 0.0);
+    const Eigen::Vector3d up(std::cos(lat) * std::cos(lon),
+                             std::cos(lat) * std::sin(lon),
+                             std::sin(lat));
+    struct Case {
+        double mjd_utc;
+        double east_m;
+        double up_m;
+    };
+    // GPST epochs converted to UTC (GPST - UTC = 18 s).
+    const double kLeap = 18.0 / 86400.0;
+    const Case cases[] = {
+        {60908.0 + 7.0 / 24.0 - kLeap, -0.0402, -0.0963},   // 2025-08-21 07:00 GPST
+        {60908.0 + 8.0 / 24.0 - kLeap, -0.0175, -0.1380},   // 2025-08-21 08:00 GPST
+        {60721.0 + 17.0 / 24.0 - kLeap, -0.0151, 0.1375},   // 2025-02-15 17:00 GPST
+        {60721.0 + 18.0 / 24.0 - kLeap, -0.0340, 0.1012},   // 2025-02-15 18:00 GPST
+    };
+    for (const auto& c : cases) {
+        const Eigen::Vector3d d = libgnss::iers::solidEarthTideDisplacementAt(c.mjd_utc, xsta);
+        EXPECT_NEAR(d.dot(east), c.east_m, 0.01) << "mjd " << c.mjd_utc;
+        EXPECT_NEAR(d.dot(up), c.up_m, 0.01) << "mjd " << c.mjd_utc;
+    }
+    // The radial tide follows the Earth's rotation: it changes by about
+    // 4 cm over this hour. Inertial Sun / Moon vectors mixed with an
+    // Earth-fixed station gave a nearly constant +0.28 m instead.
+    const Eigen::Vector3d d0 = libgnss::iers::solidEarthTideDisplacementAt(cases[0].mjd_utc, xsta);
+    const Eigen::Vector3d d1 = libgnss::iers::solidEarthTideDisplacementAt(cases[1].mjd_utc, xsta);
+    EXPECT_GT(d0.dot(up) - d1.dot(up), 0.03);
+}
+
 // --- Pole tide (IERS Conventions 2010 §7.1.4) -----------------------
 
 using libgnss::iers::poleTideDisplacement;

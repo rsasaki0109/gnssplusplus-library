@@ -99,7 +99,8 @@ path = "runs.has_idd_static.convergence_abs_up_below_0p40_min"
 max = 30.0
 readme = "docs/galileo_has.md"
 
-# docs/galileo_has.md table values; reported, not gated.
+# docs/galileo_has.md table values (re-measured 2026-09-30 after the
+# solid-earth-tide frame fix); reported, not gated.
 [[metrics]]
 name = "table: has-idd static {field} at {t}"
 source = "{work_dir}/summary.json"
@@ -108,14 +109,14 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.016 },
-  { t = "10min", field = "up_m", expected = -0.490 },
-  { t = "20min", field = "h_m", expected = 0.058 },
-  { t = "20min", field = "up_m", expected = -0.421 },
-  { t = "30min", field = "h_m", expected = 0.073 },
-  { t = "30min", field = "up_m", expected = -0.082 },
-  { t = "60min", field = "h_m", expected = 0.095 },
-  { t = "60min", field = "up_m", expected = -0.135 },
+  { t = "10min", field = "h_m", expected = 0.018 },
+  { t = "10min", field = "up_m", expected = -0.503 },
+  { t = "20min", field = "h_m", expected = 0.057 },
+  { t = "20min", field = "up_m", expected = -0.432 },
+  { t = "30min", field = "h_m", expected = 0.072 },
+  { t = "30min", field = "up_m", expected = -0.090 },
+  { t = "60min", field = "h_m", expected = 0.097 },
+  { t = "60min", field = "up_m", expected = -0.136 },
 ]
 
 [[metrics]]
@@ -126,8 +127,8 @@ gate = false
 abs_tol = 1.5
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "convergence_h_below_0p20_min", expected = 4.18 },
-  { field = "convergence_abs_up_below_0p40_min", expected = 20.95 },
+  { field = "convergence_h_below_0p20_min", expected = 4.23 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 21.47 },
 ]
 
 # Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
@@ -159,14 +160,14 @@ gate = false
 abs_tol = 0.05
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.035 },
-  { t = "10min", field = "up_m", expected = -0.195 },
+  { t = "10min", field = "h_m", expected = 0.033 },
+  { t = "10min", field = "up_m", expected = -0.201 },
   { t = "20min", field = "h_m", expected = 0.064 },
-  { t = "20min", field = "up_m", expected = -0.127 },
-  { t = "30min", field = "h_m", expected = 0.059 },
-  { t = "30min", field = "up_m", expected = 0.015 },
-  { t = "60min", field = "h_m", expected = 0.115 },
-  { t = "60min", field = "up_m", expected = 0.059 },
+  { t = "20min", field = "up_m", expected = -0.128 },
+  { t = "30min", field = "h_m", expected = 0.057 },
+  { t = "30min", field = "up_m", expected = 0.018 },
+  { t = "60min", field = "h_m", expected = 0.114 },
+  { t = "60min", field = "up_m", expected = 0.077 },
 ]
 
 # The same stream through the legacy RTCM SSR conversion (no IODE match,
@@ -179,6 +180,6 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "h_m", expected = 0.160 },
-  { field = "up_m", expected = 0.088 },
+  { field = "h_m", expected = 0.162 },
+  { field = "up_m", expected = 0.087 },
 ]

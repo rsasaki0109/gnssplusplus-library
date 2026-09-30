@@ -14,9 +14,21 @@ availability is the share of reference epochs with an output solution.
 |---|---|---|---:|---|---|---:|
 | `gnss_ppp --kinematic`, develop after PR #537 | 7.58 / 42.43 m | 19.68 / 56.01 m | 99.29 % | 5.36 / 20.26 m | 4.69 / 57.03 m | 98.80 % |
 | `gnss_ppp --kinematic`, this change | **0.80 / 4.88 m** | **2.06 / 13.47 m** | 99.12 % | **3.27 / 11.60 m** | **2.37 / 22.26 m** | 98.68 % |
+| `gnss_ppp --kinematic`, after the solid-earth-tide frame fix (2026-09-30) | 0.79 / 4.87 m | 2.07 / 13.48 m | 99.12 % | 3.56 / 13.31 m | 2.21 / 32.24 m | 98.68 % |
 | `gnss_spp` (same data) | 1.78 / 20.44 m | 2.09 / 47.94 m | 99.12 % | 2.80 / 11.05 m | 4.11 / 20.85 m | 98.65 % |
 | RTKLIB demo5 b34k PPP-kinematic, broadcast (config below) | 3.62 / 18.16 m | 4.32 / 48.96 m | 68.91 % | 5.59 / 11.77 m | 27.82 / 72.67 m | 11.99 % |
 | same, innovation gates opened (`pos2-rejionno=30`, `pos2-rejcode=100`) | 3.90 / 31.68 m | 6.57 / 103.89 m | 96.75 % | 4.57 / 17.76 m | 24.05 / 66.73 m | 96.68 % |
+
+The solid-earth-tide frame fix (the IERS 2010 tide was computed with the
+Sun and Moon in the ICRS instead of the Earth-fixed frame; see
+[Galileo HAS](galileo_has.md)) changes the modelled tide by up to a few
+decimetres. Tokyo run1 is unchanged; Nagoya run1 moves to H95 13.3 m and U95
+32.2 m, the same as with the legacy Step-1 tide (`--no-iers-solid-tide`:
+3.56 / 13.31 m, U95 32.23 m) or with no solid tide (3.55 / 13.29 m, U95
+32.06 m), so its previous U95 of 22 m was a side effect of the mis-framed
+tide in a run whose up tail follows metre-level code errors. On runs 2 and 3
+H50 moves by -0.06 to +0.13 m and the up statistics move both ways (Nagoya
+run2 U50 5.39 -> 6.02 m and U95 31.0 -> 36.0 m, run3 U50 7.44 -> 5.69 m).
 
 Before PR #537 (one measurement update per epoch) Tokyo run1 was at
 18.1 / 117 m horizontal. The 29 epochs (20 Tokyo, 9 Nagoya) no longer output are epochs where the SPP
