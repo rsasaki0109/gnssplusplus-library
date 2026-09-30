@@ -75,6 +75,48 @@ Some GNSS signal-selection design work is informed by
 > OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 > SOFTWARE.
 
+## Galileo HAS test data
+
+`tests/test_galileo_has.cpp` embeds the Reed-Solomon decoding example of the
+Galileo HAS SIS ICD, Issue 1.0 (May 2022), Annex C (15 encoded pages and the
+decoded message), used under the ICD's Annex E authorisation. The HAS decoder
+(`src/io/galileo_has.cpp`) is an independent implementation of the ICD; its
+decoded values were compared with cssrlib (MIT, see above) but no cssrlib code
+is included.
+
+The same test embeds two HAS messages (1.3 kB) decoded from the u-blox X20
+recording `drive_0708/gnss_1934.ubx` of
+[rtklibexplorer/GNSS_IMU](https://github.com/rtklibexplorer/GNSS_IMU), under
+the BSD 3-Clause License:
+
+> Copyright (c) 2025, rtklibexplorer
+>
+> Redistribution and use in source and binary forms, with or without
+> modification, are permitted provided that the following conditions are met:
+> 1. Redistributions of source code must retain the above copyright notice,
+>    this list of conditions and the following disclaimer.
+> 2. Redistributions in binary form must reproduce the above copyright notice,
+>    this list of conditions and the following disclaimer in the documentation
+>    and/or other materials provided with the distribution.
+> 3. Neither the name of the copyright holder nor the names of its
+>    contributors may be used to endorse or promote products derived from this
+>    software without specific prior written permission.
+>
+> THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+> AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+> IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+> ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+> LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+> CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+> SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+> INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+> CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+> ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+> POSSIBILITY OF SUCH DAMAGE.
+
+The public HAS recordings used for validation (hirokawa/cssrlib-data, MRTKLIB
+test data) are not redistributed.
+
 ## GTSAM
 
 The optional GTSAM backend links against GTSAM, distributed under the

@@ -15,6 +15,7 @@
 #include <libgnss++/algorithms/ppp_env_overrides.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/external/madocalib_bridge.hpp>
+#include <libgnss++/io/galileo_has.hpp>
 #include <libgnss++/io/madoca_l6.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -35,6 +36,8 @@ struct Options {
     std::string ssr_path;
     std::string ssr_rtcm_path;
     std::string ssr_rtcm_profile = "legacy";
+    std::string has_pages_path;
+    std::string has_pages_format;
     std::vector<std::string> madoca_l6_paths;
     std::vector<std::string> madoca_l6d_paths;
     std::vector<std::string> madoca_l6d_shadow_paths;
@@ -57,6 +60,7 @@ struct Options {
     double convergence_threshold_horizontal = 0.1;
     double convergence_threshold_vertical = 0.2;
     double ssr_step_seconds = 1.0;
+    double elevation_mask_deg = -1.0;  // < 0: processor default
     bool estimate_troposphere = true;
     bool estimate_ionosphere = false;
     bool use_ionosphere_free = true;
@@ -186,6 +190,11 @@ void printUsage(const char* program_name) {
         << "                          Internet Data Distribution: IODE-matched broadcast orbits,\n"
         << "                          Galileo I/NAV only, held RTCM-signal-ID code biases, and\n"
         << "                          GPS/Galileo ephemerides merged from the SSR stream\n"
+        << "  --has-pages <file>       Galileo HAS signal-in-space corrections decoded from\n"
+        << "                          E6-B C/NAV pages (UBX RXM-SFRBX, SBF GALRawCNAV or\n"
+        << "                          cssrlib page text); requires --nav, Galileo I/NAV only\n"
+        << "  --has-pages-format <ubx|cssrlib|sbf>\n"
+        << "                          HAS page log format (default: from the file extension)\n"
         << "  --madoca-l6 <file>       Native MADOCA L6E SSR channel (repeatable,\n"
         << "                          e.g. PRN 204 and 206); requires --nav\n"
         << "  --madoca-l6d <file>      Native MADOCA L6D STEC input (repeatable);\n"
@@ -210,6 +219,7 @@ void printUsage(const char* program_name) {
         << "                          Station name to select from the BLQ file\n"
         << "  --ssr-step-seconds <seconds>\n"
         << "                          Sampling step for RTCM SSR conversion (default: 1.0)\n"
+        << "  --elevation-mask <deg>   Satellite elevation mask (default: processor default, 15)\n"
         << "  --out <solution.pos>     Output position file (required)\n"
         << "  --summary-json <summary.json>\n"
         << "                          Optional machine-readable run summary\n"
@@ -372,6 +382,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.ssr_rtcm_path = argv[++i];
         } else if (arg == "--ssr-rtcm-profile" && i + 1 < argc) {
             options.ssr_rtcm_profile = argv[++i];
+        } else if (arg == "--has-pages" && i + 1 < argc) {
+            options.has_pages_path = argv[++i];
+        } else if (arg == "--has-pages-format" && i + 1 < argc) {
+            options.has_pages_format = argv[++i];
         } else if (arg == "--madoca-l6" && i + 1 < argc) {
             options.madoca_l6_paths.push_back(argv[++i]);
         } else if (arg == "--madoca-l6d" && i + 1 < argc) {
@@ -416,6 +430,8 @@ Options parseArguments(int argc, char* argv[]) {
             options.convergence_threshold_vertical = std::stod(argv[++i]);
         } else if (arg == "--ssr-step-seconds" && i + 1 < argc) {
             options.ssr_step_seconds = std::stod(argv[++i]);
+        } else if (arg == "--elevation-mask" && i + 1 < argc) {
+            options.elevation_mask_deg = std::stod(argv[++i]);
         } else if (arg == "--no-estimate-troposphere") {
             options.estimate_troposphere = false;
         } else if (arg == "--estimate-troposphere") {
@@ -567,6 +583,23 @@ Options parseArguments(int argc, char* argv[]) {
     if (!options.madoca_l6_paths.empty() && options.nav_path.empty()) {
         argumentError("--madoca-l6 requires --nav (broadcast ephemeris)", argv[0]);
     }
+    if (!options.has_pages_path.empty()) {
+        if (options.nav_path.empty()) {
+            argumentError("--has-pages requires --nav (broadcast ephemeris)", argv[0]);
+        }
+        if (!options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
+            !options.madoca_l6_paths.empty()) {
+            argumentError("--has-pages cannot be combined with --ssr, --ssr-rtcm or --madoca-l6",
+                          argv[0]);
+        }
+        libgnss::io::HasPageInputFormat format;
+        if (!options.has_pages_format.empty() &&
+            !libgnss::io::parseHasPageInputFormat(options.has_pages_format, format)) {
+            argumentError("--has-pages-format must be one of: ubx, cssrlib, sbf", argv[0]);
+        }
+    } else if (!options.has_pages_format.empty()) {
+        argumentError("--has-pages-format requires --has-pages", argv[0]);
+    }
     if (!options.madoca_l6d_paths.empty() &&
         !options.madoca_l6d_shadow_paths.empty()) {
         argumentError(
@@ -609,6 +642,10 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.ssr_step_seconds <= 0.0) {
         argumentError("--ssr-step-seconds must be positive", argv[0]);
+    }
+    if (options.elevation_mask_deg != -1.0 &&
+        (options.elevation_mask_deg < 0.0 || options.elevation_mask_deg >= 90.0)) {
+        argumentError("--elevation-mask must be in [0, 90) degrees", argv[0]);
     }
 #if GNSSPP_MADOCALIB_ORACLE_CLI
     if (options.madocalib_time_interval_seconds < 0.0) {
@@ -1106,7 +1143,7 @@ int main(int argc, char* argv[]) {
         ppp_config.ssr_file_path = options.ssr_path;
         ppp_config.use_ssr_corrections =
             !options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
-            !options.madoca_l6_paths.empty();
+            !options.madoca_l6_paths.empty() || !options.has_pages_path.empty();
         ppp_config.ionex_file_path = options.ionex_path;
         ppp_config.dcb_file_path = options.dcb_path;
         ppp_config.antex_file_path = options.antex_path;
@@ -1332,6 +1369,9 @@ int main(int argc, char* argv[]) {
         if (!options.madoca_l6_paths.empty() && ppp_env_overrides.madoca_low_elev) {
             processor_config.elevation_mask = 10.0;
         }
+        if (options.elevation_mask_deg >= 0.0) {
+            processor_config.elevation_mask = options.elevation_mask_deg;
+        }
 
         const auto init_started = std::chrono::steady_clock::now();
         if (options.progress_interval_s > 0.0) {
@@ -1372,6 +1412,39 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to load RTCM SSR corrections: "
                       << options.ssr_rtcm_path << "\n";
             return 1;
+        }
+        if (!options.has_pages_path.empty()) {
+            // HAS clocks refer to the I/NAV clock and to the exact IODref.
+            nav_data.setGalileoEphemerisSource(
+                libgnss::NavigationData::GalileoEphemerisSource::INavOnly);
+            libgnss::io::HasPageInputFormat format =
+                libgnss::io::guessHasPageInputFormat(options.has_pages_path);
+            if (!options.has_pages_format.empty()) {
+                libgnss::io::parseHasPageInputFormat(options.has_pages_format, format);
+            }
+            libgnss::io::GalileoHasDecoder::Options decoder_options;
+            decoder_options.keep_messages = false;
+            libgnss::io::GalileoHasDecoder decoder(decoder_options);
+            libgnss::io::HasPageReadStats read_stats;
+            std::string error;
+            if (!libgnss::io::decodeGalileoHasPages(options.has_pages_path, format, decoder,
+                                                    &read_stats, &error)) {
+                std::cerr << "Error: failed to read HAS pages: " << error << "\n";
+                return 1;
+            }
+            const auto& has_stats = decoder.stats();
+            if (!options.quiet) {
+                std::cerr << "[gnss_ppp] has-sis: " << read_stats.pages << " E6-B pages ("
+                          << has_stats.crc_failures << " CRC failures, " << has_stats.dummy_pages
+                          << " dummy), " << has_stats.messages_decoded << " HAS messages, "
+                          << decoder.updates().size() << " held updates\n";
+            }
+            if (!processor.loadGalileoHasSisProducts(decoder.updates(), nav_data,
+                                                     options.ssr_step_seconds)) {
+                std::cerr << "Error: no usable Galileo HAS corrections in "
+                          << options.has_pages_path << "\n";
+                return 1;
+            }
         }
         if (!options.madoca_l6_paths.empty() &&
             !processor.loadMadocaL6Products(options.madoca_l6_paths)) {
@@ -1633,7 +1706,8 @@ int main(int argc, char* argv[]) {
                     << "  \"ppp_solution_rate_pct\": " << ppp_solution_rate << ",\n"
                     << "  \"ssr_corrections_enabled\": "
                     << ((!options.ssr_path.empty() || !options.ssr_rtcm_path.empty() ||
-                         !options.madoca_l6_paths.empty()) ? "true" : "false") << ",\n"
+                         !options.madoca_l6_paths.empty() || !options.has_pages_path.empty())
+                            ? "true" : "false") << ",\n"
                     << "  \"atmospheric_trop_corrections\": " << atmospheric_trop_corrections << ",\n"
                     << "  \"atmospheric_trop_meters\": " << atmospheric_trop_meters << ",\n"
                     << "  \"atmospheric_iono_corrections\": " << atmospheric_iono_corrections << ",\n"
@@ -1762,7 +1836,8 @@ int main(int argc, char* argv[]) {
             std::cout << "  ambiguity resolution: " << (options.enable_ar ? "on" : "off") << "\n";
             std::cout << "  SSR corrections: "
                       << ((options.ssr_path.empty() && options.ssr_rtcm_path.empty() &&
-                           options.madoca_l6_paths.empty()) ? "off" : "on")
+                           options.madoca_l6_paths.empty() && options.has_pages_path.empty())
+                              ? "off" : "on")
                       << "\n";
             if (!options.madoca_materialization_dump_path.empty()) {
                 std::cout << "  MADOCA materialization dump: "

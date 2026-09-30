@@ -22,6 +22,10 @@
 
 namespace libgnss {
 
+namespace io {
+struct HasSsrUpdate;
+}  // namespace io
+
 /// Per-SVN ANTEX entry used by PPPProcessor to translate satellite
 /// centre-of-mass positions (as delivered by SP3) to the antenna phase
 /// centre. Body frame uses ANTEX semantics: x = north-of-antenna,
@@ -240,6 +244,16 @@ public:
                              RTCMSSRProfile profile);
 
     /**
+     * @brief Load Galileo HAS signal-in-space corrections (io::GalileoHasDecoder
+     * updates) as held, IODE-tagged SSR samples, with the same conventions as
+     * the GalileoHasIdd profile. Each update is held until the next update of
+     * the satellite, at most until the end of its ICD validity interval.
+     */
+    bool loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>& updates,
+                                   const NavigationData& nav,
+                                   double sample_step_seconds = 1.0);
+
+    /**
      * @brief Interpolate a loaded SSR correction for inspection/debugging.
      */
     bool interpolateLoadedSSRCorrection(const SatelliteId& sat,
@@ -352,6 +366,12 @@ private:
     bool precise_products_loaded_ = false;
     bool ssr_products_loaded_ = false;
     bool require_coherent_ssr_ = false;
+    /// Drop satellites without an SSR orbit sample (Galileo HAS SIS: the
+    /// corrections cover GPS and Galileo only and expire with their validity).
+    bool require_ssr_orbit_correction_ = false;
+    /// Select GPS L2 SSR code biases by the tracked RINEX code (C2W -> L2 P,
+    /// C2L -> L2C) instead of the coarse signal (Galileo HAS SIS).
+    bool ssr_code_bias_tracking_identity_ = false;
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
     struct OceanLoadingCoefficients {

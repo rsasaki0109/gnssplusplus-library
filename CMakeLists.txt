@@ -79,6 +79,7 @@ add_subdirectory(third_party/ginan-iers2010)
 set(GNSS_SOURCES
     src/gnss.cpp
     src/io/android_raw_gnss.cpp
+    src/io/galileo_has.cpp
     src/io/imu.cpp
     src/io/ntrip.cpp
     src/io/rinex.cpp
