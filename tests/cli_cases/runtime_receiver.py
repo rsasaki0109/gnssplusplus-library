@@ -1748,6 +1748,10 @@ class RuntimeReceiverCases:
             self.assertIn('"config_path":', result.stdout)
             self.assertIn('"log_tail": [', result.stdout)
             self.assertIn("summary: messages=5 written_solutions=3", result.stdout)
+    def wait_for_background_receiver_exit(self, status_path: Path) -> None:
+        """Let a receiver launched in the background finish before the temp dir is removed."""
+        self.run_gnss("rcv", "status", "--status-out", str(status_path), "--wait-seconds", "5")
+
     def test_rcv_restart_without_existing_status_behaves_like_start(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_restart_test_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1782,6 +1786,7 @@ class RuntimeReceiverCases:
             launched = json.loads(restart_result.stdout)
             self.assertEqual(launched["state"], "starting")
             self.assertEqual(launched["status_path"], str(status_path))
+            self.wait_for_background_receiver_exit(status_path)
     def test_rcv_reload_without_existing_status_behaves_like_start(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_reload_test_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1816,6 +1821,7 @@ class RuntimeReceiverCases:
             launched = json.loads(reload_result.stdout)
             self.assertEqual(launched["state"], "starting")
             self.assertEqual(launched["status_path"], str(status_path))
+            self.wait_for_background_receiver_exit(status_path)
     def test_rcv_reload_resolves_config_from_existing_status(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_reload_managed_test_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -1860,6 +1866,7 @@ class RuntimeReceiverCases:
             self.assertEqual(launched["state"], "starting")
             self.assertEqual(launched["config_path"], str(config_path))
             self.assertEqual(launched["status_path"], str(status_path))
+            self.wait_for_background_receiver_exit(status_path)
     @unittest.skipUnless(
         os.path.exists("gnssplusplus_thesis_ws/data/clas/claslib/data/0627239Q.obs"),
         "CLAS regression data not available"
