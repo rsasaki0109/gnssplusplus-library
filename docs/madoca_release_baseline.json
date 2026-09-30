@@ -313,7 +313,7 @@
         "5": 713
       },
       "delta_max_3d_m": 4.284246515935533,
-      "delta_rms_3d_m": 1.2209054962011483,
+      "delta_rms_3d_m": 1.300666323454092,
       "matched_epochs": 713,
       "missed_fixes": 0,
       "native_row_counts": {

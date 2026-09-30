@@ -9,12 +9,11 @@
 // Conventions 2010 solid-earth-tide model implemented in
 // libgnss::iers::solidEarthTideDisplacement.
 //
-// Frame note: the IERS Conventions 2010 routine (dehanttideinel)
-// expects the station in ITRS but takes Sun and Moon in the ICRS /
-// GCRS — see the comment block at the top of tides.hpp for details.
-// The functions in this header therefore return ICRS positions; if
-// you need ITRS Sun/Moon vectors for an unrelated purpose, multiply
-// by libgnss::iers::icrsToItrs().
+// Frame note: these functions return ICRS / GCRS positions. The IERS
+// Conventions 2010 solid-tide routine (dehanttideinel) needs the Sun
+// and Moon in the station's Earth-fixed frame, so rotate them with
+// libgnss::iers::icrsToItrs() first; solidEarthTideDisplacementAt() in
+// tides.hpp does this.
 //
 // Accuracy: SOFA's iauEpv00 has ~15 km positional error vs. JPL DE405
 // (~1e-7 of the Sun-Earth distance); iauMoon98 has ~1 km positional

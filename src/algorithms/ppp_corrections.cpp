@@ -1758,15 +1758,18 @@ Vector3d PPPProcessor::calculateSolidEarthTides(const Vector3d& position,
     if (algorithms::ppp_correction_contract::useIersSolidEarthTide(
             madoca_per_frequency, ppp_config_.use_iers_solid_tide)) {
         // IERS Conventions 2010 §7.1.1 (Dehant) Step-1 + Step-2 model
-        // via the libgnss::iers wrapper. Sun and Moon are supplied in
-        // ICRS — see the FRAME NOTE in libgnss++/iers/tides.hpp for
-        // why this is the correct frame for the IERS routine despite
-        // its public documentation calling it "ECEF".
+        // via the libgnss::iers wrapper, with the SOFA Sun and Moon
+        // rotated to ITRS (the station frame).
         const double mjd_utc = libgnss::iers::gnssTimeToMjdUtc(time);
-        const Vector3d sun_icrs  = libgnss::iers::sunPositionIcrs(mjd_utc);
-        const Vector3d moon_icrs = libgnss::iers::moonPositionIcrs(mjd_utc);
-        return libgnss::iers::solidEarthTideDisplacement(
-            mjd_utc, position, sun_icrs, moon_icrs);
+        libgnss::iers::EarthOrientationParams eop;
+        if (eop_table_) {
+            try {
+                eop = getEarthOrientationParams(time);
+            } catch (const std::out_of_range&) {
+                eop = libgnss::iers::EarthOrientationParams{};
+            }
+        }
+        return libgnss::iers::solidEarthTideDisplacementAt(mjd_utc, position, eop);
     }
 
     // Default path: simplified Step-1-only Love-number body-tide

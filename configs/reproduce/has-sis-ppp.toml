@@ -113,7 +113,8 @@ max = 0
 readme = "docs/galileo_has.md"
 foreach = [{ hour = "046r" }, { hour = "233h" }]
 
-# PPP gates (reproduced 2026-09-30, MSVC Release) on the 2025-046 hour:
+# PPP gates (reproduced 2026-09-30, MSVC Release, after the solid-earth-tide
+# frame fix) on the 2025-046 hour:
 # static float PPP with the decoded HAS SIS corrections.
 [[metrics]]
 name = "has-sis 046r static H at {t} (m)"
@@ -140,22 +141,22 @@ gate = false
 abs_tol = 0.05
 readme = "docs/galileo_has.md table"
 foreach = [
-  { run = "sis_046r_static", t = "10min", field = "h_m", expected = 0.452 },
-  { run = "sis_046r_static", t = "10min", field = "up_m", expected = 0.479 },
-  { run = "sis_046r_static", t = "30min", field = "h_m", expected = 0.045 },
-  { run = "sis_046r_static", t = "30min", field = "up_m", expected = 0.268 },
-  { run = "sis_046r_static", t = "60min", field = "h_m", expected = 0.074 },
-  { run = "sis_046r_static", t = "60min", field = "up_m", expected = 0.113 },
-  { run = "sis_046r_kinematic", t = "30min", field = "h_m", expected = 0.084 },
-  { run = "sis_046r_kinematic", t = "30min", field = "up_m", expected = 0.292 },
-  { run = "sis_046r_kinematic", t = "60min", field = "h_m", expected = 0.245 },
-  { run = "sis_046r_kinematic", t = "60min", field = "up_m", expected = -0.235 },
-  { run = "sis_233h_static", t = "30min", field = "h_m", expected = 0.605 },
-  { run = "sis_233h_static", t = "30min", field = "up_m", expected = -0.958 },
-  { run = "sis_233h_static", t = "60min", field = "h_m", expected = 0.516 },
-  { run = "sis_233h_static", t = "60min", field = "up_m", expected = -1.165 },
-  { run = "sis_233h_kinematic", t = "60min", field = "h_m", expected = 0.378 },
-  { run = "sis_233h_kinematic", t = "60min", field = "up_m", expected = -0.959 },
+  { run = "sis_046r_static", t = "10min", field = "h_m", expected = 0.415 },
+  { run = "sis_046r_static", t = "10min", field = "up_m", expected = 0.399 },
+  { run = "sis_046r_static", t = "30min", field = "h_m", expected = 0.026 },
+  { run = "sis_046r_static", t = "30min", field = "up_m", expected = 0.184 },
+  { run = "sis_046r_static", t = "60min", field = "h_m", expected = 0.010 },
+  { run = "sis_046r_static", t = "60min", field = "up_m", expected = 0.041 },
+  { run = "sis_046r_kinematic", t = "30min", field = "h_m", expected = 0.052 },
+  { run = "sis_046r_kinematic", t = "30min", field = "up_m", expected = 0.250 },
+  { run = "sis_046r_kinematic", t = "60min", field = "h_m", expected = 0.184 },
+  { run = "sis_046r_kinematic", t = "60min", field = "up_m", expected = -0.256 },
+  { run = "sis_233h_static", t = "30min", field = "h_m", expected = 0.515 },
+  { run = "sis_233h_static", t = "30min", field = "up_m", expected = -0.519 },
+  { run = "sis_233h_static", t = "60min", field = "h_m", expected = 0.447 },
+  { run = "sis_233h_static", t = "60min", field = "up_m", expected = -0.732 },
+  { run = "sis_233h_kinematic", t = "60min", field = "h_m", expected = 0.372 },
+  { run = "sis_233h_kinematic", t = "60min", field = "up_m", expected = -0.540 },
 ]
 
 [[metrics]]
@@ -166,6 +167,6 @@ gate = false
 abs_tol = 1.5
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "convergence_h_below_0p20_min", expected = 19.43 },
-  { field = "convergence_abs_up_below_0p40_min", expected = 23.73 },
+  { field = "convergence_h_below_0p20_min", expected = 18.22 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 10.00 },
 ]

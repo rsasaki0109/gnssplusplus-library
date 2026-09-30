@@ -6,11 +6,11 @@
 //     ± 14%) — frame-independent, only assumes physical orbit ranges.
 //   - Direction sweep over a quarter / half year so the Sun's
 //     ICRS angular position advances as expected.
-//   - Integration smoke: feeding our SOFA-derived sun/moon vectors
-//     into solidEarthTideDisplacement at the IERS reference epoch
-//     should produce a displacement close to the published reference
-//     (~7 cm magnitude), validating the wrapper as a self-contained
-//     unit.
+//   - Ephemeris check against the IERS reference test case: the Sun
+//     and Moon vectors of the published DEHANTTIDEINEL test case are
+//     geocentric ICRS positions, so our SOFA ICRS vectors reproduce its
+//     displacement (~7 cm magnitude). This validates the ephemerides;
+//     physical use needs Earth-fixed vectors (solidEarthTideDisplacementAt).
 
 #include <gtest/gtest.h>
 
@@ -71,15 +71,18 @@ TEST(IersEphemeris, SunDirectionSweepsOverHalfYear) {
 }
 
 TEST(IersEphemeris, SolidEarthTideUsingComputedEphemeris) {
-    // Integration test: at the IERS Conventions 2010 reference epoch
+    // Ephemeris test: at the IERS Conventions 2010 reference epoch
     // (2009-04-13 0h UTC, MJD 54934.0) feed our SOFA-computed sun and
-    // moon ICRS vectors into solidEarthTideDisplacement. Compare to
+    // moon ICRS vectors into solidEarthTideDisplacement and compare to
     // the published reference value.
     //
-    // The IERS reference test in test_iers_tides.cpp uses hand-supplied
-    // sun/moon vectors (also in ICRS, despite the IERS routine docs
-    // calling it "ECEF"). Here we replace those hand-supplied vectors
-    // with SOFA-computed ones; small differences arise because:
+    // The IERS reference test case (test_iers_tides.cpp) supplies Sun
+    // and Moon vectors that are geocentric ICRS positions, although the
+    // routine documents Earth-fixed inputs; the case only checks the
+    // routine's arithmetic. Reproducing it with SOFA ICRS vectors
+    // therefore validates sunPositionIcrs / moonPositionIcrs. Physical
+    // displacements need the Sun and Moon rotated to ITRS
+    // (solidEarthTideDisplacementAt). Small differences arise because:
     //   - iauEpv00 vs. JPL DE405 differ by ~15 km at the Sun.
     //   - iauMoon98 vs. JPL DE405 differ by ~1 km at the Moon.
     //   - Inverse-cube weighting in the tide formula amplifies any

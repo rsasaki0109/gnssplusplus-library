@@ -149,33 +149,75 @@ agree with cssrlib's `satposs()` to 0.1 mm in clock and to about 2 cm in positio
 observations, so it is used for decoding only.
 
 Static and kinematic float PPP (`--has-pages`, IGS BRDC navigation, default
-15 degree elevation mask), H / U error at the given time after the first
-epoch; convergence as in the IDD table below:
+15 degree elevation mask; 2026-09-30, after the solid-earth-tide frame fix
+described below), H / U error at the given time after the first epoch;
+convergence as in the IDD table below:
 
 | Run | 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| 2025-02-15 17h, libgnss++ SIS, static | 0.452 / +0.479 m | 0.174 / +0.245 m | **0.045 / +0.268 m** | **0.074 / +0.113 m** | **19.4 min** | **23.7 min** |
-| 2025-02-15 17h, libgnss++ SIS, kinematic | 0.560 / +0.343 m | 0.177 / +0.171 m | 0.084 / +0.292 m | 0.245 / -0.235 m | never | 5.3 min |
+| 2025-02-15 17h, libgnss++ SIS, static | 0.415 / +0.399 m | 0.131 / +0.159 m | **0.026 / +0.184 m** | **0.010 / +0.041 m** | **18.2 min** | **10.0 min** |
+| 2025-02-15 17h, libgnss++ SIS, kinematic | 0.521 / +0.290 m | 0.117 / +0.123 m | 0.052 / +0.250 m | 0.184 / -0.256 m | 59.4 min | 5.2 min |
 | 2025-02-15 17h, cssrlib SIS, static (10 deg, E29 excluded, igs20.atx) | 0.531 / +0.450 m | 0.220 / -0.033 m | 0.077 / +0.193 m | 0.153 / -0.065 m | 48.4 min | 45.1 min |
-| 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.520 / +0.423 m | 0.275 / +0.472 m | 0.228 / +0.330 m | 0.260 / +0.327 m | never | 50.7 min |
-| 2025-08-21 07h, libgnss++ SIS, static | 0.764 / +0.246 m | 0.607 / -0.258 m | 0.605 / -0.958 m | 0.516 / -1.165 m | never | never |
-| 2025-08-21 07h, libgnss++ SIS, kinematic | 0.407 / -0.070 m | 0.358 / +0.111 m | 0.366 / -0.079 m | 0.378 / -0.959 m | never | never |
+| 2025-02-15 17h, libgnss++ broadcast only, GPS + Galileo | 0.479 / +0.335 m | 0.217 / +0.379 m | 0.164 / +0.241 m | 0.212 / +0.252 m | never | 27.3 min |
+| 2025-08-21 07h, libgnss++ SIS, static | 0.628 / +0.724 m | 0.491 / +0.177 m | 0.515 / -0.519 m | 0.447 / -0.732 m | never | never |
+| 2025-08-21 07h, libgnss++ SIS, kinematic | 0.404 / +0.314 m | 0.368 / +0.504 m | 0.385 / +0.322 m | 0.372 / -0.540 m | never | never |
 | 2025-08-21 07h, cssrlib SIS, static (10 deg, L1 C/A + L2 CL) | 0.303 / -0.663 m | 0.112 / -0.501 m | 0.079 / -0.186 m | 0.079 / +0.212 m | 18.1 min | 22.2 min |
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
-| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.623 / -0.670 m | 0.536 / -0.699 m | 0.499 / -0.797 m | 0.445 / -0.892 m | never | never |
-| 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.690 / -0.866 m | 0.656 / -0.797 m | 0.583 / -0.838 m | 0.477 / -1.081 m | never | never |
-| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.016 / -0.490 m | 0.058 / -0.421 m | 0.073 / -0.082 m | 0.095 / -0.135 m | 4.2 min | 21.0 min |
+| 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 0.556 / +0.038 m | 0.497 / -0.605 m | 0.494 / -0.711 m | 0.466 / -0.809 m | never | never |
+| 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.643 / -0.464 m | 0.612 / -0.387 m | 0.538 / -0.419 m | 0.430 / -0.655 m | never | never |
+| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | 0.097 / -0.136 m | 4.2 min | 21.5 min |
 
 The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
 30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
-failure), and reports the other rows. On the 2025-08-21 hour libgnss++ sits
-about 1 m low in every configuration, whatever the correction source (HAS SIS,
-JPL GDGPS, broadcast only), while cssrlib on the same corrections ends the
-hour within 0.6 m; only 11-13 GPS / Galileo satellites carry HAS corrections
-above 15 degrees there, and the offset is a libgnss++ PPP-model issue on that
-hour (it follows the troposphere estimation: with a 10 degree mask the static
-run ends at -1.36 m, and at -0.54 m with the troposphere fixed to its model),
-not a decoding one.
+failure), and reports the other rows. The JPL and broadcast-only rows use the
+observation file limited to GPS and Galileo.
+
+**2025-08-21 vertical offset: solid-earth tide.** Before the fix libgnss++
+ended this hour about 1 m low whatever the correction source (HAS SIS static
+-1.165 m, kinematic -0.959 m, JPL GDGPS -1.235 m, broadcast only -1.081 m at
+60 min), while cssrlib ends it at +0.21 / +0.56 m. The main cause was the IERS
+2010 (Dehant) solid-earth tide, the default `--use-iers-solid-tide` model: it
+was fed the SOFA Sun and Moon in the ICRS, while the routine needs them in the
+station's Earth-fixed frame, so the Earth's rotation dropped out of the
+station-body geometry. The modelled radial tide was a nearly constant +0.28 m
+over that hour instead of -0.10 to -0.14 m (cssrlib `tidedisp` /
+`tidedispIERS2010`, ports of RTKLIB `tide_solid()`, and the libgnss++ Step-1
+model `--no-iers-solid-tide` agree on the latter), a 0.4 m
+error in up; on 2025-02-15 17h the true tide was +0.10 to +0.14 m and the
+error smaller. The Sun and Moon are now rotated to ITRS (`icrsToItrs`, IAU
+2006/2000A, with EOP when `--eop-c04` is given). Every 2025-08-21 row moves up
+by 0.42-0.44 m at 60 min, and the 2025-02-15 static run ends at +0.04 m. The
+CLAS lane (own tide model) and the per-frequency MADOCA profiles (Step-1 model)
+do not use this path; the static ionosphere-free MADOCA `ppp` profile does.
+
+The hour still ends 0.5-0.7 m low. What was checked:
+
+- *Reference coordinate.* RTKLIB demo5 b34k PPP-static with IGS final orbits
+  and clocks (GPS only, `igs20.atx`) ends the hour at -0.21 m (10 degree mask)
+  and -0.28 m (15 degree), the 2025-02-15 hour at -0.02 / -0.20 m.
+- *Troposphere.* The zenith delay RTKLIB estimates with the position held at
+  the reference is 2.59 m (2025-02-15: 2.41 m). The libgnss++ a priori
+  (UNB3m-style climatology) is 2.395 m on 2025-08-21, 0.2 m short for this
+  humid afternoon; the filter estimate reaches 2.67 m after 45 min. With the
+  zenith delay held at 2.59 m the static run still ended at -0.75 m (before the
+  tide fix), so the troposphere is not the main driver.
+- *Model or estimator.* A batch least-squares float solution on the libgnss++
+  corrected observables (clocks per epoch and system, one ambiguity per arc)
+  gives the same up offset as the filter (-1.05 to -1.19 m before the tide
+  fix), so the remaining offset is in the observables of that hour, not in the
+  filter. Code residuals at the reference differ by satellite by up to
+  +/-0.4 m (G28 -0.9 m) with 11-13 satellites in view; GPS-only and
+  Galileo-only runs are both about 1 m low (before the tide fix).
+- *Satellite set.* The IGS merged BRDC file used by the lane lacks the G12
+  ephemeris with IODE 8 (uploaded at 07:59:44) that the HAS corrections refer
+  to, so libgnss++ excludes G12 (51-64 degrees elevation) for the whole hour;
+  cssrlib takes it from the receiver's RINEX navigation file. A navigation file
+  that carries it (BRDC00IGS_R) did not help (-1.67 m before the tide fix).
+- *Other terms.* Receiver ANTEX (`--antex igs20.atx`, -0.02 m), a 10 degree
+  mask (-1.09 m before and -0.65 m after the fix) and a Galileo clock offset
+  state (horizontal 0.52 -> 0.13 m, up worse) do not explain it;
+  the HAS code biases of each satellite nearly cancel in the
+  ionosphere-free combination (flipping their sign moves the result by 1 cm).
 
 Smoke test on the u-blox X20 drive (rtklibexplorer/GNSS_IMU `drive_0708`,
 Boulder CO, inside the service area, 9 min, RXM-RAWX converted to RINEX,
@@ -203,14 +245,15 @@ a SEPCHOKE_B3E6 antenna).
 python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /data/cssrlib-data/data/doy2023-229 --check
 ```
 
-Lane result (2026-09-29, kinematic rows 2026-09-30, MSVC Release, elapsed time from the first epoch
-01:59:12 GPST):
+Lane result (2026-09-30, after the solid-earth-tide frame fix, MSVC Release,
+elapsed time from the first epoch 01:59:12 GPST; the historical rows keep the
+values of their time):
 
 | Run | H / U at 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| `has-idd`, static | 0.016 / -0.490 m | 0.058 / -0.421 m | 0.073 / -0.082 m | **0.095 / -0.135 m** | **4.2 min** | **21.0 min** |
-| `legacy` conversion of the same stream, static | 0.374 / -0.537 m | 0.261 / -0.219 m | 0.267 / +0.282 m | 0.160 / +0.088 m | 57.5 min | 53.1 min |
-| `has-idd`, kinematic | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.059 / +0.015 m | **0.115 / +0.059 m** | 59.6 min | 6.0 min |
+| `has-idd`, static | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | **0.097 / -0.136 m** | **4.2 min** | **21.5 min** |
+| `legacy` conversion of the same stream, static | 0.370 / -0.550 m | 0.258 / -0.230 m | 0.266 / +0.274 m | 0.162 / +0.087 m | 57.5 min | 46.7 min |
+| `has-idd`, kinematic | 0.033 / -0.201 m | 0.064 / -0.128 m | 0.057 / +0.018 m | **0.114 / +0.077 m** | 59.6 min | 6.1 min |
 | `has-idd`, kinematic, before the residual screening | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.136 / +0.058 m | 0.018 / -0.390 m | 45.0 min | never (-0.44 m at the last epoch) |
 | `has-idd`, kinematic, before the one-update fix | 3.03 / -5.95 m | 2.47 / -5.13 m | 2.20 / -5.71 m | 1.87 / -5.61 m | never | never |
 
@@ -227,7 +270,8 @@ of the hour, hence the late horizontal convergence time.
 Comparison with [cssrlib](https://github.com/hirokawa/cssrlib) (main,
 `samples/test_ppprtcm.py` case 1, which processes the same files from
 02:00:00 GPST with `igs20.atx`). libgnss++ was run on the observation file cut
-to start at 02:00:00 as well:
+to start at 02:00:00 as well (2026-09-29, before the solid-earth-tide frame
+fix, which moves the lane rows above by at most 2 cm):
 
 | Solver (static float PPP, from 02:00:00) | 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
