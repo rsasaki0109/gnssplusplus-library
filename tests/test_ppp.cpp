@@ -11,6 +11,7 @@
 
 #include "../src/algorithms/ppp_internal.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -152,6 +153,72 @@ TEST(PPPFilterIterations, KinematicMotionCommitsOneUpdatePerEpoch) {
 TEST(PPPFilterIterations, StaticMotionKeepsPinnedCount) {
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, true, 8), 3);
     EXPECT_EQ(ppp_internal::filterIterationCount(false, false, false, 8), 8);
+}
+
+TEST(PPPPostfitScreening, KinematicNonMadocaNonClasOnly) {
+    EXPECT_TRUE(ppp_internal::usePostfitResidualScreening(true, false, false));
+    EXPECT_FALSE(ppp_internal::usePostfitResidualScreening(false, false, false));
+    EXPECT_FALSE(ppp_internal::usePostfitResidualScreening(true, true, false));
+    EXPECT_FALSE(ppp_internal::usePostfitResidualScreening(true, false, true));
+}
+
+TEST(PPPPostfitScreening, StandardizedResidualFindsCodeOutlier) {
+    // Five code rows observing one clock-like state (prior sigma 10 m, row
+    // sigma 1 m); the last row carries a 20 m NLOS excess delay.
+    const int n = 5;
+    Eigen::MatrixXd H = Eigen::MatrixXd::Ones(n, 1);
+    Eigen::MatrixXd P = Eigen::MatrixXd::Identity(1, 1) * 100.0;
+    Eigen::MatrixXd R = Eigen::MatrixXd::Identity(n, n);
+    const Eigen::MatrixXd S_inv = (H * P * H.transpose() + R).inverse();
+    Eigen::VectorXd r(n);
+    r << 0.3, -0.4, 0.2, -0.1, 20.0;
+    EXPECT_EQ(ppp_internal::worstStandardizedResidualRow(
+                  r, S_inv, ppp_internal::kPostfitRejectSigma),
+              4);
+    r(4) = 0.5;
+    EXPECT_EQ(ppp_internal::worstStandardizedResidualRow(
+                  r, S_inv, ppp_internal::kPostfitRejectSigma),
+              -1);
+}
+
+TEST(PPPBroadcastGroupDelay, BeiDouClockReferencedToB3I) {
+    Ephemeris eph;
+    eph.tgd = -45e-9;            // TGD1 of C33 on 2024-07-23
+    eph.tgd_secondary = -20e-9;  // TGD2
+    EXPECT_NEAR(ppp_internal::broadcastBeiDouGroupDelayMeters(SignalType::BDS_B1I, eph),
+                -45e-9 * constants::SPEED_OF_LIGHT, 1e-9);
+    EXPECT_NEAR(ppp_internal::broadcastBeiDouGroupDelayMeters(SignalType::BDS_B2I, eph),
+                -20e-9 * constants::SPEED_OF_LIGHT, 1e-9);
+    EXPECT_EQ(ppp_internal::broadcastBeiDouGroupDelayMeters(SignalType::BDS_B3I, eph), 0.0);
+    const auto& secondary = ppp_internal::broadcastBeiDouSecondarySignals();
+    EXPECT_EQ(std::count(secondary.begin(), secondary.end(), SignalType::BDS_B2A), 0);
+    const auto& primary = ppp_internal::broadcastBeiDouPrimarySignals();
+    ASSERT_EQ(primary.size(), 1U);
+    EXPECT_EQ(primary.front(), SignalType::BDS_B1I);
+}
+
+TEST(PPPBroadcastGroupDelay, SingleFrequencyFollowsSppModel) {
+    Ephemeris eph;
+    eph.tgd = 5e-9;
+    eph.tgd_secondary = 1e-9;
+    const double c = constants::SPEED_OF_LIGHT;
+    EXPECT_NEAR(ppp_internal::broadcastSingleFrequencyGroupDelayMeters(
+                    SatelliteId(GNSSSystem::GPS, 5), SignalType::GPS_L1CA, eph),
+                5e-9 * c, 1e-9);
+    EXPECT_NEAR(ppp_internal::broadcastSingleFrequencyGroupDelayMeters(
+                    SatelliteId(GNSSSystem::BeiDou, 33), SignalType::BDS_B1I, eph),
+                5e-9 * c, 1e-9);
+    EXPECT_EQ(ppp_internal::broadcastSingleFrequencyGroupDelayMeters(
+                  SatelliteId(GNSSSystem::GLONASS, 5), SignalType::GLO_L1CA, eph),
+              0.0);
+}
+
+TEST(PPPBroadcastGroupDelay, OnlyWithoutExternalBiasProducts) {
+    EXPECT_TRUE(ppp_internal::broadcastClockIonosphereFree(true, false, false, false));
+    EXPECT_FALSE(ppp_internal::broadcastClockIonosphereFree(false, false, false, false));
+    EXPECT_FALSE(ppp_internal::broadcastClockIonosphereFree(true, true, false, false));
+    EXPECT_FALSE(ppp_internal::broadcastClockIonosphereFree(true, false, true, false));
+    EXPECT_FALSE(ppp_internal::broadcastClockIonosphereFree(true, false, false, true));
 }
 
 TEST(PPPMadocaL6dConstraints, RemovesIndependentConstellationBiases) {

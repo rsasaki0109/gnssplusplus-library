@@ -578,9 +578,12 @@ Local result (MSVC Release, 44 s): every metric passes. The static run is at
 0.095 m horizontal / -0.135 m vertical after one hour and converges below
 0.20 m horizontal after 4.2 min and below 0.40 m vertical after 21.0 min;
 the gates are H <= 0.20 m and |U| <= 0.40 m at 60 min, and convergence within
-10 min (H) and 30 min (U). The kinematic run is at 0.136 / +0.058 m after
-30 min and 0.018 / -0.390 m after one hour, gated at H <= 0.30 m and
+10 min (H) and 30 min (U). The kinematic run is at 0.059 / +0.015 m after
+30 min and 0.115 / +0.059 m after one hour, gated at H <= 0.30 m and
 |U| <= 0.60 m at 30 and 60 min (before the one-measurement-update-per-epoch
-fix of the kinematic PPP filter it stayed at about 1.9 m / -5.6 m). The legacy
+fix of the kinematic PPP filter it stayed at about 1.9 m / -5.6 m; before the
+kinematic post-fit residual screening it read 0.136 / +0.058 m and
+0.018 / -0.390 m, with an hour RMS of 0.156 / 0.206 m instead of
+0.086 / 0.099 m). The legacy
 conversion is reported, not gated. See [Galileo HAS support](galileo_has.md)
 for the full table and the cssrlib comparison.
