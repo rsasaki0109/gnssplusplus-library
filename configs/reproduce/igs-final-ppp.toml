@@ -10,8 +10,11 @@
 #   (GPS week 2353: IGS0OPSFIN_20250460000_01D_{15M_ORB.SP3,30S_CLK.CLK};
 #   week 2380: IGS0OPSFIN_20252330000_...; week 2275:
 #   IGS0OPSFIN_20232290000_...), gunzipped next to the observations of the day;
-# - igs20.atx (https://files.igs.org/pub/station/general/igs20.atx) in the
-#   --has-sis-data-root directory (used for all three runs).
+# - igs20.atx in the --has-sis-data-root directory (used for all three runs):
+#   the immutable IGS archive copy
+#   https://files.igs.org/pub/station/general/pcv_archive/igs20_2425.atx.gz,
+#   gunzipped (SHA-256 8715268e17e09e5447f4949d67cbd067e7f0f33d48dd698aafe14f5cffb26de2).
+#   The live general/igs20.atx is updated in place and may differ.
 #
 # IGS0OPSFIN is GPS-only, so every other constellation in the multi-GNSS
 # observation files is dropped (no broadcast-clock fallback).

@@ -81,10 +81,14 @@ SOURCES: dict[str, dict[str, Any]] = {
         "bytes": 1190657,
         "sha256": "1c69db9bf9ce3b26c97dd9df1cbfa04618970a527521a4b6355c425b91dd18ee",
     },
+    # The live general/igs20.atx is updated in place, so pin the immutable
+    # IGS archive copy (GPS week 2425); its payload is the pinned igs20.atx.
     "antex": {
-        "url": "https://files.igs.org/pub/station/general/igs20.atx",
-        "bytes": 60295761,
-        "sha256": "8715268e17e09e5447f4949d67cbd067e7f0f33d48dd698aafe14f5cffb26de2",
+        "url": "https://files.igs.org/pub/station/general/pcv_archive/igs20_2425.atx.gz",
+        "bytes": 7660658,
+        "sha256": "cc15ff342305278fc818b7300453b02068b5f8e7393b03c9aa98b70918ba7260",
+        "materialized_bytes": 60295761,
+        "materialized_sha256": "8715268e17e09e5447f4949d67cbd067e7f0f33d48dd698aafe14f5cffb26de2",
     },
     "rnxcmp_linux_x86_64": {
         "url": "https://terras.gsi.go.jp/ja/crx2rnx/RNXCMP_4.2.0_Linux_gcc_64bit.tar.gz",
@@ -333,6 +337,20 @@ def materialize_gzip(source: Path, destination: Path) -> None:
     atomic_write(destination, content)
 
 
+def materialize_source(source_path: Path, source: dict[str, Any], destination: Path) -> None:
+    if str(source["url"]).endswith(".gz"):
+        materialize_gzip(source_path, destination)
+    else:
+        atomic_write(destination, source_path.read_bytes())
+    if "materialized_sha256" not in source:
+        return
+    if destination.stat().st_size != int(source["materialized_bytes"]):
+        raise ValueError(f"materialized byte-size mismatch: {destination}")
+    actual = sha256_file(destination)
+    if actual != source["materialized_sha256"]:
+        raise ValueError(f"materialized SHA-256 mismatch: {destination}: {actual}")
+
+
 def resolve_crx2rnx(downloads: dict[str, Path], paths: dict[str, Path]) -> Path:
     system = shutil.which("CRX2RNX") or shutil.which("crx2rnx")
     if system:
@@ -415,7 +433,7 @@ def acquire(args: argparse.Namespace) -> tuple[dict[str, Path], dict[str, Any]]:
         ("antex", "antex"), ("igs20_ssc", "igs20_ssc"),
         ("rover_log", "rover_log"), ("base_log", "base_log"),
     ):
-        atomic_write(paths[destination_name], downloads[source_name].read_bytes())
+        materialize_source(downloads[source_name], sources[source_name], paths[destination_name])
     truth = {
         station: read_station_estimate(paths["truth_snx"], station, observation_epoch)
         for station in ("TSK2", "TSKB")
