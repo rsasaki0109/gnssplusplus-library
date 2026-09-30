@@ -167,6 +167,7 @@ int main(int argc, char** argv) {
                     case libgnss::GNSSSystem::BeiDou: std::cout << "BeiDou"; break;
                     case libgnss::GNSSSystem::QZSS: std::cout << "QZSS"; break;
                     case libgnss::GNSSSystem::NavIC: std::cout << "NavIC"; break;
+                    case libgnss::GNSSSystem::SBAS: std::cout << "SBAS"; break;
                     default: std::cout << "UNKNOWN"; break;
                 }
                 std::cout << " sv=" << static_cast<int>(event.sfrbx.sv_id)
@@ -180,6 +181,7 @@ int main(int argc, char** argv) {
                     }
                 }
                 std::cout
+                          << " sig_id=" << static_cast<int>(event.sfrbx.signal_id)
                           << " freq_id=" << static_cast<int>(event.sfrbx.frequency_id)
                           << " channel=" << static_cast<int>(event.sfrbx.channel)
                           << "\n";

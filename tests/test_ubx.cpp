@@ -4,6 +4,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <vector>
 
 using namespace libgnss;
@@ -120,20 +121,23 @@ std::vector<uint8_t> buildMixedRawxMessage() {
     });
 }
 
+// UBX-RXM-SFRBX payload as documented by u-blox (M8/F9/X20): gnssId, svId,
+// sigId, freqId, numWords, chn, version, reserved, then numWords U4 words.
 std::vector<uint8_t> buildSfrbxMessage(uint8_t gnss_id,
                                        uint8_t sv_id,
+                                       uint8_t sig_id,
                                        uint8_t frequency_id,
                                        uint8_t channel,
                                        const std::vector<uint32_t>& words) {
     std::vector<uint8_t> payload = {
-        0x02,  // version
-        static_cast<uint8_t>(words.size()),
-        channel,
-        0x00,  // reserved
         gnss_id,
         sv_id,
-        0x00,  // reserved
+        sig_id,
         frequency_id,
+        static_cast<uint8_t>(words.size()),
+        channel,
+        0x02,  // version
+        0x00,  // reserved
     };
     for (const uint32_t word : words) {
         appendLittleEndian<uint32_t>(payload, word);
@@ -142,13 +146,60 @@ std::vector<uint8_t> buildSfrbxMessage(uint8_t gnss_id,
 }
 
 std::vector<uint8_t> buildGpsSfrbxMessage() {
-    return buildSfrbxMessage(0x00, 0x0C, 0x00, 0x01,
+    return buildSfrbxMessage(0x00, 0x0C, 0x00, 0x00, 0x01,
                              {0x8B0000AAU, 0x00000500U, 0xCAFEBABEU});
 }
 
 std::vector<uint8_t> buildBeiDouGeoSfrbxMessage() {
-    return buildSfrbxMessage(0x03, 0x03, 0x00, 0x01,
+    return buildSfrbxMessage(0x03, 0x03, 0x01, 0x00, 0x01,
                              {0x00001000U, 0x00028000U, 0x00000000U});
+}
+
+std::vector<uint8_t> fromHex(const std::string& hex) {
+    std::vector<uint8_t> bytes;
+    for (size_t i = 0; i + 1 < hex.size(); i += 2) {
+        bytes.push_back(static_cast<uint8_t>(std::stoul(hex.substr(i, 2), nullptr, 16)));
+    }
+    return bytes;
+}
+
+// Complete UBX-RXM-SFRBX frames recorded by a u-blox X20 (rtklibexplorer/
+// GNSS_IMU drive_0708/gnss_1934.ubx, BSD-3-Clause, see THIRD_PARTY_NOTICES).
+struct RealSfrbxFrame {
+    const char* hex;
+    GNSSSystem system;
+    int sv_id;
+    int sig_id;
+    int channel;
+    size_t words;
+    bool legacy_navigation;
+    io::UBXSfrbxFrameInfo::Kind kind;
+    int frame_id;
+};
+
+const std::vector<RealSfrbxFrame>& realX20SfrbxFrames() {
+    using Kind = io::UBXSfrbxFrameInfo::Kind;
+    static const std::vector<RealSfrbxFrame> frames = {
+        // GPS L1 C/A LNAV subframe 1.
+        {"B56202133000000A00000A3C02001846C122D849CC131A006414409BA58E90EE2D28B2A6992E71C1D69A30F1CE90FDE93F00F49E68B05A35",
+         GNSSSystem::GPS, 10, 0, 60, 10, true, Kind::GPS_LNAV, 1},
+        // Galileo E1-B I/NAV word type 1.
+        {"B562021328000204010008590200C8CF0501760ED2136F2F260000C004AA88D3D9B02A61F7434154AAAA00C04AFD7808",
+         GNSSSystem::Galileo, 4, 1, 89, 8, true, Kind::GAL_INAV, 1},
+        // BeiDou B3I D1 subframe 1.
+        {"B56202133000031B04000A2C0200BE139038B510A0187E75F407265FBD31C0FF1E1529CF033E257F313F0A2000001C40E7328361B2028CEB",
+         GNSSSystem::BeiDou, 27, 4, 44, 10, true, Kind::BDS_D1, 1},
+        // GPS L5-I CNAV: same gnssId and word count as LNAV, not LNAV.
+        {"B56202133000001206000A010200F2E4498B76ED72F9A144635501303A8082FE0FEEE07FFCCFFEFF030AF9FF0931E2070046A1B4C86801A4",
+         GNSSSystem::GPS, 18, 6, 1, 10, false, Kind::UNKNOWN, 0},
+        // Galileo E5a-I F/NAV: same word count as I/NAV, not I/NAV.
+        {"B5620213280002130300081D0200FC5C3005C82A4180FD500C00A00319AD8AF381394AC6768C43AAAAAA00000C4054F6",
+         GNSSSystem::Galileo, 19, 3, 29, 8, false, Kind::UNKNOWN, 0},
+        // BeiDou B1C B-CNAV1 subframe 2.
+        {"B56202132C0003310600094D0200BCCA1E09A563FE380067F1FF7859FA9ABC1E7802A02F0A000000007052AC00001728A9696602",
+         GNSSSystem::BeiDou, 49, 6, 77, 9, false, Kind::UNKNOWN, 0},
+    };
+    return frames;
 }
 
 }  // namespace
@@ -275,12 +326,83 @@ TEST(UBXDecoderTest, DecodesSfrbxMessage) {
     ASSERT_TRUE(decoder.decodeSfrbx(decoded.front(), sfrbx));
     EXPECT_EQ(sfrbx.system, GNSSSystem::GPS);
     EXPECT_EQ(sfrbx.sv_id, 12);
+    EXPECT_EQ(sfrbx.signal_id, 0);
     EXPECT_EQ(sfrbx.channel, 1);
     EXPECT_EQ(sfrbx.frequency_id, 0);
+    EXPECT_EQ(sfrbx.version, 2);
     ASSERT_EQ(sfrbx.words.size(), 3U);
     EXPECT_EQ(sfrbx.words[0], 0x8B0000AAU);
     EXPECT_EQ(sfrbx.words[1], 0x00000500U);
     EXPECT_EQ(sfrbx.words[2], 0xCAFEBABEU);
+}
+
+TEST(UBXDecoderTest, DecodesRealX20SfrbxFrames) {
+    io::UBXDecoder decoder;
+    for (const auto& frame : realX20SfrbxFrames()) {
+        const auto bytes = fromHex(frame.hex);
+        const auto decoded = decoder.decode(bytes.data(), bytes.size());
+        ASSERT_EQ(decoded.size(), 1U) << frame.hex;
+
+        io::UBXSfrbx sfrbx;
+        ASSERT_TRUE(decoder.decodeSfrbx(decoded.front(), sfrbx)) << frame.hex;
+        EXPECT_EQ(sfrbx.system, frame.system);
+        EXPECT_EQ(sfrbx.sv_id, frame.sv_id);
+        EXPECT_EQ(sfrbx.signal_id, frame.sig_id);
+        EXPECT_EQ(sfrbx.frequency_id, 0);
+        EXPECT_EQ(sfrbx.channel, frame.channel);
+        EXPECT_EQ(sfrbx.version, 2);
+        EXPECT_EQ(sfrbx.words.size(), frame.words);
+        EXPECT_EQ(io::ubx_utils::isSfrbxLegacyNavigation(sfrbx), frame.legacy_navigation)
+            << frame.sv_id << " sig " << frame.sig_id;
+
+        io::UBXSfrbxFrameInfo frame_info;
+        EXPECT_EQ(io::ubx_utils::decodeSfrbxFrameInfo(sfrbx, frame_info),
+                  frame.legacy_navigation);
+        EXPECT_EQ(frame_info.kind, frame.kind);
+        EXPECT_EQ(frame_info.frame_id, frame.frame_id);
+    }
+}
+
+TEST(UBXDecoderTest, DecodesSfrbxGlonassSlotAndBeiDouMessageType) {
+    io::UBXDecoder decoder;
+    const auto decode = [&decoder](const std::vector<uint8_t>& message) {
+        io::UBXSfrbx sfrbx;
+        const auto decoded = decoder.decode(message.data(), message.size());
+        EXPECT_EQ(decoded.size(), 1U);
+        EXPECT_TRUE(!decoded.empty() && decoder.decodeSfrbx(decoded.front(), sfrbx));
+        return sfrbx;
+    };
+
+    // GLONASS L2OF, slot 7, frequency channel +1 (freqId = FCN + 7).
+    const auto glonass = decode(buildSfrbxMessage(0x06, 7, 2, 8, 3, {1U, 2U, 3U, 4U}));
+    EXPECT_EQ(glonass.system, GNSSSystem::GLONASS);
+    EXPECT_EQ(glonass.sv_id, 7);
+    EXPECT_EQ(glonass.signal_id, 2);
+    EXPECT_EQ(glonass.frequency_id, 8);
+    EXPECT_EQ(glonass.channel, 3);
+    EXPECT_TRUE(io::ubx_utils::isSfrbxLegacyNavigation(glonass));
+
+    // BeiDou D1/D2 from sigId, with the GEO PRN rule for sigId 0.
+    const std::vector<uint32_t> words(10, 0U);
+    EXPECT_TRUE(io::ubx_utils::isSfrbxBeiDouD2(decode(buildSfrbxMessage(0x03, 3, 0, 0, 1, words))));
+    EXPECT_TRUE(io::ubx_utils::isSfrbxBeiDouD2(decode(buildSfrbxMessage(0x03, 60, 0, 0, 1, words))));
+    EXPECT_TRUE(io::ubx_utils::isSfrbxBeiDouD2(decode(buildSfrbxMessage(0x03, 60, 1, 0, 1, words))));
+    EXPECT_TRUE(io::ubx_utils::isSfrbxBeiDouD2(decode(buildSfrbxMessage(0x03, 61, 10, 0, 1, words))));
+    EXPECT_FALSE(io::ubx_utils::isSfrbxBeiDouD2(decode(buildSfrbxMessage(0x03, 27, 4, 0, 1, words))));
+    EXPECT_FALSE(io::ubx_utils::isSfrbxBeiDouD2(decode(buildSfrbxMessage(0x03, 27, 0, 0, 1, words))));
+    EXPECT_FALSE(io::ubx_utils::isSfrbxLegacyNavigation(
+        decode(buildSfrbxMessage(0x03, 27, 8, 0, 1, words))));
+
+    // numWords beyond the payload is rejected.
+    auto truncated = buildSfrbxMessage(0x00, 12, 0, 0, 1, {1U, 2U});
+    std::vector<uint8_t> payload(truncated.begin() + 6, truncated.end() - 2);
+    payload[4] = 3;
+    io::UBXMessage message;
+    message.message_class = 0x02;
+    message.message_id = 0x13;
+    message.payload = payload;
+    io::UBXSfrbx sfrbx;
+    EXPECT_FALSE(decoder.decodeSfrbx(message, sfrbx));
 }
 
 TEST(UBXUtilsTest, MapsMessageNamesAndSignals) {

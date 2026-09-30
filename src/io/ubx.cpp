@@ -253,19 +253,22 @@ bool UBXDecoder::decodeSfrbx(const UBXMessage& message, UBXSfrbx& sfrbx) {
         return false;
     }
 
+    // gnssId, svId, sigId, freqId, numWords, chn, version, reserved, then
+    // numWords U4 data words.
     const auto& payload = message.payload;
-    const uint8_t num_words = payload[1];
+    const uint8_t num_words = payload[4];
     const size_t expected_length = 8U + static_cast<size_t>(num_words) * 4U;
     if (payload.size() < expected_length) {
         return false;
     }
 
     sfrbx = UBXSfrbx{};
-    sfrbx.version = payload[0];
-    sfrbx.channel = payload[2];
-    sfrbx.system = ubx_utils::getSystemFromGnssId(payload[4]);
-    sfrbx.sv_id = payload[5];
-    sfrbx.frequency_id = payload[7];
+    sfrbx.system = ubx_utils::getSystemFromGnssId(payload[0]);
+    sfrbx.sv_id = payload[1];
+    sfrbx.signal_id = payload[2];
+    sfrbx.frequency_id = payload[3];
+    sfrbx.channel = payload[5];
+    sfrbx.version = payload[6];
     sfrbx.words.reserve(num_words);
 
     for (uint8_t index = 0; index < num_words; ++index) {
@@ -368,8 +371,49 @@ bool getSignalType(uint8_t gnss_id, uint8_t sig_id, SignalType& signal_type) {
     }
 }
 
+bool isSfrbxLegacyNavigation(const UBXSfrbx& sfrbx) {
+    const uint8_t sig = sfrbx.signal_id;
+    switch (sfrbx.system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::QZSS:
+        case GNSSSystem::SBAS:
+            return sig == 0;  // L1 C/A
+        case GNSSSystem::Galileo:
+            return sig == 0 || sig == 1 || sig == 5;  // E1-B / E5b-I I/NAV
+        case GNSSSystem::BeiDou:
+            return sig <= 4 || sig == 10;  // B1I / B2I / B3I D1 and D2
+        case GNSSSystem::GLONASS:
+            return sig == 0 || sig == 2;  // L1OF / L2OF
+        default:
+            return false;
+    }
+}
+
+bool isSfrbxBeiDouD2(const UBXSfrbx& sfrbx) {
+    if (sfrbx.system != GNSSSystem::BeiDou) {
+        return false;
+    }
+    switch (sfrbx.signal_id) {
+        case 1:
+        case 3:
+        case 10:
+            return true;
+        case 0: {
+            // sigId 0 is B1I D1 from protocol 27 on but reserved before it;
+            // GEO satellites (C01-C05, C59-C63) broadcast D2.
+            const int prn = sfrbx.sv_id;
+            return (prn >= 1 && prn <= 5) || (prn >= 59 && prn <= 63);
+        }
+        default:
+            return false;
+    }
+}
+
 bool decodeSfrbxFrameInfo(const UBXSfrbx& sfrbx, UBXSfrbxFrameInfo& frame_info) {
     frame_info = UBXSfrbxFrameInfo{};
+    if (!isSfrbxLegacyNavigation(sfrbx)) {
+        return false;
+    }
 
     switch (sfrbx.system) {
         case GNSSSystem::GPS:
@@ -400,7 +444,7 @@ bool decodeSfrbxFrameInfo(const UBXSfrbx& sfrbx, UBXSfrbxFrameInfo& frame_info) 
                 return false;
             }
             frame_info.frame_id = subframe_id;
-            if (sfrbx.sv_id > 5) {
+            if (!isSfrbxBeiDouD2(sfrbx)) {
                 frame_info.kind = UBXSfrbxFrameInfo::Kind::BDS_D1;
                 frame_info.valid = true;
                 return true;
@@ -430,7 +474,7 @@ bool decodeSfrbxFrameInfo(const UBXSfrbx& sfrbx, UBXSfrbxFrameInfo& frame_info) 
             const int part2 = static_cast<int>(readBitsMsbFirst(bytes.data() + 16, 16U, 0, 1));
             const int page2 = static_cast<int>(readBitsMsbFirst(bytes.data() + 16, 16U, 1, 1));
             const int word_type = static_cast<int>(readBitsMsbFirst(bytes.data(), bytes.size(), 2, 6));
-            if (page1 == 1 || page2 == 1 || part1 != 0 || part2 != 1 || word_type <= 0) {
+            if (page1 == 1 || page2 == 1 || part1 != 0 || part2 != 1) {
                 return false;
             }
             frame_info.kind = UBXSfrbxFrameInfo::Kind::GAL_INAV;
