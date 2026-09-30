@@ -294,6 +294,11 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
             continue;
         }
 
+        if (secondary == nullptr &&
+            dropSingleFrequencyPreciseProductSatellite(
+                precise_products_loaded_, ssr_products_loaded_)) {
+            continue;
+        }
         if (secondary == nullptr) {
             entry.pseudorange_if = primary->pseudorange;
             if (broadcast_clock) {

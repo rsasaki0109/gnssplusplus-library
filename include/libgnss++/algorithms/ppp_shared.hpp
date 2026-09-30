@@ -398,6 +398,9 @@ struct PPPConfig {
     double outlier_threshold = 4.0;
     bool enable_cycle_slip_detection = true;
     double cycle_slip_threshold = 0.05;
+    // Measurement-update passes per epoch for the coherent MADOCA static
+    // ionosphere-free path only; every other path commits one update per
+    // epoch (see ppp_internal::filterIterationCount).
     int filter_iterations = 8;
 };
 
