@@ -301,14 +301,11 @@ struct PPPConfig {
 
     bool apply_ocean_loading = false;
     bool apply_solid_earth_tides = true;
-    // Apply satellite antenna PCO (read from ANTEX) by shifting the
-    // SP3-interpolated satellite position to the ionosphere-free
-    // combination phase center. Default off because IGS final products
-    // since the 2017 convention switch publish SP3 / CLK already at the
-    // IF antenna phase center, so the additional shift double-applies
-    // the offset on those products. Enable for SP3 sources known to
-    // report centre of mass (some legacy AC products / GLONASS-only
-    // analyses). The ANTEX loader is unconditional when --antex is set.
+    // Satellite antenna PCO (read from ANTEX; the loader is unconditional
+    // when --antex is set) is always applied to precise (SP3) orbits, which
+    // refer to the satellite centre of mass. This flag additionally forces
+    // it for broadcast / SSR-corrected broadcast orbits, which normally
+    // already refer to the antenna phase centre.
     bool apply_satellite_antenna_pco = false;
     // Hard-blend the static-mode position state toward the SPP-derived
     // anchor each epoch (50 % post-convergence with precise products).

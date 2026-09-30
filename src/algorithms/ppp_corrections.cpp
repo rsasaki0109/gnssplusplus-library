@@ -827,14 +827,26 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
 
         bool have_precise = false;
         if (precise_products_loaded_) {
+            bool precise_clock_available = false;
             have_precise = precise_products_.interpolateOrbitClock(
                 observation.satellite,
                 time,
                 sat_position,
                 sat_velocity,
                 sat_clock_bias,
-                sat_clock_drift);
-            if (have_precise) {
+                sat_clock_drift,
+                &precise_clock_available);
+            // With precise products loaded, a satellite needs both a precise
+            // orbit and a precise clock. Falling back to the broadcast orbit
+            // and clock (e.g. QZSS / GLONASS absent from an IGS GPS-only SP3)
+            // would mix the broadcast clock datum into the product clock
+            // datum that the receiver clock state follows. RTKLIB (EPHOPT_PREC)
+            // likewise drops satellites missing from the SP3.
+            if (!have_precise || !precise_clock_available) {
+                observation.valid = false;
+                continue;
+            }
+            {
                 // Light-travel-time correction: the SP3 query above samples
                 // the orbit at reception time, but the signal left the sat at
                 // emission_time = reception − τ. Re-querying the precise
@@ -854,6 +866,12 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     sat_position -= sat_velocity * travel_time;
                     sat_clock_bias -= sat_clock_drift * travel_time;
                 }
+                // SP3 / RINEX clock products exclude the periodic
+                // relativistic effect (up to ~14 m for GPS); add it here.
+                // The broadcast branch below gets it from the navigation
+                // message clock model instead.
+                sat_clock_bias +=
+                    preciseClockRelativisticCorrection(sat_position, sat_velocity);
             }
         }
 
@@ -1327,14 +1345,21 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
             }
         }
 
-        // Satellite antenna PCO from ANTEX. The IGS final products since
-        // the 2017 convention switch publish SP3 / CLK at the iono-free
-        // combination antenna phase centre (so no shift is needed by
-        // default). For SP3 sources known to report centre of mass,
-        // setting apply_satellite_antenna_pco rotates the body-frame PCO
-        // (constructed via the yaw-steering attitude) into ECEF and
+        // Satellite antenna PCO from ANTEX. SP3 orbits (IGS and its
+        // analysis centres) refer to the satellite centre of mass, and the
+        // product clocks are consistent with the ANTEX model named in the
+        // headers (IGS finals: "PCV:IGS20", "SYS / PCVS APPLIED
+        // igs20_2375.atx"), so with precise products the ionosphere-free
+        // PCO has to be added (RTKLIB satantoff(), cssrlib). The body-frame
+        // PCO is rotated into ECEF with the yaw-steering attitude and
         // shifts sat_position so geodist() returns the antenna range.
-        if (satellite_antex_loaded_ && ppp_config_.apply_satellite_antenna_pco) {
+        // Broadcast and SSR-corrected broadcast orbits, and SP3 files marked
+        // as antenna-phase-centre orbits (gnss nav-products), already refer
+        // to the antenna phase centre; apply_satellite_antenna_pco forces
+        // the shift there as well.
+        if (satellite_antex_loaded_ &&
+            ((have_precise && !precise_products_.orbits_at_antenna_phase_center) ||
+             ppp_config_.apply_satellite_antenna_pco)) {
             Vector3d pco_body_if = Vector3d::Zero();
             bool have_pco = false;
             for (const auto& entry : satellite_antex_offsets_) {

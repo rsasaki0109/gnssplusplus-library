@@ -27,7 +27,7 @@ import gnss_reproduce as reproduce  # noqa: E402
 
 READY_LANES = {
     "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
-    "gsdc-official", "has-idd-ppp", "has-sis-ppp",
+    "gsdc-official", "has-idd-ppp", "has-sis-ppp", "igs-final-ppp",
 }
 PLANNED_LANES: set[str] = set()
 
@@ -384,6 +384,43 @@ class HasSisPppLaneTest(unittest.TestCase):
         for t in ("30min", "60min"):
             self.assertEqual(gated[f"has-sis 046r static H at {t} (m)"]["max"], 0.20)
             self.assertEqual(gated[f"has-sis 046r static |U| at {t} (m)"]["max"], 0.40)
+
+
+class IgsFinalPppLaneTest(unittest.TestCase):
+    def test_dry_run_renders_precise_product_runs_from_both_data_roots(self) -> None:
+        result = subprocess.run(
+            [
+                sys.executable, str(GNSS_CLI), "reproduce", "igs-final-ppp", "--dry-run",
+                "--work-dir", "output/reproduce/test-igs-final-dry-run",
+                "--has-sis-data-root", "/data/cssrlib-data/data",
+                "--has-data-root", "/data/cssrlib-data/data/doy2023-229",
+            ],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        ppp_runs = [line for line in out.splitlines() if "--sp3 /data/" in line]
+        self.assertEqual(len(ppp_runs), 3)
+        self.assertTrue(all("--clk /data/" in line and "--static" in line for line in ppp_runs))
+        self.assertTrue(all("--antex /data/cssrlib-data/data/igs20.atx" in line for line in ppp_runs))
+        self.assertIn(
+            "--sp3 /data/cssrlib-data/data/doy2025-233/IGS0OPSFIN_20252330000_01D_15M_ORB.SP3", out)
+        self.assertIn(
+            "--clk /data/cssrlib-data/data/doy2023-229/IGS0OPSFIN_20232290000_01D_30S_CLK.CLK", out)
+        self.assertIn("--reference-ecef 4186704.2262 834903.7677 4723664.9337", out)
+        self.assertIn("warning: dataset `has_sis` incomplete", out)
+        self.assertIn("warning: dataset `has` incomplete", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-igs-final-dry-run").exists())
+
+    def test_manifest_gates_final_accuracy(self) -> None:
+        manifest = reproduce.load_manifest(ROOT_DIR / "configs" / "reproduce" / "igs-final-ppp.toml")
+        metrics = reproduce.expand_metric_specs(manifest["metrics"], "igs-final-ppp.metrics")
+        gated = {metric["name"]: metric for metric in metrics if metric.get("gate", True)}
+        for hour in ("046r", "233h"):
+            self.assertEqual(gated[f"igs {hour} static H at 60 min (m)"]["max"], 0.40)
+            self.assertEqual(gated[f"igs {hour} static |U| at 60 min (m)"]["max"], 0.40)
+        self.assertEqual(gated["igs obe4 static H at 60 min (m)"]["max"], 0.30)
+        self.assertEqual(gated["igs obe4 static |U| at 60 min (m)"]["max"], 0.30)
 
 
 class GsdcDevRoutesLaneTest(unittest.TestCase):

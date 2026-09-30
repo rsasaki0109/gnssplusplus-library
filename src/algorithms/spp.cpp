@@ -782,24 +782,31 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             double travel_time = transmit_pseudorange / constants::SPEED_OF_LIGHT;
             GNSSTime tx_time = time - travel_time;
             if (spp_config_.use_precise_products && precise_products_loaded_) {
+                bool precise_clock_available = false;
                 precise_orbit_clock = precise_products_.interpolateOrbitClock(
                     obs.satellite,
                     time,
                     sat_pos,
                     sat_vel,
                     sat_clk,
-                    sat_clk_drift);
-                if (precise_orbit_clock) {
-                    const double initial_distance = (sat_pos - current_position).norm();
-                    if (std::isfinite(initial_distance) && initial_distance > 0.0) {
-                        travel_time = initial_distance / constants::SPEED_OF_LIGHT;
-                        sat_pos -= sat_vel * travel_time;
-                        sat_clk -= sat_clk_drift * travel_time;
-                        tx_time = time - travel_time;
-                    } else {
-                        precise_orbit_clock = false;
-                    }
+                    sat_clk_drift,
+                    &precise_clock_available);
+                // Satellites without a precise orbit and clock are dropped
+                // rather than mixed in on broadcast clocks (RTKLIB
+                // EPHOPT_PREC behaviour; see ppp_corrections.cpp).
+                if (!precise_orbit_clock || !precise_clock_available) {
+                    continue;
                 }
+                const double initial_distance = (sat_pos - current_position).norm();
+                if (!std::isfinite(initial_distance) || initial_distance <= 0.0) {
+                    continue;
+                }
+                travel_time = initial_distance / constants::SPEED_OF_LIGHT;
+                sat_pos -= sat_vel * travel_time;
+                sat_clk -= sat_clk_drift * travel_time;
+                tx_time = time - travel_time;
+                // Product clocks exclude the periodic relativistic term.
+                sat_clk += preciseClockRelativisticCorrection(sat_pos, sat_vel);
             }
 
             if (!precise_orbit_clock && spp_config_.mrtklib_iflc_code_bias) {
@@ -2129,17 +2136,23 @@ std::map<SatelliteId, SPPProcessor::SatelliteState> SPPProcessor::calculateSatel
                 0,
                 &ssr_orbit_iode);
 
-        if (spp_config_.use_precise_products &&
-            precise_products_loaded_ &&
-            precise_products_.interpolateOrbitClock(obs.satellite,
-                                                     time,
-                                                     state.position,
-                                                     state.velocity,
-                                                     state.clock_bias,
-                                                     state.clock_drift)) {
-            state.valid = true;
-            state.precise_orbit_clock = true;
-            states[obs.satellite] = state;
+        if (spp_config_.use_precise_products && precise_products_loaded_) {
+            // Precise products loaded: use them or drop the satellite (no
+            // broadcast fallback; see buildMeasurements()).
+            bool precise_clock_available = false;
+            state.valid = precise_products_.interpolateOrbitClock(
+                              obs.satellite,
+                              time,
+                              state.position,
+                              state.velocity,
+                              state.clock_bias,
+                              state.clock_drift,
+                              &precise_clock_available) &&
+                precise_clock_available;
+            state.precise_orbit_clock = state.valid;
+            if (state.valid) {
+                states[obs.satellite] = state;
+            }
             continue;
         }
 
@@ -2482,6 +2495,7 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs,
         if (st.precise_orbit_clock) {
             sat_position -= st.velocity * travel_time;
             sat_clk -= st.clock_drift * travel_time;
+            sat_clk += preciseClockRelativisticCorrection(sat_position, st.velocity);
             range_approx = (sat_position - position).norm();
             travel_time = range_approx / constants::SPEED_OF_LIGHT;
         }

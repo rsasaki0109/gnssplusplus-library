@@ -1,0 +1,187 @@
+# Static float PPP with IGS final orbits and clocks (gnss_ppp --sp3 --clk).
+# Not a README row; see docs/reproduce.md#igs-final-ppp.
+#
+# Inputs (public, not redistributed here):
+# - the Kamakura hours of hirokawa/cssrlib-data used by has-sis-ppp
+#   (data/doy2025-046/046r_rnx.obs, data/doy2025-233/233h_rnx.obs) with the IGS
+#   merged broadcast navigation files next to them, and the OBE4 hour of
+#   data/doy2023-229 used by has-idd-ppp (OBE42023229c.obs / .nav);
+# - IGS final products from https://igs.bkg.bund.de/root_ftp/IGS/products/
+#   (GPS week 2353: IGS0OPSFIN_20250460000_01D_{15M_ORB.SP3,30S_CLK.CLK};
+#   week 2380: IGS0OPSFIN_20252330000_...; week 2275:
+#   IGS0OPSFIN_20232290000_...), gunzipped next to the observations of the day;
+# - igs20.atx (https://files.igs.org/pub/station/general/igs20.atx) in the
+#   --has-sis-data-root directory (used for all three runs).
+#
+# IGS0OPSFIN is GPS-only, so every other constellation in the multi-GNSS
+# observation files is dropped (no broadcast-clock fallback).
+#
+# RTKLIB demo5 b34j PPP-static on the same inputs (GPS, L1+L2 iono-free,
+# est-ztd, 10 deg, igs20.atx, tides, forward): 233h H 0.434 / 0.154 / 0.099 m
+# and U -0.488 / -0.179 / -0.212 m at 10 / 30 / 60 min; 046r H 0.717 / 0.418 /
+# 0.267 m and U -0.147 / -0.202 / -0.017 m; OBE4 H 0.426 / 0.315 / 0.280 m and
+# U -0.245 / -0.127 / -0.054 m.
+
+[lane]
+name = "igs-final-ppp"
+status = "ready"
+title = "Static float PPP with IGS final SP3/CLK: Kamakura and OBE4 hours vs reference"
+readme_row = "(docs) Precise-product PPP: IGS finals, static Kamakura and OBE4 hours"
+runtime_estimate = "~3 min"
+docs = "docs/reproduce.md"
+
+[datasets.has_sis]
+required = [
+  "igs20.atx",
+  "doy2025-046/046r_rnx.obs",
+  "doy2025-046/BRDC00WRD_S_20250460000_01D_MN.rnx",
+  "doy2025-046/IGS0OPSFIN_20250460000_01D_15M_ORB.SP3",
+  "doy2025-046/IGS0OPSFIN_20250460000_01D_30S_CLK.CLK",
+  "doy2025-233/233h_rnx.obs",
+  "doy2025-233/BRDC00WRD_S_20252330000_01D_MN.rnx",
+  "doy2025-233/IGS0OPSFIN_20252330000_01D_15M_ORB.SP3",
+  "doy2025-233/IGS0OPSFIN_20252330000_01D_30S_CLK.CLK",
+]
+
+[datasets.has]
+required = [
+  "OBE42023229c.obs",
+  "OBE42023229c.nav",
+  "IGS0OPSFIN_20232290000_01D_15M_ORB.SP3",
+  "IGS0OPSFIN_20232290000_01D_30S_CLK.CLK",
+]
+
+[tools.cssrlib_data]
+repository = "https://github.com/hirokawa/cssrlib-data"
+path = "data/doy2025-046, data/doy2025-233, data/doy2023-229"
+note = "License not stated upstream; download locally, do not commit."
+
+[tools.igs_products]
+repository = "https://igs.bkg.bund.de/root_ftp/IGS/products/"
+path = "2353/IGS0OPSFIN_20250460000_01D_*, 2380/IGS0OPSFIN_20252330000_01D_*, 2275/IGS0OPSFIN_20232290000_01D_* (15M_ORB.SP3.gz, 30S_CLK.CLK.gz)"
+note = "IGS final orbits/clocks (public); gunzip next to the observations of the day."
+
+[[steps]]
+name = "gnss-ppp-igs-{hour}"
+foreach = [{ hour = "046r", doy = "046" }, { hour = "233h", doy = "233" }]
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{has_sis_root}/doy2025-{doy}/{hour}_rnx.obs",
+  "--nav", "{has_sis_root}/doy2025-{doy}/BRDC00WRD_S_2025{doy}0000_01D_MN.rnx",
+  "--sp3", "{has_sis_root}/doy2025-{doy}/IGS0OPSFIN_2025{doy}0000_01D_15M_ORB.SP3",
+  "--clk", "{has_sis_root}/doy2025-{doy}/IGS0OPSFIN_2025{doy}0000_01D_30S_CLK.CLK",
+  "--antex", "{has_sis_root}/igs20.atx",
+  "--static",
+  "--elevation-mask", "10",
+  "--out", "{work_dir}/igs_{hour}_static.pos",
+  "--summary-json", "{work_dir}/igs_{hour}_static_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "gnss-ppp-igs-obe4"
+argv = [
+  "{bin:gnss_ppp}",
+  "--obs", "{has_root}/OBE42023229c.obs",
+  "--nav", "{has_root}/OBE42023229c.nav",
+  "--sp3", "{has_root}/IGS0OPSFIN_20232290000_01D_15M_ORB.SP3",
+  "--clk", "{has_root}/IGS0OPSFIN_20232290000_01D_30S_CLK.CLK",
+  "--antex", "{has_sis_root}/igs20.atx",
+  "--static",
+  "--elevation-mask", "10",
+  "--out", "{work_dir}/igs_obe4_static.pos",
+  "--summary-json", "{work_dir}/igs_obe4_static_run.json",
+  "--quiet",
+]
+
+[[steps]]
+name = "score-kamakura"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "-3962108.6836", "3381309.5672", "3668678.6720",
+  "--run", "igs_046r_static={work_dir}/igs_046r_static.pos",
+  "--run", "igs_233h_static={work_dir}/igs_233h_static.pos",
+  "--summary-json", "{work_dir}/summary_kamakura.json",
+]
+
+[[steps]]
+name = "score-obe4"
+argv = [
+  "{python}", "scripts/experiments/has/has_idd_ppp_reproduce.py", "score",
+  "--reference-ecef", "4186704.2262", "834903.7677", "4723664.9337",
+  "--run", "igs_obe4_static={work_dir}/igs_obe4_static.pos",
+  "--summary-json", "{work_dir}/summary_obe4.json",
+]
+
+# Gates (reproduced 2026-10-01, MSVC Release). Before the precise-product fix
+# (missing -2 r.v/c^2 clock term, broadcast-clock fallback for satellites
+# absent from the SP3, no satellite PCO) these runs ended 1.4-1.6 m off
+# horizontally.
+[[metrics]]
+name = "igs {hour} static H at 60 min (m)"
+source = "{work_dir}/summary_kamakura.json"
+path = "runs.igs_{hour}_static.checkpoints.60min.h_m"
+max = 0.40
+readme = "docs/reproduce.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+[[metrics]]
+name = "igs {hour} static |U| at 60 min (m)"
+source = "{work_dir}/summary_kamakura.json"
+path = "runs.igs_{hour}_static.checkpoints.60min.abs_up_m"
+max = 0.40
+readme = "docs/reproduce.md"
+foreach = [{ hour = "046r" }, { hour = "233h" }]
+
+[[metrics]]
+name = "igs obe4 static H at 60 min (m)"
+source = "{work_dir}/summary_obe4.json"
+path = "runs.igs_obe4_static.checkpoints.60min.h_m"
+max = 0.30
+readme = "docs/reproduce.md"
+
+[[metrics]]
+name = "igs obe4 static |U| at 60 min (m)"
+source = "{work_dir}/summary_obe4.json"
+path = "runs.igs_obe4_static.checkpoints.60min.abs_up_m"
+max = 0.30
+readme = "docs/reproduce.md"
+
+# docs/reproduce.md table values; reported, not gated.
+[[metrics]]
+name = "table: {run} {field} at {t}"
+source = "{work_dir}/summary_kamakura.json"
+path = "runs.{run}.checkpoints.{t}.{field}"
+gate = false
+abs_tol = 0.05
+readme = "docs/reproduce.md table"
+foreach = [
+  { run = "igs_046r_static", t = "10min", field = "h_m", expected = 0.611 },
+  { run = "igs_046r_static", t = "10min", field = "up_m", expected = -0.007 },
+  { run = "igs_046r_static", t = "30min", field = "h_m", expected = 0.454 },
+  { run = "igs_046r_static", t = "30min", field = "up_m", expected = -0.205 },
+  { run = "igs_046r_static", t = "60min", field = "h_m", expected = 0.315 },
+  { run = "igs_046r_static", t = "60min", field = "up_m", expected = 0.027 },
+  { run = "igs_233h_static", t = "10min", field = "h_m", expected = 0.490 },
+  { run = "igs_233h_static", t = "10min", field = "up_m", expected = -0.646 },
+  { run = "igs_233h_static", t = "30min", field = "h_m", expected = 0.168 },
+  { run = "igs_233h_static", t = "30min", field = "up_m", expected = -0.222 },
+  { run = "igs_233h_static", t = "60min", field = "h_m", expected = 0.120 },
+  { run = "igs_233h_static", t = "60min", field = "up_m", expected = -0.265 },
+]
+
+[[metrics]]
+name = "table: {run} {field} at {t}"
+source = "{work_dir}/summary_obe4.json"
+path = "runs.{run}.checkpoints.{t}.{field}"
+gate = false
+abs_tol = 0.05
+readme = "docs/reproduce.md table"
+foreach = [
+  { run = "igs_obe4_static", t = "10min", field = "h_m", expected = 0.171 },
+  { run = "igs_obe4_static", t = "10min", field = "up_m", expected = -0.341 },
+  { run = "igs_obe4_static", t = "30min", field = "h_m", expected = 0.209 },
+  { run = "igs_obe4_static", t = "30min", field = "up_m", expected = -0.165 },
+  { run = "igs_obe4_static", t = "60min", field = "h_m", expected = 0.199 },
+  { run = "igs_obe4_static", t = "60min", field = "up_m", expected = -0.057 },
+]
