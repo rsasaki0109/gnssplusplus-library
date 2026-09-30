@@ -920,6 +920,14 @@ double mappingFunction(double elevation) {
     return 1.001 / std::sqrt(0.002001 + sin_elevation * sin_elevation);
 }
 
+// Epochs (30 s apart, inside the 600 s synthetic SP3/CLK span) the static
+// synthetic precise-product tests process before checking the float position.
+// The satellites are fixed in ECEF and the observations noise-free, so the
+// position information comes from the repeated code rows alone and the error
+// falls roughly as 1/n (3.2 m after the first epoch, 1.05 m after 8, 0.57 m
+// after 16) with one measurement update per epoch.
+constexpr int kSyntheticPreciseEpochs = 16;
+
 struct SyntheticSatellite {
     SatelliteId id;
     Vector3d position;
@@ -1361,7 +1369,7 @@ TEST(PPPTest, SolidEarthTidesChangeSyntheticPrecisePppSolutionWithoutBreakingIt)
     NavigationData nav_data;
     PositionSolution tides_on_solution;
     PositionSolution tides_off_solution;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < kSyntheticPreciseEpochs; ++i) {
         const ObservationData epoch = makeSyntheticEpoch(
             first_time + 30.0 * static_cast<double>(i),
             true_receiver_position,
@@ -1443,7 +1451,7 @@ TEST(PPPTest, IersSolidTideOptInDispatchProducesDistinctSolution) {
     NavigationData nav_data;
     PositionSolution legacy_solution;
     PositionSolution iers_solution;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < kSyntheticPreciseEpochs; ++i) {
         const ObservationData epoch = makeSyntheticEpoch(
             first_time + 30.0 * static_cast<double>(i),
             true_receiver_position,
@@ -1528,7 +1536,7 @@ TEST(PPPTest, ReceiverAntexPcoChangesSyntheticPrecisePppSolutionWithoutBreakingI
     NavigationData nav_data;
     PositionSolution plain_solution;
     PositionSolution antex_solution;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < kSyntheticPreciseEpochs; ++i) {
         const ObservationData epoch = makeSyntheticEpoch(
             first_time + 30.0 * static_cast<double>(i),
             true_receiver_position,
@@ -1606,7 +1614,7 @@ TEST(PPPTest, OceanLoadingCoefficientsChangeSyntheticPrecisePppSolutionWithoutBr
     NavigationData nav_data;
     PositionSolution base_solution;
     PositionSolution blq_solution;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < kSyntheticPreciseEpochs; ++i) {
         const ObservationData epoch = makeSyntheticEpoch(
             first_time + 30.0 * static_cast<double>(i),
             true_receiver_position,
@@ -2871,7 +2879,7 @@ TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProduct
 
     NavigationData nav_data;
     PositionSolution last_solution;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < kSyntheticPreciseEpochs; ++i) {
         const ObservationData epoch = makeSyntheticEpoch(
             first_time + 30.0 * static_cast<double>(i),
             true_receiver_position,
@@ -2887,8 +2895,8 @@ TEST(PPPTest, ProcessorProducesConvergedFloatSolutionWithSyntheticPreciseProduct
     EXPECT_LT(last_solution.residual_rms, 0.2);
 
     const auto stats = processor.getStats();
-    EXPECT_EQ(stats.total_epochs, 8U);
-    EXPECT_EQ(stats.valid_solutions, 8U);
+    EXPECT_EQ(stats.total_epochs, static_cast<unsigned>(kSyntheticPreciseEpochs));
+    EXPECT_EQ(stats.valid_solutions, static_cast<unsigned>(kSyntheticPreciseEpochs));
 
     std::filesystem::remove(sp3_path);
     std::filesystem::remove(clk_path);
@@ -3078,7 +3086,7 @@ TEST(PPPTest, ProcessorFixesSyntheticAmbiguitiesWithPreciseProducts) {
     bool saw_fixed_solution = false;
     int best_fixed_ambiguities = 0;
     double best_ratio = 0.0;
-    for (int i = 0; i < 8; ++i) {
+    for (int i = 0; i < kSyntheticPreciseEpochs; ++i) {
         const ObservationData epoch = makeSyntheticEpoch(
             first_time + 30.0 * static_cast<double>(i),
             true_receiver_position,
