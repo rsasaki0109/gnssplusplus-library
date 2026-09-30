@@ -129,6 +129,7 @@ if(GTest_FOUND)
         test_rtcm.cpp
         test_rtcm_stream.cpp
         test_ubx.cpp
+        test_galileo_has.cpp
         test_sofa_vendor.cpp
         test_ginan_iers2010_vendor.cpp
         test_iers_earth_rotation.cpp
@@ -202,6 +203,7 @@ if(GTest_FOUND)
         gnss_doppler_row_attrition_audit
         gnss_stream
         gnss_ubx_info
+        gnss_has_info
         gnss_vel_d
     )
 

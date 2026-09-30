@@ -27,7 +27,7 @@ import gnss_reproduce as reproduce  # noqa: E402
 
 READY_LANES = {
     "clas-ppc", "spp-policy", "rtk-demo5", "odaiba", "fgo-tokyo", "gsdc-dev-routes", "ppc-goal",
-    "gsdc-official", "has-idd-ppp",
+    "gsdc-official", "has-idd-ppp", "has-sis-ppp",
 }
 PLANNED_LANES: set[str] = set()
 
@@ -341,6 +341,49 @@ class HasIddPppLaneTest(unittest.TestCase):
         self.assertAlmostEqual(run["checkpoints"]["60min"]["h_m"], 0.0, places=3)
         self.assertEqual(run["convergence_h_below_0p20_min"], 0.0)
         self.assertEqual(run["convergence_abs_up_below_0p40_min"], 25.0)
+
+
+class HasSisPppLaneTest(unittest.TestCase):
+    def test_dry_run_uses_has_sis_data_root_option_and_env(self) -> None:
+        base = [
+            sys.executable, str(GNSS_CLI), "reproduce", "has-sis-ppp", "--dry-run",
+            "--work-dir", "output/reproduce/test-has-sis-dry-run",
+        ]
+        result = subprocess.run(
+            [*base, "--has-sis-data-root", "/data/cssrlib-data/data"],
+            cwd=ROOT_DIR, check=False, capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = result.stdout
+        ppp_runs = [line for line in out.splitlines() if "--has-pages /data/" in line]
+        self.assertEqual(len(ppp_runs), 4)
+        self.assertTrue(all("--has-pages-format cssrlib" in line for line in ppp_runs))
+        self.assertTrue(any("--static" in line and "046r_rnx.obs" in line for line in ppp_runs))
+        self.assertTrue(any("--kinematic" in line and "233h_rnx.obs" in line for line in ppp_runs))
+        self.assertIn(
+            "--nav /data/cssrlib-data/data/doy2025-046/BRDC00WRD_S_20250460000_01D_MN.rnx", out)
+        info_runs = [line for line in out.splitlines() if "--json-out" in line]
+        self.assertEqual(len(info_runs), 2)
+        self.assertIn("has_idd_ppp_reproduce.py score", out)
+        self.assertIn("--reference-ecef -3962108.6836 3381309.5672 3668678.6720", out)
+        self.assertIn("warning: dataset `has_sis` incomplete", out)
+        self.assertIn("--has-sis-data-root or GNSSPP_HAS_SIS_DATA_ROOT", out)
+        self.assertFalse((ROOT_DIR / "output" / "reproduce" / "test-has-sis-dry-run").exists())
+
+        env = {**os.environ, "GNSSPP_HAS_SIS_DATA_ROOT": "/env/has-sis"}
+        from_env = subprocess.run(base, cwd=ROOT_DIR, check=False, capture_output=True, text=True, env=env)
+        self.assertEqual(from_env.returncode, 0, from_env.stderr)
+        self.assertIn("--obs /env/has-sis/doy2025-233/233h_rnx.obs", from_env.stdout)
+
+    def test_manifest_gates_decoder_and_static_accuracy(self) -> None:
+        manifest = reproduce.load_manifest(ROOT_DIR / "configs" / "reproduce" / "has-sis-ppp.toml")
+        metrics = reproduce.expand_metric_specs(manifest["metrics"], "has-sis-ppp.metrics")
+        gated = {metric["name"]: metric for metric in metrics if metric.get("gate", True)}
+        self.assertEqual(gated["046r HAS MT1 messages decoded"]["min"], 432)
+        self.assertEqual(gated["233h C/NAV CRC failures"]["max"], 0)
+        for t in ("30min", "60min"):
+            self.assertEqual(gated[f"has-sis 046r static H at {t} (m)"]["max"], 0.20)
+            self.assertEqual(gated[f"has-sis 046r static |U| at {t} (m)"]["max"], 0.40)
 
 
 class GsdcDevRoutesLaneTest(unittest.TestCase):

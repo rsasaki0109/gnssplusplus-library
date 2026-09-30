@@ -314,6 +314,30 @@ inline double ssrBiasLookup(const std::map<uint8_t, double>& m,
     return 0.0;
 }
 
+// GPS L2 code observations collapse onto GPS_L2C (bias id 8) whatever their
+// tracking mode. When the SSR source carries distinct L2C and L2 P(Y) biases
+// (Galileo HAS: L2 CL and L2 P), pick the one matching the tracked code:
+// P / Y / W / D / N (P(Y) and semi-/codeless) -> L2 P (id 9), otherwise L2C.
+uint8_t trackingAwareSsrBiasId(GNSSSystem system,
+                               uint8_t id,
+                               const std::string& observation_type,
+                               bool tracking_code_identity) {
+    if (!tracking_code_identity || system != GNSSSystem::GPS || (id != 8U && id != 9U) ||
+        observation_type.size() < 3) {
+        return id;
+    }
+    switch (observation_type[2]) {
+        case 'P':
+        case 'Y':
+        case 'W':
+        case 'D':
+        case 'N':
+            return 9U;
+        default:
+            return 8U;
+    }
+}
+
 double observationCodeBiasMeters(GNSSSystem system,
                                  SignalType primary_signal,
                                  SignalType secondary_signal,
@@ -323,9 +347,14 @@ double observationCodeBiasMeters(GNSSSystem system,
                                  double coeff_secondary,
                                  const std::string& primary_observation_type,
                                  const std::string& secondary_observation_type,
-                                 bool madoca_bias_identity) {
-    const uint8_t primary_id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
-        system, primary_signal, primary_observation_type, madoca_bias_identity);
+                                 bool madoca_bias_identity,
+                                 bool tracking_code_identity = false) {
+    const uint8_t primary_id = trackingAwareSsrBiasId(
+        system,
+        algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
+            system, primary_signal, primary_observation_type, madoca_bias_identity),
+        primary_observation_type,
+        tracking_code_identity);
     if (primary_id == 0U) {
         return 0.0;
     }
@@ -335,8 +364,12 @@ double observationCodeBiasMeters(GNSSSystem system,
         return primary_bias;
     }
 
-    const uint8_t secondary_id = algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
-        system, secondary_signal, secondary_observation_type, madoca_bias_identity);
+    const uint8_t secondary_id = trackingAwareSsrBiasId(
+        system,
+        algorithms::ppp_bias_identity::madocaBiasIdentityIdForObservation(
+            system, secondary_signal, secondary_observation_type, madoca_bias_identity),
+        secondary_observation_type,
+        tracking_code_identity);
     if (secondary_id == 0U) {
         return coeff_primary * primary_bias;
     }
@@ -868,7 +901,7 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                 observation.valid = false;
                 continue;
             }
-            if (env_overrides_.require_ssr_orbit &&
+            if ((env_overrides_.require_ssr_orbit || require_ssr_orbit_correction_) &&
                 ssr_products_loaded_ && ssr_orbit_iode < 0) {
                 observation.valid = false;
                 continue;
@@ -1063,7 +1096,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                     observation.secondary_code_bias_coeff,
                     observation.primary_observation_type,
                     observation.secondary_observation_type,
-                    madoca_bias_identity);
+                    madoca_bias_identity,
+                    ssr_code_bias_tracking_identity_);
                 // MADOCALIB adds SSR biases to the observables (ppp.c:432-451).
                 // The MADOCA L6 path follows that convention by default;
                 // GNSS_PPP_MADOCA_BIAS_SUBTRACT restores the legacy subtraction
@@ -1098,7 +1132,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                         SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m, 1.0, 0.0,
                         observation.primary_observation_type,
                         std::string(),
-                        madoca_bias_identity);
+                        madoca_bias_identity,
+                        ssr_code_bias_tracking_identity_);
                     observation.pseudorange_l1 += ssr_bias_sign * cb_l1;
                     observation.code_bias_l1_m = cb_l1;
                     if (observation.has_l2) {
@@ -1107,7 +1142,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                             SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m, 1.0, 0.0,
                             observation.secondary_observation_type,
                             std::string(),
-                            madoca_bias_identity);
+                            madoca_bias_identity,
+                            ssr_code_bias_tracking_identity_);
                         observation.pseudorange_l2 += ssr_bias_sign * cb_l2;
                         observation.code_bias_l2_m = cb_l2;
                     }
@@ -1119,7 +1155,8 @@ void PPPProcessor::applyPreciseCorrections(std::vector<IonosphereFreeObs>& obser
                             observation.satellite.system, extra.signal,
                             SignalType::SIGNAL_TYPE_COUNT, false, code_bias_m,
                             1.0, 0.0, extra.observation_type, std::string(),
-                            madoca_bias_identity);
+                            madoca_bias_identity,
+                            ssr_code_bias_tracking_identity_);
                         extra.pseudorange += ssr_bias_sign * cb;
                         extra.code_bias_m = cb;
                     }

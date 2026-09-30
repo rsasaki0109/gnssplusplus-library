@@ -309,6 +309,11 @@ COMMANDS = {
         "target": "gnss_stream",
         "summary": "Read and relay RTCM from file, NTRIP, or serial sources with optional decode summaries and relay sinks.",
     },
+    "has-info": {
+        "kind": "binary",
+        "target": "gnss_has_info",
+        "summary": "Decode Galileo HAS E6-B pages (UBX/SBF/cssrlib text) and dump MT1 messages and held corrections.",
+    },
     "ubx-info": {
         "kind": "binary",
         "target": "gnss_ubx_info",

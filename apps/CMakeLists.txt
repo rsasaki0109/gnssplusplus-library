@@ -17,6 +17,7 @@ set(GNSS_APP_TARGETS
     gnss_rinex_info
     gnss_stream
     gnss_ubx_info
+    gnss_has_info
     gnss_convert
     gnss_replay
     gnss_live
@@ -151,6 +152,9 @@ target_link_libraries(gnss_stream PRIVATE gnss_lib gnss_lib_solvers Threads::Thr
 
 add_executable(gnss_ubx_info ${GNSS_NATIVE_DIR}/gnss_ubx_info.cpp)
 target_link_libraries(gnss_ubx_info PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
+
+add_executable(gnss_has_info ${GNSS_NATIVE_DIR}/gnss_has_info.cpp)
+target_link_libraries(gnss_has_info PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 add_executable(gnss_convert ${GNSS_NATIVE_DIR}/gnss_convert.cpp)
 target_link_libraries(gnss_convert PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
