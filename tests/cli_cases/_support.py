@@ -2561,7 +2561,12 @@ def build_synthetic_ppp_inputs(
     temp_root: Path,
     *,
     include_antenna_header: bool = False,
+    epochs: int = 8,
 ) -> tuple[Path, Path, Path, tuple[float, float, float]]:
+    # The satellites are fixed in ECEF and the observations noise-free, so the
+    # static float position is carried by the repeated code rows and its error
+    # falls roughly as 1/n with one measurement update per epoch. The SP3/CLK
+    # span (01:00-01:10) allows up to 20 epochs at 30 s.
     latitude = math.radians(35.0)
     longitude = math.radians(139.0)
     true_position = geodetic_to_ecef(latitude, longitude, 45.0)
@@ -2607,7 +2612,7 @@ def build_synthetic_ppp_inputs(
     clk_path = temp_root / "synthetic_ppp.clk"
 
     epoch_times = []
-    for epoch_index in range(8):
+    for epoch_index in range(epochs):
         total_seconds = 30.0 * epoch_index
         minute = int(total_seconds // 60.0)
         second = total_seconds - minute * 60.0
