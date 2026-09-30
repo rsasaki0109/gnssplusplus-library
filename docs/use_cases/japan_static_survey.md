@@ -81,10 +81,13 @@ The default sources are fixed to this R2 fixture:
 | `IGS0OPSFIN...ORB.SP3.gz`, `...CLK.CLK.gz` | BKG IGS final products, GPS week 2295 | PPP precise orbit/clock |
 | `IGS0OPSSNX_2023365...SOL.SNX.gz` | SOPAC/Garner mirror of the IGS weekly combination | independent station truth |
 | station logs | `files.igs.org/pub/station/log/` | station/receiver history audit |
-| `IGS20.ssc`, `igs20.atx` | `files.igs.org` | reference-frame and antenna-model provenance |
+| `IGS20.ssc` | `files.igs.org/pub/station/coord/IGS20/` | reference-frame provenance |
+| `igs20_2425.atx.gz` (`igs20.atx`) | `files.igs.org/pub/station/general/pcv_archive/` | antenna-model provenance |
 
 The command verifies the pinned byte count and SHA-256 before using every
-source. Compact RINEX is converted with a system `CRX2RNX` when available;
+source. `igs20.atx` is taken from the immutable IGS PCV archive rather than
+`general/igs20.atx`, which IGS updates in place; the decompressed file is
+also checked against its own pinned size and SHA-256. Compact RINEX is converted with a system `CRX2RNX` when available;
 on Linux x86-64 it otherwise downloads the official GSI RNXCMP 4.2.0 binary,
 verifies its pinned archive hash, safely extracts the `CRX2RNX` member, and
 sets the cached copy executable. Other platforms fail closed unless a system
