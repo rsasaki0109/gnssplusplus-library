@@ -99,8 +99,9 @@ path = "runs.has_idd_static.convergence_abs_up_below_0p40_min"
 max = 30.0
 readme = "docs/galileo_has.md"
 
-# docs/galileo_has.md table values (re-measured 2026-10-01 after the static
-# one-update-per-epoch fix); reported, not gated.
+# docs/galileo_has.md table values (re-measured 2026-10-01 after GPS L2 code
+# biases started following the tracked code and satellites without HAS
+# corrections were excluded, as on the SIS path); reported, not gated.
 [[metrics]]
 name = "table: has-idd static {field} at {t}"
 source = "{work_dir}/summary.json"
@@ -109,14 +110,14 @@ gate = false
 abs_tol = 0.03
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.056 },
-  { t = "10min", field = "up_m", expected = -0.147 },
-  { t = "20min", field = "h_m", expected = 0.067 },
-  { t = "20min", field = "up_m", expected = -0.170 },
-  { t = "30min", field = "h_m", expected = 0.092 },
-  { t = "30min", field = "up_m", expected = 0.049 },
-  { t = "60min", field = "h_m", expected = 0.014 },
-  { t = "60min", field = "up_m", expected = 0.050 },
+  { t = "10min", field = "h_m", expected = 0.158 },
+  { t = "10min", field = "up_m", expected = -0.081 },
+  { t = "20min", field = "h_m", expected = 0.130 },
+  { t = "20min", field = "up_m", expected = -0.029 },
+  { t = "30min", field = "h_m", expected = 0.027 },
+  { t = "30min", field = "up_m", expected = 0.028 },
+  { t = "60min", field = "h_m", expected = 0.174 },
+  { t = "60min", field = "up_m", expected = 0.069 },
 ]
 
 [[metrics]]
@@ -127,15 +128,18 @@ gate = false
 abs_tol = 1.5
 readme = "docs/galileo_has.md table"
 foreach = [
-  { field = "convergence_h_below_0p20_min", expected = 0.85 },
-  { field = "convergence_abs_up_below_0p40_min", expected = 5.77 },
+  { field = "convergence_h_below_0p20_min", expected = 6.43 },
+  { field = "convergence_abs_up_below_0p40_min", expected = 4.72 },
 ]
 
 # Kinematic float PPP (white-noise position re-seeded from SPP each epoch,
 # one measurement update per epoch, post-fit residual screening). Before the
 # one-update fix it settled at H 1.87 m / U -5.61 m after one hour; before the
 # screening it read 0.136 / +0.058 m at 30 min and 0.018 / -0.390 m at 60 min
-# (hour RMS after 10 min: H 0.156 m, U 0.206 m; now 0.086 m, 0.099 m).
+# (hour RMS after 10 min: H 0.156 m, U 0.206 m; then 0.086 m, 0.099 m).
+# Since E18 / E33 (no HAS corrections) are excluded and GPS C2W uses the HAS
+# L2 P bias, 12 satellites remain for most of the hour and the up error drifts
+# to +0.6..+0.8 m after 40 min (RMS after 10 min: H 0.176 m, U 0.503 m).
 [[metrics]]
 name = "has-idd kinematic H at {t} (m)"
 source = "{work_dir}/summary.json"
@@ -160,14 +164,14 @@ gate = false
 abs_tol = 0.05
 readme = "docs/galileo_has.md table"
 foreach = [
-  { t = "10min", field = "h_m", expected = 0.033 },
-  { t = "10min", field = "up_m", expected = -0.201 },
-  { t = "20min", field = "h_m", expected = 0.064 },
-  { t = "20min", field = "up_m", expected = -0.128 },
-  { t = "30min", field = "h_m", expected = 0.057 },
-  { t = "30min", field = "up_m", expected = 0.018 },
-  { t = "60min", field = "h_m", expected = 0.114 },
-  { t = "60min", field = "up_m", expected = 0.077 },
+  { t = "10min", field = "h_m", expected = 0.185 },
+  { t = "10min", field = "up_m", expected = 0.064 },
+  { t = "20min", field = "h_m", expected = 0.143 },
+  { t = "20min", field = "up_m", expected = 0.184 },
+  { t = "30min", field = "h_m", expected = 0.116 },
+  { t = "30min", field = "up_m", expected = 0.393 },
+  { t = "60min", field = "h_m", expected = 0.147 },
+  { t = "60min", field = "up_m", expected = 0.612 },
 ]
 
 # The same stream through the legacy RTCM SSR conversion (no IODE match,
