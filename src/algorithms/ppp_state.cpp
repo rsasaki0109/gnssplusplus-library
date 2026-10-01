@@ -2151,10 +2151,11 @@ void PPPProcessor::constrainStaticAnchorPosition() {
     }
     // Opt-in only (PPPConfig::apply_static_anchor_blend). Coherent MADOCA
     // static used to blend 26-30% of the SPP seed back into the position
-    // after every measurement pass and reset its covariance to 2 m
-    // isotropic, which held the solution near the seed and hid the drift of
-    // its eight stale-geometry passes. MADOCALIB udpos_ppp() initializes a
-    // static position once and then only adds its process noise.
+    // after every measurement pass and reset its covariance to a fixed
+    // 2-3 m isotropic sigma, which held the solution near the seed and hid
+    // the drift of its eight stale-geometry passes. MADOCALIB udpos_ppp()
+    // initializes a static position once and then only adds its process
+    // noise.
     if (!ppp_config_.apply_static_anchor_blend) {
         return;
     }

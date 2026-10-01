@@ -647,6 +647,44 @@ AR outputs are byte-identical, so the release baseline (native `ppp` is
 (1 h / 6 h, `delta RMS 3D`): MIZU 5.326 -> 0.505 m / 8.032 -> 0.383 m,
 ALIC 2.268 -> 0.392 m / 4.971 -> 0.225 m.
 
+#### Static ionosphere-free: no SPP anchor blend, one update per epoch (2026-10-01)
+
+The native release-matrix `ppp` profile (`--static`, L6E, ionosphere-free)
+was the last path that re-applied an epoch's measurement update up to eight
+times at the prior geometry.  After every pass, again after the update, and
+in prediction it also blended 26-30% of the first SPP position back into the
+position state and reset the position covariance to a fixed 2-3 m isotropic
+sigma with no cross-covariance.  That blend held the solution near the SPP seed and hid the
+drift of the stale-geometry passes: with the blend switched off
+(`GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR=1`) the eight passes reached
+245 m (MIZU) / 338 m (ALIC) 3D RMS over the first hour.  MADOCALIB has no
+such blend: `udpos_ppp()` initializes a static position once from the SPP
+solution and afterwards only adds its process noise (`stats-prnpos`, 0 in
+`sample.conf`), and `pppos()` commits one update per epoch.  The blend and its
+opt-out are removed, and the profile commits one update per epoch like every
+other PPP path.  The opt-in `PPPConfig::apply_static_anchor_blend` path is
+unchanged; per-frequency AR (`pppar`, `pppar-ion`) outputs are byte-identical.
+
+Release matrix, native `ppp` vs the bridge `ppp` profile (`delta RMS 3D` /
+`delta max 3D`, Windows MSVC build):
+
+| case | before | after |
+|---|---:|---:|
+| `mizu.ppp.1h` | 1.631 / 4.071 m | 0.646 / 3.931 m |
+| `mizu.ppp.6h` | 1.274 / 4.071 m | 0.266 / 3.931 m |
+| `alic.ppp.1h` | 0.958 / 3.387 m | 0.526 / 2.086 m |
+| `alic.ppp.6h` | 0.706 / 3.387 m | 0.217 / 2.086 m |
+
+From 30 min on, the native static solution is 0.17 / 0.08 m (MIZU / ALIC,
+1 h) RMS from the bridge, against 1.28 / 0.66 m before.  Against the mean of
+the bridge `pppar` 6 h fixed solutions (the matrix's MIZU coordinate is
+4.4 m from it; ALIC's agrees within 0.3 m), 3D RMS over the 1 h / 6 h runs
+is 1.51 -> 0.58 m / 1.23 -> 0.24 m at MIZU and 1.02 -> 0.51 m /
+0.74 -> 0.21 m at ALIC; the bridge (kinematic) is at 0.37 / 0.15 m and
+0.42 / 0.18 m.  The remaining early-epoch difference is the start-up:
+a static filter seeded from SPP against a kinematic bridge that re-seeds
+every epoch.
+
 ### M6 -- Complete the migration
 
 - Promote native behavior only after M2--M5 pass with an explicit opt-out for
