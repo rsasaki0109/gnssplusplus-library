@@ -1059,6 +1059,17 @@ class CIScopeDetectionTest(unittest.TestCase):
         self.assertFalse(payload["docs_only"])
         self.assertTrue(payload["run_heavy"])
 
+    def test_classify_changed_paths_runs_heavy_for_docs_data_files(self) -> None:
+        for path in (
+            "docs/madoca_release_baseline.json",
+            "docs/use_cases/records/example_record.json",
+            "docs/example_table.csv",
+        ):
+            with self.subTest(path=path):
+                payload = ci_scope.classify_changed_paths(["docs/guide.md", path])
+                self.assertFalse(payload["docs_only"])
+                self.assertTrue(payload["run_heavy"])
+
     def test_classify_changed_paths_runs_heavy_for_empty_diff(self) -> None:
         payload = ci_scope.classify_changed_paths([])
 
