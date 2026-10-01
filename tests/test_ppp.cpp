@@ -141,13 +141,9 @@ TEST(PPPClasSeedFde, MaskedAdmissionFailureCoastsWithTooFewSatellites) {
 
 TEST(PPPFilterIterations, CommitsOneUpdatePerEpoch) {
     // Static, --low-dynamics and kinematic motion on broadcast, SP3/CLK, HAS /
-    // legacy RTCM SSR, and MADOCA uncombined / kinematic ionosphere-free.
-    EXPECT_EQ(ppp_internal::filterIterationCount(false, 8), 1);
-    EXPECT_EQ(ppp_internal::filterIterationCount(false, 3), 1);
-}
-
-TEST(PPPFilterIterations, CoherentMadocaStaticKeepsPinnedCount) {
-    EXPECT_EQ(ppp_internal::filterIterationCount(true, 8), 8);
+    // legacy RTCM SSR and MADOCA (uncombined and ionosphere-free, including
+    // the coherent MADOCA static ionosphere-free release profile).
+    EXPECT_EQ(ppp_internal::kMeasurementUpdatesPerEpoch, 1);
 }
 
 TEST(PPPCycleSlipDetection, CombinationDetectorsCoverStaticIonosphereFree) {

@@ -27,20 +27,13 @@ inline constexpr double kDefaultZenithDelayMeters = 2.3;
 // the prior is also all the geometry needs: a position error of 100 m changes
 // the line of sight by ~5e-6 rad, a sub-millimetre range term.
 //
-// One update per epoch everywhere (static, --low-dynamics and kinematic;
-// broadcast, SP3/CLK, HAS / legacy RTCM SSR and MADOCA uncombined), except the
-// coherent MADOCA ionosphere-free *static* path. At start-up the repeated
-// push moved a static solution tens to hundreds of metres (TSK2 IGS-final
-// first hour 930 m 3D, 30 s GPS-only Kamakura 250 m) before the phase rows
-// pulled it back. The coherent MADOCA static IF path keeps the historical
-// passes: its position is re-blended with the SPP anchor after every pass
-// (constrainStaticAnchorPosition()), and its native-vs-MADOCALIB bridge delta
-// (docs/madoca_release_baseline.json) grows with a single update (MIZU 1 h
-// 1.63 -> 2.21 m RMS) until that anchor blend is reworked.
-inline int filterIterationCount(bool coherent_madoca_ionosphere_free_static,
-                                int configured_iterations) {
-    return coherent_madoca_ionosphere_free_static ? configured_iterations : 1;
-}
+// One update per epoch everywhere: static, --low-dynamics and kinematic;
+// broadcast, SP3/CLK, HAS / legacy RTCM SSR and MADOCA (uncombined and
+// ionosphere-free). At start-up the repeated push moved a static solution
+// tens to hundreds of metres (TSK2 IGS-final first hour 930 m 3D, 30 s
+// GPS-only Kamakura 250 m; MADOCA static IF MIZU/ALIC 1 h 250/340 m 3D RMS
+// once its SPP anchor blend was off) before the phase rows pulled it back.
+inline constexpr int kMeasurementUpdatesPerEpoch = 1;
 
 // Geometry-free and Melbourne-Wubbena cycle-slip detection (RTKLIB
 // detslp_gf() / detslp_mw(), used by every RTKLIB PPP mode). Static

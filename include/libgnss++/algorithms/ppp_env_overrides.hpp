@@ -14,9 +14,6 @@ struct PPPEnvOverrides {
     // GNSS_PPP_REQUIRE_SSR_ORBIT: drop satellites missing SSR orbit
     // corrections when set to a value whose first char is not '0'. Default false.
     bool require_ssr_orbit = false;
-    // GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR: disable the MADOCA static anchor
-    // blend when set exactly to "1". Default false.
-    bool disable_madoca_static_anchor = false;
     // GNSS_PPP_STATIC_ANCHOR_BLEND: override static anchor blend fraction;
     // values outside [0,1] are ignored at use sites. Default -1.0 (inactive).
     double static_anchor_blend = -1.0;
