@@ -315,10 +315,22 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
         visible_systems.count(GNSSSystem::QZSS)) {
         filter_state_.qzs_clock_index = isb_start++;
     }
-    if ((env_overrides_.estimate_isb_bds || require_coherent_ssr_) &&
+    // Broadcast BeiDou clocks are referenced to BDT, and the B1I/B3I (BDS-3)
+    // and B1I/B2I (BDS-2) ionosphere-free codes carry receiver delays of their
+    // own: with the GPS receiver clock their prefit code residuals sit about
+    // +2 m (BDS-3) and +5 m (BDS-2) above the GPS ones on the Kamakura hours,
+    // which the static filter turned into a metre-level up bias. Estimate one
+    // receiver clock for BDS-3 and one for BDS-2 when only broadcast
+    // ephemerides are used, as MADOCALIB does (RTKLIB estimates one clock per
+    // system); precise / SSR products keep their own clock datum handling.
+    const bool broadcast_beidou_clocks = broadcastClockIonosphereFree(
+        ppp_config_.use_ionosphere_free, precise_products_loaded_,
+        ssr_products_loaded_, dcb_products_loaded_);
+    if ((env_overrides_.estimate_isb_bds || require_coherent_ssr_ ||
+         broadcast_beidou_clocks) &&
         visible_systems.count(GNSSSystem::BeiDou)) {
         filter_state_.bds_clock_index = isb_start++;
-        if (require_coherent_ssr_) {
+        if (require_coherent_ssr_ || broadcast_beidou_clocks) {
             filter_state_.bds2_clock_index = isb_start++;
         }
     }
@@ -524,20 +536,66 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
                     seed_solution->receiver_clock_bias + reset_offset,
                     ppp_config_.initial_clock_variance);
             };
-            reinitializeScalarState(
-                filter_state_.clock_index,
-                seed_solution->receiver_clock_bias,
-                ppp_config_.initial_clock_variance);
-            reinitializeSystemClock(
-                filter_state_.glo_clock_index, GNSSSystem::GLONASS, true);
-            reinitializeSystemClock(
-                filter_state_.gal_clock_index, GNSSSystem::Galileo, false);
-            reinitializeSystemClock(
-                filter_state_.qzs_clock_index, GNSSSystem::QZSS, false);
-            reinitializeSystemClock(
-                filter_state_.bds_clock_index, GNSSSystem::BeiDou, false);
-            reinitializeSystemClock(
-                filter_state_.bds2_clock_index, GNSSSystem::BeiDou, false);
+            // With broadcast ephemerides only, the Galileo / QZSS / BeiDou
+            // clocks are the GPS clock plus an inter-system bias that is
+            // constant over a run. Re-seeding the GPS clock from SPP must not
+            // discard what the filter has learned about those biases (a free
+            // system clock each epoch costs a kinematic urban epoch a whole
+            // constellation's worth of clock information), so keep each bias
+            // and its covariance and move only the common clock.
+            const bool keep_inter_system_biases = broadcastClockIonosphereFree(
+                ppp_config_.use_ionosphere_free, precise_products_loaded_,
+                ssr_products_loaded_, dcb_products_loaded_);
+            if (keep_inter_system_biases) {
+                std::vector<int> bias_indices;
+                for (const int index : {filter_state_.gal_clock_index,
+                                        filter_state_.qzs_clock_index,
+                                        filter_state_.bds_clock_index,
+                                        filter_state_.bds2_clock_index}) {
+                    if (index >= 0) {
+                        bias_indices.push_back(index);
+                    }
+                }
+                const int g = filter_state_.clock_index;
+                auto& x = filter_state_.state;
+                auto& P = filter_state_.covariance;
+                // System clocks -> biases relative to the GPS clock.
+                for (const int s : bias_indices) {
+                    x(s) -= x(g);
+                    P.row(s) -= P.row(g);
+                }
+                for (const int s : bias_indices) {
+                    P.col(s) -= P.col(g);
+                }
+                reinitializeScalarState(
+                    g, seed_solution->receiver_clock_bias,
+                    ppp_config_.initial_clock_variance);
+                // Biases -> system clocks on the re-seeded GPS clock.
+                for (const int s : bias_indices) {
+                    x(s) += x(g);
+                    P.row(s) += P.row(g);
+                }
+                for (const int s : bias_indices) {
+                    P.col(s) += P.col(g);
+                }
+                reinitializeSystemClock(
+                    filter_state_.glo_clock_index, GNSSSystem::GLONASS, true);
+            } else {
+                reinitializeScalarState(
+                    filter_state_.clock_index,
+                    seed_solution->receiver_clock_bias,
+                    ppp_config_.initial_clock_variance);
+                reinitializeSystemClock(
+                    filter_state_.glo_clock_index, GNSSSystem::GLONASS, true);
+                reinitializeSystemClock(
+                    filter_state_.gal_clock_index, GNSSSystem::Galileo, false);
+                reinitializeSystemClock(
+                    filter_state_.qzs_clock_index, GNSSSystem::QZSS, false);
+                reinitializeSystemClock(
+                    filter_state_.bds_clock_index, GNSSSystem::BeiDou, false);
+                reinitializeSystemClock(
+                    filter_state_.bds2_clock_index, GNSSSystem::BeiDou, false);
+            }
         }
         if (ppp_config_.kinematic_mode &&
             !ppp_config_.low_dynamics_mode &&
@@ -1036,10 +1094,24 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
             !ppp_config_.use_ionosphere_free &&
             ppp_config_.estimate_ionosphere;
 
+        // A broadcast ionosphere-free BDS-3 row pairs B1I with B3I, which the
+        // reader keeps outside the selected observations when the satellite
+        // also logs B2b (formIonosphereFree); test the same pair, including
+        // the B3I loss-of-lock flag.
+        const bool broadcast_beidou3 =
+            ppp_internal::isBeiDou3Satellite(satellite) &&
+            broadcastClockIonosphereFree(ppp_config_.use_ionosphere_free,
+                                         precise_products_loaded_,
+                                         ssr_products_loaded_,
+                                         dcb_products_loaded_);
         const Observation* secondary =
-            use_combination_slip_detection ?
-                findCarrierObservationForSignals(obs, satellite, secondary_candidates) :
-                nullptr;
+            !use_combination_slip_detection ? nullptr
+            : broadcast_beidou3
+                ? findBroadcastBeiDouSecondaryObservation(obs, satellite, true)
+                : findCarrierObservationForSignals(obs, satellite, secondary_candidates);
+        if (broadcast_beidou3 && secondary != nullptr && secondary->loss_of_lock) {
+            lli_slip = true;
+        }
         if (secondary != nullptr) {
             const Ephemeris* eph = nav.getEphemeris(satellite, obs.time);
             const double lambda1 =

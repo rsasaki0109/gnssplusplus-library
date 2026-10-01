@@ -740,5 +740,67 @@ The all-system broadcast rows are dominated by BeiDou-3, not by the update
 count: GPS + BDS-3 alone ends 5.0 m low before and 13.2 m low after, GPS +
 BDS-2 1.46 m low before and 0.00 m after, while GPS + GLONASS, GPS + QZSS and
 GPS + Galileo + QZSS end within 0.52 m in up with one update. The
-multi-pass filter damped that BeiDou-3 broadcast bias; its cause is left open.
+multi-pass filter damped that BeiDou-3 broadcast bias; its cause is the
+BeiDou signal pairing and receiver clock fixed in the next section.
+
+### BeiDou with broadcast ephemerides (2026-10-01)
+
+Two modelling errors made broadcast-only PPP with BeiDou-3 metres off; the
+broadcast BeiDou orbits and clocks themselves are fine. Against the WUM0MGXFIN
+multi-GNSS finals of both days (5-min samples over the hour, broadcast clocks
+moved from B3I to the B1I/B3I ionosphere-free reference with TGD1), every
+BDS-3 satellite has a mean radial difference of -0.8 to -1.8 m (GPS -0.3 to
+-2.3 m, the broadcast antenna-phase-centre vs SP3 centre-of-mass offset) and
+a clock within 1.0 m of its system median. So the BDT time tag, the GEO
+rotation and the CGCS2000 frame are not the cause.
+
+1. **B2b used as B2I.** BDS-3 satellites (C19 and above) do not transmit B2I;
+   the band-7 code a receiver logs for them (`C7D` / `C7P` / `C7Z`) is B2b,
+   whose group delay is only broadcast in B-CNAV3. The RINEX reader keeps one
+   secondary observation per satellite with band 7 ahead of band 6, so the
+   Kamakura BDS-3 satellites (`C2I C5P C6I C7D`) were processed as B1I / "B2I"
+   with TGD1 / TGD2 removed, and their D1 TGD2 field simply repeats TGD1 (all
+   BDS-3 satellites in both IGS merged BRDC files). Broadcast BDS-3 now pairs
+   B1I with B3I (`C6I` / `C6Q` / `C6X`, taken from the per-tracking-code
+   observations when the reader selected B2b) and removes TGD1 only; the
+   geometry-free / Melbourne-Wubbena slip test uses the same pair and the
+   B3I loss-of-lock flag. BDS-2 keeps B1I / B2I with TGD1 / TGD2.
+2. **No BeiDou receiver clock.** Galileo / QZSS / BeiDou shared the GPS
+   receiver clock. Relative to the WUM finals the broadcast clocks of each
+   system have their own datum (per-system median, metres, GPS / BDS-3 /
+   BDS-2: 2025-08-21 +4.0 / +1.8 / +10.0, 2025-02-15 +0.1 / +4.9 / +11.2), and
+   with the GPS clock the prefit code residuals of BDS-3 sit about 2 m and
+   those of BDS-2 about 5 m above the GPS ones on the 2025-08-21 hour. With
+   broadcast ephemerides only, PPP now estimates one receiver clock for BDS-3
+   and one for BDS-2, as MADOCALIB does (RTKLIB estimates one clock per
+   system). The per-epoch re-seeding of the GPS clock from the SPP keeps the
+   Galileo / QZSS / BeiDou inter-system biases and their covariance instead of
+   re-initializing those clocks; GLONASS keeps its re-initialized clock.
+   On the PPC drives (Septentrio, B1I / B3I for BDS-3) the estimated biases
+   are steady at about +7.7 m (BDS-3) and +3.6 m (BDS-2).
+
+Precise-product, SSR (CLAS, MADOCA, HAS) and DCB runs are unchanged: both
+changes apply only to the broadcast ionosphere-free path.
+
+Broadcast-only static PPP on the Kamakura hours (1 Hz, H / U in metres at 10 /
+60 min):
+
+| Run | before | after |
+|---|---|---|
+| 2025-08-21 GPS + BDS-3 | 2.866 / -5.862, 3.784 / -13.183 | 0.598 / -0.705, **0.273 / -0.200** |
+| 2025-02-15 GPS + BDS-3 | 0.166 / +0.855, 0.259 / +0.014 | 0.556 / +0.154, 0.141 / -0.061 |
+| 2025-08-21 GPS + BDS-2 | 2.124 / -0.336, 1.133 / +0.004 | 0.669 / -1.829, 0.458 / -0.971 |
+| 2025-02-15 GPS + BDS-2 | 1.474 / +1.438, 1.080 / +0.223 | 0.891 / -0.564, 0.150 / -0.315 |
+| 2025-08-21 GPS + BeiDou | - | 0.650 / -0.961, 0.349 / -0.245 |
+| 2025-08-21 GPS + Galileo + QZSS + BeiDou | - | 0.689 / -0.063, 0.186 / -0.355 |
+| 2025-08-21 all systems | 0.905 / -4.052, 1.079 / -9.259 | 0.425 / +0.492, **0.154 / -0.264** |
+| 2025-02-15 all systems | 0.965 / +0.732, 0.451 / +1.626 | 0.274 / -0.307, 0.202 / +1.589 |
+| 2025-08-21 GPS (unchanged) | 0.524 / -1.528, 0.411 / -0.889 | same |
+
+The remaining +1.6 m up of the 2025-02-15 all-system run comes from GLONASS
+(GPS + GLONASS alone ends at +2.0 m; one GLONASS clock, no inter-frequency
+code biases). RTKLIB demo5 b34 PPP-static with `pos1-navsys=33` (GPS +
+BeiDou) on the same files is not a usable reference: it reproduces its
+GPS-only result to the millimetre on the GPS + BDS-3 files and ends 2.5-3.8 m
+off with the BDS-2 satellites (GEO included).
 

@@ -547,10 +547,64 @@ inline const std::vector<SignalType>& broadcastBeiDouPrimarySignals() {
     return signals;
 }
 
-inline const std::vector<SignalType>& broadcastBeiDouSecondarySignals() {
-    static const std::vector<SignalType> signals{
+// BDS-3 satellites (C19 and above) do not transmit B2I: their D1 message is
+// on B1I and B3I only (BDS-SIS-ICD-B1I-3.0, BDS-SIS-ICD-B3I-1.0), and the
+// RINEX band-7 code a receiver logs for them (C7D / C7P / C7Z) is B2b, which
+// shares the B2I carrier (and so the BDS_B2I slot here) but whose group delay
+// is only broadcast in B-CNAV3 (TGD_B2bI). Their D1 TGD2 field repeats TGD1
+// (all BDS-3 satellites in the IGS merged BRDC files of 2025-046 / 2025-233),
+// so pairing B1I with B2b and removing TGD1 / TGD2 left a
+// 1.49 * (TGD1 - TGD_B2b) error of up to tens of metres per satellite. BDS-3
+// uses B1I / B3I, whose only group delay is TGD1; BDS-2 keeps B2I / TGD2.
+inline bool isBeiDou3Satellite(const SatelliteId& sat) {
+    return sat.system == GNSSSystem::BeiDou && sat.prn >= 19;
+}
+
+inline const std::vector<SignalType>& broadcastBeiDouSecondarySignals(
+    const SatelliteId& sat) {
+    static const std::vector<SignalType> bds2_signals{
         SignalType::BDS_B2I, SignalType::BDS_B3I};
-    return signals;
+    static const std::vector<SignalType> bds3_signals{SignalType::BDS_B3I};
+    return isBeiDou3Satellite(sat) ? bds3_signals : bds2_signals;
+}
+
+// The RINEX reader keeps one policy-selected secondary observation per
+// satellite, with band 7 ahead of band 6, so a BDS-3 satellite logging B2b
+// keeps B2b there and its B3I code is only in the per-tracking-code
+// observations. Return the B3I (C6I / C6Q / C6X) observation of a BDS-3
+// satellite, or the first broadcast secondary signal of a BDS-2 satellite.
+// require_carrier selects an observation with a carrier phase (slip
+// detection) instead of a pseudorange.
+inline const Observation* findBroadcastBeiDouSecondaryObservation(
+    const ObservationData& obs, const SatelliteId& sat, bool require_carrier) {
+    const auto usable = [require_carrier](const Observation* candidate) {
+        if (candidate == nullptr || !candidate->valid) {
+            return false;
+        }
+        if (require_carrier) {
+            return candidate->has_carrier_phase &&
+                   std::isfinite(candidate->carrier_phase);
+        }
+        return candidate->has_pseudorange && candidate->pseudorange > 0.0 &&
+               std::isfinite(candidate->pseudorange);
+    };
+    for (const auto signal : broadcastBeiDouSecondarySignals(sat)) {
+        const Observation* candidate = obs.getObservation(sat, signal);
+        if (usable(candidate)) {
+            return candidate;
+        }
+    }
+    if (!isBeiDou3Satellite(sat)) {
+        return nullptr;
+    }
+    for (const char* tracking_code : {"6I", "6Q", "6X"}) {
+        const Observation* candidate =
+            obs.getRinexTrackingObservation(sat, tracking_code);
+        if (usable(candidate)) {
+            return candidate;
+        }
+    }
+    return nullptr;
 }
 
 inline double broadcastBeiDouGroupDelayMeters(SignalType signal, const Ephemeris& eph) {
