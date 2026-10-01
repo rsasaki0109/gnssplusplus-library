@@ -5,13 +5,13 @@
       "base_status_counts": {
         "6": 118
       },
-      "boundary_max_delta_3d_m": 3.4893895548867557,
+      "boundary_max_delta_3d_m": 0.6569518591831118,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
         "5": 118
       },
-      "delta_max_3d_m": 3.4893895548867557,
-      "delta_rms_3d_m": 1.2890065263482149,
+      "delta_max_3d_m": 2.189548544457379,
+      "delta_rms_3d_m": 0.6333448672044429,
       "matched_epochs": 118,
       "missed_fixes": 0,
       "native_row_counts": {
@@ -55,13 +55,13 @@
       "base_status_counts": {
         "6": 718
       },
-      "boundary_max_delta_3d_m": 3.4893895548867557,
+      "boundary_max_delta_3d_m": 0.6569518591831118,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
         "5": 713
       },
-      "delta_max_3d_m": 3.4893895548867557,
-      "delta_rms_3d_m": 0.8830304718044313,
+      "delta_max_3d_m": 2.189548544457379,
+      "delta_rms_3d_m": 0.30421638493818065,
       "matched_epochs": 713,
       "missed_fixes": 0,
       "native_row_counts": {
@@ -257,13 +257,13 @@
       "base_status_counts": {
         "6": 118
       },
-      "boundary_max_delta_3d_m": 4.284246515935533,
+      "boundary_max_delta_3d_m": 1.3963712288639378,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
         "5": 118
       },
-      "delta_max_3d_m": 4.284246515935533,
-      "delta_rms_3d_m": 1.6156750831405513,
+      "delta_max_3d_m": 4.128772823616126,
+      "delta_rms_3d_m": 0.6871660930742431,
       "matched_epochs": 118,
       "missed_fixes": 0,
       "native_row_counts": {
@@ -307,13 +307,13 @@
       "base_status_counts": {
         "6": 718
       },
-      "boundary_max_delta_3d_m": 4.284246515935533,
+      "boundary_max_delta_3d_m": 1.3963712288639378,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
         "5": 713
       },
-      "delta_max_3d_m": 4.284246515935533,
-      "delta_rms_3d_m": 1.300666323454092,
+      "delta_max_3d_m": 4.128772823616126,
+      "delta_rms_3d_m": 0.2868328047897463,
       "matched_epochs": 713,
       "missed_fixes": 0,
       "native_row_counts": {
