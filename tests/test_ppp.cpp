@@ -204,11 +204,80 @@ TEST(PPPBroadcastGroupDelay, BeiDouClockReferencedToB3I) {
     EXPECT_NEAR(ppp_internal::broadcastBeiDouGroupDelayMeters(SignalType::BDS_B2I, eph),
                 -20e-9 * constants::SPEED_OF_LIGHT, 1e-9);
     EXPECT_EQ(ppp_internal::broadcastBeiDouGroupDelayMeters(SignalType::BDS_B3I, eph), 0.0);
-    const auto& secondary = ppp_internal::broadcastBeiDouSecondarySignals();
+    const auto& secondary =
+        ppp_internal::broadcastBeiDouSecondarySignals(SatelliteId(GNSSSystem::BeiDou, 14));
     EXPECT_EQ(std::count(secondary.begin(), secondary.end(), SignalType::BDS_B2A), 0);
     const auto& primary = ppp_internal::broadcastBeiDouPrimarySignals();
     ASSERT_EQ(primary.size(), 1U);
     EXPECT_EQ(primary.front(), SignalType::BDS_B1I);
+}
+
+TEST(PPPBroadcastGroupDelay, BeiDou3PairsB1IWithB3IOnly) {
+    // BDS-2 transmits B2I and broadcasts its TGD2: B2I first, then B3I.
+    const auto& bds2 =
+        ppp_internal::broadcastBeiDouSecondarySignals(SatelliteId(GNSSSystem::BeiDou, 14));
+    ASSERT_EQ(bds2.size(), 2U);
+    EXPECT_EQ(bds2[0], SignalType::BDS_B2I);
+    EXPECT_EQ(bds2[1], SignalType::BDS_B3I);
+    // BDS-3 does not transmit B2I; its band-7 code is B2b (no D1 group delay).
+    for (const int prn : {19, 33, 46, 60}) {
+        const SatelliteId sat(GNSSSystem::BeiDou, static_cast<uint8_t>(prn));
+        EXPECT_TRUE(ppp_internal::isBeiDou3Satellite(sat));
+        const auto& bds3 = ppp_internal::broadcastBeiDouSecondarySignals(sat);
+        ASSERT_EQ(bds3.size(), 1U);
+        EXPECT_EQ(bds3.front(), SignalType::BDS_B3I);
+    }
+    EXPECT_FALSE(ppp_internal::isBeiDou3Satellite(SatelliteId(GNSSSystem::BeiDou, 18)));
+    EXPECT_FALSE(ppp_internal::isBeiDou3Satellite(SatelliteId(GNSSSystem::GPS, 19)));
+}
+
+TEST(PPPBroadcastGroupDelay, BeiDou3SecondaryFallsBackToTrackedB3I) {
+    // A BDS-3 satellite logging C2I, C6I and C7D: the reader's selected
+    // secondary is B2b (band 7, BDS_B2I slot); B3I is only a tracking-code
+    // observation.
+    const SatelliteId bds3(GNSSSystem::BeiDou, 38);
+    ObservationData obs;
+    Observation b1i(bds3, SignalType::BDS_B1I);
+    b1i.valid = true;
+    b1i.has_pseudorange = true;
+    b1i.pseudorange = 2.20e7;
+    obs.addObservation(b1i);
+    Observation b2b(bds3, SignalType::BDS_B2I);
+    b2b.valid = true;
+    b2b.has_pseudorange = true;
+    b2b.pseudorange = 2.20e7 + 3.0;
+    b2b.has_carrier_phase = true;
+    b2b.carrier_phase = 1.0e8;
+    obs.addObservation(b2b);
+    Observation b3i(bds3, SignalType::BDS_B3I);
+    b3i.valid = true;
+    b3i.has_pseudorange = true;
+    b3i.pseudorange = 2.20e7 + 5.0;
+    b3i.has_carrier_phase = true;
+    b3i.carrier_phase = 1.1e8;
+    obs.addRinexTrackingObservation("6I", b3i);
+
+    const Observation* code =
+        ppp_internal::findBroadcastBeiDouSecondaryObservation(obs, bds3, false);
+    ASSERT_NE(code, nullptr);
+    EXPECT_EQ(code->signal, SignalType::BDS_B3I);
+    EXPECT_DOUBLE_EQ(code->pseudorange, 2.20e7 + 5.0);
+    const Observation* carrier =
+        ppp_internal::findBroadcastBeiDouSecondaryObservation(obs, bds3, true);
+    ASSERT_NE(carrier, nullptr);
+    EXPECT_EQ(carrier->signal, SignalType::BDS_B3I);
+
+    // BDS-2 keeps its selected B2I.
+    const SatelliteId bds2(GNSSSystem::BeiDou, 8);
+    Observation b2i(bds2, SignalType::BDS_B2I);
+    b2i.valid = true;
+    b2i.has_pseudorange = true;
+    b2i.pseudorange = 3.0e7;
+    obs.addObservation(b2i);
+    const Observation* bds2_secondary =
+        ppp_internal::findBroadcastBeiDouSecondaryObservation(obs, bds2, false);
+    ASSERT_NE(bds2_secondary, nullptr);
+    EXPECT_EQ(bds2_secondary->signal, SignalType::BDS_B2I);
 }
 
 TEST(PPPBroadcastGroupDelay, SingleFrequencyFollowsSppModel) {

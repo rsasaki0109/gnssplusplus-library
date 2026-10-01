@@ -1036,10 +1036,24 @@ void PPPProcessor::detectCycleSlips(const ObservationData& obs, const Navigation
             !ppp_config_.use_ionosphere_free &&
             ppp_config_.estimate_ionosphere;
 
+        // A broadcast ionosphere-free BDS-3 row pairs B1I with B3I, which the
+        // reader keeps outside the selected observations when the satellite
+        // also logs B2b (formIonosphereFree); test the same pair, including
+        // the B3I loss-of-lock flag.
+        const bool broadcast_beidou3 =
+            ppp_internal::isBeiDou3Satellite(satellite) &&
+            broadcastClockIonosphereFree(ppp_config_.use_ionosphere_free,
+                                         precise_products_loaded_,
+                                         ssr_products_loaded_,
+                                         dcb_products_loaded_);
         const Observation* secondary =
-            use_combination_slip_detection ?
-                findCarrierObservationForSignals(obs, satellite, secondary_candidates) :
-                nullptr;
+            !use_combination_slip_detection ? nullptr
+            : broadcast_beidou3
+                ? findBroadcastBeiDouSecondaryObservation(obs, satellite, true)
+                : findCarrierObservationForSignals(obs, satellite, secondary_candidates);
+        if (broadcast_beidou3 && secondary != nullptr && secondary->loss_of_lock) {
+            lli_slip = true;
+        }
         if (secondary != nullptr) {
             const Ephemeris* eph = nav.getEphemeris(satellite, obs.time);
             const double lambda1 =

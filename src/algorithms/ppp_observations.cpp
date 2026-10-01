@@ -171,12 +171,13 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         if (broadcast_beidou_clock && eph == nullptr) {
             continue;
         }
-        const Observation* secondary = findObservationForSignals(
-            obs, sat,
+        const Observation* secondary =
             broadcast_beidou_clock
-                ? broadcastBeiDouSecondarySignals()
-                : secondarySignalsForObservation(
-                      sat, prefer_qzss_l5, require_coherent_ssr_));
+                ? findBroadcastBeiDouSecondaryObservation(obs, sat, false)
+                : findObservationForSignals(
+                      obs, sat,
+                      secondarySignalsForObservation(
+                          sat, prefer_qzss_l5, require_coherent_ssr_));
         if (require_coherent_ssr_) {
             secondary =
                 algorithms::ppp_bias_identity::madocaFrequencySlotObservation(
