@@ -1134,22 +1134,8 @@ inline double uraMetersFromIndex(uint8_t ura_index) {
     return (ura_index < 15U) ? kUraMetersTable[ura_index] : 32767.0;
 }
 
-// Galileo SISA index to metres (Galileo OS SIS ICD 5.1.12); 255 = NAPA.
-inline double galileoSisaMeters(uint8_t sisa) {
-    if (sisa <= 49U) {
-        return 0.01 * static_cast<double>(sisa);
-    }
-    if (sisa <= 74U) {
-        return 0.5 + 0.02 * static_cast<double>(sisa - 50U);
-    }
-    if (sisa <= 99U) {
-        return 1.0 + 0.04 * static_cast<double>(sisa - 75U);
-    }
-    if (sisa <= 125U) {
-        return 2.0 + 0.16 * static_cast<double>(sisa - 100U);
-    }
-    return -1.0;
-}
+// Galileo SISA index to metres (core/navigation.hpp); 255 = NAPA -> -1.
+using libgnss::galileoSisaMeters;
 
 inline double uraMetersFromSsrIndex(uint8_t ura_index) {
     if (ura_index == 0U) {

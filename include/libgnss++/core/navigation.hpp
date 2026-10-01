@@ -68,6 +68,37 @@ struct GlonassCdmaNavigationData {
     std::optional<double> isc_l3ocp;  ///< L3OC A17 ISC_L3OCp; blank is preserved.
 };
 
+/// Bits of the Galileo "data sources" word of a RINEX 3.0x / 4.0x navigation
+/// record (Ephemeris::data_source_code).
+namespace galileo_data_source {
+constexpr int kInavE1B = 1 << 0;      ///< I/NAV E1-B
+constexpr int kFnavE5aI = 1 << 1;     ///< F/NAV E5a-I
+constexpr int kInavE5bI = 1 << 2;     ///< I/NAV E5b-I
+constexpr int kClockE5aE1 = 1 << 8;   ///< af0-af2, Toc, SISA for E5a,E1
+constexpr int kClockE5bE1 = 1 << 9;   ///< af0-af2, Toc, SISA for E5b,E1
+}  // namespace galileo_data_source
+
+/// Galileo SISA index to metres (Galileo OS SIS ICD 2.1, Table 89):
+/// 0-49 -> 1 cm steps up to 0.49 m, 50-74 -> 2 cm steps from 0.5 m,
+/// 75-99 -> 4 cm steps from 1 m, 100-125 -> 16 cm steps from 2 m.
+/// Spare indices (126-254) and 255 (NAPA, no accuracy prediction available)
+/// map to -1, the value RINEX navigation files use for NAPA.
+inline double galileoSisaMeters(uint8_t sisa_index) {
+    if (sisa_index <= 49U) {
+        return 0.01 * static_cast<double>(sisa_index);
+    }
+    if (sisa_index <= 74U) {
+        return 0.5 + 0.02 * static_cast<double>(sisa_index - 50U);
+    }
+    if (sisa_index <= 99U) {
+        return 1.0 + 0.04 * static_cast<double>(sisa_index - 75U);
+    }
+    if (sisa_index <= 125U) {
+        return 2.0 + 0.16 * static_cast<double>(sisa_index - 100U);
+    }
+    return -1.0;
+}
+
 /**
  * @brief Satellite ephemeris data
  */

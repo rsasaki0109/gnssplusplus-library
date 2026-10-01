@@ -99,6 +99,9 @@ struct BdsD2FrameSet {
 struct GalileoWordSet {
     std::array<std::array<uint8_t, 16>, 6> words{};
     std::array<bool, 6> present = {false, false, false, false, false, false};
+    /// RINEX data-source bit of the signal each word was received on
+    /// (I/NAV E1-B or E5b-I).
+    std::array<int, 6> source = {0, 0, 0, 0, 0, 0};
 };
 
 void printUsage(const char* argv0) {
@@ -1173,7 +1176,8 @@ bool decodeGalileoInavEphemeris(const libgnss::SatelliteId& satellite,
     const double crs = static_cast<double>(readSignedBitsMsbFirst(buffer.data(), buffer.size(), bit, 16)) *
                        kPow2Neg5;
     bit += 16;
-    const double sva = static_cast<double>(readBitsMsbFirst(buffer.data(), buffer.size(), bit, 8));
+    const uint8_t sisa_index =
+        static_cast<uint8_t>(readBitsMsbFirst(buffer.data(), buffer.size(), bit, 8));
 
     bit = 512;
     const int type4 = static_cast<int>(readBitsMsbFirst(buffer.data(), buffer.size(), bit, 6));
@@ -1245,7 +1249,10 @@ bool decodeGalileoInavEphemeris(const libgnss::SatelliteId& satellite,
     eph.crs = crs;
     eph.cic = cic;
     eph.cis = cis;
-    eph.sv_accuracy = sva;
+    // RINEX / Ephemeris::sv_accuracy carry SISA in metres, not the index.
+    eph.ura = sisa_index;
+    eph.sv_accuracy = libgnss::galileoSisaMeters(sisa_index);
+    eph.navigation_message_type = libgnss::NavigationMessageType::INAV;
     eph.af0 = af0;
     eph.af1 = af1;
     eph.af2 = af2;
@@ -1571,11 +1578,21 @@ int runUBXConversion(const ConvertConfig& config) {
                     auto& word_set = galileo_words[satellite];
                     word_set.words[static_cast<size_t>(word_type)] = word;
                     word_set.present[static_cast<size_t>(word_type)] = true;
+                    // u-blox sigId 5 = E5b-I; 1 = E1-B (0 before protocol 27).
+                    word_set.source[static_cast<size_t>(word_type)] =
+                        event.sfrbx.signal_id == 5
+                            ? libgnss::galileo_data_source::kInavE5bI
+                            : libgnss::galileo_data_source::kInavE1B;
 
                     if (std::all_of(word_set.present.begin(), word_set.present.end(),
                                     [](bool present) { return present; })) {
                         libgnss::Ephemeris ephemeris;
                         if (decodeGalileoInavEphemeris(satellite, word_set.words, ephemeris)) {
+                            // I/NAV clock parameters refer to E5b,E1.
+                            ephemeris.data_source_code = libgnss::galileo_data_source::kClockE5bE1;
+                            for (const int source : word_set.source) {
+                                ephemeris.data_source_code |= source;
+                            }
                             const auto last_it = last_exported_ephemeris.find(ephemeris.satellite);
                             const bool duplicate =
                                 last_it != last_exported_ephemeris.end() &&

@@ -1207,6 +1207,43 @@ class StreamProtocolCases:
             self.assertIn("E05", exported)
             self.assertIn("5.440588203430D+03", exported)
             self.assertIn("1.094304025173D-08", exported)
+            # Data sources: I/NAV E1-B + clock E5b/E1 (513); SISA index 3 = 0.03 m.
+            self.assertIn(" 5.130000000000D+02 ", exported)
+            self.assertIn("\n     3.000000000000D-02", exported)
+
+    def test_convert_galileo_nav_data_sources_follow_sfrbx_signal(self) -> None:
+        # Words 0-2 received on E1-B and 3-5 on E5b-I: data sources 517
+        # (E1-B + E5b-I + clock E5b/E1), SISA index 107 written as 3.12 m.
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_gal_src_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "session_gal_src.ubx"
+            output_path = temp_root / "session_gal_src.nav"
+            input_path.write_bytes(
+                b"".join(
+                    build_galileo_inav_sfrbx_message(
+                        word_type, sig_id=1 if word_type < 3 else 5, sisa_index=107
+                    )
+                    for word_type in range(6)
+                )
+            )
+
+            result = self.run_gnss(
+                "convert",
+                "--format",
+                "ubx",
+                "--input",
+                str(input_path),
+                "--nav-out",
+                str(output_path),
+                "--quiet",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("exported_nav_messages=1", result.stdout)
+            exported = output_path.read_text(encoding="ascii")
+            self.assertIn(" 5.170000000000D+02 ", exported)
+            self.assertIn("\n     3.120000000000D+00", exported)
+
     def test_convert_exports_nav_from_real_x20_sfrbx(self) -> None:
         # Real u-blox X20 frames: only the L1 C/A LNAV, E1-B I/NAV and B3I D1
         # frames may feed the ephemeris decoders; CNAV / F/NAV / E6 / B-CNAV
@@ -1242,6 +1279,11 @@ class StreamProtocolCases:
             self.assertIn("5.153654279709D+03", exported)
             self.assertIn("E04 2025  7  8 19 20  0-2.803717507049D-04", exported)
             self.assertIn("5.440617601395D+03", exported)
+            # E1-B pages only: data sources 513 (BRDC, from receivers that
+            # also track E5b-I: 517); SISA 3.12 m as in BRDC (index 107).
+            self.assertIn(" 5.130000000000D+02 ", exported)
+            self.assertIn("\n     3.120000000000D+00", exported)
+            self.assertTrue(exported.startswith("     3.04           NAVIGATION DATA     M"))
             self.assertIn("C27 2025  7  8 19  0  0 5.004175473005D-04", exported)
             self.assertIn("5.282620653152D+03", exported)
 

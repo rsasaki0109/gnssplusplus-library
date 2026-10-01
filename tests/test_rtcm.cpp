@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/core/signals.hpp>
+#include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
 
 #include <chrono>
@@ -9,6 +10,7 @@
 #include <fstream>
 #include <optional>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #ifndef _WIN32
@@ -1952,6 +1954,58 @@ TEST_F(RTCMProcessorTest, DecodesGalileo1045FnavEphemeris) {
     EXPECT_EQ(records.front().data_source_code, 258);
     EXPECT_EQ(records.front().health, 8U);  // E5a DVS bit
     EXPECT_DOUBLE_EQ(records.front().tgd_secondary, 0.0);
+}
+
+TEST_F(RTCMProcessorTest, Galileo1045And1046RoundTripThroughRinexNavigation) {
+    // RTCM 1046 (I/NAV) and 1045 (F/NAV) -> RINEX navigation -> reader keeps
+    // the data-source word and SISA in metres (index 107 = 3.12 m).
+    GalileoEphemerisRaw inav_raw;
+    GalileoEphemerisRaw fnav_raw;
+    fnav_raw.prn = 12;
+    NavigationData decoded;
+    for (const bool inav : {true, false}) {
+        const auto frame =
+            buildRtcmFrame(buildGalileoEphemerisMessage(inav ? inav_raw : fnav_raw, inav));
+        const auto messages = processor.decode(frame.data(), frame.size());
+        ASSERT_EQ(messages.size(), 1U);
+        ASSERT_TRUE(processor.decodeNavigationData(messages.front(), decoded));
+    }
+
+    const auto path =
+        std::filesystem::temp_directory_path() / "libgnss_test_rtcm_gal_roundtrip.nav";
+    io::RINEXWriter writer;
+    io::RINEXReader::RINEXHeader header;
+    header.version = 3.04;
+    header.file_type = io::RINEXReader::FileType::NAVIGATION;
+    header.satellite_system = "M";
+    ASSERT_TRUE(writer.createNavigationFile(path.string(), header));
+    for (const uint8_t prn : {inav_raw.prn, fnav_raw.prn}) {
+        for (const auto& eph : decoded.getEphemeris(SatelliteId(GNSSSystem::Galileo, prn))) {
+            ASSERT_TRUE(writer.writeNavigationMessage(eph));
+        }
+    }
+    writer.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    NavigationData nav;
+    ASSERT_TRUE(reader.readNavigationData(nav));
+    reader.close();
+    std::filesystem::remove(path);
+
+    for (const auto& [prn, source] :
+         {std::pair<uint8_t, int>{inav_raw.prn, 513}, std::pair<uint8_t, int>{fnav_raw.prn, 258}}) {
+        const SatelliteId sat(GNSSSystem::Galileo, prn);
+        const auto original = decoded.getEphemeris(sat);
+        const auto records = nav.getEphemeris(sat);
+        ASSERT_EQ(records.size(), 1U);
+        ASSERT_EQ(original.size(), 1U);
+        EXPECT_EQ(records.front().data_source_code, source);
+        EXPECT_NEAR(records.front().sv_accuracy, 3.12, 1e-12);
+        EXPECT_EQ(records.front().iode, original.front().iode);
+        EXPECT_NEAR(records.front().sqrt_a, original.front().sqrt_a, 1e-9);
+        EXPECT_NEAR(records.front().af0, original.front().af0, 1e-15);
+    }
 }
 
 TEST(RTCMEphemerisMergeTest, MergesStreamEphemeridesOnceAndSelectsInav) {

@@ -2034,6 +2034,8 @@ def build_galileo_inav_sfrbx_message(
     word_type: int,
     sv_id: int = 5,
     gst_week: int = 1176,
+    sig_id: int = 1,
+    sisa_index: int = 3,
 ) -> bytes:
     if word_type < 0 or word_type > 5:
         raise ValueError(f"unsupported Galileo word type: {word_type}")
@@ -2075,7 +2077,7 @@ def build_galileo_inav_sfrbx_message(
         set_signed_bits(word, 72, 16, round(-1.5e-6 / (2.0 ** -29)))
         set_signed_bits(word, 88, 16, round(210.0 / (2.0 ** -5)))
         set_signed_bits(word, 104, 16, round(120.0 / (2.0 ** -5)))
-        set_unsigned_bits(word, 120, 8, 3)
+        set_unsigned_bits(word, 120, 8, sisa_index)
 
     elif word_type == 4:
         set_unsigned_bits(word, 0, 6, 4)
@@ -2111,7 +2113,7 @@ def build_galileo_inav_sfrbx_message(
         [
             0x02,  # gnssId = Galileo
             sv_id,
-            0x01,  # sigId = E1-B I/NAV
+            sig_id,  # sigId: 1 = E1-B, 5 = E5b-I (I/NAV)
             0x00,  # freqId
             0x08,  # numWords
             0x01,  # chn
