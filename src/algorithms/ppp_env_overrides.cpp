@@ -144,8 +144,6 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
     overrides.madoca_bias_subtract = envPresent("GNSS_PPP_MADOCA_BIAS_SUBTRACT");
     overrides.madoca_allow_partial_ssr = envExactOne("GNSS_PPP_MADOCA_ALLOW_PARTIAL_SSR");
     overrides.require_ssr_orbit = envFirstCharNotZero("GNSS_PPP_REQUIRE_SSR_ORBIT");
-    overrides.disable_madoca_static_anchor =
-        envExactOne("GNSS_PPP_DISABLE_MADOCA_STATIC_ANCHOR");
     overrides.static_anchor_blend = envDoubleOr("GNSS_PPP_STATIC_ANCHOR_BLEND", -1.0);
     overrides.madoca_early_window = !envExactZero("GNSS_PPP_MADOCA_EARLY_WINDOW");
     overrides.madoca_spike_guard = !envExactZero("GNSS_PPP_MADOCA_SPIKE_GUARD");

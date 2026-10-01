@@ -689,12 +689,9 @@ hour. RTKLIB and MADOCALIB commit one update per epoch (`pppos()` restarts
 every residual-screening pass from the prior state), and a single update
 linearized at the prior is exact to well below a millimetre for GNSS ranges.
 Kinematic PPP was moved to one update per epoch earlier; static and
-`--low-dynamics` PPP now do the same. Only the coherent MADOCA static
-ionosphere-free profile keeps its passes: its position is re-blended with the
-SPP anchor after each pass and its native-vs-MADOCALIB delta
-(`docs/madoca_release_baseline.json`) grows with a single update
-(MIZU 1 h 1.63 -> 2.21 m RMS), so it is left byte-identical until that anchor
-blend is reworked.
+`--low-dynamics` PPP now do the same. The coherent MADOCA static
+ionosphere-free profile followed the same day, once its SPP anchor blend was
+removed (see `docs/madocalib_native_migration.md`).
 
 Two static-only gaps showed up once the start-up push was gone, and are fixed
 with it: static ionosphere-free PPP without SSR ran without geometry-free /

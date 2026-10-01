@@ -812,18 +812,10 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
 
     // One committed measurement update per epoch (RTKLIB/MADOCALIB pppos():
     // every residual-screening pass restarts from rtk->x/rtk->P). The rows
-    // keep the prior-position geometry, so re-applying them pushes the
+    // keep the prior-position geometry, so re-applying them would push the
     // position again by the innovation it already absorbed; see
-    // filterIterationCount() for the coherent MADOCA static exception.
-    const bool madoca_per_frequency_update =
-        require_coherent_ssr_ && ssr_products_loaded_ &&
-        !ppp_config_.use_ionosphere_free && ppp_config_.estimate_ionosphere;
-    const bool static_motion =
-        !ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode;
-    const int filter_iterations = filterIterationCount(
-        require_coherent_ssr_ && ssr_products_loaded_ &&
-            !madoca_per_frequency_update && static_motion,
-        ppp_config_.filter_iterations);
+    // kMeasurementUpdatesPerEpoch.
+    const int filter_iterations = kMeasurementUpdatesPerEpoch;
     const PPPState pre_update_state = filter_state_;
     const bool madoca_static_spike_guard =
         require_coherent_ssr_ && ssr_products_loaded_ &&
@@ -965,12 +957,6 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
             (identity - kh) * filter_state_.covariance * (identity - kh).transpose() +
             gain * meas_eq.weight_matrix * gain.transpose();
         completed_filter_iterations = iteration + 1;
-
-        if (delta_state.segment(filter_state_.pos_index, 3).norm() < 1e-4 &&
-            std::abs(delta_state(filter_state_.clock_index)) < 1e-3 &&
-            std::abs(delta_state(filter_state_.trop_index)) < 1e-3) {
-            break;
-        }
     }
 
     const bool madoca_postfit_shadow =
@@ -990,12 +976,10 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
     const double epoch_position_update_norm_m =
         (filter_state_.state.segment(filter_state_.pos_index, 3) -
          pre_update_state.state.segment(pre_update_state.pos_index, 3)).norm();
-    const bool madoca_static_anchor_blend =
-        require_coherent_ssr_ && !env_overrides_.disable_madoca_static_anchor;
     const bool anchor_active =
         (!ppp_config_.kinematic_mode || ppp_config_.low_dynamics_mode) &&
         has_static_anchor_position_ &&
-        (ppp_config_.apply_static_anchor_blend || madoca_static_anchor_blend) &&
+        ppp_config_.apply_static_anchor_blend &&
         !(precise_products_loaded_ && !ppp_config_.estimate_troposphere);
     if (madoca_postfit_shadow) {
         // applyPreciseCorrections() materializes each antenna phase-centre
@@ -2165,10 +2149,14 @@ void PPPProcessor::constrainStaticAnchorPosition() {
         !has_static_anchor_position_) {
         return;
     }
-    const bool madoca_static_anchor_blend =
-        require_coherent_ssr_ &&
-        !env_overrides_.disable_madoca_static_anchor;
-    if (!ppp_config_.apply_static_anchor_blend && !madoca_static_anchor_blend) {
+    // Opt-in only (PPPConfig::apply_static_anchor_blend). Coherent MADOCA
+    // static used to blend 26-30% of the SPP seed back into the position
+    // after every measurement pass and reset its covariance to a fixed
+    // 2-3 m isotropic sigma, which held the solution near the seed and hid
+    // the drift of its eight stale-geometry passes. MADOCALIB udpos_ppp()
+    // initializes a static position once and then only adds its process
+    // noise.
+    if (!ppp_config_.apply_static_anchor_blend) {
         return;
     }
     if (precise_products_loaded_ && !ppp_config_.estimate_troposphere) {
@@ -2180,17 +2168,13 @@ void PPPProcessor::constrainStaticAnchorPosition() {
     // Root cause of 4m floor is 20-40m SSR residual spread (light travel time).
     // Fix the residuals first, then loosen the anchor.
 
-    const double default_madoca_anchor_blend =
-        env_overrides_.madoca_early_window ? 0.26 : 0.30;
     const double default_anchor_blend =
-        madoca_static_anchor_blend && !ppp_config_.apply_static_anchor_blend
-            ? default_madoca_anchor_blend
-            : (ppp_config_.low_dynamics_mode
-                   ? (precise_products_loaded_ ? (converged_ ? 0.65 : 0.9) : 0.95)
-                   : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85)
-                      : (ssr_products_loaded_
-                             ? (converged_ ? 0.5 : 0.7)
-                             : 1.0)));
+        ppp_config_.low_dynamics_mode
+            ? (precise_products_loaded_ ? (converged_ ? 0.65 : 0.9) : 0.95)
+            : (precise_products_loaded_ ? (converged_ ? 0.5 : 0.85)
+               : (ssr_products_loaded_
+                      ? (converged_ ? 0.5 : 0.7)
+                      : 1.0));
     const double configured_anchor_blend = env_overrides_.static_anchor_blend;
     const double anchor_blend =
         configured_anchor_blend >= 0.0 && configured_anchor_blend <= 1.0
