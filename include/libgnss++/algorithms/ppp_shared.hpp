@@ -200,6 +200,24 @@ struct PPPConfig {
     bool kinematic_mode = false;
     bool low_dynamics_mode = false;
     bool use_dynamics_model = false;
+    // Position / velocity / acceleration motion model for the non-CLAS
+    // kinematic filter (RTKLIB ppp-kine with pos1-dynamics=on, udpos_ppp()):
+    // acceleration random walk in local ENU, no process noise on position or
+    // velocity, velocity seeded from the SPP Doppler solution, and position /
+    // velocity / acceleration re-seeded from SPP when the mean position
+    // variance exceeds initial_position_variance. Requires use_dynamics_model;
+    // the CLAS filter has its own MRTKLIB dynamics and ignores this flag.
+    bool use_pva_dynamics = false;
+    double process_noise_acceleration_horizontal = 1.0;  // m/s^2/sqrt(s)
+    double process_noise_acceleration_vertical = 0.1;    // m/s^2/sqrt(s)
+    double initial_acceleration_variance = 100.0;        // (m/s^2)^2
+    // PVA only: update the velocity states with the SPP Doppler velocity
+    // (and its covariance) every epoch before the GNSS measurement update.
+    bool pva_doppler_velocity_update = true;
+    // PVA only: re-seed position / velocity / acceleration from SPP when the
+    // predicted position disagrees with the SPP seed beyond this normalized
+    // squared distance (chi-square, 3 degrees of freedom; <= 0 disables).
+    double pva_seed_disagreement_gate = 16.27;
     bool reset_clock_to_spp_each_epoch = true;
     bool reset_kinematic_position_to_spp_each_epoch = true;
     bool emit_solution_epoch_time = false;

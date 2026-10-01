@@ -96,6 +96,8 @@ struct Options {
     std::string ar_method = "iflc";
     double process_noise_iono = 0.0;
     bool process_noise_iono_set = false;
+    double process_noise_accel_h = -1.0;
+    double process_noise_accel_v = -1.0;
     bool use_iers_solid_tide = true;
     bool use_iers_ocean_loading = false;
     std::string eop_c04_file;
@@ -285,7 +287,8 @@ void printUsage(const char* program_name) {
 #endif
         << "  --static                Use a static PPP motion model (default)\n"
         << "  --kinematic             Use a kinematic PPP motion model\n"
-        << "  --use-dynamics-model    Continuous pos/vel dynamics (MRTKLIB accel model)\n"
+        << "  --use-dynamics-model    Position/velocity/acceleration dynamics (RTKLIB\n"
+        << "                          ppp-kine dynamics=on; CLAS: MRTKLIB accel model)\n"
         << "  --emit-epoch-time       Write GPS week/TOW and geodetic columns in .pos output\n"
         << "  --low-dynamics          Keep kinematic PPP anchored for quasi-static motion\n"
         << "  --no-low-dynamics       Disable quasi-static anchoring (default)\n"
@@ -299,6 +302,11 @@ void printUsage(const char* program_name) {
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
         << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc);\n"
         << "                          per-freq enables uncombined estimated-STEC states\n"
+        << "  --process-noise-accel-h <v>\n"
+        << "  --process-noise-accel-v <v>\n"
+        << "                          --use-dynamics-model acceleration random walk,\n"
+        << "                          horizontal / vertical, m/s^2/sqrt(s) (default: 1 / 0.1;\n"
+        << "                          not used with --clas-osr)\n"
         << "  --process-noise-iono <v>\n"
         << "                          KF process noise for per-satellite ionosphere states,\n"
         << "                          m^2/s (default: 1e-4 for MADOCA per-frequency mode,\n"
@@ -514,6 +522,10 @@ Options parseArguments(int argc, char* argv[]) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
         } else if (arg == "--ar-method" && i + 1 < argc) {
             options.ar_method = argv[++i];
+        } else if (arg == "--process-noise-accel-h" && i + 1 < argc) {
+            options.process_noise_accel_h = std::stod(argv[++i]);
+        } else if (arg == "--process-noise-accel-v" && i + 1 < argc) {
+            options.process_noise_accel_v = std::stod(argv[++i]);
         } else if (arg == "--process-noise-iono" && i + 1 < argc) {
             options.process_noise_iono = std::stod(argv[++i]);
             options.process_noise_iono_set = true;
@@ -1205,6 +1217,28 @@ int main(int argc, char* argv[]) {
                 ppp_env_overrides.clas_ar_held_minimum_dd_rows;
             ppp_config.clas_ar_held_maximum_publication_streak =
                 ppp_env_overrides.clas_ar_held_maximum_publication_streak;
+            if (!options.use_clas_osr_filter && options.madoca_l6_paths.empty()) {
+                // Broadcast / SP3 / SSR / HAS: RTKLIB ppp-kine with dynamics
+                // on. Position / velocity / acceleration states with an ENU
+                // acceleration random walk, velocity seeded and updated from
+                // the SPP Doppler solution, and the receiver clock re-seeded
+                // from SPP every epoch (udclk_ppp()). Without the clock
+                // re-seed the broadcast / SSR clock had no process noise and
+                // the filter diverged. CLAS keeps its MRTKLIB dynamics and
+                // clock handling; MADOCA keeps its previous settings until
+                // they are compared with the MADOCALIB bridge.
+                ppp_config.use_pva_dynamics = true;
+                ppp_config.reset_clock_to_spp_each_epoch = true;
+                ppp_config.initial_velocity_variance = 100.0;
+                if (options.process_noise_accel_h >= 0.0) {
+                    ppp_config.process_noise_acceleration_horizontal =
+                        options.process_noise_accel_h;
+                }
+                if (options.process_noise_accel_v >= 0.0) {
+                    ppp_config.process_noise_acceleration_vertical =
+                        options.process_noise_accel_v;
+                }
+            }
         }
         ppp_config.emit_solution_epoch_time = options.emit_epoch_time;
         ppp_config.apply_static_anchor_blend = options.apply_static_anchor_blend;
@@ -1280,6 +1314,7 @@ int main(int argc, char* argv[]) {
             ppp_config.reset_clock_to_spp_each_epoch = false;
             ppp_config.reset_kinematic_position_to_spp_each_epoch = false;
             ppp_config.use_dynamics_model = false;
+            ppp_config.use_pva_dynamics = false;
             ppp_config.process_noise_position = 0.0;
             ppp_config.process_noise_velocity = 1e-8;
         }

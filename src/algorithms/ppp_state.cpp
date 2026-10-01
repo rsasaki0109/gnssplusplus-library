@@ -250,6 +250,23 @@ bool validReceiverSeed(const Vector3d& receiver_position) {
            receiver_position.norm() > 1000.0;
 }
 
+bool pvaDynamicsEnabled(const PPPProcessor::PPPConfig& config) {
+    return usePvaDynamics(config.use_pva_dynamics,
+                          config.use_dynamics_model,
+                          config.kinematic_mode,
+                          config.low_dynamics_mode,
+                          config.use_clas_osr_filter);
+}
+
+Vector3d seedVelocityOrZero(const PositionSolution& solution) {
+    // SPP Doppler velocity when it was solved; otherwise start from rest
+    // (RTKLIB's pntpos leaves rr[3..5] zero without Doppler).
+    if (solution.has_velocity && solution.velocity_ecef.allFinite()) {
+        return solution.velocity_ecef;
+    }
+    return Vector3d::Zero();
+}
+
 double wrapFractionalCycle(double value) {
     if (!std::isfinite(value)) {
         return 0.0;
@@ -267,14 +284,17 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
                                     const NavigationData& nav,
                                     const PositionSolution* seed_solution) {
     Vector3d initial_position = Vector3d::Zero();
+    Vector3d initial_velocity = Vector3d::Zero();
     double initial_clock_bias_m = 0.0;
     if (seed_solution != nullptr && seed_solution->isValid()) {
         initial_position = seed_solution->position_ecef;
+        initial_velocity = seedVelocityOrZero(*seed_solution);
         initial_clock_bias_m = seed_solution->receiver_clock_bias;
     } else {
         auto spp_solution = spp_processor_.processEpoch(obs, nav);
         if (spp_solution.isValid()) {
             initial_position = spp_solution.position_ecef;
+            initial_velocity = seedVelocityOrZero(spp_solution);
             initial_clock_bias_m = spp_solution.receiver_clock_bias;
         } else if (validReceiverSeed(obs.receiver_position)) {
             initial_position = obs.receiver_position;
@@ -285,7 +305,15 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     }
 
     // Allocate per-system receiver clocks after the base states:
-    // pos(3) + vel(3) + gps_clk(1) + glo_clk(1) + trop(1).
+    // pos(3) + vel(3) [+ acc(3) with the PVA dynamics] + gps_clk(1) +
+    // glo_clk(1) + trop(1).
+    const bool pva_dynamics = pvaDynamicsEnabled(ppp_config_);
+    filter_state_.pos_index = 0;
+    filter_state_.vel_index = 3;
+    filter_state_.accel_index = pva_dynamics ? 6 : -1;
+    filter_state_.clock_index = pva_dynamics ? 9 : 6;
+    filter_state_.glo_clock_index = pva_dynamics ? 10 : 7;
+    const int fixed_state_count = pva_dynamics ? 12 : 9;
     filter_state_.gal_clock_index = -1;
     filter_state_.qzs_clock_index = -1;
     filter_state_.bds_clock_index = -1;
@@ -303,8 +331,8 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     for (const auto& sat : obs.getSatellites()) {
         visible_systems.insert(sat.system);
     }
-    filter_state_.trop_index = 8;  // keep original
-    int isb_start = 9;
+    filter_state_.trop_index = fixed_state_count - 1;
+    int isb_start = fixed_state_count;
     if (env_overrides_.estimate_isb_gal && visible_systems.count(GNSSSystem::Galileo)) {
         filter_state_.gal_clock_index = isb_start++;
     }
@@ -355,13 +383,14 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
             ++n_iono_states;
         }
     }
-    const int n_isb = isb_start - 9;
-    const int n_states = 9 + n_isb + n_iono_states;
-    filter_state_.amb_index = 9 + n_isb + n_iono_states;
+    const int n_isb = isb_start - fixed_state_count;
+    const int n_states = fixed_state_count + n_isb + n_iono_states;
+    filter_state_.amb_index = fixed_state_count + n_isb + n_iono_states;
     filter_state_.state = VectorXd::Zero(n_states);
     filter_state_.covariance = MatrixXd::Identity(n_states, n_states);
     filter_state_.state.segment(filter_state_.pos_index, 3) = initial_position;
-    filter_state_.state.segment(filter_state_.vel_index, 3).setZero();
+    filter_state_.state.segment(filter_state_.vel_index, 3) =
+        pva_dynamics ? initial_velocity : Vector3d::Zero();
     filter_state_.state(filter_state_.clock_index) = initial_clock_bias_m;
     filter_state_.state(filter_state_.glo_clock_index) = initial_clock_bias_m;
     // Initialize per-system clock states.
@@ -381,7 +410,15 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
     filter_state_.covariance.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3) *=
         use_broadcast_rtklib_model ? ppp_config_.initial_position_variance : 100.0;
     filter_state_.covariance.block(filter_state_.vel_index, filter_state_.vel_index, 3, 3) *=
-        use_broadcast_rtklib_model ? ppp_config_.initial_velocity_variance : 25.0;
+        use_broadcast_rtklib_model || pva_dynamics
+            ? ppp_config_.initial_velocity_variance
+            : 25.0;
+    if (pva_dynamics) {
+        // Acceleration starts at zero (RTKLIB: 1e-6) with VAR_ACC.
+        filter_state_.covariance.block(
+            filter_state_.accel_index, filter_state_.accel_index, 3, 3) *=
+            ppp_config_.initial_acceleration_variance;
+    }
     filter_state_.covariance(filter_state_.clock_index, filter_state_.clock_index) =
         use_broadcast_rtklib_model ? ppp_config_.initial_clock_variance : 1e8;
     filter_state_.covariance(filter_state_.glo_clock_index, filter_state_.glo_clock_index) =
@@ -441,10 +478,18 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     const bool use_broadcast_rtklib_model = !precise_products_loaded_;
     const bool use_dynamic_prediction =
         ppp_config_.kinematic_mode && (!use_broadcast_rtklib_model || ppp_config_.use_dynamics_model);
+    const bool pva_dynamics =
+        pvaDynamicsEnabled(ppp_config_) && filter_state_.accel_index >= 0;
     MatrixXd F = MatrixXd::Identity(filter_state_.total_states, filter_state_.total_states);
     if (use_dynamic_prediction) {
         F.block(filter_state_.pos_index, filter_state_.vel_index, 3, 3) =
             MatrixXd::Identity(3, 3) * dt;
+        if (pva_dynamics) {
+            F.block(filter_state_.pos_index, filter_state_.accel_index, 3, 3) =
+                MatrixXd::Identity(3, 3) * (0.5 * dt * dt);
+            F.block(filter_state_.vel_index, filter_state_.accel_index, 3, 3) =
+                MatrixXd::Identity(3, 3) * dt;
+        }
     }
 
     filter_state_.state = F * filter_state_.state;
@@ -456,11 +501,19 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     if (!ppp_config_.kinematic_mode) {
         Q.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3) =
             MatrixXd::Identity(3, 3) * ppp_config_.process_noise_position * dt;
-    } else if (use_dynamic_prediction) {
+    } else if (use_dynamic_prediction && !pva_dynamics) {
         Q.block(filter_state_.pos_index, filter_state_.pos_index, 3, 3) =
             MatrixXd::Identity(3, 3) * ppp_config_.process_noise_position * dt;
     }
-    if (use_dynamic_prediction) {
+    if (pva_dynamics) {
+        // Process noise on the acceleration only (RTKLIB udpos_ppp()).
+        Q.block(filter_state_.accel_index, filter_state_.accel_index, 3, 3) =
+            pvaAccelerationProcessNoiseEcef(
+                filter_state_.state.segment(filter_state_.pos_index, 3),
+                ppp_config_.process_noise_acceleration_horizontal,
+                ppp_config_.process_noise_acceleration_vertical,
+                dt);
+    } else if (use_dynamic_prediction) {
         Q.block(filter_state_.vel_index, filter_state_.vel_index, 3, 3) =
             MatrixXd::Identity(3, 3) * ppp_config_.process_noise_velocity * dt;
     } else {
@@ -511,6 +564,56 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
     }
 
     filter_state_.covariance = F * filter_state_.covariance * F.transpose() + Q;
+    // RTKLIB udpos_ppp() re-seeds position / velocity / acceleration from SPP
+    // when the mean position variance exceeds the initial position variance
+    // (repeated rejected epochs). The test is applied to the predicted
+    // covariance so that an outage of several seconds, over which the
+    // acceleration noise has grown the position variance past that bound,
+    // restarts from SPP instead of from a stale velocity.
+    bool pva_reset =
+        pva_dynamics && seed_solution != nullptr && seed_solution->isValid() &&
+        !(filter_state_.covariance
+                  .block(filter_state_.pos_index, filter_state_.pos_index, 3, 3)
+                  .trace() / 3.0 <=
+          ppp_config_.initial_position_variance);
+    // Divergence guard: the predicted position must stay consistent with the
+    // SPP seed. A wrong position carried with a small covariance makes the
+    // post-fit screening reject the code rows that disagree with it (urban
+    // stops under NLOS, a wrong Doppler velocity), so it would never recover.
+    // Re-seeding costs one epoch of the default white-noise position.
+    if (pva_dynamics && !pva_reset && seed_solution != nullptr &&
+        seed_solution->isValid() &&
+        ppp_config_.pva_seed_disagreement_gate > 0.0) {
+        Matrix3d seed_covariance = seed_solution->position_covariance;
+        if (!seed_covariance.allFinite()) {
+            seed_covariance = Matrix3d::Identity() * kPvaFallbackSeedVariance;
+        }
+        const double disagreement = seedPositionDisagreement(
+            filter_state_.state.segment(filter_state_.pos_index, 3),
+            filter_state_.covariance.block(
+                filter_state_.pos_index, filter_state_.pos_index, 3, 3),
+            seed_solution->position_ecef,
+            seed_covariance);
+        pva_reset = !(disagreement <= ppp_config_.pva_seed_disagreement_gate);
+        if (pva_reset && pppDebugEnabled()) {
+            std::cerr << "[PPP] PVA reset: SPP disagreement nis=" << disagreement
+                      << "\n";
+        }
+    }
+    if (pva_reset) {
+        reinitializeVectorState(
+            filter_state_.pos_index,
+            seed_solution->position_ecef,
+            ppp_config_.initial_position_variance);
+        reinitializeVectorState(
+            filter_state_.vel_index,
+            seedVelocityOrZero(*seed_solution),
+            ppp_config_.initial_velocity_variance);
+        reinitializeVectorState(
+            filter_state_.accel_index,
+            Vector3d::Zero(),
+            ppp_config_.initial_acceleration_variance);
+    }
     if (use_broadcast_rtklib_model && seed_solution != nullptr && seed_solution->isValid()) {
         if (ppp_config_.reset_clock_to_spp_each_epoch || useLowDynamicsBroadcastSeedAssist()) {
             const double gps_clock_before_reset = filter_state_.state(filter_state_.clock_index);

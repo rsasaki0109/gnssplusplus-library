@@ -20,6 +20,7 @@
 #include <fstream>
 #include <cstdint>
 #include <iomanip>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -193,6 +194,74 @@ TEST(PPPPostfitScreening, StandardizedResidualFindsCodeOutlier) {
     EXPECT_EQ(ppp_internal::worstStandardizedResidualRow(
                   r, S_inv, ppp_internal::kPostfitRejectSigma),
               -1);
+}
+
+TEST(PPPPvaDynamics, NonClasKinematicDynamicsModelOnly) {
+    // flag, use_dynamics_model, kinematic, low_dynamics, clas_osr
+    EXPECT_TRUE(ppp_internal::usePvaDynamics(true, true, true, false, false));
+    EXPECT_FALSE(ppp_internal::usePvaDynamics(false, true, true, false, false));
+    EXPECT_FALSE(ppp_internal::usePvaDynamics(true, false, true, false, false));
+    EXPECT_FALSE(ppp_internal::usePvaDynamics(true, true, false, false, false));
+    EXPECT_FALSE(ppp_internal::usePvaDynamics(true, true, true, true, false));
+    // The CLAS OSR filter keeps its MRTKLIB dynamics.
+    EXPECT_FALSE(ppp_internal::usePvaDynamics(true, true, true, false, true));
+}
+
+TEST(PPPPvaDynamics, AccelerationNoiseIsDefinedInLocalEnu) {
+    double lat = 0.0;
+    double lon = 0.0;
+    double height = 0.0;
+    const Eigen::Vector3d position(-3961767.6, 3349008.7, 3698309.8);  // Tokyo
+    ecef2geodetic(position, lat, lon, height);
+    const Eigen::Matrix3d Q =
+        ppp_internal::pvaAccelerationProcessNoiseEcef(position, 1.0, 0.1, 0.2);
+    EXPECT_TRUE(Q.isApprox(Q.transpose(), 1e-12));
+    const Eigen::Vector3d east = enu2ecef(Eigen::Vector3d::UnitX(), lat, lon);
+    const Eigen::Vector3d north = enu2ecef(Eigen::Vector3d::UnitY(), lat, lon);
+    const Eigen::Vector3d up = enu2ecef(Eigen::Vector3d::UnitZ(), lat, lon);
+    EXPECT_NEAR(east.dot(Q * east), 1.0 * 0.2, 1e-12);
+    EXPECT_NEAR(north.dot(Q * north), 1.0 * 0.2, 1e-12);
+    EXPECT_NEAR(up.dot(Q * up), 0.01 * 0.2, 1e-12);
+    EXPECT_NEAR(east.dot(Q * up), 0.0, 1e-12);
+}
+
+TEST(PPPPvaDynamics, SeedDisagreementIsNormalizedByBothCovariances) {
+    const Eigen::Vector3d seed(-3961767.6, 3349008.7, 3698309.8);
+    const Eigen::Matrix3d P = Eigen::Matrix3d::Identity() * 4.0;
+    const Eigen::Matrix3d C = Eigen::Matrix3d::Identity() * 5.0;
+    const Eigen::Vector3d offset(6.0, 0.0, 0.0);
+    EXPECT_NEAR(ppp_internal::seedPositionDisagreement(seed + offset, P, seed, C),
+                36.0 / 9.0, 1e-12);
+    const Eigen::Matrix3d nan_covariance =
+        Eigen::Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    EXPECT_TRUE(std::isinf(
+        ppp_internal::seedPositionDisagreement(seed, P, seed, nan_covariance)));
+}
+
+TEST(PPPPvaDynamics, DopplerVelocityUpdatesVelocityAndCorrelatedPosition) {
+    ppp_shared::PPPState state;
+    state.total_states = 9;
+    state.state = Eigen::VectorXd::Zero(9);
+    state.covariance = Eigen::MatrixXd::Identity(9, 9) * 100.0;
+    // Position and velocity correlated as after one 1 s prediction.
+    for (int axis = 0; axis < 3; ++axis) {
+        state.covariance(axis, 3 + axis) = 50.0;
+        state.covariance(3 + axis, axis) = 50.0;
+    }
+    const Eigen::Vector3d doppler_velocity(10.0, 0.0, 0.0);
+    const Eigen::Matrix3d R = Eigen::Matrix3d::Identity() * 0.01;
+    ASSERT_TRUE(ppp_internal::applyVelocityMeasurement(state, doppler_velocity, R, 0.0));
+    EXPECT_NEAR(state.state(3), 10.0 * 100.0 / 100.01, 1e-9);
+    EXPECT_NEAR(state.state(0), 10.0 * 50.0 / 100.01, 1e-9);
+    EXPECT_NEAR(state.state(4), 0.0, 1e-12);
+    EXPECT_LT(state.covariance(3, 3), 0.01);
+    EXPECT_TRUE(state.covariance.isApprox(state.covariance.transpose(), 1e-12));
+
+    // The gate leaves the state untouched for an inconsistent velocity.
+    const ppp_shared::PPPState before = state;
+    EXPECT_FALSE(ppp_internal::applyVelocityMeasurement(
+        state, Eigen::Vector3d(30.0, 0.0, 0.0), R, 16.27));
+    EXPECT_EQ(state.state, before.state);
 }
 
 TEST(PPPBroadcastGroupDelay, BeiDouClockReferencedToB3I) {
