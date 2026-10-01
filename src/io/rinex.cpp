@@ -2228,14 +2228,18 @@ bool RINEXWriter::writeHeader(const RINEXReader::RINEXHeader& header) {
         return false;
     }
     
-    // Write RINEX header
-    file_ << std::fixed << std::setprecision(2) << header.version;
+    // RINEX VERSION / TYPE: F9.2, 11X, A20 file type, A20 satellite system
+    // (columns 1-60), so readers find the version and the label in place.
+    file_ << std::fixed << std::setprecision(2) << std::setw(9) << header.version
+          << std::string(11, ' ');
     if (header.file_type == RINEXReader::FileType::NAVIGATION) {
-        file_ << "           NAVIGATION DATA     ";
+        file_ << "NAVIGATION DATA     ";
     } else {
-        file_ << "           OBSERVATION DATA    ";
+        file_ << "OBSERVATION DATA    ";
     }
-    file_ << header.satellite_system << "                   RINEX VERSION / TYPE\n";
+    std::string satellite_system = header.satellite_system.substr(0, 20);
+    satellite_system.resize(20, ' ');
+    file_ << satellite_system << "RINEX VERSION / TYPE\n";
     
     file_ << "LibGNSS++           User                ";
     file_ << "20240101 000000 UTC PGM / RUN BY / DATE\n";
@@ -2313,6 +2317,27 @@ std::string RINEXWriter::formatSatelliteId(const SatelliteId& sat, double versio
     return oss.str();
 }
 
+namespace {
+
+// Galileo "data sources" word of a RINEX navigation record. Decoders record
+// the pages the ephemeris came from in Ephemeris::data_source_code; an
+// ephemeris that only knows its message type gets that type's canonical word.
+int galileoRinexDataSources(const Ephemeris& eph) {
+    if (eph.data_source_code != 0) {
+        return eph.data_source_code;
+    }
+    switch (eph.navigation_message_type) {
+        case NavigationMessageType::INAV:
+            return galileo_data_source::kInavE1B | galileo_data_source::kClockE5bE1;
+        case NavigationMessageType::FNAV:
+            return galileo_data_source::kFnavE5aI | galileo_data_source::kClockE5aE1;
+        default:
+            return 0;
+    }
+}
+
+}  // namespace
+
 bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
     if (!file_.is_open()) {
         return false;
@@ -2374,6 +2399,10 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
         (is_beidou || is_galileo) ? eph.tgd_secondary : static_cast<double>(eph.iodc);
     const double line7_col1 = is_beidou ? gpstToBdt(eph.tof).tow : eph.tof.tow;
     const double line7_col2 = is_beidou ? static_cast<double>(eph.iodc) : 0.0;
+    // Galileo: "data sources" word (RINEX 3.0x Table A8 / 4.0x Table A10);
+    // the SV accuracy field holds SISA in metres (Ephemeris::sv_accuracy).
+    const double line5_col2 =
+        is_galileo ? static_cast<double>(galileoRinexDataSources(eph)) : 0.0;
 
     file_ << formatSatelliteId(eph.satellite, header_.version)
           << formatTime(toc_time, header_.version)
@@ -2412,7 +2441,7 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
 
     file_ << "    "
           << formatRinexFloat(eph.idot)
-          << formatRinexFloat(0.0)
+          << formatRinexFloat(line5_col2)
           << formatRinexFloat(week_field)
           << formatRinexFloat(0.0)
           << "\n";

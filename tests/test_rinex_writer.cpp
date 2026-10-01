@@ -1483,6 +1483,90 @@ TEST(RINEXWriterTest, WritesGalileoNavigationMessageReadableByReader) {
     std::filesystem::remove(temp_path);
 }
 
+TEST(RINEXWriterTest, GalileoSisaIndexMapsToMetres) {
+    // Galileo OS SIS ICD Table 89.
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(0), 0.0);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(49), 0.49);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(50), 0.5);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(74), 0.98);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(75), 1.0);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(99), 1.96);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(100), 2.0);
+    EXPECT_NEAR(galileoSisaMeters(107), 3.12, 1e-12);
+    EXPECT_NEAR(galileoSisaMeters(125), 6.0, 1e-12);
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(126), -1.0);  // spare
+    EXPECT_DOUBLE_EQ(galileoSisaMeters(255), -1.0);  // NAPA
+}
+
+TEST(RINEXWriterTest, RoundTripsGalileoDataSourcesAndSisa) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex_writer_test_gal_sources.nav";
+    std::filesystem::remove(temp_path);
+
+    io::RINEXWriter writer;
+    io::RINEXReader::RINEXHeader header;
+    header.version = 3.04;
+    header.file_type = io::RINEXReader::FileType::NAVIGATION;
+    header.satellite_system = "M";
+    ASSERT_TRUE(writer.createNavigationFile(temp_path.string(), header));
+
+    // E05: explicit data-source word (I/NAV E1-B + E5b-I, clock E5b/E1) and
+    // SISA index 107 = 3.12 m. E07 / E08: only the message type is known.
+    Ephemeris explicit_sources = makeGalileoEphemeris();
+    explicit_sources.data_source_code = galileo_data_source::kInavE1B |
+                                        galileo_data_source::kInavE5bI |
+                                        galileo_data_source::kClockE5bE1;
+    explicit_sources.ura = 107;
+    explicit_sources.sv_accuracy = galileoSisaMeters(107);
+    Ephemeris inav_only = makeGalileoEphemeris();
+    inav_only.satellite = SatelliteId(GNSSSystem::Galileo, 7);
+    inav_only.navigation_message_type = NavigationMessageType::INAV;
+    Ephemeris fnav_only = makeGalileoEphemeris();
+    fnav_only.satellite = SatelliteId(GNSSSystem::Galileo, 8);
+    fnav_only.navigation_message_type = NavigationMessageType::FNAV;
+    ASSERT_TRUE(writer.writeNavigationMessage(explicit_sources));
+    ASSERT_TRUE(writer.writeNavigationMessage(inav_only));
+    ASSERT_TRUE(writer.writeNavigationMessage(fnav_only));
+    writer.close();
+
+    std::string text;
+    {
+        std::ifstream input(temp_path);
+        std::ostringstream buffer;
+        buffer << input.rdbuf();
+        text = buffer.str();
+    }
+    // Broadcast orbit 5, field 2 (data sources) and orbit 6, field 1 (SISA).
+    EXPECT_NE(text.find(" 8.000000000000D-11 5.170000000000D+02"), std::string::npos);
+    EXPECT_NE(text.find(" 8.000000000000D-11 5.130000000000D+02"), std::string::npos);
+    EXPECT_NE(text.find(" 8.000000000000D-11 2.580000000000D+02"), std::string::npos);
+    EXPECT_NE(text.find("     3.120000000000D+00"), std::string::npos);
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    NavigationData nav_data;
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    reader.close();
+
+    const auto first = [&](int prn) -> const Ephemeris& {
+        return nav_data.ephemeris_data.at(SatelliteId(GNSSSystem::Galileo, prn)).front();
+    };
+    EXPECT_EQ(first(5).data_source_code, 517);
+    EXPECT_NEAR(first(5).sv_accuracy, 3.12, 1e-12);
+    EXPECT_EQ(first(7).data_source_code, 513);
+    EXPECT_EQ(first(8).data_source_code, 258);
+    EXPECT_NEAR(first(7).sv_accuracy, 3.0, 1e-12);
+
+    // I/NAV-only selection keeps the records carrying the E5b/E1 clock bit.
+    nav_data.setGalileoEphemerisSource(NavigationData::GalileoEphemerisSource::INavOnly);
+    const GNSSTime query(2200, 345600.0);
+    EXPECT_NE(nav_data.getEphemeris(SatelliteId(GNSSSystem::Galileo, 5), query), nullptr);
+    EXPECT_NE(nav_data.getEphemeris(SatelliteId(GNSSSystem::Galileo, 7), query), nullptr);
+    EXPECT_EQ(nav_data.getEphemeris(SatelliteId(GNSSSystem::Galileo, 8), query), nullptr);
+
+    std::filesystem::remove(temp_path);
+}
+
 TEST(RINEXWriterTest, ReadsObservationAntennaHeaderFields) {
     const auto temp_path =
         std::filesystem::temp_directory_path() / "libgnss_rinex_obs_antenna_header_test.obs";

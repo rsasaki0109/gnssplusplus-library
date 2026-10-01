@@ -313,14 +313,16 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
             const int e1_dvs = static_cast<int>(u(1));
             svh = (e5b_hs << 7) | (e5b_dvs << 6) | (e1_hs << 1) | e1_dvs;
             // RINEX data-source word: I/NAV E1-B, clock referenced to E5b/E1.
-            eph.data_source_code = (1 << 0) | (1 << 9);
+            eph.data_source_code =
+                galileo_data_source::kInavE1B | galileo_data_source::kClockE5bE1;
             eph.navigation_message_type = NavigationMessageType::INAV;
         } else {
             const int e5a_hs = static_cast<int>(u(2));
             const int e5a_dvs = static_cast<int>(u(1));
             svh = (e5a_hs << 4) | (e5a_dvs << 3);
             // RINEX data-source word: F/NAV E5a-I, clock referenced to E5a/E1.
-            eph.data_source_code = (1 << 1) | (1 << 8);
+            eph.data_source_code =
+                galileo_data_source::kFnavE5aI | galileo_data_source::kClockE5aE1;
             eph.navigation_message_type = NavigationMessageType::FNAV;
         }
         eph.health = static_cast<uint8_t>(svh & 0xFF);
