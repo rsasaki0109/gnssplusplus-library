@@ -21,6 +21,20 @@ DOCS_ONLY_EXACT_PATHS = {
 DOCS_ONLY_PREFIXES = (
     "docs/",
 )
+# Files under docs/ that CI and tests consume as data (release baselines,
+# metrics JSON, records) are not documentation: changing them must run the
+# heavy lanes that read them, e.g. madoca-parity with
+# docs/madoca_release_baseline.json.
+DOCS_ONLY_SUFFIXES = (
+    ".md",
+    ".png",
+    ".gif",
+    ".jpg",
+    ".jpeg",
+    ".svg",
+    ".css",
+    ".html",
+)
 
 
 def normalize_paths(paths: Sequence[str]) -> list[str]:
@@ -31,7 +45,9 @@ def normalize_paths(paths: Sequence[str]) -> list[str]:
 def is_docs_only_path(path: str) -> bool:
     if path in DOCS_ONLY_EXACT_PATHS:
         return True
-    return any(path.startswith(prefix) for prefix in DOCS_ONLY_PREFIXES)
+    return any(path.startswith(prefix) for prefix in DOCS_ONLY_PREFIXES) and path.lower().endswith(
+        DOCS_ONLY_SUFFIXES
+    )
 
 
 def classify_changed_paths(paths: Sequence[str]) -> dict[str, object]:
