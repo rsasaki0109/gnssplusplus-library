@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/ppp.hpp>
 #include <libgnss++/algorithms/ppp_utils.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/core/coordinates.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -70,6 +71,96 @@ inline bool useCombinationSlipDetection(bool kinematic_mode,
 // bridge semantics it is pinned against, and the CLAS OSR lane never reaches
 // this filter.
 inline constexpr double kPostfitRejectSigma = 4.0;
+
+// Position / velocity / acceleration dynamics (RTKLIB ppp-kine with
+// pos1-dynamics=on) for the non-CLAS kinematic filter. --low-dynamics and the
+// CLAS OSR filter (MRTKLIB dynamics of its own) never use it.
+inline bool usePvaDynamics(bool use_pva_dynamics,
+                           bool use_dynamics_model,
+                           bool kinematic_mode,
+                           bool low_dynamics_mode,
+                           bool clas_osr_filter) {
+    return use_pva_dynamics && use_dynamics_model && kinematic_mode &&
+           !low_dynamics_mode && !clas_osr_filter;
+}
+
+// RTKLIB udpos_ppp() acceleration process noise: a random walk with
+// standard deviation sigma_h (east, north) and sigma_v (up) per sqrt(s),
+// defined in the local frame at `receiver_position_ecef` and rotated to ECEF
+// (covecef()).
+inline Eigen::Matrix3d pvaAccelerationProcessNoiseEcef(
+    const Eigen::Vector3d& receiver_position_ecef,
+    double sigma_horizontal,
+    double sigma_vertical,
+    double dt) {
+    double lat = 0.0;
+    double lon = 0.0;
+    double height = 0.0;
+    ecef2geodetic(receiver_position_ecef, lat, lon, height);
+    Eigen::Matrix3d enu_to_ecef;
+    enu_to_ecef.col(0) = enu2ecef(Eigen::Vector3d::UnitX(), lat, lon);
+    enu_to_ecef.col(1) = enu2ecef(Eigen::Vector3d::UnitY(), lat, lon);
+    enu_to_ecef.col(2) = enu2ecef(Eigen::Vector3d::UnitZ(), lat, lon);
+    Eigen::Matrix3d q_enu = Eigen::Matrix3d::Zero();
+    q_enu(0, 0) = q_enu(1, 1) = sigma_horizontal * sigma_horizontal * std::abs(dt);
+    q_enu(2, 2) = sigma_vertical * sigma_vertical * std::abs(dt);
+    return enu_to_ecef * q_enu * enu_to_ecef.transpose();
+}
+
+// SPP position variance assumed when the seed carries no covariance (m^2).
+inline constexpr double kPvaFallbackSeedVariance = 100.0;
+
+// Normalized squared distance d' (P + C)^-1 d between the predicted filter
+// position (covariance P) and the SPP seed (covariance C); infinity when the
+// sum is not positive definite or an input is not finite.
+inline double seedPositionDisagreement(const Eigen::Vector3d& predicted_position,
+                                       const Eigen::Matrix3d& predicted_covariance,
+                                       const Eigen::Vector3d& seed_position,
+                                       const Eigen::Matrix3d& seed_covariance) {
+    const Eigen::Vector3d d = predicted_position - seed_position;
+    const Eigen::Matrix3d C = predicted_covariance + seed_covariance;
+    if (!d.allFinite() || !C.allFinite()) {
+        return std::numeric_limits<double>::infinity();
+    }
+    const Eigen::LLT<Eigen::Matrix3d> llt(C);
+    if (llt.info() != Eigen::Success) {
+        return std::numeric_limits<double>::infinity();
+    }
+    return d.dot(llt.solve(d));
+}
+
+// Kalman update of the velocity states with a direct velocity measurement
+// (the SPP Doppler velocity) of covariance R. Returns false, leaving the
+// state untouched, when the normalized innovation squared exceeds
+// chi_square_gate (<= 0 disables the gate) or the inputs are not finite.
+inline bool applyVelocityMeasurement(ppp_shared::PPPState& filter_state,
+                                     const Eigen::Vector3d& velocity,
+                                     const Eigen::Matrix3d& covariance,
+                                     double chi_square_gate) {
+    const int v = filter_state.vel_index;
+    if (v < 0 || v + 3 > filter_state.state.size() || !velocity.allFinite() ||
+        !covariance.allFinite()) {
+        return false;
+    }
+    auto& x = filter_state.state;
+    auto& P = filter_state.covariance;
+    const Eigen::Vector3d innovation = velocity - x.segment(v, 3);
+    const Eigen::Matrix3d S = P.block(v, v, 3, 3) + covariance;
+    const Eigen::LDLT<Eigen::Matrix3d> ldlt(S);
+    if (ldlt.info() != Eigen::Success) {
+        return false;
+    }
+    const double nis = innovation.dot(ldlt.solve(innovation));
+    if (!std::isfinite(nis) || (chi_square_gate > 0.0 && nis > chi_square_gate)) {
+        return false;
+    }
+    const Eigen::MatrixXd PHt = P.middleCols(v, 3);  // P H'
+    const Eigen::MatrixXd gain = ldlt.solve(PHt.transpose()).transpose();
+    x += gain * innovation;
+    P -= gain * PHt.transpose();
+    P = 0.5 * (P + P.transpose()).eval();
+    return true;
+}
 
 inline bool usePostfitResidualScreening(bool kinematic_motion,
                                         bool coherent_madoca_ssr,

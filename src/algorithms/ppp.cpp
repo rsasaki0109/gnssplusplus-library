@@ -588,8 +588,41 @@ PositionSolution PPPProcessor::processEpochStandard(
             detectCycleSlips(obs, nav);
             predictState(dt, seed_ptr);
 
-            bool updated = updateFilter(obs, nav, dt);
-            if (!updated && ppp_config_.enable_ambiguity_resolution) {
+            // Position / velocity / acceleration dynamics without an SPP seed:
+            // RTKLIB runs no PPP update when pntpos() fails. The receiver
+            // clock is re-seeded from SPP every epoch, and after an outage
+            // the motion states wait for the next seed to restart from.
+            const bool skip_update_without_seed =
+                seed_ptr == nullptr && filter_state_.accel_index >= 0 &&
+                ppp_internal::usePvaDynamics(
+                    ppp_config_.use_pva_dynamics,
+                    ppp_config_.use_dynamics_model,
+                    ppp_config_.kinematic_mode,
+                    ppp_config_.low_dynamics_mode,
+                    ppp_config_.use_clas_osr_filter);
+            // Doppler velocity: the SPP solves the receiver velocity from the
+            // Doppler range rates every epoch. Without it the velocity is
+            // observed only through the position changes of the carrier-phase
+            // rows, and a few epochs of rejected or code-only updates leave a
+            // velocity error that the dynamics integrate into the position.
+            if (!skip_update_without_seed && seed_ptr != nullptr &&
+                filter_state_.accel_index >= 0 &&
+                ppp_config_.pva_doppler_velocity_update &&
+                seed_solution.has_velocity) {
+                const bool applied = applyVelocityMeasurement(
+                    filter_state_,
+                    seed_solution.velocity_ecef,
+                    seed_solution.velocity_covariance,
+                    0.0);
+                if (!applied && pppDebugEnabled()) {
+                    std::cerr << "[PPP] Doppler velocity update skipped at tow="
+                              << obs.time.tow << "\n";
+                }
+            }
+            bool updated =
+                !skip_update_without_seed && updateFilter(obs, nav, dt);
+            if (!updated && !skip_update_without_seed &&
+                ppp_config_.enable_ambiguity_resolution) {
                 bool had_fixed_ambiguities = false;
                 for (auto& [satellite, ambiguity] : ambiguity_states_) {
                     if (!ambiguity.is_fixed) {

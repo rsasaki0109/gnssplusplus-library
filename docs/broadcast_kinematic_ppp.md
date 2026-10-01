@@ -53,8 +53,8 @@ from GLONASS (GPS + Galileo + QZSS + GLONASS: U50 6.63 m).
 Before PR #537 (one measurement update per epoch) Tokyo run1 was at
 18.1 / 117 m horizontal. The 29 epochs (20 Tokyo, 9 Nagoya) no longer output are epochs where the SPP
 seed failed and the old filter coasted on a stale position with 4-6
-satellites; their errors were 9 m to 5 km. `--use-dynamics-model` is not
-covered by this change; see [Remaining limitations](#remaining-limitations).
+satellites; their errors were 9 m to 5 km. For `--use-dynamics-model` see
+[Dynamics model](#dynamics-model---use-dynamics-model-2026-10-01).
 
 The Galileo HAS kinematic lane (`gnss reproduce has-idd-ppp`, OBE4 static
 antenna processed kinematically) also benefits from the residual screening:
@@ -154,22 +154,117 @@ Other suspects checked and ruled out on this data:
 - **Urban canyons with few satellites.** Below 15 satellites the Tokyo error
   is 2-8 m median, above 20 satellites 0.6-0.9 m (H95 about 2 m): the
   remaining tail is geometry and NLOS the screening cannot identify.
-- **`--use-dynamics-model` with broadcast ephemerides** diverges (hundreds of
-  metres to kilometres on develop) because that mode neither re-seeds the
-  receiver clock from SPP nor gives it process noise (`process_noise_clock`
-  is 0 on the broadcast path), and its velocity random walk (0.01 m^2/s^3)
-  is far below car dynamics. With the screening it no longer diverges: it
-  rejects the inconsistent updates and outputs the SPP seed (Tokyo H50
-  1.79 m). Re-seeding the clock every epoch makes it work (Tokyo 0.95 /
-  8.73 m, Nagoya 2.75 / 57.13 m) but not better than the default white-noise
-  position; the mode shares its CLI defaults with the CLAS lane, so it is
-  left for a separate change.
+- **`--use-dynamics-model` relies on the SPP seed check.** The guard that
+  re-seeds the motion states when the predicted position disagrees with SPP
+  (below) fires on 4.4 % of the Tokyo run1 epochs. Where the SPP itself is
+  tens of metres off for a long stretch, the dynamics output follows the
+  re-seeded SPP on those epochs; Tokyo run3 H95 (5.99 m against 4.03 m with
+  the default white-noise position) and Nagoya run1 H95 (11.4 m against
+  10.3 m) are the two tails it does not improve.
+
+## Dynamics model (`--use-dynamics-model`, 2026-10-01)
+
+Outside CLAS, `--use-dynamics-model` diverged with broadcast ephemerides
+(hundreds of metres to kilometres before PR #541; since the screening it
+rejected the inconsistent updates and printed the SPP seed, Tokyo run1 H50
+1.78 m). It now follows RTKLIB's ppp-kine with `pos1-dynamics=on`
+(`udpos_ppp()` / `udclk_ppp()`, items 1 and 2) and adds two safeguards
+(items 3 and 4):
+
+1. **Receiver clock re-seeded from SPP every epoch.** The mode switched the
+   clock re-seed off and the broadcast / SSR clock had no process noise
+   (`process_noise_clock = 0`), so the filter held the receiver clock while
+   the PPC rover clock drifts by about 150 m/s. RTKLIB re-initializes the
+   clock every epoch (`udclk_ppp()`, `VAR_CLK = 60^2`); the dynamics mode now
+   does the same, keeping the Galileo / QZSS / BeiDou inter-system biases as
+   the default mode does.
+2. **Position / velocity / acceleration states.** The filter had position and
+   velocity only, with random walks of 0.04 m^2/s on the position and
+   0.01 m^2/s^3 on the velocity. It now carries three acceleration states
+   (`x = [r v a]`, `r += v dt + a dt^2/2`, `v += a dt`) with process noise on
+   the acceleration only, 1 m/s^2/sqrt(s) horizontal and 0.1 m/s^2/sqrt(s)
+   vertical in the local frame (`--process-noise-accel-h / -v`; RTKLIB
+   `stats-prnaccelh / v`). Velocity is initialized from the SPP Doppler
+   velocity when the SPP has one. As in RTKLIB the motion states are
+   re-seeded from SPP when the mean position variance exceeds the initial
+   60^2 m^2, tested on the predicted covariance so that an outage of several
+   seconds restarts from SPP, and no PPP update is made on an epoch without
+   an SPP seed (RTKLIB skips PPP when `pntpos()` fails). Without that,
+   15 s without a seed on Tokyo run1 ended in a 2.4 km update from five
+   satellites.
+3. **Doppler velocity update.** Every epoch the velocity states are updated
+   with the SPP Doppler velocity and its covariance before the GNSS
+   measurement update. The velocity is otherwise observed only through the
+   carrier-phase rows; after a few rejected or code-only epochs a velocity
+   error of a few m/s was integrated into the position (Nagoya run1: a
+   4 m/s drift that ended 55 m east). RTKLIB does not use Doppler in PPP.
+4. **SPP disagreement guard.** The motion states are re-seeded from SPP when
+   the predicted position and the SPP seed disagree beyond the 99.9 % bound
+   of a chi-square with three degrees of freedom,
+   `d' (P + C_spp)^-1 d > 16.27`. With a small position covariance the
+   post-fit screening otherwise rejects the code rows that disagree with a
+   wrong prediction, so the filter cannot recover (Tokyo run1 under NLOS at
+   tow 189460: the position oscillated by up to 300 m with 11-27 of about 30
+   satellites rejected per epoch).
+
+Scope: kinematic `gnss_ppp` with broadcast, SP3 / CLK or SSR (HAS, RTCM)
+products. `--clas-osr` keeps its MRTKLIB dynamics and clock handling
+unchanged (CLAS tokyo_run1 output byte-identical), MADOCA L6 runs keep the
+previous settings until they are compared with the MADOCALIB bridge, and
+`--low-dynamics` still disables the dynamics. Runs without
+`--use-dynamics-model` are byte-identical.
+
+PPC 2024 run1 (scored as above):
+
+| Solver | Tokyo H50 / H95 | Tokyo U50 / U95 | Tokyo avail. | Nagoya H50 / H95 | Nagoya U50 / U95 | Nagoya avail. |
+|---|---|---|---:|---|---|---:|
+| `gnss_ppp --kinematic` (default white-noise position) | 0.91 / 5.29 m | 3.26 / 15.26 m | 99.12 % | 1.99 / 10.31 m | 3.18 / 31.28 m | 98.68 % |
+| `--use-dynamics-model`, develop (outputs the SPP seed) | 1.78 / 20.61 m | 2.10 / 48.63 m | 99.12 % | 2.81 / 11.57 m | 4.13 / 22.02 m | 98.65 % |
+| `--use-dynamics-model`, items 1-2 only | 0.89 / 11.11 m | 3.67 / 22.36 m | 99.12 % | 1.59 / 30.65 m | 2.36 / 79.64 m | 98.65 % |
+| + Doppler velocity update | 0.85 / 5.40 m | 3.50 / 13.95 m | 99.12 % | 1.43 / 41.03 m | 2.90 / 16.31 m | 98.65 % |
+| + SPP disagreement guard (this change) | **0.74 / 4.01 m** | 3.35 / **9.48 m** | 99.12 % | **1.71** / 11.41 m | **2.86 / 26.72 m** | 98.65 % |
+| RTKLIB demo5 b34k ppp-kine, `pos1-dynamics=on` | 2.77 / 19.34 m | 2.00 / 36.01 m | 34.01 % | 4.67 / 11.04 m | 16.59 / 30.98 m | 14.73 % |
+| same, gates opened (`rejionno=30`, `rejcode=100`) | 3.47 / 19.60 m | 3.81 / 69.86 m | 75.29 % | 3.37 / 15.34 m | 17.49 / 57.81 m | 74.92 % |
+| same, gates opened, `prnaccelh=1`, `prnaccelv=0.1` | 3.23 / 17.82 m | 4.29 / 69.05 m | 76.25 % | 3.51 / 16.01 m | 18.20 / 56.18 m | 76.70 % |
+
+All dynamics rows use the default acceleration noise (1 / 0.1). The RTKLIB
+rows use the configuration in [Reproduce](#reproduce) with
+`pos1-dynamics=on` (demo5 default acceleration noise 0.1 / 0.01
+m/s^2/sqrt(s)).
+
+All six drives, default white-noise position against the dynamics model:
+
+| Run | default H50 / H95 | dynamics H50 / H95 | default U50 / U95 | dynamics U50 / U95 |
+|---|---|---|---|---|
+| Tokyo run1 | 0.91 / 5.29 m | 0.74 / 4.01 m | 3.26 / 15.26 m | 3.35 / 9.48 m |
+| Tokyo run2 | 0.81 / 4.48 m | 0.63 / 3.25 m | 0.74 / 10.30 m | 0.83 / 4.19 m |
+| Tokyo run3 | 0.74 / 4.03 m | 0.64 / 5.99 m | 3.08 / 6.90 m | 2.97 / 6.38 m |
+| Nagoya run1 | 1.99 / 10.31 m | 1.71 / 11.41 m | 3.18 / 31.28 m | 2.86 / 26.72 m |
+| Nagoya run2 | 2.98 / 15.05 m | 2.60 / 9.19 m | 6.81 / 38.23 m | 6.73 / 27.90 m |
+| Nagoya run3 | 1.85 / 18.86 m | 1.85 / 6.65 m | 9.20 / 56.45 m | 8.59 / 24.36 m |
+
+Availability is unchanged except Nagoya run1 and run2 (-0.03 %, epochs
+without an SPP seed). Acceleration noise 3 / 1 m/s^2/sqrt(s) gives a
+similar picture (mean H50 1.26 m against 1.36 m over the six runs, mean H95
+6.73 m against 6.75 m, mean U95 15.9 m against 16.5 m); 1 / 0.1 is the
+default because it is also neutral on a static antenna.
+
+OBE4 hour processed kinematically (RMS after the first 10 minutes,
+H / U): HAS IDD 0.085 / 0.102 m by default, 0.196 / 0.442 m with the
+develop dynamics mode and 0.084 / 0.100 m now; broadcast only 0.138 /
+0.237 m by default, 0.238 / 1.168 m on develop and 0.138 / 0.236 m now; IGS
+final SP3 / CLK 0.265 / 0.317 m in all three (that path already had a clock
+process noise).
 
 ## Reproduce
 
 ```bash
 gnss_ppp --obs PPC-Dataset/tokyo/run1/rover.obs --nav PPC-Dataset/tokyo/run1/base.nav \
   --kinematic --out tokyo_run1_ppp.pos
+# dynamics model (add --process-noise-accel-h 3 --process-noise-accel-v 1 for
+# the 3 / 1 comparison)
+gnss_ppp --obs PPC-Dataset/tokyo/run1/rover.obs --nav PPC-Dataset/tokyo/run1/base.nav \
+  --kinematic --use-dynamics-model --out tokyo_run1_ppp_dyn.pos
 ```
 
 RTKLIB demo5 b34k `rnx2rtkp -k conf rover.obs base.nav` with:
