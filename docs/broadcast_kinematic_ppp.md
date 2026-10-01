@@ -15,6 +15,7 @@ availability is the share of reference epochs with an output solution.
 | `gnss_ppp --kinematic`, develop after PR #537 | 7.58 / 42.43 m | 19.68 / 56.01 m | 99.29 % | 5.36 / 20.26 m | 4.69 / 57.03 m | 98.80 % |
 | `gnss_ppp --kinematic`, this change | **0.80 / 4.88 m** | **2.06 / 13.47 m** | 99.12 % | **3.27 / 11.60 m** | **2.37 / 22.26 m** | 98.68 % |
 | `gnss_ppp --kinematic`, after the solid-earth-tide frame fix (2026-09-30) | 0.79 / 4.87 m | 2.07 / 13.48 m | 99.12 % | 3.56 / 13.31 m | 2.21 / 32.24 m | 98.68 % |
+| `gnss_ppp --kinematic`, BeiDou receiver clocks (2026-10-01) | 0.91 / 5.29 m | 3.26 / 15.26 m | 99.12 % | **1.99 / 10.31 m** | 3.18 / 31.28 m | 98.68 % |
 | `gnss_spp` (same data) | 1.78 / 20.44 m | 2.09 / 47.94 m | 99.12 % | 2.80 / 11.05 m | 4.11 / 20.85 m | 98.65 % |
 | RTKLIB demo5 b34k PPP-kinematic, broadcast (config below) | 3.62 / 18.16 m | 4.32 / 48.96 m | 68.91 % | 5.59 / 11.77 m | 27.82 / 72.67 m | 11.99 % |
 | same, innovation gates opened (`pos2-rejionno=30`, `pos2-rejcode=100`) | 3.90 / 31.68 m | 6.57 / 103.89 m | 96.75 % | 4.57 / 17.76 m | 24.05 / 66.73 m | 96.68 % |
@@ -29,6 +30,25 @@ decimetres. Tokyo run1 is unchanged; Nagoya run1 moves to H95 13.3 m and U95
 tide in a run whose up tail follows metre-level code errors. On runs 2 and 3
 H50 moves by -0.06 to +0.13 m and the up statistics move both ways (Nagoya
 run2 U50 5.39 -> 6.02 m and U95 31.0 -> 36.0 m, run3 U50 7.44 -> 5.69 m).
+
+The BeiDou receiver clocks (one for BDS-3, one for BDS-2, with the
+Galileo / QZSS / BeiDou inter-system biases kept across the per-epoch SPP
+re-seeding of the GPS clock; see
+[the BeiDou note](reproduce.md#beidou-with-broadcast-ephemerides-2026-10-01))
+remove most of the Nagoya east bias (median east error +2.79 -> +1.41 m on
+run1). The BeiDou code was the cause: the estimated biases are steady at about
++7.7 m (BDS-3) and +3.6 m (BDS-2) on all PPC drives, and with the shared GPS
+clock that code offset leaned the solution east. H50 on the other runs:
+Tokyo run2 1.33 -> 0.81 m, run3 0.79 -> 0.74 m, Nagoya run2 3.67 -> 2.98 m,
+run3 3.89 -> 1.85 m (H95 run2 24.8 -> 15.1 m, run3 28.3 -> 18.9 m). The up
+error grows on most runs (Tokyo run1 U50 2.07 -> 3.26 m, Nagoya run1
+2.21 -> 3.18 m, run3 5.69 -> 9.20 m; Tokyo run2 improves 1.91 -> 0.74 m):
+the biased BeiDou code had been offsetting an up error of the other
+constellations. Without BeiDou (GPS + Galileo + QZSS) Tokyo run1 has a median
+up error of +4.5 m; with BeiDou and its clocks, GPS + Galileo + QZSS + BeiDou
+gives Tokyo run1 H50 / H95 0.95 / 4.27 m, U50 3.12 m and Nagoya run3 H50 1.64 m,
+U50 2.20 m (U95 14.8 m); the Nagoya run3 up tail of the all-system run comes
+from GLONASS (GPS + Galileo + QZSS + GLONASS: U50 6.63 m).
 
 Before PR #537 (one measurement update per epoch) Tokyo run1 was at
 18.1 / 117 m horizontal. The 29 epochs (20 Tokyo, 9 Nagoya) no longer output are epochs where the SPP
@@ -65,7 +85,9 @@ epoch, so the extra error came from the filter, not from the data.
    Tokyo run1). The SPP applies TGD1 on its single-frequency B1I rows, which
    is why the SPP was better. Fix: without precise, SSR or DCB products,
    BeiDou uses B1I with B2I / B3I and removes TGD1 / TGD2. Tokyo H50 7.58 ->
-   4.01 m, Nagoya 5.36 -> 3.84 m.
+   4.01 m, Nagoya 5.36 -> 3.84 m. (BDS-3 transmits no B2I; its band-7 code
+   is B2b, so BDS-3 pairs B1I with B3I only since 2026-10-01. The PPC rover
+   logs no B2b, so the PPC numbers are not affected by that part.)
 2. **No post-fit residual screening in kinematic PPP (missing safeguard).**
    The only code gate rejected residuals above 20 km with broadcast
    ephemerides. On Tokyo run1 6.9 % of the code rows had prefit residuals
@@ -109,24 +131,26 @@ Other suspects checked and ruled out on this data:
   runs worse (Tokyo H50 2.52 m, Nagoya U50 7.9 m).
 - **Estimating Galileo / BeiDou / QZSS inter-system biases**
   (`GNSS_PPP_ESTIMATE_ISB`): mixed (BeiDou ISB: Nagoya H50 3.22 -> 1.89 m but
-  H95 12.3 -> 15.3 m, Tokyo H50 0.77 -> 1.56 m), left off.
+  H95 12.3 -> 15.3 m, Tokyo H50 0.77 -> 1.56 m), left off. Those runs
+  re-initialized the system clocks every epoch, so the bias was re-estimated
+  from scratch; since 2026-10-01 BeiDou has its own clocks by default with
+  broadcast ephemerides and the biases are kept across epochs (see above).
 
 ## Remaining limitations
 
-- **Metre-level floor at Nagoya.** With 20-30 satellites Nagoya run1 still
-  has H50 2.5-3.2 m (Tokyo 0.6-0.9 m), a slowly varying east bias of 1-3 m.
-  It tracks BeiDou and GLONASS: GPS + Galileo + QZSS only gives H50 1.78 m
-  (with BeiDou 2.89 m, with GLONASS 2.09 m, with both 3.27 m; subsets
-  measured by removing systems from `rover.obs`), and the SPP
-  shows the same pattern (GPS + Galileo + QZSS H50 0.82 m, all systems
-  2.80 m). Candidate causes are BeiDou / GLONASS broadcast clock errors, the
-  GLONASS inter-frequency code biases (one GLONASS clock, no per-channel
-  bias) and the BeiDou receiver inter-system bias; none of them is a
-  one-line fix. Static broadcast PPP shows the same BeiDou-3 effect on the
-  Kamakura 2025-08-21 hour (GPS + BDS-3 ends 5 m low with the former
-  multi-pass static filter and 13 m low with one update per epoch, GPS +
-  BDS-2 or GLONASS / QZSS / Galileo within 0.52 m); see
-  [the static filter note](reproduce.md#static-filter-one-measurement-update-per-epoch-2026-10-01).
+- **Metre-level floor at Nagoya.** Before the BeiDou receiver clocks Nagoya
+  run1 had H50 2.5-3.6 m (Tokyo 0.6-0.9 m), a slowly varying east bias of
+  1-3 m that tracked BeiDou and GLONASS (GPS + Galileo + QZSS only: H50
+  1.78 m; with BeiDou 2.89 m, with GLONASS 2.09 m, with both 3.27 m). The
+  BeiDou part was the missing BeiDou receiver clock (now H50 1.99 m, median
+  east +1.41 m; GPS + Galileo + QZSS + BeiDou 1.70 m). GLONASS remains (one
+  GLONASS clock re-initialized every epoch, no inter-frequency code biases),
+  as does the SPP, which still shares one clock across GPS / Galileo / QZSS /
+  BeiDou (all systems H50 2.80 m, GPS + Galileo + QZSS 0.82 m).
+- **Up error.** The kinematic up error is metre-level on every run (median
+  +3 m on Tokyo run1 and Nagoya run1, +9 m on Nagoya run3 with GLONASS) and
+  is not explained by BeiDou: GPS + Galileo + QZSS alone has a median of
+  +4.5 m on Tokyo run1.
 - **Urban canyons with few satellites.** Below 15 satellites the Tokyo error
   is 2-8 m median, above 20 satellites 0.6-0.9 m (H95 about 2 m): the
   remaining tail is geometry and NLOS the screening cannot identify.
