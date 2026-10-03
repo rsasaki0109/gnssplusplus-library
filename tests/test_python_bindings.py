@@ -31,6 +31,7 @@ class PythonBindingsSmokeTest(unittest.TestCase):
             "test_read_rinex_header_returns_expected_fields",
             "test_read_rinex_observation_epochs_returns_epoch_summaries",
             "test_solve_spp_file_returns_valid_solution_records",
+            "test_preprocess_spp_file_exposes_satellite_identity",
             "test_solve_ppp_file_returns_valid_solution_records",
             "test_solve_ppp_file_accepts_new_kwargs",
         } and not repo_data_exists("data/rover_static.obs", "data/navigation_static.nav"):
@@ -174,6 +175,23 @@ class PythonBindingsSmokeTest(unittest.TestCase):
         )
         self.assertGreaterEqual(solution.size(), 1)
         self.assertTrue(any(record.is_valid() for record in solution.records()))
+
+    def test_preprocess_spp_file_exposes_satellite_identity(self) -> None:
+        epochs = libgnsspp.preprocess_spp_file(
+            str(ROOT_DIR / "data" / "rover_static.obs"),
+            str(ROOT_DIR / "data" / "navigation_static.nav"),
+            max_epochs=3,
+        )
+        measurements = [m for _, rows in epochs for m in rows]
+        self.assertTrue(measurements)
+        system_chars = {0: "G", 1: "R", 2: "E", 3: "C", 4: "J"}
+        for measurement in measurements:
+            self.assertGreater(measurement.prn, 0)
+            self.assertEqual(
+                measurement.satellite_id,
+                f"{system_chars[measurement.system_id]}{measurement.prn:02d}",
+            )
+        self.assertGreater(len({m.satellite_id for m in epochs[0][1]}), 4)
 
     def test_solve_ppp_file_returns_valid_solution_records(self) -> None:
         solution = libgnsspp.solve_ppp_file(

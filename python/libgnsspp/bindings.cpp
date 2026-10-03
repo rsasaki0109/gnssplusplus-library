@@ -591,7 +591,19 @@ PYBIND11_MODULE(_libgnsspp, m) {
         .def_readonly("elevation", &libgnss::SPPProcessor::CorrectedMeasurement::elevation)
         .def_readonly("system_id", &libgnss::SPPProcessor::CorrectedMeasurement::system_id)
         .def_readonly("ionosphere_free",
-                      &libgnss::SPPProcessor::CorrectedMeasurement::ionosphere_free);
+                      &libgnss::SPPProcessor::CorrectedMeasurement::ionosphere_free)
+        // Satellite identity, so external solvers can pair rows with other
+        // receivers (e.g. base-station double differences).
+        .def_property_readonly(
+            "prn",
+            [](const libgnss::SPPProcessor::CorrectedMeasurement& measurement) {
+                return static_cast<int>(measurement.identity.satellite.prn);
+            })
+        .def_property_readonly(
+            "satellite_id",
+            [](const libgnss::SPPProcessor::CorrectedMeasurement& measurement) {
+                return measurement.identity.satellite.toString();
+            });
 
     m.def("preprocess_spp_file",
           [](const std::string& obs_path, const std::string& nav_path, size_t max_epochs) {
