@@ -231,7 +231,10 @@ public:
      * - code biases are held per satellite independently of their (static)
      *   message epoch, mapped from RTCM SSR signal IDs to libgnss++ signals and
      *   converted to the internal subtract-from-pseudorange sign (RTCM biases
-     *   are added to the observation).
+     *   are added to the observation); GPS L2 biases follow the tracked RINEX
+     *   code (C2W -> L2 P, C2L -> L2C), as on the HAS SIS path;
+     * - satellites without an SSR orbit/clock sample are excluded instead of
+     *   falling back to the broadcast orbit (HAS covers GPS and Galileo only).
      * The caller is expected to restrict Galileo to I/NAV ephemerides
      * (NavigationData::setGalileoEphemerisSource).
      */
@@ -341,6 +344,9 @@ public:
 
 private:
     void applyEnvironmentOverridesToPPPConfig();
+    /// Correction-use policy shared by the Galileo HAS IDD profile and the HAS
+    /// SIS path (or reset to the default for the other SSR loaders).
+    void setGalileoHasCorrectionPolicy(bool enabled);
 
     PPPConfig ppp_config_;
     PPPEnvOverrides env_overrides_;
@@ -366,11 +372,11 @@ private:
     bool precise_products_loaded_ = false;
     bool ssr_products_loaded_ = false;
     bool require_coherent_ssr_ = false;
-    /// Drop satellites without an SSR orbit sample (Galileo HAS SIS: the
+    /// Drop satellites without an SSR orbit sample (Galileo HAS IDD / SIS: the
     /// corrections cover GPS and Galileo only and expire with their validity).
     bool require_ssr_orbit_correction_ = false;
     /// Select GPS L2 SSR code biases by the tracked RINEX code (C2W -> L2 P,
-    /// C2L -> L2C) instead of the coarse signal (Galileo HAS SIS).
+    /// C2L -> L2C) instead of the coarse signal (Galileo HAS IDD / SIS).
     bool ssr_code_bias_tracking_identity_ = false;
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
