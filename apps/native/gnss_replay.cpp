@@ -321,8 +321,13 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--rtcm-message-limit" && i + 1 < argc) {
             config.rtcm_message_limit = static_cast<size_t>(std::stoull(argv[++i]));
         } else if (arg == "--base-ecef" && i + 3 < argc) {
-            config.base_position_ecef =
-                Eigen::Vector3d(std::stod(argv[++i]), std::stod(argv[++i]), std::stod(argv[++i]));
+            // Do not increment i multiple times in constructor arguments: C++
+            // does not guarantee their evaluation order, and MSVC builds read
+            // the supplied XYZ reversed.
+            const double base_x = std::stod(argv[++i]);
+            const double base_y = std::stod(argv[++i]);
+            const double base_z = std::stod(argv[++i]);
+            config.base_position_ecef = Eigen::Vector3d(base_x, base_y, base_z);
             config.base_position_override = true;
         } else if (arg == "--quiet") {
             config.quiet = true;
