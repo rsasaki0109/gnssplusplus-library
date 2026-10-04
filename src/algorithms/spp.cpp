@@ -2714,6 +2714,19 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs,
         cm.identity.clock_group = cm.clock_group;
         cm.identity.weight = cm.weight;
         cm.ionosphere_free = spp_obs.ionosphere_free;
+        cm.snr = o.snr;
+        if (o.has_carrier_phase) {
+            cm.carrier_phase = o.carrier_phase;
+        }
+        if (o.has_doppler) {
+            cm.doppler = o.doppler;
+        }
+        // Rotate the velocity with the same Sagnac rotation as the position.
+        cm.satellite_velocity = {
+            st.velocity.x() * cos_a + st.velocity.y() * sin_a,
+            -st.velocity.x() * sin_a + st.velocity.y() * cos_a,
+            st.velocity.z()};
+        cm.satellite_clock_drift = st.clock_drift;
         result.push_back(cm);
         markAccepted(spp_obs);
     }

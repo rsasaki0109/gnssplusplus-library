@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import tempfile
 import unittest
 from pathlib import Path
@@ -32,6 +33,7 @@ class PythonBindingsSmokeTest(unittest.TestCase):
             "test_read_rinex_observation_epochs_returns_epoch_summaries",
             "test_solve_spp_file_returns_valid_solution_records",
             "test_preprocess_spp_file_exposes_satellite_identity",
+            "test_preprocess_spp_file_exposes_raw_observables",
             "test_solve_ppp_file_returns_valid_solution_records",
             "test_solve_ppp_file_accepts_new_kwargs",
         } and not repo_data_exists("data/rover_static.obs", "data/navigation_static.nav"):
@@ -192,6 +194,24 @@ class PythonBindingsSmokeTest(unittest.TestCase):
                 f"{system_chars[measurement.system_id]}{measurement.prn:02d}",
             )
         self.assertGreater(len({m.satellite_id for m in epochs[0][1]}), 4)
+
+    def test_preprocess_spp_file_exposes_raw_observables(self) -> None:
+        epochs = libgnsspp.preprocess_spp_file(
+            str(ROOT_DIR / "data" / "rover_static.obs"),
+            str(ROOT_DIR / "data" / "navigation_static.nav"),
+            max_epochs=3,
+        )
+        measurements = [m for _, rows in epochs for m in rows]
+        self.assertTrue(measurements)
+        for measurement in measurements:
+            self.assertGreater(measurement.snr, 0.0)
+            speed = math.sqrt(sum(v * v for v in measurement.satellite_velocity))
+            # GNSS satellites move at roughly 1.5-4 km/s in ECEF.
+            self.assertGreater(speed, 500.0)
+            self.assertLess(speed, 5000.0)
+            self.assertLess(abs(measurement.satellite_clock_drift), 1e-8)
+        self.assertTrue(any(math.isfinite(m.carrier_phase) for m in measurements))
+        self.assertTrue(any(math.isfinite(m.doppler) for m in measurements))
 
     def test_solve_ppp_file_returns_valid_solution_records(self) -> None:
         solution = libgnsspp.solve_ppp_file(

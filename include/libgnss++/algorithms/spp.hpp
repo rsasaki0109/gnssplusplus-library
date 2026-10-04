@@ -99,6 +99,15 @@ public:
         // the GPS clock, while the MRTKLIB IFLC compatibility path preserves
         // a QZSS-specific column.
         GNSSSystem clock_group = GNSSSystem::UNKNOWN;
+        // Raw observables of the source row and the satellite motion, for
+        // external solvers that time-difference carrier phase or use Doppler.
+        double snr = 0.0;                        ///< Signal-to-noise ratio [dB-Hz]
+        double carrier_phase =                   ///< Carrier phase [cycles], NaN if absent
+            std::numeric_limits<double>::quiet_NaN();
+        double doppler =                         ///< Doppler [Hz], NaN if absent
+            std::numeric_limits<double>::quiet_NaN();
+        std::array<double, 3> satellite_velocity{};  ///< Satellite ECEF velocity [m/s], same frame as satellite_ecef
+        double satellite_clock_drift = 0.0;      ///< Satellite clock drift [s/s]
     };
 
     /**
