@@ -603,7 +603,15 @@ PYBIND11_MODULE(_libgnsspp, m) {
             "satellite_id",
             [](const libgnss::SPPProcessor::CorrectedMeasurement& measurement) {
                 return measurement.identity.satellite.toString();
-            });
+            })
+        .def_readonly("snr", &libgnss::SPPProcessor::CorrectedMeasurement::snr)
+        .def_readonly("carrier_phase",
+                      &libgnss::SPPProcessor::CorrectedMeasurement::carrier_phase)
+        .def_readonly("doppler", &libgnss::SPPProcessor::CorrectedMeasurement::doppler)
+        .def_readonly("satellite_velocity",
+                      &libgnss::SPPProcessor::CorrectedMeasurement::satellite_velocity)
+        .def_readonly("satellite_clock_drift",
+                      &libgnss::SPPProcessor::CorrectedMeasurement::satellite_clock_drift);
 
     m.def("preprocess_spp_file",
           [](const std::string& obs_path, const std::string& nav_path, size_t max_epochs) {
