@@ -205,6 +205,13 @@ class PythonBindingsSmokeTest(unittest.TestCase):
         self.assertTrue(measurements)
         for measurement in measurements:
             self.assertGreater(measurement.snr, 0.0)
+            self.assertGreater(measurement.carrier_frequency_hz, 1e9)
+            self.assertLess(measurement.carrier_frequency_hz, 2e9)
+            self.assertGreaterEqual(measurement.signal_id, 0)
+            self.assertIn(measurement.clock_group, (1, 2, 4, 8, 16))
+            self.assertIsInstance(measurement.loss_of_lock_indicator, int)
+            self.assertIsInstance(measurement.source_loss_of_lock, bool)
+            self.assertIsInstance(measurement.carrier_observation_type, str)
             speed = math.sqrt(sum(v * v for v in measurement.satellite_velocity))
             # GNSS satellites move at roughly 1.5-4 km/s in ECEF.
             self.assertGreater(speed, 500.0)

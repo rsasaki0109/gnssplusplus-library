@@ -46,8 +46,10 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
 
         Ephemeris eph;
         eph.satellite = SatelliteId(GNSSSystem::GPS, prn);
-        eph.week = static_cast<uint16_t>(adjustGpsWeek(static_cast<uint16_t>(
-            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 10))));
+        const auto week_mod = static_cast<uint16_t>(
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 10));
+        eph.week = static_cast<uint16_t>(reference_time_ ? adjustGpsWeek(week_mod, reference_time_->week) :
+                                                      adjustGpsWeek(week_mod));
         bit_pos += 10;
         eph.ura = static_cast<uint8_t>(
             readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 4));
@@ -234,7 +236,7 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
         eph.health = bn;
         eph.sv_health = static_cast<double>(bn);
         eph.iode = tb & 0x7FU;
-        const GNSSTime current_utc = gpstToUtcApprox(currentGpstApprox());
+        const GNSSTime current_utc = gpstToUtcApprox(reference_time_ ? *reference_time_ : currentGpstApprox());
         const GNSSTime tof_utc = alignUtcTimeOfDay(tk_h * 3600.0 + tk_m * 60.0 + tk_s - 10800.0, current_utc);
         const GNSSTime toe_utc = alignUtcTimeOfDay(static_cast<double>(tb) * 900.0 - 10800.0, current_utc);
         eph.tof = utcToGpstApprox(tof_utc);

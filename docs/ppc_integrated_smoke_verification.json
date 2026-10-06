@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "compared_streams": 3,
+  "different_streams": [],
+  "scope": "120 epoch GTSAM-enabled integrated default compatibility; all POS numeric fields; RTK/fused/coupled RTK",
+  "baseline_manifest": {
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\ppc-native-smoke-20261006\\manifest.json",
+    "bytes": 313055,
+    "sha256": "dd34c52ce9a52e35a4588dc7a7a73422e857bb7b652868b4b6fa25dde171a11d"
+  },
+  "integrated_manifest": {
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\integrated-native-smoke-20261006\\manifest.json",
+    "bytes": 319451,
+    "sha256": "d2c8b9bbcabc8c0577a8f257b511d28a43e5bfac05509d6bcf1f0e3c34f6b910"
+  }
+}

@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/integrity_consensus.hpp>
+#include <libgnss++/algorithms/fix_recovery_guard.hpp>
 #include <libgnss++/algorithms/nlos_weights.hpp>
 #include <libgnss++/algorithms/float_trust_policy.hpp>
 #include <libgnss++/algorithms/rtk.hpp>
@@ -237,6 +238,8 @@ struct SolveConfig {
     double min_demote_fixed_status_baseline_m = 0.0;
     double max_demote_fixed_status_baseline_m = 0.0;
     bool enable_realtime_fix_integrity = false;
+    bool enable_fix_recovery = false;
+    std::string fix_recovery_log_path;
     // Fix 1 (agent/realtime-fix-integrity follow-up): opt-in, off by
     // default. Ported field-for-field from the frozen offline external
     // audit and safe there (Shinjuku-Trimble: 22 caught / 0 harmed), but
@@ -1952,6 +1955,10 @@ void printAdvancedUsage(const char* program_name) {
         << "  --timing-csv <file>        Write per-epoch RTK solver processing timing CSV\n"
         << "  --realtime-fix-integrity   Gate FIX output with bounded-latency residual checks\n"
         << "                             (default: off; maximum latency: 7 epochs)\n"
+        << "  --fix-recovery            Optional residual quarantine and clean-FIX recovery\n"
+        << "                             (default: off; zero additional output delay)\n"
+        << "  --no-fix-recovery         Disable residual quarantine/recovery\n"
+        << "  --fix-recovery-log <file>  Record every recovery decision; implies --fix-recovery\n"
         << "  --integrity-base-gate      Also enable the frozen offline low-satellite/ratio\n"
         << "                             confidence gate (default: off). Recommended for\n"
         << "                             low-FIX-rate receivers matching the audited offline\n"
@@ -2172,6 +2179,7 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             {"--float-bridge-tail-guard", "--no-float-bridge-tail-guard"},
             {"--glonass", "--no-glonass"},
             {"--integrity-base-gate", "--no-integrity-base-gate"},
+            {"--fix-recovery", "--no-fix-recovery"},
             {"--kinematic-post-filter", "--no-kinematic-post-filter"},
             {"--kml", "--no-kml"},
             {"--nonfix-drift-guard", "--no-nonfix-drift-guard"},
@@ -2324,6 +2332,15 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--realtime-fix-integrity") {
             config.enable_realtime_fix_integrity = true;
+            continue;
+        }
+        if (arg == "--fix-recovery" || arg == "--no-fix-recovery") {
+            config.enable_fix_recovery = arg == "--fix-recovery";
+            continue;
+        }
+        if (arg == "--fix-recovery-log" && i + 1 < argc) {
+            config.fix_recovery_log_path = argv[++i];
+            config.enable_fix_recovery = true;
             continue;
         }
         if (arg == "--integrity-base-gate") {
@@ -3783,6 +3800,19 @@ int main(int argc, char* argv[]) {
         }
 
         std::unique_ptr<libgnss::RealtimeFixIntegrityGate> integrity_gate;
+        libgnss::FixRecoveryGuard::Config fix_recovery_config;
+        fix_recovery_config.enabled = config.enable_fix_recovery;
+        libgnss::FixRecoveryGuard fix_recovery_guard(fix_recovery_config);
+        std::ofstream fix_recovery_log;
+        if (config.enable_fix_recovery && !config.fix_recovery_log_path.empty()) {
+            fix_recovery_log.open(config.fix_recovery_log_path);
+            if (!fix_recovery_log) {
+                std::cerr << "Error: cannot open FIX recovery log: " << config.fix_recovery_log_path << '\n';
+                return 1;
+            }
+            fix_recovery_log << "gps_week,tow,input_status,output_status,state,reasons,"
+                                "demote_fixed,request_primary_reset,recovered,suspect_streak,clean_streak\n";
+        }
         IntegrityTelemetryWriter integrity_writer;
         if (config.enable_realtime_fix_integrity) {
             libgnss::RealtimeFixIntegrityGate::Config integrity_config;
@@ -4448,6 +4478,22 @@ int main(int argc, char* argv[]) {
 
             auto gated_feedback_solution = feedback_solution;
             bool integrity_reset_requested = false;
+            if (config.enable_fix_recovery) {
+                const auto recovery = fix_recovery_guard.update(feedback_solution, rover_obs.time);
+                if (recovery.demote_fixed) {
+                    if (pos_solution.isFixed()) pos_solution.status = libgnss::SolutionStatus::FLOAT;
+                    if (gated_feedback_solution.isFixed()) gated_feedback_solution.status = libgnss::SolutionStatus::FLOAT;
+                }
+                integrity_reset_requested = recovery.request_primary_reset;
+                if (fix_recovery_log) {
+                    fix_recovery_log << rover_obs.time.week << ',' << std::fixed << std::setprecision(3)
+                        << rover_obs.time.tow << ',' << static_cast<int>(feedback_solution.status) << ','
+                        << static_cast<int>(pos_solution.status) << ',' << static_cast<int>(recovery.state) << ','
+                        << recovery.reasons << ',' << recovery.demote_fixed << ','
+                        << recovery.request_primary_reset << ',' << recovery.recovered << ','
+                        << recovery.suspect_streak << ',' << recovery.clean_streak << '\n';
+                }
+            }
             if (integrity_gate) {
                 libgnss::RealtimeFixIntegrityGate::EpochInput integrity_input;
                 integrity_input.primary = pos_solution;
@@ -4462,6 +4508,7 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 integrity_reset_requested =
+                    integrity_reset_requested ||
                     integrity_update.current.consensus.request_primary_reset ||
                     integrity_update.current.residual_streak_demoted ||
                     integrity_update.current.residual_spike_demoted ||

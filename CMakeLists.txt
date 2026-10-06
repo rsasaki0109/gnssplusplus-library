@@ -106,6 +106,7 @@ set(GNSS_SOURCES
     src/fusion/fusion_update.cpp
     src/fusion/fusion_initialization.cpp
     src/fusion/fusion_processor.cpp
+    src/fusion/online_rtk_imu.cpp
     src/fusion/dd_imu_bridge.cpp
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp
@@ -342,7 +343,10 @@ target_include_directories(gnss_rtk_runtime PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(gnss_rtk_runtime PUBLIC Eigen3::Eigen)
+# Runtime navigation/SSR and RTK objects also use types and environment helpers
+# defined in gnss_lib. Declare that dependency so single-pass static linkers
+# place gnss_lib after this archive, including for new online-only consumers.
+target_link_libraries(gnss_rtk_runtime PUBLIC gnss_lib Eigen3::Eigen)
 
 # Solver support archive: the shared runtime objects plus FGO. The historical
 # target name "gnss_lib_noopt" referred to its old -O0 build; it is compiled

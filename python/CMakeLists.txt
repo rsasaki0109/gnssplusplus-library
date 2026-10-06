@@ -5,6 +5,7 @@ set(GNSSPP_PYTHON_INSTALL_DIR
 set(GNSSPP_PYTHON_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/__init__.py
     ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/artifacts.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/libgnsspp/observations.py
 )
 
 file(MAKE_DIRECTORY ${GNSSPP_PYTHON_PACKAGE_DIR})

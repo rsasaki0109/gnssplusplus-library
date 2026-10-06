@@ -266,6 +266,25 @@ def resolve_log_path(config_path: Path | None, explicit_path: str | None) -> Pat
 def process_is_running(pid: int) -> bool:
     if pid <= 0:
         return False
+    if os.name == "nt":
+        # os.kill(pid, 0) invokes TerminateProcess on Windows. Probe the
+        # process handle without sending any signal or changing its state.
+        import ctypes
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+        kernel.OpenProcess.restype = wintypes.HANDLE
+        kernel.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+        kernel.WaitForSingleObject.restype = wintypes.DWORD
+        kernel.CloseHandle.argtypes = (wintypes.HANDLE,)
+        kernel.CloseHandle.restype = wintypes.BOOL
+        handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel.WaitForSingleObject(handle, 0) == 258  # WAIT_TIMEOUT
+        finally:
+            kernel.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except OSError:

@@ -244,6 +244,28 @@ if(GTest_FOUND)
         Threads::Threads
     )
 
+    add_executable(gnss_online_tests test_online_rtk_imu.cpp)
+    target_link_libraries(gnss_online_tests PRIVATE
+        gnss_lib gnss_rtk_runtime GTest::GTest GTest::Main Threads::Threads)
+    add_test(NAME online_rtk_imu_tests COMMAND gnss_online_tests)
+    set_tests_properties(online_rtk_imu_tests PROPERTIES LABELS core)
+
+    add_executable(gnss_rtcm_context_tests test_rtcm_time_context.cpp)
+    target_link_libraries(gnss_rtcm_context_tests PRIVATE gnss_lib gnss_rtk_runtime GTest::GTest GTest::Main Threads::Threads)
+    add_test(NAME rtcm_time_context_tests COMMAND gnss_rtcm_context_tests)
+    set_tests_properties(rtcm_time_context_tests PROPERTIES LABELS core)
+
+    # Explicit raw PPC staging/audit harness; no external data is substituted
+    # for the independent historical fixtures of other test targets.
+    add_executable(gnss_online_ppc_fixture ppc_online_fixture.cpp)
+    target_link_libraries(gnss_online_ppc_fixture PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
+
+    add_executable(gnss_fix_recovery_tests test_fix_recovery_guard.cpp)
+    target_include_directories(gnss_fix_recovery_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(gnss_fix_recovery_tests PRIVATE Eigen3::Eigen GTest::GTest GTest::Main)
+    add_test(NAME fix_recovery_guard_tests COMMAND gnss_fix_recovery_tests)
+    set_tests_properties(fix_recovery_guard_tests PROPERTIES LABELS core)
+
     # Add test to CTest
     add_test(NAME run_tests COMMAND gnss_run_tests)
     add_test(
@@ -693,8 +715,11 @@ if(GTest_FOUND)
         gsdc_frozen_runner
         gsdc_raw_clock_cleanup_audit
         integrity_consensus_replay
+        observation_analysis
+        native_integrity_audit
         ppc_clas_scorecard
         ppc_kinematic_integrity_loo
+        ppc_native_replay
         ppc_residual_integrity_policy
         ppc_status_demotion
         ppc_wrong_fix_residuals

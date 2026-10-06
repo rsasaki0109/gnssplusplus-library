@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "compared_streams": 18,
+  "different_streams": [],
+  "scope": "all POS data fields; headers excluded",
+  "baseline_manifest": {
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\ppc-native-full-20261006\\manifest.json",
+    "bytes": 498304,
+    "sha256": "62107bd441c820b7e8fb759808bffc11adbea7fd85da77c54e019a8f6cd1cc99"
+  },
+  "repeat_manifest": {
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\ppc-native-repeat-20261006\\manifest.json",
+    "bytes": 498791,
+    "sha256": "8b760272202b92548fd6a2f79c40c71d624aa383dd48f3d01c3a92a394ea6f27"
+  },
+  "cmake_settings_match": true,
+  "evaluation": "full six runs, all three streams",
+  "source_contents_sha256": "fb0647c680d2431b3a86dc2d52229ac025b0522f6bd65ac59b8d3962d4d4207f"
+}

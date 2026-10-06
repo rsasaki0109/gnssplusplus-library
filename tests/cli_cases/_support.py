@@ -23,6 +23,7 @@ import zipfile
 import http.server
 import importlib.util
 from functools import partial
+from contextlib import closing
 from pathlib import Path
 from urllib import request
 
@@ -88,7 +89,7 @@ def build_synthetic_sqlite_rosbag(
     if include_fix:
         topic_specs.append(("/gnss/fix", "sensor_msgs/msg/NavSatFix", [1_000_000_000, 1_200_000_000, 4_000_000_000]))
 
-    with sqlite3.connect(db_path) as connection:
+    with closing(sqlite3.connect(db_path)) as connection:
         connection.execute(
             "CREATE TABLE topics("
             "id INTEGER PRIMARY KEY, "

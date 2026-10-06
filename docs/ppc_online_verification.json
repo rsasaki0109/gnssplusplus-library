@@ -1,0 +1,293 @@
+{
+  "schema": "online_ppc_verification.v1",
+  "state": "passed",
+  "staging": {
+    "schema": "online_ppc_staging.v1",
+    "base_ecef": [
+      -3961905.0275,
+      3348993.7526,
+      3698211.7831
+    ],
+    "lever_arm": [
+      0.31,
+      0,
+      0.55
+    ],
+    "prefix_epochs": 300,
+    "late_base_reception_delay_s": 0.1,
+    "delayed_rover_reception_delay_s": 0.15,
+    "reception_contract": "simulated arrival at each rover epoch; navigation admitted only after toc and tof; no observed PPC network receipts",
+    "typed_api_systems": "all RINEX systems",
+    "rtcm_transport_systems": "GPS only, MSM7/1019 encoder scope",
+    "reference_used": false
+  },
+  "input_artifacts": [
+    {
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+      "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+      "bytes": 90593655
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+      "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+      "bytes": 35794907
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+      "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+      "bytes": 815565
+    },
+    {
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+      "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091",
+      "bytes": 22469390
+    }
+  ],
+  "binaries": [
+    {
+      "path": "E:\\gnsspp-goal-build\\tests\\Release\\gnss_online_ppc_fixture.exe",
+      "sha256": "f17f7706de46359c551214a45055d53c818f3aada0f68a2460f75e374cd3a0c1",
+      "bytes": 1306112
+    },
+    {
+      "path": "E:\\gnsspp-goal-build\\apps\\Release\\gnss_online.exe",
+      "sha256": "b2d6a474d63b98c7a5f90774a878f25989a057fcb17f484eba5d6c1b48c4e1cb",
+      "bytes": 1110528
+    }
+  ],
+  "staging_argv": [
+    "E:\\gnsspp-goal-build\\tests\\Release\\gnss_online_ppc_fixture.exe",
+    "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1",
+    "output\\online-tokyo1-final-20261006\\staged",
+    "600"
+  ],
+  "prefix_epochs_exactly_equal": 300,
+  "prefix_comparison_excludes": [
+    "processing_ms"
+  ],
+  "delayed_rover_numeric_parity": true,
+  "typed_api": {
+    "normal": {
+      "epochs": 600,
+      "valid_rtk": 600,
+      "valid_fused": 590,
+      "exact_base": 120,
+      "tight_updates": 103,
+      "max_reset_generation": 0,
+      "processing_p95_ms": 25.733,
+      "processing_max_ms": 51.5232,
+      "rtk_status_counts": {
+        "1": 487,
+        "3": 98,
+        "4": 15
+      },
+      "reason_counts": {
+        "": 120,
+        "missing_exact_base": 480
+      }
+    },
+    "missing_base": {
+      "epochs": 600,
+      "valid_rtk": 600,
+      "valid_fused": 590,
+      "exact_base": 60,
+      "tight_updates": 43,
+      "max_reset_generation": 0,
+      "processing_p95_ms": 23.3725,
+      "processing_max_ms": 51.9451,
+      "rtk_status_counts": {
+        "1": 541,
+        "3": 44,
+        "4": 15
+      },
+      "reason_counts": {
+        "": 60,
+        "missing_exact_base": 540
+      }
+    },
+    "late_base": {
+      "epochs": 600,
+      "valid_rtk": 600,
+      "valid_fused": 590,
+      "exact_base": 60,
+      "tight_updates": 43,
+      "max_reset_generation": 0,
+      "processing_p95_ms": 23.0043,
+      "processing_max_ms": 59.8624,
+      "rtk_status_counts": {
+        "1": 541,
+        "3": 44,
+        "4": 15
+      },
+      "reason_counts": {
+        "": 60,
+        "missing_exact_base": 540
+      }
+    },
+    "imu_gap": {
+      "epochs": 600,
+      "valid_rtk": 600,
+      "valid_fused": 560,
+      "exact_base": 120,
+      "tight_updates": 78,
+      "max_reset_generation": 1,
+      "processing_p95_ms": 26.8559,
+      "processing_max_ms": 48.7166,
+      "rtk_status_counts": {
+        "1": 481,
+        "3": 66,
+        "4": 53
+      },
+      "reason_counts": {
+        "": 119,
+        "imu_stale_reset": 1,
+        "missing_exact_base": 480
+      }
+    },
+    "delayed_rover": {
+      "epochs": 600,
+      "valid_rtk": 600,
+      "valid_fused": 590,
+      "exact_base": 120,
+      "tight_updates": 103,
+      "max_reset_generation": 0,
+      "processing_p95_ms": 25.4987,
+      "processing_max_ms": 94.6145,
+      "rtk_status_counts": {
+        "1": 487,
+        "3": 98,
+        "4": 15
+      },
+      "reason_counts": {
+        "": 120,
+        "missing_exact_base": 480
+      }
+    }
+  },
+  "streaming": {
+    "normal": {
+      "argv": [
+        "E:\\gnsspp-goal-build\\apps\\Release\\gnss_online.exe",
+        "--base-ecef",
+        "-3961905.0275",
+        "3348993.7526",
+        "3698211.7831",
+        "--lever-arm",
+        "0.31",
+        "0",
+        "0.55"
+      ],
+      "outputs_received_before_next_rover_input": 600,
+      "stdin_remained_open_until_all_outputs_received": true,
+      "delivery_to_output_max_ms": 7.785099558532238,
+      "stderr": {
+        "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\stream_normal.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    },
+    "suffix_reset": {
+      "argv": [
+        "E:\\gnsspp-goal-build\\apps\\Release\\gnss_online.exe",
+        "--base-ecef",
+        "-3961905.0275",
+        "3348993.7526",
+        "3698211.7831",
+        "--lever-arm",
+        "0.31",
+        "0",
+        "0.55"
+      ],
+      "outputs_received_before_next_rover_input": 600,
+      "stdin_remained_open_until_all_outputs_received": true,
+      "delivery_to_output_max_ms": 8.271099999547005,
+      "stderr": {
+        "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\stream_suffix_reset.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    }
+  },
+  "transport": {
+    "epochs": 600,
+    "valid_rtk": 108,
+    "valid_fused": 590,
+    "exact_base": 120,
+    "tight_updates": 28,
+    "max_reset_generation": 0,
+    "processing_p95_ms": 2.7321,
+    "processing_max_ms": 6.9551,
+    "rtk_status_counts": {
+      "0": 492,
+      "3": 58,
+      "4": 50
+    },
+    "reason_counts": {
+      "": 120,
+      "missing_exact_base": 480
+    }
+  },
+  "claims": "prefix causality and outage behavior for this declared received-event simulation; no full-run accuracy or real network latency claim",
+  "artifacts": [
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\delayed_rover.csv",
+      "sha256": "2e1fe97c5653486ea6dd0432b6ff67a58e6dc6ed5fe08b87bb97e1a8ab4ae571",
+      "bytes": 158594
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\events.txt",
+      "sha256": "87360c6d33555b6e4fe2c59c08a7ce7394fe77338c1105c2bf43c989bd51cc13",
+      "bytes": 2385874
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\imu_gap.csv",
+      "sha256": "66c582ff30b940f3385e02d3bec22131998eeea4e64075eb52d2cedfd3f5a5ff",
+      "bytes": 151469
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\late_base.csv",
+      "sha256": "397165850ec84bdf3f198cfea81f523eadaa108a3cb6c45db343996ab10a2216",
+      "bytes": 154300
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\missing_base.csv",
+      "sha256": "653e1f848a0c063b8c51f3e8ef5ba66eb40a73a9ee1d6b4f85b13e7686f0988f",
+      "bytes": 154412
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\normal.csv",
+      "sha256": "e7948f5427675287acbcb716afc8910323b26423157d47e85a38e7b7d0c3822d",
+      "bytes": 153355
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staged\\staging.json",
+      "sha256": "ca82906592de23c6edb4d898adbde71c3d4619c1c1f748ecc15c1493402e94f2",
+      "bytes": 503
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\staging.log",
+      "sha256": "90d280fd01c0fe37748fde3d399c4a81cf9cfbfd2f4d044d16695992a7bb97f9",
+      "bytes": 69
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\stream_normal.csv",
+      "sha256": "1a38eebeb0b08258e6a5de0d928bcd7d3c2d4e250c47914d9216f98e003d9e2d",
+      "bytes": 131604
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\stream_normal.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\stream_suffix_reset.csv",
+      "sha256": "99740a6d8408dfa42a6f5b5845ec14d9c6fb2f458426187be2090664835d5b70",
+      "bytes": 130781
+    },
+    {
+      "path": "E:\\gnsspp-goal-development\\output\\online-tokyo1-final-20261006\\stream_suffix_reset.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

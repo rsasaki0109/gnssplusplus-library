@@ -1,0 +1,1217 @@
+{
+  "adoption": {
+    "any_wrong_fixed_reduction": true,
+    "contract": "each run: no wrong-FIX increase at 0.5/2m; <=1% baseline-correct FIX loss; no missing, horizontal P95, recovery P95 or censored-event increase; at least one wrong-FIX reduction overall",
+    "decision": "NO_GO",
+    "default_enabled": false,
+    "runs": {
+      "nagoya/run1": {
+        "failed_conditions": [
+          "horizontal_p95_increased",
+          "2.0m:correct_fixed_loss_exceeded_one_percent",
+          "2.0m:recovery_delay_p95_increased"
+        ],
+        "passed": false
+      },
+      "nagoya/run2": {
+        "failed_conditions": [
+          "missing_or_unmatched_outputs_increased",
+          "horizontal_p95_increased",
+          "0.5m:correct_fixed_loss_exceeded_one_percent",
+          "2.0m:correct_fixed_loss_exceeded_one_percent"
+        ],
+        "passed": false
+      },
+      "nagoya/run3": {
+        "failed_conditions": [
+          "missing_or_unmatched_outputs_increased",
+          "0.5m:correct_fixed_loss_exceeded_one_percent",
+          "0.5m:recovery_delay_p95_increased",
+          "2.0m:correct_fixed_loss_exceeded_one_percent",
+          "2.0m:recovery_delay_p95_increased"
+        ],
+        "passed": false
+      },
+      "tokyo/run1": {
+        "failed_conditions": [
+          "missing_or_unmatched_outputs_increased",
+          "horizontal_p95_increased",
+          "0.5m:correct_fixed_loss_exceeded_one_percent",
+          "0.5m:recovery_delay_p95_increased",
+          "2.0m:wrong_fixed_epochs_increased",
+          "2.0m:correct_fixed_loss_exceeded_one_percent",
+          "2.0m:recovery_delay_p95_increased"
+        ],
+        "passed": false
+      },
+      "tokyo/run2": {
+        "failed_conditions": [
+          "horizontal_p95_increased",
+          "0.5m:correct_fixed_loss_exceeded_one_percent",
+          "0.5m:recovery_delay_p95_increased",
+          "2.0m:correct_fixed_loss_exceeded_one_percent",
+          "2.0m:recovery_delay_p95_increased"
+        ],
+        "passed": false
+      },
+      "tokyo/run3": {
+        "failed_conditions": [
+          "horizontal_p95_increased",
+          "0.5m:correct_fixed_loss_exceeded_one_percent",
+          "0.5m:recovery_delay_p95_increased",
+          "2.0m:correct_fixed_loss_exceeded_one_percent"
+        ],
+        "passed": false
+      }
+    },
+    "runtime_contract": "reported separately; concurrent-job wall times are not an adoption gate",
+    "scope": "existing six-run development comparison; no held-out integrity guarantee"
+  },
+  "aggregate": {
+    "0.5": {
+      "baseline_correct_fixed_epochs": 36833,
+      "baseline_correct_fixed_lost": 1608,
+      "baseline_wrong_fixed_epochs": 3223,
+      "candidate_wrong_fixed_epochs": 948,
+      "correct_fixed_loss_fraction": 0.04365650367876632
+    },
+    "2.0": {
+      "baseline_correct_fixed_epochs": 39132,
+      "baseline_correct_fixed_lost": 3339,
+      "baseline_wrong_fixed_epochs": 924,
+      "candidate_wrong_fixed_epochs": 399,
+      "correct_fixed_loss_fraction": 0.08532658693652254
+    }
+  },
+  "analysis_script": {
+    "bytes": 18587,
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\scripts\\analysis\\audit_ppc_native_integrity.py",
+    "sha256": "2c4fcf358d8e5cf42dc81d6809c5ea5a862e7cf9353b5ce38096837367b1e1d0"
+  },
+  "baseline_replay_manifest": {
+    "bytes": 368428,
+    "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\manifest.json",
+    "sha256": "f3d13a7356fb96df544c6f3625790a0c857e7d480dc2fb370ffdbef2eb729e75",
+    "state": "passed"
+  },
+  "candidate_replay_manifest": {
+    "bytes": 370600,
+    "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\manifest.json",
+    "sha256": "b0f04afa6d3d45afb8bf137adb43602083daf17a425ab1cce1ca0293bd0ff82d",
+    "state": "passed"
+  },
+  "evaluation_runs": [
+    "tokyo/run1",
+    "tokyo/run2",
+    "tokyo/run3",
+    "nagoya/run1",
+    "nagoya/run2",
+    "nagoya/run3"
+  ],
+  "experiment_source_commit": "8235764f",
+  "full_audit": {
+    "bytes": 510540,
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\native-fix-recovery-paired-audit-final-20261006.json",
+    "sha256": "8448cea471a8cb1bcb8199791c55b0b6918fee4656b8ae919b766a23dd8b20a9"
+  },
+  "horizontal_contract": "official geodetic horizontal P95 retained from replay scorer",
+  "input_artifacts": [
+    {
+      "bytes": 1658813,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+      "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+    },
+    {
+      "bytes": 1788080,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run1\\rtk.pos",
+      "sha256": "f282606a6415a7342d7af36853f27f50472ae5a03a4593f591cf090e8ab03eb7"
+    },
+    {
+      "bytes": 1495,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run1\\rtk.log",
+      "sha256": "f37fdc02b5464493479a50e84156dfe93dd08c0f6bf7929693f27219cd387797"
+    },
+    {
+      "bytes": 7001,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run1\\rtk_summary.json",
+      "sha256": "8dc433b37ffa330f73fd8d6069b2a2711c6c89014aa95a097506c048cc9e1cf9"
+    },
+    {
+      "bytes": 1774535,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run1\\rtk.pos",
+      "sha256": "38c090ac5a3fda6494558b67938df7804be5f6d9765521646691822d8a54e71a"
+    },
+    {
+      "bytes": 1493,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run1\\rtk.log",
+      "sha256": "a952d095f280a641093e70bc79bf2d38751bdcbd1cd0d20589075505a808a7aa"
+    },
+    {
+      "bytes": 6993,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run1\\rtk_summary.json",
+      "sha256": "9ea7f9756a0c3b162d83c5aece8342ee049fda9bdfff26e95bda84922469369d"
+    },
+    {
+      "bytes": 417608,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run1\\fix_recovery.csv",
+      "sha256": "81670295896eb90459d733349e71ad54167f1f4a81bef06e012a5159a769727c"
+    },
+    {
+      "bytes": 1269866,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run2\\reference.csv",
+      "sha256": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53"
+    },
+    {
+      "bytes": 1472057,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run2\\rtk.pos",
+      "sha256": "19485272b5a36dcd667ab1af5058d2a809b8e63f870f7a824aa2b09bcfa051e1"
+    },
+    {
+      "bytes": 1491,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run2\\rtk.log",
+      "sha256": "c69b35c71dfdcd087ecd6e173196175dd0ee48a8220555b88a08483f55d6820b"
+    },
+    {
+      "bytes": 6997,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run2\\rtk_summary.json",
+      "sha256": "31177de9927128841eccac27980f0d744c2e1c99495b68ba4d910390f9a452be"
+    },
+    {
+      "bytes": 1474582,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run2\\rtk.pos",
+      "sha256": "5aaf2e994a8b8896e074930b77272e0b411ce1313f180597e15a746a4c4f9f3b"
+    },
+    {
+      "bytes": 1489,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run2\\rtk.log",
+      "sha256": "341951e4809e91f2ba654fa017f7b7deae7869b98d7f55a4a035a765a87c1c62"
+    },
+    {
+      "bytes": 6994,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run2\\rtk_summary.json",
+      "sha256": "5d52905fb0e7fd4931b23ffda730a23a05d90e1ebcc1e8adb274d870cddfd607"
+    },
+    {
+      "bytes": 320413,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run2\\fix_recovery.csv",
+      "sha256": "f21e51249b799d7e23ee13290cd44e27a3e077b228e47db9aa46cb0e6edfc03d"
+    },
+    {
+      "bytes": 2124084,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run3\\reference.csv",
+      "sha256": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49"
+    },
+    {
+      "bytes": 2409997,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run3\\rtk.pos",
+      "sha256": "c392a15489af671afa403a5e90e26f249025a28af5e5000bb5ff8b7277a0ad06"
+    },
+    {
+      "bytes": 1498,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run3\\rtk.log",
+      "sha256": "4ee9a3133ce8f16873da72d6b76af863040d39f7391c2014999804ee46aa78d3"
+    },
+    {
+      "bytes": 7006,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\tokyo\\run3\\rtk_summary.json",
+      "sha256": "e6130725f63017b6ed95280d67cd6cf7b250e3123438e65c1bea831c739e6b47"
+    },
+    {
+      "bytes": 2412220,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run3\\rtk.pos",
+      "sha256": "74e12936f78329494b71f0cff1cd27bceee0279a34faf2d98fd40e0fb92b1ea4"
+    },
+    {
+      "bytes": 1495,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run3\\rtk.log",
+      "sha256": "72e54673e6989bace2e80ed3bb23de11c43dda2f740d30fea9ea8ad4f5475338"
+    },
+    {
+      "bytes": 7003,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run3\\rtk_summary.json",
+      "sha256": "ea54c281af70b6376c61cc104d6a6c13d940beb5497c417cc11c671c56794045"
+    },
+    {
+      "bytes": 535663,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\tokyo\\run3\\fix_recovery.csv",
+      "sha256": "43b0612aa22a8296dd7987b6c92797b08937f2a21733c6f734f4a10bca1c2ea6"
+    },
+    {
+      "bytes": 1063676,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run1\\reference.csv",
+      "sha256": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d"
+    },
+    {
+      "bytes": 1177513,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run1\\rtk.pos",
+      "sha256": "f60e9ffc84fa53b8b20f0d57bf6224c908d0e94945d70516090cfeec0f7a6272"
+    },
+    {
+      "bytes": 1496,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run1\\rtk.log",
+      "sha256": "b092049d5d379e45fdf6a4e5e257c5582c53a6268af25be994cfcbd9b3741b84"
+    },
+    {
+      "bytes": 7013,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run1\\rtk_summary.json",
+      "sha256": "ed03db55a0bbb57a0f58c9a6141366fb7786b41d0d95d07ea445cb8f772b7a22"
+    },
+    {
+      "bytes": 1178565,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run1\\rtk.pos",
+      "sha256": "6e3e043c4e7518b7c5c81525d7e964fea98a4abc0854f7495a156db87486269f"
+    },
+    {
+      "bytes": 1494,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run1\\rtk.log",
+      "sha256": "bba39bad2856d606ce03659524fc4f4b1a1da043ce6ebe953237b1d21f3608ec"
+    },
+    {
+      "bytes": 7010,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run1\\rtk_summary.json",
+      "sha256": "48e226d28be728964d329ce0349340a2fc4a02dccd670adc37ab096b97ae1c61"
+    },
+    {
+      "bytes": 266198,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run1\\fix_recovery.csv",
+      "sha256": "a4bd6ea4466820a1875de2e0e51bc5c7771073950cd72e667a888b0ad88463f5"
+    },
+    {
+      "bytes": 1309822,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run2\\reference.csv",
+      "sha256": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e"
+    },
+    {
+      "bytes": 1215230,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run2\\rtk.pos",
+      "sha256": "bd3afd1b20559cb26ea9fd125bf0cf3b0d2666c1c9e2caef949303a825b10c87"
+    },
+    {
+      "bytes": 1499,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run2\\rtk.log",
+      "sha256": "0520aadab658d365e512eb8436d055c2fe88adf3810b8cbe7e65b056c0e8e14c"
+    },
+    {
+      "bytes": 7011,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run2\\rtk_summary.json",
+      "sha256": "c742eaf0de106eb80cffc70b2612edc8f65c35bcb3f3573be2b944c5b24acdf2"
+    },
+    {
+      "bytes": 1202076,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run2\\rtk.pos",
+      "sha256": "8ca9b1286c30890d1d41e3523a8f04ccf103903d0887b13fb0bace3143c3c43e"
+    },
+    {
+      "bytes": 1496,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run2\\rtk.log",
+      "sha256": "1df9bdd7365a136935fc7226b362962f2084f5e6cb106fa6e9284e523ce5cd31"
+    },
+    {
+      "bytes": 7009,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run2\\rtk_summary.json",
+      "sha256": "83ffe30a80f2e4344e89d3737146ca10a1815db81e8a1a294037ffc87dc9e13e"
+    },
+    {
+      "bytes": 330913,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run2\\fix_recovery.csv",
+      "sha256": "a2f8cbeb370319257efa91477a2b1878dd00a9d3aebc72aa73d795f386113264"
+    },
+    {
+      "bytes": 721654,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\nagoya\\run3\\reference.csv",
+      "sha256": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564"
+    },
+    {
+      "bytes": 579385,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run3\\rtk.pos",
+      "sha256": "51604ad069dfe187a7900f2656b7de7c1b8fabe29220c4b74ea61432b03d6215"
+    },
+    {
+      "bytes": 1499,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run3\\rtk.log",
+      "sha256": "d3f17a99a4eb7c0d4d5c36d22b9be1dc1fd1fb68e924ba37afbf1eda376b8a68"
+    },
+    {
+      "bytes": 7011,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\nagoya\\run3\\rtk_summary.json",
+      "sha256": "c8607cb0a2ddf0c4f5ec8b3627d8175e97d0dbde36a6091279ee21f224d03941"
+    },
+    {
+      "bytes": 560571,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run3\\rtk.pos",
+      "sha256": "e79de1de6b198f3274c487a3ffbf809237ec7bbf3220d926c2568648bbbf1f60"
+    },
+    {
+      "bytes": 1498,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run3\\rtk.log",
+      "sha256": "7b7d30e756c88db77959222f49db7b6b6062bdb0b1e861de9eeaf3c755376ed4"
+    },
+    {
+      "bytes": 7010,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run3\\rtk_summary.json",
+      "sha256": "7146e7a08637f3ef33f52f5d063f13bc01bf1b29c39fcd87da1423acdf7e0f03"
+    },
+    {
+      "bytes": 182163,
+      "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-on-full-20261006\\nagoya\\run3\\fix_recovery.csv",
+      "sha256": "6283ff3766112e18afc5a8ddc46e4e7c19a0b0268fc586decc8206c23a5289de"
+    }
+  ],
+  "matching": "exact GPS week and millisecond-rounded TOW; unmatched outputs excluded",
+  "omitted": "Per-event arrays only; full event-level audit is retained at full_audit.path.",
+  "paired_provenance": {
+    "scope": "same full runs, source contents, binary, raw inputs, runtime libraries, CMake settings and solver arguments except recovery log/flag and destinations",
+    "verified": true
+  },
+  "recovery_contract": "time after last wrong FIX until next threshold-correct FIX, including intervening missing/float epochs",
+  "reference_role": "offline labels only; no detector input",
+  "runs": {
+    "nagoya/run1": {
+      "admitted_rover_epochs": 7602,
+      "candidate": {
+        "admitted_rover_epochs": 7602,
+        "error_3d_p95_m": 4.1554119678635,
+        "exact_reference_matched_epochs": 6704,
+        "fixed_epochs": 5098,
+        "missing_or_unmatched_epochs": 898,
+        "native_wall_s": 85.091793,
+        "official_geodetic_horizontal_p95_m": 1.251883,
+        "recovery_decisions": {
+          "clean_candidate_recoveries": 5,
+          "demoted_fixed_epochs": 662,
+          "logged_epochs": 7602,
+          "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline",
+          "primary_reset_requests": 5,
+          "right_censored_quarantines": 0,
+          "state_counts": {
+            "0": 6653,
+            "1": 2,
+            "2": 926,
+            "3": 21
+          }
+        },
+        "thresholds": {
+          "0.5": {
+            "correct_fixed_epochs": 4925,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 1243,
+              "large_prefit": 1050,
+              "large_update_nis": 5,
+              "low_ratio": 164,
+              "no_named_runtime_warning": 3533
+            },
+            "recovery_delay_p50_s": 12.799999952316284,
+            "recovery_delay_p95_s": 165.9800000667571,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 173,
+            "wrong_fixed_events": 27,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 52,
+              "large_prefit": 1,
+              "large_update_nis": 2,
+              "low_ratio": 74,
+              "no_named_runtime_warning": 52
+            }
+          },
+          "2.0": {
+            "correct_fixed_epochs": 5034,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 1263,
+              "large_prefit": 1051,
+              "large_update_nis": 6,
+              "low_ratio": 228,
+              "no_named_runtime_warning": 3558
+            },
+            "recovery_delay_p50_s": 15.099999904632568,
+            "recovery_delay_p95_s": 71.69999998807907,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 64,
+            "wrong_fixed_events": 16,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 32,
+              "large_update_nis": 1,
+              "low_ratio": 10,
+              "no_named_runtime_warning": 27
+            }
+          }
+        }
+      },
+      "comparison": {
+        "0.5": {
+          "baseline_correct_fixed_lost": 27,
+          "baseline_wrong_epochs_now_accurate": 2,
+          "baseline_wrong_epochs_now_missing": 15,
+          "baseline_wrong_fixed_removed": 690
+        },
+        "2.0": {
+          "baseline_correct_fixed_lost": 442,
+          "baseline_wrong_epochs_now_accurate": 11,
+          "baseline_wrong_epochs_now_missing": 8,
+          "baseline_wrong_fixed_removed": 276
+        }
+      },
+      "error_3d_p95_m": 2.0725747009806423,
+      "exact_reference_matched_epochs": 6699,
+      "fixed_epochs": 5789,
+      "missing_or_unmatched_epochs": 903,
+      "native_wall_s": 107.874666,
+      "official_geodetic_horizontal_p95_m": 0.755371,
+      "thresholds": {
+        "0.5": {
+          "correct_fixed_epochs": 4952,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 1243,
+            "large_prefit": 1050,
+            "large_update_nis": 7,
+            "low_ratio": 165,
+            "no_named_runtime_warning": 3559
+          },
+          "recovery_delay_p50_s": 11.799999952316284,
+          "recovery_delay_p95_s": 186.86000003814692,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 837,
+          "wrong_fixed_events": 27,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 589,
+            "large_prefit": 493,
+            "large_update_nis": 16,
+            "low_ratio": 606,
+            "no_named_runtime_warning": 83
+          }
+        },
+        "2.0": {
+          "correct_fixed_epochs": 5475,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 1548,
+            "large_prefit": 1287,
+            "large_update_nis": 15,
+            "low_ratio": 527,
+            "no_named_runtime_warning": 3637
+          },
+          "recovery_delay_p50_s": 0.20000004768371582,
+          "recovery_delay_p95_s": 21.299999952316277,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 314,
+          "wrong_fixed_events": 63,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 284,
+            "large_prefit": 256,
+            "large_update_nis": 8,
+            "low_ratio": 244,
+            "no_named_runtime_warning": 5
+          }
+        }
+      }
+    },
+    "nagoya/run2": {
+      "admitted_rover_epochs": 9451,
+      "candidate": {
+        "admitted_rover_epochs": 9451,
+        "error_3d_p95_m": 11.397298070022748,
+        "exact_reference_matched_epochs": 6876,
+        "fixed_epochs": 3715,
+        "missing_or_unmatched_epochs": 2575,
+        "native_wall_s": 104.621878,
+        "official_geodetic_horizontal_p95_m": 5.746931,
+        "recovery_decisions": {
+          "clean_candidate_recoveries": 7,
+          "demoted_fixed_epochs": 650,
+          "logged_epochs": 9451,
+          "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline",
+          "primary_reset_requests": 7,
+          "right_censored_quarantines": 0,
+          "state_counts": {
+            "0": 5515,
+            "1": 7,
+            "2": 3896,
+            "3": 33
+          }
+        },
+        "thresholds": {
+          "0.5": {
+            "correct_fixed_epochs": 3664,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 183,
+              "large_prefit": 77,
+              "large_update_nis": 2,
+              "low_ratio": 760,
+              "low_satellites": 1,
+              "no_named_runtime_warning": 2710
+            },
+            "recovery_delay_p50_s": 2.1999999284744263,
+            "recovery_delay_p95_s": 23.400000035762787,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 51,
+            "wrong_fixed_events": 16,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 10,
+              "large_prefit": 1,
+              "large_update_nis": 1,
+              "low_ratio": 29,
+              "no_named_runtime_warning": 16
+            }
+          },
+          "2.0": {
+            "correct_fixed_epochs": 3703,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 192,
+              "large_prefit": 78,
+              "large_update_nis": 3,
+              "low_ratio": 780,
+              "low_satellites": 1,
+              "no_named_runtime_warning": 2724
+            },
+            "recovery_delay_p50_s": 2.799999952316284,
+            "recovery_delay_p95_s": 20.0,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 12,
+            "wrong_fixed_events": 5,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 1,
+              "low_ratio": 9,
+              "no_named_runtime_warning": 2
+            }
+          }
+        }
+      },
+      "comparison": {
+        "0.5": {
+          "baseline_correct_fixed_lost": 560,
+          "baseline_wrong_epochs_now_accurate": 2,
+          "baseline_wrong_epochs_now_missing": 9,
+          "baseline_wrong_fixed_removed": 383
+        },
+        "2.0": {
+          "baseline_correct_fixed_lost": 928,
+          "baseline_wrong_epochs_now_accurate": 0,
+          "baseline_wrong_epochs_now_missing": 7,
+          "baseline_wrong_fixed_removed": 15
+        }
+      },
+      "error_3d_p95_m": 11.09869148402821,
+      "exact_reference_matched_epochs": 6939,
+      "fixed_epochs": 4658,
+      "missing_or_unmatched_epochs": 2512,
+      "native_wall_s": 107.192971,
+      "official_geodetic_horizontal_p95_m": 5.198496,
+      "thresholds": {
+        "0.5": {
+          "correct_fixed_epochs": 4224,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 366,
+            "large_prefit": 241,
+            "large_update_nis": 513,
+            "low_ratio": 1331,
+            "low_satellites": 1,
+            "no_named_runtime_warning": 2536
+          },
+          "recovery_delay_p50_s": 4.300000071525574,
+          "recovery_delay_p95_s": 138.69000002145768,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 434,
+          "wrong_fixed_events": 32,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 270,
+            "large_prefit": 285,
+            "large_update_nis": 40,
+            "low_ratio": 406,
+            "low_satellites": 1,
+            "no_named_runtime_warning": 17
+          }
+        },
+        "2.0": {
+          "correct_fixed_epochs": 4631,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 621,
+            "large_prefit": 514,
+            "large_update_nis": 552,
+            "low_ratio": 1714,
+            "low_satellites": 1,
+            "no_named_runtime_warning": 2550
+          },
+          "recovery_delay_p50_s": 29.100000023841858,
+          "recovery_delay_p95_s": 242.74000006914122,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 27,
+          "wrong_fixed_events": 12,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 15,
+            "large_prefit": 12,
+            "large_update_nis": 1,
+            "low_ratio": 23,
+            "low_satellites": 1,
+            "no_named_runtime_warning": 3
+          }
+        }
+      }
+    },
+    "nagoya/run3": {
+      "admitted_rover_epochs": 5201,
+      "candidate": {
+        "admitted_rover_epochs": 5201,
+        "error_3d_p95_m": 15.788391105025442,
+        "exact_reference_matched_epochs": 3202,
+        "fixed_epochs": 1261,
+        "missing_or_unmatched_epochs": 1999,
+        "native_wall_s": 58.269122,
+        "official_geodetic_horizontal_p95_m": 10.638017,
+        "recovery_decisions": {
+          "clean_candidate_recoveries": 5,
+          "demoted_fixed_epochs": 1087,
+          "logged_epochs": 5201,
+          "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline",
+          "primary_reset_requests": 5,
+          "right_censored_quarantines": 0,
+          "state_counts": {
+            "0": 2018,
+            "1": 1,
+            "2": 3031,
+            "3": 151
+          }
+        },
+        "thresholds": {
+          "0.5": {
+            "correct_fixed_epochs": 1205,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 110,
+              "large_prefit": 115,
+              "large_update_nis": 4,
+              "low_ratio": 109,
+              "low_satellites": 1,
+              "no_named_runtime_warning": 897
+            },
+            "recovery_delay_p50_s": 1.0,
+            "recovery_delay_p95_s": 146.92000000476838,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 56,
+            "wrong_fixed_events": 23,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 16,
+              "large_update_nis": 1,
+              "low_ratio": 23,
+              "low_satellites": 1,
+              "no_named_runtime_warning": 22
+            }
+          },
+          "2.0": {
+            "correct_fixed_epochs": 1241,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 113,
+              "large_prefit": 115,
+              "large_update_nis": 4,
+              "low_ratio": 125,
+              "low_satellites": 2,
+              "no_named_runtime_warning": 914
+            },
+            "recovery_delay_p50_s": 114.19999992847443,
+            "recovery_delay_p95_s": 139.71000007390975,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 20,
+            "wrong_fixed_events": 12,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 13,
+              "large_update_nis": 1,
+              "low_ratio": 7,
+              "no_named_runtime_warning": 5
+            }
+          }
+        }
+      },
+      "comparison": {
+        "0.5": {
+          "baseline_correct_fixed_lost": 400,
+          "baseline_wrong_epochs_now_accurate": 1,
+          "baseline_wrong_epochs_now_missing": 25,
+          "baseline_wrong_fixed_removed": 638
+        },
+        "2.0": {
+          "baseline_correct_fixed_lost": 770,
+          "baseline_wrong_epochs_now_accurate": 0,
+          "baseline_wrong_epochs_now_missing": 7,
+          "baseline_wrong_fixed_removed": 268
+        }
+      },
+      "error_3d_p95_m": 21.11648629492155,
+      "exact_reference_matched_epochs": 3309,
+      "fixed_epochs": 2299,
+      "missing_or_unmatched_epochs": 1892,
+      "native_wall_s": 48.77942,
+      "official_geodetic_horizontal_p95_m": 10.641817,
+      "thresholds": {
+        "0.5": {
+          "correct_fixed_epochs": 1605,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 359,
+            "large_prefit": 309,
+            "large_update_nis": 11,
+            "low_ratio": 200,
+            "low_satellites": 1,
+            "no_named_runtime_warning": 987
+          },
+          "recovery_delay_p50_s": 1.4000000953674316,
+          "recovery_delay_p95_s": 105.28000009059906,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 694,
+          "wrong_fixed_events": 63,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 448,
+            "large_prefit": 13,
+            "large_update_nis": 189,
+            "low_ratio": 371,
+            "low_satellites": 1,
+            "no_named_runtime_warning": 150
+          }
+        },
+        "2.0": {
+          "correct_fixed_epochs": 2011,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 534,
+            "large_prefit": 322,
+            "large_update_nis": 15,
+            "low_ratio": 349,
+            "low_satellites": 2,
+            "no_named_runtime_warning": 1127
+          },
+          "recovery_delay_p50_s": 16.200000166893005,
+          "recovery_delay_p95_s": 104.86000007390976,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 288,
+          "wrong_fixed_events": 30,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 273,
+            "large_update_nis": 185,
+            "low_ratio": 222,
+            "no_named_runtime_warning": 10
+          }
+        }
+      }
+    },
+    "tokyo/run1": {
+      "admitted_rover_epochs": 11928,
+      "candidate": {
+        "admitted_rover_epochs": 11928,
+        "error_3d_p95_m": 4.169016810866665,
+        "exact_reference_matched_epochs": 10151,
+        "fixed_epochs": 8225,
+        "missing_or_unmatched_epochs": 1777,
+        "native_wall_s": 114.24548,
+        "official_geodetic_horizontal_p95_m": 1.404645,
+        "recovery_decisions": {
+          "clean_candidate_recoveries": 4,
+          "demoted_fixed_epochs": 617,
+          "logged_epochs": 11928,
+          "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline",
+          "primary_reset_requests": 4,
+          "right_censored_quarantines": 0,
+          "state_counts": {
+            "0": 11067,
+            "1": 7,
+            "2": 809,
+            "3": 45
+          }
+        },
+        "thresholds": {
+          "0.5": {
+            "correct_fixed_epochs": 7819,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 891,
+              "large_prefit": 606,
+              "large_update_nis": 11,
+              "low_ratio": 697,
+              "low_satellites": 13,
+              "no_named_runtime_warning": 5954
+            },
+            "recovery_delay_p50_s": 4.3999998569488525,
+            "recovery_delay_p95_s": 105.03999996185301,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 406,
+            "wrong_fixed_events": 79,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 76,
+              "large_prefit": 3,
+              "large_update_nis": 2,
+              "low_ratio": 123,
+              "low_satellites": 15,
+              "no_named_runtime_warning": 217
+            }
+          },
+          "2.0": {
+            "correct_fixed_epochs": 8000,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 919,
+              "large_prefit": 608,
+              "large_update_nis": 13,
+              "low_ratio": 725,
+              "low_satellites": 18,
+              "no_named_runtime_warning": 6079
+            },
+            "recovery_delay_p50_s": 42.200000047683716,
+            "recovery_delay_p95_s": 107.68000001907347,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 225,
+            "wrong_fixed_events": 35,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 48,
+              "large_prefit": 1,
+              "low_ratio": 95,
+              "low_satellites": 10,
+              "no_named_runtime_warning": 92
+            }
+          }
+        }
+      },
+      "comparison": {
+        "0.5": {
+          "baseline_correct_fixed_lost": 318,
+          "baseline_wrong_epochs_now_accurate": 279,
+          "baseline_wrong_epochs_now_missing": 56,
+          "baseline_wrong_fixed_removed": 388
+        },
+        "2.0": {
+          "baseline_correct_fixed_lost": 684,
+          "baseline_wrong_epochs_now_accurate": 0,
+          "baseline_wrong_epochs_now_missing": 2,
+          "baseline_wrong_fixed_removed": 7
+        }
+      },
+      "error_3d_p95_m": 3.773750451281537,
+      "exact_reference_matched_epochs": 10226,
+      "fixed_epochs": 8867,
+      "missing_or_unmatched_epochs": 1702,
+      "native_wall_s": 121.116832,
+      "official_geodetic_horizontal_p95_m": 1.380763,
+      "thresholds": {
+        "0.5": {
+          "correct_fixed_epochs": 8083,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 1144,
+            "large_prefit": 811,
+            "large_update_nis": 24,
+            "low_ratio": 713,
+            "low_satellites": 13,
+            "no_named_runtime_warning": 5957
+          },
+          "recovery_delay_p50_s": 4.3999998569488525,
+          "recovery_delay_p95_s": 102.83999998569487,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 784,
+          "wrong_fixed_events": 95,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 408,
+            "large_prefit": 203,
+            "large_update_nis": 17,
+            "low_ratio": 161,
+            "low_satellites": 18,
+            "no_named_runtime_warning": 247
+          }
+        },
+        "2.0": {
+          "correct_fixed_epochs": 8650,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 1501,
+            "large_prefit": 1010,
+            "large_update_nis": 37,
+            "low_ratio": 773,
+            "low_satellites": 18,
+            "no_named_runtime_warning": 6127
+          },
+          "recovery_delay_p50_s": 41.89999997615814,
+          "recovery_delay_p95_s": 107.60000002384186,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 217,
+          "wrong_fixed_events": 36,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 51,
+            "large_prefit": 4,
+            "large_update_nis": 4,
+            "low_ratio": 101,
+            "low_satellites": 13,
+            "no_named_runtime_warning": 77
+          }
+        }
+      }
+    },
+    "tokyo/run2": {
+      "admitted_rover_epochs": 9151,
+      "candidate": {
+        "admitted_rover_epochs": 9151,
+        "error_3d_p95_m": 2.0994506574081435,
+        "exact_reference_matched_epochs": 8459,
+        "fixed_epochs": 7010,
+        "missing_or_unmatched_epochs": 692,
+        "native_wall_s": 148.87733,
+        "official_geodetic_horizontal_p95_m": 0.875513,
+        "recovery_decisions": {
+          "clean_candidate_recoveries": 2,
+          "demoted_fixed_epochs": 177,
+          "logged_epochs": 9151,
+          "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline",
+          "primary_reset_requests": 2,
+          "right_censored_quarantines": 0,
+          "state_counts": {
+            "0": 8856,
+            "1": 4,
+            "2": 275,
+            "3": 16
+          }
+        },
+        "thresholds": {
+          "0.5": {
+            "correct_fixed_epochs": 6879,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 456,
+              "large_prefit": 249,
+              "large_update_nis": 4,
+              "low_ratio": 1257,
+              "low_satellites": 3,
+              "no_named_runtime_warning": 5014
+            },
+            "recovery_delay_p50_s": 2.799999952316284,
+            "recovery_delay_p95_s": 61.56000008583068,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 131,
+            "wrong_fixed_events": 33,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 16,
+              "large_update_nis": 2,
+              "low_ratio": 52,
+              "low_satellites": 32,
+              "no_named_runtime_warning": 56
+            }
+          },
+          "2.0": {
+            "correct_fixed_epochs": 6966,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 469,
+              "large_prefit": 249,
+              "large_update_nis": 6,
+              "low_ratio": 1283,
+              "low_satellites": 14,
+              "no_named_runtime_warning": 5065
+            },
+            "recovery_delay_p50_s": 2.6000001430511475,
+            "recovery_delay_p95_s": 61.56000008583068,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 44,
+            "wrong_fixed_events": 13,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 3,
+              "low_ratio": 26,
+              "low_satellites": 21,
+              "no_named_runtime_warning": 5
+            }
+          }
+        }
+      },
+      "comparison": {
+        "0.5": {
+          "baseline_correct_fixed_lost": 147,
+          "baseline_wrong_epochs_now_accurate": 0,
+          "baseline_wrong_epochs_now_missing": 0,
+          "baseline_wrong_fixed_removed": 2
+        },
+        "2.0": {
+          "baseline_correct_fixed_lost": 149,
+          "baseline_wrong_epochs_now_accurate": 0,
+          "baseline_wrong_epochs_now_missing": 0,
+          "baseline_wrong_fixed_removed": 0
+        }
+      },
+      "error_3d_p95_m": 2.089624446505863,
+      "exact_reference_matched_epochs": 8445,
+      "fixed_epochs": 7159,
+      "missing_or_unmatched_epochs": 706,
+      "native_wall_s": 136.861031,
+      "official_geodetic_horizontal_p95_m": 0.870171,
+      "thresholds": {
+        "0.5": {
+          "correct_fixed_epochs": 7026,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 559,
+            "large_prefit": 322,
+            "large_update_nis": 4,
+            "low_ratio": 1271,
+            "low_satellites": 3,
+            "no_named_runtime_warning": 5043
+          },
+          "recovery_delay_p50_s": 2.200000047683716,
+          "recovery_delay_p95_s": 35.65999990701675,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 133,
+          "wrong_fixed_events": 34,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 18,
+            "large_update_nis": 2,
+            "low_ratio": 52,
+            "low_satellites": 32,
+            "no_named_runtime_warning": 56
+          }
+        },
+        "2.0": {
+          "correct_fixed_epochs": 7115,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 574,
+            "large_prefit": 322,
+            "large_update_nis": 6,
+            "low_ratio": 1297,
+            "low_satellites": 14,
+            "no_named_runtime_warning": 5094
+          },
+          "recovery_delay_p50_s": 2.6000001430511475,
+          "recovery_delay_p95_s": 42.12000002861017,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 44,
+          "wrong_fixed_events": 13,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 3,
+            "low_ratio": 26,
+            "low_satellites": 21,
+            "no_named_runtime_warning": 5
+          }
+        }
+      }
+    },
+    "tokyo/run3": {
+      "admitted_rover_epochs": 15301,
+      "candidate": {
+        "admitted_rover_epochs": 15301,
+        "error_3d_p95_m": 2.3643422713473745,
+        "exact_reference_matched_epochs": 13805,
+        "fixed_epochs": 10918,
+        "missing_or_unmatched_epochs": 1496,
+        "native_wall_s": 359.805342,
+        "official_geodetic_horizontal_p95_m": 1.063567,
+        "recovery_decisions": {
+          "clean_candidate_recoveries": 5,
+          "demoted_fixed_epochs": 281,
+          "logged_epochs": 15301,
+          "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline",
+          "primary_reset_requests": 5,
+          "right_censored_quarantines": 0,
+          "state_counts": {
+            "0": 14314,
+            "1": 11,
+            "2": 935,
+            "3": 41
+          }
+        },
+        "thresholds": {
+          "0.5": {
+            "correct_fixed_epochs": 10787,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 1008,
+              "large_prefit": 132,
+              "large_update_nis": 7,
+              "low_ratio": 645,
+              "low_satellites": 14,
+              "no_named_runtime_warning": 9212
+            },
+            "recovery_delay_p50_s": 6.599999904632568,
+            "recovery_delay_p95_s": 59.019999909400795,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 131,
+            "wrong_fixed_events": 54,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 67,
+              "large_update_nis": 5,
+              "low_ratio": 67,
+              "low_satellites": 15,
+              "no_named_runtime_warning": 21
+            }
+          },
+          "2.0": {
+            "correct_fixed_epochs": 10884,
+            "correct_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 1061,
+              "large_prefit": 132,
+              "large_update_nis": 12,
+              "low_ratio": 692,
+              "low_satellites": 21,
+              "no_named_runtime_warning": 9232
+            },
+            "recovery_delay_p50_s": 6.599999904632568,
+            "recovery_delay_p95_s": 43.26000003814697,
+            "right_censored_events": 0,
+            "wrong_fixed_epochs": 34,
+            "wrong_fixed_events": 19,
+            "wrong_fixed_runtime_classes": {
+              "heavy_outlier_suppression": 14,
+              "low_ratio": 20,
+              "low_satellites": 8,
+              "no_named_runtime_warning": 1
+            }
+          }
+        }
+      },
+      "comparison": {
+        "0.5": {
+          "baseline_correct_fixed_lost": 156,
+          "baseline_wrong_epochs_now_accurate": 16,
+          "baseline_wrong_epochs_now_missing": 30,
+          "baseline_wrong_fixed_removed": 210
+        },
+        "2.0": {
+          "baseline_correct_fixed_lost": 366,
+          "baseline_wrong_epochs_now_accurate": 0,
+          "baseline_wrong_epochs_now_missing": 0,
+          "baseline_wrong_fixed_removed": 0
+        }
+      },
+      "error_3d_p95_m": 2.1821936663858224,
+      "exact_reference_matched_epochs": 13791,
+      "fixed_epochs": 11284,
+      "missing_or_unmatched_epochs": 1510,
+      "native_wall_s": 342.433771,
+      "official_geodetic_horizontal_p95_m": 0.883091,
+      "thresholds": {
+        "0.5": {
+          "correct_fixed_epochs": 10943,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 1101,
+            "large_prefit": 194,
+            "large_update_nis": 9,
+            "low_ratio": 727,
+            "low_satellites": 14,
+            "no_named_runtime_warning": 9248
+          },
+          "recovery_delay_p50_s": 7.400000095367432,
+          "recovery_delay_p95_s": 45.88000006675719,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 341,
+          "wrong_fixed_events": 57,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 274,
+            "large_prefit": 121,
+            "large_update_nis": 25,
+            "low_ratio": 103,
+            "low_satellites": 15,
+            "no_named_runtime_warning": 23
+          }
+        },
+        "2.0": {
+          "correct_fixed_epochs": 11250,
+          "correct_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 1361,
+            "large_prefit": 315,
+            "large_update_nis": 34,
+            "low_ratio": 810,
+            "low_satellites": 21,
+            "no_named_runtime_warning": 9270
+          },
+          "recovery_delay_p50_s": 6.599999904632568,
+          "recovery_delay_p95_s": 43.26000003814697,
+          "right_censored_events": 0,
+          "wrong_fixed_epochs": 34,
+          "wrong_fixed_events": 19,
+          "wrong_fixed_runtime_classes": {
+            "heavy_outlier_suppression": 14,
+            "low_ratio": 20,
+            "low_satellites": 8,
+            "no_named_runtime_warning": 1
+          }
+        }
+      }
+    }
+  },
+  "schema": "libgnsspp.ppc_fix_recovery_evaluation.summary.v1"
+}

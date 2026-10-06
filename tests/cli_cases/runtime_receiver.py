@@ -351,8 +351,8 @@ class RuntimeReceiverCases:
                 "\n".join(
                     [
                         "[live_signoff]",
-                        f'use_existing_log = "{log_path}"',
-                        f'summary_json = "{summary_path}"',
+                        f'use_existing_log = "{log_path.as_posix()}"',
+                        f'summary_json = "{summary_path.as_posix()}"',
                         'require_termination = "completed"',
                         "require_written_solutions_min = 3",
                         "require_fixed_solutions_min = 1",
@@ -909,7 +909,11 @@ class RuntimeReceiverCases:
                 self.assertTrue(status_payload["available"])
                 self.assertEqual(status_payload["state"], "running")
             finally:
-                process.terminate()
+                if os.name == "nt":
+                    subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                   capture_output=True, check=False, creationflags=subprocess.CREATE_NO_WINDOW)
+                else:
+                    process.terminate()
                 try:
                     process.communicate(timeout=5)
                 except subprocess.TimeoutExpired:
@@ -1327,11 +1331,11 @@ class RuntimeReceiverCases:
                         "[moving_base_signoff]",
                         'solver = "replay"',
                         "use_existing_solution = true",
-                        f'out = "{solution_path}"',
-                        f'reference_csv = "{reference_csv}"',
-                        f'summary_json = "{summary_path}"',
-                        f'matched_csv = "{matched_csv}"',
-                        f'plot_png = "{plot_path}"',
+                        f'out = "{solution_path.as_posix()}"',
+                        f'reference_csv = "{reference_csv.as_posix()}"',
+                        f'summary_json = "{summary_path.as_posix()}"',
+                        f'matched_csv = "{matched_csv.as_posix()}"',
+                        f'plot_png = "{plot_path.as_posix()}"',
                         "solver_wall_time_s = 0.5",
                         "require_valid_epochs_min = 2",
                         "require_matched_epochs_min = 2",
@@ -1489,7 +1493,7 @@ class RuntimeReceiverCases:
                         'run_root = "runs"',
                         "[station.receiver]",
                         'rover_rtcm = "ntrip://field:super-secret@caster.example/MOUNT"',
-                        f'base_rtcm = "{temp_root / "base.rtcm3"}"',
+                        f'base_rtcm = "{(temp_root / "base.rtcm3").as_posix()}"',
                         "auto_restart = false",
                     ]
                 )
@@ -1539,7 +1543,8 @@ class RuntimeReceiverCases:
             self.assertEqual(launch["schema_version"], "station.v1")
             for name in ("run.json", "receiver.conf", "status.json", "live.log"):
                 self.assertTrue((run_dir / name).is_file(), name)
-            self.assertEqual(stat.S_IMODE((run_dir / "receiver.conf").stat().st_mode) & 0o077, 0)
+            if os.name != "nt":  # Windows chmod does not implement POSIX group/other permissions.
+                self.assertEqual(stat.S_IMODE((run_dir / "receiver.conf").stat().st_mode) & 0o077, 0)
 
             manifest = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["source_config_path"], str(config_path))
@@ -1577,6 +1582,20 @@ class RuntimeReceiverCases:
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("process identity does not match", result.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "Windows process probe regression")
+    def test_receiver_process_probe_does_not_terminate_the_probed_process(self) -> None:
+        command = (
+            "import os,sys; "
+            f"sys.path[:0] = {[str(ROOT_DIR / 'apps/commands'), str(ROOT_DIR / 'apps/commands/receivers')]!r}; "
+            "import gnss_rcv; "
+            "assert gnss_rcv.process_is_running(os.getpid()); "
+            "assert not gnss_rcv.process_is_running(0); "
+            "print('probe survived')"
+        )
+        result = subprocess.run([sys.executable, "-c", command], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("probe survived", result.stdout)
     def test_rcv_start_and_status_report_failed_background_run(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_start_test_") as temp_dir:
             temp_root = Path(temp_dir)

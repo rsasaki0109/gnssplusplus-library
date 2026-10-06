@@ -108,6 +108,10 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         std::array<double, 3> satellite_velocity{};  ///< Satellite ECEF velocity [m/s], same frame as satellite_ecef
         double satellite_clock_drift = 0.0;      ///< Satellite clock drift [s/s]
+        double carrier_frequency_hz = 0.0;       ///< Frequency of the raw source carrier, not the IF combination
+        std::uint8_t loss_of_lock_indicator = 0; ///< Source RINEX LLI bits; diagnostic only
+        bool source_loss_of_lock = false;        ///< Source discontinuity flag; diagnostic only
+        std::string carrier_observation_type;    ///< Source tracking identity, e.g. L1C
     };
 
     /**

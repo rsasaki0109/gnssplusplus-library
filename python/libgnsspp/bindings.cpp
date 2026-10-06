@@ -605,6 +605,16 @@ PYBIND11_MODULE(_libgnsspp, m) {
                 return measurement.identity.satellite.toString();
             })
         .def_readonly("snr", &libgnss::SPPProcessor::CorrectedMeasurement::snr)
+        .def_property_readonly("signal_id", [](const libgnss::SPPProcessor::CorrectedMeasurement& measurement) {
+            return static_cast<int>(measurement.identity.signal);
+        })
+        .def_property_readonly("clock_group", [](const libgnss::SPPProcessor::CorrectedMeasurement& measurement) {
+            return static_cast<int>(measurement.clock_group);
+        })
+        .def_readonly("carrier_frequency_hz", &libgnss::SPPProcessor::CorrectedMeasurement::carrier_frequency_hz)
+        .def_readonly("loss_of_lock_indicator", &libgnss::SPPProcessor::CorrectedMeasurement::loss_of_lock_indicator)
+        .def_readonly("source_loss_of_lock", &libgnss::SPPProcessor::CorrectedMeasurement::source_loss_of_lock)
+        .def_readonly("carrier_observation_type", &libgnss::SPPProcessor::CorrectedMeasurement::carrier_observation_type)
         .def_readonly("carrier_phase",
                       &libgnss::SPPProcessor::CorrectedMeasurement::carrier_phase)
         .def_readonly("doppler", &libgnss::SPPProcessor::CorrectedMeasurement::doppler)

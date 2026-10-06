@@ -189,13 +189,18 @@ class JapanStaticSurveyTest(unittest.TestCase):
             output = root / "observation.rnx"
             output.write_text("stale\n", encoding="ascii")
             converter = root / "converter"
-            converter.write_text(
-                "#!/bin/sh\nprintf 'fresh\\n' > \"${1%.crx}.rnx\"\n",
-                encoding="ascii",
-            )
-            converter.chmod(0o755)
-            survey.convert_crx(source, output, converter)
+            def convert(argv, **kwargs):
+                self.assertEqual(argv, [str(converter), str(output.with_suffix(".crx"))])
+                self.assertFalse(output.exists(), "stale output must be removed before conversion")
+                self.assertEqual(Path(argv[1]).read_bytes(), b"compact payload\n")
+                output.write_text("fresh\n", encoding="ascii")
+                return survey.subprocess.CompletedProcess(argv, 0, "", "")
+
+            with mock.patch.object(survey.subprocess, "run", side_effect=convert) as run:
+                survey.convert_crx(source, output, converter)
+                run.assert_called_once()
             self.assertEqual(output.read_text(encoding="ascii"), "fresh\n")
+            self.assertFalse(output.with_suffix(".crx").exists())
 
     def test_child_commands_carry_independent_truth_and_antenna_contract(self) -> None:
         with tempfile.TemporaryDirectory(prefix="japan_survey_commands_") as temp_dir:

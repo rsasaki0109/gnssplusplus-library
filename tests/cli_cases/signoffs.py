@@ -2309,11 +2309,11 @@ class SignoffCases:
                 "\n".join(
                     [
                         "[ppc_rtk_signoff]",
-                        f'run_dir = "{run_dir}"',
+                        f'run_dir = "{run_dir.as_posix()}"',
                         'city = "tokyo"',
-                        f'out = "{solution_path}"',
-                        f'summary_json = "{summary_path}"',
-                        f'rtklib_pos = "{rtklib_path}"',
+                        f'out = "{solution_path.as_posix()}"',
+                        f'summary_json = "{summary_path.as_posix()}"',
+                        f'rtklib_pos = "{rtklib_path.as_posix()}"',
                         "use_existing_solution = true",
                         "use_existing_rtklib_solution = true",
                         "solver_wall_time_s = 0.5",

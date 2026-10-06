@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import csv
 from pathlib import Path
+import runpy
 import sys
 import tempfile
+import types
 import unittest
+from unittest import mock
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -18,6 +21,12 @@ import gnss_timing_holdover_workflow as workflow  # noqa: E402
 
 
 class TimingHoldoverSignoffTest(unittest.TestCase):
+    def test_workflow_loads_sibling_even_with_unrelated_benchmarks_package(self) -> None:
+        with mock.patch.dict(sys.modules, {"benchmarks": types.ModuleType("benchmarks")}):
+            namespace = runpy.run_path(str(ROOT_DIR / "apps/commands/benchmarks/gnss_timing_holdover_workflow.py"))
+        self.assertEqual(Path(namespace["survey"].__file__).resolve(),
+                         (ROOT_DIR / "apps/commands/benchmarks/gnss_japan_static_survey.py").resolve())
+
     def test_calendar_key_matches_known_gps_week_tow(self) -> None:
         self.assertEqual(signoff.calendar_gps_key(2024, 1, 1, 0, 0, 0.0), signoff.gps_key(2295, 86400.0))
 

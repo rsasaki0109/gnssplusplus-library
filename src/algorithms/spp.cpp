@@ -2715,6 +2715,17 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs,
         cm.identity.weight = cm.weight;
         cm.ionosphere_free = spp_obs.ionosphere_free;
         cm.snr = o.snr;
+        cm.carrier_frequency_hz =
+            o.has_source_carrier_frequency_hz &&
+                    std::isfinite(o.source_carrier_frequency_hz) &&
+                    o.source_carrier_frequency_hz > 0.0
+                ? o.source_carrier_frequency_hz
+                : (o.has_glonass_frequency_channel
+                       ? signalFrequencyHz(o)
+                       : signalFrequencyHz(o.signal, eph));
+        cm.loss_of_lock_indicator = o.lli;
+        cm.source_loss_of_lock = o.loss_of_lock;
+        cm.carrier_observation_type = o.carrier_phase_observation_type;
         if (o.has_carrier_phase) {
             cm.carrier_phase = o.carrier_phase;
         }

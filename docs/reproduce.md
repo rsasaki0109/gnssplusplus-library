@@ -427,6 +427,12 @@ matches the refreshed README table.
 
 ## ppc-goal frozen inputs
 
+For fresh solver regeneration from raw PPC data, use
+[PPC native replay](ppc_native_replay.md). It builds RTK and RTK/IMU, scores each
+stream separately and records complete source/input/binary provenance. Its
+results are a new native baseline, separate from the historical selected tiers
+below.
+
 The README goal matrix is the end of a long chain of truth-free selectors
 built on July 2026 solver outputs. The final steps of that chain are
 documented in [PPC reproduction](ppc_reproduction.md), but the commands that

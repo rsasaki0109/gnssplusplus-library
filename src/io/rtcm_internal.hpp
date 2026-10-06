@@ -974,10 +974,9 @@ inline uint32_t gpstToGlonassMsmEpoch(const GNSSTime& gps_time) {
     return (dow << 27) | tod_ms;
 }
 
-inline GNSSTime glonassMsmEpochToGpst(uint32_t epoch) {
+inline GNSSTime glonassMsmEpochToGpst(uint32_t epoch, const GNSSTime& current = currentGpstApprox()) {
     const uint32_t dow = epoch >> 27;
     const double tod = static_cast<double>(epoch & ((1U << 27) - 1U)) * 1e-3;
-    const GNSSTime current = currentGpstApprox();
     GNSSTime glot(current.week, static_cast<double>(dow) * kSecondsPerDay + tod);
     const double diff = glot - current;
     if (diff < -302400.0) {
@@ -1109,11 +1108,8 @@ inline uint8_t decodeSsrPrn(const SsrSystemDescriptor& descriptor, uint64_t raw_
     return static_cast<uint8_t>(raw_prn + static_cast<uint64_t>(descriptor.prn_offset));
 }
 
-inline int adjustGpsWeek(uint16_t week_mod_1024) {
-    int current_week = currentGpstApprox().week;
-    if (current_week < kMinimumExpandedGpsWeek) {
-        current_week = kMinimumExpandedGpsWeek;
-    }
+inline int adjustGpsWeek(uint16_t week_mod_1024,
+                         int current_week = std::max<int>(currentGpstApprox().week, kMinimumExpandedGpsWeek)) {
     return static_cast<int>(week_mod_1024) +
            ((current_week - static_cast<int>(week_mod_1024) + 512) / 1024) * 1024;
 }
