@@ -112,6 +112,8 @@ on Tokyo run1 with 600 epochs and an exactly matching 300-epoch prefix.
 
 Build the explicit staging harness and run the verifier against an existing
 PPC development run. Keep the historical native test fixtures separate.
+The verification targets require `BUILD_TESTING=ON` and Google Test; the
+production `gnss_online` executable does not depend on Google Test.
 
 ```sh
 cmake --build build --target gnss_online gnss_online_ppc_fixture

@@ -1,0 +1,21 @@
+{
+  "passed": true,
+  "compared_streams": 6,
+  "different_streams": [],
+  "scope": "all POS numeric fields including status; header/whitespace excluded",
+  "default_fix_recovery": false,
+  "shared_raw_input_hashes_match": true,
+  "parent_manifest": {
+    "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\ppc-native-full-20261006\\manifest.json",
+    "bytes": 498304,
+    "sha256": "62107bd441c820b7e8fb759808bffc11adbea7fd85da77c54e019a8f6cd1cc99"
+  },
+  "new_manifest": {
+    "path": "E:\\gnsspp-goal-development\\output\\fix-recovery-off-full-20261006\\manifest.json",
+    "bytes": 368428,
+    "sha256": "f3d13a7356fb96df544c6f3625790a0c857e7d480dc2fb370ffdbef2eb729e75"
+  },
+  "parent_source_hash": "fb0647c680d2431b3a86dc2d52229ac025b0522f6bd65ac59b8d3962d4d4207f",
+  "new_source_hash": "5c387633e18eb7d3a9c9826700ace49129f6a54f890c6ce0f1e7c48e5205820c",
+  "build_note": "parent GTSAM-enabled build and new GTSAM-disabled build; observed RTK fields identical on all six runs"
+}

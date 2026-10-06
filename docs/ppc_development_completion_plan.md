@@ -57,38 +57,24 @@ it is not permission to promote a default or claim a measured improvement.
 
 ## Current state
 
-2026-10-06 checkpoint: the raw command regenerated and scored all six runs
-and 18 RTK/fused/coupled-RTK streams from frozen commit `b34cf3e7`. Its same
-recipe repeat is still running; exact repeated POS data is required before
-acceptance. The 26 historical tiers remain a separate score-only lane.
-The replay's twelve focused tests and the existing 32 reproduction tests pass.
+2026-10-06: all four implementation/evaluation deliverables are complete.
+[ppc_development_results.md](ppc_development_results.md) is the final evidence
+ledger with reproducible commands, machine-readable results and regression
+limitations. This completion does not approve default adoption of the FIX
+guard: the frozen six-run comparison returns NO_GO and the default stays off.
 
-Implementation continues in `feat/ppc-integrity-online-analysis` at
-`E:/gnsspp-goal-development`, keeping the first evaluation source frozen.
-The optional default-off FIX guard has seven native mechanism tests and a
-120-epoch disabled-path POS parity check. The offline native integrity audit
-has six tests and labels all six fresh baseline runs. Its strict paired
-provenance check rejects differing source, binary, input, settings, environment
-or effective arguments. Full six-run off/on comparison and the declared
-adoption gate in [fix_recovery_guard.md](fix_recovery_guard.md) remain pending.
+The native full replay and repeat both score all six runs and 18 streams;
+every repeated POS numeric field matches. The integrated default-off RTK path
+also matches the original baseline on all six runs. The received-event path
+passes real-position prefix invariance for 300 of 600 Tokyo 1 epochs, five
+typed scenarios and two streaming executions, including actual tight-filter
+updates, late/missing base input and fresh initialization after an IMU gap.
+The public Python example exports 9,432 rows and 33 satellite plots from 300
+epochs. Frozen historical tiers, closed holdouts and the paused smartphone
+development lane are unchanged.
 
-The received-event RTK/IMU processor and stdin RTCM/IMU executable build.
-The raw Tokyo run1 verifier passed 600 epochs with five typed-API scenarios
-and two streamed CLI executions. Numerical/metadata prefixes match exactly
-for 300 epochs, excluding measured wall time. Normal typed processing produced
-600 valid RTK positions, 590 fresh fused positions, and 103 tight time updates.
-Missing/late base data, a four-second IMU outage with fresh reinitialization,
-and 0.15 s delayed rover delivery are verified. A 1 Hz base/5 Hz rover interval
-bug found by this real test was corrected. Four historical RTCM context tests
-are also registered; full native regression checks remain required.
-This is a declared received-event simulation, not a live PPC reception trace
-or a new full-run accuracy claim.
-
-The public Python satellite analysis API and CLI have fourteen independent
-passing tests. The built extension's bounded 300-epoch PPC example exports
-9,432 rows and 33 satellite plots. G05/C11 plots were visually reviewed,
-including gaps and unavailable carrier observations. Python binding smoke
-tests pass with eight historical-data cases skipped. The broader benchmark
-runner passed 181 cases (one skipped); full native/CLI/packaging checks and
-final integration are ongoing. ROS2 dependencies are unavailable on this
-Windows build, so its runtime node test cannot be performed here.
+All default native targets build, all C++ CTest suites pass, and the CLI,
+benchmark, binding and install/package checks pass in the Windows environment.
+The full 137-lane CTest run retains nine unrelated smartphone environment/
+fixture failures, documented individually in the final ledger; it is not
+reported as a completely green suite. ROS2 is unavailable and unverified.

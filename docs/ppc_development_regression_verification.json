@@ -1,0 +1,155 @@
+{
+  "broad_suite_state": "partial_pass_with_nine_existing_environment_or_fixture_failures",
+  "checks": {
+    "benchmark_scripts": {
+      "log": {
+        "bytes": 40466,
+        "path": "E:\\gnsspp-goal-development\\output\\broad-benchmark-tests.log",
+        "sha256": "84e6e0c29c610137f1d25f408caf77895fe4a3b665179df3381dde4680c1216e"
+      },
+      "passed": 180,
+      "skipped": 1,
+      "state": "passed_with_skips",
+      "total": 181
+    },
+    "cli": {
+      "log": {
+        "bytes": 36999,
+        "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\output\\broad-cli-verified-tests.log",
+        "sha256": "4faa268eeaf7881c39c7b74de7dfd6428ca97d2edbb37ee9be762ee2ad6d1b64"
+      },
+      "passed": 158,
+      "skipped": 65,
+      "state": "passed_with_skips",
+      "total": 223
+    },
+    "default_native_build": {
+      "log": {
+        "bytes": 85344,
+        "path": "E:\\gnsspp-goal-development\\output\\all-native-build.log",
+        "sha256": "74792cb9df79ba35d3ce5cd6225af39b99e2292ae1dda2a1926e55158f8c2d28"
+      },
+      "scope": "all configured default targets, including apps, examples, bindings and native test binaries",
+      "state": "passed"
+    },
+    "focused": {
+      "existing_ppc_reproduction_passed": 32,
+      "fix_recovery_guard_passed": 7,
+      "native_integrity_audit_passed": 7,
+      "native_replay_passed": 12,
+      "observation_analysis_passed": 14,
+      "online_processor_passed": 9,
+      "rtcm_time_context_passed": 4
+    },
+    "full_ctest": {
+      "argv": [
+        "ctest",
+        "--test-dir",
+        "E:\\gnsspp-goal-build",
+        "-C",
+        "Release",
+        "--output-on-failure",
+        "-j",
+        "4"
+      ],
+      "exit_code": 8,
+      "failed_lanes": [
+        "python_smartphone_native_fgo_v2_1_confirmation_tests",
+        "python_smartphone_native_fgo_v3_heading_optional_tests",
+        "python_smartphone_raw_quality_control_tests",
+        "python_smartphone_wls_stability_selector_eval_tests",
+        "python_smartphone_wls_residual_tests",
+        "python_smartphone_wls_residual_v2_tests",
+        "python_smartphone_wls_multi_phone_ensemble_tests",
+        "python_smartphone_wls_test_batch_tests",
+        "python_smartphone_native_fgo_pdc_factor_hypotheses_tests"
+      ],
+      "log": {
+        "bytes": 28967,
+        "path": "E:\\gnsspp-goal-development\\output\\ctest-full-reviewed-20261006.log",
+        "sha256": "dcc3a09a506cb08175bb98c3b75848ce18c4707c9ae0bb1613107360d4d2ca5b"
+      },
+      "passed_lanes": 128,
+      "raw_test_log": {
+        "bytes": 525911,
+        "path": "E:\\gnsspp-goal-build\\Testing\\Temporary\\LastTest.log",
+        "sha256": "49e4cef0eb7d743b53c75162aa01dfed4643908949784d94871a4d297e0f3b63"
+      },
+      "registered_lanes": 137
+    },
+    "packaging": {
+      "cases": 3,
+      "evidence": "python_packaging_tests lane in full_ctest.raw_test_log",
+      "state": "passed"
+    },
+    "primary_native_gtest": {
+      "evidence": "run_tests lane in full_ctest.raw_test_log",
+      "passed": 1274,
+      "skipped": 65,
+      "state": "passed_with_skips",
+      "total": 1339
+    },
+    "python_bindings": {
+      "log": {
+        "bytes": 2323,
+        "path": "E:\\gnsspp-goal-development\\output\\broad-python-bindings-tests.log",
+        "sha256": "1c1193d19856c004b26291615f2c3b8bb633690bb352fa48132520a3d0047d07"
+      },
+      "passed": 4,
+      "skipped": 8,
+      "state": "passed_with_skips",
+      "total": 12
+    },
+    "ros2": {
+      "attempt_log": {
+        "bytes": 950,
+        "path": "E:\\gnsspp-goal-development\\output\\broad-ros2-tests.log",
+        "sha256": "a00e44513bcd8fd13a2e86fdf0b2843e5bd9bccebe9ee985e6f06b6b397d2dde"
+      },
+      "cause": "ROS2 dependency/node binary unavailable in configured Windows build",
+      "runtime_verified": false,
+      "state": "unavailable"
+    },
+    "serial_failed_ctest": {
+      "argv": [
+        "ctest",
+        "--test-dir",
+        "E:\\gnsspp-goal-build",
+        "-C",
+        "Release",
+        "--rerun-failed",
+        "--output-on-failure",
+        "-j",
+        "1"
+      ],
+      "log": {
+        "bytes": 8949,
+        "path": "E:\\gnsspp-goal-development\\output\\ctest-rerun-failed-final.log",
+        "sha256": "525a5c78c156f2f04617e12dae93b3b7b424a4e3ce99d8b047df2b19b4ac1f65"
+      }
+    }
+  },
+  "date": "2026-10-06",
+  "development_code_commit": "92a689a0dea159e0c3f8da06ba795162ff95a6c1",
+  "immutable_hash_failure_examples": [
+    {
+      "checkout_newlines": "CRLF",
+      "checkout_sha256": "6b51834ab3deae3e3799ab6abdddb0e231a62a58b50ff75ae0522bf89d24da21",
+      "expected_sha256": "a6c1dff74f8ec0eb28985cb595976231bac7869ccddebc3d10fc725fd31f52c3",
+      "path": "docs/use_cases/records/smartphone_r5_gsdc2023_native_fgo_v2_1_confirmation_freeze.json",
+      "unchanged_baseline_git_blob_matches": true
+    },
+    {
+      "checkout_newlines": "CRLF",
+      "checkout_sha256": "1e6f0746ffa96c66964845d64412cf1859ed618f5cbc97da1a82bd7f0bbf0520",
+      "expected_sha256": "3d72bff440fad0c4a9d614bad74b97f19b6ed40d1c8be099756d64035d1b225d",
+      "path": "apps/native/gnss_fgo_imu_v3_heading_optional.cpp",
+      "unchanged_baseline_git_blob_matches": true
+    }
+  ],
+  "main_code_commit": "8a2c2adacb72187517d3aa4312d1a6cbd13ddd39",
+  "platform": "Windows native Python 3.12, MSVC Release x64",
+  "schema": "libgnsspp.ppc_development_regression.v1",
+  "scope": "Four PPC implementation/evaluation deliverables; no ROS2 runtime claim, sealed holdout access or paused smartphone development.",
+  "unchanged_smartphone_lane_verified_against": "9d89a58a"
+}

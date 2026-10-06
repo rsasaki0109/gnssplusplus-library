@@ -77,3 +77,13 @@ libraries, selected runs and epoch cap. It checks every emitted POS data field,
 including positions and statuses, excluding comments and whitespace. A changed
 population or solution fails the command and is retained in the manifest.
 Source edits between the two runs require a new baseline.
+
+The 2026-10-06 full verification at frozen commit `b34cf3e7` generated all
+six runs and 18 streams twice. Every emitted POS numeric field, including
+status, matched exactly, and saved CMake settings matched. The
+[repeatability record](ppc_native_repeatability_verification.json) identifies
+both successful manifests and their source-content hash. The original replay
+schema predates the later algorithm-environment inventory; these runs used the
+shared parent environment without GNSS/PPC overrides. The source archives and
+full manifests remain in `output/ppc-native-full-20261006/` and
+`output/ppc-native-repeat-20261006/`.
