@@ -170,4 +170,38 @@ TEST(OnlineRtkImuTest, SamePrefixIsUnaffectedByDifferentSuffixes) {
     EXPECT_DOUBLE_EQ(a.input_age_s, b.input_age_s);
     // Position parity on usable solutions additionally needs raw PPC replay.
 }
+TEST(OnlineRtkImuTest, OptInVehicleConstraintWaitsForObservedHeading) {
+    auto control_config = configuration().fusion;
+    control_config.lever_arm_body.setZero();
+    auto candidate_config = control_config;
+    candidate_config.nhc_enable = true;
+    candidate_config.nhc_require_heading_alignment = true;
+    LooseCouplingProcessor control(control_config), candidate(candidate_config);
+    for (double t : {10.0, 10.01, 10.02, 10.03}) {
+        control.processImuSample(imu(t));
+        candidate.processImuSample(imu(t));
+        EXPECT_NEAR((control.state().covariance-candidate.state().covariance).norm(), 0, 1e-12);
+    }
+    for (double t : {10.04, 10.05, 10.06}) {
+        control.processImuSample(imu(t));
+        candidate.processImuSample(imu(t));
+        PositionSolution fix;
+        fix.time = time(t);
+        fix.status = SolutionStatus::SPP;
+        fix.position_ecef = Vector3d(6378137, 0, 0);
+        fix.position_covariance = Matrix3d::Identity();
+        fix.has_velocity = true;
+        fix.velocity_ecef = Vector3d(0, 0, 5); // North at equator/Greenwich
+        fix.velocity_covariance = Matrix3d::Identity();
+        control.processGnssSolution(fix);
+        candidate.processGnssSolution(fix);
+        EXPECT_NEAR((control.state().covariance-candidate.state().covariance).norm(), 0, 1e-12);
+        EXPECT_NEAR((control.state().nominal.velocity_enu-candidate.state().nominal.velocity_enu).norm(), 0, 1e-12);
+    }
+    ASSERT_TRUE(control.isHeadingAligned());
+    ASSERT_TRUE(candidate.isHeadingAligned());
+    control.processImuSample(imu(10.07));
+    candidate.processImuSample(imu(10.07));
+    EXPECT_GT((control.state().covariance-candidate.state().covariance).norm(), 1e-7);
+}
 }

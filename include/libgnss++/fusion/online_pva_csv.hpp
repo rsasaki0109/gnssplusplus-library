@@ -13,7 +13,8 @@ inline constexpr const char* kOnlinePvaCsvHeader =
     "rtk_has_velocity,rtk_vx_mps,rtk_vy_mps,rtk_vz_mps,fused_has_velocity,fused_vx_mps,fused_vy_mps,fused_vz_mps,"
     "attitude_available,heading_aligned,attitude_week,attitude_tow,qw,qx,qy,qz,roll_deg,pitch_deg,heading_deg,"
     "ecef_to_enu_00,ecef_to_enu_01,ecef_to_enu_02,ecef_to_enu_10,ecef_to_enu_11,ecef_to_enu_12,"
-    "ecef_to_enu_20,ecef_to_enu_21,ecef_to_enu_22";
+    "ecef_to_enu_20,ecef_to_enu_21,ecef_to_enu_22,"
+    "accel_bias_x_mps2,accel_bias_y_mps2,accel_bias_z_mps2,gyro_bias_x_radps,gyro_bias_y_radps,gyro_bias_z_radps";
 
 inline void writeOnlinePvaCsv(std::ostream& stream, const GNSSTime& rover,
                               const OnlineRtkImuProcessor::Output& row) {
@@ -42,6 +43,8 @@ inline void writeOnlinePvaCsv(std::ostream& stream, const GNSSTime& rover,
         << row.rpy_frd_ned_deg.x() << ',' << row.rpy_frd_ned_deg.y() << ',' << row.rpy_frd_ned_deg.z();
     for (int r = 0; r < 3; ++r) for (int c = 0; c < 3; ++c)
         stream << ',' << row.ecef_to_attitude_enu(r, c);
+    for (int i = 0; i < 3; ++i) stream << ',' << row.accel_bias_body_mps2(i);
+    for (int i = 0; i < 3; ++i) stream << ',' << row.gyro_bias_body_radps(i);
     stream << '\n';
 }
 } // namespace libgnss

@@ -52,6 +52,8 @@ public:
         // Fixed filter frame, needed to transport attitude to another local
         // tangent frame. Row-major elements are exported with the snapshot.
         Matrix3d ecef_to_attitude_enu = Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
+        Vector3d accel_bias_body_mps2 = Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+        Vector3d gyro_bias_body_radps = Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
         bool gnss_position_updated = false;
         bool tight_time_update_supplied = false;
         std::size_t reset_generation = 0;

@@ -28,10 +28,11 @@ def dump(path, value):
 
 
 def source_identity():
-    root = Path(__file__).resolve().parents[3]
-    if not (root/".git").exists(): return None
+    parents = Path(__file__).resolve().parents
+    root = parents[3] if len(parents) > 3 else None
+    if root is None or not (root/".git").exists(): return None
     head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
-    diff = subprocess.check_output(["git", "diff", "--binary", "HEAD"], cwd=root)
+    diff = subprocess.check_output(["git", "diff", "--binary", "HEAD"], cwd=root, stderr=subprocess.DEVNULL)
     untracked = subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard"], cwd=root, text=True).splitlines()
     return dict(commit=head, tracked_diff_sha256=hashlib.sha256(diff).hexdigest(),
                 untracked={name: pin(root/name) for name in untracked})
@@ -50,6 +51,7 @@ def main(argv=None):
     parser.add_argument("--start-s", type=float, default=60)
     parser.add_argument("--duration-s", type=float, default=10)
     parser.add_argument("--plot", action="store_true", help="Needs matplotlib; metrics need only Python standard library")
+    parser.add_argument("--candidate", choices=("none", "vehicle_nhc_latched_v1"), default="none", help="Opt-in frozen development experiment; does not alter default inference")
     args = parser.parse_args(argv)
     if args.output_dir.exists(): parser.error("output directory already exists")
     if args.max_epochs < 0: parser.error("max epochs must be nonnegative")
@@ -68,6 +70,7 @@ def main(argv=None):
             manifest["binary"] = pin(binary)
             command = [str(binary.resolve()), str(args.run_dir.resolve()), str((args.output_dir/"replay").resolve()),
                        str(args.max_epochs), args.scenario, str(args.start_s), str(args.duration_s)]
+            if args.candidate != "none": command += ["--candidate", args.candidate]
             manifest["argv"] = command
             started = time.monotonic()
             result = subprocess.run(command, capture_output=True, text=True)

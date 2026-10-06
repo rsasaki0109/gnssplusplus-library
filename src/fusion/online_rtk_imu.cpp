@@ -238,6 +238,8 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         out.attitude_time = nominal.time;
         out.attitude_body_to_enu = nominal.attitude_body_to_enu;
         out.ecef_to_attitude_enu = fusion_->ecefToLocalEnuRotation();
+        out.accel_bias_body_mps2 = nominal.accel_bias;
+        out.gyro_bias_body_radps = nominal.gyro_bias;
         out.rpy_frd_ned_deg = attitude::fluEnuToFrdNedRpyDegrees(out.attitude_body_to_enu);
     }
     out.reset_generation = diagnostics_.reset_generation;
