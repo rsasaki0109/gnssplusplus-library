@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "apps/commands/benchmarks"))
@@ -119,6 +120,32 @@ class PvaTest(unittest.TestCase):
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertTrue((out/"manifest.json").exists())
         self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+
+    def test_drift_uses_one_frame_and_keeps_missing_recovery_censored(self):
+        _, rows = m.score(self.estimate, self.reference)
+        for row in rows:
+            if "fused_position_m" not in row: continue
+            row["reference_latitude"] = 10*row["elapsed_s"]
+            error = m.rotate(m.enu(row["reference_latitude"], 0), [1, 2, 3])
+            for axis, value in zip("enu", error): row["fused_position_"+axis+"_m"] = value
+        report = m.scenario_summary(rows, "gnss_outage", 3, 2)
+        self.assertLess(report["displacement_error_growth_m"]["max"], 1e-12)
+        self.assertEqual(report["drift_anchor_s"], 2)
+        censored = m.scenario_summary(rows, "gnss_outage", 10, 10)
+        self.assertIsNone(censored["recovery_heading_s"])
+        empty = m.scenario_summary(rows, "gnss_outage", 0, 1)
+        self.assertIsNone(empty["drift_anchor_s"])
+        self.assertIsNone(empty["end_displacement_error_growth_m"])
+
+    def test_missing_plot_dependency_records_failed_manifest(self):
+        import gnss_pva_evaluate as workflow
+        import json
+        out = self.directory/"failed-plot"
+        with mock.patch.object(workflow.metrics, "plot_errors", side_effect=ImportError("matplotlib missing")):
+            result = workflow.main(["--estimate", str(self.estimate), "--reference", str(self.reference),
+                                    "--output-dir", str(out), "--plot"])
+        self.assertEqual(result, 2)
+        self.assertEqual(json.loads((out/"manifest.json").read_text())["state"], "failed")
 
 
 if __name__ == "__main__":

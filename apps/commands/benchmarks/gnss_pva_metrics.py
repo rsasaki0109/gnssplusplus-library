@@ -177,6 +177,8 @@ def score(estimate, reference):
             errors.append(item)
             continue
         ref = truth[key]
+        item["reference_latitude"] = number(ref, "Latitude (deg)")
+        item["reference_longitude"] = number(ref, "Longitude (deg)")
         current = enu(number(ref, "Latitude (deg)"), number(ref, "Longitude (deg)"))
         position = [number(ref, k) for k in ("ECEF X (m)", "ECEF Y (m)", "ECEF Z (m)")]
         velocity = [number(ref, k) for k in ("East Velocity (m/s)", "North Velocity (m/s)", "Up Velocity (m/s)")]
@@ -239,6 +241,37 @@ def score(estimate, reference):
     if not matched:
         raise ValueError("no estimate timestamps match reference")
     return report, errors
+
+
+def scenario_summary(rows, name, start_s, duration_s):
+    """Diagnostic error growth from the last pre-event output; no estimator fit."""
+    end_s = start_s+duration_s
+    after = [r for r in rows if r["elapsed_s"] >= end_s]
+    window = [r for r in rows if start_s <= r["elapsed_s"] < end_s]
+    anchors = [r for r in rows if r["elapsed_s"] < start_s and "fused_position_m" in r]
+    anchor = anchors[-1] if anchors else None
+    drift, horizontal, heading_change = [], [], []
+    if anchor:
+        fixed = enu(anchor["reference_latitude"], anchor["reference_longitude"])
+        initial = [anchor["fused_position_"+axis+"_m"] for axis in "enu"]
+        for row in window:
+            if "fused_position_m" in row:
+                current = enu(row["reference_latitude"], row["reference_longitude"])
+                error_fixed = rotate(multiply(fixed, transpose(current)), [row["fused_position_"+axis+"_m"] for axis in "enu"])
+                delta = [a-b for a, b in zip(error_fixed, initial)]
+                drift.append(norm(delta))
+                horizontal.append(math.hypot(*delta[:2]))
+            if "heading_deg" in anchor and "heading_deg" in row:
+                heading_change.append(circular(row["heading_deg"]-anchor["heading_deg"]))
+    return dict(name=name, start_s=start_s, end_s=end_s, window_epochs=len(window),
+        recovery_gnss_update_s=next((r["elapsed_s"]-end_s for r in after if r["gnss_position_updated"]), None),
+        recovery_fresh_attitude_s=next((r["elapsed_s"]-end_s for r in after if r["attitude_available"]), None),
+        recovery_heading_s=next((r["elapsed_s"]-end_s for r in after if r["attitude_available"] and r["heading_aligned"]), None),
+        window_metrics={k: stats([r[k] for r in window if k in r]) for k in ("fused_position_m", "fused_velocity_mps", "rotation_deg", "heading_deg")},
+        drift_anchor_s=anchor["elapsed_s"] if anchor else None, displacement_error_growth_m=stats(drift),
+        horizontal_displacement_error_growth_m=stats(horizontal), end_displacement_error_growth_m=drift[-1] if drift else None,
+        heading_error_change_deg=stats(heading_change),
+        drift_convention="(estimate displacement - truth displacement), pre-event anchor ENU; absolute primary errors are unchanged; heading error change uses wrapped difference")
 
 
 def write_errors(path, rows):

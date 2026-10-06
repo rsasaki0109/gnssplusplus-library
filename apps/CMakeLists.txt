@@ -189,6 +189,10 @@ install(FILES
     ${CMAKE_SOURCE_DIR}/docs/online_pva.md
     ${CMAKE_SOURCE_DIR}/docs/online_pva_development_plan.md
     ${CMAKE_SOURCE_DIR}/docs/online_pva_candidate_v1.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_development_results.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_development_scorecard.png
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_decision_v1.json
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_provenance_v1.json
     DESTINATION share/libgnsspp/docs)
 install(FILES ${CMAKE_SOURCE_DIR}/LICENSE DESTINATION share/licenses/libgnsspp)
 
@@ -353,3 +357,9 @@ install(FILES
     ${CMAKE_SOURCE_DIR}/demo/fixtures/PVA_README.md
     DESTINATION share/libgnsspp/demo
 )
+
+if(UNIX)
+    configure_file(normalize_installed_scripts.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/normalize_installed_scripts.cmake @ONLY NEWLINE_STYLE UNIX)
+    install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/normalize_installed_scripts.cmake)
+endif()

@@ -1,0 +1,25 @@
+# Also support already-existing Windows checkouts with CRLF scripts.
+# Only installed executables/modules are normalized, never raw/frozen data.
+set(gnsspp_script_paths)
+foreach(gnsspp_destination "@CMAKE_INSTALL_BINDIR@" "tools" "scripts")
+    if(IS_ABSOLUTE "${gnsspp_destination}")
+        set(gnsspp_script_directory "$ENV{DESTDIR}${gnsspp_destination}")
+    else()
+        set(gnsspp_script_directory "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${gnsspp_destination}")
+    endif()
+    file(GLOB_RECURSE gnsspp_discovered_scripts
+        "${gnsspp_script_directory}/*.py" "${gnsspp_script_directory}/*.sh")
+    list(APPEND gnsspp_script_paths ${gnsspp_discovered_scripts})
+    if(gnsspp_destination STREQUAL "@CMAKE_INSTALL_BINDIR@")
+        list(APPEND gnsspp_script_paths "${gnsspp_script_directory}/gnss" "${gnsspp_script_directory}/gnss_pos2kml")
+    endif()
+endforeach()
+foreach(gnsspp_script IN LISTS gnsspp_script_paths)
+    if(EXISTS "${gnsspp_script}")
+        file(READ "${gnsspp_script}" gnsspp_script_text)
+        string(REPLACE "\r\n" "\n" gnsspp_normalized_script "${gnsspp_script_text}")
+        # file(READ) may already normalize CRLF on some hosts, so always write
+        # the normalized bytes. Existing executable permissions are preserved.
+        file(WRITE "${gnsspp_script}" "${gnsspp_normalized_script}")
+    endif()
+endforeach()

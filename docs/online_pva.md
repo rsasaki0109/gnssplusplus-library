@@ -112,3 +112,5 @@ its dependencies. SDK consumers additionally need Eigen development headers.
 
 See the [development contract](online_pva_development_plan.md) and
 [candidate contract](online_pva_candidate_v1.md) for the frozen acceptance rules.
+The [development results](online_pva_development_results.md) include the
+negative candidate decision, full-run errors and scenario limitations.

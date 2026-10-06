@@ -42,6 +42,24 @@ def repo_data_exists(*relative_paths: str) -> bool:
 
 
 class PackagingSmokeTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX installer runs on UNIX; CMake file(WRITE) uses host newlines")
+    def test_posix_install_normalizes_scripts_without_touching_frozen_data(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_script_eol_") as temp_dir:
+            prefix = Path(temp_dir)/"prefix"
+            bindir = prefix/"bin"
+            bindir.mkdir(parents=True)
+            script = bindir/"gnss"
+            script.write_bytes(b"#!/usr/bin/env python3\r\nprint('ready')\r\n")
+            frozen = prefix/"frozen.json"
+            original = b'{"immutable":true}\r\n'
+            frozen.write_bytes(original)
+            template = (ROOT_DIR/"apps/normalize_installed_scripts.cmake.in").read_text(encoding="utf-8")
+            cmake_script = Path(temp_dir)/"normalize.cmake"
+            cmake_script.write_text(template.replace("@CMAKE_INSTALL_BINDIR@", "bin"), encoding="utf-8")
+            subprocess.run(["cmake", f"-DCMAKE_INSTALL_PREFIX={prefix.as_posix()}", "-P", str(cmake_script)], check=True)
+            self.assertEqual(script.read_bytes(), b"#!/usr/bin/env python3\nprint('ready')\n")
+            self.assertEqual(frozen.read_bytes(), original)
+
     def test_docker_files_exist_and_look_like_runtime_packaging(self) -> None:
         dockerfile = ROOT_DIR / "Dockerfile"
         dockerignore = ROOT_DIR / ".dockerignore"

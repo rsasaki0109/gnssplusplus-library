@@ -61,8 +61,8 @@ def main(argv=None):
     manifest = dict(schema="libgnsspp.pva_evaluation.v1", state="running", reference_used_for_estimation=False,
                     dataset_role="development/regression; no heldout claim", scoring_source=pin(metrics.__file__),
                     workflow_source=pin(__file__), inputs={}, argv=None)
-    manifest["repository"] = source_identity()
     try:
+        manifest["repository"] = source_identity()
         if args.run_dir:
             manifest["inputs"] = {n: pin(args.run_dir/n) for n in ("rover.obs", "base.obs", "base.nav", "imu.csv", "reference.csv")}
             binary = args.replay_binary or Path(shutil.which("gnss_pva_replay") or "")
@@ -88,15 +88,8 @@ def main(argv=None):
         report, rows = metrics.score(estimate, reference)
         if args.run_dir:
             replay = manifest["replay"]
-            end = replay["scenario_start_s"]+replay["scenario_duration_s"]
-            after = [r for r in rows if r["elapsed_s"] >= end]
             if args.scenario in ("gnss_outage", "imu_gap"):
-                report["scenario"] = dict(name=args.scenario, start_s=replay["scenario_start_s"], end_s=end,
-                    recovery_gnss_update_s=next((r["elapsed_s"]-end for r in after if r["gnss_position_updated"]), None),
-                    recovery_fresh_attitude_s=next((r["elapsed_s"]-end for r in after if r["attitude_available"]), None),
-                    recovery_heading_s=next((r["elapsed_s"]-end for r in after if r["attitude_available"] and r["heading_aligned"]), None),
-                    window_metrics={k: metrics.stats([r[k] for r in rows if replay["scenario_start_s"] <= r["elapsed_s"] < end and k in r])
-                                    for k in ("fused_position_m", "fused_velocity_mps", "rotation_deg", "heading_deg")})
+                report["scenario"] = metrics.scenario_summary(rows, args.scenario, replay["scenario_start_s"], replay["scenario_duration_s"])
         metrics.write_errors(args.output_dir/"errors.csv", rows)
         if args.plot: metrics.plot_errors(args.output_dir/"errors.png", rows)
         dump(args.output_dir/"score.json", report)
@@ -106,7 +99,7 @@ def main(argv=None):
         dump(args.output_dir/"manifest.json", manifest)
         print(json.dumps(dict(output=str(args.output_dir), epochs=report["epochs"], matched=report["match_fraction"], coverage=report["coverage"])))
         return 0
-    except (ValueError, OSError, KeyError) as error:
+    except (ValueError, OSError, KeyError, ImportError) as error:
         manifest.update(state="failed", error=str(error))
         dump(args.output_dir/"manifest.json", manifest)
         print(f"pva-evaluate: {error}", file=sys.stderr)
