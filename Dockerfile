@@ -52,6 +52,9 @@ EXPOSE 8085
 # Smoke-test: CLI and Python binding must both load successfully.
 RUN gnss --help >/dev/null \
  && gnss ppp --help >/dev/null \
+ && gnss pva-replay --help >/dev/null \
+ && gnss pva-demo --output-dir /tmp/pva-smoke \
+ && rm -rf /tmp/pva-smoke \
  && python3 -c "import libgnsspp" >/dev/null
 
 # Default entrypoint: run the unified gnss CLI.

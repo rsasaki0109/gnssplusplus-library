@@ -64,6 +64,18 @@ def python_target(filename: str) -> str:
     return os.path.join(APPS_DIR, filename)
 
 COMMANDS = {
+    "pva-demo": {
+        "kind": "python", "target": python_target("gnss_pva_demo.py"),
+        "summary": "Run the tracked synthetic PVA scoring witness without hardware or a source build.",
+    },
+    "pva-evaluate": {
+        "kind": "python", "target": python_target("gnss_pva_evaluate.py"),
+        "summary": "Replay received GNSS/IMU events and score position, velocity, attitude and motion scenes offline.",
+    },
+    "pva-replay": {
+        "kind": "binary", "target": "gnss_pva_replay",
+        "summary": "Replay raw PPC through the causal online API without opening reference truth.",
+    },
     "commands": {
         "kind": "builtin",
         "summary": "List registered dispatcher commands as text or JSON for users, docs, and tooling.",

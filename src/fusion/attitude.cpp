@@ -1,4 +1,5 @@
 #include <libgnss++/fusion/attitude.hpp>
+#include <cmath>
 
 namespace libgnss {
 namespace attitude {
@@ -26,6 +27,22 @@ Eigen::Quaterniond smallAngleQuaternion(const Eigen::Vector3d& dtheta) {
 Eigen::Vector3d quaternionToRotationVector(const Eigen::Quaterniond& q) {
     const Eigen::AngleAxisd aa(q.normalized());
     return aa.angle() * aa.axis();
+}
+
+Eigen::Vector3d fluEnuToFrdNedRpyDegrees(const Eigen::Quaterniond& q) {
+    Eigen::Matrix3d d = Eigen::Matrix3d::Identity();
+    d(1, 1) = -1.0;
+    d(2, 2) = -1.0;
+    Eigen::Matrix3d p;
+    p << 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, -1.0;
+    const Eigen::Matrix3d r = p * q.toRotationMatrix() * d;
+    const double degrees = 180.0 / std::acos(-1.0);
+    double heading = std::atan2(r(1, 0), r(0, 0)) * degrees;
+    if (heading < 0.0) heading += 360.0;
+    if (heading >= 360.0) heading = 0.0; // roundoff just below zero
+    return Eigen::Vector3d(std::atan2(r(2, 1), r(2, 2)) * degrees,
+        std::atan2(-r(2, 0), std::sqrt(r(2, 1) * r(2, 1) + r(2, 2) * r(2, 2))) * degrees,
+        heading);
 }
 
 }  // namespace attitude

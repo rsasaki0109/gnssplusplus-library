@@ -1,4 +1,5 @@
 #include <libgnss++/fusion/online_rtk_imu.hpp>
+#include <libgnss++/fusion/attitude.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -213,6 +214,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
     }
     out.fusion_initialized = fusion_->isInitialized() && fusion_->isOriginSet();
     out.heading_converged = fusion_->isHeadingConverged();
+    out.heading_aligned = fusion_->isHeadingAligned();
     out.gnss_position_updated = imu_at_epoch && out.rtk.isValid() &&
         fusion_->lastGnssPositionUpdateApplied();
     out.fused = fusion_->toAntennaPositionSolution();
@@ -227,6 +229,17 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
     if (!out.fusion_initialized || !std::isfinite(out.fusion_age_s) ||
         out.fusion_age_s < 0.0 || out.fusion_age_s > config_.max_fusion_age_s)
         out.fused = PositionSolution{};
+    const auto& nominal = fusion_->state().nominal;
+    const double attitude_age_s = obs.time - nominal.time;
+    if (out.fusion_initialized && std::isfinite(attitude_age_s) && attitude_age_s >= 0.0 &&
+        attitude_age_s <= config_.max_fusion_age_s && nominal.attitude_body_to_enu.coeffs().allFinite() &&
+        std::abs(nominal.attitude_body_to_enu.norm() - 1.0) < 1e-6) {
+        out.attitude_available = true;
+        out.attitude_time = nominal.time;
+        out.attitude_body_to_enu = nominal.attitude_body_to_enu;
+        out.ecef_to_attitude_enu = fusion_->ecefToLocalEnuRotation();
+        out.rpy_frd_ned_deg = attitude::fluEnuToFrdNedRpyDegrees(out.attitude_body_to_enu);
+    }
     out.reset_generation = diagnostics_.reset_generation;
     ++diagnostics_.rover_epochs;
     rover_time_ = obs.time;

@@ -29,5 +29,11 @@ Eigen::Quaterniond smallAngleQuaternion(const Eigen::Vector3d& dtheta);
  */
 Eigen::Vector3d quaternionToRotationVector(const Eigen::Quaterniond& q);
 
+/// Aerospace 3-2-1 roll/pitch/heading (degrees), body FRD -> world NED.
+/// Input is the library's body FLU -> local ENU unit quaternion. Heading is
+/// clockwise from north in [0,360); this is an axis convention conversion,
+/// not a fitted mounting or heading offset.
+Eigen::Vector3d fluEnuToFrdNedRpyDegrees(const Eigen::Quaterniond& q);
+
 }  // namespace attitude
 }  // namespace libgnss

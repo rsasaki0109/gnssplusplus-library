@@ -2,6 +2,7 @@
 
 #include <deque>
 #include <memory>
+#include <limits>
 #include <string>
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/fusion/fusion_processor.hpp>
@@ -38,6 +39,19 @@ public:
         bool exact_base_available = false;
         bool fusion_initialized = false;
         bool heading_converged = false;
+        // Snapshot of the loose-coupling attitude actually used for fused
+        // output. Availability does not imply observed or accurate heading.
+        // Uninitialized/stale states have NaNs, never a valid-looking identity.
+        bool attitude_available = false;
+        bool heading_aligned = false;
+        GNSSTime attitude_time;
+        Eigen::Quaterniond attitude_body_to_enu = Eigen::Quaterniond(
+            std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(),
+            std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN());
+        Vector3d rpy_frd_ned_deg = Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
+        // Fixed filter frame, needed to transport attitude to another local
+        // tangent frame. Row-major elements are exported with the snapshot.
+        Matrix3d ecef_to_attitude_enu = Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
         bool gnss_position_updated = false;
         bool tight_time_update_supplied = false;
         std::size_t reset_generation = 0;
