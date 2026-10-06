@@ -569,6 +569,11 @@ COMMANDS = {
         "target": python_target("gnss_ppp_products_signoff.py"),
         "summary": "Run static, kinematic, or PPC PPP sign-off with fetched SP3/CLK/IONEX/DCB products and emit summary JSON.",
     },
+    "ppc-native-replay": {
+        "kind": "python",
+        "target": python_target("gnss_ppc_native_replay.py"),
+        "summary": "Build and regenerate PPC RTK/IMU baselines from raw inputs with complete run provenance.",
+    },
     "ppc-demo": {
         "kind": "python",
         "target": python_target("gnss_ppc_demo.py"),

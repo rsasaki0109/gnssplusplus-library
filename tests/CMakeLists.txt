@@ -695,6 +695,7 @@ if(GTest_FOUND)
         integrity_consensus_replay
         ppc_clas_scorecard
         ppc_kinematic_integrity_loo
+        ppc_native_replay
         ppc_residual_integrity_policy
         ppc_status_demotion
         ppc_wrong_fix_residuals
