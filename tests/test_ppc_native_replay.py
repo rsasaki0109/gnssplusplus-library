@@ -19,6 +19,15 @@ import gnss_ppc_native_replay as replay
 
 
 class NativeReplayTest(unittest.TestCase):
+    def test_solver_environment_records_algorithm_defaults_and_excludes_unrelated_secrets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "src/algorithms"
+            source.mkdir(parents=True)
+            (source / "knob.cpp").write_text('getenv("GNSS_KNOB"); getenv("GNSS_OTHER");', encoding="utf-8")
+            result = replay.solver_environment(root, {"GNSS_KNOB": "1", "ACCOUNT_TOKEN": "private"})
+            self.assertEqual(result, {"GNSS_KNOB": "1", "GNSS_OTHER": None})
+
     def test_fix_recovery_is_explicit_and_cannot_claim_fusion_recipe_support(self):
         commands = replay.solver_commands({"gnss_solve": Path("/build/gnss_solve")},
             Path("/data/tokyo/run1"), "tokyo", Path("/out"), ["rtk"], -1, True)
@@ -121,6 +130,10 @@ class NativeReplayTest(unittest.TestCase):
         candidate = copy.deepcopy(baseline)
         candidate["results"] = []
         with self.assertRaisesRegex(ValueError, "population"):
+            replay.compare_reports(baseline, candidate)
+        candidate = copy.deepcopy(baseline)
+        candidate["solver_environment"] = {"GNSS_KNOB": "1"}
+        with self.assertRaisesRegex(ValueError, "environment"):
             replay.compare_reports(baseline, candidate)
 
     def test_failed_child_is_recorded_and_not_reported_as_pass(self):

@@ -23,6 +23,7 @@ public:
         double max_imu_gap_s = 0.1;
         double max_fusion_age_s = 0.02;
         double max_rover_gap_s = 2.0;
+        double max_tight_interval_s = 2.0;
         std::size_t max_pending_imu = 10000;
         std::size_t max_pending_base = 16;
         std::size_t max_ephemerides_per_satellite = 8;
@@ -73,11 +74,14 @@ private:
     std::deque<ImuSample> imu_;
     Diagnostics diagnostics_;
     GNSSTime arrival_, rover_time_, imu_time_, last_queued_imu_;
+    GNSSTime tight_anchor_time_;
     bool have_arrival_ = false, have_rover_ = false, have_imu_ = false;
     bool have_queued_imu_ = false;
+    bool have_tight_anchor_ = false;
     void validateArrival(const GNSSTime& received_at) const;
     void acceptArrival(const GNSSTime& received_at);
     void recreateFilters();
+    void recreateTightFilter();
 };
 
 } // namespace libgnss

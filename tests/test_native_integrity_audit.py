@@ -48,6 +48,34 @@ class NativeIntegrityAuditTest(unittest.TestCase):
         epoch.prefit_rms_m = None
         self.assertEqual(audit.runtime_classes(epoch), ["incomplete_runtime_diagnostics"])
 
+    def test_paired_adoption_rejects_partial_or_different_binary_evidence(self):
+        import copy
+        baseline = {"state": "passed", "evaluation": "full", "paths": ["rtk"], "runs": ["tokyo/run1"],
+                    "max_epochs": -1, "fix_recovery": False, "inputs": [], "binaries": {"gnss_solve": "a"},
+                    "runtime_libraries": [], "source": {"contents_sha256": "same"},
+                    "build": {"settings": {}}, "steps": [], "artifacts": []}
+        candidate = copy.deepcopy(baseline)
+        candidate["fix_recovery"] = True
+        candidate["binaries"]["gnss_solve"] = "b"
+        with self.assertRaisesRegex(ValueError, "binaries"):
+            audit.paired_provenance(baseline, candidate, Path("off"), Path("on"), baseline["runs"])
+        candidate["binaries"] = baseline["binaries"]
+        candidate["state"] = "running"
+        with self.assertRaisesRegex(ValueError, "successful full"):
+            audit.paired_provenance(baseline, candidate, Path("off"), Path("on"), baseline["runs"])
+
+    def test_runtime_clean_recovery_is_separate_from_accuracy_and_preserves_censoring(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "decisions.csv"
+            path.write_text("gps_week,tow,state,demote_fixed,request_primary_reset,recovered\n"
+                            "2200,10,2,1,1,0\n2200,12,0,0,0,1\n2200,15,2,1,1,0\n", encoding="utf-8")
+            result = audit.recovery_decisions(path)
+            self.assertEqual(result["primary_reset_requests"], 2)
+            self.assertEqual(result["clean_candidate_recoveries"], 1)
+            self.assertEqual(result["right_censored_quarantines"], 1)
+            self.assertEqual(result["events"][0]["clean_recovery_delay_s"], 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

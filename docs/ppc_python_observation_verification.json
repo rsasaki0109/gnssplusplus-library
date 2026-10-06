@@ -1,0 +1,574 @@
+{
+  "analysis_script": {
+    "bytes": 9085,
+    "path": "E:\\gnsspp-goal-development\\apps\\commands\\diagnostics\\gnss_observation_analysis.py",
+    "sha256": "fb5466596bca3d5da482e79dae66508bc74dcc9177330126ce199a4598314c95"
+  },
+  "artifacts": [
+    {
+      "bytes": 3517789,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\observations.csv",
+      "sha256": "9407a3ab32287d49eb0336a167bfa9ca03d3c2713241a43ea6f0e63ef2e11f39"
+    },
+    {
+      "bytes": 147417,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C11.png",
+      "sha256": "2d552ea51fe8578b60bbbde086c28c7f7b2c5582528aaeaa62e7bb99f1e289cd"
+    },
+    {
+      "bytes": 137019,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C13.png",
+      "sha256": "77930d71970978eae516d4ba1eb4383b4abb46c05057dfe051016c0d3afd4589"
+    },
+    {
+      "bytes": 150627,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C14.png",
+      "sha256": "cb716237eb9a9fb05cb06453a8652a740496501f30a38b170b612b4ecd61b79e"
+    },
+    {
+      "bytes": 141208,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C21.png",
+      "sha256": "5c3a89ce070f8dca4aa15f67b1a9aa3509fbb8c7471effbad2cbdfff2824eeeb"
+    },
+    {
+      "bytes": 143969,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C28.png",
+      "sha256": "00d69058c7f2664a6d8276a7c27a81db574c780ff38a1adf7f592a28129e778d"
+    },
+    {
+      "bytes": 144373,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C33.png",
+      "sha256": "317d3d7547c95e230c8c7dfedd558e879ac6bb2b7787fe132a4c539fb450a64f"
+    },
+    {
+      "bytes": 141659,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C34.png",
+      "sha256": "41a15f72b65dde7dea7da0191cc4d43a46e65be350403e2e1c11fba99b85a758"
+    },
+    {
+      "bytes": 152294,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C38.png",
+      "sha256": "2bb4bcd9915f0d55c50da301acd5ce82c169a627a10965a436046a5385c241cc"
+    },
+    {
+      "bytes": 143730,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C40.png",
+      "sha256": "b5c043d3a7ff6604711a1c70defb3ee84aeb001c57afe304f167733b6932f043"
+    },
+    {
+      "bytes": 145428,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C42.png",
+      "sha256": "452ddb7526285d5b34f057273231849290f385989c826788e9b240fb26e4cfbd"
+    },
+    {
+      "bytes": 165689,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\C43.png",
+      "sha256": "87d74231d669323ee29eaa2f6c9c1330ef63d9c1433a29ea9e4bd3c862e6d9a2"
+    },
+    {
+      "bytes": 152921,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\E04.png",
+      "sha256": "e56fc76fabae5878c1728cc3c710942b43534786b7131542c5b9a388ea65c046"
+    },
+    {
+      "bytes": 146216,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\E05.png",
+      "sha256": "36a1776c3bedfe20ed8f48aeb264fc3797a1e6a0cbdb06de0898ff2d2e1263d9"
+    },
+    {
+      "bytes": 168120,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\E09.png",
+      "sha256": "746d3847971ed6d2bcd4ddb2ed5c30f80dc87d63b3675c9743d00930c363dfe9"
+    },
+    {
+      "bytes": 149539,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\E10.png",
+      "sha256": "2421c4293936797d3f90d508c69006edd57f3ca2d17c55dbd32be83be548ba3f"
+    },
+    {
+      "bytes": 145662,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\E11.png",
+      "sha256": "0865595de5f057bec8fde2ee15ec2168270a3beedf0bd9f34aebfbbf46adf035"
+    },
+    {
+      "bytes": 167324,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\E36.png",
+      "sha256": "89ddbb02ef7a723d586691d72d5832959dde281606840648b472a216fec5bcc7"
+    },
+    {
+      "bytes": 147414,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G05.png",
+      "sha256": "cec0fe5f26787fcea9be62cf1448cb4d91f42ddca60c952e4d50895b7598a267"
+    },
+    {
+      "bytes": 146895,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G06.png",
+      "sha256": "443c5881d2158f4187030bdd50514a9775fc8b4f127c466a1f7c52accd95c57b"
+    },
+    {
+      "bytes": 153563,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G07.png",
+      "sha256": "16c9824845813e4963484872eee152b9f4f5eac18bcd53dad7064a1710916dd6"
+    },
+    {
+      "bytes": 123615,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G09.png",
+      "sha256": "362e605c75bb93f0bd4a01c49d774e4390219787a624a85b85eb0755fa2a35bd"
+    },
+    {
+      "bytes": 165395,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G11.png",
+      "sha256": "82e6ff6c8e7f6cb8610f9f61bc05aa80d9a2e87d6e8397230016db2016dc8da1"
+    },
+    {
+      "bytes": 148588,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G13.png",
+      "sha256": "ca8cd297eec4f4adb5f94b7b30af54bae99e8f64cf56eea111b88d62112493e0"
+    },
+    {
+      "bytes": 157165,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G20.png",
+      "sha256": "4bad1d2ca3385ecccd923fd00e36974bec3eb0edd8a0be9def238857a6afe62d"
+    },
+    {
+      "bytes": 121153,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G29.png",
+      "sha256": "2791659d93cbe10e7dbb03e2acce2134ca2994e20bcb18f5f17065bae7b69ae8"
+    },
+    {
+      "bytes": 145253,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\G30.png",
+      "sha256": "48f86a66aff9ba94058329c5827208819b4c962b0647a40ac96c46cf4d73c381"
+    },
+    {
+      "bytes": 163920,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\J03.png",
+      "sha256": "1c2baf1e8ae6fc950dfc374c2ed4603d142b3247223776ca1838827d0bb63455"
+    },
+    {
+      "bytes": 157364,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\J04.png",
+      "sha256": "57de83fc66e601ffc8b7bc95f810920e70a11ff2180a5a1da94f53cb29659686"
+    },
+    {
+      "bytes": 148433,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\R05.png",
+      "sha256": "8bc31bfed2c3a7b9e64ac7396017b738bb5df7dea0c89cf5342fa9f0b98c03f0"
+    },
+    {
+      "bytes": 157506,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\R06.png",
+      "sha256": "b04660a960216b0c5d11faa381070eaa2dcb6a30eba2c5f5e0193d318492cd6d"
+    },
+    {
+      "bytes": 150792,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\R07.png",
+      "sha256": "6a570adb2fea6c3674fbf462859de77618026ff8594293ca4085295274e365bc"
+    },
+    {
+      "bytes": 141703,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\R20.png",
+      "sha256": "c4f9b85bb95d7e540327c60bbff83770db79c8b48c4c9a4c8742f579aff18559"
+    },
+    {
+      "bytes": 160786,
+      "path": "E:\\gnsspp-goal-development\\output\\observation-analysis-tokyo1-integrated-20261006\\satellites\\R21.png",
+      "sha256": "c2cc3495dcb3bdde5caf21f5758660bc87de1277a55fd2b229c936a597c98cf6"
+    }
+  ],
+  "binding_files": [
+    {
+      "bytes": 7584,
+      "path": "E:\\gnsspp-goal-build\\python\\libgnsspp\\__init__.py",
+      "sha256": "cc618a5f2d25ba0c5905afb0d51ed66e8e943e7562b091ade8c583e08ebddc43"
+    },
+    {
+      "bytes": 2864128,
+      "path": "E:\\gnsspp-goal-build\\python\\libgnsspp\\_libgnsspp.cp312-win_amd64.pyd",
+      "sha256": "9ef7d9c7dc7965cd1d0ded8fc26548175ecdf9d6509d26ad888811c923fc7154"
+    },
+    {
+      "bytes": 8066,
+      "path": "E:\\gnsspp-goal-build\\python\\libgnsspp\\artifacts.py",
+      "sha256": "079a69c8172ac3e68fc1b5d3667003fa305c638d3cf5de2c17ccf94a0c9b3a42"
+    },
+    {
+      "bytes": 12655,
+      "path": "E:\\gnsspp-goal-build\\python\\libgnsspp\\observations.py",
+      "sha256": "ab91aeaec13b69117712b105d574f81a9a67b8f0cbf8c5a4372431ff3a911020"
+    }
+  ],
+  "clock_step_candidate_rows": 0,
+  "epochs": 300,
+  "evaluation": "bounded",
+  "inputs": [
+    {
+      "bytes": 90593655,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+      "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+    },
+    {
+      "bytes": 815565,
+      "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+      "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+    }
+  ],
+  "max_epochs": 300,
+  "observation_rows": 9432,
+  "phase_doppler_assessed_rows": 7955,
+  "plot_satellites": [
+    "C11",
+    "C13",
+    "C14",
+    "C21",
+    "C28",
+    "C33",
+    "C34",
+    "C38",
+    "C40",
+    "C42",
+    "C43",
+    "E04",
+    "E05",
+    "E09",
+    "E10",
+    "E11",
+    "E36",
+    "G05",
+    "G06",
+    "G07",
+    "G09",
+    "G11",
+    "G13",
+    "G20",
+    "G29",
+    "G30",
+    "J03",
+    "J04",
+    "R05",
+    "R06",
+    "R07",
+    "R20",
+    "R21"
+  ],
+  "reason_counts": {
+    "arc_start": 75,
+    "carrier_unavailable": 1402,
+    "source_loss_of_lock": 24
+  },
+  "reference_used": false,
+  "residual_contract": "code residuals centered by native receiver clock group at the SPP position; not solver postfit residuals",
+  "satellites": {
+    "C11": {
+      "code_abs_residual_p95_m": 0.794976292892534,
+      "rows": 300,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 46.75
+    },
+    "C13": {
+      "code_abs_residual_p95_m": 3.896162882492557,
+      "rows": 299,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 1,
+      "snr_median_dbhz": 39.688
+    },
+    "C14": {
+      "code_abs_residual_p95_m": 0.572638837962495,
+      "rows": 300,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 46.438
+    },
+    "C21": {
+      "code_abs_residual_p95_m": 6.5643088945827115,
+      "rows": 214,
+      "signals": [
+        13,
+        16
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 30.7815
+    },
+    "C28": {
+      "code_abs_residual_p95_m": 1.7445800329893453,
+      "rows": 299,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 1,
+      "snr_median_dbhz": 41.813
+    },
+    "C33": {
+      "code_abs_residual_p95_m": 0.7336504461737606,
+      "rows": 300,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 45.625
+    },
+    "C34": {
+      "code_abs_residual_p95_m": 1.485441634814355,
+      "rows": 299,
+      "signals": [
+        13,
+        16
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 42.688
+    },
+    "C38": {
+      "code_abs_residual_p95_m": 1.1432018377115925,
+      "rows": 300,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 45.125
+    },
+    "C40": {
+      "code_abs_residual_p95_m": 1.7525248222366652,
+      "rows": 298,
+      "signals": [
+        13,
+        16
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 40.375
+    },
+    "C42": {
+      "code_abs_residual_p95_m": 0.8133354458023404,
+      "rows": 299,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 47.75
+    },
+    "C43": {
+      "code_abs_residual_p95_m": 0.9184246489716344,
+      "rows": 300,
+      "signals": [
+        13
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 48.6565
+    },
+    "E04": {
+      "code_abs_residual_p95_m": 2.073906926524546,
+      "rows": 277,
+      "signals": [
+        9
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 39.813
+    },
+    "E05": {
+      "code_abs_residual_p95_m": 1.9931049001082668,
+      "rows": 292,
+      "signals": [
+        9
+      ],
+      "slip_suspect_rows": 1,
+      "snr_median_dbhz": 39.313
+    },
+    "E09": {
+      "code_abs_residual_p95_m": 0.3830711303581325,
+      "rows": 300,
+      "signals": [
+        9
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 47.625
+    },
+    "E10": {
+      "code_abs_residual_p95_m": 1.4989532072554754,
+      "rows": 284,
+      "signals": [
+        9
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 38.1565
+    },
+    "E11": {
+      "code_abs_residual_p95_m": 1.275975001309643,
+      "rows": 299,
+      "signals": [
+        9
+      ],
+      "slip_suspect_rows": 1,
+      "snr_median_dbhz": 43.25
+    },
+    "E36": {
+      "code_abs_residual_p95_m": 0.41948804469725476,
+      "rows": 300,
+      "signals": [
+        9
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 45.594
+    },
+    "G05": {
+      "code_abs_residual_p95_m": 1.7527441866546951,
+      "rows": 296,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 3,
+      "snr_median_dbhz": 41.5
+    },
+    "G06": {
+      "code_abs_residual_p95_m": 1.7745305472460562,
+      "rows": 298,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 42.75
+    },
+    "G07": {
+      "code_abs_residual_p95_m": 3.2674701626639315,
+      "rows": 278,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 32.563
+    },
+    "G09": {
+      "code_abs_residual_p95_m": 12.229612690157564,
+      "rows": 230,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 26.688
+    },
+    "G11": {
+      "code_abs_residual_p95_m": 0.45804781855978266,
+      "rows": 300,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 49.063
+    },
+    "G13": {
+      "code_abs_residual_p95_m": 0.650578628935398,
+      "rows": 300,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 42.188
+    },
+    "G20": {
+      "code_abs_residual_p95_m": 1.728092642914635,
+      "rows": 300,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 45.25
+    },
+    "G29": {
+      "code_abs_residual_p95_m": 11.46852508059926,
+      "rows": 90,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 25.6875
+    },
+    "G30": {
+      "code_abs_residual_p95_m": 3.4010366412619235,
+      "rows": 294,
+      "signals": [
+        0
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 36.844
+    },
+    "J03": {
+      "code_abs_residual_p95_m": 0.9280457323474366,
+      "rows": 300,
+      "signals": [
+        18
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 47.438
+    },
+    "J04": {
+      "code_abs_residual_p95_m": 0.7470737341748646,
+      "rows": 300,
+      "signals": [
+        18
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 46.25
+    },
+    "R05": {
+      "code_abs_residual_p95_m": 5.867882185939739,
+      "rows": 294,
+      "signals": [
+        5
+      ],
+      "slip_suspect_rows": 3,
+      "snr_median_dbhz": 42.469
+    },
+    "R06": {
+      "code_abs_residual_p95_m": 4.7580420902228076,
+      "rows": 300,
+      "signals": [
+        5
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 39.313
+    },
+    "R07": {
+      "code_abs_residual_p95_m": 4.334296116155922,
+      "rows": 294,
+      "signals": [
+        5
+      ],
+      "slip_suspect_rows": 2,
+      "snr_median_dbhz": 42.344
+    },
+    "R20": {
+      "code_abs_residual_p95_m": 4.012163594576713,
+      "rows": 298,
+      "signals": [
+        5
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 38.125
+    },
+    "R21": {
+      "code_abs_residual_p95_m": 1.066120562367496,
+      "rows": 300,
+      "signals": [
+        5
+      ],
+      "slip_suspect_rows": 0,
+      "snr_median_dbhz": 50.25
+    }
+  },
+  "schema_version": 1,
+  "settings": {
+    "max_gap_s": 2.0,
+    "min_clock_witnesses": 4,
+    "slip_threshold_cycles": 10.0
+  },
+  "slip_contract": "source LLI/lock flags and phase plus trapezoidal RINEX Doppler; diagnostic candidates, not confirmed integer slips",
+  "slip_suspect_rows": 24,
+  "state": "passed",
+  "valid_solution_epochs": 300,
+  "wall_s": 33.887856100685894
+}

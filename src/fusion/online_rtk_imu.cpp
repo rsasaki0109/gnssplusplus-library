@@ -24,6 +24,7 @@ OnlineRtkImuProcessor::OnlineRtkImuProcessor(const Config& config) : config_(con
         !std::isfinite(config_.max_imu_gap_s) || config_.max_imu_gap_s <= 0.0 ||
         !std::isfinite(config_.max_fusion_age_s) || config_.max_fusion_age_s < 0.0 ||
         !std::isfinite(config_.max_rover_gap_s) || config_.max_rover_gap_s <= 0.0 ||
+        !std::isfinite(config_.max_tight_interval_s) || config_.max_tight_interval_s <= 0.0 ||
         config_.max_pending_imu == 0 || config_.max_pending_base == 0 ||
         config_.max_ephemerides_per_satellite == 0 ||
         config_.rtk.position_mode != RTKProcessor::RTKConfig::PositionMode::KINEMATIC)
@@ -39,6 +40,11 @@ void OnlineRtkImuProcessor::recreateFilters() {
     if (!rtk_->initialize(config_.processor)) throw std::invalid_argument("RTK initialization failed");
     rtk_->setBasePosition(config_.base_position_ecef);
     fusion_ = std::make_unique<LooseCouplingProcessor>(config_.fusion);
+    recreateTightFilter();
+    have_imu_ = false;
+}
+
+void OnlineRtkImuProcessor::recreateTightFilter() {
     TightCouplingProcessor::Config tight_config;
     tight_config.process_noise = config_.fusion.process_noise;
     tight_config.lever_arm_body = config_.fusion.lever_arm_body;
@@ -47,7 +53,7 @@ void OnlineRtkImuProcessor::recreateFilters() {
     tight_config.nhc_enable = config_.fusion.nhc_enable;
     tight_config.velocity_state_output_enable = true;
     tight_ = std::make_unique<TightCouplingProcessor>(tight_config);
-    have_imu_ = false;
+    have_tight_anchor_ = false;
 }
 
 void OnlineRtkImuProcessor::validateArrival(const GNSSTime& time) const {
@@ -156,6 +162,8 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         std::abs(base_.front().time - obs.time) <= kExactEpochToleranceS &&
         base_.front().time <= obs.time; // Never admit even a near future epoch.
     const bool imu_at_epoch = have_imu_ && std::abs(imu_time_ - obs.time) <= kExactEpochToleranceS;
+    if (have_tight_anchor_ && obs.time - tight_anchor_time_ > config_.max_tight_interval_s)
+        recreateTightFilter();
     if (out.exact_base_available) {
         if (config_.tight_time_update && imu_at_epoch) {
             const auto update = tight_->prepareTimeUpdate();
@@ -192,7 +200,16 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
                 out.rtk.velocity_covariance, obs.time,
                 tight_->initialized() ? nullptr : &fusion_->state());
         }
-        if (!anchored) tight_->invalidateInterval();
+        if (anchored) {
+            tight_anchor_time_ = obs.time;
+            have_tight_anchor_ = true;
+        } else if (out.exact_base_available) {
+            // A failed differential anchor must bootstrap from a fresh LC
+            // state rather than retain an unpropagated old attitude. An SPP
+            // fallback between base epochs does not advance the RTK filter:
+            // preserve its short IMU interval for the next exact-base epoch.
+            recreateTightFilter();
+        }
     }
     out.fusion_initialized = fusion_->isInitialized() && fusion_->isOriginSet();
     out.heading_converged = fusion_->isHeadingConverged();

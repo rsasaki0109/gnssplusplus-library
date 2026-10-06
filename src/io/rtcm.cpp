@@ -10,6 +10,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <stdexcept>
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -28,9 +29,16 @@ namespace io {
 using namespace rtcm_internal;
 
 void RTCMProcessor::clear() {
+    reference_time_.reset();
     reference_position_.setZero();
     has_reference_position_ = false;
     glonass_frequency_channels_.clear();
+}
+
+void RTCMProcessor::setReferenceTime(const GNSSTime& time) {
+    if (time.week < 0 || !std::isfinite(time.tow) || time.tow < 0.0 || time.tow >= 604800.0)
+        throw std::invalid_argument("expected normalized finite RTCM GPST context");
+    reference_time_ = time;
 }
 
 std::vector<RTCMMessage> RTCMProcessor::decode(const uint8_t* buffer, size_t size) {

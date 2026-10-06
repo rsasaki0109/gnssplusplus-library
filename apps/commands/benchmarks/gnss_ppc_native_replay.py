@@ -8,6 +8,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 import tarfile
@@ -52,6 +53,8 @@ def compare_reports(baseline: dict, candidate: dict) -> dict:
             raise ValueError(f"comparison recipe differs: {key}")
     if baseline.get("fix_recovery", False) != candidate.get("fix_recovery", False):
         raise ValueError("comparison recipe differs: fix_recovery")
+    if baseline.get("solver_environment", {}) != candidate.get("solver_environment", {}):
+        raise ValueError("comparison solver environment differs")
     if baseline["source"]["contents_sha256"] != candidate["source"]["contents_sha256"]:
         raise ValueError("comparison source contents differ")
     for key in ("inputs", "binaries", "runtime_libraries"):
@@ -68,6 +71,18 @@ def compare_reports(baseline: dict, candidate: dict) -> dict:
 
 def git(root: Path, *arguments: str) -> bytes:
     return subprocess.check_output(["git", "-C", str(root), *arguments], stderr=subprocess.PIPE)
+
+
+def solver_environment(root: Path, env: dict[str, str]) -> dict[str, str | None]:
+    """Record native algorithm knobs, including unset defaults, without account credentials."""
+    files = [root / "apps/native/gnss_solve.cpp", root / "apps/native/gnss_fuse.cpp"]
+    for directory in ("src/algorithms", "src/fusion", "include/libgnss++/algorithms", "include/libgnss++/fusion"):
+        files.extend(path for path in (root / directory).rglob("*") if path.suffix in (".cpp", ".hpp"))
+    names = set()
+    for path in files:
+        if path.is_file():
+            names.update(re.findall(r'"(GNSS_[A-Z0-9_]+)"', path.read_text(encoding="utf-8")))
+    return {name: env.get(name) for name in sorted(names)}
 
 
 def source_snapshot(root: Path) -> dict[str, Any]:
@@ -266,6 +281,8 @@ def replay(args: argparse.Namespace) -> dict:
     # Solver paths and arguments never come from the legacy PPC environment overrides.
     env.pop("PPC_EXTRA_SOLVER_ARGS", None)
     env.pop("PPC_DEBUG_EPOCH_LOG", None)
+    report["solver_environment"] = solver_environment(ROOT, env)
+    write_json(manifest, report)
     try:
         archive_source(ROOT, source, out / "source.tar.gz")
         report["source_archive"] = file_record(out / "source.tar.gz")

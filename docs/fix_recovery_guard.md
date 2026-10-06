@@ -65,6 +65,21 @@ recovery delays and right-censored events. It keeps horizontal P95 and runtime
 from the native replay scorer. Its descriptive runtime classes are not the
 guard's decision rule or a guarantee of position accuracy.
 
+An off/on audit requires both replay manifests to have passed a full run.
+It verifies source contents, executable hashes, input population, runtime
+libraries, CMake settings and effective solver arguments; only the recovery
+flag and output destinations may differ. It rechecks recorded artifact hashes
+before labeling. An equal epoch count alone is insufficient provenance.
+
+The default-adoption gate for this development comparison is conservative:
+for every run, neither wrong-FIX threshold may increase; baseline-correct FIX
+loss must stay within 1%; missing/unmatched output count and horizontal P95
+must not increase; recovery-delay P95 and right-censored event counts must not
+increase at either threshold. At least one wrong-FIX population must decrease.
+All runtime measurements are retained, with concurrent-job contention noted.
+A failed gate leaves the feature an opt-in diagnostic experiment. Demoting a
+wrong coordinate to FLOAT is never counted as a correct position recovery.
+
 The new Tokyo run1 baseline contains 784 wrong FIX epochs above 0.5 m, including
 247 without any of the audit's named runtime warnings. At 2 m the counts are
 217 and 77. These are development-data observations: the guard cannot promise

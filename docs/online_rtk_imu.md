@@ -39,6 +39,12 @@ the command checks frame CRC, TOW and duplicate satellite/signal identities.
 The full week comes from the envelope. Empty lines and `#` comments are allowed.
 A malformed event stops with its line number and a nonzero exit code.
 
+The decoder receives the event's GPST reception time as the context for
+truncated GPS week and GLONASS day fields. Historical replay does not use the
+current PC date for those fields. The public `RTCMProcessor::setReferenceTime`
+also exposes this context to adapters; callers that omit it retain the legacy
+host-clock decoding behavior. `clear()` removes the explicit context.
+
 The command flushes one CSV record after every `ROVER` line, before reading
 the next event. Optional POS sinks contain only valid solutions and must be
 new files. CSV includes every rover event, including missing solutions.
@@ -87,9 +93,76 @@ they must come from actual receipt for a live causality claim. Assigning a
 timestamp to a preloaded navigation file does not establish when its records
 were broadcast or received.
 
+An SPP fallback between exact base epochs leaves the RTK differential filter
+unchanged and preserves the short IMU interval. The next exact base can then
+receive the accumulated time update (for example, with 1 Hz base and 5 Hz
+rover). An anchor interval exceeding 2 s discards the tight filter and requires
+a fresh LC heading/bootstrap; failed exact-base anchors also discard it. The
+public configuration exposes this bound as `max_tight_interval_s`.
+
 This route is distinct from fixed-lag FGO and existing whole-file fusion.
 Batch scores do not prove its accuracy or latency. Acceptance requires native
 queue/reset tests, numerical prefix parity on usable raw PPC outputs,
 late/missing-base and IMU-gap replays, and measured missing outputs and latency.
-The processor and executable build, and all nine queue/reset tests pass.
-Numerical real-data prefix parity and outage/latency checks remain pending.
+The processor and executable build; all nine queue/reset tests and four
+historical RTCM context tests pass. The raw-data verification below passed
+on Tokyo run1 with 600 epochs and an exactly matching 300-epoch prefix.
+
+## Reproducible raw-data verification
+
+Build the explicit staging harness and run the verifier against an existing
+PPC development run. Keep the historical native test fixtures separate.
+
+```sh
+cmake --build build --target gnss_online gnss_online_ppc_fixture
+python scripts/analysis/verify_online_ppc.py \
+  --run-dir /datasets/PPC-Dataset/tokyo/run1 \
+  --fixture-exe build/tests/gnss_online_ppc_fixture \
+  --online-exe build/apps/gnss_online --epochs 600 \
+  --output-dir output/online-tokyo1
+```
+
+For Windows multi-config builds add `--config Release` and use
+`build/tests/Release/*.exe` and `build/apps/Release/*.exe`. The output directory
+must be new. The report records raw-input and executable hashes, the command,
+every emitted row, processing time and availability counts.
+
+The typed-API audit uses all constellations admitted by the RINEX reader. The
+first half of five executions receives identical inputs; subsequent inputs
+remove base epochs, deliver base epochs after their rover output, or omit IMU
+samples for four seconds. A fifth execution delivers the rover 0.15 s late,
+checks its input-age metadata and preserves its chronological numerical output.
+Late base delivery is explicitly 0.1 s after its rover output. All
+numerical/metadata prefix fields except wall
+time must match exactly, with actual RTK/fused positions and supplied tight
+time updates required. The IMU-gap execution must reinitialize fusion.
+
+The stdin transport audit stages GPS MSM7/1019 frames because the existing
+ephemeris encoder cannot emit Galileo/BeiDou navigation. This restriction is
+on the transport fixture, not on the typed processor's constellation support.
+It waits for each output with stdin still open before sending another rover
+event, then repeats with a state reset in the suffix. The numerical prefix
+must match and the suffix must actually change. This also tests CRC framing
+and historical week interpretation through the production CLI.
+
+PPC does not provide observed reception timestamps. The staging simulation
+delivers samples/base records at each rover event and admits navigation only
+after its clock epoch and transmission time. It reads files only to prepare
+events; the processor sees received records alone. The results establish this
+declared simulation's prefix causality, missing/late-data behavior and local
+processing latency. They do not establish live network latency or full-run
+accuracy against reference truth.
+
+The 2026-10-06 Tokyo run1 verification emitted 600 valid typed RTK positions,
+590 fresh fused positions and 103 tight time updates. Exact-base availability
+was 120/600; removing or delivering the second half's base epochs late reduced
+it to 60/600. The four-second IMU outage caused one filter reset and fresh
+reinitialization, with 560 valid fused outputs. Normal processor wall-time P95
+was 25.733 ms (maximum 51.5232 ms) on this concurrently busy Windows host.
+The GPS-only stdin fixture emitted 108 valid RTK positions, 590 fused positions
+(including explicit propagation), and 28 tight updates; its unavailable RTK
+outputs remain in CSV. All 600 outputs arrived with stdin still open. Raw
+inputs, binaries, CSVs and timing measurements are retained in
+`output/online-tokyo1-final-20261006/report.json`.
+The [verification record](ppc_online_verification.json) preserves the input and
+binary hashes, scenario populations, prefix result and artifact manifest.

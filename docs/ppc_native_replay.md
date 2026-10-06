@@ -42,6 +42,11 @@ The fusion route additionally enables `navi776-tc` and uses the documented
 city-specific antenna lever arms. The actual arrays passed to each executable
 are the authoritative recipe, stored in `manifest.json`.
 
+The manifest also records native algorithm environment knobs found in the
+solver/algorithm sources, including null for unset values. This captures
+environment-driven gate overrides as well as command-line options. Account
+and unrelated process environment variables are not collected.
+
 ## Inspect and repeat
 
 With both paths selected, the output contains `source.tar.gz`, build and native

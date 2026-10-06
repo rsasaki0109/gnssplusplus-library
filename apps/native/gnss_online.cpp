@@ -135,6 +135,7 @@ int main(int argc, char** argv) {
             std::string kind;
             if (!(in >> kind) || kind[0] == '#') continue;
             const auto received = readTime(in);
+            decoder.setReferenceTime(received);
             if (kind == "IMU") {
                 ImuSample sample;
                 sample.time = readTime(in);

@@ -201,7 +201,8 @@ bool RTCMProcessor::decodeObservationMessage(const RTCMMessage& message, Observa
         }
 
         obs_data.clear();
-        obs_data.time = glonassMsmEpochToGpst(epoch_field);
+        obs_data.time = reference_time_ ? glonassMsmEpochToGpst(epoch_field, *reference_time_) :
+                                         glonassMsmEpochToGpst(epoch_field);
         if (has_reference_position_) {
             obs_data.receiver_position = reference_position_;
         }

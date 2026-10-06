@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import csv
 import hashlib
 import json
 import math
@@ -137,6 +138,81 @@ def file_record(path):
     return {"path": str(path.resolve()), "sha256": digest.hexdigest(), "bytes": path.stat().st_size}
 
 
+def paired_provenance(baseline, candidate, baseline_dir, candidate_dir, runs):
+    """Only the recovery flag/output destinations may differ in a paired audit."""
+    for manifest in (baseline, candidate):
+        if manifest.get("state") != "passed" or manifest.get("evaluation") != "full":
+            raise ValueError("paired audit requires successful full replay manifests")
+        if manifest.get("paths") != ["rtk"] or manifest.get("runs") != runs:
+            raise ValueError("paired audit requires the same declared RTK run population")
+    if baseline.get("fix_recovery", False) or not candidate.get("fix_recovery", False):
+        raise ValueError("paired audit requires recovery off then on")
+    for key in ("max_epochs", "inputs", "binaries", "runtime_libraries"):
+        if baseline[key] != candidate[key]:
+            raise ValueError("paired audit provenance differs: " + key)
+    if baseline.get("solver_environment", {}) != candidate.get("solver_environment", {}):
+        raise ValueError("paired audit solver environment differs")
+    if baseline["source"]["contents_sha256"] != candidate["source"]["contents_sha256"]:
+        raise ValueError("paired audit source contents differ")
+    if baseline["build"]["settings"] != candidate["build"]["settings"]:
+        raise ValueError("paired audit CMake settings differ")
+    def commands(manifest, directory):
+        result = []
+        for step in manifest["steps"]:
+            if Path(step["log"]).name != "rtk.log":
+                continue
+            argv = step["argv"]
+            normalized = []
+            index = 0
+            while index < len(argv):
+                if argv[index] == "--fix-recovery-log":
+                    index += 2
+                    continue
+                normalized.append(argv[index].replace(str(directory.resolve()), "<OUTPUT>"))
+                index += 1
+            result.append(normalized)
+        return result
+    if commands(baseline, baseline_dir) != commands(candidate, candidate_dir):
+        raise ValueError("paired audit solver arguments differ beyond the recovery flag")
+    for manifest in (baseline, candidate):
+        for record in manifest["artifacts"] + manifest["inputs"]:
+            if file_record(Path(record["path"])) != record:
+                raise ValueError("paired replay artifact no longer matches manifest: " + record["path"])
+    return {"verified": True, "scope": "same full runs, source contents, binary, raw inputs, runtime libraries, CMake settings and solver arguments except recovery log/flag and destinations"}
+
+
+def recovery_decisions(path):
+    with path.open(encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    events = []
+    active = None
+    previous = None
+    for row in rows:
+        stamp = int(row["gps_week"]) * 604800.0 + float(row["tow"])
+        if not math.isfinite(stamp) or (previous is not None and stamp <= previous):
+            raise ValueError("recovery decision times must increase")
+        previous = stamp
+        if int(row["request_primary_reset"]):
+            if active is not None:
+                raise ValueError("recovery guard requested another reset before recovery")
+            active = {"entry_week": int(row["gps_week"]), "entry_tow": float(row["tow"]),
+                      "right_censored": True, "clean_recovery_delay_s": None}
+            events.append(active)
+        if int(row["recovered"]):
+            if active is None:
+                raise ValueError("recovery decision lacks a quarantine entry")
+            active["right_censored"] = False
+            active["clean_recovery_delay_s"] = stamp - (active["entry_week"] * 604800.0 + active["entry_tow"])
+            active = None
+    return {"logged_epochs": len(rows), "state_counts": dict(Counter(row["state"] for row in rows)),
+            "demoted_fixed_epochs": sum(int(row["demote_fixed"]) for row in rows),
+            "primary_reset_requests": sum(int(row["request_primary_reset"]) for row in rows),
+            "clean_candidate_recoveries": sum(int(row["recovered"]) for row in rows),
+            "right_censored_quarantines": sum(event["right_censored"] for event in events),
+            "events": events,
+            "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline"}
+
+
 def audit(args):
     result = {"schema": "ppc_native_integrity_audit.v1", "evaluation_runs": args.runs,
               "reference_role": "offline labels only; no detector input", "runs": {},
@@ -144,6 +220,10 @@ def audit(args):
               "recovery_contract": "time after last wrong FIX until next threshold-correct FIX, including intervening missing/float epochs",
               "horizontal_contract": "official geodetic horizontal P95 retained from replay scorer",
               "input_artifacts": []}
+    if args.candidate_dir:
+        manifests = [json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+                     for directory in (args.replay_dir, args.candidate_dir)]
+        result["paired_provenance"] = paired_provenance(*manifests, args.replay_dir, args.candidate_dir, args.runs)
     for run in args.runs:
         reference = load_reference(args.dataset_root / run / "reference.csv")
         directory = args.replay_dir / run
@@ -167,6 +247,9 @@ def audit(args):
             result["input_artifacts"].extend(file_record(path) for path in
                 (candidate_dir / "rtk.pos", candidate_dir / "rtk.log", candidate_dir / "rtk_summary.json"))
             report["comparison"] = compare(baseline, candidate)
+            decisions = candidate_dir / "fix_recovery.csv"
+            report["candidate"]["recovery_decisions"] = recovery_decisions(decisions)
+            result["input_artifacts"].append(file_record(decisions))
         result["runs"][run] = report
     for directory, name in ((args.replay_dir, "baseline"), (args.candidate_dir, "candidate")):
         if directory is not None and (directory / "manifest.json").is_file():

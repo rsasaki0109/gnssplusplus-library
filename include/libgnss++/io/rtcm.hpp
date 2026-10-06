@@ -4,6 +4,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <optional>
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
 
@@ -141,6 +142,10 @@ public:
      * @brief Clear internal state like reference position
      */
     void clear();
+
+    /** Explicit GPST context for truncated RTCM week/day fields. When unset,
+     * legacy decoding continues to use the host clock. */
+    void setReferenceTime(const GNSSTime& time);
     
     /**
      * @brief Decode RTCM data stream
@@ -236,6 +241,7 @@ public:
     void resetStats() { stats_ = RTCMStats{}; }
 
 private:
+    std::optional<GNSSTime> reference_time_;
     Vector3d reference_position_;
     bool has_reference_position_ = false;
     RTCMStats stats_;

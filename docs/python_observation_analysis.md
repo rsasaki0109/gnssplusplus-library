@@ -115,9 +115,12 @@ passed four tests and skipped eight dataset-dependent tests; a separate raw
 PPC binding check verified 64 corrected rows, native clock groups and carrier
 frequencies between 1 and 2 GHz.
 
-Artifacts are under `output/observation-analysis-tokyo1-final-20261006/` in the
+Artifacts are under `output/observation-analysis-tokyo1-integrated-20261006/` in the
 development worktree: `observations.csv`, `summary.json` and 33 satellite PNGs.
 The summary records input, binding, analysis-script and output hashes. G05 and
 C11 plots were visually reviewed; absent values and gaps break plotted lines.
 This is a bounded example on existing development data, not a full-run or
 held-out slip-detection benchmark.
+
+The recorded input/binding hashes, satellite summaries and artifact manifest
+are retained in [the verification record](ppc_python_observation_verification.json).
