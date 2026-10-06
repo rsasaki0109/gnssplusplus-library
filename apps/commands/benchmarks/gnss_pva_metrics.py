@@ -154,7 +154,9 @@ def score(estimate, reference):
             if valid and generation[field] is None:
                 generation[field] = item["elapsed_s"]-generation["start_s"]
         for prefix in ("rtk", "fused"):
-            item[prefix+"_available"] = int(row[prefix+"_status"]) > 0
+            status = int(row[prefix+"_status"])
+            if not 0 <= status <= 7: raise ValueError("invalid solution status")
+            item[prefix+"_available"] = status > 0
             item[prefix+"_velocity_available"] = flag(row, prefix+"_has_velocity") and item[prefix+"_available"]
             if item[prefix+"_available"]:
                 age = (key-timestamp(row, prefix+"_week", prefix+"_tow"))/1e6
@@ -204,7 +206,9 @@ def score(estimate, reference):
     scenes = {}
     for scene in ("all", "stop", "low_speed", "turn", "reverse"):
         subset = [r for r in errors if scene in r["scenes"]]
-        scenes[scene] = dict(epochs=len(subset), metrics={key: stats([r[key] for r in subset if key in r]) for key in metric_keys})
+        scenes[scene] = dict(epochs=len(subset),
+            available_epochs={key: sum(r[key] for r in subset) for key in ("rtk_available", "fused_available", "attitude_available", "heading_aligned", "heading_converged")},
+            metrics={key: stats([r[key] for r in subset if key in r]) for key in metric_keys})
     matched = len(rows)-unmatched
     duration_s = (next(reversed(estimates))-start)/1e6
     sample_intervals = [(b-a)/1e6 for a, b in zip(list(estimates), list(estimates)[1:])]
@@ -216,6 +220,9 @@ def score(estimate, reference):
     report = dict(schema="libgnsspp.pva_score.v1", state="passed", epochs=len(rows), reference_epochs=len(truth),
         matched_epochs=matched, match_fraction=matched/len(rows), truth_coverage_fraction=matched/len(truth),
         missing_truth_epochs=unmatched, coverage=coverage, scenes=scenes, generations=generations,
+        uninitialized_epochs=sum(not r["fusion_initialized"] for r in errors),
+        missing_attitude_epochs=sum(not r["attitude_available"] for r in errors),
+        unlatched_heading_epochs=sum(not r["heading_aligned"] for r in errors),
         duration_s=duration_s, median_input_period_s=period_s,
         output_rate_hz={key: value*len(rows)/(duration_s+(period_s or 0)) if duration_s+(period_s or 0) else None
                         for key, value in coverage.items()},

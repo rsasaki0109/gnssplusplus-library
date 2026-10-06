@@ -13,7 +13,8 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True, help="Must not exist")
     parser.add_argument("--plot", action="store_true")
     args = parser.parse_args()
-    source = Path(__file__).resolve().parents[3]/"demo/fixtures"
+    parents = Path(__file__).resolve().parents
+    source = parents[3]/"demo/fixtures" if len(parents) > 3 else Path("__no_source_fixtures__")
     installed = Path(__file__).resolve().parent.parent/"share/libgnsspp/demo"
     fixtures = source if (source/"synthetic_pva.csv").is_file() else installed
     command = ["--estimate", str(fixtures/"synthetic_pva.csv"), "--reference", str(fixtures/"synthetic_reference.csv"),
