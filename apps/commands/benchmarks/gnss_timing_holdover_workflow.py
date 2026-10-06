@@ -13,8 +13,11 @@ import subprocess
 import sys
 from typing import Any
 
-from support.gnss_runtime import application_root
-from benchmarks import gnss_japan_static_survey as survey
+from support.gnss_runtime import application_root, load_python_module
+
+survey = load_python_module(
+    "gnsspp_timing_static_survey", Path(__file__).with_name("gnss_japan_static_survey.py")
+)
 
 ROOT = application_root(__file__)
 DISPATCHER = ROOT / "apps/gnss.py"
