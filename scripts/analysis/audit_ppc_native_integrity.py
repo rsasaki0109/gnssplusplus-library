@@ -213,6 +213,40 @@ def recovery_decisions(path):
             "meaning": "runtime clean-candidate recovery only; accuracy recovery is separately labeled offline"}
 
 
+def adoption_gate(runs):
+    """Apply the default-adoption contract declared before the paired replay."""
+    checks = {}
+    any_reduction = False
+    for name, baseline in runs.items():
+        candidate = baseline["candidate"]
+        failures = []
+        if candidate["missing_or_unmatched_epochs"] > baseline["missing_or_unmatched_epochs"]:
+            failures.append("missing_or_unmatched_outputs_increased")
+        if candidate["official_geodetic_horizontal_p95_m"] > baseline["official_geodetic_horizontal_p95_m"]:
+            failures.append("horizontal_p95_increased")
+        for threshold in ("0.5", "2.0"):
+            before, after = baseline["thresholds"][threshold], candidate["thresholds"][threshold]
+            prefix = threshold + "m:"
+            if after["wrong_fixed_epochs"] > before["wrong_fixed_epochs"]:
+                failures.append(prefix + "wrong_fixed_epochs_increased")
+            any_reduction |= after["wrong_fixed_epochs"] < before["wrong_fixed_epochs"]
+            loss = baseline["comparison"][threshold]["baseline_correct_fixed_lost"]
+            if loss > .01 * before["correct_fixed_epochs"]:
+                failures.append(prefix + "correct_fixed_loss_exceeded_one_percent")
+            if after["right_censored_events"] > before["right_censored_events"]:
+                failures.append(prefix + "right_censored_events_increased")
+            before_delay, after_delay = before["recovery_delay_p95_s"], after["recovery_delay_p95_s"]
+            if after_delay is not None and before_delay is not None and after_delay > before_delay:
+                failures.append(prefix + "recovery_delay_p95_increased")
+        checks[name] = {"passed": not failures, "failed_conditions": failures}
+    passed = bool(checks) and all(check["passed"] for check in checks.values()) and any_reduction
+    return {"decision": "GO" if passed else "NO_GO", "default_enabled": False,
+            "any_wrong_fixed_reduction": any_reduction, "runs": checks,
+            "contract": "each run: no wrong-FIX increase at 0.5/2m; <=1% baseline-correct FIX loss; no missing, horizontal P95, recovery P95 or censored-event increase; at least one wrong-FIX reduction overall",
+            "runtime_contract": "reported separately; concurrent-job wall times are not an adoption gate",
+            "scope": "existing six-run development comparison; no held-out integrity guarantee"}
+
+
 def audit(args):
     result = {"schema": "ppc_native_integrity_audit.v1", "evaluation_runs": args.runs,
               "reference_role": "offline labels only; no detector input", "runs": {},
@@ -259,6 +293,9 @@ def audit(args):
     for record in result["input_artifacts"]:
         if file_record(Path(record["path"])) != record:
             raise ValueError("audit input changed while labeling")
+    if args.candidate_dir:
+        result["adoption"] = adoption_gate(result["runs"])
+    result["analysis_script"] = file_record(Path(__file__))
     return result
 
 

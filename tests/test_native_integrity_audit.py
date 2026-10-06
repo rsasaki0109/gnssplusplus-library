@@ -14,6 +14,23 @@ def row(tow, error, *, fixed=True):
 
 
 class NativeIntegrityAuditTest(unittest.TestCase):
+    def test_adoption_rejects_correct_fix_loss_and_any_threshold_regression(self):
+        import copy
+        thresholds = {key: {"wrong_fixed_epochs": wrong, "correct_fixed_epochs": 100,
+                            "right_censored_events": 0, "recovery_delay_p95_s": 5.0}
+                      for key, wrong in (("0.5", 3), ("2.0", 1))}
+        baseline = {"thresholds": thresholds, "missing_or_unmatched_epochs": 2,
+                    "official_geodetic_horizontal_p95_m": .1,
+                    "comparison": {key: {"baseline_correct_fixed_lost": 1} for key in thresholds}}
+        baseline["candidate"] = copy.deepcopy(baseline)
+        baseline["candidate"]["thresholds"]["0.5"]["wrong_fixed_epochs"] = 2
+        self.assertEqual(audit.adoption_gate({"run": baseline})["decision"], "GO")
+        baseline["comparison"]["0.5"]["baseline_correct_fixed_lost"] = 2
+        self.assertEqual(audit.adoption_gate({"run": baseline})["decision"], "NO_GO")
+        baseline["comparison"]["0.5"]["baseline_correct_fixed_lost"] = 1
+        baseline["candidate"]["thresholds"]["2.0"]["wrong_fixed_epochs"] = 2
+        self.assertEqual(audit.adoption_gate({"run": baseline})["decision"], "NO_GO")
+
     def test_missing_interval_is_included_in_recovery_delay_and_final_event_is_censored(self):
         rows = [row(10.0, 3), row(10.2, 3), row(12.0, 1, fixed=False),
                 row(13.0, 0.1), row(14.0, 4)]
