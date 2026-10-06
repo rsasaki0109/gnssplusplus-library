@@ -1,6 +1,6 @@
 # Maintainer release runbook
 
-This runbook covers the tag-driven v0.2.0 release. Release automation is
+This runbook covers the tag-driven v0.3.0 release. Release automation is
 intentionally started only by an annotated `vMAJOR.MINOR.PATCH` tag pushed to
 the repository.
 
@@ -18,7 +18,7 @@ not automate posting or change repository publication state.
 
    ```bash
    python3 scripts/release/validate_version.py \
-     --tag v0.2.0 --cmake-file CMakeLists.txt
+     --tag v0.3.0 --cmake-file CMakeLists.txt
    ```
 
 ## Start the release
@@ -26,12 +26,12 @@ not automate posting or change repository publication state.
 From the validated `develop` merge commit, create and push the annotated tag:
 
 ```bash
-git tag -a v0.2.0 -m "libgnss++ v0.2.0"
-git push origin v0.2.0
+git tag -a v0.3.0 -m "libgnss++ v0.3.0"
+git push origin v0.3.0
 ```
 
 The release workflow checks out the event commit, then refuses to proceed
-unless the local `v0.2.0` ref is an annotated tag that peels exactly to that
+unless the local `v0.3.0` ref is an annotated tag that peels exactly to that
 commit and matches CMake. It builds repeatable tag-driven packages for Ubuntu
 24.04 amd64 and verifies the tag with `gh release create --verify-tag`; the
 workflow never creates a Git tag.
@@ -47,9 +47,9 @@ workflow never creates a Git tag.
   fresh Ubuntu 24.04 amd64 container before running the offline demo.
 - Treat the binaries and packages as Ubuntu 24.04 amd64 release artifacts;
   the TGZ is not a universal portability promise.
-- Confirm the GitHub Release for `v0.2.0` contains those assets and generated
-  notes plus `docs/releases/v0.2.0.md` when that file is present.
-- Confirm GHCR has `v0.2.0`, `0.2.0`, and `0.2` aliases, together with the
+- Confirm the GitHub Release for `v0.3.0` contains those assets and generated
+  notes plus `docs/releases/v0.3.0.md` when that file is present.
+- Confirm GHCR has `v0.3.0`, `0.3.0`, and `0.3` aliases, together with the
   normal branch/ref, short-SHA, and `latest` tags.
 
 If a rerun finds an existing release, it uploads the freshly checked assets

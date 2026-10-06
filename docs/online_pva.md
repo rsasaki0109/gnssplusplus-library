@@ -83,14 +83,14 @@ and is a separate comparator, not proof of received-event causality.
 
 ## Docker and binary bundles
 
-Build a local image from this branch before its publication:
+Use the versioned v0.3.0 runtime image:
 
 ```sh
-docker build -t libgnsspp:pva-dev .
-docker run --rm -v "$PWD/out:/out" libgnsspp:pva-dev \
+docker pull ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0
+docker run --rm -v "$PWD/out:/out" ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0 \
   pva-demo --output-dir /out/pva-demo --plot
 docker run --rm -v /datasets/PPC-Dataset:/datasets/PPC-Dataset:ro \
-  -v "$PWD/out:/out" libgnsspp:pva-dev pva-evaluate \
+  -v "$PWD/out:/out" ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0 pva-evaluate \
   --run-dir /datasets/PPC-Dataset/tokyo/run1 --output-dir /out/tokyo1 --plot
 ```
 
@@ -98,8 +98,9 @@ No raw PPC log is bundled. The Dockerfile runs the synthetic PVA witness at
 image build time; release smoke-install runs it from the installed DEB.
 CPack produces TGZ/DEB on Linux and ZIP on Windows. Generate locally after a
 full Release build using `cpack --config build/CPackConfig.cmake -C Release`.
-Checksums and actual platform verification belong with each artifact; an
-existing published image/tag does not contain these new changes yet.
+Download native packages from the [v0.3.0 release](https://github.com/rsasaki0109/gnssplusplus-library/releases/tag/v0.3.0).
+Checksums and platform verification accompany each artifact. The earlier
+v0.2.0 release does not include the PVA command surface.
 The Linux DEB packager needs `file` and `dpkg-dev` for ELF dependency discovery;
 the Docker builder includes these through its package dependencies.
 
@@ -119,4 +120,5 @@ negative candidate decision, full-run errors and scenario limitations.
 The [local delivery record](online_pva_delivery_v1.json) identifies verified
 development ZIP, TGZ, DEB and Docker archives and their SHA256 checksums.
 For the exported image, use `docker load -i libgnsspp-pva-1091b8c3-docker.tar`,
-then run the examples above with image `libgnsspp:pva-1091b8c3`.
+then use image `libgnsspp:pva-1091b8c3` in the commands above. That archived
+development image has separately pinned provenance from the v0.3.0 build.

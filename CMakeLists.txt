@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(gnss_lib VERSION 0.2.0 LANGUAGES C CXX)
+project(gnss_lib VERSION 0.3.0 LANGUAGES C CXX)
 
 set(GNSSPP_CXX_STANDARD 20 CACHE STRING
     "C++ standard (use 17 with legacy Eigen 3.3 toolchains that reject C++20 rewritten comparisons)")

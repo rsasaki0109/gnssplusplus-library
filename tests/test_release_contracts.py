@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Unit and static-contract tests for the v0.2.0 release surface."""
+"""Unit and static-contract tests for the current release surface."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 VALIDATOR_PATH = ROOT_DIR / "scripts" / "release" / "validate_version.py"
 RELEASE_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "release.yml"
 DOCKER_WORKFLOW_PATH = ROOT_DIR / ".github" / "workflows" / "docker.yml"
-PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0"
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0"
 
 
 def load_validator_module():
@@ -29,10 +29,10 @@ validator = load_validator_module()
 
 
 class ReleaseVersionValidatorTest(unittest.TestCase):
-    def test_valid_v020_matches_cmake(self) -> None:
+    def test_valid_v030_matches_cmake(self) -> None:
         self.assertEqual(
-            validator.validate_versions("v0.2.0", ROOT_DIR / "CMakeLists.txt"),
-            "0.2.0",
+            validator.validate_versions("v0.3.0", ROOT_DIR / "CMakeLists.txt"),
+            "0.3.0",
         )
 
     def test_invalid_and_prerelease_tags_are_rejected(self) -> None:

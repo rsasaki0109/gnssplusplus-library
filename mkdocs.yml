@@ -88,6 +88,7 @@ nav:
           - SPP Accuracy Improvement: references/spp-accuracy-improvement.md
           - Roadmap: references/roadmap.md
   - Operations:
+      - v0.3.0 release highlights: releases/v0.3.0.md
       - Maintainer release runbook: release_runbook.md
       - v0.2.0 release highlights: releases/v0.2.0.md
       - v0.2.0 growth launch runbook: growth_launch_runbook.md
