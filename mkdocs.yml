@@ -68,6 +68,10 @@ nav:
       - PPC reproduction: ppc_reproduction.md
       - Architecture: architecture.md
       - IMU fusion: imu_fusion.md
+      - Online position velocity attitude: online_pva.md
+      - PVA development contract: online_pva_development_plan.md
+      - PVA candidate contract: online_pva_candidate_v1.md
+      - PVA development results: online_pva_development_results.md
       - Tight coupling: tight_coupling.md
       - Datasets: dataset_gallery.md
       - Decisions: decisions.md

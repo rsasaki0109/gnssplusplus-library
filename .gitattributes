@@ -14,3 +14,9 @@
 # One-off research analysis and experiment drivers (not shipped commands).
 scripts/analysis/**    linguist-vendored
 scripts/experiments/** linguist-vendored
+
+# Executable scripts must retain POSIX shebangs in Windows checkouts and
+# git archives used as Docker contexts. Frozen JSON/data records are untouched.
+*.py text eol=lf
+*.sh text eol=lf
+apps/compat/gnss_pos2kml text eol=lf

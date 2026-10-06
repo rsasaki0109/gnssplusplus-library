@@ -1,6 +1,6 @@
 // Offline staging and regression harness. File reads here are not part of the
 // online processor. Reception is a declared simulation, not a PPC network log.
-#include <libgnss++/fusion/online_rtk_imu.hpp>
+#include <libgnss++/fusion/online_pva_csv.hpp>
 #include <libgnss++/io/imu.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -57,19 +57,8 @@ void stageEpoch(std::ostream& out, io::RTCMProcessor& encoder, const char* kind,
     out << kind << ' ' << stamp(arrival) << ' ' << stamp(obs.time) << ' '
         << frame(encoder.encodeObservations(gps, io::RTCMMessageType::RTCM_1077)) << '\n';
 }
-void solution(std::ostream& out, const PositionSolution& value) {
-    out << ',' << static_cast<int>(value.status) << ',' << value.time.week << ',' << value.time.tow;
-    if (value.isValid()) out << ',' << value.position_ecef.x() << ',' << value.position_ecef.y()
-                            << ',' << value.position_ecef.z();
-    else out << ",nan,nan,nan";
-}
 void write(std::ostream& out, const ObservationData& obs, const OnlineRtkImuProcessor::Output& row) {
-    out << std::setprecision(17) << obs.time.week << ',' << obs.time.tow << ','
-        << row.received_at.week << ',' << row.received_at.tow << ',' << row.input_age_s << ','
-        << row.exact_base_available << ',' << row.imu_consumed << ',' << row.reset_generation << ','
-        << row.fusion_initialized << ',' << row.heading_converged << ',' << row.gnss_position_updated << ','
-        << row.tight_time_update_supplied << ',' << row.fusion_age_s << ',' << row.processing_ms << ',' << row.reason;
-    solution(out, row.rtk); solution(out, row.fused); out << '\n';
+    writeOnlinePvaCsv(out, obs.time, row);
 }
 }
 int main(int argc, char** argv) {
@@ -100,9 +89,7 @@ int main(int argc, char** argv) {
         for (std::size_t i = 0; i < processors.size(); ++i) {
             processors[i] = std::make_unique<OnlineRtkImuProcessor>(config);
             files[i].open(output / (names[i] + ".csv"));
-            files[i] << "rover_week,rover_tow,received_week,received_tow,input_age_s,exact_base,imu_consumed,reset_generation,"
-                "fusion_initialized,heading_converged,gnss_position_updated,tight_update,fusion_age_s,processing_ms,reason,"
-                "rtk_status,rtk_week,rtk_tow,rtk_x_m,rtk_y_m,rtk_z_m,fused_status,fused_week,fused_tow,fused_x_m,fused_y_m,fused_z_m\n";
+            files[i] << kOnlinePvaCsvHeader << '\n';
         }
         std::ofstream events(output / "events.txt"), metadata(output / "staging.json");
         io::RTCMProcessor encoder;

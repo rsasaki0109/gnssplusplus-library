@@ -1,4 +1,4 @@
-#include <libgnss++/fusion/online_rtk_imu.hpp>
+#include <libgnss++/fusion/online_pva_csv.hpp>
 #include <libgnss++/io/rtcm.hpp>
 
 #include <filesystem>
@@ -70,12 +70,6 @@ ObservationData readEpoch(std::istream& in, io::RTCMProcessor& decoder, const GN
     if (!frames) throw std::invalid_argument("empty observation epoch");
     return merged;
 }
-void vectorColumns(std::ostream& out, const PositionSolution& solution) {
-    out << ',' << static_cast<int>(solution.status) << ',' << solution.time.week << ',' << solution.time.tow;
-    if (solution.isValid()) out << ',' << solution.position_ecef.x() << ',' << solution.position_ecef.y()
-                               << ',' << solution.position_ecef.z();
-    else out << ",nan,nan,nan";
-}
 void openNew(std::ofstream& out, const std::string& path) {
     if (path.empty()) return;
     if (std::filesystem::exists(path)) throw std::invalid_argument("output already exists: " + path);
@@ -122,11 +116,8 @@ int main(int argc, char** argv) {
         std::ofstream rtk_out, fused_out;
         openNew(rtk_out, rtk_path);
         openNew(fused_out, fused_path);
-        std::cout << "% causal_received_events=1 base_alignment=exact output_frame=antenna\n"
-            "rover_week,rover_tow,received_week,received_tow,input_age_s,exact_base,imu_consumed,reset_generation,"
-            "fusion_initialized,heading_converged,gnss_position_updated,tight_update,fusion_age_s,processing_ms,reason,"
-            "rtk_status,rtk_week,rtk_tow,rtk_x_m,rtk_y_m,rtk_z_m,"
-            "fused_status,fused_week,fused_tow,fused_x_m,fused_y_m,fused_z_m\n" << std::flush;
+        std::cout << "% causal_received_events=1 base_alignment=exact output_frame=antenna online_csv_schema=2 attitude_frame=body_FLU_to_local_ENU\n"
+            << kOnlinePvaCsvHeader << '\n' << std::flush;
         std::string line;
         while (std::getline(std::cin, line)) {
             ++line_number;
@@ -159,16 +150,8 @@ int main(int argc, char** argv) {
                 if (kind == "BASE") processor.pushBase(obs, received);
                 else {
                     const auto out = processor.processRover(obs, received);
-                    std::cout << std::setprecision(17) << time.week << ',' << time.tow << ','
-                        << received.week << ',' << received.tow << ',' << out.input_age_s << ','
-                        << out.exact_base_available << ',' << out.imu_consumed << ',' << out.reset_generation << ','
-                        << out.fusion_initialized << ',' << out.heading_converged << ','
-                        << out.gnss_position_updated << ','
-                        << out.tight_time_update_supplied << ',' << out.fusion_age_s << ','
-                        << out.processing_ms << ',' << out.reason;
-                    vectorColumns(std::cout, out.rtk);
-                    vectorColumns(std::cout, out.fused);
-                    std::cout << '\n' << std::flush;
+                    writeOnlinePvaCsv(std::cout, time, out);
+                    std::cout << std::flush;
                     if (rtk_out && out.rtk.isValid()) { Solution::appendSolutionLine(rtk_out, out.rtk); rtk_out.flush(); }
                     if (fused_out && out.fused.isValid()) { Solution::appendSolutionLine(fused_out, out.fused); fused_out.flush(); }
                 }

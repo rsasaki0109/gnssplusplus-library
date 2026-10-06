@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include <libgnss++/fusion/online_rtk_imu.hpp>
+#include <libgnss++/fusion/attitude.hpp>
 #include <limits>
 #include <stdexcept>
 
@@ -51,6 +52,9 @@ TEST(OnlineRtkImuTest, FutureImuStaysQueuedUntilItsEpoch) {
     EXPECT_EQ(first.imu_consumed, 3U);
     EXPECT_EQ(processor.pendingImu(), 1U);
     EXPECT_FALSE(first.fused.isValid());
+    EXPECT_FALSE(first.attitude_available);
+    EXPECT_FALSE(first.attitude_body_to_enu.coeffs().allFinite());
+    EXPECT_FALSE(first.ecef_to_attitude_enu.allFinite());
     const auto second = processor.processRover(epoch(10.03), time(10.03));
     EXPECT_EQ(second.imu_consumed, 1U);
     EXPECT_EQ(processor.pendingImu(), 0U);
@@ -78,8 +82,32 @@ TEST(OnlineRtkImuTest, GapReinitializationDoesNotReuseAlignmentOrTimeUpdate) {
     EXPECT_EQ(after_gap.reason, "imu_gap_reset");
     EXPECT_FALSE(after_gap.fusion_initialized);
     EXPECT_FALSE(after_gap.fused.isValid());
+    EXPECT_FALSE(after_gap.attitude_available);
+    EXPECT_FALSE(after_gap.heading_aligned);
+    EXPECT_FALSE(after_gap.rpy_frd_ned_deg.allFinite());
     EXPECT_FALSE(after_gap.tight_time_update_supplied);
     EXPECT_EQ(processor.diagnostics().imu_gap_resets, 1U);
+}
+TEST(OnlineRtkImuTest, AttitudeConventionMatchesIndependentAerospaceRotations) {
+    Matrix3d enu_to_ned;
+    enu_to_ned << 0, 1, 0, 1, 0, 0, 0, 0, -1;
+    const Matrix3d flu_to_frd = Vector3d(1, -1, -1).asDiagonal();
+    for (const Vector3d rpy : {Vector3d(0, 0, 0), Vector3d(17, -23, 359), Vector3d(-45, 35, 90)}) {
+        const double rad = std::acos(-1.0) / 180.0;
+        const Matrix3d body_frd_to_ned = (Eigen::AngleAxisd(rpy.z()*rad, Vector3d::UnitZ()) *
+            Eigen::AngleAxisd(rpy.y()*rad, Vector3d::UnitY()) *
+            Eigen::AngleAxisd(rpy.x()*rad, Vector3d::UnitX())).toRotationMatrix();
+        Eigen::Quaterniond q(enu_to_ned.transpose() * body_frd_to_ned * flu_to_frd);
+        auto actual = attitude::fluEnuToFrdNedRpyDegrees(q);
+        EXPECT_NEAR(actual.x(), rpy.x(), 1e-10);
+        EXPECT_NEAR(actual.y(), rpy.y(), 1e-10);
+        EXPECT_NEAR(std::remainder(actual.z()-rpy.z(), 360.0), 0.0, 1e-10);
+        q.coeffs() *= -1;
+        actual = attitude::fluEnuToFrdNedRpyDegrees(q);
+        EXPECT_NEAR(actual.x(), rpy.x(), 1e-10);
+        EXPECT_NEAR(actual.y(), rpy.y(), 1e-10);
+        EXPECT_NEAR(std::remainder(actual.z()-rpy.z(), 360.0), 0.0, 1e-10);
+    }
 }
 TEST(OnlineRtkImuTest, StaleImuAndRoverOutageResetOncePerDiscontinuity) {
     OnlineRtkImuProcessor processor(configuration());
@@ -141,5 +169,40 @@ TEST(OnlineRtkImuTest, SamePrefixIsUnaffectedByDifferentSuffixes) {
     EXPECT_EQ(a.reason, b.reason);
     EXPECT_DOUBLE_EQ(a.input_age_s, b.input_age_s);
     // Position parity on usable solutions additionally needs raw PPC replay.
+}
+TEST(OnlineRtkImuTest, OptInVehicleConstraintWaitsForObservedHeading) {
+    auto control_config = configuration().fusion;
+    control_config.lever_arm_body.setZero();
+    auto candidate_config = control_config;
+    candidate_config.nhc_enable = true;
+    candidate_config.nhc_require_heading_alignment = true;
+    LooseCouplingProcessor control(control_config), candidate(candidate_config);
+    for (double t : {10.0, 10.01, 10.02, 10.03}) {
+        control.processImuSample(imu(t));
+        candidate.processImuSample(imu(t));
+        EXPECT_NEAR((control.state().covariance-candidate.state().covariance).norm(), 0, 1e-12);
+    }
+    for (double t : {10.04, 10.05, 10.06}) {
+        control.processImuSample(imu(t));
+        candidate.processImuSample(imu(t));
+        PositionSolution fix;
+        fix.time = time(t);
+        fix.status = SolutionStatus::SPP;
+        fix.num_satellites = 8;
+        fix.position_ecef = Vector3d(6378137, 0, 0);
+        fix.position_covariance = Matrix3d::Identity();
+        fix.has_velocity = true;
+        fix.velocity_ecef = Vector3d(0, 0, 5); // North at equator/Greenwich
+        fix.velocity_covariance = Matrix3d::Identity();
+        control.processGnssSolution(fix);
+        candidate.processGnssSolution(fix);
+        EXPECT_NEAR((control.state().covariance-candidate.state().covariance).norm(), 0, 1e-12);
+        EXPECT_NEAR((control.state().nominal.velocity_enu-candidate.state().nominal.velocity_enu).norm(), 0, 1e-12);
+    }
+    ASSERT_TRUE(control.isHeadingAligned());
+    ASSERT_TRUE(candidate.isHeadingAligned());
+    control.processImuSample(imu(10.07));
+    candidate.processImuSample(imu(10.07));
+    EXPECT_GT((control.state().covariance-candidate.state().covariance).norm(), 1e-7);
 }
 }

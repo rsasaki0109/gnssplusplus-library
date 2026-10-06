@@ -6,6 +6,7 @@ set(GNSS_APP_TARGETS
     gnss_smartphone_fgo
     gnss_fuse
     gnss_online
+    gnss_pva_replay
     gnss_vel_d
     gnss_pos_pdc
     gnss_pos_pd
@@ -104,6 +105,9 @@ target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_rtk_runtime Threads::Threa
 add_executable(gnss_online ${GNSS_NATIVE_DIR}/gnss_online.cpp)
 target_link_libraries(gnss_online PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
 
+add_executable(gnss_pva_replay ${GNSS_NATIVE_DIR}/gnss_pva_replay.cpp)
+target_link_libraries(gnss_pva_replay PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
+
 add_executable(gnss_vel_d ${GNSS_NATIVE_DIR}/gnss_vel_d.cpp)
 target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
@@ -178,6 +182,19 @@ install(PROGRAMS
     DESTINATION ${CMAKE_INSTALL_BINDIR}
     RENAME gnss
 )
+if(WIN32)
+    install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/gnss.cmd DESTINATION ${CMAKE_INSTALL_BINDIR})
+endif()
+install(FILES
+    ${CMAKE_SOURCE_DIR}/docs/online_pva.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_development_plan.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_candidate_v1.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_development_results.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_development_scorecard.png
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_decision_v1.json
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_provenance_v1.json
+    DESTINATION share/libgnsspp/docs)
+install(FILES ${CMAKE_SOURCE_DIR}/LICENSE DESTINATION share/licenses/libgnsspp)
 
 file(GLOB GNSS_PYTHON_COMMAND_FILES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/commands/*/*.py"
@@ -335,5 +352,14 @@ install(FILES
     ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_ppp.obs
     ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_ppp.sp3
     ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_ppp.clk
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_pva.csv
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/synthetic_reference.csv
+    ${CMAKE_SOURCE_DIR}/demo/fixtures/PVA_README.md
     DESTINATION share/libgnsspp/demo
 )
+
+if(UNIX)
+    configure_file(normalize_installed_scripts.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/normalize_installed_scripts.cmake @ONLY NEWLINE_STYLE UNIX)
+    install(SCRIPT ${CMAKE_CURRENT_BINARY_DIR}/normalize_installed_scripts.cmake)
+endif()

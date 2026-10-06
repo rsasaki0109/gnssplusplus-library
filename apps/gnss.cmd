@@ -1,9 +1,11 @@
 @echo off
 setlocal
+set "gnss_dispatcher=%~dp0gnss.py"
+if not exist "%gnss_dispatcher%" set "gnss_dispatcher=%~dp0gnss"
 where py >nul 2>nul
 if %ERRORLEVEL%==0 (
-    py "%~dp0gnss.py" %*
+    py "%gnss_dispatcher%" %*
 ) else (
-    python "%~dp0gnss.py" %*
+    python "%gnss_dispatcher%" %*
 )
 exit /b %ERRORLEVEL%

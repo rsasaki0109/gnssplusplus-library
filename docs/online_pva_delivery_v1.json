@@ -1,0 +1,1005 @@
+{
+  "schema": "libgnsspp.online_pva_local_delivery.v1",
+  "state": "passed",
+  "release_published": false,
+  "pushed": false,
+  "pull_request_created": false,
+  "package_source_commit": "1091b8c3fd793f48a6784aefdd1e13cfdb5ddc53",
+  "packaging_dependency_fix_commit": "e45f87a1a0a64ad0b0e52f6c1f60f6f9619ef3e7",
+  "native_component_source": "7671c9af; production C++ is unchanged through 1091b8c3",
+  "linux_build": "Ubuntu 24.04 x86_64, Release, GTSAM/OpenCV/ROS2 unavailable; full native builder from 7671c9af, incremental CMake build/install of changed scripts and packaging at 1091b8c3; file installed for DEB ELF dependency discovery",
+  "windows_build": "MSVC 2022 x64 Release; Python binding 3.12; GTSAM/OpenCV/ROS2 unavailable",
+  "docker_image": {
+    "tag": "libgnsspp:pva-1091b8c3",
+    "id": "sha256:b2e1e6d3ec324700b23e851bdd21ff45305722e22bd80530c7377e7637ad233b",
+    "export_load": "passed"
+  },
+  "artifacts": [
+    {
+      "path": "E:\\gnsspp-pva-development\\dist-final-windows\\libgnsspp-0.2.0-pva-1091b8c3-win64.zip",
+      "bytes": 51535584,
+      "sha256": "0d9e3904fde5a31ddfa99ca1d74d11a65b2ae3fa5b62983a9095b5ab3f286803"
+    },
+    {
+      "path": "E:\\gnsspp-pva-development\\dist-linux\\libgnsspp-0.2.0-pva-1091b8c3-ubuntu24.04-x86_64.tar.gz",
+      "bytes": 26473738,
+      "sha256": "66a9537193f9621e81eff7b05974d8d100d43a1d4c4fa93333c3bba6ca63595a"
+    },
+    {
+      "path": "E:\\gnsspp-pva-development\\dist-linux\\libgnsspp_0.2.0+pva.1091b8c3_amd64.deb",
+      "bytes": 26485852,
+      "sha256": "5c9a5b2619976d2c472f5cbe2f608a5210ef193c8c7f9a13805bf112ae9f508d"
+    },
+    {
+      "path": "E:\\gnsspp-pva-development\\dist-linux\\libgnsspp-pva-1091b8c3-docker.tar",
+      "bytes": 201351680,
+      "sha256": "ba45986d7f9ea49f4d9aa5c1e4ba24814505047a968695047905429417a4e622"
+    }
+  ],
+  "scoring_source_sha256": {
+    "gnss_pva_metrics.py": "2d767c3d6e612e83ad61dd5f4f01d524a83470b73577a1b8817cd53076fa2957",
+    "gnss_pva_evaluate.py": "e7ccf73db27f978d746c129e1a0f29766e289b8f5d7fe25428f25c7efa58db96"
+  },
+  "linux_native_sha256": "c904ae8ba44a3922eb1e13fe2d89e6c44be63a77331318506922deb74f16d8b1",
+  "linux_tgz_matches_docker_native": true,
+  "runtime_prerequisites": {
+    "windows": "Python 3.10+, matplotlib for plots, MSVC x64 runtime; binding needs Python 3.12",
+    "linux": "Ubuntu 24.04 x86_64 C/C++ runtime, Python 3.10+, numpy/matplotlib; binding built for 3.12",
+    "docker": "Docker Linux x86_64 runtime; scoring and plotting dependencies included"
+  },
+  "package_smokes": {
+    "windows_zip": "installed-only demo+plot and 600-epoch GNSS outage with exact truth matching",
+    "docker": "installed-only demo+plot and 600-epoch IMU gap with exact truth matching; archive reload; no compiler",
+    "deb": "fresh compiler-free Ubuntu install, demo+plot, native help, binding import with explicit PYTHONPATH",
+    "tgz": "fresh compiler-free Ubuntu extract, demo+plot, native help, binding import with explicit PYTHONPATH"
+  },
+  "installed_evaluation_manifests": {
+    "final-zip-gnss-outage": {
+      "schema": "libgnsspp.pva_evaluation.v1",
+      "state": "passed",
+      "reference_used_for_estimation": false,
+      "dataset_role": "development/regression; no heldout claim",
+      "scoring_source": {
+        "path": "E:\\gnsspp-pva-development\\final-zip-smoke\\libgnsspp-0.2.0-pva-1091b8c3-win64\\bin\\gnss_pva_metrics.py",
+        "bytes": 16288,
+        "sha256": "2d767c3d6e612e83ad61dd5f4f01d524a83470b73577a1b8817cd53076fa2957"
+      },
+      "workflow_source": {
+        "path": "E:\\gnsspp-pva-development\\final-zip-smoke\\libgnsspp-0.2.0-pva-1091b8c3-win64\\bin\\gnss_pva_evaluate.py",
+        "bytes": 6479,
+        "sha256": "e7ccf73db27f978d746c129e1a0f29766e289b8f5d7fe25428f25c7efa58db96"
+      },
+      "inputs": {
+        "rover.obs": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+          "bytes": 90593655,
+          "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+        },
+        "base.obs": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+          "bytes": 35794907,
+          "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+        },
+        "base.nav": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+          "bytes": 815565,
+          "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+        },
+        "imu.csv": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+          "bytes": 22469390,
+          "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+        },
+        "reference.csv": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+          "bytes": 1658813,
+          "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+        }
+      },
+      "argv": [
+        "E:\\gnsspp-pva-development\\final-zip-smoke\\libgnsspp-0.2.0-pva-1091b8c3-win64\\bin\\gnss_pva_replay.exe",
+        "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1",
+        "E:\\gnsspp-pva-development\\final-zip-gnss-outage\\replay",
+        "600",
+        "gnss_outage",
+        "60.0",
+        "10.0"
+      ],
+      "repository": null,
+      "binary": {
+        "path": "E:\\gnsspp-pva-development\\final-zip-smoke\\libgnsspp-0.2.0-pva-1091b8c3-win64\\bin\\gnss_pva_replay.exe",
+        "bytes": 1257472,
+        "sha256": "280541c14503003b2714fb3d85b6620b0ae3eae7df7fed3c75d5e6ac1f4798d5"
+      },
+      "wall_s": 9.625,
+      "replay": {
+        "schema": "libgnsspp.online_pva_replay.v1",
+        "state": "passed",
+        "reference_used": false,
+        "receipt_times": "simulated at rover epoch",
+        "imu_axes": "raw xyz is FLU identity; deg/s converted once to rad/s by CSV loader",
+        "candidate": "none",
+        "nhc_enable": false,
+        "navigation_policy": "toc and tof <= rover epoch",
+        "scenario": "gnss_outage",
+        "scenario_start_s": 60,
+        "scenario_duration_s": 10,
+        "epochs": 600,
+        "max_epochs": 600,
+        "reset_count": 0,
+        "start_week": 2324,
+        "start_tow": 187470,
+        "base_ecef": [
+          -3961905.0275,
+          3348993.7526,
+          3698211.7831
+        ],
+        "lever_arm_flu_m": [
+          0.31,
+          0,
+          0.55
+        ]
+      },
+      "estimate": {
+        "path": "E:\\gnsspp-pva-development\\final-zip-gnss-outage\\replay\\pva.csv",
+        "bytes": 497508,
+        "sha256": "10bda586290eaad002cf44669090a9962a517afd0c3784301713134c7acc76ce"
+      },
+      "outputs": {
+        "errors.csv": {
+          "path": "E:\\gnsspp-pva-development\\final-zip-gnss-outage\\errors.csv",
+          "bytes": 326413,
+          "sha256": "e72f35eded23acf64b334d82a8bc86bdc9e60797f602259c45489c6f3a7c12b0"
+        },
+        "errors.png": {
+          "path": "E:\\gnsspp-pva-development\\final-zip-gnss-outage\\errors.png",
+          "bytes": 256306,
+          "sha256": "348dd84a1f0bd9287ed6677716acf8d788068ecdf57d806911c423ffbf8b5213"
+        },
+        "replay.log": {
+          "path": "E:\\gnsspp-pva-development\\final-zip-gnss-outage\\replay.log",
+          "bytes": 35,
+          "sha256": "433f28b781403f21674dfa8c0dc79f491cf720b3654016705087f7fc98e2f178"
+        },
+        "score.json": {
+          "path": "E:\\gnsspp-pva-development\\final-zip-gnss-outage\\score.json",
+          "bytes": 34837,
+          "sha256": "e3fff36b24290af46c9b1da2f9365e4346ffc33d5036d511b57b911a3da03963"
+        }
+      }
+    },
+    "final-docker-imu-gap": {
+      "schema": "libgnsspp.pva_evaluation.v1",
+      "state": "passed",
+      "reference_used_for_estimation": false,
+      "dataset_role": "development/regression; no heldout claim",
+      "scoring_source": {
+        "path": "/opt/libgnsspp/bin/gnss_pva_metrics.py",
+        "bytes": 16288,
+        "sha256": "2d767c3d6e612e83ad61dd5f4f01d524a83470b73577a1b8817cd53076fa2957"
+      },
+      "workflow_source": {
+        "path": "/opt/libgnsspp/bin/gnss_pva_evaluate.py",
+        "bytes": 6479,
+        "sha256": "e7ccf73db27f978d746c129e1a0f29766e289b8f5d7fe25428f25c7efa58db96"
+      },
+      "inputs": {
+        "rover.obs": {
+          "path": "/datasets/PPC-Dataset/tokyo/run1/rover.obs",
+          "bytes": 90593655,
+          "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+        },
+        "base.obs": {
+          "path": "/datasets/PPC-Dataset/tokyo/run1/base.obs",
+          "bytes": 35794907,
+          "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+        },
+        "base.nav": {
+          "path": "/datasets/PPC-Dataset/tokyo/run1/base.nav",
+          "bytes": 815565,
+          "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+        },
+        "imu.csv": {
+          "path": "/datasets/PPC-Dataset/tokyo/run1/imu.csv",
+          "bytes": 22469390,
+          "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+        },
+        "reference.csv": {
+          "path": "/datasets/PPC-Dataset/tokyo/run1/reference.csv",
+          "bytes": 1658813,
+          "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+        }
+      },
+      "argv": [
+        "/opt/libgnsspp/bin/gnss_pva_replay",
+        "/datasets/PPC-Dataset/tokyo/run1",
+        "/out/final-docker-imu-gap/replay",
+        "600",
+        "imu_gap",
+        "60.0",
+        "4.0"
+      ],
+      "repository": null,
+      "binary": {
+        "path": "/opt/libgnsspp/bin/gnss_pva_replay",
+        "bytes": 2340672,
+        "sha256": "c904ae8ba44a3922eb1e13fe2d89e6c44be63a77331318506922deb74f16d8b1"
+      },
+      "wall_s": 8.041519814000367,
+      "replay": {
+        "schema": "libgnsspp.online_pva_replay.v1",
+        "state": "passed",
+        "reference_used": false,
+        "receipt_times": "simulated at rover epoch",
+        "imu_axes": "raw xyz is FLU identity; deg/s converted once to rad/s by CSV loader",
+        "candidate": "none",
+        "nhc_enable": false,
+        "navigation_policy": "toc and tof <= rover epoch",
+        "scenario": "imu_gap",
+        "scenario_start_s": 60,
+        "scenario_duration_s": 4,
+        "epochs": 600,
+        "max_epochs": 600,
+        "reset_count": 1,
+        "start_week": 2324,
+        "start_tow": 187470,
+        "base_ecef": [
+          -3961905.0275,
+          3348993.7526,
+          3698211.7831
+        ],
+        "lever_arm_flu_m": [
+          0.31,
+          0,
+          0.55
+        ]
+      },
+      "estimate": {
+        "path": "/out/final-docker-imu-gap/replay/pva.csv",
+        "bytes": 490873,
+        "sha256": "c2d6ed2382c3847e56e26399be8ecc50482060bb9ed69a21e452b7b5747d600e"
+      },
+      "outputs": {
+        "errors.csv": {
+          "path": "/out/final-docker-imu-gap/errors.csv",
+          "bytes": 328717,
+          "sha256": "1768c1ce7b6307dbd644e1f0c462f54982cb8ae497a4e0db8d10aa4c9f0845d5"
+        },
+        "errors.png": {
+          "path": "/out/final-docker-imu-gap/errors.png",
+          "bytes": 290768,
+          "sha256": "19db85714d6e543ad00dc5e2e67f977547864c6f8c2e5b3f08d07be4cb0d0bd8"
+        },
+        "replay.log": {
+          "path": "/out/final-docker-imu-gap/replay.log",
+          "bytes": 30,
+          "sha256": "0217f49ff9266adeb0da12aea177b5be5178617ffb6c6ed45dc0c87f081323d5"
+        },
+        "score.json": {
+          "path": "/out/final-docker-imu-gap/score.json",
+          "bytes": 33740,
+          "sha256": "f2577489a728057a6241e2f429c5f43fd10a5efd97ca98c9d6a8d33ecbe3c11f"
+        }
+      }
+    }
+  },
+  "default_parity": {
+    "state": "passed",
+    "epochs": 600,
+    "common_fields": [
+      "attitude_available",
+      "attitude_tow",
+      "attitude_week",
+      "ecef_to_enu_00",
+      "ecef_to_enu_01",
+      "ecef_to_enu_02",
+      "ecef_to_enu_10",
+      "ecef_to_enu_11",
+      "ecef_to_enu_12",
+      "ecef_to_enu_20",
+      "ecef_to_enu_21",
+      "ecef_to_enu_22",
+      "exact_base",
+      "fused_has_velocity",
+      "fused_status",
+      "fused_tow",
+      "fused_vx_mps",
+      "fused_vy_mps",
+      "fused_vz_mps",
+      "fused_week",
+      "fused_x_m",
+      "fused_y_m",
+      "fused_z_m",
+      "fusion_age_s",
+      "fusion_initialized",
+      "gnss_position_updated",
+      "heading_aligned",
+      "heading_converged",
+      "heading_deg",
+      "imu_consumed",
+      "input_age_s",
+      "pitch_deg",
+      "qw",
+      "qx",
+      "qy",
+      "qz",
+      "reason",
+      "received_tow",
+      "received_week",
+      "reset_generation",
+      "roll_deg",
+      "rover_tow",
+      "rover_week",
+      "rtk_has_velocity",
+      "rtk_status",
+      "rtk_tow",
+      "rtk_vx_mps",
+      "rtk_vy_mps",
+      "rtk_vz_mps",
+      "rtk_week",
+      "rtk_x_m",
+      "rtk_y_m",
+      "rtk_z_m",
+      "tight_update"
+    ],
+    "excluded_fields": [
+      "processing_ms"
+    ],
+    "differences": 0,
+    "control": {
+      "path": "E:\\gnsspp-pva-development\\baseline\\tokyo1\\replay\\pva.csv",
+      "bytes": 8509063,
+      "sha256": "3ec738073657089446184a7c69ebbf93f385f5e814d393084d4f6cf1487ee088"
+    },
+    "candidate_none": {
+      "path": "E:\\gnsspp-pva-development\\default-parity-control\\replay\\pva.csv",
+      "bytes": 502086,
+      "sha256": "a39b3995ff32fc0c2073a3997ff1632b85d1b7c489628f31766067195860eaf5"
+    },
+    "control_manifest": {
+      "schema": "libgnsspp.pva_evaluation.v1",
+      "state": "passed",
+      "reference_used_for_estimation": false,
+      "dataset_role": "development/regression; no heldout claim",
+      "scoring_source": {
+        "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\apps\\commands\\benchmarks\\gnss_pva_metrics.py",
+        "bytes": 13298,
+        "sha256": "ec9d9d382ab2a5e0bb751c1a551dfbf4de8e360449a7a683174caedbb193d896"
+      },
+      "workflow_source": {
+        "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\apps\\commands\\benchmarks\\gnss_pva_evaluate.py",
+        "bytes": 6855,
+        "sha256": "6212047c13b6036dc1abb3e661949ea749b3a3e7234546442ccc7fa7202fe978"
+      },
+      "inputs": {
+        "rover.obs": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+          "bytes": 90593655,
+          "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+        },
+        "base.obs": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+          "bytes": 35794907,
+          "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+        },
+        "base.nav": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+          "bytes": 815565,
+          "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+        },
+        "imu.csv": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+          "bytes": 22469390,
+          "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+        },
+        "reference.csv": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+          "bytes": 1658813,
+          "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+        }
+      },
+      "argv": [
+        "E:\\gnsspp-pva-development\\baseline-bin\\gnss_pva_replay.exe",
+        "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1",
+        "E:\\gnsspp-pva-development\\baseline\\tokyo1\\replay",
+        "0",
+        "normal",
+        "60",
+        "10"
+      ],
+      "repository": {
+        "commit": "c0c5e7094853650d7b65c2253e86682d2133349c",
+        "tracked_diff_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "untracked": {}
+      },
+      "binary": {
+        "path": "E:\\gnsspp-pva-development\\baseline-bin\\gnss_pva_replay.exe",
+        "bytes": 1251840,
+        "sha256": "de39172892f30643f8160007ba20453c626c5fe3b24003daea2fd88ff73d7548"
+      },
+      "wall_s": 163.546999999322,
+      "replay": {
+        "schema": "libgnsspp.online_pva_replay.v1",
+        "state": "passed",
+        "reference_used": false,
+        "receipt_times": "simulated at rover epoch",
+        "navigation_policy": "toc and tof <= rover epoch",
+        "scenario": "normal",
+        "scenario_start_s": 60,
+        "scenario_duration_s": 10,
+        "epochs": 11928,
+        "max_epochs": 0,
+        "reset_count": 0,
+        "start_week": 2324,
+        "start_tow": 187470,
+        "base_ecef": [
+          -3961905.0275,
+          3348993.7526,
+          3698211.7831
+        ],
+        "lever_arm_flu_m": [
+          0.31,
+          0,
+          0.55
+        ]
+      },
+      "estimate": {
+        "path": "E:\\gnsspp-pva-development\\baseline\\tokyo1\\replay\\pva.csv",
+        "bytes": 8509063,
+        "sha256": "3ec738073657089446184a7c69ebbf93f385f5e814d393084d4f6cf1487ee088"
+      },
+      "outputs": {
+        "errors.csv": {
+          "path": "E:\\gnsspp-pva-development\\baseline\\tokyo1\\errors.csv",
+          "bytes": 6330409,
+          "sha256": "ac525696a5e05848817c7560c91c7856c6ced2152fb17bfada09e7d36741bfe5"
+        },
+        "errors.png": {
+          "path": "E:\\gnsspp-pva-development\\baseline\\tokyo1\\errors.png",
+          "bytes": 414684,
+          "sha256": "901b7eef92436064bbbb9e6e2a3dd153d83939a0381093b6b39ba51a2361a4b0"
+        },
+        "replay.log": {
+          "path": "E:\\gnsspp-pva-development\\baseline\\tokyo1\\replay.log",
+          "bytes": 32,
+          "sha256": "7d2b6d9be2b0fd7cdde18755ae7825a738cd9f986e88cf74ed8b19ea25cc6fb7"
+        },
+        "score.json": {
+          "path": "E:\\gnsspp-pva-development\\baseline\\tokyo1\\score.json",
+          "bytes": 31971,
+          "sha256": "b858892472a4a241cf510b05f3c2484d9093d47376b1be6bd1bafdaec2fd23a9"
+        }
+      }
+    },
+    "candidate_none_manifest": {
+      "schema": "libgnsspp.pva_evaluation.v1",
+      "state": "passed",
+      "reference_used_for_estimation": false,
+      "dataset_role": "development/regression; no heldout claim",
+      "scoring_source": {
+        "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\apps\\commands\\benchmarks\\gnss_pva_metrics.py",
+        "bytes": 13835,
+        "sha256": "ed98cba6b78c0fc8bc1819b121f220d2b1a40b3c5a1433da5a80615c4d79e338"
+      },
+      "workflow_source": {
+        "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\apps\\commands\\benchmarks\\gnss_pva_evaluate.py",
+        "bytes": 7212,
+        "sha256": "7c16413b89b589396ebff4ba7f506edd409da700b94d6f98362aeaaf196b41a1"
+      },
+      "inputs": {
+        "rover.obs": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+          "bytes": 90593655,
+          "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5"
+        },
+        "base.obs": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+          "bytes": 35794907,
+          "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8"
+        },
+        "base.nav": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+          "bytes": 815565,
+          "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7"
+        },
+        "imu.csv": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+          "bytes": 22469390,
+          "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091"
+        },
+        "reference.csv": {
+          "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\reference.csv",
+          "bytes": 1658813,
+          "sha256": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9"
+        }
+      },
+      "argv": [
+        "E:\\gnsspp-pva-development\\candidate-bin\\gnss_pva_replay.exe",
+        "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1",
+        "E:\\gnsspp-pva-development\\default-parity-control\\replay",
+        "600",
+        "normal",
+        "60",
+        "10"
+      ],
+      "repository": {
+        "commit": "7671c9afac64942487f1f665b805aaefa4520e1c",
+        "tracked_diff_sha256": "d40b99b9ac27a73b932091fb46207401e4b7a9bd84ee78c1749daccce580c02d",
+        "untracked": {
+          "scripts/analysis/compare_online_pva.py": {
+            "path": "C:\\Users\\rsasa\\Workspace\\rtklib_v2_ws\\gnssplusplus-library\\scripts\\analysis\\compare_online_pva.py",
+            "bytes": 7766,
+            "sha256": "5cfdfc749c58808914babc4cfb476b1aec34d2087b461323b24c2889056a61d7"
+          }
+        }
+      },
+      "binary": {
+        "path": "E:\\gnsspp-pva-development\\candidate-bin\\gnss_pva_replay.exe",
+        "bytes": 1257472,
+        "sha256": "78c6f2c66a9a0e14fb922171e7ddeffa7d52ecc8c70042bfc7fe15040ceb94bf"
+      },
+      "wall_s": 17.953999999910593,
+      "replay": {
+        "schema": "libgnsspp.online_pva_replay.v1",
+        "state": "passed",
+        "reference_used": false,
+        "receipt_times": "simulated at rover epoch",
+        "imu_axes": "raw xyz is FLU identity; deg/s converted once to rad/s by CSV loader",
+        "candidate": "none",
+        "nhc_enable": false,
+        "navigation_policy": "toc and tof <= rover epoch",
+        "scenario": "normal",
+        "scenario_start_s": 60,
+        "scenario_duration_s": 10,
+        "epochs": 600,
+        "max_epochs": 600,
+        "reset_count": 0,
+        "start_week": 2324,
+        "start_tow": 187470,
+        "base_ecef": [
+          -3961905.0275,
+          3348993.7526,
+          3698211.7831
+        ],
+        "lever_arm_flu_m": [
+          0.31,
+          0,
+          0.55
+        ]
+      },
+      "estimate": {
+        "path": "E:\\gnsspp-pva-development\\default-parity-control\\replay\\pva.csv",
+        "bytes": 502086,
+        "sha256": "a39b3995ff32fc0c2073a3997ff1632b85d1b7c489628f31766067195860eaf5"
+      },
+      "outputs": {
+        "errors.csv": {
+          "path": "E:\\gnsspp-pva-development\\default-parity-control\\errors.csv",
+          "bytes": 321123,
+          "sha256": "80702eecdd6b2c8cb41c759958c85fb107ee776c0c1475b748520896a011627a"
+        },
+        "replay.log": {
+          "path": "E:\\gnsspp-pva-development\\default-parity-control\\replay.log",
+          "bytes": 30,
+          "sha256": "32affd5ecc96b687b75ed74513b95d00cb39d80b44589b357211d9302821342a"
+        },
+        "score.json": {
+          "path": "E:\\gnsspp-pva-development\\default-parity-control\\score.json",
+          "bytes": 32903,
+          "sha256": "5e88b7b5fbd17cc8d855f6ad705c0c9bc7d4654fe4798e034de41ff668d4b9c6"
+        }
+      }
+    }
+  },
+  "production_prefix_verification": {
+    "schema": "online_ppc_verification.v1",
+    "state": "passed",
+    "staging": {
+      "schema": "online_ppc_staging.v1",
+      "base_ecef": [
+        -3961905.0275,
+        3348993.7526,
+        3698211.7831
+      ],
+      "lever_arm": [
+        0.31,
+        0,
+        0.55
+      ],
+      "prefix_epochs": 300,
+      "late_base_reception_delay_s": 0.1,
+      "delayed_rover_reception_delay_s": 0.15,
+      "reception_contract": "simulated arrival at each rover epoch; navigation admitted only after toc and tof; no observed PPC network receipts",
+      "typed_api_systems": "all RINEX systems",
+      "rtcm_transport_systems": "GPS only, MSM7/1019 encoder scope",
+      "reference_used": false
+    },
+    "input_artifacts": [
+      {
+        "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\rover.obs",
+        "sha256": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+        "bytes": 90593655
+      },
+      {
+        "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.obs",
+        "sha256": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+        "bytes": 35794907
+      },
+      {
+        "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\base.nav",
+        "sha256": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+        "bytes": 815565
+      },
+      {
+        "path": "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1\\imu.csv",
+        "sha256": "bba039063ebcfde1f3be5e5c8c4a86e522064a8873a2310a5ed142e820acc091",
+        "bytes": 22469390
+      }
+    ],
+    "binaries": [
+      {
+        "path": "E:\\gnsspp-build-integrity-covariance\\tests\\Release\\gnss_online_ppc_fixture.exe",
+        "sha256": "71c96491a3c16ae501555fb3c079797e411e7de7c7f57562b78f20ca1089e1b9",
+        "bytes": 1309184
+      },
+      {
+        "path": "E:\\gnsspp-build-integrity-covariance\\apps\\Release\\gnss_online.exe",
+        "sha256": "1f245d37fba87b11a477e3799c925bc2bef42e8c70eccf7c9d25a5a83d17f243",
+        "bytes": 1114112
+      }
+    ],
+    "staging_argv": [
+      "E:\\gnsspp-build-integrity-covariance\\tests\\Release\\gnss_online_ppc_fixture.exe",
+      "E:\\rtklib_v2_ws_data\\PPC-Dataset\\tokyo\\run1",
+      "E:\\gnsspp-pva-development\\prefix-proof\\staged",
+      "600"
+    ],
+    "prefix_epochs_exactly_equal": 300,
+    "prefix_comparison_excludes": [
+      "processing_ms"
+    ],
+    "delayed_rover_numeric_parity": true,
+    "typed_api": {
+      "normal": {
+        "epochs": 600,
+        "valid_rtk": 600,
+        "valid_fused": 590,
+        "exact_base": 120,
+        "tight_updates": 103,
+        "max_reset_generation": 0,
+        "processing_p95_ms": 82.3966,
+        "processing_max_ms": 303.2148,
+        "rtk_status_counts": {
+          "1": 487,
+          "3": 98,
+          "4": 15
+        },
+        "reason_counts": {
+          "": 120,
+          "missing_exact_base": 480
+        }
+      },
+      "missing_base": {
+        "epochs": 600,
+        "valid_rtk": 600,
+        "valid_fused": 590,
+        "exact_base": 60,
+        "tight_updates": 43,
+        "max_reset_generation": 0,
+        "processing_p95_ms": 71.7165,
+        "processing_max_ms": 207.7564,
+        "rtk_status_counts": {
+          "1": 541,
+          "3": 44,
+          "4": 15
+        },
+        "reason_counts": {
+          "": 60,
+          "missing_exact_base": 540
+        }
+      },
+      "late_base": {
+        "epochs": 600,
+        "valid_rtk": 600,
+        "valid_fused": 590,
+        "exact_base": 60,
+        "tight_updates": 43,
+        "max_reset_generation": 0,
+        "processing_p95_ms": 80.7173,
+        "processing_max_ms": 178.1223,
+        "rtk_status_counts": {
+          "1": 541,
+          "3": 44,
+          "4": 15
+        },
+        "reason_counts": {
+          "": 60,
+          "missing_exact_base": 540
+        }
+      },
+      "imu_gap": {
+        "epochs": 600,
+        "valid_rtk": 600,
+        "valid_fused": 560,
+        "exact_base": 120,
+        "tight_updates": 78,
+        "max_reset_generation": 1,
+        "processing_p95_ms": 81.0277,
+        "processing_max_ms": 212.9312,
+        "rtk_status_counts": {
+          "1": 481,
+          "3": 66,
+          "4": 53
+        },
+        "reason_counts": {
+          "": 119,
+          "imu_stale_reset": 1,
+          "missing_exact_base": 480
+        }
+      },
+      "delayed_rover": {
+        "epochs": 600,
+        "valid_rtk": 600,
+        "valid_fused": 590,
+        "exact_base": 120,
+        "tight_updates": 103,
+        "max_reset_generation": 0,
+        "processing_p95_ms": 78.47,
+        "processing_max_ms": 267.7937,
+        "rtk_status_counts": {
+          "1": 487,
+          "3": 98,
+          "4": 15
+        },
+        "reason_counts": {
+          "": 120,
+          "missing_exact_base": 480
+        }
+      }
+    },
+    "streaming": {
+      "normal": {
+        "argv": [
+          "E:\\gnsspp-build-integrity-covariance\\apps\\Release\\gnss_online.exe",
+          "--base-ecef",
+          "-3961905.0275",
+          "3348993.7526",
+          "3698211.7831",
+          "--lever-arm",
+          "0.31",
+          "0",
+          "0.55"
+        ],
+        "outputs_received_before_next_rover_input": 600,
+        "stdin_remained_open_until_all_outputs_received": true,
+        "delivery_to_output_max_ms": 22.648800164461136,
+        "stderr": {
+          "path": "E:\\gnsspp-pva-development\\prefix-proof\\stream_normal.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      },
+      "suffix_reset": {
+        "argv": [
+          "E:\\gnsspp-build-integrity-covariance\\apps\\Release\\gnss_online.exe",
+          "--base-ecef",
+          "-3961905.0275",
+          "3348993.7526",
+          "3698211.7831",
+          "--lever-arm",
+          "0.31",
+          "0",
+          "0.55"
+        ],
+        "outputs_received_before_next_rover_input": 600,
+        "stdin_remained_open_until_all_outputs_received": true,
+        "delivery_to_output_max_ms": 23.125200532376766,
+        "stderr": {
+          "path": "E:\\gnsspp-pva-development\\prefix-proof\\stream_suffix_reset.stderr.log",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "bytes": 0
+        }
+      }
+    },
+    "transport": {
+      "epochs": 600,
+      "valid_rtk": 108,
+      "valid_fused": 590,
+      "exact_base": 120,
+      "tight_updates": 28,
+      "max_reset_generation": 0,
+      "processing_p95_ms": 3.5071,
+      "processing_max_ms": 10.9813,
+      "rtk_status_counts": {
+        "0": 492,
+        "3": 58,
+        "4": 50
+      },
+      "reason_counts": {
+        "": 120,
+        "missing_exact_base": 480
+      }
+    },
+    "claims": "prefix causality and outage behavior for this declared received-event simulation; no full-run accuracy or real network latency claim",
+    "artifacts": [
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\delayed_rover.csv",
+        "sha256": "1d0341b425906972cba02a65c52288928fcae42cb74d3bc099a75d0e08132df7",
+        "bytes": 432290
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\events.txt",
+        "sha256": "87360c6d33555b6e4fe2c59c08a7ce7394fe77338c1105c2bf43c989bd51cc13",
+        "bytes": 2385874
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\imu_gap.csv",
+        "sha256": "4937f1379697ab1941cca4019458dc759e9ee3f596fd5be5dd4a56228ba7d84e",
+        "bytes": 415571
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\late_base.csv",
+        "sha256": "48a1eb32600249f84c3cb90df75b344a2c723ba63519cd6439e9bf6a3a8a43e9",
+        "bytes": 427193
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\missing_base.csv",
+        "sha256": "27288a929eab8486d484ab076a44d19cfe4e3cc6c932987d546c69a5a2b326a6",
+        "bytes": 427211
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\normal.csv",
+        "sha256": "4213975c3e8db03ca6b39e293ec319444578d3b3d61f32cafaf8933d9f5e68cb",
+        "bytes": 426726
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staged\\staging.json",
+        "sha256": "ca82906592de23c6edb4d898adbde71c3d4619c1c1f748ecc15c1493402e94f2",
+        "bytes": 503
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\staging.log",
+        "sha256": "f03edf90223f8428508443587e2b9e3ea9e2b540a863583902ffcf616201429f",
+        "bytes": 72
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\stream_normal.csv",
+        "sha256": "c264c22465d3e01f53ad8842f7461084c5ecae30cb9964f48eb8bd4536f2a0ef",
+        "bytes": 379852
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\stream_normal.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\stream_suffix_reset.csv",
+        "sha256": "9ce79763fa2f35e90ba5b92b899c9c72744b2a5490a67265d7e9b054bba465d9",
+        "bytes": 375589
+      },
+      {
+        "path": "E:\\gnsspp-pva-development\\prefix-proof\\stream_suffix_reset.stderr.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "bytes": 0
+      }
+    ]
+  },
+  "tests": {
+    "online_cpp": {
+      "passed": 11
+    },
+    "pva_python": {
+      "passed": 12
+    },
+    "cli": {
+      "passed": 158,
+      "skipped": 65
+    },
+    "benchmark": {
+      "passed": 180,
+      "skipped": 1
+    },
+    "bindings": {
+      "passed": 4,
+      "skipped": 8
+    },
+    "packaging_windows": {
+      "passed": 3,
+      "skipped": 1
+    },
+    "packaging_posix_normalization": {
+      "passed": 1
+    },
+    "cpp_main": {
+      "passed": 1274,
+      "skipped": 65
+    },
+    "ctest": {
+      "passed_lanes": 130,
+      "failed_lanes": 9,
+      "classification": "same pre-existing platform/immutable-record/external-fixture failures"
+    },
+    "ros2": {
+      "state": "unavailable",
+      "reason": "node binary/dependencies absent"
+    },
+    "mkdocs_strict": {
+      "state": "passed"
+    },
+    "hygiene": {
+      "state": "passed"
+    },
+    "cppcheck": {
+      "state": "script_passed",
+      "note": "repository warning/style diagnostics retained; script does not promote them to failures"
+    }
+  },
+  "evidence_logs": {
+    "cli-tests.log": {
+      "path": "E:\\gnsspp-pva-development\\cli-tests.log",
+      "bytes": 732,
+      "sha256": "5a4944a9b8dc72150539f414af1c80aeaf74aa3ac8bd32e8a96639e5a67d9698"
+    },
+    "benchmark-tests.log": {
+      "path": "E:\\gnsspp-pva-development\\benchmark-tests.log",
+      "bytes": 8765,
+      "sha256": "65f4a23084f17c6b4d45453d3deca6b0c3a39a8efa84f225d83e720c71fd9a39"
+    },
+    "binding-tests.log": {
+      "path": "E:\\gnsspp-pva-development\\binding-tests.log",
+      "bytes": 2323,
+      "sha256": "89f7bc4894880f1c988107d03b45784d2c4befd33635a33d705969a84561c9ac"
+    },
+    "ctest.log": {
+      "path": "E:\\gnsspp-pva-development\\ctest.log",
+      "bytes": 29256,
+      "sha256": "6cddb231d38ab0634955fa8780eaf082edea445f7c81b4511b038e12fb66d47c"
+    },
+    "packaging-final-windows.log": {
+      "path": "E:\\gnsspp-pva-development\\packaging-final-windows.log",
+      "bytes": 53764,
+      "sha256": "fc69fe8e0b5d4c70cb428a348b09a153f1e2a946975e0b3c611ed0b73e85f0da"
+    },
+    "mkdocs-final.log": {
+      "path": "E:\\gnsspp-pva-development\\mkdocs-final.log",
+      "bytes": 10513,
+      "sha256": "32fd2832d70aab5fee037b06b697f998eead5bef7b6720d6acae396c940fb181"
+    },
+    "mkdocs-delivery.log": {
+      "path": "E:\\gnsspp-pva-development\\mkdocs-delivery.log",
+      "bytes": 10520,
+      "sha256": "267927311aa154109cf2adc0f4ee91fe96cd1cb46dfd3efac397411209274c0a"
+    },
+    "hygiene-e45f87a1.log": {
+      "path": "E:\\gnsspp-pva-development\\hygiene-e45f87a1.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "cppcheck-final.log": {
+      "path": "E:\\gnsspp-pva-development\\cppcheck-final.log",
+      "bytes": 76255,
+      "sha256": "e237e47e82d37474782829f5a8c7dbec1c56a29302f64f56c54df0b0af1169e9"
+    },
+    "linux-package.log": {
+      "path": "E:\\gnsspp-pva-development\\linux-package.log",
+      "bytes": 35554,
+      "sha256": "cabce54712c17f3a3db9bdc1c2bc537517c075fcfa74d2bdfe876643373e79a5"
+    },
+    "deb-package.log": {
+      "path": "E:\\gnsspp-pva-development\\deb-package.log",
+      "bytes": 4001,
+      "sha256": "664fd19f136c3afe6aaa1d0942e8f256537ec4546ebdaecfa5327fad1c674d5b"
+    },
+    "linux-smoke.log": {
+      "path": "E:\\gnsspp-pva-development\\linux-smoke.log",
+      "bytes": 89886,
+      "sha256": "ff3aada883f6903b57437d1ee5db7feee3f122033a88b5d6a72aa094aed35c01"
+    },
+    "docker-export-smoke.log": {
+      "path": "E:\\gnsspp-pva-development\\docker-export-smoke.log",
+      "bytes": 66,
+      "sha256": "992e9e8d5d886b7babb8f9de793e54ac0f87bbd680e1379d7dbf3b40c4fad4e3"
+    }
+  },
+  "scope": "local development artifacts; no new release, no heldout accuracy claim; frozen candidate No-Go, production defaults unchanged"
+}

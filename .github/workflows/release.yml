@@ -43,6 +43,7 @@ jobs:
           build-essential \
           cmake \
           dpkg-dev \
+          file \
           libeigen3-dev \
           pybind11-dev \
           python3 \
@@ -89,6 +90,9 @@ jobs:
             test -s "${demo_dir}/demo_solution.pos"
             test -s "${demo_dir}/demo_solution.kml"
             test -s "${demo_dir}/demo_summary.json"
+            gnss pva-replay --help
+            gnss pva-demo --output-dir "${demo_dir}/pva"
+            test -s "${demo_dir}/pva/score.json"
           '
 
     - name: Check package contents and generate checksums

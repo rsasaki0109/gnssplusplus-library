@@ -423,7 +423,7 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
         applyUpdateAndInject(system, 0.0, unused_rejections);
         ++zupt_updates_;
     }
-    if (config_.nhc_enable) {
+    if (config_.nhc_enable && (!config_.nhc_require_heading_alignment || heading_aligned_)) {
         const auto system = fusion_measurement::buildNhcUpdate(
             state_, config_.lever_arm_body, angular_rate_body, config_.nhc_sigma_lateral_mps,
             config_.nhc_sigma_vertical_mps);

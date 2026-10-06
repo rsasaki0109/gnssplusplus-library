@@ -42,6 +42,24 @@ def repo_data_exists(*relative_paths: str) -> bool:
 
 
 class PackagingSmokeTest(unittest.TestCase):
+    @unittest.skipIf(os.name == "nt", "POSIX installer runs on UNIX; CMake file(WRITE) uses host newlines")
+    def test_posix_install_normalizes_scripts_without_touching_frozen_data(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_script_eol_") as temp_dir:
+            prefix = Path(temp_dir)/"prefix"
+            bindir = prefix/"bin"
+            bindir.mkdir(parents=True)
+            script = bindir/"gnss"
+            script.write_bytes(b"#!/usr/bin/env python3\r\nprint('ready')\r\n")
+            frozen = prefix/"frozen.json"
+            original = b'{"immutable":true}\r\n'
+            frozen.write_bytes(original)
+            template = (ROOT_DIR/"apps/normalize_installed_scripts.cmake.in").read_text(encoding="utf-8")
+            cmake_script = Path(temp_dir)/"normalize.cmake"
+            cmake_script.write_text(template.replace("@CMAKE_INSTALL_BINDIR@", "bin"), encoding="utf-8")
+            subprocess.run(["cmake", f"-DCMAKE_INSTALL_PREFIX={prefix.as_posix()}", "-P", str(cmake_script)], check=True)
+            self.assertEqual(script.read_bytes(), b"#!/usr/bin/env python3\nprint('ready')\n")
+            self.assertEqual(frozen.read_bytes(), original)
+
     def test_docker_files_exist_and_look_like_runtime_packaging(self) -> None:
         dockerfile = ROOT_DIR / "Dockerfile"
         dockerignore = ROOT_DIR / ".dockerignore"
@@ -241,6 +259,12 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.obs",
                 prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.sp3",
                 prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.clk",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_pva.csv",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_reference.csv",
+                prefix / "share" / "libgnsspp" / "docs" / "online_pva.md",
+                prefix / "share" / "libgnsspp" / "docs" / "online_pva_candidate_v1.md",
+                prefix / "share" / "libgnsspp" / "docs" / "online_pva_development_plan.md",
+                prefix / "bin" / ("gnss_pva_replay" + EXE_SUFFIX),
             ]
             commands_root = ROOT_DIR / "apps" / "commands"
             command_sources = [
@@ -311,6 +335,12 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("Self-contained offline demo complete:", installed_demo.stdout)
+            pva_demo = subprocess.run(
+                [*installed_dispatcher, "pva-demo", "--output-dir", str(Path(temp_dir)/"installed-pva")],
+                check=True, cwd=Path(temp_dir), env=env, capture_output=True, text=True)
+            self.assertIn("Synthetic scoring witness passed", pva_demo.stdout)
+            subprocess.run([*installed_dispatcher, "pva-replay", "--help"], check=True,
+                           cwd=Path(temp_dir), env=env, capture_output=True, text=True)
             for artifact_name in (
                 "demo_solution.pos",
                 "demo_solution.kml",

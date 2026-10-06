@@ -51,6 +51,9 @@ public:
         double zupt_gnss_speed_gate_threshold_mps = 0.5;
 
         bool nhc_enable = false;  ///< off unless platform == vehicle (docs/design.md 3.8)
+        // Opt-in vehicle experiment: avoid applying body-velocity constraints
+        // while heading is still unobserved. False preserves existing users.
+        bool nhc_require_heading_alignment = false;
         double nhc_sigma_lateral_mps = 0.3;
         double nhc_sigma_vertical_mps = 0.2;
 
