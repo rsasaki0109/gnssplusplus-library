@@ -1577,6 +1577,20 @@ class RuntimeReceiverCases:
 
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("process identity does not match", result.stderr)
+
+    @unittest.skipUnless(os.name == "nt", "Windows process probe regression")
+    def test_receiver_process_probe_does_not_terminate_the_probed_process(self) -> None:
+        command = (
+            "import os,sys; "
+            f"sys.path[:0] = {[str(ROOT_DIR / 'apps/commands'), str(ROOT_DIR / 'apps/commands/receivers')]!r}; "
+            "import gnss_rcv; "
+            "assert gnss_rcv.process_is_running(os.getpid()); "
+            "assert not gnss_rcv.process_is_running(0); "
+            "print('probe survived')"
+        )
+        result = subprocess.run([sys.executable, "-c", command], capture_output=True, text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("probe survived", result.stdout)
     def test_rcv_start_and_status_report_failed_background_run(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_rcv_start_test_") as temp_dir:
             temp_root = Path(temp_dir)

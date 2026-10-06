@@ -441,6 +441,19 @@ def process_identity_matches(pid: int, run_dir: Path) -> bool:
     """Avoid signalling a reused PID when procfs exposes the command line."""
     if pid <= 0 or not rcv.process_is_running(pid):
         return False
+    if os.name == "nt":
+        # Query command-line identity before allowing a stop request. A status
+        # artifact containing a reused PID is not sufficient authorization.
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                 f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine"],
+                capture_output=True, text=True, timeout=10,
+                creationflags=subprocess.CREATE_NO_WINDOW, check=False)
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        command_line = result.stdout.replace("\\", "/").casefold()
+        return result.returncode == 0 and "gnss_rcv.py" in command_line and run_dir.as_posix().casefold() in command_line
     proc_cmdline = Path(f"/proc/{pid}/cmdline")
     if not proc_cmdline.is_file():
         # Windows and non-procfs Unix systems do not expose an equivalent
