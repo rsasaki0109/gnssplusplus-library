@@ -48,7 +48,14 @@ does not apply:
   L1 C/A, 10 = L2 P, 8 = L2C(L); Galileo 2 = E1-C, 6 = E5a-Q, 9 = E5b-Q,
   16 = E6-C) and are added to the pseudorange. HAS code-bias messages carry
   a fixed, stale epoch, so the latest bias set per satellite is held by
-  stream order. The HAS biases replace broadcast TGD / BGD.
+  stream order. The HAS biases replace broadcast TGD / BGD. GPS L2 biases
+  follow the tracked RINEX code, as on the SIS path: C2W / C2P / C2Y use the
+  HAS L2 P bias, C2L / C2S / C2X the L2 CL bias.
+- **No broadcast fallback.** HAS covers GPS and Galileo only; a satellite
+  without a HAS orbit / clock sample at the epoch (other constellations,
+  satellites outside the HAS mask such as E18 / E33 on the OBE4 sample, or a
+  correction older than 90 s) is excluded instead of being processed on its
+  broadcast orbit.
 
 Orbit corrections are applied with the RTCM convention
 (`x = x_brdc - R_rac->ecef * dRAC`, clock `dt = dt_brdc + dC / c`) and refer
@@ -166,7 +173,7 @@ in the IDD table below:
 | 2025-08-21 07h, cssrlib SIS, static (15 deg, L1 C/A + L2 W) | 0.381 / -1.214 m | 0.117 / -0.629 m | 0.139 / -0.607 m | 0.084 / +0.563 m | 18.4 min | never |
 | 2025-08-21 07h, libgnss++ JPL GDGPS RTCM SSR, GPS + Galileo | 1.050 / +0.886 m | 0.719 / -0.007 m | 0.640 / +0.092 m | 0.524 / -0.113 m | never | 17.8 min |
 | 2025-08-21 07h, libgnss++ broadcast only, GPS + Galileo | 0.874 / +0.774 m | 0.710 / +0.069 m | 0.699 / +0.067 m | 0.651 / -0.246 m | never | 17.8 min |
-| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | 0.014 / +0.050 m | 0.8 min | 5.8 min |
+| For reference: OBE4 (Germany) HAS IDD, static (table below) | 0.158 / -0.081 m | 0.130 / -0.029 m | 0.027 / +0.028 m | 0.174 / +0.069 m | 6.4 min | 4.7 min |
 
 The lane gates the 2025-02-15 static run (H <= 0.20 m and |U| <= 0.40 m at
 30 and 60 min) and the decoder (all 432 MT1 messages of each hour, no CRC
@@ -258,16 +265,19 @@ a SEPCHOKE_B3E6 antenna).
 python3 apps/gnss.py reproduce has-idd-ppp --has-data-root /data/cssrlib-data/data/doy2023-229 --check
 ```
 
-Lane result (2026-10-01, after the solid-earth-tide frame fix and the static
-one-update-per-epoch fix, MSVC Release, elapsed time from the first epoch
-01:59:12 GPST; the historical rows keep the values of their time):
+Lane result (2026-10-01, after GPS L2 code biases started following the
+tracked code and satellites without HAS corrections were excluded, MSVC
+Release, elapsed time from the first epoch 01:59:12 GPST; the historical rows
+keep the values of their time):
 
 | Run | H / U at 10 min | 20 min | 30 min | 60 min | Converged H < 0.20 m | Converged \|U\| < 0.40 m |
 |---|---|---|---|---|---:|---:|
-| `has-idd`, static | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | **0.014 / +0.050 m** | **0.8 min** | **5.8 min** |
+| `has-idd`, static | 0.158 / -0.081 m | 0.130 / -0.029 m | 0.027 / +0.028 m | **0.174 / +0.069 m** | **6.4 min** | **4.7 min** |
+| `has-idd`, static, L2 bias by coarse signal, broadcast fallback | 0.056 / -0.147 m | 0.067 / -0.170 m | 0.092 / +0.049 m | 0.014 / +0.050 m | 0.8 min | 5.8 min |
 | `has-idd`, static, before the one-update fix | 0.018 / -0.503 m | 0.057 / -0.432 m | 0.072 / -0.090 m | 0.097 / -0.136 m | 4.2 min | 21.5 min |
 | `legacy` conversion of the same stream, static | 0.517 / -0.120 m | 0.207 / +0.072 m | 0.273 / +0.551 m | 0.105 / +0.284 m | 57.8 min | 58.7 min |
-| `has-idd`, kinematic | 0.033 / -0.201 m | 0.064 / -0.128 m | 0.057 / +0.018 m | **0.114 / +0.077 m** | 59.6 min | 6.1 min |
+| `has-idd`, kinematic | 0.185 / +0.064 m | 0.143 / +0.184 m | 0.116 / +0.393 m | **0.147 / +0.612 m** | 58.7 min | never |
+| `has-idd`, kinematic, L2 bias by coarse signal, broadcast fallback | 0.033 / -0.201 m | 0.064 / -0.128 m | 0.057 / +0.018 m | 0.114 / +0.077 m | 59.6 min | 6.1 min |
 | `has-idd`, kinematic, before the residual screening | 0.035 / -0.195 m | 0.064 / -0.127 m | 0.136 / +0.058 m | 0.018 / -0.390 m | 45.0 min | never (-0.44 m at the last epoch) |
 | `has-idd`, kinematic, before the one-update fix | 3.03 / -5.95 m | 2.47 / -5.13 m | 2.20 / -5.71 m | 1.87 / -5.61 m | never | never |
 
@@ -275,11 +285,15 @@ The lane gates the static run (H at 60 min <= 0.20 m, |U| at 60 min <= 0.40 m,
 horizontal convergence <= 10 min, vertical convergence <= 30 min) and the
 kinematic run (H <= 0.30 m and |U| <= 0.60 m at 30 and 60 min), and reports
 the other rows. With the kinematic post-fit residual screening (see
-[Broadcast kinematic PPP](broadcast_kinematic_ppp.md)) the kinematic run stays
-within 0.21 m horizontally and 0.24 m vertically after the first 10 minutes
-(RMS 0.086 m / 0.099 m, against 0.156 m / 0.206 m and peaks of 0.27 m /
-0.48 m before); it crosses 0.20 m horizontally once more just before the end
-of the hour, hence the late horizontal convergence time.
+[Broadcast kinematic PPP](broadcast_kinematic_ppp.md)) the kinematic run
+stayed within 0.21 m horizontally and 0.24 m vertically after the first 10
+minutes (RMS 0.086 m / 0.099 m) while E18 and E33, which have no HAS
+corrections in this stream, were still processed on their broadcast orbits.
+Excluding them (and applying the HAS L2 P bias to C2W) leaves 12 satellites
+for most of the hour: the static run improves vertically (RMS after 10 min
+U 0.117 m against 0.249 m, H 0.118 m against 0.125 m), while the white-noise
+kinematic run drifts up to +0.6..+0.8 m after 40 min (RMS after 10 min H
+0.176 m, U 0.503 m) and its 60-minute |U| gate (0.60 m) reads 0.612 m.
 
 Comparison with [cssrlib](https://github.com/hirokawa/cssrlib) (main,
 `samples/test_ppprtcm.py` case 1, which processes the same files from
@@ -323,10 +337,9 @@ applied; with `--antex igs20.atx` the up error shifts by about -0.1 m.
 - **SIS: phase biases** are decoded and dumped but not applied (float PPP).
 - **SIS: SBF observations.** SBF input is used for the HAS pages only; the
   observations must be converted to RINEX separately.
-- **IDD profile unchanged.** The `has-idd` profile keeps its stage-A
-  behaviour: GPS L2 code biases are chosen by the coarse signal (L2C) even for
-  C2W observations, and satellites without corrections keep their broadcast
-  orbit. `--has-pages` does both the tracked-code selection and the exclusion.
+- **IDD kinematic geometry.** With satellites outside the HAS mask excluded
+  (as on the SIS path), the OBE4 kinematic hour runs on 12 satellites and its
+  vertical error drifts to +0.6..+0.8 m in the second half hour.
 
 - **Kinematic PPP (fixed).** Until the one-update fix, `--kinematic` settled
   about 2 m horizontal / 5.6 m vertical off on this hour with HAS, legacy SSR

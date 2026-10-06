@@ -232,6 +232,15 @@ size_t sampleHeldSsrUpdates(std::map<SatelliteId, std::vector<HeldSsrUpdate>>& u
 
 }  // namespace
 
+void PPPProcessor::setGalileoHasCorrectionPolicy(bool enabled) {
+    // HAS covers GPS and Galileo only: other constellations (and satellites
+    // whose HAS correction expired) must not fall back to the broadcast orbit.
+    require_ssr_orbit_correction_ = enabled;
+    // HAS carries both L2 CL and L2 P code biases; apply the one of the
+    // tracked GPS L2 code (C2W -> L2 P, C2L -> L2 CL).
+    ssr_code_bias_tracking_identity_ = enabled;
+}
+
 bool PPPProcessor::loadPreciseProducts(const std::string& orbit_file, const std::string& clock_file) {
     precise_products_.clear();
 
@@ -582,6 +591,7 @@ bool PPPProcessor::loadRTCMSSRProducts(const std::string& rtcm_file,
                                        const NavigationData& nav,
                                        double sample_step_seconds,
                                        RTCMSSRProfile profile) {
+    setGalileoHasCorrectionPolicy(profile == RTCMSSRProfile::GalileoHasIdd);
     if (profile == RTCMSSRProfile::Legacy) {
         return loadRTCMSSRProducts(rtcm_file, nav, sample_step_seconds);
     }
@@ -671,12 +681,7 @@ bool PPPProcessor::loadGalileoHasSisProducts(const std::vector<io::HasSsrUpdate>
     ssr_products_.clear();
     require_coherent_ssr_ = false;
     ssr_products_loaded_ = false;
-    // HAS covers GPS and Galileo only: other constellations (and satellites
-    // whose HAS validity expired) must not fall back to the broadcast orbit.
-    require_ssr_orbit_correction_ = true;
-    // HAS carries both L2 CL and L2 P code biases; apply the one of the
-    // tracked GPS L2 code.
-    ssr_code_bias_tracking_identity_ = true;
+    setGalileoHasCorrectionPolicy(true);
     if (sample_step_seconds <= 0.0) {
         return false;
     }
