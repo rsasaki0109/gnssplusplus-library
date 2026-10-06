@@ -27,7 +27,7 @@ class DiagnosticsDataCases:
         self.assertIn("launch", payload["commands"])
         self.assertIn("record", payload["commands"])
         self.assertIn("topic_list", payload["commands"])
-        self.assertIn("device:=/dev/gnsspp-missing-test-device", payload["commands"]["launch"])
+        self.assertIn("device:=" + str(Path("/dev/gnsspp-missing-test-device")), payload["commands"]["launch"])
         check_names = {item["name"] for item in payload["checks"]}
         self.assertIn("serial device", check_names)
         self.assertIn("driver node binary", check_names)
@@ -254,7 +254,7 @@ class DiagnosticsDataCases:
             self.assertIn("ROS2 Bag Diagnostics", markdown)
             self.assertIn("Robotics Realtime Smoke", markdown)
             self.assertIn("ros2_bag_doctor_summary.json", markdown)
-            self.assertIn("robotics_smoke/realtime.json", markdown)
+            self.assertIn(str(Path("robotics_smoke/realtime.json")), markdown)
             payload = json.loads(report_json.read_text(encoding="utf-8"))
             self.assertEqual(payload["tool"], "field-report")
             self.assertEqual(len(payload["ros2_bags"]), 1)

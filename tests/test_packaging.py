@@ -295,9 +295,11 @@ class PackagingSmokeTest(unittest.TestCase):
             env["PATH"] = str(prefix / "bin") + os.pathsep + env.get("PATH", "")
 
             installed_demo_output = Path(temp_dir) / "installed-demo-output"
+            installed_dispatcher = ([sys.executable, str(prefix / "bin" / "gnss")]
+                                    if os.name == "nt" else [str(prefix / "bin" / "gnss")])
             installed_demo = subprocess.run(
                 [
-                    str(prefix / "bin" / "gnss"),
+                    *installed_dispatcher,
                     "demo",
                     "--output-dir",
                     str(installed_demo_output),
