@@ -71,8 +71,8 @@ The online API unit lane passes all 11 cases; PVA scoring and comparison tests
 cover coordinate transport, quaternion sign, unhealthy 180-degree error,
 missing data, censored recovery, drift and tampered provenance. A 600-epoch
 production replay also passes prefix invariance and a 300-epoch common prefix;
-default candidate-none outputs match the frozen control exactly in all 55
-common CSV fields except wall-clock processing time.
+default candidate-none outputs match the frozen control exactly in all 54
+deterministic common CSV fields (wall-clock processing time is excluded).
 
 The broader Windows checks pass 158 CLI tests (65 skips), 180 benchmark tests
 (one skip), four binding tests (eight skips), and installed packaging smoke
@@ -87,3 +87,23 @@ commands. Synthetic fixtures check the scoring workflow; public PPC data are
 external and not bundled. Each locally produced artifact has its own checksum
 and platform smoke evidence. Published v0.2.0 artifacts do not contain this
 development branch. No new release, PR or merge is implied by these results.
+
+The [local delivery record](online_pva_delivery_v1.json) pins four artifacts,
+their platform/runtime requirements, installed-only evaluation manifests,
+the default parity comparison and the production prefix proof. Windows ZIP
+and Docker both replay 600 public epochs and produce plots from installed
+files alone. DEB and TGZ pass demo, plot, native startup and explicit binding
+import checks in fresh compiler-free Ubuntu 24.04 containers. The TGZ native
+binary hash matches the Docker binary used for the public replay. The Docker
+archive was reloaded successfully. Strict documentation, actionlint hygiene
+and the prescribed cppcheck script pass; existing style warnings are retained.
+
+The artifacts are under `E:/gnsspp-pva-development/dist-final-windows` and
+`E:/gnsspp-pva-development/dist-linux` in this local workspace, with
+`SHA256SUMS` beside them and `README-distributions.txt` in the parent directory.
+The DEB has development version `0.2.0+pva.1091b8c3`; the TGZ and ZIP filenames
+also identify their development source. These paths are not public downloads.
+The native component was built at 7671c9af; production C++ is unchanged through
+the package source 1091b8c3. Scripts/install rules were rebuilt incrementally.
+The subsequent packaging fix e45f87a1 adds the ELF inspection prerequisite;
+that prerequisite was installed for the successful local DEB build.
