@@ -185,7 +185,11 @@ install(PROGRAMS
 if(WIN32)
     install(PROGRAMS ${CMAKE_CURRENT_SOURCE_DIR}/gnss.cmd DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
-install(FILES ${CMAKE_SOURCE_DIR}/docs/online_pva.md DESTINATION share/libgnsspp/docs)
+install(FILES
+    ${CMAKE_SOURCE_DIR}/docs/online_pva.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_development_plan.md
+    ${CMAKE_SOURCE_DIR}/docs/online_pva_candidate_v1.md
+    DESTINATION share/libgnsspp/docs)
 install(FILES ${CMAKE_SOURCE_DIR}/LICENSE DESTINATION share/licenses/libgnsspp)
 
 file(GLOB GNSS_PYTHON_COMMAND_FILES CONFIGURE_DEPENDS

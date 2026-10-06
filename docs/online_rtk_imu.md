@@ -6,6 +6,14 @@ samples and rover observations one event at a time. It does not open a data
 file, scan later observations, smooth outputs or interpolate a future base.
 Existing batch commands retain their existing behavior.
 
+CSV schema v2 appends fresh attitude (wxyz, body FLU to fixed ENU), its source
+time and fixed frame rotation, FRD/NED Roll/Pitch/Heading, estimated IMU biases
+and antenna ECEF velocities. The first 27 columns are preserved. An available
+attitude does not imply observed heading: `heading_aligned` is the first latch,
+while `heading_converged` is recent innovation health. Uninitialized/stale
+quaternions, frame rotations and angles are NaN. See the
+[PVA workflow](online_pva.md) for public-log scoring and distribution demos.
+
 ## Build and input
 
 ```sh

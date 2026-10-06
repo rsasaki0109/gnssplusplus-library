@@ -241,6 +241,12 @@ class PackagingSmokeTest(unittest.TestCase):
                 prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.obs",
                 prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.sp3",
                 prefix / "share" / "libgnsspp" / "demo" / "synthetic_ppp.clk",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_pva.csv",
+                prefix / "share" / "libgnsspp" / "demo" / "synthetic_reference.csv",
+                prefix / "share" / "libgnsspp" / "docs" / "online_pva.md",
+                prefix / "share" / "libgnsspp" / "docs" / "online_pva_candidate_v1.md",
+                prefix / "share" / "libgnsspp" / "docs" / "online_pva_development_plan.md",
+                prefix / "bin" / ("gnss_pva_replay" + EXE_SUFFIX),
             ]
             commands_root = ROOT_DIR / "apps" / "commands"
             command_sources = [
@@ -311,6 +317,12 @@ class PackagingSmokeTest(unittest.TestCase):
                 text=True,
             )
             self.assertIn("Self-contained offline demo complete:", installed_demo.stdout)
+            pva_demo = subprocess.run(
+                [*installed_dispatcher, "pva-demo", "--output-dir", str(Path(temp_dir)/"installed-pva")],
+                check=True, cwd=Path(temp_dir), env=env, capture_output=True, text=True)
+            self.assertIn("Synthetic scoring witness passed", pva_demo.stdout)
+            subprocess.run([*installed_dispatcher, "pva-replay", "--help"], check=True,
+                           cwd=Path(temp_dir), env=env, capture_output=True, text=True)
             for artifact_name in (
                 "demo_solution.pos",
                 "demo_solution.kml",

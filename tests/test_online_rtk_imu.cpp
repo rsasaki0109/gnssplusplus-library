@@ -188,6 +188,7 @@ TEST(OnlineRtkImuTest, OptInVehicleConstraintWaitsForObservedHeading) {
         PositionSolution fix;
         fix.time = time(t);
         fix.status = SolutionStatus::SPP;
+        fix.num_satellites = 8;
         fix.position_ecef = Vector3d(6378137, 0, 0);
         fix.position_covariance = Matrix3d::Identity();
         fix.has_velocity = true;

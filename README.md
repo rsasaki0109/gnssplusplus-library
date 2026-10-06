@@ -345,6 +345,8 @@ Choose the entrypoint that matches your job:
   runs, profile comparisons, Python inspection, and artifact layout.
 - [Self-contained offline demo](docs/self_contained_demo.md): one tracked
   fixture, one command, and `.pos`/KML/JSON artifacts without a download.
+- [Position, velocity and attitude evaluation](docs/online_pva.md): received-event
+  public-log replay, scene scoring and an included hardware-free scoring demo.
 - [Dataset gallery](docs/dataset_gallery.md): current public dataset lanes and
   the adapter contract for adding more.
 
