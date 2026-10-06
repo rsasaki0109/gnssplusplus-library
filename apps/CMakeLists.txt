@@ -5,6 +5,7 @@ set(GNSS_APP_TARGETS
     gnss_doppler_row_attrition_audit
     gnss_smartphone_fgo
     gnss_fuse
+    gnss_online
     gnss_vel_d
     gnss_pos_pdc
     gnss_pos_pd
@@ -99,6 +100,9 @@ add_executable(gnss_fuse
     ${GNSS_NATIVE_DIR}/cli_toml_config.cpp
 )
 target_link_libraries(gnss_fuse PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
+
+add_executable(gnss_online ${GNSS_NATIVE_DIR}/gnss_online.cpp)
+target_link_libraries(gnss_online PRIVATE gnss_lib gnss_rtk_runtime Threads::Threads)
 
 add_executable(gnss_vel_d ${GNSS_NATIVE_DIR}/gnss_vel_d.cpp)
 target_link_libraries(gnss_vel_d PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)

@@ -106,6 +106,7 @@ set(GNSS_SOURCES
     src/fusion/fusion_update.cpp
     src/fusion/fusion_initialization.cpp
     src/fusion/fusion_processor.cpp
+    src/fusion/online_rtk_imu.cpp
     src/fusion/dd_imu_bridge.cpp
     src/algorithms/ppp_ar.cpp
     src/algorithms/ppp_atmosphere.cpp

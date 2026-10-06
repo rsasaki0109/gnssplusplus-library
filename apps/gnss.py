@@ -179,6 +179,11 @@ COMMANDS = {
         "target": "gnss_fuse",
         "summary": "GNSS/IMU fusion with SPP/RTK and validated tight-coupling presets.",
     },
+    "online": {
+        "kind": "binary",
+        "target": "gnss_online",
+        "summary": "Process received RTCM and IMU events sequentially, with explicit input age and reset metadata.",
+    },
     "vel-d": {
         "kind": "binary",
         "target": "gnss_vel_d",
@@ -568,6 +573,11 @@ COMMANDS = {
         "kind": "python",
         "target": python_target("gnss_ppp_products_signoff.py"),
         "summary": "Run static, kinematic, or PPC PPP sign-off with fetched SP3/CLK/IONEX/DCB products and emit summary JSON.",
+    },
+    "observation-analysis": {
+        "kind": "python",
+        "target": python_target("gnss_observation_analysis.py"),
+        "summary": "Export satellite code residuals, SNR and carrier-continuity diagnostics through the public Python API.",
     },
     "ppc-native-replay": {
         "kind": "python",

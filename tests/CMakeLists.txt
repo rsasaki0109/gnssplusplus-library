@@ -244,6 +244,18 @@ if(GTest_FOUND)
         Threads::Threads
     )
 
+    add_executable(gnss_online_tests test_online_rtk_imu.cpp)
+    target_link_libraries(gnss_online_tests PRIVATE
+        gnss_lib gnss_rtk_runtime GTest::GTest GTest::Main Threads::Threads)
+    add_test(NAME online_rtk_imu_tests COMMAND gnss_online_tests)
+    set_tests_properties(online_rtk_imu_tests PROPERTIES LABELS core)
+
+    add_executable(gnss_fix_recovery_tests test_fix_recovery_guard.cpp)
+    target_include_directories(gnss_fix_recovery_tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+    target_link_libraries(gnss_fix_recovery_tests PRIVATE Eigen3::Eigen GTest::GTest GTest::Main)
+    add_test(NAME fix_recovery_guard_tests COMMAND gnss_fix_recovery_tests)
+    set_tests_properties(fix_recovery_guard_tests PROPERTIES LABELS core)
+
     # Add test to CTest
     add_test(NAME run_tests COMMAND gnss_run_tests)
     add_test(
@@ -693,6 +705,8 @@ if(GTest_FOUND)
         gsdc_frozen_runner
         gsdc_raw_clock_cleanup_audit
         integrity_consensus_replay
+        observation_analysis
+        native_integrity_audit
         ppc_clas_scorecard
         ppc_kinematic_integrity_loo
         ppc_native_replay

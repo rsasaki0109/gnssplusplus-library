@@ -74,3 +74,33 @@ credential dependency. Acceptance requires successful full six-run generation,
 same-condition repeated POS data, and negative tests for stale output and
 provenance mismatches. The focused ten tests and the existing 32 reproduction
 tests passed. Native rebuilding and real-data validation are pending.
+
+The native executables now build successfully. A 120-epoch Tokyo run1 smoke
+regenerated and scored three streams successfully. The uncapped six-run replay
+is running from frozen commit `b34cf3e7`; it must finish and then be repeated
+before raw-replay acceptance. Tokyo run1 currently has 784 wrong FIX epochs
+above 0.5 m and 217 above 2 m. The offline audit records 1,702 missing or
+unmatched epochs relative to the 11,928 admitted rover inputs. These figures
+describe the new native baseline, not historical selected tiers.
+
+Further implementation is isolated in `feat/ppc-integrity-online-analysis` at
+`E:/gnsspp-goal-development`, so evaluation source contents remain stable.
+The satellite analysis API and CLI have fourteen passing independent tests.
+The public extension builds and a bounded PPC example exports 9,432 rows and
+33 satellite plots, with G05/C11 visually reviewed. The broader regression
+checks and final integration remain pending. The
+received-event RTK/IMU processor and stdin RTCM/IMU executable compile. Its
+nine queue/reset tests pass. Numerical prefix
+parity and late/missing-input real-data evidence remain required.
+
+The new offline native integrity audit has four passing tests for two error
+thresholds, missing-output costs, status demotion versus actual accuracy, and
+right-censored recovery. On Tokyo run1, 247 of the 784 wrong FIX epochs have
+none of the audit's named runtime warnings. This limits simple threshold
+detectors. `FixRecoveryGuard` and the optional native `--fix-recovery` path
+are now implemented, with immediate hard-residual containment, repeated joint
+prefit evidence, one reset on quarantine entry, and consecutive clean-candidate
+recovery. Its seven native tests pass, and the disabled path preserves every
+POS numeric field on the 120-epoch PPC smoke. Six-run comparison and adoption
+decision remain pending. No deliverable is signed off
+solely from the bounded smoke or these partial-run observations.

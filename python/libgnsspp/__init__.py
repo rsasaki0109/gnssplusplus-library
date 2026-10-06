@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 
-from . import artifacts
+from . import artifacts, observations
 from ._libgnsspp import (
     CorrectedMeasurement,
     GNSSTime,
@@ -235,6 +235,7 @@ __all__ = [
     "SolutionStatistics",
     "SolutionStatus",
     "artifacts",
+    "observations",
     "ecef_to_geodetic_deg",
     "geodetic_deg_to_ecef",
     "load_solution",

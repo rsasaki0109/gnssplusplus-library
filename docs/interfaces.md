@@ -1,5 +1,14 @@
 # Interfaces
 
+See [received-event RTK/IMU](online_rtk_imu.md) for the sequential native API
+and stdin executable, including input availability and timestamp contracts.
+
+See [runtime FIX recovery](fix_recovery_guard.md) for optional residual
+containment, clean-candidate recovery and the off/on evaluation contract.
+
+[Python satellite observation analysis](python_observation_analysis.md) provides
+code residual, SNR and carrier-continuity diagnostics from the public bindings.
+
 ## CLI
 
 The primary interface is the `gnss` dispatcher plus native command binaries.

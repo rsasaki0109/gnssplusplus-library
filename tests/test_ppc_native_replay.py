@@ -19,6 +19,16 @@ import gnss_ppc_native_replay as replay
 
 
 class NativeReplayTest(unittest.TestCase):
+    def test_fix_recovery_is_explicit_and_cannot_claim_fusion_recipe_support(self):
+        commands = replay.solver_commands({"gnss_solve": Path("/build/gnss_solve")},
+            Path("/data/tokyo/run1"), "tokyo", Path("/out"), ["rtk"], -1, True)
+        argv = commands[0][1]
+        self.assertIn("--fix-recovery-log", argv)
+        self.assertEqual(argv[-1], str(Path("/out/fix_recovery.csv")))
+        with self.assertRaises(SystemExit):
+            replay.parse_args(["--dataset-root", "/data", "--build-dir", "/build",
+                               "--output-dir", "/out", "--fix-recovery"])
+
     def test_output_refuses_prior_results_without_deleting_them(self):
         with tempfile.TemporaryDirectory() as directory:
             out = Path(directory)

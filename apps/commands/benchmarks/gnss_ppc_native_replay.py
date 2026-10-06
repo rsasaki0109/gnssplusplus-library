@@ -50,6 +50,8 @@ def compare_reports(baseline: dict, candidate: dict) -> dict:
     for key in ("evaluation", "max_epochs", "runs", "paths"):
         if baseline.get(key) != candidate.get(key):
             raise ValueError(f"comparison recipe differs: {key}")
+    if baseline.get("fix_recovery", False) != candidate.get("fix_recovery", False):
+        raise ValueError("comparison recipe differs: fix_recovery")
     if baseline["source"]["contents_sha256"] != candidate["source"]["contents_sha256"]:
         raise ValueError("comparison source contents differ")
     for key in ("inputs", "binaries", "runtime_libraries"):
@@ -160,7 +162,7 @@ def run_step(argv: list[str], log: Path, env: dict[str, str], report: dict, mani
 
 
 def solver_commands(binaries: dict[str, Path], run_dir: Path, city: str, out: Path,
-                    paths: list[str], max_epochs: int) -> list[tuple[str, list[str], list[tuple[str, Path]]]]:
+                    paths: list[str], max_epochs: int, fix_recovery: bool = False) -> list[tuple[str, list[str], list[tuple[str, Path]]]]:
     cap = ["--max-epochs", str(max_epochs)] if max_epochs > 0 else []
     commands = []
     if "rtk" in paths:
@@ -169,6 +171,8 @@ def solver_commands(binaries: dict[str, Path], run_dir: Path, city: str, out: Pa
                 "--base", str(run_dir / "base.obs"), "--nav", str(run_dir / "base.nav"),
                 "--mode", "kinematic", "--no-kml", *COMMON, *cap, "--out", str(pos),
                 "--debug-epoch-log", str(out / "rtk_debug.csv")]
+        if fix_recovery:
+            argv.extend(["--fix-recovery-log", str(out / "fix_recovery.csv")])
         commands.append(("rtk", argv, [("rtk", pos)]))
     if "fusion" in paths:
         fused, coupled = out / "fused.pos", out / "coupled_rtk.pos"
@@ -188,6 +192,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--jobs", type=int, default=2)
     parser.add_argument("--runs", nargs="+", choices=RUNS, default=list(RUNS))
     parser.add_argument("--paths", nargs="+", choices=("rtk", "fusion"), default=["rtk", "fusion"])
+    parser.add_argument("--fix-recovery", action="store_true",
+                        help="Evaluate optional runtime FIX recovery; requires --paths rtk.")
     parser.add_argument("--max-epochs", type=int, default=-1,
                         help="-1: full run (default); a positive cap is a smoke, never full evidence.")
     parser.add_argument("--runtime-dir", type=Path, action="append", default=[],
@@ -202,6 +208,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--jobs must be positive")
     if len(set(args.runs)) != len(args.runs) or len(set(args.paths)) != len(args.paths):
         parser.error("runs and paths must not contain duplicates")
+    if args.fix_recovery and args.paths != ["rtk"]:
+        parser.error("--fix-recovery requires --paths rtk; the fusion recipe is unchanged")
     return args
 
 
@@ -239,6 +247,7 @@ def replay(args: argparse.Namespace) -> dict:
               "scope": "existing PPC development data; fresh native baseline, not historical selected tiers",
               "evaluation": "full" if args.max_epochs == -1 else "smoke",
               "max_epochs": args.max_epochs, "runs": args.runs, "paths": args.paths,
+              "fix_recovery": args.fix_recovery,
               "source": source, "inputs": inputs, "steps": [], "results": [],
               "platform": platform.platform(), "python": sys.version,
               "build": {"directory": str(build), "config": args.build_config,
@@ -276,7 +285,8 @@ def replay(args: argparse.Namespace) -> dict:
             city, number = run.split("/")
             run_out = out / city / number
             run_out.mkdir(parents=True)
-            for label, argv, streams in solver_commands(binaries, dataset / run, city, run_out, args.paths, args.max_epochs):
+            for label, argv, streams in solver_commands(binaries, dataset / run, city, run_out,
+                                                       args.paths, args.max_epochs, args.fix_recovery):
                 wall = run_step(argv, run_out / f"{label}.log", env, report, manifest)
                 for stream, pos in streams:
                     if not pos.is_file() or pos.stat().st_size == 0:
