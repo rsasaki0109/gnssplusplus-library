@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     cmake \
+    file \
     libeigen3-dev \
     libgtest-dev \
     pybind11-dev \

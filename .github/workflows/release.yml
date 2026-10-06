@@ -43,6 +43,7 @@ jobs:
           build-essential \
           cmake \
           dpkg-dev \
+          file \
           libeigen3-dev \
           pybind11-dev \
           python3 \

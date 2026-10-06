@@ -100,6 +100,8 @@ CPack produces TGZ/DEB on Linux and ZIP on Windows. Generate locally after a
 full Release build using `cpack --config build/CPackConfig.cmake -C Release`.
 Checksums and actual platform verification belong with each artifact; an
 existing published image/tag does not contain these new changes yet.
+The Linux DEB packager needs `file` and `dpkg-dev` for ELF dependency discovery;
+the Docker builder includes these through its package dependencies.
 
 For a Windows ZIP, extract it and add its `bin` to PATH. `gnss.cmd` uses Python
 via the Python launcher or Python on PATH. PVA scoring/demo need Python 3.10+;
