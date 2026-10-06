@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 BUILD_DIR = Path(os.environ.get("GNSSPP_BINARY_DIR", ROOT_DIR / "build"))
-PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.2.0"
+PUBLIC_IMAGE = "ghcr.io/rsasaki0109/gnssplusplus-library:v0.3.0"
 PUBLIC_DEMO_COMMAND = re.compile(
     re.escape(PUBLIC_IMAGE)
     + r"\s+demo\s+--output-dir\s+/workspace/output/self-contained-demo"
