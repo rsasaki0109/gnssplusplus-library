@@ -243,6 +243,10 @@ private:
     
     // State variables
     Vector3d estimated_position_;           ///< Current position estimate (ECEF)
+    /// True while estimated_position_ is only the crude initializePosition()
+    /// linearization point that no solve has confirmed.  The next solve then
+    /// re-seeds and runs as a cold start instead of re-using it (lockout).
+    bool position_is_cold_start_seed_ = false;
     double receiver_clock_bias_;            ///< Receiver clock bias in seconds
     std::map<GNSSSystem, double> system_biases_; ///< Inter-system clock biases
     bool has_last_valid_position_ = false;

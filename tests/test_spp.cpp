@@ -106,6 +106,90 @@ Vector3d expectedBeiDouGeoPosition(const Ephemeris& eph,
     return position;
 }
 
+// Synthetic 24-satellite GPS-like constellation (6 planes x 4 slots) used to
+// exercise the SPP cold start without any repo test data.
+struct SyntheticColdStartScene {
+    Vector3d truth = Vector3d(-3959000.0, 3354000.0, 3697000.0);  // near Tokyo
+    double clock_bias_m = 150000.0;
+    NavigationData nav;
+
+    SyntheticColdStartScene() {
+        const GNSSTime toe(2300, 100000.0);
+        for (int plane = 0; plane < 6; ++plane) {
+            for (int slot = 0; slot < 4; ++slot) {
+                Ephemeris eph;
+                eph.valid = true;
+                eph.satellite = SatelliteId(GNSSSystem::GPS, plane * 4 + slot + 1);
+                eph.toe = eph.toc = toe;
+                eph.toes = toe.tow;
+                eph.week = 2300;
+                eph.sqrt_a = std::sqrt(26560000.0);
+                eph.e = 0.005;
+                eph.i0 = 55.0 * M_PI / 180.0;
+                eph.omega0 = plane * (M_PI / 3.0);
+                eph.omega = 0.0;
+                eph.m0 = slot * (M_PI / 2.0) + plane * (M_PI / 12.0);
+                eph.omega_dot = -8.0e-9;
+                nav.addEphemeris(eph);
+            }
+        }
+    }
+
+    ObservationData observe(const GNSSTime& time, double min_elevation_deg = 5.0,
+                            double max_elevation_deg = 90.0) const {
+        ObservationData epoch;
+        epoch.time = time;
+        epoch.receiver_position = Vector3d::Zero();  // online/PVA replay: no header position
+        const Vector3d up = truth.normalized();
+        for (const auto& [sat, ephs] : nav.ephemeris_data) {
+            const Ephemeris& eph = ephs.front();
+            double tau = 0.075;
+            Vector3d rotated = Vector3d::Zero();
+            bool ok = true;
+            for (int i = 0; i < 5; ++i) {
+                Vector3d pos, vel;
+                double clk, drift;
+                if (!eph.calculateSatelliteState(time - tau, pos, vel, clk, drift)) {
+                    ok = false;
+                    break;
+                }
+                const double angle = constants::OMEGA_E * tau;
+                Eigen::Matrix3d rot;
+                rot << std::cos(angle), std::sin(angle), 0.0,
+                      -std::sin(angle), std::cos(angle), 0.0,
+                       0.0, 0.0, 1.0;
+                rotated = rot * pos;
+                tau = (rotated - truth).norm() / constants::SPEED_OF_LIGHT;
+            }
+            if (!ok) continue;
+            const Vector3d los = (rotated - truth).normalized();
+            const double elevation_deg = std::asin(los.dot(up)) * 180.0 / M_PI;
+            if (elevation_deg < min_elevation_deg || elevation_deg > max_elevation_deg) {
+                continue;
+            }
+            Observation obs;
+            obs.satellite = sat;
+            obs.signal = SignalType::GPS_L1CA;
+            obs.pseudorange = (rotated - truth).norm() + clock_bias_m;
+            obs.snr = 45.0;
+            obs.valid = true;
+            obs.has_pseudorange = true;
+            epoch.addObservation(obs);
+        }
+        return epoch;
+    }
+};
+
+ProcessorConfig syntheticColdStartConfig() {
+    ProcessorConfig config;
+    config.elevation_mask = 15.0;
+    config.snr_mask = 0.0;
+    config.mode = PositioningMode::SPP;
+    config.use_ionosphere_model = false;
+    config.use_troposphere_model = false;
+    return config;
+}
+
 }  // namespace
 
 TEST(NavigationTest, BeiDouGeoBroadcastStateUsesGeoRotationFrame) {
@@ -574,6 +658,63 @@ protected:
     ObservationData obs_data_;
     NavigationData nav_data_;
 };
+
+// Regression for the SPP cold-start lockout.  With no receiver position
+// (online/PVA replay never sets obs.receiver_position) the solver seeds
+// estimated_position_ at 0.9 * (first satellite ECEF).  At that bogus seed
+// few satellites pass the elevation mask, so the epoch used to fail and the
+// very same seed was kept for every later epoch (permanent lockout).  RTKLIB
+// rescode() bypasses the mask while the receiver position is uninitialised;
+// the solver must do the same and must not keep a failed cold-start seed.
+TEST(SPPColdStartTest, SolvesEveryEpochWithoutReceiverPosition) {
+    SyntheticColdStartScene scene;
+    SPPProcessor processor;
+    ASSERT_TRUE(processor.initialize(syntheticColdStartConfig()));
+    int solved = 0;
+    for (int k = 0; k < 20; ++k) {
+        const GNSSTime time(2300, 100000.0 + 30.0 * k);
+        const auto epoch = scene.observe(time);
+        ASSERT_GE(epoch.observations.size(), 8u) << k;
+        const auto solution = processor.processEpoch(epoch, scene.nav);
+        ASSERT_TRUE(solution.isValid()) << "epoch " << k << " locked out";
+        EXPECT_LT((solution.position_ecef - scene.truth).norm(), 5.0) << k;
+        EXPECT_NEAR(solution.receiver_clock_bias, scene.clock_bias_m, 5.0) << k;
+        ++solved;
+    }
+    EXPECT_EQ(solved, 20);
+}
+
+// An epoch whose satellites all lie below the 15 degree mask passes the
+// unmasked cold-start iterations but fails the masked solution.  It must not
+// leave its crude linearization point behind as the "known" position: the next
+// epoch (full sky) has to cold-start again and be solved.
+TEST(SPPColdStartTest, FailedColdStartEpochDoesNotLeaveBogusSeed) {
+    SyntheticColdStartScene scene;
+    const GNSSTime time(2300, 100000.0);
+    const ObservationData low_only = scene.observe(time, 0.0, 14.0);
+    ASSERT_GE(low_only.observations.size(), 4u);
+    SPPProcessor processor;
+    ASSERT_TRUE(processor.initialize(syntheticColdStartConfig()));
+    EXPECT_FALSE(processor.processEpoch(low_only, scene.nav).isValid());
+    const auto solution = processor.processEpoch(scene.observe(time), scene.nav);
+    ASSERT_TRUE(solution.isValid());
+    EXPECT_LT((solution.position_ecef - scene.truth).norm(), 5.0);
+}
+
+TEST(SPPColdStartTest, HeaderSeededPathStillMaskedAndUnchanged) {
+    SyntheticColdStartScene scene;
+    SPPProcessor processor;
+    ASSERT_TRUE(processor.initialize(syntheticColdStartConfig()));
+    ObservationData epoch = scene.observe(GNSSTime(2300, 100000.0));
+    epoch.receiver_position = scene.truth + Vector3d(50.0, -30.0, 20.0);
+    const auto solution = processor.processEpoch(epoch, scene.nav);
+    ASSERT_TRUE(solution.isValid());
+    EXPECT_LT((solution.position_ecef - scene.truth).norm(), 5.0);
+    // The 15 degree mask still applies once a position is known.
+    for (const double elevation : solution.satellite_elevations) {
+        EXPECT_GE(elevation, 15.0 * M_PI / 180.0 - 1e-6);
+    }
+}
 
 TEST_F(SPPTest, ProcessorInitialization) {
     ASSERT_NE(spp_processor_, nullptr);
