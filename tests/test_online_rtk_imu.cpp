@@ -209,6 +209,7 @@ TEST(OnlineRtkImuTest, VelocityConsistencyCandidateDefaultsAreOff) {
     const OnlineRtkImuProcessor::Config config;
     EXPECT_FALSE(config.independent_doppler_velocity);
     EXPECT_FALSE(config.fusion.reanchor_velocity_on_heading_latch);
+    EXPECT_EQ(config.fusion.float_position_reanchor_after_rejections, 0);
     EXPECT_EQ(config.fusion.max_position_update_nis_per_observation, 0.0);
     EXPECT_EQ(config.fusion.max_velocity_update_nis_per_observation, 0.0);
 }

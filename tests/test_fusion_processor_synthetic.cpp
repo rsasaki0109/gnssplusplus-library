@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <limits>
+#include <memory>
 #include <vector>
 
 #include <libgnss++/core/coordinates.hpp>
@@ -961,6 +962,145 @@ TEST(FusionProcessorSyntheticTest, DetectsAndFlagsAConsistentButWrongInitialHead
         << "isHeadingConverged() never flagged the wrong latch as unhealthy -- the replacement for "
            "the old always-yes 'Heading aligned' printout is not doing its job";
     EXPECT_TRUE(recovered_once) << "processor never re-inflated yaw covariance via velocity NIS";
+}
+
+// velocity_consistency_v2: lockout-proof recovery of the precise-class
+// position gate. Shared harness: zero lever arm so antenna == IMU position.
+class FloatGateRecoveryHarness {
+public:
+    explicit FloatGateRecoveryHarness(int reanchor_after) {
+        config_.align_static_window_s = 0.1;
+        config_.zupt_enable = false;
+        config_.nhc_enable = false;
+        config_.lever_arm_body.setZero();
+        config_.max_position_update_nis_per_observation = 9.0;
+        config_.max_consecutive_gate_rejections = 0;  // existing FIXED path off
+        config_.float_position_reanchor_after_rejections = reanchor_after;
+        processor_ = std::make_unique<LooseCouplingProcessor>(config_);
+        for (int i = 0; i < 20; ++i) {
+            ImuSample sample;
+            sample.time = time_;
+            sample.accel_raw = Eigen::Vector3d(0.0, 0.0, kGravity);
+            sample.gyro_raw_radps.setZero();
+            processor_->processImuSample(sample);
+            time_ = time_ + kDt;
+        }
+        origin_ecef_ = geodetic2ecef(35.6 * M_PI / 180.0, 139.7 * M_PI / 180.0, 50.0);
+        // Origin-setting coarse epoch at the state position.
+        send(SolutionStatus::SPP, Eigen::Vector3d::Zero(), 5.0);
+    }
+    // ENU antenna offset from the origin -> solution of the given class.
+    void send(SolutionStatus status, const Eigen::Vector3d& enu, double sigma_m) {
+        time_ = time_ + 0.2;
+        PositionSolution solution;
+        solution.time = time_;
+        solution.status = status;
+        solution.num_satellites = 10;
+        solution.position_covariance = sigma_m * sigma_m * Eigen::Matrix3d::Identity();
+        const Eigen::Matrix3d enu_to_ecef = rotationOrIdentity().transpose();
+        solution.position_ecef = origin_ecef_ + enu_to_ecef * enu;
+        processor_->processGnssSolution(solution);
+    }
+    void skip(double seconds) { time_ = time_ + seconds; }
+    LooseCouplingProcessor& processor() { return *processor_; }
+    Eigen::Vector3d antennaEnu() const { return processor_->state().nominal.position_enu; }
+
+private:
+    Eigen::Matrix3d rotationOrIdentity() const {
+        return processor_ ? processor_->ecefToLocalEnuRotation() : Eigen::Matrix3d::Identity();
+    }
+    LooseCouplingProcessor::Config config_;
+    std::unique_ptr<LooseCouplingProcessor> processor_;
+    GNSSTime time_{2200, 100000.0};
+    Eigen::Vector3d origin_ecef_ = Eigen::Vector3d::Zero();
+};
+
+TEST(FusionProcessorSyntheticTest, FloatGateRecoveryDefaultsOffAndKeepsFloatRejected) {
+    EXPECT_EQ(LooseCouplingProcessor::Config().float_position_reanchor_after_rejections, 0);
+    FloatGateRecoveryHarness h(0);
+    ASSERT_TRUE(h.processor().isOriginSet());
+    for (int i = 0; i < 8; ++i) {
+        h.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+        h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+        EXPECT_FALSE(h.processor().lastGnssPositionUpdateApplied()) << i;
+        EXPECT_FALSE(h.processor().lastGnssPositionReanchored()) << i;
+    }
+}
+
+TEST(FusionProcessorSyntheticTest, FloatGateRecoveryReanchorsDespiteInterleavedCoarseAcceptance) {
+    FloatGateRecoveryHarness h(3);
+    ASSERT_TRUE(h.processor().isOriginSet());
+    const Eigen::Vector3d float_enu(25.0, 0.0, 0.0);
+    for (int i = 0; i < 2; ++i) {
+        h.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+        // The coarse update is accepted and resets the shared streak counter,
+        // which is exactly what starves the existing recovery.
+        EXPECT_TRUE(h.processor().lastGnssPositionUpdateApplied());
+        h.send(SolutionStatus::FLOAT, float_enu, 0.1);
+        EXPECT_FALSE(h.processor().lastGnssPositionUpdateApplied()) << i;
+        EXPECT_FALSE(h.processor().lastGnssPositionReanchored()) << i;
+    }
+    const auto before = h.processor().state();
+    h.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+    const Eigen::Vector3d attitude_before_vel = h.processor().state().nominal.velocity_enu;
+    const Eigen::Quaterniond attitude_before = h.processor().state().nominal.attitude_body_to_enu;
+    const Eigen::Vector3d gyro_before = h.processor().state().nominal.gyro_bias;
+    h.send(SolutionStatus::FLOAT, float_enu, 0.1);
+    EXPECT_TRUE(h.processor().lastGnssPositionReanchored());
+    EXPECT_TRUE(h.processor().lastGnssPositionUpdateApplied());
+    EXPECT_NEAR((h.antennaEnu() - float_enu).norm(), 0.0, 1e-6);
+    // Position only: velocity, attitude and biases untouched, position
+    // cross-covariances cleared, position covariance = GNSS covariance.
+    EXPECT_TRUE(h.processor().state().nominal.velocity_enu.isApprox(attitude_before_vel, 1e-12));
+    EXPECT_TRUE(h.processor().state().nominal.attitude_body_to_enu.isApprox(attitude_before, 1e-12));
+    EXPECT_TRUE(h.processor().state().nominal.gyro_bias.isApprox(gyro_before, 1e-12));
+    const auto& cov = h.processor().state().covariance;
+    constexpr int p = fusion_index::POSITION;
+    const double cross_norm = cov.block<3, 12>(p, 3).norm();
+    const double position_variance = cov(p, p);
+    EXPECT_NEAR(cross_norm, 0.0, 1e-12);
+    EXPECT_NEAR(position_variance, 0.01, 0.01);
+    (void)before;
+    // Counter restarted: the next rejected FLOAT does not re-anchor again
+    // (state is now at the FLOAT position, so move the FLOAT away again).
+    h.send(SolutionStatus::SPP, float_enu, 5.0);
+    h.send(SolutionStatus::FLOAT, float_enu + Eigen::Vector3d(30.0, 0.0, 0.0), 0.1);
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+}
+
+TEST(FusionProcessorSyntheticTest, FloatGateRecoveryRefusesFloatInconsistentWithCoarse) {
+    FloatGateRecoveryHarness h(3);
+    // A drifting float, 140 m from both the state and the coarse position.
+    for (int i = 0; i < 8; ++i) {
+        h.send(SolutionStatus::SPP, Eigen::Vector3d(2.0, 0.0, 0.0), 5.0);
+        h.send(SolutionStatus::FLOAT, Eigen::Vector3d(140.0, 0.0, 0.0), 0.1);
+        EXPECT_FALSE(h.processor().lastGnssPositionReanchored()) << i;
+        EXPECT_FALSE(h.processor().lastGnssPositionUpdateApplied()) << i;
+    }
+    EXPECT_LT(h.antennaEnu().norm(), 20.0);
+}
+
+TEST(FusionProcessorSyntheticTest, FloatGateRecoveryNeedsRecentCoarseAndAcceptedFloatResetsStreak) {
+    FloatGateRecoveryHarness stale(2);
+    stale.skip(5.0);  // coarse origin epoch is now stale (> 1 s)
+    for (int i = 0; i < 6; ++i) {
+        stale.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+        stale.skip(0.8);  // 1 s cadence, never a fresh coarse epoch
+        EXPECT_FALSE(stale.processor().lastGnssPositionReanchored()) << i;
+    }
+    FloatGateRecoveryHarness reset(3);
+    for (int round = 0; round < 3; ++round) {
+        reset.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+        reset.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+        EXPECT_FALSE(reset.processor().lastGnssPositionReanchored());
+        reset.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+        reset.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+        EXPECT_FALSE(reset.processor().lastGnssPositionReanchored());
+        // A FLOAT the gate accepts (consistent with the state) resets the streak.
+        reset.send(SolutionStatus::FLOAT, reset.antennaEnu(), 1.0);
+        EXPECT_TRUE(reset.processor().lastGnssPositionUpdateApplied());
+        EXPECT_FALSE(reset.processor().lastGnssPositionReanchored());
+    }
 }
 
 }  // namespace
