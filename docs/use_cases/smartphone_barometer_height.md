@@ -1,6 +1,6 @@
 # Smartphone barometer-aided height (Nantes feasibility study)
 
-Status: **feasibility study with a weak reference.**  Default OFF; with the
+Status: **feasibility study with a weak reference; outcome below (vertical aid works, horizontal aid not shown, the pre-registered Go gate G3 failed by 0.07 m on the sealed holdout).**  Default OFF; with the
 flag absent the native SPP output is bit-identical to the pre-change binary
 (checked by `md5sum` on five real runs and by unit tests).  Nothing here is an
 accuracy claim against a survey-grade reference.
@@ -18,7 +18,7 @@ Devices and ULISS", Zenodo record 12566912, `Android_GNSS_Dataset_Nantes.zip`
 (5.6 GB), CC-BY 4.0 (`LICENSE.txt` in the archive).  Source:
 <https://zenodo.org/records/12566912>.  Data are **not** committed.  Extracted
 files and their SHA-256 are recorded in
-`/media/sasaki/aiueo2/datasets/nantes_mimir/extracted/manifest_*.json`; the
+`/media/sasaki/aiueo2/datasets/nantes_mimir/MANIFEST_extracted.json`; the
 broadcast navigation file is the public IGS
 `BRDC00IGS_R_20240740000_01D_MN.rnx` (sha256
 `903986e0f1fdf8558d4af8b4ef5ccfe95e43623d33155f40b1a87ae33db8bd42`).
@@ -216,12 +216,74 @@ first-epoch SPP height error and converges only over several minutes (A2:
 gain is outlier suppression.  The chipset `Fix.csv` is better horizontally
 (median 7.9 m versus 12.5 m).
 
+## Sealed holdout (S4 A1/A2, opened once after the freeze commit)
+
+Run exactly as frozen (final binary, no `--baro-*` flags, `--max-residual-rms
+50`, lag 0 s).  S4 reference: the Awinda altitude is essentially a constant
+52.6-53.1 m (flat street), start/end closure 0.23 / 0.36 m horizontal; the
+barometer cannot be checked against it (range 5.4 m in A1 is weather drift, 52
+m in A2 pocket spikes).  So S4 vertical error means "deviation from a constant
+height" and cannot reveal a real slope of the street.  A1 = left hand,
+A2 = left trouser pocket; the phone clock was only 0.28-0.29 s from UTC.
+
+Pooled (1740 matched epochs, availability 100 % for OFF and ON):
+
+| | H RMSE | H P50 | H P95 | V demeaned RMSE | V demeaned P50 | V demeaned P95 | V common-offset RMSE | max H / V step (m/s) |
+|---|---|---|---|---|---|---|---|---|
+| OFF | 23.4 | 12.1 | 50.4 | 27.3 | 15.3 | 58.4 | 27.3 | 155 / 108 |
+| ON | 22.6 | 12.8 | 46.7 | 8.4 | 3.4 | 21.1 | 7.9 | 120 / 51 |
+| Fix.csv | 3.1 | 2.0 | 5.5 | 1.8 | 0.9 | 2.3 | 17.1 | 3 / 28 |
+
+Per run (OFF → ON): A1 (hand) H RMSE 23.3 → 21.7, P50 10.6 → 11.4, P95 54.0 →
+47.7; V demeaned RMSE 26.0 → 3.7.  A2 (pocket) H RMSE 23.5 → 23.7, P50 14.7 →
+15.3, P95 47.5 → 46.2; V demeaned RMSE 28.7 → 11.9 (closure vertical 29.2 →
+21.8 m, i.e. the absolute level is still wrong by ≈ 20 m at the end of the
+pocket run).  Reference-free closure, hand run: vertical −7.4 → +1.3 m.
+
+Gate evaluation (frozen, pooled):
+
+| Gate | Result | Verdict |
+|---|---|---|
+| G1 relative vertical: RMSE ≤ 0.5×, P95 ≤ 0.5× | 0.31×, 0.36× | pass |
+| G2 vertical with common offset: RMSE ≤ 0.75× | 0.29× | pass |
+| G3 horizontal no-harm: P50 ≤ 1.05×, P95 ≤ 1.05× | P50 **1.055×** (12.75 vs 12.68 limit), P95 0.93× | **fail (by 0.07 m)** |
+| G4 horizontal benefit (P50 not worse and RMSE or P95 ≤ 0.95×) | P95 0.93×, RMSE 0.97×, P50 worse | fail |
+| G5 availability ON ≥ OFF | 100 % = 100 % | pass |
+| G6 jumps not worse | H 155 → 120, V 108 → 51 m/s | pass |
+
+**As pre-registered the outcome is No-Go for the combined "vertical aid" claim
+because G3 failed, and No-Go for "horizontal aid".**  No parameter was changed
+after reading the holdout.  For context only (not used for any decision): a
+30 s block bootstrap of the paired ON-OFF differences gives, on S4, ΔH P50
++0.66 m [-0.34, +1.49], ΔH P95 -3.72 m [-6.74, +0.90], ΔH RMSE -0.77 m [-1.76,
++0.19], Δ demeaned V RMSE -18.9 m [-23.1, -14.5]; on S3 development ΔH P50
+-0.10 m [-0.44, +0.15], ΔH P95 +0.83 m [-2.14, +3.32], Δ V RMSE -16.3 m
+[-21.3, -12.3].  The vertical effect is significant in both sessions, the
+horizontal effect is indistinguishable from zero in both; the G3 miss is a
+statistically insignificant 0.67 m on a metric with ±1-2 m reference
+uncertainty.
+
+Filter behaviour on all five scored runs: constraint applied on 91-100 % of
+epochs after a 2-25 epoch start-up, 1-4 baro rejections per run, no GNSS
+height rejections except one, no re-base events.
+
+Other findings: (1) the chipset `Fix.csv` solution is far better horizontally
+than this code-only L1/E1 SPP on S4 (median 2.0 m versus 12 m) and in vertical
+dispersion (0.9 m versus 3.4 m demeaned median), so the barometer does not
+close the gap to a modern smartphone fix; (2) the vertical gain is a relative
+one: the ON height tracks level changes (mezzanine ≈ 10 m) to 1-2 m but starts
+from the first-epoch SPP height and converges over minutes; (3) the unguarded
+OFF baseline can diverge on a single epoch (A2, 679 km) and the constrained
+re-solve recovered it, which is a solver QC weakness rather than a barometer
+result and is why the common residual gate is applied to both arms.
+
 ## Limits / unverified
 
 Weak reference (piecewise-linear altitude, unknown datum, ≈ 1-2 m); one phone
 model; one subject on one day; no weather record, so
 the pressure bias model (random walk + re-base) is validated only through the
 reference profile; the absolute vertical level is unverified; hand/pocket
-differences are not separated statistically (3 scored runs).  A three-satellite
+differences are not separated statistically (3 scored runs).  The S4 reference altitude is
+constant, so S4 vertical error is a flat-street assumption.  A three-satellite
 + barometer solution (availability gain on the ≈ 25-30 epochs per pocket run with ≤ 3
 usable satellites) is **not implemented**.
