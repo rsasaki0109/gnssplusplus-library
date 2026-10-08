@@ -45,9 +45,11 @@ says surveys were made 12-19.03.2024.  The 2023 in `notes.txt` is a typo; the
 `Raw.csv` has **no header** (the header only exists in `log_mimir_*.txt`) and
 35 fields; the adapter pins that 35-field contract.  No `CodeType`,
 `SignalType`, `ArrivalTimeNanosSinceGpsEpoch` or WLS columns exist.  Pixel 7
-logs L1/E1, L5/E5a, BDS B1I and GLONASS; only GPS L1 C/A and Galileo E1 are
-used (about 8.8 GPS + 6.2 Galileo rows per epoch), everything else is kept in
-`observations.csv` with an exclusion reason.  Android reports the L1 carrier as
+logs L1/E1, L5/E5a, BDS B1I/B2a and GLONASS G1; the default adapter
+(`--signal-set legacy-l1-e1`, the configuration of every result above) uses
+only GPS L1 C/A and Galileo E1 (about 8.8 GPS + 6.2 Galileo rows per epoch),
+everything else is kept in `observations.csv` with an exclusion reason.  The
+multi-signal option is evaluated in the post-hoc section at the end.  Android reports the L1 carrier as
 1575 420 030 Hz (+30 Hz); the adapter accepts ±1 kHz and writes the nominal
 frequency.
 
@@ -287,3 +289,180 @@ differences are not separated statistically (3 scored runs).  The S4 reference a
 constant, so S4 vertical error is a flat-street assumption.  A three-satellite
 + barometer solution (availability gain on the ≈ 25-30 epochs per pocket run with ≤ 3
 usable satellites) is **not implemented**.
+
+## Post-hoc: multi-signal adapter and the existing R5 smartphone profile
+
+**Status: post-hoc, non-holdout.**  S4 was the sealed holdout of the study
+above and has already been opened; every S4 number in this section is
+post-hoc and was used for **no** gate decision.  Nothing was tuned on S3 or S4:
+the barometer configuration is the one frozen above, the SPP binary is the
+frozen `gnss_spp_baro_final` (sources of `src/`/`include/` unchanged), the
+common QC is `--max-residual-rms 50`, the reference lag is 0 s.  This is a
+wiring task: the existing smartphone pipeline was connected to the Nantes data
+as is.  Outputs and a manifest (BRDC URL + sha256, binary and input hashes)
+are in `rtklib_v2_ws_output/mimir_multisignal_20261009/`.
+
+### Why the baseline was weak
+
+The #564 adapter used only L1/E1 code and none of the R5 features.  Mimir
+`Raw.csv` has no `CodeType`/`SignalType`, so the signal has to be inferred.
+
+### Signals in the Pixel 7 data (rows over S3 A2/A4/A6 + S4 A1/A2, 178 842 rows)
+
+| Constellation (`ConstellationType`) | Carrier | Signal | Rows used (state usable) |
+|---|---|---|---|
+| GPS (1) | 1575.42 / 1176.45 MHz | L1 C/A / L5 | 29 573 / 15 882 |
+| Galileo (6) | 1575.42 / 1176.45 MHz | E1 / E5a | 19 584 / 17 331 |
+| GLONASS (3) | 1602 MHz + k*562.5 kHz, k = -7..+6 | G1 (FDMA) | 10 003 |
+| BeiDou (5) | 1561.098 / 1176.45 MHz | B1I / B2a | 29 228 / 20 181 |
+| NavIC (7) | 1176.45 MHz (S4 A1 only) | L5 | 0 (919 rows rejected, `unsupported_constellation`) |
+| QZSS (4), SBAS (2) | absent from the data | - | table support for QZSS L1/L5 only, untested on data |
+
+Total used 141 782 of 178 842 rows; 36 139 are `state_not_usable` (no code
+lock / TOW or TOD unknown / ms-ambiguous), 2 `uncertain_received_sv_time`.
+No `unsupported_frequency`, `no_navigation`, `invalid_svid` or
+`glonass_fcn_conflict` rows occurred in the real data (they are exercised by
+unit tests).
+
+### Mapping design
+
+* `gnss_smartphone_mimir_signals.py`: signal table `SIGNALS`, `classify_multi`
+  (ConstellationType + carrier within 1 kHz of nominal; GLONASS channel from
+  `1602 MHz + k*562.5 kHz`, and it must equal the channel in the broadcast
+  file), RINEX 3.04 codes (`C1C`, `C5Q` for GPS L5/E5a, `C2I` BDS B1I, `C5X`
+  BDS B2a, `C1C` GLONASS G1), per-constellation state rules and time bases
+  (BeiDou BDT = GPST - 14 s, GLONASS time of day = GPST - 18 s + 3 h),
+  `MultiSignalRinexWriter` (several signals per satellite line, GLONASS
+  `SLOT / FRQ #` header), and `NavigationIndex` (row-level navigation coverage).
+* The tracking attribute (`Q` / `X`) is **inferred**: Mimir does not log it.
+  The native reader keys only on the band digit.
+* The R5 `StreamingRinexWriter` supports only GPS L1 and Galileo E1 and fails
+  closed on anything else, and GSDC output must stay unchanged, so it was
+  **not** modified; the multi-signal writer reuses its helpers and its
+  `HatchSmoother` unchanged.
+* Every source row gets exactly one terminal disposition (`used`,
+  `unsupported_constellation`, `unsupported_frequency`, `signal_not_enabled`,
+  `invalid_svid`, `glonass_fcn_conflict`, `state_not_usable`,
+  `uncertain_received_sv_time`, `implausible_travel_time`, `no_range_fields`,
+  `no_navigation`, `excluded_by_max_epochs`); the summary lists the rejected
+  rows with constellation@frequency, and rows are preserved in
+  `observations.csv`.
+* Navigation: the same IGS merged broadcast file as above (it already contains
+  G, R, E, C, J), URL
+  `ftp://igs.gnsswhu.cn/pub/gps/data/daily/2024/074/24p/BRDC00IGS_R_20240740000_01D_MN.rnx.gz`,
+  sha256 (gz) `cf28abe19a018a9fcb00c87cdffced1afdd67b3395a2890c465da244d0b6c466`,
+  sha256 `903986e0f1fdf8558d4af8b4ef5ccfe95e43623d33155f40b1a87ae33db8bd42`.
+  A measurement without a broadcast record inside the age limit (4 h; GLONASS
+  30 min) is rejected as `no_navigation`.
+* **OFF contract:** the default is unchanged (`--signal-set legacy-l1-e1`);
+  `observations.csv`, `rover.obs`, `baro.csv` are byte-identical to the #564
+  adapter output (md5 checked on S3 A2 and A4, `summary.json` differs only in
+  paths and the source-terms argument).  The GSDC/R5 adapter is not touched.
+  The multi-signal set is opt-in: `--signal-set multi` (optionally
+  `--enable-signals`, `--hatch-window-s`).
+* Tests: `tests/test_smartphone_mimir_multisignal.py` (15) in addition to the
+  16 existing Mimir tests.
+
+### The existing best smartphone profile
+
+`smartphone_raw_gnss.md` / `configs/benchmarks/smartphone_r5_gsdc2023.json`:
+the **frozen** profile (4.93 m H median / 16.35 m P95 on GSDC development) is
+single-frequency GPS L1 standalone with no solver flags.  The later
+development-only promotions were GPS L1 + Galileo E1 (3.41 / 8.43 m), then
+Hatch code smoothing of Galileo E1 C1C with a 30 s window (3.22 / 7.96 m), and
+a truth-free Kalman/RTS smoother (2.75 / 6.17 m).  GLONASS G1 (phase 6) and GPS
+L5 were No-Go in R5.  The SPP-stage best profile is therefore
+**GPS L1 + Galileo E1 + R5 `HatchSmoother` window 30 s on E1 C1C, default SPP
+flags**; it is applied unchanged (`--hatch-window-s 30`).  The Kalman/RTS
+smoother is a separate GSDC-specific stage (needs `device_gnss.csv` epoch keys
+and the GSDC profile hashes) and was **not** applied.
+
+### Results (baro OFF / ON with the frozen #564 configuration)
+
+Pooled over the runs, metres, same scorer and lag as above.  "V dem." is the
+per-run-median-removed vertical error.  S3 = development runs A2/A4/A6; S4 =
+post-hoc A1/A2 (not a holdout).  Epoch sets differ slightly between arms
+(availability), so small differences are not paired comparisons.
+
+S3 (A2/A4/A6):
+
+| Arm | baro | H RMSE | H P50 | H P95 | V dem. RMSE | V dem. P95 | avail. |
+|---|---|---|---|---|---|---|---|
+| (i) #564 baseline, L1/E1 | OFF | 18.9 | 12.6 | 28.7 | 20.3 | 38.6 | 95.7 % |
+| | ON | 16.9 | 12.5 | 29.6 | 3.9 | 8.9 | 95.7 % |
+| (ii) multi-signal, default SPP | OFF | 25.1 | 12.7 | 28.8 | 23.0 | 32.5 | 97.1 % |
+| | ON | 17.5 | 12.7 | 28.2 | 3.4 | 7.4 | 97.1 % |
+| (iii) multi-signal + R5 profile (Hatch30 on E1) | OFF | 27.2 | 12.9 | 35.0 | 28.3 | 41.8 | 86.0 % |
+| | ON | 19.3 | 12.9 | 34.8 | 4.0 | 6.6 | 86.0 % |
+| diagnostic (i-b): L1/E1 + Hatch30 | OFF | 19.7 | 12.2 | 31.5 | 23.0 | 40.2 | 81.7 % |
+| | ON | 16.9 | 12.0 | 31.1 | 5.4 | 4.6 | 81.7 % |
+| exploratory (iv-x): multi + `--ionosphere-free` | OFF | 32.7 | 16.7 | 45.3 | 35.6 | 51.1 | 97.1 % |
+| | ON | 23.8 | 16.5 | 44.5 | 7.4 | 15.9 | 97.1 % |
+| Android `Fix.csv` | - | 10.0 | 7.9 | 18.2 | 5.9 | 13.2 | n/a |
+
+S4 (A1/A2), **post-hoc, non-holdout**:
+
+| Arm | baro | H RMSE | H P50 | H P95 | V dem. RMSE | V dem. P95 | avail. |
+|---|---|---|---|---|---|---|---|
+| (i) #564 baseline, L1/E1 | OFF | 23.4 | 12.1 | 50.4 | 27.3 | 58.4 | 100 % |
+| | ON | 22.6 | 12.7 | 46.7 | 8.4 | 21.1 | 100 % |
+| (ii) multi-signal, default SPP | OFF | 23.5 | 11.2 | 53.2 | 23.8 | 50.6 | 100 % |
+| | ON | 22.5 | 12.1 | 48.7 | 8.9 | 22.7 | 100 % |
+| (iii) multi-signal + R5 profile | OFF | 27.9 | 14.5 | 56.5 | 25.8 | 53.1 | 96.6 % |
+| | ON | 26.8 | 15.1 | 55.0 | 6.7 | 17.4 | 96.6 % |
+| diagnostic (i-b): L1/E1 + Hatch30 | OFF | 41.8 | 15.6 | 74.4 | 37.9 | 66.8 | 94.3 % |
+| | ON | 35.6 | 16.1 | 67.5 | 14.2 | 17.6 | 94.3 % |
+| exploratory (iv-x): multi + `--ionosphere-free` | OFF | 38.3 | 23.3 | 76.7 | 38.8 | 76.0 | 100 % |
+| | ON | 35.8 | 23.5 | 71.6 | 10.1 | 19.5 | 100 % |
+| Android `Fix.csv` | - | 3.1 | 2.0 | 5.5 | 1.8 | 2.3 | n/a |
+
+Arm (i) reproduces the numbers recorded above for both sessions.
+
+### Outcome (honest reading)
+
+* **Multi-signal does not close the gap.**  Satellites per epoch go from 11.9
+  to 21.4 (S3) and 8.5 to 15.8 (S4) and PDOP (A2) from 1.7 to 1.1, but the
+  horizontal median stays at 11-13 m (S3 12.6 -> 12.7, S4 12.1 -> 11.2 OFF,
+  12.7 -> 12.1 ON) against 2.0-7.9 m for the chipset `Fix.csv`.  Availability
+  improves by 1.4 points on S3.  The OFF H RMSE is worse on S3 (25.1 vs 18.9)
+  because of a few gross-error epochs that the barometer re-solve removes (ON
+  17.5 vs 16.9); this is the known solver QC weakness, not a signal effect.
+  The ON vertical error is 3.9 -> 3.4 m (S3) and 8.4 -> 8.9 m (S4), i.e. no
+  consistent change.
+* **Single-constellation checks (S3, OFF, wiring diagnostic):** GPS-only 14.1 m,
+  Galileo-only 13.0 m, GLONASS-only 17.7 m (42 % availability), BeiDou-only
+  17.9 m H median.  All constellations independently land at 13-18 m, so there
+  is no sign of a time-base or channel error in the BeiDou/GLONASS wiring (a
+  wrong time base would be kilometres), and the error floor is shared
+  (multipath / phone-grade pseudoranges / weights).  Mean residual RMS rises
+  from 5.1 to 7.0 m (S3) with the extra signals.
+* **L5/E5a/B2a give nothing with default SPP**: the native SPP uses primary
+  signals only (L1/E1/G1/B1), so these rows are written but not consumed.
+  The only existing way to use them, `--ionosphere-free`, is worse (H P50
+  16.7 / 23.3 m, residual RMS 13.8 / 12.0 m); no L5 inter-signal bias or
+  weighting exists in the code, so this is not evidence against L5 itself.
+* **The R5 profile (Hatch30 on E1) hurts on this data.**  It reduces
+  availability (82-86 % S3; 94-97 % S4) and increases error.  Cause
+  (verified, not tuned around): in these Pixel 7 logs `AccumulatedDeltaRangeMeters`
+  advances by `c * DriftNanosPerSecond` (about 170 m/s; the median of
+  (dADR - dPR)/dt over 7 900 Galileo/GPS L1 pairs equals 1.00 x c*drift in every run, 169-176 m/s)
+  more than the clock-corrected pseudorange, whereas the R5 smoother uses the ADR
+  delta directly.  The smoothed code drifts away from the raw code by up to
+  10^6 m on affected arcs and the `--max-residual-rms 50` gate rejects the
+  epochs.  A drift-compensated smoother would be a model change to the R5
+  smoother and was **not** implemented or evaluated here (no tuning).
+* The chipset `Fix.csv` (2.0 m on S4, 7.9 m on S3) is probably a map/filter
+  aided fused fix, not raw SPP; the gap is therefore not explained by the
+  adapter alone.  That is unverified.
+
+### Limits / unverified (this section)
+
+Post-hoc and non-holdout (S4); three plus two runs, one phone, one day; the
+weak reference of the sections above still applies; L5/E5a/B2a code attributes
+and the GLONASS UTC leap-second constant (18 s, valid for 2024) are inferred
+or assumed; QZSS and BeiDou B1C are in the table but absent from the data;
+inter-signal biases (`FullInterSignalBiasNanos`, `SatelliteInterSignalBiasNanos`)
+are not applied (as in R5); the GSDC-specific Kalman/RTS smoother and IMU
+process-noise stages were not applied; the C++ solver was not changed so the
+C++ suite was not re-run.
+
