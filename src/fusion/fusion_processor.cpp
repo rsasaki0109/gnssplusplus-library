@@ -198,6 +198,33 @@ fusion_update::FusionUpdateResult LooseCouplingProcessor::applyUpdateAndInject(
     return result;
 }
 
+bool LooseCouplingProcessor::floatPositionConsistentWithCoarse(
+    const GNSSTime& time, const Eigen::Vector3d& antenna_position_enu,
+    const Eigen::Matrix3d& position_covariance_enu) const {
+    if (!have_coarse_position_) {
+        return false;
+    }
+    const double age_s = time - coarse_position_time_;
+    if (!std::isfinite(age_s) || age_s < 0.0 || age_s > config_.float_reanchor_max_coarse_age_s) {
+        return false;
+    }
+    const double max_nis = config_.max_position_update_nis_per_observation;
+    if (!(max_nis > 0.0)) {
+        return true;  // No NIS gate configured: nothing to compare against.
+    }
+    const double displacement_m = state_.nominal.velocity_enu.norm() * age_s;
+    const Eigen::Matrix3d innovation_covariance =
+        position_covariance_enu + coarse_position_covariance_enu_ +
+        displacement_m * displacement_m * Eigen::Matrix3d::Identity();
+    const Eigen::Vector3d difference = antenna_position_enu - coarse_antenna_position_enu_;
+    const Eigen::LDLT<Eigen::Matrix3d> ldlt(innovation_covariance);
+    if (!difference.allFinite() || ldlt.info() != Eigen::Success || !ldlt.isPositive()) {
+        return false;
+    }
+    const double nis = difference.dot(ldlt.solve(difference));
+    return std::isfinite(nis) && nis / 3.0 <= max_nis;
+}
+
 bool LooseCouplingProcessor::reanchorPositionFromFixedSolution(
     const Eigen::Vector3d& antenna_position_enu,
     const Eigen::Matrix3d& position_covariance_enu) {
@@ -462,6 +489,14 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
     const Eigen::Matrix3d position_covariance_enu = regularizeCovariance3x3(
         r_e2n * solution.position_covariance * r_e2n.transpose(), kDefaultPositionSigmaM);
 
+    if (config_.float_position_reanchor_after_rejections > 0 && !solution.isFixed() &&
+        solution.status != SolutionStatus::FLOAT) {
+        have_coarse_position_ = true;
+        coarse_position_time_ = solution.time;
+        coarse_antenna_position_enu_ = antenna_position_enu;
+        coarse_position_covariance_enu_ = position_covariance_enu;
+    }
+
     // A non-FIXED solution is never trusted for position recovery. Reset the
     // FIX patience even when position_updates_require_fixed skips the normal
     // FLOAT/SPP EKF update entirely; otherwise a stale rejection streak could
@@ -497,6 +532,30 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
             position_consecutive_gate_rejections_ = 0;
             last_gnss_position_update_applied_ = true;
             last_gnss_position_reanchored_ = true;
+        }
+        // velocity_consistency_v2: the precise (FLOAT/FIXED) class has its own
+        // rejection streak, independent of coarse SPP acceptance.
+        if (config_.float_position_reanchor_after_rejections > 0 &&
+            (solution.isFixed() || solution.status == SolutionStatus::FLOAT)) {
+            if (position_result.ok) {
+                float_class_consecutive_gate_rejections_ = 0;
+            } else if (position_result.rejected_by_innovation_gate ||
+                       position_result.rejected_by_invalid_innovation_covariance) {
+                if (float_class_consecutive_gate_rejections_ < std::numeric_limits<int>::max()) {
+                    ++float_class_consecutive_gate_rejections_;
+                }
+                if (float_class_consecutive_gate_rejections_ >=
+                        config_.float_position_reanchor_after_rejections &&
+                    floatPositionConsistentWithCoarse(solution.time, antenna_position_enu,
+                                                      position_covariance_enu) &&
+                    reanchorPositionFromFixedSolution(antenna_position_enu, position_covariance_enu)) {
+                    position_result.ok = true;
+                    position_consecutive_gate_rejections_ = 0;
+                    float_class_consecutive_gate_rejections_ = 0;
+                    last_gnss_position_update_applied_ = true;
+                    last_gnss_position_reanchored_ = true;
+                }
+            }
         }
         if (position_result.ok) {
             if (!last_gnss_position_reanchored_) {
