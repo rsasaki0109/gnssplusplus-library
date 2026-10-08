@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1]\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
         }
@@ -31,7 +31,8 @@ int main(int argc, char** argv) {
             positional_argc -= 2;
         }
         if (positional_argc < 4 || positional_argc > 7 || positional_argc == 6 ||
-            (candidate != "none" && candidate != "vehicle_nhc_latched_v1"))
+            (candidate != "none" && candidate != "vehicle_nhc_latched_v1" &&
+             candidate != "velocity_consistency_v1"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
         std::size_t consumed = 0;
@@ -65,6 +66,13 @@ int main(int argc, char** argv) {
         if (candidate == "vehicle_nhc_latched_v1") {
             config.fusion.nhc_enable = true;
             config.fusion.nhc_require_heading_alignment = true;
+        }
+        if (candidate == "velocity_consistency_v1") {
+            // Frozen in docs/online_pva_candidate_v2.md. Fixed values, not tuned.
+            config.independent_doppler_velocity = true;
+            config.fusion.reanchor_velocity_on_heading_latch = true;
+            config.fusion.max_position_update_nis_per_observation = 9.0;
+            config.fusion.max_velocity_update_nis_per_observation = 9.0;
         }
         OnlineRtkImuProcessor processor(config);
         fs::create_directories(output);

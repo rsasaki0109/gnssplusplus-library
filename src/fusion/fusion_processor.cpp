@@ -592,6 +592,16 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                     heading_aligned_ = true;
                     velocity_nis_ema_ = 0.0;
                     consecutive_bad_heading_epochs_ = 0;
+                    // The latch rotated only the attitude. Make velocity and
+                    // its correlations consistent with the new attitude by
+                    // re-anchoring to this epoch's independent GNSS velocity.
+                    if (config_.reanchor_velocity_on_heading_latch &&
+                        velocity_solution_quality_ok &&
+                        reanchorVelocityFromGnssSolution(antenna_velocity_enu,
+                                                         velocity_covariance_enu)) {
+                        velocity_consecutive_gate_rejections_ = 0;
+                        last_gnss_velocity_reanchored_ = true;
+                    }
                     if (debugHeadingEnabled()) {
                         std::cerr << "[HEADING] LATCH tow=" << solution.time.tow
                                   << " mean_course_deg=" << (mean_course_rad * 180.0 / M_PI)

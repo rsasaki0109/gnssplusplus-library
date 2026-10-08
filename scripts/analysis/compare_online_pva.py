@@ -31,10 +31,10 @@ def load(directory):
     return manifest, report, rows
 
 
-def compare(control, candidate, label):
+def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1"):
     am, a, ar = load(control)
     bm, b, br = load(candidate)
-    if bm["replay"].get("candidate") != "vehicle_nhc_latched_v1": raise ValueError("unexpected candidate")
+    if bm["replay"].get("candidate") != candidate_name: raise ValueError("unexpected candidate")
     for name in ("rover.obs", "base.obs", "base.nav", "imu.csv", "reference.csv"):
         if am["inputs"][name]["sha256"] != bm["inputs"][name]["sha256"]: raise ValueError("different raw inputs")
     for key in ("scenario", "scenario_start_s", "scenario_duration_s", "epochs", "start_week", "start_tow", "base_ecef", "lever_arm_flu_m", "navigation_policy"):
@@ -74,7 +74,11 @@ def compare(control, candidate, label):
     keys = (set(raw_a[0]) & set(raw_b[0]))-{"processing_ms"}
     prefix = [i for i, row in enumerate(ar) if first_latch is None or float(row["elapsed_s"]) <= first_latch]
     parity = all(all(raw_a[i][k] == raw_b[i][k] for k in keys) for i in prefix)
-    gate("before_latch.numeric_parity", len(prefix), parity, "all common CSV fields except processing_ms exactly equal", parity)
+    # Only the NHC candidate is causally inert before the latch. A candidate
+    # that changes inference from the first epoch (velocity_consistency_v1)
+    # is instead guarded by the separate candidate-none bit-identity check.
+    if candidate_name == "vehicle_nhc_latched_v1":
+        gate("before_latch.numeric_parity", len(prefix), parity, "all common CSV fields except processing_ms exactly equal", parity)
     return dict(name=label, gates=gates, all_output_control=a, all_output_candidate=b, common_valid=paired,
                 control_manifest=pin(control/"manifest.json"), candidate_manifest=pin(candidate/"manifest.json")), improvement
 
@@ -86,22 +90,24 @@ def main():
     p.add_argument("--baseline-scenario-dir", type=Path, required=True)
     p.add_argument("--candidate-scenario-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
+    p.add_argument("--candidate-name", default="vehicle_nhc_latched_v1")
+    p.add_argument("--contract", type=Path, default=ROOT/"docs/online_pva_candidate_v1.md")
     args = p.parse_args()
     if args.output_dir.exists(): p.error("output directory must be new")
     args.output_dir.mkdir(parents=True)
     report = dict(schema="libgnsspp.pva_candidate_decision.v1", state="running", adoption="No-Go", default_changed=False,
-                  contract=pin(ROOT/"docs/online_pva_candidate_v1.md"), comparison_source=pin(__file__), runs=[])
+                  contract=pin(args.contract), candidate=args.candidate_name, comparison_source=pin(__file__), runs=[])
     try:
         improved = False
         for city in ("tokyo", "nagoya"):
             for run in (1, 2, 3):
                 name = f"{city}{run}"
-                result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name)
+                result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name, args.candidate_name)
                 report["runs"].append(result)
                 improved |= improvement
                 for scenario in ("gnss_outage", "imu_gap"):
                     label = name+"-"+scenario
-                    result, _ = compare(args.baseline_scenario_dir/label, args.candidate_scenario_dir/label, label)
+                    result, _ = compare(args.baseline_scenario_dir/label, args.candidate_scenario_dir/label, label, args.candidate_name)
                     report["runs"].append(result)
         failures = [dict(run=r["name"], gate=g) for r in report["runs"] for g in r["gates"] if not g["passed"]]
         if not improved: failures.append(dict(run="all_normal", gate=dict(name="targeted_rotation_improvement", passed=False)))
