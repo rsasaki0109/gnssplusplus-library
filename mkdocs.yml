@@ -53,6 +53,7 @@ nav:
       - CLAS/MADOCA application decision: use_cases/clas_submeter.md
       - CLAS PPP below 10 cm without a base station: use_cases/clas_ppp_no_base_station.md
       - Smartphone raw GNSS (R5): use_cases/smartphone_raw_gnss.md
+      - Smartphone barometer height (Nantes study): use_cases/smartphone_barometer_height.md
       - UAV navigation and flight continuity (R6): use_cases/uav_navigation.md
       - RTKLIB migration: use_cases/rtklib_migration.md
       - ROS2 receiver and bag replay: use_cases/ros2.md

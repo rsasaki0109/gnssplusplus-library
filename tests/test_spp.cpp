@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 #include <libgnss++/algorithms/dual_frequency_code.hpp>
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/models/ionosphere.hpp>
 
+#include <algorithm>
+#include <iostream>
 #include <memory>
 #include <cmath>
 #include <filesystem>
@@ -714,6 +717,175 @@ TEST(SPPColdStartTest, HeaderSeededPathStillMaskedAndUnchanged) {
     for (const double elevation : solution.satellite_elevations) {
         EXPECT_GE(elevation, 15.0 * M_PI / 180.0 - 1e-6);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Barometer-aided height (default OFF).
+// ---------------------------------------------------------------------------
+namespace {
+
+double ellipsoidalHeight(const Vector3d& ecef) {
+    double lat = 0.0, lon = 0.0, h = 0.0;
+    ecef2geodetic(ecef, lat, lon, h);
+    return h;
+}
+
+SPPProcessor::SPPConfig baroSppConfig() {
+    SPPProcessor::SPPConfig config;
+    config.baro.enabled = true;
+    config.baro.baro_sigma_m = 0.5;
+    config.baro.init_min_satellites = 6;
+    config.baro.sample_window_s = 2.0;
+    return config;
+}
+
+}  // namespace
+
+TEST(SPPBarometerTest, DisabledIsBitIdenticalEvenWithSamplesAndNoSamples) {
+    SyntheticColdStartScene scene;
+    SPPProcessor plain;
+    SPPProcessor::SPPConfig off_config;  // baro.enabled == false
+    SPPProcessor with_samples(off_config);
+    ASSERT_TRUE(plain.initialize(syntheticColdStartConfig()));
+    ASSERT_TRUE(with_samples.initialize(syntheticColdStartConfig()));
+    for (int k = 0; k < 6; ++k) {
+        const GNSSTime time(2300, 100000.0 + k);
+        const auto epoch = scene.observe(time);
+        // Samples are inert while disabled.
+        with_samples.addBarometerSample(time, 1000.0 - k);
+        const auto a = plain.processEpoch(epoch, scene.nav);
+        const auto b = with_samples.processEpoch(epoch, scene.nav);
+        ASSERT_TRUE(a.isValid());
+        ASSERT_TRUE(b.isValid());
+        EXPECT_EQ(a.position_ecef(0), b.position_ecef(0));
+        EXPECT_EQ(a.position_ecef(1), b.position_ecef(1));
+        EXPECT_EQ(a.position_ecef(2), b.position_ecef(2));
+        EXPECT_EQ(a.receiver_clock_bias, b.receiver_clock_bias);
+        EXPECT_FALSE(with_samples.lastBaroDiagnostics().baro_available);
+    }
+}
+
+TEST(SPPBarometerTest, EnabledWithoutSamplesEqualsOffPath) {
+    SyntheticColdStartScene scene;
+    SPPProcessor off;
+    SPPProcessor on(baroSppConfig());
+    ASSERT_TRUE(off.initialize(syntheticColdStartConfig()));
+    ASSERT_TRUE(on.initialize(syntheticColdStartConfig()));
+    for (int k = 0; k < 4; ++k) {
+        const auto epoch = scene.observe(GNSSTime(2300, 100000.0 + k));
+        const auto a = off.processEpoch(epoch, scene.nav);
+        const auto b = on.processEpoch(epoch, scene.nav);
+        ASSERT_TRUE(a.isValid());
+        ASSERT_TRUE(b.isValid());
+        EXPECT_EQ(a.position_ecef(0), b.position_ecef(0));
+        EXPECT_EQ(a.position_ecef(2), b.position_ecef(2));
+        EXPECT_FALSE(on.lastBaroDiagnostics().baro_available);
+        EXPECT_FALSE(on.lastBaroDiagnostics().constraint_applied);
+    }
+}
+
+TEST(SPPBarometerTest, FutureSampleIsNeverUsed) {
+    SyntheticColdStartScene scene;
+    SPPProcessor on(baroSppConfig());
+    ASSERT_TRUE(on.initialize(syntheticColdStartConfig()));
+    const GNSSTime time(2300, 100000.0);
+    on.addBarometerSample(time + 5.0, 1000.0);  // stamped after the epoch
+    ASSERT_TRUE(on.processEpoch(scene.observe(time), scene.nav).isValid());
+    EXPECT_FALSE(on.lastBaroDiagnostics().baro_available);
+}
+
+// 300 clean epochs let the filter learn the unknown barometer offset (the
+// first epoch fixes b only to the GNSS height accuracy, ~14 m here, so a bias
+// appearing early is legitimately followed).  Then every pseudorange carries
+// the exact geometric effect of a +20 m vertical displacement (a consistent,
+// RAIM-invisible vertical error as from urban multipath).  The unconstrained
+// height moves by ~20 m while the barometer prior - which does not contain the
+// epoch's own GNSS height - keeps the constrained height close to the truth.
+TEST(SPPBarometerTest, ConstraintLimitsVerticalErrorFromConsistentVerticalBias) {
+    SyntheticColdStartScene scene;
+    SPPProcessor::SPPConfig config = baroSppConfig();
+    config.baro.init_min_satellites = 4;
+    config.baro.gnss_sigma_floor_m = 3.0;
+    SPPProcessor on(config);
+    ASSERT_TRUE(on.initialize(syntheticColdStartConfig()));
+    const double true_height = ellipsoidalHeight(scene.truth);
+    const Vector3d up = scene.truth.normalized();
+    const double baro_offset = 4.2;  // unknown weather/HVAC offset
+    int constrained_epochs = 0;
+    double worst_unconstrained = 0.0;
+    double worst_final = 0.0;
+    constexpr int kCleanEpochs = 300;
+    for (int k = 0; k < kCleanEpochs + 40; ++k) {
+        const GNSSTime time(2300, 100000.0 + k);
+        auto epoch = scene.observe(time);
+        if (k >= kCleanEpochs) {
+            for (auto& observation : epoch.observations) {
+                const auto& sat_eph =
+                    scene.nav.ephemeris_data.at(observation.satellite).front();
+                Vector3d pos, vel;
+                double clk, drift;
+                ASSERT_TRUE(sat_eph.calculateSatelliteState(time - 0.075, pos, vel, clk, drift));
+                const double sin_el = (pos - scene.truth).normalized().dot(up);
+                observation.pseudorange += -20.0 * sin_el;
+            }
+        }
+        on.addBarometerSample(
+            time, barometer::standardAtmosphereHeightToPressureHpa(true_height + baro_offset));
+        const auto solution = on.processEpoch(epoch, scene.nav);
+        ASSERT_TRUE(solution.isValid()) << k;
+        const auto& diag = on.lastBaroDiagnostics();
+        ASSERT_TRUE(diag.baro_available) << k;
+        if (k == 0) {
+            EXPECT_TRUE(diag.initialized_this_epoch);
+            EXPECT_FALSE(diag.constraint_applied);
+            EXPECT_NEAR(diag.bias_m, baro_offset + (true_height - diag.unconstrained_height_m), 0.6);
+        }
+        if (k < kCleanEpochs) {
+            continue;
+        }
+        if (diag.constraint_applied) {
+            ++constrained_epochs;
+        }
+        worst_unconstrained = std::max(
+            worst_unconstrained,
+            std::abs(diag.unconstrained_height_m - ellipsoidalHeight(scene.truth)));
+        worst_final = std::max(
+            worst_final, std::abs(ellipsoidalHeight(solution.position_ecef) - true_height));
+    }
+    EXPECT_GE(constrained_epochs, 38);
+    EXPECT_GT(worst_unconstrained, 12.0);  // the vertical bias really moves the fix
+    EXPECT_LT(worst_final, 0.25 * worst_unconstrained);
+}
+
+TEST(SPPBarometerTest, ConstraintLeavesConsistentScenesUnharmed) {
+    SyntheticColdStartScene scene;
+    SPPProcessor::SPPConfig config = baroSppConfig();
+    config.baro.init_min_satellites = 4;
+    SPPProcessor off;
+    SPPProcessor on(config);
+    ASSERT_TRUE(off.initialize(syntheticColdStartConfig()));
+    ASSERT_TRUE(on.initialize(syntheticColdStartConfig()));
+    const double true_height = ellipsoidalHeight(scene.truth);
+    int constrained_epochs = 0;
+    for (int k = 0; k < 20; ++k) {
+        const GNSSTime time(2300, 100000.0 + k);
+        on.addBarometerSample(
+            time, barometer::standardAtmosphereHeightToPressureHpa(true_height - 2.0));
+        const auto epoch = scene.observe(time);
+        const auto a = off.processEpoch(epoch, scene.nav);
+        const auto b = on.processEpoch(epoch, scene.nav);
+        ASSERT_TRUE(a.isValid());
+        ASSERT_TRUE(b.isValid());
+        // The synthetic scene has a small modelling error; the barometer-aided
+        // fix must not be worse than the unaided fix by more than a metre.
+        EXPECT_LT((b.position_ecef - scene.truth).norm(),
+                  (a.position_ecef - scene.truth).norm() + 1.0) << k;
+        EXPECT_LT((b.position_ecef - scene.truth).norm(), 5.0) << k;
+        if (on.lastBaroDiagnostics().constraint_applied) {
+            ++constrained_epochs;
+        }
+    }
+    EXPECT_GE(constrained_epochs, 10);
 }
 
 TEST_F(SPPTest, ProcessorInitialization) {

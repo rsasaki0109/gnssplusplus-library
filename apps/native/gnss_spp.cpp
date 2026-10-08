@@ -1,6 +1,8 @@
 #include <cstdlib>
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <vector>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -32,6 +34,8 @@ struct Options {
     std::string ssr_path;
     std::string ionex_path;
     std::string dcb_path;
+    std::string baro_csv_path;
+    std::string baro_telemetry_csv_path;
     int max_epochs = 0;
     double elevation_mask_deg = 15.0;
     double snr_mask = 0.0;
@@ -82,6 +86,9 @@ struct RunSummary {
     double total_epoch_elapsed_ms = 0.0;
     double max_epoch_elapsed_ms = 0.0;
     int timing_rows = 0;
+    int baro_constraint_epochs = 0;
+    int baro_rejected_epochs = 0;
+    int baro_gnss_rejected_epochs = 0;
 
     void addTiming(double elapsed_ms) {
         total_epoch_elapsed_ms += elapsed_ms;
@@ -168,6 +175,56 @@ std::string requireValue(const std::string& arg, int& i, int argc, char* argv[])
     return argv[++i];
 }
 
+struct BaroSample {
+    libgnss::GNSSTime time;
+    double pressure_hpa = 0.0;
+};
+
+// The barometer CSV is produced by smartphone-mimir-adapter; the header is
+// part of the contract so a differently shaped file fails closed.
+std::vector<BaroSample> loadBaroCsv(const std::string& path) {
+    std::ifstream input(path);
+    if (!input.is_open()) {
+        throw std::runtime_error("failed to open barometer CSV: " + path);
+    }
+    std::string line;
+    if (!std::getline(input, line) ||
+        line.rfind("gps_week,gps_tow_s,pressure_hpa", 0) != 0) {
+        throw std::runtime_error("unexpected barometer CSV header: " + path);
+    }
+    std::vector<BaroSample> samples;
+    std::size_t line_number = 1;
+    while (std::getline(input, line)) {
+        ++line_number;
+        if (line.empty()) {
+            continue;
+        }
+        std::stringstream fields(line);
+        std::string week_token, tow_token, pressure_token;
+        if (!std::getline(fields, week_token, ',') || !std::getline(fields, tow_token, ',') ||
+            !std::getline(fields, pressure_token, ',')) {
+            throw std::runtime_error("malformed barometer CSV row " + std::to_string(line_number));
+        }
+        BaroSample sample;
+        try {
+            sample.time = libgnss::GNSSTime(std::stoi(week_token), std::stod(tow_token));
+            sample.pressure_hpa = std::stod(pressure_token);
+        } catch (const std::exception&) {
+            throw std::runtime_error("malformed barometer CSV row " + std::to_string(line_number));
+        }
+        if (!std::isfinite(sample.pressure_hpa) || !std::isfinite(sample.time.tow) ||
+            (!samples.empty() && (sample.time - samples.back().time) < 0.0)) {
+            throw std::runtime_error("invalid or out-of-order barometer CSV row " +
+                                     std::to_string(line_number));
+        }
+        samples.push_back(sample);
+    }
+    if (samples.empty()) {
+        throw std::runtime_error("no barometer samples in " + path);
+    }
+    return samples;
+}
+
 void printUsage(const char* program_name) {
     std::cout
         << "Usage: " << program_name << " --obs <rover.obs> --nav <nav.rnx> --out <solution.pos>\n"
@@ -214,6 +271,18 @@ void printUsage(const char* program_name) {
         << "  --disable-ssr-corrections         Load SSR only for inspection, do not apply\n"
         << "  --disable-ionex-corrections       Load IONEX only for inspection, do not apply\n"
         << "  --disable-dcb-corrections         Load DCB/OSB only for inspection, do not apply\n"
+        << "  --baro-csv <baro.csv>             Barometer samples (gps_week,gps_tow_s,pressure_hpa,...)\n"
+        << "  --baro-height                     Enable barometer-aided height (needs --baro-csv; default OFF)\n"
+        << "  --baro-sigma-m <m>                Pressure-height 1-sigma (default: 1.0)\n"
+        << "  --baro-bias-walk <m/sqrt(s)>      Baro bias random walk (default: 0.05)\n"
+        << "  --baro-height-walk <m/sqrt(s)>    True-height random walk (default: 1.0)\n"
+        << "  --baro-gnss-sigma-scale <f>       Inflation of the SPP vertical sigma (default: 1)\n"
+        << "  --baro-gnss-sigma-floor-m <m>     Minimum GNSS height sigma (default: 5)\n"
+        << "  --baro-init-max-gdop <v>          Geometry gate for init/GNSS height update (default: 6)\n"
+        << "  --baro-init-min-satellites <n>    Satellite gate for init/GNSS height update (default: 6)\n"
+        << "  --baro-innovation-gate-sigma <n>  Baro/GNSS innovation gate (default: 4)\n"
+        << "  --baro-sample-window-s <s>        Causal pressure averaging window (default: 2)\n"
+        << "  --baro-telemetry-csv <file>       Write per-epoch barometer fusion telemetry\n"
         << "  --quiet                           Suppress run summary\n"
         << "  -h, --help                        Show this help\n";
 }
@@ -323,6 +392,37 @@ Options parseArguments(int argc, char* argv[]) {
             options.spp_config.use_ionex_corrections = false;
         } else if (arg == "--disable-dcb-corrections") {
             options.spp_config.use_dcb_corrections = false;
+        } else if (arg == "--baro-csv") {
+            options.baro_csv_path = requireValue(arg, i, argc, argv);
+        } else if (arg == "--baro-height") {
+            options.spp_config.baro.enabled = true;
+        } else if (arg == "--baro-sigma-m") {
+            options.spp_config.baro.baro_sigma_m = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-bias-walk") {
+            options.spp_config.baro.bias_walk_m_per_sqrt_s =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-height-walk") {
+            options.spp_config.baro.height_walk_m_per_sqrt_s =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-gnss-sigma-scale") {
+            options.spp_config.baro.gnss_sigma_scale =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-gnss-sigma-floor-m") {
+            options.spp_config.baro.gnss_sigma_floor_m =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-init-max-gdop") {
+            options.spp_config.baro.init_max_gdop = std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-init-min-satellites") {
+            options.spp_config.baro.init_min_satellites =
+                std::stoi(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-innovation-gate-sigma") {
+            options.spp_config.baro.innovation_gate_sigma =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-sample-window-s") {
+            options.spp_config.baro.sample_window_s =
+                std::stod(requireValue(arg, i, argc, argv));
+        } else if (arg == "--baro-telemetry-csv") {
+            options.baro_telemetry_csv_path = requireValue(arg, i, argc, argv);
         } else if (arg == "--quiet") {
             options.quiet = true;
         } else {
@@ -347,6 +447,23 @@ Options parseArguments(int argc, char* argv[]) {
     }
     if (options.snr_mask < 0.0) {
         argumentError("--snr-mask must be non-negative", argv[0]);
+    }
+    {
+        const auto& baro = options.spp_config.baro;
+        if (baro.enabled && options.baro_csv_path.empty()) {
+            argumentError("--baro-height requires --baro-csv", argv[0]);
+        }
+        if (!baro.enabled &&
+            (!options.baro_csv_path.empty() || !options.baro_telemetry_csv_path.empty())) {
+            argumentError("--baro-csv/--baro-telemetry-csv require --baro-height", argv[0]);
+        }
+        if (!(baro.baro_sigma_m > 0.0) || !(baro.bias_walk_m_per_sqrt_s >= 0.0) ||
+            !(baro.height_walk_m_per_sqrt_s >= 0.0) || !(baro.gnss_sigma_scale > 0.0) ||
+            !(baro.gnss_sigma_floor_m > 0.0) || !(baro.init_max_gdop > 0.0) ||
+            baro.init_min_satellites < 4 || !(baro.innovation_gate_sigma > 0.0) ||
+            !(baro.sample_window_s > 0.0)) {
+            argumentError("invalid --baro-* value", argv[0]);
+        }
     }
     if (options.spp_config.outlier_threshold_sigma <= 0.0) {
         argumentError("--outlier-threshold-sigma must be > 0", argv[0]);
@@ -424,6 +541,23 @@ bool writeSummaryJson(const std::string& path,
                    ? "null"
                    : ("\"" + jsonEscape(options.dcb_path) + "\""))
            << ",\n";
+    if (options.spp_config.baro.enabled) {
+        const auto& b = options.spp_config.baro;
+        output << "  \"baro\": {\"csv\": \"" << jsonEscape(options.baro_csv_path)
+               << "\", \"baro_sigma_m\": " << b.baro_sigma_m
+               << ", \"bias_walk_m_per_sqrt_s\": " << b.bias_walk_m_per_sqrt_s
+               << ", \"height_walk_m_per_sqrt_s\": " << b.height_walk_m_per_sqrt_s
+               << ", \"gnss_sigma_scale\": " << b.gnss_sigma_scale
+               << ", \"gnss_sigma_floor_m\": " << b.gnss_sigma_floor_m
+               << ", \"init_max_gdop\": " << b.init_max_gdop
+               << ", \"init_min_satellites\": " << b.init_min_satellites
+               << ", \"innovation_gate_sigma\": " << b.innovation_gate_sigma
+               << ", \"sample_window_s\": " << b.sample_window_s
+               << ", \"constraint_epochs\": " << summary.baro_constraint_epochs
+               << ", \"baro_rejected_epochs\": " << summary.baro_rejected_epochs
+               << ", \"gnss_height_rejected_epochs\": " << summary.baro_gnss_rejected_epochs
+               << "},\n";
+    }
     output << "  \"processed_epochs\": " << summary.processed_epochs << ",\n";
     output << "  \"valid_solutions\": " << summary.valid_solutions << ",\n";
     output << "  \"availability_rate\": " << summary.availabilityRate() << ",\n";
@@ -629,6 +763,28 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        std::vector<BaroSample> baro_samples;
+        std::size_t baro_next = 0;
+        std::ofstream baro_telemetry;
+        if (options.spp_config.baro.enabled) {
+            baro_samples = loadBaroCsv(options.baro_csv_path);
+        }
+        if (!options.baro_telemetry_csv_path.empty()) {
+            baro_telemetry.open(options.baro_telemetry_csv_path);
+            if (!baro_telemetry.is_open()) {
+                std::cerr << "Error: failed to open baro telemetry CSV: "
+                          << options.baro_telemetry_csv_path << "\n";
+                return 1;
+            }
+            baro_telemetry
+                << "gps_week,gps_tow_s,valid,baro_available,filter_initialized,"
+                   "initialized_this_epoch,geometry_good,baro_update_accepted,"
+                   "gnss_update_accepted,constraint_applied,sample_count,rebase_count,"
+                   "baro_height_m,prior_height_m,prior_sigma_m,bias_m,bias_sigma_m,"
+                   "unconstrained_height_m,unconstrained_sigma_m,final_height_m\n";
+            baro_telemetry << std::fixed << std::setprecision(4);
+        }
+
         libgnss::Solution solution;
         RunSummary summary;
         summary.precise_loaded = processor.hasLoadedPreciseProducts();
@@ -678,8 +834,43 @@ int main(int argc, char* argv[]) {
             const auto epoch_start = timing_enabled
                                          ? std::chrono::steady_clock::now()
                                          : std::chrono::steady_clock::time_point{};
+            // Causal feed: only pressure samples stamped at or before this
+            // epoch are ever handed to the processor.
+            while (baro_next < baro_samples.size() &&
+                   (baro_samples[baro_next].time - obs.time) <= 0.0) {
+                processor.addBarometerSample(baro_samples[baro_next].time,
+                                             baro_samples[baro_next].pressure_hpa);
+                ++baro_next;
+            }
             const auto epoch_solution = processor.processEpoch(obs, nav_data);
             summary.addSolution(epoch_solution);
+            if (options.spp_config.baro.enabled) {
+                const auto& bd = processor.lastBaroDiagnostics();
+                if (bd.constraint_applied) {
+                    ++summary.baro_constraint_epochs;
+                }
+                if (bd.filter_initialized && bd.baro_available && !bd.baro_update_accepted) {
+                    ++summary.baro_rejected_epochs;
+                }
+                if (bd.geometry_good && bd.filter_initialized && !bd.gnss_update_accepted &&
+                    !bd.initialized_this_epoch) {
+                    ++summary.baro_gnss_rejected_epochs;
+                }
+                if (baro_telemetry.is_open()) {
+                    baro_telemetry
+                        << epoch_solution.time.week << ',' << epoch_solution.time.tow << ','
+                        << (epoch_solution.isValid() ? 1 : 0) << ','
+                        << bd.baro_available << ',' << bd.filter_initialized << ','
+                        << bd.initialized_this_epoch << ',' << bd.geometry_good << ','
+                        << bd.baro_update_accepted << ',' << bd.gnss_update_accepted << ','
+                        << bd.constraint_applied << ',' << bd.sample_count << ','
+                        << bd.rebase_count << ',' << bd.baro_height_m << ','
+                        << bd.prior_height_m << ',' << bd.prior_sigma_m << ','
+                        << bd.bias_m << ',' << bd.bias_sigma_m << ','
+                        << bd.unconstrained_height_m << ',' << bd.unconstrained_sigma_m << ','
+                        << bd.final_height_m << '\n';
+                }
+            }
             if (timing_enabled) {
                 const double elapsed_ms =
                     std::chrono::duration<double, std::milli>(

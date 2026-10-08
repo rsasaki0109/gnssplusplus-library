@@ -25,6 +25,7 @@ if(GTest_FOUND)
     add_executable(gnss_run_tests
         test_imu_csv.cpp
         test_android_raw_gnss.cpp
+        test_barometer_height.cpp
         test_native_imu_refinement_handoff.cpp
         test_native_gnss_imu_initial_handoff.cpp
         test_native_imu_refinement_attitude_reset.cpp
@@ -729,6 +730,7 @@ if(GTest_FOUND)
         smartphone_gnss_adapter
         smartphone_gnss_signoff
         smartphone_gnss_workflow
+        smartphone_mimir_adapter
         static_metrics
         uav_mars_acquire
         uav_mars_adapter

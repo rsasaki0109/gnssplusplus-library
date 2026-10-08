@@ -631,6 +631,21 @@ COMMANDS = {
         "target": python_target("gnss_smartphone_gnss_adapter.py"),
         "summary": "Validate and normalize Google Smartphone Decimeter Challenge raw GNSS and truth CSVs.",
     },
+    "smartphone-mimir-adapter": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_mimir_adapter.py"),
+        "summary": "Fail-closed adapter for Mimir (Nantes dataset) Raw.csv/PSR.csv: RINEX observations plus GPST barometer CSV.",
+    },
+    "smartphone-baro-eval": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_baro_eval.py"),
+        "summary": "Score a smartphone SPP POS against the weak Awinda reference (H/V RMSE, P95, availability, jumps).",
+    },
+    "smartphone-baro-nantes": {
+        "kind": "python",
+        "target": python_target("gnss_smartphone_baro_nantes_runner.py"),
+        "summary": "Run barometer OFF vs ON standalone SPP on Nantes/Mimir runs and score against the Awinda reference.",
+    },
     "smartphone-gnss-signoff": {
         "kind": "python",
         "target": python_target("gnss_smartphone_gnss_signoff.py"),
