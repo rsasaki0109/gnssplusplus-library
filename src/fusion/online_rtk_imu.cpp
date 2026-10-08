@@ -1,5 +1,6 @@
 #include <libgnss++/fusion/online_rtk_imu.hpp>
 #include <libgnss++/fusion/attitude.hpp>
+#include <libgnss++/algorithms/spp_velocity.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -186,7 +187,24 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
     }
     // GNSS correction must be synchronous with the mechanized state. For an
     // unsampled epoch emit the older prediction with its real timestamp.
-    if (out.rtk.isValid() && imu_at_epoch) fusion_->processGnssSolution(out.rtk);
+    // GNSS input to the loose/tight filters. Normally the RTK solution itself;
+    // the opt-in candidate replaces its velocity by an independent Doppler LS
+    // solution. out.rtk (the exported RTK result) is never modified.
+    PositionSolution gnss_input = out.rtk;
+    if (config_.independent_doppler_velocity && config_.tight_time_update && out.rtk.isValid()) {
+        const auto doppler = spp_velocity::solveVelocityFromObservations(
+            obs, epoch_navigation, out.rtk.position_ecef, rtk_->getDopplerVelocitySigma());
+        gnss_input.has_velocity = doppler.ok && doppler.velocity_ecef.allFinite() &&
+            doppler.velocity_covariance.allFinite();
+        if (gnss_input.has_velocity) {
+            gnss_input.velocity_ecef = doppler.velocity_ecef;
+            gnss_input.velocity_covariance = doppler.velocity_covariance;
+        } else {
+            gnss_input.velocity_ecef.setZero();
+            gnss_input.velocity_covariance.setZero();
+        }
+    }
+    if (out.rtk.isValid() && imu_at_epoch) fusion_->processGnssSolution(gnss_input);
     if (config_.tight_time_update) {
         bool anchored = false;
         Vector3d anchor;
@@ -194,11 +212,11 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         const bool bootstrap_ready = tight_->initialized() ||
             (fusion_->isInitialized() && fusion_->isOriginSet() && fusion_->isHeadingConverged());
         if (out.exact_base_available && imu_at_epoch && out.rtk.isValid() &&
-            out.rtk.has_velocity && bootstrap_ready &&
-            out.rtk.velocity_ecef.allFinite() && out.rtk.velocity_covariance.allFinite() &&
+            gnss_input.has_velocity && bootstrap_ready &&
+            gnss_input.velocity_ecef.allFinite() && gnss_input.velocity_covariance.allFinite() &&
             rtk_->getFloatPosteriorPosition(anchor, covariance)) {
-            anchored = tight_->reanchor(anchor, covariance, out.rtk.velocity_ecef,
-                out.rtk.velocity_covariance, obs.time,
+            anchored = tight_->reanchor(anchor, covariance, gnss_input.velocity_ecef,
+                gnss_input.velocity_covariance, obs.time,
                 tight_->initialized() ? nullptr : &fusion_->state());
         }
         if (anchored) {

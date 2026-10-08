@@ -205,4 +205,62 @@ TEST(OnlineRtkImuTest, OptInVehicleConstraintWaitsForObservedHeading) {
     candidate.processImuSample(imu(10.07));
     EXPECT_GT((control.state().covariance-candidate.state().covariance).norm(), 1e-7);
 }
+TEST(OnlineRtkImuTest, VelocityConsistencyCandidateDefaultsAreOff) {
+    const OnlineRtkImuProcessor::Config config;
+    EXPECT_FALSE(config.independent_doppler_velocity);
+    EXPECT_FALSE(config.fusion.reanchor_velocity_on_heading_latch);
+    EXPECT_EQ(config.fusion.max_position_update_nis_per_observation, 0.0);
+    EXPECT_EQ(config.fusion.max_velocity_update_nis_per_observation, 0.0);
+}
+TEST(OnlineRtkImuTest, HeadingLatchReanchorsVelocityAndClearsItsCrossCovariance) {
+    auto control_config = configuration().fusion;
+    control_config.lever_arm_body.setZero();
+    auto candidate_config = control_config;
+    candidate_config.reanchor_velocity_on_heading_latch = true;
+    LooseCouplingProcessor control(control_config), candidate(candidate_config);
+    for (double t : {10.0, 10.01, 10.02, 10.03}) {
+        control.processImuSample(imu(t));
+        candidate.processImuSample(imu(t));
+    }
+    // Noisy but consistent northward course so velocity differs from each
+    // measurement; ECEF +z at lon 0, lat 0 is local north.
+    const double speeds[] = {5.0, 5.3, 4.7};
+    const double stamps[] = {10.04, 10.05, 10.06};
+    for (int i = 0; i < 3; ++i) {
+        const double t = stamps[i];
+        control.processImuSample(imu(t));
+        candidate.processImuSample(imu(t));
+        PositionSolution fix;
+        fix.time = time(t);
+        fix.status = SolutionStatus::SPP;
+        fix.num_satellites = 8;
+        fix.position_ecef = Vector3d(6378137, 0, 0);
+        fix.position_covariance = Matrix3d::Identity();
+        fix.has_velocity = true;
+        fix.velocity_ecef = Vector3d(0, 0, speeds[i]);
+        fix.velocity_covariance = 0.04 * Matrix3d::Identity();
+        control.processGnssSolution(fix);
+        candidate.processGnssSolution(fix);
+        if (i < 2) {  // identical until the latch epoch
+            ASSERT_FALSE(control.isHeadingAligned());
+            ASSERT_FALSE(candidate.isHeadingAligned());
+            EXPECT_NEAR((control.state().covariance-candidate.state().covariance).norm(), 0, 1e-12);
+            EXPECT_NEAR((control.state().nominal.velocity_enu-candidate.state().nominal.velocity_enu).norm(), 0, 1e-12);
+        }
+    }
+    ASSERT_TRUE(control.isHeadingAligned());
+    ASSERT_TRUE(candidate.isHeadingAligned());
+    const Vector3d measured(0.0, 4.7, 0.0);
+    EXPECT_GT((control.state().nominal.velocity_enu-measured).norm(), 1e-3);
+    EXPECT_NEAR((candidate.state().nominal.velocity_enu-measured).norm(), 0, 1e-9);
+    const auto& cov = candidate.state().covariance;
+    constexpr int v = fusion_index::VELOCITY;
+    EXPECT_NEAR((cov.block<3, 3>(v, v) - 0.04 * Matrix3d::Identity()).norm(), 0, 1e-9);
+    auto cross = [](const auto& c) {
+        return c.template block<3, 3>(v, 0).norm() + c.template block<3, 9>(v, 6).norm();
+    };
+    EXPECT_NEAR(cross(cov), 0, 1e-12);
+    EXPECT_GT(cross(control.state().covariance), 1e-9);
+    EXPECT_GT(cov.diagonal().minCoeff(), 0.0);
+}
 }

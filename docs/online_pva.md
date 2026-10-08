@@ -117,6 +117,9 @@ See the [development contract](online_pva_development_plan.md) and
 [candidate contract](online_pva_candidate_v1.md) for the frozen acceptance rules.
 The [development results](online_pva_development_results.md) include the
 negative candidate decision, full-run errors and scenario limitations.
+A second frozen opt-in experiment, `--candidate velocity_consistency_v1`, is
+specified in [candidate contract v2](online_pva_candidate_v2.md) and recorded as
+No-Go in its [results](online_pva_candidate_v2_results.md); defaults are unchanged.
 The [local delivery record](online_pva_delivery_v1.json) identifies verified
 development ZIP, TGZ, DEB and Docker archives and their SHA256 checksums.
 For the exported image, use `docker load -i libgnsspp-pva-1091b8c3-docker.tar`,

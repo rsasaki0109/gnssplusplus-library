@@ -20,6 +20,14 @@ public:
         RTKProcessor::RTKConfig rtk;
         LooseCouplingProcessor::Config fusion;
         bool tight_time_update = true;
+        // Opt-in (velocity_consistency_v1). With tight_time_update the RTK
+        // filter carries its own velocity state, which is the tight INS
+        // prediction fed back by reanchor(). Feeding that state to the loose
+        // filter and to tight reanchor() closes a self-confirming loop, so
+        // use an independent Doppler least-squares velocity (with its own
+        // covariance) at the RTK position for both. If it cannot be solved
+        // the epoch carries no GNSS velocity (never the RTK state velocity).
+        bool independent_doppler_velocity = false;
         Vector3d base_position_ecef = Vector3d::Zero();
         double max_imu_gap_s = 0.1;
         double max_fusion_age_s = 0.02;

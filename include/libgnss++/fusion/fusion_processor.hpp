@@ -176,6 +176,16 @@ public:
         // Maximum norm of a velocity-only re-anchor correction in m/s. <= 0
         // disables re-anchoring; a large correction is treated as untrusted.
         double max_gnss_velocity_reanchor_mps = 20.0;
+
+        // Opt-in (velocity_consistency_v1): when the GNSS-course heading is
+        // latched, also re-anchor the velocity state to the same epoch's
+        // GNSS antenna velocity (the reanchorVelocityFromGnssSolution()
+        // reset: lever-arm compensated with the NEW attitude, covariance =
+        // GNSS covariance, velocity cross-covariances cleared). The latch
+        // rotates only the attitude; velocity and every velocity/attitude/
+        // bias correlation were produced by a filter running with an
+        // arbitrary pre-latch yaw. False keeps the previous behavior.
+        bool reanchor_velocity_on_heading_latch = false;
     };
 
     explicit LooseCouplingProcessor(const Config& config);

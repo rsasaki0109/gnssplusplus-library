@@ -1,0 +1,3834 @@
+{
+ "schema": "libgnsspp.pva_candidate_decision_compact.v1",
+ "candidate": "velocity_consistency_v1",
+ "adoption": "No-Go",
+ "default_changed": false,
+ "contract": "docs/online_pva_candidate_v2.md",
+ "contract_sha256": "23a6f91cff6c60b416631e55e8b48cb535f09e117fe8c4d5de029b4e941e9ab3",
+ "control_source": "c2eb06f7 (develop incl. #562), default, Release",
+ "control_binary_sha256": "99c56dcdf357d0a53d065245acbd513d54befb8eb18e3f8b8d2477fb8a02af5f",
+ "candidate_binary_sha256": "ff02d2cfdec99465ece42c498e61fc3582cb067b7800bbbe571939b625681d86",
+ "full_decision_json": "/media/sasaki/aiueo2/rtklib_v2_ws_output/pva_velcons_20261009/decision/decision.json",
+ "failed_gate_count": 54,
+ "total_gate_count": 558,
+ "failures": [
+  {
+   "run": "tokyo2-gnss_outage",
+   "name": "scenario.recovery_gnss_update_s",
+   "control": 0.0,
+   "candidate": 0.20000000000000284,
+   "allowed": "no later; both censored allowed"
+  },
+  {
+   "run": "tokyo2-imu_gap",
+   "name": "all.rtk_velocity_mps.p95",
+   "control": 2.208482719641324,
+   "candidate": 2.397088497323262,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo2-imu_gap",
+   "name": "common.rtk_velocity_mps.p95",
+   "control": 2.208482719641324,
+   "candidate": 2.397088497323262,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3",
+   "name": "all.rtk_velocity_mps.p95",
+   "control": 1.7571722210504923,
+   "candidate": 1.7796233327516102,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3",
+   "name": "common.rtk_velocity_mps.p95",
+   "control": 1.7571722210504923,
+   "candidate": 1.7796233327516102,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-gnss_outage",
+   "name": "all.rtk_position_m.rmse",
+   "control": 16.806323684015307,
+   "candidate": 25.891205702061786,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-gnss_outage",
+   "name": "all.rtk_position_m.p95",
+   "control": 30.875594140935224,
+   "candidate": 41.65886492496611,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-gnss_outage",
+   "name": "common.rtk_position_m.rmse",
+   "control": 16.806323684015307,
+   "candidate": 25.891205702061786,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-gnss_outage",
+   "name": "common.rtk_position_m.p95",
+   "control": 30.875594140935224,
+   "candidate": 41.65886492496611,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-gnss_outage",
+   "name": "all.rtk_velocity_mps.p95",
+   "control": 1.5501496086442348,
+   "candidate": 1.9213546556434455,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-gnss_outage",
+   "name": "common.rtk_velocity_mps.p95",
+   "control": 1.5501496086442348,
+   "candidate": 1.9213546556434455,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-imu_gap",
+   "name": "all.rtk_velocity_mps.p95",
+   "control": 1.7430169205066668,
+   "candidate": 2.1425349615257194,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "tokyo3-imu_gap",
+   "name": "common.rtk_velocity_mps.p95",
+   "control": 1.7430169205066668,
+   "candidate": 2.1425349615257194,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "all.rtk_position_m.rmse",
+   "control": 25.740667580485677,
+   "candidate": 30.18890504409756,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "all.rtk_position_m.p95",
+   "control": 29.044807427332096,
+   "candidate": 34.52593727116638,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "common.rtk_position_m.rmse",
+   "control": 25.740667580485677,
+   "candidate": 30.18890504409756,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "common.rtk_position_m.p95",
+   "control": 29.044807427332096,
+   "candidate": 34.52593727116638,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "all.fused_position_m.rmse",
+   "control": 49.33142436005671,
+   "candidate": 118.97975502546046,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "all.fused_position_m.p95",
+   "control": 118.14565490488448,
+   "candidate": 178.28630610516362,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "common.fused_position_m.rmse",
+   "control": 49.33142436005671,
+   "candidate": 118.97975502546046,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1",
+   "name": "common.fused_position_m.p95",
+   "control": 118.14565490488448,
+   "candidate": 178.28630610516362,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "all.rtk_position_m.rmse",
+   "control": 26.020752947806766,
+   "candidate": 30.277543465950608,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "all.rtk_position_m.p95",
+   "control": 29.330954546263637,
+   "candidate": 34.92848997085985,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "common.rtk_position_m.rmse",
+   "control": 26.020752947806766,
+   "candidate": 30.277543465950608,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "common.rtk_position_m.p95",
+   "control": 29.330954546263637,
+   "candidate": 34.92848997085985,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "all.fused_position_m.rmse",
+   "control": 53.234113242144055,
+   "candidate": 119.34049701516844,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "all.fused_position_m.p95",
+   "control": 131.93055484220912,
+   "candidate": 178.28630610516362,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "common.fused_position_m.rmse",
+   "control": 53.234113242144055,
+   "candidate": 119.34049701516844,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "common.fused_position_m.p95",
+   "control": 131.93055484220912,
+   "candidate": 178.28630610516362,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-gnss_outage",
+   "name": "scenario.recovery_gnss_update_s",
+   "control": 0.0,
+   "candidate": 142.8,
+   "allowed": "no later; both censored allowed"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "all.rtk_position_m.rmse",
+   "control": 27.56421302210522,
+   "candidate": 30.188899615089113,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "all.rtk_position_m.p95",
+   "control": 30.848904327053177,
+   "candidate": 34.52593727116638,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "common.rtk_position_m.rmse",
+   "control": 27.56421302210522,
+   "candidate": 30.188899615089113,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "common.rtk_position_m.p95",
+   "control": 30.848904327053177,
+   "candidate": 34.52593727116638,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "all.fused_position_m.rmse",
+   "control": 55.80098339086851,
+   "candidate": 119.14901680602937,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "all.fused_position_m.p95",
+   "control": 130.60194832624788,
+   "candidate": 178.2877981622794,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "common.fused_position_m.rmse",
+   "control": 55.80098339086851,
+   "candidate": 119.14901680602937,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya1-imu_gap",
+   "name": "common.fused_position_m.p95",
+   "control": 130.60194832624788,
+   "candidate": 178.2877981622794,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya2",
+   "name": "all.rtk_position_m.p95",
+   "control": 81.8062367067428,
+   "candidate": 83.79837258632897,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya2",
+   "name": "common.rtk_position_m.p95",
+   "control": 81.8062367067428,
+   "candidate": 83.79837258632897,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya2",
+   "name": "initial.first_heading_s",
+   "control": 41.8,
+   "candidate": 42.0,
+   "allowed": "no later; both censored allowed"
+  },
+  {
+   "run": "nagoya2-gnss_outage",
+   "name": "initial.first_heading_s",
+   "control": 41.8,
+   "candidate": 42.0,
+   "allowed": "no later; both censored allowed"
+  },
+  {
+   "run": "nagoya2-gnss_outage",
+   "name": "scenario.recovery_gnss_update_s",
+   "control": 0.0,
+   "candidate": 0.20000000000000284,
+   "allowed": "no later; both censored allowed"
+  },
+  {
+   "run": "nagoya2-imu_gap",
+   "name": "initial.first_heading_s",
+   "control": 41.8,
+   "candidate": 42.0,
+   "allowed": "no later; both censored allowed"
+  },
+  {
+   "run": "nagoya3",
+   "name": "all.rtk_position_m.rmse",
+   "control": 43.69933784987149,
+   "candidate": 44.95434291867919,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3",
+   "name": "all.rtk_position_m.p95",
+   "control": 101.09038426078531,
+   "candidate": 109.03086000702338,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3",
+   "name": "common.rtk_position_m.rmse",
+   "control": 43.69933784987149,
+   "candidate": 44.95434291867919,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3",
+   "name": "common.rtk_position_m.p95",
+   "control": 101.09038426078531,
+   "candidate": 109.03086000702338,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3-gnss_outage",
+   "name": "all.rtk_position_m.p95",
+   "control": 103.73679237495739,
+   "candidate": 109.31172809681861,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3-gnss_outage",
+   "name": "common.rtk_position_m.p95",
+   "control": 103.73679237495739,
+   "candidate": 109.31172809681861,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3-imu_gap",
+   "name": "all.rtk_position_m.rmse",
+   "control": 43.79909835922594,
+   "candidate": 44.97340344964686,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3-imu_gap",
+   "name": "all.rtk_position_m.p95",
+   "control": 100.66566191230542,
+   "candidate": 109.0308600110099,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3-imu_gap",
+   "name": "common.rtk_position_m.rmse",
+   "control": 43.79909835922594,
+   "candidate": 44.97340344964686,
+   "allowed": "candidate <= 1.01 * control"
+  },
+  {
+   "run": "nagoya3-imu_gap",
+   "name": "common.rtk_position_m.p95",
+   "control": 100.66566191230542,
+   "candidate": 109.0308600110099,
+   "allowed": "candidate <= 1.01 * control"
+  }
+ ],
+ "runs": [
+  {
+   "name": "tokyo1",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 32.203655479467116,
+     "candidate": 27.36713877586583,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 61.67056440844112,
+     "candidate": 55.22275484076607,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 32.203655479467116,
+     "candidate": 27.36713877586583,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 61.67056440844112,
+     "candidate": 55.22275484076607,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 71.65130263790894,
+     "candidate": 25.92001021855369,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 155.22625305656425,
+     "candidate": 48.05533252373138,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 71.65130263790894,
+     "candidate": 25.92001021855369,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 155.22625305656425,
+     "candidate": 48.05533252373138,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.104606869950318,
+     "candidate": 1.3986385733539668,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 3.285737786135214,
+     "candidate": 2.7833785903060324,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.104606869950318,
+     "candidate": 1.3986385733539668,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 3.285737786135214,
+     "candidate": 2.7833785903060324,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 7.047040947587838,
+     "candidate": 1.2005697551364265,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 14.616861110509618,
+     "candidate": 1.2599363434596897,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 7.047040947587838,
+     "candidate": 1.2005697551364265,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 14.616861110509618,
+     "candidate": 1.2599363434596897,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 105.06898607255866,
+     "candidate": 2.9063704160629933,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 171.11321846621937,
+     "candidate": 6.02791679690647,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 105.06898607255866,
+     "candidate": 2.9063704160629933,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 171.11321846621937,
+     "candidate": 6.02791679690647,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9931254191817572,
+     "candidate": 0.9931254191817572,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9991616364855801,
+     "candidate": 0.9991616364855801,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9922870556673373,
+     "candidate": 0.9922870556673373,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9991616364855801,
+     "candidate": 0.9991616364855801,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9991616364855801,
+     "candidate": 0.9991616364855801,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9936284372904092,
+     "candidate": 0.9936284372904092,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 15.2,
+     "candidate": 15.2,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 6.272122649999997,
+     "candidate": 7.21739445,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo1-gnss_outage",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 29.67573109847495,
+     "candidate": 27.41843496828266,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 58.8775864229878,
+     "candidate": 55.35467911382873,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 29.67573109847495,
+     "candidate": 27.41843496828266,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 58.8775864229878,
+     "candidate": 55.35467911382873,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 55.10364617769882,
+     "candidate": 25.60958147593794,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 130.87655760774635,
+     "candidate": 48.07216848539855,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 55.10364617769882,
+     "candidate": 25.60958147593794,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 130.87655760774635,
+     "candidate": 48.07216848539855,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.6404357360583,
+     "candidate": 1.3890850814466036,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 3.894614551635168,
+     "candidate": 2.7803057523635153,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.6404357360583,
+     "candidate": 1.3890850814466036,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 3.894614551635168,
+     "candidate": 2.7803057523635153,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 6.111713377003401,
+     "candidate": 1.1985860207398789,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 11.780988409797375,
+     "candidate": 1.2483584578995484,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 6.111713377003401,
+     "candidate": 1.1985860207398789,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 11.780988409797375,
+     "candidate": 1.2483584578995484,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 104.91681504752506,
+     "candidate": 2.88922657733721,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 171.19581519331226,
+     "candidate": 6.02845083953264,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 104.91681504752506,
+     "candidate": 2.88922657733721,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 171.19581519331226,
+     "candidate": 6.02845083953264,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9889336016096579,
+     "candidate": 0.9889336016096579,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9991616364855801,
+     "candidate": 0.9991616364855801,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9880952380952381,
+     "candidate": 0.9880952380952381,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9991616364855801,
+     "candidate": 0.9991616364855801,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9991616364855801,
+     "candidate": 0.9991616364855801,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9936284372904092,
+     "candidate": 0.9936284372904092,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 15.2,
+     "candidate": 15.2,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 7.649596899999999,
+     "candidate": 9.218411799999995,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo1-imu_gap",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 31.18513579944361,
+     "candidate": 27.367073962867785,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 63.31177422454812,
+     "candidate": 55.22275483686317,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 31.18513579944361,
+     "candidate": 27.367073962867785,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 63.31177422454812,
+     "candidate": 55.22275483686317,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 63.41642531087009,
+     "candidate": 26.33956737018033,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 148.01700467587966,
+     "candidate": 48.07879841561522,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 63.41642531087009,
+     "candidate": 26.33956737018033,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 148.01700467587966,
+     "candidate": 48.07879841561522,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.3564275572652313,
+     "candidate": 1.4035922776002523,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 3.7225177919905166,
+     "candidate": 2.797106743436439,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.3564275572652313,
+     "candidate": 1.4035922776002523,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 3.7225177919905166,
+     "candidate": 2.797106743436439,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 5.825132166807626,
+     "candidate": 1.2035836612335835,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 11.387205089545311,
+     "candidate": 1.252473095170276,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 5.825132166807626,
+     "candidate": 1.2035836612335835,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 11.387205089545311,
+     "candidate": 1.252473095170276,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 104.9258361406832,
+     "candidate": 2.9347216191234575,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 171.26995608583078,
+     "candidate": 6.080419956366367,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 104.9258361406832,
+     "candidate": 2.9347216191234575,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 171.26995608583078,
+     "candidate": 6.080419956366367,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9931254191817572,
+     "candidate": 0.9931254191817572,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9967303822937625,
+     "candidate": 0.9967303822937625,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9922870556673373,
+     "candidate": 0.9922870556673373,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9967303822937625,
+     "candidate": 0.9967303822937625,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9967303822937625,
+     "candidate": 0.9967303822937625,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9839034205231388,
+     "candidate": 0.9839034205231388,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 15.2,
+     "candidate": 15.2,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 7.588948799999998,
+     "candidate": 8.1098124,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 19.400000000000006,
+     "candidate": 19.400000000000006,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo2",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 19.535983006643583,
+     "candidate": 12.503542537070121,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 29.67391776286815,
+     "candidate": 21.095068936236082,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 19.535983006643583,
+     "candidate": 12.503542537070121,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 29.67391776286815,
+     "candidate": 21.095068936236082,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 74.18208074331348,
+     "candidate": 13.82965796920971,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 179.5178054637281,
+     "candidate": 26.98902606123832,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 74.18208074331348,
+     "candidate": 13.82965796920971,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 179.5178054637281,
+     "candidate": 26.98902606123832,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.2649856027736446,
+     "candidate": 0.9157618275494205,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 3.7114315114360896,
+     "candidate": 2.118313179962572,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.2649856027736446,
+     "candidate": 0.9157618275494205,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 3.7114315114360896,
+     "candidate": 2.118313179962572,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 6.849707202257747,
+     "candidate": 0.3842364354067251,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 14.138490181380988,
+     "candidate": 0.7847908057530142,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 6.849707202257747,
+     "candidate": 0.3842364354067251,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 14.138490181380988,
+     "candidate": 0.7847908057530142,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 100.29670511922819,
+     "candidate": 1.417207352220493,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 170.00410941702378,
+     "candidate": 2.5706258926716723,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 100.29670511922819,
+     "candidate": 1.417207352220493,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 170.00410941702378,
+     "candidate": 2.5706258926716723,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.996066003715441,
+     "candidate": 0.996066003715441,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9989072232542892,
+     "candidate": 0.9989072232542892,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9959567260408698,
+     "candidate": 0.9959567260408698,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9989072232542892,
+     "candidate": 0.9989072232542892,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9989072232542892,
+     "candidate": 0.9989072232542892,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9872145120751831,
+     "candidate": 0.9872145120751831,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 23.4,
+     "candidate": 23.4,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 7.739928,
+     "candidate": 9.2885795,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo2-gnss_outage",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 19.40419758095057,
+     "candidate": 12.515260101669377,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 26.377808315331453,
+     "candidate": 21.12404637820468,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 19.40419758095057,
+     "candidate": 12.515260101669377,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 26.377808315331453,
+     "candidate": 21.12404637820468,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 72.52958289795554,
+     "candidate": 14.446290295508266,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 187.3115429703795,
+     "candidate": 26.979039575586853,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 72.52958289795554,
+     "candidate": 14.446290295508266,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 187.3115429703795,
+     "candidate": 26.979039575586853,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.420387286104564,
+     "candidate": 0.9039903144077627,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 4.986625363657679,
+     "candidate": 2.0763316575303024,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.420387286104564,
+     "candidate": 0.9039903144077627,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 4.986625363657679,
+     "candidate": 2.0763316575303024,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 4.823832189579589,
+     "candidate": 0.39012017272489524,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 11.976941867919203,
+     "candidate": 0.7860166618527761,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 4.823832189579589,
+     "candidate": 0.39012017272489524,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 11.976941867919203,
+     "candidate": 0.7860166618527761,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 28.45851636856415,
+     "candidate": 1.4345642030948313,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 68.10941712935019,
+     "candidate": 2.570490255389547,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 28.45851636856415,
+     "candidate": 1.4345642030948313,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 68.10941712935019,
+     "candidate": 2.570490255389547,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9906021199868866,
+     "candidate": 0.9906021199868866,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9989072232542892,
+     "candidate": 0.9989072232542892,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9904928423123156,
+     "candidate": 0.9904928423123156,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9989072232542892,
+     "candidate": 0.9989072232542892,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9989072232542892,
+     "candidate": 0.9989072232542892,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9872145120751831,
+     "candidate": 0.9872145120751831,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 23.4,
+     "candidate": 23.4,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 9.658123499999999,
+     "candidate": 10.5218725,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 0.0,
+     "candidate": 0.20000000000000284,
+     "passed": false
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo2-imu_gap",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 14.004121746728117,
+     "candidate": 12.503658624965064,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 23.565064012055732,
+     "candidate": 21.09506892961755,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 14.004121746728117,
+     "candidate": 12.503658624965064,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 23.565064012055732,
+     "candidate": 21.09506892961755,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 52.22551685976065,
+     "candidate": 13.858423433602683,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 111.46604103661227,
+     "candidate": 27.021839637221547,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 52.22551685976065,
+     "candidate": 13.858423433602683,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 111.46604103661227,
+     "candidate": 27.021839637221547,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 1.6550149606079407,
+     "candidate": 1.0102172101221059,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 2.208482719641324,
+     "candidate": 2.397088497323262,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 1.6550149606079407,
+     "candidate": 1.0102172101221059,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 2.208482719641324,
+     "candidate": 2.397088497323262,
+     "passed": false
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 6.066124631164684,
+     "candidate": 0.3868121943310002,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 12.058393269521757,
+     "candidate": 0.7848606810349135,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 6.066124631164684,
+     "candidate": 0.3868121943310002,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 12.058393269521757,
+     "candidate": 0.7848606810349135,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 102.6728756329252,
+     "candidate": 2.677718398563917,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 170.60427121339953,
+     "candidate": 2.9283060382898802,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 102.6728756329252,
+     "candidate": 2.677718398563917,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 170.60427121339953,
+     "candidate": 2.9283060382898802,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.996066003715441,
+     "candidate": 0.996066003715441,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9957381706917277,
+     "candidate": 0.9957381706917277,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9959567260408698,
+     "candidate": 0.9959567260408698,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9957381706917277,
+     "candidate": 0.9957381706917277,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9957381706917277,
+     "candidate": 0.9957381706917277,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9789094088077805,
+     "candidate": 0.9789094088077805,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 23.4,
+     "candidate": 23.4,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 10.0447565,
+     "candidate": 9.6948665,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 11.400000000000006,
+     "candidate": 11.400000000000006,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo3",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 18.614938559472353,
+     "candidate": 15.181152098938268,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 31.879133759837448,
+     "candidate": 29.85572046204452,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 18.614938559472353,
+     "candidate": 15.181152098938268,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 31.879133759837448,
+     "candidate": 29.85572046204452,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 41.8628069930786,
+     "candidate": 14.303385004313268,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 115.03127984860792,
+     "candidate": 26.189781035972718,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 41.8628069930786,
+     "candidate": 14.303385004313268,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 115.03127984860792,
+     "candidate": 26.189781035972718,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.10158523400754,
+     "candidate": 0.8156794258446745,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 1.7571722210504923,
+     "candidate": 1.7796233327516102,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.10158523400754,
+     "candidate": 0.8156794258446745,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 1.7571722210504923,
+     "candidate": 1.7796233327516102,
+     "passed": false
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 3.215496632221179,
+     "candidate": 0.2758818040366212,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 8.2232484670232,
+     "candidate": 0.580935802560979,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 3.215496632221179,
+     "candidate": 0.2758818040366212,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 8.2232484670232,
+     "candidate": 0.580935802560979,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 63.45411238683299,
+     "candidate": 1.7256944108520538,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 144.40563454159263,
+     "candidate": 2.9650390501557555,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 63.45411238683299,
+     "candidate": 1.7256944108520538,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 144.40563454159263,
+     "candidate": 2.9650390501557555,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9999346447944579,
+     "candidate": 0.9999346447944579,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9993464479445788,
+     "candidate": 0.9993464479445788,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9992810927390366,
+     "candidate": 0.9992810927390366,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9993464479445788,
+     "candidate": 0.9993464479445788,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9993464479445788,
+     "candidate": 0.9993464479445788,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9877132213580812,
+     "candidate": 0.9877132213580812,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 37.6,
+     "candidate": 37.6,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 10.546314,
+     "candidate": 11.454469,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo3-gnss_outage",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 16.806323684015307,
+     "candidate": 25.891205702061786,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 30.875594140935224,
+     "candidate": 41.65886492496611,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 16.806323684015307,
+     "candidate": 25.891205702061786,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 30.875594140935224,
+     "candidate": 41.65886492496611,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 27.210097119511467,
+     "candidate": 14.29395587991242,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 31.86382250756042,
+     "candidate": 26.19194815269222,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 27.210097119511467,
+     "candidate": 14.29395587991242,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 31.86382250756042,
+     "candidate": 26.19194815269222,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 1.0684204667640205,
+     "candidate": 0.8420990580139931,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 1.5501496086442348,
+     "candidate": 1.9213546556434455,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 1.0684204667640205,
+     "candidate": 0.8420990580139931,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 1.5501496086442348,
+     "candidate": 1.9213546556434455,
+     "passed": false
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 1.9501417270283743,
+     "candidate": 0.2759633181499557,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 1.3983346949765572,
+     "candidate": 0.5797042682854641,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 1.9501417270283743,
+     "candidate": 0.2759633181499557,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 1.3983346949765572,
+     "candidate": 0.5797042682854641,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 12.653192157654685,
+     "candidate": 1.729923875097359,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 40.56733974398002,
+     "candidate": 2.978934955906365,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 12.653192157654685,
+     "candidate": 1.729923875097359,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 40.56733974398002,
+     "candidate": 2.978934955906365,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9966668845173519,
+     "candidate": 0.9966668845173519,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9993464479445788,
+     "candidate": 0.9993464479445788,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9960133324619306,
+     "candidate": 0.9960133324619306,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9993464479445788,
+     "candidate": 0.9993464479445788,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9993464479445788,
+     "candidate": 0.9993464479445788,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9877132213580812,
+     "candidate": 0.9877132213580812,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 37.6,
+     "candidate": 37.6,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 10.483655,
+     "candidate": 11.423781,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "tokyo3-imu_gap",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 17.328706844873366,
+     "candidate": 15.178732357640927,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 31.01280386185308,
+     "candidate": 29.81862300400558,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 17.328706844873366,
+     "candidate": 15.178732357640927,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 31.01280386185308,
+     "candidate": 29.81862300400558,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 59.345959531234705,
+     "candidate": 14.318766694483692,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 90.20331184779461,
+     "candidate": 26.19375135908831,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 59.345959531234705,
+     "candidate": 14.318766694483692,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 90.20331184779461,
+     "candidate": 26.19375135908831,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 1.5312148206937517,
+     "candidate": 0.9373540034679191,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 1.7430169205066668,
+     "candidate": 2.1425349615257194,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 1.5312148206937517,
+     "candidate": 0.9373540034679191,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 1.7430169205066668,
+     "candidate": 2.1425349615257194,
+     "passed": false
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 6.6030629567384445,
+     "candidate": 0.2835281397933636,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 12.335093742826508,
+     "candidate": 0.5935226041460627,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 6.6030629567384445,
+     "candidate": 0.2835281397933636,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 12.335093742826508,
+     "candidate": 0.5935226041460627,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 104.6318068081645,
+     "candidate": 2.52466939734725,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 171.1509390443981,
+     "candidate": 3.0877399103463326,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 104.6318068081645,
+     "candidate": 2.52466939734725,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 171.1509390443981,
+     "candidate": 3.0877399103463326,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9999346447944579,
+     "candidate": 0.9999346447944579,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9974511469838573,
+     "candidate": 0.9974511469838573,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9992810927390366,
+     "candidate": 0.9992810927390366,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9974511469838573,
+     "candidate": 0.9974511469838573,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9974511469838573,
+     "candidate": 0.9974511469838573,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9856872099862755,
+     "candidate": 0.9856872099862755,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 37.6,
+     "candidate": 37.6,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 8.138418,
+     "candidate": 8.812336,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 2.4000000000000057,
+     "candidate": 2.4000000000000057,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya1",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 25.740667580485677,
+     "candidate": 30.18890504409756,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 29.044807427332096,
+     "candidate": 34.52593727116638,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 25.740667580485677,
+     "candidate": 30.18890504409756,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 29.044807427332096,
+     "candidate": 34.52593727116638,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 49.33142436005671,
+     "candidate": 118.97975502546046,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 118.14565490488448,
+     "candidate": 178.28630610516362,
+     "passed": false
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 49.33142436005671,
+     "candidate": 118.97975502546046,
+     "passed": false
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 118.14565490488448,
+     "candidate": 178.28630610516362,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.5144227179223755,
+     "candidate": 1.3918551470667881,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 4.262529518179363,
+     "candidate": 2.723935362724709,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.5144227179223755,
+     "candidate": 1.3896370885784055,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 4.262529518179363,
+     "candidate": 2.7211611447609787,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 4.608382699455884,
+     "candidate": 1.2998342205087081,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 9.844171101430957,
+     "candidate": 1.6069538717352396,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 4.608382699455884,
+     "candidate": 1.2998342205087081,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 9.844171101430957,
+     "candidate": 1.6069538717352396,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 88.17160640319915,
+     "candidate": 35.35707092761101,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 168.65214725149988,
+     "candidate": 103.00852744778238,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 88.18944789046712,
+     "candidate": 35.35707092761101,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 168.65296202862802,
+     "candidate": 103.00852744778238,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9925019731649566,
+     "candidate": 0.9925019731649566,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.998158379373849,
+     "candidate": 0.998158379373849,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9892133649039726,
+     "candidate": 0.989344909234412,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.998158379373849,
+     "candidate": 0.998158379373849,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.998158379373849,
+     "candidate": 0.998158379373849,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9650092081031307,
+     "candidate": 0.9646145751118127,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 52.0,
+     "candidate": 52.0,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 7.1922707999999975,
+     "candidate": 6.871047749999997,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya1-gnss_outage",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 26.020752947806766,
+     "candidate": 30.277543465950608,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 29.330954546263637,
+     "candidate": 34.92848997085985,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 26.020752947806766,
+     "candidate": 30.277543465950608,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 29.330954546263637,
+     "candidate": 34.92848997085985,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 53.234113242144055,
+     "candidate": 119.34049701516844,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 131.93055484220912,
+     "candidate": 178.28630610516362,
+     "passed": false
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 53.234113242144055,
+     "candidate": 119.34049701516844,
+     "passed": false
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 131.93055484220912,
+     "candidate": 178.28630610516362,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.764825693989894,
+     "candidate": 1.3942340006648264,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 4.386005079846036,
+     "candidate": 2.7224752480069574,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.764825693989894,
+     "candidate": 1.392005218425605,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 4.386005079846036,
+     "candidate": 2.7209873528154644,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 4.874951439987183,
+     "candidate": 1.2774082690634747,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 10.91240671050929,
+     "candidate": 1.819143529217623,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 4.874951439987183,
+     "candidate": 1.2774082690634747,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 10.91240671050929,
+     "candidate": 1.819143529217623,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 88.7353757490732,
+     "candidate": 40.140234652782546,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 168.7811887913004,
+     "candidate": 123.77000873743764,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 88.75333376984469,
+     "candidate": 40.140234652782546,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 168.78687145375017,
+     "candidate": 123.77000873743764,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9859247566429887,
+     "candidate": 0.9859247566429887,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.998158379373849,
+     "candidate": 0.998158379373849,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9826361483820047,
+     "candidate": 0.9827676927124441,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.998158379373849,
+     "candidate": 0.998158379373849,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.998158379373849,
+     "candidate": 0.998158379373849,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9650092081031307,
+     "candidate": 0.9646145751118127,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 52.0,
+     "candidate": 52.0,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 6.692685949999997,
+     "candidate": 7.4018958,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 0.0,
+     "candidate": 142.8,
+     "passed": false
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya1-imu_gap",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 27.56421302210522,
+     "candidate": 30.188899615089113,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 30.848904327053177,
+     "candidate": 34.52593727116638,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 27.56421302210522,
+     "candidate": 30.188899615089113,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 30.848904327053177,
+     "candidate": 34.52593727116638,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 55.80098339086851,
+     "candidate": 119.14901680602937,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 130.60194832624788,
+     "candidate": 178.2877981622794,
+     "passed": false
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 55.80098339086851,
+     "candidate": 119.14901680602937,
+     "passed": false
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 130.60194832624788,
+     "candidate": 178.2877981622794,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.56975253982175,
+     "candidate": 1.4003912658723663,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 4.340639059228773,
+     "candidate": 2.765857040442425,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.56975253982175,
+     "candidate": 1.398187882442415,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 4.340639059228773,
+     "candidate": 2.7649547115448017,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 4.909270843367046,
+     "candidate": 1.214538366754548,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 11.215655643901911,
+     "candidate": 1.4321107608230532,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 4.909270843367046,
+     "candidate": 1.214538366754548,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 11.215655643901911,
+     "candidate": 1.4321107608230532,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 82.97236432130683,
+     "candidate": 14.66340118339396,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 167.38268091916873,
+     "candidate": 11.202952217644194,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 82.98920149086267,
+     "candidate": 14.66340118339396,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 167.38312736474634,
+     "candidate": 11.202952217644194,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9925019731649566,
+     "candidate": 0.9925019731649566,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9943435937911076,
+     "candidate": 0.9943435937911076,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9892133649039726,
+     "candidate": 0.989344909234412,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9943435937911076,
+     "candidate": 0.9943435937911076,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9943435937911076,
+     "candidate": 0.9943435937911076,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9609313338595107,
+     "candidate": 0.9605367008681925,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 52.0,
+     "candidate": 52.0,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 6.243542149999998,
+     "candidate": 6.4626855999999995,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 2.4000000000000057,
+     "candidate": 2.4000000000000057,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya2",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 37.688967483526035,
+     "candidate": 37.07884735051209,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 81.8062367067428,
+     "candidate": 83.79837258632897,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 37.688967483526035,
+     "candidate": 37.07884735051209,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 81.8062367067428,
+     "candidate": 83.79837258632897,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 80.99248542616597,
+     "candidate": 18.73994782501055,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 167.96498088404405,
+     "candidate": 33.80425073325557,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 80.99248542616597,
+     "candidate": 18.73994782501055,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 167.96498088404405,
+     "candidate": 33.80425073325557,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.303152862654648,
+     "candidate": 1.4809465797093337,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 5.085232711918327,
+     "candidate": 3.04128329559562,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.303152862654648,
+     "candidate": 1.480178147072449,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 5.085232711918327,
+     "candidate": 3.0380341410701055,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 3.731596094199408,
+     "candidate": 0.5748687402011602,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 9.959777080487605,
+     "candidate": 1.0774724428004654,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 3.731596094199408,
+     "candidate": 0.5748687402011602,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 9.959777080487605,
+     "candidate": 1.0774724428004654,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 18.481445661510573,
+     "candidate": 3.147649055429868,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 39.81559602088979,
+     "candidate": 5.497009638556478,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 18.482059290455382,
+     "candidate": 3.147649055429868,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 39.816376425093324,
+     "candidate": 5.497009638556478,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9973547772722463,
+     "candidate": 0.9973547772722463,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9989419109088985,
+     "candidate": 0.9989419109088985,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9931224209078404,
+     "candidate": 0.9932282298169506,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9989419109088985,
+     "candidate": 0.9989419109088985,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9989419109088985,
+     "candidate": 0.9989419109088985,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9778859379959792,
+     "candidate": 0.9777801290868691,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 41.8,
+     "candidate": 42.0,
+     "passed": false
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 6.841737,
+     "candidate": 6.990238,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya2-gnss_outage",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 37.23358610892553,
+     "candidate": 37.172794467432205,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 85.74912048512512,
+     "candidate": 83.93700521668308,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 37.23358610892553,
+     "candidate": 37.172794467432205,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 85.74912048512512,
+     "candidate": 83.93700521668308,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 55.16915092170009,
+     "candidate": 19.3662305376497,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 133.16331767196448,
+     "candidate": 33.72240971887903,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 55.16915092170009,
+     "candidate": 19.3662305376497,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 133.16331767196448,
+     "candidate": 33.72240971887903,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 4.242345441863292,
+     "candidate": 1.4885660116322197,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 13.91423154833897,
+     "candidate": 3.05011033716224,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 4.238900038249978,
+     "candidate": 1.487221976386017,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 13.914231544111175,
+     "candidate": 3.043970367050264,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 4.3008661513772335,
+     "candidate": 0.5810347100103699,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 9.760151258155235,
+     "candidate": 1.081612609691448,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 4.3008661513772335,
+     "candidate": 0.5810347100103699,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 9.760151258155235,
+     "candidate": 1.081612609691448,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 90.80793386840817,
+     "candidate": 4.2306473449599995,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 167.5060146811584,
+     "candidate": 5.503200649137493,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 90.81276843023036,
+     "candidate": 4.2306473449599995,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 167.50717516863867,
+     "candidate": 5.503200649137493,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9920643318167389,
+     "candidate": 0.9920643318167389,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9989419109088985,
+     "candidate": 0.9989419109088985,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.987726166543223,
+     "candidate": 0.9879377843614432,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9989419109088985,
+     "candidate": 0.9989419109088985,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9989419109088985,
+     "candidate": 0.9989419109088985,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9778859379959792,
+     "candidate": 0.9777801290868691,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 41.8,
+     "candidate": 42.0,
+     "passed": false
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 6.205432999999999,
+     "candidate": 6.8145035,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 0.0,
+     "candidate": 0.20000000000000284,
+     "passed": false
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya2-imu_gap",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 38.271328250740616,
+     "candidate": 37.07962194288973,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 84.97876364397635,
+     "candidate": 83.79837360662287,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 38.271328250740616,
+     "candidate": 37.07962194288973,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 84.97876364397635,
+     "candidate": 83.79837360662287,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 64.15201513293916,
+     "candidate": 18.77321322404818,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 146.16887411459626,
+     "candidate": 33.80453444894438,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 64.15201513293916,
+     "candidate": 18.77321322404818,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 146.16887411459626,
+     "candidate": 33.80453444894438,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 4.341474178570366,
+     "candidate": 1.4860243781577838,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 14.589287982784985,
+     "candidate": 3.044022700616391,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 4.33833229982743,
+     "candidate": 1.4837230119081308,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 14.589231414492229,
+     "candidate": 3.038804257642839,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 4.412586333905511,
+     "candidate": 0.5765014159695593,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 9.378393912521744,
+     "candidate": 1.0845213708935226,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 4.412586333905511,
+     "candidate": 0.5765014159695593,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 9.378393912521744,
+     "candidate": 1.0845213708935226,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 104.14870636558706,
+     "candidate": 2.681903148504447,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 170.725440247628,
+     "candidate": 5.138057003418795,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 104.1542915397175,
+     "candidate": 2.681903148504447,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 170.72552187992252,
+     "candidate": 5.138057003418795,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9973547772722463,
+     "candidate": 0.9973547772722463,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9958734525447043,
+     "candidate": 0.9958734525447043,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9930166119987303,
+     "candidate": 0.9932282298169506,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9958734525447043,
+     "candidate": 0.9958734525447043,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9958734525447043,
+     "candidate": 0.9958734525447043,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9746058618135647,
+     "candidate": 0.9745000529044545,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 41.8,
+     "candidate": 42.0,
+     "passed": false
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 5.74737,
+     "candidate": 6.333431,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 2.4000000000000057,
+     "candidate": 2.4000000000000057,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya3",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 43.69933784987149,
+     "candidate": 44.95434291867919,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 101.09038426078531,
+     "candidate": 109.03086000702338,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 43.69933784987149,
+     "candidate": 44.95434291867919,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 101.09038426078531,
+     "candidate": 109.03086000702338,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 58.88453258429007,
+     "candidate": 31.775132908647862,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 128.08490122667075,
+     "candidate": 66.92340832950427,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 58.88453258429007,
+     "candidate": 31.775132908647862,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 128.08490122667075,
+     "candidate": 66.92340832950427,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.470780994591551,
+     "candidate": 1.5625786390233982,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 5.131647062775548,
+     "candidate": 3.4515960383505844,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.470780994591551,
+     "candidate": 1.5626370223290618,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 5.131647062775548,
+     "candidate": 3.4516752565821456,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 5.5404970755785365,
+     "candidate": 0.5771401811402435,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 11.721082751690384,
+     "candidate": 0.9423430202657362,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 5.5404970755785365,
+     "candidate": 0.5771401811402435,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 11.721082751690384,
+     "candidate": 0.9423430202657362,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 104.97399205438572,
+     "candidate": 2.5491176020234607,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 170.9269099207955,
+     "candidate": 4.544737014201794,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 104.97399205438572,
+     "candidate": 2.5464354573838017,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 170.9269099207955,
+     "candidate": 4.5398670684232,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 1.0,
+     "candidate": 1.0,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9980772928283023,
+     "candidate": 0.9980772928283023,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9967313978081138,
+     "candidate": 0.9969236685252836,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9980772928283023,
+     "candidate": 0.9980772928283023,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9980772928283023,
+     "candidate": 0.9980772928283023,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9653912709094405,
+     "candidate": 0.9655835416266103,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 36.0,
+     "candidate": 35.8,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 5.515469,
+     "candidate": 5.979159,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya3-gnss_outage",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 45.775960443965,
+     "candidate": 45.137935942038624,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 103.73679237495739,
+     "candidate": 109.31172809681861,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 45.775960443965,
+     "candidate": 45.137935942038624,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 103.73679237495739,
+     "candidate": 109.31172809681861,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 75.24477660229185,
+     "candidate": 31.772850100139195,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 171.67392729546123,
+     "candidate": 66.92269281320387,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 75.24477660229185,
+     "candidate": 31.772850100139195,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 171.67392729546123,
+     "candidate": 66.92269281320387,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.4665108791744386,
+     "candidate": 1.5555926933246236,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 6.224714346624207,
+     "candidate": 3.472676732824202,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.462897144172727,
+     "candidate": 1.5556505573784083,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 6.212766833323002,
+     "candidate": 3.4731614047530677,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 5.745231285782863,
+     "candidate": 0.5790081337821107,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 10.270968239915925,
+     "candidate": 0.9426222952284846,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 5.745231285782863,
+     "candidate": 0.5790081337821107,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 10.270968239915925,
+     "candidate": 0.9426222952284846,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 103.23293100543385,
+     "candidate": 2.7071726753866554,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 171.30674818660194,
+     "candidate": 4.506066290322987,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 103.23293100543385,
+     "candidate": 2.7046778635847875,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 171.30674818660194,
+     "candidate": 4.503889071739287,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 0.9903864641415112,
+     "candidate": 0.9903864641415112,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9980772928283023,
+     "candidate": 0.9980772928283023,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9873101326667948,
+     "candidate": 0.9873101326667948,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9980772928283023,
+     "candidate": 0.9980772928283023,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9980772928283023,
+     "candidate": 0.9980772928283023,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9653912709094405,
+     "candidate": 0.9655835416266103,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 36.0,
+     "candidate": 35.8,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 5.655933,
+     "candidate": 6.558188,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 0.0,
+     "candidate": 0.0,
+     "passed": true
+    }
+   ]
+  },
+  {
+   "name": "nagoya3-imu_gap",
+   "gates": [
+    {
+     "name": "all.rtk_position_m.rmse",
+     "control": 43.79909835922594,
+     "candidate": 44.97340344964686,
+     "passed": false
+    },
+    {
+     "name": "all.rtk_position_m.p95",
+     "control": 100.66566191230542,
+     "candidate": 109.0308600110099,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.rmse",
+     "control": 43.79909835922594,
+     "candidate": 44.97340344964686,
+     "passed": false
+    },
+    {
+     "name": "common.rtk_position_m.p95",
+     "control": 100.66566191230542,
+     "candidate": 109.0308600110099,
+     "passed": false
+    },
+    {
+     "name": "all.fused_position_m.rmse",
+     "control": 88.64853786250879,
+     "candidate": 36.03119140898945,
+     "passed": true
+    },
+    {
+     "name": "all.fused_position_m.p95",
+     "control": 192.57325539782525,
+     "candidate": 66.92093336707354,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.rmse",
+     "control": 88.64853786250879,
+     "candidate": 36.03119140898945,
+     "passed": true
+    },
+    {
+     "name": "common.fused_position_m.p95",
+     "control": 192.57325539782525,
+     "candidate": 66.92093336707354,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.rmse",
+     "control": 2.0432857631808026,
+     "candidate": 1.5927746944334582,
+     "passed": true
+    },
+    {
+     "name": "all.rtk_velocity_mps.p95",
+     "control": 3.819947820659456,
+     "candidate": 3.597824153704187,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.rmse",
+     "control": 2.0432857631808026,
+     "candidate": 1.5928376349622912,
+     "passed": true
+    },
+    {
+     "name": "common.rtk_velocity_mps.p95",
+     "control": 3.819947820659456,
+     "candidate": 3.5984453089054913,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.rmse",
+     "control": 7.257452210961618,
+     "candidate": 0.6335649510980709,
+     "passed": true
+    },
+    {
+     "name": "all.fused_velocity_mps.p95",
+     "control": 14.31316507299855,
+     "candidate": 1.0451968528889788,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.rmse",
+     "control": 7.257452210961618,
+     "candidate": 0.6335649510980709,
+     "passed": true
+    },
+    {
+     "name": "common.fused_velocity_mps.p95",
+     "control": 14.31316507299855,
+     "candidate": 1.0451968528889788,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.rmse",
+     "control": 106.72387176409198,
+     "candidate": 2.7072947363535187,
+     "passed": true
+    },
+    {
+     "name": "all.rotation_deg.p95",
+     "control": 170.34152007301353,
+     "candidate": 5.060454502312284,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.rmse",
+     "control": 106.72387176409198,
+     "candidate": 2.7047845562966404,
+     "passed": true
+    },
+    {
+     "name": "common.rotation_deg.p95",
+     "control": 170.34152007301353,
+     "candidate": 5.057066731594953,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_available",
+     "control": 1.0,
+     "candidate": 1.0,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_available",
+     "control": 0.9925014420303788,
+     "candidate": 0.9925014420303788,
+     "passed": true
+    },
+    {
+     "name": "coverage.rtk_velocity_available",
+     "control": 0.9967313978081138,
+     "candidate": 0.9969236685252836,
+     "passed": true
+    },
+    {
+     "name": "coverage.fused_velocity_available",
+     "control": 0.9925014420303788,
+     "candidate": 0.9925014420303788,
+     "passed": true
+    },
+    {
+     "name": "coverage.attitude_available",
+     "control": 0.9925014420303788,
+     "candidate": 0.9925014420303788,
+     "passed": true
+    },
+    {
+     "name": "coverage.heading_available",
+     "control": 0.9594308786771775,
+     "candidate": 0.9596231493943472,
+     "passed": true
+    },
+    {
+     "name": "initial.first_fresh_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "initial.first_heading_s",
+     "control": 36.0,
+     "candidate": 35.8,
+     "passed": true
+    },
+    {
+     "name": "processing.p95_ms",
+     "control": 5.672171,
+     "candidate": 5.996953,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_gnss_update_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_fresh_attitude_s",
+     "control": 2.0,
+     "candidate": 2.0,
+     "passed": true
+    },
+    {
+     "name": "scenario.recovery_heading_s",
+     "control": 2.4000000000000057,
+     "candidate": 2.4000000000000057,
+     "passed": true
+    }
+   ]
+  }
+ ]
+}
