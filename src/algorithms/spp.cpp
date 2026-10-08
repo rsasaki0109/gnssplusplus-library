@@ -493,8 +493,10 @@ PositionSolution SPPProcessor::processEpoch(
 
     try {
         // Use RINEX header position for initialization if available
-        if (estimated_position_.norm() < 1000.0 && obs.receiver_position.norm() > 1e6) {
+        if ((estimated_position_.norm() < 1000.0 || position_is_cold_start_seed_) &&
+            obs.receiver_position.norm() > 1e6) {
             estimated_position_ = obs.receiver_position;
+            position_is_cold_start_seed_ = false;
         }
 
         // Validate and filter observations
@@ -577,6 +579,7 @@ ProcessorStats SPPProcessor::getStats() const {
 
 void SPPProcessor::reset() {
     estimated_position_.setZero();
+    position_is_cold_start_seed_ = false;
     receiver_clock_bias_ = 0.0;
     system_biases_.clear();
     has_last_valid_position_ = false;
@@ -660,8 +663,28 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     solution.time = time;
     solution.status = SolutionStatus::SPP;
 
-    if (estimated_position_.norm() < 1000.0) {
-        initializePosition(valid_obs, nav, time);
+    // Cold start: no receiver position is known yet (no RINEX header seed and
+    // no previous solution).  initializePosition() only provides a crude
+    // linearization point (0.9 * first satellite position), from which the
+    // elevation of every satellite is meaningless: only 2-3 satellites used to
+    // pass the mask there, the epoch failed, and the same bogus seed was kept
+    // for every later epoch (permanent lockout).  RTKLIB rescode() treats an
+    // unset receiver position as el = pi/2 for every satellite, i.e. the
+    // elevation mask is bypassed until the estimate has moved to a plausible
+    // location.  Mirror that: while a cold start is still unsettled (Newton
+    // step larger than kColdStartSettledStepM) the mask is not applied; it is
+    // applied from the following iteration on and always to the final
+    // measurement set.
+    constexpr double kColdStartSettledStepM = 1000.0;
+    //
+    // The seed is remembered in position_is_cold_start_seed_ until a solve
+    // stores a position, so a failed cold-start epoch does not make the next
+    // epoch re-use the same bogus linearization point.
+    const bool cold_start =
+        estimated_position_.norm() < 1000.0 || position_is_cold_start_seed_;
+    if (cold_start) {
+        position_is_cold_start_seed_ =
+            initializePosition(valid_obs, nav, time);
     }
 
     struct MeasurementModel {
@@ -714,7 +737,8 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         !(spp_config_.use_ssr_corrections && ssr_products_loaded_);
     std::vector<BroadcastMeasurementCache> broadcast_cache(valid_obs.size());
 
-    auto buildMeasurements = [&](const Vector3d& current_position) {
+    auto buildMeasurements = [&](const Vector3d& current_position,
+                                 bool apply_elevation_mask = true) {
         std::vector<MeasurementModel> measurements;
         measurements.reserve(valid_obs.size());
         const double configured_elevation_mask =
@@ -983,7 +1007,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                     : earth_rotation * sat_vel;
 
             auto geom = nav.calculateGeometry(current_position, corrected_sat_pos);
-            if (geom.elevation < min_elevation_rad) {
+            if (apply_elevation_mask && geom.elevation < min_elevation_rad) {
                 continue;
             }
             // The CLAS benchmark enables MRTKLIB's rover SNR mask on both
@@ -1235,8 +1259,15 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     int adaptive_robust_activations = 0;
     int adaptive_robust_tail_measurements = 0;
 
-    for (int iter = 0; iter < spp_config_.max_iterations; ++iter) {
-        auto measurements = buildMeasurements(position);
+    bool cold_start_settled = !cold_start;
+    // The unmasked cold-start iterations (Newton from a ~24000 km seed) are not
+    // counted against the regular iteration budget.
+    constexpr int kColdStartExtraIterations = 5;
+    const int max_iterations =
+        spp_config_.max_iterations + (cold_start ? kColdStartExtraIterations : 0);
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        const bool iteration_masked = cold_start_settled;
+        auto measurements = buildMeasurements(position, iteration_masked);
         if (measurements.size() < 4) {
             solution.status = SolutionStatus::NONE;
             return solution;
@@ -1410,12 +1441,16 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             spp_config_.mrtklib_iflc_code_bias
                 ? dx.norm()
                 : dx.head<3>().norm();
-        if (convergence_norm < spp_config_.position_convergence_threshold) {
+        if (!cold_start_settled && dx.head<3>().norm() < kColdStartSettledStepM) {
+            cold_start_settled = true;
+        }
+        if (iteration_masked &&
+            convergence_norm < spp_config_.position_convergence_threshold) {
             solution.iterations = iter + 1;
             break;
         }
-        if (iter == spp_config_.max_iterations - 1) {
-            solution.iterations = spp_config_.max_iterations;
+        if (iter == max_iterations - 1) {
+            solution.iterations = max_iterations;
         }
     }
 
@@ -1580,6 +1615,12 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             detectOutliers(final_observations, final_residuals, spp_config_.outlier_threshold_sigma);
         if (inlier_observations.size() < final_observations.size() &&
             inlier_observations.size() >= 4U) {
+            if (cold_start) {
+                // Warm-start the re-solve from the converged position rather
+                // than from the crude cold-start seed.
+                estimated_position_ = position;
+                position_is_cold_start_seed_ = false;
+            }
             auto filtered_solution = solvePositionLS(
                 inlier_observations, nav, time, false);
             if (filtered_solution.isValid()) {
@@ -1624,6 +1665,9 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         const Vector3d saved_position = estimated_position_;
         const double saved_clock_bias = receiver_clock_bias_;
         const auto saved_system_biases = system_biases_;
+        const bool saved_cold_start_seed = position_is_cold_start_seed_;
+        // The candidate re-solves start from the converged position.
+        position_is_cold_start_seed_ = false;
 
         for (size_t excluded = 0; excluded < final_observations.size(); ++excluded) {
             std::vector<SPPObservation> candidate_observations;
@@ -1658,6 +1702,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         estimated_position_ = saved_position;
         receiver_clock_bias_ = saved_clock_bias;
         system_biases_ = saved_system_biases;
+        position_is_cold_start_seed_ = saved_cold_start_seed;
 
         const int selected = spp_utils::selectRaimFdeCandidate(
             final_residual_rms,
@@ -1675,6 +1720,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             fde_solution.spp_rejected_satellites.push_back(
                 final_observations[static_cast<size_t>(selected)].observation.satellite);
             estimated_position_ = fde_solution.position_ecef;
+            position_is_cold_start_seed_ = false;
             receiver_clock_bias_ = fde_solution.receiver_clock_bias;
             system_biases_ = candidate_system_biases[static_cast<size_t>(selected)];
             return fde_solution;
@@ -1834,6 +1880,7 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
     }
 
     estimated_position_ = position;
+    position_is_cold_start_seed_ = false;
     receiver_clock_bias_ = clock_bias;
     system_biases_ = bias_estimates;
     return solution;

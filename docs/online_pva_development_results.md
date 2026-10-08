@@ -107,3 +107,39 @@ The native component was built at 7671c9af; production C++ is unchanged through
 the package source 1091b8c3. Scripts/install rules were rebuilt incrementally.
 The subsequent packaging fix e45f87a1 adds the ELF inspection prerequisite;
 that prerequisite was installed for the successful local DEB build.
+
+## Post-freeze bug-fix re-baseline: SPP cold-start lockout
+
+This section is a bug-fix re-baseline made after the v1 records above were
+frozen. It does not edit or supersede `online_pva_decision_v1.json` or the
+provenance/delivery records; those still describe the frozen candidate.
+
+The online PVA replay never sets `obs.receiver_position`, so the SPP core
+seeded its linearization point at 0.9 x the first satellite position. From that
+point only two or three satellites passed the elevation mask, SPP returned no
+solution, and the same seed was reused on every later epoch: a permanent
+lockout. On PPC Tokyo run2/run3 and Nagoya run1 about 80% of epochs (Tokyo) had
+`rtk_status` 0 and the fused position was kilometres off.
+
+The SPP core now bypasses the elevation mask while a cold start is unsettled
+(RTKLIB `rescode()` does the same for an unset receiver position), applies the
+mask again once the Newton step is below 1 km and always for the final
+measurement set, and re-seeds on the next epoch if a cold-start epoch fails.
+Solves with a known position (RINEX header, previous solution) are unchanged.
+
+Default build, full six-run `gnss pva-evaluate`, before (frozen-control
+behaviour) and after:
+
+| Run | rtk_status 0 | Position RMSE / P95 [m] | Velocity RMSE / P95 [m/s] | Rotation RMSE / P95 [deg] |
+|---|---|---|---|---|
+| Tokyo 1 | 0.7% -> 0.7% | 71.65 / 155.2 -> 71.65 / 155.2 | 7.05 / 14.6 -> 7.05 / 14.6 | 105.1 / 171.1 -> 105.1 / 171.1 |
+| Tokyo 2 | 80.7% -> 0.4% | 990.7 / 1470 -> 74.2 / 179.5 | 7.77 / 14.5 -> 6.85 / 14.1 | 104.1 / 170.8 -> 100.3 / 170.0 |
+| Tokyo 3 | 80.5% -> 0.0% | 3128.7 / 5342 -> 41.9 / 115.0 | 14.82 / 19.1 -> 3.22 / 8.2 | 105.8 / 171.4 -> 63.5 / 144.4 |
+| Nagoya 1 | 0.9% -> 0.7% | 708.2 / 476.9 -> 49.3 / 118.1 | 47.81 / 100.0 -> 4.61 / 9.8 | 118.3 / 173.4 -> 88.2 / 168.7 |
+| Nagoya 2 | 0.3% -> 0.3% | unchanged (81.0 / 168.0) | unchanged (3.73 / 10.0) | unchanged (18.5 / 39.8) |
+| Nagoya 3 | 0.0% -> 0.0% | unchanged (58.9 / 128.1) | unchanged (5.54 / 11.7) | unchanged (105.0 / 170.9) |
+
+Rotation RMSE stays large on most runs: that is a separate heading-initialisation
+question, not addressed here. Tokyo 1 differs from the old control only in the
+third decimal. Outputs are under
+`rtklib_v2_ws_output/spp_coldstart_fix_20261008/` in the local workspace.
