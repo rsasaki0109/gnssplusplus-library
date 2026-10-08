@@ -172,6 +172,7 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ar_resolve.cpp
     src/algorithms/rtk_ar_validate.cpp
     src/algorithms/spp.cpp
+    src/algorithms/barometer_height.cpp
     src/algorithms/spp_velocity.cpp
     src/algorithms/raw_p_seed.cpp
     src/algorithms/lambda.cpp

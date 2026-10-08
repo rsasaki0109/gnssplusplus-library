@@ -586,6 +586,10 @@ void SPPProcessor::reset() {
     last_valid_position_.setZero();
     last_valid_time_ = GNSSTime();
     last_valid_clock_bias_ = 0.0;
+    baro_filter_.reset();
+    baro_samples_.clear();
+    last_baro_diagnostics_ = BaroEpochDiagnostics{};
+    baro_prior_active_ = false;
     last_applied_precise_orbit_clock_measurements_ = 0;
     last_applied_ssr_orbit_clock_corrections_ = 0;
     last_applied_ssr_code_bias_corrections_ = 0;
@@ -651,8 +655,108 @@ bool SPPProcessor::loadDCBProducts(const std::string& dcb_file) {
 PositionSolution SPPProcessor::solvePosition(const std::vector<SPPObservation>& valid_obs,
                                            const NavigationData& nav,
                                            const GNSSTime& time) {
+    if (spp_config_.baro.enabled) {
+        return solvePositionBaroAided(valid_obs, nav, time);
+    }
     // Direct call to native least-squares solver
     return solvePositionLS(valid_obs, nav, time);
+}
+
+PositionSolution SPPProcessor::solvePositionBaroAided(
+    const std::vector<SPPObservation>& valid_obs,
+    const NavigationData& nav,
+    const GNSSTime& time) {
+    const auto& cfg = spp_config_.baro;
+    last_baro_diagnostics_ = BaroEpochDiagnostics{};
+    auto& diag = last_baro_diagnostics_;
+    baro_filter_.setConfig(cfg);
+
+    // 1. Unconstrained solve: exactly the barometer-OFF measurement path.  Its
+    //    height is the only GNSS information the filter ever sees, so the
+    //    height constraint below can never feed back into its own input.
+    PositionSolution base = solvePositionLS(valid_obs, nav, time);
+
+    double baro_height_m = 0.0;
+    diag.baro_available = baro_samples_.heightAt(
+        time, cfg.sample_window_s, cfg.max_sample_age_s, baro_height_m, &diag.sample_count);
+    diag.filter_initialized = baro_filter_.initialized();
+    diag.baro_height_m = baro_height_m;
+    if (!diag.baro_available) {
+        diag.final_height_m = base.isValid() ? base.position_geodetic.height : 0.0;
+        return base;
+    }
+
+    // 2. Unconstrained height, its inflated sigma and the geometry gate.
+    double base_height_m = 0.0;
+    double base_sigma_m = 0.0;
+    if (base.isValid()) {
+        double lat = 0.0, lon = 0.0, h = 0.0;
+        ecef2geodetic(base.position_ecef, lat, lon, h);
+        const Vector3d up(std::cos(lat) * std::cos(lon), std::cos(lat) * std::sin(lon),
+                          std::sin(lat));
+        const double var_up = up.dot(base.position_covariance * up);
+        base_height_m = h;
+        base_sigma_m = std::max(
+            cfg.gnss_sigma_floor_m,
+            cfg.gnss_sigma_scale * std::sqrt(std::max(0.0, var_up)));
+        diag.unconstrained_height_m = h;
+        diag.unconstrained_sigma_m = base_sigma_m;
+        diag.geometry_good = std::isfinite(base_sigma_m) &&
+                             base.num_satellites >= cfg.init_min_satellites &&
+                             std::isfinite(base.gdop) && base.gdop <= cfg.init_max_gdop;
+        diag.final_height_m = h;
+    }
+
+    // 3. Causal KF: initialise from a good GNSS height, then predict + baro.
+    if (!baro_filter_.initialized()) {
+        if (diag.geometry_good) {
+            baro_filter_.initialize(time, base_height_m, base_sigma_m, baro_height_m);
+            diag.initialized_this_epoch = true;
+            diag.filter_initialized = true;
+            diag.bias_m = baro_filter_.bias();
+            diag.bias_sigma_m = baro_filter_.biasSigma();
+        }
+        return base;
+    }
+    diag.filter_initialized = true;
+    baro_filter_.predict(time);
+    diag.baro_update_accepted = baro_filter_.updateBaro(baro_height_m);
+    diag.rebase_count = baro_filter_.rebaseCount();
+    diag.prior_height_m = baro_filter_.height();
+    diag.prior_sigma_m = std::max(cfg.prior_sigma_floor_m, baro_filter_.heightSigma());
+
+    // 4. GNSS height update (after the prior was captured, so the constraint
+    //    in step 5 does not contain this epoch's own GNSS height).
+    if (diag.geometry_good) {
+        diag.gnss_update_accepted = baro_filter_.updateGnss(base_height_m, base_sigma_m);
+    }
+    diag.bias_m = baro_filter_.bias();
+    diag.bias_sigma_m = baro_filter_.biasSigma();
+
+    if (!base.isValid() || !(diag.prior_sigma_m <= cfg.max_prior_sigma_m)) {
+        return base;
+    }
+
+    // 5. Constrained re-solve with the prior height as an extra LS row.
+    const Vector3d saved_position = estimated_position_;
+    const double saved_clock_bias = receiver_clock_bias_;
+    const auto saved_system_biases = system_biases_;
+    const bool saved_cold_start_seed = position_is_cold_start_seed_;
+    baro_prior_active_ = true;
+    baro_prior_height_m_ = diag.prior_height_m;
+    baro_prior_sigma_m_ = diag.prior_sigma_m;
+    PositionSolution constrained = solvePositionLS(valid_obs, nav, time);
+    baro_prior_active_ = false;
+    if (constrained.isValid()) {
+        diag.constraint_applied = true;
+        diag.final_height_m = constrained.position_geodetic.height;
+        return constrained;
+    }
+    estimated_position_ = saved_position;
+    receiver_clock_bias_ = saved_clock_bias;
+    system_biases_ = saved_system_biases;
+    position_is_cold_start_seed_ = saved_cold_start_seed;
+    return base;
 }
 
 PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>& valid_obs,
@@ -1301,10 +1405,13 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             bias_columns[bias_groups[i]] = 4 + i;
         }
 
+        // Barometer height row (transient; absent unless solvePositionBaroAided
+        // armed it), appended after the n measurement rows.
+        const int baro_rows = baro_prior_active_ ? 1 : 0;
         MatrixXd H = MatrixXd::Zero(n, num_unknowns);
         VectorXd residuals = VectorXd::Zero(n);
-        MatrixXd weighted_H = MatrixXd::Zero(n, num_unknowns);
-        VectorXd weighted_residuals = VectorXd::Zero(n);
+        MatrixXd weighted_H = MatrixXd::Zero(n + baro_rows, num_unknowns);
+        VectorXd weighted_residuals = VectorXd::Zero(n + baro_rows);
         int iteration_robust_weighted_measurements = 0;
         double iteration_min_robust_weight_factor = 1.0;
         int iteration_tail_measurements = 0;
@@ -1394,6 +1501,15 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             const double sqrt_weight = std::sqrt(measurement.weight * robust_factor);
             weighted_H.row(i) = H.row(i) * sqrt_weight;
             weighted_residuals(i) = residuals(i) * sqrt_weight;
+        }
+        if (baro_rows == 1) {
+            double lat = 0.0, lon = 0.0, h = 0.0;
+            ecef2geodetic(position, lat, lon, h);
+            const double inv_sigma = 1.0 / baro_prior_sigma_m_;
+            weighted_H(n, 0) = std::cos(lat) * std::cos(lon) * inv_sigma;
+            weighted_H(n, 1) = std::cos(lat) * std::sin(lon) * inv_sigma;
+            weighted_H(n, 2) = std::sin(lat) * inv_sigma;
+            weighted_residuals(n) = (baro_prior_height_m_ - h) * inv_sigma;
         }
 
         VectorXd dx;
@@ -1545,6 +1661,14 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 return fallback_covariance;
             }
             normal.noalias() += weight * geometry.row(i).transpose() * geometry.row(i);
+        }
+        if (baro_prior_active_) {
+            double lat = 0.0, lon = 0.0, h = 0.0;
+            ecef2geodetic(position, lat, lon, h);
+            const Vector3d up(std::cos(lat) * std::cos(lon), std::cos(lat) * std::sin(lon),
+                              std::sin(lat));
+            normal.topLeftCorner<3, 3>().noalias() +=
+                (1.0 / (baro_prior_sigma_m_ * baro_prior_sigma_m_)) * up * up.transpose();
         }
         normal = 0.5 * (normal + normal.transpose());
         if (!normal.allFinite()) {

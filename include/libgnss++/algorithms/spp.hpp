@@ -1,5 +1,6 @@
 #pragma once
 
+#include "barometer_height.hpp"
 #include "../core/processor.hpp"
 #include "../core/observation.hpp"
 #include "../core/navigation.hpp"
@@ -80,6 +81,33 @@ public:
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
         bool enable_beidou = true;                    ///< Enable BeiDou SPP support
         bool enable_glonass = true;                   ///< Enable GLONASS SPP support
+
+        /// Barometer-aided height (default OFF: the solver path is then
+        /// bit-identical to the pre-barometer implementation).
+        barometer::BaroHeightConfig baro;
+    };
+
+    /**
+     * @brief Per-epoch barometer-fusion telemetry (valid after processEpoch).
+     */
+    struct BaroEpochDiagnostics {
+        bool baro_available = false;         ///< a fresh causal pressure height existed
+        bool filter_initialized = false;
+        bool initialized_this_epoch = false;
+        bool geometry_good = false;          ///< unconstrained fix passed the geometry gate
+        bool baro_update_accepted = false;
+        bool gnss_update_accepted = false;
+        bool constraint_applied = false;     ///< height row used in the final solve
+        int sample_count = 0;
+        int rebase_count = 0;
+        double baro_height_m = 0.0;          ///< windowed standard-atmosphere height
+        double prior_height_m = 0.0;         ///< KF height before this epoch's GNSS update
+        double prior_sigma_m = 0.0;
+        double bias_m = 0.0;                 ///< KF baro bias after the epoch
+        double bias_sigma_m = 0.0;
+        double unconstrained_height_m = 0.0; ///< SPP height without the constraint
+        double unconstrained_sigma_m = 0.0;  ///< inflated vertical sigma fed to the KF
+        double final_height_m = 0.0;
     };
 
     /**
@@ -205,6 +233,13 @@ public:
         ssr_products_loaded_ = !ssr_products_.orbit_clock_corrections.empty();
     }
 
+    /// Feed one barometer sample (GPST).  Only samples with time <= the
+    /// epoch being solved are ever used (causal).
+    void addBarometerSample(const GNSSTime& time, double pressure_hpa) {
+        baro_samples_.add(time, pressure_hpa);
+    }
+    const BaroEpochDiagnostics& lastBaroDiagnostics() const { return last_baro_diagnostics_; }
+
     bool hasLoadedPreciseProducts() const { return precise_products_loaded_; }
     bool hasLoadedIONEXProducts() const { return ionex_products_loaded_; }
     bool hasLoadedDCBProducts() const { return dcb_products_loaded_; }
@@ -241,6 +276,14 @@ private:
     bool ionex_products_loaded_ = false;
     bool dcb_products_loaded_ = false;
     
+    // Barometer fusion (inactive unless spp_config_.baro.enabled).
+    barometer::BarometerSampleBuffer baro_samples_;
+    barometer::BarometerHeightFilter baro_filter_;
+    BaroEpochDiagnostics last_baro_diagnostics_;
+    bool baro_prior_active_ = false;        ///< transient: add the height row to the LS
+    double baro_prior_height_m_ = 0.0;
+    double baro_prior_sigma_m_ = 1.0;
+
     // State variables
     Vector3d estimated_position_;           ///< Current position estimate (ECEF)
     /// True while estimated_position_ is only the crude initializePosition()
@@ -290,6 +333,13 @@ private:
     PositionSolution solvePosition(const std::vector<SPPObservation>& valid_obs,
                                  const NavigationData& nav,
                                  const GNSSTime& time);
+
+    /**
+     * @brief Barometer-aided solve: unconstrained fix, causal KF, constrained re-solve
+     */
+    PositionSolution solvePositionBaroAided(const std::vector<SPPObservation>& valid_obs,
+                                            const NavigationData& nav,
+                                            const GNSSTime& time);
 
     /**
      * @brief Native weighted least-squares solver with atmospheric corrections
