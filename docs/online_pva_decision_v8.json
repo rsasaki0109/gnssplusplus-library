@@ -1,0 +1,36 @@
+{
+ "candidate": "velocity_consistency_v7",
+ "contract": "docs/online_pva_candidate_v8.md",
+ "contract_sha256": "1408c66c0cdad273139c70404793cee759ef4173a5f5e7d58e28c19bc1df6159",
+ "freeze_commit": "97e2380e",
+ "replay_binary_sha256": "d8fd7bbdf38b2e8a1f1278e0a8850babd08b68f81317de16e50ea1d2791a5a0c",
+ "adoption": "No-Go",
+ "default_changed": false,
+ "ppc": {
+  "runs": 18,
+  "gates": 558,
+  "failed": 19,
+  "decision_sha256": "7915ecd6ac258c47886b3f7f1ae448349d1c304259d31de132644884883a1bde",
+  "decision_bytes": 1657362
+ },
+ "urbannav": {
+  "runs": 6,
+  "gates": 186,
+  "failed": 38,
+  "decision_sha256": "b18622bbd397ae57fe4e9eeba813c5676d793cf171a91a3c45bd0bf2534e4a1c",
+  "decision_bytes": 555354
+ },
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 1.07,
+  "mean": 1.35,
+  "max": 1.82
+ },
+ "run_note": "first attempt interrupted (22 candidate replays failed to start); whole comparison rerun from a worktree of the freeze commit; only the rerun is reported",
+ "full_decision_location": "cloud session scratch (not retained)"
+}
