@@ -184,3 +184,50 @@ Broader `ctest` lanes were not run.
   (18.4 deg) remain, as in v3.
 * Diagnostic instrumentation (per-update innovation/covariance dump) was a
   scratch copy of the fusion source and is not committed.
+
+## Quiet-host re-measurement of the timing gate (2026-10-09, cloud)
+
+The five gate-4 failures above came from a host loaded by other jobs. Gate 4
+was re-measured on an otherwise idle 4-vCPU cloud host (Intel Xeon 2.10 GHz),
+running control and candidate side by side. Same frozen contract (SHA256
+`fbe3903c...`, freeze `066e4a60` before HEAD) and the same comparator
+(`compare_online_pva.py --candidate-name velocity_consistency_v4 --contract
+docs/online_pva_candidate_v5.md`), with no threshold changes. Compact record:
+[online_pva_decision_v5_quiet_host.json](online_pva_decision_v5_quiet_host.json).
+
+* Tree: develop `c37979c3`, clean. Release build, GCC 13.3.0, Python bindings
+  and tests off. Replay binary SHA256 `d853ff83...` (different toolchain, so a
+  different hash from the local `001bc66b...`).
+* Control: develop default configuration (`--candidate none`) from the same
+  binary. The changes between the freeze and `c37979c3` are only the default-OFF
+  CLAS PAR frequency gate (`ppp_ar.cpp`, `ppp_env_overrides.*`), which is not on
+  the PVA path.
+* 36 full replays: 6 runs x {normal, GNSS outage 60-70 s, IMU gap 60-64 s} x
+  {none, v4}. All 36 passed. At most 3 ran at once, with each none job queued
+  next to its v4 job. 1-minute load average median 2.96, max 3.07, nothing
+  else running.
+* Gate 7 check: all 180 RMSE/P95 values (fused/RTK position and velocity, and
+  rotation, 18 run-scenarios x none/v4) equal the recorded tables above at
+  printed precision. So this host reproduces the recorded control and
+  candidate. A bit-level CSV comparison with the local recorded set was not
+  possible here, because those CSVs are not available in the cloud.
+
+**Result: Go, 0 of 558 gates fail** (18 run/scenarios, targeted rotation
+improvement present). Processor P95, candidate / same-host control:
+min 0.956, mean 1.033, max 1.128 (gate allows 2.0). The five runs that failed
+against the recorded control:
+
+| Run | recorded control ms | quiet-host control ms | quiet-host v4 ms | v4 / quiet control | v4 / recorded control |
+|---|---:|---:|---:|---:|---:|
+| tokyo1 | 6.27 | 5.92 | 6.07 | 1.03 | 0.97 |
+| tokyo2 | 7.74 | 7.57 | 7.54 | 1.00 | 0.97 |
+| tokyo3-imu_gap | 8.14 | 10.11 | 10.20 | 1.01 | 1.25 |
+| nagoya1-imu_gap | 6.24 | 5.56 | 5.75 | 1.03 | 0.92 |
+| nagoya2-imu_gap | 5.75 | 5.93 | 6.17 | 1.04 | 1.07 |
+
+The earlier failures were host contention, not candidate cost. On a quiet host
+the candidate costs about 3% at P95 (the earlier contemporaneous estimate was
+6% under load). With this, every gate in the contract passes. The
+production default is still unchanged. Whether to switch it is a separate
+decision: these six runs are development data with no holdout, and Tokyo 2
+is worse than v3 for about 30 s after the outage (see above).

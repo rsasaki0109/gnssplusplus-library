@@ -1,0 +1,133 @@
+{
+ "candidate": "velocity_consistency_v4",
+ "contract": "docs/online_pva_candidate_v5.md",
+ "contract_sha256": "fbe3903c41b2755bbfcaae86b1fd1efae47f7c010900a653630ba048a83ea276",
+ "freeze_commit": "066e4a60",
+ "purpose": "Re-measure gate 4 (processing.p95_ms) on a quiet host: control and candidate run side by side on the same machine",
+ "tree": "c37979c3 (develop, clean)",
+ "control": "develop c37979c3 default configuration, candidate none, same binary, same host, same queue",
+ "replay_binary_sha256": "d853ff832c09faad1901879650890133016b896545f41b4759d9a61bbbf9dbf7",
+ "build": "Release, GCC 13.3.0, Python bindings and tests off",
+ "host": {
+  "cpu": "Intel Xeon @ 2.10GHz",
+  "vcpus": 4,
+  "other_load": "none",
+  "concurrent_replays": 3,
+  "queue_order": "none/v4 adjacent per run-scenario",
+  "load_avg_1min": {
+   "min": 0.02,
+   "median": 2.96,
+   "max": 3.07,
+   "samples": 13
+  }
+ },
+ "replays": 36,
+ "all_states_passed": true,
+ "adoption": "Go",
+ "runs": 18,
+ "gates": 558,
+ "failed": 0,
+ "improved_rotation": true,
+ "processing_p95_ms": {
+  "tokyo1": {
+   "control": 5.918,
+   "candidate": 6.073,
+   "ratio": 1.026
+  },
+  "tokyo1-gnss_outage": {
+   "control": 5.744,
+   "candidate": 5.964,
+   "ratio": 1.038
+  },
+  "tokyo1-imu_gap": {
+   "control": 5.887,
+   "candidate": 6.062,
+   "ratio": 1.03
+  },
+  "tokyo2": {
+   "control": 7.567,
+   "candidate": 7.543,
+   "ratio": 0.997
+  },
+  "tokyo2-gnss_outage": {
+   "control": 7.301,
+   "candidate": 7.435,
+   "ratio": 1.018
+  },
+  "tokyo2-imu_gap": {
+   "control": 7.168,
+   "candidate": 7.435,
+   "ratio": 1.037
+  },
+  "tokyo3": {
+   "control": 10.128,
+   "candidate": 10.142,
+   "ratio": 1.001
+  },
+  "tokyo3-gnss_outage": {
+   "control": 10.141,
+   "candidate": 10.46,
+   "ratio": 1.031
+  },
+  "tokyo3-imu_gap": {
+   "control": 10.109,
+   "candidate": 10.201,
+   "ratio": 1.009
+  },
+  "nagoya1": {
+   "control": 5.781,
+   "candidate": 6.41,
+   "ratio": 1.109
+  },
+  "nagoya1-gnss_outage": {
+   "control": 5.956,
+   "candidate": 5.694,
+   "ratio": 0.956
+  },
+  "nagoya1-imu_gap": {
+   "control": 5.555,
+   "candidate": 5.749,
+   "ratio": 1.035
+  },
+  "nagoya2": {
+   "control": 5.488,
+   "candidate": 5.879,
+   "ratio": 1.071
+  },
+  "nagoya2-gnss_outage": {
+   "control": 5.556,
+   "candidate": 6.265,
+   "ratio": 1.128
+  },
+  "nagoya2-imu_gap": {
+   "control": 5.927,
+   "candidate": 6.168,
+   "ratio": 1.041
+  },
+  "nagoya3": {
+   "control": 4.448,
+   "candidate": 4.355,
+   "ratio": 0.979
+  },
+  "nagoya3-gnss_outage": {
+   "control": 4.509,
+   "candidate": 4.588,
+   "ratio": 1.018
+  },
+  "nagoya3-imu_gap": {
+   "control": 4.497,
+   "candidate": 4.785,
+   "ratio": 1.064
+  }
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 0.956,
+  "max": 1.128,
+  "mean": 1.033
+ },
+ "recorded_metric_crosscheck": "180 RMSE/P95 values (fused/RTK position, velocity, rotation; 18 run-scenarios x none/v4) equal the recorded v5 tables at printed precision",
+ "full_decision_sha256": "b6b2b1a6a6df1ea0f954043f59b63e60a7e3d74b50739f30bfe1aa9cd683fcc6",
+ "full_decision_bytes": 1651215,
+ "full_decision_location": "cloud session scratch (not retained)",
+ "default_changed": false
+}
