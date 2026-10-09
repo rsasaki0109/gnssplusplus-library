@@ -731,6 +731,7 @@ if(GTest_FOUND)
         smartphone_gnss_signoff
         smartphone_gnss_workflow
         smartphone_mimir_adapter
+        smartphone_mimir_multisignal
         static_metrics
         uav_mars_acquire
         uav_mars_adapter

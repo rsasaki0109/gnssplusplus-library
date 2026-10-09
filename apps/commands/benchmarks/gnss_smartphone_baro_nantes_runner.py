@@ -53,6 +53,11 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--reuse-off", action="store_true",
                    help="reuse an existing OFF solution (same common args) instead of re-running")
     p.add_argument("--tag", default="on", help="name of the ON variant (output sub-directory)")
+    p.add_argument("--adapter-signal-set", choices=("legacy-l1-e1", "multi"), default="legacy-l1-e1",
+                   help="Mimir adapter signal set (default: the frozen #564 L1/E1 behaviour)")
+    p.add_argument("--adapter-arg", action="append", default=[],
+                   help="extra adapter argument, repeatable (e.g. --adapter-arg=--hatch-window-s "
+                   "--adapter-arg=30)")
     p.add_argument("--skip-adapter", action="store_true")
     p.add_argument("--no-reference", action="store_true",
                    help="run OFF/ON only (runs without an Awinda reference)")
@@ -83,7 +88,10 @@ def main() -> int:
                     "--dataset-id", f"nantes-{args.scenario}-{run_name}-GP7",
                     "--source-url", SOURCE_URL, "--source-terms", SOURCE_TERMS,
                     "--approx-llh", args.approx_llh,
-                    "--enable-galileo-e1", "--broadcast-nav", str(args.broadcast_nav),
+                    *(["--signal-set", "multi"] if args.adapter_signal_set == "multi"
+                      else ["--enable-galileo-e1"]),
+                    "--broadcast-nav", str(args.broadcast_nav),
+                    *args.adapter_arg,
                 ],
                 work / "adapter.log",
             )
@@ -155,7 +163,8 @@ def main() -> int:
         per_run[run_name] = info
     result: dict = {"scenario": args.scenario, "runs": per_run, "tag": args.tag,
                     "baro_args": args.baro_arg, "spp_args": args.spp_arg, "lag_s": args.lag_s,
-                "spp_binary": str(args.spp_binary)}
+                "spp_binary": str(args.spp_binary),
+                "adapter_signal_set": args.adapter_signal_set, "adapter_args": args.adapter_arg}
     if not args.no_reference:
         pooled = {}
         for method, runs in matched_by_method.items():
