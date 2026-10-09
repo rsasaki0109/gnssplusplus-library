@@ -45,6 +45,16 @@ public:
         std::size_t max_pending_imu = 10000;
         std::size_t max_pending_base = 16;
         std::size_t max_ephemerides_per_satellite = 8;
+        // Opt-in (velocity_consistency_v5). A rover-only gap (> max_rover_gap_s
+        // between rover epochs) is a GNSS-only outage: the IMU stream and the
+        // loose fused filter's mechanization stayed continuous. When true, such
+        // a gap recreates the RTK filter, the tight filter and the isolated
+        // RTK-prior filter exactly as before but keeps the loose fused filter
+        // (and have_imu_, so the unchanged IMU-gap checks still apply). It is
+        // reported as reason "rover_gap_rtk_reset", counted in
+        // Diagnostics::rover_gap_rtk_resets, and does not advance
+        // reset_generation. False keeps the previous behavior bit-for-bit.
+        bool rover_gap_keeps_inertial_filters = false;
     };
     struct Output {
         PositionSolution rtk;
@@ -84,6 +94,7 @@ public:
         std::size_t expired_base_epochs = 0;
         std::size_t imu_gap_resets = 0;
         std::size_t rover_gap_resets = 0;
+        std::size_t rover_gap_rtk_resets = 0;
         std::size_t reset_generation = 0;
     };
 
@@ -96,6 +107,8 @@ public:
     Diagnostics diagnostics() const { return diagnostics_; }
     std::size_t pendingImu() const { return imu_.size(); }
     std::size_t pendingBase() const { return base_.size(); }
+    /** Read-only view of the loose fused filter (diagnostics and tests). */
+    const LooseCouplingProcessor& fusionFilter() const { return *fusion_; }
 
 private:
     Config config_;
@@ -115,6 +128,12 @@ private:
     void validateArrival(const GNSSTime& received_at) const;
     void acceptArrival(const GNSSTime& received_at);
     void recreateFilters();
+    // Pieces of recreateFilters(). recreateRtkSideFilters() is everything but
+    // the loose fused filter and the IMU continuity flag.
+    void recreateRtkFilter();
+    void recreateFusionFilter();
+    void recreatePriorFusionFilter();
+    void recreateRtkSideFilters();
     void recreateTightFilter();
 };
 

@@ -237,6 +237,23 @@ public:
         // gap). Steady-state rejections (a recent update was accepted) are
         // untouched. <= 0 keeps the previous behavior.
         double position_reanchor_after_gnss_gap_s = 0.0;
+
+        // velocity_consistency_v5: direction test at the heading latch. The
+        // GNSS course over ground is the direction of travel, which equals the
+        // body +X axis only when the vehicle moves forward. When true, the
+        // filter integrates a signed longitudinal body velocity from the IMU
+        // (v_long += a_x * dt with a_x = [(accel_raw - accel_bias) +
+        // R_bn^T * (0, 0, -g)]_x, i.e. the body-forward kinematic
+        // acceleration, which depends on roll/pitch but not on the unknown
+        // yaw) and zeroes it whenever the ZUPT stationarity condition
+        // (gnssSpeedGateAllowsZupt() && detectStationary(), evaluated whether
+        // or not zupt_enable is set) holds. v_long is invalid after
+        // (re)initialization until that condition first holds. At the heading
+        // latch, a valid v_long < 0 means the vehicle moves backward and the
+        // latched heading is the tracker's mean course + 180 deg. Latch time,
+        // sigma and velocity re-anchoring are unchanged. False keeps the
+        // previous behavior bit-for-bit.
+        bool heading_latch_direction_test = false;
     };
 
     explicit LooseCouplingProcessor(const Config& config);
@@ -355,6 +372,19 @@ public:
     /** Number of applied loose-coupling ZUPT updates (diagnostic). */
     std::size_t zuptUpdateCount() const { return zupt_updates_; }
 
+    /** Signed longitudinal body velocity integrated for the heading-latch
+     * direction test (Config::heading_latch_direction_test); 0 while the
+     * option is off. Only meaningful when longitudinalVelocityValid(). */
+    double longitudinalVelocityMps() const { return v_long_; }
+    bool longitudinalVelocityValid() const { return v_long_valid_; }
+    /** True when the most recent heading latch used course + 180 deg. */
+    bool lastLatchDirectionFlipped() const { return last_latch_direction_flipped_; }
+    /** Number of heading latches that used course + 180 deg. */
+    std::size_t latchDirectionFlipCount() const { return latch_direction_flip_count_; }
+    /** v_long at the most recent heading latch (NaN before any latch or when
+     * the option is off / v_long was not valid). */
+    double lastLatchLongitudinalVelocityMps() const { return last_latch_v_long_mps_; }
+
 private:
     Config config_;
     FusionState state_;
@@ -374,6 +404,13 @@ private:
     bool has_gnss_velocity_ = false;
     double last_gnss_velocity_speed_mps_ = 0.0;
     std::size_t zupt_updates_ = 0;
+
+    // Heading-latch direction test (Config::heading_latch_direction_test).
+    double v_long_ = 0.0;
+    bool v_long_valid_ = false;
+    bool last_latch_direction_flipped_ = false;
+    std::size_t latch_direction_flip_count_ = 0;
+    double last_latch_v_long_mps_ = std::numeric_limits<double>::quiet_NaN();
 
     int position_consecutive_gate_rejections_ = 0;
     int velocity_consecutive_gate_rejections_ = 0;

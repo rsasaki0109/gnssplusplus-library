@@ -1,0 +1,55 @@
+{
+ "candidate": "velocity_consistency_v5",
+ "contract": "docs/online_pva_candidate_v6.md",
+ "contract_sha256": "d45c575019333b2918482e307a64950b3d60f3aff03d6918620ce8bb73dd79a2",
+ "freeze_commit": "1c7aff4a",
+ "replay_binary_sha256": "c11a3d9616b060a3cef0c133ca936702dfec93c926a33662650dd4222c6d4723",
+ "control": "candidate none, same binary, same host, interleaved queue",
+ "adoption": "Go",
+ "runs": 18,
+ "gates": 558,
+ "failed": 0,
+ "failures": [],
+ "improved_rotation": true,
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 0.979,
+  "mean": 1.055,
+  "max": 1.163
+ },
+ "host": {
+  "vcpus": 4,
+  "concurrent_replays": 3,
+  "load_avg_1min": {
+   "min": 0.52,
+   "median": 2.91,
+   "max": 3.0
+  }
+ },
+ "v4_bit_identical_runs": "all fields except processing_ms identical to v4 in 15 of 18 run/scenarios (all but Nagoya 1); RTK columns identical in 18 of 18",
+ "nagoya1_rotation_rmse_deg_v4_to_v5": {
+  "normal": [
+   31.1,
+   3.7
+  ],
+  "gnss_outage": [
+   45.8,
+   3.0
+  ],
+  "imu_gap": [
+   14.1,
+   2.3
+  ]
+ },
+ "latch_direction_flips": 1,
+ "rover_gap_rtk_resets_per_nagoya1_replay": 1,
+ "full_decision_sha256": "21c757a77a286f3ac14a2bc1dc2185ac6ad29bc5610fb32be7d0bcc10295e797",
+ "full_decision_bytes": 1650580,
+ "full_decision_location": "cloud session scratch (not retained)",
+ "default_changed": false
+}
