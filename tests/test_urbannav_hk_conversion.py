@@ -264,35 +264,53 @@ class ObservationTest(Case):
             conv.filter_rover_obs(self.write("b.obs", OBS_HEADER + obs_epoch(101) + obs_epoch(100)), self.root/"o2", set(), set())
         with self.assertRaisesRegex(ValueError, "not an observation epoch"):
             conv.filter_rover_obs(self.write("c.obs", OBS_HEADER + obs_epoch(100) + base_event()), self.root/"o3", set(), set())
+        with self.assertRaisesRegex(ValueError, "event record"):
+            conv.filter_rover_obs(self.write("d.obs", OBS_HEADER + epoch_line(100, flag=3) + obs_epoch(101)), self.root/"o4", set(), set())
 
-    def test_single_base_file_is_copied_unchanged_and_events_are_not_epochs(self):
-        data = BASE_HEADER + b"".join(obs_epoch(t, crlf=False) for t in (360, 361, 363)) + base_event()
+    def test_base_keeps_the_epoch_records_inside_the_span_byte_for_byte(self):
+        epochs = (360, 361, 362, 363)
+        data = BASE_HEADER + b"".join(obs_epoch(t, crlf=False) for t in epochs) + base_event()
         for name, content in (("b.rnx", data), ("b.rnx.gz", gzip.compress(data))):
             path = self.write(name, content)
             dst = self.root/("out_"+name)
-            stats, epochs = conv.assemble_base([path], dst)
-            self.assertEqual(dst.read_bytes(), data)
-            self.assertEqual(epochs, {360, 361, 363})
-            self.assertEqual((stats["epochs"], stats["event_records"], stats["trailing_event_records_dropped"]), (3, 1, 0))
+            stats, kept = conv.assemble_base([path], dst, (Fraction(361), Fraction(362)))
+            self.assertEqual(dst.read_bytes(), BASE_HEADER + obs_epoch(361, crlf=False) + obs_epoch(362, crlf=False))
+            self.assertEqual(kept, {361, 362})
+            self.assertEqual((stats["epochs_in_files"], stats["epochs_out"], stats["epochs_dropped_before_span"],
+                              stats["epochs_dropped_after_span"], stats["event_records_dropped"]), (4, 2, 1, 1, 1))
+            self.assertEqual((stats["first_tow_out"], stats["last_tow_out"]), (361.0, 362.0))
             self.assertEqual(stats["approx_position_ecef"], [-2414266.9197, 5386768.9868, 2407460.0314])
 
-    def test_hour_files_are_concatenated_and_closing_event_of_all_but_the_last_is_dropped(self):
+    def test_a_span_that_holds_every_epoch_changes_nothing_but_the_closing_event(self):
+        data = BASE_HEADER + b"".join(obs_epoch(t, crlf=False) for t in (360, 361, 363)) + base_event()
+        dst = self.root/"all"
+        conv.assemble_base([self.write("b.rnx", data)], dst, (Fraction(0), Fraction(10**6)))
+        self.assertEqual(dst.read_bytes() + base_event(), data)
+
+    def test_hour_files_are_concatenated_and_events_are_dropped(self):
         first = BASE_HEADER + obs_epoch(358, crlf=False) + obs_epoch(359, crlf=False) + base_event(3)
         second = BASE_HEADER + obs_epoch(360, crlf=False) + obs_epoch(361, crlf=False) + base_event(2)
-        stats, epochs = conv.assemble_base([self.write("a", first), self.write("b", second)], self.root/"cat")
-        want = BASE_HEADER + obs_epoch(358, crlf=False) + obs_epoch(359, crlf=False) + obs_epoch(360, crlf=False) + obs_epoch(361, crlf=False) + base_event(2)
-        self.assertEqual((self.root/"cat").read_bytes(), want)
-        self.assertEqual((stats["files"], stats["epochs"], stats["trailing_event_records_dropped"]), (2, 4, 1))
+        span = (Fraction(359), Fraction(360))
+        stats, kept = conv.assemble_base([self.write("a", first), self.write("b", second)], self.root/"cat", span)
+        self.assertEqual((self.root/"cat").read_bytes(), BASE_HEADER + obs_epoch(359, crlf=False) + obs_epoch(360, crlf=False))
+        self.assertEqual((stats["files"], stats["epochs_in_files"], stats["epochs_out"], stats["event_records_dropped"]), (2, 4, 2, 2))
         with self.assertRaisesRegex(ValueError, "strictly increasing"):
-            conv.assemble_base([self.write("c", second), self.write("d", first)], self.root/"bad")
+            conv.assemble_base([self.write("c", second), self.write("d", first)], self.root/"bad", span)
+
+    def test_an_event_record_in_the_middle_is_dropped_too(self):
+        data = BASE_HEADER + obs_epoch(360, crlf=False) + base_event(2) + obs_epoch(361, crlf=False)
+        stats, kept = conv.assemble_base([self.write("m", data)], self.root/"mid", (Fraction(0), Fraction(1000)))
+        self.assertEqual((self.root/"mid").read_bytes(), BASE_HEADER + obs_epoch(360, crlf=False) + obs_epoch(361, crlf=False))
+        self.assertEqual(stats["event_records_dropped"], 1)
 
     def test_base_rejections(self):
+        span = (Fraction(0), Fraction(1000))
         with self.assertRaisesRegex(ValueError, "GPS time system"):
-            conv.assemble_base([self.write("u", BASE_HEADER.replace(b"GPS         TIME", b"UTC         TIME") + obs_epoch(360))], self.root/"o")
+            conv.assemble_base([self.write("u", BASE_HEADER.replace(b"GPS         TIME", b"UTC         TIME") + obs_epoch(360))], self.root/"o", span)
         with self.assertRaisesRegex(ValueError, "APPROX POSITION"):
-            conv.assemble_base([self.write("z", BASE_HEADER.replace(b"-2414266.9197  5386768.9868  2407460.0314", b"        0.0000        0.0000        0.0000") + obs_epoch(360))], self.root/"o")
+            conv.assemble_base([self.write("z", BASE_HEADER.replace(b"-2414266.9197  5386768.9868  2407460.0314", b"        0.0000        0.0000        0.0000") + obs_epoch(360))], self.root/"o", span)
         with self.assertRaisesRegex(ValueError, "observation file"):
-            conv.assemble_base([self.write("n", nav_file("G"))], self.root/"o")
+            conv.assemble_base([self.write("n", nav_file("G"))], self.root/"o", span)
 
     def test_compact_rinex_is_expanded_when_the_hatanaka_package_is_available(self):
         try:
@@ -312,10 +330,10 @@ class ObservationTest(Case):
             self.skipTest(f"hatanaka.compress rejected the synthetic file: {error}")
         path = self.write("c.crx.gz", compressed)  # hatanaka.compress returns gzip-wrapped CRINEX, as the published .crx.gz
         dst = self.root/"expanded"
-        stats, epochs = conv.assemble_base([path], dst)
-        self.assertEqual(epochs, {360, 361, 362})
+        stats, epochs = conv.assemble_base([path], dst, (Fraction(360), Fraction(361)))
+        self.assertEqual(epochs, {360, 361})
         self.assertTrue(dst.read_bytes().startswith(b"     3.02           OBSERVATION DATA"))
-        self.assertEqual(dst.read_bytes().count(b"\n> "), 3)
+        self.assertEqual(dst.read_bytes().count(b"\n> "), 2)
 
 
 class NavigationTest(Case):
@@ -388,8 +406,10 @@ class EndToEndTest(Case):
         ref = (directory/"reference.csv").read_text().splitlines()
         self.assertEqual([line.split(",")[0] for line in ref[1:]], ["100.0", "101.0", "102.0", "103.0", "104.0"])
         self.assertEqual([float(v) for v in ref[1].split(",")[11:14]], [5.0, 0.0, 0.0])     # heading 90, 5 m/s forward -> East
-        self.assertEqual((directory/"base.obs").read_bytes(), (raw/"base.rnx").read_bytes())
-        self.assertEqual(stats["base.obs"]["epochs"], 14)
+        # base.obs holds the base epochs from the first to the last kept rover epoch (103 is missing in the base).
+        self.assertEqual((directory/"base.obs").read_bytes(), BASE_HEADER + b"".join(obs_epoch(t, crlf=False) for t in (100, 101, 102, 104)))
+        self.assertEqual((stats["base.obs"]["epochs_in_files"], stats["base.obs"]["epochs_out"], stats["base.obs"]["epochs_dropped_before_span"],
+                          stats["base.obs"]["epochs_dropped_after_span"], stats["base.obs"]["event_records_dropped"]), (14, 4, 5, 5, 1))
         self.assertEqual(stats["verification"]["rover_epochs_without_exact_base_epoch"], 1)   # base misses 103
         self.assertEqual(stats["verification"]["epochs_without_exact_base_epoch"], [103.0])
         self.assertEqual((stats["verification"]["rover_epochs_without_truth_row"], stats["verification"]["rover_epochs_without_imu_sample"]), (0, 0))

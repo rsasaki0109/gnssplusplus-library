@@ -10,16 +10,15 @@ Inputs (explicit paths, any location):
     --rover-obs   UrbanNav-HK-<Run>.novatel.flexpak6.obs          (RINEX 3, GPS time, 1 Hz)
     --reference   UrbanNav-HK-<Run> ground-truth text file         (1 Hz, D M S positions, body-frame velocity)
     --imu         Xsens IMU rosbag CSV (xsense_imu_*.csv)
-    --base-obs    HKSC hourly 1 Hz observation file(s) covering the run (.rnx, .rnx.gz, .crx.gz or .crx)
+    --base-obs    HKSC hourly 1 Hz observation file(s) covering the run (.rnx, .rnx.gz, .crx.gz or .crx);
+                  the output keeps the epochs from the first to the last kept rover epoch
     --nav         HKSC daily broadcast files GN RN EN CN (.rnx or .rnx.gz)
 
 Output: <output-root>/urbannav/<run>_novatel/{rover.obs,base.obs,base.nav,imu.csv,reference.csv}
 plus <run>_novatel.manifest.json beside that directory (SHA256 of every raw input and output).
 """
 import argparse
-import datetime
 import gzip
-import hashlib
 import json
 import math
 from fractions import Fraction
@@ -29,7 +28,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_urbannav_to_ppc_layout import (  # noqa: E402  shared, unchanged helpers of the Tokyo converter
-    PPC_IMU_HEADER, PPC_REFERENCE_HEADER, gps_tow, pin, sha256_file, split_rinex_header)
+    PPC_IMU_HEADER, PPC_REFERENCE_HEADER, gps_tow, pin, split_rinex_header)
 
 RUNS = ("HKDeepUrban1", "HKHarshUrban1")
 ROVERS = ("novatel",)
@@ -272,6 +271,11 @@ def epoch_time(line):
     return gps_tow(year, month, day, hour, minute, fields[5].decode("ascii"))
 
 
+def epoch_flag(line):
+    """Epoch flag of a RINEX 3 epoch line (0 ok, 1 power failure; 2-6 are event records)."""
+    return int(line[1:].split()[6])
+
+
 def filter_rover_obs(src, dst, keep, truth_times):
     """Copy the epochs whose GPS time of week is in `keep`; header and records byte-preserved.
 
@@ -291,6 +295,8 @@ def filter_rover_obs(src, dst, keep, truth_times):
         for line in stream:
             if line.startswith(b">"):
                 week, tow = epoch_time(line)
+                if epoch_flag(line) not in (0, 1):
+                    raise ValueError(f"event record in the rover observations at week {week} tow {float(tow)}")
                 if previous is not None and (week, tow) <= previous:
                     raise ValueError(f"non-monotonic observation epoch at week {week} tow {float(tow)}")
                 previous = (week, tow)
@@ -352,27 +358,30 @@ def parse_obs_header(data):
     raise ValueError("RINEX header has no END OF HEADER")
 
 
-def trailing_event_start(lines, start):
-    """Index of an event record (flag 4, blank time) whose header-information block runs to the end of the file."""
-    for i in range(start, len(lines)):
-        line = lines[i]
-        if line.startswith(b">") and not is_epoch_line(line):
-            fields = line[1:].split()
-            if len(fields) == 2 and fields[0] == b"4" and fields[1].isdigit() and i + 1 + int(fields[1]) == len(lines):
-                return i
-    return None
+def observation_blocks(lines, path):
+    """Split the record lines of an observation file into blocks, one per epoch or event record."""
+    blocks = []
+    for line in lines:
+        if line.startswith(b">"):
+            blocks.append([line])
+        elif blocks:
+            blocks[-1].append(line)
+        else:
+            raise ValueError(f"{path}: observation data before the first epoch line")
+    return blocks
 
 
-def assemble_base(paths, dst):
-    """base.obs from one or more hourly files. One file is copied unchanged (CRINEX expanded); several are
-    concatenated: header of the first, then the epoch records of each, which must continue strictly in time.
-    The closing event record that hourly files carry (flag 4, "header information follows" until the end of
-    the file) is dropped from every file but the last; the replay's RINEX reader stops at such a record."""
-    stats = dict(files=len(paths), epochs=0, first_tow=None, last_tow=None, week=None, approx_position_ecef=None,
-                 trailing_event_records_dropped=0, event_records=0)
-    epochs, body = [], []
-    first_lines = None
-    for number, path in enumerate(paths):
+def assemble_base(paths, dst, span):
+    """base.obs from one or more hourly files: the header of the first file and the epoch records, byte for
+    byte, whose GPS time of week lies in `span` = (first, last) inclusive; several files must continue
+    strictly in time. Everything else is dropped: epochs outside the span, because the replay buffers at
+    most 16 pending base epochs and reads every base epoch up to the first rover epoch before it starts;
+    and event records (flag other than 0 or 1, e.g. the closing "header information follows" block of an
+    hourly file), because the replay's RINEX reader treats one as the end of the file."""
+    stats = dict(files=len(paths), epochs_in_files=0, epochs_out=0, epochs_dropped_before_span=0, epochs_dropped_after_span=0,
+                 event_records_dropped=0, first_tow_out=None, last_tow_out=None, week=None, approx_position_ecef=None)
+    first_lines, kept, previous = None, [], None
+    for path in paths:
         lines, start, time_system, approx = parse_obs_header(read_text_file(path))
         if time_system != "GPS":
             raise ValueError(f"{path}: expected GPS time system in TIME OF FIRST OBS, got {time_system!r}")
@@ -382,35 +391,35 @@ def assemble_base(paths, dst):
             first_lines, stats["approx_position_ecef"] = lines[:start], approx
         elif approx != stats["approx_position_ecef"]:
             raise ValueError(f"{path}: base position differs between files")
-        if lines and not lines[-1].endswith((b"\n", b"\r")):
+        if lines[-1:] and not lines[-1].endswith((b"\n", b"\r")):
             lines[-1] += b"\n"
-        previous = epochs[-1] if epochs else None
-        for line in lines[start:]:
-            if is_epoch_line(line):
-                week, tow = epoch_time(line)
-                if stats["week"] is None:
-                    stats["week"] = week
-                elif stats["week"] != week:
-                    raise ValueError("base epochs cross a GPS week boundary")
-                if previous is not None and tow <= previous:
-                    raise ValueError(f"{path}: base epochs are not strictly increasing")
-                previous = tow
-                epochs.append(tow)
-            elif line.startswith(b">"):
-                stats["event_records"] += 1
-        cut = trailing_event_start(lines, start) if number < len(paths) - 1 else None
-        if cut is not None:
-            stats["trailing_event_records_dropped"] += 1
-            lines = lines[:cut]
-        body.append(lines[start:])
+        for block in observation_blocks(lines[start:], path):
+            if not is_epoch_line(block[0]) or epoch_flag(block[0]) not in (0, 1):
+                stats["event_records_dropped"] += 1
+                continue
+            week, tow = epoch_time(block[0])
+            if stats["week"] is None:
+                stats["week"] = week
+            elif stats["week"] != week:
+                raise ValueError("base epochs cross a GPS week boundary")
+            if previous is not None and tow <= previous:
+                raise ValueError(f"{path}: base epochs are not strictly increasing")
+            previous = tow
+            stats["epochs_in_files"] += 1
+            if tow < span[0]:
+                stats["epochs_dropped_before_span"] += 1
+            elif tow > span[1]:
+                stats["epochs_dropped_after_span"] += 1
+            else:
+                kept.append((tow, block))
     with Path(dst).open("wb") as out:
         out.writelines(first_lines)
-        for lines in body:
-            out.writelines(lines)
-    stats["epochs"] = len(epochs)
-    if epochs:
-        stats["first_tow"], stats["last_tow"] = float(epochs[0]), float(epochs[-1])
-    return stats, set(epochs)
+        for _, block in kept:
+            out.writelines(block)
+    stats["epochs_out"] = len(kept)
+    if kept:
+        stats["first_tow_out"], stats["last_tow_out"] = float(kept[0][0]), float(kept[-1][0])
+    return stats, {tow for tow, _ in kept}
 
 
 # ---------------------------------------------------------------------------
@@ -550,7 +559,7 @@ def convert(run, rover, rover_obs, reference, imu, base_obs, nav, output_root):
     stats["rover.obs"], kept = filter_rover_obs(inputs["rover_obs"], target/"rover.obs", keep, truth_times)
     kept_set = set(kept)
     stats["reference.csv"] = write_reference(truth, kept_set, target/"reference.csv")
-    stats["base.obs"], _ = assemble_base(base_obs, target/"base.obs")
+    stats["base.obs"], _ = assemble_base(base_obs, target/"base.obs", (kept[0], kept[-1]))
     stats["base.nav"] = merge_navigation(nav, target/"base.nav")
     stats["verification"] = verify_converted(target)
     names = ("rover.obs", "base.obs", "base.nav", "imu.csv", "reference.csv")
