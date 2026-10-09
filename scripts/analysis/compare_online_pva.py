@@ -14,6 +14,9 @@ from gnss_pva_metrics import stats, read_rows
 
 METRICS = ("rtk_position_m", "fused_position_m", "rtk_velocity_mps", "fused_velocity_mps", "rotation_deg")
 PPC_RUNS = tuple(f"{city}{run}" for city in ("tokyo", "nagoya") for run in (1, 2, 3))
+# Gate 8 (opt-in, --attitude-integrity): absolute, not relative to the control.
+ATTITUDE_INTEGRITY_ROTATION_DEG = 90.0
+ATTITUDE_INTEGRITY_MAX_FRACTION = 0.01
 COVERAGE = ("rtk_available", "fused_available", "rtk_velocity_available", "fused_velocity_available", "attitude_available", "heading_available")
 
 
@@ -32,7 +35,15 @@ def load(directory):
     return manifest, report, rows
 
 
-def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1"):
+def rotation_flip_fraction(rows):
+    """(count above 90 deg, scored epochs, fraction) over rows with a scored rotation_deg."""
+    values = [float(r["rotation_deg"]) for r in rows if r.get("rotation_deg")]
+    if any(not math.isfinite(v) for v in values): raise ValueError("nonfinite rotation_deg")
+    above = sum(1 for v in values if v > ATTITUDE_INTEGRITY_ROTATION_DEG)
+    return above, len(values), (above/len(values) if values else 0.0)
+
+
+def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1", attitude_integrity=False):
     am, a, ar = load(control)
     bm, b, br = load(candidate)
     if bm["replay"].get("candidate") != candidate_name: raise ValueError("unexpected candidate")
@@ -80,6 +91,13 @@ def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1"):
     # is instead guarded by the separate candidate-none bit-identity check.
     if candidate_name == "vehicle_nhc_latched_v1":
         gate("before_latch.numeric_parity", len(prefix), parity, "all common CSV fields except processing_ms exactly equal", parity)
+    if attitude_integrity:
+        # Gate 8: absolute, applies to the candidate run alone (the control value is informational).
+        _, _, control_fraction = rotation_flip_fraction(ar)
+        _, _, fraction = rotation_flip_fraction(br)
+        gate("attitude_integrity.rotation_gt_90deg_fraction", control_fraction, fraction,
+             f"candidate fraction of scored epochs with rotation_deg > {ATTITUDE_INTEGRITY_ROTATION_DEG:g} <= {ATTITUDE_INTEGRITY_MAX_FRACTION:g} (absolute)",
+             fraction <= ATTITUDE_INTEGRITY_MAX_FRACTION)
     return dict(name=label, gates=gates, all_output_control=a, all_output_candidate=b, common_valid=paired,
                 control_manifest=pin(control/"manifest.json"), candidate_manifest=pin(candidate/"manifest.json")), improvement
 
@@ -95,21 +113,24 @@ def main():
     p.add_argument("--contract", type=Path, default=ROOT/"docs/online_pva_candidate_v1.md")
     p.add_argument("--runs", nargs="+", default=list(PPC_RUNS), metavar="RUN",
                    help="Run directory names under each input dir (default: the six PPC runs, tokyo1..nagoya3)")
+    p.add_argument("--attitude-integrity", action="store_true",
+                   help="Add gate 8 to every compared run: at most 1%% of the candidate's scored epochs may have rotation_deg > 90 (absolute)")
     args = p.parse_args()
     if len(set(args.runs)) != len(args.runs): p.error("--runs must not repeat a run name")
     if args.output_dir.exists(): p.error("output directory must be new")
     args.output_dir.mkdir(parents=True)
     report = dict(schema="libgnsspp.pva_candidate_decision.v1", state="running", adoption="No-Go", default_changed=False,
                   contract=pin(args.contract), candidate=args.candidate_name, comparison_source=pin(__file__), runs=[])
+    if args.attitude_integrity: report["attitude_integrity"] = True
     try:
         improved = False
         for name in args.runs:
-            result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name, args.candidate_name)
+            result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name, args.candidate_name, args.attitude_integrity)
             report["runs"].append(result)
             improved |= improvement
             for scenario in ("gnss_outage", "imu_gap"):
                 label = name+"-"+scenario
-                result, _ = compare(args.baseline_scenario_dir/label, args.candidate_scenario_dir/label, label, args.candidate_name)
+                result, _ = compare(args.baseline_scenario_dir/label, args.candidate_scenario_dir/label, label, args.candidate_name, args.attitude_integrity)
                 report["runs"].append(result)
         failures = [dict(run=r["name"], gate=g) for r in report["runs"] for g in r["gates"] if not g["passed"]]
         if not improved: failures.append(dict(run="all_normal", gate=dict(name="targeted_rotation_improvement", passed=False)))

@@ -2,6 +2,7 @@
 
 #include <libgnss++/fusion/fusion_processor.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <memory>
@@ -1393,6 +1394,130 @@ TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionTestNeedsAStationarySamp
     EXPECT_TRUE(std::isnan(h.on().lastLatchLongitudinalVelocityMps()));
     EXPECT_NEAR(LatchDirectionHarness::angleDiffDeg(h.onCourseDeg(), h.offCourseDeg()), 0.0, 1e-9);
     EXPECT_EQ(h.offLatchTime(), h.onLatchTime());
+}
+
+// velocity_consistency_v10: consider_attitude_and_biases_before_heading_latch.
+// The body accelerates along its +X axis (from rest, after a 3 s static
+// window) with a constant 0.3 m/s^2 accelerometer bias along +Y that the
+// filter does not know, so every GNSS velocity/position update has a
+// nonzero innovation that the plain update spreads into roll/pitch and the
+// biases. GNSS is exact; one fix per 0.1 s.
+class ConsiderBeforeLatchHarness {
+public:
+    explicit ConsiderBeforeLatchHarness(bool consider) {
+        LooseCouplingProcessor::Config config;
+        config.align_static_window_s = 0.5;
+        config.lever_arm_body.setZero();
+        config.consider_attitude_and_biases_before_heading_latch = consider;
+        processor_ = std::make_unique<LooseCouplingProcessor>(config);
+    }
+
+    // Runs 10 s. For each GNSS call, the change of attitude / accel bias /
+    // gyro bias across the call is recorded, split by whether the heading was
+    // already latched before the call.
+    void run() {
+        const double t0 = 100000.0;
+        Eigen::Matrix3d r0 = Eigen::Matrix3d::Identity();
+        for (int i = 0; i <= 1000; ++i) {
+            const double t = i * kDt;
+            const bool moving = t > 3.0 + 1e-9;
+            if (!moving && i == 300) r0 = processor_->state().nominal.attitude_body_to_enu.toRotationMatrix();
+            ImuSample sample;
+            sample.time = GNSSTime(2200, t0 + t);
+            sample.accel_raw = Eigen::Vector3d(moving ? 1.0 : 0.0, 0.3, kGravity);
+            processor_->processImuSample(sample);
+            if (i % 10 != 0 || !processor_->isInitialized()) continue;
+            const double age = moving ? t - 3.0 : 0.0;
+            const Eigen::Vector3d velocity_enu = r0 * Eigen::Vector3d(age, 0.0, 0.0);
+            const Eigen::Vector3d position_enu = r0 * Eigen::Vector3d(0.5 * age * age, 0.0, 0.0);
+            PositionSolution fix;
+            fix.time = sample.time;
+            fix.status = SolutionStatus::SPP;
+            fix.num_satellites = 8;
+            fix.position_ecef = Eigen::Vector3d(6378137.0 + position_enu.z(), position_enu.x(), position_enu.y());
+            fix.position_covariance = Eigen::Matrix3d::Identity();
+            fix.has_velocity = true;
+            fix.velocity_ecef = Eigen::Vector3d(velocity_enu.z(), velocity_enu.x(), velocity_enu.y());
+            fix.velocity_covariance = 0.04 * Eigen::Matrix3d::Identity();
+            const bool aligned_before = processor_->isHeadingAligned();
+            const auto before = processor_->state().nominal;
+            const Eigen::Matrix<double, 15, 15> covariance_before = processor_->state().covariance;
+            processor_->processGnssSolution(fix);
+            if (!processor_->lastGnssPositionUpdateApplied()) continue;
+            const auto& after = processor_->state().nominal;
+            const double change = (after.accel_bias - before.accel_bias).norm() +
+                                  (after.gyro_bias - before.gyro_bias).norm() +
+                                  (after.attitude_body_to_enu.coeffs() - before.attitude_body_to_enu.coeffs()).norm();
+            const bool latched_in_call = !aligned_before && processor_->isHeadingAligned();
+            if (!aligned_before && !latched_in_call) {
+                ++updates_before_latch_;
+                max_change_before_latch_ = std::max(max_change_before_latch_, change);
+                // The consider states must keep their prior variance, and the
+                // covariance must stay symmetric positive definite.
+                const Eigen::Matrix<double, 15, 15>& covariance = processor_->state().covariance;
+                EXPECT_LT((covariance - covariance.transpose()).norm(), 1e-9);
+                Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 15, 15>> eig(covariance);
+                EXPECT_GT(eig.eigenvalues().minCoeff(), 0.0);
+                max_consider_variance_gain_ =
+                    std::max(max_consider_variance_gain_,
+                             (covariance.diagonal().tail<9>() - covariance_before.diagonal().tail<9>())
+                                 .cwiseAbs().maxCoeff());
+            } else if (aligned_before) {
+                ++updates_after_latch_;
+                max_change_after_latch_ = std::max(max_change_after_latch_, change);
+            }
+        }
+    }
+
+    LooseCouplingProcessor& processor() { return *processor_; }
+    int updatesBeforeLatch() const { return updates_before_latch_; }
+    int updatesAfterLatch() const { return updates_after_latch_; }
+    double maxChangeBeforeLatch() const { return max_change_before_latch_; }
+    double maxChangeAfterLatch() const { return max_change_after_latch_; }
+
+private:
+    std::unique_ptr<LooseCouplingProcessor> processor_;
+    int updates_before_latch_ = 0, updates_after_latch_ = 0;
+    double max_change_before_latch_ = 0.0, max_change_after_latch_ = 0.0;
+    double max_consider_variance_gain_ = 0.0;
+};
+
+TEST(FusionProcessorSyntheticTest, ConsiderBeforeHeadingLatchDefaultsOff) {
+    EXPECT_FALSE(LooseCouplingProcessor::Config().consider_attitude_and_biases_before_heading_latch);
+}
+
+TEST(FusionProcessorSyntheticTest, PlainUpdatesBeforeTheLatchCorrectAttitudeAndBiases) {
+    // Guards the premise of the next test: with the option off the same input
+    // does move the attitude / bias states before the latch.
+    ConsiderBeforeLatchHarness off(false);
+    off.run();
+    ASSERT_TRUE(off.processor().isHeadingAligned());
+    ASSERT_GT(off.updatesBeforeLatch(), 0);
+    EXPECT_GT(off.maxChangeBeforeLatch(), 1e-6);
+}
+
+TEST(FusionProcessorSyntheticTest, ConsiderBeforeHeadingLatchLeavesAttitudeAndBiasesUnchangedUntilTheLatch) {
+    ConsiderBeforeLatchHarness on(true);
+    on.run();
+    ASSERT_TRUE(on.processor().isHeadingAligned());
+    ASSERT_GT(on.updatesBeforeLatch(), 0);
+    // Zero gain rows: bit-exact, not approximately, unchanged.
+    EXPECT_EQ(on.maxChangeBeforeLatch(), 0.0);
+    // After the latch the same updates correct them again.
+    ASSERT_GT(on.updatesAfterLatch(), 0);
+    EXPECT_GT(on.maxChangeAfterLatch(), 1e-6);
+}
+
+TEST(FusionProcessorSyntheticTest, ConsiderBeforeHeadingLatchStillCorrectsPositionAndVelocity) {
+    ConsiderBeforeLatchHarness off(false), on(true);
+    off.run();
+    on.run();
+    // Position/velocity are corrected by the GNSS fixes in both: the final
+    // states agree with the truth to within a few metres / decimetres per second.
+    const double expected_age = 7.0;
+    for (auto* h : {&off, &on}) {
+        EXPECT_NEAR(h->processor().state().nominal.velocity_enu.head<2>().norm(), expected_age, 1.0);
+    }
 }
 
 TEST(FusionProcessorSyntheticTest, LongitudinalVelocityRemovesGravityOfATiltedMount) {

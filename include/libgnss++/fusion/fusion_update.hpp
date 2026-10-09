@@ -8,6 +8,13 @@
 namespace libgnss {
 namespace fusion_update {
 
+/// Consider mask meaning "no consider states" (the plain update).
+constexpr unsigned kNoConsiderMask = 0u;
+/// Consider mask of the attitude (error states 6-8), the accelerometer bias
+/// (9-11) and the gyro bias (12-14): bits 6..14 = 0x7fc0. Position and
+/// velocity are corrected.
+constexpr unsigned kConsiderAttitudeAndBiasesMask = 0x7fc0u;
+
 /**
  * @brief Diagnostic result of applyDenseUpdate(). Same diagnostic shape as
  * rtk_update::FilterUpdateResult (rtk_update.hpp) for consistency of
@@ -55,12 +62,21 @@ struct FusionUpdateResult {
  * @param system       Measurement system (H, residual, R) from fusion_measurement
  * @param max_normalized_innovation_squared_per_observation
  *        NIS gate threshold; <= 0 or non-finite disables the gate
+ * @param consider_state_mask
+ *        Schmidt-Kalman "consider" update: bit i set zeroes the gain row of
+ *        error state i, so that state is not corrected (bit i = index in
+ *        fusion_index, e.g. kConsiderAttitudeAndBiasesMask). The Joseph form
+ *        above is valid for any gain, so the covariance stays consistent: the
+ *        consider states keep their uncertainty and their cross-covariances
+ *        are updated accordingly. 0 (the default) is the plain update, bit for
+ *        bit.
  * @return              Diagnostic result
  */
 FusionUpdateResult applyDenseUpdate(Eigen::Matrix<double, 15, 1>& error_state,
                                     Eigen::Matrix<double, 15, 15>& covariance,
                                     const fusion_measurement::FusionMeasurementSystem& system,
-                                    double max_normalized_innovation_squared_per_observation = 0.0);
+                                    double max_normalized_innovation_squared_per_observation = 0.0,
+                                    unsigned consider_state_mask = kNoConsiderMask);
 
 }  // namespace fusion_update
 }  // namespace libgnss

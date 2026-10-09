@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|velocity_consistency_v7|velocity_consistency_v8|velocity_consistency_v9|rtk_base_extrapolation_v1|rtk_online_product_v1]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|velocity_consistency_v7|velocity_consistency_v8|velocity_consistency_v9|velocity_consistency_v10|rtk_base_extrapolation_v1|rtk_online_product_v1]\n"
                 "RAW_RUN is <tokyo|nagoya>/<run> (PPC) or urbannav/<run> (zero lever arm).\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
@@ -37,7 +37,7 @@ int main(int argc, char** argv) {
              candidate != "velocity_consistency_v3" && candidate != "velocity_consistency_v4" &&
              candidate != "velocity_consistency_v5" && candidate != "velocity_consistency_v6" &&
              candidate != "velocity_consistency_v7" && candidate != "velocity_consistency_v8" &&
-             candidate != "velocity_consistency_v9" &&
+             candidate != "velocity_consistency_v9" && candidate != "velocity_consistency_v10" &&
              candidate != "rtk_base_extrapolation_v1" && candidate != "rtk_online_product_v1"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
@@ -69,8 +69,10 @@ int main(int argc, char** argv) {
             throw std::invalid_argument("expected PPC <tokyo|nagoya>/<run> or urbannav/<run> directory layout");
         const bool nagoya = city == "nagoya";
         // velocity_consistency_v8 contains everything of velocity_consistency_v7,
-        // and velocity_consistency_v9 everything of velocity_consistency_v8.
-        const bool v8_or_later = candidate == "velocity_consistency_v8" || candidate == "velocity_consistency_v9";
+        // velocity_consistency_v9 everything of velocity_consistency_v8, and
+        // velocity_consistency_v10 everything of velocity_consistency_v9.
+        const bool v9_or_later = candidate == "velocity_consistency_v9" || candidate == "velocity_consistency_v10";
+        const bool v8_or_later = candidate == "velocity_consistency_v8" || v9_or_later;
         const bool v7_or_later = candidate == "velocity_consistency_v7" || v8_or_later;
         // urbannav: UrbanNav documents no antenna-IMU lever arm; zero is a declared
         // assumption (docs/online_pva_default_switch_holdout_v1.md).
@@ -135,13 +137,21 @@ int main(int argc, char** argv) {
             config.fusion.reanchor_requires_prefit_gate_pass = true;
             config.independent_velocity_from_epoch_spp = true;
         }
-        if (candidate == "velocity_consistency_v9") {
+        if (v9_or_later) {
             // v9 = v8 + the existing velocity_consistency_v1 option
             // reanchor_velocity_on_heading_latch on the fused filter only,
             // frozen in docs/online_pva_candidate_v10.md. Set after the
             // rtk_prior_fusion snapshot, so the isolated prior filter keeps
             // the v7 settings. No new option or constant.
             config.fusion.reanchor_velocity_on_heading_latch = true;
+        }
+        if (candidate == "velocity_consistency_v10") {
+            // v10 = v9 + the Schmidt-Kalman consider update of the attitude and
+            // both bias states before the heading latch, on the fused filter
+            // only, frozen in docs/online_pva_candidate_v11.md. Set after the
+            // rtk_prior_fusion snapshot, so the isolated prior filter keeps
+            // the v7 settings. No new constant.
+            config.fusion.consider_attitude_and_biases_before_heading_latch = true;
         }
         if (candidate == "rtk_online_product_v1") {
             // Candidate none + product RTK configuration, frozen in
@@ -252,9 +262,12 @@ int main(int argc, char** argv) {
                  << ",\"rtk_float_prefit_gate_exceeded\":" << diagnostics.rtk_float_prefit_gate_exceeded
                  << ",\"fusion_reanchor_prefit_refusals\":" << diagnostics.fusion_reanchor_prefit_refusals
                  << ",\"epoch_spp_velocity_exports\":" << diagnostics.epoch_spp_velocity_exports;
-        if (candidate == "velocity_consistency_v9")
+        if (v9_or_later)
             meta << ",\"reanchor_velocity_on_heading_latch\":"
                  << (config.fusion.reanchor_velocity_on_heading_latch ? "true" : "false");
+        if (candidate == "velocity_consistency_v10")
+            meta << ",\"consider_attitude_and_biases_before_heading_latch\":"
+                 << (config.fusion.consider_attitude_and_biases_before_heading_latch ? "true" : "false");
         meta << "}\n";
         std::cout << "replayed " << count << " epochs (" << scenario << ")\n";
         return 0;

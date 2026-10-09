@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import math
 from pathlib import Path
 import sys
 import tempfile
@@ -117,6 +118,15 @@ class ComparisonTest(unittest.TestCase):
         self.assertNotIn("before_latch.numeric_parity", {g["name"] for g in result["gates"]})
         self.assertTrue(all(g["passed"] for g in result["gates"]))
 
+    def test_velocity_consistency_v10_is_a_distinct_checked_candidate(self):
+        control = self.case("control")
+        candidate = self.case("candidate", candidate="velocity_consistency_v10")
+        with self.assertRaisesRegex(ValueError, "unexpected candidate"):
+            comparison.compare(control, candidate, "synthetic", "velocity_consistency_v9")
+        result, _ = comparison.compare(control, candidate, "synthetic", "velocity_consistency_v10")
+        self.assertNotIn("before_latch.numeric_parity", {g["name"] for g in result["gates"]})
+        self.assertTrue(all(g["passed"] for g in result["gates"]))
+
     def test_velocity_consistency_v8_is_a_distinct_checked_candidate(self):
         control = self.case("control")
         candidate = self.case("candidate", candidate="velocity_consistency_v8")
@@ -169,6 +179,7 @@ class ComparisonTest(unittest.TestCase):
         """Build control/candidate trees for `runs` and invoke the CLI; returns (exit code, decision.json)."""
         for side in ("control", "candidate"):
             for name in runs:
+                if (self.root/side/"normal"/name).exists(): continue  # trees are reusable across calls
                 self.case(f"{side}/normal/{name}")
                 for scenario in ("gnss_outage", "imu_gap"):
                     self.case(f"{side}/scenarios/{name}-{scenario}")
@@ -181,6 +192,71 @@ class ComparisonTest(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()):
             code = comparison.main()
         return code, json.loads((out/"decision.json").read_text())
+
+    # Gate 8 (--attitude-integrity): absolute, candidate-only, opt-in.
+    GATE8 = "attitude_integrity.rotation_gt_90deg_fraction"
+
+    @staticmethod
+    def repair_final_flip(raw):
+        # The fixture's last epoch is 180 deg off (heading 180, truth 0); give it the truth heading.
+        a = math.radians(90)/2
+        raw[-1]["qw"], raw[-1]["qz"] = math.cos(a), math.sin(a)
+
+    def test_attitude_integrity_gate_is_absent_by_default(self):
+        control, candidate = self.case("control"), self.case("candidate_v1")
+        default, _ = comparison.compare(control, candidate, "synthetic")
+        explicit_off, _ = comparison.compare(control, candidate, "synthetic", attitude_integrity=False)
+        self.assertEqual(default, explicit_off)
+        self.assertNotIn(self.GATE8, {g["name"] for g in default["gates"]})
+
+    def test_attitude_integrity_gate_fails_an_absolute_flip_even_when_the_control_flips_too(self):
+        control, candidate = self.case("control"), self.case("candidate_v1")  # both flip at the last epoch
+        result, _ = comparison.compare(control, candidate, "synthetic", attitude_integrity=True)
+        gates = {g["name"]: g for g in result["gates"]}
+        self.assertFalse(gates[self.GATE8]["passed"])
+        self.assertAlmostEqual(gates[self.GATE8]["candidate"], 1/10)
+        self.assertAlmostEqual(gates[self.GATE8]["control"], 1/10)
+        others = [g for g in result["gates"] if g["name"] != self.GATE8]
+        self.assertTrue(all(g["passed"] for g in others))
+        self.assertEqual(others, comparison.compare(control, candidate, "synthetic")[0]["gates"])
+
+    def test_attitude_integrity_gate_passes_a_candidate_without_flips_regardless_of_the_control(self):
+        control = self.case("control")
+        candidate = self.case("candidate_v1", mutate=self.repair_final_flip)
+        result, _ = comparison.compare(control, candidate, "synthetic", attitude_integrity=True)
+        gate = next(g for g in result["gates"] if g["name"] == self.GATE8)
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["candidate"], 0.0)
+        # Absolute, not relative: a clean control and a flipping candidate fail.
+        clean_control = self.case("control2", mutate=self.repair_final_flip)
+        flipping = self.case("candidate_v1b")
+        failed, _ = comparison.compare(clean_control, flipping, "synthetic", attitude_integrity=True)
+        self.assertFalse(next(g for g in failed["gates"] if g["name"] == self.GATE8)["passed"])
+
+    def test_attitude_integrity_threshold_is_one_percent_of_scored_epochs(self):
+        rows = [dict(rotation_deg="") for _ in range(5)] + [dict(rotation_deg="1.0") for _ in range(99)]
+        self.assertEqual(comparison.rotation_flip_fraction(rows), (0, 99, 0.0))
+        at_limit = rows + [dict(rotation_deg="90.5")]  # 1 of 100 scored epochs
+        above, scored, fraction = comparison.rotation_flip_fraction(at_limit)
+        self.assertEqual((above, scored), (1, 100))
+        self.assertLessEqual(fraction, comparison.ATTITUDE_INTEGRITY_MAX_FRACTION)
+        self.assertEqual(comparison.rotation_flip_fraction([dict(rotation_deg="90.0")] * 3)[0], 0)  # not strictly above
+        self.assertEqual(comparison.rotation_flip_fraction([])[2], 0.0)
+
+    def test_attitude_integrity_flag_adds_the_gate_to_every_run_and_changes_nothing_else(self):
+        runs = ("Odaiba_ublox", "Shinjuku_ublox")
+        code0, plain = self.decide(runs, "--runs", *runs)
+        code1, strict = self.decide(runs, "--runs", *runs, "--attitude-integrity")
+        self.assertEqual((code0, code1), (0, 0))
+        self.assertNotIn("attitude_integrity", plain)
+        self.assertTrue(strict["attitude_integrity"])
+        for before, after in zip(plain["runs"], strict["runs"]):
+            self.assertEqual(after["gates"][:-1], before["gates"])
+            self.assertEqual(after["gates"][-1]["name"], self.GATE8)
+        self.assertEqual(plain["adoption"], "No-Go" if plain["failures"] else "Go")
+        gate8_failures = [f for f in strict["failures"] if f["gate"]["name"] == self.GATE8]
+        self.assertEqual(len(gate8_failures), 6)  # the fixture flips in all 6 runs/scenarios
+        self.assertEqual(strict["adoption"], "No-Go")
 
     def test_default_runs_are_the_six_ppc_runs_in_the_original_order(self):
         self.assertEqual(comparison.PPC_RUNS, ("tokyo1", "tokyo2", "tokyo3", "nagoya1", "nagoya2", "nagoya3"))

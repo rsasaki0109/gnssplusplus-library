@@ -22,7 +22,8 @@ constexpr double kInnovationEigenvalueRelativeFloor = 1e-12;
 FusionUpdateResult applyDenseUpdate(Eigen::Matrix<double, 15, 1>& error_state,
                                     Eigen::Matrix<double, 15, 15>& covariance,
                                     const fusion_measurement::FusionMeasurementSystem& system,
-                                    double max_normalized_innovation_squared_per_observation) {
+                                    double max_normalized_innovation_squared_per_observation,
+                                    unsigned consider_state_mask) {
     FusionUpdateResult result;
     const int m = static_cast<int>(system.residuals.size());
     result.observation_count = m;
@@ -91,7 +92,16 @@ FusionUpdateResult applyDenseUpdate(Eigen::Matrix<double, 15, 1>& error_state,
         result.rejected_by_invalid_innovation_covariance = true;
         return result;
     }
-    const Eigen::MatrixXd K = kt.transpose();  // 15 x m
+    Eigen::MatrixXd K = kt.transpose();  // 15 x m
+    if (consider_state_mask != kNoConsiderMask) {
+        // Schmidt-Kalman consider states: no correction, the Joseph form below
+        // keeps the covariance consistent for this suboptimal gain.
+        for (int i = 0; i < fusion_index::SIZE; ++i) {
+            if ((consider_state_mask >> i) & 1u) {
+                K.row(i).setZero();
+            }
+        }
+    }
 
     error_state += K * v;
 

@@ -266,6 +266,21 @@ public:
         // sigma and velocity re-anchoring are unchanged. False keeps the
         // previous behavior bit-for-bit.
         bool heading_latch_direction_test = false;
+
+        // velocity_consistency_v10 (docs/online_pva_candidate_v11.md). While the
+        // heading is not latched the yaw is unobservable (sigma 180 deg, the
+        // error-state linearization about an arbitrary nominal yaw is invalid),
+        // and the measurement updates spread their innovation into roll/pitch
+        // and both IMU biases; the latch resets only the yaw, so the tilt and
+        // bias learned in that regime stay, with a tight and wrong covariance.
+        // When true, every measurement update of this filter (position,
+        // velocity, ZUPT, NHC) made while heading_aligned_ is false is a
+        // Schmidt-Kalman consider update for the attitude and both bias
+        // states: their gain rows are zero, so they are left unchanged, and
+        // the covariance is updated in Joseph form (consistent for any gain).
+        // Updates after the latch are unchanged. False keeps the previous
+        // behavior bit-for-bit.
+        bool consider_attitude_and_biases_before_heading_latch = false;
     };
 
     explicit LooseCouplingProcessor(const Config& config);
