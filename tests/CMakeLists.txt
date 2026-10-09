@@ -260,6 +260,7 @@ if(GTest_FOUND)
     add_test(NAME python_pva_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pva.py)
     add_test(NAME python_pva_comparison_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pva_comparison.py)
     add_test(NAME python_urbannav_conversion_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_urbannav_conversion.py)
+    add_test(NAME python_urbannav_hk_conversion_tests COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_urbannav_hk_conversion.py)
     set_tests_properties(online_rtk_imu_tests PROPERTIES LABELS core)
 
     add_executable(gnss_rtcm_context_tests test_rtcm_time_context.cpp)
