@@ -351,6 +351,15 @@ struct PPPEnvOverrides {
     // definition in ppp_clas_epoch.cpp). Default -1 (unset) preserves the
     // built-in default of 60, bit-identical; any value >= 0 overrides it.
     int clas_hold_cont_min_track = -1;
+    // GNSS_PPP_CLAS_PAR_FREQ_GATE: when exactly "1", the CLAS kinematic
+    // direct state-DD partial-AR exclusion loop only tries satellites that
+    // pass MRTKLIB's resamb gate (mrtk_ppp_rtk.c elsort loop: a satellite is
+    // skipped when more than one of the nf configured frequencies is not both
+    // observed (vsat) and locked (lock > 0)).  clas.toml uses l1+2+3 (nf = 3)
+    // and this implementation tracks L1/L2 states only, so the gate means
+    // "at least two active locked frequency states".  Default false keeps the
+    // historical one-state minimum (bit-identical).
+    bool clas_par_freq_gate = false;
     // GNSS_PPP_DEBUG: general PPP debug logging. Default false.
     bool debug = false;
 

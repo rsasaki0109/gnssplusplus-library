@@ -1636,7 +1636,12 @@ WlnlFixAttempt resolveWlnlFix(
                                    // Keep it eligible for exclusion even
                                    // though dual-frequency satellites remain
                                    // the preferred candidates by elevation.
-                                   1);
+                                   // GNSS_PPP_CLAS_PAR_FREQ_GATE=1 instead
+                                   // follows MRTKLIB's elsort loop, which
+                                   // skips satellites with more than one of
+                                   // nf=3 frequencies unlocked (L1/L2 states
+                                   // only here => at least two required).
+                                   pppEnvOverrides().clas_par_freq_gate ? 2 : 1);
     }
     const auto nl_info = buildWlnlNlInfoMap(
         eligible_ambiguities.satellites,
