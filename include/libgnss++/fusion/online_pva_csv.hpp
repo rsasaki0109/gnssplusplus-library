@@ -16,8 +16,14 @@ inline constexpr const char* kOnlinePvaCsvHeader =
     "ecef_to_enu_20,ecef_to_enu_21,ecef_to_enu_22,"
     "accel_bias_x_mps2,accel_bias_y_mps2,accel_bias_z_mps2,gyro_bias_x_radps,gyro_bias_y_radps,gyro_bias_z_radps";
 
+// Optional trailing column, written only by writers that opt in (the
+// rtk_base_extrapolation_v1 replay). The default schema above is unchanged, so
+// every existing consumer and the candidate-none parity check see the same CSV.
+inline constexpr const char* kOnlinePvaCsvExtrapolatedBaseColumn = ",extrapolated_base";
+
 inline void writeOnlinePvaCsv(std::ostream& stream, const GNSSTime& rover,
-                              const OnlineRtkImuProcessor::Output& row) {
+                              const OnlineRtkImuProcessor::Output& row,
+                              bool extrapolated_base_column = false) {
     stream << std::setprecision(17) << rover.week << ',' << rover.tow << ','
         << row.received_at.week << ',' << row.received_at.tow << ',' << row.input_age_s << ','
         << row.exact_base_available << ',' << row.imu_consumed << ',' << row.reset_generation << ','
@@ -45,6 +51,7 @@ inline void writeOnlinePvaCsv(std::ostream& stream, const GNSSTime& rover,
         stream << ',' << row.ecef_to_attitude_enu(r, c);
     for (int i = 0; i < 3; ++i) stream << ',' << row.accel_bias_body_mps2(i);
     for (int i = 0; i < 3; ++i) stream << ',' << row.gyro_bias_body_radps(i);
+    if (extrapolated_base_column) stream << ',' << row.extrapolated_base_available;
     stream << '\n';
 }
 } // namespace libgnss

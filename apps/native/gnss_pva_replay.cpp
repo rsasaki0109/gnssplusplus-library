@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|rtk_base_extrapolation_v1]\n"
                 "RAW_RUN is <tokyo|nagoya>/<run> (PPC) or urbannav/<run> (zero lever arm).\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
@@ -35,7 +35,8 @@ int main(int argc, char** argv) {
             (candidate != "none" && candidate != "vehicle_nhc_latched_v1" &&
              candidate != "velocity_consistency_v1" && candidate != "velocity_consistency_v2" &&
              candidate != "velocity_consistency_v3" && candidate != "velocity_consistency_v4" &&
-             candidate != "velocity_consistency_v5" && candidate != "velocity_consistency_v6"))
+             candidate != "velocity_consistency_v5" && candidate != "velocity_consistency_v6" &&
+             candidate != "rtk_base_extrapolation_v1"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
         std::size_t consumed = 0;
@@ -103,6 +104,13 @@ int main(int argc, char** argv) {
             // filter is recreated without a seed.
             config.carry_gyro_bias_across_reset = true;
         }
+        const bool extrapolation_candidate = candidate == "rtk_base_extrapolation_v1";
+        if (extrapolation_candidate) {
+            // Candidate none + base extrapolation, frozen in
+            // docs/online_rtk_base_extrapolation_v1.md. The 2 s horizon is the
+            // batch kMaxInterpolationGapSeconds, not tuned. Nothing else changes.
+            config.base_extrapolation_max_age_s = 2.0;
+        }
         if (candidate == "vehicle_nhc_latched_v1") {
             config.fusion.nhc_enable = true;
             config.fusion.nhc_require_heading_alignment = true;
@@ -123,7 +131,7 @@ int main(int argc, char** argv) {
         fs::create_directories(output);
         std::ofstream csv(output / "pva.csv"), meta(output / "replay.json");
         if (!csv || !meta) throw std::runtime_error("cannot create replay output");
-        csv << kOnlinePvaCsvHeader << '\n';
+        csv << kOnlinePvaCsvHeader << (extrapolation_candidate ? kOnlinePvaCsvExtrapolatedBaseColumn : "") << '\n';
         ObservationData rover, base;
         bool have_base = base_reader.readObservationEpoch(base);
         std::size_t imu_cursor = 0;
@@ -158,7 +166,7 @@ int main(int argc, char** argv) {
             const double age = rover.time - start;
             const bool outage = scenario == "gnss_outage" && age >= start_s && age < start_s + duration_s;
             writeOnlinePvaCsv(csv, rover.time, processor.processRover(
-                outage ? ObservationData(rover.time) : rover, rover.time));
+                outage ? ObservationData(rover.time) : rover, rover.time), extrapolation_candidate);
             ++count;
         }
         if (count == 0 || (limit > 0 && count != limit)) throw std::runtime_error("insufficient rover epochs");
@@ -173,7 +181,13 @@ int main(int argc, char** argv) {
             << diagnostics.reset_generation << ",\"start_week\":" << start.week << ",\"start_tow\":" << start.tow
             << ",\"base_ecef\":[" << config.base_position_ecef.x() << ',' << config.base_position_ecef.y() << ','
             << config.base_position_ecef.z() << "],\"lever_arm_flu_m\":[" << config.fusion.lever_arm_body.x() << ','
-            << config.fusion.lever_arm_body.y() << ',' << config.fusion.lever_arm_body.z() << "]}\n";
+            << config.fusion.lever_arm_body.y() << ',' << config.fusion.lever_arm_body.z() << "]";
+        // Candidate-only fields; the default replay.json is unchanged.
+        if (extrapolation_candidate)
+            meta << ",\"base_extrapolation_max_age_s\":" << config.base_extrapolation_max_age_s
+                 << ",\"extrapolated_base_epochs\":" << diagnostics.extrapolated_base_epochs
+                 << ",\"missing_base_epochs\":" << diagnostics.missing_base_epochs;
+        meta << "}\n";
         std::cout << "replayed " << count << " epochs (" << scenario << ")\n";
         return 0;
     } catch (const std::exception& error) { std::cerr << "gnss_pva_replay: " << error.what() << '\n'; return 2; }

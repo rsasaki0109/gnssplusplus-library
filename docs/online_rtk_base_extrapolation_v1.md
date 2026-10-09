@@ -139,6 +139,40 @@ reviewed default-switch proposal. Nothing is tuned after the results are seen.
   These only confirm that extrapolated epochs are produced and the RTK
   status mix changes.
 
+## Implementation notes recorded before the freeze
+
+- **Helper location.** The hold is implemented in
+  `src/algorithms/rtk_base_alignment.cpp`. It mirrors the formulas of
+  `calculateModeledBaseRange` and `signalWavelength`. The batch header
+  `apps/native/rtk_base_epoch_align.hpp` is not rewired, so batch numerics
+  cannot change. The specification said the helper is "shared with the batch
+  path"; the shared part is the formulas, not the code.
+- **Hold accuracy.** For a static base with a constant residual, the held
+  observations reproduce those generated at the target time to 0.2 mm at
+  0.2 s and to 0.9 mm at 1.0 s.
+- **Epoch handling.**
+  - The latest past base epoch is kept: either the last expired epoch or the
+    consumed exact epoch.
+  - Filter recreation does not clear it, because base data is independent of
+    the filters and the age limit bounds its use. `reset()` does clear it.
+  - An extrapolated epoch takes the same tight time-update, RTK and tight
+    anchoring branches as an exact-base epoch. With the option off these
+    branches are unchanged.
+- **Carrier phase.** A satellite whose base carrier has LLI bit 0 or loss of
+  lock loses its carrier on every held epoch until the next base epoch.
+- **New CSV column.** The `extrapolated_base` column is written last and only
+  for this candidate. The default CSV schema is unchanged, which gate 7's
+  parity script requires.
+- **Pre-freeze prefix check.** Run with 600 epochs, normal scenario. Only
+  counts were read, no error metric.
+
+  | Run | Variant | Exact / extrapolated / SPP fallback | RTK SPP / FLOAT / FIXED |
+  |---|---|---|---|
+  | PPC Tokyo 1 | control | 120 / 0 / 480 | 487 / 98 / 15 |
+  | PPC Tokyo 1 | candidate | 120 / 480 / 0 | 0 / 33 / 567 |
+  | UrbanNav Odaiba | control | 120 / 0 / 480 | 494 / 100 / 6 |
+  | UrbanNav Odaiba | candidate | 120 / 480 / 0 | 0 / 172 / 428 |
+
 ## Reported in addition (not gates)
 
 - Per run: exact, extrapolated and SPP-fallback epoch counts.

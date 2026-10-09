@@ -67,6 +67,14 @@ public:
         // reset() carries nothing. False keeps the previous behavior
         // bit-for-bit.
         bool carry_gyro_bias_across_reset = false;
+        // Opt-in (rtk_base_extrapolation_v1, docs/online_rtk_base_extrapolation_v1.md).
+        // 0 disables it and keeps the previous behavior bit-for-bit. When > 0
+        // and no base epoch exists at the rover time, the latest base epoch
+        // at or before the rover time is held to the rover time (geometry
+        // corrected zero-order hold, see rtk_base_alignment.hpp) if its age is
+        // <= this many seconds, and used like an exact base epoch for RTK and
+        // for tight anchoring. Otherwise the existing SPP fallback runs.
+        double base_extrapolation_max_age_s = 0.0;
     };
     struct Output {
         PositionSolution rtk;
@@ -75,7 +83,11 @@ public:
         double input_age_s = 0.0;
         double fusion_age_s = 0.0;
         double processing_ms = 0.0;
+        // True only for a received base epoch at the rover time (+-1e-6 s).
         bool exact_base_available = false;
+        // True only when base_extrapolation_max_age_s > 0 and a held past base
+        // epoch was used instead (never together with exact_base_available).
+        bool extrapolated_base_available = false;
         bool fusion_initialized = false;
         bool heading_converged = false;
         // Snapshot of the loose-coupling attitude actually used for fused
@@ -104,6 +116,8 @@ public:
         std::size_t missing_base_epochs = 0;
         std::size_t late_imu_dropped = 0;
         std::size_t expired_base_epochs = 0;
+        // Rover epochs that used a held past base epoch (extrapolation only).
+        std::size_t extrapolated_base_epochs = 0;
         std::size_t imu_gap_resets = 0;
         std::size_t rover_gap_resets = 0;
         std::size_t rover_gap_rtk_resets = 0;
@@ -133,6 +147,10 @@ private:
     std::unique_ptr<TightCouplingProcessor> tight_;
     NavigationData navigation_;
     std::deque<ObservationData> base_;
+    // Latest received base epoch at or before the rover time that has left
+    // base_ (expired or consumed). Maintained only when extrapolation is on.
+    ObservationData last_past_base_;
+    bool have_last_past_base_ = false;
     std::deque<ImuSample> imu_;
     Diagnostics diagnostics_;
     GNSSTime arrival_, rover_time_, imu_time_, last_queued_imu_;
