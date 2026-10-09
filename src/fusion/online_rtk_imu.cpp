@@ -32,7 +32,8 @@ OnlineRtkImuProcessor::OnlineRtkImuProcessor(const Config& config) : config_(con
         config_.max_pending_imu == 0 || config_.max_pending_base == 0 ||
         config_.max_ephemerides_per_satellite == 0 ||
         !std::isfinite(config_.base_extrapolation_max_age_s) || config_.base_extrapolation_max_age_s < 0.0 ||
-        config_.rtk.position_mode != RTKProcessor::RTKConfig::PositionMode::KINEMATIC)
+        config_.rtk.position_mode != RTKProcessor::RTKConfig::PositionMode::KINEMATIC ||
+        (config_.independent_velocity_from_epoch_spp && !config_.independent_doppler_velocity))
         throw std::invalid_argument("invalid online RTK/IMU configuration");
     if (!config_.rtk_preset.empty()) {
         RTKProcessor::RTKConfig probe;
@@ -50,6 +51,14 @@ void OnlineRtkImuProcessor::recreateRtkFilter() {
     rtk_ = std::make_unique<RTKProcessor>(rtk_config);
     if (!rtk_->initialize(config_.processor)) throw std::invalid_argument("RTK initialization failed");
     rtk_->setBasePosition(config_.base_position_ecef);
+}
+
+void OnlineRtkImuProcessor::countRtkEpochDiagnostics(const PositionSolution& rtk_solution) {
+    const auto& telemetry = rtk_->getLastDebugTelemetry();
+    if (telemetry.float_seeded_at_base_rejected) ++diagnostics_.rtk_base_seed_rejections;
+    if (telemetry.spp_blank_age_limited) ++diagnostics_.rtk_spp_blank_age_limited;
+    if (rtk_solution.isValid() && rtk_solution.float_prefit_gate_exceeded)
+        ++diagnostics_.rtk_float_prefit_gate_exceeded;
 }
 
 void OnlineRtkImuProcessor::recreateFusionFilter() {
@@ -239,6 +248,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         }
         if (out.exact_base_available) {
             out.rtk = rtk_->processRTKEpoch(obs, base_.front(), epoch_navigation);
+            countRtkEpochDiagnostics(out.rtk);
             if (extrapolation) {
                 // The consumed exact epoch is the latest past epoch for the
                 // following rover epochs (base_ no longer holds it).
@@ -248,6 +258,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
             base_.pop_front();
         } else {
             out.rtk = rtk_->processRTKEpoch(obs, extrapolated_base, epoch_navigation);
+            countRtkEpochDiagnostics(out.rtk);
             ++diagnostics_.extrapolated_base_epochs;
         }
     } else {
@@ -261,22 +272,57 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
     // unsampled epoch emit the older prediction with its real timestamp.
     // GNSS input to the loose/tight filters. Normally the RTK solution itself;
     // the opt-in candidate replaces its velocity by an independent Doppler LS
-    // solution. out.rtk (the exported RTK result) is never modified.
+    // solution (or, with independent_velocity_from_epoch_spp, by the epoch SPP
+    // velocity). out.rtk (the exported RTK result) is never modified except
+    // that same opt-in replaces its exported velocity by the epoch SPP velocity
+    // when that is available.
     PositionSolution gnss_input = out.rtk;
+    // Epoch SPP velocity (velocity_consistency_v8 (n)): the SPP solved by this
+    // epoch's RTK call (processRTKEpoch or, without a differential base,
+    // processEpoch -- exactly one ran above), valid only with a finite
+    // velocity and covariance.
+    const PositionSolution* epoch_spp_velocity = nullptr;
+    if (config_.independent_velocity_from_epoch_spp) {
+        const PositionSolution& spp = rtk_->currentSpp();
+        if (spp.isValid() && spp.has_velocity && spp.velocity_ecef.allFinite() &&
+            spp.velocity_covariance.allFinite())
+            epoch_spp_velocity = &spp;
+    }
     if (config_.independent_doppler_velocity && config_.tight_time_update && out.rtk.isValid()) {
-        const auto doppler = spp_velocity::solveVelocityFromObservations(
-            obs, epoch_navigation, out.rtk.position_ecef, rtk_->getDopplerVelocitySigma());
-        gnss_input.has_velocity = doppler.ok && doppler.velocity_ecef.allFinite() &&
-            doppler.velocity_covariance.allFinite();
-        if (gnss_input.has_velocity) {
-            gnss_input.velocity_ecef = doppler.velocity_ecef;
-            gnss_input.velocity_covariance = doppler.velocity_covariance;
+        if (config_.independent_velocity_from_epoch_spp) {
+            gnss_input.has_velocity = epoch_spp_velocity != nullptr;
+            if (gnss_input.has_velocity) {
+                gnss_input.velocity_ecef = epoch_spp_velocity->velocity_ecef;
+                gnss_input.velocity_covariance = epoch_spp_velocity->velocity_covariance;
+            } else {
+                gnss_input.velocity_ecef.setZero();
+                gnss_input.velocity_covariance.setZero();
+            }
         } else {
-            gnss_input.velocity_ecef.setZero();
-            gnss_input.velocity_covariance.setZero();
+            const auto doppler = spp_velocity::solveVelocityFromObservations(
+                obs, epoch_navigation, out.rtk.position_ecef, rtk_->getDopplerVelocitySigma());
+            gnss_input.has_velocity = doppler.ok && doppler.velocity_ecef.allFinite() &&
+                doppler.velocity_covariance.allFinite();
+            if (gnss_input.has_velocity) {
+                gnss_input.velocity_ecef = doppler.velocity_ecef;
+                gnss_input.velocity_covariance = doppler.velocity_covariance;
+            } else {
+                gnss_input.velocity_ecef.setZero();
+                gnss_input.velocity_covariance.setZero();
+            }
         }
     }
-    if (out.rtk.isValid() && imu_at_epoch) fusion_->processGnssSolution(gnss_input);
+    if (epoch_spp_velocity && out.rtk.isValid()) {
+        out.rtk.velocity_ecef = epoch_spp_velocity->velocity_ecef;
+        out.rtk.velocity_covariance = epoch_spp_velocity->velocity_covariance;
+        out.rtk.has_velocity = true;
+        ++diagnostics_.epoch_spp_velocity_exports;
+    }
+    if (out.rtk.isValid() && imu_at_epoch) {
+        fusion_->processGnssSolution(gnss_input);
+        if (fusion_->lastGnssPositionReanchorRefusedByPrefitGate())
+            ++diagnostics_.fusion_reanchor_prefit_refusals;
+    }
     if (prior_fusion_ && out.rtk.isValid() && imu_at_epoch) {
         // The isolated filter sees what the unmodified processor would have
         // reported, so the RTK prior is independent of the reporting mode.

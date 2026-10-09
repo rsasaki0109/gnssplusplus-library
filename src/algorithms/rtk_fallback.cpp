@@ -347,6 +347,9 @@ void RTKProcessor::resetPositionToSPP(
     has_external_position_time_update_ = false;
     has_external_velocity_time_update_ = false;
     ins_time_update_applied_last_epoch_ = false;
+    // reject_float_seeded_at_base: re-evaluated at every re-seed. Only the
+    // final base_position_ fallback of the kinematic seed chain below sets it.
+    rover_seed_from_base_fallback_ = false;
 
     if (rtk_config_.position_mode == RTKConfig::PositionMode::STATIC) {
         // Static: position accumulates with process noise
@@ -560,6 +563,7 @@ void RTKProcessor::resetPositionToSPP(
                 rover_pos = last_solution_position_;
             } else {
                 rover_pos = base_position_;
+                rover_seed_from_base_fallback_ = true;
             }
         }
     }

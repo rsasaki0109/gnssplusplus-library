@@ -239,6 +239,17 @@ public:
         // untouched. <= 0 keeps the previous behavior.
         double position_reanchor_after_gnss_gap_s = 0.0;
 
+        // velocity_consistency_v8 (l): when true, the FLOAT/FIXED re-anchors
+        // of float_position_reanchor_after_rejections (v2) and
+        // position_reanchor_after_gnss_gap_s (v4) refuse a solution whose
+        // PositionSolution::float_prefit_gate_exceeded is set (its own update
+        // prefit residual failed the RTK processor's configured float prefit
+        // gate). The NIS gate then stands as the decision for that epoch; the
+        // rejection streak and the gap are unchanged. The FIXED-patience
+        // re-anchor (max_consecutive_gate_rejections) is not affected. false
+        // keeps the previous behavior bit-for-bit.
+        bool reanchor_requires_prefit_gate_pass = false;
+
         // velocity_consistency_v5: direction test at the heading latch. The
         // GNSS course over ground is the direction of travel, which equals the
         // body +X axis only when the vehicle moves forward. When true, the
@@ -362,6 +373,11 @@ public:
     }
     /** True when the last position correction was a fixed-solution re-anchor. */
     bool lastGnssPositionReanchored() const { return last_gnss_position_reanchored_; }
+    /** True when the last solution would have been re-anchored but
+     * reanchor_requires_prefit_gate_pass refused it. */
+    bool lastGnssPositionReanchorRefusedByPrefitGate() const {
+        return last_gnss_position_reanchor_refused_by_prefit_gate_;
+    }
     /** True when the last velocity correction was a bounded Doppler re-anchor. */
     bool lastGnssVelocityReanchored() const {
         return last_gnss_velocity_reanchored_;
@@ -447,6 +463,7 @@ private:
     Eigen::Matrix3d coarse_position_covariance_enu_ = Eigen::Matrix3d::Zero();
     bool last_gnss_position_update_applied_ = false;
     bool last_gnss_position_reanchored_ = false;
+    bool last_gnss_position_reanchor_refused_by_prefit_gate_ = false;
     bool last_gnss_velocity_reanchored_ = false;
     Eigen::Vector3d last_gnss_position_correction_enu_ =
         Eigen::Vector3d::Zero();

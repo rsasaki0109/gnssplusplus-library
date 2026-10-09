@@ -125,6 +125,11 @@ struct PositionSolution {
     int rtk_update_suppressed_outliers = 0;
     double rtk_update_prefit_residual_rms_m = 0.0;
     double rtk_update_prefit_residual_max_m = 0.0;
+    // True when this solution's own update prefit residual exceeded the RTK
+    // processor's configured max_float_prefit_residual_rms_m / _max_m (each
+    // checked only when its configured value is > 0). Set by RTKProcessor;
+    // false for every other producer.
+    bool float_prefit_gate_exceeded = false;
     double rtk_update_post_suppression_residual_rms_m = 0.0;
     double rtk_update_post_suppression_residual_max_m = 0.0;
     double rtk_update_normalized_innovation_squared = 0.0;

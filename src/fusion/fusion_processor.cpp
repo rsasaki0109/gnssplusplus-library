@@ -507,6 +507,7 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
 void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solution) {
     last_gnss_position_update_applied_ = false;
     last_gnss_position_reanchored_ = false;
+    last_gnss_position_reanchor_refused_by_prefit_gate_ = false;
     last_gnss_velocity_reanchored_ = false;
     last_gnss_position_correction_enu_.setZero();
     last_gnss_velocity_correction_enu_.setZero();
@@ -602,7 +603,16 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                         config_.float_position_reanchor_after_rejections &&
                     floatPositionConsistentWithCoarse(solution.time, antenna_position_enu,
                                                       position_covariance_enu);
-                if ((after_gnss_gap || patience_reanchor) &&
+                const bool reanchor_wanted = after_gnss_gap || patience_reanchor;
+                // velocity_consistency_v8 (l): a solution that failed the RTK
+                // float prefit gate is never adopted by a re-anchor.
+                const bool refused_by_prefit_gate =
+                    reanchor_wanted && config_.reanchor_requires_prefit_gate_pass &&
+                    solution.float_prefit_gate_exceeded;
+                if (refused_by_prefit_gate) {
+                    last_gnss_position_reanchor_refused_by_prefit_gate_ = true;
+                }
+                if (reanchor_wanted && !refused_by_prefit_gate &&
                     reanchorPositionFromFixedSolution(antenna_position_enu, position_covariance_enu)) {
                     position_result.ok = true;
                     position_consecutive_gate_rejections_ = 0;

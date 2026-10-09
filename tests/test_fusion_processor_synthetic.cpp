@@ -968,7 +968,8 @@ TEST(FusionProcessorSyntheticTest, DetectsAndFlagsAConsistentButWrongInitialHead
 // position gate. Shared harness: zero lever arm so antenna == IMU position.
 class FloatGateRecoveryHarness {
 public:
-    explicit FloatGateRecoveryHarness(int reanchor_after, double gap_reanchor_s = 0.0) {
+    explicit FloatGateRecoveryHarness(int reanchor_after, double gap_reanchor_s = 0.0,
+                                      bool require_prefit_gate_pass = false) {
         config_.align_static_window_s = 0.1;
         config_.zupt_enable = false;
         config_.nhc_enable = false;
@@ -977,6 +978,7 @@ public:
         config_.max_consecutive_gate_rejections = 0;  // existing FIXED path off
         config_.float_position_reanchor_after_rejections = reanchor_after;
         config_.position_reanchor_after_gnss_gap_s = gap_reanchor_s;
+        config_.reanchor_requires_prefit_gate_pass = require_prefit_gate_pass;
         processor_ = std::make_unique<LooseCouplingProcessor>(config_);
         for (int i = 0; i < 20; ++i) {
             ImuSample sample;
@@ -991,9 +993,11 @@ public:
         send(SolutionStatus::SPP, Eigen::Vector3d::Zero(), 5.0);
     }
     // ENU antenna offset from the origin -> solution of the given class.
-    void send(SolutionStatus status, const Eigen::Vector3d& enu, double sigma_m) {
+    void send(SolutionStatus status, const Eigen::Vector3d& enu, double sigma_m,
+              bool prefit_gate_exceeded = false) {
         time_ = time_ + 0.2;
         PositionSolution solution;
+        solution.float_prefit_gate_exceeded = prefit_gate_exceeded;
         solution.time = time_;
         solution.status = status;
         solution.num_satellites = 10;
@@ -1166,6 +1170,59 @@ TEST(FusionProcessorSyntheticTest, PostGapReanchorIgnoresCoarseClassAndAcceptedU
     h.skip(10.0);
     h.send(SolutionStatus::SPP, Eigen::Vector3d(500.0, 0.0, 0.0), 1.0);
     EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+}
+
+// velocity_consistency_v8 (l): reanchor_requires_prefit_gate_pass. Both
+// re-anchors refuse a solution flagged float_prefit_gate_exceeded.
+TEST(FusionProcessorSyntheticTest, ReanchorPrefitGateDefaultsOffAndFlagIsIgnored) {
+    EXPECT_FALSE(LooseCouplingProcessor::Config().reanchor_requires_prefit_gate_pass);
+    EXPECT_FALSE(PositionSolution{}.float_prefit_gate_exceeded);
+    FloatGateRecoveryHarness h(0, 1.0);  // option off
+    h.send(SolutionStatus::SPP, Eigen::Vector3d(0.0, 0.0, 0.0), 5.0);
+    h.skip(10.0);
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1, /*prefit_gate_exceeded=*/true);
+    EXPECT_TRUE(h.processor().lastGnssPositionReanchored());
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchorRefusedByPrefitGate());
+    EXPECT_NEAR((h.antennaEnu() - Eigen::Vector3d(25.0, 0.0, 0.0)).norm(), 0.0, 1e-6);
+}
+
+TEST(FusionProcessorSyntheticTest, PostGapReanchorRefusesFlaggedSolutionOnlyWhenRequired) {
+    FloatGateRecoveryHarness h(0, 1.0, /*require_prefit_gate_pass=*/true);
+    h.send(SolutionStatus::SPP, Eigen::Vector3d(0.0, 0.0, 0.0), 5.0);
+    h.skip(10.0);
+    const Eigen::Vector3d before = h.antennaEnu();
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1, true);
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+    EXPECT_FALSE(h.processor().lastGnssPositionUpdateApplied());
+    EXPECT_TRUE(h.processor().lastGnssPositionReanchorRefusedByPrefitGate());
+    EXPECT_LT((h.antennaEnu() - before).norm(), 1.0);
+    // The gap is still open: an unflagged solution is re-anchored at once.
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1, false);
+    EXPECT_TRUE(h.processor().lastGnssPositionReanchored());
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchorRefusedByPrefitGate());
+    EXPECT_NEAR((h.antennaEnu() - Eigen::Vector3d(25.0, 0.0, 0.0)).norm(), 0.0, 1e-6);
+}
+
+TEST(FusionProcessorSyntheticTest, RejectionPatienceReanchorRefusesFlaggedSolutionOnlyWhenRequired) {
+    for (const bool required : {false, true}) {
+        FloatGateRecoveryHarness h(3, 0.0, required);
+        const Eigen::Vector3d float_enu(25.0, 0.0, 0.0);
+        for (int i = 0; i < 2; ++i) {
+            h.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+            h.send(SolutionStatus::FLOAT, float_enu, 0.1, true);
+        }
+        h.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+        h.send(SolutionStatus::FLOAT, float_enu, 0.1, true);
+        EXPECT_EQ(h.processor().lastGnssPositionReanchored(), !required) << required;
+        EXPECT_EQ(h.processor().lastGnssPositionReanchorRefusedByPrefitGate(), required) << required;
+        if (required) {
+            // The streak is not consumed: the next unflagged solution re-anchors.
+            h.send(SolutionStatus::SPP, Eigen::Vector3d(12.0, 0.0, 0.0), 5.0);
+            h.send(SolutionStatus::FLOAT, float_enu, 0.1, false);
+            EXPECT_TRUE(h.processor().lastGnssPositionReanchored());
+            EXPECT_NEAR((h.antennaEnu() - float_enu).norm(), 0.0, 1e-6);
+        }
+    }
 }
 
 // velocity_consistency_v5: direction test at the heading latch. A paired
