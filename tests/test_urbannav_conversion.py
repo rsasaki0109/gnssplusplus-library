@@ -81,6 +81,17 @@ class RoverDecimationTest(ConverterCase):
         self.assertEqual((stats["epochs_in"], stats["epochs_out"]), (len(SECONDS), len(kept)))
         self.assertEqual((stats["first_tow_out"], stats["last_tow_out"]), (273375.0, 273376.2))
 
+    def test_epochs_outside_the_truth_span_are_dropped_with_inclusive_bounds(self):
+        source = self.write("in.obs", RINEX_HEADER + b"".join(epoch(s) for s in SECONDS))
+        span = (conv.Fraction("273375.2"), conv.Fraction("273375.6"))
+        stats = conv.decimate_rinex_obs(source, self.root/"out.obs", span)
+        # 15.0 precedes the first truth row and 16.2 follows the last; the bounds themselves are kept.
+        expected = RINEX_HEADER + b"".join(epoch(s) for s in ("15.2000000", "15.4000000", "15.6000000"))
+        self.assertEqual((self.root/"out.obs").read_bytes(), expected)
+        self.assertEqual((stats["epochs_out"], stats["epochs_dropped_outside_truth_span"]), (3, 2))
+        self.assertEqual((stats["first_tow_out"], stats["last_tow_out"]), (273375.2, 273375.6))
+        self.assertEqual(conv.decimate_rinex_obs(source, self.root/"all.obs")["epochs_dropped_outside_truth_span"], 0)
+
     def test_non_gps_time_system_and_backward_epochs_are_rejected(self):
         utc = RINEX_HEADER.replace(b"GPS         TIME", b"UTC         TIME")
         with self.assertRaisesRegex(ValueError, "GPS time system"):
@@ -184,39 +195,40 @@ class EndToEndTest(ConverterCase):
         raw.mkdir()
         body = RINEX_HEADER + b"".join(epoch(s) for s in SECONDS)
         (raw/"Odaiba_rover_trimble.obs").write_bytes(body)
-        (raw/"Odaiba_rover_ublox.obs").write_bytes(body.replace(b"15.3000000", b"15.3010000"))
         (raw/"Odaiba_base_trimble.obs").write_bytes(RINEX_HEADER + epoch("15.0000000"))
         (raw/"Odaiba_base.nav").write_bytes(b"nav bytes\r\n")
         (raw/"Odaiba_imu.csv").write_text(IMU_RAW_HEADER + imu_line("273375.01") + imu_line("273375.03") + imu_line("273375.05"))
-        (raw/"Odaiba_reference.csv").write_text(REF_RAW_HEADER + ref_line("273375.20", "1.000000") + ref_line("273375.30", "2.000000"))
+        (raw/"Odaiba_reference.csv").write_text(
+            REF_RAW_HEADER + "".join(ref_line(t, "1.000000") for t in ("273375.20", "273375.30", "273375.40", "273375.60", "273375.80")))
         return raw
 
-    def test_ublox_is_unchanged_trimble_decimated_and_manifest_hashes_every_file(self):
+    def test_trimble_rover_is_cut_to_the_truth_span_and_manifest_hashes_every_file(self):
         raw = self.make_raw()
         out = self.root/"out"
-        manifest_u = conv.convert(raw, "Odaiba", "ublox", out)
-        manifest_t = conv.convert(raw, "Odaiba", "trimble", out)
-        ublox, trimble = out/"urbannav/Odaiba_ublox", out/"urbannav/Odaiba_trimble"
-        self.assertEqual((ublox/"rover.obs").read_bytes(), (raw/"Odaiba_rover_ublox.obs").read_bytes())
-        self.assertEqual((trimble/"rover.obs").read_bytes().count(b">"), 5)
-        for directory in (ublox, trimble):
-            self.assertEqual((directory/"base.obs").read_bytes(), (raw/"Odaiba_base_trimble.obs").read_bytes())
-            self.assertEqual((directory/"base.nav").read_bytes(), b"nav bytes\r\n")
-            self.assertEqual(sorted(p.name for p in directory.iterdir()),
-                             ["base.nav", "base.obs", "imu.csv", "reference.csv", "rover.obs"])
-        for manifest, directory in ((manifest_u, ublox), (manifest_t, trimble)):
-            self.assertEqual(set(manifest["raw_inputs"]), set(manifest["outputs"]))
-            for name, pin in manifest["outputs"].items():
-                self.assertEqual(pin["sha256"], hashlib.sha256((directory/name).read_bytes()).hexdigest())
-            on_disk = json.loads((out/f"urbannav/{directory.name}.manifest.json").read_text())
-            self.assertEqual(on_disk["raw_inputs"], manifest["raw_inputs"])
-        self.assertEqual(manifest_u["raw_inputs"]["rover.obs"]["sha256"],
-                         hashlib.sha256((raw/"Odaiba_rover_ublox.obs").read_bytes()).hexdigest())
-        self.assertNotEqual(manifest_u["outputs"]["rover.obs"]["sha256"], manifest_t["outputs"]["rover.obs"]["sha256"])
+        manifest = conv.convert(raw, "Odaiba", "trimble", out)
+        directory = out/"urbannav/Odaiba_trimble"
+        self.assertEqual((directory/"rover.obs").read_bytes().count(b">"), 3)  # 15.2, 15.4, 15.6 of 0.2 s multiples 15.0..16.2
+        self.assertEqual(manifest["stats"]["rover.obs"]["epochs_dropped_outside_truth_span"], 2)
+        self.assertEqual(conv.reference_span(directory/"reference.csv"), (conv.Fraction("273375.2"), conv.Fraction("273375.8")))
+        self.assertEqual((directory/"base.obs").read_bytes(), (raw/"Odaiba_base_trimble.obs").read_bytes())
+        self.assertEqual((directory/"base.nav").read_bytes(), b"nav bytes\r\n")
+        self.assertEqual(sorted(p.name for p in directory.iterdir()),
+                         ["base.nav", "base.obs", "imu.csv", "reference.csv", "rover.obs"])
+        self.assertEqual(set(manifest["raw_inputs"]), set(manifest["outputs"]))
+        for name, pin in manifest["outputs"].items():
+            self.assertEqual(pin["sha256"], hashlib.sha256((directory/name).read_bytes()).hexdigest())
+        on_disk = json.loads((out/"urbannav/Odaiba_trimble.manifest.json").read_text())
+        self.assertEqual(on_disk["raw_inputs"], manifest["raw_inputs"])
+        self.assertEqual(manifest["raw_inputs"]["rover.obs"]["sha256"],
+                         hashlib.sha256((raw/"Odaiba_rover_trimble.obs").read_bytes()).hexdigest())
+
+    def test_ublox_is_not_supported(self):
+        with self.assertRaisesRegex(ValueError, "rover"):
+            conv.convert(self.make_raw(), "Odaiba", "ublox", self.root/"out")
 
     def test_cli_refuses_to_overwrite_and_reports_missing_inputs(self):
         raw = self.make_raw()
-        argv = ["--raw-dir", str(raw), "--run", "Odaiba", "--rover", "ublox", "--output-root", str(self.root/"o")]
+        argv = ["--raw-dir", str(raw), "--run", "Odaiba", "--rover", "trimble", "--output-root", str(self.root/"o")]
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(conv.main(argv), 0)
         with contextlib.redirect_stderr(io.StringIO()):

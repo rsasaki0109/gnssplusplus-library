@@ -6,12 +6,13 @@ docs/online_pva_default_switch_holdout_v1.md. Pure standard library. The raw
 files are read as data only; nothing from them is executed.
 
 Input names under --raw-dir (``<run>`` is Odaiba or Shinjuku):
-    <run>_rover_ublox.obs  <run>_rover_trimble.obs  <run>_base_trimble.obs
-    <run>_base.nav  <run>_imu.csv  <run>_reference.csv
+    <run>_rover_trimble.obs  <run>_base_trimble.obs  <run>_base.nav
+    <run>_imu.csv  <run>_reference.csv
 
-Output: <output-root>/urbannav/<run>_<rover>/{rover.obs,base.obs,base.nav,
-imu.csv,reference.csv} plus <run>_<rover>.manifest.json beside that directory
-(SHA256 of every raw input and output file).
+Output: <output-root>/urbannav/<run>_trimble/{rover.obs,base.obs,base.nav,
+imu.csv,reference.csv} plus <run>_trimble.manifest.json beside that directory
+(SHA256 of every raw input and output file). Only the Trimble rover is used; the
+u-blox rover is excluded by the contract (its epochs are off the 0.2 s grid).
 """
 import argparse
 import datetime
@@ -24,7 +25,7 @@ import shutil
 import sys
 
 RUNS = ("Odaiba", "Shinjuku")
-ROVERS = ("ublox", "trimble")
+ROVERS = ("trimble",)
 GPS_EPOCH = datetime.date(1980, 1, 6)
 
 GRID_US = 20_000          # 50 Hz IMU grid, t = k * 0.02 s of GPS time of week
@@ -100,9 +101,11 @@ def split_rinex_header(stream):
     raise ValueError("RINEX header has no END OF HEADER")
 
 
-def decimate_rinex_obs(src, dst):
-    """Copy epochs whose GPS time of week is a multiple of 0.2 s; header and records byte-preserved."""
-    stats = dict(epochs_in=0, epochs_out=0, first_tow_out=None, last_tow_out=None, week=None)
+def decimate_rinex_obs(src, dst, span=None):
+    """Copy epochs whose GPS time of week is a multiple of 0.2 s and, if `span` is given, lies within
+    the inclusive (first, last) TOW span of the converted truth; header and records byte-preserved."""
+    stats = dict(epochs_in=0, epochs_out=0, epochs_dropped_outside_truth_span=0,
+                 first_tow_out=None, last_tow_out=None, week=None)
     with Path(src).open("rb") as stream, Path(dst).open("wb") as out:
         header, time_system = split_rinex_header(stream)
         if time_system != "GPS":
@@ -123,6 +126,9 @@ def decimate_rinex_obs(src, dst):
                     raise ValueError("observation epochs cross a GPS week boundary")
                 stats["epochs_in"] += 1
                 keep = is_multiple(tow, EPOCH_STEP)
+                if keep and span is not None and not span[0] <= tow <= span[1]:
+                    keep = False
+                    stats["epochs_dropped_outside_truth_span"] += 1
                 if keep:
                     stats["epochs_out"] += 1
                     if stats["first_tow_out"] is None:
@@ -246,6 +252,21 @@ def convert_reference(src, dst):
 # ---------------------------------------------------------------------------
 
 
+def reference_span(path):
+    """Exact inclusive (first, last) TOW of a converted reference.csv."""
+    first = last = None
+    with Path(path).open("rb") as stream:
+        stream.readline()
+        for line in stream:
+            if line.strip():
+                last = Fraction(line.split(b",", 1)[0].decode().strip())
+                if first is None:
+                    first = last
+    if first is None:
+        raise ValueError("converted reference has no rows")
+    return first, last
+
+
 def copy_unchanged(src, dst):
     shutil.copyfile(src, dst)
     if sha256_file(src) != sha256_file(dst):
@@ -268,15 +289,12 @@ def convert(raw_dir, run, rover, output_root):
         raise ValueError(f"output already exists: {target}")
     target.mkdir(parents=True)
     stats = {}
-    if rover == "trimble":
-        stats["rover.obs"] = decimate_rinex_obs(raw["rover"], target/"rover.obs")
-    else:
-        copy_unchanged(raw["rover"], target/"rover.obs")
-        stats["rover.obs"] = dict(copied_unchanged=True)
+    # Truth first: rover epochs are kept only inside the converted truth's TOW span.
+    stats["reference.csv"] = convert_reference(raw["reference"], target/"reference.csv")
+    stats["rover.obs"] = decimate_rinex_obs(raw["rover"], target/"rover.obs", reference_span(target/"reference.csv"))
     copy_unchanged(raw["base"], target/"base.obs")
     copy_unchanged(raw["nav"], target/"base.nav")
     stats["imu.csv"] = convert_imu(raw["imu"], target/"imu.csv")
-    stats["reference.csv"] = convert_reference(raw["reference"], target/"reference.csv")
     manifest = dict(
         schema="libgnsspp.urbannav_ppc_conversion.v1", contract="docs/online_pva_default_switch_holdout_v1.md",
         run=run, rover=rover, converter=pin(__file__),
@@ -292,7 +310,7 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--raw-dir", type=Path, required=True)
     parser.add_argument("--run", choices=RUNS, required=True)
-    parser.add_argument("--rover", choices=ROVERS, required=True)
+    parser.add_argument("--rover", choices=ROVERS, default="trimble")
     parser.add_argument("--output-root", type=Path, required=True)
     args = parser.parse_args(argv)
     try:

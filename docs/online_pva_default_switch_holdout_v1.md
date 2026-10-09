@@ -175,6 +175,23 @@ The same review changed the IMU grid rule. A grid point that coincides with a
 raw sample is now kept, where the draft skipped it as "strictly inside no
 pair". The draft rule skipped 4 and 6 such points.
 
+## Final pre-freeze smoke
+
+The final control-only smoke used the frozen converter: 300 epochs, normal
+scenario. Only state, availability and match fraction were read; no error
+metric was read.
+
+| Directory | State | Fused availability | RTK availability | Match fraction |
+|---|---|---|---|---:|
+| `Odaiba_trimble` | passed | 0.967 | 1.0 | 1.0 |
+| `Shinjuku_trimble` | passed | 0.967 | 1.0 | 1.0 |
+
+An offline check of the full converted runs, which did not involve the
+estimator, confirmed that every kept rover epoch has an exact truth row:
+
+- Odaiba: 6,199 epochs, 0 without a truth row.
+- Shinjuku: 10,395 epochs, 0 without a truth row.
+
 ## Reported in addition (not gates)
 
 - Absolute errors, with the warning that the zero lever arm and the unknown
