@@ -50,6 +50,6 @@ develop = `c37979c3`。オープン PR は #549（HAS、ドラフト、以前か
 - `reference.csv` はすでにアンテナ位置。採点に lever arm は使わない。
 
 ## 主要コマンド
-- PVA：`python3 apps/gnss.py pva-evaluate --run-dir data/PPC-Dataset/tokyo/run1 --replay-binary build/apps/native/gnss_pva_replay --output-dir <new> --scenario normal --candidate <name>`
+- PVA：`python3 apps/gnss.py pva-evaluate --run-dir data/PPC-Dataset/tokyo/run1 --replay-binary build/apps/gnss_pva_replay --output-dir <new> --scenario normal --candidate <name>`
 - 既定パリティ：`scripts/analysis/check_pva_default_parity.py`
 - C++ テスト：`run_tests`（ローカルでは gtsam の都合で `LD_LIBRARY_PATH` の指定が必要だった）
