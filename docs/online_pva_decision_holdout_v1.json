@@ -1,0 +1,67 @@
+{
+ "contract": "docs/online_pva_default_switch_holdout_v1.md",
+ "contract_sha256": "123caf558a5a214c6902b04d3cce79e2a782ce783a2fc97a914591304658b412",
+ "freeze_commit": "90d6921d",
+ "candidate": "velocity_consistency_v6",
+ "control": "none (current production default)",
+ "replay_binary_sha256": "8fa5d784a245077dbbd59fdd2544da3fb01f86d825eb399e0592df23d814e744",
+ "population": {
+  "dataset": "UrbanNav Tokyo 2018-12-19",
+  "runs": [
+   "Odaiba_trimble",
+   "Shinjuku_trimble"
+  ],
+  "scenarios": [
+   "normal",
+   "gnss_outage 60-70 s",
+   "imu_gap 60-64 s"
+  ]
+ },
+ "adoption": "No-Go",
+ "runs": 6,
+ "gates": 186,
+ "failed": 4,
+ "default_changed": false,
+ "failures": [
+  {
+   "run": "Odaiba_trimble",
+   "gate": "all.rotation_deg.rmse",
+   "control": 105.614,
+   "candidate": 109.312
+  },
+  {
+   "run": "Odaiba_trimble",
+   "gate": "common.rotation_deg.rmse",
+   "control": 105.614,
+   "candidate": 109.312
+  },
+  {
+   "run": "Odaiba_trimble-gnss_outage",
+   "gate": "scenario.recovery_gnss_update_s",
+   "control": 0.0,
+   "candidate": 0.8
+  },
+  {
+   "run": "Shinjuku_trimble-gnss_outage",
+   "gate": "scenario.recovery_gnss_update_s",
+   "control": 0.0,
+   "candidate": 0.8
+  }
+ ],
+ "improved_rotation": true,
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 0.965,
+  "mean": 1.026,
+  "max": 1.073
+ },
+ "converter_sha256_in_manifests_matches_frozen_script": true,
+ "full_decision_sha256": "fa9eadad732bd852d451368d0c6eabd9b6ab0d75973becc0669e48fd23fbc662",
+ "full_decision_bytes": 545842,
+ "full_decision_location": "cloud session scratch (not retained)"
+}
