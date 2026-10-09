@@ -1,0 +1,181 @@
+{
+ "vs_recorded_control": {
+  "adoption": "No-Go",
+  "runs": 18,
+  "gates": 558,
+  "failed": 21,
+  "failures": [
+   {
+    "run": "tokyo1",
+    "gate": "processing.p95_ms",
+    "control": 6.272122649999997,
+    "candidate": 17.962399049999995
+   },
+   {
+    "run": "tokyo1-gnss_outage",
+    "gate": "processing.p95_ms",
+    "control": 7.649596899999999,
+    "candidate": 16.31264605
+   },
+   {
+    "run": "tokyo1-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 7.588948799999998,
+    "candidate": 17.0513544
+   },
+   {
+    "run": "tokyo2",
+    "gate": "processing.p95_ms",
+    "control": 7.739928,
+    "candidate": 21.324859
+   },
+   {
+    "run": "tokyo2-gnss_outage",
+    "gate": "processing.p95_ms",
+    "control": 9.658123499999999,
+    "candidate": 20.4343455
+   },
+   {
+    "run": "tokyo2-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 0.20000000000000284
+   },
+   {
+    "run": "tokyo2-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 10.0447565,
+    "candidate": 20.4383895
+   },
+   {
+    "run": "tokyo3",
+    "gate": "processing.p95_ms",
+    "control": 10.546314,
+    "candidate": 25.239495
+   },
+   {
+    "run": "tokyo3-gnss_outage",
+    "gate": "processing.p95_ms",
+    "control": 10.483655,
+    "candidate": 22.746734
+   },
+   {
+    "run": "tokyo3-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 0.20000000000000284
+   },
+   {
+    "run": "tokyo3-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 8.138418,
+    "candidate": 21.259673
+   },
+   {
+    "run": "nagoya1-gnss_outage",
+    "gate": "processing.p95_ms",
+    "control": 6.692685949999997,
+    "candidate": 14.235468149999997
+   },
+   {
+    "run": "nagoya1-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 18.0
+   },
+   {
+    "run": "nagoya1-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 6.243542149999998,
+    "candidate": 16.743505099999997
+   },
+   {
+    "run": "nagoya2",
+    "gate": "processing.p95_ms",
+    "control": 6.841737,
+    "candidate": 15.926189
+   },
+   {
+    "run": "nagoya2-gnss_outage",
+    "gate": "processing.p95_ms",
+    "control": 6.205432999999999,
+    "candidate": 16.028557499999998
+   },
+   {
+    "run": "nagoya2-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 0.20000000000000284
+   },
+   {
+    "run": "nagoya2-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 5.74737,
+    "candidate": 18.5891595
+   },
+   {
+    "run": "nagoya3",
+    "gate": "processing.p95_ms",
+    "control": 5.515469,
+    "candidate": 13.184796
+   },
+   {
+    "run": "nagoya3-gnss_outage",
+    "gate": "processing.p95_ms",
+    "control": 5.655933,
+    "candidate": 13.233787
+   },
+   {
+    "run": "nagoya3-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 5.672171,
+    "candidate": 12.645892
+   }
+  ],
+  "improved_rotation": true,
+  "full_decision_sha256": "cc66af38759630e597c003a2292e0e34ac2ee8a2c226479654c44fb52ff5668c",
+  "full_decision_bytes": 1655323
+ },
+ "vs_contemporaneous_candidate_none": {
+  "adoption": "No-Go",
+  "runs": 18,
+  "gates": 558,
+  "failed": 4,
+  "failures": [
+   {
+    "run": "tokyo2-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 0.20000000000000284
+   },
+   {
+    "run": "tokyo3-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 0.20000000000000284
+   },
+   {
+    "run": "nagoya1-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 18.0
+   },
+   {
+    "run": "nagoya2-gnss_outage",
+    "gate": "scenario.recovery_gnss_update_s",
+    "control": 0.0,
+    "candidate": 0.20000000000000284
+   }
+  ],
+  "improved_rotation": true,
+  "full_decision_sha256": "f0733113ab33224a200a203decd9a083ac0014a83bd64038dd4a2c7038e22414",
+  "full_decision_bytes": 1650984
+ },
+ "candidate": "velocity_consistency_v3",
+ "contract": "docs/online_pva_candidate_v4.md",
+ "default_changed": false,
+ "repository_commit": "5a6f48ab",
+ "replay_binary_sha256": "31e2859ae164c6b1a9a2bcd512778119b6420c363ed0abd71902f2f8ce045708",
+ "candidate_none_parity": 0,
+ "full_decision_location": "/media/sasaki/aiueo2/rtklib_v2_ws_output/pva_floatcov_20261009/decision/decision.json"
+}
