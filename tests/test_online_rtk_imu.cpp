@@ -267,4 +267,93 @@ TEST(OnlineRtkImuTest, HeadingLatchReanchorsVelocityAndClearsItsCrossCovariance)
     EXPECT_GT(cross(control.state().covariance), 1e-9);
     EXPECT_GT(cov.diagonal().minCoeff(), 0.0);
 }
+TEST(OnlineRtkImuTest, RoverGapKeepsInertialFiltersDefaultsOff) {
+    const OnlineRtkImuProcessor::Config config;
+    EXPECT_FALSE(config.rover_gap_keeps_inertial_filters);
+    EXPECT_FALSE(config.fusion.heading_latch_direction_test);
+    EXPECT_EQ(OnlineRtkImuProcessor::Diagnostics().rover_gap_rtk_resets, 0U);
+}
+namespace {
+ImuSample movingImu(double tow) {
+    auto sample = imu(tow);
+    // Static through the alignment window (before 10.1 s), then a
+    // forward acceleration: the mechanized velocity grows, a re-alignment
+    // would zero it.
+    if (tow > 10.1) sample.accel_raw.x() = 0.5;
+    return sample;
+}
+// Streams continuous IMU through 10.00 s, a rover epoch at 10.5, then more IMU
+// and a rover epoch 2.5 s later (> max_rover_gap_s). `skip_imu_from/_to`
+// (when set) removes IMU samples in between so that the IMU itself has a gap.
+struct RoverGapRun {
+    OnlineRtkImuProcessor::Output gap_epoch;
+    OnlineRtkImuProcessor::Diagnostics diagnostics;
+    Vector3d fused_velocity_enu;
+    Vector3d reference_velocity_enu;
+    double fused_time_tow = 0.0;
+    double reference_time_tow = 0.0;
+    bool fused_initialized = false;
+};
+RoverGapRun runRoverGap(bool keep_inertial, double skip_imu_from = 0.0, double skip_imu_to = 0.0) {
+    auto config = configuration();
+    config.rover_gap_keeps_inertial_filters = keep_inertial;
+    OnlineRtkImuProcessor processor(config);
+    // Reference: the same fusion configuration fed every consumed sample.
+    LooseCouplingProcessor reference(config.fusion);
+    auto push = [&](double t) {
+        if (t > skip_imu_from && t < skip_imu_to) return;
+        const auto sample = movingImu(t);
+        processor.pushImu(sample, time(t));
+        reference.processImuSample(sample);
+    };
+    for (int i = 0; i <= 50; ++i) push(10.0 + 0.01 * i);
+    processor.processRover(epoch(10.5), time(10.5));
+    for (int i = 51; i <= 300; ++i) push(10.0 + 0.01 * i);
+    RoverGapRun run;
+    run.gap_epoch = processor.processRover(epoch(13.0), time(13.0));
+    run.diagnostics = processor.diagnostics();
+    run.fused_velocity_enu = processor.fusionFilter().state().nominal.velocity_enu;
+    run.reference_velocity_enu = reference.state().nominal.velocity_enu;
+    run.fused_time_tow = processor.fusionFilter().state().nominal.time.tow;
+    run.reference_time_tow = reference.state().nominal.time.tow;
+    run.fused_initialized = processor.fusionFilter().isInitialized();
+    return run;
+}
+}  // namespace
+TEST(OnlineRtkImuTest, RoverGapKeepsFusedFilterWhenImuIsContinuous) {
+    const auto run = runRoverGap(true);
+    EXPECT_EQ(run.gap_epoch.reason, "rover_gap_rtk_reset");
+    EXPECT_EQ(run.gap_epoch.reset_generation, 0U);
+    EXPECT_EQ(run.diagnostics.reset_generation, 0U);
+    EXPECT_EQ(run.diagnostics.rover_gap_rtk_resets, 1U);
+    EXPECT_EQ(run.diagnostics.rover_gap_resets, 0U);
+    EXPECT_EQ(run.diagnostics.imu_gap_resets, 0U);
+    EXPECT_EQ(run.gap_epoch.imu_consumed, 250U);
+    EXPECT_TRUE(run.fused_initialized);
+    // The fused filter is the uninterrupted one: it kept its 3 s of velocity.
+    EXPECT_GT(run.reference_velocity_enu.norm(), 1.0);
+    EXPECT_EQ(run.fused_velocity_enu, run.reference_velocity_enu);
+    EXPECT_EQ(run.fused_time_tow, run.reference_time_tow);
+}
+TEST(OnlineRtkImuTest, RoverGapResetsEverythingWhenOptionIsOff) {
+    const auto run = runRoverGap(false);
+    EXPECT_EQ(run.gap_epoch.reason, "rover_gap_reset");
+    EXPECT_EQ(run.gap_epoch.reset_generation, 1U);
+    EXPECT_EQ(run.diagnostics.reset_generation, 1U);
+    EXPECT_EQ(run.diagnostics.rover_gap_resets, 1U);
+    EXPECT_EQ(run.diagnostics.rover_gap_rtk_resets, 0U);
+    // Re-aligned on the backlog: the continuous velocity history is lost.
+    EXPECT_GT((run.fused_velocity_enu - run.reference_velocity_enu).norm(), 0.5);
+}
+TEST(OnlineRtkImuTest, ImuGapStillResetsEverythingWithRoverGapOptionOn) {
+    // The IMU itself has a 1 s hole (11.0 .. 12.0) inside the rover gap.
+    const auto run = runRoverGap(true, 11.0, 12.0);
+    EXPECT_EQ(run.gap_epoch.reason, "imu_gap_reset");
+    EXPECT_EQ(run.gap_epoch.reset_generation, 1U);
+    EXPECT_EQ(run.diagnostics.rover_gap_rtk_resets, 1U);
+    EXPECT_EQ(run.diagnostics.rover_gap_resets, 0U);
+    EXPECT_EQ(run.diagnostics.imu_gap_resets, 1U);
+    EXPECT_EQ(run.diagnostics.reset_generation, 1U);
+    EXPECT_GT((run.fused_velocity_enu - run.reference_velocity_enu).norm(), 0.5);
+}
 }

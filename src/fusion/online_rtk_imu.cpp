@@ -34,18 +34,36 @@ OnlineRtkImuProcessor::OnlineRtkImuProcessor(const Config& config) : config_(con
     recreateFilters();
 }
 
-void OnlineRtkImuProcessor::recreateFilters() {
+void OnlineRtkImuProcessor::recreateRtkFilter() {
     auto rtk_config = config_.rtk;
     rtk_config.use_external_position_time_update = config_.tight_time_update;
     rtk_config.enable_velocity_states = config_.tight_time_update;
     rtk_ = std::make_unique<RTKProcessor>(rtk_config);
     if (!rtk_->initialize(config_.processor)) throw std::invalid_argument("RTK initialization failed");
     rtk_->setBasePosition(config_.base_position_ecef);
+}
+
+void OnlineRtkImuProcessor::recreateFusionFilter() {
     fusion_ = std::make_unique<LooseCouplingProcessor>(config_.fusion);
+}
+
+void OnlineRtkImuProcessor::recreatePriorFusionFilter() {
     prior_fusion_ = config_.rtk_prior_fusion
         ? std::make_unique<LooseCouplingProcessor>(*config_.rtk_prior_fusion) : nullptr;
+}
+
+void OnlineRtkImuProcessor::recreateFilters() {
+    recreateRtkFilter();
+    recreateFusionFilter();
+    recreatePriorFusionFilter();
     recreateTightFilter();
     have_imu_ = false;
+}
+
+void OnlineRtkImuProcessor::recreateRtkSideFilters() {
+    recreateRtkFilter();
+    recreatePriorFusionFilter();
+    recreateTightFilter();
 }
 
 void OnlineRtkImuProcessor::recreateTightFilter() {
@@ -131,10 +149,19 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
     out.received_at = arrival;
     out.input_age_s = arrival - obs.time;
     if (have_rover_ && obs.time - rover_time_ > config_.max_rover_gap_s) {
-        recreateFilters();
-        ++diagnostics_.rover_gap_resets;
-        ++diagnostics_.reset_generation;
-        out.reason = "rover_gap_reset";
+        if (config_.rover_gap_keeps_inertial_filters) {
+            // GNSS-only gap: the fused loose filter and the IMU continuity
+            // flag are kept; the IMU-gap checks below still recreate
+            // everything if the IMU itself has a gap.
+            recreateRtkSideFilters();
+            ++diagnostics_.rover_gap_rtk_resets;
+            out.reason = "rover_gap_rtk_reset";
+        } else {
+            recreateFilters();
+            ++diagnostics_.rover_gap_resets;
+            ++diagnostics_.reset_generation;
+            out.reason = "rover_gap_reset";
+        }
     }
     while (!imu_.empty() && imu_.front().time <= obs.time) {
         const ImuSample sample = imu_.front();

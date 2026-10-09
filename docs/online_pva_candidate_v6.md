@@ -202,7 +202,18 @@ and bounded Nagoya 1 prefixes:
 - 400 epochs, to confirm (h) fires at the first latch;
 - 1,200 epochs, to confirm the (i) path is taken at 227.2 s.
 
-No full replay of the candidate is run before the freeze. (h) and (i)
+No full replay of the candidate is run before the freeze. What those
+prefixes showed:
+
+- 400 epochs: the latch is at 52.0 s as before, with `v_long` = -0.61 m/s
+  (valid) and the course flipped to 177.2 deg. The heading error against
+  truth is -1.6 deg.
+- 1,200 epochs: one `rover_gap_rtk_reset` at 227.2 s, with
+  `reset_generation` 0 throughout. Rotation error is 3.4 deg at 230 s and
+  3.2 deg at 240 s.
+- Candidate `none` and `velocity_consistency_v4` from the candidate tree
+  match the develop binary in every field except `processing_ms` on
+  1,200-epoch prefixes of Nagoya 1 and Tokyo 1. (h) and (i)
 introduce no constant: the stationarity test is the existing ZUPT condition,
 and the decision boundary is the sign.
 

@@ -1168,5 +1168,196 @@ TEST(FusionProcessorSyntheticTest, PostGapReanchorIgnoresCoarseClassAndAcceptedU
     EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
 }
 
+// velocity_consistency_v5: direction test at the heading latch. A paired
+// "off"/"on" processor sees identical input; the body moves along +X
+// (body_accel_x > 0) or -X (< 0) of the filter's own pre-motion attitude R0,
+// so the GNSS course is the direction of travel and the true body +X course
+// is the course of R0 * UnitX.
+class LatchDirectionHarness {
+public:
+    LatchDirectionHarness(double body_accel_x, bool vibrate, bool zupt_enable)
+        : body_accel_x_(body_accel_x), vibrate_(vibrate) {
+        LooseCouplingProcessor::Config config;
+        config.align_static_window_s = 0.5;
+        config.zupt_enable = zupt_enable;
+        config.lever_arm_body.setZero();
+        off_ = std::make_unique<LooseCouplingProcessor>(config);
+        config.heading_latch_direction_test = true;
+        on_ = std::make_unique<LooseCouplingProcessor>(config);
+    }
+
+    // Runs until both processors latched (or 10 s) and records the body +X
+    // course at each processor's own latch epoch.
+    void run() {
+        const double t0 = 100000.0;
+        Eigen::Matrix3d r0 = Eigen::Matrix3d::Identity();
+        for (int i = 0; i <= 1000; ++i) {
+            const double t = i * kDt;
+            const bool moving = t > 3.0 + 1e-9;
+            if (!moving && i == 300) r0 = on_->state().nominal.attitude_body_to_enu.toRotationMatrix();
+            const double a_x = moving ? body_accel_x_ : 0.0;
+            ImuSample sample;
+            sample.time = GNSSTime(2200, t0 + t);
+            const double vib = vibrate_ ? ((i % 2 == 0) ? 1.5 : -1.5) : 0.0;
+            sample.accel_raw = Eigen::Vector3d(a_x, 0.0, kGravity + vib);
+            off_->processImuSample(sample);
+            on_->processImuSample(sample);
+            if (i % 10 != 0 || !on_->isInitialized()) continue;
+            const double age = moving ? t - 3.0 : 0.0;
+            const Eigen::Vector3d velocity_enu = r0 * Eigen::Vector3d(body_accel_x_ * age, 0.0, 0.0);
+            const Eigen::Vector3d position_enu =
+                r0 * Eigen::Vector3d(0.5 * body_accel_x_ * age * age, 0.0, 0.0);
+            PositionSolution fix;
+            fix.time = sample.time;
+            fix.status = SolutionStatus::SPP;
+            fix.num_satellites = 8;
+            // ENU -> ECEF at lat 0, lon 0: east = y, north = z, up = x.
+            fix.position_ecef = Eigen::Vector3d(6378137.0 + position_enu.z(), position_enu.x(), position_enu.y());
+            fix.position_covariance = Eigen::Matrix3d::Identity();
+            fix.has_velocity = true;
+            fix.velocity_ecef = Eigen::Vector3d(velocity_enu.z(), velocity_enu.x(), velocity_enu.y());
+            fix.velocity_covariance = 0.04 * Eigen::Matrix3d::Identity();
+            const bool off_before = off_->isHeadingAligned();
+            const bool on_before = on_->isHeadingAligned();
+            off_->processGnssSolution(fix);
+            on_->processGnssSolution(fix);
+            if (!off_before && off_->isHeadingAligned()) {
+                off_latch_time_ = sample.time.tow;
+                off_course_deg_ = bodyXCourseDeg(*off_);
+            }
+            if (!on_before && on_->isHeadingAligned()) {
+                on_latch_time_ = sample.time.tow;
+                on_course_deg_ = bodyXCourseDeg(*on_);
+            }
+            if (!off_->isHeadingAligned() && !on_->isHeadingAligned()) {
+                // Before the latch the option is observationally inert.
+                EXPECT_EQ((off_->state().covariance - on_->state().covariance).norm(), 0.0);
+                EXPECT_EQ((off_->state().nominal.velocity_enu - on_->state().nominal.velocity_enu).norm(), 0.0);
+                EXPECT_EQ(off_->state().nominal.attitude_body_to_enu.coeffs(),
+                          on_->state().nominal.attitude_body_to_enu.coeffs());
+            }
+            if (off_->isHeadingAligned() && on_->isHeadingAligned()) break;
+        }
+        true_body_x_course_deg_ = courseDeg(r0.col(0));
+        travel_course_deg_ = courseDeg(body_accel_x_ >= 0.0 ? r0.col(0) : Eigen::Vector3d(-r0.col(0)));
+    }
+
+    static double courseDeg(const Eigen::Vector3d& enu) {
+        return std::atan2(enu.x(), enu.y()) * 180.0 / M_PI;
+    }
+    static double bodyXCourseDeg(const LooseCouplingProcessor& processor) {
+        return courseDeg(processor.state().nominal.attitude_body_to_enu.toRotationMatrix().col(0));
+    }
+    static double angleDiffDeg(double a, double b) { return std::remainder(a - b, 360.0); }
+
+    LooseCouplingProcessor& off() { return *off_; }
+    LooseCouplingProcessor& on() { return *on_; }
+    double offCourseDeg() const { return off_course_deg_; }
+    double onCourseDeg() const { return on_course_deg_; }
+    double offLatchTime() const { return off_latch_time_; }
+    double onLatchTime() const { return on_latch_time_; }
+    double trueBodyXCourseDeg() const { return true_body_x_course_deg_; }
+    double travelCourseDeg() const { return travel_course_deg_; }
+
+private:
+    double body_accel_x_;
+    bool vibrate_;
+    std::unique_ptr<LooseCouplingProcessor> off_, on_;
+    double off_course_deg_ = std::numeric_limits<double>::quiet_NaN();
+    double on_course_deg_ = std::numeric_limits<double>::quiet_NaN();
+    double off_latch_time_ = -1.0, on_latch_time_ = -1.0;
+    double true_body_x_course_deg_ = 0.0, travel_course_deg_ = 0.0;
+};
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionTestDefaultsOff) {
+    EXPECT_FALSE(LooseCouplingProcessor::Config().heading_latch_direction_test);
+    LooseCouplingProcessor processor{LooseCouplingProcessor::Config()};
+    EXPECT_FALSE(processor.longitudinalVelocityValid());
+    EXPECT_EQ(processor.longitudinalVelocityMps(), 0.0);
+    EXPECT_FALSE(processor.lastLatchDirectionFlipped());
+    EXPECT_EQ(processor.latchDirectionFlipCount(), 0U);
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionTestFlipsAReverseStart) {
+    for (const bool zupt_enable : {true, false}) {
+        LatchDirectionHarness h(-1.0, /*vibrate=*/false, zupt_enable);
+        h.run();
+        ASSERT_TRUE(h.off().isHeadingAligned()) << zupt_enable;
+        ASSERT_TRUE(h.on().isHeadingAligned()) << zupt_enable;
+        // Latch time is unchanged by the option.
+        EXPECT_EQ(h.offLatchTime(), h.onLatchTime());
+        // Option off: heading = course of travel, 180 deg from the true heading.
+        EXPECT_NEAR(LatchDirectionHarness::angleDiffDeg(h.offCourseDeg(), h.travelCourseDeg()), 0.0, 0.1);
+        EXPECT_NEAR(std::abs(LatchDirectionHarness::angleDiffDeg(h.offCourseDeg(), h.trueBodyXCourseDeg())),
+                    180.0, 0.1);
+        // Option on: course + 180 deg, i.e. the true body +X direction.
+        EXPECT_NEAR(LatchDirectionHarness::angleDiffDeg(h.onCourseDeg(), h.trueBodyXCourseDeg()), 0.0, 0.1);
+        EXPECT_NEAR(std::abs(LatchDirectionHarness::angleDiffDeg(h.onCourseDeg(), h.offCourseDeg())), 180.0, 0.1);
+        EXPECT_TRUE(h.on().longitudinalVelocityValid());
+        EXPECT_LT(h.on().lastLatchLongitudinalVelocityMps(), -0.3);
+        EXPECT_TRUE(h.on().lastLatchDirectionFlipped());
+        EXPECT_EQ(h.on().latchDirectionFlipCount(), 1U);
+        EXPECT_FALSE(h.off().lastLatchDirectionFlipped());
+        EXPECT_EQ(h.off().latchDirectionFlipCount(), 0U);
+        EXPECT_FALSE(h.off().longitudinalVelocityValid());
+    }
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionTestKeepsAForwardStart) {
+    LatchDirectionHarness h(1.0, /*vibrate=*/false, /*zupt_enable=*/true);
+    h.run();
+    ASSERT_TRUE(h.off().isHeadingAligned());
+    ASSERT_TRUE(h.on().isHeadingAligned());
+    EXPECT_EQ(h.offLatchTime(), h.onLatchTime());
+    EXPECT_NEAR(LatchDirectionHarness::angleDiffDeg(h.offCourseDeg(), h.trueBodyXCourseDeg()), 0.0, 0.1);
+    EXPECT_NEAR(LatchDirectionHarness::angleDiffDeg(h.onCourseDeg(), h.trueBodyXCourseDeg()), 0.0, 0.1);
+    EXPECT_TRUE(h.on().longitudinalVelocityValid());
+    EXPECT_GT(h.on().lastLatchLongitudinalVelocityMps(), 0.3);
+    EXPECT_FALSE(h.on().lastLatchDirectionFlipped());
+    EXPECT_EQ(h.on().latchDirectionFlipCount(), 0U);
+    // With nothing flipped, the whole state is identical to the option off.
+    EXPECT_EQ(h.off().state().nominal.attitude_body_to_enu.coeffs(),
+              h.on().state().nominal.attitude_body_to_enu.coeffs());
+    EXPECT_EQ((h.off().state().covariance - h.on().state().covariance).norm(), 0.0);
+}
+
+TEST(FusionProcessorSyntheticTest, HeadingLatchDirectionTestNeedsAStationarySampleAfterInitialization) {
+    // Constant vibration keeps the ZUPT stationarity condition from ever
+    // holding after initialization, so v_long is never validated and the
+    // (otherwise negative) integral is not trusted: no flip.
+    LatchDirectionHarness h(-1.0, /*vibrate=*/true, /*zupt_enable=*/true);
+    h.run();
+    ASSERT_TRUE(h.off().isHeadingAligned());
+    ASSERT_TRUE(h.on().isHeadingAligned());
+    EXPECT_FALSE(h.on().longitudinalVelocityValid());
+    EXPECT_LT(h.on().longitudinalVelocityMps(), 0.0);
+    EXPECT_FALSE(h.on().lastLatchDirectionFlipped());
+    EXPECT_EQ(h.on().latchDirectionFlipCount(), 0U);
+    EXPECT_TRUE(std::isnan(h.on().lastLatchLongitudinalVelocityMps()));
+    EXPECT_NEAR(LatchDirectionHarness::angleDiffDeg(h.onCourseDeg(), h.offCourseDeg()), 0.0, 1e-9);
+    EXPECT_EQ(h.offLatchTime(), h.onLatchTime());
+}
+
+TEST(FusionProcessorSyntheticTest, LongitudinalVelocityRemovesGravityOfATiltedMount) {
+    // A constant tilted specific force (|f| = g) is gravity only: the
+    // body-forward kinematic acceleration is 0, whatever the pitch. The
+    // z-axis vibration keeps the stationarity condition from resetting v_long.
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.5;
+    config.heading_latch_direction_test = true;
+    LooseCouplingProcessor processor(config);
+    const double pitch = 10.0 * M_PI / 180.0;
+    for (int i = 0; i <= 500; ++i) {
+        ImuSample sample;
+        sample.time = GNSSTime(2200, 100000.0 + i * kDt);
+        const double vib = (i % 2 == 0) ? 1.5 : -1.5;
+        sample.accel_raw = Eigen::Vector3d(-kGravity * std::sin(pitch), 0.0, kGravity * std::cos(pitch) + vib);
+        processor.processImuSample(sample);
+    }
+    ASSERT_TRUE(processor.isInitialized());
+    EXPECT_FALSE(processor.longitudinalVelocityValid());
+    EXPECT_NEAR(processor.longitudinalVelocityMps(), 0.0, 0.05);
+}
+
 }  // namespace
 }  // namespace libgnss

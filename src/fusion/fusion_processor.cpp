@@ -137,6 +137,11 @@ void LooseCouplingProcessor::initializeFromStaticWindow() {
     error_state_.setZero();
     initialized_ = true;
     static_window_.clear();
+    // The static-alignment window is not evidence of rest after a reset that
+    // happens while moving: v_long is invalid until the stationarity
+    // condition first holds (Config::heading_latch_direction_test).
+    v_long_ = 0.0;
+    v_long_valid_ = false;
 }
 
 bool LooseCouplingProcessor::detectStationary() const {
@@ -428,6 +433,7 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
     const Eigen::Vector3d specific_force_body = sample_body_flu.accel_raw - state_.nominal.accel_bias;
     const Eigen::Vector3d angular_rate_body = sample_body_flu.gyro_raw_radps - state_.nominal.gyro_bias;
     last_angular_rate_body_ = angular_rate_body;
+    const bool track_v_long = config_.heading_latch_direction_test;
 
     const auto phi = fusion_process_noise::transitionMatrix(state_.nominal, specific_force_body,
                                                             angular_rate_body, dt);
@@ -442,6 +448,28 @@ void LooseCouplingProcessor::processImuSample(const ImuSample& sample_body_flu) 
     zupt_window_.push_back(sample_body_flu);
     while (zupt_window_.size() > kZuptWindowSize) {
         zupt_window_.pop_front();
+    }
+
+    if (track_v_long) {
+        // Body-forward kinematic acceleration of this sample. The bias is the
+        // one the mechanization just used (specific_force_body, pre-update)
+        // and the attitude is the mechanized attitude at the END of the
+        // sample (state_.nominal after propagate()). Gravity is removed in
+        // the body frame via R_bn^T (ENU -> body); only roll/pitch enter, so
+        // the unknown yaw (and any later heading latch) does not matter.
+        // v_long is then zeroed by the stationary condition below, using the
+        // same window/thresholds as ZUPT and evaluated before the ZUPT/NHC
+        // updates of this sample modify the state. It is a pure function of
+        // the sample and does not influence the filter state.
+        const Eigen::Matrix3d r_bn = state_.nominal.attitude_body_to_enu.toRotationMatrix();
+        const double a_x =
+            (specific_force_body + r_bn.transpose() * Eigen::Vector3d(0.0, 0.0, -kStandardGravityMps2))
+                .x();
+        v_long_ += a_x * dt;
+        if (gnssSpeedGateAllowsZupt() && detectStationary()) {
+            v_long_ = 0.0;
+            v_long_valid_ = true;
+        }
     }
 
     if (config_.zupt_enable && gnssSpeedGateAllowsZupt() && detectStationary()) {
@@ -657,14 +685,28 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                 // above the tracker's own min_speed_mps gate works, and the
                 // tracker has already verified every buffered sample cleared
                 // that gate.
-                const Eigen::Vector3d consensus_velocity_enu(std::sin(mean_course_rad),
-                                                             std::cos(mean_course_rad), 0.0);
+                //
+                // velocity_consistency_v5: the course is the direction of
+                // travel; if the integrated longitudinal velocity says the
+                // vehicle is moving backward, body +X points the other way.
+                const bool flip_direction = config_.heading_latch_direction_test &&
+                                            v_long_valid_ && v_long_ < 0.0;
+                const double latch_course_rad =
+                    flip_direction ? mean_course_rad + M_PI : mean_course_rad;
+                const Eigen::Vector3d consensus_velocity_enu(std::sin(latch_course_rad),
+                                                             std::cos(latch_course_rad), 0.0);
                 const double honest_sigma_deg = std::max(config_.align_heading_sigma_deg, scatter_deg);
                 if (fusion_initialization::tryAlignHeading(state_, consensus_velocity_enu,
                                                            /*min_speed_mps=*/0.5, honest_sigma_deg)) {
                     heading_aligned_ = true;
                     velocity_nis_ema_ = 0.0;
                     consecutive_bad_heading_epochs_ = 0;
+                    last_latch_direction_flipped_ = flip_direction;
+                    last_latch_v_long_mps_ =
+                        (config_.heading_latch_direction_test && v_long_valid_)
+                            ? v_long_
+                            : std::numeric_limits<double>::quiet_NaN();
+                    if (flip_direction) ++latch_direction_flip_count_;
                     // The latch rotated only the attitude. Make velocity and
                     // its correlations consistent with the new attitude by
                     // re-anchoring to this epoch's independent GNSS velocity.
@@ -679,7 +721,14 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                         std::cerr << "[HEADING] LATCH tow=" << solution.time.tow
                                   << " mean_course_deg=" << (mean_course_rad * 180.0 / M_PI)
                                   << " scatter_deg=" << scatter_deg << " honest_sigma_deg=" << honest_sigma_deg
-                                  << " nsamples=" << heading_tracker_.sampleCount() << "\n";
+                                  << " nsamples=" << heading_tracker_.sampleCount();
+                        if (config_.heading_latch_direction_test) {
+                            std::cerr << " v_long_mps=" << v_long_
+                                      << " v_long_valid=" << (v_long_valid_ ? 1 : 0)
+                                      << " direction_flipped=" << (flip_direction ? 1 : 0)
+                                      << " latch_course_deg=" << (latch_course_rad * 180.0 / M_PI);
+                        }
+                        std::cerr << "\n";
                     }
                 }
             }
