@@ -61,3 +61,32 @@ The RTK filter output there must not be worse than the control at P95.
 A follow-up candidate needs a new frozen contract. All eight runs are now
 development data, so a credible default switch will also need a fresh
 holdout.
+
+## Post-hoc findings after the decision (recorded after the results; no gate or result above changes)
+
+1. **The Odaiba IMU gap RTK P95 failure is the control's variance, not a
+   candidate regression.** Candidate RTK P95 is 28.28 / 28.41 / 28.46 m on the
+   normal / GNSS outage / IMU gap scenarios. The control's is
+   47.84 / 28.45 / 26.79 m, and its best draw is the IMU gap scenario. Both arms
+   recreate the RTK filter at 60.2 s, and the candidate fixes again about 0.8 s
+   later. A scratch counterfactual that kept the RTK filter across the IMU gap
+   left the P95 at 28.46 m. The candidate's P95 comes from a FLOAT bias of about
+   50 m at 455-477 s, and that bias is present in every scenario.
+2. **RINEX 3.00-3.02 BeiDou B1 was read as B1C.** UrbanNav Tokyo is RINEX 3.02,
+   and the reader mapped BeiDou band 1 (`C1I`) to B1C at 1575.42 MHz instead of
+   B1I at 1561.098 MHz. PPC is RINEX 3.04 and is not affected. A separate fix
+   reads band 1 as B1I in 3.00-3.02. With that fix, the candidate's Odaiba
+   results change as follows:
+   - fused P95: 58.1 -> 17.4 m;
+   - RTK velocity P95: 5.00 -> 0.51 m/s.
+3. **Early attitude loss of about 180 deg.**
+   - **Odaiba.** The candidate's error exceeds 90 deg on about half of the
+     epochs, from 29.6 s, before and after the reader fix.
+   - **Shinjuku.** With the reader fix, the candidate starts doing the same
+     from 25.4 s: rotation RMSE 3.8 -> 105 deg.
+   - **IMU gap scenario.** On Odaiba, the re-initialisation after the gap
+     recovers the attitude (P95 5.7 deg).
+   - **Consequences.** This candidate is not a default-switch candidate. The
+     relative gates did not show the defect, because the control fails the
+     same way. A later contract needs an absolute attitude-integrity check as
+     well as the relative gates.
