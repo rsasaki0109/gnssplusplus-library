@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Apply the frozen PVA candidate gate to six normal and twelve scenario runs."""
+"""Apply the frozen PVA candidate gate to six normal and twelve scenario runs.
+
+``--gate-set default`` (the default) is the per-run/scenario gate of the v1-v10 contracts.
+``--gate-set holdout_v2`` is the pooled gate set of docs/online_pva_default_switch_holdout_v2.md.
+"""
 import argparse
 import csv
 import json
@@ -18,6 +22,20 @@ PPC_RUNS = tuple(f"{city}{run}" for city in ("tokyo", "nagoya") for run in (1, 2
 ATTITUDE_INTEGRITY_ROTATION_DEG = 90.0
 ATTITUDE_INTEGRITY_MAX_FRACTION = 0.01
 COVERAGE = ("rtk_available", "fused_available", "rtk_velocity_available", "fused_velocity_available", "attitude_available", "heading_available")
+
+# Fixed gate set of docs/online_pva_default_switch_holdout_v2.md. Do not tune.
+GATE_SETS = ("default", "holdout_v2")
+HOLDOUT_V2_CONTRACT = "docs/online_pva_default_switch_holdout_v2.md"
+HOLDOUT_V2_CANDIDATE = "velocity_consistency_v9"
+HOLDOUT_V2_SCENARIOS = (("normal", None, None), ("gnss_outage", 60, 10), ("imu_gap", 60, 4))  # name, start_s, duration_s
+H1_METRICS = ("fused_position_m", "rotation_deg")                         # primary: candidate <= 1.00 x control
+H2_METRICS = ("rtk_position_m", "rtk_velocity_mps", "fused_velocity_mps")  # secondary: candidate <= 1.10 x control
+H3_METRICS = ("fused_position_m", "rotation_deg")                         # tail: P99 candidate <= 1.25 x control
+H1_RATIO, H2_RATIO, H3_RATIO = 1.00, 1.10, 1.25
+H4_COVERAGE_LOSS = 0.005
+H5_TIMING_SLACK_S = 1.0
+H6_PROCESSING_RATIO = 2.0
+EPSILON = 1e-9
 
 
 def load(directory):
@@ -43,17 +61,26 @@ def rotation_flip_fraction(rows):
     return above, len(values), (above/len(values) if values else 0.0)
 
 
-def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1", attitude_integrity=False):
-    am, a, ar = load(control)
-    bm, b, br = load(candidate)
+INPUT_NAMES = ("rover.obs", "base.obs", "base.nav", "imu.csv", "reference.csv")
+
+
+def check_pair(am, a, ar, bm, b, br, candidate_name):
+    """Integrity checks shared by every gate set; returns the elapsed_s-keyed rows of both arms."""
     if bm["replay"].get("candidate") != candidate_name: raise ValueError("unexpected candidate")
-    for name in ("rover.obs", "base.obs", "base.nav", "imu.csv", "reference.csv"):
+    for name in INPUT_NAMES:
         if am["inputs"][name]["sha256"] != bm["inputs"][name]["sha256"]: raise ValueError("different raw inputs")
     for key in ("scenario", "scenario_start_s", "scenario_duration_s", "epochs", "start_week", "start_tow", "base_ecef", "lever_arm_flu_m", "navigation_policy"):
         if am["replay"][key] != bm["replay"][key]: raise ValueError(f"different replay contract {key}")
     if a["match_fraction"] != 1 or b["match_fraction"] != 1: raise ValueError("need complete exact truth matches")
     amap, bmap = {r["elapsed_s"]: r for r in ar}, {r["elapsed_s"]: r for r in br}
     if set(amap) != set(bmap): raise ValueError("different emitted timestamps")
+    return amap, bmap
+
+
+def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1", attitude_integrity=False):
+    am, a, ar = load(control)
+    bm, b, br = load(candidate)
+    amap, bmap = check_pair(am, a, ar, bm, b, br, candidate_name)
     gates, paired, improvement = [], {}, False
     def gate(name, av, bv, allowed, passed):
         gates.append(dict(name=name, control=av, candidate=bv, allowed=allowed, passed=bool(passed)))
@@ -102,6 +129,111 @@ def compare(control, candidate, label, candidate_name="vehicle_nhc_latched_v1", 
                 control_manifest=pin(control/"manifest.json"), candidate_manifest=pin(candidate/"manifest.json")), improvement
 
 
+def percentile(sorted_values, p):
+    """Same linear interpolation as gnss_pva_metrics.stats, for P99."""
+    k = (len(sorted_values)-1)*p
+    i = int(k)
+    return sorted_values[i] + (sorted_values[min(i+1, len(sorted_values)-1)]-sorted_values[i])*(k-i)
+
+
+def pooled_stats(values):
+    """gnss_pva_metrics.stats plus P99; an empty cohort has all statistics None (a missing metric)."""
+    result = stats(values)
+    result["p99"] = percentile(sorted(abs(v) for v in values), .99) if values else None
+    return result
+
+
+def timing_passed(x, y):
+    """Null means never (censored), never zero. Candidate must not be later than control + 1 s."""
+    if x is None: return True   # control never got there: a candidate that does (or does not) is no worse
+    if y is None: return False
+    return y <= x+H5_TIMING_SLACK_S+1e-6
+
+
+def holdout_v2_run(name, args):
+    """Pooled holdout_v2 gates for one run: its normal, gnss_outage and imu_gap replays, both arms."""
+    arms = ("control", "candidate")
+    binaries, replays, gates, first_inputs = set(), [], [], None
+    keys = sorted(set(H1_METRICS+H2_METRICS+H3_METRICS))
+    values = {(cohort, arm): {k: [] for k in keys} for cohort in ("all", "common") for arm in arms}
+    epochs = {arm: 0 for arm in arms}
+    covered = {arm: {k: 0 for k in COVERAGE} for arm in arms}
+    def gate(hypothesis, gate_name, av, bv, allowed, passed):
+        gates.append(dict(name=gate_name, hypothesis=hypothesis, control=av, candidate=bv, allowed=allowed, passed=bool(passed)))
+    for scenario, start_s, duration_s in HOLDOUT_V2_SCENARIOS:
+        label = name if scenario == "normal" else f"{name}-{scenario}"
+        base_dir, cand_dir = ((args.baseline_dir, args.candidate_dir) if scenario == "normal"
+                              else (args.baseline_scenario_dir, args.candidate_scenario_dir))
+        am, a, ar = load(base_dir/label)
+        bm, b, br = load(cand_dir/label)
+        amap, bmap = check_pair(am, a, ar, bm, b, br, args.candidate_name)
+        if am["replay"].get("candidate") != "none": raise ValueError("unexpected control")
+        if am["replay"]["scenario"] != scenario: raise ValueError(f"{label}: expected the {scenario} scenario")
+        if start_s is not None and (am["replay"]["scenario_start_s"], am["replay"]["scenario_duration_s"]) != (start_s, duration_s):
+            raise ValueError(f"{label}: expected scenario window {start_s}+{duration_s} s")
+        inputs = {n: am["inputs"][n]["sha256"] for n in INPUT_NAMES}
+        if first_inputs is None: first_inputs = inputs
+        elif inputs != first_inputs: raise ValueError(f"{label}: the scenarios of one run must share the raw inputs")
+        binaries.update(manifest.get("binary", {}).get("sha256") for manifest in (am, bm))
+        # Pooling: every scored epoch of the three replays; the paired cohort is keyed (scenario, elapsed_s).
+        for key in keys:
+            for t in amap:
+                x, y = amap[t].get(key), bmap[t].get(key)
+                if x: values[("all", "control")][key].append(float(x))
+                if y: values[("all", "candidate")][key].append(float(y))
+                if x and y:
+                    values[("common", "control")][key].append(float(x))
+                    values[("common", "candidate")][key].append(float(y))
+        for arm, report, rows in (("control", a, ar), ("candidate", b, br)):
+            epochs[arm] += report["epochs"]
+            for key in COVERAGE:
+                covered[arm][key] += round(report["coverage"][key]*report["epochs"])
+            for key in keys:
+                if report["scenes"]["all"]["metrics"].get(key, {}).get("count", 0) != sum(1 for r in rows if r.get(key)):
+                    raise ValueError(f"{label}: errors.csv disagrees with score.json for {key}")
+        if scenario == "normal":
+            for key in ("first_fresh_s", "first_heading_s"):
+                x, y = a["generations"]["0"][key], b["generations"]["0"][key]
+                gate("H5", f"{scenario}.initial.{key}", x, y, "candidate <= control + 1.0 s; a null candidate fails if control is non-null", timing_passed(x, y))
+        else:
+            for key in ("recovery_gnss_update_s", "recovery_fresh_attitude_s", "recovery_heading_s"):
+                x, y = a["scenario"][key], b["scenario"][key]
+                gate("H5", f"{scenario}.scenario.{key}", x, y, "candidate <= control + 1.0 s; a null candidate fails if control is non-null", timing_passed(x, y))
+        px, py = a["processing_ms"]["p95"], b["processing_ms"]["p95"]
+        gate("H6", f"{scenario}.processing.p95_ms", px, py, "candidate <= 2 * control; host contention", py <= H6_PROCESSING_RATIO*px)
+        replays.append(dict(scenario=scenario, epochs=a["epochs"], control_manifest=pin(base_dir/label/"manifest.json"),
+                            candidate_manifest=pin(cand_dir/label/"manifest.json")))
+    cohorts = {cohort: {arm: {k: pooled_stats(v) for k, v in values[(cohort, arm)].items()} for arm in arms}
+               for cohort in ("all", "common")}
+    def ratio_gates(hypothesis, metrics, ratio, statistics, cohort_names):
+        for cohort in cohort_names:
+            for key in metrics:
+                for statistic in statistics:
+                    x, y = cohorts[cohort]["control"][key][statistic], cohorts[cohort]["candidate"][key][statistic]
+                    gate(hypothesis, f"{hypothesis}.{cohort}.{key}.{statistic}", x, y, f"candidate <= {ratio:.2f} * control",
+                         x is not None and y is not None and y <= x*ratio+EPSILON)
+    ratio_gates("H1", H1_METRICS, H1_RATIO, ("rmse", "p95"), ("all", "common"))
+    ratio_gates("H2", H2_METRICS, H2_RATIO, ("rmse", "p95"), ("all", "common"))
+    ratio_gates("H3", H3_METRICS, H3_RATIO, ("p99",), ("all",))
+    coverage = {arm: {k: covered[arm][k]/epochs[arm] for k in COVERAGE} for arm in arms}
+    for key in COVERAGE:
+        x, y = coverage["control"][key], coverage["candidate"][key]
+        gate("H4", f"H4.coverage.{key}", x, y, f"candidate >= control - {H4_COVERAGE_LOSS}", y >= x-H4_COVERAGE_LOSS-1e-12)
+    return dict(name=name, gates=gates, pooled=cohorts, pooled_coverage=coverage, pooled_epochs=epochs, replays=replays), binaries
+
+
+def run_holdout_v2(args, report):
+    binaries = set()
+    for name in args.runs:
+        result, used = holdout_v2_run(name, args)
+        report["runs"].append(result)
+        binaries |= used
+    if len(binaries) != 1 or None in binaries: raise ValueError("all replays must record one and the same binary")
+    failures = [dict(run=r["name"], gate=g) for r in report["runs"] for g in r["gates"] if not g["passed"]]
+    report.update(state="passed", failures=failures, adoption="Go" if not failures else "No-Go", binary_sha256=next(iter(binaries)))
+    return failures
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--baseline-dir", type=Path, required=True)
@@ -109,20 +241,32 @@ def main():
     p.add_argument("--baseline-scenario-dir", type=Path, required=True)
     p.add_argument("--candidate-scenario-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
-    p.add_argument("--candidate-name", default="vehicle_nhc_latched_v1")
-    p.add_argument("--contract", type=Path, default=ROOT/"docs/online_pva_candidate_v1.md")
+    p.add_argument("--candidate-name", default=None, help="Default: vehicle_nhc_latched_v1 (default gate set), velocity_consistency_v9 (holdout_v2)")
+    p.add_argument("--contract", type=Path, default=None, help="Default: docs/online_pva_candidate_v1.md (default gate set), the holdout_v2 contract otherwise")
+    p.add_argument("--gate-set", choices=GATE_SETS, default="default",
+                   help="default: per-run/scenario gates of the v1-v10 contracts; holdout_v2: pooled gates H1-H6 of the holdout v2 contract (H7 is the integrity failure of any check)")
     p.add_argument("--runs", nargs="+", default=list(PPC_RUNS), metavar="RUN",
                    help="Run directory names under each input dir (default: the six PPC runs, tokyo1..nagoya3)")
     p.add_argument("--attitude-integrity", action="store_true",
                    help="Add gate 8 to every compared run: at most 1%% of the candidate's scored epochs may have rotation_deg > 90 (absolute)")
     args = p.parse_args()
     if len(set(args.runs)) != len(args.runs): p.error("--runs must not repeat a run name")
+    holdout = args.gate_set == "holdout_v2"
+    if args.candidate_name is None: args.candidate_name = HOLDOUT_V2_CANDIDATE if holdout else "vehicle_nhc_latched_v1"
+    if args.contract is None: args.contract = ROOT/(HOLDOUT_V2_CONTRACT if holdout else "docs/online_pva_candidate_v1.md")
     if args.output_dir.exists(): p.error("output directory must be new")
     args.output_dir.mkdir(parents=True)
     report = dict(schema="libgnsspp.pva_candidate_decision.v1", state="running", adoption="No-Go", default_changed=False,
                   contract=pin(args.contract), candidate=args.candidate_name, comparison_source=pin(__file__), runs=[])
     if args.attitude_integrity: report["attitude_integrity"] = True
+    if holdout: report.update(schema="libgnsspp.pva_candidate_decision.v2", gate_set="holdout_v2")
     try:
+        if holdout:
+            failures = run_holdout_v2(args, report)
+            dump(args.output_dir/"decision.json", report)
+            print(json.dumps(dict(state=report["state"], adoption=report["adoption"], failed_gates=len(failures),
+                                  gates=sum(len(r["gates"]) for r in report["runs"]), runs=len(report["runs"]))))
+            return 0
         improved = False
         for name in args.runs:
             result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name, args.candidate_name, args.attitude_integrity)
