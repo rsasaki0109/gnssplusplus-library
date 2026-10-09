@@ -55,6 +55,18 @@ public:
         // Diagnostics::rover_gap_rtk_resets, and does not advance
         // reset_generation. False keeps the previous behavior bit-for-bit.
         bool rover_gap_keeps_inertial_filters = false;
+        // Opt-in (velocity_consistency_v6). Every reset that recreates the
+        // loose fused filter after construction (imu_gap_reset,
+        // imu_stale_reset, and rover_gap_reset when
+        // rover_gap_keeps_inertial_filters is false) carries the old fused
+        // filter's nominal gyro bias, if that filter was initialized, into the
+        // new one: it replaces the window-mean gyro bias at the new filter's
+        // next static-window initialization (see
+        // LooseCouplingProcessor::seedGyroBiasForNextInitialization). The
+        // isolated RTK-prior filter is recreated without a seed. The public
+        // reset() carries nothing. False keeps the previous behavior
+        // bit-for-bit.
+        bool carry_gyro_bias_across_reset = false;
     };
     struct Output {
         PositionSolution rtk;
@@ -109,6 +121,9 @@ public:
     std::size_t pendingBase() const { return base_.size(); }
     /** Read-only view of the loose fused filter (diagnostics and tests). */
     const LooseCouplingProcessor& fusionFilter() const { return *fusion_; }
+    /** Read-only view of the isolated RTK-prior filter; null unless
+     * Config::rtk_prior_fusion is set (diagnostics and tests). */
+    const LooseCouplingProcessor* priorFusionFilter() const { return prior_fusion_.get(); }
 
 private:
     Config config_;
@@ -127,7 +142,9 @@ private:
     bool have_tight_anchor_ = false;
     void validateArrival(const GNSSTime& received_at) const;
     void acceptArrival(const GNSSTime& received_at);
-    void recreateFilters();
+    // carry_gyro_bias: true only for the internal gap/stale resets; the
+    // constructor and the public reset() recreate without carrying.
+    void recreateFilters(bool carry_gyro_bias = false);
     // Pieces of recreateFilters(). recreateRtkSideFilters() is everything but
     // the loose fused filter and the IMU continuity flag.
     void recreateRtkFilter();

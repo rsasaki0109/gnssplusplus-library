@@ -52,9 +52,13 @@ void OnlineRtkImuProcessor::recreatePriorFusionFilter() {
         ? std::make_unique<LooseCouplingProcessor>(*config_.rtk_prior_fusion) : nullptr;
 }
 
-void OnlineRtkImuProcessor::recreateFilters() {
+void OnlineRtkImuProcessor::recreateFilters(bool carry_gyro_bias) {
+    std::optional<Vector3d> carried_gyro_bias;
+    if (carry_gyro_bias && config_.carry_gyro_bias_across_reset && fusion_ && fusion_->isInitialized())
+        carried_gyro_bias = fusion_->state().nominal.gyro_bias;
     recreateRtkFilter();
     recreateFusionFilter();
+    if (carried_gyro_bias) fusion_->seedGyroBiasForNextInitialization(*carried_gyro_bias);
     recreatePriorFusionFilter();
     recreateTightFilter();
     have_imu_ = false;
@@ -157,7 +161,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
             ++diagnostics_.rover_gap_rtk_resets;
             out.reason = "rover_gap_rtk_reset";
         } else {
-            recreateFilters();
+            recreateFilters(true);
             ++diagnostics_.rover_gap_resets;
             ++diagnostics_.reset_generation;
             out.reason = "rover_gap_reset";
@@ -167,7 +171,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         const ImuSample sample = imu_.front();
         imu_.pop_front();
         if (have_imu_ && sample.time - imu_time_ > config_.max_imu_gap_s + 1e-9) {
-            recreateFilters();
+            recreateFilters(true);
             ++diagnostics_.imu_gap_resets;
             ++diagnostics_.reset_generation;
             out.reason = "imu_gap_reset";
@@ -181,7 +185,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
     }
     // A stale last sample also invalidates the filters, before GNSS feedback.
     if (have_imu_ && obs.time - imu_time_ > config_.max_imu_gap_s + 1e-9) {
-        recreateFilters();
+        recreateFilters(true);
         ++diagnostics_.imu_gap_resets;
         ++diagnostics_.reset_generation;
         out.reason = "imu_stale_reset";

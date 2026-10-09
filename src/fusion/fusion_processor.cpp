@@ -117,6 +117,23 @@ LooseCouplingProcessor::LooseCouplingProcessor(const Config& config) : config_(c
 void LooseCouplingProcessor::initializeFromStaticWindow() {
     state_.nominal =
         fusion_initialization::alignStatic(static_window_, Eigen::Vector3d::Zero(), kStandardGravityMps2);
+    // velocity_consistency_v6: a pending seed replaces only the window-mean
+    // gyro bias. alignStatic's attitude and accel bias depend on the mean
+    // specific force alone, and the covariances below are unchanged.
+    last_init_gyro_bias_seeded_ = false;
+    if (pending_gyro_bias_seed_) {
+        last_init_window_gyro_bias_ = state_.nominal.gyro_bias;
+        state_.nominal.gyro_bias = *pending_gyro_bias_seed_;
+        last_init_gyro_bias_seeded_ = true;
+        if (debugHeadingEnabled()) {
+            const auto& seed = state_.nominal.gyro_bias;
+            const auto& mean = last_init_window_gyro_bias_;
+            std::cerr << "[INIT] tow=" << state_.nominal.time.tow << " seeded=1 seed=("
+                      << seed.x() << "," << seed.y() << "," << seed.z() << ") window_mean=("
+                      << mean.x() << "," << mean.y() << "," << mean.z() << ")\n";
+        }
+        pending_gyro_bias_seed_.reset();
+    }
 
     state_.covariance.setZero();
     state_.covariance.block<3, 3>(fusion_index::POSITION, fusion_index::POSITION) =

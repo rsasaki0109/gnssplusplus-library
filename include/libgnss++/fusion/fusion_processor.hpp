@@ -3,6 +3,7 @@
 #include <deque>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <Eigen/Dense>
@@ -377,6 +378,23 @@ public:
      * option is off. Only meaningful when longitudinalVelocityValid(). */
     double longitudinalVelocityMps() const { return v_long_; }
     bool longitudinalVelocityValid() const { return v_long_valid_; }
+    /** velocity_consistency_v6: the next static-window initialization sets
+     * the nominal gyro bias to this value instead of the window mean (the
+     * seed is consumed by that initialization). Attitude, accel bias and all
+     * covariances are those of the unseeded initialization. A second call
+     * before the initialization replaces the pending seed. */
+    void seedGyroBiasForNextInitialization(const Eigen::Vector3d& gyro_bias) {
+        pending_gyro_bias_seed_ = gyro_bias;
+    }
+    /** True while a seed is waiting for the next initialization. */
+    bool hasPendingGyroBiasSeed() const { return pending_gyro_bias_seed_.has_value(); }
+    /** True when the most recent initialization used a seeded gyro bias. */
+    bool lastInitializationGyroBiasSeeded() const { return last_init_gyro_bias_seeded_; }
+    /** Window-mean gyro bias of the most recent initialization that applied a
+     * seed (the value the seed replaced); NaN before any seeded one. */
+    const Eigen::Vector3d& lastInitializationWindowGyroBias() const {
+        return last_init_window_gyro_bias_;
+    }
     /** True when the most recent heading latch used course + 180 deg. */
     bool lastLatchDirectionFlipped() const { return last_latch_direction_flipped_; }
     /** Number of heading latches that used course + 180 deg. */
@@ -404,6 +422,12 @@ private:
     bool has_gnss_velocity_ = false;
     double last_gnss_velocity_speed_mps_ = 0.0;
     std::size_t zupt_updates_ = 0;
+
+    // velocity_consistency_v6 gyro-bias seed for the next initialization.
+    std::optional<Eigen::Vector3d> pending_gyro_bias_seed_;
+    bool last_init_gyro_bias_seeded_ = false;
+    Eigen::Vector3d last_init_window_gyro_bias_ =
+        Eigen::Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
 
     // Heading-latch direction test (Config::heading_latch_direction_test).
     double v_long_ = 0.0;

@@ -1359,5 +1359,95 @@ TEST(FusionProcessorSyntheticTest, LongitudinalVelocityRemovesGravityOfATiltedMo
     EXPECT_NEAR(processor.longitudinalVelocityMps(), 0.0, 0.05);
 }
 
+// velocity_consistency_v6: the gyro-bias seed replaces only the window-mean
+// gyro bias of the next static-window initialization.
+namespace {
+const Eigen::Vector3d kWindowGyro(0.012, -0.021, 0.0875);
+// Stops at the initializing sample (stop_at_init) so the state compared is the
+// initialization itself, before any propagation with the differing bias.
+void feedTiltedWindow(LooseCouplingProcessor& processor, double t0, int samples,
+                      const Eigen::Vector3d& gyro, bool stop_at_init = true) {
+    // Tilted (roll ~ 5 deg, pitch ~ 3 deg) specific force with a nonzero
+    // accel bias so attitude and accel bias are both nontrivial.
+    const Eigen::Vector3d accel(-0.51, 0.86, 9.76);
+    for (int i = 0; i < samples; ++i) {
+        ImuSample sample;
+        sample.time = GNSSTime(2200, t0 + i * kDt);
+        sample.accel_raw = accel;
+        sample.gyro_raw_radps = gyro;
+        processor.processImuSample(sample);
+        if (stop_at_init && processor.isInitialized()) return;
+    }
+}
+LooseCouplingProcessor::Config seedConfig() {
+    LooseCouplingProcessor::Config config;
+    config.align_static_window_s = 0.5;
+    config.zupt_enable = false;
+    return config;
+}
+}  // namespace
+
+TEST(FusionProcessorSyntheticTest, GyroBiasSeedIsOffByDefault) {
+    LooseCouplingProcessor processor(seedConfig());
+    EXPECT_FALSE(processor.hasPendingGyroBiasSeed());
+    EXPECT_FALSE(processor.lastInitializationGyroBiasSeeded());
+    EXPECT_FALSE(processor.lastInitializationWindowGyroBias().allFinite());
+    feedTiltedWindow(processor, 100000.0, 60, kWindowGyro);
+    ASSERT_TRUE(processor.isInitialized());
+    EXPECT_FALSE(processor.lastInitializationGyroBiasSeeded());
+    EXPECT_FALSE(processor.lastInitializationWindowGyroBias().allFinite());
+    EXPECT_NEAR((processor.state().nominal.gyro_bias - kWindowGyro).norm(), 0.0, 1e-12);
+}
+
+TEST(FusionProcessorSyntheticTest, GyroBiasSeedReplacesWindowMeanOnly) {
+    LooseCouplingProcessor control(seedConfig());
+    LooseCouplingProcessor seeded(seedConfig());
+    const Eigen::Vector3d seed(-0.0004, 0.0031, -0.0114);
+    seeded.seedGyroBiasForNextInitialization(seed);
+    EXPECT_TRUE(seeded.hasPendingGyroBiasSeed());
+    EXPECT_FALSE(seeded.isInitialized());
+    feedTiltedWindow(control, 100000.0, 60, kWindowGyro);
+    feedTiltedWindow(seeded, 100000.0, 60, kWindowGyro);
+    ASSERT_TRUE(control.isInitialized());
+    ASSERT_TRUE(seeded.isInitialized());
+    const auto& c = control.state().nominal;
+    const auto& n = seeded.state().nominal;
+    EXPECT_NEAR((c.gyro_bias - kWindowGyro).norm(), 0.0, 1e-12);
+    EXPECT_EQ(n.gyro_bias, seed);
+    // Everything else equals the unseeded initialization exactly.
+    EXPECT_EQ(n.attitude_body_to_enu.coeffs(), c.attitude_body_to_enu.coeffs());
+    EXPECT_EQ(n.accel_bias, c.accel_bias);
+    EXPECT_GT(c.accel_bias.norm(), 1e-3);
+    EXPECT_EQ(n.velocity_enu, c.velocity_enu);
+    EXPECT_EQ(n.position_enu, c.position_enu);
+    EXPECT_EQ(n.time.tow, c.time.tow);
+    EXPECT_EQ(seeded.state().covariance, control.state().covariance);
+    // Diagnostics: seeded, with the replaced window mean recorded.
+    EXPECT_TRUE(seeded.lastInitializationGyroBiasSeeded());
+    EXPECT_NEAR((seeded.lastInitializationWindowGyroBias() - kWindowGyro).norm(), 0.0, 1e-12);
+    EXPECT_FALSE(control.lastInitializationGyroBiasSeeded());
+}
+
+TEST(FusionProcessorSyntheticTest, GyroBiasSeedIsConsumedByTheInitialization) {
+    LooseCouplingProcessor processor(seedConfig());
+    const Eigen::Vector3d seed(0.001, 0.002, 0.003);
+    processor.seedGyroBiasForNextInitialization(seed);
+    feedTiltedWindow(processor, 100000.0, 60, kWindowGyro);
+    ASSERT_TRUE(processor.isInitialized());
+    EXPECT_FALSE(processor.hasPendingGyroBiasSeed());
+    EXPECT_EQ(processor.state().nominal.gyro_bias, seed);
+    // A seed set after initialization is never applied to the running filter.
+    const auto before = processor.state().nominal.gyro_bias;
+    processor.seedGyroBiasForNextInitialization(Eigen::Vector3d(9.0, 9.0, 9.0));
+    feedTiltedWindow(processor, 100001.0, 20, kWindowGyro, false);
+    EXPECT_LT((processor.state().nominal.gyro_bias - before).norm(), 1e-3);
+    // The next initialization of a fresh processor without a seed uses the
+    // window mean (initialization is once per instance; a reset builds a new one).
+    LooseCouplingProcessor next(seedConfig());
+    feedTiltedWindow(next, 100000.0, 60, kWindowGyro);
+    EXPECT_NEAR((next.state().nominal.gyro_bias - kWindowGyro).norm(), 0.0, 1e-12);
+    EXPECT_FALSE(next.lastInitializationGyroBiasSeeded());
+}
+
 }  // namespace
 }  // namespace libgnss
