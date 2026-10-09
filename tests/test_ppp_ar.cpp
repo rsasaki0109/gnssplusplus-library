@@ -1,8 +1,12 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/ppp_ar.hpp>
+#include <libgnss++/algorithms/ppp_env_overrides.hpp>
 
+#include <cstdlib>
 #include <limits>
+#include <map>
+#include <vector>
 
 using namespace libgnss;
 
@@ -75,6 +79,45 @@ TEST(PPPArTest, ParCandidatesCanIncludeSingleFrequencyConstellationFallback) {
     ASSERT_EQ(candidates.size(), 2u);
     EXPECT_EQ(candidates[0], qzss2);
     EXPECT_EQ(candidates[1], gps6);
+}
+
+// tokyo/run2 tow 177046.0 (five epochs after a FLOATCNT reset): MRTKLIB's
+// elsort loop never trial-excludes the single-frequency QZSS satellites J02/J03
+// (nf=3, only L1 observed and locked => two missing slots), whereas the
+// relaxed min=1 selector offers them and produced a PAR FIX (exclude J02).
+TEST(PPPArTest, ParFreqGateKeepsSingleFrequencyQzssOutOfMrtklibTrials) {
+    std::vector<SatelliteId> eligible;
+    std::map<SatelliteId, double> elevations;
+    const int gps_prn[] = {4, 6, 9, 11, 17, 19};
+    const double gps_el_deg[] = {40.0, 54.3, 46.6, 20.1, 70.4, 80.3};
+    for (int i = 0; i < 6; ++i) {
+        eligible.emplace_back(GNSSSystem::GPS, gps_prn[i]);
+        eligible.emplace_back(GNSSSystem::GPS, 100 + gps_prn[i]);
+        elevations[SatelliteId(GNSSSystem::GPS, gps_prn[i])] =
+            gps_el_deg[i] * M_PI / 180.0;
+    }
+    const SatelliteId j02(GNSSSystem::QZSS, 2);
+    const SatelliteId j03(GNSSSystem::QZSS, 3);
+    eligible.push_back(j02);
+    eligible.push_back(j03);
+    elevations[j02] = 33.4 * M_PI / 180.0;
+    elevations[j03] = 85.7 * M_PI / 180.0;
+
+    const auto gated = ppp_ar::selectMrtklibParCandidates(eligible, elevations, 2);
+    EXPECT_EQ(gated.size(), 6u);
+    for (const auto& satellite : gated) {
+        EXPECT_NE(satellite.system, GNSSSystem::QZSS);
+    }
+    const auto relaxed = ppp_ar::selectMrtklibParCandidates(eligible, elevations, 1);
+    EXPECT_EQ(relaxed.size(), 8u);
+}
+
+TEST(PPPArTest, ParFreqGateEnvDefaultsOff) {
+    // GNSS_PPP_CLAS_PAR_FREQ_GATE is opt-in; unset must keep the historical
+    // one-state PAR candidate minimum.
+    if (std::getenv("GNSS_PPP_CLAS_PAR_FREQ_GATE") == nullptr) {
+        EXPECT_FALSE(pppEnvOverrides().clas_par_freq_gate);
+    }
 }
 
 TEST(PPPArTest, FrequencyLifecycleTracksSignalsIndependently) {
