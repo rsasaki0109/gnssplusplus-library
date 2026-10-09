@@ -74,6 +74,8 @@ nav:
       - PVA candidate contract: online_pva_candidate_v1.md
       - PVA velocity-consistency contract (v2): online_pva_candidate_v2.md
       - PVA velocity-consistency results (v2): online_pva_candidate_v2_results.md
+      - PVA velocity-consistency contract (v3): online_pva_candidate_v3.md
+      - PVA velocity-consistency results (v3): online_pva_candidate_v3_results.md
       - PVA development results: online_pva_development_results.md
       - Tight coupling: tight_coupling.md
       - Datasets: dataset_gallery.md
