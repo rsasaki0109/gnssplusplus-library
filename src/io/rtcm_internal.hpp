@@ -245,25 +245,33 @@ inline bool isSupportedGlonassMsmSignal(SignalType signal) {
 inline bool isFixedFrequencyMsm4MessageType(RTCMMessageType message_type) {
     return message_type == RTCMMessageType::RTCM_1074 ||
            message_type == RTCMMessageType::RTCM_1094 ||
-           message_type == RTCMMessageType::RTCM_1124;
+           message_type == RTCMMessageType::RTCM_1114 ||
+           message_type == RTCMMessageType::RTCM_1124 ||
+           message_type == RTCMMessageType::RTCM_1134;
 }
 
 inline bool isFixedFrequencyMsm5MessageType(RTCMMessageType message_type) {
     return message_type == RTCMMessageType::RTCM_1075 ||
            message_type == RTCMMessageType::RTCM_1095 ||
-           message_type == RTCMMessageType::RTCM_1125;
+           message_type == RTCMMessageType::RTCM_1115 ||
+           message_type == RTCMMessageType::RTCM_1125 ||
+           message_type == RTCMMessageType::RTCM_1135;
 }
 
 inline bool isFixedFrequencyMsm6MessageType(RTCMMessageType message_type) {
     return message_type == RTCMMessageType::RTCM_1076 ||
            message_type == RTCMMessageType::RTCM_1096 ||
-           message_type == RTCMMessageType::RTCM_1126;
+           message_type == RTCMMessageType::RTCM_1116 ||
+           message_type == RTCMMessageType::RTCM_1126 ||
+           message_type == RTCMMessageType::RTCM_1136;
 }
 
 inline bool isFixedFrequencyMsm7MessageType(RTCMMessageType message_type) {
     return message_type == RTCMMessageType::RTCM_1077 ||
            message_type == RTCMMessageType::RTCM_1097 ||
-           message_type == RTCMMessageType::RTCM_1127;
+           message_type == RTCMMessageType::RTCM_1117 ||
+           message_type == RTCMMessageType::RTCM_1127 ||
+           message_type == RTCMMessageType::RTCM_1137;
 }
 
 inline bool isFixedFrequencyMsmMessageType(RTCMMessageType message_type) {
@@ -473,11 +481,21 @@ inline GNSSSystem fixedFrequencyMsmSystem(RTCMMessageType message_type) {
         case RTCMMessageType::RTCM_1096:
         case RTCMMessageType::RTCM_1097:
             return GNSSSystem::Galileo;
+        case RTCMMessageType::RTCM_1114:
+        case RTCMMessageType::RTCM_1115:
+        case RTCMMessageType::RTCM_1116:
+        case RTCMMessageType::RTCM_1117:
+            return GNSSSystem::QZSS;
         case RTCMMessageType::RTCM_1124:
         case RTCMMessageType::RTCM_1125:
         case RTCMMessageType::RTCM_1126:
         case RTCMMessageType::RTCM_1127:
             return GNSSSystem::BeiDou;
+        case RTCMMessageType::RTCM_1134:
+        case RTCMMessageType::RTCM_1135:
+        case RTCMMessageType::RTCM_1136:
+        case RTCMMessageType::RTCM_1137:
+            return GNSSSystem::NavIC;
         default: return GNSSSystem::UNKNOWN;
     }
 }
@@ -552,47 +570,282 @@ inline uint8_t fixedFrequencyMsmSignalId(GNSSSystem system, SignalType signal) {
     }
 }
 
-inline SignalType decodeGpsMsmSignal(uint8_t signal_id) {
-    switch (signal_id) {
-        case 2: return SignalType::GPS_L1CA;
-        case 3: return SignalType::GPS_L1P;
-        case 8: return SignalType::GPS_L2C;
-        case 9: return SignalType::GPS_L2P;
-        default: return SignalType::SIGNAL_TYPE_COUNT;
+// ---------------------------------------------------------------------------
+// MSM signal ID -> RINEX observation code -> SignalType decode tables.
+//
+// The signal IDs and RINEX codes are the RTCM 10403.3 MSM signal maps, taken
+// verbatim from RTKLIB demo5 rtcm3.c (msm_sig_gps/glo/gal/qzs/cmp/irn); the
+// entry index is (signal ID - 1).  The SignalType column follows how
+// RINEXReader (signal_policy::trySignalForObservationType) maps the same RINEX
+// code, so an observation decoded from MSM carries the same SignalType a RINEX
+// file with that code would produce:
+//   GPS/QZSS  band 1 -> *_L1CA, band 2 -> *_L2C, band 5 -> *_L5
+//   Galileo   1x -> E1, 5x -> E5a, 7x -> E5b, 6x -> E6
+//   BeiDou    2x -> B1I, 1x -> B1C, 7I/Q/X -> B2I, 5x -> B2a, 6x -> B3I
+//   NavIC     5x -> GPS_L5 (RINEX reader convention)
+// An entry whose SignalType is SIGNAL_TYPE_COUNT is a defined RTCM signal that
+// the library cannot represent (no SignalType / frequency slot); the decoder
+// skips it instead of mapping it onto a wrong frequency.  Those are: Galileo
+// E5 AltBOC (8I/8Q/8X), BeiDou B2b (7D), QZSS L6 (6S/6L/6X).  SBAS (MSM
+// 1104-1107) is not decoded at all: there is no SBAS SignalType.
+//
+// Legacy exceptions kept for encoder round-trip compatibility: GPS 1P (ID 3)
+// and 2P (ID 9) decode to GPS_L1P / GPS_L2P (what the MSM encoder writes for
+// those signals) rather than the RINEX reader's L1CA / L2C.  GPS 1W (ID 4) and
+// 2W (ID 10), which is what Trimble/Septentrio/Leica bases send, follow the
+// RINEX mapping (L1CA / L2C).
+// ---------------------------------------------------------------------------
+struct MsmSignalEntry {
+    // Defaults make every table slot that is not spelled out an undefined ID.
+    SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+    const char* code = "";  // RINEX band+attribute suffix, e.g. "2W"; "" if undefined
+};
+
+namespace msm_tables {
+
+constexpr SignalType kNone = SignalType::SIGNAL_TYPE_COUNT;
+
+inline constexpr MsmSignalEntry kGps[32] = {
+    /*  1 */ {kNone, ""},
+    /*  2 */ {SignalType::GPS_L1CA, "1C"},
+    /*  3 */ {SignalType::GPS_L1P, "1P"},   // legacy (see above)
+    /*  4 */ {SignalType::GPS_L1CA, "1W"},
+    /*  5 */ {kNone, ""}, /* 6 */ {kNone, ""}, /* 7 */ {kNone, ""},
+    /*  8 */ {SignalType::GPS_L2C, "2C"},
+    /*  9 */ {SignalType::GPS_L2P, "2P"},   // legacy (see above)
+    /* 10 */ {SignalType::GPS_L2C, "2W"},
+    /* 11 */ {kNone, ""}, /* 12 */ {kNone, ""}, /* 13 */ {kNone, ""}, /* 14 */ {kNone, ""},
+    /* 15 */ {SignalType::GPS_L2C, "2S"},
+    /* 16 */ {SignalType::GPS_L2C, "2L"},
+    /* 17 */ {SignalType::GPS_L2C, "2X"},
+    /* 18 */ {kNone, ""}, /* 19 */ {kNone, ""}, /* 20 */ {kNone, ""}, /* 21 */ {kNone, ""},
+    /* 22 */ {SignalType::GPS_L5, "5I"},
+    /* 23 */ {SignalType::GPS_L5, "5Q"},
+    /* 24 */ {SignalType::GPS_L5, "5X"},
+    /* 25 */ {kNone, ""}, /* 26 */ {kNone, ""}, /* 27 */ {kNone, ""},
+    /* 28 */ {kNone, ""}, /* 29 */ {kNone, ""},
+    /* 30 */ {SignalType::GPS_L1CA, "1S"},
+    /* 31 */ {SignalType::GPS_L1CA, "1L"},
+    /* 32 */ {SignalType::GPS_L1CA, "1X"},
+};
+
+inline constexpr MsmSignalEntry kGlonass[32] = {
+    /*  1 */ {kNone, ""},
+    /*  2 */ {SignalType::GLO_L1CA, "1C"},
+    /*  3 */ {SignalType::GLO_L1P, "1P"},
+    /*  4 */ {kNone, ""}, /* 5 */ {kNone, ""}, /* 6 */ {kNone, ""}, /* 7 */ {kNone, ""},
+    /*  8 */ {SignalType::GLO_L2CA, "2C"},
+    /*  9 */ {SignalType::GLO_L2P, "2P"},
+};
+
+inline constexpr MsmSignalEntry kGalileo[32] = {
+    /*  1 */ {kNone, ""},
+    /*  2 */ {SignalType::GAL_E1, "1C"},
+    /*  3 */ {SignalType::GAL_E1, "1A"},
+    /*  4 */ {SignalType::GAL_E1, "1B"},
+    /*  5 */ {SignalType::GAL_E1, "1X"},
+    /*  6 */ {SignalType::GAL_E1, "1Z"},
+    /*  7 */ {kNone, ""},
+    /*  8 */ {SignalType::GAL_E6, "6C"},
+    /*  9 */ {SignalType::GAL_E6, "6A"},
+    /* 10 */ {SignalType::GAL_E6, "6B"},
+    /* 11 */ {SignalType::GAL_E6, "6X"},
+    /* 12 */ {SignalType::GAL_E6, "6Z"},
+    /* 13 */ {kNone, ""},
+    /* 14 */ {SignalType::GAL_E5B, "7I"},
+    /* 15 */ {SignalType::GAL_E5B, "7Q"},
+    /* 16 */ {SignalType::GAL_E5B, "7X"},
+    /* 17 */ {kNone, ""},
+    /* 18 */ {kNone, "8I"},  // E5 AltBOC: no SignalType
+    /* 19 */ {kNone, "8Q"},
+    /* 20 */ {kNone, "8X"},
+    /* 21 */ {kNone, ""},
+    /* 22 */ {SignalType::GAL_E5A, "5I"},
+    /* 23 */ {SignalType::GAL_E5A, "5Q"},
+    /* 24 */ {SignalType::GAL_E5A, "5X"},
+};
+
+inline constexpr MsmSignalEntry kQzss[32] = {
+    /*  1 */ {kNone, ""},
+    /*  2 */ {SignalType::QZS_L1CA, "1C"},
+    /*  3 */ {kNone, ""}, /* 4 */ {kNone, ""}, /* 5 */ {kNone, ""},
+    /*  6 */ {kNone, ""}, /* 7 */ {kNone, ""}, /* 8 */ {kNone, ""},
+    /*  9 */ {kNone, "6S"},  // L6: no SignalType
+    /* 10 */ {kNone, "6L"},
+    /* 11 */ {kNone, "6X"},
+    /* 12 */ {kNone, ""}, /* 13 */ {kNone, ""}, /* 14 */ {kNone, ""},
+    /* 15 */ {SignalType::QZS_L2C, "2S"},
+    /* 16 */ {SignalType::QZS_L2C, "2L"},
+    /* 17 */ {SignalType::QZS_L2C, "2X"},
+    /* 18 */ {kNone, ""}, /* 19 */ {kNone, ""}, /* 20 */ {kNone, ""}, /* 21 */ {kNone, ""},
+    /* 22 */ {SignalType::QZS_L5, "5I"},
+    /* 23 */ {SignalType::QZS_L5, "5Q"},
+    /* 24 */ {SignalType::QZS_L5, "5X"},
+    /* 25 */ {kNone, ""}, /* 26 */ {kNone, ""}, /* 27 */ {kNone, ""},
+    /* 28 */ {kNone, ""}, /* 29 */ {kNone, ""},
+    /* 30 */ {SignalType::QZS_L1CA, "1S"},
+    /* 31 */ {SignalType::QZS_L1CA, "1L"},
+    /* 32 */ {SignalType::QZS_L1CA, "1X"},
+};
+
+inline constexpr MsmSignalEntry kBeiDou[32] = {
+    /*  1 */ {kNone, ""},
+    /*  2 */ {SignalType::BDS_B1I, "2I"},
+    /*  3 */ {SignalType::BDS_B1I, "2Q"},
+    /*  4 */ {SignalType::BDS_B1I, "2X"},
+    /*  5 */ {kNone, ""}, /* 6 */ {kNone, ""}, /* 7 */ {kNone, ""},
+    /*  8 */ {SignalType::BDS_B3I, "6I"},
+    /*  9 */ {SignalType::BDS_B3I, "6Q"},
+    /* 10 */ {SignalType::BDS_B3I, "6X"},
+    /* 11 */ {kNone, ""}, /* 12 */ {kNone, ""}, /* 13 */ {kNone, ""},
+    /* 14 */ {SignalType::BDS_B2I, "7I"},
+    /* 15 */ {SignalType::BDS_B2I, "7Q"},
+    /* 16 */ {SignalType::BDS_B2I, "7X"},
+    /* 17 */ {kNone, ""}, /* 18 */ {kNone, ""}, /* 19 */ {kNone, ""},
+    /* 20 */ {kNone, ""}, /* 21 */ {kNone, ""},
+    /* 22 */ {SignalType::BDS_B2A, "5D"},
+    /* 23 */ {SignalType::BDS_B2A, "5P"},
+    /* 24 */ {SignalType::BDS_B2A, "5X"},
+    /* 25 */ {kNone, "7D"},  // B2b: no SignalType
+    /* 26 */ {kNone, ""}, /* 27 */ {kNone, ""}, /* 28 */ {kNone, ""}, /* 29 */ {kNone, ""},
+    /* 30 */ {SignalType::BDS_B1C, "1D"},
+    /* 31 */ {SignalType::BDS_B1C, "1P"},
+    /* 32 */ {SignalType::BDS_B1C, "1X"},
+};
+
+inline constexpr MsmSignalEntry kNavic[32] = {
+    /*  1 */ {kNone, ""}, /* 2 */ {kNone, ""}, /* 3 */ {kNone, ""}, /* 4 */ {kNone, ""},
+    /*  5 */ {kNone, ""}, /* 6 */ {kNone, ""}, /* 7 */ {kNone, ""}, /* 8 */ {kNone, ""},
+    /*  9 */ {kNone, ""}, /* 10 */ {kNone, ""}, /* 11 */ {kNone, ""}, /* 12 */ {kNone, ""},
+    /* 13 */ {kNone, ""}, /* 14 */ {kNone, ""}, /* 15 */ {kNone, ""}, /* 16 */ {kNone, ""},
+    /* 17 */ {kNone, ""}, /* 18 */ {kNone, ""}, /* 19 */ {kNone, ""}, /* 20 */ {kNone, ""},
+    /* 21 */ {kNone, ""},
+    /* 22 */ {SignalType::GPS_L5, "5A"},
+};
+
+}  // namespace msm_tables
+
+inline MsmSignalEntry lookupMsmSignal(GNSSSystem system, uint8_t signal_id) {
+    const MsmSignalEntry* table = nullptr;
+    switch (system) {
+        case GNSSSystem::GPS: table = msm_tables::kGps; break;
+        case GNSSSystem::GLONASS: table = msm_tables::kGlonass; break;
+        case GNSSSystem::Galileo: table = msm_tables::kGalileo; break;
+        case GNSSSystem::QZSS: table = msm_tables::kQzss; break;
+        case GNSSSystem::BeiDou: table = msm_tables::kBeiDou; break;
+        case GNSSSystem::NavIC: table = msm_tables::kNavic; break;
+        default: break;
     }
+    if (table == nullptr || signal_id < 1U || signal_id > 32U) {
+        return {SignalType::SIGNAL_TYPE_COUNT, ""};
+    }
+    return table[signal_id - 1U];
+}
+
+inline SignalType decodeGpsMsmSignal(uint8_t signal_id) {
+    return lookupMsmSignal(GNSSSystem::GPS, signal_id).signal;
 }
 
 inline SignalType decodeFixedFrequencyMsmSignal(GNSSSystem system, uint8_t signal_id) {
-    switch (system) {
-        case GNSSSystem::GPS:
-            return decodeGpsMsmSignal(signal_id);
-        case GNSSSystem::Galileo:
-            switch (signal_id) {
-                case 2: return SignalType::GAL_E1;
-                case 22: return SignalType::GAL_E5A;
-                case 14: return SignalType::GAL_E5B;
-                case 8: return SignalType::GAL_E6;
-                default: return SignalType::SIGNAL_TYPE_COUNT;
-            }
-        case GNSSSystem::BeiDou:
-            switch (signal_id) {
-                case 2: return SignalType::BDS_B1I;
-                case 8: return SignalType::BDS_B3I;
-                case 14: return SignalType::BDS_B2I;
-                default: return SignalType::SIGNAL_TYPE_COUNT;
-            }
-        default:
-            return SignalType::SIGNAL_TYPE_COUNT;
-    }
+    return lookupMsmSignal(system, signal_id).signal;
 }
 
 inline SignalType decodeGlonassMsmSignal(uint8_t signal_id) {
-    switch (signal_id) {
-        case 2: return SignalType::GLO_L1CA;
-        case 3: return SignalType::GLO_L1P;
-        case 8: return SignalType::GLO_L2CA;
-        case 9: return SignalType::GLO_L2P;
-        default: return SignalType::SIGNAL_TYPE_COUNT;
+    return lookupMsmSignal(GNSSSystem::GLONASS, signal_id).signal;
+}
+
+// Tracking-attribute priority used when several MSM signals of one satellite
+// decode to the same SignalType (e.g. GPS 2C/2W/2S/2L/2X are all GPS_L2C).
+// These are the RTKLIB demo5 `codepris` strings (rtkcmn.c), highest priority
+// first, restricted to the attributes reachable through the tables above.
+// RINEXReader has no code priority inside one band (it keeps the first
+// observation type declared in the header), so RTKLIB's order is the only
+// deterministic reference for an MSM stream.
+inline const char* msmTrackingPriority(GNSSSystem system, SignalType signal) {
+    switch (signal) {
+        case SignalType::GPS_L1CA: return "CPYWMNSLX";
+        case SignalType::GPS_L2C: return "CPYWMNDLSX";
+        case SignalType::GPS_L5: return system == GNSSSystem::NavIC ? "ABCX" : "IQX";
+        case SignalType::GLO_L1CA:
+        case SignalType::GLO_L1P:
+        case SignalType::GLO_L2CA:
+        case SignalType::GLO_L2P: return "CPABX";
+        case SignalType::GAL_E1: return "CABXZ";
+        case SignalType::GAL_E5A:
+        case SignalType::GAL_E5B: return "XIQ";
+        case SignalType::GAL_E6: return "ABCXZ";
+        case SignalType::QZS_L1CA: return "CLSXZ";
+        case SignalType::QZS_L2C: return "LSX";
+        case SignalType::QZS_L5: return "IQXDPZ";
+        case SignalType::BDS_B1I:
+        case SignalType::BDS_B2I:
+        case SignalType::BDS_B3I: return "IQX";
+        case SignalType::BDS_B1C: return "XDP";
+        case SignalType::BDS_B2A: return "DPX";
+        default: return "";
+    }
+}
+
+// Lower is better; unknown attributes rank after every listed one.
+inline int msmTrackingRank(GNSSSystem system, const MsmSignalEntry& entry) {
+    if (entry.code[0] == '\0' || entry.code[1] == '\0') {
+        return 1000;
+    }
+    const char* priority = msmTrackingPriority(system, entry.signal);
+    for (int i = 0; priority[i] != '\0'; ++i) {
+        if (priority[i] == entry.code[1]) {
+            return i;
+        }
+    }
+    return 100;
+}
+
+// One decoded MSM cell, held until every signal of the satellite is known so
+// that cells sharing a SignalType can be resolved deterministically.
+struct MsmCandidate {
+    Observation obs;
+    const char* code = "";  // RINEX band+attribute suffix, e.g. "2W"
+    int rank = 1000;
+};
+
+// Fill the RINEX observation type strings the way RINEXReader does
+// (assignObservationField): C<code> with a pseudorange, L<code> with a phase.
+inline void annotateMsmObservationCodes(Observation& obs, const char* code) {
+    if (code == nullptr || code[0] == '\0') {
+        return;
+    }
+    if (obs.has_pseudorange) {
+        obs.pseudorange_observation_type = std::string("C") + code;
+    }
+    if (obs.has_carrier_phase) {
+        obs.carrier_phase_observation_type = std::string("L") + code;
+    }
+}
+
+// Emit one satellite's candidates.  Every candidate is kept in
+// ObservationData::rinex_tracking_observations (keyed by tracking code, like
+// the RINEX v3 reader).  Into `observations` goes exactly one observation per
+// SignalType: the candidate with the best (lowest) tracking rank, the earlier
+// signal ID winning an exact tie.  Output order follows the signal-ID order of
+// the winners.
+inline void appendMsmSatelliteCandidates(const std::vector<MsmCandidate>& candidates,
+                                         ObservationData& obs_data) {
+    for (size_t i = 0; i < candidates.size(); ++i) {
+        const auto& candidate = candidates[i];
+        obs_data.addRinexTrackingObservation(candidate.code, candidate.obs);
+        bool winner = true;
+        for (size_t j = 0; j < candidates.size() && winner; ++j) {
+            if (j == i || candidates[j].obs.signal != candidate.obs.signal) {
+                continue;
+            }
+            if (candidates[j].rank < candidate.rank ||
+                (candidates[j].rank == candidate.rank && j < i)) {
+                winner = false;
+            }
+        }
+        if (winner) {
+            obs_data.addObservation(candidate.obs);
+        }
     }
 }
 

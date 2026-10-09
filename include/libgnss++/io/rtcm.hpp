@@ -60,6 +60,10 @@ enum class RTCMMessageType : uint16_t {
     RTCM_1095 = 1095,  ///< Galileo MSM5
     RTCM_1096 = 1096,  ///< Galileo MSM6
     RTCM_1097 = 1097,  ///< Galileo MSM7
+    RTCM_1114 = 1114,  ///< QZSS MSM4
+    RTCM_1115 = 1115,  ///< QZSS MSM5
+    RTCM_1116 = 1116,  ///< QZSS MSM6
+    RTCM_1117 = 1117,  ///< QZSS MSM7
     RTCM_1240 = 1240,  ///< Galileo SSR orbit correction
     RTCM_1241 = 1241,  ///< Galileo SSR clock correction
     RTCM_1242 = 1242,  ///< Galileo SSR code bias
@@ -81,7 +85,11 @@ enum class RTCMMessageType : uint16_t {
     RTCM_1124 = 1124,  ///< BeiDou MSM4
     RTCM_1125 = 1125,  ///< BeiDou MSM5
     RTCM_1126 = 1126,  ///< BeiDou MSM6
-    RTCM_1127 = 1127   ///< BeiDou MSM7
+    RTCM_1127 = 1127,  ///< BeiDou MSM7
+    RTCM_1134 = 1134,  ///< NavIC (IRNSS) MSM4
+    RTCM_1135 = 1135,  ///< NavIC (IRNSS) MSM5
+    RTCM_1136 = 1136,  ///< NavIC (IRNSS) MSM6
+    RTCM_1137 = 1137   ///< NavIC (IRNSS) MSM7
 };
 
 /**

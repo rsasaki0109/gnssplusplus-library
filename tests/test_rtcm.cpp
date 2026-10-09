@@ -1,14 +1,19 @@
 #include <gtest/gtest.h>
+#include <libgnss++/core/signal_policy.hpp>
 #include <libgnss++/core/signals.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <optional>
+#include <set>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -2312,4 +2317,592 @@ TEST(RTCMUtilsTest, ConvertsGpsTimeToAndFromRtcmMilliseconds) {
     EXPECT_EQ(rtcm_time, 345678901U);
     EXPECT_EQ(round_trip.week, 2200);
     EXPECT_NEAR(round_trip.tow, gps_time.tow, 1e-3);
+}
+
+// ---------------------------------------------------------------------------
+// MSM signal-ID decoding.  The bitstreams below are built by hand (not through
+// RTCMProcessor::encodeObservations, which only writes a few GPS/GAL/BDS/GLO
+// signal IDs) so the decoder is exercised against the RTCM 10403.3 signal-ID
+// tables independently of the encoder.
+// ---------------------------------------------------------------------------
+namespace {
+
+constexpr double kMsmUnitM = constants::SPEED_OF_LIGHT * 0.001;  // one light-millisecond
+
+struct MsmTestCell {
+    int sat;                // MSM satellite ID (1-64)
+    int signal_id;          // MSM signal ID (1-32)
+    double pr_offset_m;     // pseudorange minus the satellite rough range
+    double cp_offset_m;     // carrier range minus the satellite rough range
+    bool with_phase = true;
+};
+
+// Build an MSM4..MSM7 payload.  Cells are laid out satellite-major, signal-minor
+// in the order the wire format requires, whatever the order of `cells`.
+io::RTCMMessage buildMsmMessage(uint16_t type_number,
+                                int msm_level,  // 4..7
+                                uint32_t epoch_field,
+                                std::vector<MsmTestCell> cells,
+                                int glonass_fcn = 99) {
+    std::vector<int> sats;
+    std::vector<int> sigs;
+    for (const auto& cell : cells) {
+        sats.push_back(cell.sat);
+        sigs.push_back(cell.signal_id);
+    }
+    std::sort(sats.begin(), sats.end());
+    sats.erase(std::unique(sats.begin(), sats.end()), sats.end());
+    std::sort(sigs.begin(), sigs.end());
+    sigs.erase(std::unique(sigs.begin(), sigs.end()), sigs.end());
+
+    const bool ext = msm_level >= 6;                       // MSM6/7 high resolution
+    const bool rate = msm_level == 5 || msm_level == 7;    // MSM5/7 carry Doppler fields
+    const size_t nsat = sats.size();
+    const size_t nsig = sigs.size();
+    const size_t nmask = nsat * nsig;
+
+    std::map<std::pair<int, int>, const MsmTestCell*> by_key;
+    for (const auto& cell : cells) {
+        by_key[{cell.sat, cell.signal_id}] = &cell;
+    }
+    size_t ncell = by_key.size();
+
+    const size_t pr_bits = ext ? 20 : 15;
+    const size_t cp_bits = ext ? 24 : 22;
+    const size_t lock_bits = ext ? 10 : 4;
+    const size_t cnr_bits = ext ? 10 : 6;
+    const size_t total_bits =
+        169 + nmask + nsat * (8 + 10 + (rate ? 4 + 14 : 0)) +
+        ncell * (pr_bits + cp_bits + lock_bits + 1 + cnr_bits + (rate ? 15 : 0));
+    std::vector<uint8_t> payload((total_bits + 7) / 8, 0);
+
+    int bit = 0;
+    const auto put = [&](int len, uint64_t value) {
+        setUnsignedBits(payload, bit, len, value);
+        bit += len;
+    };
+    const auto put_signed = [&](int len, int64_t value) {
+        setSignedBits(payload, bit, len, value);
+        bit += len;
+    };
+
+    put(12, type_number);
+    put(12, 7);  // reference station id
+    put(30, epoch_field);
+    put(1, 0);   // multiple message bit
+    put(3, 0);   // IODS
+    put(7, 0);   // reserved
+    put(2, 0);   // clock steering
+    put(2, 0);   // external clock
+    put(1, 0);   // smoothing indicator
+    put(3, 0);   // smoothing interval
+    for (int sat = 1; sat <= 64; ++sat) {
+        put(1, std::binary_search(sats.begin(), sats.end(), sat) ? 1 : 0);
+    }
+    for (int sig = 1; sig <= 32; ++sig) {
+        put(1, std::binary_search(sigs.begin(), sigs.end(), sig) ? 1 : 0);
+    }
+    for (int sat : sats) {
+        for (int sig : sigs) {
+            put(1, by_key.count({sat, sig}) ? 1 : 0);
+        }
+    }
+
+    // Rough range of satellite k: (70 + k) light-milliseconds, exact.
+    const auto rough_ms = [](int sat) { return 70 + sat % 20; };
+    for (int sat : sats) put(8, static_cast<uint64_t>(rough_ms(sat)));
+    if (rate) {
+        for (int sat : sats) {
+            put(4, glonass_fcn == 99 ? 15U : static_cast<uint64_t>(glonass_fcn + 7));
+        }
+    }
+    for (int sat : sats) { (void)sat; put(10, 0); }
+    if (rate) {
+        for (size_t i = 0; i < nsat; ++i) put_signed(14, -8192);  // rate unavailable
+    }
+
+    const auto for_each_cell = [&](const auto& fn) {
+        for (int sat : sats) {
+            for (int sig : sigs) {
+                const auto it = by_key.find({sat, sig});
+                if (it != by_key.end()) fn(*it->second);
+            }
+        }
+    };
+    for_each_cell([&](const MsmTestCell& cell) {
+        const double scale = ext ? 536870912.0 : 16777216.0;  // 2^29 / 2^24
+        put_signed(static_cast<int>(pr_bits),
+                   static_cast<int64_t>(std::llround(cell.pr_offset_m / kMsmUnitM * scale)));
+    });
+    for_each_cell([&](const MsmTestCell& cell) {
+        if (!cell.with_phase) {
+            put_signed(static_cast<int>(cp_bits), ext ? -8388608 : -2097152);
+            return;
+        }
+        const double scale = ext ? 2147483648.0 : 536870912.0;  // 2^31 / 2^29
+        put_signed(static_cast<int>(cp_bits),
+                   static_cast<int64_t>(std::llround(cell.cp_offset_m / kMsmUnitM * scale)));
+    });
+    for_each_cell([&](const MsmTestCell&) { put(static_cast<int>(lock_bits), ext ? 100 : 12); });
+    for_each_cell([&](const MsmTestCell&) { put(1, 0); });
+    for_each_cell([&](const MsmTestCell&) {
+        put(static_cast<int>(cnr_bits), ext ? 45 * 16 : 45);
+    });
+    if (rate) {
+        for_each_cell([&](const MsmTestCell&) { put_signed(15, -16384); });
+    }
+    EXPECT_EQ(static_cast<size_t>(bit), total_bits);
+
+    io::RTCMMessage message;
+    message.type = static_cast<io::RTCMMessageType>(type_number);
+    message.length = static_cast<uint16_t>(payload.size());
+    message.data = std::move(payload);
+    message.valid = true;
+    return message;
+}
+
+double msmRoughRangeM(int sat) { return static_cast<double>(70 + sat % 20) * kMsmUnitM; }
+
+struct MsmIdExpectation {
+    GNSSSystem system;
+    uint16_t msm7_type;
+    int signal_id;
+    SignalType signal;  // SIGNAL_TYPE_COUNT = must be skipped
+    const char* code;   // expected RINEX band+attribute when decoded
+    double frequency_hz;
+};
+
+// Independent restatement of RTCM 10403.3 / RTKLIB msm_sig_* with the RINEX
+// reader's code -> SignalType mapping.
+const std::vector<MsmIdExpectation>& msmIdExpectations() {
+    constexpr auto kNone = SignalType::SIGNAL_TYPE_COUNT;
+    static const std::vector<MsmIdExpectation> table = {
+        // GPS (1077)
+        {GNSSSystem::GPS, 1077, 2, SignalType::GPS_L1CA, "1C", 1575.42e6},
+        {GNSSSystem::GPS, 1077, 3, SignalType::GPS_L1P, "1P", 1575.42e6},
+        {GNSSSystem::GPS, 1077, 4, SignalType::GPS_L1CA, "1W", 1575.42e6},
+        {GNSSSystem::GPS, 1077, 8, SignalType::GPS_L2C, "2C", 1227.60e6},
+        {GNSSSystem::GPS, 1077, 9, SignalType::GPS_L2P, "2P", 1227.60e6},
+        {GNSSSystem::GPS, 1077, 10, SignalType::GPS_L2C, "2W", 1227.60e6},
+        {GNSSSystem::GPS, 1077, 15, SignalType::GPS_L2C, "2S", 1227.60e6},
+        {GNSSSystem::GPS, 1077, 16, SignalType::GPS_L2C, "2L", 1227.60e6},
+        {GNSSSystem::GPS, 1077, 17, SignalType::GPS_L2C, "2X", 1227.60e6},
+        {GNSSSystem::GPS, 1077, 22, SignalType::GPS_L5, "5I", 1176.45e6},
+        {GNSSSystem::GPS, 1077, 23, SignalType::GPS_L5, "5Q", 1176.45e6},
+        {GNSSSystem::GPS, 1077, 24, SignalType::GPS_L5, "5X", 1176.45e6},
+        {GNSSSystem::GPS, 1077, 30, SignalType::GPS_L1CA, "1S", 1575.42e6},
+        {GNSSSystem::GPS, 1077, 31, SignalType::GPS_L1CA, "1L", 1575.42e6},
+        {GNSSSystem::GPS, 1077, 32, SignalType::GPS_L1CA, "1X", 1575.42e6},
+        // GLONASS (1087); frequency is the channel-0 value
+        {GNSSSystem::GLONASS, 1087, 2, SignalType::GLO_L1CA, "1C", 0.0},
+        {GNSSSystem::GLONASS, 1087, 3, SignalType::GLO_L1P, "1P", 0.0},
+        {GNSSSystem::GLONASS, 1087, 8, SignalType::GLO_L2CA, "2C", 0.0},
+        {GNSSSystem::GLONASS, 1087, 9, SignalType::GLO_L2P, "2P", 0.0},
+        // Galileo (1097)
+        {GNSSSystem::Galileo, 1097, 2, SignalType::GAL_E1, "1C", 1575.42e6},
+        {GNSSSystem::Galileo, 1097, 3, SignalType::GAL_E1, "1A", 1575.42e6},
+        {GNSSSystem::Galileo, 1097, 4, SignalType::GAL_E1, "1B", 1575.42e6},
+        {GNSSSystem::Galileo, 1097, 5, SignalType::GAL_E1, "1X", 1575.42e6},
+        {GNSSSystem::Galileo, 1097, 6, SignalType::GAL_E1, "1Z", 1575.42e6},
+        {GNSSSystem::Galileo, 1097, 8, SignalType::GAL_E6, "6C", 1278.75e6},
+        {GNSSSystem::Galileo, 1097, 9, SignalType::GAL_E6, "6A", 1278.75e6},
+        {GNSSSystem::Galileo, 1097, 10, SignalType::GAL_E6, "6B", 1278.75e6},
+        {GNSSSystem::Galileo, 1097, 11, SignalType::GAL_E6, "6X", 1278.75e6},
+        {GNSSSystem::Galileo, 1097, 12, SignalType::GAL_E6, "6Z", 1278.75e6},
+        {GNSSSystem::Galileo, 1097, 14, SignalType::GAL_E5B, "7I", 1207.14e6},
+        {GNSSSystem::Galileo, 1097, 15, SignalType::GAL_E5B, "7Q", 1207.14e6},
+        {GNSSSystem::Galileo, 1097, 16, SignalType::GAL_E5B, "7X", 1207.14e6},
+        {GNSSSystem::Galileo, 1097, 18, kNone, "8I", 0.0},  // E5 AltBOC: no SignalType
+        {GNSSSystem::Galileo, 1097, 19, kNone, "8Q", 0.0},
+        {GNSSSystem::Galileo, 1097, 20, kNone, "8X", 0.0},
+        {GNSSSystem::Galileo, 1097, 22, SignalType::GAL_E5A, "5I", 1176.45e6},
+        {GNSSSystem::Galileo, 1097, 23, SignalType::GAL_E5A, "5Q", 1176.45e6},
+        {GNSSSystem::Galileo, 1097, 24, SignalType::GAL_E5A, "5X", 1176.45e6},
+        // QZSS (1117)
+        {GNSSSystem::QZSS, 1117, 2, SignalType::QZS_L1CA, "1C", 1575.42e6},
+        {GNSSSystem::QZSS, 1117, 9, kNone, "6S", 0.0},  // L6: no SignalType
+        {GNSSSystem::QZSS, 1117, 10, kNone, "6L", 0.0},
+        {GNSSSystem::QZSS, 1117, 11, kNone, "6X", 0.0},
+        {GNSSSystem::QZSS, 1117, 15, SignalType::QZS_L2C, "2S", 1227.60e6},
+        {GNSSSystem::QZSS, 1117, 16, SignalType::QZS_L2C, "2L", 1227.60e6},
+        {GNSSSystem::QZSS, 1117, 17, SignalType::QZS_L2C, "2X", 1227.60e6},
+        {GNSSSystem::QZSS, 1117, 22, SignalType::QZS_L5, "5I", 1176.45e6},
+        {GNSSSystem::QZSS, 1117, 23, SignalType::QZS_L5, "5Q", 1176.45e6},
+        {GNSSSystem::QZSS, 1117, 24, SignalType::QZS_L5, "5X", 1176.45e6},
+        {GNSSSystem::QZSS, 1117, 30, SignalType::QZS_L1CA, "1S", 1575.42e6},
+        {GNSSSystem::QZSS, 1117, 31, SignalType::QZS_L1CA, "1L", 1575.42e6},
+        {GNSSSystem::QZSS, 1117, 32, SignalType::QZS_L1CA, "1X", 1575.42e6},
+        // BeiDou (1127)
+        {GNSSSystem::BeiDou, 1127, 2, SignalType::BDS_B1I, "2I", 1561.098e6},
+        {GNSSSystem::BeiDou, 1127, 3, SignalType::BDS_B1I, "2Q", 1561.098e6},
+        {GNSSSystem::BeiDou, 1127, 4, SignalType::BDS_B1I, "2X", 1561.098e6},
+        {GNSSSystem::BeiDou, 1127, 8, SignalType::BDS_B3I, "6I", 1268.52e6},
+        {GNSSSystem::BeiDou, 1127, 9, SignalType::BDS_B3I, "6Q", 1268.52e6},
+        {GNSSSystem::BeiDou, 1127, 10, SignalType::BDS_B3I, "6X", 1268.52e6},
+        {GNSSSystem::BeiDou, 1127, 14, SignalType::BDS_B2I, "7I", 1207.14e6},
+        {GNSSSystem::BeiDou, 1127, 15, SignalType::BDS_B2I, "7Q", 1207.14e6},
+        {GNSSSystem::BeiDou, 1127, 16, SignalType::BDS_B2I, "7X", 1207.14e6},
+        {GNSSSystem::BeiDou, 1127, 22, SignalType::BDS_B2A, "5D", 1176.45e6},
+        {GNSSSystem::BeiDou, 1127, 23, SignalType::BDS_B2A, "5P", 1176.45e6},
+        {GNSSSystem::BeiDou, 1127, 24, SignalType::BDS_B2A, "5X", 1176.45e6},
+        {GNSSSystem::BeiDou, 1127, 25, kNone, "7D", 0.0},  // B2b: no SignalType
+        {GNSSSystem::BeiDou, 1127, 30, SignalType::BDS_B1C, "1D", 1575.42e6},
+        {GNSSSystem::BeiDou, 1127, 31, SignalType::BDS_B1C, "1P", 1575.42e6},
+        {GNSSSystem::BeiDou, 1127, 32, SignalType::BDS_B1C, "1X", 1575.42e6},
+        // NavIC (1137): RINEX reader maps band 5 to GPS_L5
+        {GNSSSystem::NavIC, 1137, 22, SignalType::GPS_L5, "5A", 1176.45e6},
+    };
+    return table;
+}
+
+// One satellite, one signal: decode through a framed message so the message
+// number dispatch is part of the test.  Returns the decoded epoch.
+bool decodeSingleCell(io::RTCMProcessor& processor,
+                      uint16_t type_number,
+                      int msm_level,
+                      const MsmTestCell& cell,
+                      ObservationData& decoded,
+                      int glonass_fcn = 99) {
+    const io::RTCMMessage built = buildMsmMessage(
+        type_number, msm_level, 100000000U, {cell}, glonass_fcn);
+    const std::vector<uint8_t> frame = buildRtcmFrame(built);
+    const auto messages = processor.decode(frame.data(), frame.size());
+    EXPECT_EQ(messages.size(), 1U);
+    if (messages.size() != 1U) return false;
+    EXPECT_EQ(static_cast<uint16_t>(messages[0].type), type_number);
+    EXPECT_TRUE(io::rtcm_utils::isObservationMessage(messages[0].type));
+    return processor.decodeObservationData(messages[0], decoded);
+}
+
+}  // namespace
+
+TEST_F(RTCMProcessorTest, MsmSignalIdsMapToRinexConsistentSignalFrequencyAndCode) {
+    for (const auto& expected : msmIdExpectations()) {
+        SCOPED_TRACE(::testing::Message()
+                     << "system=" << static_cast<int>(expected.system)
+                     << " signal_id=" << expected.signal_id << " code=" << expected.code);
+        const bool glonass = expected.system == GNSSSystem::GLONASS;
+        const int fcn = glonass ? -3 : 99;
+        const MsmTestCell cell{3, expected.signal_id, 12.5, 7.25};
+        ObservationData decoded;
+        const bool ok =
+            decodeSingleCell(processor, expected.msm7_type, 7, cell, decoded, fcn);
+        if (expected.signal == SignalType::SIGNAL_TYPE_COUNT) {
+            EXPECT_FALSE(ok);
+            EXPECT_TRUE(decoded.observations.empty());
+            continue;
+        }
+        ASSERT_TRUE(ok);
+        ASSERT_EQ(decoded.observations.size(), 1U);
+        const Observation& obs = decoded.observations.front();
+        EXPECT_EQ(obs.satellite.system, expected.system);
+        EXPECT_EQ(obs.satellite.prn, 3);
+        EXPECT_EQ(obs.signal, expected.signal);
+
+        // The RINEX reader maps the same code to the same SignalType.
+        SignalType rinex_signal = SignalType::SIGNAL_TYPE_COUNT;
+        const std::string rinex_pseudorange = std::string("C") + expected.code;
+        ASSERT_TRUE(signal_policy::trySignalForObservationType(
+            expected.system, rinex_pseudorange, rinex_signal));
+        // Legacy GPS 1P / 2P (IDs 3, 9) intentionally keep GPS_L1P / GPS_L2P
+        // (what the MSM encoder writes); GLONASS P codes are distinct types in
+        // both readers.
+        const bool legacy_p = expected.system == GNSSSystem::GPS &&
+                              (expected.signal_id == 3 || expected.signal_id == 9);
+        if (!legacy_p) {
+            EXPECT_EQ(rinex_signal, expected.signal);
+        }
+
+        EXPECT_EQ(obs.pseudorange_observation_type, rinex_pseudorange);
+        EXPECT_EQ(obs.carrier_phase_observation_type, std::string("L") + expected.code);
+        const double rough = msmRoughRangeM(3);
+        EXPECT_NEAR(obs.pseudorange, rough + 12.5, 1e-3);
+        ASSERT_TRUE(obs.has_carrier_phase);
+
+        double frequency_hz = expected.frequency_hz;
+        if (glonass) {
+            const bool l1 = expected.signal == SignalType::GLO_L1CA ||
+                            expected.signal == SignalType::GLO_L1P;
+            frequency_hz = l1 ? constants::GLO_L1_BASE_FREQ + fcn * constants::GLO_L1_STEP_FREQ
+                              : constants::GLO_L2_BASE_FREQ + fcn * constants::GLO_L2_STEP_FREQ;
+        } else {
+            EXPECT_DOUBLE_EQ(signalFrequencyHz(obs.signal), expected.frequency_hz);
+        }
+        EXPECT_NEAR(obs.carrier_phase * (constants::SPEED_OF_LIGHT / frequency_hz),
+                    rough + 7.25, 2e-3);
+
+        // The complete tracking-code entry mirrors the RINEX v3 reader.
+        const Observation* tracking = decoded.getRinexTrackingObservation(
+            obs.satellite, expected.code);
+        ASSERT_NE(tracking, nullptr);
+        EXPECT_EQ(tracking->signal, expected.signal);
+    }
+}
+
+TEST_F(RTCMProcessorTest, MsmUndefinedSignalIdsAreStillSkipped) {
+    // Every ID that is not in the expectation table above must be dropped, for
+    // every constellation the decoder handles, without disturbing the other
+    // cells of the same satellite.
+    struct SystemCase { GNSSSystem system; uint16_t type; int good_id; SignalType good_signal; };
+    const std::vector<SystemCase> systems = {
+        {GNSSSystem::GPS, 1077, 2, SignalType::GPS_L1CA},
+        {GNSSSystem::GLONASS, 1087, 2, SignalType::GLO_L1CA},
+        {GNSSSystem::Galileo, 1097, 2, SignalType::GAL_E1},
+        {GNSSSystem::QZSS, 1117, 2, SignalType::QZS_L1CA},
+        {GNSSSystem::BeiDou, 1127, 2, SignalType::BDS_B1I},
+        {GNSSSystem::NavIC, 1137, 22, SignalType::GPS_L5},
+    };
+    for (const auto& sys : systems) {
+        std::set<int> defined;
+        for (const auto& e : msmIdExpectations()) {
+            if (e.system == sys.system) defined.insert(e.signal_id);
+        }
+        for (int id = 1; id <= 32; ++id) {
+            if (defined.count(id) != 0) continue;
+            SCOPED_TRACE(::testing::Message() << "system=" << static_cast<int>(sys.system)
+                                              << " undefined id=" << id);
+            // Alone: nothing decodes.
+            ObservationData alone;
+            EXPECT_FALSE(decodeSingleCell(processor, sys.type, 7, {4, id, 5.0, 2.0}, alone, -3));
+            EXPECT_TRUE(alone.observations.empty());
+
+            // Next to a supported signal: only the supported one survives and
+            // the cell bookkeeping stays aligned (the good cell keeps its data).
+            const io::RTCMMessage mixed = buildMsmMessage(
+                sys.type, 7, 100000000U,
+                {{4, id, 5.0, 2.0}, {4, sys.good_id, 9.5, 3.5}}, -3);
+            ObservationData decoded;
+            ASSERT_TRUE(processor.decodeObservationData(mixed, decoded));
+            ASSERT_EQ(decoded.observations.size(), 1U);
+            EXPECT_EQ(decoded.observations[0].signal, sys.good_signal);
+            EXPECT_NEAR(decoded.observations[0].pseudorange, msmRoughRangeM(4) + 9.5, 1e-3);
+        }
+    }
+}
+
+TEST_F(RTCMProcessorTest, MsmSameSignalTypeCellsResolveByTrackingPriority) {
+    struct PriorityCase {
+        const char* name;
+        GNSSSystem system;
+        uint16_t type;
+        std::vector<int> ids;       // all present on one satellite
+        SignalType signal;
+        const char* winner;         // expected surviving RINEX code
+    };
+    const std::vector<PriorityCase> cases = {
+        // GPS L2: C > W > L > S > X (RTKLIB demo5 "CPYWMNDLSX"), GPS L1: C > W > S > L > X
+        // ("CPYWMNSLX"); the wire ID order is not the tie-break.
+        {"gps2 C beats W/L/X", GNSSSystem::GPS, 1077, {8, 10, 16, 17}, SignalType::GPS_L2C, "2C"},
+        {"gps2 W beats L/S/X", GNSSSystem::GPS, 1077, {10, 15, 16, 17}, SignalType::GPS_L2C, "2W"},
+        {"gps2 L beats S/X", GNSSSystem::GPS, 1077, {15, 16, 17}, SignalType::GPS_L2C, "2L"},
+        {"gps2 S beats X", GNSSSystem::GPS, 1077, {15, 17}, SignalType::GPS_L2C, "2S"},
+        {"gps1 C beats W/S/L/X", GNSSSystem::GPS, 1077, {2, 4, 30, 31, 32}, SignalType::GPS_L1CA, "1C"},
+        {"gps1 W beats S/L/X", GNSSSystem::GPS, 1077, {4, 30, 31, 32}, SignalType::GPS_L1CA, "1W"},
+        {"gps1 S beats L/X", GNSSSystem::GPS, 1077, {30, 31, 32}, SignalType::GPS_L1CA, "1S"},
+        {"gps5 I beats Q/X", GNSSSystem::GPS, 1077, {22, 23, 24}, SignalType::GPS_L5, "5I"},
+        {"gps5 Q beats X", GNSSSystem::GPS, 1077, {23, 24}, SignalType::GPS_L5, "5Q"},
+        {"gal1 C beats B/X", GNSSSystem::Galileo, 1097, {2, 4, 5}, SignalType::GAL_E1, "1C"},
+        {"gal1 B beats X", GNSSSystem::Galileo, 1097, {4, 5}, SignalType::GAL_E1, "1B"},
+        {"gal5a X beats I/Q", GNSSSystem::Galileo, 1097, {22, 23, 24}, SignalType::GAL_E5A, "5X"},
+        {"gal5b X beats I/Q", GNSSSystem::Galileo, 1097, {14, 15, 16}, SignalType::GAL_E5B, "7X"},
+        {"gal6 A beats C/X", GNSSSystem::Galileo, 1097, {8, 9, 11}, SignalType::GAL_E6, "6A"},
+        {"qzs1 C beats L/S/X", GNSSSystem::QZSS, 1117, {2, 30, 31, 32}, SignalType::QZS_L1CA, "1C"},
+        {"qzs1 L beats S/X", GNSSSystem::QZSS, 1117, {30, 31, 32}, SignalType::QZS_L1CA, "1L"},
+        {"qzs2 L beats S/X", GNSSSystem::QZSS, 1117, {15, 16, 17}, SignalType::QZS_L2C, "2L"},
+        {"qzs5 I beats Q/X", GNSSSystem::QZSS, 1117, {22, 23, 24}, SignalType::QZS_L5, "5I"},
+        {"bds1i I beats Q/X", GNSSSystem::BeiDou, 1127, {2, 3, 4}, SignalType::BDS_B1I, "2I"},
+        {"bds2i I beats Q/X", GNSSSystem::BeiDou, 1127, {14, 15, 16}, SignalType::BDS_B2I, "7I"},
+        {"bds3i Q beats X", GNSSSystem::BeiDou, 1127, {9, 10}, SignalType::BDS_B3I, "6Q"},
+        {"bds2a D beats P/X", GNSSSystem::BeiDou, 1127, {22, 23, 24}, SignalType::BDS_B2A, "5D"},
+        {"bds2a P beats X", GNSSSystem::BeiDou, 1127, {23, 24}, SignalType::BDS_B2A, "5P"},
+        {"bds1c X beats D/P", GNSSSystem::BeiDou, 1127, {30, 31, 32}, SignalType::BDS_B1C, "1X"},
+    };
+    for (const auto& c : cases) {
+        SCOPED_TRACE(c.name);
+        std::vector<MsmTestCell> cells;
+        double offset = 1.0;
+        for (int id : c.ids) {
+            cells.push_back({6, id, offset, offset + 0.5});
+            offset += 1.0;  // distinct data per code so the winner is identifiable
+        }
+        const io::RTCMMessage message =
+            buildMsmMessage(c.type, 7, 100000000U, cells);
+        ObservationData decoded;
+        ASSERT_TRUE(processor.decodeObservationData(message, decoded));
+
+        // Exactly one observation of the contested SignalType.
+        int count = 0;
+        const Observation* kept = nullptr;
+        for (const auto& obs : decoded.observations) {
+            if (obs.signal == c.signal) {
+                ++count;
+                kept = &obs;
+            }
+        }
+        ASSERT_EQ(count, 1);
+        EXPECT_EQ(kept->pseudorange_observation_type, std::string("C") + c.winner);
+        EXPECT_EQ(kept->carrier_phase_observation_type, std::string("L") + c.winner);
+
+        // Its data belongs to the winning cell, not to the first/last one.
+        double expected_offset = 0.0;
+        double idx_offset = 1.0;
+        for (int id : c.ids) {
+            const std::string code = [&] {
+                for (const auto& e : msmIdExpectations()) {
+                    if (e.system == c.system && e.signal_id == id) return std::string(e.code);
+                }
+                return std::string();
+            }();
+            if (code == c.winner) expected_offset = idx_offset;
+            idx_offset += 1.0;
+        }
+        EXPECT_NEAR(kept->pseudorange, msmRoughRangeM(6) + expected_offset, 1e-3);
+
+        // Every cell stays reachable through the RINEX tracking-code store.
+        for (int id : c.ids) {
+            for (const auto& e : msmIdExpectations()) {
+                if (e.system == c.system && e.signal_id == id) {
+                    EXPECT_NE(decoded.getRinexTrackingObservation(kept->satellite, e.code),
+                              nullptr)
+                        << e.code;
+                }
+            }
+        }
+    }
+}
+
+TEST_F(RTCMProcessorTest, MsmNeverEmitsTwoObservationsOfOneSignalTypePerSatellite) {
+    // A GPS satellite tracked on every GPS civil tracking mode, plus the
+    // legacy P-code IDs, on two satellites.
+    std::vector<MsmTestCell> cells;
+    for (int sat : {5, 9}) {
+        for (int id : {2, 3, 4, 8, 9, 10, 15, 16, 17, 22, 23, 24, 30, 31, 32}) {
+            cells.push_back({sat, id, 1.0 + id * 0.1, 2.0 + id * 0.1});
+        }
+    }
+    const io::RTCMMessage message = buildMsmMessage(1077, 7, 100000000U, cells);
+    ObservationData decoded;
+    ASSERT_TRUE(processor.decodeObservationData(message, decoded));
+    std::set<std::pair<int, int>> seen;
+    for (const auto& obs : decoded.observations) {
+        EXPECT_TRUE(seen.insert({obs.satellite.prn, static_cast<int>(obs.signal)}).second);
+    }
+    // L1CA, L1P, L2C, L2P, L5 per satellite.
+    EXPECT_EQ(decoded.observations.size(), 10U);
+    const auto l2c = findObservation(decoded, 5, SignalType::GPS_L2C);
+    ASSERT_TRUE(l2c.has_value());
+    EXPECT_EQ(l2c->pseudorange_observation_type, "C2C");
+    const auto l2p = findObservation(decoded, 5, SignalType::GPS_L2P);
+    ASSERT_TRUE(l2p.has_value());
+    EXPECT_EQ(l2p->pseudorange_observation_type, "C2P");
+}
+
+TEST_F(RTCMProcessorTest, MsmPriorityBeatsDataCompleteness) {
+    // 2C carries only a pseudorange, 2W carries code and phase: the RTKLIB code
+    // priority still selects 2C (the library never mixes fields across codes).
+    const io::RTCMMessage message = buildMsmMessage(
+        1077, 7, 100000000U,
+        {MsmTestCell{3, 8, 4.0, 0.0, false}, MsmTestCell{3, 10, 5.0, 3.0, true}});
+    ObservationData decoded;
+    ASSERT_TRUE(processor.decodeObservationData(message, decoded));
+    ASSERT_EQ(decoded.observations.size(), 1U);
+    const Observation& obs = decoded.observations.front();
+    EXPECT_EQ(obs.signal, SignalType::GPS_L2C);
+    EXPECT_EQ(obs.pseudorange_observation_type, "C2C");
+    EXPECT_TRUE(obs.carrier_phase_observation_type.empty());
+    EXPECT_FALSE(obs.has_carrier_phase);
+    ASSERT_NE(decoded.getRinexTrackingObservation(obs.satellite, "2W"), nullptr);
+    EXPECT_TRUE(decoded.getRinexTrackingObservation(obs.satellite, "2W")->has_carrier_phase);
+}
+
+TEST_F(RTCMProcessorTest, DecodesQzssMsmAcrossResolutionsAndTimeScale) {
+    // MSM4 (1114), MSM5 (1115), MSM6 (1116), MSM7 (1117).  QZSS epochs are GPS
+    // time; the satellite ID is the RINEX J number (1-10).
+    const std::vector<std::pair<uint16_t, int>> messages = {
+        {1114, 4}, {1115, 5}, {1116, 6}, {1117, 7}};
+    for (const auto& [type, level] : messages) {
+        SCOPED_TRACE(type);
+        const io::RTCMMessage built = buildMsmMessage(
+            type, level, 345600500U,
+            {{2, 2, 20.0, 10.0}, {2, 16, 21.0, 11.0}, {2, 23, 22.0, 12.0},
+             {3, 2, 30.0, 15.0}});
+        const std::vector<uint8_t> frame = buildRtcmFrame(built);
+        const auto framed = processor.decode(frame.data(), frame.size());
+        ASSERT_EQ(framed.size(), 1U);
+        EXPECT_EQ(framed[0].type, static_cast<io::RTCMMessageType>(type));
+        EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(framed[0].type), GNSSSystem::QZSS);
+        EXPECT_TRUE(io::rtcm_utils::isObservationMessage(framed[0].type));
+
+        ObservationData decoded;
+        ASSERT_TRUE(processor.decodeObservationData(framed[0], decoded));
+        EXPECT_NEAR(decoded.time.tow, 345600.5, 1e-3);  // no BDT offset
+        ASSERT_EQ(decoded.observations.size(), 4U);
+        const GNSSSystem qzss = GNSSSystem::QZSS;
+        const auto l1 = findObservation(decoded, qzss, 2, SignalType::QZS_L1CA);
+        const auto l2 = findObservation(decoded, qzss, 2, SignalType::QZS_L2C);
+        const auto l5 = findObservation(decoded, qzss, 2, SignalType::QZS_L5);
+        const auto j3 = findObservation(decoded, qzss, 3, SignalType::QZS_L1CA);
+        ASSERT_TRUE(l1.has_value());
+        ASSERT_TRUE(l2.has_value());
+        ASSERT_TRUE(l5.has_value());
+        ASSERT_TRUE(j3.has_value());
+        const double tol = level >= 6 ? 2e-3 : 0.05;
+        EXPECT_NEAR(l1->pseudorange, msmRoughRangeM(2) + 20.0, tol);
+        EXPECT_NEAR(l2->pseudorange, msmRoughRangeM(2) + 21.0, tol);
+        EXPECT_NEAR(l5->pseudorange, msmRoughRangeM(2) + 22.0, tol);
+        EXPECT_NEAR(l1->carrier_phase * constants::GPS_L1_WAVELENGTH, msmRoughRangeM(2) + 10.0, tol);
+        EXPECT_NEAR(l2->carrier_phase * constants::GPS_L2_WAVELENGTH, msmRoughRangeM(2) + 11.0, tol);
+        EXPECT_NEAR(l5->carrier_phase * constants::GPS_L5_WAVELENGTH, msmRoughRangeM(2) + 12.0, tol);
+        EXPECT_EQ(l1->pseudorange_observation_type, "C1C");
+        EXPECT_EQ(l2->carrier_phase_observation_type, "L2L");
+        EXPECT_EQ(l5->pseudorange_observation_type, "C5Q");
+        EXPECT_NEAR(j3->pseudorange, msmRoughRangeM(3) + 30.0, tol);
+        EXPECT_NEAR(l1->snr, 45.0, 1e-6);
+    }
+}
+
+TEST_F(RTCMProcessorTest, DecodesNavicMsmL5AndKeepsOtherSignalsOut) {
+    const std::vector<std::pair<uint16_t, int>> messages = {
+        {1134, 4}, {1135, 5}, {1136, 6}, {1137, 7}};
+    for (const auto& [type, level] : messages) {
+        SCOPED_TRACE(type);
+        // 5A (ID 22) is decoded; ID 9 (S-band 9A in later amendments) is not defined here.
+        const io::RTCMMessage built = buildMsmMessage(
+            type, level, 100000250U,
+            {{4, 22, 40.0, 20.0}, {4, 9, 41.0, 21.0}, {11, 22, 50.0, 25.0}});
+        const std::vector<uint8_t> frame = buildRtcmFrame(built);
+        const auto framed = processor.decode(frame.data(), frame.size());
+        ASSERT_EQ(framed.size(), 1U);
+        EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(framed[0].type), GNSSSystem::NavIC);
+        ObservationData decoded;
+        ASSERT_TRUE(processor.decodeObservationData(framed[0], decoded));
+        ASSERT_EQ(decoded.observations.size(), 2U);
+        const auto sat4 = findObservation(decoded, GNSSSystem::NavIC, 4, SignalType::GPS_L5);
+        const auto sat11 = findObservation(decoded, GNSSSystem::NavIC, 11, SignalType::GPS_L5);
+        ASSERT_TRUE(sat4.has_value());
+        ASSERT_TRUE(sat11.has_value());
+        const double tol = level >= 6 ? 2e-3 : 0.05;
+        EXPECT_NEAR(sat4->pseudorange, msmRoughRangeM(4) + 40.0, tol);
+        EXPECT_NEAR(sat11->carrier_phase * constants::GPS_L5_WAVELENGTH,
+                    msmRoughRangeM(11) + 25.0, tol);
+        EXPECT_EQ(sat4->pseudorange_observation_type, "C5A");
+    }
+}
+
+TEST(RTCMUtilsTest, ClassifiesQzssAndNavicMsmMessages) {
+    for (uint16_t type : {1114, 1115, 1116, 1117, 1134, 1135, 1136, 1137}) {
+        EXPECT_TRUE(io::rtcm_utils::isObservationMessage(static_cast<io::RTCMMessageType>(type)))
+            << type;
+    }
+    // MSM1-3 and SBAS MSM remain non-decoded.
+    for (uint16_t type : {1111, 1112, 1113, 1131, 1132, 1133, 1101, 1104, 1105, 1106, 1107}) {
+        EXPECT_FALSE(io::rtcm_utils::isObservationMessage(static_cast<io::RTCMMessageType>(type)))
+            << type;
+    }
+    EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1117),
+              GNSSSystem::QZSS);
+    EXPECT_EQ(io::rtcm_utils::getSystemFromMessageType(io::RTCMMessageType::RTCM_1137),
+              GNSSSystem::NavIC);
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1114), "QZSS MSM4");
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1137), "NavIC MSM7");
 }

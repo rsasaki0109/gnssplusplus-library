@@ -337,10 +337,18 @@ std::string getMessageTypeName(RTCMMessageType type) {
         case RTCMMessageType::RTCM_1095: return "Galileo MSM5";
         case RTCMMessageType::RTCM_1096: return "Galileo MSM6";
         case RTCMMessageType::RTCM_1097: return "Galileo MSM7";
+        case RTCMMessageType::RTCM_1114: return "QZSS MSM4";
+        case RTCMMessageType::RTCM_1115: return "QZSS MSM5";
+        case RTCMMessageType::RTCM_1116: return "QZSS MSM6";
+        case RTCMMessageType::RTCM_1117: return "QZSS MSM7";
         case RTCMMessageType::RTCM_1124: return "BeiDou MSM4";
         case RTCMMessageType::RTCM_1125: return "BeiDou MSM5";
         case RTCMMessageType::RTCM_1126: return "BeiDou MSM6";
         case RTCMMessageType::RTCM_1127: return "BeiDou MSM7";
+        case RTCMMessageType::RTCM_1134: return "NavIC MSM4";
+        case RTCMMessageType::RTCM_1135: return "NavIC MSM5";
+        case RTCMMessageType::RTCM_1136: return "NavIC MSM6";
+        case RTCMMessageType::RTCM_1137: return "NavIC MSM7";
         case RTCMMessageType::RTCM_1240: return "Galileo SSR Orbit Correction";
         case RTCMMessageType::RTCM_1241: return "Galileo SSR Clock Correction";
         case RTCMMessageType::RTCM_1242: return "Galileo SSR Code Bias";
@@ -371,7 +379,9 @@ bool isObservationMessage(RTCMMessageType type) {
            (type_val >= 1074 && type_val <= 1077) ||
            (type_val >= 1084 && type_val <= 1087) ||
            (type_val >= 1094 && type_val <= 1097) ||
-           (type_val >= 1124 && type_val <= 1127);
+           (type_val >= 1114 && type_val <= 1117) ||
+           (type_val >= 1124 && type_val <= 1127) ||
+           (type_val >= 1134 && type_val <= 1137);
 }
 
 bool isEphemerisMessage(RTCMMessageType type) {
@@ -401,12 +411,16 @@ GNSSSystem getSystemFromMessageType(RTCMMessageType type) {
         (type_val >= 1240 && type_val <= 1245)) {
         return GNSSSystem::Galileo;
     }
-    if (type_val >= 1246 && type_val <= 1251) {
+    if ((type_val >= 1114 && type_val <= 1117) ||
+        (type_val >= 1246 && type_val <= 1251)) {
         return GNSSSystem::QZSS;
     }
     if ((type_val >= 1124 && type_val <= 1127) ||
         (type_val >= 1258 && type_val <= 1263)) {
         return GNSSSystem::BeiDou;
+    }
+    if (type_val >= 1134 && type_val <= 1137) {
+        return GNSSSystem::NavIC;
     }
     if (type_val >= 1252 && type_val <= 1257) {
         return GNSSSystem::SBAS;
