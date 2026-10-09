@@ -1200,3 +1200,59 @@ TEST(PPPClasTest, MrtklibDdLayoutKeepsCanonicalDynamicsOff) {
     EXPECT_EQ(scaffold.snapshot().layout.nr(), 3);
     EXPECT_DOUBLE_EQ(scaffold.snapshot().covariance(0, 0), 900.0);
 }
+
+TEST(PPPClasTest, ReceiverGeometryOffsetShiftsCodeResidualByRangeChange) {
+    // MRTKLIB clas_osr_zdres() evaluates the geometric distance at
+    // rr + tide displacement while the estimated state stays tide-free.
+    // buildEpochMeasurements() therefore receives state + offset; the code
+    // residual must shift by exactly the geometric range difference.
+    ObservationData obs;
+    obs.time = GNSSTime(2324, 177796.2);
+
+    OSRCorrection osr;
+    osr.valid = true;
+    osr.satellite = SatelliteId(GNSSSystem::GPS, 5);
+    osr.num_frequencies = 1;
+    osr.frequencies[0] = 1575.42e6;
+    osr.wavelengths[0] = constants::SPEED_OF_LIGHT / osr.frequencies[0];
+    osr.signals[0] = SignalType::GPS_L1CA;
+    osr.satellite_position = Vector3d(-12.0e6, 17.0e6, 19.0e6);
+    osr.elevation = 0.9;
+    osr.code_bias_present[0] = true;
+    osr.phase_bias_present[0] = true;
+
+    Observation l1;
+    l1.satellite = osr.satellite;
+    l1.signal = SignalType::GPS_L1CA;
+    l1.valid = true;
+    l1.has_pseudorange = true;
+    l1.pseudorange = 2.4e7;
+    obs.observations = {l1};
+
+    ppp_shared::PPPConfig config;
+    config.kinematic_mode = true;
+    config.use_clas_osr_filter = true;
+
+    ppp_shared::PPPState state;
+    state.state = VectorXd::Zero(state.total_states);
+    state.covariance = MatrixXd::Identity(state.total_states, state.total_states);
+    const Vector3d receiver_position(-3961765.5, 3349009.3, 3698311.5);
+    const Vector3d tide(-0.1316, 0.0382, 0.0942);
+    const ppp_clas::TropMappingFunction mapping =
+        [](const Vector3d&, double, const GNSSTime&) { return 1.0; };
+
+    const auto base = ppp_clas::buildEpochMeasurements(
+        obs, {osr}, state, config, receiver_position, 0.0, 2.3, {}, mapping);
+    const auto shifted = ppp_clas::buildEpochMeasurements(
+        obs, {osr}, state, config, receiver_position + tide, 0.0, 2.3, {},
+        mapping);
+    ASSERT_FALSE(base.measurements.empty());
+    ASSERT_EQ(base.measurements.size(), shifted.measurements.size());
+    const double expected_range_change =
+        geodist(osr.satellite_position, receiver_position + tide) -
+        geodist(osr.satellite_position, receiver_position);
+    EXPECT_GT(std::abs(expected_range_change), 0.05);
+    EXPECT_NEAR(shifted.measurements.front().residual -
+                    base.measurements.front().residual,
+                -expected_range_change, 1e-6);
+}

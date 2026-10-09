@@ -42,6 +42,11 @@ struct FixValidationOptions {
     /// should pass the float filter covariance here. Null keeps the
     /// historical measurement-only (R) basis.
     const MatrixXd* innovation_covariance = nullptr;
+    /// Offset added to the filter-state position for the geometric range
+    /// (MRTKLIB clas_osr_zdres() "rr += disp": receiver tide displacement
+    /// plus any epoch-context vs state offset). Zero keeps the state
+    /// position verbatim (historical behavior).
+    Vector3d receiver_geometry_offset = Vector3d::Zero();
 };
 
 using TropMappingFunction =

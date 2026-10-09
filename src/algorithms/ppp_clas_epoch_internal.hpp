@@ -28,6 +28,9 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <map>
+#include <sstream>
+#include <cstdio>
 
 extern "C" {
 #include "sofa.h"
@@ -429,7 +432,8 @@ inline Vector3d mrtklibClasBodyTide(const Vector3d& receiver_position,
 }
 
 inline Vector3d mrtklibClasSolidTide(const Vector3d& receiver_position,
-                             double mjd_utc) {
+                             double mjd_utc,
+                             bool include_permanent_deformation = true) {
     constexpr double kSunGm = 1.327124e20;
     constexpr double kMoonGm = 4.902801e12;
     Vector3d sun_itrs = Vector3d::Zero();
@@ -449,12 +453,16 @@ inline Vector3d mrtklibClasSolidTide(const Vector3d& receiver_position,
     displacement += radial_k1 * receiver_position.normalized();
     // CLASLIB's PPP tide path passes flag=1 and therefore applies the legacy
     // permanent-deformation elimination term (its flag differs from the
-    // upstream RTKLIB option-bit API).
-    const double permanent_up =
-        0.1196 * (1.5 * std::pow(std::sin(latitude), 2) - 0.5);
-    const double permanent_north = 0.0247 * std::sin(2.0 * latitude);
-    displacement += enu2ecef(
-        Vector3d(0.0, permanent_north, permanent_up), latitude, longitude);
+    // upstream RTKLIB option-bit API). MRTKLIB's clas_osr_zdres() instead
+    // calls tidedisp(opt=5), which never sets the opt&8 permanent-term bit;
+    // GNSS_PPP_CLAS_TIDE_NO_PERMANENT=1 selects that behavior.
+    if (include_permanent_deformation) {
+        const double permanent_up =
+            0.1196 * (1.5 * std::pow(std::sin(latitude), 2) - 0.5);
+        const double permanent_north = 0.0247 * std::sin(2.0 * latitude);
+        displacement += enu2ecef(
+            Vector3d(0.0, permanent_north, permanent_up), latitude, longitude);
+    }
     return displacement;
 }
 
@@ -534,14 +542,101 @@ inline Vector3d mrtklibClasPoleTide(const Vector3d& receiver_position,
     return enu2ecef(enu, latitude, longitude);
 }
 
+// Parses the official CLAS ocean-loading table (clas_grid.blq): records are
+// introduced by a "<network>-<grid>" line, followed by "$$" comment lines and
+// six rows of eleven values (radial/west/south amplitudes then phases), the
+// same layout MRTKLIB readblqrecord() consumes (mrtk_clas_grid.c).
+inline std::map<std::pair<int, int>, ClasBlqRows> parseClasGridBlq(
+    std::istream& input) {
+    std::map<std::pair<int, int>, ClasBlqRows> table;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty() || line[0] == '$') {
+            continue;
+        }
+        int network = 0;
+        int grid = 0;
+        char trailing = '\0';
+        if (std::sscanf(line.c_str(), " %d-%d %c", &network, &grid,
+                        &trailing) != 2 ||
+            network <= 0 || grid <= 0) {
+            continue;
+        }
+        ClasBlqRows record{};
+        int rows = 0;
+        while (rows < 6 && std::getline(input, line)) {
+            if (line.empty() || line[0] == '$') {
+                continue;
+            }
+            std::istringstream row_stream(line);
+            bool ok = true;
+            for (int column = 0; column < 11; ++column) {
+                if (!(row_stream >> record[static_cast<size_t>(rows)]
+                                          [static_cast<size_t>(column)])) {
+                    ok = false;
+                    break;
+                }
+            }
+            if (!ok) {
+                break;
+            }
+            ++rows;
+        }
+        if (rows == 6) {
+            table[{network, grid}] = record;
+        }
+    }
+    return table;
+}
+
+inline const std::map<std::pair<int, int>, ClasBlqRows>& clasGridBlqTable(
+    const std::string& path) {
+    static std::map<std::string, std::map<std::pair<int, int>, ClasBlqRows>>
+        cache;
+    auto it = cache.find(path);
+    if (it == cache.end()) {
+        std::ifstream input(path);
+        it = cache.emplace(path, parseClasGridBlq(input)).first;
+    }
+    return it->second;
+}
+
 inline Vector3d mrtklibTokyoClasTideDisplacement(const Vector3d& receiver_position,
                                           const GNSSTime& time,
                                           int network_id,
-                                          const std::array<double, 4>& grid_weights) {
-    if (network_id != 7) {
+                                          const std::array<double, 4>& grid_weights,
+                                          const std::array<int, 4>& grid_numbers =
+                                              {{0, 0, 0, 0}}) {
+    // Only network 7 has an embedded clas_grid.blq table. With
+    // GNSS_PPP_CLAS_RECEIVER_TIDE the other networks still receive the solid
+    // and pole terms (MRTKLIB adds ocean loading from clas_grid.blq there as
+    // well; that table is not embedded, so ocean loading is omitted).
+    // GNSS_PPP_CLAS_GRID_BLQ supplies every network's table at runtime.
+    std::array<ClasBlqRows, 4> file_blq{};
+    bool have_file_blq = false;
+    if (pppEnvOverrides().clas_receiver_tide &&
+        !pppEnvOverrides().clas_grid_blq_path.empty()) {
+        const auto& table =
+            clasGridBlqTable(pppEnvOverrides().clas_grid_blq_path);
+        have_file_blq = true;
+        for (size_t grid = 0; grid < 4; ++grid) {
+            if (!(grid_weights[grid] > 0.0)) {
+                continue;
+            }
+            const auto record =
+                table.find({network_id, grid_numbers[grid]});
+            if (record == table.end()) {
+                have_file_blq = false;
+                break;
+            }
+            file_blq[grid] = record->second;
+        }
+    }
+    const bool solid_pole_only = network_id != 7 && !have_file_blq;
+    if (solid_pole_only && !pppEnvOverrides().clas_receiver_tide) {
         return Vector3d::Zero();
     }
-    const auto* blq = &kTokyoClasBlq;
+    const auto* blq = have_file_blq ? &file_blq : &kTokyoClasBlq;
     if (blq == nullptr || !receiver_position.allFinite() ||
         receiver_position.norm() < constants::WGS84_A * 0.5) {
         return Vector3d::Zero();
@@ -557,7 +652,9 @@ inline Vector3d mrtklibTokyoClasTideDisplacement(const Vector3d& receiver_positi
         displacement = Vector3d(solid_pole[0], solid_pole[1], solid_pole[2]);
     } else {
         const double mjd_utc = iers::gnssTimeToMjdUtc(time);
-        const Vector3d solid = mrtklibClasSolidTide(receiver_position, mjd_utc);
+        const Vector3d solid = mrtklibClasSolidTide(
+            receiver_position, mjd_utc,
+            !pppEnvOverrides().clas_tide_no_permanent);
         const Vector3d pole = mrtklibClasPoleTide(receiver_position, mjd_utc);
         displacement = solid + pole;
         if (pppDebugEnabled()) {
@@ -568,6 +665,9 @@ inline Vector3d mrtklibTokyoClasTideDisplacement(const Vector3d& receiver_positi
         }
     }
 
+    if (solid_pole_only) {
+        return displacement;
+    }
     // CLASLIB applies Emat*Gmat interpolation weights from the selected
     // atmospheric grid, not a fresh bilinear interpolation at the receiver
     // coordinates. Reuse the typed weights carried by the accepted OSR row.

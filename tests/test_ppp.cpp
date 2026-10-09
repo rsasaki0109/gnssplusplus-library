@@ -9,6 +9,7 @@
 #include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
+#include "../src/algorithms/ppp_clas_epoch_internal.hpp"
 #include "../src/algorithms/ppp_internal.hpp"
 
 #include <algorithm>
@@ -3384,4 +3385,116 @@ TEST(PPPMultifrequencyTest, MatchesMadocalibExtraWideLaneDoubleDifference) {
                     (sat_n2_cycles - sat_n3_cycles),
                 1e-12);
     EXPECT_NEAR(value, 0.12, 1e-12);
+}
+
+using namespace libgnss::ppp_clas_epoch_internal;
+
+TEST(PPPEnvOverridesTest, ClasReceiverTideKnobsAreOffByDefaultAndStrict) {
+    ScopedEnvironmentVariable tide("GNSS_PPP_CLAS_RECEIVER_TIDE");
+    ScopedEnvironmentVariable permanent("GNSS_PPP_CLAS_TIDE_NO_PERMANENT");
+    ScopedEnvironmentVariable blq("GNSS_PPP_CLAS_GRID_BLQ");
+
+    tide.clear();
+    permanent.clear();
+    blq.clear();
+    auto overrides = PPPEnvOverrides::fromEnvironment();
+    EXPECT_FALSE(overrides.clas_receiver_tide);
+    EXPECT_FALSE(overrides.clas_tide_no_permanent);
+    EXPECT_TRUE(overrides.clas_grid_blq_path.empty());
+
+    for (const char* invalid : {"", "0", "2", "true", "1trailing"}) {
+        tide.set(invalid);
+        permanent.set(invalid);
+        overrides = PPPEnvOverrides::fromEnvironment();
+        EXPECT_FALSE(overrides.clas_receiver_tide) << "value=" << invalid;
+        EXPECT_FALSE(overrides.clas_tide_no_permanent) << "value=" << invalid;
+    }
+
+    tide.set("1");
+    permanent.set("1");
+    blq.set("/tmp/clas_grid.blq");
+    overrides = PPPEnvOverrides::fromEnvironment();
+    EXPECT_TRUE(overrides.clas_receiver_tide);
+    EXPECT_TRUE(overrides.clas_tide_no_permanent);
+    EXPECT_EQ(overrides.clas_grid_blq_path, "/tmp/clas_grid.blq");
+}
+
+TEST(PPPClasTideTest, PermanentDeformationTermMatchesMrtklibOptBit8) {
+    // MRTKLIB tide_solid() adds du=0.1196*(1.5*sin^2(phi)-0.5) up and
+    // dn=0.0247*sin(2*phi) north only when tidedisp() opt has bit 8, which
+    // clas_osr_zdres() (opt=5) never sets.
+    const Vector3d tokyo_ecef(-3961765.5, 3349009.3, 3698311.5);
+    const double mjd_utc = 60514.05;
+    const Vector3d with_term =
+        mrtklibClasSolidTide(tokyo_ecef, mjd_utc, true);
+    const Vector3d without_term =
+        mrtklibClasSolidTide(tokyo_ecef, mjd_utc, false);
+    const double latitude = std::asin(tokyo_ecef.z() / tokyo_ecef.norm());
+    const double longitude = std::atan2(tokyo_ecef.y(), tokyo_ecef.x());
+    const double up = 0.1196 * (1.5 * std::pow(std::sin(latitude), 2) - 0.5);
+    const double north = 0.0247 * std::sin(2.0 * latitude);
+    const Vector3d expected =
+        enu2ecef(Vector3d(0.0, north, up), latitude, longitude);
+    EXPECT_NEAR((with_term - without_term - expected).norm(), 0.0, 1e-12);
+    EXPECT_GT((with_term - without_term).norm(), 0.02);
+    // The default argument keeps the historical behavior.
+    EXPECT_EQ(mrtklibClasSolidTide(tokyo_ecef, mjd_utc), with_term);
+    // MRTKLIB's solid tide at this site/epoch is ~(+0.055 E, -0.021 N,
+    // +0.122 U) m including pole tide: the permanent-free north term is
+    // negative while the legacy term flips it to ~0.
+    const Vector3d enu_without =
+        ecef2enu(without_term, 35.6676 * M_PI / 180.0, 139.7911 * M_PI / 180.0);
+    const Vector3d enu_with =
+        ecef2enu(with_term, 35.6676 * M_PI / 180.0, 139.7911 * M_PI / 180.0);
+    EXPECT_LT(enu_without.y(), -0.01);
+    EXPECT_NEAR(enu_with.y() - enu_without.y(), north, 1e-4);
+}
+
+TEST(PPPClasTideTest, ClasGridBlqParserReadsNetworkGridRecords) {
+    std::istringstream input(
+        "$$ header\n"
+        "$$ END HEADER\n"
+        "$$\n"
+        "  7-17     \n"
+        "$$ FES2004_PP ID: 2020-03-23 09:37:09\n"
+        "$$ 7-17,   RADI TANG  lon/lat:  140.0300   35.8500    0.000\n"
+        "  .00799 .00419 .00123 .00124 .01091 .00848 .00361 .00168 .00034 .00010 .00004\n"
+        "  .00259 .00132 .00034 .00037 .00219 .00179 .00073 .00035 .00010 .00003 .00001\n"
+        "  .00227 .00078 .00047 .00018 .00194 .00147 .00064 .00029 .00004 .00004 .00004\n"
+        "    52.6   72.7   58.9   67.1 -136.5 -154.9 -136.4 -162.6  -13.8  -32.3  -15.2\n"
+        "   -14.0   24.6  -26.2   25.2 -170.7  169.5 -170.4  161.7  -34.5  -49.3  -29.8\n"
+        "   -79.8  -63.6  -90.5  -68.0   86.0   67.5   86.6   56.0   46.9   33.6    4.8\n"
+        "$$\n"
+        "  7-18     \n"
+        "  .1 .2 .3\n"
+        "$$\n"
+        "  11-3     \n"
+        "  .00100 .00100 .00100 .00100 .00100 .00100 .00100 .00100 .00100 .00100 .00100\n"
+        "  .00200 .00200 .00200 .00200 .00200 .00200 .00200 .00200 .00200 .00200 .00200\n"
+        "  .00300 .00300 .00300 .00300 .00300 .00300 .00300 .00300 .00300 .00300 .00300\n"
+        "     1.0    2.0    3.0    4.0    5.0    6.0    7.0    8.0    9.0   10.0   11.0\n"
+        "     1.0    2.0    3.0    4.0    5.0    6.0    7.0    8.0    9.0   10.0   11.0\n"
+        "     1.0    2.0    3.0    4.0    5.0    6.0    7.0    8.0    9.0   10.0   11.0\n");
+    const auto table = parseClasGridBlq(input);
+    // The truncated 7-18 record is dropped, the others are keyed by (net, grid).
+    ASSERT_EQ(table.size(), 2u);
+    ASSERT_EQ(table.count({7, 17}), 1u);
+    ASSERT_EQ(table.count({11, 3}), 1u);
+    EXPECT_EQ(table.count({7, 18}), 0u);
+    // The runtime table reproduces the embedded tokyo/run2 7-17 record.
+    EXPECT_EQ(table.at({7, 17}), kTokyoClasBlq[0]);
+    EXPECT_DOUBLE_EQ(table.at({11, 3})[2][5], 0.003);
+    EXPECT_DOUBLE_EQ(table.at({11, 3})[5][10], 11.0);
+}
+
+TEST(PPPClasTideTest, ReceiverTideStaysDisabledForForeignNetworkByDefault) {
+    if (pppEnvOverrides().clas_receiver_tide) {
+        GTEST_SKIP() << "GNSS_PPP_CLAS_RECEIVER_TIDE is set in this process";
+    }
+    const Vector3d nagoya_ecef(-3810226.6, 3567862.1, 3652911.4);
+    const GNSSTime time(2323, 556000.0);
+    const std::array<double, 4> weights{{0.25, 0.25, 0.25, 0.25}};
+    // Legacy behavior: only network 7 receives a tide displacement.
+    EXPECT_EQ(mrtklibTokyoClasTideDisplacement(nagoya_ecef, time, 8, weights),
+              Vector3d::Zero());
 }
