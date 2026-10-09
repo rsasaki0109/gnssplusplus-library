@@ -1,0 +1,35 @@
+{
+ "candidate": "velocity_consistency_v8",
+ "contract": "docs/online_pva_candidate_v9.md",
+ "contract_sha256": "8313064b98440acbcd69e2d35923071da73785bc1925b6a8821969c452c4381d",
+ "freeze_commit": "c06567c1",
+ "replay_binary_sha256": "5313534179fce8e5f85be5738ccf6e1b704d4c5373ee28f5f833c3f2b08f5770",
+ "adoption": "No-Go",
+ "default_changed": false,
+ "ppc": {
+  "runs": 18,
+  "gates": 558,
+  "failed": 6,
+  "decision_sha256": "5243c5b3ceade46b1cbb032b0526952a397afdfee3b538dc278b0a078967cbbc",
+  "decision_bytes": 1654130
+ },
+ "urbannav": {
+  "runs": 6,
+  "gates": 186,
+  "failed": 2,
+  "decision_sha256": "42674ecd4b36be47ce9f294a93f1f2e16ad82f3478638ffc157795ef1d9b3a7d",
+  "decision_bytes": 545775
+ },
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 0.99,
+  "mean": 1.31,
+  "max": 1.88
+ },
+ "full_decision_location": "cloud session scratch (not retained)"
+}
