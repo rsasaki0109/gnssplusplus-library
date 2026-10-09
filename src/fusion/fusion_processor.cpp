@@ -203,8 +203,13 @@ void LooseCouplingProcessor::injectAndReset() {
 fusion_update::FusionUpdateResult LooseCouplingProcessor::applyUpdateAndInject(
     const fusion_measurement::FusionMeasurementSystem& system, double max_nis_per_observation,
     int& consecutive_gate_rejections) {
-    const auto result =
-        fusion_update::applyDenseUpdate(error_state_, state_.covariance, system, max_nis_per_observation);
+    // Schmidt-Kalman consider update while the yaw is unobservable (default off).
+    const unsigned consider_mask =
+        (config_.consider_attitude_and_biases_before_heading_latch && !heading_aligned_)
+            ? fusion_update::kConsiderAttitudeAndBiasesMask
+            : fusion_update::kNoConsiderMask;
+    const auto result = fusion_update::applyDenseUpdate(error_state_, state_.covariance, system,
+                                                        max_nis_per_observation, consider_mask);
 
     if (result.ok) {
         injectAndReset();
