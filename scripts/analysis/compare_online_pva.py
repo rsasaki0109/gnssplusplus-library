@@ -13,6 +13,7 @@ from gnss_pva_evaluate import pin, dump
 from gnss_pva_metrics import stats, read_rows
 
 METRICS = ("rtk_position_m", "fused_position_m", "rtk_velocity_mps", "fused_velocity_mps", "rotation_deg")
+PPC_RUNS = tuple(f"{city}{run}" for city in ("tokyo", "nagoya") for run in (1, 2, 3))
 COVERAGE = ("rtk_available", "fused_available", "rtk_velocity_available", "fused_velocity_available", "attitude_available", "heading_available")
 
 
@@ -92,23 +93,24 @@ def main():
     p.add_argument("--output-dir", type=Path, required=True)
     p.add_argument("--candidate-name", default="vehicle_nhc_latched_v1")
     p.add_argument("--contract", type=Path, default=ROOT/"docs/online_pva_candidate_v1.md")
+    p.add_argument("--runs", nargs="+", default=list(PPC_RUNS), metavar="RUN",
+                   help="Run directory names under each input dir (default: the six PPC runs, tokyo1..nagoya3)")
     args = p.parse_args()
+    if len(set(args.runs)) != len(args.runs): p.error("--runs must not repeat a run name")
     if args.output_dir.exists(): p.error("output directory must be new")
     args.output_dir.mkdir(parents=True)
     report = dict(schema="libgnsspp.pva_candidate_decision.v1", state="running", adoption="No-Go", default_changed=False,
                   contract=pin(args.contract), candidate=args.candidate_name, comparison_source=pin(__file__), runs=[])
     try:
         improved = False
-        for city in ("tokyo", "nagoya"):
-            for run in (1, 2, 3):
-                name = f"{city}{run}"
-                result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name, args.candidate_name)
+        for name in args.runs:
+            result, improvement = compare(args.baseline_dir/name, args.candidate_dir/name, name, args.candidate_name)
+            report["runs"].append(result)
+            improved |= improvement
+            for scenario in ("gnss_outage", "imu_gap"):
+                label = name+"-"+scenario
+                result, _ = compare(args.baseline_scenario_dir/label, args.candidate_scenario_dir/label, label, args.candidate_name)
                 report["runs"].append(result)
-                improved |= improvement
-                for scenario in ("gnss_outage", "imu_gap"):
-                    label = name+"-"+scenario
-                    result, _ = compare(args.baseline_scenario_dir/label, args.candidate_scenario_dir/label, label, args.candidate_name)
-                    report["runs"].append(result)
         failures = [dict(run=r["name"], gate=g) for r in report["runs"] for g in r["gates"] if not g["passed"]]
         if not improved: failures.append(dict(run="all_normal", gate=dict(name="targeted_rotation_improvement", passed=False)))
         report.update(state="passed", failures=failures, adoption="Go" if not failures else "No-Go", improved_rotation=improved)

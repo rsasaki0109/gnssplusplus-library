@@ -1,9 +1,12 @@
+import contextlib
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 
+from unittest import mock
 from test_pva import fixture, write, m
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]/"scripts/analysis"))
 import compare_online_pva as comparison
@@ -116,6 +119,47 @@ class ComparisonTest(unittest.TestCase):
         (candidate/"score.json").write_text("{}")
         with self.assertRaises((ValueError, KeyError)):
             comparison.compare(control, candidate, "synthetic")
+
+    def decide(self, runs, *extra):
+        """Build control/candidate trees for `runs` and invoke the CLI; returns (exit code, decision.json)."""
+        for side in ("control", "candidate"):
+            for name in runs:
+                self.case(f"{side}/normal/{name}")
+                for scenario in ("gnss_outage", "imu_gap"):
+                    self.case(f"{side}/scenarios/{name}-{scenario}")
+        out = self.root/f"decision{len(list(self.root.glob('decision*')))}"
+        argv = ["compare_online_pva.py", "--baseline-dir", str(self.root/"control/normal"),
+                "--candidate-dir", str(self.root/"candidate/normal"),
+                "--baseline-scenario-dir", str(self.root/"control/scenarios"),
+                "--candidate-scenario-dir", str(self.root/"candidate/scenarios"), "--output-dir", str(out), *extra]
+        with mock.patch.object(sys, "argv", argv), contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = comparison.main()
+        return code, json.loads((out/"decision.json").read_text())
+
+    def test_default_runs_are_the_six_ppc_runs_in_the_original_order(self):
+        self.assertEqual(comparison.PPC_RUNS, ("tokyo1", "tokyo2", "tokyo3", "nagoya1", "nagoya2", "nagoya3"))
+        code, decision = self.decide(comparison.PPC_RUNS)
+        self.assertEqual(code, 0)
+        expected = [n for name in comparison.PPC_RUNS for n in (name, name+"-gnss_outage", name+"-imu_gap")]
+        self.assertEqual([r["name"] for r in decision["runs"]], expected)
+
+    def test_runs_argument_selects_other_run_names_without_changing_gates(self):
+        code, decision = self.decide(("Odaiba_ublox", "Shinjuku_ublox"), "--runs", "Odaiba_ublox", "Shinjuku_ublox")
+        self.assertEqual(code, 0)
+        self.assertEqual([r["name"] for r in decision["runs"]],
+                         ["Odaiba_ublox", "Odaiba_ublox-gnss_outage", "Odaiba_ublox-imu_gap",
+                          "Shinjuku_ublox", "Shinjuku_ublox-gnss_outage", "Shinjuku_ublox-imu_gap"])
+        reference = comparison.compare(self.root/"control/normal/Odaiba_ublox", self.root/"candidate/normal/Odaiba_ublox",
+                                       "Odaiba_ublox")[0]
+        self.assertEqual([g["name"] for g in decision["runs"][0]["gates"]], [g["name"] for g in reference["gates"]])
+        self.assertEqual(decision["runs"][0]["gates"], reference["gates"])
+
+    def test_missing_run_fails_closed(self):
+        code, decision = self.decide(("Odaiba_ublox",), "--runs", "Odaiba_ublox", "Shinjuku_ublox")
+        self.assertEqual(code, 2)
+        self.assertEqual(decision["state"], "failed")
+        self.assertEqual(decision["adoption"], "No-Go")
 
 
 if __name__ == "__main__":
