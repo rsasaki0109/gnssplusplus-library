@@ -1,0 +1,43 @@
+{
+ "candidate": "velocity_consistency_v10",
+ "contract": "docs/online_pva_candidate_v11.md",
+ "contract_sha256": "f685b873c2d34e4f0d77c7962063cea1ff63b61511c3f620fee6c06104eb140c",
+ "freeze_commit": "6f2fab94",
+ "replay_binary_sha256": "854bdd42d68677d6a9716d7c8174ade4688e301f907f6b0f8a4e75812f3d7f13",
+ "adoption": "Go",
+ "default_changed": false,
+ "ppc": {
+  "runs": 18,
+  "gates": 576,
+  "failed": 0,
+  "adoption": "Go",
+  "decision_sha256": "f2584f7e36f886746464907d5fc37f49225ce72ab4de9022e83c4a48d767a09b",
+  "decision_bytes": 1658379
+ },
+ "urbannav": {
+  "runs": 6,
+  "gates": 192,
+  "failed": 0,
+  "adoption": "Go",
+  "decision_sha256": "708d0e7466e1fd476684a66cc93c42c6fdb677315ea8a950b1f13278161bcea8",
+  "decision_bytes": 547722
+ },
+ "attitude_integrity_gate8": {
+  "threshold_fraction_rotation_gt_90deg": 0.01,
+  "candidate_max_fraction": 0.0,
+  "candidate_epochs_gt_90deg": 0,
+  "candidate_max_rotation_deg": 38.5
+ },
+ "candidate_none_parity": {
+  "reference": "develop a7a5d5bf candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 1.11,
+  "mean": 1.36,
+  "max": 1.92
+ },
+ "full_decision_location": "cloud session scratch (not retained)"
+}
