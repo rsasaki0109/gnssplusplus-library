@@ -44,6 +44,31 @@ inline int rinexBand(const std::string& obs_type) {
     return obs_type[1] - '0';
 }
 
+// RINEX 3.00-3.02 label BeiDou B1I (1561.098 MHz) as band 1 ("C1I"). RINEX
+// 3.03 moved B1I to band 2 ("C2I") and reassigned band 1 to B1C
+// (1575.42 MHz). Normalize the legacy label so the rest of the pipeline sees
+// the 3.03+ convention (same remap as RTKLIB rinex.c for ver <= 3.02).
+// RINEX 2.x and 3.03+/4.x are left untouched.
+inline bool beiDouBand1IsB1I(double rinex_version) {
+    return rinex_version >= 3.0 && rinex_version < 3.025;
+}
+
+inline bool needsRinexVersionObsTypeRemap(GNSSSystem system, double rinex_version) {
+    return system == GNSSSystem::BeiDou && beiDouBand1IsB1I(rinex_version);
+}
+
+inline std::string normalizeObservationTypeForRinexVersion(GNSSSystem system,
+                                                           const std::string& obs_type,
+                                                           double rinex_version) {
+    if (needsRinexVersionObsTypeRemap(system, rinex_version) &&
+        rinexBand(obs_type) == 1) {
+        std::string normalized = obs_type;
+        normalized[1] = '2';
+        return normalized;
+    }
+    return obs_type;
+}
+
 inline bool trySignalForObservationType(GNSSSystem system,
                                         const std::string& obs_type,
                                         SignalType& signal) {
