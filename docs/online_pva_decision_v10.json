@@ -1,0 +1,48 @@
+{
+ "candidate": "velocity_consistency_v9",
+ "contract": "docs/online_pva_candidate_v10.md",
+ "contract_sha256": "e25a9b960ea691b41e3aa665e9938b0ef20349f3e7f20787d4265f6c4f0a9637",
+ "freeze_commit": "4e0d4914",
+ "replay_binary_sha256": "5cf2b2c60d17b24a25ed46d3d69b593fdf0481263043e2c8e6cc83fda928f5ad",
+ "adoption": "No-Go",
+ "default_changed": false,
+ "ppc": {
+  "runs": 18,
+  "gates": 558,
+  "failed": 0,
+  "adoption": "Go",
+  "decision_sha256": "035dbde993933ae197cb587543a994753788cfcae8c1d894528018d9bf9dafe8",
+  "decision_bytes": 1653229
+ },
+ "urbannav": {
+  "runs": 6,
+  "gates": 186,
+  "failed": 2,
+  "failures": [
+   {
+    "run": "Odaiba_trimble-imu_gap",
+    "gate": "all.rtk_position_m.p95",
+    "control": 26.787,
+    "candidate": 28.456
+   },
+   {
+    "run": "Odaiba_trimble-imu_gap",
+    "gate": "common.rtk_position_m.p95"
+   }
+  ],
+  "decision_sha256": "da75c80f0dd038fdcc2f646c295db25e0eed2cfb29587138aaf1331a99cbaeae",
+  "decision_bytes": 545754
+ },
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 1.06,
+  "mean": 1.33,
+  "max": 1.89
+ },
+ "full_decision_location": "cloud session scratch (not retained)"
+}
