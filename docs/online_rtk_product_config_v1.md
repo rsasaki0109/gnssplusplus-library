@@ -116,6 +116,25 @@ tuned after the results are seen.
   Tokyo 1. The prefix confirms that the preset, hold and independent Doppler
   velocity are active. Only status counts are read.
 
+## Implementation notes recorded before the freeze
+
+- **Library presets.** `applyRtkPreset` carries every preset the app helper
+  supports: survey, low-cost, odaiba and moving-base. `""` and `"none"` are
+  no-ops, as in the app helper.
+  - `max_baseline_length = 20000` is added for low-cost and for odaiba, which
+    is low-cost plus wide-lane AR. Only low-cost is used here.
+  - A unit test compares all 16 fields touched by the library and app tables
+    for every preset.
+- **Unknown preset names** are rejected in the processor constructor.
+- **Pre-freeze prefix.** PPC Tokyo 1, normal scenario, 600 epochs; only counts
+  were read:
+  - RTK status: SPP 0 / FLOAT 6 / FIXED 594;
+  - base epochs: 120 exact, 480 extrapolated;
+  - `replay.json` confirms the preset, the hold and the independent Doppler
+    velocity.
+- **Parity on 600-epoch prefixes of Tokyo 1 / Nagoya 1.** Candidates `none` and
+  `rtk_base_extrapolation_v1` are unchanged against their earlier outputs.
+
 ## Reported in addition (not gates)
 
 - RTK status counts (SPP, FLOAT, FIXED).

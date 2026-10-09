@@ -75,6 +75,15 @@ public:
         // <= this many seconds, and used like an exact base epoch for RTK and
         // for tight anchoring. Otherwise the existing SPP fallback runs.
         double base_extrapolation_max_age_s = 0.0;
+        // Opt-in (rtk_online_product_v1, docs/online_rtk_product_config_v1.md).
+        // Empty keeps the previous behavior bit-for-bit. A name accepted by
+        // applyRtkPreset() (rtk_presets.hpp, e.g. "low-cost") is applied to a
+        // copy of `rtk` when the RTK filter is (re)created, before the
+        // processor's own overrides (use_external_position_time_update,
+        // enable_velocity_states). Unknown names are rejected by the
+        // constructor. The isolated RTK-prior filter and the fusion
+        // configurations are not affected.
+        std::string rtk_preset;
     };
     struct Output {
         PositionSolution rtk;
@@ -138,6 +147,8 @@ public:
     /** Read-only view of the isolated RTK-prior filter; null unless
      * Config::rtk_prior_fusion is set (diagnostics and tests). */
     const LooseCouplingProcessor* priorFusionFilter() const { return prior_fusion_.get(); }
+    /** Read-only view of the RTK filter (diagnostics and tests). */
+    const RTKProcessor& rtkFilter() const { return *rtk_; }
 
 private:
     Config config_;

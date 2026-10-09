@@ -2,6 +2,7 @@
 #include <libgnss++/fusion/online_rtk_imu.hpp>
 #include <libgnss++/fusion/attitude.hpp>
 #include <libgnss++/algorithms/rtk_base_alignment.hpp>
+#include <libgnss++/algorithms/rtk_presets.hpp>
 #include <limits>
 #include <stdexcept>
 
@@ -672,5 +673,68 @@ TEST(OnlineRtkImuTest, BaseExtrapolationFallsBackWithoutAUsableBaseEpoch) {
         h.processor.reset(time23(0.3));
         EXPECT_FALSE(h.processor.processRover(epoch23(0.4), time23(0.4)).extrapolated_base_available);
     }
+}
+
+// ---- rtk_online_product_v1 (docs/online_rtk_product_config_v1.md) ----
+
+TEST(OnlineRtkImuTest, RtkPresetIsOffByDefault) {
+    EXPECT_TRUE(OnlineRtkImuProcessor::Config{}.rtk_preset.empty());
+    // With no preset the RTK filter carries config.rtk plus the two
+    // processor overrides and nothing else.
+    auto config = configuration();
+    OnlineRtkImuProcessor processor(config);
+    const auto& applied = processor.rtkFilter().getRTKConfig();
+    const RTKProcessor::RTKConfig defaults;
+    EXPECT_EQ(applied.max_position_jump_rate_mps, defaults.max_position_jump_rate_mps);
+    EXPECT_EQ(applied.max_baseline_length, defaults.max_baseline_length);
+    EXPECT_EQ(applied.min_hold_count, defaults.min_hold_count);
+    EXPECT_EQ(applied.enable_ar_filter, defaults.enable_ar_filter);
+    EXPECT_EQ(applied.max_float_prefit_residual_rms_m, defaults.max_float_prefit_residual_rms_m);
+    EXPECT_TRUE(applied.use_external_position_time_update);
+    EXPECT_TRUE(applied.enable_velocity_states);
+}
+
+TEST(OnlineRtkImuTest, UnknownRtkPresetIsRejected) {
+    auto config = configuration();
+    config.rtk_preset = "not-a-preset";
+    EXPECT_THROW(OnlineRtkImuProcessor{config}, std::invalid_argument);
+    config.rtk_preset = "Low-Cost";
+    EXPECT_THROW(OnlineRtkImuProcessor{config}, std::invalid_argument);
+}
+
+TEST(OnlineRtkImuTest, LowCostPresetBuildsRtkFilterEqualToLibraryPreset) {
+    auto config = configuration();
+    config.rtk_preset = "low-cost";
+    config.rtk.ratio_threshold = 9.0;  // overwritten by the preset
+    config.rtk.outlier_threshold = 123.0;  // untouched by the preset
+    RTKProcessor::RTKConfig expected = config.rtk;
+    ASSERT_TRUE(applyRtkPreset(expected, "low-cost"));
+    // Processor overrides come after the preset.
+    expected.use_external_position_time_update = config.tight_time_update;
+    expected.enable_velocity_states = config.tight_time_update;
+    OnlineRtkImuProcessor processor(config);
+    const auto& applied = processor.rtkFilter().getRTKConfig();
+    EXPECT_EQ(applied.ratio_threshold, expected.ratio_threshold);
+    EXPECT_EQ(applied.ambiguity_ratio_threshold, expected.ambiguity_ratio_threshold);
+    EXPECT_EQ(applied.enable_ar_filter, expected.enable_ar_filter);
+    EXPECT_EQ(applied.ar_filter_margin, expected.ar_filter_margin);
+    EXPECT_EQ(applied.min_satellites_for_ar, expected.min_satellites_for_ar);
+    EXPECT_EQ(applied.min_hold_count, expected.min_hold_count);
+    EXPECT_EQ(applied.hold_ambiguity_ratio_threshold, expected.hold_ambiguity_ratio_threshold);
+    EXPECT_EQ(applied.max_position_jump_rate_mps, expected.max_position_jump_rate_mps);
+    EXPECT_EQ(applied.max_position_jump_min_m, expected.max_position_jump_min_m);
+    EXPECT_EQ(applied.min_full_ratio_for_subset_ar, expected.min_full_ratio_for_subset_ar);
+    EXPECT_EQ(applied.max_float_prefit_residual_rms_m, expected.max_float_prefit_residual_rms_m);
+    EXPECT_EQ(applied.max_float_prefit_residual_max_m, expected.max_float_prefit_residual_max_m);
+    EXPECT_EQ(applied.max_float_prefit_residual_reset_streak,
+              expected.max_float_prefit_residual_reset_streak);
+    EXPECT_EQ(applied.max_baseline_length, 20000.0);
+    EXPECT_EQ(applied.outlier_threshold, 123.0);
+    EXPECT_EQ(applied.use_external_position_time_update, expected.use_external_position_time_update);
+    EXPECT_EQ(applied.enable_velocity_states, expected.enable_velocity_states);
+    // The preset is also applied when the RTK filter is recreated.
+    processor.reset(time(1.0));
+    EXPECT_EQ(processor.rtkFilter().getRTKConfig().max_position_jump_rate_mps, 30.0);
+    EXPECT_EQ(processor.rtkFilter().getRTKConfig().max_baseline_length, 20000.0);
 }
 }

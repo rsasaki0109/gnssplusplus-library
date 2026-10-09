@@ -109,6 +109,7 @@ if(GTest_FOUND)
         test_fgo.cpp
         test_raw_p_seed.cpp
         test_rtk_base_alignment.cpp
+        test_rtk_presets.cpp
         test_base_pseudorange_compensation.cpp
         test_phase127_glonass_channel_provenance.cpp
         test_phase128_glonass_provenance.cpp

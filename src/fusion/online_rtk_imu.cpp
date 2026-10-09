@@ -1,6 +1,7 @@
 #include <libgnss++/fusion/online_rtk_imu.hpp>
 #include <libgnss++/fusion/attitude.hpp>
 #include <libgnss++/algorithms/rtk_base_alignment.hpp>
+#include <libgnss++/algorithms/rtk_presets.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
 
 #include <algorithm>
@@ -33,11 +34,17 @@ OnlineRtkImuProcessor::OnlineRtkImuProcessor(const Config& config) : config_(con
         !std::isfinite(config_.base_extrapolation_max_age_s) || config_.base_extrapolation_max_age_s < 0.0 ||
         config_.rtk.position_mode != RTKProcessor::RTKConfig::PositionMode::KINEMATIC)
         throw std::invalid_argument("invalid online RTK/IMU configuration");
+    if (!config_.rtk_preset.empty()) {
+        RTKProcessor::RTKConfig probe;
+        if (!applyRtkPreset(probe, config_.rtk_preset))
+            throw std::invalid_argument("unknown RTK preset: " + config_.rtk_preset);
+    }
     recreateFilters();
 }
 
 void OnlineRtkImuProcessor::recreateRtkFilter() {
     auto rtk_config = config_.rtk;
+    if (!config_.rtk_preset.empty()) applyRtkPreset(rtk_config, config_.rtk_preset);
     rtk_config.use_external_position_time_update = config_.tight_time_update;
     rtk_config.enable_velocity_states = config_.tight_time_update;
     rtk_ = std::make_unique<RTKProcessor>(rtk_config);

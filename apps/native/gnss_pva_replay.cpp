@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|rtk_base_extrapolation_v1]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|rtk_base_extrapolation_v1|rtk_online_product_v1]\n"
                 "RAW_RUN is <tokyo|nagoya>/<run> (PPC) or urbannav/<run> (zero lever arm).\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
              candidate != "velocity_consistency_v1" && candidate != "velocity_consistency_v2" &&
              candidate != "velocity_consistency_v3" && candidate != "velocity_consistency_v4" &&
              candidate != "velocity_consistency_v5" && candidate != "velocity_consistency_v6" &&
-             candidate != "rtk_base_extrapolation_v1"))
+             candidate != "rtk_base_extrapolation_v1" && candidate != "rtk_online_product_v1"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
         std::size_t consumed = 0;
@@ -104,13 +104,25 @@ int main(int argc, char** argv) {
             // filter is recreated without a seed.
             config.carry_gyro_bias_across_reset = true;
         }
-        const bool extrapolation_candidate = candidate == "rtk_base_extrapolation_v1";
-        if (extrapolation_candidate) {
+        if (candidate == "rtk_online_product_v1") {
+            // Candidate none + product RTK configuration, frozen in
+            // docs/online_rtk_product_config_v1.md: library low-cost preset,
+            // 2 s causal base hold (as rtk_base_extrapolation_v1) and the
+            // independent Doppler velocity (as velocity_consistency_v1, without
+            // its fusion options). No new constant.
+            config.rtk_preset = "low-cost";
+            config.base_extrapolation_max_age_s = 2.0;
+            config.independent_doppler_velocity = true;
+        }
+        if (candidate == "rtk_base_extrapolation_v1") {
             // Candidate none + base extrapolation, frozen in
             // docs/online_rtk_base_extrapolation_v1.md. The 2 s horizon is the
             // batch kMaxInterpolationGapSeconds, not tuned. Nothing else changes.
             config.base_extrapolation_max_age_s = 2.0;
         }
+        // Any candidate that holds a past base epoch writes the extrapolated_base
+        // column and the extrapolation fields of replay.json.
+        const bool extrapolation_candidate = config.base_extrapolation_max_age_s > 0.0;
         if (candidate == "vehicle_nhc_latched_v1") {
             config.fusion.nhc_enable = true;
             config.fusion.nhc_require_heading_alignment = true;
@@ -187,6 +199,10 @@ int main(int argc, char** argv) {
             meta << ",\"base_extrapolation_max_age_s\":" << config.base_extrapolation_max_age_s
                  << ",\"extrapolated_base_epochs\":" << diagnostics.extrapolated_base_epochs
                  << ",\"missing_base_epochs\":" << diagnostics.missing_base_epochs;
+        if (candidate == "rtk_online_product_v1")
+            meta << ",\"rtk_preset\":\"" << config.rtk_preset << "\""
+                 << ",\"independent_doppler_velocity\":"
+                 << (config.independent_doppler_velocity ? "true" : "false");
         meta << "}\n";
         std::cout << "replayed " << count << " epochs (" << scenario << ")\n";
         return 0;
