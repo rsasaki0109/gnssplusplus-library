@@ -208,6 +208,10 @@ private:
     bool preserve_additional_frequency_bands_ = false;
     bool source_header_tracking_filter_ = false;
     bool last_rinex4_epoch_was_event_ = false;
+    // Set by parseObservationEpochV2 when the record just consumed was a
+    // RINEX 2.x event/special record (epoch flags 2-6) rather than an
+    // observation epoch; readObservationEpoch then keeps scanning.
+    bool last_rinex2_epoch_was_event_ = false;
     rinex4::SystemData rinex4_system_data_;
 
     // State for parsing RINEX 3/4 "SYS / # / OBS TYPES" records that span
@@ -224,8 +228,17 @@ private:
     
     /**
      * @brief Parse observation epoch (RINEX 2.x)
+     *
+     * Handles the fixed-width 2.x epoch record: continuation satellite lines
+     * (12 satellites per line), the 'G'/'R'/'E'/'S'/'J'/'C' system letters
+     * (blank = GPS; unknown letters are consumed but dropped) and epoch
+     * flags 2-6 (special records / cycle-slip records are consumed and never
+     * emitted as observations).
      */
     bool parseObservationEpochV2(const std::string& line, ObservationData& obs_data);
+
+    /// Read one line and strip a trailing '\r' (RINEX 2.x CRLF files).
+    bool readLineStripCr(std::string& line);
     
     /**
      * @brief Parse observation epoch (RINEX 3.x)
