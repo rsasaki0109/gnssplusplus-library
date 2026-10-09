@@ -1,0 +1,36 @@
+{
+ "candidate": "rtk_base_extrapolation_v1",
+ "contract": "docs/online_rtk_base_extrapolation_v1.md",
+ "contract_sha256": "b652802ce966253803012cb1ed9c03619a18b083e557147e1abe665abc001abb",
+ "freeze_commit": "a760429f",
+ "replay_binary_sha256": "9ac63bcba9c5ace0dfe2e0b392b5dbc291f744e1577bae67d67c611d3e0d0283",
+ "adoption": "No-Go",
+ "default_changed": false,
+ "ppc": {
+  "runs": 18,
+  "gates": 558,
+  "failed": 133,
+  "decision_sha256": "65975bf4810cd212642943fde309acd9e9b2fc0b007aa950fa242c26aa39b312",
+  "decision_bytes": 1684921
+ },
+ "urbannav": {
+  "runs": 6,
+  "gates": 186,
+  "failed": 107,
+  "improved_rotation": false,
+  "decision_sha256": "2ee83c31b57194152a18b32351ffae351fb3b36db0ddffdf9566c817dd8c5d40",
+  "decision_bytes": 575192
+ },
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 1.07,
+  "mean": 1.37,
+  "max": 2.0
+ },
+ "full_decision_location": "cloud session scratch (not retained)"
+}

@@ -1,5 +1,7 @@
 #include <libgnss++/fusion/online_rtk_imu.hpp>
 #include <libgnss++/fusion/attitude.hpp>
+#include <libgnss++/algorithms/rtk_base_alignment.hpp>
+#include <libgnss++/algorithms/rtk_presets.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
 
 #include <algorithm>
@@ -29,13 +31,20 @@ OnlineRtkImuProcessor::OnlineRtkImuProcessor(const Config& config) : config_(con
         !std::isfinite(config_.max_tight_interval_s) || config_.max_tight_interval_s <= 0.0 ||
         config_.max_pending_imu == 0 || config_.max_pending_base == 0 ||
         config_.max_ephemerides_per_satellite == 0 ||
+        !std::isfinite(config_.base_extrapolation_max_age_s) || config_.base_extrapolation_max_age_s < 0.0 ||
         config_.rtk.position_mode != RTKProcessor::RTKConfig::PositionMode::KINEMATIC)
         throw std::invalid_argument("invalid online RTK/IMU configuration");
+    if (!config_.rtk_preset.empty()) {
+        RTKProcessor::RTKConfig probe;
+        if (!applyRtkPreset(probe, config_.rtk_preset))
+            throw std::invalid_argument("unknown RTK preset: " + config_.rtk_preset);
+    }
     recreateFilters();
 }
 
 void OnlineRtkImuProcessor::recreateRtkFilter() {
     auto rtk_config = config_.rtk;
+    if (!config_.rtk_preset.empty()) applyRtkPreset(rtk_config, config_.rtk_preset);
     rtk_config.use_external_position_time_update = config_.tight_time_update;
     rtk_config.enable_velocity_states = config_.tight_time_update;
     rtk_ = std::make_unique<RTKProcessor>(rtk_config);
@@ -190,17 +199,35 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         ++diagnostics_.reset_generation;
         out.reason = "imu_stale_reset";
     }
+    const bool extrapolation = config_.base_extrapolation_max_age_s > 0.0;
     while (!base_.empty() && base_.front().time < obs.time - kExactEpochToleranceS) {
+        // Expired epochs are in time order; the last one popped is the latest
+        // past epoch. Keep it only when extrapolation may use it.
+        if (extrapolation) {
+            last_past_base_ = std::move(base_.front());
+            have_last_past_base_ = true;
+        }
         base_.pop_front();
         ++diagnostics_.expired_base_epochs;
     }
     out.exact_base_available = !base_.empty() &&
         std::abs(base_.front().time - obs.time) <= kExactEpochToleranceS &&
         base_.front().time <= obs.time; // Never admit even a near future epoch.
+    // Opt-in: without an exact base, hold the latest past base epoch to the
+    // rover time. Never taken (and last_past_base_ never set) when off.
+    ObservationData extrapolated_base;
+    if (extrapolation && !out.exact_base_available && have_last_past_base_ &&
+        rtk_base_alignment::holdBaseEpoch(last_past_base_, obs.time, config_.base_position_ecef,
+            epoch_navigation, config_.base_extrapolation_max_age_s, extrapolated_base))
+        out.extrapolated_base_available = true;
+    // An extrapolated epoch advances the RTK filter exactly like an exact-base
+    // epoch, so it takes the same time-update and anchoring branches below.
+    // With the option off extrapolated_base_available is always false.
+    const bool differential_base = out.exact_base_available || out.extrapolated_base_available;
     const bool imu_at_epoch = have_imu_ && std::abs(imu_time_ - obs.time) <= kExactEpochToleranceS;
     if (have_tight_anchor_ && obs.time - tight_anchor_time_ > config_.max_tight_interval_s)
         recreateTightFilter();
-    if (out.exact_base_available) {
+    if (differential_base) {
         if (config_.tight_time_update && imu_at_epoch) {
             const auto update = tight_->prepareTimeUpdate();
             if (update.valid) {
@@ -210,8 +237,19 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
                 out.tight_time_update_supplied = true;
             }
         }
-        out.rtk = rtk_->processRTKEpoch(obs, base_.front(), epoch_navigation);
-        base_.pop_front();
+        if (out.exact_base_available) {
+            out.rtk = rtk_->processRTKEpoch(obs, base_.front(), epoch_navigation);
+            if (extrapolation) {
+                // The consumed exact epoch is the latest past epoch for the
+                // following rover epochs (base_ no longer holds it).
+                last_past_base_ = std::move(base_.front());
+                have_last_past_base_ = true;
+            }
+            base_.pop_front();
+        } else {
+            out.rtk = rtk_->processRTKEpoch(obs, extrapolated_base, epoch_navigation);
+            ++diagnostics_.extrapolated_base_epochs;
+        }
     } else {
         // Explicit SPP fallback; no stale differential observation is stamped
         // with the rover time and no waiting for a future base occurs.
@@ -255,7 +293,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         const LooseCouplingProcessor& prior = prior_fusion_ ? *prior_fusion_ : *fusion_;
         const bool bootstrap_ready = tight_->initialized() ||
             (prior.isInitialized() && prior.isOriginSet() && prior.isHeadingConverged());
-        if (out.exact_base_available && imu_at_epoch && out.rtk.isValid() &&
+        if (differential_base && imu_at_epoch && out.rtk.isValid() &&
             gnss_input.has_velocity && bootstrap_ready &&
             gnss_input.velocity_ecef.allFinite() && gnss_input.velocity_covariance.allFinite() &&
             rtk_->getFloatPosteriorPosition(anchor, covariance)) {
@@ -266,7 +304,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         if (anchored) {
             tight_anchor_time_ = obs.time;
             have_tight_anchor_ = true;
-        } else if (out.exact_base_available) {
+        } else if (differential_base) {
             // A failed differential anchor must bootstrap from a fresh LC
             // state rather than retain an unpropagated old attitude. An SPP
             // fallback between base epochs does not advance the RTK filter:
@@ -317,6 +355,8 @@ void OnlineRtkImuProcessor::reset(const GNSSTime& arrival) {
     validateArrival(arrival);
     recreateFilters();
     base_.clear();
+    last_past_base_ = ObservationData();
+    have_last_past_base_ = false;
     imu_.clear();
     have_queued_imu_ = false;
     have_rover_ = false;

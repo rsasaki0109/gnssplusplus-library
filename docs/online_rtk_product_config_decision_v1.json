@@ -1,0 +1,35 @@
+{
+ "candidate": "rtk_online_product_v1",
+ "contract": "docs/online_rtk_product_config_v1.md",
+ "contract_sha256": "25ba00c696f28b5d818e788e23830198cf70a0cf6c15e19b84ec59c05be548aa",
+ "freeze_commit": "977b24b1",
+ "replay_binary_sha256": "f2d4a6480bd962a19bb92d9c50785566d61f7b7fa936ff1b7b31047c0f87b997",
+ "adoption": "No-Go",
+ "default_changed": false,
+ "ppc": {
+  "runs": 18,
+  "gates": 558,
+  "failed": 39,
+  "decision_sha256": "bc89873a38a5964cf63454f5ba4a2d402fcb83957523159fc4ee6c786efd2e0f",
+  "decision_bytes": 1660921
+ },
+ "urbannav": {
+  "runs": 6,
+  "gates": 186,
+  "failed": 58,
+  "decision_sha256": "5d2c80081f4270fc940bc8a57540ab99257ec3fe863aedcd847a435b5b66bb32",
+  "decision_bytes": 562246
+ },
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none, PPC",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 1.04,
+  "mean": 1.37,
+  "max": 1.76
+ },
+ "full_decision_location": "cloud session scratch (not retained)"
+}

@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <libgnss++/fusion/online_rtk_imu.hpp>
 #include <libgnss++/fusion/attitude.hpp>
+#include <libgnss++/algorithms/rtk_base_alignment.hpp>
+#include <libgnss++/algorithms/rtk_presets.hpp>
 #include <limits>
 #include <stdexcept>
 
@@ -512,5 +514,227 @@ TEST(OnlineRtkImuTest, RtkPriorFilterIsNeverSeeded) {
         EXPECT_FALSE(run.prior_pending_seed);
         EXPECT_NEAR((run.prior_bias - kGyroAfter).norm(), 0.0, 1e-12);
     }
+}
+
+// ---- rtk_base_extrapolation_v1 (docs/online_rtk_base_extrapolation_v1.md) ----
+GNSSTime time23(double offset) { return GNSSTime(2300, 100000.0 + offset); }
+ObservationData epoch23(double offset) { return ObservationData(time23(offset)); }
+OnlineRtkImuProcessor::Config extrapolationConfiguration(double max_age) {
+    auto config = configuration();
+    config.base_extrapolation_max_age_s = max_age;
+    return config;
+}
+NavigationData syntheticNavigation() {
+    NavigationData nav;
+    for (uint8_t prn = 1; prn <= 24; ++prn) {
+        Ephemeris eph;
+        eph.satellite = SatelliteId(GNSSSystem::GPS, prn);
+        eph.valid = true;
+        eph.week = 2300;
+        eph.toe = GNSSTime(2300, 100000.0);
+        eph.toc = eph.toe;
+        eph.tof = eph.toe;
+        eph.toes = eph.toe.tow;
+        eph.sqrt_a = std::sqrt(26560000.0);
+        eph.e = 0.004 + 0.0002 * prn;
+        eph.i0 = 0.94 + 0.01 * (prn % 3);
+        eph.omega0 = 0.35 * prn;
+        eph.omega = 0.17 * prn;
+        eph.m0 = 0.61 * prn;
+        eph.delta_n = 1e-9 * prn;
+        eph.omega_dot = -8.0e-9;
+        nav.addEphemeris(eph);
+    }
+    return nav;
+}
+// Base epoch with every satellite that the model accepts (base on the equator).
+ObservationData baseWithObservations(const NavigationData& nav, double offset,
+                                     const Vector3d& base_position) {
+    ObservationData base = epoch23(offset);
+    for (uint8_t prn = 1; prn <= 24; ++prn) {
+        const SatelliteId sat(GNSSSystem::GPS, prn);
+        double modeled = 0.0;
+        if (!rtk_base_alignment::calculateModeledBaseRange(sat, base.time, 0.0, base_position, nav, modeled))
+            continue;
+        Observation obs(sat, SignalType::GPS_L1CA);
+        obs.pseudorange = modeled + 100.0;
+        obs.has_pseudorange = true;
+        base.addObservation(obs);
+    }
+    return base;
+}
+struct ExtrapolationHarness {
+    explicit ExtrapolationHarness(double max_age)
+        : processor(extrapolationConfiguration(max_age)), nav(syntheticNavigation()) {
+        processor.pushNavigation(nav, time23(-1.0));
+    }
+    OnlineRtkImuProcessor processor;
+    NavigationData nav;
+    Vector3d base_position = configuration().base_position_ecef;
+    void pushBase(double offset, double received) {
+        processor.pushBase(baseWithObservations(nav, offset, base_position), time23(received));
+    }
+};
+
+TEST(OnlineRtkImuTest, BaseExtrapolationIsOffByDefault) {
+    EXPECT_EQ(OnlineRtkImuProcessor::Config{}.base_extrapolation_max_age_s, 0.0);
+    ExtrapolationHarness h(0.0);
+    h.pushBase(0.0, 0.0);
+    h.pushBase(1.0, 1.0);
+    const auto exact = h.processor.processRover(epoch23(0.0), time23(1.0));
+    EXPECT_TRUE(exact.exact_base_available);
+    const auto held = h.processor.processRover(epoch23(0.2), time23(1.0));
+    EXPECT_FALSE(held.exact_base_available);
+    EXPECT_FALSE(held.extrapolated_base_available);
+    EXPECT_EQ(held.reason, "missing_exact_base");
+    EXPECT_EQ(h.processor.diagnostics().extrapolated_base_epochs, 0U);
+    EXPECT_EQ(h.processor.diagnostics().missing_base_epochs, 1U);
+}
+
+TEST(OnlineRtkImuTest, InvalidBaseExtrapolationAgeIsRejected) {
+    for (const double age : {-1.0, std::numeric_limits<double>::quiet_NaN(),
+                             std::numeric_limits<double>::infinity()})
+        EXPECT_THROW(OnlineRtkImuProcessor{extrapolationConfiguration(age)}, std::invalid_argument);
+}
+
+TEST(OnlineRtkImuTest, BaseExtrapolationHoldsLatestPastBaseWithinAgeLimit) {
+    ExtrapolationHarness h(2.0);
+    h.pushBase(0.0, 0.0);
+    h.pushBase(1.0, 1.0);
+    // First rover epoch at 0.0: the exact base is consumed (and becomes the latest past).
+    const auto exact = h.processor.processRover(epoch23(0.0), time23(1.0));
+    EXPECT_TRUE(exact.exact_base_available);
+    EXPECT_FALSE(exact.extrapolated_base_available);
+    // Rover epochs between base epochs reuse the consumed exact base; the 1.0 base stays pending.
+    for (double t : {0.2, 0.4, 0.6, 0.8}) {
+        const auto row = h.processor.processRover(epoch23(t), time23(1.0));
+        EXPECT_FALSE(row.exact_base_available) << t;
+        EXPECT_TRUE(row.extrapolated_base_available) << t;
+        EXPECT_TRUE(row.reason.empty()) << t;
+    }
+    EXPECT_EQ(h.processor.pendingBase(), 1U);
+    EXPECT_EQ(h.processor.diagnostics().extrapolated_base_epochs, 4U);
+    EXPECT_EQ(h.processor.diagnostics().missing_base_epochs, 0U);
+    // The exact epoch at 1.0 is still exact, never reported as extrapolated.
+    const auto next_exact = h.processor.processRover(epoch23(1.0), time23(1.0));
+    EXPECT_TRUE(next_exact.exact_base_available);
+    EXPECT_FALSE(next_exact.extrapolated_base_available);
+    // Age 1.8 s is still in range; 2.2 s is not and takes the SPP fallback.
+    h.processor.pushNavigation(NavigationData{}, time23(2.8));
+    const auto old_ok = h.processor.processRover(epoch23(2.8), time23(2.8));
+    EXPECT_TRUE(old_ok.extrapolated_base_available);
+    const auto too_old = h.processor.processRover(epoch23(3.2), time23(3.2));
+    EXPECT_FALSE(too_old.exact_base_available);
+    EXPECT_FALSE(too_old.extrapolated_base_available);
+    EXPECT_EQ(too_old.reason, "missing_exact_base");
+    EXPECT_EQ(h.processor.diagnostics().missing_base_epochs, 1U);
+}
+
+TEST(OnlineRtkImuTest, BaseExtrapolationKeepsExpiredPastBaseAndNeverUsesFutureBase) {
+    ExtrapolationHarness h(2.0);
+    h.pushBase(0.0, 0.0);
+    h.pushBase(1.0, 1.0);
+    h.pushBase(2.0, 2.0);
+    // Rover at 1.4 (received at 2.0): bases 0.0 and 1.0 expire, 1.0 is the latest
+    // past; the received 2.0 base is in the future and must stay pending.
+    const auto row = h.processor.processRover(epoch23(1.4), time23(2.0));
+    EXPECT_FALSE(row.exact_base_available);
+    EXPECT_TRUE(row.extrapolated_base_available);
+    EXPECT_EQ(h.processor.diagnostics().expired_base_epochs, 2U);
+    EXPECT_EQ(h.processor.pendingBase(), 1U);
+    // The same sequence with the option off has no differential epoch.
+    ExtrapolationHarness off(0.0);
+    off.pushBase(0.0, 0.0);
+    off.pushBase(1.0, 1.0);
+    off.pushBase(2.0, 2.0);
+    EXPECT_FALSE(off.processor.processRover(epoch23(1.4), time23(2.0)).extrapolated_base_available);
+}
+
+TEST(OnlineRtkImuTest, BaseExtrapolationFallsBackWithoutAUsableBaseEpoch) {
+    {   // No base epoch was ever received.
+        ExtrapolationHarness h(2.0);
+        const auto row = h.processor.processRover(epoch23(0.2), time23(0.2));
+        EXPECT_FALSE(row.extrapolated_base_available);
+        EXPECT_EQ(row.reason, "missing_exact_base");
+    }
+    {   // Past base epoch with no surviving observations.
+        ExtrapolationHarness h(2.0);
+        h.processor.pushBase(epoch23(0.0), time23(0.0));
+        const auto row = h.processor.processRover(epoch23(0.2), time23(0.2));
+        EXPECT_FALSE(row.extrapolated_base_available);
+        EXPECT_EQ(row.reason, "missing_exact_base");
+        EXPECT_EQ(h.processor.diagnostics().extrapolated_base_epochs, 0U);
+    }
+    {   // reset() forgets the latest past base.
+        ExtrapolationHarness h(2.0);
+        h.pushBase(0.0, 0.0);
+        EXPECT_TRUE(h.processor.processRover(epoch23(0.0), time23(0.0)).exact_base_available);
+        EXPECT_TRUE(h.processor.processRover(epoch23(0.2), time23(0.2)).extrapolated_base_available);
+        h.processor.reset(time23(0.3));
+        EXPECT_FALSE(h.processor.processRover(epoch23(0.4), time23(0.4)).extrapolated_base_available);
+    }
+}
+
+// ---- rtk_online_product_v1 (docs/online_rtk_product_config_v1.md) ----
+
+TEST(OnlineRtkImuTest, RtkPresetIsOffByDefault) {
+    EXPECT_TRUE(OnlineRtkImuProcessor::Config{}.rtk_preset.empty());
+    // With no preset the RTK filter carries config.rtk plus the two
+    // processor overrides and nothing else.
+    auto config = configuration();
+    OnlineRtkImuProcessor processor(config);
+    const auto& applied = processor.rtkFilter().getRTKConfig();
+    const RTKProcessor::RTKConfig defaults;
+    EXPECT_EQ(applied.max_position_jump_rate_mps, defaults.max_position_jump_rate_mps);
+    EXPECT_EQ(applied.max_baseline_length, defaults.max_baseline_length);
+    EXPECT_EQ(applied.min_hold_count, defaults.min_hold_count);
+    EXPECT_EQ(applied.enable_ar_filter, defaults.enable_ar_filter);
+    EXPECT_EQ(applied.max_float_prefit_residual_rms_m, defaults.max_float_prefit_residual_rms_m);
+    EXPECT_TRUE(applied.use_external_position_time_update);
+    EXPECT_TRUE(applied.enable_velocity_states);
+}
+
+TEST(OnlineRtkImuTest, UnknownRtkPresetIsRejected) {
+    auto config = configuration();
+    config.rtk_preset = "not-a-preset";
+    EXPECT_THROW(OnlineRtkImuProcessor{config}, std::invalid_argument);
+    config.rtk_preset = "Low-Cost";
+    EXPECT_THROW(OnlineRtkImuProcessor{config}, std::invalid_argument);
+}
+
+TEST(OnlineRtkImuTest, LowCostPresetBuildsRtkFilterEqualToLibraryPreset) {
+    auto config = configuration();
+    config.rtk_preset = "low-cost";
+    config.rtk.ratio_threshold = 9.0;  // overwritten by the preset
+    config.rtk.outlier_threshold = 123.0;  // untouched by the preset
+    RTKProcessor::RTKConfig expected = config.rtk;
+    ASSERT_TRUE(applyRtkPreset(expected, "low-cost"));
+    // Processor overrides come after the preset.
+    expected.use_external_position_time_update = config.tight_time_update;
+    expected.enable_velocity_states = config.tight_time_update;
+    OnlineRtkImuProcessor processor(config);
+    const auto& applied = processor.rtkFilter().getRTKConfig();
+    EXPECT_EQ(applied.ratio_threshold, expected.ratio_threshold);
+    EXPECT_EQ(applied.ambiguity_ratio_threshold, expected.ambiguity_ratio_threshold);
+    EXPECT_EQ(applied.enable_ar_filter, expected.enable_ar_filter);
+    EXPECT_EQ(applied.ar_filter_margin, expected.ar_filter_margin);
+    EXPECT_EQ(applied.min_satellites_for_ar, expected.min_satellites_for_ar);
+    EXPECT_EQ(applied.min_hold_count, expected.min_hold_count);
+    EXPECT_EQ(applied.hold_ambiguity_ratio_threshold, expected.hold_ambiguity_ratio_threshold);
+    EXPECT_EQ(applied.max_position_jump_rate_mps, expected.max_position_jump_rate_mps);
+    EXPECT_EQ(applied.max_position_jump_min_m, expected.max_position_jump_min_m);
+    EXPECT_EQ(applied.min_full_ratio_for_subset_ar, expected.min_full_ratio_for_subset_ar);
+    EXPECT_EQ(applied.max_float_prefit_residual_rms_m, expected.max_float_prefit_residual_rms_m);
+    EXPECT_EQ(applied.max_float_prefit_residual_max_m, expected.max_float_prefit_residual_max_m);
+    EXPECT_EQ(applied.max_float_prefit_residual_reset_streak,
+              expected.max_float_prefit_residual_reset_streak);
+    EXPECT_EQ(applied.max_baseline_length, 20000.0);
+    EXPECT_EQ(applied.outlier_threshold, 123.0);
+    EXPECT_EQ(applied.use_external_position_time_update, expected.use_external_position_time_update);
+    EXPECT_EQ(applied.enable_velocity_states, expected.enable_velocity_states);
+    // The preset is also applied when the RTK filter is recreated.
+    processor.reset(time(1.0));
+    EXPECT_EQ(processor.rtkFilter().getRTKConfig().max_position_jump_rate_mps, 30.0);
+    EXPECT_EQ(processor.rtkFilter().getRTKConfig().max_baseline_length, 20000.0);
 }
 }
