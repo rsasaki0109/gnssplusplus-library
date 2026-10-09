@@ -356,4 +356,161 @@ TEST(OnlineRtkImuTest, ImuGapStillResetsEverythingWithRoverGapOptionOn) {
     EXPECT_EQ(run.diagnostics.reset_generation, 1U);
     EXPECT_GT((run.fused_velocity_enu - run.reference_velocity_enu).norm(), 0.5);
 }
+
+// velocity_consistency_v6: gyro bias carried across fused-filter resets.
+namespace {
+const Vector3d kGyroBefore(0.010, -0.020, -0.0114);
+const Vector3d kGyroAfter(0.030, 0.040, 0.0875);
+ImuSample gyroImu(double tow, const Vector3d& gyro) {
+    auto sample = imu(tow);
+    sample.gyro_raw_radps = gyro;
+    return sample;
+}
+struct GyroCarryRun {
+    Vector3d bias_before_reset = Vector3d::Zero();
+    bool was_initialized_before_reset = false;
+    OnlineRtkImuProcessor::Output reset_epoch;
+    OnlineRtkImuProcessor::Diagnostics diagnostics;
+    bool fused_initialized = false;
+    bool fused_seeded = false;
+    bool fused_pending_seed = false;
+    Vector3d fused_bias = Vector3d::Zero();
+    Vector3d fused_window_mean = Vector3d::Zero();
+    bool has_prior = false;
+    bool prior_seeded = false;
+    bool prior_pending_seed = false;
+    bool prior_initialized = false;
+    Vector3d prior_bias = Vector3d::Zero();
+};
+enum class GapKind { ImuGap, ImuStale, RoverGap };
+// Samples through `first_end` carry kGyroBefore; the first epoch is processed
+// there. The reset then comes from an IMU hole (ImuGap), a rover epoch after
+// stale IMU (ImuStale), or a rover-only gap with continuous IMU (RoverGap).
+// `first_start` = first_end disables the pre-gap initialization (one sample).
+GyroCarryRun runGyroCarry(bool carry, GapKind kind, bool prior = false, bool pre_gap_initialized = true) {
+    auto config = configuration();
+    config.carry_gyro_bias_across_reset = carry;
+    if (prior) config.rtk_prior_fusion = config.fusion;
+    OnlineRtkImuProcessor processor(config);
+    auto push = [&](double t, const Vector3d& gyro) { processor.pushImu(gyroImu(t, gyro), time(t)); };
+    if (pre_gap_initialized) {
+        for (int i = 0; i <= 50; ++i) push(10.0 + 0.01 * i, kGyroBefore);
+        processor.processRover(epoch(10.5), time(10.5));
+    } else {
+        push(10.0, kGyroBefore);  // a single sample cannot initialize
+        processor.processRover(epoch(10.0), time(10.0));
+    }
+    GyroCarryRun run;
+    run.was_initialized_before_reset = processor.fusionFilter().isInitialized();
+    run.bias_before_reset = processor.fusionFilter().state().nominal.gyro_bias;
+    const double last = pre_gap_initialized ? 10.5 : 10.0;
+    if (kind == GapKind::ImuGap) {
+        // 1.5 s IMU hole, then new data; the epoch is after it.
+        for (int i = 0; i <= 50; ++i) push(last + 1.5 + 0.01 * i, kGyroAfter);
+        run.reset_epoch = processor.processRover(epoch(last + 2.0), time(last + 2.0));
+    } else if (kind == GapKind::ImuStale) {
+        // An epoch arrives with no IMU since `last`: stale reset, then fresh IMU.
+        const auto stale = processor.processRover(epoch(last + 1.0), time(last + 1.0));
+        EXPECT_EQ(stale.reason, "imu_stale_reset");
+        for (int i = 0; i <= 50; ++i) push(last + 1.5 + 0.01 * i, kGyroAfter);
+        run.reset_epoch = processor.processRover(epoch(last + 2.0), time(last + 2.0));
+    } else {
+        // Continuous IMU, rover epoch 2.5 s later (> max_rover_gap_s).
+        for (int i = 1; i <= 250; ++i) push(last + 0.01 * i, kGyroAfter);
+        run.reset_epoch = processor.processRover(epoch(last + 2.5), time(last + 2.5));
+    }
+    run.diagnostics = processor.diagnostics();
+    const auto& fused = processor.fusionFilter();
+    run.fused_initialized = fused.isInitialized();
+    run.fused_seeded = fused.lastInitializationGyroBiasSeeded();
+    run.fused_pending_seed = fused.hasPendingGyroBiasSeed();
+    run.fused_bias = fused.state().nominal.gyro_bias;
+    run.fused_window_mean = fused.lastInitializationWindowGyroBias();
+    if (const auto* p = processor.priorFusionFilter()) {
+        run.has_prior = true;
+        run.prior_initialized = p->isInitialized();
+        run.prior_seeded = p->lastInitializationGyroBiasSeeded();
+        run.prior_pending_seed = p->hasPendingGyroBiasSeed();
+        run.prior_bias = p->state().nominal.gyro_bias;
+    }
+    return run;
+}
+}  // namespace
+
+TEST(OnlineRtkImuTest, CarryGyroBiasAcrossResetDefaultsOff) {
+    const OnlineRtkImuProcessor::Config config;
+    EXPECT_FALSE(config.carry_gyro_bias_across_reset);
+}
+
+TEST(OnlineRtkImuTest, GyroBiasCarriedAcrossImuGapReset) {
+    const auto run = runGyroCarry(true, GapKind::ImuGap);
+    ASSERT_TRUE(run.was_initialized_before_reset);
+    EXPECT_NEAR((run.bias_before_reset - kGyroBefore).norm(), 0.0, 1e-12);
+    EXPECT_EQ(run.reset_epoch.reason, "imu_gap_reset");
+    EXPECT_EQ(run.diagnostics.imu_gap_resets, 1U);
+    ASSERT_TRUE(run.fused_initialized);
+    EXPECT_TRUE(run.fused_seeded);
+    EXPECT_FALSE(run.fused_pending_seed);
+    EXPECT_EQ(run.fused_bias, run.bias_before_reset);
+    EXPECT_NEAR((run.fused_window_mean - kGyroAfter).norm(), 0.0, 1e-12);
+}
+
+TEST(OnlineRtkImuTest, GyroBiasCarriedAcrossImuStaleReset) {
+    const auto run = runGyroCarry(true, GapKind::ImuStale);
+    ASSERT_TRUE(run.was_initialized_before_reset);
+    EXPECT_EQ(run.diagnostics.imu_gap_resets, 1U);
+    ASSERT_TRUE(run.fused_initialized);
+    EXPECT_TRUE(run.fused_seeded);
+    EXPECT_EQ(run.fused_bias, run.bias_before_reset);
+    EXPECT_NEAR((run.fused_window_mean - kGyroAfter).norm(), 0.0, 1e-12);
+}
+
+TEST(OnlineRtkImuTest, GyroBiasCarriedAcrossRoverGapResetWhenFusedFilterIsRecreated) {
+    const auto run = runGyroCarry(true, GapKind::RoverGap);
+    ASSERT_TRUE(run.was_initialized_before_reset);
+    EXPECT_EQ(run.reset_epoch.reason, "rover_gap_reset");
+    EXPECT_EQ(run.diagnostics.rover_gap_resets, 1U);
+    ASSERT_TRUE(run.fused_initialized);
+    EXPECT_TRUE(run.fused_seeded);
+    EXPECT_EQ(run.fused_bias, run.bias_before_reset);
+    EXPECT_NEAR((run.fused_window_mean - kGyroAfter).norm(), 0.0, 1e-12);
+}
+
+TEST(OnlineRtkImuTest, GyroBiasNotSeededWhenOldFilterWasNeverInitialized) {
+    for (const auto kind : {GapKind::ImuGap, GapKind::ImuStale}) {
+        const auto run = runGyroCarry(true, kind, false, false);
+        EXPECT_FALSE(run.was_initialized_before_reset);
+        EXPECT_EQ(run.diagnostics.imu_gap_resets, 1U);
+        ASSERT_TRUE(run.fused_initialized);
+        EXPECT_FALSE(run.fused_seeded);
+        EXPECT_FALSE(run.fused_pending_seed);
+        EXPECT_NEAR((run.fused_bias - kGyroAfter).norm(), 0.0, 1e-12);
+    }
+}
+
+TEST(OnlineRtkImuTest, GyroBiasIsWindowMeanWhenCarryOptionIsOff) {
+    for (const auto kind : {GapKind::ImuGap, GapKind::ImuStale, GapKind::RoverGap}) {
+        const auto run = runGyroCarry(false, kind);
+        ASSERT_TRUE(run.was_initialized_before_reset);
+        ASSERT_TRUE(run.fused_initialized);
+        EXPECT_FALSE(run.fused_seeded);
+        EXPECT_FALSE(run.fused_pending_seed);
+        EXPECT_NEAR((run.fused_bias - kGyroAfter).norm(), 0.0, 1e-12);
+        EXPECT_GT((run.fused_bias - run.bias_before_reset).norm(), 0.01);
+    }
+}
+
+TEST(OnlineRtkImuTest, RtkPriorFilterIsNeverSeeded) {
+    for (const auto kind : {GapKind::ImuGap, GapKind::ImuStale, GapKind::RoverGap}) {
+        const auto run = runGyroCarry(true, kind, true);
+        ASSERT_TRUE(run.has_prior);
+        ASSERT_TRUE(run.fused_initialized);
+        ASSERT_TRUE(run.prior_initialized);
+        EXPECT_TRUE(run.fused_seeded);
+        EXPECT_EQ(run.fused_bias, run.bias_before_reset);
+        EXPECT_FALSE(run.prior_seeded);
+        EXPECT_FALSE(run.prior_pending_seed);
+        EXPECT_NEAR((run.prior_bias - kGyroAfter).norm(), 0.0, 1e-12);
+    }
+}
 }

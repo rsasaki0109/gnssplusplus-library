@@ -1,0 +1,66 @@
+{
+ "candidate": "velocity_consistency_v6",
+ "contract": "docs/online_pva_candidate_v7.md",
+ "contract_sha256": "fd481b42cf8a1c8dcb7e4deaea0c49086a05fa79b0e921a92b842a0880e3e50d",
+ "freeze_commit": "62ffab3c",
+ "implementation_commit": "18cdaa5a",
+ "replay_binary_sha256": "9a1ecce186d7b4914ac5afcd8e664be581c5c1ac8763c0faaa7130275a94d967",
+ "control": "candidate none, same binary, same host, interleaved queue",
+ "adoption": "Go",
+ "runs": 18,
+ "gates": 558,
+ "failed": 0,
+ "failures": [],
+ "improved_rotation": true,
+ "candidate_none_parity": {
+  "reference": "develop c37979c3 candidate none",
+  "runs": 18,
+  "rows": 175902,
+  "differing_runs": 0
+ },
+ "processing_p95_ratio_candidate_over_control": {
+  "min": 0.947,
+  "mean": 1.039,
+  "max": 1.107
+ },
+ "host": {
+  "vcpus": 4,
+  "concurrent_replays": 3,
+  "load_avg_1min": {
+   "median": 3.02,
+   "max": 3.42
+  }
+ },
+ "v5_bit_identical": "all normal and GNSS-outage scenarios (12 of 18); RTK columns identical in 18 of 18",
+ "imu_gap_rotation_rmse_deg_v5_to_v6": {
+  "tokyo1": [
+   1.8,
+   1.8
+  ],
+  "tokyo2": [
+   18.4,
+   3.8
+  ],
+  "tokyo3": [
+   2.0,
+   1.7
+  ],
+  "nagoya1": [
+   2.3,
+   2.3
+  ],
+  "nagoya2": [
+   2.3,
+   2.6
+  ],
+  "nagoya3": [
+   2.8,
+   2.8
+  ]
+ },
+ "seeded_initializations": 6,
+ "full_decision_sha256": "53c5eb0d8881e098d0f214d55bf9c3f2db71e83025269891de49761e4252ecb7",
+ "full_decision_bytes": 1650595,
+ "full_decision_location": "cloud session scratch (not retained)",
+ "default_changed": false
+}
