@@ -123,6 +123,7 @@ if(GTest_FOUND)
         test_gnss_live.cpp
         test_ppp.cpp
         test_rinex_writer.cpp
+        test_rinex2_reader.cpp
         test_rinex4_navigation.cpp
         test_madoca_core.cpp
         test_madoca_l6d_snapshots.cpp
