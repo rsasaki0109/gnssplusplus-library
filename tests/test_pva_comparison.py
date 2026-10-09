@@ -99,6 +99,15 @@ class ComparisonTest(unittest.TestCase):
         self.assertNotIn("before_latch.numeric_parity", {g["name"] for g in result["gates"]})
         self.assertTrue(all(g["passed"] for g in result["gates"]))
 
+    def test_velocity_consistency_v7_is_a_distinct_checked_candidate(self):
+        control = self.case("control")
+        candidate = self.case("candidate", candidate="velocity_consistency_v7")
+        with self.assertRaisesRegex(ValueError, "unexpected candidate"):
+            comparison.compare(control, candidate, "synthetic", "velocity_consistency_v6")
+        result, _ = comparison.compare(control, candidate, "synthetic", "velocity_consistency_v7")
+        self.assertNotIn("before_latch.numeric_parity", {g["name"] for g in result["gates"]})
+        self.assertTrue(all(g["passed"] for g in result["gates"]))
+
     def test_rtk_base_extrapolation_v1_is_a_distinct_checked_candidate(self):
         control = self.case("control")
         candidate = self.case("candidate", candidate="rtk_base_extrapolation_v1")

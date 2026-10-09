@@ -51,7 +51,7 @@ def main(argv=None):
     parser.add_argument("--start-s", type=float, default=60)
     parser.add_argument("--duration-s", type=float, default=10)
     parser.add_argument("--plot", action="store_true", help="Needs matplotlib; metrics need only Python standard library")
-    parser.add_argument("--candidate", choices=("none", "vehicle_nhc_latched_v1", "velocity_consistency_v1", "velocity_consistency_v2", "velocity_consistency_v3", "velocity_consistency_v4", "velocity_consistency_v5", "velocity_consistency_v6", "rtk_base_extrapolation_v1", "rtk_online_product_v1"), default="none", help="Opt-in frozen development experiment; does not alter default inference")
+    parser.add_argument("--candidate", choices=("none", "vehicle_nhc_latched_v1", "velocity_consistency_v1", "velocity_consistency_v2", "velocity_consistency_v3", "velocity_consistency_v4", "velocity_consistency_v5", "velocity_consistency_v6", "velocity_consistency_v7", "rtk_base_extrapolation_v1", "rtk_online_product_v1"), default="none", help="Opt-in frozen development experiment; does not alter default inference")
     args = parser.parse_args(argv)
     if args.output_dir.exists(): parser.error("output directory already exists")
     if args.max_epochs < 0: parser.error("max epochs must be nonnegative")
