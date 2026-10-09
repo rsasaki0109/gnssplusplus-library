@@ -173,6 +173,19 @@ and one bounded prefix: Tokyo 2 IMU gap, 600 epochs, to confirm that the seed
 is applied at the post-gap initialization. No full replay of the candidate is
 run before the freeze. (j) introduces no constant.
 
+What that prefix showed:
+
+- The seed is applied at the post-gap initialization (tow 177066). Gyro bias
+  z is -0.0114 rad/s (seed) instead of +0.0875 rad/s (window mean).
+- Rotation error at 76 / 86 / 100 / 110 s:
+  - v6: 1.3 / 13.9 / 23.4 / 33.8 deg
+  - v5: 3.1 / 64.6 / 15.0 / 27.0 deg
+  - v6 is worse than v5 at 100-110 s within the prefix. That matches X1's
+    timeline, and nothing was changed in response.
+- Candidates `none` and `velocity_consistency_v5` from the candidate tree
+  match the v5-study outputs in every field except `processing_ms` on the same
+  600-epoch prefix.
+
 ## Acceptance (unchanged from `online_pva_candidate_v6.md`, no relaxation)
 
 Population: six full normal runs, plus fixed 60-70 s GNSS removal and 60-64 s
