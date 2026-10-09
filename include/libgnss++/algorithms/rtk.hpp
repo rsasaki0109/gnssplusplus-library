@@ -106,6 +106,24 @@ public:
         bool prefer_trusted_position_seed = false;
         bool prefer_rover_position_seed = false;
 
+        /// velocity_consistency_v8 (k). When true and the latest kinematic
+        /// position re-seed (resetPositionToSPP) took the rover position from
+        /// the final base_position_ fallback -- no rover-header, SPP, last
+        /// fixed, receiver or last-solution position was available -- the
+        /// epoch that would emit a FLOAT from that seed returns through the
+        /// SPP fallback path instead. The filter stays initialised. The
+        /// condition is re-evaluated at every re-seed, so it clears as soon
+        /// as a real position is available. false (default) keeps the
+        /// previous behavior bit-for-bit.
+        bool reject_float_seeded_at_base = false;
+
+        /// velocity_consistency_v8 (m). The SPP fallback blanks an SPP
+        /// solution with <= 5 satellites that is > 25 m from the last trusted
+        /// position. When > 0 that rule applies only if the trusted anchor is
+        /// no older than this many seconds (rover time - last trusted time).
+        /// 0 (default) = no age limit, the previous behavior bit-for-bit.
+        double spp_fallback_blank_max_anchor_age_s = 0.0;
+
         /// Propagate the latest trusted position with the most recent
         /// Doppler-derived rover velocity when reseeding a kinematic epoch.
         /// This mirrors the short FLOAT-gap strategy in Fredeluces et al.
@@ -895,6 +913,15 @@ public:
     }
 
     struct EpochDebugTelemetry {
+        // velocity_consistency_v8 diagnostics (telemetry only).
+        // reject_float_seeded_at_base routed this epoch to the SPP fallback.
+        // The epoch's kinematic re-seed took the rover position from the final
+        // base_position_ fallback (tracked regardless of the option).
+        bool rover_seed_from_base_fallback = false;
+        bool float_seeded_at_base_rejected = false;
+        // The SPP-fallback blanking rule would have fired but the trusted
+        // anchor was older than spp_fallback_blank_max_anchor_age_s.
+        bool spp_blank_age_limited = false;
         // Optional per-epoch stage timing. These fields are telemetry only;
         // they do not participate in any RTK decision or state update. SPP
         // time is accumulated from PositionSolution::processing_time_ms so
@@ -1471,6 +1498,16 @@ public:
     void setDopplerVelocitySigma(double sigma_mps) { doppler_velocity_sigma_mps_ = sigma_mps; }
     double getDopplerVelocitySigma() const { return doppler_velocity_sigma_mps_; }
 
+    /**
+     * @brief The raw SPP solution the SPP processor computed for the latest
+     * processRTKEpoch()/processEpoch() call (position, status, velocity and
+     * velocity covariance), before any fallback blanking or stabilisation.
+     * Reset to an invalid default solution at the start of every call, so it
+     * never carries a previous epoch's solution. Read-only; has no effect on
+     * the RTK solution.
+     */
+    const PositionSolution& currentSpp() const { return current_spp_solution_; }
+
     void setBasePosition(const Vector3d& base_position) {
         base_position_ = base_position;
         base_position_known_ = true;
@@ -1806,6 +1843,11 @@ private:
     Vector3d epoch_spp_position_ecef_ = Vector3d::Zero();
     Matrix3d epoch_spp_position_covariance_ = Matrix3d::Zero();
     bool epoch_spp_valid_ = false;
+    // Raw SPP solution of the latest epoch call (see currentSpp()).
+    PositionSolution current_spp_solution_;
+    // True when the latest kinematic re-seed took rover_pos from the final
+    // base_position_ fallback (RTKConfig::reject_float_seeded_at_base).
+    bool rover_seed_from_base_fallback_ = false;
     // Position marginal and innovation statistic after the first measurement
     // iteration of this epoch (single application of its measurements).
     Matrix3d first_pass_position_covariance_ = Matrix3d::Zero();

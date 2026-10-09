@@ -124,6 +124,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
     debug_telemetry_ = EpochDebugTelemetry{};
     independent_failure_budget_evaluated_this_epoch_ = false;
     epoch_spp_valid_ = false;
+    current_spp_solution_ = PositionSolution{};
     has_first_pass_covariance_ = false;
     PositionSolution solution;
     solution.time = rover_obs.time;
@@ -144,6 +145,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 std::chrono::duration<double, std::milli>(
                     std::chrono::steady_clock::now() - spp_started)
                     .count();
+            current_spp_solution_ = spp;
             rememberSolution(spp);
             consecutive_fix_count_ = 0;
             consecutive_float_count_ = 0;
@@ -160,6 +162,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - spp_started)
                 .count();
+        current_spp_solution_ = current_spp;
         epoch_spp_valid_ = current_spp.isValid() &&
             current_spp.position_ecef.allFinite() &&
             current_spp.position_covariance.allFinite();
@@ -175,9 +178,18 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 const double trusted_jump =
                     (spp.position_ecef - last_trusted_position_).norm();
                 if (spp.num_satellites <= 5 && trusted_jump > 25.0) {
-                    spp = PositionSolution{};
-                    spp.time = rover_obs.time;
-                    spp.status = SolutionStatus::NONE;
+                    // velocity_consistency_v8 (m): bound the blanking by the
+                    // trusted anchor's age; 0 (default) = no limit.
+                    const double max_anchor_age =
+                        rtk_config_.spp_fallback_blank_max_anchor_age_s;
+                    const double anchor_age = rover_obs.time - last_trusted_time_;
+                    if (max_anchor_age > 0.0 && !(anchor_age <= max_anchor_age)) {
+                        debug_telemetry_.spp_blank_age_limited = true;
+                    } else {
+                        spp = PositionSolution{};
+                        spp.time = rover_obs.time;
+                        spp.status = SolutionStatus::NONE;
+                    }
                 }
             }
             if (!moving_base_mode && spp.isValid() && has_last_solution_position_ && has_last_epoch_) {
@@ -242,6 +254,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
 
         const auto reset_started = std::chrono::steady_clock::now();
         resetPositionToSPP(rover_obs, nav);
+        debug_telemetry_.rover_seed_from_base_fallback = rover_seed_from_base_fallback_;
         debug_telemetry_.stage_reset_position_ms +=
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - reset_started)
@@ -375,6 +388,16 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             if (!finitePosition(solution) ||
                 deviatesTooFarFromSPP(solution, 150.0) ||
                 float_exceeds_spp_gate) {
+                restoreRememberedState();
+                return fallback_spp();
+            }
+
+            // velocity_consistency_v8 (k): a FLOAT whose position seed fell
+            // through to the base coordinates is not emitted. Same handling as
+            // the gates above; the filter stays initialised.
+            if (rtk_config_.reject_float_seeded_at_base && !moving_base_mode &&
+                rover_seed_from_base_fallback_) {
+                debug_telemetry_.float_seeded_at_base_rejected = true;
                 restoreRememberedState();
                 return fallback_spp();
             }

@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|rtk_base_extrapolation_v1|rtk_online_product_v1]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|velocity_consistency_v7|velocity_consistency_v8|rtk_base_extrapolation_v1|rtk_online_product_v1]\n"
                 "RAW_RUN is <tokyo|nagoya>/<run> (PPC) or urbannav/<run> (zero lever arm).\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
@@ -36,6 +36,7 @@ int main(int argc, char** argv) {
              candidate != "velocity_consistency_v1" && candidate != "velocity_consistency_v2" &&
              candidate != "velocity_consistency_v3" && candidate != "velocity_consistency_v4" &&
              candidate != "velocity_consistency_v5" && candidate != "velocity_consistency_v6" &&
+             candidate != "velocity_consistency_v7" && candidate != "velocity_consistency_v8" &&
              candidate != "rtk_base_extrapolation_v1" && candidate != "rtk_online_product_v1"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
@@ -66,13 +67,16 @@ int main(int argc, char** argv) {
         if (city != "tokyo" && city != "nagoya" && city != "urbannav")
             throw std::invalid_argument("expected PPC <tokyo|nagoya>/<run> or urbannav/<run> directory layout");
         const bool nagoya = city == "nagoya";
+        // velocity_consistency_v8 contains everything of velocity_consistency_v7.
+        const bool v7_or_later = candidate == "velocity_consistency_v7" || candidate == "velocity_consistency_v8";
         // urbannav: UrbanNav documents no antenna-IMU lever arm; zero is a declared
         // assumption (docs/online_pva_default_switch_holdout_v1.md).
         config.fusion.lever_arm_body = city == "urbannav" ? Vector3d(0., 0., 0.)
             : nagoya ? Vector3d(.593, -.670, -1.216) : Vector3d(.31, 0., .55);
         config.tight_time_update = scenario != "loose_only";
         if (candidate == "velocity_consistency_v3" || candidate == "velocity_consistency_v4" ||
-            candidate == "velocity_consistency_v5" || candidate == "velocity_consistency_v6") {
+            candidate == "velocity_consistency_v5" || candidate == "velocity_consistency_v6" ||
+            v7_or_later) {
             // v3 frozen in docs/online_pva_candidate_v4.md. Fixed values, not tuned.
             // The control fusion configuration is snapshotted first so the RTK
             // filter's INS prior is produced by an isolated control filter.
@@ -84,13 +88,14 @@ int main(int argc, char** argv) {
             config.fusion.float_position_reanchor_after_rejections = 30;
         }
         if (candidate == "velocity_consistency_v4" || candidate == "velocity_consistency_v5" ||
-            candidate == "velocity_consistency_v6") {
+            candidate == "velocity_consistency_v6" || v7_or_later) {
             // v4 = v3 + post-gap re-anchor, frozen in docs/online_pva_candidate_v5.md.
             // The gap horizon is the existing coarse-position currency horizon.
             config.fusion.position_reanchor_after_gnss_gap_s =
                 config.fusion.float_reanchor_max_coarse_age_s;
         }
-        if (candidate == "velocity_consistency_v5" || candidate == "velocity_consistency_v6") {
+        if (candidate == "velocity_consistency_v5" || candidate == "velocity_consistency_v6" ||
+            v7_or_later) {
             // v5 = v4 + heading-latch direction test + rover-gap RTK-only reset,
             // frozen in docs/online_pva_candidate_v6.md. No constants. The
             // direction test is applied to the fused filter only (the
@@ -98,11 +103,34 @@ int main(int argc, char** argv) {
             config.fusion.heading_latch_direction_test = true;
             config.rover_gap_keeps_inertial_filters = true;
         }
-        if (candidate == "velocity_consistency_v6") {
+        if (candidate == "velocity_consistency_v6" || v7_or_later) {
             // v6 = v5 + gyro-bias carry across fused-filter resets, frozen in
             // docs/online_pva_candidate_v7.md. No constants. The RTK-prior
             // filter is recreated without a seed.
             config.carry_gyro_bias_across_reset = true;
+        }
+        if (v7_or_later) {
+            // v7 = v6 + the RTK input of rtk_online_product_v1 (library low-cost
+            // preset, 2 s causal base hold, independent Doppler velocity), frozen
+            // in docs/online_pva_candidate_v8.md. No new option or constant. The
+            // rtk_prior_fusion snapshot above is the control fusion config, as in
+            // v3-v6; the preset applies to the RTK filter only.
+            config.rtk_preset = "low-cost";
+            config.base_extrapolation_max_age_s = 2.0;
+            config.independent_doppler_velocity = true;
+        }
+        if (candidate == "velocity_consistency_v8") {
+            // v8 = v7 + four default-off options, frozen in
+            // docs/online_pva_candidate_v9.md. The 3.0 s horizon is the one of
+            // the sibling trusted-jump rule in the same function. RTK options
+            // are set on config.rtk, which the preset (applied to a copy in
+            // OnlineRtkImuProcessor::recreateRtkFilter) does not touch; the
+            // fusion option goes to config.fusion after the rtk_prior_fusion
+            // snapshot, so the isolated prior filter keeps the v7 settings.
+            config.rtk.reject_float_seeded_at_base = true;
+            config.rtk.spp_fallback_blank_max_anchor_age_s = 3.0;
+            config.fusion.reanchor_requires_prefit_gate_pass = true;
+            config.independent_velocity_from_epoch_spp = true;
         }
         if (candidate == "rtk_online_product_v1") {
             // Candidate none + product RTK configuration, frozen in
@@ -199,10 +227,20 @@ int main(int argc, char** argv) {
             meta << ",\"base_extrapolation_max_age_s\":" << config.base_extrapolation_max_age_s
                  << ",\"extrapolated_base_epochs\":" << diagnostics.extrapolated_base_epochs
                  << ",\"missing_base_epochs\":" << diagnostics.missing_base_epochs;
-        if (candidate == "rtk_online_product_v1")
+        if (!config.rtk_preset.empty())
             meta << ",\"rtk_preset\":\"" << config.rtk_preset << "\""
                  << ",\"independent_doppler_velocity\":"
                  << (config.independent_doppler_velocity ? "true" : "false");
+        if (candidate == "velocity_consistency_v8")
+            meta << ",\"reject_float_seeded_at_base\":" << (config.rtk.reject_float_seeded_at_base ? "true" : "false")
+                 << ",\"spp_fallback_blank_max_anchor_age_s\":" << config.rtk.spp_fallback_blank_max_anchor_age_s
+                 << ",\"reanchor_requires_prefit_gate_pass\":" << (config.fusion.reanchor_requires_prefit_gate_pass ? "true" : "false")
+                 << ",\"independent_velocity_from_epoch_spp\":" << (config.independent_velocity_from_epoch_spp ? "true" : "false")
+                 << ",\"rtk_base_seed_rejections\":" << diagnostics.rtk_base_seed_rejections
+                 << ",\"rtk_spp_blank_age_limited\":" << diagnostics.rtk_spp_blank_age_limited
+                 << ",\"rtk_float_prefit_gate_exceeded\":" << diagnostics.rtk_float_prefit_gate_exceeded
+                 << ",\"fusion_reanchor_prefit_refusals\":" << diagnostics.fusion_reanchor_prefit_refusals
+                 << ",\"epoch_spp_velocity_exports\":" << diagnostics.epoch_spp_velocity_exports;
         meta << "}\n";
         std::cout << "replayed " << count << " epochs (" << scenario << ")\n";
         return 0;

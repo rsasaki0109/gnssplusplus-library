@@ -95,11 +95,16 @@ bool RTKProcessor::initialize(const ProcessorConfig& config) {
 }
 
 PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, const NavigationData& nav) {
-    return spp_processor_.processEpoch(rover_obs, nav);
+    current_spp_solution_ = PositionSolution{};
+    auto spp = spp_processor_.processEpoch(rover_obs, nav);
+    current_spp_solution_ = spp;
+    return spp;
 }
 
 void RTKProcessor::reset() {
     filter_initialized_ = false;
+    rover_seed_from_base_fallback_ = false;
+    current_spp_solution_ = PositionSolution{};
     adaptive_noise_tracker_.clear();
     debug_telemetry_ = EpochDebugTelemetry{};
     debug_telemetry_.prior_held_integer_count = static_cast<int>(last_dd_fixed_.size());
@@ -284,6 +289,20 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
         current_update_diagnostics_.prefit_residual_rms_m;
     solution.rtk_update_prefit_residual_max_m =
         current_update_diagnostics_.prefit_residual_max_m;
+    {
+        // velocity_consistency_v8 (l): the solution's own update prefit
+        // residual against the configured FLOAT prefit gate (each limit only
+        // when > 0). Informational; consumed by the fusion re-anchor option.
+        const double max_rms = rtk_config_.max_float_prefit_residual_rms_m;
+        const double max_max = rtk_config_.max_float_prefit_residual_max_m;
+        solution.float_prefit_gate_exceeded =
+            (std::isfinite(max_rms) && max_rms > 0.0 &&
+             std::isfinite(solution.rtk_update_prefit_residual_rms_m) &&
+             solution.rtk_update_prefit_residual_rms_m > max_rms) ||
+            (std::isfinite(max_max) && max_max > 0.0 &&
+             std::isfinite(solution.rtk_update_prefit_residual_max_m) &&
+             solution.rtk_update_prefit_residual_max_m > max_max);
+    }
     solution.rtk_update_post_suppression_residual_rms_m =
         current_update_diagnostics_.post_suppression_residual_rms_m;
     solution.rtk_update_post_suppression_residual_max_m =

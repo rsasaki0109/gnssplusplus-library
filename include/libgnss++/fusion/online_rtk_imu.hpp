@@ -30,6 +30,20 @@ public:
         // covariance) at the RTK position for both. If it cannot be solved
         // the epoch carries no GNSS velocity (never the RTK state velocity).
         bool independent_doppler_velocity = false;
+        // Opt-in (velocity_consistency_v8 (n)); requires
+        // independent_doppler_velocity (the constructor rejects it without).
+        // The independent velocity (with its covariance) fed to the fusion
+        // filters and to tight reanchor() is then the SPP processor's own
+        // velocity solved in the same RTK epoch (RTKProcessor::currentSpp(),
+        // one signal per satellite, elevation mask, pseudorange outlier
+        // rejection) instead of the all-rows Doppler least squares. When that
+        // SPP is not valid with a finite velocity and covariance, the epoch
+        // carries no GNSS velocity, exactly as when the least squares fails.
+        // The same velocity, when available, also replaces the velocity and
+        // velocity covariance of the exported Output::rtk; otherwise the
+        // exported velocity is unchanged. false keeps the previous behavior
+        // bit-for-bit.
+        bool independent_velocity_from_epoch_spp = false;
         // Opt-in (velocity_consistency_v3). When set, the RTK filter's INS prior
         // is bootstrapped from a second, isolated loose-coupling filter built
         // from this configuration and fed the unmodified legacy RTK covariance,
@@ -130,6 +144,21 @@ public:
         std::size_t imu_gap_resets = 0;
         std::size_t rover_gap_resets = 0;
         std::size_t rover_gap_rtk_resets = 0;
+        // velocity_consistency_v8 diagnostics, accumulated across filter
+        // re-creations. Zero unless the matching option is enabled (the
+        // gate-exceeded count is informational and needs a configured float
+        // prefit gate).
+        // Differential RTK epochs the FLOAT seeded at the base was rejected.
+        std::size_t rtk_base_seed_rejections = 0;
+        // Differential RTK epochs where the SPP-fallback blanking was skipped
+        // because the trusted anchor was too old.
+        std::size_t rtk_spp_blank_age_limited = 0;
+        // Valid RTK epochs whose float_prefit_gate_exceeded was set.
+        std::size_t rtk_float_prefit_gate_exceeded = 0;
+        // Epochs where the fused filter refused a re-anchor for that reason.
+        std::size_t fusion_reanchor_prefit_refusals = 0;
+        // Epochs where the exported RTK velocity was the epoch SPP velocity.
+        std::size_t epoch_spp_velocity_exports = 0;
         std::size_t reset_generation = 0;
     };
 
@@ -177,6 +206,7 @@ private:
     // Pieces of recreateFilters(). recreateRtkSideFilters() is everything but
     // the loose fused filter and the IMU continuity flag.
     void recreateRtkFilter();
+    void countRtkEpochDiagnostics(const PositionSolution& rtk_solution);
     void recreateFusionFilter();
     void recreatePriorFusionFilter();
     void recreateRtkSideFilters();

@@ -3,6 +3,7 @@
 #include <libgnss++/fusion/attitude.hpp>
 #include <libgnss++/algorithms/rtk_base_alignment.hpp>
 #include <libgnss++/algorithms/rtk_presets.hpp>
+#include "synthetic_rtk_scene.hpp"
 #include <limits>
 #include <stdexcept>
 
@@ -736,5 +737,115 @@ TEST(OnlineRtkImuTest, LowCostPresetBuildsRtkFilterEqualToLibraryPreset) {
     processor.reset(time(1.0));
     EXPECT_EQ(processor.rtkFilter().getRTKConfig().max_position_jump_rate_mps, 30.0);
     EXPECT_EQ(processor.rtkFilter().getRTKConfig().max_baseline_length, 20000.0);
+}
+
+// ---- velocity_consistency_v8 (n): independent_velocity_from_epoch_spp ----
+
+namespace {
+struct EpochSppRun {
+    OnlineRtkImuProcessor::Output output;
+    PositionSolution spp;
+    OnlineRtkImuProcessor::Diagnostics diagnostics;
+};
+// One differential RTK epoch of the synthetic scene, rover 40 m from the base.
+EpochSppRun runEpochSpp(bool from_epoch_spp, double spp_elevation_mask_deg,
+                        bool reject_base_seed = false) {
+    auto config = configuration();
+    config.rtk.reject_float_seeded_at_base = reject_base_seed;
+    config.independent_doppler_velocity = true;
+    config.independent_velocity_from_epoch_spp = from_epoch_spp;
+    config.processor.elevation_mask = spp_elevation_mask_deg;
+    const auto nav = synthetic_rtk_scene::constellation();
+    const Vector3d rover_position = config.base_position_ecef + Vector3d(40.0, 30.0, 10.0);
+    const auto t = synthetic_rtk_scene::epochTime(0.0);
+    const auto prns = synthetic_rtk_scene::visible(nav, t, rover_position, 15.0);
+    OnlineRtkImuProcessor processor(config);
+    processor.pushNavigation(nav, t);
+    processor.pushBase(synthetic_rtk_scene::observations(
+        nav, t, config.base_position_ecef, 10.0, prns, 500.0, true), t);
+    EpochSppRun run;
+    run.output = processor.processRover(synthetic_rtk_scene::observations(
+        nav, t, rover_position, 30.0, prns, 0.0, true), t);
+    run.spp = processor.rtkFilter().currentSpp();
+    run.diagnostics = processor.diagnostics();
+    return run;
+}
+}  // namespace
+
+TEST(OnlineRtkImuTest, IndependentVelocityFromEpochSppDefaultsOffAndRequiresDopplerVelocity) {
+    EXPECT_FALSE(OnlineRtkImuProcessor::Config{}.independent_velocity_from_epoch_spp);
+    auto config = configuration();
+    config.independent_velocity_from_epoch_spp = true;
+    EXPECT_THROW(OnlineRtkImuProcessor{config}, std::invalid_argument);
+    config.independent_doppler_velocity = true;
+    EXPECT_NO_THROW(OnlineRtkImuProcessor{config});
+}
+
+TEST(OnlineRtkImuTest, EpochSppVelocityIsExportedWhenTheOptionIsOn) {
+    const auto off = runEpochSpp(false, 15.0);
+    const auto on = runEpochSpp(true, 15.0);
+    ASSERT_TRUE(off.output.rtk.isValid());
+    ASSERT_TRUE(on.output.rtk.isValid());
+    // Position and status do not depend on the option.
+    EXPECT_EQ(on.output.rtk.status, off.output.rtk.status);
+    EXPECT_TRUE(on.output.rtk.position_ecef.isApprox(off.output.rtk.position_ecef, 0.0));
+    // The SPP solved in the RTK epoch carries a velocity and its covariance.
+    ASSERT_TRUE(on.spp.isValid());
+    ASSERT_TRUE(on.spp.has_velocity);
+    ASSERT_TRUE(on.spp.velocity_covariance.allFinite());
+    // On: the exported RTK velocity and covariance are exactly the SPP's.
+    EXPECT_TRUE(on.output.rtk.has_velocity);
+    EXPECT_TRUE(on.output.rtk.velocity_ecef.isApprox(on.spp.velocity_ecef, 0.0));
+    EXPECT_TRUE(on.output.rtk.velocity_covariance.isApprox(on.spp.velocity_covariance, 0.0));
+    EXPECT_EQ(on.diagnostics.epoch_spp_velocity_exports, 1U);
+    // Off: nothing is exported from the SPP.
+    EXPECT_EQ(off.diagnostics.epoch_spp_velocity_exports, 0U);
+    EXPECT_EQ(off.diagnostics.rtk_base_seed_rejections, 0U);
+    EXPECT_EQ(off.diagnostics.rtk_spp_blank_age_limited, 0U);
+    EXPECT_EQ(off.diagnostics.fusion_reanchor_prefit_refusals, 0U);
+}
+
+TEST(OnlineRtkImuTest, ExportedVelocityIsUnchangedWhenTheEpochSppIsInvalid) {
+    // SPP elevation mask of 89 deg: no SPP, but the DD filter still runs
+    // (seeded at the base; the base-seed rejection option is off).
+    const auto off = runEpochSpp(false, 89.0);
+    const auto on = runEpochSpp(true, 89.0);
+    ASSERT_TRUE(off.output.rtk.isValid());
+    ASSERT_TRUE(on.output.rtk.isValid());
+    EXPECT_FALSE(on.spp.isValid());
+    EXPECT_EQ(on.diagnostics.epoch_spp_velocity_exports, 0U);
+    EXPECT_EQ(on.output.rtk.has_velocity, off.output.rtk.has_velocity);
+    if (off.output.rtk.has_velocity) {
+        EXPECT_TRUE(on.output.rtk.velocity_ecef.isApprox(off.output.rtk.velocity_ecef, 0.0));
+        EXPECT_TRUE(on.output.rtk.velocity_covariance.isApprox(off.output.rtk.velocity_covariance, 0.0));
+    }
+}
+
+TEST(OnlineRtkImuTest, EpochSppVelocityAlsoServesTheMissingBaseEpoch) {
+    auto config = configuration();
+    config.independent_doppler_velocity = true;
+    config.independent_velocity_from_epoch_spp = true;
+    const auto nav = synthetic_rtk_scene::constellation();
+    const Vector3d rover_position = config.base_position_ecef + Vector3d(40.0, 30.0, 10.0);
+    const auto t = synthetic_rtk_scene::epochTime(0.0);
+    const auto prns = synthetic_rtk_scene::visible(nav, t, rover_position, 15.0);
+    OnlineRtkImuProcessor processor(config);
+    processor.pushNavigation(nav, t);
+    // No base epoch: the SPP fallback runs through RTKProcessor::processEpoch.
+    const auto out = processor.processRover(synthetic_rtk_scene::observations(
+        nav, t, rover_position, 30.0, prns, 0.0, true), t);
+    EXPECT_EQ(out.reason, "missing_exact_base");
+    ASSERT_TRUE(out.rtk.isValid());
+    ASSERT_TRUE(processor.rtkFilter().currentSpp().has_velocity);
+    EXPECT_TRUE(out.rtk.velocity_ecef.isApprox(processor.rtkFilter().currentSpp().velocity_ecef, 0.0));
+}
+
+TEST(OnlineRtkImuTest, BaseSeededFloatRejectionIsCountedAndRemovesTheRtkSolution) {
+    const auto kept = runEpochSpp(false, 89.0, false);
+    ASSERT_TRUE(kept.output.rtk.isValid());
+    EXPECT_EQ(kept.diagnostics.rtk_base_seed_rejections, 0U);
+    const auto rejected = runEpochSpp(false, 89.0, true);
+    EXPECT_FALSE(rejected.output.rtk.isValid());
+    EXPECT_EQ(rejected.diagnostics.rtk_base_seed_rejections, 1U);
 }
 }

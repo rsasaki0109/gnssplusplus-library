@@ -150,6 +150,7 @@ if(GTest_FOUND)
     # befriended RTKProcessorTestAccess (not "#define private public", which
     # cannot link under the MSVC ABI), so it builds on every toolchain.
     target_sources(gnss_run_tests PRIVATE test_rtk_legacy.cpp)
+    target_sources(gnss_run_tests PRIVATE test_rtk_v8_options.cpp)
 
     # GTSAM FGO backend parity tests (guarded at both CMake and #ifdef level:
     # the source itself is a no-op TU when GNSSPP_HAS_GTSAM isn't defined, but
