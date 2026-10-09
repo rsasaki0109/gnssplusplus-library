@@ -217,6 +217,26 @@ public:
         // one. With no recent coarse position the re-anchor is not taken.
         int float_position_reanchor_after_rejections = 0;
         double float_reanchor_max_coarse_age_s = 1.0;
+
+        // velocity_consistency_v4: post-gap re-anchor. > 0 enables it; the
+        // value is the GNSS-absence duration (s) after which the position
+        // prior is regarded as unverified. Inertial propagation without any
+        // accepted GNSS position update grows the position error through
+        // unmodelled terms (attitude/lever/dynamics error) that the 15-state
+        // covariance does not carry, so the covariance of the prior is only
+        // trustworthy while GNSS keeps verifying it. When a FLOAT/FIXED
+        // position update is rejected by the NIS gate and the last accepted
+        // GNSS position update of any class is older than this value, the
+        // rejection is attributed to the prior (the only element that was
+        // propagated unverified) rather than to the measurement, whose
+        // reported covariance has been checked against the same epoch's SPP
+        // (RTKConfig::ReportedCovarianceMode::SPP_CONSISTENCY_SCALED), and
+        // the position-only re-anchor above is applied at once. The coarse
+        // cross-check of float_position_reanchor_after_rejections cannot be
+        // used here by construction (no coarse position is current after a
+        // gap). Steady-state rejections (a recent update was accepted) are
+        // untouched. <= 0 keeps the previous behavior.
+        double position_reanchor_after_gnss_gap_s = 0.0;
     };
 
     explicit LooseCouplingProcessor(const Config& config);
@@ -360,6 +380,8 @@ private:
     int float_class_consecutive_gate_rejections_ = 0;
     bool have_coarse_position_ = false;
     GNSSTime coarse_position_time_;
+    bool have_position_update_time_ = false;
+    GNSSTime last_position_update_time_;
     Eigen::Vector3d coarse_antenna_position_enu_ = Eigen::Vector3d::Zero();
     Eigen::Matrix3d coarse_position_covariance_enu_ = Eigen::Matrix3d::Zero();
     bool last_gnss_position_update_applied_ = false;

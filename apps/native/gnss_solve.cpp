@@ -106,6 +106,9 @@ struct SolveConfig {
     double doppler_float_seed_max_age_s = 6.0;
     std::string rover_seed_pos_path;
     std::string diagnostics_csv_path;
+    // Default-off RTK reported-covariance mode and per-epoch covariance log.
+    int rtk_reported_covariance_mode = 0;
+    std::string rtk_covariance_log_path;
     std::string timing_csv_path;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
@@ -1499,6 +1502,10 @@ void printAdvancedUsage(const char* program_name) {
         << "  --ratio <value|sat-count>  Fixed or satellite-count-aware Ratio threshold\n"
         << "  --preset <survey|low-cost|moving-base|odaiba>\n"
         << "                             Apply a named RTK tuning preset\n"
+        << "  --rtk-reported-covariance <legacy|filter|first-pass|spp-consistency>\n"
+        << "                             Covariance reported on RTK FLOAT epochs (default: legacy\n"
+        << "                             constant 0.01 m^2); positions are never changed\n"
+        << "  --rtk-covariance-log <file> Write per-epoch status, ECEF position and covariance\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
         << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
@@ -2474,6 +2481,22 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--debug-epoch-log" && i + 1 < argc) {
             config.debug_epoch_log_path = argv[++i];
+            continue;
+        }
+        if (arg == "--rtk-reported-covariance" && i + 1 < argc) {
+            const std::string mode = argv[++i];
+            if (mode == "legacy") config.rtk_reported_covariance_mode = 0;
+            else if (mode == "filter") config.rtk_reported_covariance_mode = 1;
+            else if (mode == "first-pass") config.rtk_reported_covariance_mode = 2;
+            else if (mode == "spp-consistency") config.rtk_reported_covariance_mode = 3;
+            else {
+                std::cerr << "Error: --rtk-reported-covariance expects legacy|filter|first-pass|spp-consistency\n";
+                std::exit(1);
+            }
+            continue;
+        }
+        if (arg == "--rtk-covariance-log" && i + 1 < argc) {
+            config.rtk_covariance_log_path = argv[++i];
             continue;
         }
         // Keep these late-chain options standalone as well. Besides making
@@ -3573,6 +3596,9 @@ int main(int argc, char* argv[]) {
             rtk_config.carrier_phase_sigma = config.carrier_phase_sigma;
         }
         rtk_config.enable_snr_weighting = config.enable_snr_weighting;
+        rtk_config.reported_covariance_mode =
+            static_cast<libgnss::RTKProcessor::RTKConfig::ReportedCovarianceMode>(
+                config.rtk_reported_covariance_mode);
         rtk_config.snr_reference_dbhz = config.snr_reference_dbhz;
         rtk_config.snr_max_variance_scale = config.snr_max_variance_scale;
         rtk_config.snr_min_baseline_m = config.snr_min_baseline_m;
@@ -3755,6 +3781,17 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
             writeDiagnosticsHeader(diagnostics_csv);
+        }
+
+        std::ofstream rtk_covariance_log;
+        if (!config.rtk_covariance_log_path.empty()) {
+            rtk_covariance_log.open(config.rtk_covariance_log_path);
+            if (!rtk_covariance_log.is_open()) {
+                std::cerr << "Error: failed to open RTK covariance log: "
+                          << config.rtk_covariance_log_path << std::endl;
+                return 1;
+            }
+            rtk_covariance_log << "week,tow,status,x,y,z,c00,c01,c02,c11,c12,c22\n";
         }
 
         std::ofstream timing_csv;
@@ -4517,6 +4554,14 @@ int main(int argc, char* argv[]) {
             }
 
             debug_writer.write(pos_solution, rtk_processor.getLastDebugTelemetry());
+            if (rtk_covariance_log.is_open() && pos_solution.position_ecef.allFinite()) {
+                const auto& c = pos_solution.position_covariance;
+                rtk_covariance_log << pos_solution.time.week << ',' << std::setprecision(12)
+                    << pos_solution.time.tow << ',' << static_cast<int>(pos_solution.status) << ','
+                    << pos_solution.position_ecef.x() << ',' << pos_solution.position_ecef.y() << ','
+                    << pos_solution.position_ecef.z() << ',' << c(0, 0) << ',' << c(0, 1) << ','
+                    << c(0, 2) << ',' << c(1, 1) << ',' << c(1, 2) << ',' << c(2, 2) << '\n';
+            }
 
             if (diagnostics_csv.is_open()) {
                 EpochDiagnostics diag;

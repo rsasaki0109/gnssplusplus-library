@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <deque>
 #include <memory>
 #include <limits>
@@ -28,6 +30,13 @@ public:
         // covariance) at the RTK position for both. If it cannot be solved
         // the epoch carries no GNSS velocity (never the RTK state velocity).
         bool independent_doppler_velocity = false;
+        // Opt-in (velocity_consistency_v3). When set, the RTK filter's INS prior
+        // is bootstrapped from a second, isolated loose-coupling filter built
+        // from this configuration and fed the unmodified legacy RTK covariance,
+        // so what the fused output does (gates, re-anchors, honest RTK
+        // covariance) cannot change the RTK filter's own output. Unset
+        // (default): the single fused filter bootstraps the RTK prior as before.
+        std::optional<LooseCouplingProcessor::Config> rtk_prior_fusion;
         Vector3d base_position_ecef = Vector3d::Zero();
         double max_imu_gap_s = 0.1;
         double max_fusion_age_s = 0.02;
@@ -92,6 +101,7 @@ private:
     Config config_;
     std::unique_ptr<RTKProcessor> rtk_;
     std::unique_ptr<LooseCouplingProcessor> fusion_;
+    std::unique_ptr<LooseCouplingProcessor> prior_fusion_;
     std::unique_ptr<TightCouplingProcessor> tight_;
     NavigationData navigation_;
     std::deque<ObservationData> base_;

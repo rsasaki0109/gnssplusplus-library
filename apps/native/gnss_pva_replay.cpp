@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4]\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
         }
@@ -32,7 +32,8 @@ int main(int argc, char** argv) {
         }
         if (positional_argc < 4 || positional_argc > 7 || positional_argc == 6 ||
             (candidate != "none" && candidate != "vehicle_nhc_latched_v1" &&
-             candidate != "velocity_consistency_v1" && candidate != "velocity_consistency_v2"))
+             candidate != "velocity_consistency_v1" && candidate != "velocity_consistency_v2" &&
+             candidate != "velocity_consistency_v3" && candidate != "velocity_consistency_v4"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
         std::size_t consumed = 0;
@@ -63,6 +64,23 @@ int main(int argc, char** argv) {
         const bool nagoya = city == "nagoya";
         config.fusion.lever_arm_body = nagoya ? Vector3d(.593, -.670, -1.216) : Vector3d(.31, 0., .55);
         config.tight_time_update = scenario != "loose_only";
+        if (candidate == "velocity_consistency_v3" || candidate == "velocity_consistency_v4") {
+            // v3 frozen in docs/online_pva_candidate_v4.md. Fixed values, not tuned.
+            // The control fusion configuration is snapshotted first so the RTK
+            // filter's INS prior is produced by an isolated control filter.
+            config.rtk_prior_fusion = config.fusion;
+            config.rtk.reported_covariance_mode =
+                RTKProcessor::RTKConfig::ReportedCovarianceMode::SPP_CONSISTENCY_SCALED;
+            config.fusion.max_position_update_nis_per_observation = 9.0;
+            config.fusion.max_velocity_update_nis_per_observation = 9.0;
+            config.fusion.float_position_reanchor_after_rejections = 30;
+        }
+        if (candidate == "velocity_consistency_v4") {
+            // v4 = v3 + post-gap re-anchor, frozen in docs/online_pva_candidate_v5.md.
+            // The gap horizon is the existing coarse-position currency horizon.
+            config.fusion.position_reanchor_after_gnss_gap_s =
+                config.fusion.float_reanchor_max_coarse_age_s;
+        }
         if (candidate == "vehicle_nhc_latched_v1") {
             config.fusion.nhc_enable = true;
             config.fusion.nhc_require_heading_alignment = true;

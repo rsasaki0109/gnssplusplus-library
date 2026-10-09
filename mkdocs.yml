@@ -76,6 +76,11 @@ nav:
       - PVA velocity-consistency results (v2): online_pva_candidate_v2_results.md
       - PVA velocity-consistency contract (v3): online_pva_candidate_v3.md
       - PVA velocity-consistency results (v3): online_pva_candidate_v3_results.md
+      - PVA velocity-consistency contract (v4): online_pva_candidate_v4.md
+      - PVA velocity-consistency results (v4): online_pva_candidate_v4_results.md
+      - PVA velocity-consistency contract (v5): online_pva_candidate_v5.md
+      - PVA velocity-consistency results (v5): online_pva_candidate_v5_results.md
+      - RTK FLOAT reported covariance: rtk_float_covariance.md
       - PVA development results: online_pva_development_results.md
       - Tight coupling: tight_coupling.md
       - Datasets: dataset_gallery.md

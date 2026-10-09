@@ -212,6 +212,9 @@ TEST(OnlineRtkImuTest, VelocityConsistencyCandidateDefaultsAreOff) {
     EXPECT_EQ(config.fusion.float_position_reanchor_after_rejections, 0);
     EXPECT_EQ(config.fusion.max_position_update_nis_per_observation, 0.0);
     EXPECT_EQ(config.fusion.max_velocity_update_nis_per_observation, 0.0);
+    EXPECT_EQ(config.fusion.position_reanchor_after_gnss_gap_s, 0.0);
+    EXPECT_EQ(config.rtk.reported_covariance_mode,
+              RTKProcessor::RTKConfig::ReportedCovarianceMode::LEGACY_FIXED_SIGMA);
 }
 TEST(OnlineRtkImuTest, HeadingLatchReanchorsVelocityAndClearsItsCrossCovariance) {
     auto control_config = configuration().fusion;

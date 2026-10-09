@@ -1,0 +1,72 @@
+{
+ "vs_recorded_control": {
+  "adoption": "No-Go",
+  "runs": 18,
+  "gates": 558,
+  "failed": 5,
+  "failures": [
+   {
+    "run": "tokyo1",
+    "gate": "processing.p95_ms",
+    "control": 6.272122649999997,
+    "candidate": 12.58998105
+   },
+   {
+    "run": "tokyo2",
+    "gate": "processing.p95_ms",
+    "control": 7.739928,
+    "candidate": 16.097516499999998
+   },
+   {
+    "run": "tokyo3-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 8.138418,
+    "candidate": 19.505048
+   },
+   {
+    "run": "nagoya1-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 6.243542149999998,
+    "candidate": 12.8997523
+   },
+   {
+    "run": "nagoya2-imu_gap",
+    "gate": "processing.p95_ms",
+    "control": 5.74737,
+    "candidate": 12.009688
+   }
+  ],
+  "improved_rotation": true,
+  "full_decision_sha256": "17f2a3afc428af1dca75a426751b98e6f1da0d58f758fd6be36aa851a63ff9bf",
+  "full_decision_bytes": 1650864
+ },
+ "vs_contemporaneous_candidate_none": {
+  "adoption": "Go",
+  "runs": 18,
+  "gates": 558,
+  "failed": 0,
+  "failures": [],
+  "improved_rotation": true,
+  "full_decision_sha256": "366866736ccaaa251f9072d4c02bddff8727a0a071086d47020fe5c888c65ce8",
+  "full_decision_bytes": 1649517
+ },
+ "candidate": "velocity_consistency_v4",
+ "contract": "docs/online_pva_candidate_v5.md",
+ "contract_sha256": "fbe3903c41b2755bbfcaae86b1fd1efae47f7c010900a653630ba048a83ea276",
+ "default_changed": false,
+ "freeze_commit": "066e4a60",
+ "replay_binary_sha256": "001bc66bc98709b1c8d556d7a5ae12edbbc5f4d5cd3398afc92b821bb80bd4cc",
+ "candidate_none_parity": 0,
+ "processing_p95_ratio_candidate_over_contemporaneous_none": {
+  "min": 1.008,
+  "max": 1.114,
+  "mean": 1.057
+ },
+ "processing_p95_ratio_contemporaneous_none_over_recorded_control": {
+  "min": 1.49,
+  "max": 2.3,
+  "mean": 1.79
+ },
+ "full_decision_location": "/media/sasaki/aiueo2/rtklib_v2_ws_output/pva_v4_20261009/decision/decision.json",
+ "full_decision_vs_none_location": "/media/sasaki/aiueo2/rtklib_v2_ws_output/pva_v4_20261009/decision_vs_none/decision.json"
+}

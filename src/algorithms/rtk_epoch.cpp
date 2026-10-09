@@ -123,6 +123,8 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
     const ObservationData& base_obs, const NavigationData& nav) {
     debug_telemetry_ = EpochDebugTelemetry{};
     independent_failure_budget_evaluated_this_epoch_ = false;
+    epoch_spp_valid_ = false;
+    has_first_pass_covariance_ = false;
     PositionSolution solution;
     solution.time = rover_obs.time;
     solution.status = SolutionStatus::NONE;
@@ -158,6 +160,13 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - spp_started)
                 .count();
+        epoch_spp_valid_ = current_spp.isValid() &&
+            current_spp.position_ecef.allFinite() &&
+            current_spp.position_covariance.allFinite();
+        if (epoch_spp_valid_) {
+            epoch_spp_position_ecef_ = current_spp.position_ecef;
+            epoch_spp_position_covariance_ = current_spp.position_covariance;
+        }
         auto fallback_spp = [&]() {
             last_ar_ratio_ = 0.0;
             last_num_fixed_ambiguities_ = 0;
@@ -303,6 +312,13 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
             filter_ok = updateFilter(sat_data);
             if (!filter_ok) break;
+            if (iter == 0 && filter_state_.covariance.rows() >= 3) {
+                first_pass_position_covariance_ =
+                    filter_state_.covariance.topLeftCorner<3, 3>();
+                first_pass_nis_per_observation_ =
+                    current_update_diagnostics_.normalized_innovation_squared_per_observation;
+                has_first_pass_covariance_ = true;
+            }
             current_update_diagnostics_.iterations++;
             if (iter >= 1) {
                 const double baseline_step =

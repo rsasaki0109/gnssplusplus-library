@@ -514,6 +514,12 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                 config_.lever_arm_body);
         const Eigen::Vector3d position_before =
             state_.nominal.position_enu;
+        // Time since the last accepted GNSS position update of any class
+        // (position_reanchor_after_gnss_gap_s).
+        const bool after_gnss_gap =
+            config_.position_reanchor_after_gnss_gap_s > 0.0 && have_position_update_time_ &&
+            (solution.time - last_position_update_time_) >
+                config_.position_reanchor_after_gnss_gap_s;
         auto position_result = applyUpdateAndInject(
             position_system,
             config_.max_position_update_nis_per_observation,
@@ -535,7 +541,8 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
         }
         // velocity_consistency_v2: the precise (FLOAT/FIXED) class has its own
         // rejection streak, independent of coarse SPP acceptance.
-        if (config_.float_position_reanchor_after_rejections > 0 &&
+        if ((config_.float_position_reanchor_after_rejections > 0 ||
+             config_.position_reanchor_after_gnss_gap_s > 0.0) &&
             (solution.isFixed() || solution.status == SolutionStatus::FLOAT)) {
             if (position_result.ok) {
                 float_class_consecutive_gate_rejections_ = 0;
@@ -544,10 +551,13 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                 if (float_class_consecutive_gate_rejections_ < std::numeric_limits<int>::max()) {
                     ++float_class_consecutive_gate_rejections_;
                 }
-                if (float_class_consecutive_gate_rejections_ >=
+                const bool patience_reanchor =
+                    config_.float_position_reanchor_after_rejections > 0 &&
+                    float_class_consecutive_gate_rejections_ >=
                         config_.float_position_reanchor_after_rejections &&
                     floatPositionConsistentWithCoarse(solution.time, antenna_position_enu,
-                                                      position_covariance_enu) &&
+                                                      position_covariance_enu);
+                if ((after_gnss_gap || patience_reanchor) &&
                     reanchorPositionFromFixedSolution(antenna_position_enu, position_covariance_enu)) {
                     position_result.ok = true;
                     position_consecutive_gate_rejections_ = 0;
@@ -563,6 +573,10 @@ void LooseCouplingProcessor::processGnssSolution(const PositionSolution& solutio
                 last_gnss_position_correction_enu_ =
                     state_.nominal.position_enu - position_before;
             }
+        }
+        if (last_gnss_position_update_applied_) {
+            have_position_update_time_ = true;
+            last_position_update_time_ = solution.time;
         }
         if (solution.isFixed() && position_result.ok &&
             std::isfinite(

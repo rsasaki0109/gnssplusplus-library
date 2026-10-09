@@ -130,6 +130,11 @@ struct PositionSolution {
     double rtk_update_normalized_innovation_squared = 0.0;
     double rtk_update_normalized_innovation_squared_per_observation = 0.0;
     int rtk_update_rejected_by_innovation_gate = 0;
+    // RTK reported-covariance factors (RTKConfig::reported_covariance_mode);
+    // 1.0 when the mode is LEGACY_FIXED_SIGMA or the factor does not apply.
+    double rtk_covariance_variance_factor = 1.0;
+    double rtk_covariance_spp_scale = 1.0;
+    bool rtk_reported_covariance_replaced = false;
     
     // Satellite information
     std::vector<SatelliteId> satellites_used;
