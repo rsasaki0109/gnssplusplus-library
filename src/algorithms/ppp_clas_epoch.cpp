@@ -680,6 +680,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
     if (clas_mrtklib_parity) {
         int tide_network_id = -1;
         std::array<double, 4> tide_grid_weights{{0.0, 0.0, 0.0, 0.0}};
+        std::array<int, 4> tide_grid_numbers{{0, 0, 0, 0}};
         bool have_tide_network = readClasAtmosNetworkId(
             epoch_context.epoch_atmos_tokens, tide_network_id);
         bool have_tide_weights = false;
@@ -701,6 +702,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
                         }
                         if (sum > 0.0) {
                             tide_grid_weights = osr.atmos_interpolation_weights;
+                            tide_grid_numbers = osr.atmos_interpolation_grid_no;
                             have_tide_weights = true;
                             break;
                         }
@@ -711,7 +713,7 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
         if (have_tide_network && have_tide_weights) {
             const Vector3d tide = mrtklibTokyoClasTideDisplacement(
                 epoch_context.receiver_position, obs.time, tide_network_id,
-                tide_grid_weights);
+                tide_grid_weights, tide_grid_numbers);
             epoch_context.receiver_tide_displacement = tide;
             if (pppDebugEnabled() && tide.squaredNorm() > 0.0) {
                 std::cerr << "[CLAS-TIDE] tow=" << obs.time.tow
@@ -1210,6 +1212,10 @@ PositionSolution PPPProcessor::processEpochCLAS(const ObservationData& obs,
             fix_validation_options.outlier_sigma_gate =
                 kMrtklibPhaseResidualSigmaGate;
             fix_validation_options.mrtklib_chisq_fallback = true;
+            if (pppEnvOverrides().clas_receiver_tide) {
+                fix_validation_options.receiver_geometry_offset =
+                    epoch_context.receiver_tide_displacement;
+            }
             // MRTKLIB parity (dynamics path only): the post-fix residual
             // gate/chi-square normalize by the innovation covariance
             // H'*P*H + R formed from the FLOAT posterior covariance

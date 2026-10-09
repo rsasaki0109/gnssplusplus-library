@@ -12,7 +12,13 @@ This adapter
 * derives the Android raw pseudorange / GPST arrival time with the standard
   GnssLogger algorithm,
 * maps GPS L1 C/A and (optionally) Galileo E1 rows onto the existing R5
-  ``StreamingRinexWriter`` (every other row is preserved but excluded),
+  ``StreamingRinexWriter`` (every other row is preserved but excluded); this
+  is the default ``--signal-set legacy-l1-e1`` and its outputs are
+  byte-identical to the pre-multi-signal adapter,
+* with ``--signal-set multi`` infers the signal of every row from
+  ``ConstellationType`` + ``CarrierFrequencyHz`` (GPS L1/L5, Galileo E1/E5a,
+  GLONASS G1, BeiDou B1I/B2a/B1C, QZSS L1/L5; see
+  ``gnss_smartphone_mimir_signals``) and writes a multi-signal RINEX 3.04,
 * accounts for every source row with exactly one terminal disposition,
 * converts ``PSR.csv`` barometer samples to GPST,
 * publishes all artifacts atomically and hashes inputs and outputs.
@@ -30,7 +36,9 @@ from pathlib import Path
 import tempfile
 from statistics import median
 
+import gnss_smartphone_mimir_signals as sigs
 from gnss_smartphone_gnss_adapter import (
+    HATCH_WINDOW_SECONDS,
     GALILEO_E1_HZ,
     GALILEO_E1_SIGNAL,
     GPS_L1_HZ,
@@ -42,6 +50,8 @@ from gnss_smartphone_gnss_adapter import (
 )
 
 SCHEMA_VERSION = "smartphone-mimir-adapter.v1"
+SCHEMA_VERSION_MULTI = "smartphone-mimir-adapter.v2-multisignal"
+SIGNAL_SETS = ("legacy-l1-e1", "multi")
 
 MIMIR_RAW_FIELDS = (
     "Raw",
@@ -263,6 +273,29 @@ def read_psr(path: Path) -> tuple[list[tuple[int, int, float, int]], dict[str, i
     return rows, counts
 
 
+def scan_glonass_channels(raw: Path) -> dict[int, set[int]]:
+    """Pre-scan: GLONASS slot -> set of carrier-derived frequency channels.
+
+    The RINEX header (GLONASS SLOT / FRQ #) must be written before the first
+    epoch, so the channel map is established in a separate read-only pass.
+    """
+
+    channels: dict[int, set[int]] = {}
+    with raw.open(encoding="utf-8", newline="") as handle:
+        for line, fields in enumerate(csv.reader(handle), start=1):
+            if not fields:
+                continue
+            row = parse_raw_line(fields, line)
+            if row["ConstellationType"].strip() != "3" or not row["CarrierFrequencyHz"].strip():
+                continue
+            fcn = sigs.glonass_fcn_from_carrier(
+                _float(row["CarrierFrequencyHz"], "CarrierFrequencyHz", line)
+            )
+            if fcn is not None:
+                channels.setdefault(_int(row["Svid"], "Svid", line), set()).add(fcn)
+    return channels
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog=os.environ.get("GNSS_CLI_NAME"))
     parser.add_argument("--raw", type=Path, required=True, help="Mimir Raw.csv (headerless)")
@@ -279,6 +312,25 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--enable-galileo-e1", action="store_true")
     parser.add_argument("--broadcast-nav", type=Path)
+    parser.add_argument(
+        "--signal-set",
+        choices=SIGNAL_SETS,
+        default="legacy-l1-e1",
+        help="legacy-l1-e1 (default, byte-identical to the original adapter) or "
+        "multi (carrier-frequency inferred multi-constellation/multi-band)",
+    )
+    parser.add_argument(
+        "--enable-signals",
+        help="multi only: comma-separated subset of signal names "
+        f"({','.join(sigs.SIGNAL_BY_NAME)}); default all",
+    )
+    parser.add_argument(
+        "--hatch-window-s",
+        type=int,
+        choices=HATCH_WINDOW_SECONDS,
+        help="R5 promoted Hatch C1C smoothing of Galileo E1 (window seconds); "
+        "unchanged R5 HatchSmoother, applies to Galileo E1 only",
+    )
     parser.add_argument("--max-epochs", type=int, default=-1)
     return parser.parse_args()
 
@@ -298,10 +350,27 @@ def llh_to_ecef(lat_deg: float, lon_deg: float, h: float) -> tuple[float, float,
 
 def main() -> int:
     args = parse_args()
-    if args.enable_galileo_e1 and args.broadcast_nav is None:
-        fail("--broadcast-nav is required with --enable-galileo-e1")
-    if args.broadcast_nav is not None and not args.enable_galileo_e1:
-        fail("--broadcast-nav is only valid with --enable-galileo-e1")
+    multi = args.signal_set == "multi"
+    if multi:
+        if args.enable_galileo_e1:
+            fail("--enable-galileo-e1 is implied by --signal-set multi; do not pass both")
+        if args.broadcast_nav is None:
+            fail("--broadcast-nav (mixed BRDC) is required with --signal-set multi")
+    else:
+        if args.enable_galileo_e1 and args.broadcast_nav is None:
+            fail("--broadcast-nav is required with --enable-galileo-e1")
+        if args.broadcast_nav is not None and not args.enable_galileo_e1:
+            fail("--broadcast-nav is only valid with --enable-galileo-e1")
+        if args.enable_signals is not None:
+            fail("--enable-signals is only valid with --signal-set multi")
+        if args.hatch_window_s is not None and not args.enable_galileo_e1:
+            fail("--hatch-window-s requires --enable-galileo-e1 (or --signal-set multi)")
+    enabled_names = set(sigs.SIGNAL_BY_NAME)
+    if args.enable_signals is not None:
+        enabled_names = {n.strip() for n in args.enable_signals.split(",") if n.strip()}
+        unknown = sorted(enabled_names - set(sigs.SIGNAL_BY_NAME))
+        if unknown or not enabled_names:
+            fail(f"--enable-signals has unknown/empty signal names: {unknown}")
     if args.max_epochs == 0 or args.max_epochs < -1:
         fail("--max-epochs must be -1 or a positive integer")
     try:
@@ -324,7 +393,21 @@ def main() -> int:
         "summary": out / "summary.json",
     }
 
-    dispositions = {name: 0 for name in DISPOSITIONS}
+    dispositions = {name: 0 for name in (sigs.MULTI_DISPOSITIONS if multi else DISPOSITIONS)}
+    rejected_detail: dict[str, dict[str, int]] = {}
+    nav_index = None
+    glonass_channels: dict[int, int] = {}
+    glonass_scan: dict[int, set[int]] = {}
+    nav_uncovered: dict[str, int] = {}
+    nav_max_age: dict[str, float] = {}
+    enabled_specs = tuple(sp for sp in sigs.SIGNALS if sp.name in enabled_names)
+    if multi:
+        nav_index = sigs.NavigationIndex.load(args.broadcast_nav)
+        glonass_scan = scan_glonass_channels(args.raw)
+        for slot, ks in glonass_scan.items():
+            nav_ks = nav_index.glonass_channels.get(slot)
+            if len(ks) == 1 and nav_ks and next(iter(ks)) in nav_ks:
+                glonass_channels[slot] = next(iter(ks))
     signal_rows: dict[str, int] = {}
     constellation_rows: dict[str, int] = {}
     state_rows_unusable: dict[str, int] = {}
@@ -341,9 +424,17 @@ def main() -> int:
         tmp = Path(tmp_name)
         writer: StreamingRinexWriter | None = None
         try:
-            writer = StreamingRinexWriter(
-                tmp / "rover.obs", approx, enable_galileo_e1=args.enable_galileo_e1
-            )
+            if multi:
+                writer = sigs.MultiSignalRinexWriter(
+                    tmp / "rover.obs", approx, enabled_specs,
+                    glonass_channels if "GLO_G1_CA" in enabled_names else {},
+                    hatch_window_s=args.hatch_window_s,
+                )
+            else:
+                writer = StreamingRinexWriter(
+                    tmp / "rover.obs", approx, enable_galileo_e1=args.enable_galileo_e1,
+                    hatch_window_s=args.hatch_window_s,
+                )
             with args.raw.open(encoding="utf-8", newline="") as raw_handle, (
                 tmp / "observations.csv"
             ).open("w", encoding="utf-8", newline="") as norm_handle:
@@ -354,7 +445,72 @@ def main() -> int:
                 )
                 current_key: str | None = None
 
+                def reject(disp: str, detail: str):
+                    rejected_detail.setdefault(disp, {})
+                    rejected_detail[disp][detail] = rejected_detail[disp].get(detail, 0) + 1
+
+                def classify_multi_row(line: int, row: dict[str, str]):
+                    """Returns (disposition, signal, pr, arrival, extra)."""
+                    constellation = row["ConstellationType"].strip()
+                    constellation_rows[constellation] = constellation_rows.get(constellation, 0) + 1
+                    carrier = row["CarrierFrequencyHz"].strip()
+                    carrier_hz = _float(carrier, "CarrierFrequencyHz", line) if carrier else None
+                    spec, fcn, reason = sigs.classify_multi(constellation, carrier_hz)
+                    cname = sigs.CONSTELLATION_NAMES.get(constellation, f"type{constellation}")
+                    if spec is None:
+                        mhz = "none" if carrier_hz is None else f"{carrier_hz / 1e6:.2f}MHz"
+                        reject(reason, f"{cname}@{mhz}")
+                        return reason, "", None, None, None
+                    if spec.name not in enabled_names:
+                        reject("signal_not_enabled", spec.name)
+                        return "signal_not_enabled", spec.name, None, None, None
+                    svid = _int(row["Svid"], "Svid", line)
+                    prn = sigs.prn_from_svid(spec, svid)
+                    if prn is None:
+                        reject("invalid_svid", f"{spec.name}:svid{svid}")
+                        return "invalid_svid", spec.name, None, None, None
+                    if spec.name == "GLO_G1_CA":
+                        if prn not in nav_index.glonass_channels:
+                            reject("no_navigation", f"{spec.name}:R{prn:02d}")
+                            nav_uncovered[spec.name] = nav_uncovered.get(spec.name, 0) + 1
+                            return "no_navigation", spec.name, None, None, None
+                        if glonass_channels.get(prn) != fcn:
+                            reject("glonass_fcn_conflict", f"R{prn:02d}")
+                            return "glonass_fcn_conflict", spec.name, None, None, None
+                    state = _int(row["State"], "State", line)
+                    if not sigs.state_usable_multi(constellation, state):
+                        key = f"{constellation}:{state}"
+                        state_rows_unusable[key] = state_rows_unusable.get(key, 0) + 1
+                        return "state_not_usable", spec.name, None, None, None
+                    unc = _float(row["ReceivedSvTimeUncertaintyNanos"], "ReceivedSvTimeUncertaintyNanos", line)
+                    if unc > MAX_RECEIVED_SV_TIME_UNCERTAINTY_NS:
+                        return "uncertain_received_sv_time", spec.name, None, None, None
+                    if not row["ReceivedSvTimeNanos"].strip() or not row["Cn0DbHz"].strip() or not row[
+                        "PseudorangeRateMetersPerSecond"
+                    ].strip():
+                        return "no_range_fields", spec.name, None, None, None
+                    whole, frac = arrival_time_ns(row, line)
+                    tx_ns = _float(row["ReceivedSvTimeNanos"], "ReceivedSvTimeNanos", line)
+                    travel_s = sigs.travel_time_s(constellation, whole, frac, tx_ns)
+                    if not MIN_TRAVEL_TIME_S <= travel_s <= MAX_TRAVEL_TIME_S:
+                        return "implausible_travel_time", spec.name, None, None, None
+                    arrival = whole + frac
+                    covered, age = nav_index.covers(
+                        spec.rinex_system, prn, sigs.gpst_to_datetime(arrival / 1e9)
+                    )
+                    if not covered:
+                        reject("no_navigation", f"{spec.name}:{spec.rinex_system}{prn:02d}")
+                        nav_uncovered[spec.name] = nav_uncovered.get(spec.name, 0) + 1
+                        return "no_navigation", spec.name, None, None, None
+                    nav_max_age[spec.name] = max(nav_max_age.get(spec.name, 0.0), age)
+                    return "used", spec.name, travel_s * SPEED_OF_LIGHT_MPS, arrival, (spec, prn, carrier_hz)
+
                 def classify(line: int, row: dict[str, str]):
+                    if multi:
+                        return classify_multi_row(line, row)
+                    return (*classify_legacy(line, row), None)
+
+                def classify_legacy(line: int, row: dict[str, str]):
                     constellation = row["ConstellationType"].strip()
                     constellation_rows[constellation] = constellation_rows.get(constellation, 0) + 1
                     carrier = row["CarrierFrequencyHz"].strip()
@@ -386,14 +542,15 @@ def main() -> int:
                     epochs_total += 1
                     capped = args.max_epochs > 0 and epochs_selected >= args.max_epochs
                     used_rows = []
-                    for ln, row, disp, signal, pr, arrival in rows_in_epoch:
+                    for ln, row, disp, signal, pr, arrival, extra in rows_in_epoch:
                         final_disp = disp
                         if capped and disp == "used":
-                            final_disp = "unsupported_signal"  # excluded by --max-epochs
+                            # excluded by --max-epochs
+                            final_disp = "excluded_by_max_epochs" if multi else "unsupported_signal"
                         dispositions[final_disp] += 1
                         if final_disp == "used":
                             signal_rows[signal] = signal_rows.get(signal, 0) + 1
-                            used_rows.append((ln, row, signal, pr, arrival))
+                            used_rows.append((ln, row, signal, pr, arrival, extra))
                         norm.writerow(
                             (
                                 *[row[f] for f in MIMIR_RAW_FIELDS],
@@ -415,18 +572,32 @@ def main() -> int:
                     if clock_counts and count < clock_counts[-1]:
                         fail("hardware clock discontinuity count moved backwards")
                     clock_counts.append(count)
-                    gsdc_rows = [
-                        to_gsdc_row(r, ln, signal, pr, arrival)
-                        for ln, r, signal, pr, arrival in used_rows
-                    ]
                     timestamp = _int(used_rows[0][1]["utcTimeMillis"], "utcTimeMillis", used_rows[0][0])
-                    for ln, r, signal, pr, arrival in used_rows:
+                    for ln, r, signal, pr, arrival, _extra in used_rows:
                         utc_minus_arrival.append(
                             arrival / 1e6 - _int(r["utcTimeMillis"], "utcTimeMillis", ln)
                         )
-                    writer.write_epoch(timestamp, gsdc_rows, count)
+                    if multi:
+                        records = [
+                            sigs.ObservationRecord(
+                                spec=extra[0], prn=extra[1], pseudorange_m=pr, arrival_ns=arrival,
+                                carrier_hz=extra[2],
+                                doppler_rate_mps=_float(r["PseudorangeRateMetersPerSecond"], "PseudorangeRateMetersPerSecond", ln),
+                                cn0_dbhz=_float(r["Cn0DbHz"], "Cn0DbHz", ln),
+                                adr_state=_int(r["AccumulatedDeltaRangeState"] or "0", "AccumulatedDeltaRangeState", ln),
+                                adr_token=r["AccumulatedDeltaRangeMeters"].strip(),
+                            )
+                            for ln, r, signal, pr, arrival, extra in used_rows
+                        ]
+                        writer.write_epoch(timestamp, records, count)
+                    else:
+                        gsdc_rows = [
+                            to_gsdc_row(r, ln, signal, pr, arrival)
+                            for ln, r, signal, pr, arrival, _extra in used_rows
+                        ]
+                        writer.write_epoch(timestamp, gsdc_rows, count)
                     epochs_selected += 1
-                    arr = [a for *_x, a in used_rows]
+                    arr = [u[4] for u in used_rows]
                     if first_arrival_ns is None:
                         first_arrival_ns = min(arr)
                     last_arrival_ns = max(arr)
@@ -446,8 +617,8 @@ def main() -> int:
                         epoch_rows = []
                     current_key = key
                     last_time_nanos = time_nanos
-                    disp, signal, pr, arrival = classify(line, row)
-                    epoch_rows.append((line, row, disp, signal, pr, arrival))
+                    disp, signal, pr, arrival, extra = classify(line, row)
+                    epoch_rows.append((line, row, disp, signal, pr, arrival, extra))
                 if epoch_rows:
                     emit_epoch(epoch_rows)
 
@@ -460,7 +631,30 @@ def main() -> int:
             writer.close()
             rinex_summary = writer.summary(final_paths["rinex"])
             navigation_summary = None
-            if args.enable_galileo_e1:
+            if multi:
+                navigation_summary = {
+                    "path": str(args.broadcast_nav),
+                    "sha256": sha256_file(args.broadcast_nav),
+                    "record_prns_by_system": {
+                        system: sorted(p for (s_, p) in nav_index.records if s_ == system)
+                        for system in sorted({s_ for (s_, _p) in nav_index.records})
+                    },
+                    "glonass_nav_channels": {
+                        str(k): sorted(v) for k, v in sorted(nav_index.glonass_channels.items())
+                    },
+                    "glonass_carrier_channels_observed": {
+                        str(k): sorted(v) for k, v in sorted(glonass_scan.items())
+                    },
+                    "glonass_channels_in_rinex_header": {
+                        str(k): v for k, v in sorted(glonass_channels.items())
+                    },
+                    "rows_without_navigation_by_signal": dict(sorted(nav_uncovered.items())),
+                    "max_nearest_record_age_s_by_signal": dict(sorted(nav_max_age.items())),
+                    "max_allowed_record_age_s": sigs.NAV_MAX_AGE_S,
+                    "source_policy": "row-level: a measurement without a broadcast record "
+                    "inside the age limit is rejected as no_navigation (accounted, not dropped)",
+                }
+            elif args.enable_galileo_e1:
                 if not writer.galileo_epoch_prns:
                     fail("--enable-galileo-e1 found no Galileo E1 observations")
                 navigation_summary = validate_galileo_navigation(
@@ -544,6 +738,37 @@ def main() -> int:
                 "native_observation_adapter": rinex_summary,
                 "navigation": navigation_summary,
             }
+            if multi:
+                summary["schema_version"] = SCHEMA_VERSION_MULTI
+                obs = summary["observations"]
+                obs["signal_set"] = "multi"
+                obs["signal_policy"] = [sp.name for sp in enabled_specs]
+                obs["signal_inference"] = (
+                    "ConstellationType + CarrierFrequencyHz (Mimir Raw.csv has no "
+                    "CodeType/SignalType); table in gnss_smartphone_mimir_signals.SIGNALS"
+                )
+                obs["carrier_frequency_normalisation"] = (
+                    f"within {sigs.FREQ_TOLERANCE_HZ:.0f} Hz of nominal (GLONASS: of "
+                    "1602 MHz + k*562.5 kHz); actual carrier used for wavelength"
+                )
+                obs["pseudorange_policy"]["formula"] = (
+                    "(tRxGnss - ReceivedSvTime) * c; GPS/GAL/QZS week-rollover wrapped, "
+                    "BeiDou tRx shifted by -14 s (BDT), GLONASS tRx = (tow - 18 s + 3 h) mod 1 day"
+                )
+                obs["rejected_rows_detail"] = {
+                    k: dict(sorted(v.items())) for k, v in sorted(rejected_detail.items())
+                }
+                obs["signal_table"] = {
+                    sp.name: {
+                        "constellation_type": sp.constellation,
+                        "rinex_system": sp.rinex_system,
+                        "nominal_hz": sp.nominal_hz,
+                        "rinex_obs_codes": list(sp.obs_codes),
+                        "note": sp.note,
+                    }
+                    for sp in sigs.SIGNALS
+                }
+                obs["hatch_window_s"] = args.hatch_window_s
             (tmp / "summary.json").write_text(
                 json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
             )
