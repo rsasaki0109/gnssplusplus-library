@@ -47,13 +47,17 @@ Dropbox), runs **Odaiba** (1,241 s) and **Shinjuku** (2,095 s).
 
 ## Conversion to the PPC run layout (fixed here, no tuning)
 
-A converter script in the repository writes, per run and rover, a directory
-`<root>/urbannav/<run>_<rover>/` holding the PPC file set.
+`scripts/convert_urbannav_to_ppc_layout.py` writes, per run, a directory
+`<root>/urbannav/<run>_trimble/` holding the PPC file set. Only the Trimble
+rover is used; the section below explains why u-blox is excluded.
 
-1. **`rover.obs`:**
-   - u-blox: the file unchanged (5 Hz).
-   - Trimble: only epochs whose GPS time of week is a multiple of 0.2 s.
-     Header and observation records are otherwise byte-preserved.
+1. **`rover.obs`:** `rover_trimble.obs`, keeping only epochs that satisfy
+   both conditions below. Header and observation records are otherwise
+   byte-preserved.
+   - The GPS time of week is a multiple of 0.2 s.
+   - The epoch lies within the time span of the converted `reference.csv`
+     (first to last row, inclusive). The scorer requires every emitted epoch
+     to have a truth row.
 2. **`base.obs`:** `base_trimble.obs`, unchanged.
 3. **`base.nav`:** `base.nav`, unchanged.
 4. **`imu.csv`:** PPC header and units. The steps, in order:
@@ -67,13 +71,16 @@ A converter script in the repository writes, per run and rover, a directory
       replay requires an IMU sample at each rover epoch, within 1e-6 s. So the
       samples are resampled by linear interpolation onto the grid
       t = k x 0.02 s (50 Hz) of GPS time of week.
-      - Only grid points strictly inside two consecutive raw samples at most
-        0.1 s apart are written.
+      - A grid point is written when it lies after one raw sample and at or
+        before the next, and those two samples are at most 0.1 s apart.
+        A grid point that coincides with a raw sample therefore takes that
+        sample's value.
       - No extrapolation is done, and no time offset is applied.
 5. **`reference.csv`:** PPC header names. `Velocity X/Y/Z` are renamed to
    `East/North/Up Velocity (m/s)`; the survey showed they are ENU. Only rows
    whose GPS time of week is a multiple of 0.2 s are kept. Everything else is
-   copied unchanged.
+   copied unchanged, including six trailing acceleration and angular-rate
+   columns that PPC does not have and the scorer ignores.
 
 ## Replay configuration (fixed here)
 
@@ -92,18 +99,21 @@ PPC `tokyo|nagoya/<run>`.
 
 ## Population and comparison
 
-- **Population:** 2 runs (Odaiba, Shinjuku) x 2 rovers (u-blox, Trimble) x 3
+- **Population:** 2 runs (Odaiba, Shinjuku) with the Trimble rover x 3
   scenarios.
   - Normal.
   - GNSS outage, 60-70 s.
   - IMU gap, 60-64 s.
-- That is 12 control replays (`--candidate none`, the current production
-  default) and 12 candidate replays (`--candidate velocity_consistency_v6`).
+- That is 6 control replays (`--candidate none`, the current production
+  default) and 6 candidate replays (`--candidate velocity_consistency_v6`).
   Both are built from the same binary and interleaved on the same quiet host,
   at most 3 at once.
-- The existing comparator `scripts/analysis/compare_online_pva.py` applies to
-  each rover set separately (two invocations). It is extended only as needed
-  to accept the UrbanNav run names, with no change to any gate.
+- The existing comparator `scripts/analysis/compare_online_pva.py` gains a
+  `--runs` option and is invoked once with `--runs Odaiba_trimble
+  Shinjuku_trimble`. Its default run list and every gate are unchanged.
+- The base is 1 Hz, so only every fifth 5 Hz rover epoch has an exact base
+  epoch. The other epochs use the replay's existing SPP fallback, in control
+  and candidate alike.
 
 ## Acceptance (the frozen gates, applied per run/scenario)
 
@@ -122,7 +132,7 @@ PPC `tokyo|nagoya/<run>`.
    `none` from the develop commit this branch starts from. This covers every
    deterministic CSV field on the 18 PPC runs.
 
-**Go only if every gate passes on all 12 run/scenarios.** Otherwise record
+**Go only if every gate passes on all 6 run/scenarios.** Otherwise record
 No-Go with the failed gates, and keep the default. Do not change the
 candidate, the conversion or the configuration after seeing any holdout
 result.
@@ -130,7 +140,7 @@ result.
 ## Pipeline smoke allowed before the candidate run
 
 - **Allowed run:** one bounded control-only replay, `--candidate none
-  --max-epochs 300`, on each of the four converted directories.
+  --max-epochs 300`, on each converted directory.
 - **What it checks:** that the conversion and the layout run, meaning state
   `passed` and a nonzero fused availability.
 - **What it does not look at:** no error metric is read. This is recorded in
@@ -138,6 +148,32 @@ result.
 - **If the smoke fails:** if it fails for a format reason, the converter may be
   fixed to meet this contract's specification. The specification itself does
   not change. The fix and its reason are recorded.
+
+## Change before the freeze: u-blox excluded
+
+The first draft (`d0fc112b`) also had a u-blox rover set, copied unchanged at
+5 Hz. The allowed control-only smoke on four directories showed a format
+problem: the u-blox epochs are mostly 1-3 ms off the 0.2 s grid.
+
+- Odaiba: 6,069 of 6,206 epochs are off the grid.
+- Shinjuku: 7,768 of 10,476 epochs are off the grid.
+
+The scorer matches truth by exact timestamp, and the replay needs base and IMU
+epochs within 1e-6 s. So these sets cannot be scored. On Shinjuku the fused
+filter never initialized.
+
+Re-timing the observations would alter the measurement data, so the u-blox
+rover is excluded instead. Only state and availability were read in that
+smoke; no error metric was read, and no candidate was run.
+
+The same smoke, on the Trimble sets, showed a match fraction of 0.9967. The
+first rover epoch (Odaiba 273375.0 s) precedes the first 0.2 s truth row
+(273375.2 s), and the comparator requires every epoch to match. Rover epochs
+are therefore limited to the truth span, as rule 1 states.
+
+The same review changed the IMU grid rule. A grid point that coincides with a
+raw sample is now kept, where the draft skipped it as "strictly inside no
+pair". The draft rule skipped 4 and 6 such points.
 
 ## Reported in addition (not gates)
 

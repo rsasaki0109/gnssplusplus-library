@@ -21,6 +21,7 @@ int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
             std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6]\n"
+                "RAW_RUN is <tokyo|nagoya>/<run> (PPC) or urbannav/<run> (zero lever arm).\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
         }
@@ -61,9 +62,13 @@ int main(int argc, char** argv) {
         OnlineRtkImuProcessor::Config config;
         config.base_position_ecef = base_header.approximate_position;
         const auto city = fs::absolute(data).lexically_normal().parent_path().filename().string();
-        if (city != "tokyo" && city != "nagoya") throw std::invalid_argument("expected PPC <tokyo|nagoya>/<run> directory layout");
+        if (city != "tokyo" && city != "nagoya" && city != "urbannav")
+            throw std::invalid_argument("expected PPC <tokyo|nagoya>/<run> or urbannav/<run> directory layout");
         const bool nagoya = city == "nagoya";
-        config.fusion.lever_arm_body = nagoya ? Vector3d(.593, -.670, -1.216) : Vector3d(.31, 0., .55);
+        // urbannav: UrbanNav documents no antenna-IMU lever arm; zero is a declared
+        // assumption (docs/online_pva_default_switch_holdout_v1.md).
+        config.fusion.lever_arm_body = city == "urbannav" ? Vector3d(0., 0., 0.)
+            : nagoya ? Vector3d(.593, -.670, -1.216) : Vector3d(.31, 0., .55);
         config.tight_time_update = scenario != "loose_only";
         if (candidate == "velocity_consistency_v3" || candidate == "velocity_consistency_v4" ||
             candidate == "velocity_consistency_v5" || candidate == "velocity_consistency_v6") {
