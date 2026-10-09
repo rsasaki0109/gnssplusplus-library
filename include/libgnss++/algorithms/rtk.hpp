@@ -704,6 +704,34 @@ public:
         /// / fit-RMS / disagreement safeguards are identical.
         bool enable_fixed_anchor_single_stabilization = false;
 
+        /// Covariance reported on FLOAT PositionSolution::position_covariance.
+        /// LEGACY_FIXED_SIGMA (default) keeps the historical constant
+        /// 0.01 m^2 * I, which is not derived from the filter and is 10^2-10^3
+        /// times too small in FLOAT epochs (docs/rtk_float_covariance.md).
+        /// FILTER_MARGINAL reports the Kalman position marginal after the last
+        /// measurement iteration (the same rows are applied once per
+        /// iteration, so this is over-confident by up to the iteration count).
+        /// FIRST_PASS_SCALED reports the marginal after the first iteration
+        /// (a single application of the epoch's measurements) times the
+        /// innovation variance factor max(1, NIS_per_observation) of that pass.
+        /// SPP_CONSISTENCY_SCALED additionally multiplies by the smallest
+        /// s >= 1 for which the FLOAT-minus-SPP difference d is consistent
+        /// with its own covariance: d' (s*C + C_spp)^-1 d <= 3 (the expected
+        /// value for 3 degrees of freedom). The SPP solution is the one the
+        /// epoch already computes for its divergence gates.
+        /// Every mode changes only the reported covariance: no filter state,
+        /// position, ambiguity or status is modified. FIXED is not changed.
+        enum class ReportedCovarianceMode {
+            LEGACY_FIXED_SIGMA = 0,
+            FILTER_MARGINAL = 1,
+            FIRST_PASS_SCALED = 2,
+            SPP_CONSISTENCY_SCALED = 3
+        };
+        /// Variance (m^2, per axis) of the historical constant covariance.
+        static constexpr double kLegacyReportedVarianceM2 = 0.01;
+        ReportedCovarianceMode reported_covariance_mode =
+            ReportedCovarianceMode::LEGACY_FIXED_SIGMA;
+
         /// M5 measurement-neutral single-difference TDCP-vs-Doppler
         /// diagnostics. No filter row or state mutation is performed.
         bool enable_tdcp_diagnostics = false;
@@ -1773,6 +1801,16 @@ private:
     bool has_last_fixed_time_ = false;
     Vector3d last_solution_position_ = Vector3d::Zero();
     bool has_last_solution_position_ = false;
+    // This epoch's SPP solution, kept for the reported-covariance consistency
+    // scaling only (RTKConfig::reported_covariance_mode). Reset every epoch.
+    Vector3d epoch_spp_position_ecef_ = Vector3d::Zero();
+    Matrix3d epoch_spp_position_covariance_ = Matrix3d::Zero();
+    bool epoch_spp_valid_ = false;
+    // Position marginal and innovation statistic after the first measurement
+    // iteration of this epoch (single application of its measurements).
+    Matrix3d first_pass_position_covariance_ = Matrix3d::Zero();
+    double first_pass_nis_per_observation_ = 0.0;
+    bool has_first_pass_covariance_ = false;
     Vector3d last_trusted_position_ = Vector3d::Zero();
     bool has_last_trusted_position_ = false;
     Vector3d fixed_update_gate_previous_position_ = Vector3d::Zero();

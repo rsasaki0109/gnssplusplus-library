@@ -9,6 +9,7 @@
 #include <libgnss++/algorithms/rtk_measurement.hpp>
 #include <libgnss++/algorithms/rtk_selection.hpp>
 #include <libgnss++/algorithms/rtk_ins_time_update.hpp>
+#include <libgnss++/algorithms/rtk_covariance_consistency.hpp>
 #include <libgnss++/algorithms/rtk_tdcp_diagnostics.hpp>
 #include <libgnss++/algorithms/rtk_update.hpp>
 #include <libgnss++/algorithms/spp_velocity.hpp>
@@ -235,7 +236,40 @@ PositionSolution RTKProcessor::generateSolution(const GNSSTime& time, SolutionSt
     double N = a / std::sqrt(1 - e2*std::sin(solution.position_geodetic.latitude)*std::sin(solution.position_geodetic.latitude));
     solution.position_geodetic.height = p / std::cos(solution.position_geodetic.latitude) - N;
     solution.num_satellites = num_satellites;
-    solution.position_covariance = Matrix3d::Identity() * 0.01;
+    solution.position_covariance =
+        Matrix3d::Identity() * RTKConfig::kLegacyReportedVarianceM2;
+    if (status == SolutionStatus::FLOAT &&
+        rtk_config_.reported_covariance_mode !=
+            RTKConfig::ReportedCovarianceMode::LEGACY_FIXED_SIGMA &&
+        filter_state_.covariance.rows() >= BASE_STATES &&
+        filter_state_.covariance.cols() >= BASE_STATES) {
+        using Mode = RTKConfig::ReportedCovarianceMode;
+        const Mode mode = rtk_config_.reported_covariance_mode;
+        Matrix3d reported =
+            filter_state_.covariance.topLeftCorner<BASE_STATES, BASE_STATES>();
+        if (mode != Mode::FILTER_MARGINAL && has_first_pass_covariance_ &&
+            first_pass_position_covariance_.allFinite()) {
+            reported = first_pass_position_covariance_;
+            if (std::isfinite(first_pass_nis_per_observation_) &&
+                first_pass_nis_per_observation_ > 1.0) {
+                solution.rtk_covariance_variance_factor =
+                    first_pass_nis_per_observation_;
+                reported *= first_pass_nis_per_observation_;
+            }
+        }
+        if (reported.allFinite()) {
+            reported = 0.5 * (reported + reported.transpose());
+            if (mode == Mode::SPP_CONSISTENCY_SCALED && epoch_spp_valid_) {
+                solution.rtk_covariance_spp_scale =
+                    rtk_covariance_consistency::sppConsistencyScale(
+                        solution.position_ecef - epoch_spp_position_ecef_,
+                        reported, epoch_spp_position_covariance_);
+                reported *= solution.rtk_covariance_spp_scale;
+            }
+            solution.position_covariance = reported;
+            solution.rtk_reported_covariance_replaced = true;
+        }
+    }
     solution.pdop = 2.0; solution.hdop = 1.5; solution.vdop = 2.5;
     if (filter_state_.state.size() >= 3) solution.baseline_length = filter_state_.state.head<3>().norm();
     solution.ratio = last_ar_ratio_;

@@ -42,6 +42,8 @@ void OnlineRtkImuProcessor::recreateFilters() {
     if (!rtk_->initialize(config_.processor)) throw std::invalid_argument("RTK initialization failed");
     rtk_->setBasePosition(config_.base_position_ecef);
     fusion_ = std::make_unique<LooseCouplingProcessor>(config_.fusion);
+    prior_fusion_ = config_.rtk_prior_fusion
+        ? std::make_unique<LooseCouplingProcessor>(*config_.rtk_prior_fusion) : nullptr;
     recreateTightFilter();
     have_imu_ = false;
 }
@@ -144,6 +146,7 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
             out.reason = "imu_gap_reset";
         }
         fusion_->processImuSample(sample);
+        if (prior_fusion_) prior_fusion_->processImuSample(sample);
         if (config_.tight_time_update) tight_->processImuSample(sample);
         imu_time_ = sample.time;
         have_imu_ = true;
@@ -205,19 +208,29 @@ OnlineRtkImuProcessor::Output OnlineRtkImuProcessor::processRover(
         }
     }
     if (out.rtk.isValid() && imu_at_epoch) fusion_->processGnssSolution(gnss_input);
+    if (prior_fusion_ && out.rtk.isValid() && imu_at_epoch) {
+        // The isolated filter sees what the unmodified processor would have
+        // reported, so the RTK prior is independent of the reporting mode.
+        PositionSolution legacy_input = gnss_input;
+        if (legacy_input.rtk_reported_covariance_replaced)
+            legacy_input.position_covariance =
+                Matrix3d::Identity() * RTKProcessor::RTKConfig::kLegacyReportedVarianceM2;
+        prior_fusion_->processGnssSolution(legacy_input);
+    }
     if (config_.tight_time_update) {
         bool anchored = false;
         Vector3d anchor;
         Matrix3d covariance;
+        const LooseCouplingProcessor& prior = prior_fusion_ ? *prior_fusion_ : *fusion_;
         const bool bootstrap_ready = tight_->initialized() ||
-            (fusion_->isInitialized() && fusion_->isOriginSet() && fusion_->isHeadingConverged());
+            (prior.isInitialized() && prior.isOriginSet() && prior.isHeadingConverged());
         if (out.exact_base_available && imu_at_epoch && out.rtk.isValid() &&
             gnss_input.has_velocity && bootstrap_ready &&
             gnss_input.velocity_ecef.allFinite() && gnss_input.velocity_covariance.allFinite() &&
             rtk_->getFloatPosteriorPosition(anchor, covariance)) {
             anchored = tight_->reanchor(anchor, covariance, gnss_input.velocity_ecef,
                 gnss_input.velocity_covariance, obs.time,
-                tight_->initialized() ? nullptr : &fusion_->state());
+                tight_->initialized() ? nullptr : &prior.state());
         }
         if (anchored) {
             tight_anchor_time_ = obs.time;
