@@ -85,6 +85,8 @@ void UBXDecoder::clear() {
     has_last_nav_pvt_ = false;
     last_gps_week_ = 0;
     has_last_gps_week_ = false;
+    rawx_track_state_.clear();
+    rawx_gen9_receiver_ = false;
 }
 
 std::vector<UBXMessage> UBXDecoder::decode(const uint8_t* buffer, size_t size) {
@@ -203,40 +205,126 @@ bool UBXDecoder::decodeRawx(const UBXMessage& message, ObservationData& obs_data
         obs_data.receiver_position = last_nav_pvt_.position_ecef;
     }
 
+    // Carrier-phase validity and slip handling mirrors RTKLIB demo5
+    // decode_rxmrawx (src/rcv/ublox.c):
+    //  - phase is invalid when trkStat bit1 (cpValid) is clear, cpMes is the
+    //    -0.5 marker, or cpStdev exceeds the receiver-generation threshold;
+    //  - LLI bit0 (slip): locktime == 0, locktime decreased vs the previous
+    //    epoch of the same (sat, sigId), halfSub bit toggled, or cpStdev at
+    //    the slip threshold; the slip is carried forward until a valid phase
+    //    is reported;
+    //  - LLI bit1 (half-cycle unresolved): trkStat bit2 (halfCyc) clear on a
+    //    valid phase.  The phase is kept (as demo5 does), only flagged.  RTK
+    //    and FGO consume LLI bit0 only, so they still treat such a phase as an
+    //    integer-ambiguity phase; the bit is informational for consumers that
+    //    read bit1 (RTCM encoder, CLAS parity slip check).  RTKLIB's LLI_HALFA
+    //    (0x40) is deliberately not emitted because the RINEX LLI contract
+    //    here is bits 0-2 and several consumers test lli == 0.
+    constexpr int kCpStdevValidGen8 = 5;
+    constexpr int kCpStdevValidGen9 = 14;
+    constexpr int kCpStdevSlip = 15;
+
     for (uint8_t index = 0; index < num_measurements; ++index) {
         const size_t base = 16U + static_cast<size_t>(index) * 32U;
         const uint8_t gnss_id = payload[base + 20];
         const uint8_t sv_id = payload[base + 21];
         const uint8_t sig_id = payload[base + 22];
+        const uint8_t freq_id = payload[base + 23];
         const uint8_t cno = payload[base + 26];
+        const int cp_stdev = payload[base + 28] & 0x0F;
         const uint8_t trk_stat = payload[base + 30];
         const uint16_t locktime = readLittleEndian<uint16_t>(payload.data() + base + 24);
+
+        if (sig_id > 1) {
+            rawx_gen9_receiver_ = true;
+        }
 
         const GNSSSystem system = ubx_utils::getSystemFromGnssId(gnss_id);
         if (system == GNSSSystem::UNKNOWN || sv_id == 0) {
             continue;
         }
+        // GLONASS svId 255 is an unknown slot (RTKLIB skips it too).
+        if (system == GNSSSystem::GLONASS && sv_id == 255) {
+            continue;
+        }
 
+        // Unknown / unsupported sigIds are dropped instead of being folded
+        // into a default signal (which duplicated observations of the same
+        // SignalType).  SBAS has no SignalType of its own; its L1 C/A
+        // (sigId 0) keeps the historical GPS_L1CA mapping under an SBAS
+        // satellite id.
         SignalType signal_type = defaultSignalType(system);
-        ubx_utils::getSignalType(gnss_id, sig_id, signal_type);
+        if (system == GNSSSystem::SBAS) {
+            if (sig_id != 0) {
+                continue;
+            }
+        } else if (!ubx_utils::getSignalType(gnss_id, sig_id, signal_type)) {
+            continue;
+        }
 
         Observation obs(SatelliteId(system, sv_id), signal_type);
         obs.code = sig_id;
         obs.snr = static_cast<double>(cno);
         obs.signal_strength = static_cast<int>(cno);
 
-        const double pseudorange = readLittleEndian<double>(payload.data() + base);
-        const double carrier_phase = readLittleEndian<double>(payload.data() + base + 8);
+        double pseudorange = readLittleEndian<double>(payload.data() + base);
+        double carrier_phase = readLittleEndian<double>(payload.data() + base + 8);
         const double doppler = static_cast<double>(readLittleEndian<float>(payload.data() + base + 16));
 
-        obs.has_pseudorange = (trk_stat & 0x01U) != 0 && std::isfinite(pseudorange);
-        obs.has_carrier_phase = (trk_stat & 0x02U) != 0 && std::isfinite(carrier_phase);
+        const int cp_stdev_valid =
+            rawx_gen9_receiver_ ? kCpStdevValidGen9 : kCpStdevValidGen8;
+        const bool pseudorange_valid = (trk_stat & 0x01U) != 0 && std::isfinite(pseudorange);
+        const bool phase_valid = (trk_stat & 0x02U) != 0 && std::isfinite(carrier_phase) &&
+                           carrier_phase != -0.5 && cp_stdev <= cp_stdev_valid;
+        if (!pseudorange_valid) {
+            pseudorange = 0.0;
+        }
+        if (!phase_valid) {
+            carrier_phase = 0.0;
+        } else if (system == GNSSSystem::BeiDou && (sv_id <= 5 || sv_id >= 59)) {
+            // Half-cycle shift correction for BeiDou GEO (demo5 ublox.c).
+            carrier_phase += 0.5;
+        }
+
+        // Cycle-slip bookkeeping per (gnssId, svId, sigId).
+        const bool half_valid = (trk_stat & 0x04U) != 0;
+        const bool half_subtracted = (trk_stat & 0x08U) != 0;
+        const double lock_time_s = static_cast<double>(locktime) * 1e-3;
+        RawxTrackState& track = rawx_track_state_[
+            (static_cast<uint32_t>(gnss_id) << 16) | (static_cast<uint32_t>(sv_id) << 8) |
+            static_cast<uint32_t>(sig_id)];
+        const bool half_toggled = half_subtracted != track.half_subtracted;
+        if (locktime == 0 || lock_time_s < track.lock_time_s || half_toggled ||
+            cp_stdev >= kCpStdevSlip) {
+            track.slip_pending = true;
+        }
+        track.lock_time_s = lock_time_s;
+        track.half_subtracted = half_subtracted;
+
+        uint8_t lli = 0;
+        if (phase_valid) {
+            if (!half_valid) {
+                lli |= 0x02U;  // half-cycle ambiguity unresolved
+            }
+            if (track.slip_pending) {
+                lli |= 0x01U;
+                track.slip_pending = false;
+            }
+        }
+
+        obs.has_pseudorange = pseudorange_valid;
+        obs.has_carrier_phase = phase_valid;
         obs.has_doppler = std::isfinite(doppler);
         obs.pseudorange = pseudorange;
         obs.carrier_phase = carrier_phase;
         obs.doppler = doppler;
-        obs.loss_of_lock = locktime == 0;
-        obs.lli = obs.loss_of_lock ? 1 : 0;
+        obs.lli = lli;
+        obs.loss_of_lock = (lli & 0x01U) != 0;
+        if (system == GNSSSystem::GLONASS && freq_id <= 13) {
+            // freqId = FCN + 7 (0..13); other values are not a valid slot.
+            obs.has_glonass_frequency_channel = true;
+            obs.glonass_frequency_channel = static_cast<int>(freq_id) - 7;
+        }
         obs.valid = obs.has_pseudorange || obs.has_carrier_phase || obs.has_doppler;
 
         if (obs.valid) {
