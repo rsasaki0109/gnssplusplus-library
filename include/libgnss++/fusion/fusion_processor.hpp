@@ -186,6 +186,37 @@ public:
         // bias correlation were produced by a filter running with an
         // arbitrary pre-latch yaw. False keeps the previous behavior.
         bool reanchor_velocity_on_heading_latch = false;
+
+        // Opt-in (velocity_consistency_v2): lockout-proof recovery of the
+        // position NIS gate for the precise (RTK FLOAT/FIXED) class. The
+        // consecutive-rejection counter above is shared by every solution
+        // class, reset by any accepted update and (for FLOAT/SPP) zeroed by
+        // every non-FIXED epoch. A coarse SPP update (sigma metres) can
+        // therefore keep passing the gate while every precise FLOAT update
+        // (sigma ~0.1 m) is rejected for the whole run, and once the state
+        // has drifted beyond the SPP gate as well, nothing is accepted.
+        // With a value N > 0, a separate counter counts consecutive gate
+        // rejections of FLOAT/FIXED position updates only; SPP/DGPS epochs
+        // neither advance nor reset it. A FLOAT/FIXED update accepted by the
+        // gate resets it. At N the position-only re-anchor
+        // (reanchorPositionFromFixedSolution(): position set from the
+        // lever-arm compensated GNSS antenna position, covariance = GNSS
+        // covariance + lever-arm attitude term, all position cross-
+        // covariances cleared, attitude/velocity/bias untouched) is applied
+        // from that FLOAT/FIXED solution, then the counter restarts. <= 0
+        // keeps the previous behavior.
+        //
+        // The re-anchor is additionally refused unless the FLOAT/FIXED
+        // position is consistent with the most recent coarse (non-FLOAT/
+        // FIXED) GNSS position no older than float_reanchor_max_coarse_age_s:
+        // NIS of their difference against both covariances, plus the
+        // displacement variance (|velocity| * age)^2, must not exceed
+        // max_position_update_nis_per_observation per axis (no gate value
+        // means no check). A drifting RTK float (observed: 140 m off while
+        // reporting 0.1 m) is otherwise indistinguishable from a recovered
+        // one. With no recent coarse position the re-anchor is not taken.
+        int float_position_reanchor_after_rejections = 0;
+        double float_reanchor_max_coarse_age_s = 1.0;
     };
 
     explicit LooseCouplingProcessor(const Config& config);
@@ -326,6 +357,11 @@ private:
 
     int position_consecutive_gate_rejections_ = 0;
     int velocity_consecutive_gate_rejections_ = 0;
+    int float_class_consecutive_gate_rejections_ = 0;
+    bool have_coarse_position_ = false;
+    GNSSTime coarse_position_time_;
+    Eigen::Vector3d coarse_antenna_position_enu_ = Eigen::Vector3d::Zero();
+    Eigen::Matrix3d coarse_position_covariance_enu_ = Eigen::Matrix3d::Zero();
     bool last_gnss_position_update_applied_ = false;
     bool last_gnss_position_reanchored_ = false;
     bool last_gnss_velocity_reanchored_ = false;
@@ -355,6 +391,9 @@ private:
     fusion_update::FusionUpdateResult applyUpdateAndInject(
         const fusion_measurement::FusionMeasurementSystem& system, double max_nis_per_observation,
         int& consecutive_gate_rejections);
+    bool floatPositionConsistentWithCoarse(const GNSSTime& time,
+                                           const Eigen::Vector3d& antenna_position_enu,
+                                           const Eigen::Matrix3d& position_covariance_enu) const;
     bool reanchorPositionFromFixedSolution(const Eigen::Vector3d& antenna_position_enu,
                                            const Eigen::Matrix3d& position_covariance_enu);
     bool reanchorVelocityFromGnssSolution(
