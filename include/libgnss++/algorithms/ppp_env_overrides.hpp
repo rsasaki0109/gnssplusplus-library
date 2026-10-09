@@ -200,6 +200,32 @@ struct PPPEnvOverrides {
     // (fix ON); exact "0" restores the unconditional-increment-only legacy
     // behavior byte-for-byte.
     bool clas_outage_reset_parity = true;
+    // GNSS_PPP_CLAS_TIDE_NO_PERMANENT: omit the legacy permanent-deformation
+    // elimination term (0.1196*(1.5*sin^2(phi)-0.5) up, 0.0247*sin(2*phi)
+    // north) from the CLAS receiver solid-earth tide when set exactly to "1".
+    // MRTKLIB v0.4.2 and v0.5.1 call tidedisp(opt=5) from clas_osr_zdres()
+    // (mrtk_clas_osr.c: solid(1)+pole(4)); the permanent term needs opt bit 8
+    // (mrtk_tides.c:128) and is therefore NOT applied by the pinned reference.
+    // Default false keeps the historical term for bit-exact legacy output.
+    bool clas_tide_no_permanent = false;
+    // GNSS_PPP_CLAS_RECEIVER_TIDE: feed the CLAS receiver tide displacement
+    // (solid + pole [+ grid ocean loading for the hard-coded network 7]) into
+    // the OSR measurement geometry, exactly as MRTKLIB clas_osr_zdres() does
+    // with "rr[i] += disp[i]" before the geometric distance
+    // (mrtk_clas_osr.c:1055-1100), while the filter position state stays
+    // tide-free. The displacement was already computed per epoch
+    // (CLASEpochContext::receiver_tide_displacement) but only the CLAS DD
+    // scaffold consumed it, so the default OSR filter modelled a site with no
+    // tide at all. Exact "1" enables; default false is bit-identical legacy.
+    // For networks other than 7 (no ocean-loading table available) only the
+    // solid and pole terms are applied.
+    bool clas_receiver_tide = false;
+    // GNSS_PPP_CLAS_GRID_BLQ: path to the official CLAS ocean-loading table
+    // (clas_grid.blq, records "<network>-<grid>"). When set together with
+    // GNSS_PPP_CLAS_RECEIVER_TIDE=1 the grid ocean loading is interpolated for
+    // every network exactly as MRTKLIB ocean_tide_clasgrid() does; unset keeps
+    // the embedded network-7 table (other networks: solid + pole only).
+    std::string clas_grid_blq_path;
     // GNSS_PPP_CLAS_SIS_BOUNDARY: apply the CLAS SIS continuity delta with
     // CLASLIB-style SSR-update-boundary semantics (hold the delta captured at
     // a 30s orbit/clock boundary for the following 15s, matching the

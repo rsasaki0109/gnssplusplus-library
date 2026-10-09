@@ -227,6 +227,12 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
             "GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK", 5, 1, 5);
     overrides.clas_outage_reset_parity =
         !envExactZero("GNSS_PPP_CLAS_OUTAGE_RESET_PARITY");
+    overrides.clas_tide_no_permanent =
+        envExactOne("GNSS_PPP_CLAS_TIDE_NO_PERMANENT");
+    overrides.clas_receiver_tide =
+        envExactOne("GNSS_PPP_CLAS_RECEIVER_TIDE");
+    overrides.clas_grid_blq_path =
+        envStringOrEmpty("GNSS_PPP_CLAS_GRID_BLQ");
     overrides.clas_sis_boundary =
         envExactOne("GNSS_PPP_CLAS_SIS_BOUNDARY");
     overrides.clas_base_clock_parity =

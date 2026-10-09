@@ -198,14 +198,21 @@ EpochUpdateResult runEpochMeasurementUpdate(
     EpochUpdateResult result;
     const Vector3d state_position_before_update =
         filter_state.state.segment(filter_state.pos_index, 3);
+    // MRTKLIB clas_osr_zdres() adds the receiver tide displacement to rr for
+    // the geometric distance only; the estimated state stays tide-free.
+    const Vector3d receiver_tide =
+        pppEnvOverrides().clas_receiver_tide
+            ? epoch_context.receiver_tide_displacement
+            : Vector3d::Zero();
     const Vector3d receiver_geometry_offset =
-        epoch_context.receiver_position - state_position_before_update;
+        epoch_context.receiver_position + receiver_tide -
+        state_position_before_update;
     auto measurement_build_result = buildEpochMeasurements(
         obs,
         epoch_context.osr_corrections,
         filter_state,
         config,
-        epoch_context.receiver_position,
+        epoch_context.receiver_position + receiver_tide,
         epoch_context.receiver_clock_m,
         epoch_context.trop_zenith_m,
         epoch_context.epoch_atmos_tokens,
@@ -260,7 +267,7 @@ EpochUpdateResult runEpochMeasurementUpdate(
                 epoch_context.osr_corrections,
                 filter_state,
                 config,
-                epoch_context.receiver_position,
+                epoch_context.receiver_position + receiver_tide,
                 epoch_context.receiver_clock_m,
                 epoch_context.trop_zenith_m,
                 epoch_context.epoch_atmos_tokens,
@@ -447,7 +454,8 @@ FixValidationStats validateFixedSolution(
     const bool mrtklib_parity = clasMrtklibFloatParity(config);
 
     const Vector3d receiver_position =
-        filter_state.state.segment(filter_state.pos_index, 3);
+        filter_state.state.segment(filter_state.pos_index, 3) +
+        options.receiver_geometry_offset;
     const double trop_zenith = filter_state.state(filter_state.trop_index);
     for (const auto& osr : osr_corrections) {
         if (!osr.valid) {
