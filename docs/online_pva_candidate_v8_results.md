@@ -56,12 +56,16 @@ all 18 run/scenarios.** Rotation is 1.4-2.8 deg RMSE on all six runs, against
 The common-valid cohort fails the same gates as the all-output cohort.
 
 - **RTK velocity P95.** PPC: Tokyo 1, Tokyo 3 (all scenarios), Tokyo 2 IMU gap,
-  and Nagoya 1 (all scenarios).
-  - The candidate's RTK velocity is the independent Doppler least-squares
-    velocity on every epoch.
-  - It is 3-31 % worse at P95 than the control's mixture: Doppler LS on SPP
-    epochs, filter state on the 20 % differential epochs. For example,
-    Tokyo 1 goes 3.29 -> 3.39 m/s.
+  and Nagoya 1 (all scenarios). The candidate is 3-31 % worse at P95, for
+  example Tokyo 1 3.29 -> 3.39 m/s.
+  - *Corrected after a post-hoc diagnosis (see
+    [online_pva_candidate_v9.md](online_pva_candidate_v9.md)).* The first
+    version of this note said the candidate exports the independent Doppler
+    velocity. It does not. The exported RTK velocity is the RTK filter's
+    velocity state on every candidate epoch; `independent_doppler_velocity`
+    changes only the fusion input.
+  - The control exports the SPP Doppler velocity on its 80 % SPP-fallback
+    epochs, and the filter state elsewhere.
 - **Nagoya 2 first heading latch.** 41.8 -> 42.0 s in all three scenarios.
 - **UrbanNav RTK availability.** 0.2-0.4 percentage points lower (gate 0.1) on
   every Odaiba and Shinjuku scenario.
