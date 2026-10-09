@@ -1612,8 +1612,21 @@ bool RINEXReader::parseObservationSatelliteRecord(
     }
 
     auto sys_it = header_.system_obs_types.find(sys_char);
-    const std::vector<std::string>& obs_types =
+    const std::vector<std::string>& header_obs_types =
         (sys_it != header_.system_obs_types.end()) ? sys_it->second : header_.observation_types;
+    // RINEX 3.00-3.02 BeiDou "C1I/L1I/D1I/S1I" is B1I (band 2 in 3.03+).
+    std::vector<std::string> version_normalized_obs_types;
+    if (signal_policy::needsRinexVersionObsTypeRemap(system, header_.version)) {
+        version_normalized_obs_types.reserve(header_obs_types.size());
+        for (const auto& type : header_obs_types) {
+            version_normalized_obs_types.push_back(
+                signal_policy::normalizeObservationTypeForRinexVersion(
+                    system, type, header_.version));
+        }
+    }
+    const std::vector<std::string>& obs_types =
+        version_normalized_obs_types.empty() ? header_obs_types
+                                             : version_normalized_obs_types;
     int num_obs_types = static_cast<int>(obs_types.size());
     if (num_obs_types == 0) {
         num_obs_types = 4;

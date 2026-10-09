@@ -1,4 +1,6 @@
 #include <gtest/gtest.h>
+#include <libgnss++/core/signal_policy.hpp>
+#include <libgnss++/core/signals.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rinex4.hpp>
 
@@ -1896,4 +1898,163 @@ TEST(RINEXReaderTest, AdditionalFrequencyModePreservesFourGalileoBands) {
     EXPECT_NE(four_frequency_epoch.getObservation(galileo_9, SignalType::GAL_E6), nullptr);
 
     std::filesystem::remove(temp_path);
+}
+
+namespace {
+
+// One BeiDou satellite (C20) with B1 (as `b1_prefix`I = C1I/C2I) and B2I
+// (C7I) observations, written with the requested RINEX version string.
+bool readBeiDouB1Epoch(const std::string& label,
+                       const std::string& version_text,
+                       const std::string& b1_band,
+                       ObservationData& epoch) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / ("libgnss_bds_b1_" + label + ".obs");
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream output(temp_path);
+        if (!output.is_open()) return false;
+        output << rinexHeaderLine(
+            "     " + version_text + "           OBSERVATION DATA    M",
+            "RINEX VERSION / TYPE");
+        output << rinexHeaderLine(
+            "C   10 C" + b1_band + "I L" + b1_band + "I D" + b1_band + "I S" + b1_band +
+                "I C7I L7I D7I S7I",
+            "SYS / # / OBS TYPES");
+        output << rinexHeaderLine("", "END OF HEADER");
+        output << "> 2024 08 03 09 51 20.0000000  0  1\n";
+        output << "C20"
+               << rinexObsField("22011162.552", ' ', '6')
+               << rinexObsField("115669443.467", '0', '6')
+               << rinexObsField("-2361.403", ' ', '6')
+               << rinexObsField("41.156")
+               << rinexObsField("22011170.100", ' ', '6')
+               << rinexObsField("93000000.250", '0', '6')
+               << rinexObsField("-1800.500", ' ', '6')
+               << rinexObsField("39.500")
+               << "\n";
+    }
+    io::RINEXReader reader;
+    bool ok = reader.open(temp_path.string());
+    io::RINEXReader::RINEXHeader header;
+    ok = ok && reader.readHeader(header);
+    ok = ok && reader.readObservationEpoch(epoch);
+    reader.close();
+    std::filesystem::remove(temp_path);
+    return ok;
+}
+
+}  // namespace
+
+TEST(RINEXReaderTest, Rinex302BeiDouBand1IsB1I) {
+    ObservationData epoch;
+    ASSERT_TRUE(readBeiDouB1Epoch("302_c1i", "3.02", "1", epoch));
+    const SatelliteId sat(GNSSSystem::BeiDou, 20);
+
+    EXPECT_EQ(epoch.getObservation(sat, SignalType::BDS_B1C), nullptr);
+    const auto* b1i = epoch.getObservation(sat, SignalType::BDS_B1I);
+    ASSERT_NE(b1i, nullptr);
+    EXPECT_TRUE(b1i->has_pseudorange);
+    EXPECT_TRUE(b1i->has_carrier_phase);
+    EXPECT_TRUE(b1i->has_doppler);
+    EXPECT_NEAR(b1i->pseudorange, 22011162.552, 1e-3);
+    EXPECT_NEAR(b1i->carrier_phase, 115669443.467, 1e-3);
+    EXPECT_NEAR(b1i->doppler, -2361.403, 1e-3);
+    EXPECT_NEAR(b1i->snr, 41.156, 1e-3);
+    // Normalized to the RINEX 3.03+ label so bias tables keyed on C2I match.
+    EXPECT_EQ(b1i->pseudorange_observation_type, "C2I");
+    EXPECT_EQ(b1i->carrier_phase_observation_type, "L2I");
+    EXPECT_NEAR(signalWavelengthMeters(*b1i),
+                constants::SPEED_OF_LIGHT / 1561.098e6, 1e-9);
+    EXPECT_NEAR(signalWavelengthMeters(*b1i), 0.19204, 1e-5);
+
+    const auto* b2i = epoch.getObservation(sat, SignalType::BDS_B2I);
+    ASSERT_NE(b2i, nullptr);
+    EXPECT_NEAR(b2i->pseudorange, 22011170.100, 1e-3);
+}
+
+TEST(RINEXReaderTest, Rinex304BeiDouBand1IsB1C) {
+    ObservationData epoch;
+    ASSERT_TRUE(readBeiDouB1Epoch("304_c1i", "3.04", "1", epoch));
+    const SatelliteId sat(GNSSSystem::BeiDou, 20);
+
+    EXPECT_EQ(epoch.getObservation(sat, SignalType::BDS_B1I), nullptr);
+    const auto* b1c = epoch.getObservation(sat, SignalType::BDS_B1C);
+    ASSERT_NE(b1c, nullptr);
+    EXPECT_NEAR(b1c->pseudorange, 22011162.552, 1e-3);
+    EXPECT_EQ(b1c->pseudorange_observation_type, "C1I");
+    EXPECT_NEAR(signalWavelengthMeters(*b1c),
+                constants::SPEED_OF_LIGHT / 1575.42e6, 1e-9);
+}
+
+TEST(RINEXReaderTest, Rinex304BeiDouBand2IsB1I) {
+    ObservationData epoch;
+    ASSERT_TRUE(readBeiDouB1Epoch("304_c2i", "3.04", "2", epoch));
+    const SatelliteId sat(GNSSSystem::BeiDou, 20);
+
+    EXPECT_EQ(epoch.getObservation(sat, SignalType::BDS_B1C), nullptr);
+    const auto* b1i = epoch.getObservation(sat, SignalType::BDS_B1I);
+    ASSERT_NE(b1i, nullptr);
+    EXPECT_NEAR(b1i->pseudorange, 22011162.552, 1e-3);
+    EXPECT_EQ(b1i->pseudorange_observation_type, "C2I");
+    EXPECT_NEAR(signalWavelengthMeters(*b1i),
+                constants::SPEED_OF_LIGHT / 1561.098e6, 1e-9);
+}
+
+TEST(RINEXReaderTest, Rinex302AndRinex303BeiDouB1IObservationsAreEquivalent) {
+    ObservationData legacy;
+    ObservationData modern;
+    ASSERT_TRUE(readBeiDouB1Epoch("302_equiv", "3.02", "1", legacy));
+    ASSERT_TRUE(readBeiDouB1Epoch("303_equiv", "3.03", "2", modern));
+    const SatelliteId sat(GNSSSystem::BeiDou, 20);
+    const auto* a = legacy.getObservation(sat, SignalType::BDS_B1I);
+    const auto* b = modern.getObservation(sat, SignalType::BDS_B1I);
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    EXPECT_EQ(a->pseudorange, b->pseudorange);
+    EXPECT_EQ(a->carrier_phase, b->carrier_phase);
+    EXPECT_EQ(a->doppler, b->doppler);
+    EXPECT_EQ(a->pseudorange_observation_type, b->pseudorange_observation_type);
+    EXPECT_EQ(a->carrier_phase_observation_type, b->carrier_phase_observation_type);
+    EXPECT_NE(legacy.getRinexTrackingObservation(sat, "2I"), nullptr);
+}
+
+TEST(RINEXReaderTest, Rinex302BandOneRemapOnlyAffectsBeiDou) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex302_gps_band1.obs";
+    std::filesystem::remove(temp_path);
+    {
+        std::ofstream output(temp_path);
+        ASSERT_TRUE(output.is_open());
+        output << rinexHeaderLine("     3.02           OBSERVATION DATA    M",
+                                  "RINEX VERSION / TYPE");
+        output << rinexHeaderLine("G    2 C1C L1C", "SYS / # / OBS TYPES");
+        output << rinexHeaderLine("", "END OF HEADER");
+        output << "> 2024 08 03 09 51 20.0000000  0  1\n";
+        output << "G05" << rinexObsField("22011162.552") << rinexObsField("115669443.467")
+               << "\n";
+    }
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    ObservationData epoch;
+    ASSERT_TRUE(reader.readObservationEpoch(epoch));
+    const auto* l1 = epoch.getObservation(SatelliteId(GNSSSystem::GPS, 5), SignalType::GPS_L1CA);
+    ASSERT_NE(l1, nullptr);
+    EXPECT_EQ(l1->pseudorange_observation_type, "C1C");
+    reader.close();
+    std::filesystem::remove(temp_path);
+}
+
+TEST(SignalPolicyRinexVersionTest, NormalizesOnlyLegacyBeiDouBand1) {
+    using signal_policy::normalizeObservationTypeForRinexVersion;
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C1I", 3.02), "C2I");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "L1I", 3.00), "L2I");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C1I", 3.03), "C1I");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C1X", 3.04), "C1X");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C1I", 4.02), "C1I");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C1", 2.11), "C1");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C7I", 3.02), "C7I");
+    EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::GPS, "C1C", 3.02), "C1C");
 }
