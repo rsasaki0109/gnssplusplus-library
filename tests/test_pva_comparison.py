@@ -69,6 +69,15 @@ class ComparisonTest(unittest.TestCase):
         self.assertNotIn("before_latch.numeric_parity", {g["name"] for g in result["gates"]})
         self.assertTrue(all(g["passed"] for g in result["gates"]))
 
+    def test_velocity_consistency_v4_is_a_distinct_checked_candidate(self):
+        control = self.case("control")
+        candidate = self.case("candidate", candidate="velocity_consistency_v4")
+        with self.assertRaisesRegex(ValueError, "unexpected candidate"):
+            comparison.compare(control, candidate, "synthetic", "velocity_consistency_v3")
+        result, _ = comparison.compare(control, candidate, "synthetic", "velocity_consistency_v4")
+        self.assertNotIn("before_latch.numeric_parity", {g["name"] for g in result["gates"]})
+        self.assertTrue(all(g["passed"] for g in result["gates"]))
+
     def test_dropping_bad_attitude_cannot_pass_coverage_gate(self):
         control = self.case("control")
         candidate = self.case("candidate", lambda rows: rows[-1].update(attitude_available="0"))

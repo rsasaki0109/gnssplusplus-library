@@ -968,7 +968,7 @@ TEST(FusionProcessorSyntheticTest, DetectsAndFlagsAConsistentButWrongInitialHead
 // position gate. Shared harness: zero lever arm so antenna == IMU position.
 class FloatGateRecoveryHarness {
 public:
-    explicit FloatGateRecoveryHarness(int reanchor_after) {
+    explicit FloatGateRecoveryHarness(int reanchor_after, double gap_reanchor_s = 0.0) {
         config_.align_static_window_s = 0.1;
         config_.zupt_enable = false;
         config_.nhc_enable = false;
@@ -976,6 +976,7 @@ public:
         config_.max_position_update_nis_per_observation = 9.0;
         config_.max_consecutive_gate_rejections = 0;  // existing FIXED path off
         config_.float_position_reanchor_after_rejections = reanchor_after;
+        config_.position_reanchor_after_gnss_gap_s = gap_reanchor_s;
         processor_ = std::make_unique<LooseCouplingProcessor>(config_);
         for (int i = 0; i < 20; ++i) {
             ImuSample sample;
@@ -1101,6 +1102,70 @@ TEST(FusionProcessorSyntheticTest, FloatGateRecoveryNeedsRecentCoarseAndAccepted
         EXPECT_TRUE(reset.processor().lastGnssPositionUpdateApplied());
         EXPECT_FALSE(reset.processor().lastGnssPositionReanchored());
     }
+}
+
+// velocity_consistency_v4: a FLOAT/FIXED position rejected by the NIS gate after
+// a GNSS-absence longer than the configured horizon re-anchors at once; the
+// same rejection in steady state does not.
+TEST(FusionProcessorSyntheticTest, PostGapReanchorDefaultsOff) {
+    EXPECT_EQ(LooseCouplingProcessor::Config().position_reanchor_after_gnss_gap_s, 0.0);
+    FloatGateRecoveryHarness h(0);
+    h.send(SolutionStatus::SPP, Eigen::Vector3d(0.0, 0.0, 0.0), 5.0);
+    h.skip(10.0);
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+    EXPECT_FALSE(h.processor().lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+}
+
+TEST(FusionProcessorSyntheticTest, PostGapReanchorAppliesOnlyAfterTheHorizon) {
+    FloatGateRecoveryHarness h(0, 1.0);
+    // Steady state: SPP updates every 0.2 s keep the prior verified, so a
+    // rejected FLOAT is not re-anchored (the existing NIS gate stays in force).
+    for (int i = 0; i < 4; ++i) {
+        h.send(SolutionStatus::SPP, Eigen::Vector3d(0.0, 0.0, 0.0), 5.0);
+        EXPECT_TRUE(h.processor().lastGnssPositionUpdateApplied());
+        h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+        EXPECT_FALSE(h.processor().lastGnssPositionUpdateApplied()) << i;
+        EXPECT_FALSE(h.processor().lastGnssPositionReanchored()) << i;
+    }
+    // A silence shorter than the horizon (0.4 s + two 0.2 s send steps = 0.8 s
+    // since the last accepted update) is not a gap.
+    h.skip(0.4);
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+    // A 10 s GNSS absence: the rejected FLOAT is trusted over the prior.
+    h.skip(10.0);
+    const Eigen::Vector3d velocity_before = h.processor().state().nominal.velocity_enu;
+    const Eigen::Quaterniond attitude_before = h.processor().state().nominal.attitude_body_to_enu;
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(25.0, 0.0, 0.0), 0.1);
+    EXPECT_TRUE(h.processor().lastGnssPositionReanchored());
+    EXPECT_TRUE(h.processor().lastGnssPositionUpdateApplied());
+    EXPECT_NEAR((h.antennaEnu() - Eigen::Vector3d(25.0, 0.0, 0.0)).norm(), 0.0, 1e-6);
+    // Position only, covariance = the measurement's, cross terms cleared.
+    EXPECT_TRUE(h.processor().state().nominal.velocity_enu.isApprox(velocity_before, 1e-12));
+    EXPECT_TRUE(h.processor().state().nominal.attitude_body_to_enu.isApprox(attitude_before, 1e-12));
+    const auto& cov = h.processor().state().covariance;
+    constexpr int p = fusion_index::POSITION;
+    const double cross_norm = cov.block<3, 12>(p, 3).norm();
+    EXPECT_NEAR(cross_norm, 0.0, 1e-12);
+    EXPECT_NEAR(cov(p, p), 0.01, 0.01);
+    // The reference clock restarted: an immediate further rejected FLOAT is
+    // steady state again and is not re-anchored.
+    h.send(SolutionStatus::FLOAT, Eigen::Vector3d(60.0, 0.0, 0.0), 0.1);
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+}
+
+TEST(FusionProcessorSyntheticTest, PostGapReanchorIgnoresCoarseClassAndAcceptedUpdates) {
+    FloatGateRecoveryHarness h(0, 1.0);
+    h.skip(10.0);
+    // A consistent FLOAT after the gap is an ordinary accepted update.
+    h.send(SolutionStatus::FLOAT, h.antennaEnu(), 1.0);
+    EXPECT_TRUE(h.processor().lastGnssPositionUpdateApplied());
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
+    // A rejected coarse (SPP) update after a gap is never re-anchored.
+    h.skip(10.0);
+    h.send(SolutionStatus::SPP, Eigen::Vector3d(500.0, 0.0, 0.0), 1.0);
+    EXPECT_FALSE(h.processor().lastGnssPositionReanchored());
 }
 
 }  // namespace
