@@ -285,7 +285,20 @@ struct ObservationSelection {
     int priority = 100;
     int band = -1;
     char tracking_code = '\0';
+    int tracking_rank = signal_policy::kUnlistedTrackingRank;
 };
+
+// True when `candidate` should replace `current` among two different tracking
+// codes of one band.  Fixed attribute priority (signal_policy::
+// trackingAttributePriority), then the attribute letter itself, so the result
+// never depends on the order the observation types are declared in.
+bool trackingCodeBeats(int candidate_rank, char candidate_code,
+                       int current_rank, char current_code) {
+    if (candidate_rank != current_rank) {
+        return candidate_rank < current_rank;
+    }
+    return candidate_code < current_code;
+}
 
 void maybeAssignSelectedObservation(ObservationSelection& selection,
                                     const SatelliteId& sat,
@@ -325,11 +338,18 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
             candidate_priority += tracking_priority;
         }
     }
-    const bool starts_better_track = candidate_priority < selection.priority;
+    const int tracking_rank =
+        signal_policy::trackingAttributeRank(sat.system, band, tracking_code);
+    const bool same_band_level =
+        candidate_priority == selection.priority && band == selection.band;
     const bool continues_current_track =
-        candidate_priority == selection.priority &&
-        band == selection.band &&
+        same_band_level &&
         sameTrackingCode(selection.tracking_code, tracking_code);
+    const bool starts_better_track =
+        candidate_priority < selection.priority ||
+        (same_band_level && !continues_current_track &&
+         trackingCodeBeats(tracking_rank, tracking_code,
+                           selection.tracking_rank, selection.tracking_code));
     if (!starts_better_track && !continues_current_track) {
         return;
     }
@@ -344,6 +364,7 @@ void maybeAssignSelectedObservation(ObservationSelection& selection,
         selection.priority = candidate_priority;
         selection.band = band;
         selection.tracking_code = tracking_code;
+        selection.tracking_rank = tracking_rank;
     }
 
     assignObservationField(selection.observation,
