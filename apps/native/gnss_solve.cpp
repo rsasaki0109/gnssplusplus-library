@@ -328,6 +328,9 @@ struct SolveConfig {
     // (RTKConfig::cmc_aware_reference_selection). Off by default; see the
     // config field's doc comment in rtk.hpp for the full algorithm.
     bool cmc_aware_reference_selection = false;
+    // RINEX/receiver LLI bit1 (half-cycle unresolved) handling
+    // (RTKConfig::use_half_cycle_lli); the default follows the library.
+    bool use_half_cycle_lli = libgnss::RTKProcessor::RTKConfig().use_half_cycle_lli;
     double cmc_ref_level_m = 0.75;
     int cmc_ref_switch_epochs = 3;
     double cmc_ref_return_min_elev_deg = 5.0;
@@ -1819,6 +1822,14 @@ void printAdvancedUsage(const char* program_name) {
         << "                             satellites (per --nlos-weights) among the AR\n"
         << "                             candidate set before attempting/accepting a fix\n"
         << "                             (default: 0, disabled). Requires --nlos-weights\n"
+        << "  --half-cycle-lli / --no-half-cycle-lli\n"
+        << "                             Honour (or ignore) RINEX/receiver LLI bit1\n"
+        << "                             (half-cycle ambiguity unresolved) like RTKLIB demo5:\n"
+        << "                             a set<->clear transition is a slip for that\n"
+        << "                             satellite/frequency, phase variance is +0.01 m^2\n"
+        << "                             while set, and the satellite is excluded from\n"
+        << "                             ambiguity resolution. Library default applies\n"
+        << "                             when neither is given\n"
         << "  --cmc-ref                  Phase 2a: CMC-aware DD reference-satellite selection\n"
         << "                             with hysteresis (default: off). Switches the DD\n"
         << "                             reference away from a code-minus-carrier-suspect\n"
@@ -2227,6 +2238,14 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--cmc-ref") {
             config.cmc_aware_reference_selection = true;
+            continue;
+        }
+        if (arg == "--half-cycle-lli") {
+            config.use_half_cycle_lli = true;
+            continue;
+        }
+        if (arg == "--no-half-cycle-lli") {
+            config.use_half_cycle_lli = false;
             continue;
         }
         if (arg == "--cmc-ref-level" && i + 1 < argc) {
@@ -3544,6 +3563,7 @@ int main(int argc, char* argv[]) {
         rtk_config.trust_lapse_gate_nlos_frac = config.trust_lapse_gate_nlos_frac;
         rtk_config.nlos_min_los_sats = config.nlos_min_los_sats;
         rtk_config.cmc_aware_reference_selection = config.cmc_aware_reference_selection;
+        rtk_config.use_half_cycle_lli = config.use_half_cycle_lli;
         rtk_config.cmc_ref_level_m = config.cmc_ref_level_m;
         rtk_config.cmc_ref_switch_epochs = config.cmc_ref_switch_epochs;
         rtk_config.cmc_ref_return_min_elev_deg = config.cmc_ref_return_min_elev_deg;

@@ -463,7 +463,24 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
         for (const auto& [sat, sd] : sat_data) {
             if (!has_freq_signal(sd, freq)) continue;
             int lli = freq_lli(sd, freq);
-            const bool lli_slip = (lli & 0x01) != 0;
+            bool lli_slip = (lli & 0x01) != 0;
+            if (rtk_config_.use_half_cycle_lli) {
+                // demo5 detslp_ll: a transition of the half-cycle-unresolved
+                // flag (either direction) on the rover or the base
+                // observation of this satellite/frequency is a slip for that
+                // satellite/frequency only. The previous flag survives
+                // observation gaps (demo5 keeps it in ssat.slip).
+                const bool rover_half = sd.roverHalfCycle(freq);
+                const bool base_half = sd.baseHalfCycle(freq);
+                const auto key = std::make_pair(sat, freq);
+                const auto previous = half_cycle_lli_history_.find(key);
+                if (previous != half_cycle_lli_history_.end() &&
+                    (previous->second.first != rover_half ||
+                     previous->second.second != base_half)) {
+                    lli_slip = true;
+                }
+                half_cycle_lli_history_[key] = {rover_half, base_half};
+            }
             if (lli_slip) {
                 lli_slip_count++;
             }

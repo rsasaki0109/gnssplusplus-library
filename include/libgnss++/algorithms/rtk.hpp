@@ -860,6 +860,25 @@ public:
         /// low to be a good DD reference). No effect unless
         /// cmc_aware_reference_selection is true.
         double cmc_ref_switch_min_elev_deg = 30.0;
+
+        /// Honour the RINEX/receiver LLI bit1 ("half-cycle ambiguity not
+        /// resolved", 0x02) the way RTKLIB demo5 does:
+        ///   * a clear->set or set->clear transition of the bit on the
+        ///     rover or base observation of one satellite/frequency is a
+        ///     cycle slip for that satellite/frequency only (ambiguity
+        ///     reset),
+        ///   * while the bit is set on either receiver the satellite's
+        ///     phase variance is inflated by half_cycle_phase_variance_m2,
+        ///   * a satellite/frequency whose rover or base LLI has the bit set
+        ///     is excluded from the ambiguity-resolution candidate set.
+        /// Default true (matches RTKLIB demo5). It is a strict no-op on
+        /// data whose LLI never carries bit1 (all PPC Tokyo/Nagoya and
+        /// UrbanNav Odaiba/Shinjuku RINEX), bit-identical to false there; set
+        /// false to use only LLI bit0 as before on flagged data.
+        bool use_half_cycle_lli = true;
+        /// Extra phase variance (m^2) added per receiver-satellite while the
+        /// half-cycle flag is set (demo5 ddres: 0.01).
+        double half_cycle_phase_variance_m2 = 0.01;
     };
 
     /// Phase 2a diagnostics: RTKConfig::cmc_aware_reference_selection
@@ -1971,6 +1990,8 @@ private:
         bool has_l1 = false;
         bool has_l1_doppler = false;
         int l1_lli = 0;
+        int rover_l1_lli = 0;  // per-receiver LLI (l1_lli is rover|base)
+        int base_l1_lli = 0;
         // L2
         double rover_l2_phase = 0.0;
         double rover_l2_code = 0.0;
@@ -1983,6 +2004,8 @@ private:
         bool has_l2 = false;
         bool has_l2_doppler = false;
         int l2_lli = 0;
+        int rover_l2_lli = 0;
+        int base_l2_lli = 0;
         // L5 (Phase 18 — populated when --enable-l5 set; default off, no effect on L1/L2 path)
         double rover_l5_phase = 0.0;
         double rover_l5_code = 0.0;
@@ -1995,6 +2018,18 @@ private:
         bool has_l5 = false;
         bool has_l5_doppler = false;
         int l5_lli = 0;
+        int rover_l5_lli = 0;
+        int base_l5_lli = 0;
+        // Per-receiver LLI accessors by frequency index (0=L1, 1=L2, 2=L5).
+        int roverLli(int freq) const {
+            return freq == 0 ? rover_l1_lli : (freq == 1 ? rover_l2_lli : rover_l5_lli);
+        }
+        int baseLli(int freq) const {
+            return freq == 0 ? base_l1_lli : (freq == 1 ? base_l2_lli : base_l5_lli);
+        }
+        static constexpr int kLliHalfCycle = 0x02;  // RINEX LLI bit1
+        bool roverHalfCycle(int freq) const { return (roverLli(freq) & kLliHalfCycle) != 0; }
+        bool baseHalfCycle(int freq) const { return (baseLli(freq) & kLliHalfCycle) != 0; }
         // Geometry
         Vector3d sat_pos;          // satellite position for rover (RTKLIB satposs from rover PR)
         Vector3d sat_pos_base;     // satellite position for base (RTKLIB satposs from base PR)
@@ -2023,6 +2058,10 @@ private:
     std::map<SatelliteId, double> doppler_phase_history_l1_m_;
     std::map<SatelliteId, double> doppler_phase_history_l2_m_;
     std::map<SatelliteId, double> doppler_phase_history_l5_m_;  // Phase 18 Step 5
+    // RTKConfig::use_half_cycle_lli: previous-epoch LLI bit1 per
+    // (satellite, frequency index), {rover, base}. Kept across observation
+    // gaps like demo5's ssat.slip LLI memory; cleared in reset().
+    std::map<std::pair<SatelliteId, int>, std::pair<bool, bool>> half_cycle_lli_history_;
     std::map<SatelliteId, double> code_phase_history_l1_m_;
     std::map<SatelliteId, double> code_phase_history_l2_m_;
     std::map<SatelliteId, double> code_phase_history_l5_m_;  // Phase 18 Step 5
@@ -2311,9 +2350,14 @@ private:
                                         SatelliteId& ref_sat) const;
     std::vector<rtk_selection::SatelliteSelectionData> buildSelectionSnapshot(
         const std::map<SatelliteId, SatelliteData>& sat_data) const;
+    // exclude_half_cycle: ambiguity-resolution callers pass true so that
+    // satellite/frequencies flagged half-cycle-unresolved (RTKConfig::
+    // use_half_cycle_lli) are dropped from the candidate set and reference
+    // choice. No effect when that option is off.
     std::vector<DDPair> buildDoubleDifferencePairs(
         const std::map<SatelliteId, SatelliteData>& sat_data,
-        int min_lock_count) const;
+        int min_lock_count,
+        bool exclude_half_cycle = false) const;
 
     /**
      * Remove satellite from state

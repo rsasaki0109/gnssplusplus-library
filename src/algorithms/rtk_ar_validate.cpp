@@ -738,7 +738,7 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
 
     const int na = usesGlonassAutocal(rtk_config_) ? REAL_STATES : BASE_STATES;
 
-    std::vector<DDPair> dd_pairs = buildDoubleDifferencePairs(sat_data, 1);
+    std::vector<DDPair> dd_pairs = buildDoubleDifferencePairs(sat_data, 1, true);
     dd_pairs.erase(
         std::remove_if(dd_pairs.begin(), dd_pairs.end(),
                        [&](const DDPair& pair) {

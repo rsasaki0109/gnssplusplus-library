@@ -163,6 +163,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
         sd.rover_l1_snr = r_obs->snr;
         sd.base_l1_snr = b_obs->snr;
         sd.has_l1 = true; sd.l1_lli = r_obs->lli | b_obs->lli;
+        sd.rover_l1_lli = r_obs->lli; sd.base_l1_lli = b_obs->lli;
         sd.has_l1_doppler = r_obs->has_doppler && b_obs->has_doppler;
         auto r_l2 = rover_l2.find(sat); auto b_l2 = base_l2.find(sat);
         if (r_l2 != rover_l2.end() && b_l2 != base_l2.end()) {
@@ -181,6 +182,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                 sd.base_l2_snr = b_l2_obs->snr;
                 sd.has_l2 = sd.l2_wavelength > 0.0;
                 sd.l2_lli = r_l2_obs->lli | b_l2_obs->lli;
+                sd.rover_l2_lli = r_l2_obs->lli; sd.base_l2_lli = b_l2_obs->lli;
                 sd.has_l2_doppler = r_l2_obs->has_doppler && b_l2_obs->has_doppler;
             }
         }
@@ -209,6 +211,7 @@ std::map<SatelliteId, RTKProcessor::SatelliteData> RTKProcessor::collectSatellit
                         sd.base_l5_snr = b_l5_obs->snr;
                         sd.has_l5 = true;
                         sd.l5_lli = r_l5_obs->lli | b_l5_obs->lli;
+                        sd.rover_l5_lli = r_l5_obs->lli; sd.base_l5_lli = b_l5_obs->lli;
                         sd.has_l5_doppler = r_l5_obs->has_doppler && b_l5_obs->has_doppler;
                     }
                 }
@@ -424,9 +427,25 @@ void RTKProcessor::updateCmcAwareReferenceSelection(
 
 std::vector<RTKProcessor::DDPair> RTKProcessor::buildDoubleDifferencePairs(
     const std::map<SatelliteId, SatelliteData>& sat_data,
-    int min_lock_count) const {
+    int min_lock_count,
+    bool exclude_half_cycle) const {
     std::vector<DDPair> dd_pairs;
-    const auto snapshot = buildSelectionSnapshot(sat_data);
+    auto snapshot = buildSelectionSnapshot(sat_data);
+
+    // demo5 resamb_LAMBDA: a satellite/frequency whose rover or base LLI
+    // carries the half-cycle-unresolved bit is neither a reference nor a
+    // target of the ambiguity-resolution candidate set (the float filter
+    // keeps using it with inflated variance).
+    if (exclude_half_cycle && rtk_config_.use_half_cycle_lli) {
+        for (auto& item : snapshot) {
+            const auto sat_it = sat_data.find(item.satellite);
+            if (sat_it == sat_data.end()) continue;
+            const auto& sd = sat_it->second;
+            if (sd.roverHalfCycle(0) || sd.baseHalfCycle(0)) item.n1_active = false;
+            if (sd.roverHalfCycle(1) || sd.baseHalfCycle(1)) item.n2_active = false;
+            if (sd.roverHalfCycle(2) || sd.baseHalfCycle(2)) item.n5_active = false;
+        }
+    }
 
     for (GNSSSystem system : kRTKSupportedSystems) {
         if (!isEnabledRTKSystem(rtk_config_, system)) continue;
