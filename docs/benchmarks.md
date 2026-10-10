@@ -122,16 +122,16 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 <!-- PPC_COVERAGE_MATRIX:START -->
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | 90.4% | **99.1%** | -8.6 pp | **83.7%** | 8.4% | **69.5%** | 2.1% | +67.4 pp | -20.12 m |
-| Tokyo run2 | 96.5% | **99.6%** | -3.1 pp | **84.3%** | 12.6% | **83.3%** | 17.9% | +65.4 pp | -5.68 m |
-| Tokyo run3 | 93.8% | **100.0%** | -6.2 pp | **80.3%** | 43.6% | **79.0%** | 36.3% | +42.6 pp | -9.95 m |
-| Nagoya run1 | 92.2% | **98.6%** | -6.4 pp | **79.1%** | 20.9% | **53.1%** | 18.2% | +34.9 pp | -21.36 m |
-| Nagoya run2 | 84.1% | **99.7%** | -15.6 pp | **64.1%** | 22.6% | **32.4%** | 15.5% | +16.9 pp | -16.22 m |
-| Nagoya run3 | 83.0% | **100.0%** | -17.0 pp | **63.2%** | 5.6% | **52.6%** | 7.3% | +45.3 pp | +4.68 m |
+| Tokyo run1 | 90.3% | **99.1%** | -8.8 pp | **84.0%** | 8.4% | **69.6%** | 2.1% | +67.5 pp | -20.20 m |
+| Tokyo run2 | 96.4% | **99.6%** | -3.1 pp | **84.3%** | 12.6% | **83.2%** | 17.9% | +65.3 pp | -5.67 m |
+| Tokyo run3 | 93.7% | **100.0%** | -6.2 pp | **80.6%** | 43.6% | **79.0%** | 36.3% | +42.7 pp | -10.01 m |
+| Nagoya run1 | 91.9% | **98.6%** | -6.7 pp | **79.4%** | 20.9% | **52.8%** | 18.2% | +34.6 pp | -21.29 m |
+| Nagoya run2 | 84.0% | **99.7%** | -15.7 pp | **63.6%** | 22.6% | **30.0%** | 15.5% | +14.5 pp | -16.40 m |
+| Nagoya run3 | 82.7% | **100.0%** | -17.3 pp | **63.9%** | 5.6% | **52.2%** | 7.3% | +44.9 pp | +5.60 m |
 
-Across these six public runs, the coverage profile averages **-9.5 pp**
-Positioning-rate deficit, **+45.4 pp** PPC official-score lead, and
-**-11.44 m** P95 horizontal-error delta versus RTKLIB `demo5`.
+Across these six public runs, the coverage profile averages **-9.7 pp**
+Positioning-rate deficit, **+44.9 pp** PPC official-score lead, and
+**-11.33 m** P95 horizontal-error delta versus RTKLIB `demo5`.
 <!-- PPC_COVERAGE_MATRIX:END -->
 
 Reproduce this table with `gnss reproduce rtk-demo5` (RTKLIB demo5 b34k,
