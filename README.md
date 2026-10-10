@@ -347,6 +347,8 @@ Choose the entrypoint that matches your job:
   fixture, one command, and `.pos`/KML/JSON artifacts without a download.
 - [Position, velocity and attitude evaluation](docs/online_pva.md): received-event
   public-log replay, scene scoring and an included hardware-free scoring demo.
+  The online PVA pipeline is experimental; its default attitude is not reliable
+  (see the status section there).
 - [Dataset gallery](docs/dataset_gallery.md): current public dataset lanes and
   the adapter contract for adding more.
 
