@@ -1,6 +1,10 @@
 """Independent rotation/time/availability witnesses; no field fixture needed."""
+import contextlib
 import csv
+import io
+import json
 import math
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -146,6 +150,51 @@ class PvaTest(unittest.TestCase):
                                     "--output-dir", str(out), "--plot"])
         self.assertEqual(result, 2)
         self.assertEqual(json.loads((out/"manifest.json").read_text())["state"], "failed")
+
+
+class IndependentDopplerCandidateTest(unittest.TestCase):
+    """independent_doppler_v1 = candidate none + Config::independent_doppler_velocity."""
+
+    @staticmethod
+    def replay_source():
+        return (ROOT/"apps/native/gnss_pva_replay.cpp").read_text(encoding="utf-8")
+
+    def test_workflow_accepts_the_candidate_and_still_rejects_unknown_names(self):
+        import gnss_pva_evaluate as workflow
+        with tempfile.TemporaryDirectory() as temp:
+            run = Path(temp)/"run"
+            run.mkdir()
+            # An accepted candidate gets past argparse and fails later on the missing inputs.
+            out = Path(temp)/"accepted"
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(workflow.main(["--run-dir", str(run), "--output-dir", str(out),
+                                                "--candidate", "independent_doppler_v1"]), 2)
+            self.assertEqual(json.loads((out/"manifest.json").read_text())["state"], "failed")
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                workflow.main(["--run-dir", str(run), "--output-dir", str(Path(temp)/"refused"),
+                               "--candidate", "independent_doppler_v2"])
+
+    def test_replay_accepts_the_candidate_in_usage_and_argument_check(self):
+        source = self.replay_source()
+        self.assertIn('candidate != "independent_doppler_v1"', source)
+        self.assertIn("|rtk_online_product_v1|independent_doppler_v1]", source)
+
+    def test_replay_candidate_block_sets_exactly_one_option(self):
+        """The candidate is the default plus one option: nothing else may be added to its block."""
+        source = self.replay_source()
+        match = re.search(r'if \(candidate == "independent_doppler_v1"\) \{(.*?)\n        \}\n', source, re.S)
+        self.assertIsNotNone(match)
+        code = "\n".join(line.split("//")[0].strip() for line in match.group(1).splitlines())
+        self.assertEqual([line for line in code.splitlines() if line],
+                         ["config.independent_doppler_velocity = true;"])
+        # It is not reachable through any "or later" chain or shared candidate group.
+        for chain in re.findall(r"const bool \w+ = [^;]*;", source):
+            self.assertNotIn("independent_doppler_v1", chain)
+        self.assertEqual(source.count('candidate == "independent_doppler_v1"'), 2)  # the block and replay.json
+        # Its replay.json records only that option, and only for this candidate.
+        record = re.search(r'if \(candidate == "independent_doppler_v1"\)\s*\n\s*meta << (.*?);', source, re.S)
+        self.assertIsNotNone(record)
+        self.assertEqual(re.findall(r'\\"(\w+)\\"', record.group(1)), ["independent_doppler_velocity"])
 
 
 if __name__ == "__main__":
