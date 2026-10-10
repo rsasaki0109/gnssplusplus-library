@@ -347,6 +347,12 @@ void RTKProcessor::resetPositionToSPP(
     has_external_position_time_update_ = false;
     has_external_velocity_time_update_ = false;
     ins_time_update_applied_last_epoch_ = false;
+    // An INS-seeded float the previous epoch's measurements could not support
+    // (ins_prior_min_code_rows) leaves a posterior that is only the propagated
+    // prior. Do not propagate it again: skip this epoch's time update, count it
+    // as rejected and fall through to the legacy SPP/trusted re-seed below.
+    const bool drop_ins_prior = drop_ins_prior_next_epoch_;
+    drop_ins_prior_next_epoch_ = false;
     // reject_float_seeded_at_base: re-evaluated at every re-seed. Only the
     // final base_position_ fallback of the kinematic seed chain below sets it.
     rover_seed_from_base_fallback_ = false;
@@ -361,8 +367,12 @@ void RTKProcessor::resetPositionToSPP(
 
     const bool moving_base_mode = isMovingBasePositionMode(rtk_config_);
 
-    if (rtk_config_.use_external_position_time_update &&
-        has_time_update_this_epoch && !moving_base_mode) {
+    const bool time_update_requested =
+        rtk_config_.use_external_position_time_update &&
+        has_time_update_this_epoch && !moving_base_mode;
+    if (time_update_requested && drop_ins_prior) {
+        ++ins_time_update_rejected_count_;
+    } else if (time_update_requested) {
         const bool applied = rtk_config_.enable_velocity_states &&
                 has_velocity_update_this_epoch
             ? rtk_ins_time_update::applyPositionVelocity(

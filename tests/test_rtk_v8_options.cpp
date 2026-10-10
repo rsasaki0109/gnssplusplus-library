@@ -4,6 +4,7 @@
 //   (l) PositionSolution::float_prefit_gate_exceeded
 //   (n) RTKProcessor::currentSpp()
 //   RTKConfig::require_spp_for_kinematic_epoch, SPPConfig::max_position_sigma_m
+//   RTKConfig::ins_prior_min_code_rows (INS-time-update-seeded floats)
 // Synthetic observations only (no data files): the receivers and the 24-GPS
 // constellation are modelled with the same geometry the processors use.
 // Public-API-only, like the other RTK unit tests.
@@ -361,4 +362,99 @@ TEST(RtkV8OptionsTest, FloatPrefitGateFlagFollowsTheConfiguredLimits) {
     EXPECT_FALSE(clean.float_prefit_gate_exceeded);
     EXPECT_LE(clean.rtk_update_prefit_residual_rms_m, 4.0);
     EXPECT_LE(clean.rtk_update_prefit_residual_max_m, 10.0);
+}
+
+// ---- ins_prior_min_code_rows -----------------------------------------------
+//
+// An INS-time-update-seeded float whose update kept fewer DD code rows than
+// ins_prior_min_code_rows is the propagated prior itself (the absolute prefit
+// outlier test zeroes every row once the prior is a few metres off). It must
+// not be emitted, and the next epoch must re-seed from SPP rather than
+// propagate that posterior again.
+
+namespace {
+
+struct InsPriorRun {
+    PositionSolution epoch1;
+    PositionSolution epoch2;
+    bool epoch1_rejected = false;
+    int epoch1_retained_code_rows = 0;
+    RTKProcessor::InsTimeUpdateDiagnostics after_epoch2;
+};
+
+// Epoch 0 initialises the filter at kRover. Epoch 1 receives an INS time
+// update whose displacement is `epoch1_error` away from the (static) truth;
+// epoch 2 receives an exact zero displacement.
+InsPriorRun runInsPrior(int min_code_rows, const Vector3d& epoch1_error) {
+    const auto nav = constellation();
+    const auto prns = visible(nav, epochTime(0.0), kRover, 15.0);
+    auto config = rtkConfig();
+    config.require_spp_for_kinematic_epoch = true;  // library default
+    config.use_external_position_time_update = true;
+    config.ins_prior_min_code_rows = min_code_rows;
+    auto processor_owner = makeProcessor(config, 5.0);
+    auto& processor = *processor_owner;
+    auto solve = [&](double t) {
+        return processor.processRTKEpoch(
+            observations(nav, epochTime(t), kRover, 30.0, prns, 0.0),
+            observations(nav, epochTime(t), kBase, 10.0, prns, 500.0), nav);
+    };
+    const Matrix3d noise = Matrix3d::Identity() * 1e-2;
+    EXPECT_TRUE(solve(0.0).isValid());
+    InsPriorRun run;
+    processor.setExternalPositionTimeUpdate(epoch1_error, noise);
+    run.epoch1 = solve(1.0);
+    run.epoch1_rejected = processor.getLastDebugTelemetry().ins_prior_unsupported_rejected;
+    run.epoch1_retained_code_rows = processor.getLastDebugTelemetry().retained_code_rows;
+    processor.setExternalPositionTimeUpdate(Vector3d::Zero(), noise);
+    run.epoch2 = solve(2.0);
+    run.after_epoch2 = processor.getInsTimeUpdateDiagnostics();
+    return run;
+}
+
+}  // namespace
+
+TEST(RtkV8OptionsTest, InsPriorMinCodeRowsDefaultsToFour) {
+    EXPECT_EQ(RTKProcessor::RTKConfig{}.ins_prior_min_code_rows, 4);
+}
+
+TEST(RtkV8OptionsTest, ConsistentInsTimeUpdateKeepsItsFloat) {
+    const auto run = runInsPrior(4, Vector3d::Zero());
+    EXPECT_FALSE(run.epoch1_rejected);
+    EXPECT_GE(run.epoch1_retained_code_rows, 4);
+    EXPECT_EQ(run.epoch1.status, SolutionStatus::FLOAT);
+    EXPECT_LT((run.epoch1.position_ecef - kRover).norm(), 1.0);
+    EXPECT_EQ(run.after_epoch2.applied_count, 2U);
+    EXPECT_EQ(run.after_epoch2.rejected_count, 0U);
+    EXPECT_TRUE(run.after_epoch2.applied_last_epoch);
+}
+
+TEST(RtkV8OptionsTest, UnsupportedInsSeededFloatIsEmittedWhenTheOptionIsOff) {
+    // 10 m along x: every code row's prefit residual exceeds the 3 m outlier
+    // threshold, the update moves nothing and the float is the prior itself.
+    const Vector3d error(10.0, 0.0, 0.0);
+    const auto run = runInsPrior(0, error);
+    EXPECT_FALSE(run.epoch1_rejected);
+    ASSERT_LT(run.epoch1_retained_code_rows, 4);
+    EXPECT_EQ(run.epoch1.status, SolutionStatus::FLOAT);
+    EXPECT_NEAR((run.epoch1.position_ecef - kRover).norm(), error.norm(), 1.0);
+}
+
+TEST(RtkV8OptionsTest, UnsupportedInsSeededFloatFallsBackToSppAndDropsThePrior) {
+    const Vector3d error(10.0, 0.0, 0.0);
+    const auto run = runInsPrior(4, error);
+    EXPECT_TRUE(run.epoch1_rejected);
+    EXPECT_LT(run.epoch1_retained_code_rows, 4);
+    // Epoch 1 is the SPP fallback, which is independent of the INS prior (the
+    // synthetic scene has no atmosphere model, so SPP is a few metres off).
+    EXPECT_EQ(run.epoch1.status, SolutionStatus::SPP);
+    EXPECT_LT((run.epoch1.position_ecef - kRover).norm(), 15.0);
+    // Epoch 2: the supplied time update is dropped (counted as rejected, not
+    // applied) and the filter re-seeds from SPP, so the float is back on the
+    // truth instead of integrating the 10 m error again.
+    EXPECT_EQ(run.after_epoch2.applied_count, 1U);
+    EXPECT_EQ(run.after_epoch2.rejected_count, 1U);
+    EXPECT_FALSE(run.after_epoch2.applied_last_epoch);
+    EXPECT_EQ(run.epoch2.status, SolutionStatus::FLOAT);
+    EXPECT_LT((run.epoch2.position_ecef - kRover).norm(), 5.0);
 }

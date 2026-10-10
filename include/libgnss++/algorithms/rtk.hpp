@@ -776,6 +776,24 @@ public:
         /// tunable without destroying cross-covariance.
         double ins_time_update_position_q_floor_m2 = 25.0;
 
+        /// An INS-time-update-seeded float is emitted only if its measurement
+        /// update retained at least this many double-differenced code rows
+        /// after the prefit outlier test. A float built from fewer rows is
+        /// the propagated prior itself: the prefit test zeroes every row once
+        /// the prior has drifted past the absolute residual threshold, the
+        /// update then moves nothing, and the filter keeps integrating the
+        /// INS increment of its own previous posterior (a self-confirming
+        /// dead-reckoning float, tens to hundreds of metres off, with a
+        /// formal sigma that still reads metres). 4 = the 3 position
+        /// unknowns plus one row of redundancy (carrier rows add no absolute
+        /// position information while ambiguities are float). A rejected
+        /// epoch returns through the SPP fallback and the INS prior is
+        /// dropped for the next epoch, which re-seeds from SPP as an epoch
+        /// without a time update does. 0 disables. Only epochs seeded by an
+        /// INS time update are affected; batch and loose-only RTK are
+        /// bit-identical.
+        int ins_prior_min_code_rows = 4;
+
         /// M2 wrong-fix containment: validate a fixed DD integer candidate
         /// using code-minus-carrier consistency before it can be reported,
         /// held, or remembered as a trusted fix. The check is independent
@@ -958,6 +976,13 @@ public:
         // The SPP-fallback blanking rule would have fired but the trusted
         // anchor was older than spp_fallback_blank_max_anchor_age_s.
         bool spp_blank_age_limited = false;
+        // ins_prior_min_code_rows routed this INS-seeded epoch to the SPP
+        // fallback and dropped the INS prior for the next epoch.
+        bool ins_prior_unsupported_rejected = false;
+        // DD code / carrier rows that survived the prefit outlier test in the
+        // last float update of the epoch (telemetry only).
+        int retained_code_rows = 0;
+        int retained_phase_rows = 0;
         // Optional per-epoch stage timing. These fields are telemetry only;
         // they do not participate in any RTK decision or state update. SPP
         // time is accumulated from PositionSolution::processing_time_ms so
@@ -1755,6 +1780,10 @@ private:
     double position_correction_sum_sq_m2_ = 0.0;
     std::size_t ins_time_update_rejected_count_ = 0;
     bool ins_time_update_applied_last_epoch_ = false;
+    // Set when an INS-seeded float was rejected as unsupported by its own
+    // measurements; consumed by the next resetPositionToSPP(), which then
+    // skips the (stale) time update and re-seeds from SPP.
+    bool drop_ins_prior_next_epoch_ = false;
     int consecutive_cp_pr_gate_rejections_ = 0;
     Vector3d last_ddpr_anchor_position_ecef_ = Vector3d::Zero();
     Matrix3d last_ddpr_anchor_covariance_ecef_ = Matrix3d::Zero();

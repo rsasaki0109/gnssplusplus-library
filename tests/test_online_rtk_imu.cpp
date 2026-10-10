@@ -805,6 +805,7 @@ TEST(OnlineRtkImuTest, EpochSppVelocityIsExportedWhenTheOptionIsOn) {
     EXPECT_EQ(off.diagnostics.epoch_spp_velocity_exports, 0U);
     EXPECT_EQ(off.diagnostics.rtk_base_seed_rejections, 0U);
     EXPECT_EQ(off.diagnostics.rtk_spp_blank_age_limited, 0U);
+    EXPECT_EQ(off.diagnostics.rtk_ins_prior_unsupported_rejections, 0U);
     EXPECT_EQ(off.diagnostics.fusion_reanchor_prefit_refusals, 0U);
 }
 

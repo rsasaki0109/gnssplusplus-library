@@ -57,6 +57,7 @@ void OnlineRtkImuProcessor::countRtkEpochDiagnostics(const PositionSolution& rtk
     const auto& telemetry = rtk_->getLastDebugTelemetry();
     if (telemetry.float_seeded_at_base_rejected) ++diagnostics_.rtk_base_seed_rejections;
     if (telemetry.spp_blank_age_limited) ++diagnostics_.rtk_spp_blank_age_limited;
+    if (telemetry.ins_prior_unsupported_rejected) ++diagnostics_.rtk_ins_prior_unsupported_rejections;
     if (rtk_solution.isValid() && rtk_solution.float_prefit_gate_exceeded)
         ++diagnostics_.rtk_float_prefit_gate_exceeded;
 }

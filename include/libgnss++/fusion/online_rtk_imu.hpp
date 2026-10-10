@@ -150,6 +150,10 @@ public:
         // prefit gate).
         // Differential RTK epochs the FLOAT seeded at the base was rejected.
         std::size_t rtk_base_seed_rejections = 0;
+        // INS-seeded RTK floats rejected because the update retained fewer
+        // than RTKConfig::ins_prior_min_code_rows code rows (the INS prior was
+        // dropped for the next epoch).
+        std::size_t rtk_ins_prior_unsupported_rejections = 0;
         // Differential RTK epochs where the SPP-fallback blanking was skipped
         // because the trusted anchor was too old.
         std::size_t rtk_spp_blank_age_limited = 0;
