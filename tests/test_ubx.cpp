@@ -1,9 +1,14 @@
 #include <gtest/gtest.h>
+#include <libgnss++/core/signal_policy.hpp>
+#include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/ubx.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -549,6 +554,394 @@ TEST(UBXDecoderTest, ClearResetsRawxTrackingState) {
     decoder.clear();
     ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(100, kTrkPrCpHalfValid)}, epoch));
     EXPECT_EQ(epoch.observations.front().lli & 0x01, 0);
+}
+
+// ---------------------------------------------------------------------------
+// RINEX tracking codes (u-blox interface description + RTKLIB demo5 ubx_sig())
+// ---------------------------------------------------------------------------
+
+struct ExpectedRawxSignal {
+    uint8_t gnss_id;
+    uint8_t sig_id;
+    GNSSSystem system;
+    SignalType signal;
+    const char* code;
+};
+
+// Independent copy of the u-blox sigId -> RINEX 3.04 code table (demo5
+// ublox.c ubx_sig()); the decoder table must match it exactly.
+const ExpectedRawxSignal kExpectedRawxSignals[] = {
+    {0, 0, GNSSSystem::GPS, SignalType::GPS_L1CA, "1C"},
+    {0, 3, GNSSSystem::GPS, SignalType::GPS_L2C, "2L"},
+    {0, 4, GNSSSystem::GPS, SignalType::GPS_L2C, "2S"},
+    {0, 6, GNSSSystem::GPS, SignalType::GPS_L5, "5I"},
+    {0, 7, GNSSSystem::GPS, SignalType::GPS_L5, "5Q"},
+    {2, 0, GNSSSystem::Galileo, SignalType::GAL_E1, "1C"},
+    {2, 1, GNSSSystem::Galileo, SignalType::GAL_E1, "1B"},
+    {2, 3, GNSSSystem::Galileo, SignalType::GAL_E5A, "5I"},
+    {2, 4, GNSSSystem::Galileo, SignalType::GAL_E5A, "5Q"},
+    {2, 5, GNSSSystem::Galileo, SignalType::GAL_E5B, "7I"},
+    {2, 6, GNSSSystem::Galileo, SignalType::GAL_E5B, "7Q"},
+    {3, 0, GNSSSystem::BeiDou, SignalType::BDS_B1I, "2I"},
+    {3, 1, GNSSSystem::BeiDou, SignalType::BDS_B1I, "2I"},
+    {3, 2, GNSSSystem::BeiDou, SignalType::BDS_B2I, "7I"},
+    {3, 3, GNSSSystem::BeiDou, SignalType::BDS_B2I, "7I"},
+    {3, 5, GNSSSystem::BeiDou, SignalType::BDS_B1C, "1P"},
+    {3, 6, GNSSSystem::BeiDou, SignalType::BDS_B1C, "1D"},
+    {3, 7, GNSSSystem::BeiDou, SignalType::BDS_B2A, "5P"},
+    {3, 8, GNSSSystem::BeiDou, SignalType::BDS_B2A, "5D"},
+    {5, 0, GNSSSystem::QZSS, SignalType::QZS_L1CA, "1C"},
+    {5, 4, GNSSSystem::QZSS, SignalType::QZS_L2C, "2S"},
+    {5, 5, GNSSSystem::QZSS, SignalType::QZS_L2C, "2L"},
+    {5, 8, GNSSSystem::QZSS, SignalType::QZS_L5, "5I"},
+    {5, 9, GNSSSystem::QZSS, SignalType::QZS_L5, "5Q"},
+    {6, 0, GNSSSystem::GLONASS, SignalType::GLO_L1CA, "1C"},
+    {6, 2, GNSSSystem::GLONASS, SignalType::GLO_L2CA, "2C"},
+    {7, 0, GNSSSystem::NavIC, SignalType::GPS_L5, "5A"},
+};
+
+RawxMeasurement rawxSignal(uint8_t gnss_id,
+                           uint8_t sv_id,
+                           uint8_t sig_id,
+                           double pseudorange,
+                           double carrier_phase = 123456.5,
+                           uint8_t trk_stat = kTrkPrCpHalfValid) {
+    RawxMeasurement m;
+    m.pseudorange = pseudorange;
+    m.carrier_phase = carrier_phase;
+    m.doppler = -100.0f;
+    m.gnss_id = gnss_id;
+    m.sv_id = sv_id;
+    m.sig_id = sig_id;
+    m.locktime = 1000;
+    m.trk_stat = trk_stat;
+    return m;
+}
+
+TEST(UBXUtilsTest, TrackingCodeTableMatchesSignalTypeAndRinexPolicy) {
+    for (const auto& expected : kExpectedRawxSignals) {
+        SCOPED_TRACE(std::string("gnssId ") + std::to_string(expected.gnss_id) + " sigId " +
+                     std::to_string(expected.sig_id));
+        EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(expected.gnss_id, expected.sig_id),
+                     expected.code);
+        SignalType signal = SignalType::SIGNAL_TYPE_COUNT;
+        ASSERT_TRUE(io::ubx_utils::getSignalType(expected.gnss_id, expected.sig_id, signal));
+        EXPECT_EQ(signal, expected.signal);
+        // The RINEX reader / RTCM tables must map the same code to the same
+        // SignalType, so all three inputs agree for one physical signal.
+        SignalType from_code = SignalType::SIGNAL_TYPE_COUNT;
+        ASSERT_TRUE(signal_policy::trySignalForObservationType(
+            expected.system, std::string("C") + expected.code, from_code));
+        EXPECT_EQ(from_code, expected.signal);
+    }
+    // SBAS L1 C/A has a code but no SignalType; unknown pairs have neither.
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(1, 0), "1C");
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(1, 1), "");
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(0, 1), "");
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(0, 5), "");
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(2, 8), "");   // E6B
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(3, 4), "");   // B3I D1
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(5, 1), "");   // L1S
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(4, 0), "");   // IMES
+    EXPECT_STREQ(io::ubx_utils::getRinexTrackingCode(9, 0), "");
+}
+
+TEST(UBXDecoderTest, RawxFillsRinexObservationTypesForEverySupportedSignal) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    std::vector<RawxMeasurement> measurements;
+    uint8_t sv = 1;
+    for (const auto& expected : kExpectedRawxSignals) {
+        // One satellite per signal so nothing collides.
+        measurements.push_back(rawxSignal(expected.gnss_id, sv++, expected.sig_id,
+                                          2.0e7 + sv));
+    }
+    ASSERT_TRUE(decodeRawxEpoch(decoder, measurements, epoch));
+    ASSERT_EQ(epoch.observations.size(), measurements.size());
+    ASSERT_EQ(epoch.rinex_tracking_observations.size(), measurements.size());
+
+    sv = 1;
+    for (const auto& expected : kExpectedRawxSignals) {
+        SCOPED_TRACE(std::string("gnssId ") + std::to_string(expected.gnss_id) + " sigId " +
+                     std::to_string(expected.sig_id));
+        const SatelliteId sat(expected.system, sv++);
+        const Observation* selected = epoch.getObservation(sat, expected.signal);
+        ASSERT_NE(selected, nullptr);
+        EXPECT_EQ(selected->pseudorange_observation_type, std::string("C") + expected.code);
+        EXPECT_EQ(selected->carrier_phase_observation_type, std::string("L") + expected.code);
+        EXPECT_EQ(selected->code, expected.sig_id);
+        const Observation* tracked = epoch.getRinexTrackingObservation(sat, expected.code);
+        ASSERT_NE(tracked, nullptr);
+        EXPECT_EQ(tracked->signal, expected.signal);
+        EXPECT_EQ(tracked->pseudorange_observation_type, selected->pseudorange_observation_type);
+        EXPECT_DOUBLE_EQ(tracked->pseudorange, selected->pseudorange);
+    }
+}
+
+TEST(UBXDecoderTest, RawxObservationTypesFollowWhichMeasurementsAreValid) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement code_only = rawxSignal(0, 5, 3, 22000000.0, 0.0, 0x01);   // L2 CL, no phase
+    RawxMeasurement doppler_only = rawxSignal(0, 6, 0, 0.0, 0.0, 0x00);       // L1, nothing valid
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {code_only, doppler_only}, epoch));
+    const Observation* l2 = epoch.getObservation(SatelliteId(GNSSSystem::GPS, 5),
+                                                 SignalType::GPS_L2C);
+    ASSERT_NE(l2, nullptr);
+    EXPECT_EQ(l2->pseudorange_observation_type, "C2L");
+    EXPECT_TRUE(l2->carrier_phase_observation_type.empty());
+    // Doppler-only rows carry no C/L provenance (as in the RTCM decoder) but
+    // are still keyed by their tracking code.
+    const Observation* l1 = epoch.getObservation(SatelliteId(GNSSSystem::GPS, 6),
+                                                 SignalType::GPS_L1CA);
+    ASSERT_NE(l1, nullptr);
+    EXPECT_TRUE(l1->pseudorange_observation_type.empty());
+    EXPECT_TRUE(l1->carrier_phase_observation_type.empty());
+    EXPECT_NE(epoch.getRinexTrackingObservation(SatelliteId(GNSSSystem::GPS, 6), "1C"), nullptr);
+}
+
+TEST(UBXDecoderTest, RawxGpsL2ClAndCmKeepDistinctCodesAndClIsSelected) {
+    // CM listed before CL, then the reverse: the selected observation (and so
+    // the code every solver sees) must not depend on the RAWX block order.
+    for (const bool cm_first : {true, false}) {
+        SCOPED_TRACE(cm_first ? "CM first" : "CL first");
+        io::UBXDecoder decoder;
+        ObservationData epoch;
+        const RawxMeasurement cl = rawxSignal(0, 9, 3, 22000100.0, 111111.5);
+        const RawxMeasurement cm = rawxSignal(0, 9, 4, 22000200.0, 222222.5);
+        const RawxMeasurement l1 = rawxSignal(0, 9, 0, 21000000.0, 333333.5);
+        ASSERT_TRUE(decodeRawxEpoch(
+            decoder, cm_first ? std::vector<RawxMeasurement>{l1, cm, cl}
+                              : std::vector<RawxMeasurement>{l1, cl, cm},
+            epoch));
+        const SatelliteId sat(GNSSSystem::GPS, 9);
+
+        // One observation per SignalType (no duplicate GPS_L2C rows).
+        ASSERT_EQ(epoch.observations.size(), 2U);
+        const Observation* l2 = epoch.getObservation(sat, SignalType::GPS_L2C);
+        ASSERT_NE(l2, nullptr);
+        EXPECT_EQ(l2->pseudorange_observation_type, "C2L");
+        EXPECT_EQ(l2->carrier_phase_observation_type, "L2L");
+        EXPECT_DOUBLE_EQ(l2->pseudorange, 22000100.0);
+
+        // Both tracking channels stay available under their own codes.
+        const Observation* tracked_l = epoch.getRinexTrackingObservation(sat, "2L");
+        const Observation* tracked_s = epoch.getRinexTrackingObservation(sat, "2S");
+        ASSERT_NE(tracked_l, nullptr);
+        ASSERT_NE(tracked_s, nullptr);
+        EXPECT_DOUBLE_EQ(tracked_l->pseudorange, 22000100.0);
+        EXPECT_DOUBLE_EQ(tracked_s->pseudorange, 22000200.0);
+        EXPECT_EQ(tracked_s->pseudorange_observation_type, "C2S");
+        EXPECT_EQ(tracked_s->carrier_phase_observation_type, "L2S");
+        EXPECT_EQ(epoch.rinex_tracking_observations.size(), 3U);
+    }
+}
+
+TEST(UBXDecoderTest, RawxFallsBackToCmWhenClHasNoData) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement cl = rawxSignal(0, 9, 3, 0.0, 0.0, 0x00);  // nothing valid
+    cl.doppler = std::numeric_limits<float>::quiet_NaN();
+    const RawxMeasurement cm = rawxSignal(0, 9, 4, 22000200.0, 222222.5);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {cl, cm}, epoch));
+    const Observation* l2 =
+        epoch.getObservation(SatelliteId(GNSSSystem::GPS, 9), SignalType::GPS_L2C);
+    ASSERT_NE(l2, nullptr);
+    EXPECT_EQ(l2->pseudorange_observation_type, "C2S");
+    EXPECT_EQ(l2->carrier_phase_observation_type, "L2S");
+    EXPECT_EQ(epoch.observations.size(), 1U);
+}
+
+TEST(UBXDecoderTest, RawxDopplerOnlyClDoesNotDisplaceCmWithRangeAndPhase) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    const RawxMeasurement cl_doppler_only = rawxSignal(0, 9, 3, 0.0, 0.0, 0x00);
+    const RawxMeasurement cm = rawxSignal(0, 9, 4, 22000200.0, 222222.5);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {cl_doppler_only, cm}, epoch));
+    const SatelliteId sat(GNSSSystem::GPS, 9);
+    const Observation* l2 = epoch.getObservation(sat, SignalType::GPS_L2C);
+    ASSERT_NE(l2, nullptr);
+    EXPECT_EQ(epoch.observations.size(), 1U);
+    EXPECT_EQ(l2->pseudorange_observation_type, "C2S");
+    EXPECT_TRUE(l2->has_pseudorange);
+    // The Doppler-only channel is still available under its own code.
+    const Observation* cl = epoch.getRinexTrackingObservation(sat, "2L");
+    ASSERT_NE(cl, nullptr);
+    EXPECT_FALSE(cl->has_pseudorange);
+    EXPECT_TRUE(cl->has_doppler);
+}
+
+TEST(UBXDecoderTest, RawxDopplerOnlyChannelIsWrittenUnderItsTrackingCode) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    const RawxMeasurement l1 = rawxSignal(0, 9, 0, 21000000.0, 333333.5);
+    // The only L2 channel of the satellite is a Doppler-only CL.
+    const RawxMeasurement cl_doppler_only = rawxSignal(0, 9, 3, 0.0, 0.0, 0x00);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l1, cl_doppler_only}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 2U);
+
+    const auto path = std::filesystem::temp_directory_path() / "libgnss_ubx_codes_doppler_only.obs";
+    std::filesystem::remove(path);
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(path.string(), io::RINEXReader::RINEXHeader{}));
+    ASSERT_TRUE(writer.writeObservationEpoch(epoch));
+    ASSERT_TRUE(writer.close());
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    reader.close();
+    std::filesystem::remove(path);
+    const auto& types = header.system_obs_types.at('G');
+    EXPECT_NE(std::find(types.begin(), types.end(), "D2L"), types.end());
+    for (const auto& type : types) {
+        EXPECT_NE(type.substr(1), "2X") << "default-code column " << type;
+    }
+}
+
+TEST(UBXDecoderTest, RawxQzssL2ClAndCmUseSwappedSigIds) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    // QZSS numbers L2 CM = 4 and CL = 5 (the reverse of GPS).
+    const RawxMeasurement cm = rawxSignal(5, 3, 4, 38000200.0);
+    const RawxMeasurement cl = rawxSignal(5, 3, 5, 38000100.0);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {cm, cl}, epoch));
+    const SatelliteId sat(GNSSSystem::QZSS, 3);
+    ASSERT_EQ(epoch.observations.size(), 1U);
+    EXPECT_EQ(epoch.observations.front().pseudorange_observation_type, "C2L");
+    EXPECT_DOUBLE_EQ(epoch.observations.front().pseudorange, 38000100.0);
+    ASSERT_NE(epoch.getRinexTrackingObservation(sat, "2S"), nullptr);
+    EXPECT_DOUBLE_EQ(epoch.getRinexTrackingObservation(sat, "2S")->pseudorange, 38000200.0);
+}
+
+TEST(UBXDecoderTest, RawxMultiBandSatellitesKeepOneObservationPerSignalType) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    std::vector<RawxMeasurement> measurements = {
+        // Galileo E1 C + B, E5a I + Q, E5b Q only
+        rawxSignal(2, 11, 1, 24000001.0),  // E1 B
+        rawxSignal(2, 11, 0, 24000000.0),  // E1 C
+        rawxSignal(2, 11, 4, 24000011.0),  // E5aQ
+        rawxSignal(2, 11, 3, 24000010.0),  // E5aI
+        rawxSignal(2, 11, 6, 24000020.0),  // E5bQ
+        // BeiDou B1I D1 + B2I D1
+        rawxSignal(3, 22, 0, 25000000.0),
+        rawxSignal(3, 22, 2, 25000010.0),
+        // BeiDou B1C pilot + data, B2a pilot + data
+        rawxSignal(3, 33, 5, 26000000.0),  // B1 Cp
+        rawxSignal(3, 33, 6, 26000001.0),  // B1 Cd
+        rawxSignal(3, 33, 7, 26000010.0),  // B2 ap
+        rawxSignal(3, 33, 8, 26000011.0),  // B2 ad
+        // GLONASS L1 + L2
+        rawxSignal(6, 4, 0, 23000000.0),
+        rawxSignal(6, 4, 2, 23000010.0),
+    };
+    measurements[11].freq_id = 9;
+    measurements[12].freq_id = 9;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, measurements, epoch));
+
+    const SatelliteId gal(GNSSSystem::Galileo, 11);
+    const SatelliteId bds(GNSSSystem::BeiDou, 22);
+    const SatelliteId bds3(GNSSSystem::BeiDou, 33);
+    const SatelliteId glo(GNSSSystem::GLONASS, 4);
+
+    // E1 C beats E1 B, E5a I beats E5a Q (signal_policy "CABXZ" / "XIQ").
+    EXPECT_EQ(epoch.getObservation(gal, SignalType::GAL_E1)->pseudorange_observation_type, "C1C");
+    EXPECT_EQ(epoch.getObservation(gal, SignalType::GAL_E5A)->pseudorange_observation_type, "C5I");
+    EXPECT_EQ(epoch.getObservation(gal, SignalType::GAL_E5B)->pseudorange_observation_type, "C7Q");
+    EXPECT_NE(epoch.getRinexTrackingObservation(gal, "1B"), nullptr);
+    EXPECT_NE(epoch.getRinexTrackingObservation(gal, "5Q"), nullptr);
+
+    EXPECT_EQ(epoch.getObservation(bds, SignalType::BDS_B1I)->pseudorange_observation_type, "C2I");
+    EXPECT_EQ(epoch.getObservation(bds, SignalType::BDS_B2I)->pseudorange_observation_type, "C7I");
+    EXPECT_EQ(epoch.getObservation(bds, SignalType::BDS_B2I)->carrier_phase_observation_type, "L7I");
+
+    // BeiDou-3 data component ranks above pilot ("DPX...").
+    EXPECT_EQ(epoch.getObservation(bds3, SignalType::BDS_B1C)->pseudorange_observation_type, "C1D");
+    EXPECT_EQ(epoch.getObservation(bds3, SignalType::BDS_B2A)->pseudorange_observation_type, "C5D");
+    EXPECT_NE(epoch.getRinexTrackingObservation(bds3, "1P"), nullptr);
+    EXPECT_NE(epoch.getRinexTrackingObservation(bds3, "5P"), nullptr);
+
+    EXPECT_EQ(epoch.getObservation(glo, SignalType::GLO_L1CA)->pseudorange_observation_type, "C1C");
+    EXPECT_EQ(epoch.getObservation(glo, SignalType::GLO_L2CA)->pseudorange_observation_type, "C2C");
+
+    // 13 RAWX blocks -> 9 distinct (satellite, SignalType) observations, but
+    // every block stays in the tracking-code map.
+    EXPECT_EQ(epoch.observations.size(), 9U);
+    EXPECT_EQ(epoch.rinex_tracking_observations.size(), 13U);
+}
+
+TEST(UBXDecoderTest, RawxSbasKeepsL1CaCode) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {rawxSignal(1, 123, 0, 38000000.0)}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 1U);
+    EXPECT_EQ(epoch.observations.front().satellite.system, GNSSSystem::SBAS);
+    EXPECT_EQ(epoch.observations.front().pseudorange_observation_type, "C1C");
+    EXPECT_EQ(epoch.observations.front().carrier_phase_observation_type, "L1C");
+}
+
+TEST(UBXDecoderTest, RawxToRinexWriterKeepsL2ClAndL2CmColumnsDistinct) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    const RawxMeasurement l1 = rawxSignal(0, 9, 0, 21000000.0, 333333.5);
+    const RawxMeasurement cl = rawxSignal(0, 9, 3, 22000100.0, 111111.5);
+    const RawxMeasurement cm = rawxSignal(0, 9, 4, 22000200.0, 222222.5);
+    const RawxMeasurement l5 = rawxSignal(0, 9, 6, 23000000.0, 444444.5);
+    const RawxMeasurement e1 = rawxSignal(2, 11, 0, 24000000.0, 555555.5);
+    const RawxMeasurement e5b = rawxSignal(2, 11, 5, 24000010.0, 666666.5);
+    const RawxMeasurement b1 = rawxSignal(3, 22, 0, 25000000.0, 777777.5);
+    const RawxMeasurement b2 = rawxSignal(3, 22, 2, 25000010.0, 888888.5);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l1, cm, cl, l5, e1, e5b, b1, b2}, epoch));
+
+    const auto path = std::filesystem::temp_directory_path() / "libgnss_ubx_codes_roundtrip.obs";
+    std::filesystem::remove(path);
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(path.string(), io::RINEXReader::RINEXHeader{}));
+    ASSERT_TRUE(writer.writeObservationEpoch(epoch));
+    ASSERT_TRUE(writer.close());
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(reader.readHeader(header));
+    const auto& gps_types = header.system_obs_types.at('G');
+    for (const char* type : {"C1C", "L1C", "C2L", "L2L", "D2L", "S2L", "C2S", "L2S", "D2S", "S2S",
+                             "C5I", "L5I"}) {
+        EXPECT_NE(std::find(gps_types.begin(), gps_types.end(), type), gps_types.end()) << type;
+    }
+    EXPECT_EQ(std::find(gps_types.begin(), gps_types.end(), "C2X"), gps_types.end());
+    const auto& gal_types = header.system_obs_types.at('E');
+    for (const char* type : {"C1C", "L1C", "C7I", "L7I"}) {
+        EXPECT_NE(std::find(gal_types.begin(), gal_types.end(), type), gal_types.end()) << type;
+    }
+    const auto& bds_types = header.system_obs_types.at('C');
+    for (const char* type : {"C2I", "L2I", "C7I", "L7I"}) {
+        EXPECT_NE(std::find(bds_types.begin(), bds_types.end(), type), bds_types.end()) << type;
+    }
+
+    ObservationData read_back;
+    ASSERT_TRUE(reader.readObservationEpoch(read_back));
+    reader.close();
+    std::filesystem::remove(path);
+
+    const SatelliteId gps(GNSSSystem::GPS, 9);
+    const Observation* read_l = read_back.getRinexTrackingObservation(gps, "2L");
+    const Observation* read_s = read_back.getRinexTrackingObservation(gps, "2S");
+    ASSERT_NE(read_l, nullptr);
+    ASSERT_NE(read_s, nullptr);
+    EXPECT_NEAR(read_l->pseudorange, 22000100.0, 1e-3);
+    EXPECT_NEAR(read_l->carrier_phase, 111111.5, 1e-3);
+    EXPECT_NEAR(read_s->pseudorange, 22000200.0, 1e-3);
+    EXPECT_NEAR(read_s->carrier_phase, 222222.5, 1e-3);
+    EXPECT_NEAR(read_l->doppler, -100.0, 1e-3);
+    EXPECT_NEAR(read_s->doppler, -100.0, 1e-3);
+    EXPECT_EQ(read_l->pseudorange_observation_type, "C2L");
+    EXPECT_EQ(read_s->pseudorange_observation_type, "C2S");
+    // The reader selects the same L2 observation the UBX decoder did.
+    const Observation* read_l2 = read_back.getObservation(gps, SignalType::GPS_L2C);
+    ASSERT_NE(read_l2, nullptr);
+    EXPECT_EQ(read_l2->pseudorange_observation_type, "C2L");
 }
 
 TEST(UBXDecoderTest, DecodesSfrbxMessage) {

@@ -3113,7 +3113,30 @@ bool RINEXWriter::writeObservationEpoch(const ObservationData& obs_data) {
         }
         auto& list = contributions[obs.satellite];
         const std::size_t before = list.size();
-        collectContributions(obs, nullptr, list);
+        // A Doppler / C/N0-only observation has no C or L provenance, so
+        // without help it would land in the default code of its SignalType
+        // (GPS L2C -> "2X") although its tracking code is known.  Use the
+        // key of the identical entry in rinex_tracking_observations.
+        const std::string* tracked_code = nullptr;
+        if (obs.pseudorange_observation_type.empty() &&
+            obs.carrier_phase_observation_type.empty()) {
+            for (auto it = obs_data.rinex_tracking_observations.lower_bound(
+                     {obs.satellite, std::string()});
+                 it != obs_data.rinex_tracking_observations.end() &&
+                 it->first.first == obs.satellite;
+                 ++it) {
+                const Observation& tracked = it->second;
+                if (tracked.signal == obs.signal &&
+                    tracked.has_pseudorange == obs.has_pseudorange &&
+                    tracked.has_carrier_phase == obs.has_carrier_phase &&
+                    tracked.has_doppler == obs.has_doppler &&
+                    tracked.doppler == obs.doppler && tracked.snr == obs.snr) {
+                    tracked_code = &it->first.second;
+                    break;
+                }
+            }
+        }
+        collectContributions(obs, tracked_code, list);
         for (std::size_t i = before; i < list.size(); ++i) {
             present.emplace(obs.satellite, list[i].code, list[i].kind);
         }
