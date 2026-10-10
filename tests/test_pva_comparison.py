@@ -309,9 +309,10 @@ class ComparisonTest(Fixture):
         self.assertEqual(decision["adoption"], "No-Go")
 
 
-class HoldoutV2Test(Fixture):
-    """Pooled gate set of docs/online_pva_default_switch_holdout_v2.md, on synthetic replays only."""
+class HoldoutHelpers(Fixture):
+    """Synthetic three-scenario trees and mutations shared by the holdout gate-set tests; has no tests of its own."""
     CANDIDATE = "velocity_consistency_v9"
+    GATE_SET = "holdout_v2"
     RUN = "HKDeepUrban1_novatel"
     SCENARIOS = (("normal", 60, 10), ("gnss_outage", 60, 10), ("imu_gap", 60, 4))
 
@@ -329,7 +330,7 @@ class HoldoutV2Test(Fixture):
         self.top = self.root/top
         return ["--baseline-dir", str(self.top/"control/normal"), "--candidate-dir", str(self.top/"candidate/normal"),
                 "--baseline-scenario-dir", str(self.top/"control/scenarios"), "--candidate-scenario-dir", str(self.top/"candidate/scenarios"),
-                "--gate-set", "holdout_v2", "--contract", str(self.truth), "--runs", run]
+                "--gate-set", self.GATE_SET, "--contract", str(self.truth), "--runs", run]
 
     def decide_v2(self, args, *extra):
         out = self.root/f"decision{len(list(self.root.glob('decision*')))}"
@@ -370,6 +371,9 @@ class HoldoutV2Test(Fixture):
             for f in mutates: f(rows)
         return {name: mutate for name, _, _ in self.SCENARIOS}
 
+class HoldoutV2Test(HoldoutHelpers):
+    """Pooled gate set of docs/online_pva_default_switch_holdout_v2.md, on synthetic replays only."""
+
     def test_equal_arms_pass_every_gate(self):
         code, decision = self.decide_v2(self.tree())
         self.assertEqual(code, 0)
@@ -385,7 +389,7 @@ class HoldoutV2Test(Fixture):
         self.assertEqual([r["scenario"] for r in decision["runs"][0]["replays"]], ["normal", "gnss_outage", "imu_gap"])
 
     def test_fixed_definitions(self):
-        self.assertEqual(comparison.GATE_SETS, ("default", "holdout_v2"))
+        self.assertEqual(comparison.GATE_SETS[:2], ("default", "holdout_v2"))
         self.assertEqual(comparison.HOLDOUT_V2_CANDIDATE, "velocity_consistency_v9")
         self.assertEqual(comparison.HOLDOUT_V2_CONTRACT, "docs/online_pva_default_switch_holdout_v2.md")
         self.assertEqual(comparison.HOLDOUT_V2_SCENARIOS, (("normal", None, None), ("gnss_outage", 60, 10), ("imu_gap", 60, 4)))
@@ -572,6 +576,143 @@ class HoldoutV2Test(Fixture):
         self.assertEqual([r["name"] for r in decision["runs"]], [self.RUN, "HKHarshUrban1_novatel"])
         self.assertEqual(sorted({f["run"] for f in decision["failures"]}), ["HKHarshUrban1_novatel"])
         self.assertEqual(decision["adoption"], "No-Go")
+
+
+class HoldoutV3Test(HoldoutHelpers):
+    """holdout_v3 = holdout_v2 + H8 (absolute attitude integrity) for velocity_consistency_v10, on synthetic replays only."""
+    CANDIDATE = "velocity_consistency_v10"
+    GATE_SET = "holdout_v3"
+    H8 = "H8.{}.attitude_integrity.rotation_gt_90deg_fraction"
+
+    @staticmethod
+    def repaired(rows):
+        """The fixture's last epoch is 180 deg off (heading 180, truth 0); give it the truth heading: no flip."""
+        a = math.radians(90)/2
+        rows[-1]["qw"], rows[-1]["qz"] = math.cos(a), math.sin(a)
+
+    def clean(self, *scenarios):
+        return {name: self.repaired for name, _, _ in self.SCENARIOS if name in (scenarios or [n for n, _, _ in self.SCENARIOS])}
+
+    def test_fixed_definitions(self):
+        self.assertEqual(comparison.GATE_SETS, ("default", "holdout_v2", "holdout_v3"))
+        self.assertEqual(comparison.HOLDOUT_V3_CANDIDATE, "velocity_consistency_v10")
+        self.assertEqual(comparison.HOLDOUT_V3_CONTRACT, "docs/online_pva_default_switch_holdout_v3.md")
+        self.assertEqual((comparison.ATTITUDE_INTEGRITY_ROTATION_DEG, comparison.ATTITUDE_INTEGRITY_MAX_FRACTION), (90.0, 0.01))
+        # holdout_v2 keeps its own candidate and contract.
+        self.assertEqual(comparison.HOLDOUT_V2_CANDIDATE, "velocity_consistency_v9")
+        self.assertEqual(comparison.HOLDOUT_V2_CONTRACT, "docs/online_pva_default_switch_holdout_v2.md")
+
+    def test_equal_clean_arms_pass_all_42_gates(self):
+        code, decision = self.decide_v2(self.tree(control=self.clean(), candidate=self.clean()))
+        self.assertEqual(code, 0)
+        self.assertEqual((decision["adoption"], decision["failures"]), ("Go", []))
+        self.assertEqual((decision["gate_set"], decision["schema"], decision["candidate"]),
+                         ("holdout_v3", "libgnsspp.pva_candidate_decision.v2", "velocity_consistency_v10"))
+        self.assertNotIn("attitude_integrity", decision)
+        gates = decision["runs"][0]["gates"]
+        self.assertEqual(len(gates), 42)
+        counts = {h: sum(g["hypothesis"] == h for g in gates) for h in ("H1", "H2", "H3", "H4", "H5", "H6", "H8")}
+        self.assertEqual(counts, dict(H1=8, H2=12, H3=2, H4=6, H5=8, H6=3, H8=3))
+        self.assertEqual(len({g["name"] for g in gates}), len(gates))
+        self.assertEqual([g["name"] for g in gates if g["hypothesis"] == "H8"], [self.H8.format(n) for n, _, _ in self.SCENARIOS])
+        self.assertTrue(all(g["control"] == 0.0 and g["candidate"] == 0.0 for g in gates if g["hypothesis"] == "H8"))
+
+    def test_h1_to_h7_are_those_of_holdout_v2(self):
+        """The same replays under holdout_v2 and holdout_v3 give the same H1-H6 gates."""
+        args = self.tree(control=self.everywhere(self.shifted("fused", 1.0), self.shifted("rtk", 1.0)),
+                         candidate=self.everywhere(self.shifted("fused", 1.005), self.shifted("rtk", 1.12)))
+        _, v3 = self.decide_v2(args)
+        v2_args = list(args)
+        v2_args[v2_args.index("holdout_v3")] = "holdout_v2"
+        _, v2 = self.decide_v2(v2_args, "--candidate-name", self.CANDIDATE)
+        self.assertEqual(v2["gate_set"], "holdout_v2")
+        self.assertEqual([g for g in v3["runs"][0]["gates"] if g["hypothesis"] != "H8"], v2["runs"][0]["gates"])
+        self.assertEqual(len(v2["runs"][0]["gates"]), 39)
+        h8 = {g["name"] for g in v3["runs"][0]["gates"] if g["hypothesis"] == "H8"}
+        self.assertEqual(self.failed(v3) - h8, self.failed(v2))
+        self.assertIn("H1.all.fused_position_m.rmse", self.failed(v3))
+        self.assertIn("H2.all.rtk_position_m.rmse", self.failed(v3))
+
+    def test_h8_fails_a_candidate_flip_even_when_the_control_flips_too(self):
+        # The control flips in all three scenarios; the candidate is clean in two and flips in the IMU-gap replay.
+        code, decision = self.decide_v2(self.tree(candidate=self.clean("normal", "gnss_outage")))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.failed(decision), {self.H8.format("imu_gap")})
+        self.assertEqual(decision["adoption"], "No-Go")
+        gate = next(g for g in decision["runs"][0]["gates"] if g["name"] == self.H8.format("imu_gap"))
+        self.assertAlmostEqual(gate["candidate"], 1/10)   # 1 of 10 scored rotation epochs
+        self.assertAlmostEqual(gate["control"], 1/10)
+        self.assertFalse(gate["passed"])
+        self.assertIn("absolute", gate["allowed"])
+
+    def test_h8_is_absolute_and_the_control_fraction_is_information_only(self):
+        # A flipping control with a clean candidate passes; a clean control with a flipping candidate fails H8.
+        code, decision = self.decide_v2(self.tree(candidate=self.clean()))
+        self.assertEqual((code, decision["failures"], decision["adoption"]), (0, [], "Go"))
+        h8 = [g for g in decision["runs"][0]["gates"] if g["hypothesis"] == "H8"]
+        self.assertEqual([(g["control"], g["candidate"]) for g in h8], [(0.1, 0.0)]*3)
+        _, decision = self.decide_v2(self.tree(control=self.clean()))
+        self.assertTrue({self.H8.format(n) for n, _, _ in self.SCENARIOS} <= self.failed(decision))
+        self.assertEqual(decision["adoption"], "No-Go")
+
+    def test_h8_threshold_and_definition(self):
+        # One flipped epoch of 100 scored epochs is exactly 0.01 and passes; strictly above 90 deg; epochs without a rotation do not count.
+        rows = [dict(rotation_deg="") for _ in range(7)] + [dict(rotation_deg="30.0") for _ in range(99)] + [dict(rotation_deg="179.9")]
+        above, scored, fraction = comparison.rotation_flip_fraction(rows)
+        self.assertEqual((above, scored), (1, 100))
+        self.assertLessEqual(fraction, comparison.ATTITUDE_INTEGRITY_MAX_FRACTION)
+        self.assertEqual(comparison.rotation_flip_fraction([dict(rotation_deg="90.0")]*200)[0], 0)
+        self.assertGreater(comparison.rotation_flip_fraction(rows + [dict(rotation_deg="91.0")])[2], comparison.ATTITUDE_INTEGRITY_MAX_FRACTION)
+
+    def test_the_candidate_name_must_be_velocity_consistency_v10(self):
+        for recorded, requested in (("velocity_consistency_v9", "velocity_consistency_v9"),   # replays and flag agree on v9
+                                    ("velocity_consistency_v10", "velocity_consistency_v9"),  # the flag names the wrong candidate
+                                    ("velocity_consistency_v10", "vehicle_nhc_latched_v1"),
+                                    ("velocity_consistency_v10", "none")):
+            self.CANDIDATE = recorded
+            code, decision = self.decide_v2(self.tree(control=self.clean(), candidate=self.clean()), "--candidate-name", requested)
+            self.assertEqual((code, decision["state"], decision["adoption"]), (2, "failed", "No-Go"), (recorded, requested))
+            self.assertIn("requires the candidate velocity_consistency_v10", decision["error"])
+            self.assertEqual(decision["runs"], [])
+        # Replays recorded with another candidate are refused under the default (v10) name as well.
+        self.CANDIDATE = "velocity_consistency_v9"
+        code, decision = self.decide_v2(self.tree(control=self.clean(), candidate=self.clean()))
+        self.assertEqual((code, decision["state"]), (2, "failed"))
+        self.assertIn("unexpected candidate", decision["error"])
+        # The v2 gate set does not accept the v10 replays under its own default (v9).
+        self.CANDIDATE = "velocity_consistency_v10"
+        args = self.tree(control=self.clean(), candidate=self.clean())
+        args[args.index("holdout_v3")] = "holdout_v2"
+        code, decision = self.decide_v2(args)
+        self.assertEqual(code, 2); self.assertIn("unexpected candidate", decision["error"])
+
+    def test_v3_inherits_the_integrity_rules(self):
+        args = self.tree(control=self.clean(), candidate=self.clean())
+        shutil.rmtree(self.top/f"candidate/scenarios/{self.RUN}-imu_gap")
+        code, decision = self.decide_v2(args)
+        self.assertEqual((code, decision["state"], decision["adoption"]), (2, "failed", "No-Go"))
+        args = self.tree(control=self.clean(), candidate=self.clean())
+        self.edit_manifest(f"control/normal/{self.RUN}", lambda m_: m_["replay"].update(candidate=self.CANDIDATE))
+        code, decision = self.decide_v2(args)
+        self.assertEqual(code, 2); self.assertIn("unexpected control", decision["error"])
+        args = self.tree(control=self.clean(), candidate=self.clean())
+        self.edit_manifest(f"candidate/normal/{self.RUN}", lambda m_: m_["binary"].update(sha256="b"*64))
+        code, decision = self.decide_v2(args)
+        self.assertEqual(code, 2); self.assertIn("one and the same binary", decision["error"])
+
+    def test_attitude_integrity_flag_is_not_accepted_with_holdout_v3(self):
+        out = self.root/"unused_output"
+        with mock.patch.object(sys, "argv", ["compare_online_pva.py", *self.tree(), "--attitude-integrity", "--output-dir", str(out)]), \
+                contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit): comparison.main()
+        self.assertFalse(out.exists())
+
+    def test_holdout_v2_has_no_h8(self):
+        self.CANDIDATE, self.GATE_SET = "velocity_consistency_v9", "holdout_v2"
+        _, decision = self.decide_v2(self.tree())
+        self.assertEqual(len(decision["runs"][0]["gates"]), 39)
+        self.assertNotIn("H8", {g["hypothesis"] for g in decision["runs"][0]["gates"]})
+        self.assertNotIn("attitude_integrity", decision)
 
 
 if __name__ == "__main__":

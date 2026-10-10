@@ -3,6 +3,8 @@
 
 ``--gate-set default`` (the default) is the per-run/scenario gate of the v1-v10 contracts.
 ``--gate-set holdout_v2`` is the pooled gate set of docs/online_pva_default_switch_holdout_v2.md.
+``--gate-set holdout_v3`` is holdout_v2 plus the absolute attitude-integrity gate H8, for
+velocity_consistency_v10 (docs/online_pva_default_switch_holdout_v3.md).
 """
 import argparse
 import csv
@@ -24,9 +26,14 @@ ATTITUDE_INTEGRITY_MAX_FRACTION = 0.01
 COVERAGE = ("rtk_available", "fused_available", "rtk_velocity_available", "fused_velocity_available", "attitude_available", "heading_available")
 
 # Fixed gate set of docs/online_pva_default_switch_holdout_v2.md. Do not tune.
-GATE_SETS = ("default", "holdout_v2")
+GATE_SETS = ("default", "holdout_v2", "holdout_v3")
 HOLDOUT_V2_CONTRACT = "docs/online_pva_default_switch_holdout_v2.md"
 HOLDOUT_V2_CANDIDATE = "velocity_consistency_v9"
+# holdout_v3 = holdout_v2 (H1-H7, same thresholds) + H8, for velocity_consistency_v10. Do not tune.
+HOLDOUT_V3_CONTRACT = "docs/online_pva_default_switch_holdout_v3.md"
+HOLDOUT_V3_CANDIDATE = "velocity_consistency_v10"
+HOLDOUT_CONTRACTS = {"holdout_v2": HOLDOUT_V2_CONTRACT, "holdout_v3": HOLDOUT_V3_CONTRACT}
+HOLDOUT_CANDIDATES = {"holdout_v2": HOLDOUT_V2_CANDIDATE, "holdout_v3": HOLDOUT_V3_CANDIDATE}
 HOLDOUT_V2_SCENARIOS = (("normal", None, None), ("gnss_outage", 60, 10), ("imu_gap", 60, 4))  # name, start_s, duration_s
 H1_METRICS = ("fused_position_m", "rotation_deg")                         # primary: candidate <= 1.00 x control
 H2_METRICS = ("rtk_position_m", "rtk_velocity_mps", "fused_velocity_mps")  # secondary: candidate <= 1.10 x control
@@ -150,8 +157,11 @@ def timing_passed(x, y):
     return y <= x+H5_TIMING_SLACK_S+1e-6
 
 
-def holdout_v2_run(name, args):
-    """Pooled holdout_v2 gates for one run: its normal, gnss_outage and imu_gap replays, both arms."""
+def holdout_run(name, args, attitude_gate=False):
+    """Pooled holdout gates for one run: its normal, gnss_outage and imu_gap replays, both arms.
+
+    attitude_gate adds H8 (holdout_v3): per candidate scenario replay, the absolute fraction of scored
+    epochs with rotation_deg > 90 must be <= 0.01. The control's fraction is information only."""
     arms = ("control", "candidate")
     binaries, replays, gates, first_inputs = set(), [], [], None
     keys = sorted(set(H1_METRICS+H2_METRICS+H3_METRICS))
@@ -201,6 +211,12 @@ def holdout_v2_run(name, args):
                 gate("H5", f"{scenario}.scenario.{key}", x, y, "candidate <= control + 1.0 s; a null candidate fails if control is non-null", timing_passed(x, y))
         px, py = a["processing_ms"]["p95"], b["processing_ms"]["p95"]
         gate("H6", f"{scenario}.processing.p95_ms", px, py, "candidate <= 2 * control; host contention", py <= H6_PROCESSING_RATIO*px)
+        if attitude_gate:
+            _, _, control_fraction = rotation_flip_fraction(ar)
+            _, _, fraction = rotation_flip_fraction(br)
+            gate("H8", f"H8.{scenario}.attitude_integrity.rotation_gt_90deg_fraction", control_fraction, fraction,
+                 f"candidate fraction of scored epochs with rotation_deg > {ATTITUDE_INTEGRITY_ROTATION_DEG:g} <= {ATTITUDE_INTEGRITY_MAX_FRACTION:g} (absolute; control is information only)",
+                 fraction <= ATTITUDE_INTEGRITY_MAX_FRACTION)
         replays.append(dict(scenario=scenario, epochs=a["epochs"], control_manifest=pin(base_dir/label/"manifest.json"),
                             candidate_manifest=pin(cand_dir/label/"manifest.json")))
     cohorts = {cohort: {arm: {k: pooled_stats(v) for k, v in values[(cohort, arm)].items()} for arm in arms}
@@ -222,10 +238,12 @@ def holdout_v2_run(name, args):
     return dict(name=name, gates=gates, pooled=cohorts, pooled_coverage=coverage, pooled_epochs=epochs, replays=replays), binaries
 
 
-def run_holdout_v2(args, report):
+def run_holdout(args, report):
+    if args.gate_set == "holdout_v3" and args.candidate_name != HOLDOUT_V3_CANDIDATE:
+        raise ValueError(f"holdout_v3 requires the candidate {HOLDOUT_V3_CANDIDATE}")
     binaries = set()
     for name in args.runs:
-        result, used = holdout_v2_run(name, args)
+        result, used = holdout_run(name, args, attitude_gate=args.gate_set == "holdout_v3")
         report["runs"].append(result)
         binaries |= used
     if len(binaries) != 1 or None in binaries: raise ValueError("all replays must record one and the same binary")
@@ -241,28 +259,29 @@ def main():
     p.add_argument("--baseline-scenario-dir", type=Path, required=True)
     p.add_argument("--candidate-scenario-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
-    p.add_argument("--candidate-name", default=None, help="Default: vehicle_nhc_latched_v1 (default gate set), velocity_consistency_v9 (holdout_v2)")
-    p.add_argument("--contract", type=Path, default=None, help="Default: docs/online_pva_candidate_v1.md (default gate set), the holdout_v2 contract otherwise")
+    p.add_argument("--candidate-name", default=None, help="Default: vehicle_nhc_latched_v1 (default gate set), velocity_consistency_v9 (holdout_v2), velocity_consistency_v10 (holdout_v3; no other name is accepted)")
+    p.add_argument("--contract", type=Path, default=None, help="Default: docs/online_pva_candidate_v1.md (default gate set), the contract document of the holdout gate set otherwise")
     p.add_argument("--gate-set", choices=GATE_SETS, default="default",
-                   help="default: per-run/scenario gates of the v1-v10 contracts; holdout_v2: pooled gates H1-H6 of the holdout v2 contract (H7 is the integrity failure of any check)")
+                   help="default: per-run/scenario gates of the v1-v10 contracts; holdout_v2: pooled gates H1-H6 of the holdout v2 contract (H7 is the integrity failure of any check); holdout_v3: holdout_v2 plus H8 attitude integrity (holdout v3 contract)")
     p.add_argument("--runs", nargs="+", default=list(PPC_RUNS), metavar="RUN",
                    help="Run directory names under each input dir (default: the six PPC runs, tokyo1..nagoya3)")
     p.add_argument("--attitude-integrity", action="store_true",
                    help="Add gate 8 to every compared run: at most 1%% of the candidate's scored epochs may have rotation_deg > 90 (absolute)")
     args = p.parse_args()
     if len(set(args.runs)) != len(args.runs): p.error("--runs must not repeat a run name")
-    holdout = args.gate_set == "holdout_v2"
-    if args.candidate_name is None: args.candidate_name = HOLDOUT_V2_CANDIDATE if holdout else "vehicle_nhc_latched_v1"
-    if args.contract is None: args.contract = ROOT/(HOLDOUT_V2_CONTRACT if holdout else "docs/online_pva_candidate_v1.md")
+    holdout = args.gate_set in HOLDOUT_CONTRACTS
+    if args.gate_set == "holdout_v3" and args.attitude_integrity: p.error("--attitude-integrity is part of holdout_v3 (H8); do not pass it")
+    if args.candidate_name is None: args.candidate_name = HOLDOUT_CANDIDATES[args.gate_set] if holdout else "vehicle_nhc_latched_v1"
+    if args.contract is None: args.contract = ROOT/(HOLDOUT_CONTRACTS[args.gate_set] if holdout else "docs/online_pva_candidate_v1.md")
     if args.output_dir.exists(): p.error("output directory must be new")
     args.output_dir.mkdir(parents=True)
     report = dict(schema="libgnsspp.pva_candidate_decision.v1", state="running", adoption="No-Go", default_changed=False,
                   contract=pin(args.contract), candidate=args.candidate_name, comparison_source=pin(__file__), runs=[])
     if args.attitude_integrity: report["attitude_integrity"] = True
-    if holdout: report.update(schema="libgnsspp.pva_candidate_decision.v2", gate_set="holdout_v2")
+    if holdout: report.update(schema="libgnsspp.pva_candidate_decision.v2", gate_set=args.gate_set)
     try:
         if holdout:
-            failures = run_holdout_v2(args, report)
+            failures = run_holdout(args, report)
             dump(args.output_dir/"decision.json", report)
             print(json.dumps(dict(state=report["state"], adoption=report["adoption"], failed_gates=len(failures),
                                   gates=sum(len(r["gates"]) for r in report["runs"]), runs=len(report["runs"]))))
