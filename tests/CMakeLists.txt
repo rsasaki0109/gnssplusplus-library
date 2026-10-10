@@ -125,6 +125,7 @@ if(GTest_FOUND)
         test_rinex_writer.cpp
         test_rinex2_reader.cpp
         test_rinex_crlf.cpp
+        test_rinex_code_priority.cpp
         test_rinex4_navigation.cpp
         test_madoca_core.cpp
         test_madoca_l6d_snapshots.cpp

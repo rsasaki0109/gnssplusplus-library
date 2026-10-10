@@ -97,7 +97,10 @@ inline bool trySignalForObservationType(GNSSSystem system,
             if (band == 1) { signal = SignalType::GAL_E1; return true; }
             if (band == 5) { signal = SignalType::GAL_E5A; return true; }
             if (band == 6) { signal = SignalType::GAL_E6; return true; }
-            if (band == 7 || band == 8) { signal = SignalType::GAL_E5B; return true; }
+            if (band == 7) { signal = SignalType::GAL_E5B; return true; }
+            // Band 8 is the E5 AltBOC (E5a+E5b, 1191.795 MHz) signal. There
+            // is no SignalType for it, and folding it into E5b would give it
+            // the 1207.14 MHz wavelength, so it is not mapped.
             break;
         case GNSSSystem::BeiDou:
             if (band == 1) { signal = SignalType::BDS_B1C; return true; }
@@ -105,7 +108,8 @@ inline bool trySignalForObservationType(GNSSSystem system,
             if (band == 5) { signal = SignalType::BDS_B2A; return true; }
             if (band == 6) { signal = SignalType::BDS_B3I; return true; }
             if (band == 7) { signal = SignalType::BDS_B2I; return true; }
-            if (band == 8) { signal = SignalType::BDS_B2A; return true; }
+            // Band 8 is B2a+B2b (1191.795 MHz); not B2a (1176.45 MHz). No
+            // SignalType exists for it, so it is not mapped.
             break;
         case GNSSSystem::QZSS:
             if (band == 1) { signal = SignalType::QZS_L1CA; return true; }
@@ -119,6 +123,75 @@ inline bool trySignalForObservationType(GNSSSystem system,
             break;
     }
     return false;
+}
+
+// Tracking-attribute priority for observation codes that map to the same band
+// of one system, highest priority first.  These are the RTKLIB demo5
+// `codepris` strings (rtkcmn.c), re-keyed by RINEX band digit instead of
+// RTKLIB's per-system frequency index:
+//   GPS     L1 "CPYWMNSLX"  L2 "CPYWMNDLSX"  L5 "IQX"
+//   GLONASS G1 "CPABX"      G2 "CPABX"
+//   Galileo E1 "CABXZ"      E5b(7) "XIQ"     E5a(5) "XIQ"   E6 "ABCXZ"
+//   QZSS    L1 "CLSXZBE"    L2 "LSX"         L5 "IQXDPZ"    L6 "LSXEZ"
+//   BeiDou  B1C(1) "DPXSLZAN"  B1I(2) "IQX"  B2a(5) "DPX"
+//           B3(6) "IQXDPZA"    B2(7) "IQXDPZ"
+//   NavIC   L5 "ABCX"       S(9) "ABCX"      L1(1) "DPX"
+// Using one fixed order makes the observation chosen for a satellite
+// independent of the order of the header's observation types, so a rover and
+// a base that declare the same codes in a different order still pair on the
+// same tracking code (RTKLIB's double-difference pairs by frequency index only
+// and relies on exactly this).
+inline const char* trackingAttributePriority(GNSSSystem system, int band) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            if (band == 1) return "CPYWMNSLX";
+            if (band == 2) return "CPYWMNDLSX";
+            if (band == 5) return "IQX";
+            break;
+        case GNSSSystem::GLONASS:
+            if (band == 1 || band == 2) return "CPABX";
+            break;
+        case GNSSSystem::Galileo:
+            if (band == 1) return "CABXZ";
+            if (band == 7 || band == 5) return "XIQ";
+            if (band == 6) return "ABCXZ";
+            break;
+        case GNSSSystem::QZSS:
+            if (band == 1) return "CLSXZBE";
+            if (band == 2) return "LSX";
+            if (band == 5) return "IQXDPZ";
+            if (band == 6) return "LSXEZ";
+            break;
+        case GNSSSystem::BeiDou:
+            if (band == 2) return "IQX";
+            if (band == 7) return "IQXDPZ";
+            if (band == 5) return "DPX";
+            if (band == 6) return "IQXDPZA";
+            if (band == 1) return "DPXSLZAN";
+            break;
+        case GNSSSystem::NavIC:
+            if (band == 5 || band == 9) return "ABCX";
+            if (band == 1) return "DPX";
+            break;
+        default:
+            break;
+    }
+    return "";
+}
+
+// Rank of a tracking attribute within its band: 0 is the best, attributes
+// missing from the priority string share rank kUnlistedTrackingRank (they are
+// still usable, they just lose to every listed attribute).
+constexpr int kUnlistedTrackingRank = 100;
+
+inline int trackingAttributeRank(GNSSSystem system, int band, char attribute) {
+    const char* priority = trackingAttributePriority(system, band);
+    for (int i = 0; priority[i] != '\0'; ++i) {
+        if (priority[i] == attribute) {
+            return i;
+        }
+    }
+    return kUnlistedTrackingRank;
 }
 
 inline SignalType signalForObservationType(GNSSSystem system,
