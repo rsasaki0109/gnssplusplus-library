@@ -103,6 +103,7 @@ if(GTest_FOUND)
         test_rtk_selection.cpp
         test_rtk_cmc_ref.cpp
         test_rtk_half_cycle_lli.cpp
+        test_rtk_doppler_slip_dt.cpp
         test_rtk_cp_pr_gate.cpp
         test_rtk_ddpr_anchor.cpp
         test_rtk_validation.cpp

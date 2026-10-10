@@ -186,7 +186,8 @@ void RTKProcessor::updateTdcpDiagnostics(
     }
 }
 
-void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s) {
+void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s,
+                              const GNSSTime& epoch_time) {
     updateTdcpDiagnostics(sat_data, dt_s);
     current_epoch_slips_l1_.clear();
     current_epoch_slips_l2_.clear();
@@ -277,10 +278,20 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
     std::set<SatelliteId> doppler_slips_l1;
     std::set<SatelliteId> doppler_slips_l2;
     std::set<SatelliteId> doppler_slips_l5;  // Phase 18 Step 5
+    // The stored phase samples are one detector call old, not one remembered
+    // solution old: a rejected previous epoch leaves dt_s at 2x (or more) the
+    // sample spacing while the history was still refreshed.
+    double doppler_dt_s = dt_s;
+    if (has_doppler_history_time_) {
+        const double history_dt = epoch_time - doppler_history_time_;
+        if (std::isfinite(history_dt) && history_dt > 0.0) {
+            doppler_dt_s = history_dt;
+        }
+    }
     if (rtk_config_.enable_doppler_slip_detection &&
-        std::isfinite(dt_s) &&
-        dt_s > 0.0 &&
-        dt_s <= 5.0) {
+        std::isfinite(doppler_dt_s) &&
+        doppler_dt_s > 0.0 &&
+        doppler_dt_s <= 5.0) {
         const double doppler_slip_threshold =
             apply_dynamic_slip_floor
                 ? std::max(rtk_config_.doppler_slip_threshold, 0.20)
@@ -298,7 +309,7 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                         previous->second,
                         sd_phase_m,
                         sd_range_rate_mps,
-                        dt_s,
+                        doppler_dt_s,
                         doppler_slip_threshold)) {
                     doppler_slips_l1.insert(sat);
                 }
@@ -316,7 +327,7 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                         previous->second,
                         sd_phase_m,
                         sd_range_rate_mps,
-                        dt_s,
+                        doppler_dt_s,
                         doppler_slip_threshold)) {
                     doppler_slips_l2.insert(sat);
                 }
@@ -336,12 +347,25 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
                         previous->second,
                         sd_phase_m,
                         sd_range_rate_mps,
-                        dt_s,
+                        doppler_dt_s,
                         doppler_slip_threshold)) {
                     doppler_slips_l5.insert(sat);
                 }
                 doppler_phase_history_l5_m_[sat] = sd_phase_m;
             }
+        }
+    }
+    if (rtk_config_.enable_doppler_slip_detection) {
+        if (std::isfinite(doppler_dt_s) && doppler_dt_s > 0.0 && doppler_dt_s <= 5.0) {
+            doppler_history_time_ = epoch_time;
+            has_doppler_history_time_ = true;
+        } else {
+            // Gap too long (or invalid) for a Doppler prediction: drop the
+            // stale samples instead of comparing against them later.
+            doppler_phase_history_l1_m_.clear();
+            doppler_phase_history_l2_m_.clear();
+            doppler_phase_history_l5_m_.clear();
+            has_doppler_history_time_ = false;
         }
     }
     debug_telemetry_.doppler_slip_l1_count = static_cast<int>(doppler_slips_l1.size());
