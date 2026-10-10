@@ -1,0 +1,1229 @@
+{
+  "schema": "libgnsspp.pva_candidate_decision.v2",
+  "state": "passed",
+  "adoption": "No-Go",
+  "default_changed": false,
+  "contract": {
+    "path": "/home/user/gnssplusplus-library/docs/online_pva_default_switch_holdout_v3.md",
+    "bytes": 46528,
+    "sha256": "bb488787443d11e9d7b6c87cae607df3f5376b7ffa9c7eff7a8ecc2ac5f4f7ce"
+  },
+  "candidate": "velocity_consistency_v10",
+  "comparison_source": {
+    "path": "/home/user/gnssplusplus-library/scripts/analysis/compare_online_pva.py",
+    "bytes": 21084,
+    "sha256": "5b3b54e8f615d1b9cd7f7d293ef6bc5f232e81ea53d72e010299d56d49c5a57d"
+  },
+  "runs": [
+    {
+      "name": "HKDeepUrban1_novatel",
+      "gates": [
+        {
+          "name": "normal.initial.first_fresh_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "normal.initial.first_heading_s",
+          "hypothesis": "H5",
+          "control": 8.0,
+          "candidate": 8.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "normal.processing.p95_ms",
+          "hypothesis": "H6",
+          "control": 6.34111835,
+          "candidate": 8.05112895,
+          "allowed": "candidate <= 2 * control; host contention",
+          "passed": true
+        },
+        {
+          "name": "H8.normal.attitude_integrity.rotation_gt_90deg_fraction",
+          "hypothesis": "H8",
+          "control": 0.42781954887218043,
+          "candidate": 0.0,
+          "allowed": "candidate fraction of scored epochs with rotation_deg > 90 <= 0.01 (absolute; control is information only)",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.scenario.recovery_gnss_update_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.scenario.recovery_fresh_attitude_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.scenario.recovery_heading_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.processing.p95_ms",
+          "hypothesis": "H6",
+          "control": 6.10516065,
+          "candidate": 7.183383650000001,
+          "allowed": "candidate <= 2 * control; host contention",
+          "passed": true
+        },
+        {
+          "name": "H8.gnss_outage.attitude_integrity.rotation_gt_90deg_fraction",
+          "hypothesis": "H8",
+          "control": 0.49624060150375937,
+          "candidate": 0.0,
+          "allowed": "candidate fraction of scored epochs with rotation_deg > 90 <= 0.01 (absolute; control is information only)",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.scenario.recovery_gnss_update_s",
+          "hypothesis": "H5",
+          "control": 2.0,
+          "candidate": 2.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.scenario.recovery_fresh_attitude_s",
+          "hypothesis": "H5",
+          "control": 2.0,
+          "candidate": 2.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.scenario.recovery_heading_s",
+          "hypothesis": "H5",
+          "control": 35.0,
+          "candidate": 35.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.processing.p95_ms",
+          "hypothesis": "H6",
+          "control": 6.081428350000001,
+          "candidate": 7.087809350000001,
+          "allowed": "candidate <= 2 * control; host contention",
+          "passed": true
+        },
+        {
+          "name": "H8.imu_gap.attitude_integrity.rotation_gt_90deg_fraction",
+          "hypothesis": "H8",
+          "control": 0.4419504643962848,
+          "candidate": 0.0,
+          "allowed": "candidate fraction of scored epochs with rotation_deg > 90 <= 0.01 (absolute; control is information only)",
+          "passed": true
+        },
+        {
+          "name": "H1.all.fused_position_m.rmse",
+          "hypothesis": "H1",
+          "control": 2246.150062468873,
+          "candidate": 316.82415272057096,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.all.fused_position_m.p95",
+          "hypothesis": "H1",
+          "control": 5476.178400029957,
+          "candidate": 425.2913169738263,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.all.rotation_deg.rmse",
+          "hypothesis": "H1",
+          "control": 99.4152737762284,
+          "candidate": 4.269276784634661,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.all.rotation_deg.p95",
+          "hypothesis": "H1",
+          "control": 170.07496047228167,
+          "candidate": 7.587662418099671,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.fused_position_m.rmse",
+          "hypothesis": "H1",
+          "control": 2246.150062468873,
+          "candidate": 108.0951504432606,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.fused_position_m.p95",
+          "hypothesis": "H1",
+          "control": 5476.178400029957,
+          "candidate": 65.14184142293664,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.rotation_deg.rmse",
+          "hypothesis": "H1",
+          "control": 99.4152737762284,
+          "candidate": 4.112202777995483,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.rotation_deg.p95",
+          "hypothesis": "H1",
+          "control": 170.07496047228167,
+          "candidate": 7.714119455719476,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_position_m.rmse",
+          "hypothesis": "H2",
+          "control": 765.5868113309593,
+          "candidate": 34.026762455909534,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_position_m.p95",
+          "hypothesis": "H2",
+          "control": 107.98229268912992,
+          "candidate": 36.262353781767224,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 24.766987320469063,
+          "candidate": 1.0805927265421162,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 43.29473526624834,
+          "candidate": 1.3648166482664827,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.fused_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 221.98532020650214,
+          "candidate": 13.499508411704753,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.fused_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 174.3900923035021,
+          "candidate": 41.158310468393466,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_position_m.rmse",
+          "hypothesis": "H2",
+          "control": 41.69510651104422,
+          "candidate": 34.064903600491796,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_position_m.p95",
+          "hypothesis": "H2",
+          "control": 63.75249449441573,
+          "candidate": 36.03051254087995,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 24.979196649865166,
+          "candidate": 0.9178920644263424,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 43.379105032010976,
+          "candidate": 1.1401636096630852,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.fused_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 221.98532020650214,
+          "candidate": 11.793226466494628,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.fused_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 174.3900923035021,
+          "candidate": 16.11984864961453,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H3.all.fused_position_m.p99",
+          "hypothesis": "H3",
+          "control": 10213.693662532452,
+          "candidate": 1897.0857861370343,
+          "allowed": "candidate <= 1.25 * control",
+          "passed": true
+        },
+        {
+          "name": "H3.all.rotation_deg.p99",
+          "hypothesis": "H3",
+          "control": 178.69654054710534,
+          "candidate": 12.312106866210655,
+          "allowed": "candidate <= 1.25 * control",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.rtk_available",
+          "hypothesis": "H4",
+          "control": 0.8315460232350312,
+          "candidate": 0.8228328865058088,
+          "allowed": "candidate >= control - 0.005",
+          "passed": false
+        },
+        {
+          "name": "H4.coverage.fused_available",
+          "hypothesis": "H4",
+          "control": 0.9171134941912422,
+          "candidate": 0.9988829311885612,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.rtk_velocity_available",
+          "hypothesis": "H4",
+          "control": 0.8295352993744415,
+          "candidate": 0.8228328865058088,
+          "allowed": "candidate >= control - 0.005",
+          "passed": false
+        },
+        {
+          "name": "H4.coverage.fused_velocity_available",
+          "hypothesis": "H4",
+          "control": 0.9171134941912422,
+          "candidate": 0.9988829311885612,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.attitude_available",
+          "hypothesis": "H4",
+          "control": 0.9171134941912422,
+          "candidate": 0.9988829311885612,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.heading_available",
+          "hypothesis": "H4",
+          "control": 0.8829311885612153,
+          "candidate": 0.9861483467381591,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        }
+      ],
+      "pooled": {
+        "all": {
+          "control": {
+            "fused_position_m": {
+              "count": 4105,
+              "rmse": 2246.150062468873,
+              "p50": 25.67760769050925,
+              "p95": 5476.178400029957,
+              "max": 11177.653256658363,
+              "p99": 10213.693662532452
+            },
+            "fused_velocity_mps": {
+              "count": 4105,
+              "rmse": 221.98532020650214,
+              "p50": 5.989743017300453,
+              "p95": 174.3900923035021,
+              "max": 3266.6134849818586,
+              "p99": 622.1302855306468
+            },
+            "rotation_deg": {
+              "count": 3952,
+              "rmse": 99.4152737762284,
+              "p50": 82.82539627520333,
+              "p95": 170.07496047228167,
+              "max": 179.9426486447331,
+              "p99": 178.69654054710534
+            },
+            "rtk_position_m": {
+              "count": 3722,
+              "rmse": 765.5868113309593,
+              "p50": 4.968447035048135,
+              "p95": 107.98229268912992,
+              "max": 5478.675622276985,
+              "p99": 5371.431827145738
+            },
+            "rtk_velocity_mps": {
+              "count": 3713,
+              "rmse": 24.766987320469063,
+              "p50": 7.679357208669625,
+              "p95": 43.29473526624834,
+              "max": 57.87642702288674,
+              "p99": 45.130938525962726
+            }
+          },
+          "candidate": {
+            "fused_position_m": {
+              "count": 4471,
+              "rmse": 316.82415272057096,
+              "p50": 2.4374344940467356,
+              "p95": 425.2913169738263,
+              "max": 2549.711042701961,
+              "p99": 1897.0857861370343
+            },
+            "fused_velocity_mps": {
+              "count": 4471,
+              "rmse": 13.499508411704753,
+              "p50": 0.3149052266593237,
+              "p95": 41.158310468393466,
+              "max": 64.15737652431069,
+              "p99": 60.56623235396784
+            },
+            "rotation_deg": {
+              "count": 4414,
+              "rmse": 4.269276784634661,
+              "p50": 3.0240053409613146,
+              "p95": 7.587662418099671,
+              "max": 15.526122058202297,
+              "p99": 12.312106866210655
+            },
+            "rtk_position_m": {
+              "count": 3683,
+              "rmse": 34.026762455909534,
+              "p50": 2.2270467983240856,
+              "p95": 36.262353781767224,
+              "max": 890.9722763412158,
+              "p99": 107.79932508539082
+            },
+            "rtk_velocity_mps": {
+              "count": 3683,
+              "rmse": 1.0805927265421162,
+              "p50": 0.1623993709586369,
+              "p95": 1.3648166482664827,
+              "max": 13.55757708675425,
+              "p99": 3.961274208717181
+            }
+          }
+        },
+        "common": {
+          "control": {
+            "fused_position_m": {
+              "count": 4105,
+              "rmse": 2246.150062468873,
+              "p50": 25.67760769050925,
+              "p95": 5476.178400029957,
+              "max": 11177.653256658363,
+              "p99": 10213.693662532452
+            },
+            "fused_velocity_mps": {
+              "count": 4105,
+              "rmse": 221.98532020650214,
+              "p50": 5.989743017300453,
+              "p95": 174.3900923035021,
+              "max": 3266.6134849818586,
+              "p99": 622.1302855306468
+            },
+            "rotation_deg": {
+              "count": 3952,
+              "rmse": 99.4152737762284,
+              "p50": 82.82539627520333,
+              "p95": 170.07496047228167,
+              "max": 179.9426486447331,
+              "p99": 178.69654054710534
+            },
+            "rtk_position_m": {
+              "count": 3644,
+              "rmse": 41.69510651104422,
+              "p50": 4.743479440816308,
+              "p95": 63.75249449441573,
+              "max": 890.9722769768166,
+              "p99": 176.27761890320008
+            },
+            "rtk_velocity_mps": {
+              "count": 3644,
+              "rmse": 24.979196649865166,
+              "p50": 7.868765713952795,
+              "p95": 43.379105032010976,
+              "max": 57.87642702288674,
+              "p99": 45.130938525962726
+            }
+          },
+          "candidate": {
+            "fused_position_m": {
+              "count": 4105,
+              "rmse": 108.0951504432606,
+              "p50": 2.2547626774811302,
+              "p95": 65.14184142293664,
+              "max": 2549.711042701961,
+              "p99": 462.5473470096655
+            },
+            "fused_velocity_mps": {
+              "count": 4105,
+              "rmse": 11.793226466494628,
+              "p50": 0.2585698176510362,
+              "p95": 16.11984864961453,
+              "max": 64.15737652431069,
+              "p99": 60.977726433662646
+            },
+            "rotation_deg": {
+              "count": 3952,
+              "rmse": 4.112202777995483,
+              "p50": 2.844604554525217,
+              "p95": 7.714119455719476,
+              "max": 15.526122058202297,
+              "p99": 12.488671375612668
+            },
+            "rtk_position_m": {
+              "count": 3644,
+              "rmse": 34.064903600491796,
+              "p50": 2.1868134822946255,
+              "p95": 36.03051254087995,
+              "max": 890.9722763412158,
+              "p99": 107.79932508539082
+            },
+            "rtk_velocity_mps": {
+              "count": 3644,
+              "rmse": 0.9178920644263424,
+              "p50": 0.16086127051286495,
+              "p95": 1.1401636096630852,
+              "max": 13.497080149466687,
+              "p99": 3.69987490225703
+            }
+          }
+        }
+      },
+      "pooled_coverage": {
+        "control": {
+          "rtk_available": 0.8315460232350312,
+          "fused_available": 0.9171134941912422,
+          "rtk_velocity_available": 0.8295352993744415,
+          "fused_velocity_available": 0.9171134941912422,
+          "attitude_available": 0.9171134941912422,
+          "heading_available": 0.8829311885612153
+        },
+        "candidate": {
+          "rtk_available": 0.8228328865058088,
+          "fused_available": 0.9988829311885612,
+          "rtk_velocity_available": 0.8228328865058088,
+          "fused_velocity_available": 0.9988829311885612,
+          "attitude_available": 0.9988829311885612,
+          "heading_available": 0.9861483467381591
+        }
+      },
+      "pooled_epochs": {
+        "control": 4476,
+        "candidate": 4476
+      },
+      "replays": [
+        {
+          "scenario": "normal",
+          "epochs": 1492,
+          "control_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/none/normal/HKDeepUrban1_novatel/manifest.json",
+            "bytes": 4984,
+            "sha256": "ebd299cc8bd39624b7f05524fc08136898c38192d7f75407184fc9a5880adf55"
+          },
+          "candidate_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/cand/normal/HKDeepUrban1_novatel/manifest.json",
+            "bytes": 5723,
+            "sha256": "98810504e9fc9ae3ab71aecdd5e3a6d3468d7d1f11bc76bb521d450be2e46ddd"
+          }
+        },
+        {
+          "scenario": "gnss_outage",
+          "epochs": 1492,
+          "control_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/none/scenarios/HKDeepUrban1_novatel-gnss_outage/manifest.json",
+            "bytes": 5073,
+            "sha256": "3eb15619a3905e700078b66830ad3c6fa6e0ff76a10328a11ebb336a0cfebe78"
+          },
+          "candidate_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/cand/scenarios/HKDeepUrban1_novatel-gnss_outage/manifest.json",
+            "bytes": 5813,
+            "sha256": "d719c3f7cdbc90bdc1a835d585f284e65df41a4777ed57006a3d4605b4d8be25"
+          }
+        },
+        {
+          "scenario": "imu_gap",
+          "epochs": 1492,
+          "control_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/none/scenarios/HKDeepUrban1_novatel-imu_gap/manifest.json",
+            "bytes": 5042,
+            "sha256": "dd1e0704cf9a6b7783457dbea8acef4731a5885ea99cafbde4898ab61fd3c08e"
+          },
+          "candidate_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/cand/scenarios/HKDeepUrban1_novatel-imu_gap/manifest.json",
+            "bytes": 5783,
+            "sha256": "8c0ada6a7399323dbbc7a4a22f3f3823965923f4ec7931f504864f1f7a867641"
+          }
+        }
+      ]
+    },
+    {
+      "name": "HKHarshUrban1_novatel",
+      "gates": [
+        {
+          "name": "normal.initial.first_fresh_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "normal.initial.first_heading_s",
+          "hypothesis": "H5",
+          "control": 2.0,
+          "candidate": 22.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": false
+        },
+        {
+          "name": "normal.processing.p95_ms",
+          "hypothesis": "H6",
+          "control": 4.3058754,
+          "candidate": 6.1843248,
+          "allowed": "candidate <= 2 * control; host contention",
+          "passed": true
+        },
+        {
+          "name": "H8.normal.attitude_integrity.rotation_gt_90deg_fraction",
+          "hypothesis": "H8",
+          "control": 0.5497987927565392,
+          "candidate": 0.0,
+          "allowed": "candidate fraction of scored epochs with rotation_deg > 90 <= 0.01 (absolute; control is information only)",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.scenario.recovery_gnss_update_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.scenario.recovery_fresh_attitude_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.scenario.recovery_heading_s",
+          "hypothesis": "H5",
+          "control": 0.0,
+          "candidate": 0.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "gnss_outage.processing.p95_ms",
+          "hypothesis": "H6",
+          "control": 4.398777,
+          "candidate": 5.6389157999999995,
+          "allowed": "candidate <= 2 * control; host contention",
+          "passed": true
+        },
+        {
+          "name": "H8.gnss_outage.attitude_integrity.rotation_gt_90deg_fraction",
+          "hypothesis": "H8",
+          "control": 0.5960764587525151,
+          "candidate": 0.0,
+          "allowed": "candidate fraction of scored epochs with rotation_deg > 90 <= 0.01 (absolute; control is information only)",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.scenario.recovery_gnss_update_s",
+          "hypothesis": "H5",
+          "control": 2.0,
+          "candidate": 2.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.scenario.recovery_fresh_attitude_s",
+          "hypothesis": "H5",
+          "control": 2.0,
+          "candidate": 2.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.scenario.recovery_heading_s",
+          "hypothesis": "H5",
+          "control": 4.0,
+          "candidate": 4.0,
+          "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+          "passed": true
+        },
+        {
+          "name": "imu_gap.processing.p95_ms",
+          "hypothesis": "H6",
+          "control": 4.6982276,
+          "candidate": 5.8921802,
+          "allowed": "candidate <= 2 * control; host contention",
+          "passed": true
+        },
+        {
+          "name": "H8.imu_gap.attitude_integrity.rotation_gt_90deg_fraction",
+          "hypothesis": "H8",
+          "control": 0.49974760222110043,
+          "candidate": 0.0,
+          "allowed": "candidate fraction of scored epochs with rotation_deg > 90 <= 0.01 (absolute; control is information only)",
+          "passed": true
+        },
+        {
+          "name": "H1.all.fused_position_m.rmse",
+          "hypothesis": "H1",
+          "control": 5978.492794135952,
+          "candidate": 223.11578661242658,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.all.fused_position_m.p95",
+          "hypothesis": "H1",
+          "control": 4313.411485160073,
+          "candidate": 384.34501014424865,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.all.rotation_deg.rmse",
+          "hypothesis": "H1",
+          "control": 108.39333812661681,
+          "candidate": 7.79808332564993,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.all.rotation_deg.p95",
+          "hypothesis": "H1",
+          "control": 171.6077455898095,
+          "candidate": 15.888016311816099,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.fused_position_m.rmse",
+          "hypothesis": "H1",
+          "control": 5978.492794135952,
+          "candidate": 203.6843667086931,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.fused_position_m.p95",
+          "hypothesis": "H1",
+          "control": 4313.411485160073,
+          "candidate": 173.1762634690358,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.rotation_deg.rmse",
+          "hypothesis": "H1",
+          "control": 108.34471239819341,
+          "candidate": 7.913179624591404,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H1.common.rotation_deg.p95",
+          "hypothesis": "H1",
+          "control": 171.53075297649693,
+          "candidate": 16.113670722924613,
+          "allowed": "candidate <= 1.00 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_position_m.rmse",
+          "hypothesis": "H2",
+          "control": 747.608532400134,
+          "candidate": 1094.9834435443113,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": false
+        },
+        {
+          "name": "H2.all.rtk_position_m.p95",
+          "hypothesis": "H2",
+          "control": 187.83009513598938,
+          "candidate": 134.32709234434114,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 10.782274689183879,
+          "candidate": 0.9300557564009801,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.rtk_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 20.118968625453046,
+          "candidate": 1.439771275960794,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.fused_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 274.5569345950692,
+          "candidate": 5.890971842392056,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.all.fused_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 480.039967732666,
+          "candidate": 10.123128282080899,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_position_m.rmse",
+          "hypothesis": "H2",
+          "control": 700.3300560145556,
+          "candidate": 700.2242633776617,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_position_m.p95",
+          "hypothesis": "H2",
+          "control": 151.69426464585345,
+          "candidate": 133.92076291884848,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 10.821005392731221,
+          "candidate": 0.8136266119943822,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.rtk_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 20.119029222348043,
+          "candidate": 1.2406206386810006,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.fused_velocity_mps.rmse",
+          "hypothesis": "H2",
+          "control": 274.5569345950692,
+          "candidate": 5.3754451931835545,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H2.common.fused_velocity_mps.p95",
+          "hypothesis": "H2",
+          "control": 480.039967732666,
+          "candidate": 4.992626511728869,
+          "allowed": "candidate <= 1.10 * control",
+          "passed": true
+        },
+        {
+          "name": "H3.all.fused_position_m.p99",
+          "hypothesis": "H3",
+          "control": 39825.32286638729,
+          "candidate": 1228.8112843959125,
+          "allowed": "candidate <= 1.25 * control",
+          "passed": true
+        },
+        {
+          "name": "H3.all.rotation_deg.p99",
+          "hypothesis": "H3",
+          "control": 178.24406438259038,
+          "candidate": 18.20857116377941,
+          "allowed": "candidate <= 1.25 * control",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.rtk_available",
+          "hypothesis": "H4",
+          "control": 0.7321874540913765,
+          "candidate": 0.7330688996621125,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.fused_available",
+          "hypothesis": "H4",
+          "control": 0.91244307330689,
+          "candidate": 0.9992654620243867,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.rtk_velocity_available",
+          "hypothesis": "H4",
+          "control": 0.7321874540913765,
+          "candidate": 0.7330688996621125,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.fused_velocity_available",
+          "hypothesis": "H4",
+          "control": 0.91244307330689,
+          "candidate": 0.9992654620243867,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.attitude_available",
+          "hypothesis": "H4",
+          "control": 0.91244307330689,
+          "candidate": 0.9992654620243867,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        },
+        {
+          "name": "H4.coverage.heading_available",
+          "hypothesis": "H4",
+          "control": 0.8751285441457324,
+          "candidate": 0.9892757455560452,
+          "allowed": "candidate >= control - 0.005",
+          "passed": true
+        }
+      ],
+      "pooled": {
+        "all": {
+          "control": {
+            "fused_position_m": {
+              "count": 6211,
+              "rmse": 5978.492794135952,
+              "p50": 151.0603343746693,
+              "p95": 4313.411485160073,
+              "max": 48247.10318771945,
+              "p99": 39825.32286638729
+            },
+            "fused_velocity_mps": {
+              "count": 6211,
+              "rmse": 274.5569345950692,
+              "p50": 20.76769529201748,
+              "p95": 480.039967732666,
+              "max": 3150.8752680304424,
+              "p99": 1530.49604170964
+            },
+            "rotation_deg": {
+              "count": 5957,
+              "rmse": 108.39333812661681,
+              "p50": 99.16134974753183,
+              "p95": 171.6077455898095,
+              "max": 179.96209674252458,
+              "p99": 178.24406438259038
+            },
+            "rtk_position_m": {
+              "count": 4984,
+              "rmse": 747.608532400134,
+              "p50": 14.994351912742689,
+              "p95": 187.83009513598938,
+              "max": 19911.81885386309,
+              "p99": 2716.960122102016
+            },
+            "rtk_velocity_mps": {
+              "count": 4984,
+              "rmse": 10.782274689183879,
+              "p50": 4.690457915932294,
+              "p95": 20.118968625453046,
+              "max": 43.95618432647094,
+              "p99": 20.724407852168405
+            }
+          },
+          "candidate": {
+            "fused_position_m": {
+              "count": 6802,
+              "rmse": 223.11578661242658,
+              "p50": 11.942454701334118,
+              "p95": 384.34501014424865,
+              "max": 2010.817747777612,
+              "p99": 1228.8112843959125
+            },
+            "fused_velocity_mps": {
+              "count": 6802,
+              "rmse": 5.890971842392056,
+              "p50": 0.24277742237456895,
+              "p95": 10.123128282080899,
+              "max": 43.903139433451514,
+              "p99": 34.00874664583999
+            },
+            "rotation_deg": {
+              "count": 6734,
+              "rmse": 7.79808332564993,
+              "p50": 4.171820410703798,
+              "p95": 15.888016311816099,
+              "max": 56.86637644226986,
+              "p99": 18.20857116377941
+            },
+            "rtk_position_m": {
+              "count": 4990,
+              "rmse": 1094.9834435443113,
+              "p50": 11.30370274265021,
+              "p95": 134.32709234434114,
+              "max": 19911.841343809767,
+              "p99": 248.95153114560011
+            },
+            "rtk_velocity_mps": {
+              "count": 4990,
+              "rmse": 0.9300557564009801,
+              "p50": 0.17624927739389532,
+              "p95": 1.439771275960794,
+              "max": 10.568221288470479,
+              "p99": 3.7237059214021313
+            }
+          }
+        },
+        "common": {
+          "control": {
+            "fused_position_m": {
+              "count": 6211,
+              "rmse": 5978.492794135952,
+              "p50": 151.0603343746693,
+              "p95": 4313.411485160073,
+              "max": 48247.10318771945,
+              "p99": 39825.32286638729
+            },
+            "fused_velocity_mps": {
+              "count": 6211,
+              "rmse": 274.5569345950692,
+              "p50": 20.76769529201748,
+              "p95": 480.039967732666,
+              "max": 3150.8752680304424,
+              "p99": 1530.49604170964
+            },
+            "rotation_deg": {
+              "count": 5897,
+              "rmse": 108.34471239819341,
+              "p50": 99.16134974753183,
+              "p95": 171.53075297649693,
+              "max": 179.96209674252458,
+              "p99": 178.24406438259038
+            },
+            "rtk_position_m": {
+              "count": 4927,
+              "rmse": 700.3300560145556,
+              "p50": 14.753439339047766,
+              "p95": 151.69426464585345,
+              "max": 19911.81885386309,
+              "p99": 245.096670851818
+            },
+            "rtk_velocity_mps": {
+              "count": 4927,
+              "rmse": 10.821005392731221,
+              "p50": 4.871201582388468,
+              "p95": 20.119029222348043,
+              "max": 43.95618432647094,
+              "p99": 20.724407852168405
+            }
+          },
+          "candidate": {
+            "fused_position_m": {
+              "count": 6211,
+              "rmse": 203.6843667086931,
+              "p50": 9.244765449200377,
+              "p95": 173.1762634690358,
+              "max": 2010.817747777612,
+              "p99": 1287.5088995541043
+            },
+            "fused_velocity_mps": {
+              "count": 6211,
+              "rmse": 5.3754451931835545,
+              "p50": 0.20726639866919297,
+              "p95": 4.992626511728869,
+              "max": 43.903139433451514,
+              "p99": 34.922608375177354
+            },
+            "rotation_deg": {
+              "count": 5897,
+              "rmse": 7.913179624591404,
+              "p50": 4.148579103422554,
+              "p95": 16.113670722924613,
+              "max": 56.86637644226986,
+              "p99": 18.471577246693155
+            },
+            "rtk_position_m": {
+              "count": 4927,
+              "rmse": 700.2242633776617,
+              "p50": 11.157077724341338,
+              "p95": 133.92076291884848,
+              "max": 19911.841343809767,
+              "p99": 245.0474434305344
+            },
+            "rtk_velocity_mps": {
+              "count": 4927,
+              "rmse": 0.8136266119943822,
+              "p50": 0.17387647179077273,
+              "p95": 1.2406206386810006,
+              "max": 10.568221288470479,
+              "p99": 3.092172869803842
+            }
+          }
+        }
+      },
+      "pooled_coverage": {
+        "control": {
+          "rtk_available": 0.7321874540913765,
+          "fused_available": 0.91244307330689,
+          "rtk_velocity_available": 0.7321874540913765,
+          "fused_velocity_available": 0.91244307330689,
+          "attitude_available": 0.91244307330689,
+          "heading_available": 0.8751285441457324
+        },
+        "candidate": {
+          "rtk_available": 0.7330688996621125,
+          "fused_available": 0.9992654620243867,
+          "rtk_velocity_available": 0.7330688996621125,
+          "fused_velocity_available": 0.9992654620243867,
+          "attitude_available": 0.9992654620243867,
+          "heading_available": 0.9892757455560452
+        }
+      },
+      "pooled_epochs": {
+        "control": 6807,
+        "candidate": 6807
+      },
+      "replays": [
+        {
+          "scenario": "normal",
+          "epochs": 2269,
+          "control_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/none/normal/HKHarshUrban1_novatel/manifest.json",
+            "bytes": 4996,
+            "sha256": "c6d357214bc90ea4bbe960f5080216ea180c37acae9ecc4625f0795d3d4295ef"
+          },
+          "candidate_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/cand/normal/HKHarshUrban1_novatel/manifest.json",
+            "bytes": 5737,
+            "sha256": "c90e518352405cbbf702da167c691b73a2370b11544c6e5fb3aa0023120fc1c1"
+          }
+        },
+        {
+          "scenario": "gnss_outage",
+          "epochs": 2269,
+          "control_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/none/scenarios/HKHarshUrban1_novatel-gnss_outage/manifest.json",
+            "bytes": 5085,
+            "sha256": "ccf44cabc8395154c6dd95d4e5b6d5f2072c50c6385247e5ffce4cd0565232f3"
+          },
+          "candidate_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/cand/scenarios/HKHarshUrban1_novatel-gnss_outage/manifest.json",
+            "bytes": 5826,
+            "sha256": "02425a049f0e43b42bf5a82f2279863ae0f928e87227ff54e6851ae4491c2f8e"
+          }
+        },
+        {
+          "scenario": "imu_gap",
+          "epochs": 2269,
+          "control_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/none/scenarios/HKHarshUrban1_novatel-imu_gap/manifest.json",
+            "bytes": 5055,
+            "sha256": "597f316d2824f5d0fe9dc69e6a6a7f94622d66f6a95abff752adc7ef97450399"
+          },
+          "candidate_manifest": {
+            "path": "/tmp/claude-0/-home-user-gnssplusplus-library/0cae6522-36a8-5d51-adfb-fcbe10f26406/scratchpad/holdout_v3_run/cand/scenarios/HKHarshUrban1_novatel-imu_gap/manifest.json",
+            "bytes": 5796,
+            "sha256": "37f038da00ce3ea6eb2daf20d18c63c0db4c169978731e4677de0aa5d8dafcb9"
+          }
+        }
+      ]
+    }
+  ],
+  "gate_set": "holdout_v3",
+  "failures": [
+    {
+      "run": "HKDeepUrban1_novatel",
+      "gate": {
+        "name": "H4.coverage.rtk_available",
+        "hypothesis": "H4",
+        "control": 0.8315460232350312,
+        "candidate": 0.8228328865058088,
+        "allowed": "candidate >= control - 0.005",
+        "passed": false
+      }
+    },
+    {
+      "run": "HKDeepUrban1_novatel",
+      "gate": {
+        "name": "H4.coverage.rtk_velocity_available",
+        "hypothesis": "H4",
+        "control": 0.8295352993744415,
+        "candidate": 0.8228328865058088,
+        "allowed": "candidate >= control - 0.005",
+        "passed": false
+      }
+    },
+    {
+      "run": "HKHarshUrban1_novatel",
+      "gate": {
+        "name": "normal.initial.first_heading_s",
+        "hypothesis": "H5",
+        "control": 2.0,
+        "candidate": 22.0,
+        "allowed": "candidate <= control + 1.0 s; a null candidate fails if control is non-null",
+        "passed": false
+      }
+    },
+    {
+      "run": "HKHarshUrban1_novatel",
+      "gate": {
+        "name": "H2.all.rtk_position_m.rmse",
+        "hypothesis": "H2",
+        "control": 747.608532400134,
+        "candidate": 1094.9834435443113,
+        "allowed": "candidate <= 1.10 * control",
+        "passed": false
+      }
+    }
+  ],
+  "binary_sha256": "440b24ce68c15f488dd80ae959b4d87a2db4fe3db5d764df3358899df4906fa1"
+}
