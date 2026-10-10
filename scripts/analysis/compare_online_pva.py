@@ -5,6 +5,8 @@
 ``--gate-set holdout_v2`` is the pooled gate set of docs/online_pva_default_switch_holdout_v2.md.
 ``--gate-set holdout_v3`` is holdout_v2 plus the absolute attitude-integrity gate H8, for
 velocity_consistency_v10 (docs/online_pva_default_switch_holdout_v3.md).
+``--gate-set holdout_v4`` is holdout_v2 plus the relative attitude non-inferiority gate H8r, for
+independent_doppler_v1 (docs/online_pva_default_switch_holdout_v4.md).
 """
 import argparse
 import csv
@@ -26,14 +28,22 @@ ATTITUDE_INTEGRITY_MAX_FRACTION = 0.01
 COVERAGE = ("rtk_available", "fused_available", "rtk_velocity_available", "fused_velocity_available", "attitude_available", "heading_available")
 
 # Fixed gate set of docs/online_pva_default_switch_holdout_v2.md. Do not tune.
-GATE_SETS = ("default", "holdout_v2", "holdout_v3")
+GATE_SETS = ("default", "holdout_v2", "holdout_v3", "holdout_v4")
 HOLDOUT_V2_CONTRACT = "docs/online_pva_default_switch_holdout_v2.md"
 HOLDOUT_V2_CANDIDATE = "velocity_consistency_v9"
 # holdout_v3 = holdout_v2 (H1-H7, same thresholds) + H8, for velocity_consistency_v10. Do not tune.
 HOLDOUT_V3_CONTRACT = "docs/online_pva_default_switch_holdout_v3.md"
 HOLDOUT_V3_CANDIDATE = "velocity_consistency_v10"
-HOLDOUT_CONTRACTS = {"holdout_v2": HOLDOUT_V2_CONTRACT, "holdout_v3": HOLDOUT_V3_CONTRACT}
-HOLDOUT_CANDIDATES = {"holdout_v2": HOLDOUT_V2_CANDIDATE, "holdout_v3": HOLDOUT_V3_CANDIDATE}
+# holdout_v4 = holdout_v2 (H1-H7, same thresholds) + H8r, for independent_doppler_v1. Do not tune.
+# H8r is relative: per candidate scenario replay, the fraction of scored epochs with rotation_deg > 90
+# must be <= the control's fraction of the same replay + H8R_MARGIN. This candidate does not claim to fix attitude.
+HOLDOUT_V4_CONTRACT = "docs/online_pva_default_switch_holdout_v4.md"
+HOLDOUT_V4_CANDIDATE = "independent_doppler_v1"
+H8R_MARGIN = 0.01
+HOLDOUT_CONTRACTS = {"holdout_v2": HOLDOUT_V2_CONTRACT, "holdout_v3": HOLDOUT_V3_CONTRACT, "holdout_v4": HOLDOUT_V4_CONTRACT}
+HOLDOUT_CANDIDATES = {"holdout_v2": HOLDOUT_V2_CANDIDATE, "holdout_v3": HOLDOUT_V3_CANDIDATE, "holdout_v4": HOLDOUT_V4_CANDIDATE}
+# Gate sets that refuse any candidate name other than their own.
+CANDIDATE_LOCKED_GATE_SETS = ("holdout_v3", "holdout_v4")
 HOLDOUT_V2_SCENARIOS = (("normal", None, None), ("gnss_outage", 60, 10), ("imu_gap", 60, 4))  # name, start_s, duration_s
 H1_METRICS = ("fused_position_m", "rotation_deg")                         # primary: candidate <= 1.00 x control
 H2_METRICS = ("rtk_position_m", "rtk_velocity_mps", "fused_velocity_mps")  # secondary: candidate <= 1.10 x control
@@ -157,11 +167,13 @@ def timing_passed(x, y):
     return y <= x+H5_TIMING_SLACK_S+1e-6
 
 
-def holdout_run(name, args, attitude_gate=False):
+def holdout_run(name, args, attitude_gate=False, relative_attitude_gate=False):
     """Pooled holdout gates for one run: its normal, gnss_outage and imu_gap replays, both arms.
 
     attitude_gate adds H8 (holdout_v3): per candidate scenario replay, the absolute fraction of scored
-    epochs with rotation_deg > 90 must be <= 0.01. The control's fraction is information only."""
+    epochs with rotation_deg > 90 must be <= 0.01. The control's fraction is information only.
+    relative_attitude_gate adds H8r (holdout_v4): per scenario replay, the candidate fraction must be
+    <= the control fraction of the same replay + 0.01."""
     arms = ("control", "candidate")
     binaries, replays, gates, first_inputs = set(), [], [], None
     keys = sorted(set(H1_METRICS+H2_METRICS+H3_METRICS))
@@ -217,6 +229,12 @@ def holdout_run(name, args, attitude_gate=False):
             gate("H8", f"H8.{scenario}.attitude_integrity.rotation_gt_90deg_fraction", control_fraction, fraction,
                  f"candidate fraction of scored epochs with rotation_deg > {ATTITUDE_INTEGRITY_ROTATION_DEG:g} <= {ATTITUDE_INTEGRITY_MAX_FRACTION:g} (absolute; control is information only)",
                  fraction <= ATTITUDE_INTEGRITY_MAX_FRACTION)
+        if relative_attitude_gate:
+            _, _, control_fraction = rotation_flip_fraction(ar)
+            _, _, fraction = rotation_flip_fraction(br)
+            gate("H8r", f"H8r.{scenario}.attitude_non_inferiority.rotation_gt_90deg_fraction", control_fraction, fraction,
+                 f"candidate fraction of scored epochs with rotation_deg > {ATTITUDE_INTEGRITY_ROTATION_DEG:g} <= control fraction + {H8R_MARGIN:g} (relative)",
+                 fraction <= control_fraction+H8R_MARGIN+EPSILON)
         replays.append(dict(scenario=scenario, epochs=a["epochs"], control_manifest=pin(base_dir/label/"manifest.json"),
                             candidate_manifest=pin(cand_dir/label/"manifest.json")))
     cohorts = {cohort: {arm: {k: pooled_stats(v) for k, v in values[(cohort, arm)].items()} for arm in arms}
@@ -239,11 +257,12 @@ def holdout_run(name, args, attitude_gate=False):
 
 
 def run_holdout(args, report):
-    if args.gate_set == "holdout_v3" and args.candidate_name != HOLDOUT_V3_CANDIDATE:
-        raise ValueError(f"holdout_v3 requires the candidate {HOLDOUT_V3_CANDIDATE}")
+    if args.gate_set in CANDIDATE_LOCKED_GATE_SETS and args.candidate_name != HOLDOUT_CANDIDATES[args.gate_set]:
+        raise ValueError(f"{args.gate_set} requires the candidate {HOLDOUT_CANDIDATES[args.gate_set]}")
     binaries = set()
     for name in args.runs:
-        result, used = holdout_run(name, args, attitude_gate=args.gate_set == "holdout_v3")
+        result, used = holdout_run(name, args, attitude_gate=args.gate_set == "holdout_v3",
+                                   relative_attitude_gate=args.gate_set == "holdout_v4")
         report["runs"].append(result)
         binaries |= used
     if len(binaries) != 1 or None in binaries: raise ValueError("all replays must record one and the same binary")
@@ -259,10 +278,10 @@ def main():
     p.add_argument("--baseline-scenario-dir", type=Path, required=True)
     p.add_argument("--candidate-scenario-dir", type=Path, required=True)
     p.add_argument("--output-dir", type=Path, required=True)
-    p.add_argument("--candidate-name", default=None, help="Default: vehicle_nhc_latched_v1 (default gate set), velocity_consistency_v9 (holdout_v2), velocity_consistency_v10 (holdout_v3; no other name is accepted)")
+    p.add_argument("--candidate-name", default=None, help="Default: vehicle_nhc_latched_v1 (default gate set), velocity_consistency_v9 (holdout_v2), velocity_consistency_v10 (holdout_v3) or independent_doppler_v1 (holdout_v4); holdout_v3 and holdout_v4 accept no other name")
     p.add_argument("--contract", type=Path, default=None, help="Default: docs/online_pva_candidate_v1.md (default gate set), the contract document of the holdout gate set otherwise")
     p.add_argument("--gate-set", choices=GATE_SETS, default="default",
-                   help="default: per-run/scenario gates of the v1-v10 contracts; holdout_v2: pooled gates H1-H6 of the holdout v2 contract (H7 is the integrity failure of any check); holdout_v3: holdout_v2 plus H8 attitude integrity (holdout v3 contract)")
+                   help="default: per-run/scenario gates of the v1-v10 contracts; holdout_v2: pooled gates H1-H6 of the holdout v2 contract (H7 is the integrity failure of any check); holdout_v3: holdout_v2 plus H8 attitude integrity (holdout v3 contract); holdout_v4: holdout_v2 plus H8r relative attitude non-inferiority (holdout v4 contract)")
     p.add_argument("--runs", nargs="+", default=list(PPC_RUNS), metavar="RUN",
                    help="Run directory names under each input dir (default: the six PPC runs, tokyo1..nagoya3)")
     p.add_argument("--attitude-integrity", action="store_true",
@@ -271,6 +290,7 @@ def main():
     if len(set(args.runs)) != len(args.runs): p.error("--runs must not repeat a run name")
     holdout = args.gate_set in HOLDOUT_CONTRACTS
     if args.gate_set == "holdout_v3" and args.attitude_integrity: p.error("--attitude-integrity is part of holdout_v3 (H8); do not pass it")
+    if args.gate_set == "holdout_v4" and args.attitude_integrity: p.error("--attitude-integrity (absolute) is not part of holdout_v4, which has the relative gate H8r; do not pass it")
     if args.candidate_name is None: args.candidate_name = HOLDOUT_CANDIDATES[args.gate_set] if holdout else "vehicle_nhc_latched_v1"
     if args.contract is None: args.contract = ROOT/(HOLDOUT_CONTRACTS[args.gate_set] if holdout else "docs/online_pva_candidate_v1.md")
     if args.output_dir.exists(): p.error("output directory must be new")
