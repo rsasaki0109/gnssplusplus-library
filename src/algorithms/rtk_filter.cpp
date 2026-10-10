@@ -579,6 +579,10 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                 rtk_config_.student_t_front_end);
         }
         update_result.ok = position_result.ok && doppler_result.ok;
+        debug_telemetry_.retained_code_rows = rtk_measurement::countActiveRows(
+            position_system, rtk_measurement::MeasurementKind::CODE);
+        debug_telemetry_.retained_phase_rows = rtk_measurement::countActiveRows(
+            position_system, rtk_measurement::MeasurementKind::PHASE);
         if (!update_result.ok) {
             filter_state_.state = state_before_sequential;
             filter_state_.covariance = covariance_before_sequential;
@@ -637,6 +641,10 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
                 nis_gates_disabled,
             rtk_config_.student_t_front_end);
         feed_adaptive_tracker(blocks, measurement_system, update_result);
+        debug_telemetry_.retained_code_rows = rtk_measurement::countActiveRows(
+            measurement_system, rtk_measurement::MeasurementKind::CODE);
+        debug_telemetry_.retained_phase_rows = rtk_measurement::countActiveRows(
+            measurement_system, rtk_measurement::MeasurementKind::PHASE);
     }
 
     if (update_result.ok) {

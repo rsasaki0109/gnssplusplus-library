@@ -403,6 +403,23 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 return fallback_spp();
             }
 
+            // An INS-seeded float whose update kept too few code rows is the
+            // propagated prior, not a measurement: the absolute prefit test
+            // zeroes every row once the prior has drifted a few metres, the
+            // update then moves nothing, and the INS increment of the
+            // filter's own posterior is integrated again at the next epoch.
+            // Emit the SPP fallback and make the next epoch re-seed from SPP
+            // instead of propagating the unsupported posterior (the batch
+            // kinematic path re-seeds every epoch and never carries it).
+            if (ins_time_update_applied_last_epoch_ &&
+                rtk_config_.ins_prior_min_code_rows > 0 &&
+                debug_telemetry_.retained_code_rows < rtk_config_.ins_prior_min_code_rows) {
+                debug_telemetry_.ins_prior_unsupported_rejected = true;
+                drop_ins_prior_next_epoch_ = true;
+                restoreRememberedState();
+                return fallback_spp();
+            }
+
             // velocity_consistency_v8 (k): a FLOAT whose position seed fell
             // through to the base coordinates is not emitted. Same handling as
             // the gates above; the filter stays initialised.

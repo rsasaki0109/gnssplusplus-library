@@ -97,5 +97,9 @@ int suppressOutlierRows(Eigen::VectorXd& residuals,
                         double threshold,
                         const std::vector<double>& per_row_thresholds = {});
 
+/// Rows of `kind` that still carry information after suppressOutlierRows()
+/// (suppressed rows have an all-zero design row).
+int countActiveRows(const MeasurementSystem& system, MeasurementKind kind);
+
 }  // namespace rtk_measurement
 }  // namespace libgnss

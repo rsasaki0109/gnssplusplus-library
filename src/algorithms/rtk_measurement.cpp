@@ -159,5 +159,19 @@ int suppressOutlierRows(Eigen::VectorXd& residuals,
     return suppressed;
 }
 
+int countActiveRows(const MeasurementSystem& system, MeasurementKind kind) {
+    int count = 0;
+    const int rows = static_cast<int>(
+        std::min<std::size_t>(system.row_kinds.size(),
+                              static_cast<std::size_t>(system.design_matrix.rows())));
+    for (int row = 0; row < rows; ++row) {
+        if (system.row_kinds[static_cast<std::size_t>(row)] == kind &&
+            !system.design_matrix.row(row).isZero(0.0)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 }  // namespace rtk_measurement
 }  // namespace libgnss

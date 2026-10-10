@@ -168,6 +168,7 @@ void RTKProcessor::reset() {
     ins_time_update_applied_count_ = 0;
     ins_time_update_rejected_count_ = 0;
     ins_time_update_applied_last_epoch_ = false;
+    drop_ins_prior_next_epoch_ = false;
     position_correction_count_ = 0;
     position_correction_sum_sq_m2_ = 0.0;
     consecutive_cp_pr_gate_rejections_ = 0;
