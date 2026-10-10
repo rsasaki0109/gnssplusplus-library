@@ -20,9 +20,9 @@ runner adds no scoring logic of its own.
 
 | README row | Lane | Status | Runtime (local) | Local result (2026-09-28) |
 |---|---|---|---:|---|
-| RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28; see [README refresh](#readme-refresh-2026-09-28) |
-| CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | ~45 min | **Pass.** Reproduces 25.121% FIX, 0.359 m FIX RMS2D, 0 FIX > 3 m, 58,259 epochs, all hard gates (L6/SSR expansion ~14 min + six `gnss_ppp` runs ~30 min) |
-| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29) |
+| RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28 and again 2026-10-10 (Linux gcc 13.3); see [README refresh](#readme-refresh-2026-09-28) and [2026-10-10 refresh](#readme-refresh-2026-10-10) |
+| CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | ~45 min | **Pass.** README refreshed 2026-10-10: reproduces 25.117% FIX, 0.359 m FIX RMS2D, 0 FIX > 3 m, 58,259 epochs, all hard gates (L6/SSR expansion ~14 min + six `gnss_ppp` runs ~30 min) |
+| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: the README claims (default vs demo5) pass, but the two `--preset odaiba` Hp95/Vp95 gates against the default arm fail; see [2026-10-10 refresh](#readme-refresh-2026-10-10) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
@@ -304,6 +304,72 @@ to 16.42 m. The p95 tail is FLOAT and SPP epochs whose median east error is
 about +7 m, and the old 0.7 m west bias partly cancelled it. Shifting the old
 solution 0.723 m east gives an Hp95 of 5.72 m. The remaining difference comes
 from the two runs publishing different epochs (11,027 versus 10,956).
+
+## README refresh (2026-10-10)
+
+The `rtk-demo5`, `clas-ppc` and `odaiba` lanes were rerun on develop `31d7177f`
+(Linux, gcc 13.3 Release, no GTSAM, demo5 b34k from the pinned commit, PPC
+dataset from `taroz/PPC-Dataset`, the original UrbanNav `Tokyo_Data.zip`
+Odaiba files: `rover_trimble.obs` 71,151,487 B `3ebb5c4f...`,
+`base_trimble.obs` `5cc6c8d2...`, `base.nav` `c58bd7ec...`, `reference.csv`
+`fbf3f005...`). The README rows, lane expectations, generated tables and
+figures now show these values. The RTK numbers are platform-sensitive (the
+2026-09-28 values came from an MSVC build); the lane tolerances are unchanged.
+
+**`rtk-demo5`** (six-run averages; demo5 fix rates are unchanged to 0.01 pp):
+
+| Metric | 2026-09-28 (MSVC) | 2026-10-10 (gcc 13.3) |
+|---|---:|---:|
+| Avg Fix-rate delta vs demo5 | +56.8 pp | **+57.0 pp** |
+| Avg PPC official-score delta | +45.4 pp | **+44.9 pp** |
+| Avg P95 H delta | -11.44 m | **-11.33 m** |
+| Avg Positioning delta | -9.5 pp | **-9.7 pp** |
+
+The per-run table in `docs/benchmarks.md` is regenerated. The largest moves are
+Nagoya run2 official score 32.4% to 30.0% (delta +16.9 to +14.5 pp) and Nagoya
+run3 P95 H delta +4.68 to +5.60 m. The same values were obtained at the
+2026-09-28 README commit on this platform, so the difference is platform and
+compiler, not recent solver changes.
+
+**`clas-ppc`:**
+
+| Metric | Previous | 2026-10-10 |
+|---|---:|---:|
+| Aggregate FIX | 25.121% (14,635 epochs) | **25.117%** (14,633 epochs) |
+| Aggregate FIX RMS2D | 0.359365 m | **0.359287 m** (0.359 m) |
+| All / FLOAT / SINGLE RMS2D | 36.522 / 16.885 / 70.361 m | **36.631 / 16.964 / 70.596 m** |
+| Nagoya 2 FIX | 23.969% (2,250 epochs) | **23.948%** (2,248 epochs) |
+
+Only Nagoya 2 changes its FIX count (-2 epochs); Tokyo 1-3 solutions are
+unchanged and Nagoya 1-3 differ only in FLOAT/SINGLE epochs. The first merge
+that changes it is #582 (order-independent tracking-code choice). Zero FIX
+epochs exceed 3 m and all six MRTKLIB v0.4.2 hard gates still pass.
+
+**`odaiba`** (original 10 Hz Trimble rover; demo5 b34k reproduces
+exactly, 205 fixes, Hp95 25.622 m, Vp95 43.375 m):
+
+| Claim | demo5 b34k | libgnss++ default | Result |
+|---|---:|---:|---|
+| More fixes | 205 | **1298** | pass |
+| Lower Hp95 | 25.62 m | **4.77 m** | pass |
+| Lower Vp95 | 43.37 m | **11.54 m** | pass |
+| Lower Hmed on common epochs (8,027) | 0.553 m | **0.298 m** | pass |
+
+| Claim | libgnss++ default | `--preset odaiba` | Result |
+|---|---:|---:|---|
+| More fixes | 1298 | **8002** | pass |
+| Lower Hp95 | 4.77 m | 5.29 m | **fail** |
+| Lower Vp95 | 11.54 m | 15.31 m | **fail** |
+| Hmed (reported, not gated) | 0.359 m | **0.043 m** | - |
+
+The 2026-09-29 values (default 922 fixes, Hp95 5.87 m, Vp95 16.42 m, Hmed
+0.294 m on 7,987 common epochs; preset 6115 fixes, Hp95 5.13 m, Vp95 9.74 m)
+predate the BeiDou B1I mapping (#577) and later develop changes. The default
+arm gained fixes and improved Hp95/Vp95 (Hmed moved by +0.012 m), while the
+preset gained fixes but lost its Hp95/Vp95 lead. The lane
+gates for those two preset claims are left as they were, so
+`gnss reproduce odaiba --check` exits with status 3 until the claim or the
+preset is revisited.
 
 ## fgo-tokyo local result (2026-09-28)
 

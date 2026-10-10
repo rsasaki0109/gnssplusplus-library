@@ -82,4 +82,6 @@ and estimator disagreement to advance the disagreement streak; it is opt-in.
 
 On PPC Tokyo and Nagoya, leave these off unless reproducing a specific sweep.
 On Odaiba or other urban multipath datasets, `--preset odaiba` (low-cost +
-arc-smoothed wide-lane AR) gives the most fixes and the lowest Hp95/Vp95.
+arc-smoothed wide-lane AR) gives the most fixes and the lowest Hmed; its Hp95/Vp95
+are above the default profile's on the 2026-10-10 Odaiba run
+([benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot)).

@@ -5,8 +5,8 @@ Benchmark source: [GNSS測位エコシステムの統合を目指して - モダ
 ## Current verdict
 
 The full six-run PPC moving-data hard sign-off passes. Across 58,259 scored
-epochs LibGNSS++ produced 14,635 FIX epochs (25.120582%) with 0.359365 m
-aggregate FIX RMS2D, 0.347847 m FIX p68, and zero FIX epochs above 3 m. Every
+epochs LibGNSS++ produced 14,633 FIX epochs (25.117149%) with 0.359287 m
+aggregate FIX RMS2D, 0.347764 m FIX p68, and zero FIX epochs above 3 m. Every
 run covers 100% of the reference interval and at least 99.95% of observation
 epochs.
 
@@ -23,12 +23,12 @@ six runs independently meets or exceeds the published MRTKLIB v0.4.2 FIX rate,
 beats its FIX RMS2D, retains at least 99% time and epoch coverage, and has zero
 FIX epochs above 3 m. Tokyo 2 now clears its narrow rate deficit at 21.859186%
 versus 21.7%, with 0.329495 m FIX RMS2D versus 0.514 m. Nagoya 2's prior unsafe
-tail is absent: its maximum FIX error is 0.767281 m.
+tail is absent: its maximum FIX error is 0.767249 m.
 
 p68 and TTFF remain soft diagnostics rather than hard gates. p68 passes on
 Tokyo 1 and Nagoya 3 and misses on the other four runs; TTFF passes on five
 runs and misses only on Nagoya 3 (27 s versus 9 s). Aggregate all-solution,
-FLOAT, and SINGLE RMS2D are 36.522236 m, 16.884790 m, and 70.360920 m.
+FLOAT, and SINGLE RMS2D are 36.631008 m, 16.963609 m, and 70.596097 m.
 
 The promoted production defaults are a held minimum of four DD rows and a
 maximum publication streak of five. The previous behavior remains available
@@ -63,7 +63,7 @@ apples-to-apples basis for comparison. One side effect of the old bias was
 flattering: in a historical baseline it shifted a 19-epoch Nagoya 2 burst
 from an honest 3.200 m maximum to 2.486 m, creating a false "no FIX epoch
 above 3 m" claim. The accepted candidate removes that burst (Nagoya 2 maximum
-0.767281 m), but raw-antenna scoring remains essential for an honest gate.
+0.767249 m), but raw-antenna scoring remains essential for an honest gate.
 
 ## Non-FIX continuity fix
 
