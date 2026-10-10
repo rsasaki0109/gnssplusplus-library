@@ -243,6 +243,19 @@ void annotateGlonassFrequencyChannel(Observation& observation,
     observation.glonass_frequency_channel = it->second;
 }
 
+// RINEX loss-of-lock indicator: only '0'..'7' are defined.  Anything else
+// (blank, a stray '\r', garbage) means "no indicator" instead of a value
+// derived from `c - '0'` that could set the cycle-slip bit.
+inline int rinexLliFromChar(char c) {
+    return (c >= '0' && c <= '7') ? c - '0' : 0;
+}
+
+// RINEX signal-strength indicator: only '1'..'9' are defined; '0' / blank
+// mean "not set" (0).
+inline int rinexSsiFromChar(char c) {
+    return (c >= '1' && c <= '9') ? c - '0' : 0;
+}
+
 void assignObservationField(Observation& obs,
                             const std::string& obs_type,
                             double value,
@@ -1606,12 +1619,12 @@ bool RINEXReader::parseObservationEpochV2(const std::string& epoch_line, Observa
 
                 // Parse LLI flag (position 14-15)
                 if (col_start + 14 < obs_line.length() && obs_line[col_start + 14] != ' ') {
-                    lli_flags[obs_idx] = obs_line[col_start + 14] - '0';
+                    lli_flags[obs_idx] = rinexLliFromChar(obs_line[col_start + 14]);
                 }
 
                 // Parse signal strength (position 15-16)
                 if (col_start + 15 < obs_line.length() && obs_line[col_start + 15] != ' ') {
-                    signal_strength[obs_idx] = obs_line[col_start + 15] - '0';
+                    signal_strength[obs_idx] = rinexSsiFromChar(obs_line[col_start + 15]);
                 }
             }
         }
@@ -1866,13 +1879,13 @@ bool RINEXReader::parseObservationSatelliteRecord(
             if (strict && !std::isdigit(static_cast<unsigned char>(row[lli_pos]))) {
                 return false;
             }
-            lli_flags[i] = row[lli_pos] - '0';
+            lli_flags[i] = rinexLliFromChar(row[lli_pos]);
         }
         if (strength_pos < row.length() && row[strength_pos] != ' ') {
             if (strict && !std::isdigit(static_cast<unsigned char>(row[strength_pos]))) {
                 return false;
             }
-            signal_strength[i] = row[strength_pos] - '0';
+            signal_strength[i] = rinexSsiFromChar(row[strength_pos]);
         }
     }
 
@@ -2411,6 +2424,11 @@ SatelliteId RINEXReader::parseSatelliteId(const std::string& sat_str, double ver
 bool RINEXReader::readLine(std::string& line) {
     if (std::getline(file_, line)) {
         current_line_++;
+        // CRLF files: drop the carriage return so header, navigation and
+        // observation rows decode exactly like their LF counterparts.
+        while (!line.empty() && line.back() == '\r') {
+            line.pop_back();
+        }
         return true;
     }
     return false;
