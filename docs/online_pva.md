@@ -5,6 +5,41 @@ angles, the fixed local coordinate frame, first-heading and heading-health
 flags, and estimated IMU biases. The CSV also contains antenna position and
 velocity. Missing or stale outputs are NaN, never a plausible identity attitude.
 
+## Status: experimental, and the default attitude is not reliable
+
+The online PVA pipeline is experimental. With the production default
+(`--candidate none`), the attitude estimate is frequently wrong by more than
+90 degrees, so do not use its attitude or heading without your own check.
+Position and velocity are usable but have urban outliers of tens to hundreds
+of metres.
+
+The opt-in candidate `--candidate velocity_consistency_v10` keeps attitude
+consistent and is much better on most development runs. It is **not** the
+default. On its one unseen-data check (UrbanNav Hong Kong,
+[holdout v3](online_pva_default_switch_holdout_v3.md)) it was No-Go: the primary
+fused-position and rotation gates passed, but RTK availability, the first
+heading latch and an RTK tail statistic failed
+([results](online_pva_default_switch_holdout_v3_results.md)). Its fused
+position is also worse than the default on two development runs below.
+
+Full-run `normal` scenario, `gnss pva-evaluate` (fused position 3D error in
+metres; share of scored epochs whose rotation error exceeds 90 degrees).
+develop `adb40608`. All ten runs are development data, so these numbers are
+not an independent accuracy claim. UrbanNav and Hong Kong use a zero lever arm.
+
+| Run | default: RMSE / P50 / rot>90 | v10: RMSE / P50 / rot>90 |
+|---|---|---|
+| PPC tokyo1 | 40.7 / 7.6 / 51 % | 3.4 / 0.1 / 0 % |
+| PPC tokyo2 | 14.9 / 1.2 / 0 % | 2.2 / 0.1 / 0 % |
+| PPC tokyo3 | 16.9 / 1.8 / 4 % | 2.8 / 0.1 / 0 % |
+| PPC nagoya1 | 104.2 / 5.0 / 51 % | 13.2 / 0.2 / 0 % |
+| PPC nagoya2 | 18.8 / 1.9 / 0 % | 7.5 / 0.6 / 0 % |
+| PPC nagoya3 | 26.4 / 4.7 / 0 % | 13.0 / 1.9 / 0 % |
+| UrbanNav Odaiba (Trimble) | 14.3 / 6.0 / 52 % | 21.1 / 0.8 / 0 % |
+| UrbanNav Shinjuku (Trimble) | 210.4 / 5.8 / 43 % | 9.3 / 0.8 / 0 % |
+| UrbanNav HK Deep-Urban-1 | 66.5 / 6.5 / 34 % | 316.6 / 2.4 / 0 % |
+| UrbanNav HK Harsh-Urban-1 | 348.0 / 22.2 / 42 % | 226.1 / 15.1 / 0 % |
+
 ## First run without a dataset
 
 ```sh
