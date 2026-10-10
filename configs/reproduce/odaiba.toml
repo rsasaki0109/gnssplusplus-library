@@ -5,7 +5,7 @@
 name = "odaiba"
 status = "ready"
 title = "UrbanNav Tokyo Odaiba RTK: libgnss++ default profile vs RTKLIB demo5"
-readme_row = "Urban RTK: 4.5x fixes, Hp95 5.87 vs 25.62 m, Vp95 16.42 vs 43.37 m; lower Hmed on common epochs"
+readme_row = "Urban RTK: 6.3x fixes, Hp95 4.77 vs 25.62 m, Vp95 11.54 vs 43.37 m; lower Hmed on common epochs"
 runtime_estimate = "~5 min"
 docs = "docs/benchmarks.md"
 
@@ -75,8 +75,9 @@ argv = [
   "--summary-json", "{work_dir}/default/summary.json",
 ]
 
-# README claim, gated (reproduced 2026-09-29 with demo5 b34k, surveyed base):
-# "4.5x fixes, lower Hp95/Vp95 (all matched epochs); lower Hmed on common epochs".
+# README claim, gated (reproduced 2026-10-10 with demo5 b34k, surveyed base, original
+# 10 Hz Trimble rover; libgnss++ develop 31d7177f, Linux gcc 13.3 Release):
+# "6.3x fixes, lower Hp95/Vp95 (all matched epochs); lower Hmed on common epochs".
 [[metrics]]
 name = "default fix epochs minus demo5"
 source = "{work_dir}/default/summary.json"
@@ -124,11 +125,11 @@ path = "libgnss_all_epochs.{field}"
 gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
-  { field = "fix_epochs", expected = 922.000, abs_tol = 20 },
-  { field = "fix_rate_pct", expected = 8.361, abs_tol = 0.2 },
-  { field = "median_h_m", expected = 0.347, abs_tol = 0.01 },
-  { field = "p95_h_m", expected = 5.873, abs_tol = 0.1 },
-  { field = "p95_abs_up_m", expected = 16.419, abs_tol = 0.2 },
+  { field = "fix_epochs", expected = 1298.000, abs_tol = 20 },
+  { field = "fix_rate_pct", expected = 11.829, abs_tol = 0.2 },
+  { field = "median_h_m", expected = 0.359, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 4.773, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 11.537, abs_tol = 0.2 },
 ]
 
 # `--preset odaiba` = low-cost profile + arc-smoothed MW wide-lane AR
@@ -160,9 +161,9 @@ path = "libgnss_all_epochs.{field}"
 gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
-  { field = "fix_epochs", expected = 6115.000, abs_tol = 120 },
-  { field = "fix_rate_pct", expected = 62.436, abs_tol = 1.2 },
-  { field = "median_h_m", expected = 0.068, abs_tol = 0.01 },
-  { field = "p95_h_m", expected = 5.131, abs_tol = 0.1 },
-  { field = "p95_abs_up_m", expected = 9.740, abs_tol = 0.2 },
+  { field = "fix_epochs", expected = 8002.000, abs_tol = 120 },
+  { field = "fix_rate_pct", expected = 78.915, abs_tol = 1.2 },
+  { field = "median_h_m", expected = 0.043, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 5.293, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 15.307, abs_tol = 0.2 },
 ]

@@ -10,8 +10,9 @@ receiver observations, reference-station observations, broadcast navigation
 data, and reliable trajectory truth. It is not used as a proprietary
 receiver-engine comparison. Treat the UrbanNav Odaiba snapshot below as a
 Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
-profile (low-cost + arc-smoothed wide-lane AR) gives 6.6x the default
-profile's fixes, Hmed 0.068 m versus 0.347 m, and lower Hp95/Vp95 on that scene.
+profile (low-cost + arc-smoothed wide-lane AR) gives 6.2x the default
+profile's fixes and Hmed 0.043 m versus 0.359 m on that scene, but no longer
+lower Hp95/Vp95 (see the snapshot below).
 
 For the later PPC smoother-stack sanity check, see
 [`ppc_smoother_oracle_report.md`](ppc_smoother_oracle_report.md). That report
@@ -471,20 +472,28 @@ Comparison baseline: [RTKLIB demo5](https://github.com/rtklibexplorer/RTKLIB) b3
 
 Reproduce with `gnss reproduce odaiba` (kinematic, low-cost preset). Both
 solvers use the surveyed base position described below. All-epoch statistics
-are over each solver's matched output epochs; libgnss++ publishes 11,027 epochs
-versus 8,205 for demo5. On the 7,987 epochs both solvers publish, libgnss++
-Hmed is **0.294 m** versus 0.548 m.
+are over each solver's matched output epochs; libgnss++ publishes 10,973 epochs
+versus 8,205 for demo5. On the 8,027 epochs both solvers publish, libgnss++
+Hmed is **0.298 m** versus 0.553 m.
 
 | Config | Fix | Rate | Hmed (m) | Hp95 (m) | Vp95 (m) |
 |---|---:|---:|:---:|:---:|:---:|
 | RTKLIB demo5 b34k | 205 | 2.50% | 0.567 | 25.622 | 43.375 |
-| libgnss++ default | 922 (+717) | 8.36% | 0.347 | 5.873 | 16.419 |
-| libgnss++ `--preset odaiba` | **6115** (+5910) | **62.44%** | **0.068** | **5.131** | **9.740** |
+| libgnss++ default | 1298 (+1093) | 11.83% | 0.359 | **4.773** | **11.537** |
+| libgnss++ `--preset odaiba` | **8002** (+7797) | **78.92%** | **0.043** | 5.293 | 15.307 |
 
 `--preset odaiba` is the `low-cost` profile plus Melbourne-Wubbena wide-lane
 AR averaged over each satellite's continuous arc
 (`--wide-lane-min-arc-samples 100`, 10 s at the 10 Hz rover rate). The lane
 gates it against the default arm on Fix count, Hp95 and Vp95.
+
+These numbers were measured on 2026-10-10 on the original 10 Hz Trimble rover
+(develop `31d7177f`, Linux gcc 13.3 Release; demo5 b34k is unchanged from
+2026-09-29). They supersede the 2026-09-29 values (default 922 fixes, Hp95
+5.873 m, Vp95 16.419 m; preset 6115 fixes, Hp95 5.131 m, Vp95 9.740 m), which
+predate the BeiDou B1I mapping (#577) and later develop changes. The preset keeps its Fix and Hmed lead,
+but its Hp95 and Vp95 are now 0.52 m and 3.77 m above the default arm, so the
+two preset Hp95/Vp95 gates of the lane no longer pass.
 
 ### Base station position
 

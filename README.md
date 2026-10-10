@@ -93,7 +93,7 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` b34k | +57.0 pp fix rate, +44.9 pp official score, -11.33 m P95 H delta (six-run average; demo5 publishes mostly FLOAT/SINGLE on more epochs, so Positioning is -9.7 pp) |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher fix rate on all 3 runs (avg +10.7 pp); <50 cm fraction higher on 2 of 3 runs (avg +7.9 pp, run1 -1.8 pp); fixed-only RMS wins 2 of 3 runs |
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
-| Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k | 922 vs 205 fixes, Hp95 5.87 vs 25.62 m, Vp95 16.42 vs 43.37 m; lower Hmed on common epochs (0.294 vs 0.548 m); both solvers use the surveyed base position |
+| Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k | 1298 vs 205 fixes, Hp95 4.77 vs 25.62 m, Vp95 11.54 vs 43.37 m; lower Hmed on common epochs (0.298 vs 0.553 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
 | Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.984 m / Public 0.915 m**; 40 drives, 71,936 native output rows |
 
