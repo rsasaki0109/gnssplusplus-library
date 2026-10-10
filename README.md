@@ -92,7 +92,7 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 |---|---|---|
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` b34k | +57.0 pp fix rate, +44.9 pp official score, -11.33 m P95 H delta (six-run average; demo5 publishes mostly FLOAT/SINGLE on more epochs, so Positioning is -9.7 pp) |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher fix rate on all 3 runs (avg +10.7 pp); <50 cm fraction higher on 2 of 3 runs (avg +7.9 pp, run1 -1.8 pp); fixed-only RMS wins 2 of 3 runs |
-| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.121% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
+| CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k | 922 vs 205 fixes, Hp95 5.87 vs 25.62 m, Vp95 16.42 vs 43.37 m; lower Hmed on common epochs (0.294 vs 0.548 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
 | Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.984 m / Public 0.915 m**; 40 drives, 71,936 native output rows |
@@ -299,9 +299,9 @@ Each run has 100% interval coverage and at least 99.95% epoch coverage.
 | Tokyo 2 | **21.859%** | 21.700% | **0.329 m** | 0.514 m | 25.880 m | 18.346 m | 45.128 m | 1.333 m | 0 |
 | Tokyo 3 | **38.378%** | 7.400% | **0.191 m** | 0.801 m | 35.276 m | 19.617 m | 88.519 m | 2.986 m | 0 |
 | Nagoya 1 | **36.923%** | 17.000% | **0.451 m** | 1.105 m | 57.163 m | 7.966 m | 119.111 m | 1.043 m | 0 |
-| Nagoya 2 | **23.969%** | 23.400% | **0.554 m** | 1.119 m | 25.829 m | 16.233 m | 40.405 m | 0.767 m | 0 |
-| Nagoya 3 | **9.010%** | 6.300% | **0.304 m** | 0.318 m | 13.724 m | 14.392 m | 14.380 m | 0.587 m | 0 |
-| **Six-run aggregate** | **25.121%** | — | **0.359 m** | — | **36.522 m** | **16.885 m** | **70.361 m** | **2.986 m** | **0** |
+| Nagoya 2 | **23.948%** | 23.400% | **0.554 m** | 1.119 m | 26.803 m | 16.841 m | 42.023 m | 0.767 m | 0 |
+| Nagoya 3 | **9.010%** | 6.300% | **0.304 m** | 0.318 m | 13.595 m | 14.392 m | 14.056 m | 0.587 m | 0 |
+| **Six-run aggregate** | **25.117%** | — | **0.359 m** | — | **36.631 m** | **16.964 m** | **70.596 m** | **2.986 m** | **0** |
 
 \* libgnss++ precision uses the raw PPC reference point (already
 antenna-positioned; no lever-arm transform is applied — an earlier revision
@@ -314,11 +314,11 @@ RMS2D is now lower than MRTKLIB's on all six runs (bolded above).
 
 ![PPC six-run moving CLAS metric comparison](docs/ppc_clas_full_comparison.png)
 
-Across 58,259 scored epochs, native CLAS produced 14,635 FIX epochs: 176 more
+Across 58,259 scored epochs, native CLAS produced 14,633 FIX epochs: 176 more
 than the fixed baseline, with no lost baseline FIX epochs. Every run meets or
 exceeds the published MRTKLIB v0.4.2 FIX rate, beats its FIX RMS2D, and has
-zero FIX epochs above 3 m. The six-run all-solution RMS2D is 36.522 m; FLOAT
-and SINGLE RMS2D are 16.885 m and 70.361 m respectively. p68 is a soft miss on
+zero FIX epochs above 3 m. The six-run all-solution RMS2D is 36.631 m; FLOAT
+and SINGLE RMS2D are 16.964 m and 70.596 m respectively. p68 is a soft miss on
 Tokyo 2, Tokyo 3, Nagoya 1, and Nagoya 2; TTFF is a soft miss only on Nagoya 3.
 
 The production defaults are held floor 4 and maximum reduced-publication

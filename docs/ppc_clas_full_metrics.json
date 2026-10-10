@@ -2,12 +2,12 @@
   "scoring": {
     "scope": "complete available interval of all six PPC runs",
     "dataset_revision": null,
-    "report_generator_revision": "048c4c6b10fba813855be1d352535a5ae9782757",
+    "report_generator_revision": "388e7667399e2ebcaade13722007e7f4074e476f",
     "report_generator_worktree_dirty": true,
     "candidate_manifest": {
-      "gnss_ppp_sha256": "E6717E4FA7B25BCBC9EA93D806D6FF902B6DC8EA893DB231399F0D687D92F196",
+      "gnss_ppp_sha256": "69326EEB80F9C6CF84977C8F88C1430FF58D13780E35491497817BC6F284CBD1",
       "source": {
-        "revision": "048c4c6b10fba813855be1d352535a5ae9782757",
+        "revision": "388e7667399e2ebcaade13722007e7f4074e476f",
         "worktree_dirty": true
       },
       "held_min_dd_rows": 4,
@@ -22,28 +22,28 @@
       },
       "runs": {
         "nagoya_run1": {
-          "pos_size_bytes": 958274,
-          "pos_sha256": "C1CC7E5CF40A344A3B323272B16B60291A503B9352D47084A5E506E3009D0F5D"
+          "pos_size_bytes": 950673,
+          "pos_sha256": "34B2A55EE5839788170918BBBE3FF31D8A476B822E1C7CF6E050007BBBFF88D0"
         },
         "nagoya_run2": {
-          "pos_size_bytes": 1187491,
-          "pos_sha256": "6390D199FCB0BAAA8D7BB239E93F73A62C1E46447F0A8F93E4F5A089BB7542C2"
+          "pos_size_bytes": 1178140,
+          "pos_sha256": "AD264C71673151E9878867351FA4C034C07D3F57E98DC978D065E4D53CAC137C"
         },
         "nagoya_run3": {
-          "pos_size_bytes": 649924,
-          "pos_sha256": "8EDC2840EF5DA6022B0B4290CC25AB0CFF9E18FC0123815E797EA47108DE7536"
+          "pos_size_bytes": 644726,
+          "pos_sha256": "668361E49FE3C57165BE85448C8FDFA4AF75A65BEF9304081204B97FDF98855B"
         },
         "tokyo_run1": {
-          "pos_size_bytes": 1497047,
-          "pos_sha256": "44868E6DC2470DD5985813F1B54B2AA08C21C42954F618B7721D2BD1E97BA908"
+          "pos_size_bytes": 1485119,
+          "pos_sha256": "8FCA3B7007B36BE7D5302D8D111242F9B4FDF22AB11DEA0B35394ACE91595A4E"
         },
         "tokyo_run2": {
-          "pos_size_bytes": 1151162,
-          "pos_sha256": "58B7C750D145CE8ACA6CF265E6EFDF560FE3E77CFBDAA2CC245FF5E1BCA9048A"
+          "pos_size_bytes": 1142009,
+          "pos_sha256": "527AEDCB1994838DB03AAF2E0345E9DA9EF88DE3A5F441332B14705F64A5A3CB"
         },
         "tokyo_run3": {
-          "pos_size_bytes": 1932288,
-          "pos_sha256": "7A0045DD17FE401393374D414F710A47F52D65609A2817F5D4C450F19847CFDF"
+          "pos_size_bytes": 1916987,
+          "pos_sha256": "D079DA5403D0263B842B49A46F3B22A08CA82D9B4947E5912345D3734A3EC2F1"
         }
       }
     },
@@ -125,8 +125,8 @@
       },
       "solution_artifact": {
         "file": "tokyo_run1.pos",
-        "size_bytes": 1497047,
-        "sha256": "44868E6DC2470DD5985813F1B54B2AA08C21C42954F618B7721D2BD1E97BA908"
+        "size_bytes": 1485119,
+        "sha256": "8FCA3B7007B36BE7D5302D8D111242F9B4FDF22AB11DEA0B35394ACE91595A4E"
       }
     },
     "tokyo_run2": {
@@ -150,8 +150,8 @@
         "fixed_over_1m": 21,
         "fixed_over_3m": 0,
         "rms2d_all_m": 25.880045,
-        "p95_all_m": 36.908667,
-        "rms2d_float_m": 18.345812,
+        "p95_all_m": 36.908811,
+        "rms2d_float_m": 18.345813,
         "p95_float_m": 16.577275,
         "rms2d_single_m": 45.127882,
         "p95_single_m": 124.470659,
@@ -165,8 +165,8 @@
       },
       "solution_artifact": {
         "file": "tokyo_run2.pos",
-        "size_bytes": 1151162,
-        "sha256": "58B7C750D145CE8ACA6CF265E6EFDF560FE3E77CFBDAA2CC245FF5E1BCA9048A"
+        "size_bytes": 1142009,
+        "sha256": "527AEDCB1994838DB03AAF2E0345E9DA9EF88DE3A5F441332B14705F64A5A3CB"
       }
     },
     "tokyo_run3": {
@@ -205,8 +205,8 @@
       },
       "solution_artifact": {
         "file": "tokyo_run3.pos",
-        "size_bytes": 1932288,
-        "sha256": "7A0045DD17FE401393374D414F710A47F52D65609A2817F5D4C450F19847CFDF"
+        "size_bytes": 1916987,
+        "sha256": "D079DA5403D0263B842B49A46F3B22A08CA82D9B4947E5912345D3734A3EC2F1"
       }
     },
     "nagoya_run1": {
@@ -229,11 +229,11 @@
         "max_fixed_m": 1.04297,
         "fixed_over_1m": 18,
         "fixed_over_3m": 0,
-        "rms2d_all_m": 57.163011,
+        "rms2d_all_m": 57.163449,
         "p95_all_m": 133.914465,
-        "rms2d_float_m": 7.965916,
+        "rms2d_float_m": 7.966082,
         "p95_float_m": 22.520103,
-        "rms2d_single_m": 119.110531,
+        "rms2d_single_m": 119.111431,
         "p95_single_m": 250.296826,
         "ttff_30_s": 0.0
       },
@@ -245,8 +245,8 @@
       },
       "solution_artifact": {
         "file": "nagoya_run1.pos",
-        "size_bytes": 958274,
-        "sha256": "C1CC7E5CF40A344A3B323272B16B60291A503B9352D47084A5E506E3009D0F5D"
+        "size_bytes": 950673,
+        "sha256": "34B2A55EE5839788170918BBBE3FF31D8A476B822E1C7CF6E050007BBBFF88D0"
       }
     },
     "nagoya_run2": {
@@ -259,22 +259,22 @@
         "solution_epochs": 9447,
         "matched_epochs": 9447,
         "scored_epochs": 9387,
-        "fixed_epochs": 2250,
-        "float_epochs": 3937,
-        "single_epochs": 3200,
-        "fix_pct": 23.969319,
-        "rms2d_fixed_m": 0.553906,
-        "p68_fixed_m": 0.611945,
-        "p95_fixed_m": 0.750085,
-        "max_fixed_m": 0.767281,
+        "fixed_epochs": 2248,
+        "float_epochs": 3956,
+        "single_epochs": 3183,
+        "fix_pct": 23.948013,
+        "rms2d_fixed_m": 0.55372,
+        "p68_fixed_m": 0.611941,
+        "p95_fixed_m": 0.750079,
+        "max_fixed_m": 0.767249,
         "fixed_over_1m": 0,
         "fixed_over_3m": 0,
-        "rms2d_all_m": 25.828996,
-        "p95_all_m": 53.342061,
-        "rms2d_float_m": 16.233242,
-        "p95_float_m": 35.934407,
-        "rms2d_single_m": 40.40519,
-        "p95_single_m": 92.281433,
+        "rms2d_all_m": 26.803051,
+        "p95_all_m": 55.739629,
+        "rms2d_float_m": 16.840899,
+        "p95_float_m": 36.132772,
+        "rms2d_single_m": 42.023065,
+        "p95_single_m": 98.477765,
         "ttff_30_s": 0.0
       },
       "mrtklib_v0_4_2_article": {
@@ -285,8 +285,8 @@
       },
       "solution_artifact": {
         "file": "nagoya_run2.pos",
-        "size_bytes": 1187491,
-        "sha256": "6390D199FCB0BAAA8D7BB239E93F73A62C1E46447F0A8F93E4F5A089BB7542C2"
+        "size_bytes": 1178140,
+        "sha256": "AD264C71673151E9878867351FA4C034C07D3F57E98DC978D065E4D53CAC137C"
       }
     },
     "nagoya_run3": {
@@ -309,12 +309,12 @@
         "max_fixed_m": 0.587467,
         "fixed_over_1m": 0,
         "fixed_over_3m": 0,
-        "rms2d_all_m": 13.72375,
-        "p95_all_m": 28.689678,
-        "rms2d_float_m": 14.391528,
+        "rms2d_all_m": 13.595196,
+        "p95_all_m": 28.504155,
+        "rms2d_float_m": 14.391615,
         "p95_float_m": 36.842095,
-        "rms2d_single_m": 14.380326,
-        "p95_single_m": 29.993501,
+        "rms2d_single_m": 14.056392,
+        "p95_single_m": 29.168874,
         "ttff_30_s": 27.0
       },
       "mrtklib_v0_4_2_article": {
@@ -325,27 +325,27 @@
       },
       "solution_artifact": {
         "file": "nagoya_run3.pos",
-        "size_bytes": 649924,
-        "sha256": "8EDC2840EF5DA6022B0B4290CC25AB0CFF9E18FC0123815E797EA47108DE7536"
+        "size_bytes": 644726,
+        "sha256": "668361E49FE3C57165BE85448C8FDFA4AF75A65BEF9304081204B97FDF98855B"
       }
     }
   },
   "aggregate": {
     "scored_epochs": 58259,
-    "fixed_epochs": 14635,
-    "fix_pct": 25.120582,
-    "rms2d_fixed_m": 0.359365,
-    "p68_fixed_m": 0.347847,
-    "p95_fixed_m": 0.724977,
+    "fixed_epochs": 14633,
+    "fix_pct": 25.117149,
+    "rms2d_fixed_m": 0.359287,
+    "p68_fixed_m": 0.347764,
+    "p95_fixed_m": 0.724687,
     "max_fixed_m": 2.986488,
     "fixed_over_1m": 169,
     "fixed_over_3m": 0,
-    "rms2d_all_m": 36.522236,
-    "p95_all_m": 59.563079,
-    "rms2d_float_m": 16.88479,
-    "p95_float_m": 23.99335,
-    "rms2d_single_m": 70.36092,
-    "p95_single_m": 150.902762
+    "rms2d_all_m": 36.631008,
+    "p95_all_m": 60.130722,
+    "rms2d_float_m": 16.963609,
+    "p95_float_m": 23.994162,
+    "rms2d_single_m": 70.596097,
+    "p95_single_m": 152.291319
   },
   "signoff": {
     "hard_pass": true,
@@ -450,9 +450,9 @@
           "ttff_at_most_mrtklib": true
         },
         "delta": {
-          "fix_pct_points": 0.569319,
-          "fix_rms2d_m": -0.565094,
-          "fix_p68_m": 0.150945,
+          "fix_pct_points": 0.548013,
+          "fix_rms2d_m": -0.56528,
+          "fix_p68_m": 0.150941,
           "ttff_s": 0.0
         }
       },

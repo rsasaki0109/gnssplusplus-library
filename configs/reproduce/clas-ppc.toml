@@ -7,7 +7,7 @@
 name = "clas-ppc"
 status = "ready"
 title = "PPC Tokyo/Nagoya moving CLAS PPP-RTK (six full runs) vs MRTKLIB v0.4.2"
-readme_row = "CLAS PPP: 25.121% aggregate FIX, 0.359 m FIX RMS2D, zero FIX > 3 m over 58,259 epochs"
+readme_row = "CLAS PPP: 25.117% aggregate FIX, 0.359 m FIX RMS2D, zero FIX > 3 m over 58,259 epochs"
 runtime_estimate = "~45 min"
 docs = "docs/ppc_reproduction.md"
 
@@ -80,9 +80,9 @@ argv = [
 name = "aggregate FIX rate (%)"
 source = "{work_dir}/ppc_clas_full_metrics.json"
 path = "aggregate.fix_pct"
-expected = 25.121
+expected = 25.117
 abs_tol = 0.0005
-readme = "25.121% aggregate FIX"
+readme = "25.117% aggregate FIX"
 
 [[metrics]]
 name = "aggregate FIX RMS2D (m)"
