@@ -1,5 +1,11 @@
 # Frozen holdout contract: default switch to `velocity_consistency_v9` (v2)
 
+> **Superseded before any run by [holdout contract v3](online_pva_default_switch_holdout_v3.md).**
+> This contract was written for `velocity_consistency_v9` and was never run: no
+> estimator was scored on the Hong Kong data under it. The candidate was replaced
+> by `velocity_consistency_v10` and the input readers changed, so v3 is the
+> contract that applies. This document is kept unchanged below as the record.
+
 This contract is frozen in a commit before any candidate replay of the holdout
 data, and before any estimator of this repository has been scored on it. It
 decides whether the online PVA production default may be proposed to change to
