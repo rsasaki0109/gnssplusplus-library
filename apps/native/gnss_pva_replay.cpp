@@ -20,7 +20,7 @@ void open(io::RINEXReader& reader, const fs::path& path, io::RINEXReader::RINEXH
 int main(int argc, char** argv) {
     try {
         if (argc == 2 && std::string(argv[1]) == "--help") {
-            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|velocity_consistency_v7|velocity_consistency_v8|velocity_consistency_v9|velocity_consistency_v10|rtk_base_extrapolation_v1|rtk_online_product_v1|independent_doppler_v1]\n"
+            std::cout << "gnss_pva_replay RAW_RUN NEW_OUTPUT_DIR MAX_EPOCHS [normal|gnss_outage|imu_gap|loose_only] [START_S DURATION_S] [--candidate none|vehicle_nhc_latched_v1|velocity_consistency_v1|velocity_consistency_v2|velocity_consistency_v3|velocity_consistency_v4|velocity_consistency_v5|velocity_consistency_v6|velocity_consistency_v7|velocity_consistency_v8|velocity_consistency_v9|velocity_consistency_v10|rtk_base_extrapolation_v1|rtk_online_product_v1]\n"
                 "RAW_RUN is <tokyo|nagoya>/<run> (PPC) or urbannav/<run> (zero lever arm).\n"
                 "MAX_EPOCHS=0 means full input. Body FLU, local ENU, GPST. No reference input.\n";
             return 0;
@@ -38,8 +38,7 @@ int main(int argc, char** argv) {
              candidate != "velocity_consistency_v5" && candidate != "velocity_consistency_v6" &&
              candidate != "velocity_consistency_v7" && candidate != "velocity_consistency_v8" &&
              candidate != "velocity_consistency_v9" && candidate != "velocity_consistency_v10" &&
-             candidate != "rtk_base_extrapolation_v1" && candidate != "rtk_online_product_v1" &&
-             candidate != "independent_doppler_v1"))
+             candidate != "rtk_base_extrapolation_v1" && candidate != "rtk_online_product_v1"))
             throw std::invalid_argument("see --help for argument contract");
         const fs::path data(argv[1]), output(argv[2]);
         std::size_t consumed = 0;
@@ -164,15 +163,6 @@ int main(int argc, char** argv) {
             config.base_extrapolation_max_age_s = 2.0;
             config.independent_doppler_velocity = true;
         }
-        if (candidate == "independent_doppler_v1") {
-            // Candidate none + the Doppler least-squares velocity fed to the
-            // fusion filters and to the tight re-anchor instead of the RTK
-            // filter's own IMU-only prediction, frozen in
-            // docs/online_pva_default_switch_holdout_v4.md. That one option
-            // and nothing else: no RTK preset, no base extrapolation, no
-            // epoch-SPP velocity, no NIS gates, no fusion option. No constant.
-            config.independent_doppler_velocity = true;
-        }
         if (candidate == "rtk_base_extrapolation_v1") {
             // Candidate none + base extrapolation, frozen in
             // docs/online_rtk_base_extrapolation_v1.md. The 2 s horizon is the
@@ -261,11 +251,6 @@ int main(int argc, char** argv) {
         if (!config.rtk_preset.empty())
             meta << ",\"rtk_preset\":\"" << config.rtk_preset << "\""
                  << ",\"independent_doppler_velocity\":"
-                 << (config.independent_doppler_velocity ? "true" : "false");
-        // independent_doppler_v1 records its one option itself; the other
-        // candidates that set it record it above, under rtk_preset.
-        if (candidate == "independent_doppler_v1")
-            meta << ",\"independent_doppler_velocity\":"
                  << (config.independent_doppler_velocity ? "true" : "false");
         if (v8_or_later)
             meta << ",\"reject_float_seeded_at_base\":" << (config.rtk.reject_float_seeded_at_base ? "true" : "false")

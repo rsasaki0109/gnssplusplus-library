@@ -427,21 +427,6 @@ class EndToEndTest(Case):
         imu_times = {line.split(",")[0] for line in (directory/"imu.csv").read_text().splitlines()[1:]}
         for t in range(100, 105): self.assertIn(f"{t}.00", imu_times)
 
-    def test_medium_urban_label_changes_only_the_names(self):
-        """HKMediumUrban1 is accepted; every converted file equals that of another run label byte for byte."""
-        self.assertEqual(conv.RUNS, ("HKDeepUrban1", "HKHarshUrban1", "HKMediumUrban1"))
-        raw = self.make_raw()
-        deep = self.convert(raw, self.root/"d", run="HKDeepUrban1")
-        medium = self.convert(raw, self.root/"m", run="HKMediumUrban1")
-        self.assertEqual(medium["run"], "HKMediumUrban1")
-        self.assertEqual(medium["outputs"].keys(), deep["outputs"].keys())
-        for name in medium["outputs"]:
-            self.assertEqual((self.root/"m/urbannav/HKMediumUrban1_novatel"/name).read_bytes(),
-                             (self.root/"d/urbannav/HKDeepUrban1_novatel"/name).read_bytes(), name)
-            self.assertEqual(medium["outputs"][name]["sha256"], deep["outputs"][name]["sha256"])
-        self.assertEqual(medium["stats"], deep["stats"])
-        self.assertTrue((self.root/"m/urbannav/HKMediumUrban1_novatel.manifest.json").is_file())
-
     def test_unsupported_run_rover_and_existing_output(self):
         raw = self.make_raw()
         with self.assertRaisesRegex(ValueError, "run must be"):

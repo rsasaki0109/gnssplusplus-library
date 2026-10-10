@@ -30,9 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from convert_urbannav_to_ppc_layout import (  # noqa: E402  shared, unchanged helpers of the Tokyo converter
     PPC_IMU_HEADER, PPC_REFERENCE_HEADER, gps_tow, pin, split_rinex_header)
 
-# The run label only names the output directory and manifest. HKMediumUrban1 was added for
-# docs/online_pva_default_switch_holdout_v4.md; no conversion step depends on the label.
-RUNS = ("HKDeepUrban1", "HKHarshUrban1", "HKMediumUrban1")
+RUNS = ("HKDeepUrban1", "HKHarshUrban1")
 ROVERS = ("novatel",)
 CONTRACT = "docs/online_pva_default_switch_holdout_v2.md"
 
