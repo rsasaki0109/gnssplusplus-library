@@ -2058,3 +2058,615 @@ TEST(SignalPolicyRinexVersionTest, NormalizesOnlyLegacyBeiDouBand1) {
     EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::BeiDou, "C7I", 3.02), "C7I");
     EXPECT_EQ(normalizeObservationTypeForRinexVersion(GNSSSystem::GPS, "C1C", 3.02), "C1C");
 }
+
+// ---------------------------------------------------------------------------
+// RINEX 3.04 observation writer
+// ---------------------------------------------------------------------------
+
+namespace {
+
+Observation makeWriterObservation(GNSSSystem system,
+                                  int prn,
+                                  SignalType signal,
+                                  const std::string& code,
+                                  double pseudorange,
+                                  double phase,
+                                  double doppler,
+                                  double snr,
+                                  uint8_t lli = 0) {
+    Observation obs(SatelliteId(system, static_cast<uint8_t>(prn)), signal);
+    obs.pseudorange = pseudorange;
+    obs.has_pseudorange = true;
+    obs.pseudorange_observation_type = "C" + code;
+    obs.carrier_phase = phase;
+    obs.has_carrier_phase = true;
+    obs.carrier_phase_observation_type = "L" + code;
+    obs.doppler = doppler;
+    obs.has_doppler = true;
+    obs.snr = snr;
+    obs.lli = lli;
+    obs.loss_of_lock = (lli & 1U) != 0U;
+    obs.valid = true;
+    return obs;
+}
+
+ObservationData makeWriterEpoch(const GNSSTime& time, int variant) {
+    ObservationData epoch(time);
+    epoch.receiver_position = Vector3d(-3961905.1234, 3348990.5678, 3698211.9012);
+    const double v = static_cast<double>(variant);
+    // GPS: L1 C/A, L2C(L), L5 Q
+    epoch.addObservation(makeWriterObservation(GNSSSystem::GPS, 5, SignalType::GPS_L1CA, "1C",
+                                               22011162.552 + v, 115669443.467 + v * 10.0,
+                                               -1234.567 + v, 45.0 + v, 1));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::GPS, 5, SignalType::GPS_L2C, "2L",
+                                               22011170.125 + v, 90128444.003 + v * 8.0,
+                                               -962.001 + v, 38.5, 0));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::GPS, 5, SignalType::GPS_L5, "5Q",
+                                               22011165.875 + v, 86382211.250 + v * 7.5,
+                                               -921.750, 41.0, 3));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::GPS, 13, SignalType::GPS_L1CA, "1C",
+                                               24101111.111, 126655555.555, 2500.125, 33.0, 2));
+    // GLONASS with known frequency channels
+    for (const auto& [prn, fcn] : {std::pair<int, int>{7, 5}, std::pair<int, int>{18, -3}}) {
+        auto g1 = makeWriterObservation(GNSSSystem::GLONASS, prn, SignalType::GLO_L1CA, "1C",
+                                        20654321.001 + prn, 110000000.5 + prn, 800.0 - prn, 40.25);
+        auto g2 = makeWriterObservation(GNSSSystem::GLONASS, prn, SignalType::GLO_L2CA, "2C",
+                                        20654330.002 + prn, 85555555.5 + prn, 620.0 - prn, 36.75);
+        for (auto* o : {&g1, &g2}) {
+            o->has_glonass_frequency_channel = true;
+            o->glonass_frequency_channel = fcn;
+        }
+        epoch.addObservation(g1);
+        epoch.addObservation(g2);
+    }
+    // Galileo: E1 X, E5a Q, E5b Q
+    epoch.addObservation(makeWriterObservation(GNSSSystem::Galileo, 11, SignalType::GAL_E1, "1X",
+                                               26001001.5, 136666666.25, -300.5, 47.0));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::Galileo, 11, SignalType::GAL_E5A, "5Q",
+                                               26001007.5, 102222222.75, -225.0, 44.0, 1));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::Galileo, 11, SignalType::GAL_E5B, "7Q",
+                                               26001009.5, 101111111.125, -230.0, 43.5));
+    // BeiDou: B1I (2I), B2I (7I), B1C (1P), B3I (6I)
+    epoch.addObservation(makeWriterObservation(GNSSSystem::BeiDou, 19, SignalType::BDS_B1I, "2I",
+                                               21999999.125, 114545454.5, 100.25, 42.0));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::BeiDou, 19, SignalType::BDS_B2I, "7I",
+                                               22000003.5, 88888888.75, 76.5, 40.0, 5));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::BeiDou, 19, SignalType::BDS_B1C, "1P",
+                                               21999995.5, 115000000.25, 100.0, 39.0));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::BeiDou, 19, SignalType::BDS_B3I, "6I",
+                                               22000001.25, 93333333.5, 84.5, 41.5, 4));
+    // QZSS: L1 C/A, L2C(M), L5 I
+    epoch.addObservation(makeWriterObservation(GNSSSystem::QZSS, 3, SignalType::QZS_L1CA, "1C",
+                                               37000000.875, 194444444.125, 1500.5, 37.0));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::QZSS, 3, SignalType::QZS_L2C, "2S",
+                                               37000010.25, 151515151.5, 1170.25, 35.0));
+    epoch.addObservation(makeWriterObservation(GNSSSystem::QZSS, 3, SignalType::QZS_L5, "5I",
+                                               37000012.5, 145000000.375, 1120.0, 36.0, 7));
+    // A code-only observation and a Doppler/SNR-only observation.
+    Observation code_only(SatelliteId(GNSSSystem::GPS, 21), SignalType::GPS_L1CA);
+    code_only.pseudorange = 23456789.012;
+    code_only.has_pseudorange = true;
+    code_only.pseudorange_observation_type = "C1C";
+    code_only.valid = true;
+    epoch.addObservation(code_only);
+    Observation doppler_only(SatelliteId(GNSSSystem::GPS, 22), SignalType::GPS_L1CA);
+    doppler_only.doppler = -4321.125;
+    doppler_only.has_doppler = true;
+    doppler_only.snr = 28.0;
+    doppler_only.valid = true;
+    epoch.addObservation(doppler_only);
+    return epoch;
+}
+
+std::filesystem::path writerTempPath(const std::string& name) {
+    return std::filesystem::temp_directory_path() / name;
+}
+
+std::string readWholeFile(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    std::stringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+std::vector<std::string> splitLines(const std::string& text) {
+    std::vector<std::string> lines;
+    std::istringstream stream(text);
+    std::string line;
+    while (std::getline(stream, line)) {
+        lines.push_back(line);
+    }
+    return lines;
+}
+
+// Compare one original observation with the tracking-code observation read back.
+void expectObservationMatches(const Observation& expected,
+                              const Observation& actual,
+                              const std::string& label) {
+    SCOPED_TRACE(label);
+    EXPECT_EQ(actual.satellite, expected.satellite);
+    EXPECT_EQ(actual.has_pseudorange, expected.has_pseudorange);
+    EXPECT_EQ(actual.has_carrier_phase, expected.has_carrier_phase);
+    EXPECT_EQ(actual.has_doppler, expected.has_doppler);
+    if (expected.has_pseudorange) {
+        EXPECT_NEAR(actual.pseudorange, expected.pseudorange, 5e-4);
+        EXPECT_EQ(actual.pseudorange_observation_type, expected.pseudorange_observation_type);
+    }
+    if (expected.has_carrier_phase) {
+        EXPECT_NEAR(actual.carrier_phase, expected.carrier_phase, 5e-4);
+        EXPECT_EQ(actual.carrier_phase_observation_type, expected.carrier_phase_observation_type);
+        EXPECT_EQ(actual.lli, expected.lli);
+        EXPECT_EQ(actual.loss_of_lock, (expected.lli & 1U) != 0U);
+    }
+    if (expected.has_doppler) {
+        EXPECT_NEAR(actual.doppler, expected.doppler, 5e-4);
+    }
+    EXPECT_NEAR(actual.snr, expected.snr, 5e-4);
+}
+
+}  // namespace
+
+TEST(RINEXWriterObservationTest, RoundTripsMultiGnssObservationsThroughReader) {
+    const auto path = writerTempPath("libgnss_rinex_writer_obs_roundtrip.obs");
+    std::filesystem::remove(path);
+
+    const std::vector<GNSSTime> times = {GNSSTime(2200, 357907.25), GNSSTime(2200, 357937.25),
+                                         GNSSTime(2200, 357967.1234567)};
+    std::vector<ObservationData> epochs;
+    for (std::size_t i = 0; i < times.size(); ++i) {
+        epochs.push_back(makeWriterEpoch(times[i], static_cast<int>(i)));
+    }
+
+    io::RINEXReader::RINEXHeader header;
+    header.version = 3.04;
+    header.file_type = io::RINEXReader::FileType::OBSERVATION;
+    header.satellite_system = "M";
+    header.program = "libgnss++ test";
+    header.run_by = "unit test";
+    header.date = "20260101 120000 UTC";
+    header.marker_name = "TESTMARK";
+    header.observer = "tester";
+    header.agency = "libgnss++";
+    header.receiver_number = "1234";
+    header.receiver_type = "TESTRX";
+    header.receiver_version = "1.0";
+    header.antenna_number = "5678";
+    header.antenna_type = "TESTANT";
+    header.approximate_position = Vector3d(-3961905.1234, 3348990.5678, 3698211.9012);
+    header.has_approximate_position = true;
+    header.antenna_delta = Vector3d(0.01, 0.02, 1.5);  // east, north, height
+    header.has_antenna_delta = true;
+
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+    for (const auto& epoch : epochs) {
+        ASSERT_TRUE(writer.writeObservationEpoch(epoch));
+    }
+    ASSERT_TRUE(writer.close());
+
+    // --- header -----------------------------------------------------------
+    const std::string text = readWholeFile(path);
+    const auto lines = splitLines(text);
+    std::size_t header_end = 0;
+    for (std::size_t i = 0; i < lines.size(); ++i) {
+        if (lines[i].find("END OF HEADER") != std::string::npos) {
+            header_end = i;
+            break;
+        }
+    }
+    ASSERT_GT(header_end, 0U);
+    for (std::size_t i = 0; i <= header_end; ++i) {
+        EXPECT_EQ(lines[i].size(), 80U) << lines[i];
+    }
+    const auto header_has = [&](const std::string& label) {
+        return std::any_of(lines.begin(), lines.begin() + header_end + 1,
+                           [&](const std::string& line) {
+                               return line.size() >= 60 && line.compare(60, label.size(), label) == 0;
+                           });
+    };
+    EXPECT_EQ(lines[0].compare(0, 9, "     3.04"), 0);
+    EXPECT_EQ(lines[0][20], 'O');
+    EXPECT_EQ(lines[0][40], 'M');
+    for (const char* label : {"RINEX VERSION / TYPE", "PGM / RUN BY / DATE", "MARKER NAME",
+                              "OBSERVER / AGENCY", "REC # / TYPE / VERS", "ANT # / TYPE",
+                              "APPROX POSITION XYZ", "ANTENNA: DELTA H/E/N",
+                              "SYS / # / OBS TYPES", "TIME OF FIRST OBS", "END OF HEADER"}) {
+        EXPECT_TRUE(header_has(label)) << label;
+    }
+    const auto find_line = [&](const std::string& label, std::size_t from = 0) -> std::string {
+        for (std::size_t i = from; i <= header_end; ++i) {
+            if (lines[i].compare(60, label.size(), label) == 0) {
+                return lines[i];
+            }
+        }
+        return "";
+    };
+    EXPECT_EQ(find_line("TIME OF FIRST OBS").substr(0, 60),
+              "  2022     3    10     3    25    7.2500000     GPS         ");
+    EXPECT_EQ(find_line("TIME OF LAST OBS").substr(0, 43),
+              "  2022     3    10     3    26    7.1234567");
+    EXPECT_EQ(find_line("ANTENNA: DELTA H/E/N").substr(0, 42),
+              "        1.5000        0.0100        0.0200");
+    // GPS has 3 codes (1C,2L,5Q) with C/L/D/S; GPS 21 contributes nothing new.
+    EXPECT_EQ(find_line("SYS / # / OBS TYPES")[0], 'G');
+    EXPECT_NE(find_line("GLONASS SLOT / FRQ #").find("R07  5 R18 -3"), std::string::npos);
+    // A system with more than 13 types needs continuation lines (GPS: 12 here,
+    // BeiDou: 4 codes x 4 kinds = 16).
+    std::size_t bds_lines = 0;
+    for (std::size_t i = 0; i <= header_end; ++i) {
+        if (lines[i].compare(60, 19, "SYS / # / OBS TYPES") == 0 &&
+            (lines[i][0] == 'C' || (lines[i][0] == ' ' && i > 0 && bds_lines > 0))) {
+            ++bds_lines;
+        }
+    }
+    EXPECT_EQ(bds_lines, 2U);
+
+    // --- read back ----------------------------------------------------------
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    reader.setPreserveAdditionalFrequencyBands(true);
+    io::RINEXReader::RINEXHeader read_header;
+    ASSERT_TRUE(reader.readHeader(read_header));
+    EXPECT_NEAR(read_header.version, 3.04, 1e-9);
+    EXPECT_EQ(read_header.file_type, io::RINEXReader::FileType::OBSERVATION);
+    EXPECT_EQ(read_header.satellite_system, "M");
+    EXPECT_EQ(read_header.marker_name.substr(0, 8), "TESTMARK");
+    EXPECT_EQ(read_header.antenna_type, "TESTANT");
+    EXPECT_TRUE(read_header.has_approximate_position);
+    EXPECT_NEAR(read_header.approximate_position.x(), -3961905.1234, 1e-4);
+    EXPECT_NEAR(read_header.approximate_position.y(), 3348990.5678, 1e-4);
+    EXPECT_NEAR(read_header.approximate_position.z(), 3698211.9012, 1e-4);
+    EXPECT_TRUE(read_header.has_antenna_delta);
+    EXPECT_NEAR(read_header.antenna_delta.x(), 0.01, 1e-9);
+    EXPECT_NEAR(read_header.antenna_delta.y(), 0.02, 1e-9);
+    EXPECT_NEAR(read_header.antenna_delta.z(), 1.5, 1e-9);
+    ASSERT_EQ(read_header.system_obs_types.count('G'), 1U);
+    EXPECT_EQ(read_header.system_obs_types.at('G').size(), 12U);
+    EXPECT_EQ(read_header.system_obs_types.at('C').size(), 16U);  // continuation lines
+    EXPECT_EQ(read_header.system_obs_types.at('C').front(), "C1P");
+    EXPECT_EQ(read_header.glonass_frequency_channels.at(SatelliteId(GNSSSystem::GLONASS, 7)), 5);
+    EXPECT_EQ(read_header.glonass_frequency_channels.at(SatelliteId(GNSSSystem::GLONASS, 18)), -3);
+    EXPECT_NEAR(read_header.first_obs - GNSSTime(2200, 357907.25), 0.0, 1e-7);
+
+    for (std::size_t e = 0; e < epochs.size(); ++e) {
+        ObservationData actual;
+        ASSERT_TRUE(reader.readObservationEpoch(actual)) << "epoch " << e;
+        EXPECT_EQ(actual.time.week, times[e].week);
+        EXPECT_NEAR(actual.time.tow, times[e].tow, 5e-8);
+
+        std::size_t compared = 0;
+        for (const auto& expected : epochs[e].observations) {
+            const std::string code_of_phase =
+                !expected.carrier_phase_observation_type.empty()
+                    ? expected.carrier_phase_observation_type.substr(1)
+                : !expected.pseudorange_observation_type.empty()
+                    ? expected.pseudorange_observation_type.substr(1)
+                    : io::defaultRinexTrackingCode(expected.satellite.system, expected.signal);
+            const std::string label = expected.satellite.toString() + " " + code_of_phase +
+                                      " epoch " + std::to_string(e);
+            const Observation* by_code =
+                actual.getRinexTrackingObservation(expected.satellite, code_of_phase);
+            ASSERT_NE(by_code, nullptr) << label;
+            expectObservationMatches(expected, *by_code, label);
+            EXPECT_EQ(by_code->signal, expected.signal) << label;
+            if (expected.satellite.system == GNSSSystem::GLONASS) {
+                EXPECT_TRUE(by_code->has_glonass_frequency_channel) << label;
+                EXPECT_EQ(by_code->glonass_frequency_channel, expected.glonass_frequency_channel)
+                    << label;
+            }
+            // The policy-selected view has the same data, one entry per band.
+            if (expected.has_carrier_phase) {
+                const Observation* selected =
+                    actual.getObservation(expected.satellite, expected.signal);
+                ASSERT_NE(selected, nullptr) << label;
+                expectObservationMatches(expected, *selected, label + " selected");
+            }
+            ++compared;
+        }
+        EXPECT_EQ(compared, epochs[e].observations.size());
+        // Number of satellites: G05 G13 G21 G22 R07 R18 E11 C19 J03
+        EXPECT_EQ(actual.getNumSatellites(), 9U);
+    }
+    ObservationData extra;
+    EXPECT_FALSE(reader.readObservationEpoch(extra));
+    reader.close();
+    std::filesystem::remove(path);
+}
+
+TEST(RINEXWriterObservationTest, MergesEqualTimesSortsEpochsAndHandlesHundredsOfSatellites) {
+    const auto path = writerTempPath("libgnss_rinex_writer_obs_merge.obs");
+    std::filesystem::remove(path);
+
+    // Per-system epochs (like RTCM MSM messages) at the same instant, written
+    // out of chronological order: one RINEX epoch with >100 satellites each.
+    const auto make_system_epoch = [](const GNSSTime& time, GNSSSystem system, int count,
+                                      SignalType signal, const std::string& code) {
+        ObservationData epoch(time);
+        for (int prn = 1; prn <= count; ++prn) {
+            epoch.addObservation(makeWriterObservation(system, prn, signal, code,
+                                                       21000000.0 + prn, 110000000.0 + prn,
+                                                       100.0 + prn, 40.0));
+        }
+        return epoch;
+    };
+    const GNSSTime t0(2301, 100.0);
+    const GNSSTime t1(2301, 101.0);
+
+    io::RINEXReader::RINEXHeader header;
+    header.file_type = io::RINEXReader::FileType::OBSERVATION;
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+    ASSERT_TRUE(writer.writeObservationEpoch(
+        make_system_epoch(t1, GNSSSystem::GPS, 32, SignalType::GPS_L1CA, "1C")));
+    ASSERT_TRUE(writer.writeObservationEpoch(
+        make_system_epoch(t0, GNSSSystem::GPS, 32, SignalType::GPS_L1CA, "1C")));
+    ASSERT_TRUE(writer.writeObservationEpoch(
+        make_system_epoch(t0, GNSSSystem::Galileo, 36, SignalType::GAL_E1, "1X")));
+    ASSERT_TRUE(writer.writeObservationEpoch(
+        make_system_epoch(t0, GNSSSystem::BeiDou, 63, SignalType::BDS_B1I, "2I")));
+    ASSERT_TRUE(writer.close());
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    io::RINEXReader::RINEXHeader read_header;
+    ASSERT_TRUE(reader.readHeader(read_header));
+    ObservationData first;
+    ASSERT_TRUE(reader.readObservationEpoch(first));
+    EXPECT_NEAR(first.time - t0, 0.0, 1e-7);
+    EXPECT_EQ(first.getNumSatellites(), 131U);
+    EXPECT_EQ(first.getObservations(GNSSSystem::GPS).size(), 32U);
+    EXPECT_EQ(first.getObservations(GNSSSystem::Galileo).size(), 36U);
+    EXPECT_EQ(first.getObservations(GNSSSystem::BeiDou).size(), 63U);
+    ObservationData second;
+    ASSERT_TRUE(reader.readObservationEpoch(second));
+    EXPECT_NEAR(second.time - t1, 0.0, 1e-7);
+    EXPECT_EQ(second.getNumSatellites(), 32U);
+    // Satellites missing in the second epoch must not appear.
+    EXPECT_TRUE(second.getObservations(GNSSSystem::BeiDou).empty());
+    ObservationData none;
+    EXPECT_FALSE(reader.readObservationEpoch(none));
+    reader.close();
+    std::filesystem::remove(path);
+}
+
+TEST(RINEXWriterObservationTest, DefaultsCodesFromSignalTypeAndKeepsMissingFieldsBlank) {
+    const auto path = writerTempPath("libgnss_rinex_writer_obs_defaults.obs");
+    std::filesystem::remove(path);
+
+    // No observation-type strings: the writer must pick the documented
+    // default tracking code of each SignalType.
+    ObservationData epoch(GNSSTime(2200, 0.0));
+    struct Case {
+        GNSSSystem system;
+        int prn;
+        SignalType signal;
+    };
+    const std::vector<Case> cases = {
+        {GNSSSystem::GPS, 1, SignalType::GPS_L1CA},     {GNSSSystem::GPS, 1, SignalType::GPS_L2C},
+        {GNSSSystem::GPS, 1, SignalType::GPS_L5},       {GNSSSystem::GLONASS, 2, SignalType::GLO_L1CA},
+        {GNSSSystem::GLONASS, 2, SignalType::GLO_L2CA}, {GNSSSystem::Galileo, 3, SignalType::GAL_E1},
+        {GNSSSystem::Galileo, 3, SignalType::GAL_E5A},  {GNSSSystem::Galileo, 3, SignalType::GAL_E5B},
+        {GNSSSystem::Galileo, 3, SignalType::GAL_E6},   {GNSSSystem::BeiDou, 4, SignalType::BDS_B1I},
+        {GNSSSystem::BeiDou, 4, SignalType::BDS_B2I},   {GNSSSystem::BeiDou, 4, SignalType::BDS_B3I},
+        {GNSSSystem::BeiDou, 4, SignalType::BDS_B1C},   {GNSSSystem::BeiDou, 4, SignalType::BDS_B2A},
+        {GNSSSystem::QZSS, 5, SignalType::QZS_L1CA},    {GNSSSystem::QZSS, 5, SignalType::QZS_L2C},
+        {GNSSSystem::QZSS, 5, SignalType::QZS_L5},
+    };
+    double pseudorange = 20000000.0;
+    for (const auto& c : cases) {
+        Observation obs(SatelliteId(c.system, static_cast<uint8_t>(c.prn)), c.signal);
+        obs.pseudorange = pseudorange;
+        obs.has_pseudorange = true;
+        obs.carrier_phase = pseudorange / 0.19;
+        obs.has_carrier_phase = true;
+        obs.valid = true;
+        pseudorange += 1.0;
+        epoch.addObservation(obs);
+    }
+
+    io::RINEXReader::RINEXHeader header;
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+    ASSERT_TRUE(writer.writeObservationEpoch(epoch));
+    ASSERT_TRUE(writer.close());
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    reader.setPreserveAdditionalFrequencyBands(true);
+    io::RINEXReader::RINEXHeader read_header;
+    ASSERT_TRUE(reader.readHeader(read_header));
+    // Only C and L were present: no D/S columns are declared.
+    EXPECT_EQ(read_header.system_obs_types.at('G'),
+              (std::vector<std::string>{"C1C", "L1C", "C2X", "L2X", "C5X", "L5X"}));
+    EXPECT_EQ(read_header.system_obs_types.at('E').size(), 8U);
+    ObservationData actual;
+    ASSERT_TRUE(reader.readObservationEpoch(actual));
+    for (const auto& c : cases) {
+        const SatelliteId sat(c.system, static_cast<uint8_t>(c.prn));
+        const std::string code = io::defaultRinexTrackingCode(c.system, c.signal);
+        ASSERT_FALSE(code.empty());
+        const Observation* tracked = actual.getRinexTrackingObservation(sat, code);
+        ASSERT_NE(tracked, nullptr) << sat.toString() << " " << code;
+        EXPECT_EQ(tracked->signal, c.signal) << sat.toString() << " " << code;
+        EXPECT_FALSE(tracked->has_doppler);
+        EXPECT_EQ(tracked->snr, 0.0);
+    }
+    reader.close();
+
+    // Missing fields really are blank in the text.
+    const auto lines = splitLines(readWholeFile(path));
+    const auto sat_line = std::find_if(lines.begin(), lines.end(), [](const std::string& line) {
+        return line.compare(0, 3, "G01") == 0;
+    });
+    ASSERT_NE(sat_line, lines.end());
+    EXPECT_EQ(sat_line->size(), 3U + 6U * 16U);
+    std::filesystem::remove(path);
+
+    // Documented default codes round-trip to the same SignalType wherever the
+    // reader can distinguish the signals.
+    for (const auto& c : cases) {
+        const std::string code = io::defaultRinexTrackingCode(c.system, c.signal);
+        EXPECT_EQ(signal_policy::signalForObservationType(c.system, "C" + code, true) == c.signal ||
+                      signal_policy::signalForObservationType(c.system, "C" + code, false) == c.signal,
+                  true)
+            << code;
+    }
+    EXPECT_EQ(io::defaultRinexTrackingCode(GNSSSystem::GPS, SignalType::GAL_E1), "");
+}
+
+TEST(RINEXWriterObservationTest, WritesReaderOutputBackIdentically) {
+    // RINEX in -> reader -> writer -> reader must give the same tracking-code
+    // observations (including codes the policy does not select).
+    const auto input = writerTempPath("libgnss_rinex_writer_obs_copy_in.obs");
+    const auto output = writerTempPath("libgnss_rinex_writer_obs_copy_out.obs");
+    std::filesystem::remove(input);
+    std::filesystem::remove(output);
+    {
+        std::ofstream out(input);
+        out << rinexHeaderLine("     3.04           OBSERVATION DATA    M: Mixed",
+                               "RINEX VERSION / TYPE");
+        out << rinexHeaderLine("G   10 C1C L1C S1C C1W L1W S1W C2W L2W D2W S2W",
+                               "SYS / # / OBS TYPES");
+        out << rinexHeaderLine("", "END OF HEADER");
+        out << "> 2024 08 03 09 51 20.0000000  0  1\n";
+        out << "G05" << rinexObsField("22011162.552") << rinexObsField("115669443.467", '1')
+            << rinexObsField("45.000") << rinexObsField("22011163.001")
+            << rinexObsField("115669440.250") << rinexObsField("44.000")
+            << rinexObsField("22011170.125") << rinexObsField("90128444.003", '2')
+            << rinexObsField("-962.001") << rinexObsField("38.500") << "\n";
+    }
+    io::RINEXReader first;
+    ASSERT_TRUE(first.open(input.string()));
+    io::RINEXReader::RINEXHeader header;
+    ASSERT_TRUE(first.readHeader(header));
+    ObservationData original;
+    ASSERT_TRUE(first.readObservationEpoch(original));
+    ASSERT_EQ(original.rinex_tracking_observations.size(), 3U);  // 1C 1W 2W
+    first.close();
+
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(output.string(), header));
+    ASSERT_TRUE(writer.writeObservationEpoch(original));
+    ASSERT_TRUE(writer.close());
+
+    io::RINEXReader second;
+    ASSERT_TRUE(second.open(output.string()));
+    io::RINEXReader::RINEXHeader header2;
+    ASSERT_TRUE(second.readHeader(header2));
+    EXPECT_EQ(header2.system_obs_types.at('G'),
+              (std::vector<std::string>{"C1C", "L1C", "S1C", "C1W", "L1W", "S1W", "C2W", "L2W",
+                                        "D2W", "S2W"}));
+    ObservationData copy;
+    ASSERT_TRUE(second.readObservationEpoch(copy));
+    second.close();
+    ASSERT_EQ(copy.rinex_tracking_observations.size(), original.rinex_tracking_observations.size());
+    for (const auto& [key, expected] : original.rinex_tracking_observations) {
+        const Observation* actual = copy.getRinexTrackingObservation(key.first, key.second);
+        ASSERT_NE(actual, nullptr) << key.second;
+        expectObservationMatches(expected, *actual, key.first.toString() + key.second);
+        EXPECT_EQ(actual->signal, expected.signal);
+    }
+    EXPECT_EQ(copy.observations.size(), original.observations.size());
+    EXPECT_NEAR(copy.time - original.time, 0.0, 1e-7);
+    std::filesystem::remove(input);
+    std::filesystem::remove(output);
+}
+
+TEST(RINEXWriterObservationTest, RejectsEpochsWithoutOpenFileAndSkipsUnrepresentableValues) {
+    io::RINEXWriter closed_writer;
+    EXPECT_FALSE(closed_writer.writeObservationEpoch(makeWriterEpoch(GNSSTime(2200, 1.0), 0)));
+    EXPECT_TRUE(closed_writer.close());
+
+    const auto path = writerTempPath("libgnss_rinex_writer_obs_edge.obs");
+    std::filesystem::remove(path);
+    ObservationData epoch(GNSSTime(2200, 5.0));
+    auto obs = makeWriterObservation(GNSSSystem::GPS, 9, SignalType::GPS_L1CA, "1C", 2.0e7, 1.0e11,
+                                     -10.5, 30.0);  // phase does not fit F14.3
+    epoch.addObservation(obs);
+    Observation invalid = makeWriterObservation(GNSSSystem::GPS, 10, SignalType::GPS_L1CA, "1C",
+                                                2.1e7, 1.0e8, 5.0, 30.0);
+    invalid.valid = false;
+    epoch.addObservation(invalid);
+    Observation unknown_system(SatelliteId(GNSSSystem::UNKNOWN, 1), SignalType::GPS_L1CA);
+    unknown_system.pseudorange = 2.0e7;
+    unknown_system.has_pseudorange = true;
+    unknown_system.valid = true;
+    epoch.addObservation(unknown_system);
+
+    io::RINEXReader::RINEXHeader header;
+    io::RINEXWriter writer;
+    ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+    ASSERT_TRUE(writer.writeObservationEpoch(epoch));
+    ASSERT_TRUE(writer.close());
+    EXPECT_TRUE(writer.close());  // idempotent
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(path.string()));
+    io::RINEXReader::RINEXHeader read_header;
+    ASSERT_TRUE(reader.readHeader(read_header));
+    ObservationData actual;
+    ASSERT_TRUE(reader.readObservationEpoch(actual));
+    EXPECT_EQ(actual.getNumSatellites(), 1U);
+    const auto* g09 = actual.getObservation(SatelliteId(GNSSSystem::GPS, 9), SignalType::GPS_L1CA);
+    ASSERT_NE(g09, nullptr);
+    EXPECT_FALSE(g09->has_carrier_phase);
+    EXPECT_NEAR(g09->pseudorange, 2.0e7, 5e-4);
+    reader.close();
+    std::filesystem::remove(path);
+}
+
+TEST(RINEXWriterObservationTest, SnapshotsKeepAnInterruptedRecordingReadable) {
+    const auto path = writerTempPath("libgnss_rinex_writer_obs_snapshot.obs");
+    std::filesystem::remove(path);
+    const auto count_epochs = [&path]() {
+        io::RINEXReader reader;
+        std::size_t epochs = 0;
+        if (reader.open(path.string())) {
+            io::RINEXReader::RINEXHeader header;
+            ObservationData epoch;
+            if (reader.readHeader(header)) {
+                while (reader.readObservationEpoch(epoch)) {
+                    ++epochs;
+                }
+            }
+        }
+        return epochs;
+    };
+
+    io::RINEXReader::RINEXHeader header;
+    {
+        // Snapshots disabled: nothing but the (truncated) file exists before close().
+        io::RINEXWriter writer;
+        writer.setCheckpointInterval(-1.0);
+        ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+        ASSERT_TRUE(writer.writeObservationEpoch(makeWriterEpoch(GNSSTime(2200, 10.0), 0)));
+        EXPECT_EQ(std::filesystem::file_size(path), 0U);
+        ASSERT_TRUE(writer.close());
+        EXPECT_EQ(count_epochs(), 1U);
+    }
+    {
+        io::RINEXWriter writer;
+        writer.setCheckpointInterval(0.0);  // snapshot as soon as data is pending
+        ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+        ASSERT_TRUE(writer.writeObservationEpoch(makeWriterEpoch(GNSSTime(2200, 10.0), 0)));
+        // No close(): the process could be killed here.  The file on disk is
+        // already a complete, readable RINEX file.
+        EXPECT_EQ(count_epochs(), 1U);
+        EXPECT_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+        ASSERT_TRUE(writer.writeObservationEpoch(makeWriterEpoch(GNSSTime(2200, 11.0), 1)));
+        ASSERT_TRUE(writer.close());
+        EXPECT_EQ(count_epochs(), 2U);
+        EXPECT_FALSE(std::filesystem::exists(path.string() + ".tmp"));
+    }
+    {
+        // The destructor finishes the file as well.
+        {
+            io::RINEXWriter writer;
+            writer.setCheckpointInterval(-1.0);
+            ASSERT_TRUE(writer.createObservationFile(path.string(), header));
+            ASSERT_TRUE(writer.writeObservationEpoch(makeWriterEpoch(GNSSTime(2200, 12.0), 0)));
+        }
+        EXPECT_EQ(count_epochs(), 1U);
+    }
+    std::filesystem::remove(path);
+}

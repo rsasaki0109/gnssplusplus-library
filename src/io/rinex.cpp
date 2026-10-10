@@ -5,7 +5,15 @@
 #include <libgnss++/algorithms/source_tracking_selection.hpp>
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
+#include <system_error>
+#include <tuple>
 #include <sstream>
 #include <iomanip>
 #include <iostream>
@@ -1784,7 +1792,9 @@ bool RINEXReader::parseObservationEpochV3(const std::string& epoch_line, Observa
         flag_str.erase(0, flag_str.find_first_not_of(' '));
         // int epoch_flag = flag_str.empty() ? 0 : std::stoi(flag_str);
 
-        std::string num_sats_str = epoch_line.substr(33, 3);
+        // Epoch record is (A1,1X,I4,4(1X,I2.2),F11.7,2X,I1,I3): the satellite
+        // count is the I3 at columns 32-34, so counts of 100 or more parse.
+        std::string num_sats_str = epoch_line.substr(32, 3);
         num_sats_str.erase(0, num_sats_str.find_first_not_of(' '));
         int num_sats = num_sats_str.empty() ? 0 : std::stoi(num_sats_str);
 
@@ -2456,14 +2466,731 @@ bool RINEXReader::readLine(std::string& line) {
 }
 
 // RINEXWriter implementation
+namespace {
+
+// ---------------------------------------------------------------------------
+// RINEX 3.04 observation writer helpers
+// ---------------------------------------------------------------------------
+
+constexpr double kWriterRinexVersion = 3.04;
+constexpr std::int64_t kTicksPerSecond = 10000000;  // F11.7 epoch resolution
+constexpr std::int64_t kTicksPerMinute = 60 * kTicksPerSecond;
+constexpr std::int64_t kTicksPerDay = 86400 * kTicksPerSecond;
+constexpr std::int64_t kTicksPerWeek = 7 * kTicksPerDay;
+
+enum ObsKind : int { kKindCode = 0, kKindPhase = 1, kKindDoppler = 2, kKindSnr = 3 };
+constexpr std::array<char, 4> kKindChar = {'C', 'L', 'D', 'S'};
+
+// One tracking code ("1C") of one satellite within one epoch.
+struct WriterChannel {
+    std::string code;
+    std::array<bool, 4> has{};
+    std::array<double, 4> value{};
+    int lli = 0;
+};
+
+// One value contributed by an Observation, before it is merged into a channel.
+struct WriterContribution {
+    std::string code;
+    int kind = kKindCode;
+    double value = 0.0;
+    int lli = 0;
+};
+
+using WriterSatChannels = std::map<SatelliteId, std::vector<WriterChannel>>;
+
+std::int64_t floorDiv(std::int64_t a, std::int64_t b) {
+    std::int64_t q = a / b;
+    if ((a % b != 0) && ((a < 0) != (b < 0))) {
+        --q;
+    }
+    return q;
+}
+
+std::int64_t writerEpochTicks(const GNSSTime& time) {
+    return static_cast<std::int64_t>(time.week) * kTicksPerWeek +
+           static_cast<std::int64_t>(std::llround(time.tow * 1e7));
+}
+
+struct WriterCalendar {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int hour = 0;
+    int minute = 0;
+    int second = 0;
+    int fraction_ticks = 0;  // 1e-7 s
+};
+
+WriterCalendar writerCalendarFromTicks(std::int64_t ticks) {
+    const std::int64_t gps_days = floorDiv(ticks, kTicksPerDay);
+    const std::int64_t tod = ticks - gps_days * kTicksPerDay;
+
+    // Civil date from days since the GPS epoch (1980-01-06 = day 3657 after
+    // 1970-01-01, then the usual days-from-civil inverse).
+    const std::int64_t z = gps_days + 3657 + 719468;
+    const std::int64_t era = (z >= 0 ? z : z - 146096) / 146097;
+    const std::int64_t doe = z - era * 146097;
+    const std::int64_t yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    const std::int64_t doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    const std::int64_t mp = (5 * doy + 2) / 153;
+    const std::int64_t d = doy - (153 * mp + 2) / 5 + 1;
+    const std::int64_t m = mp + (mp < 10 ? 3 : -9);
+
+    WriterCalendar cal;
+    cal.year = static_cast<int>(yoe + era * 400 + (m <= 2 ? 1 : 0));
+    cal.month = static_cast<int>(m);
+    cal.day = static_cast<int>(d);
+    cal.hour = static_cast<int>(tod / (3600 * kTicksPerSecond));
+    cal.minute = static_cast<int>((tod / kTicksPerMinute) % 60);
+    const std::int64_t in_minute = tod % kTicksPerMinute;
+    cal.second = static_cast<int>(in_minute / kTicksPerSecond);
+    cal.fraction_ticks = static_cast<int>(in_minute % kTicksPerSecond);
+    return cal;
+}
+
+template <typename... Args>
+std::string formatString(const char* format, Args... args) {
+    const int length = std::snprintf(nullptr, 0, format, args...);
+    if (length <= 0) {
+        return "";
+    }
+    std::string text(static_cast<std::size_t>(length) + 1U, '\0');
+    std::snprintf(&text[0], text.size(), format, args...);
+    text.resize(static_cast<std::size_t>(length));
+    return text;
+}
+
+// Seconds as F<width>.7 (11 in epoch records, 13 in TIME OF FIRST OBS).
+std::string writerSecondsField(const WriterCalendar& cal, int width) {
+    const std::string seconds = formatString("%d.%07d", cal.second, cal.fraction_ticks);
+    return formatString("%*s", width, seconds.c_str());
+}
+
+// Left-justified, space-padded, truncated A<width> field.
+std::string headerField(const std::string& text, std::size_t width) {
+    std::string field = trimCopy(text);
+    field.resize(width, ' ');
+    return field;
+}
+
+std::string headerLine(std::string body, const char* label) {
+    body.resize(60, ' ');
+    std::string text = label;
+    text.resize(20, ' ');  // label field is A20
+    return body + text + "\n";
+}
+
+bool writerSystemChar(GNSSSystem system, char& sys_char) {
+    switch (system) {
+        case GNSSSystem::GPS: sys_char = 'G'; return true;
+        case GNSSSystem::GLONASS: sys_char = 'R'; return true;
+        case GNSSSystem::Galileo: sys_char = 'E'; return true;
+        case GNSSSystem::BeiDou: sys_char = 'C'; return true;
+        case GNSSSystem::QZSS: sys_char = 'J'; return true;
+        case GNSSSystem::SBAS: sys_char = 'S'; return true;
+        case GNSSSystem::NavIC: sys_char = 'I'; return true;
+        default: return false;
+    }
+}
+
+// RINEX satellite number: SBAS PRN 120..158 -> S20..S58, QZSS PRN 193..202
+// -> J01..J10.
+bool writerSatelliteNumber(const SatelliteId& sat, int& number) {
+    number = sat.prn;
+    if (sat.system == GNSSSystem::SBAS && number >= 100) {
+        number -= 100;
+    } else if (sat.system == GNSSSystem::QZSS && number >= 193) {
+        number -= 192;
+    }
+    return number >= 1 && number <= 99;
+}
+
+// A usable "<type><band><attribute>" RINEX 3 observation code, e.g. "C1C".
+// Returns the two-character tracking code ("1C") or an empty string.
+std::string trackingCodeFromObservationType(const std::string& obs_type) {
+    if (obs_type.size() != 3) {
+        return "";
+    }
+    const char type = obs_type[0];
+    if (type != 'C' && type != 'L' && type != 'D' && type != 'S') {
+        return "";
+    }
+    if (std::isdigit(static_cast<unsigned char>(obs_type[1])) == 0 ||
+        std::isalpha(static_cast<unsigned char>(obs_type[2])) == 0) {
+        return "";
+    }
+    return obs_type.substr(1);
+}
+
+// Everything the observation contributes to the file, keyed by tracking code.
+// `forced_code` (from ObservationData::rinex_tracking_observations) overrides
+// the observation's own code resolution.
+void collectContributions(const Observation& obs,
+                          const std::string* forced_code,
+                          std::vector<WriterContribution>& out) {
+    if (!obs.valid) {
+        return;
+    }
+    const std::string fallback =
+        forced_code != nullptr
+            ? *forced_code
+            : defaultRinexTrackingCode(obs.satellite.system, obs.signal);
+    std::string code_of_range = fallback;
+    std::string code_of_phase = fallback;
+    if (forced_code == nullptr) {
+        const std::string pr_code =
+            trackingCodeFromObservationType(obs.pseudorange_observation_type);
+        const std::string cp_code =
+            trackingCodeFromObservationType(obs.carrier_phase_observation_type);
+        code_of_range = !pr_code.empty() ? pr_code : (!cp_code.empty() ? cp_code : fallback);
+        code_of_phase = !cp_code.empty() ? cp_code : (!pr_code.empty() ? pr_code : fallback);
+    }
+    // Doppler and C/N0 belong to the tracking channel that produced the phase.
+    const std::string& code_of_aux = obs.has_carrier_phase ? code_of_phase : code_of_range;
+
+    const auto push = [&out](const std::string& code, int kind, double value, int lli) {
+        if (code.empty() || !std::isfinite(value)) {
+            return;
+        }
+        WriterContribution c;
+        c.code = code;
+        c.kind = kind;
+        c.value = value;
+        c.lli = lli;
+        out.push_back(std::move(c));
+    };
+    if (obs.has_pseudorange) {
+        push(code_of_range, kKindCode, obs.pseudorange, 0);
+    }
+    if (obs.has_carrier_phase) {
+        push(code_of_phase, kKindPhase, obs.carrier_phase,
+             (obs.lli & 0x07) | (obs.loss_of_lock ? 0x01 : 0));
+    }
+    if (obs.has_doppler) {
+        push(code_of_aux, kKindDoppler, obs.doppler, 0);
+    }
+    if (obs.snr > 0.0) {
+        push(code_of_aux, kKindSnr, obs.snr, 0);
+    }
+}
+
+// Observation column order within a system: band, then the library's
+// tracking-attribute priority, then the attribute letter.
+bool trackingCodeLess(GNSSSystem system, const std::string& a, const std::string& b) {
+    if (a[0] != b[0]) {
+        return a[0] < b[0];
+    }
+    const int band = a[0] - '0';
+    const int rank_a = signal_policy::trackingAttributeRank(system, band, a[1]);
+    const int rank_b = signal_policy::trackingAttributeRank(system, band, b[1]);
+    if (rank_a != rank_b) {
+        return rank_a < rank_b;
+    }
+    return a[1] < b[1];
+}
+
+// RINEX 3.04 table A23 reference phase signals: no phase shift correction is
+// ever needed, so SYS / PHASE SHIFT leaves the value blank (as RTKLIB does).
+bool isReferencePhaseCode(GNSSSystem system, const std::string& code) {
+    static const std::map<GNSSSystem, std::set<std::string>> kReference = {
+        {GNSSSystem::GPS, {"1C", "2P", "5I"}},
+        {GNSSSystem::GLONASS, {"1C", "4A", "2C", "6A", "3I"}},
+        {GNSSSystem::Galileo, {"1B", "5I", "7I", "8I", "6B"}},
+        {GNSSSystem::QZSS, {"1C", "2S", "5I", "5D", "6S"}},
+        {GNSSSystem::SBAS, {"1C", "5I"}},
+        {GNSSSystem::BeiDou, {"2I", "1D", "5D", "7I", "7D", "8D", "6I"}},
+        {GNSSSystem::NavIC, {"5A", "9A"}},
+    };
+    const auto it = kReference.find(system);
+    return it != kReference.end() && it->second.count(code) != 0;
+}
+
+std::string observationField(const WriterChannel* channel, int kind) {
+    std::string field(16, ' ');
+    if (channel == nullptr || !channel->has[kind]) {
+        return field;
+    }
+    char value[48];
+    std::snprintf(value, sizeof(value), "%14.3f", channel->value[kind]);
+    if (std::strlen(value) != 14) {
+        return field;  // not representable in F14.3
+    }
+    std::memcpy(&field[0], value, 14);
+    if (kind == kKindPhase && channel->lli >= 1 && channel->lli <= 7) {
+        field[14] = static_cast<char>('0' + channel->lli);
+    }
+    // The signal-strength indicator (last column) stays blank on purpose: the
+    // S columns carry the exact C/N0.  Writing a 1-9 digit there would also
+    // be read as a measurement std-dev by RTKLIB demo5.
+    return field;
+}
+
+}  // namespace
+
+std::string defaultRinexTrackingCode(GNSSSystem system, SignalType signal) {
+    switch (system) {
+        case GNSSSystem::GPS:
+            switch (signal) {
+                case SignalType::GPS_L1CA: return "1C";
+                case SignalType::GPS_L1P: return "1W";
+                case SignalType::GPS_L2P: return "2W";
+                case SignalType::GPS_L2C: return "2X";
+                case SignalType::GPS_L5: return "5X";
+                default: return "";
+            }
+        case GNSSSystem::GLONASS:
+            switch (signal) {
+                case SignalType::GLO_L1CA: return "1C";
+                case SignalType::GLO_L1P: return "1P";
+                case SignalType::GLO_L2CA: return "2C";
+                case SignalType::GLO_L2P: return "2P";
+                default: return "";
+            }
+        case GNSSSystem::Galileo:
+            switch (signal) {
+                case SignalType::GAL_E1: return "1X";
+                case SignalType::GAL_E5A: return "5X";
+                case SignalType::GAL_E5B: return "7X";
+                case SignalType::GAL_E6: return "6X";
+                default: return "";
+            }
+        case GNSSSystem::BeiDou:
+            switch (signal) {
+                case SignalType::BDS_B1I: return "2I";
+                case SignalType::BDS_B2I: return "7I";
+                case SignalType::BDS_B3I: return "6I";
+                case SignalType::BDS_B1C: return "1X";
+                case SignalType::BDS_B2A: return "5X";
+                default: return "";
+            }
+        case GNSSSystem::QZSS:
+            switch (signal) {
+                case SignalType::QZS_L1CA: return "1C";
+                case SignalType::QZS_L2C: return "2X";
+                case SignalType::QZS_L5: return "5X";
+                default: return "";
+            }
+        case GNSSSystem::SBAS:
+            switch (signal) {
+                case SignalType::GPS_L1CA: return "1C";
+                case SignalType::GPS_L5: return "5X";
+                default: return "";
+            }
+        case GNSSSystem::NavIC:
+            return signal == SignalType::GPS_L5 ? "5A" : "";
+        default:
+            return "";
+    }
+}
+
+// Compact copy of everything the observation file needs, so the header can be
+// written after the last epoch (observation types, first/last epoch).
+struct RINEXWriter::ObservationBuffer {
+    // key: epoch in 1e-7 s ticks since the GPS epoch (also merges/sorts epochs)
+    std::map<std::int64_t, WriterSatChannels> epochs;
+    // system -> tracking code -> which of C/L/D/S occur anywhere in the file
+    std::map<GNSSSystem, std::map<std::string, std::array<bool, 4>>> used;
+    std::map<SatelliteId, int> glonass_channels;
+    Vector3d first_position = Vector3d::Zero();
+    bool has_first_position = false;
+
+    // Where the file goes, and when the last on-disk snapshot was taken.
+    std::string path;
+    double checkpoint_interval_s = 5.0;
+    std::chrono::steady_clock::time_point last_checkpoint = std::chrono::steady_clock::now();
+    double last_checkpoint_cost_s = 0.0;
+    bool dirty = false;
+
+    bool writeFile(std::ostream& file, const RINEXReader::RINEXHeader& header) const;
+    // Write the complete file to <path>.tmp and move it over <path>, so the
+    // file on disk is always a complete, valid RINEX file.
+    bool writeSnapshot(const RINEXReader::RINEXHeader& header);
+    // Snapshot when data is pending and the interval (backed off to at most
+    // ~5% of the time spent writing) has elapsed.
+    void checkpointIfDue(const RINEXReader::RINEXHeader& header);
+};
+
+bool RINEXWriter::ObservationBuffer::writeFile(
+    std::ostream& file, const RINEXReader::RINEXHeader& header) const {
+    std::string out;
+
+    // RINEX VERSION / TYPE
+    out += headerLine(formatString("%9.2f%11s%-20s%-20s", kWriterRinexVersion, "",
+                                   "OBSERVATION DATA", "M: Mixed"),
+                      "RINEX VERSION / TYPE");
+
+    // PGM / RUN BY / DATE
+    std::string date = trimCopy(header.date);
+    if (date.empty()) {
+        const std::time_t now = std::time(nullptr);
+        std::tm utc{};
+#ifdef _WIN32
+        gmtime_s(&utc, &now);
+#else
+        gmtime_r(&now, &utc);
+#endif
+        date = formatString("%04d%02d%02d %02d%02d%02d UTC", utc.tm_year + 1900,
+                            utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min,
+                            utc.tm_sec);
+    }
+    const std::string program = trimCopy(header.program);
+    out += headerLine(headerField(program.empty() ? "libgnss++" : program, 20) +
+                          headerField(header.run_by, 20) + headerField(date, 20),
+                      "PGM / RUN BY / DATE");
+
+    const std::string marker = trimCopy(header.marker_name);
+    out += headerLine(marker.empty() ? "UNKNOWN" : marker, "MARKER NAME");
+    if (!trimCopy(header.marker_number).empty()) {
+        out += headerLine(headerField(header.marker_number, 20), "MARKER NUMBER");
+    }
+    out += headerLine("", "MARKER TYPE");
+    out += headerLine(headerField(header.observer, 20) + headerField(header.agency, 40),
+                      "OBSERVER / AGENCY");
+    out += headerLine(headerField(header.receiver_number, 20) +
+                          headerField(header.receiver_type, 20) +
+                          headerField(header.receiver_version, 20),
+                      "REC # / TYPE / VERS");
+    out += headerLine(headerField(header.antenna_number, 20) +
+                          headerField(header.antenna_type, 20),
+                      "ANT # / TYPE");
+
+    Vector3d position = Vector3d::Zero();
+    if (header.approximate_position.allFinite() &&
+        (header.has_approximate_position || header.approximate_position.norm() > 0.0)) {
+        position = header.approximate_position;
+    } else if (has_first_position) {
+        position = first_position;
+    }
+    out += headerLine(formatString("%14.4f%14.4f%14.4f", position.x(), position.y(),
+                                   position.z()),
+                      "APPROX POSITION XYZ");
+    // RINEX order is H/E/N; RINEXHeader::antenna_delta is (east, north, height).
+    const Vector3d delta =
+        header.antenna_delta.allFinite() ? header.antenna_delta : Vector3d::Zero();
+    out += headerLine(formatString("%14.4f%14.4f%14.4f", delta.z(), delta.x(), delta.y()),
+                      "ANTENNA: DELTA H/E/N");
+
+    // Observation types, in a fixed column order per system.
+    std::map<GNSSSystem, std::vector<std::string>> columns;  // "C1C", "L1C", ...
+    std::map<GNSSSystem, std::vector<std::string>> phase_codes;
+    for (const auto& [system, codes] : used) {
+        char sys_char = 'G';
+        if (!writerSystemChar(system, sys_char)) {
+            continue;
+        }
+        std::vector<std::string> sorted_codes;
+        for (const auto& entry : codes) {
+            sorted_codes.push_back(entry.first);
+        }
+        std::sort(sorted_codes.begin(), sorted_codes.end(),
+                  [system](const std::string& a, const std::string& b) {
+                      return trackingCodeLess(system, a, b);
+                  });
+        auto& types = columns[system];
+        for (const auto& code : sorted_codes) {
+            const auto& kinds = codes.at(code);
+            for (int kind = 0; kind < 4; ++kind) {
+                if (kinds[kind]) {
+                    types.push_back(std::string(1, kKindChar[kind]) + code);
+                }
+            }
+            if (kinds[kKindPhase]) {
+                phase_codes[system].push_back(code);
+            }
+        }
+        std::string line;
+        for (std::size_t i = 0; i < types.size(); ++i) {
+            if (i % 13 == 0) {
+                if (i != 0) {
+                    out += headerLine(line, "SYS / # / OBS TYPES");
+                }
+                line = i == 0 ? formatString("%c  %3d", sys_char,
+                                             static_cast<int>(types.size()))
+                              : std::string(6, ' ');
+            }
+            line += " " + types[i];
+        }
+        if (!types.empty()) {
+            out += headerLine(line, "SYS / # / OBS TYPES");
+        }
+    }
+
+    if (header.interval > 0.0) {
+        out += headerLine(formatString("%10.3f", header.interval), "INTERVAL");
+    }
+    if (!epochs.empty()) {
+        const auto time_line = [](std::int64_t ticks, const char* label) {
+            const WriterCalendar cal = writerCalendarFromTicks(ticks);
+            return headerLine(
+                formatString("%6d%6d%6d%6d%6d%s     %-3s", cal.year, cal.month, cal.day,
+                             cal.hour, cal.minute, writerSecondsField(cal, 13).c_str(),
+                             "GPS"),
+                label);
+        };
+        out += time_line(epochs.begin()->first, "TIME OF FIRST OBS");
+        out += time_line(epochs.rbegin()->first, "TIME OF LAST OBS");
+    }
+
+    // SYS / PHASE SHIFT: no correction applied by this writer.
+    for (const auto& [system, codes] : phase_codes) {
+        char sys_char = 'G';
+        writerSystemChar(system, sys_char);
+        for (const auto& code : codes) {
+            const std::string obs_code = "L" + code;
+            out += headerLine(
+                isReferencePhaseCode(system, code)
+                    ? formatString("%c %3s %8s", sys_char, obs_code.c_str(), "")
+                    : formatString("%c %3s %8.5f", sys_char, obs_code.c_str(), 0.0),
+                "SYS / PHASE SHIFT");
+        }
+    }
+
+    // GLONASS SLOT / FRQ #: header entries first, observation-carried
+    // channels override them.
+    std::map<SatelliteId, int> fcn;
+    for (const auto& [sat, channel] : header.glonass_frequency_channels) {
+        if (sat.system == GNSSSystem::GLONASS && channel >= -7 && channel <= 6 &&
+            sat.prn >= 1 && sat.prn <= 99) {
+            fcn[sat] = channel;
+        }
+    }
+    for (const auto& [sat, channel] : glonass_channels) {
+        fcn[sat] = channel;
+    }
+    if (!fcn.empty()) {
+        std::string line;
+        std::size_t index = 0;
+        for (const auto& [sat, channel] : fcn) {
+            if (index % 8 == 0) {
+                if (index != 0) {
+                    out += headerLine(line, "GLONASS SLOT / FRQ #");
+                }
+                line = index == 0 ? formatString("%3d ", static_cast<int>(fcn.size()))
+                                  : std::string(4, ' ');
+            }
+            line += formatString("R%02d %2d ", static_cast<int>(sat.prn), channel);
+            ++index;
+        }
+        out += headerLine(line, "GLONASS SLOT / FRQ #");
+    }
+    out += headerLine("", "END OF HEADER");
+
+    // Epochs.
+    for (const auto& [ticks, sats] : epochs) {
+        std::vector<std::pair<SatelliteId, const std::vector<WriterChannel>*>> rows;
+        for (const auto& [sat, channels] : sats) {
+            char sys_char = 'G';
+            int number = 0;
+            if (writerSystemChar(sat.system, sys_char) &&
+                writerSatelliteNumber(sat, number) && columns.count(sat.system) != 0) {
+                rows.emplace_back(sat, &channels);
+            }
+        }
+        if (rows.empty()) {
+            continue;
+        }
+        const WriterCalendar cal = writerCalendarFromTicks(ticks);
+        out += formatString("> %04d %02d %02d %02d %02d%s  %d%3d\n", cal.year, cal.month,
+                            cal.day, cal.hour, cal.minute,
+                            writerSecondsField(cal, 11).c_str(), 0,
+                            static_cast<int>(rows.size()));
+        for (const auto& [sat, channels] : rows) {
+            char sys_char = 'G';
+            int number = 0;
+            writerSystemChar(sat.system, sys_char);
+            writerSatelliteNumber(sat, number);
+            out += formatString("%c%02d", sys_char, number);
+            for (const auto& type : columns.at(sat.system)) {
+                const int kind = type[0] == 'C'   ? kKindCode
+                                 : type[0] == 'L' ? kKindPhase
+                                 : type[0] == 'D' ? kKindDoppler
+                                                  : kKindSnr;
+                const std::string code = type.substr(1);
+                const WriterChannel* channel = nullptr;
+                for (const auto& candidate : *channels) {
+                    if (candidate.code == code) {
+                        channel = &candidate;
+                        break;
+                    }
+                }
+                out += observationField(channel, kind);
+            }
+            out += "\n";
+        }
+        if (out.size() > (1U << 20)) {
+            file.write(out.data(), static_cast<std::streamsize>(out.size()));
+            out.clear();
+        }
+    }
+    file.write(out.data(), static_cast<std::streamsize>(out.size()));
+    return file.good();
+}
+
+bool RINEXWriter::ObservationBuffer::writeSnapshot(const RINEXReader::RINEXHeader& header) {
+    const std::string temporary = path + ".tmp";
+    {
+        std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
+        if (!file.is_open() || !writeFile(file, header)) {
+            return false;
+        }
+        file.flush();
+        if (!file.good()) {
+            return false;
+        }
+    }
+    std::error_code error;
+    std::filesystem::rename(temporary, path, error);
+    if (error) {
+        std::filesystem::remove(path, error);
+        std::filesystem::rename(temporary, path, error);
+    }
+    dirty = !!error;
+    return !error;
+}
+
+void RINEXWriter::ObservationBuffer::checkpointIfDue(const RINEXReader::RINEXHeader& header) {
+    if (!dirty || checkpoint_interval_s < 0.0) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const double since_last = std::chrono::duration<double>(start - last_checkpoint).count();
+    if (since_last < std::max(checkpoint_interval_s, 20.0 * last_checkpoint_cost_s)) {
+        return;
+    }
+    writeSnapshot(header);  // failures resurface in close()
+    const auto end = std::chrono::steady_clock::now();
+    last_checkpoint_cost_s = std::chrono::duration<double>(end - start).count();
+    last_checkpoint = end;
+}
+
+RINEXWriter::RINEXWriter() = default;
+
+RINEXWriter::~RINEXWriter() {
+    close();
+}
+
 bool RINEXWriter::createObservationFile(const std::string& filename, const RINEXReader::RINEXHeader& header) {
-    file_.open(filename);
-    if (!file_.is_open()) {
+    close();
+    {
+        // Fail early when the path is not writable; this also truncates any
+        // previous file, as opening for output always did.
+        std::ofstream probe(filename, std::ios::binary | std::ios::trunc);
+        if (!probe.is_open()) {
+            return false;
+        }
+    }
+
+    header_ = header;
+    header_.file_type = RINEXReader::FileType::OBSERVATION;
+    observation_buffer_ = std::make_unique<ObservationBuffer>();
+    observation_buffer_->path = filename;
+    observation_buffer_->checkpoint_interval_s = checkpoint_interval_s_;
+    // The file is completed by close() (and snapshotted periodically), once
+    // the observation types are known.
+    return true;
+}
+
+void RINEXWriter::setCheckpointInterval(double seconds) {
+    checkpoint_interval_s_ = seconds;
+    if (observation_buffer_) {
+        observation_buffer_->checkpoint_interval_s = seconds;
+    }
+}
+
+bool RINEXWriter::writeObservationEpoch(const ObservationData& obs_data) {
+    if (!observation_buffer_ || !std::isfinite(obs_data.time.tow)) {
         return false;
     }
-    
-    header_ = header;
-    return writeHeader(header);
+    ObservationBuffer& buffer = *observation_buffer_;
+
+    std::map<SatelliteId, std::vector<WriterContribution>> contributions;
+    std::set<std::tuple<SatelliteId, std::string, int>> present;
+    char sys_char = 'G';
+    for (const auto& obs : obs_data.observations) {
+        if (!writerSystemChar(obs.satellite.system, sys_char)) {
+            continue;
+        }
+        auto& list = contributions[obs.satellite];
+        const std::size_t before = list.size();
+        collectContributions(obs, nullptr, list);
+        for (std::size_t i = before; i < list.size(); ++i) {
+            present.emplace(obs.satellite, list[i].code, list[i].kind);
+        }
+        if (obs.satellite.system == GNSSSystem::GLONASS &&
+            obs.has_glonass_frequency_channel &&
+            obs.glonass_frequency_channel >= -7 && obs.glonass_frequency_channel <= 6) {
+            buffer.glonass_channels[obs.satellite] = obs.glonass_frequency_channel;
+        }
+    }
+    // Further tracking codes of satellites that are in the epoch (the reader
+    // and the RTCM decoder keep every tracking code of a band there).  The
+    // policy-selected observations above win on conflicts.
+    for (const auto& [key, obs] : obs_data.rinex_tracking_observations) {
+        const auto sat_it = contributions.find(key.first);
+        if (sat_it == contributions.end() ||
+            trackingCodeFromObservationType("C" + key.second).empty()) {
+            continue;
+        }
+        std::vector<WriterContribution> extra;
+        collectContributions(obs, &key.second, extra);
+        for (auto& c : extra) {
+            if (present.emplace(key.first, c.code, c.kind).second) {
+                sat_it->second.push_back(std::move(c));
+            }
+        }
+    }
+
+    const bool any = std::any_of(contributions.begin(), contributions.end(),
+                                 [](const auto& entry) { return !entry.second.empty(); });
+    if (!any) {
+        return true;
+    }
+    if (!buffer.has_first_position && obs_data.receiver_position.allFinite() &&
+        obs_data.receiver_position.norm() > 0.0) {
+        buffer.first_position = obs_data.receiver_position;
+        buffer.has_first_position = true;
+    }
+
+    WriterSatChannels& sats = buffer.epochs[writerEpochTicks(obs_data.time)];
+    for (const auto& [sat, list] : contributions) {
+        if (list.empty()) {
+            continue;
+        }
+        std::vector<WriterChannel>& channels = sats[sat];
+        for (const auto& c : list) {
+            auto it = std::find_if(channels.begin(), channels.end(),
+                                   [&c](const WriterChannel& ch) { return ch.code == c.code; });
+            if (it == channels.end()) {
+                channels.emplace_back();
+                it = std::prev(channels.end());
+                it->code = c.code;
+            }
+            it->has[c.kind] = true;
+            it->value[c.kind] = c.value;
+            if (c.kind == kKindPhase) {
+                it->lli = c.lli;
+            }
+            buffer.used[sat.system][c.code][c.kind] = true;
+        }
+    }
+    buffer.dirty = true;
+    buffer.checkpointIfDue(header_);
+    return true;
+}
+
+bool RINEXWriter::close() {
+    bool ok = true;
+    if (observation_buffer_) {
+        ok = observation_buffer_->writeSnapshot(header_);
+        observation_buffer_.reset();
+    }
+    if (file_.is_open()) {
+        file_.flush();
+        ok = ok && file_.good();
+        file_.close();
+    }
+    return ok;
 }
 
 bool RINEXWriter::writeHeader(const RINEXReader::RINEXHeader& header) {
@@ -2492,24 +3219,8 @@ bool RINEXWriter::writeHeader(const RINEXReader::RINEXHeader& header) {
     return true;
 }
 
-bool RINEXWriter::writeObservationEpoch(const ObservationData& obs_data) {
-    if (!file_.is_open()) {
-        return false;
-    }
-    
-    // Simplified epoch writing
-    file_ << "> " << obs_data.time.week << " " << obs_data.time.tow;
-    file_ << "  0  " << obs_data.observations.size() << "\n";
-    
-    for (const auto& obs : obs_data.observations) {
-        file_ << obs.satellite.toString() << " ";
-        file_ << std::fixed << std::setprecision(3) << obs.pseudorange << "\n";
-    }
-    
-    return true;
-}
-
 bool RINEXWriter::createNavigationFile(const std::string& filename, const RINEXReader::RINEXHeader& header) {
+    close();
     file_.open(filename);
     if (!file_.is_open()) {
         return false;
@@ -2704,12 +3415,6 @@ bool RINEXWriter::writeNavigationMessage(const Ephemeris& eph) {
           << "\n";
 
     return true;
-}
-
-void RINEXWriter::close() {
-    if (file_.is_open()) {
-        file_.close();
-    }
 }
 
 } // namespace io

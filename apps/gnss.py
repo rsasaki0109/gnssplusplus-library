@@ -389,7 +389,7 @@ COMMANDS = {
     "convert": {
         "kind": "binary",
         "target": "gnss_convert",
-        "summary": "Convert RTCM or UBX input into simple RINEX files and export UBX SFRBX frame metadata.",
+        "summary": "Convert RTCM or UBX input into RINEX 3.04 observation/navigation files and export UBX SFRBX frame metadata.",
     },
     "replay": {
         "kind": "binary",

@@ -51,8 +51,10 @@ Current behavior is mostly RINEX 2.x and 3.x:
   GPS/Galileo/BeiDou/QZSS eight-line Kepler records, plus four-line GLONASS
   FDMA records.
 - Header-level RINEX 3 `IONOSPHERIC CORR` parsing is limited to GPSA/GPSB.
-- `RINEXWriter` can write simple RINEX 3-style headers and broadcast
-  navigation records, but it has no RINEX 4 data-record header support.
+- `RINEXWriter` writes RINEX 3.04 mixed observation files (full header with
+  per-system `SYS / # / OBS TYPES`, `TIME OF FIRST OBS`, C/L/D/S records with
+  LLI) and RINEX 3-style broadcast navigation records, but it has no RINEX 4
+  data-record header support.
 
 The important conclusion is that RINEX 4 observation files may look close to
 RINEX 3, but RINEX 4 navigation files do not fit the current navigation parser.

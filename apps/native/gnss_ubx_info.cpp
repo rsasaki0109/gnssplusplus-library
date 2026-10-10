@@ -37,7 +37,7 @@ void printUsage(const char* argv0) {
         << "  --limit <count>           Stop after this many decoded UBX messages (0 = all)\n"
         << "  --decode-nav             Print decoded NAV-PVT and RXM-SFRBX summaries\n"
         << "  --decode-observations    Print decoded RXM-RAWX summaries\n"
-        << "  --obs-rinex-out <file>   Export decoded RAWX epochs to a simple RINEX observation file\n"
+        << "  --obs-rinex-out <file>   Export decoded RAWX epochs to a RINEX 3.04 observation file\n"
         << "  --quiet                  Suppress per-message type lines\n"
         << "  --help                   Show this help text\n";
 }
@@ -50,11 +50,12 @@ libgnss::io::RINEXReader::RINEXHeader makeObservationHeader(
     header.satellite_system = "M";
     header.program = "libgnss++";
     header.run_by = "gnss ubx-info";
-    header.observation_types = {"C1C", "L1C", "D1C", "S1C"};
+    header.receiver_type = "u-blox";
     if (decoder.hasLastNavPVT()) {
         const auto nav = decoder.getLastNavPVT();
         if (nav.valid_position) {
             header.approximate_position = nav.position_ecef;
+            header.has_approximate_position = true;
         }
     }
     return header;
@@ -221,8 +222,10 @@ int main(int argc, char** argv) {
         }
     }
 
-    if (obs_writer_open) {
-        obs_writer.close();
+    bool obs_file_ok = true;
+    if (obs_writer_open && !obs_writer.close()) {
+        std::cerr << "Error: failed to write observation RINEX file: " << obs_rinex_out << "\n";
+        obs_file_ok = false;
     }
 
     closeUbxInputSource(input_source);
@@ -235,5 +238,5 @@ int main(int argc, char** argv) {
               << " sfrbx=" << sfrbx_count
               << " rawx=" << rawx_count
               << " exported_obs_epochs=" << exported_obs_epochs << "\n";
-    return 0;
+    return obs_file_ok ? 0 : 1;
 }

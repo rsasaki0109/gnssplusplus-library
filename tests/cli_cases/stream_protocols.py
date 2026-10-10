@@ -1,6 +1,7 @@
 """CLI regression cases for the StreamProtocolCases domain."""
 
 import ast
+import re
 
 from ._support import *  # noqa: F401,F403
 
@@ -32,6 +33,42 @@ def _sys_path_access_lines(source: str, *, filename: str = "<string>") -> list[i
             )
         }
     )
+
+
+def _assert_valid_rinex3_observation_text(
+    test: unittest.TestCase, text: str, *, expected_epochs: int, expected_sats: int
+) -> None:
+    """Structural RINEX 3.04 check of a writer output (header, epoch, record widths)."""
+    lines = text.split("\n")
+    header_end = next(i for i, line in enumerate(lines) if line[60:].startswith("END OF HEADER"))
+    header = lines[: header_end + 1]
+    test.assertTrue(all(len(line) == 80 for line in header), header)
+    test.assertTrue(header[0].startswith("     3.04"), header[0])
+    test.assertEqual((header[0][20], header[0][40]), ("O", "M"))
+    labels = {line[60:].strip() for line in header}
+    for label in (
+        "PGM / RUN BY / DATE",
+        "MARKER NAME",
+        "APPROX POSITION XYZ",
+        "ANTENNA: DELTA H/E/N",
+        "SYS / # / OBS TYPES",
+        "TIME OF FIRST OBS",
+    ):
+        test.assertIn(label, labels)
+    types = {}
+    for line in header:
+        if line[60:].startswith("SYS / # / OBS TYPES") and line[0] != " ":
+            types[line[0]] = int(line[3:6])
+    test.assertTrue({"G", "E", "R", "C", "J"} <= set(types), types)
+    epochs = [i for i, line in enumerate(lines) if line.startswith(">")]
+    test.assertEqual(len(epochs), expected_epochs)
+    epoch_re = re.compile(r"^> \d{4} \d{2} \d{2} \d{2} \d{2} [ \d]\d\.\d{7}  0[ \d]{2}\d$")
+    for index in epochs:
+        test.assertRegex(lines[index], epoch_re)
+        count = int(lines[index][32:35])
+        test.assertEqual(count, expected_sats)
+        for record in lines[index + 1 : index + 1 + count]:
+            test.assertEqual(len(record), 3 + 16 * types[record[0]], record)
 
 
 class StreamProtocolCases:
@@ -304,6 +341,9 @@ class StreamProtocolCases:
             self.assertIn("R07", exported)
             self.assertIn("C19", exported)
             self.assertIn("J03", exported)
+            _assert_valid_rinex3_observation_text(
+                self, exported, expected_epochs=1, expected_sats=5
+            )
     def test_convert_converts_ubx_into_observation_rinex(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_convert_test_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -333,6 +373,9 @@ class StreamProtocolCases:
             self.assertIn("R07", exported)
             self.assertIn("C19", exported)
             self.assertIn("J03", exported)
+            _assert_valid_rinex3_observation_text(
+                self, exported, expected_epochs=1, expected_sats=5
+            )
     def test_nmea_info_decodes_gga_and_rmc_from_file(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nmea_test_") as temp_dir:
             temp_root = Path(temp_dir)
