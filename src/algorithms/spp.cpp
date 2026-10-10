@@ -1952,6 +1952,14 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         solution.status = SolutionStatus::NONE;
         return solution;
     }
+    if (spp_config_.max_position_sigma_m > 0.0) {
+        const double position_sigma_m = std::sqrt(solution.position_covariance.trace());
+        if (!std::isfinite(position_sigma_m) ||
+            position_sigma_m > spp_config_.max_position_sigma_m) {
+            solution.status = SolutionStatus::NONE;
+            return solution;
+        }
+    }
     if (spp_config_.max_residual_rms > 0.0 &&
         std::isfinite(solution.residual_rms) &&
         solution.residual_rms > spp_config_.max_residual_rms) {

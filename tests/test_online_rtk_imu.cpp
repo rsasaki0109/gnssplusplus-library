@@ -752,6 +752,9 @@ EpochSppRun runEpochSpp(bool from_epoch_spp, double spp_elevation_mask_deg,
                         bool reject_base_seed = false) {
     auto config = configuration();
     config.rtk.reject_float_seeded_at_base = reject_base_seed;
+    // These tests exercise the SPP-less (base-seeded) DD path; the default
+    // require_spp_for_kinematic_epoch would reject that epoch before them.
+    config.rtk.require_spp_for_kinematic_epoch = false;
     config.independent_doppler_velocity = true;
     config.independent_velocity_from_epoch_spp = from_epoch_spp;
     config.processor.elevation_mask = spp_elevation_mask_deg;

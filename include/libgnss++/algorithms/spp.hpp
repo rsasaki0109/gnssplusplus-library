@@ -44,6 +44,12 @@ public:
         double raim_fde_min_rms_improvement_ratio = 0.25; ///< Minimum fractional RMS improvement
         double raim_fde_min_rms_improvement_m = 1.0;  ///< Minimum absolute RMS improvement [m]
         double max_gdop = 50.0;                       ///< Reject solutions above this GDOP (<=0 disables)
+        /// Reject solutions whose own formal position sigma, sqrt(trace(position_covariance)),
+        /// exceeds this [m] (<=0 disables). Unlike the GDOP gate this uses the design matrix
+        /// that was actually solved, i.e. including the inter-system-bias columns, so a
+        /// zero-redundancy multi-GNSS fix whose extra system only contributes one or two
+        /// satellites (reported GDOP ~5, formal sigma ~26 km) is caught.
+        double max_position_sigma_m = 0.0;
         double max_residual_rms = 0.0;                ///< Reject solutions above this RMS [m] (<=0 disables)
         double max_chi_square_per_dof = 0.0;          ///< Reject solutions above reduced chi-square (<=0 disables)
         bool use_variance_model = true;               ///< Use explicit code/elevation/SNR/atmosphere variance

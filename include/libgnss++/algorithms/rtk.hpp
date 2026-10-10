@@ -117,6 +117,21 @@ public:
         /// previous behavior bit-for-bit.
         bool reject_float_seeded_at_base = false;
 
+        /// Kinematic epochs need an independent single-point solution. When this
+        /// epoch's SPP is unavailable (too few satellites for the per-system
+        /// clock unknowns, GDOP / formal-sigma gate) the DD filter is seeded
+        /// from the previous solution or even the base coordinates and nothing
+        /// bounds it: its position stays wherever it was seeded (error = the
+        /// base-rover distance after a reset, tens to hundreds of metres after
+        /// a bad previous epoch) for as long as SPP stays unavailable. With
+        /// this option the epoch returns through the SPP fallback (no solution)
+        /// instead, as RTKLIB demo5 relpos() does ("point pos error" returns
+        /// without a solution, rtkpos.c). The filter stays initialised. Not
+        /// applied in static or moving-base mode, with use_external_position_prior, or
+        /// when an INS time update seeded this epoch. false restores the
+        /// previous behavior.
+        bool require_spp_for_kinematic_epoch = true;
+
         /// velocity_consistency_v8 (m). The SPP fallback blanks an SPP
         /// solution with <= 5 satellites that is > 25 m from the last trusted
         /// position. When > 0 that rule applies only if the trusted anchor is
@@ -938,6 +953,8 @@ public:
         // base_position_ fallback (tracked regardless of the option).
         bool rover_seed_from_base_fallback = false;
         bool float_seeded_at_base_rejected = false;
+        // require_spp_for_kinematic_epoch routed this epoch to the SPP fallback.
+        bool spp_unavailable_rejected = false;
         // The SPP-fallback blanking rule would have fired but the trusted
         // anchor was older than spp_fallback_blank_max_anchor_age_s.
         bool spp_blank_age_limited = false;
