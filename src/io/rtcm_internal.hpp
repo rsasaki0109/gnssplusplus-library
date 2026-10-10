@@ -3,6 +3,7 @@
 // Shared file-local helpers for the RTCM implementation TUs; extracted
 // from the former monolithic rtcm.cpp anonymous namespace.
 
+#include "../../include/libgnss++/core/signal_policy.hpp"
 #include "../../include/libgnss++/io/rtcm.hpp"
 #include "../../include/libgnss++/io/ntrip.hpp"
 
@@ -754,50 +755,22 @@ inline SignalType decodeGlonassMsmSignal(uint8_t signal_id) {
     return lookupMsmSignal(GNSSSystem::GLONASS, signal_id).signal;
 }
 
-// Tracking-attribute priority used when several MSM signals of one satellite
+// Tracking-attribute rank used when several MSM signals of one satellite
 // decode to the same SignalType (e.g. GPS 2C/2W/2S/2L/2X are all GPS_L2C).
-// These are the RTKLIB demo5 `codepris` strings (rtkcmn.c), highest priority
-// first, restricted to the attributes reachable through the tables above.
-// RINEXReader has no code priority inside one band (it keeps the first
-// observation type declared in the header), so RTKLIB's order is the only
-// deterministic reference for an MSM stream.
-inline const char* msmTrackingPriority(GNSSSystem system, SignalType signal) {
-    switch (signal) {
-        case SignalType::GPS_L1CA: return "CPYWMNSLX";
-        case SignalType::GPS_L2C: return "CPYWMNDLSX";
-        case SignalType::GPS_L5: return system == GNSSSystem::NavIC ? "ABCX" : "IQX";
-        case SignalType::GLO_L1CA:
-        case SignalType::GLO_L1P:
-        case SignalType::GLO_L2CA:
-        case SignalType::GLO_L2P: return "CPABX";
-        case SignalType::GAL_E1: return "CABXZ";
-        case SignalType::GAL_E5A:
-        case SignalType::GAL_E5B: return "XIQ";
-        case SignalType::GAL_E6: return "ABCXZ";
-        case SignalType::QZS_L1CA: return "CLSXZ";
-        case SignalType::QZS_L2C: return "LSX";
-        case SignalType::QZS_L5: return "IQXDPZ";
-        case SignalType::BDS_B1I:
-        case SignalType::BDS_B2I:
-        case SignalType::BDS_B3I: return "IQX";
-        case SignalType::BDS_B1C: return "XDP";
-        case SignalType::BDS_B2A: return "DPX";
-        default: return "";
-    }
-}
-
-// Lower is better; unknown attributes rank after every listed one.
+// The order is the one RINEXReader uses (signal_policy::
+// trackingAttributePriority, the RTKLIB demo5 `codepris` strings), so a
+// receiver observed through RTCM and through RINEX keeps the same tracking
+// code.  Each cell's RINEX code ("2W": band digit + attribute) is mapped to
+// the table's key directly; there is no separate RTCM priority table.
+// Lower is better; attributes missing from the band's priority string share
+// signal_policy::kUnlistedTrackingRank, and a cell without a RINEX code ranks
+// after everything.
 inline int msmTrackingRank(GNSSSystem system, const MsmSignalEntry& entry) {
     if (entry.code[0] == '\0' || entry.code[1] == '\0') {
         return 1000;
     }
-    const char* priority = msmTrackingPriority(system, entry.signal);
-    for (int i = 0; priority[i] != '\0'; ++i) {
-        if (priority[i] == entry.code[1]) {
-            return i;
-        }
-    }
-    return 100;
+    const int band = entry.code[0] - '0';
+    return signal_policy::trackingAttributeRank(system, band, entry.code[1]);
 }
 
 // One decoded MSM cell, held until every signal of the satellite is known so

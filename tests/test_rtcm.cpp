@@ -2715,7 +2715,10 @@ TEST_F(RTCMProcessorTest, MsmSameSignalTypeCellsResolveByTrackingPriority) {
         {"bds3i Q beats X", GNSSSystem::BeiDou, 1127, {9, 10}, SignalType::BDS_B3I, "6Q"},
         {"bds2a D beats P/X", GNSSSystem::BeiDou, 1127, {22, 23, 24}, SignalType::BDS_B2A, "5D"},
         {"bds2a P beats X", GNSSSystem::BeiDou, 1127, {23, 24}, SignalType::BDS_B2A, "5P"},
-        {"bds1c X beats D/P", GNSSSystem::BeiDou, 1127, {30, 31, 32}, SignalType::BDS_B1C, "1X"},
+        // BeiDou B1C follows the shared RINEX/RTKLIB demo5 order "DPXSLZAN"
+        // (D > P > X); RTCM used to carry a private "XDP" table that preferred X.
+        {"bds1c D beats P/X", GNSSSystem::BeiDou, 1127, {30, 31, 32}, SignalType::BDS_B1C, "1D"},
+        {"bds1c P beats X", GNSSSystem::BeiDou, 1127, {31, 32}, SignalType::BDS_B1C, "1P"},
     };
     for (const auto& c : cases) {
         SCOPED_TRACE(c.name);
@@ -2769,6 +2772,157 @@ TEST_F(RTCMProcessorTest, MsmSameSignalTypeCellsResolveByTrackingPriority) {
             }
         }
     }
+}
+
+namespace {
+
+std::string rinexHeaderLine(std::string content, const std::string& label) {
+    if (content.size() < 60) content.append(60 - content.size(), ' ');
+    return content + label + "\n";
+}
+
+char rinexSystemChar(GNSSSystem system) {
+    switch (system) {
+        case GNSSSystem::GPS: return 'G';
+        case GNSSSystem::GLONASS: return 'R';
+        case GNSSSystem::Galileo: return 'E';
+        case GNSSSystem::QZSS: return 'J';
+        case GNSSSystem::BeiDou: return 'C';
+        case GNSSSystem::NavIC: return 'I';
+        default: return '?';
+    }
+}
+
+// One-epoch, one-satellite RINEX 3.04 file with a pseudorange and a phase for
+// each code, declared in the given order.
+ObservationData readRinexWithCodes(GNSSSystem system, int prn,
+                                   const std::vector<std::string>& codes) {
+    std::string text;
+    text += rinexHeaderLine("     3.04           OBSERVATION DATA    M", "RINEX VERSION / TYPE");
+    text += rinexHeaderLine("unit test", "PGM / RUN BY / DATE");
+    text += rinexHeaderLine("TEST", "MARKER NAME");
+    text += rinexHeaderLine("  -3957000.0000  3310000.0000  3737000.0000", "APPROX POSITION XYZ");
+    char buf[32];
+    std::snprintf(buf, sizeof(buf), "%c  %3d", rinexSystemChar(system),
+                  static_cast<int>(codes.size() * 2));
+    std::string types = buf;
+    for (const auto& code : codes) types += " C" + code + " L" + code;
+    text += rinexHeaderLine(types, "SYS / # / OBS TYPES");
+    text += rinexHeaderLine("  2024     1     1     0     0    0.0000000     GPS",
+                            "TIME OF FIRST OBS");
+    text += rinexHeaderLine("", "END OF HEADER");
+    text += "> 2024 01 01 00 00  0.0000000  0  1\n";
+    std::snprintf(buf, sizeof(buf), "%c%02d", rinexSystemChar(system), prn);
+    std::string row = buf;
+    double k = 1.0;
+    for (size_t i = 0; i < codes.size(); ++i) {
+        std::snprintf(buf, sizeof(buf), "%14.3f  ", 20000000.0 + 1000.0 * k);
+        row += buf;
+        std::snprintf(buf, sizeof(buf), "%14.3f  ", 100000000.0 + 1000.0 * k);
+        row += buf;
+        k += 1.0;
+    }
+    text += row + "\n";
+
+    static int counter = 0;
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("libgnss_rtcm_prio_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()) + "_" +
+                       std::to_string(++counter) + ".obs");
+    {
+        std::ofstream file(path, std::ios::binary);
+        file << text;
+    }
+    ObservationData epoch;
+    io::RINEXReader reader;
+    reader.setPreserveAdditionalFrequencyBands(true);
+    io::RINEXReader::RINEXHeader header;
+    if (reader.open(path.string()) && reader.readHeader(header)) {
+        reader.readObservationEpoch(epoch);
+    }
+    std::error_code ec;
+    std::filesystem::remove(path, ec);
+    return epoch;
+}
+
+}  // namespace
+
+// RTCM MSM and RINEX share one tracking-attribute priority
+// (signal_policy::trackingAttributeRank).  For every system/SignalType that
+// has several MSM tracking modes, any subset of those codes must resolve to
+// the same code through the RTCM decoder and the RINEX reader, whichever order
+// the RINEX header declares them in.
+TEST_F(RTCMProcessorTest, MsmAndRinexPickTheSameTrackingCodeForEverySystemAndBand) {
+    std::map<std::pair<int, int>, std::vector<const MsmIdExpectation*>> groups;
+    for (const auto& e : msmIdExpectations()) {
+        if (e.signal == SignalType::SIGNAL_TYPE_COUNT) continue;
+        groups[{static_cast<int>(e.system), static_cast<int>(e.signal)}].push_back(&e);
+    }
+    int compared_subsets = 0;
+    int contested_groups = 0;
+    for (const auto& [key, members] : groups) {
+        if (members.size() < 2) continue;
+        ++contested_groups;
+        const GNSSSystem system = members.front()->system;
+        const SignalType signal = members.front()->signal;
+        const int n = static_cast<int>(members.size());
+        for (unsigned mask = 1; mask < (1U << n); ++mask) {
+            if ((mask & (mask - 1U)) == 0U) continue;  // single code: nothing to decide
+            std::vector<const MsmIdExpectation*> subset;
+            for (int i = 0; i < n; ++i) {
+                if (mask & (1U << i)) subset.push_back(members[i]);
+            }
+            std::string label;
+            for (const auto* e : subset) label += std::string(e->code) + " ";
+            SCOPED_TRACE(::testing::Message() << "system=" << static_cast<int>(system)
+                                              << " signal=" << static_cast<int>(signal)
+                                              << " codes=" << label);
+
+            std::vector<MsmTestCell> cells;
+            double offset = 1.0;
+            for (const auto* e : subset) {
+                cells.push_back({6, e->signal_id, offset, offset + 0.5});
+                offset += 1.0;
+            }
+            processor.clear();
+            ObservationData rtcm_epoch;
+            ASSERT_TRUE(processor.decodeObservationData(
+                buildMsmMessage(subset.front()->msm7_type, 7, 100000000U, cells), rtcm_epoch));
+            std::string rtcm_pick;
+            for (const auto& obs : rtcm_epoch.observations) {
+                if (obs.signal == signal) rtcm_pick = obs.pseudorange_observation_type;
+            }
+            ASSERT_FALSE(rtcm_pick.empty());
+
+            // The shared helper's own verdict: lowest rank.
+            int best_rank = 1 << 30;
+            std::string expected;
+            for (const auto* e : subset) {
+                const int rank = signal_policy::trackingAttributeRank(
+                    system, e->code[0] - '0', e->code[1]);
+                if (rank < best_rank) {
+                    best_rank = rank;
+                    expected = std::string("C") + e->code;
+                }
+            }
+            EXPECT_EQ(rtcm_pick, expected);
+
+            std::vector<std::string> codes;
+            for (const auto* e : subset) codes.push_back(e->code);
+            for (int pass = 0; pass < 2; ++pass) {
+                if (pass == 1) std::reverse(codes.begin(), codes.end());
+                const ObservationData rinex_epoch = readRinexWithCodes(system, 6, codes);
+                std::string rinex_pick;
+                for (const auto& obs : rinex_epoch.observations) {
+                    if (obs.signal == signal) rinex_pick = obs.pseudorange_observation_type;
+                }
+                EXPECT_EQ(rinex_pick, rtcm_pick) << "header order pass " << pass;
+            }
+            ++compared_subsets;
+        }
+    }
+    // GPS L1/L2/L5, Galileo E1/E5a/E5b/E6, QZSS L1/L2/L5, BeiDou B1I/B2I/B3I/B2a/B1C.
+    EXPECT_GE(contested_groups, 15);
+    EXPECT_GT(compared_subsets, 50);
 }
 
 TEST_F(RTCMProcessorTest, MsmNeverEmitsTwoObservationsOfOneSignalTypePerSatellite) {
