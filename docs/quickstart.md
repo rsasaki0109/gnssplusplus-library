@@ -128,7 +128,7 @@ python3 apps/gnss.py replay \
 | `gnss vmf-atl` | Convert VMF site-wise GNSS tidal APL coefficients into libgnss++ ATL coefficient files |
 | `gnss stream` | Inspect and relay RTCM over file, NTRIP, TCP, or serial |
 | `gnss station` | Validate, start, monitor, stop, and restart a long-running RTK session with run artifacts |
-| `gnss convert` | Convert RTCM or UBX into simple RINEX outputs |
+| `gnss convert` | Convert RTCM or UBX into RINEX 3.04 observation (mixed GNSS: pseudorange, phase, Doppler, C/N0, LLI) and navigation files |
 | `gnss ubx-info` | Inspect `NAV-PVT`, `RAWX`, `SFRBX` from file or serial |
 | `gnss ionex-info` | Inspect `IONEX` headers, maps, and auxiliary DCB blocks |
 | `gnss dcb-info` | Inspect `Bias-SINEX` or auxiliary DCB products |
@@ -136,6 +136,26 @@ python3 apps/gnss.py replay \
 | `gnss web` | Local browser UI for summary JSON, live/moving-base/PPP-product sign-offs, trajectories, moving-base/visibility plots, receiver status, and artifact links |
 | `gnss ppc-rtk-signoff` | Fixed RTK sign-off profiles for PPC Tokyo/Nagoya, with optional RTKLIB/commercial receiver side-by-side output |
 | `gnss ppc-coverage-matrix` | Full six-run PPC Tokyo/Nagoya coverage-profile matrix with JSON/Markdown summaries |
+
+## Converting UBX or RTCM to RINEX
+
+```bash
+gnss convert --format ubx  --input logs/session.ubx --obs-out output/session.obs
+gnss convert --format rtcm --input logs/base.rtcm3 --gps-week 2200 --obs-out output/base.obs
+```
+
+`--obs-out` writes a RINEX 3.04 mixed observation file: a full header
+(`SYS / # / OBS TYPES` per system, derived from the observations that are
+actually present, `TIME OF FIRST OBS`, `GLONASS SLOT / FRQ #` when the
+channels are known) and, per satellite, pseudorange, carrier phase (with LLI),
+Doppler and C/N0 (`S`) columns. Tracking codes (`C1C`, `L2X`, ...) come from the
+decoder when it records them (RTCM MSM signal id) and otherwise default to one
+fixed code per signal type (UBX RAWX, for example, is written as `1C`, `2X`,
+`5X`, ...). The file is assembled when the conversion
+finishes (the header needs the full set of observation types) and is
+re-snapshotted every few seconds, so an interrupted live capture still leaves a
+valid file. RTCM carries only the GPS time of week; pass `--gps-week` with the
+week of the recording (default: the current week).
 
 ## Long-running RTK station
 

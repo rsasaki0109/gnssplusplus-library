@@ -45,6 +45,9 @@ struct ConvertConfig {
     InputFormat format = InputFormat::RTCM;
     size_t limit = 0;
     bool quiet = false;
+    // RTCM carries only the GPS time of week; this supplies the week.
+    bool has_gps_week = false;
+    int gps_week = 0;
 };
 
 constexpr double kSemiCircleToRadians = 3.14159265358979323846;
@@ -109,9 +112,11 @@ void printUsage(const char* argv0) {
         << "Usage: " << argv0
         << " --input <file|ntrip://...|serial://...|tcp://host:port|/dev/tty...> --format <rtcm|ubx> [options]\n"
         << "Options:\n"
-        << "  --obs-out <file>          Export decoded observations to a simple RINEX file\n"
+        << "  --obs-out <file>          Export decoded observations to a RINEX 3.04 observation file\n"
         << "  --nav-out <file>          Export decoded broadcast nav to a RINEX nav file\n"
         << "  --sfrbx-out <file>        Export UBX RXM-SFRBX subframes to CSV\n"
+        << "  --gps-week <week>         RTCM only: GPS week of the data (RTCM messages carry\n"
+        << "                            only the time of week; default: current week)\n"
         << "  --limit <count>           Stop after this many decoded messages (0 = all)\n"
         << "  --quiet                   Suppress per-message type lines\n"
         << "  --help                    Show this help text\n";
@@ -138,6 +143,12 @@ ConvertConfig parseArguments(int argc, char** argv) {
             } else {
                 throw std::invalid_argument("unsupported --format value: " + value);
             }
+        } else if (arg == "--gps-week" && i + 1 < argc) {
+            config.gps_week = std::stoi(argv[++i]);
+            if (config.gps_week < 0) {
+                throw std::invalid_argument("--gps-week must be non-negative");
+            }
+            config.has_gps_week = true;
         } else if (arg == "--limit" && i + 1 < argc) {
             config.limit = static_cast<size_t>(std::stoull(argv[++i]));
         } else if (arg == "--quiet") {
@@ -167,7 +178,8 @@ libgnss::io::RINEXReader::RINEXHeader makeObservationHeader() {
     header.satellite_system = "M";
     header.program = "libgnss++";
     header.run_by = "gnss convert";
-    header.observation_types = {"C1C", "L1C", "D1C", "S1C"};
+    // Observation types, TIME OF FIRST OBS and the like are derived from the
+    // decoded epochs by RINEXWriter; only descriptive fields are set here.
     return header;
 }
 
@@ -1286,6 +1298,17 @@ int runRTCMConversion(const ConvertConfig& config) {
     }
 
     libgnss::io::RTCMProcessor processor;
+    // GPS/Galileo/BeiDou/QZSS observation epochs only have a time of week
+    // (week 0 out of the decoder) and GLONASS epochs are resolved against a
+    // reference time.  Pin both to one week, rolling it over when the time of
+    // week wraps, so the RINEX epochs carry real, consistent dates.
+    const libgnss::GNSSTime start_time =
+        config.has_gps_week ? libgnss::GNSSTime(config.gps_week, kHalfWeekSeconds)
+                            : currentGpstApprox();
+    int resolved_week = start_time.week;
+    bool have_last_tow = false;
+    double last_tow = 0.0;
+    processor.setReferenceTime(start_time);
     libgnss::io::RINEXWriter obs_writer;
     libgnss::io::RINEXWriter nav_writer;
     bool obs_writer_open = false;
@@ -1308,6 +1331,25 @@ int runRTCMConversion(const ConvertConfig& config) {
             libgnss::io::rtcm_utils::isObservationMessage(message.type)) {
             libgnss::ObservationData obs_data;
             if (processor.decodeObservationData(message, obs_data)) {
+                // Week 0 is "time of week only"; week 1 is a BeiDou epoch whose
+                // +14 s BDT->GPST shift wrapped past the end of that week 0.
+                if (obs_data.time.week <= 1) {
+                    const double tow = std::fmod(
+                        obs_data.time.week * libgnss::constants::SECONDS_PER_WEEK +
+                            obs_data.time.tow,
+                        libgnss::constants::SECONDS_PER_WEEK);
+                    // Nearest week to the previous epoch, so messages that
+                    // straddle a week boundary resolve consistently.
+                    if (have_last_tow && tow < last_tow - kHalfWeekSeconds) {
+                        ++resolved_week;
+                    } else if (have_last_tow && tow > last_tow + kHalfWeekSeconds) {
+                        --resolved_week;
+                    }
+                    have_last_tow = true;
+                    last_tow = tow;
+                    obs_data.time.week = resolved_week;
+                    processor.setReferenceTime(libgnss::GNSSTime(resolved_week, tow));
+                }
                 if (!obs_writer_open) {
                     if (!obs_writer.createObservationFile(config.obs_out_path, makeObservationHeader())) {
                         std::cerr << "Error: failed to create observation RINEX: "
@@ -1351,11 +1393,14 @@ int runRTCMConversion(const ConvertConfig& config) {
         }
     }
 
-    if (obs_writer_open) {
-        obs_writer.close();
+    bool outputs_ok = true;
+    if (obs_writer_open && !obs_writer.close()) {
+        std::cerr << "Error: failed to write observation RINEX: " << config.obs_out_path << "\n";
+        outputs_ok = false;
     }
-    if (nav_writer_open) {
-        nav_writer.close();
+    if (nav_writer_open && !nav_writer.close()) {
+        std::cerr << "Error: failed to write navigation RINEX: " << config.nav_out_path << "\n";
+        outputs_ok = false;
     }
     reader.close();
 
@@ -1363,7 +1408,7 @@ int runRTCMConversion(const ConvertConfig& config) {
               << " exported_obs_epochs=" << exported_obs_epochs
               << " exported_nav_messages=" << exported_nav_messages
               << " skipped_nav_messages=" << skipped_nav_messages << "\n";
-    return 0;
+    return outputs_ok ? 0 : 1;
 }
 
 int runUBXConversion(const ConvertConfig& config) {
@@ -1748,11 +1793,13 @@ int runUBXConversion(const ConvertConfig& config) {
 
             if (!obs_writer_open) {
                 auto header = makeObservationHeader();
+                header.receiver_type = "u-blox";
                 const auto& ubx_decoder = decoder.getDecoder();
                 if (ubx_decoder.hasLastNavPVT()) {
                     const auto nav = ubx_decoder.getLastNavPVT();
                     if (nav.valid_position) {
                         header.approximate_position = nav.position_ecef;
+                        header.has_approximate_position = true;
                     }
                 }
                 if (!obs_writer.createObservationFile(config.obs_out_path, header)) {
@@ -1773,11 +1820,14 @@ int runUBXConversion(const ConvertConfig& config) {
         }
     }
 
-    if (obs_writer_open) {
-        obs_writer.close();
+    bool outputs_ok = true;
+    if (obs_writer_open && !obs_writer.close()) {
+        std::cerr << "Error: failed to write observation RINEX: " << config.obs_out_path << "\n";
+        outputs_ok = false;
     }
-    if (nav_writer_open) {
-        nav_writer.close();
+    if (nav_writer_open && !nav_writer.close()) {
+        std::cerr << "Error: failed to write navigation RINEX: " << config.nav_out_path << "\n";
+        outputs_ok = false;
     }
     if (sfrbx_writer_open) {
         sfrbx_writer.close();
@@ -1792,7 +1842,7 @@ int runUBXConversion(const ConvertConfig& config) {
               << " exported_nav_messages=" << exported_nav_messages
               << " skipped_nav_messages=" << skipped_nav_messages
               << " exported_sfrbx_messages=" << exported_sfrbx_messages << "\n";
-    return 0;
+    return outputs_ok ? 0 : 1;
 }
 
 }  // namespace

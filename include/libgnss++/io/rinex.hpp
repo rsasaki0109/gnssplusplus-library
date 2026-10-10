@@ -293,15 +293,50 @@ private:
 };
 
 /**
+ * @brief Canonical RINEX 3 tracking code ("1C", "2X", ...) used by the writer
+ * when an observation does not carry its own tracking code.
+ *
+ * The result is the inverse of the reader's SignalType mapping, so the code
+ * written for a signal reads back as the same SignalType wherever the
+ * reader can tell the signals apart.  Per band the attribute follows the
+ * RTKLIB/convbin convention for a signal whose exact tracking mode is not
+ * known: "C" for civil C/A codes, "X" for combined data+pilot signals and
+ * "I" for BeiDou B1I/B2I/B3I.  Returns an empty string when the
+ * (system, signal) pair has no RINEX representation.
+ */
+std::string defaultRinexTrackingCode(GNSSSystem system, SignalType signal);
+
+/**
  * @brief RINEX file writer
+ *
+ * Observation files are written as RINEX 3.04 mixed ("M") files.  The
+ * SYS / # / OBS TYPES header, TIME OF FIRST OBS and GLONASS SLOT / FRQ # can
+ * only be known once all epochs have been seen, so createObservationFile()
+ * opens (and truncates) the file but writeObservationEpoch() only buffers a
+ * compact copy of each epoch.  The complete file - header followed by the
+ * epochs, sorted by time - is written by close() (also called by the
+ * destructor) and, for long or live recordings, snapshotted periodically
+ * (see setCheckpointInterval()).  Epochs with identical timestamps are
+ * merged, so the per-system epochs of an RTCM MSM stream end up as one RINEX
+ * epoch.
+ *
+ * Navigation files are written immediately, message by message.
  */
 class RINEXWriter {
 public:
-    RINEXWriter() = default;
-    ~RINEXWriter() = default;
+    RINEXWriter();
+    ~RINEXWriter();
+    RINEXWriter(const RINEXWriter&) = delete;
+    RINEXWriter& operator=(const RINEXWriter&) = delete;
     
     /**
      * @brief Create observation file
+     *
+     * Only descriptive header fields are used (program, run_by, date,
+     * marker, observer, agency, receiver, antenna, approximate position,
+     * antenna delta, interval and GLONASS frequency channels).  Observation
+     * types and the time of the first observation are derived from the
+     * epochs passed to writeObservationEpoch().
      */
     bool createObservationFile(const std::string& filename,
                              const RINEXReader::RINEXHeader& header);
@@ -314,6 +349,8 @@ public:
     
     /**
      * @brief Write observation epoch
+     *
+     * Buffers the epoch; nothing reaches the file until close().
      */
     bool writeObservationEpoch(const ObservationData& obs_data);
     
@@ -323,13 +360,31 @@ public:
     bool writeNavigationMessage(const Ephemeris& eph);
     
     /**
-     * @brief Close file
+     * @brief Seconds between on-disk snapshots of the buffered observation file
+     * (default 5; negative disables; 0 snapshots after every epoch).
+     *
+     * A snapshot rewrites the complete file atomically (<file>.tmp then
+     * rename), so an interrupted live conversion still leaves a valid RINEX
+     * file holding everything up to the last snapshot.  The effective
+     * interval backs off to at least 20x the time a snapshot takes, which
+     * bounds the overhead for long recordings.  Call before
+     * createObservationFile() or at any time afterwards.
      */
-    void close();
+    void setCheckpointInterval(double seconds);
+
+    /**
+     * @brief Finish the file (writes the buffered observation file) and
+     * close it.  Returns false if the file could not be written completely.
+     */
+    bool close();
 
 private:
+    struct ObservationBuffer;
+
     std::ofstream file_;
     RINEXReader::RINEXHeader header_;
+    std::unique_ptr<ObservationBuffer> observation_buffer_;
+    double checkpoint_interval_s_ = 5.0;
     
     /**
      * @brief Write header

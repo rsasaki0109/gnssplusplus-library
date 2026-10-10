@@ -360,7 +360,11 @@ target_include_directories(gnss_lib_solvers PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
-target_link_libraries(gnss_lib_solvers PUBLIC Eigen3::Eigen)
+# The solver archive uses types and RINEX/environment helpers defined in
+# gnss_lib.  Declare the dependency (as gnss_rtk_runtime does) so single-pass
+# static linkers place gnss_lib after this archive instead of relying on some
+# earlier object happening to pull the needed gnss_lib members in.
+target_link_libraries(gnss_lib_solvers PUBLIC gnss_lib Eigen3::Eigen)
 if(CHOLMOD_INCLUDE_DIR AND CHOLMOD_LIBRARY)
     target_include_directories(gnss_lib_solvers PRIVATE ${CHOLMOD_INCLUDE_DIR})
     target_compile_definitions(gnss_lib_solvers PRIVATE GNSSPP_HAS_CHOLMOD=1)
