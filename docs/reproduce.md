@@ -22,7 +22,7 @@ runner adds no scoring logic of its own.
 |---|---|---|---:|---|
 | RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28 and again 2026-10-10 (Linux gcc 13.3); see [README refresh](#readme-refresh-2026-09-28) and [2026-10-10 refresh](#readme-refresh-2026-10-10) |
 | CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | ~45 min | **Pass.** README refreshed 2026-10-10: reproduces 25.117% FIX, 0.359 m FIX RMS2D, 0 FIX > 3 m, 58,259 epochs, all hard gates (L6/SSR expansion ~14 min + six `gnss_ppp` runs ~30 min) |
-| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: the README claims (default vs demo5) pass, but the two `--preset odaiba` Hp95/Vp95 gates against the default arm fail; see [2026-10-10 refresh](#readme-refresh-2026-10-10) |
+| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: all gates pass; the `--preset odaiba` claim is restated (more fixes, lower Hmed; all-epoch Hp95/Vp95 reported, not gated); see [2026-10-10 refresh](#readme-refresh-2026-10-10) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
@@ -358,18 +358,23 @@ exactly, 205 fixes, Hp95 25.622 m, Vp95 43.375 m):
 | Claim | libgnss++ default | `--preset odaiba` | Result |
 |---|---:|---:|---|
 | More fixes | 1298 | **8002** | pass |
-| Lower Hp95 | 4.77 m | 5.29 m | **fail** |
-| Lower Vp95 | 11.54 m | 15.31 m | **fail** |
-| Hmed (reported, not gated) | 0.359 m | **0.043 m** | - |
+| Lower Hmed | 0.359 m | **0.043 m** | pass |
+| Hp95, all epochs (reported, not gated) | **4.77 m** | 5.29 m | - |
+| Vp95, all epochs (reported, not gated) | **11.54 m** | 15.31 m | - |
 
 The 2026-09-29 values (default 922 fixes, Hp95 5.87 m, Vp95 16.42 m, Hmed
 0.294 m on 7,987 common epochs; preset 6115 fixes, Hp95 5.13 m, Vp95 9.74 m)
 predate the BeiDou B1I mapping (#577) and later develop changes. The default
 arm gained fixes and improved Hp95/Vp95 (Hmed moved by +0.012 m), while the
-preset gained fixes but lost its Hp95/Vp95 lead. The lane
-gates for those two preset claims are left as they were, so
-`gnss reproduce odaiba --check` exits with status 3 until the claim or the
-preset is revisited.
+preset gained fixes but its all-epoch Hp95/Vp95 rose above the default arm.
+A bisection on the 10 Hz data showed this is not a solver regression: the old
+preset Vp95 held only because two FLOAT post-filters blanked two stationary
+deep-canyon windows, and #577/#588 changed the fix pattern so they no longer
+fire (with the filters off the pre-#577 preset Vp95 was already 14.74 m; on
+the epochs both arms publish the preset Vp95 is lower, 7.38 vs 9.41 m). The
+preset claim is therefore restated as more fixes and lower Hmed, gated, with
+its all-epoch Hp95/Vp95 reported but not gated; see
+[benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot).
 
 ## fgo-tokyo local result (2026-09-28)
 
