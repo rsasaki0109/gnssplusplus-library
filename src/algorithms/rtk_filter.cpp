@@ -224,7 +224,16 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
             }
             const double ref_snr = signal_snr_dbhz(ref_sd, freq);
             const double ref_nlos_factor = nlos_variance_factor(ref_sat);
-            const double ref_phase_variance = varerr(ref_sd.elevation, true, ref_snr) * ref_nlos_factor;
+            // demo5 ddres: +0.01 m^2 phase variance while the half-cycle
+            // flag (LLI bit1) is set. Off => exactly +0.0.
+            const double ref_half_cycle_variance =
+                (rtk_config_.use_half_cycle_lli &&
+                 (ref_sd.roverHalfCycle(freq) || ref_sd.baseHalfCycle(freq)))
+                    ? rtk_config_.half_cycle_phase_variance_m2
+                    : 0.0;
+            const double ref_phase_variance =
+                varerr(ref_sd.elevation, true, ref_snr) * ref_nlos_factor +
+                ref_half_cycle_variance;
             const double ref_code_variance = varerr(ref_sd.elevation, false, ref_snr) * ref_nlos_factor;
 
             for (const auto& pair : system_pairs) {
@@ -250,6 +259,10 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
                 // stays at the model value so the DD block structure
                 // (ref_var*11' + diag) keeps its known correlated part.
                 const int adaptive_key = freq * MAXSAT + satelliteSlot(sat);
+                if (rtk_config_.use_half_cycle_lli &&
+                    (sd.roverHalfCycle(freq) || sd.baseHalfCycle(freq))) {
+                    sat_phase_variance += rtk_config_.half_cycle_phase_variance_m2;
+                }
                 const double sat_phase_model_variance = sat_phase_variance;
                 const double sat_code_model_variance = sat_code_variance;
                 if (adaptive_noise_active) {

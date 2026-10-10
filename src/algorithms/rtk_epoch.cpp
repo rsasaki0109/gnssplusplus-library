@@ -520,7 +520,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             auto build_pairs_for_mode = [&](RTKConfig::GlonassARMode mode) {
                 const auto saved_mode = rtk_config_.glonass_ar_mode;
                 rtk_config_.glonass_ar_mode = mode;
-                auto dd_pairs = buildDoubleDifferencePairs(sat_data, min_lock);
+                auto dd_pairs = buildDoubleDifferencePairs(sat_data, min_lock, true);
                 rtk_config_.glonass_ar_mode = saved_mode;
                 return dd_pairs;
             };

@@ -181,7 +181,7 @@ bool RTKProcessor::resolveAmbiguities() {
     const auto& sat_data = current_sat_data_;
 
     const int min_lock = std::max(1, rtk_config_.min_lock_count);
-    return resolveAmbiguities(buildDoubleDifferencePairs(sat_data, min_lock));
+    return resolveAmbiguities(buildDoubleDifferencePairs(sat_data, min_lock, true));
 }
 
 void RTKProcessor::tryWlNlFallback(int na,

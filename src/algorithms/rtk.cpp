@@ -152,6 +152,7 @@ void RTKProcessor::reset() {
     doppler_phase_history_l1_m_.clear();
     doppler_phase_history_l2_m_.clear();
     doppler_phase_history_l5_m_.clear();
+    half_cycle_lli_history_.clear();
     code_phase_history_l1_m_.clear();
     code_phase_history_l2_m_.clear();
     tdcp_history_l1_.clear();
