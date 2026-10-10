@@ -70,6 +70,8 @@ struct RawxMeasurement {
     uint16_t locktime = 500;
     uint8_t cno = 45;
     uint8_t trk_stat = 0x03;
+    uint8_t freq_id = 0;
+    uint8_t cp_stdev = 0;
 };
 
 std::vector<uint8_t> buildRawxMessage(const std::vector<RawxMeasurement>& measurements,
@@ -92,11 +94,11 @@ std::vector<uint8_t> buildRawxMessage(const std::vector<RawxMeasurement>& measur
         payload.push_back(measurement.gnss_id);
         payload.push_back(measurement.sv_id);
         payload.push_back(measurement.sig_id);
-        payload.push_back(0);
+        payload.push_back(measurement.freq_id);
         appendLittleEndian<uint16_t>(payload, measurement.locktime);
         payload.push_back(measurement.cno);
         payload.push_back(0);
-        payload.push_back(0);
+        payload.push_back(measurement.cp_stdev);
         payload.push_back(0);
         payload.push_back(measurement.trk_stat);
         payload.push_back(0);
@@ -313,6 +315,240 @@ TEST(UBXDecoderTest, DecodesMixedGnssRawxObservationEpoch) {
         obs_data.getObservation(SatelliteId(GNSSSystem::GLONASS, 7), SignalType::GLO_L2CA);
     ASSERT_NE(glonass, nullptr);
     EXPECT_NEAR(glonass->doppler, 125.0, 1e-3);
+}
+
+// trkStat bits: 0 prValid, 1 cpValid, 2 halfCyc valid, 3 halfCyc subtracted.
+constexpr uint8_t kTrkPrCp = 0x03;
+constexpr uint8_t kTrkPrCpHalfValid = 0x07;
+
+bool decodeRawxEpoch(io::UBXDecoder& decoder,
+                     const std::vector<RawxMeasurement>& measurements,
+                     ObservationData& obs_data) {
+    const auto bytes = buildRawxMessage(measurements);
+    const auto decoded = decoder.decode(bytes.data(), bytes.size());
+    return decoded.size() == 1U && decoder.decodeRawx(decoded.front(), obs_data);
+}
+
+RawxMeasurement gpsL1(uint16_t locktime, uint8_t trk_stat, uint8_t cp_stdev = 0) {
+    RawxMeasurement m;
+    m.pseudorange = 20200000.25;
+    m.carrier_phase = 110000.5;
+    m.doppler = -1234.5f;
+    m.gnss_id = 0;
+    m.sv_id = 12;
+    m.sig_id = 0;
+    m.locktime = locktime;
+    m.trk_stat = trk_stat;
+    m.cp_stdev = cp_stdev;
+    return m;
+}
+
+TEST(UBXDecoderTest, RawxLockTimeDecreaseFlagsSlipOnLli) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(1000, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli, 0);
+    EXPECT_FALSE(epoch.observations.front().loss_of_lock);
+
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(2000, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli, 0);
+
+    // locktime fell from 2000 ms to 500 ms: lock was lost and re-acquired.
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(500, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli & 0x01, 1);
+    EXPECT_TRUE(epoch.observations.front().loss_of_lock);
+
+    // Next epoch is continuous again: the slip is reported only once.
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(1500, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli, 0);
+}
+
+TEST(UBXDecoderTest, RawxZeroLockTimeFlagsSlip) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(0, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli & 0x01, 1);
+    EXPECT_TRUE(epoch.observations.front().loss_of_lock);
+}
+
+TEST(UBXDecoderTest, RawxSlipCarriesForwardUntilValidPhase) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(5000, kTrkPrCpHalfValid)}, epoch));
+    // Slip epoch with an invalid phase (cpValid clear): nothing to flag yet.
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(0, 0x05)}, epoch));
+    EXPECT_FALSE(epoch.observations.front().has_carrier_phase);
+    EXPECT_EQ(epoch.observations.front().lli, 0);
+    // First valid phase afterwards carries the slip.
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(1000, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_TRUE(epoch.observations.front().has_carrier_phase);
+    EXPECT_EQ(epoch.observations.front().lli & 0x01, 1);
+}
+
+TEST(UBXDecoderTest, RawxHalfSubtractedToggleFlagsSlip) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(1000, 0x0F)}, epoch));  // first sight, halfSub=1
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(2000, 0x0F)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli, 0);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(3000, kTrkPrCpHalfValid)}, epoch));  // halfSub 1 -> 0
+    EXPECT_EQ(epoch.observations.front().lli & 0x01, 1);
+}
+
+TEST(UBXDecoderTest, RawxSlipStateIsPerSatelliteAndSignal) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement l1 = gpsL1(5000, kTrkPrCpHalfValid);
+    RawxMeasurement l2 = gpsL1(5000, kTrkPrCpHalfValid);
+    l2.sig_id = 3;  // L2CL
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l1, l2}, epoch));
+    l1.locktime = 6000;
+    l2.locktime = 100;  // only L2 loses lock
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l1, l2}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 2U);
+    EXPECT_EQ(epoch.observations[0].signal, SignalType::GPS_L1CA);
+    EXPECT_EQ(epoch.observations[0].lli & 0x01, 0);
+    EXPECT_EQ(epoch.observations[1].signal, SignalType::GPS_L2C);
+    EXPECT_EQ(epoch.observations[1].lli & 0x01, 1);
+}
+
+TEST(UBXDecoderTest, RawxUnresolvedHalfCycleSetsLliBit1ButKeepsPhase) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    // trkStat bit2 clear: halfCyc not valid.
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(1000, kTrkPrCp)}, epoch));
+    const Observation& unresolved = epoch.observations.front();
+    EXPECT_TRUE(unresolved.has_carrier_phase);
+    EXPECT_EQ(unresolved.lli & 0x02, 0x02);
+    EXPECT_EQ(unresolved.lli & 0x01, 0);
+
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(2000, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_TRUE(epoch.observations.front().has_carrier_phase);
+    EXPECT_EQ(epoch.observations.front().lli, 0);
+}
+
+TEST(UBXDecoderTest, RawxHighCpStdevInvalidatesCarrierPhase) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    // Gen8-style receiver (only sigId 0 seen): threshold is 5.
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(1000, kTrkPrCpHalfValid, 5)}, epoch));
+    EXPECT_TRUE(epoch.observations.front().has_carrier_phase);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(2000, kTrkPrCpHalfValid, 6)}, epoch));
+    const Observation& obs = epoch.observations.front();
+    EXPECT_FALSE(obs.has_carrier_phase);
+    EXPECT_DOUBLE_EQ(obs.carrier_phase, 0.0);
+    EXPECT_TRUE(obs.has_pseudorange);
+    EXPECT_EQ(obs.lli, 0);
+}
+
+TEST(UBXDecoderTest, RawxGen9ReceiverUsesLooserCpStdevThreshold) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement l2 = gpsL1(1000, kTrkPrCpHalfValid);
+    l2.sig_id = 4;  // sigId > 1 marks a Gen9 receiver
+    RawxMeasurement l1 = gpsL1(1000, kTrkPrCpHalfValid, 10);
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l2, l1}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 2U);
+    EXPECT_TRUE(epoch.observations[1].has_carrier_phase);
+    l1.cp_stdev = 15;
+    l1.locktime = 2000;
+    l2.locktime = 2000;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l2, l1}, epoch));
+    EXPECT_FALSE(epoch.observations[1].has_carrier_phase);
+}
+
+TEST(UBXDecoderTest, RawxInvalidHalfCycleMarkerPhaseIsRejected) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement m = gpsL1(1000, kTrkPrCpHalfValid);
+    m.carrier_phase = -0.5;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {m}, epoch));
+    EXPECT_FALSE(epoch.observations.front().has_carrier_phase);
+    EXPECT_TRUE(epoch.observations.front().has_pseudorange);
+}
+
+TEST(UBXDecoderTest, RawxUnknownSigIdIsSkippedWithoutDuplicates) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement l1 = gpsL1(1000, kTrkPrCpHalfValid);
+    RawxMeasurement l1_bogus = l1;
+    l1_bogus.sig_id = 2;  // not a GPS signal
+    l1_bogus.pseudorange = 99999999.0;
+    RawxMeasurement qzss_l1s = l1;
+    qzss_l1s.gnss_id = 5;
+    qzss_l1s.sv_id = 3;
+    qzss_l1s.sig_id = 1;  // L1S, not representable
+    RawxMeasurement e6 = l1;
+    e6.gnss_id = 2;
+    e6.sv_id = 5;
+    e6.sig_id = 8;  // E6B, not representable
+    RawxMeasurement b3i = l1;
+    b3i.gnss_id = 3;
+    b3i.sv_id = 19;
+    b3i.sig_id = 4;  // B3I D1, not representable
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {l1, l1_bogus, qzss_l1s, e6, b3i}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 1U);
+    EXPECT_EQ(epoch.observations.front().signal, SignalType::GPS_L1CA);
+    EXPECT_NEAR(epoch.observations.front().pseudorange, 20200000.25, 1e-6);
+}
+
+TEST(UBXDecoderTest, RawxGlonassUnknownSlotSkippedAndFcnFilled) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement unknown_slot = gpsL1(1000, kTrkPrCpHalfValid);
+    unknown_slot.gnss_id = 6;
+    unknown_slot.sv_id = 255;
+    unknown_slot.freq_id = 7;
+    RawxMeasurement glo_minus4 = unknown_slot;
+    glo_minus4.sv_id = 7;
+    glo_minus4.freq_id = 3;  // FCN -4
+    RawxMeasurement glo_plus6 = unknown_slot;
+    glo_plus6.sv_id = 9;
+    glo_plus6.freq_id = 13;  // FCN +6
+    RawxMeasurement glo_bad_freq = unknown_slot;
+    glo_bad_freq.sv_id = 11;
+    glo_bad_freq.freq_id = 200;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {unknown_slot, glo_minus4, glo_plus6, glo_bad_freq}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 3U);
+    const Observation* a = epoch.getObservation(SatelliteId(GNSSSystem::GLONASS, 7), SignalType::GLO_L1CA);
+    const Observation* b = epoch.getObservation(SatelliteId(GNSSSystem::GLONASS, 9), SignalType::GLO_L1CA);
+    const Observation* c = epoch.getObservation(SatelliteId(GNSSSystem::GLONASS, 11), SignalType::GLO_L1CA);
+    ASSERT_NE(a, nullptr);
+    ASSERT_NE(b, nullptr);
+    ASSERT_NE(c, nullptr);
+    EXPECT_TRUE(a->has_glonass_frequency_channel);
+    EXPECT_EQ(a->glonass_frequency_channel, -4);
+    EXPECT_TRUE(b->has_glonass_frequency_channel);
+    EXPECT_EQ(b->glonass_frequency_channel, 6);
+    EXPECT_FALSE(c->has_glonass_frequency_channel);
+    EXPECT_EQ(epoch.getObservation(SatelliteId(GNSSSystem::GLONASS, 255), SignalType::GLO_L1CA), nullptr);
+}
+
+TEST(UBXDecoderTest, RawxBeiDouGeoPhaseGetsHalfCycleCorrection) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    RawxMeasurement geo = gpsL1(1000, kTrkPrCpHalfValid);
+    geo.gnss_id = 3;
+    geo.sv_id = 3;  // C03 GEO
+    geo.sig_id = 0;
+    RawxMeasurement igso = geo;
+    igso.sv_id = 19;
+    RawxMeasurement geo_late = geo;
+    geo_late.sv_id = 60;  // C60 GEO
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {geo, igso, geo_late}, epoch));
+    ASSERT_EQ(epoch.observations.size(), 3U);
+    EXPECT_NEAR(epoch.observations[0].carrier_phase, 110000.5 + 0.5, 1e-9);
+    EXPECT_NEAR(epoch.observations[1].carrier_phase, 110000.5, 1e-9);
+    EXPECT_NEAR(epoch.observations[2].carrier_phase, 110000.5 + 0.5, 1e-9);
+}
+
+TEST(UBXDecoderTest, ClearResetsRawxTrackingState) {
+    io::UBXDecoder decoder;
+    ObservationData epoch;
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(9000, kTrkPrCpHalfValid)}, epoch));
+    decoder.clear();
+    ASSERT_TRUE(decodeRawxEpoch(decoder, {gpsL1(100, kTrkPrCpHalfValid)}, epoch));
+    EXPECT_EQ(epoch.observations.front().lli & 0x01, 0);
 }
 
 TEST(UBXDecoderTest, DecodesSfrbxMessage) {

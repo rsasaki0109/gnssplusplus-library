@@ -106,6 +106,19 @@ private:
     uint16_t last_gps_week_ = 0;
     bool has_last_gps_week_ = false;
 
+    /// Per (gnssId, svId, sigId) carrier-phase tracking state carried across
+    /// UBX-RXM-RAWX epochs for cycle-slip detection (RTKLIB demo5
+    /// decode_rxmrawx lockt/halfc/lockflag).
+    struct RawxTrackState {
+        double lock_time_s = 0.0;   ///< locktime of the previous epoch [s]
+        bool half_subtracted = false; ///< previous trkStat halfSub bit
+        bool slip_pending = false;  ///< slip seen, not yet reported on a valid phase
+    };
+    std::map<uint32_t, RawxTrackState> rawx_track_state_;
+    /// Set once a sigId > 1 is seen (u-blox Gen9 / F9 family); selects the
+    /// looser cpStdev validity threshold.
+    bool rawx_gen9_receiver_ = false;
+
     static uint16_t messageKey(uint8_t message_class, uint8_t message_id);
     static bool validateChecksum(const uint8_t* data, size_t payload_length, uint8_t ck_a, uint8_t ck_b);
 };
