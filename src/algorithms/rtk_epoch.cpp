@@ -392,6 +392,17 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 return fallback_spp();
             }
 
+            // No independent SPP this epoch: the filter was seeded from the
+            // previous solution or the base and nothing bounds it. RTKLIB
+            // demo5 relpos() skips such an epoch (rtkpos.c "point pos error").
+            if (rtk_config_.require_spp_for_kinematic_epoch && isDynamicPositionMode(rtk_config_) &&
+                !moving_base_mode && !current_spp.isValid() && !rtk_config_.use_external_position_prior &&
+                !ins_time_update_applied_last_epoch_) {
+                debug_telemetry_.spp_unavailable_rejected = true;
+                restoreRememberedState();
+                return fallback_spp();
+            }
+
             // velocity_consistency_v8 (k): a FLOAT whose position seed fell
             // through to the base coordinates is not emitted. Same handling as
             // the gates above; the filter stays initialised.

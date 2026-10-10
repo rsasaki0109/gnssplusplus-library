@@ -3,6 +3,7 @@
 //   (m) RTKConfig::spp_fallback_blank_max_anchor_age_s
 //   (l) PositionSolution::float_prefit_gate_exceeded
 //   (n) RTKProcessor::currentSpp()
+//   RTKConfig::require_spp_for_kinematic_epoch, SPPConfig::max_position_sigma_m
 // Synthetic observations only (no data files): the receivers and the 24-GPS
 // constellation are modelled with the same geometry the processors use.
 // Public-API-only, like the other RTK unit tests.
@@ -10,6 +11,7 @@
 #include <gtest/gtest.h>
 
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
@@ -34,6 +36,9 @@ RTKProcessor::RTKConfig rtkConfig() {
     RTKProcessor::RTKConfig config;
     config.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
     config.elevation_mask = 5.0 * M_PI / 180.0;
+    // The (k)/(m) tests exercise the SPP-less path; the default
+    // require_spp_for_kinematic_epoch would reject that epoch first.
+    config.require_spp_for_kinematic_epoch = false;
     return config;
 }
 
@@ -150,6 +155,73 @@ TEST(RtkV8OptionsTest, RealSeedIsNeverRejectedEvenWithTheOptionOn) {
     EXPECT_FALSE(processor.getLastDebugTelemetry().rover_seed_from_base_fallback);
     EXPECT_FALSE(processor.getLastDebugTelemetry().float_seeded_at_base_rejected);
     EXPECT_EQ(solution.status, SolutionStatus::FLOAT);
+}
+
+// ---- require_spp_for_kinematic_epoch --------------------------------------
+
+TEST(RtkV8OptionsTest, KinematicEpochWithoutSppIsRejectedByDefault) {
+    EXPECT_TRUE(RTKProcessor::RTKConfig{}.require_spp_for_kinematic_epoch);
+    const auto nav = constellation();
+    const auto prns = visible(nav, epochTime(0.0), kRover, 15.0);
+    auto solve = [&](bool require_spp, double spp_mask_deg, bool& rejected,
+                     bool& filter_initialised) {
+        auto config = rtkConfig();
+        config.require_spp_for_kinematic_epoch = require_spp;
+        config.reject_float_seeded_at_base = false;  // isolate the new gate
+        auto processor = makeProcessor(config, spp_mask_deg);
+        const auto solution = processor->processRTKEpoch(
+            observations(nav, epochTime(0.0), kRover, 30.0, prns, 0.0),
+            observations(nav, epochTime(0.0), kBase, 10.0, prns, 500.0), nav);
+        rejected = processor->getLastDebugTelemetry().spp_unavailable_rejected;
+        Vector3d position;
+        Matrix3d covariance;
+        filter_initialised = processor->getFloatPosteriorPosition(position, covariance);
+        return solution;
+    };
+    bool rejected = false;
+    bool initialised = false;
+    // SPP sees no satellite (mask 89 deg): default -> no solution, filter kept.
+    auto solution = solve(true, 89.0, rejected, initialised);
+    EXPECT_TRUE(rejected);
+    EXPECT_FALSE(solution.isValid());
+    EXPECT_TRUE(initialised);
+    // Option off -> the base-seeded float is emitted as before.
+    solution = solve(false, 89.0, rejected, initialised);
+    EXPECT_FALSE(rejected);
+    EXPECT_EQ(solution.status, SolutionStatus::FLOAT);
+    // SPP available -> the gate never fires.
+    solution = solve(true, 5.0, rejected, initialised);
+    EXPECT_FALSE(rejected);
+    EXPECT_EQ(solution.status, SolutionStatus::FLOAT);
+}
+
+// ---- SPPConfig::max_position_sigma_m -----------------------------------------
+
+TEST(RtkV8OptionsTest, SppPositionSigmaGateRejectsOnlyWhenEnabled) {
+    // The gate uses sqrt(trace(position_covariance)), i.e. the formal sigma of
+    // the design matrix that was solved (inter-system-bias columns included).
+    EXPECT_EQ(SPPProcessor::SPPConfig{}.max_position_sigma_m, 0.0);  // default: off
+
+    const auto nav = constellation();
+    const auto prns = visible(nav, epochTime(0.0), kRover, 15.0);
+    const auto rover = observations(nav, epochTime(0.0), kRover, 30.0, prns, 0.0);
+    auto solve = [&](double max_sigma_m) {
+        SPPProcessor::SPPConfig config;
+        config.max_position_sigma_m = max_sigma_m;
+        SPPProcessor spp(config);
+        EXPECT_TRUE(spp.initialize(processorConfig(5.0)));
+        return spp.processEpoch(rover, nav);
+    };
+    const auto baseline = solve(0.0);
+    ASSERT_TRUE(baseline.isValid());
+    const double sigma = std::sqrt(baseline.position_covariance.trace());
+    ASSERT_TRUE(std::isfinite(sigma));
+    ASSERT_GT(sigma, 0.0);
+
+    const auto accepted = solve(2.0 * sigma);
+    ASSERT_TRUE(accepted.isValid());
+    EXPECT_TRUE(accepted.position_ecef.isApprox(baseline.position_ecef, 1e-9));
+    EXPECT_FALSE(solve(0.5 * sigma).isValid());
 }
 
 // ---- (n) currentSpp() ------------------------------------------------------

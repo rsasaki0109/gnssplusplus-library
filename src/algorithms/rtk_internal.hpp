@@ -266,6 +266,10 @@ inline SPPProcessor::SPPConfig makeRTKSppConfig(const RTKProcessor::RTKConfig& r
     config.use_multi_constellation = true;
     config.enable_glonass = rtk_config.enable_glonass;
     config.enable_beidou = rtk_config.enable_beidou;
+    // RTK seeds its kinematic float from this SPP every epoch and falls back to
+    // it. A fix whose own formal sigma is >1 km (zero-redundancy multi-GNSS
+    // solutions with a per-system ISB) carries no position information.
+    config.max_position_sigma_m = 1000.0;
     return config;
 }
 
