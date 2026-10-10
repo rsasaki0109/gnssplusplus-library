@@ -71,6 +71,22 @@ def _assert_valid_rinex3_observation_text(
             test.assertEqual(len(record), 3 + 16 * types[record[0]], record)
 
 
+def _rinex3_obs_types(text: str) -> dict[str, list[str]]:
+    """SYS / # / OBS TYPES of a RINEX 3 header: system letter -> observation types."""
+    types: dict[str, list[str]] = {}
+    current = ""
+    for line in text.split("\n"):
+        if line[60:].startswith("END OF HEADER"):
+            break
+        if not line[60:].startswith("SYS / # / OBS TYPES"):
+            continue
+        if line[0] != " ":
+            current = line[0]
+            types[current] = []
+        types[current].extend(line[7:60].split())
+    return types
+
+
 class StreamProtocolCases:
     def test_sys_path_access_detector_covers_aliases_and_targets(self) -> None:
         cases = (
@@ -376,6 +392,87 @@ class StreamProtocolCases:
             _assert_valid_rinex3_observation_text(
                 self, exported, expected_epochs=1, expected_sats=5
             )
+            # RINEX 3.04 tracking codes per system (same as RTCM MSM and
+            # RTKLIB demo5 convbin): GPS/QZSS L1 C/A "1C", Galileo E1-C "1C",
+            # GLONASS G2 C/A "2C", BeiDou B1I "2I".
+            self.assertEqual(
+                _rinex3_obs_types(exported),
+                {
+                    "G": ["C1C", "L1C", "D1C", "S1C"],
+                    "E": ["C1C", "L1C", "D1C", "S1C"],
+                    "R": ["C2C", "L2C", "D2C", "S2C"],
+                    "C": ["C2I", "L2I", "D2I", "S2I"],
+                    "J": ["C1C", "L1C", "D1C", "S1C"],
+                },
+            )
+
+    def test_convert_ubx_multiband_rawx_keeps_distinct_tracking_codes(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_codes_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "multiband.ubx"
+            output_path = temp_root / "multiband.obs"
+            # (pseudorange, phase, doppler, gnssId, svId, sigId, locktime, cno, trkStat)
+            input_path.write_bytes(
+                build_rawx_message(
+                    [
+                        (20200000.25, 110000.5, -1234.5, 0, 12, 0, 500, 45, 0x07),  # GPS L1 C/A
+                        (20200100.50, 90000.5, -960.0, 0, 12, 4, 500, 40, 0x07),  # GPS L2 CM
+                        (20200101.75, 90001.5, -960.0, 0, 12, 3, 500, 41, 0x07),  # GPS L2 CL
+                        (21400000.75, 120000.25, -432.5, 2, 5, 0, 480, 42, 0x07),  # GAL E1 C
+                        (21400100.25, 91000.25, -325.0, 2, 5, 5, 480, 41, 0x07),  # GAL E5b I
+                        (23400000.00, 140000.125, -55.0, 3, 19, 0, 440, 40, 0x07),  # BDS B1I D1
+                        (23400200.00, 105000.125, -43.0, 3, 19, 2, 440, 39, 0x07),  # BDS B2I D1
+                        (24500000.25, 150000.875, 8.0, 5, 3, 5, 420, 39, 0x07),  # QZSS L2 CL
+                        (22300000.50, 130000.75, 125.0, 6, 7, 0, 460, 41, 0x07),  # GLO G1
+                    ]
+                )
+            )
+
+            result = self.run_gnss(
+                "convert",
+                "--format",
+                "ubx",
+                "--input",
+                str(input_path),
+                "--obs-out",
+                str(output_path),
+                "--quiet",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("exported_obs_epochs=1", result.stdout)
+            exported = output_path.read_text(encoding="ascii")
+            types = _rinex3_obs_types(exported)
+            # GPS L2 CL and CM stay two distinct column groups; the library's
+            # default "2X" code must not appear for a receiver that reports
+            # the real tracking attribute.
+            for code in ("1C", "2L", "2S"):
+                for kind in "CLDS":
+                    self.assertIn(f"{kind}{code}", types["G"])
+            self.assertFalse([t for t in types["G"] if t[1:] == "2X"], types["G"])
+            self.assertEqual(
+                sorted(t[1:] for t in types["E"] if t[0] == "C"), ["1C", "7I"]
+            )
+            self.assertEqual(
+                sorted(t[1:] for t in types["C"] if t[0] == "C"), ["2I", "7I"]
+            )
+            self.assertEqual(sorted(t[1:] for t in types["J"] if t[0] == "C"), ["2L"])
+            self.assertEqual(sorted(t[1:] for t in types["R"] if t[0] == "C"), ["1C"])
+            _assert_valid_rinex3_observation_text(
+                self, exported, expected_epochs=1, expected_sats=5
+            )
+            gps_row = next(
+                line for line in exported.split("\n") if line.startswith("G12")
+            )
+            self.assertEqual(len(gps_row), 3 + 16 * len(types["G"]))
+            columns = {
+                name: gps_row[3 + 16 * i : 3 + 16 * i + 14].strip()
+                for i, name in enumerate(types["G"])
+            }
+            self.assertEqual(columns["C2L"], "20200101.750")
+            self.assertEqual(columns["C2S"], "20200100.500")
+            self.assertEqual(columns["C1C"], "20200000.250")
+
     def test_nmea_info_decodes_gga_and_rmc_from_file(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nmea_test_") as temp_dir:
             temp_root = Path(temp_dir)

@@ -129,6 +129,20 @@ std::string getMessageName(uint8_t message_class, uint8_t message_id);
 GNSSSystem getSystemFromGnssId(uint8_t gnss_id);
 bool getSignalType(uint8_t gnss_id, uint8_t sig_id, SignalType& signal_type);
 /**
+ * @brief RINEX 3.04 band + tracking attribute ("2L") of a UBX-RXM-RAWX
+ * (gnssId, sigId), or "" when the pair is not decoded.
+ *
+ * Same table as getSignalType() and the same codes as the RTCM MSM decoder
+ * and RTKLIB demo5 ubx_sig(): GPS L2 CL "2L" / CM "2S", L5 I/Q "5I"/"5Q",
+ * Galileo E1 C/B "1C"/"1B", E5a "5I"/"5Q", E5b "7I"/"7Q", BeiDou B1I "2I",
+ * B2I "7I", B1C "1P"/"1D", B2a "5P"/"5D", QZSS L2 CM "2S" / CL "2L", GLONASS
+ * "1C"/"2C", NavIC "5A", SBAS "1C".  decodeRawx() writes C<code> / L<code>
+ * into Observation::pseudorange_observation_type /
+ * carrier_phase_observation_type and keeps every tracking code in
+ * ObservationData::rinex_tracking_observations.
+ */
+const char* getRinexTrackingCode(uint8_t gnss_id, uint8_t sig_id);
+/**
  * @brief True when the subframe carries a legacy navigation message handled
  * by the frame decoders: GPS/QZSS L1 C/A LNAV (sigId 0), Galileo E1-B /
  * E5b-I I/NAV (sigId 1 / 5), BeiDou B1I / B2I / B3I D1 or D2 (sigId 0-4,
