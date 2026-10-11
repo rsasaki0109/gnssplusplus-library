@@ -15,6 +15,9 @@
 
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
+#include <libgnss++/io/rtcm_stream.hpp>
+
+#include "../apps/native/navigation_merge.hpp"
 
 #ifndef _WIN32
 #include <fcntl.h>
@@ -1221,5 +1224,60 @@ TEST(GNSSLiveRecordedStreamTest, ReportsRtcmCrcFailuresInDecoderErrorSummary) {
     EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
 
     fs::remove_all(temp_dir);
+}
+
+
+TEST(GNSSLiveRecordedStreamTest, RebroadcastEphemeridesDoNotGrowTheNavigationDatabase) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+
+    // Collect every 1019 the recorded base stream carries (each repeated every 20 s).
+    io::RTCMReader reader;
+    ASSERT_TRUE(reader.open((fixture / "base.rtcm").string()));
+    io::RTCMProcessor processor;
+    std::vector<NavigationData> per_message;
+    io::RTCMMessage message;
+    while (reader.readMessage(message)) {
+        if (message.type != io::RTCMMessageType::RTCM_1019) continue;
+        NavigationData nav;
+        if (processor.decodeNavigationData(message, nav)) per_message.push_back(nav);
+    }
+    ASSERT_GT(per_message.size(), 30U);
+
+    auto count = [](const NavigationData& nav) {
+        size_t total = 0;
+        for (const auto& [sat, list] : nav.ephemeris_data) { (void)sat; total += list.size(); }
+        return total;
+    };
+
+    NavigationData grown, bounded;
+    for (int pass = 0; pass < 5; ++pass) {
+        for (const auto& nav : per_message) {
+            libgnss_apps::mergeNavigationData(grown, nav);
+            libgnss_apps::mergeNavigationDataIfNew(bounded, nav);
+        }
+    }
+    // The plain merge keeps every rebroadcast; the live-stream merge keeps one copy per record.
+    EXPECT_EQ(count(grown), per_message.size() * 5);
+    EXPECT_LT(count(bounded), per_message.size());
+    EXPECT_GE(count(bounded), 10U);
+
+    // Same guarantee inside the RTCM stream decoder used by gnss_live.
+    io::RTCMStreamDecoder decoder;
+    reader.close();
+    ASSERT_TRUE(reader.open((fixture / "base.rtcm").string()));
+    std::vector<uint8_t> frame;
+    size_t after_first_pass = 0;
+    for (int pass = 0; pass < 3; ++pass) {
+        ASSERT_TRUE(reader.open((fixture / "base.rtcm").string()));
+        while (reader.readMessage(message)) {
+            frame = buildRtcmFrame(message);
+            std::vector<io::RTCMStreamDecoder::Event> events;
+            decoder.pushFrame(frame.data(), frame.size(), events);
+        }
+        if (pass == 0) after_first_pass = count(decoder.getNavigationData());
+    }
+    EXPECT_EQ(count(decoder.getNavigationData()), after_first_pass);
 }
 

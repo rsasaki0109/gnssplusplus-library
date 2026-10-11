@@ -37,6 +37,7 @@ namespace {
 
 using libgnss_apps::buildRtcmFrame;
 using libgnss_apps::mergeNavigationData;
+using libgnss_apps::mergeNavigationDataIfNew;
 #ifndef _WIN32
 using libgnss_apps::baudRateConstant;
 #endif
@@ -1111,7 +1112,7 @@ int main(int argc, char** argv) {
         auto applyEvents = [&](const std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
             for (const auto& event : events) {
                 if (event.has_navigation) {
-                    mergeNavigationData(nav_data, event.navigation);
+                    mergeNavigationDataIfNew(nav_data, event.navigation);
                     ++nav_event_updates;
                 }
                 if (event.has_station_position && !config.base_position_override) {
