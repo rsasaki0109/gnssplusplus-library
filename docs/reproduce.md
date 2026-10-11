@@ -430,12 +430,13 @@ Hmed 0.298 vs 0.553 m on 8,027 common epochs; demo5 unchanged):
 
 The gates (more fixes than the default, lower Hmed) still pass. The preset's
 all-epoch Hp95/Vp95 remain above the default arm's (+0.51 m and +2.35 m,
-previously +0.52 m and +3.77 m). The 2026-10-10 statement that the preset Vp95
-is lower on the epochs both arms publish no longer holds: on the 9,906 common
-epochs it is 11.81 m against 10.52 m for the default (Hp95 5.11 vs 4.57 m, Hmed
-0.042 vs 0.318 m), and the "about 830 more FLOAT epochs" wording was dropped
-(the preset publishes fewer epochs and far fewer FLOAT epochs than the default,
-1,935 against 9,577). 604 of the preset's 629 epochs with more than 10 m
+previously +0.52 m and +3.77 m). Two statements added on 2026-10-10 (#593) are
+withdrawn. "The preset Vp95 is lower on the epochs both arms publish" (7.38 vs
+9.41 m on 9,615 epochs) came from a different epoch matching and is not
+comparable; on the 9,906 common epochs measured now it is 11.81 m against
+10.52 m for the default (Hp95 5.11 vs 4.57 m, Hmed 0.042 vs 0.318 m). "About
+830 more FLOAT epochs" was wrong: the preset publishes fewer epochs and far
+fewer FLOAT epochs than the default (1,935 against 9,577). 604 of the preset's 629 epochs with more than 10 m
 vertical error lie in the two stationary deep-canyon windows. See
 [benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot).
 

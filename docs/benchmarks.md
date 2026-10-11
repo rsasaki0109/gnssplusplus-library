@@ -506,11 +506,12 @@ biased code. They hold 604 of the preset's 629 epochs with more than 10 m
 vertical error (941 of 972 for the default arm), and the preset's Vp95 falls
 inside that plateau: its median vertical error in the first window is 17.6 m
 against 12.2 m for the default. The preset publishes 10,077 epochs (1,935
-FLOAT) against 10,973 (9,577 FLOAT) for the default. Unlike on 2026-10-10
-(7.38 vs 9.41 m on the epochs both arms published), the preset Vp95 is no
-longer lower on common epochs: on the 9,906 epochs both arms publish it is
+FLOAT) against 10,973 (9,577 FLOAT) for the default. The preset Vp95 is not
+lower on common epochs either: on the 9,906 epochs both arms publish it is
 11.81 m against 10.52 m (Hp95 5.11 vs 4.57 m), while Hmed stays far lower (0.042
-vs 0.318 m). The 2026-09-29 preset Vp95 of 9.74 m
+vs 0.318 m). An earlier statement that the preset was lower there (7.38 vs
+9.41 m on 9,615 epochs) came from a different epoch matching, is not comparable,
+and is withdrawn. The 2026-09-29 preset Vp95 of 9.74 m
 held only because two FLOAT post-filters (the non-FIX drift guard and the FLOAT
 bridge-tail guard) happened to blank those windows; #577 (BeiDou B1I was read
 at the B1C frequency, a 0.9% wavelength error) and the RTK-internal SPP sigma

@@ -142,11 +142,12 @@ foreach = [
 # because two FLOAT post-filters happened to blank those windows; the BeiDou
 # B1I fix (#577) and the RTK-internal SPP sigma gate (#588) changed the fix
 # pattern so they no longer fire. With the filters off the pre-#577 preset
-# Vp95 was already 14.74 m. On the 2026-10-10 run the preset Vp95 was lower on
-# the epochs both arms emit (7.38 vs 9.41 m); after the Doppler/phase slip-test
-# interval fix (2026-10-11: preset 7961 fixes, Hp95 5.284 m, Vp95 13.892 m) it
-# is higher there too (11.81 vs 10.52 m on 9,906 epochs; default arm unchanged).
-# See docs/benchmarks.md.
+# Vp95 was already 14.74 m. After the Doppler/phase slip-test interval fix
+# (2026-10-11: preset 7961 fixes, Hp95 5.284 m, Vp95 13.892 m; default arm
+# unchanged) the preset Vp95 is also higher on the 9,906 epochs both arms emit
+# (11.81 vs 10.52 m). An earlier "lower on common epochs" figure (7.38 vs
+# 9.41 m on 9,615 epochs) used a different epoch matching and is not
+# comparable; it is withdrawn. See docs/benchmarks.md.
 [[metrics]]
 name = "preset odaiba fix epochs minus default"
 source = "{work_dir}/preset_odaiba/summary.json"
