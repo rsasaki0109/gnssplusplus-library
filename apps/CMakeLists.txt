@@ -23,6 +23,7 @@ set(GNSS_APP_TARGETS
     gnss_convert
     gnss_replay
     gnss_live
+    gnss_rtcm_encode
 )
 
 set(GNSS_NATIVE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/native)
@@ -172,6 +173,10 @@ target_link_libraries(gnss_replay PRIVATE gnss_lib gnss_lib_solvers Threads::Thr
 
 add_executable(gnss_live ${GNSS_NATIVE_DIR}/gnss_live.cpp)
 target_link_libraries(gnss_live PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
+
+# Recorded RINEX -> RTCM3 stream + per-epoch index, used by `gnss realtime-stress`.
+add_executable(gnss_rtcm_encode ${GNSS_NATIVE_DIR}/gnss_rtcm_encode.cpp)
+target_link_libraries(gnss_rtcm_encode PRIVATE gnss_lib gnss_lib_solvers Threads::Threads)
 
 install(TARGETS ${GNSS_APP_TARGETS}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}

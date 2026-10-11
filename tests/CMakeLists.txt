@@ -348,6 +348,14 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_ux.py
     )
     add_test(
+        NAME python_realtime_stress_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_realtime_stress.py
+    )
+    set_tests_properties(
+        python_realtime_stress_tests
+        PROPERTIES ENVIRONMENT "GNSSPP_BUILD_DIR=${CMAKE_BINARY_DIR}" TIMEOUT 240
+    )
+    add_test(
         NAME python_gnss_reproduce_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_gnss_reproduce.py
     )
@@ -855,6 +863,7 @@ if(GTest_FOUND)
         python_claslib_zd_component_export_tests
         python_cli_json_contract_validator_tests
         python_cli_ux_tests
+        python_realtime_stress_tests
         python_optional_clas_zd_component_diff_tests
         python_qzss_l6_bias_tests
         python_madoca_materialization_diff_tests

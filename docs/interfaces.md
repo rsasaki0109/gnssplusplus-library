@@ -39,6 +39,8 @@ Examples:
 - `gnss stream`
 - `gnss convert`
 - `gnss live`
+- `gnss realtime-stress` (recorded-data real-time stress harness, see [Real-time stress](realtime_stress.md))
+- `gnss rtcm-encode`
 - `gnss station` (`check|start|status|stop|restart`, with a station TOML)
 - `gnss rcv`
 - `gnss web`
