@@ -269,15 +269,31 @@ bool parseRtklibSolutionLine(const std::string& line, PositionSolution& sol) {
 
 } // namespace
 
+Matrix3d PositionSolution::positionCovarianceEnu() const {
+    if (!position_ecef.allFinite() || position_ecef.norm() <= 1e6 ||
+        !position_covariance.allFinite()) {
+        return Matrix3d::Constant(std::numeric_limits<double>::quiet_NaN());
+    }
+    double latitude_rad = 0.0;
+    double longitude_rad = 0.0;
+    double height_m = 0.0;
+    ecef2geodetic(position_ecef, latitude_rad, longitude_rad, height_m);
+    const Matrix3d ecef_to_enu = ecefToEnuRotation(latitude_rad, longitude_rad);
+    return ecef_to_enu * position_covariance * ecef_to_enu.transpose();
+}
+
 double PositionSolution::getHorizontalAccuracy() const {
-    // 95% confidence (2-sigma)
-    double sigma_h = std::sqrt(position_covariance(0,0) + position_covariance(1,1));
+    // 95% confidence (2-sigma) from the local East/North variances;
+    // position_covariance is ECEF, so its XX/YY terms are not horizontal.
+    const Matrix3d enu = positionCovarianceEnu();
+    double sigma_h = std::sqrt(enu(0,0) + enu(1,1));
     return 2.0 * sigma_h;
 }
 
 double PositionSolution::getVerticalAccuracy() const {
-    // 95% confidence (2-sigma)
-    double sigma_v = std::sqrt(position_covariance(2,2));
+    // 95% confidence (2-sigma) from the local Up variance.
+    const Matrix3d enu = positionCovarianceEnu();
+    double sigma_v = std::sqrt(enu(2,2));
     return 2.0 * sigma_v;
 }
 
