@@ -109,6 +109,8 @@ struct SolveConfig {
     // Default-off RTK reported-covariance mode and per-epoch covariance log.
     int rtk_reported_covariance_mode = 0;
     std::string rtk_covariance_log_path;
+    // Opt-in: append sdn/sde/sdu/sdne/sdeu/sdun and DiffAge(s) to .pos rows.
+    bool pos_uncertainty = false;
     std::string timing_csv_path;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
@@ -1512,6 +1514,9 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Covariance reported on RTK FLOAT epochs (default: legacy\n"
         << "                             constant 0.01 m^2); positions are never changed\n"
         << "  --rtk-covariance-log <file> Write per-epoch status, ECEF position and covariance\n"
+        << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m, 1-sigma, local ENU,\n"
+        << "                             RTKLIB signed-sqrt cross terms) and DiffAge(s) to .pos rows\n"
+        << "                             (--format pos only; default off = byte-identical output)\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
         << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
@@ -2534,6 +2539,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.rtk_covariance_log_path = argv[++i];
             continue;
         }
+        if (arg == "--pos-uncertainty") {
+            config.pos_uncertainty = true;
+            continue;
+        }
         // Keep these late-chain options standalone as well. Besides making
         // the parser easier to extend, this keeps MSVC below C1061's nested
         // else-if limit.
@@ -3415,6 +3424,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.doppler_float_seed_max_age_s <= 0.0) {
         argumentError("--doppler-float-seed-max-age must be > 0", argv[0]);
     }
+    if (config.pos_uncertainty &&
+        config.output_format != libgnss::io::SolutionWriter::Format::POS) {
+        argumentError("--pos-uncertainty requires --format pos", argv[0]);
+    }
 
     return config;
 }
@@ -3490,15 +3503,29 @@ std::string ionoOptString(libgnss::RTKProcessor::RTKConfig::IonoOpt iono) {
     return "off";
 }
 
-bool writeSolutions(const SolveConfig& config, const libgnss::Solution& solution) {
+// Age of differential (s) per rover epoch, keyed by integer milliseconds of
+// week*604800+tow. Only populated when --pos-uncertainty is on.
+using DifferentialAgeMap = std::map<long long, double>;
+
+long long differentialAgeKey(const libgnss::GNSSTime& time) {
+    return std::llround((static_cast<double>(time.week) * 604800.0 + time.tow) * 1000.0);
+}
+
+bool writeSolutions(const SolveConfig& config, const libgnss::Solution& solution,
+                    const DifferentialAgeMap& differential_age) {
     libgnss::io::SolutionWriter writer;
-    if (!writer.open(config.output_pos_path, config.output_format)) {
+    if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty)) {
         std::cerr << "Error: failed to open output file: " << config.output_pos_path << std::endl;
         return false;
     }
 
     for (const auto& epoch_solution : solution.solutions) {
-        writer.writeEpoch(epoch_solution);
+        double age_s = std::numeric_limits<double>::quiet_NaN();
+        if (config.pos_uncertainty) {
+            const auto age_it = differential_age.find(differentialAgeKey(epoch_solution.time));
+            if (age_it != differential_age.end()) age_s = age_it->second;
+        }
+        writer.writeEpoch(epoch_solution, age_s);
     }
     writer.close();
 
@@ -4030,6 +4057,7 @@ int main(int argc, char* argv[]) {
             return 1;
         }
 
+        DifferentialAgeMap differential_age_s;
         int processed_rover_epochs = 0;
         int valid_solution_count = 0;
         int fixed_solution_count = 0;
@@ -4113,6 +4141,11 @@ int main(int argc, char* argv[]) {
                 aligned_base_obs = base_obs;
                 exact_base_epochs++;
                 have_aligned_base = true;
+                if (config.pos_uncertainty) {
+                    // Exact match: the base observation used is the rover epoch's own.
+                    differential_age_s[differentialAgeKey(rover_obs.time)] =
+                        timeDiffSeconds(rover_obs.time, base_obs.time);
+                }
             } else if (config.enable_base_interpolation && base_ok && have_lower_base &&
                        timeDiffSeconds(rover_obs.time, lower_base_obs.time) >= -kExactTimeToleranceSeconds &&
                        timeDiffSeconds(base_obs.time, rover_obs.time) >= -kExactTimeToleranceSeconds &&
@@ -4121,6 +4154,12 @@ int main(int argc, char* argv[]) {
                 interpolated_base_epochs++;
                 have_aligned_base = true;
                 used_interpolated_base = true;
+                if (config.pos_uncertainty) {
+                    // Interpolated between two real base epochs: report the age of
+                    // the older bracketing sample (rover time - lower base time).
+                    differential_age_s[differentialAgeKey(rover_obs.time)] =
+                        timeDiffSeconds(rover_obs.time, lower_base_obs.time);
+                }
             }
 
             if (!have_aligned_base) {
@@ -4882,7 +4921,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: no valid solutions were produced" << std::endl;
             return 1;
         }
-        if (!writeSolutions(config, solution)) {
+        if (!writeSolutions(config, solution, differential_age_s)) {
             return 1;
         }
 

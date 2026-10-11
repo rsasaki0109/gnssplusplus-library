@@ -70,6 +70,7 @@ struct LiveConfig {
     std::string nav_rinex_path;
     std::string output_pos_path = "output/live_solution.pos";
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
+    bool pos_uncertainty = false;
     int max_epochs = -1;
     size_t rover_message_limit = 0;
     size_t base_message_limit = 0;
@@ -522,6 +523,7 @@ void printUsage(const char* argv0) {
         << "  --nav-rinex <file>         Supplemental broadcast navigation RINEX\n"
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
+        << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
         << "  --max-epochs <n>           Stop after n solved epochs\n"
         << "  --rover-message-limit <n>  Stop rover ingest after n RTCM messages (0 = all)\n"
         << "  --base-message-limit <n>   Stop base ingest after n RTCM messages (0 = all)\n"
@@ -658,6 +660,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.output_pos_path = argv[++i];
         } else if (arg == "--format" && i + 1 < argc) {
             config.output_format = parseOutputFormat(argv[++i], argv[0]);
+        } else if (arg == "--pos-uncertainty") {
+            config.pos_uncertainty = true;
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             config.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--rover-message-limit" && i + 1 < argc) {
@@ -779,6 +783,10 @@ LiveConfig parseArguments(int argc, char** argv) {
     }
     if (config.base_hold_seconds < 0.0) {
         argumentError("--base-hold-seconds must be >= 0", argv[0]);
+    }
+    if (config.pos_uncertainty &&
+        config.output_format != libgnss::io::SolutionWriter::Format::POS) {
+        argumentError("--pos-uncertainty requires --format pos", argv[0]);
     }
     if (config.rover_ubx_baud <= 0) {
         argumentError("--rover-ubx-baud must be > 0", argv[0]);
@@ -1064,7 +1072,7 @@ int main(int argc, char** argv) {
         }
 
         libgnss::io::SolutionWriter writer;
-        if (!writer.open(config.output_pos_path, config.output_format)) {
+        if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty)) {
             std::cerr << "Error: failed to open output file\n";
             return 1;
         }
@@ -1165,6 +1173,9 @@ int main(int argc, char** argv) {
             const double exact_dt = base_ok ? std::abs(timeDiffSeconds(base_obs.time, rover_obs.time))
                                             : std::numeric_limits<double>::infinity();
             bool have_aligned_base = false;
+            // Age of differential for --pos-uncertainty: rover time minus the
+            // (older) base observation time actually used.
+            double epoch_differential_age_s = std::numeric_limits<double>::quiet_NaN();
             const double lower_dt = have_lower_base
                 ? timeDiffSeconds(rover_obs.time, lower_base_obs.time)
                 : -std::numeric_limits<double>::infinity();
@@ -1179,6 +1190,7 @@ int main(int argc, char** argv) {
             if (base_ok && exact_dt <= kExactTimeToleranceSeconds) {
                 aligned_base_obs = base_obs;
                 have_aligned_base = true;
+                epoch_differential_age_s = timeDiffSeconds(rover_obs.time, base_obs.time);
                 ++exact_base_epochs;
             } else if (config.enable_base_interpolation && base_ok && have_lower_base &&
                        have_base_position &&
@@ -1193,6 +1205,7 @@ int main(int argc, char** argv) {
                 }
                 if (interpolation_ok) {
                     have_aligned_base = true;
+                    epoch_differential_age_s = lower_dt;
                     ++interpolated_base_epochs;
                 }
             } else if (have_lower_base && have_base_position && config.base_hold_seconds > 0.0) {
@@ -1200,6 +1213,7 @@ int main(int argc, char** argv) {
                 hold_ok = holdBaseEpoch(lower_base_obs, rover_obs.time, config.base_hold_seconds, aligned_base_obs);
                 if (hold_ok) {
                     have_aligned_base = true;
+                    epoch_differential_age_s = lower_dt;
                     ++held_base_epochs;
                 }
             }
@@ -1261,7 +1275,7 @@ int main(int argc, char** argv) {
 
             const auto solution = rtk.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
             if (solution.isValid()) {
-                writer.writeEpoch(solution);
+                writer.writeEpoch(solution, epoch_differential_age_s);
                 ++written_solutions;
                 ++solved_epochs;
                 if (solution.isFixed()) {

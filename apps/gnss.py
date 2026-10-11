@@ -226,6 +226,11 @@ COMMANDS = {
         "target": python_target("gnss_mode_compare.py"),
         "summary": "Run SPP/FGO/RTK on shared RINEX inputs and emit a mode-comparison JSON summary.",
     },
+    "uncertainty-eval": {
+        "kind": "python",
+        "target": python_target("gnss_uncertainty_eval.py"),
+        "summary": "Check reported per-epoch sigma (gnss solve --pos-uncertainty) against truth: normalized errors, exceedances, K*sigma Stanford bins (not a certified protection level).",
+    },
     "taroz-pc-dogfood": {
         "kind": "python",
         "target": python_target("gnss_taroz_pc_dogfood.py"),
