@@ -1,0 +1,18 @@
+{
+  "kind": "gnss_realtime_stress_prepared",
+  "source_run": "PPC-Dataset/tokyo/run1 (MIT, Taro Suzuki)",
+  "systems": "G",
+  "format": "msm7",
+  "window": {
+    "start_offset": 0.0,
+    "duration": 40.0
+  },
+  "files": {
+    "rover_rtcm": "rover.rtcm",
+    "rover_index": "rover.idx",
+    "base_rtcm": "base.rtcm",
+    "base_index": "base.idx",
+    "reference": "reference.csv"
+  },
+  "external": {}
+}

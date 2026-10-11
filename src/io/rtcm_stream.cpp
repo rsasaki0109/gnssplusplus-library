@@ -9,7 +9,8 @@ void mergeNavigationData(NavigationData& dst, const NavigationData& src) {
     for (const auto& [satellite, ephemerides] : src.ephemeris_data) {
         (void)satellite;
         for (const auto& eph : ephemerides) {
-            dst.addEphemeris(eph);
+            // Streams rebroadcast every ephemeris periodically; keep one copy of each record.
+            dst.addEphemerisIfNew(eph);
         }
     }
     if (src.ionosphere_model.valid) {

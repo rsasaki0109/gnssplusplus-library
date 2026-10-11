@@ -10,6 +10,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <thread>
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -67,6 +68,8 @@ void RTCMReader::close() {
     buffer_.clear();
     buffer_pos_ = 0;
     is_open_ = false;
+    tcp_reconnect_count_ = 0;
+    tcp_last_error_.clear();
     processor_.clear();
     processor_.resetStats();
 }
@@ -110,7 +113,17 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
         return false;
     };
 
-    const int stream_fd =
+#ifndef _WIN32
+    // A tcp:// source with auto-reconnect enabled may have lost its socket after a failed
+    // reconnect attempt; try again here so the caller can simply keep calling readMessage().
+    const bool tcp_reconnecting = auto_reconnect_ && isTcpStream();
+    if (tcp_reconnecting && tcp_fd_ < 0 && !reconnectTcp()) {
+        return false;
+    }
+#else
+    const bool tcp_reconnecting = false;
+#endif
+    int stream_fd =
 #ifndef _WIN32
         (serial_fd_ >= 0 ? serial_fd_ : tcp_fd_);
 #else
@@ -137,12 +150,63 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
             if (errno == EINTR) {
                 continue;
             }
+            if (tcp_reconnecting) {
+                tcp_last_error_ = "tcp read failed";
+                if (!reconnectTcp()) {
+                    return false;
+                }
+                stream_fd = tcp_fd_;
+                continue;
+            }
             return false;
         }
         if (count == 0) {
+            if (tcp_reconnecting) {
+                tcp_last_error_ = "tcp stream closed";
+                if (!reconnectTcp()) {
+                    return false;
+                }
+                stream_fd = tcp_fd_;
+                continue;
+            }
             return tryDecodeBufferedMessage();
         }
         buffer_.insert(buffer_.end(), chunk.begin(), chunk.begin() + count);
+    }
+#else
+    return false;
+#endif
+}
+
+bool RTCMReader::isTcpStream() const {
+    return is_open_ && ntrip_client_ == nullptr && serial_fd_ < 0 && rtcm_internal::isTcpSource(source_);
+}
+
+bool RTCMReader::reconnectTcp() {
+#ifndef _WIN32
+    if (tcp_fd_ >= 0) {
+        ::close(tcp_fd_);
+        tcp_fd_ = -1;
+    }
+    // Bytes of a frame cut off by the dropped connection must not be glued to the new stream.
+    buffer_.clear();
+    buffer_pos_ = 0;
+    ++tcp_reconnect_count_;
+    if (reconnect_delay_ms_ > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms_));
+    }
+    try {
+        const int fd = connectTcpSocket(source_);
+        if (fd < 0) {
+            tcp_last_error_ = "failed to reconnect to " + source_;
+            return false;
+        }
+        tcp_fd_ = fd;
+        tcp_last_error_.clear();
+        return true;
+    } catch (const std::exception& e) {
+        tcp_last_error_ = e.what();
+        return false;
     }
 #else
     return false;
@@ -169,6 +233,7 @@ bool RTCMReader::readFromNetwork(const std::string& url) {
         return false;
     }
 
+    ntrip_client_->setAutoReconnect(auto_reconnect_, reconnect_delay_ms_);
     is_open_ = true;
     return true;
 }
@@ -227,21 +292,26 @@ RTCMProcessor::RTCMStats RTCMReader::getStats() const {
 }
 
 void RTCMReader::setAutoReconnect(bool enabled, int delay_ms) {
+    auto_reconnect_ = enabled;
+    reconnect_delay_ms_ = delay_ms < 0 ? 0 : delay_ms;
     if (ntrip_client_) {
         ntrip_client_->setAutoReconnect(enabled, delay_ms);
     }
 }
 
 int RTCMReader::reconnectCount() const {
-    return ntrip_client_ ? ntrip_client_->reconnectCount() : 0;
+    return ntrip_client_ ? ntrip_client_->reconnectCount() : tcp_reconnect_count_;
 }
 
 bool RTCMReader::isConnected() const {
-    return ntrip_client_ ? ntrip_client_->isConnected() : is_open_;
+    if (ntrip_client_) {
+        return ntrip_client_->isConnected();
+    }
+    return isTcpStream() ? tcp_fd_ >= 0 : is_open_;
 }
 
 std::string RTCMReader::lastError() const {
-    return ntrip_client_ ? ntrip_client_->getLastError() : std::string();
+    return ntrip_client_ ? ntrip_client_->getLastError() : tcp_last_error_;
 }
 
 size_t mergeRTCMEphemerides(const std::string& source, NavigationData& nav) {

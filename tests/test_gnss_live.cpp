@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <limits>
 #include <set>
@@ -14,12 +15,21 @@
 
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
+#include <libgnss++/io/rtcm_stream.hpp>
+
+#include "../apps/native/navigation_merge.hpp"
 
 #ifndef _WIN32
+#include <arpa/inet.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <poll.h>
 #include <stdlib.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
+
+#include <atomic>
 
 using namespace libgnss;
 
@@ -1121,6 +1131,384 @@ TEST(GNSSLiveTest, SolvesAgainstBaseRtcmSerialDeviceWithRoverUbxFile) {
     EXPECT_NE(log.find("rover_source=ubx"), std::string::npos) << log;
     EXPECT_NE(log.find("written_solutions=1"), std::string::npos) << log;
     ASSERT_TRUE(fs::exists(out_path));
+
+    fs::remove_all(temp_dir);
+}
+#endif
+
+// ---------------------------------------------------------------------------------------------
+// Recorded-data regression tests (tests/fixtures/realtime_stress: 40 s of PPC Tokyo run1, GPS-only
+// RTCM3 MSM7). They need no external data and cover stream-fault behaviour found by
+// `gnss realtime-stress`.
+// ---------------------------------------------------------------------------------------------
+namespace {
+
+struct FixtureEpoch {
+    size_t offset = 0;
+    size_t length = 0;
+};
+
+std::filesystem::path realtimeFixtureDir() {
+    return std::filesystem::path(GNSSPP_SOURCE_DIR) / "tests" / "fixtures" / "realtime_stress";
+}
+
+std::vector<uint8_t> readBinaryFile(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+}
+
+std::vector<FixtureEpoch> readFixtureIndex(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    std::vector<FixtureEpoch> epochs;
+    std::string line;
+    while (std::getline(input, line)) {
+        std::istringstream in(line);
+        double tow = 0.0;
+        int week = 0;
+        FixtureEpoch epoch;
+        size_t obs = 0;
+        size_t aux = 0;
+        if (in >> tow >> week >> epoch.offset >> epoch.length >> obs >> aux) {
+            epochs.push_back(epoch);
+        }
+    }
+    return epochs;
+}
+
+std::vector<uint8_t> epochBytes(const std::vector<uint8_t>& data,
+                                const std::vector<FixtureEpoch>& epochs,
+                                size_t first,
+                                size_t last) {
+    std::vector<uint8_t> out;
+    for (size_t i = first; i < last && i < epochs.size(); ++i) {
+        out.insert(out.end(), data.begin() + static_cast<std::ptrdiff_t>(epochs[i].offset),
+                   data.begin() + static_cast<std::ptrdiff_t>(epochs[i].offset + epochs[i].length));
+    }
+    return out;
+}
+
+int runLiveCapture(const std::string& arguments, const std::filesystem::path& log_path) {
+    const std::filesystem::path live_binary =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "apps" / "gnss_live";
+    const std::string command = "\"" + live_binary.string() + "\" " + arguments + " --quiet > \"" +
+                                log_path.string() + "\" 2>&1";
+    return std::system(command.c_str());
+}
+
+}  // namespace
+
+TEST(GNSSLiveRecordedStreamTest, ReportsRtcmCrcFailuresInDecoderErrorSummary) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+    const fs::path live_binary = fs::path(GNSSPP_BINARY_DIR) / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    // Flip one payload bit of a mid-stream base observation message.
+    auto base = readBinaryFile(fixture / "base.rtcm");
+    const auto base_epochs = readFixtureIndex(fixture / "base.idx");
+    ASSERT_GT(base_epochs.size(), 20U);
+    const size_t victim = base_epochs[20].offset + base_epochs[20].length - 40;
+    base[victim] ^= 0x10U;
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_crc_failures");
+    const fs::path base_path = temp_dir / "base_corrupt.rtcm";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+    {
+        std::ofstream output(base_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(base.data()), static_cast<std::streamsize>(base.size()));
+    }
+
+    const int rc = runLiveCapture("--rover-rtcm \"" + (fixture / "rover.rtcm").string() + "\" --base-rtcm \"" +
+                                      base_path.string() + "\" --out \"" + out_path.string() + "\"",
+                                  log_path);
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(rc, 0) << log;  // survives the corrupted frame
+    EXPECT_GT(extractSummaryDouble(log, "written_solutions"), 100.0) << log;
+    EXPECT_GE(extractSummaryDouble(log, "base_decoder_errors"), 1.0) << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
+
+    fs::remove_all(temp_dir);
+}
+
+
+TEST(GNSSLiveRecordedStreamTest, RebroadcastEphemeridesDoNotGrowTheNavigationDatabase) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+
+    // Collect every 1019 the recorded base stream carries (each repeated every 20 s).
+    io::RTCMReader reader;
+    ASSERT_TRUE(reader.open((fixture / "base.rtcm").string()));
+    io::RTCMProcessor processor;
+    std::vector<NavigationData> per_message;
+    io::RTCMMessage message;
+    while (reader.readMessage(message)) {
+        if (message.type != io::RTCMMessageType::RTCM_1019) continue;
+        NavigationData nav;
+        if (processor.decodeNavigationData(message, nav)) per_message.push_back(nav);
+    }
+    ASSERT_GT(per_message.size(), 30U);
+
+    auto count = [](const NavigationData& nav) {
+        size_t total = 0;
+        for (const auto& [sat, list] : nav.ephemeris_data) { (void)sat; total += list.size(); }
+        return total;
+    };
+
+    NavigationData grown, bounded;
+    for (int pass = 0; pass < 5; ++pass) {
+        for (const auto& nav : per_message) {
+            libgnss_apps::mergeNavigationData(grown, nav);
+            libgnss_apps::mergeNavigationDataIfNew(bounded, nav);
+        }
+    }
+    // The plain merge keeps every rebroadcast; the live-stream merge keeps one copy per record.
+    EXPECT_EQ(count(grown), per_message.size() * 5);
+    EXPECT_LT(count(bounded), per_message.size());
+    EXPECT_GE(count(bounded), 10U);
+
+    // Same guarantee inside the RTCM stream decoder used by gnss_live.
+    io::RTCMStreamDecoder decoder;
+    reader.close();
+    ASSERT_TRUE(reader.open((fixture / "base.rtcm").string()));
+    std::vector<uint8_t> frame;
+    size_t after_first_pass = 0;
+    for (int pass = 0; pass < 3; ++pass) {
+        ASSERT_TRUE(reader.open((fixture / "base.rtcm").string()));
+        while (reader.readMessage(message)) {
+            frame = buildRtcmFrame(message);
+            std::vector<io::RTCMStreamDecoder::Event> events;
+            decoder.pushFrame(frame.data(), frame.size(), events);
+        }
+        if (pass == 0) after_first_pass = count(decoder.getNavigationData());
+    }
+    EXPECT_EQ(count(decoder.getNavigationData()), after_first_pass);
+}
+
+
+namespace {
+
+#ifndef _WIN32
+// One scripted peer: each accepted connection replays the next script (bytes, pauses), then is
+// closed. After the last script the listener is closed too, so further connects are refused.
+class ScriptedRtcmServer {
+public:
+    struct Step {
+        std::vector<uint8_t> bytes;
+        int pause_ms_after = 0;
+    };
+
+    ScriptedRtcmServer(std::vector<std::vector<Step>> connections, bool ntrip)
+        : connections_(std::move(connections)), ntrip_(ntrip) {
+        // CLOEXEC: gnss_live is spawned with std::system and must not inherit (and thereby keep alive) the listener.
+        listen_fd_ = ::socket(AF_INET, SOCK_STREAM | SOCK_CLOEXEC, 0);
+        int one = 1;
+        ::setsockopt(listen_fd_, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+        sockaddr_in addr{};
+        addr.sin_family = AF_INET;
+        addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        addr.sin_port = 0;
+        EXPECT_EQ(::bind(listen_fd_, reinterpret_cast<sockaddr*>(&addr), sizeof(addr)), 0);
+        EXPECT_EQ(::listen(listen_fd_, 4), 0);
+        socklen_t len = sizeof(addr);
+        ::getsockname(listen_fd_, reinterpret_cast<sockaddr*>(&addr), &len);
+        port_ = ntohs(addr.sin_port);
+        thread_ = std::thread([this]() { run(); });
+    }
+
+    ~ScriptedRtcmServer() {
+        stop_ = true;
+        if (thread_.joinable()) thread_.join();
+        if (listen_fd_ >= 0) ::close(listen_fd_);
+    }
+
+    int port() const { return port_; }
+    int acceptedConnections() const { return accepted_; }
+
+private:
+    void run() {
+        for (const auto& script : connections_) {
+            pollfd pfd{listen_fd_, POLLIN, 0};
+            bool ready = false;
+            for (int waited = 0; waited < 15000 && !stop_; waited += 50) {
+                if (::poll(&pfd, 1, 50) > 0) { ready = true; break; }
+            }
+            if (!ready) break;
+            const int fd = ::accept4(listen_fd_, nullptr, nullptr, SOCK_CLOEXEC);
+            if (fd < 0) break;
+            ++accepted_;
+            if (ntrip_) {
+                std::string request;
+                char buffer[512];
+                while (request.find("\r\n\r\n") == std::string::npos) {
+                    const ssize_t n = ::recv(fd, buffer, sizeof(buffer), 0);
+                    if (n <= 0) break;
+                    request.append(buffer, static_cast<size_t>(n));
+                }
+                const std::string reply = "ICY 200 OK\r\n\r\n";
+                ::send(fd, reply.data(), reply.size(), MSG_NOSIGNAL);
+            }
+            for (const auto& step : script) {
+                size_t sent = 0;
+                while (sent < step.bytes.size()) {
+                    const ssize_t n = ::send(fd, step.bytes.data() + sent, step.bytes.size() - sent, MSG_NOSIGNAL);
+                    if (n <= 0) break;
+                    sent += static_cast<size_t>(n);
+                }
+                if (step.pause_ms_after > 0) {
+                    std::this_thread::sleep_for(std::chrono::milliseconds(step.pause_ms_after));
+                }
+            }
+            ::shutdown(fd, SHUT_RDWR);
+            ::close(fd);
+        }
+        ::close(listen_fd_);
+        listen_fd_ = -1;
+    }
+
+    std::vector<std::vector<Step>> connections_;
+    bool ntrip_ = false;
+    int listen_fd_ = -1;
+    int port_ = 0;
+    std::atomic<bool> stop_{false};
+    std::atomic<int> accepted_{0};
+    std::thread thread_;
+};
+#endif
+
+}  // namespace
+
+#ifndef _WIN32
+TEST(GNSSLiveRecordedStreamTest, ReconnectResumesTcpRoverAfterDroppedConnection) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "rover.rtcm")) << fixture;
+    const auto rover = readBinaryFile(fixture / "rover.rtcm");
+    const auto rover_epochs = readFixtureIndex(fixture / "rover.idx");
+    ASSERT_GT(rover_epochs.size(), 150U);
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_tcp_reconnect");
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+    const std::string base_arg = "--base-rtcm \"" + (fixture / "base.rtcm").string() + "\"";
+
+    // The rover link drops after 60 epochs and comes back with the rest of the recording.
+    auto script = [&]() {
+        std::vector<std::vector<ScriptedRtcmServer::Step>> connections(2);
+        connections[0].push_back({epochBytes(rover, rover_epochs, 0, 60), 0});
+        connections[1].push_back({epochBytes(rover, rover_epochs, 70, rover_epochs.size()), 0});
+        return connections;
+    };
+
+    double without_reconnect = 0.0;
+    {
+        ScriptedRtcmServer server(script(), false);
+        const int rc = runLiveCapture("--rover-rtcm tcp://127.0.0.1:" + std::to_string(server.port()) + " " + base_arg +
+                                          " --out \"" + out_path.string() + "\"",
+                                      log_path);
+        const std::string log = readTextFile(log_path);
+        EXPECT_EQ(rc, 0) << log;
+        // Default behaviour is unchanged: the first dropped connection ends the run.
+        EXPECT_EQ(extractSummaryToken(log, "termination"), "rover_source_exhausted") << log;
+        EXPECT_EQ(server.acceptedConnections(), 1);
+        without_reconnect = extractSummaryDouble(log, "written_solutions");
+        EXPECT_LE(without_reconnect, 60.0) << log;
+    }
+    {
+        ScriptedRtcmServer server(script(), false);
+        const int rc = runLiveCapture("--rover-rtcm tcp://127.0.0.1:" + std::to_string(server.port()) + " " + base_arg +
+                                          " --reconnect --reconnect-delay-ms 50 --reconnect-attempts 3 --out \"" +
+                                          out_path.string() + "\"",
+                                      log_path);
+        const std::string log = readTextFile(log_path);
+        EXPECT_EQ(rc, 0) << log;
+        EXPECT_EQ(server.acceptedConnections(), 2);
+        EXPECT_GE(extractSummaryDouble(log, "rover_reconnects"), 1.0) << log;
+        EXPECT_GT(extractSummaryDouble(log, "written_solutions"), without_reconnect + 80.0) << log;
+        // After the second connection closes the retries are refused and the run ends normally.
+        EXPECT_EQ(extractSummaryToken(log, "termination"), "rover_source_exhausted") << log;
+    }
+
+    fs::remove_all(temp_dir);
+}
+
+TEST(GNSSLiveRecordedStreamTest, NtripFrameSplitAcrossReadsIsNotTheEndOfTheStream) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "rover.rtcm")) << fixture;
+    const auto rover = readBinaryFile(fixture / "rover.rtcm");
+    const auto rover_epochs = readFixtureIndex(fixture / "rover.idx");
+    ASSERT_GT(rover_epochs.size(), 150U);
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_ntrip_split");
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    // The 60th epoch's frame reaches the client in two TCP segments 100 ms apart, so one read()
+    // returns only half a frame; the caster is otherwise steady.
+    const size_t cut = rover_epochs[60].offset + rover_epochs[60].length / 2;
+    std::vector<std::vector<ScriptedRtcmServer::Step>> connections(1);
+    connections[0].push_back({std::vector<uint8_t>(rover.begin(), rover.begin() + static_cast<std::ptrdiff_t>(cut)), 100});
+    connections[0].push_back({std::vector<uint8_t>(rover.begin() + static_cast<std::ptrdiff_t>(cut), rover.end()), 0});
+    ScriptedRtcmServer server(std::move(connections), true);
+
+    const int rc = runLiveCapture("--rover-rtcm ntrip://127.0.0.1:" + std::to_string(server.port()) + "/ROVER --base-rtcm \"" +
+                                      (fixture / "base.rtcm").string() + "\" --out \"" + out_path.string() + "\"",
+                                  log_path);
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(rc, 0) << log;
+    EXPECT_GT(extractSummaryDouble(log, "written_solutions"), 180.0) << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
+
+    fs::remove_all(temp_dir);
+}
+
+TEST(GNSSLiveRecordedStreamTest, ReconnectKeepsWaitingThroughNtripReadTimeout) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "rover.rtcm")) << fixture;
+    const auto rover = readBinaryFile(fixture / "rover.rtcm");
+    const auto rover_epochs = readFixtureIndex(fixture / "rover.idx");
+    ASSERT_GT(rover_epochs.size(), 150U);
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_ntrip_stall");
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+    const std::string base_arg = "--base-rtcm \"" + (fixture / "base.rtcm").string() + "\"";
+
+    // The caster goes quiet for 1.6 s (longer than the 1 s NTRIP read timeout), then carries on.
+    auto script = [&]() {
+        std::vector<std::vector<ScriptedRtcmServer::Step>> connections(1);
+        connections[0].push_back({epochBytes(rover, rover_epochs, 0, 60), 1600});
+        connections[0].push_back({epochBytes(rover, rover_epochs, 60, rover_epochs.size()), 0});
+        return connections;
+    };
+
+    double without_reconnect = 0.0;
+    {
+        ScriptedRtcmServer server(script(), true);
+        const int rc = runLiveCapture("--rover-rtcm ntrip://127.0.0.1:" + std::to_string(server.port()) + "/ROVER " +
+                                          base_arg + " --out \"" + out_path.string() + "\"",
+                                      log_path);
+        const std::string log = readTextFile(log_path);
+        EXPECT_EQ(rc, 0) << log;
+        // Unchanged default: one empty NTRIP read is treated as the end of the stream.
+        EXPECT_EQ(extractSummaryToken(log, "termination"), "rover_source_exhausted") << log;
+        without_reconnect = extractSummaryDouble(log, "written_solutions");
+        EXPECT_LE(without_reconnect, 60.0) << log;
+    }
+    {
+        ScriptedRtcmServer server(script(), true);
+        const int rc = runLiveCapture("--rover-rtcm ntrip://127.0.0.1:" + std::to_string(server.port()) + "/ROVER " +
+                                          base_arg + " --reconnect --reconnect-delay-ms 50 --reconnect-attempts 4 " +
+                                          "--out \"" + out_path.string() + "\"",
+                                      log_path);
+        const std::string log = readTextFile(log_path);
+        EXPECT_EQ(rc, 0) << log;
+        EXPECT_GT(extractSummaryDouble(log, "written_solutions"), without_reconnect + 100.0) << log;
+    }
 
     fs::remove_all(temp_dir);
 }
