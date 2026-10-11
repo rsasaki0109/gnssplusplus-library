@@ -12,6 +12,7 @@ GUIDES = {
     "rtklib": ROOT_DIR / "docs" / "use_cases" / "rtklib_migration.md",
     "ros2": ROOT_DIR / "docs" / "use_cases" / "ros2.md",
     "qzss": ROOT_DIR / "docs" / "use_cases" / "qzss_l6.md",
+    "canyon": ROOT_DIR / "docs" / "use_cases" / "urban_canyon_rtk_options.md",
 }
 
 
@@ -93,6 +94,20 @@ class UseCaseGuideTest(unittest.TestCase):
         ):
             self.assertIn(token, qzss)
 
+        canyon = GUIDES["canyon"].read_text(encoding="utf-8")
+        for token in (
+            "--rtk-canyon-carrier-prior",
+            "--rtk-snr-weighting --rtk-snr-elevation-aware",
+            "--rtk-snr-code-only",
+            "python3 apps/gnss.py ppc-demo",
+            "--max-epochs -1",
+            "engaged_epochs=",
+            "Do not combine the carrier prior with the SNR options",
+            "urban_rtk_fgo.md",
+            "../rtk_tuning_gates.md",
+        ):
+            self.assertIn(token, canyon)
+
     def test_tokyo_ppc_lever_arm_preserves_the_published_signed_z(self) -> None:
         """The urban recipe must not silently flip Tokyo's vertical lever arm."""
         contract_doc = (ROOT_DIR / "docs" / "ppc_reproduction.md").read_text(encoding="utf-8")
@@ -154,6 +169,7 @@ class UseCaseGuideTest(unittest.TestCase):
             "use_cases/rtklib_migration.md",
             "use_cases/ros2.md",
             "use_cases/qzss_l6.md",
+            "use_cases/urban_canyon_rtk_options.md",
         ):
             self.assertIn(relative_path, nav)
 

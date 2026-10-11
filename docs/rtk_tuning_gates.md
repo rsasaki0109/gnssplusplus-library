@@ -90,3 +90,9 @@ vertical error, so its Hp95/Vp95 are above the default profile's on the
 2026-10-11 Odaiba run, both over all epochs (5.28/13.89 m against 4.77/11.54 m)
 and over the epochs both profiles publish (5.11/11.81 m against 4.57/10.52 m)
 ([benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot)).
+
+For those stationary deep-canyon errors, see
+[Urban canyon RTK options](use_cases/urban_canyon_rtk_options.md): it compares
+`--rtk-canyon-carrier-prior` and the SNR options on Odaiba, Hong Kong and PPC,
+and warns against combining the carrier prior with the SNR options under
+`--preset odaiba` (wrong fixes 12 → 1,009 on Odaiba).
