@@ -1434,6 +1434,37 @@ TEST(GNSSLiveRecordedStreamTest, ReconnectResumesTcpRoverAfterDroppedConnection)
     fs::remove_all(temp_dir);
 }
 
+TEST(GNSSLiveRecordedStreamTest, NtripFrameSplitAcrossReadsIsNotTheEndOfTheStream) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "rover.rtcm")) << fixture;
+    const auto rover = readBinaryFile(fixture / "rover.rtcm");
+    const auto rover_epochs = readFixtureIndex(fixture / "rover.idx");
+    ASSERT_GT(rover_epochs.size(), 150U);
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_ntrip_split");
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    // The 60th epoch's frame reaches the client in two TCP segments 100 ms apart, so one read()
+    // returns only half a frame; the caster is otherwise steady.
+    const size_t cut = rover_epochs[60].offset + rover_epochs[60].length / 2;
+    std::vector<std::vector<ScriptedRtcmServer::Step>> connections(1);
+    connections[0].push_back({std::vector<uint8_t>(rover.begin(), rover.begin() + static_cast<std::ptrdiff_t>(cut)), 100});
+    connections[0].push_back({std::vector<uint8_t>(rover.begin() + static_cast<std::ptrdiff_t>(cut), rover.end()), 0});
+    ScriptedRtcmServer server(std::move(connections), true);
+
+    const int rc = runLiveCapture("--rover-rtcm ntrip://127.0.0.1:" + std::to_string(server.port()) + "/ROVER --base-rtcm \"" +
+                                      (fixture / "base.rtcm").string() + "\" --out \"" + out_path.string() + "\"",
+                                  log_path);
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(rc, 0) << log;
+    EXPECT_GT(extractSummaryDouble(log, "written_solutions"), 180.0) << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
+
+    fs::remove_all(temp_dir);
+}
+
 TEST(GNSSLiveRecordedStreamTest, ReconnectKeepsWaitingThroughNtripReadTimeout) {
     namespace fs = std::filesystem;
     const fs::path fixture = realtimeFixtureDir();

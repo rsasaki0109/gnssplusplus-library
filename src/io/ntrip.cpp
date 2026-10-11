@@ -261,6 +261,7 @@ bool NTRIPClient::readMessages(std::vector<RTCMMessage>& messages, int timeout_m
         return true;
     }
 
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::max(timeout_ms, 0));
     for (int attempt = 0; attempt < 2; ++attempt) {
         if (!isConnected()) {
             if (!auto_reconnect_ || !tryReconnect()) {
@@ -268,9 +269,21 @@ bool NTRIPClient::readMessages(std::vector<RTCMMessage>& messages, int timeout_m
             }
         }
 
-        if (receiveIntoBuffer(timeout_ms)) {
+        // A TCP read can end part-way through an RTCM frame. That is not the end of the stream:
+        // keep reading until a whole message arrives, the link drops, or the time budget is spent.
+        while (true) {
+            const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                deadline - std::chrono::steady_clock::now());
+            if (!receiveIntoBuffer(static_cast<int>(std::max<std::chrono::milliseconds::rep>(remaining.count(), 0)))) {
+                break;
+            }
             consumeBufferedMessages(messages);
-            return !messages.empty();
+            if (!messages.empty()) {
+                return true;
+            }
+            if (std::chrono::steady_clock::now() >= deadline) {
+                break;  // a stream that never completes a frame must not hold the caller forever
+            }
         }
 
         if (isConnected()) {
