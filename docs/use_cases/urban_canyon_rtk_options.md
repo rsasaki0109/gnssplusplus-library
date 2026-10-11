@@ -116,6 +116,12 @@ no wrong fixes and is the best Odaiba arm.
 | `--rtk-canyon-carrier-prior` | −0.09 | −0.27 | −0.75 | −0.65 | 0.00 | +2.63 | +0.68 |
 | `--rtk-snr-weighting --rtk-snr-elevation-aware` | +1.04 | +3.16 | −2.47 | +0.44 | +3.95 | +6.71 | −6.97 |
 | elevation-aware + `--rtk-snr-code-only` | +0.22 | −0.47 | +0.42 | +0.45 | +0.66 | +2.11 | −2.51 |
+| carrier prior + elevation-aware | +1.31 | +3.39 | −0.32 | +0.11 | +3.95 | +6.71 | −6.97 |
+
+On PPC the combination does not repeat the Odaiba wrong-fix failure: FIXED
+epochs outside the PPC correct-fix tolerance fall on five runs (for example
+tokyo3 455 → 199) but rise on nagoya3 (467 → 602 of 2,744 → 2,170 fixes),
+the run where both SNR arms also lose about 7 pp.
 
 ## Exit criteria
 
