@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <map>
 #include <limits>
 #include <set>
@@ -1125,3 +1126,100 @@ TEST(GNSSLiveTest, SolvesAgainstBaseRtcmSerialDeviceWithRoverUbxFile) {
     fs::remove_all(temp_dir);
 }
 #endif
+
+// ---------------------------------------------------------------------------------------------
+// Recorded-data regression tests (tests/fixtures/realtime_stress: 40 s of PPC Tokyo run1, GPS-only
+// RTCM3 MSM7). They need no external data and cover stream-fault behaviour found by
+// `gnss realtime-stress`.
+// ---------------------------------------------------------------------------------------------
+namespace {
+
+struct FixtureEpoch {
+    size_t offset = 0;
+    size_t length = 0;
+};
+
+std::filesystem::path realtimeFixtureDir() {
+    return std::filesystem::path(GNSSPP_SOURCE_DIR) / "tests" / "fixtures" / "realtime_stress";
+}
+
+std::vector<uint8_t> readBinaryFile(const std::filesystem::path& path) {
+    std::ifstream input(path, std::ios::binary);
+    return std::vector<uint8_t>((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
+}
+
+std::vector<FixtureEpoch> readFixtureIndex(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    std::vector<FixtureEpoch> epochs;
+    std::string line;
+    while (std::getline(input, line)) {
+        std::istringstream in(line);
+        double tow = 0.0;
+        int week = 0;
+        FixtureEpoch epoch;
+        size_t obs = 0;
+        size_t aux = 0;
+        if (in >> tow >> week >> epoch.offset >> epoch.length >> obs >> aux) {
+            epochs.push_back(epoch);
+        }
+    }
+    return epochs;
+}
+
+std::vector<uint8_t> epochBytes(const std::vector<uint8_t>& data,
+                                const std::vector<FixtureEpoch>& epochs,
+                                size_t first,
+                                size_t last) {
+    std::vector<uint8_t> out;
+    for (size_t i = first; i < last && i < epochs.size(); ++i) {
+        out.insert(out.end(), data.begin() + static_cast<std::ptrdiff_t>(epochs[i].offset),
+                   data.begin() + static_cast<std::ptrdiff_t>(epochs[i].offset + epochs[i].length));
+    }
+    return out;
+}
+
+int runLiveCapture(const std::string& arguments, const std::filesystem::path& log_path) {
+    const std::filesystem::path live_binary =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "apps" / "gnss_live";
+    const std::string command = "\"" + live_binary.string() + "\" " + arguments + " --quiet > \"" +
+                                log_path.string() + "\" 2>&1";
+    return std::system(command.c_str());
+}
+
+}  // namespace
+
+TEST(GNSSLiveRecordedStreamTest, ReportsRtcmCrcFailuresInDecoderErrorSummary) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+    const fs::path live_binary = fs::path(GNSSPP_BINARY_DIR) / "apps" / "gnss_live";
+    ASSERT_TRUE(fs::exists(live_binary));
+
+    // Flip one payload bit of a mid-stream base observation message.
+    auto base = readBinaryFile(fixture / "base.rtcm");
+    const auto base_epochs = readFixtureIndex(fixture / "base.idx");
+    ASSERT_GT(base_epochs.size(), 20U);
+    const size_t victim = base_epochs[20].offset + base_epochs[20].length - 40;
+    base[victim] ^= 0x10U;
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_crc_failures");
+    const fs::path base_path = temp_dir / "base_corrupt.rtcm";
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+    {
+        std::ofstream output(base_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(base.data()), static_cast<std::streamsize>(base.size()));
+    }
+
+    const int rc = runLiveCapture("--rover-rtcm \"" + (fixture / "rover.rtcm").string() + "\" --base-rtcm \"" +
+                                      base_path.string() + "\" --out \"" + out_path.string() + "\"",
+                                  log_path);
+    const std::string log = readTextFile(log_path);
+    EXPECT_EQ(rc, 0) << log;  // survives the corrupted frame
+    EXPECT_GT(extractSummaryDouble(log, "written_solutions"), 100.0) << log;
+    EXPECT_GE(extractSummaryDouble(log, "base_decoder_errors"), 1.0) << log;
+    EXPECT_EQ(extractSummaryToken(log, "rover_decoder_errors"), "0") << log;
+
+    fs::remove_all(temp_dir);
+}
+

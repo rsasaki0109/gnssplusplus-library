@@ -454,13 +454,15 @@ int main(int argc, char** argv) {
             message_count,
             has_last_message ? &last_message : nullptr);
     }
+    // Read the counters before close(): closing resets the statistics and drops the NTRIP client.
+    const auto stats = reader.getStats();
+    const int reconnect_count = reader.reconnectCount();
     reader.close();
 
-    const auto stats = reader.getStats();
     std::cout << "summary: messages=" << message_count
               << " valid=" << stats.valid_messages
               << " crc_errors=" << stats.crc_errors
               << " decode_errors=" << stats.decode_errors
-              << " reconnect_count=" << reader.reconnectCount() << "\n";
+              << " reconnect_count=" << reconnect_count << "\n";
     return 0;
 }

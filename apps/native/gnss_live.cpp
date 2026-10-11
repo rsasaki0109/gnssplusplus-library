@@ -1324,6 +1324,14 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Snapshot decoder statistics before the readers are closed: RTCMReader::close()
+        // resets its counters, which used to make every *_decoder_errors read 0.
+        const DecoderSummaryStats rover_stats =
+            rover_input_kind == RoverInputKind::RTCM
+                ? summarizeRtcmSource(rover_rtcm_source)
+                : summarizeUbxSource(rover_ubx_source);
+        const DecoderSummaryStats base_stats = summarizeRtcmSource(base_source);
+
         writer.close();
         if (rover_input_kind == RoverInputKind::RTCM) {
             rover_rtcm_source.reader.close();
@@ -1340,11 +1348,6 @@ int main(int argc, char** argv) {
         }
         base_source.reader.close();
 
-        const DecoderSummaryStats rover_stats =
-            rover_input_kind == RoverInputKind::RTCM
-                ? summarizeRtcmSource(rover_rtcm_source)
-                : summarizeUbxSource(rover_ubx_source);
-        const DecoderSummaryStats base_stats = summarizeRtcmSource(base_source);
         const std::string rover_source_label =
             rover_input_kind == RoverInputKind::RTCM ? "rtcm" : "ubx";
         const auto wall_time_end = std::chrono::steady_clock::now();
