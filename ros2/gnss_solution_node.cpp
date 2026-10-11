@@ -164,10 +164,19 @@ private:
         msg.status.status = solution.isValid()
             ? sensor_msgs::msg::NavSatStatus::STATUS_FIX
             : sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
-        msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
-        msg.position_covariance[0] = solution.position_covariance(0, 0);
-        msg.position_covariance[4] = solution.position_covariance(1, 1);
-        msg.position_covariance[8] = solution.position_covariance(2, 2);
+        // NavSatFix wants the covariance in the local East/North/Up frame,
+        // row-major; PositionSolution::position_covariance is ECEF.
+        const Eigen::Matrix3d covariance_enu = solution.positionCovarianceEnu();
+        if (covariance_enu.allFinite()) {
+            msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_KNOWN;
+            for (int row = 0; row < 3; ++row) {
+                for (int col = 0; col < 3; ++col) {
+                    msg.position_covariance[3 * row + col] = covariance_enu(row, col);
+                }
+            }
+        } else {
+            msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+        }
         fix_publisher_->publish(msg);
     }
 

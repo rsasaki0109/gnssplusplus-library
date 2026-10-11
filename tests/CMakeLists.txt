@@ -123,6 +123,7 @@ if(GTest_FOUND)
         test_signal_policy.cpp
         test_types.cpp
         test_observation.cpp
+        test_solution_covariance_frame.cpp
         test_gnss_live.cpp
         test_ppp.cpp
         test_rinex_writer.cpp

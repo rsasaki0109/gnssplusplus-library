@@ -168,12 +168,19 @@ struct PositionSolution {
     }
     
     /**
-     * @brief Get horizontal accuracy (95% confidence)
+     * @brief Position covariance rotated into the local East/North/Up frame at
+     * position_ecef (position_covariance itself is ECEF). All NaN when the
+     * position or its covariance is not finite.
+     */
+    Matrix3d positionCovarianceEnu() const;
+
+    /**
+     * @brief Get horizontal accuracy (95% confidence, from the ENU covariance)
      */
     double getHorizontalAccuracy() const;
     
     /**
-     * @brief Get vertical accuracy (95% confidence)
+     * @brief Get vertical accuracy (95% confidence, from the ENU covariance)
      */
     double getVerticalAccuracy() const;
     
