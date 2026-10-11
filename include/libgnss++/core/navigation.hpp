@@ -392,6 +392,17 @@ public:
     
     NavigationStats getStats(const GNSSTime& current_time) const;
 
+    /**
+     * @brief Bound the satellite-state memo (0 = unbounded, the default).
+     *
+     * Entries are keyed by (satellite, time) and only cleared when an ephemeris is added, so a
+     * long-running consumer that never receives a new ephemeris (for example gnss_live with a
+     * navigation RINEX) would otherwise grow the memo with every epoch. With a limit the memo is
+     * dropped when it reaches that many entries; results are unaffected, only recomputed.
+     */
+    void setSatelliteStateCacheLimit(size_t max_entries) { satellite_state_cache_limit_ = max_entries; }
+    size_t satelliteStateCacheSize() const { return satellite_state_cache_.size(); }
+
 private:
     struct SatelliteStateCacheKey {
         SatelliteId satellite;
@@ -426,6 +437,7 @@ private:
     mutable std::map<SatelliteStateCacheKey, SatelliteStateCacheValue>
         satellite_state_cache_;
     std::uint64_t revision_ = 0;
+    size_t satellite_state_cache_limit_ = 0;
     GalileoEphemerisSource galileo_ephemeris_source_ = GalileoEphemerisSource::Any;
 };
 

@@ -278,6 +278,9 @@ bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
                 computed.clock_bias,
                 computed.clock_drift);
     }
+    if (satellite_state_cache_limit_ != 0 && satellite_state_cache_.size() >= satellite_state_cache_limit_) {
+        satellite_state_cache_.clear();
+    }
     satellite_state_cache_.emplace(cache_key, computed);
     position = computed.position;
     velocity = computed.velocity;
@@ -314,6 +317,9 @@ bool NavigationData::calculateSatelliteState(const SatelliteId& sat,
                 computed.velocity,
                 computed.clock_bias,
                 computed.clock_drift);
+    }
+    if (satellite_state_cache_limit_ != 0 && satellite_state_cache_.size() >= satellite_state_cache_limit_) {
+        satellite_state_cache_.clear();
     }
     satellite_state_cache_.emplace(cache_key, computed);
     position = computed.position;

@@ -266,6 +266,54 @@ TEST(NavigationTest, GalileoBroadcastStateUsesGalileoGravitationalConstantByDefa
     EXPECT_GT((default_position - gps_mu_position).norm(), 0.1);
 }
 
+TEST(NavigationTest, SatelliteStateMemoStaysBoundedWhenALimitIsSet) {
+    Ephemeris eph;
+    eph.satellite = SatelliteId(GNSSSystem::GPS, 5);
+    eph.valid = true;
+    eph.week = 2324;
+    eph.toe = GNSSTime(2324, 187200.0);
+    eph.toc = eph.toe;
+    eph.toes = eph.toe.tow;
+    eph.sqrt_a = std::sqrt(26560000.0);
+    eph.e = 0.01;
+    eph.i0 = 0.96;
+    eph.omega0 = 1.1;
+    eph.omega = 0.5;
+    eph.m0 = 0.3;
+    eph.delta_n = 4.0e-9;
+    eph.omega_dot = -8.0e-9;
+
+    auto sweep = [&](NavigationData& nav, size_t epochs) {
+        Vector3d position, velocity;
+        double clock_bias = 0.0, clock_drift = 0.0;
+        for (size_t i = 0; i < epochs; ++i) {
+            ASSERT_TRUE(nav.calculateSatelliteState(eph.satellite, GNSSTime(2324, 187400.0 + 0.2 * i),
+                                                    position, velocity, clock_bias, clock_drift));
+        }
+    };
+
+    NavigationData unbounded;
+    unbounded.addEphemeris(eph);
+    sweep(unbounded, 2000);
+    EXPECT_EQ(unbounded.satelliteStateCacheSize(), 2000U);  // default behaviour: the memo keeps every epoch
+
+    NavigationData bounded;
+    bounded.addEphemeris(eph);
+    bounded.setSatelliteStateCacheLimit(100);
+    sweep(bounded, 2000);
+    EXPECT_LE(bounded.satelliteStateCacheSize(), 100U);
+    EXPECT_GT(bounded.satelliteStateCacheSize(), 0U);
+
+    // The memo is only an optimisation: a bounded one returns identical states.
+    Vector3d a, b, va, vb;
+    double ca = 0, cb = 0, da = 0, db = 0;
+    const GNSSTime t(2324, 187500.2);
+    ASSERT_TRUE(unbounded.calculateSatelliteState(eph.satellite, t, a, va, ca, da));
+    ASSERT_TRUE(bounded.calculateSatelliteState(eph.satellite, t, b, vb, cb, db));
+    EXPECT_EQ((a - b).norm(), 0.0);
+    EXPECT_EQ(ca, cb);
+}
+
 TEST(IonosphereModelTest, KlobucharUsesElevationInSemicircles) {
     const double latitude = 35.0 * M_PI / 180.0;
     const double longitude = 139.0 * M_PI / 180.0;

@@ -45,6 +45,8 @@ using libgnss_apps::baudRateConstant;
 constexpr double kExactTimeToleranceSeconds = 1e-3;
 constexpr double kMaxBaseInterpolationGapSeconds = 2.0;
 constexpr double kDefaultBaseHoldSeconds = 0.5;
+// A few hundred epochs of satellite states; larger than any single epoch's working set.
+constexpr size_t kSatelliteStateCacheLimit = 16384;
 
 enum class GlonassARChoice {
     OFF,
@@ -1068,6 +1070,9 @@ int main(int argc, char** argv) {
         }
 
         libgnss::NavigationData nav_data;
+        // A live run is open-ended: cap the per-(satellite, time) memo so epochs that never see a
+        // new ephemeris (navigation RINEX, or a quiet caster) cannot grow it without bound.
+        nav_data.setSatelliteStateCacheLimit(kSatelliteStateCacheLimit);
         if (!loadNavigationRinex(config.nav_rinex_path, nav_data)) {
             std::cerr << "Error: failed to read navigation RINEX: "
                       << config.nav_rinex_path << "\n";
