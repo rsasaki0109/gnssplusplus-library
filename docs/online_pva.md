@@ -25,7 +25,9 @@ position is also worse than the default on two development runs below.
 Full-run `normal` scenario, `gnss pva-evaluate` (fused position 3D error in
 metres; share of scored epochs whose rotation error exceeds 90 degrees).
 develop `adb40608`. All ten runs are development data, so these numbers are
-not an independent accuracy claim. UrbanNav and Hong Kong use a zero lever arm.
+not an independent accuracy claim. UrbanNav and Hong Kong use a zero lever arm;
+the Hong Kong truth sits about 0.55 m along track from the GNSS antenna
+([wrong-FIX holdout](rtk_wrong_fix_holdout.md#hong-kong-truth-is-not-at-the-antenna)).
 
 | Run | default: RMSE / P50 / rot>90 | v10: RMSE / P50 / rot>90 |
 |---|---|---|
