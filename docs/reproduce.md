@@ -20,9 +20,9 @@ runner adds no scoring logic of its own.
 
 | README row | Lane | Status | Runtime (local) | Local result (2026-09-28) |
 |---|---|---|---:|---|
-| RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28 and again 2026-10-10 (Linux gcc 13.3); see [README refresh](#readme-refresh-2026-09-28) and [2026-10-10 refresh](#readme-refresh-2026-10-10) |
+| RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28 and again 2026-10-10 (Linux gcc 13.3); and 2026-10-11 (Doppler/phase slip-test interval fix: +56.9 pp fix rate, weighted official score 68.108% to 68.120%); see [README refresh](#readme-refresh-2026-09-28), [2026-10-10 refresh](#readme-refresh-2026-10-10) and [2026-10-11 refresh](#readme-refresh-2026-10-11) |
 | CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | ~45 min | **Pass.** README refreshed 2026-10-10: reproduces 25.117% FIX, 0.359 m FIX RMS2D, 0 FIX > 3 m, 58,259 epochs, all hard gates (L6/SSR expansion ~14 min + six `gnss_ppp` runs ~30 min) |
-| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: all gates pass; the `--preset odaiba` claim is restated (more fixes, lower Hmed; all-epoch Hp95/Vp95 reported, not gated); see [2026-10-10 refresh](#readme-refresh-2026-10-10) |
+| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: all gates pass; the `--preset odaiba` claim is restated (more fixes, lower Hmed; all-epoch Hp95/Vp95 reported, not gated); re-run 2026-10-11 after the Doppler/phase slip-test interval fix: default arm bit-identical, preset 7961 fixes, Hp95 5.28 m, Vp95 13.89 m; see [2026-10-10 refresh](#readme-refresh-2026-10-10) and [2026-10-11 refresh](#readme-refresh-2026-10-11) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
@@ -374,6 +374,69 @@ fire (with the filters off the pre-#577 preset Vp95 was already 14.74 m; on
 the epochs both arms publish the preset Vp95 is lower, 7.38 vs 9.41 m). The
 preset claim is therefore restated as more fixes and lower Hmed, gated, with
 its all-epoch Hp95/Vp95 reported but not gated; see
+[benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot).
+
+## README refresh (2026-10-11)
+
+The `rtk-demo5` and `odaiba` lanes were rerun on develop `ced3d057` plus the
+Doppler/phase slip-test interval fix (`updateBias` used the time since the last
+remembered solution while the Doppler phase history is refreshed on every call,
+so after a rejected epoch the receiver-clock-drift term of the single-difference
+range rate produced false slips on every satellite; it now uses the Doppler
+history interval; regression test `tests/test_rtk_doppler_slip_dt.cpp`). Same
+host, toolchain, demo5 b34k pin and Odaiba input checksums as the 2026-10-10
+refresh; the original `Tokyo_Data.zip` Odaiba members were re-fetched and their
+SHA-256 values match. `clas-ppc` was not rerun: `updateBias` lives in the RTK
+filter (`src/algorithms/rtk_bias.cpp`), which the CLAS PPP path (`gnss_ppp`) does
+not call, so its numbers are unaffected by construction.
+
+**`rtk-demo5`** (demo5 fix rates unchanged to 0.01 pp):
+
+| Metric | 2026-10-10 | 2026-10-11 |
+|---|---:|---:|
+| Avg Fix-rate delta vs demo5 | +57.0 pp | **+56.9 pp** |
+| Avg PPC official-score delta | +44.9 pp | **+44.9 pp** (44.914 to 44.920) |
+| Avg P95 H delta | -11.33 m | **-11.33 m** |
+| Avg Positioning delta | -9.7 pp | **-9.7 pp** (-9.653 to -9.667) |
+| Weighted PPC official score | 68.108% | **68.120%** |
+
+| Run | Fix rate | PPC official score |
+|---|---:|---:|
+| Tokyo run1 | 83.95% to 83.85% | 69.62% (unchanged) |
+| Tokyo run2 | 84.27% to 84.48% | 83.22% to 83.32% |
+| Tokyo run3 | 80.56% to 79.89% | 79.01% (unchanged) |
+| Nagoya run1 | 79.39% (unchanged) | 52.84% (unchanged) |
+| Nagoya run2 | 63.59% (unchanged) | 30.02% (unchanged) |
+| Nagoya run3 | 63.85% to 63.84% | 52.19% to 52.12% |
+
+Positioning rates move by at most 0.05 pp (Tokyo run3 93.75% to 93.69%) and the
+per-run P95 H by at most 0.006 m; Tokyo run1 max horizontal error falls from
+29.7 to 25.8 m. The README row (+57.0 to +56.9 pp fix rate), the lane
+expectations, and the generated coverage block and scorecard in
+`docs/benchmarks.md` / `docs/ppc_rtk_demo5_scorecard.png` follow; tolerances are
+unchanged.
+
+**`odaiba`** (default arm bit-identical, 1298 fixes, Hp95 4.773 m, Vp95 11.537 m,
+Hmed 0.298 vs 0.553 m on 8,027 common epochs; demo5 unchanged):
+
+| `--preset odaiba` | 2026-10-10 | 2026-10-11 |
+|---|---:|---:|
+| Fix epochs | 8002 | **7961** |
+| Fix rate | 78.92% | **79.00%** |
+| Hmed | 0.043 m | **0.043 m** |
+| Hp95, all epochs | 5.293 m | **5.284 m** |
+| Vp95, all epochs | 15.307 m | **13.892 m** |
+| Epochs published | 10,140 | **10,077** |
+
+The gates (more fixes than the default, lower Hmed) still pass. The preset's
+all-epoch Hp95/Vp95 remain above the default arm's (+0.51 m and +2.35 m,
+previously +0.52 m and +3.77 m). The 2026-10-10 statement that the preset Vp95
+is lower on the epochs both arms publish no longer holds: on the 9,906 common
+epochs it is 11.81 m against 10.52 m for the default (Hp95 5.11 vs 4.57 m, Hmed
+0.042 vs 0.318 m), and the "about 830 more FLOAT epochs" wording was dropped
+(the preset publishes fewer epochs and far fewer FLOAT epochs than the default,
+1,935 against 9,577). 604 of the preset's 629 epochs with more than 10 m
+vertical error lie in the two stationary deep-canyon windows. See
 [benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot).
 
 ## fgo-tokyo local result (2026-09-28)

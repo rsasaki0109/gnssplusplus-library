@@ -10,7 +10,7 @@ receiver observations, reference-station observations, broadcast navigation
 data, and reliable trajectory truth. It is not used as a proprietary
 receiver-engine comparison. Treat the UrbanNav Odaiba snapshot below as a
 Tier-1 public smoke/regression run; the explicit `--preset odaiba` opt-in
-profile (low-cost + arc-smoothed wide-lane AR) gives 6.2x the default
+profile (low-cost + arc-smoothed wide-lane AR) gives 6.1x the default
 profile's fixes and Hmed 0.043 m versus 0.359 m on that scene, at the cost of
 a heavier FLOAT tail in stationary deep-canyon stretches (higher all-epoch
 Hp95/Vp95; see the snapshot below).
@@ -124,12 +124,12 @@ below is the sign-off view for no-solution gaps and fallback-positioned epochs.
 <!-- PPC_COVERAGE_MATRIX:START -->
 | Run | gnssplusplus Positioning | RTKLIB Positioning | Delta | gnssplusplus Fix | RTKLIB Fix | PPC official score | RTKLIB official score | Official delta | P95 H delta |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| Tokyo run1 | 90.3% | **99.1%** | -8.8 pp | **84.0%** | 8.4% | **69.6%** | 2.1% | +67.5 pp | -20.20 m |
-| Tokyo run2 | 96.4% | **99.6%** | -3.1 pp | **84.3%** | 12.6% | **83.2%** | 17.9% | +65.3 pp | -5.67 m |
-| Tokyo run3 | 93.7% | **100.0%** | -6.2 pp | **80.6%** | 43.6% | **79.0%** | 36.3% | +42.7 pp | -10.01 m |
+| Tokyo run1 | 90.3% | **99.1%** | -8.8 pp | **83.9%** | 8.4% | **69.6%** | 2.1% | +67.5 pp | -20.19 m |
+| Tokyo run2 | 96.4% | **99.6%** | -3.2 pp | **84.5%** | 12.6% | **83.3%** | 17.9% | +65.4 pp | -5.68 m |
+| Tokyo run3 | 93.7% | **100.0%** | -6.3 pp | **79.9%** | 43.6% | **79.0%** | 36.3% | +42.7 pp | -10.00 m |
 | Nagoya run1 | 91.9% | **98.6%** | -6.7 pp | **79.4%** | 20.9% | **52.8%** | 18.2% | +34.6 pp | -21.29 m |
 | Nagoya run2 | 84.0% | **99.7%** | -15.7 pp | **63.6%** | 22.6% | **30.0%** | 15.5% | +14.5 pp | -16.40 m |
-| Nagoya run3 | 82.7% | **100.0%** | -17.3 pp | **63.9%** | 5.6% | **52.2%** | 7.3% | +44.9 pp | +5.60 m |
+| Nagoya run3 | 82.6% | **100.0%** | -17.4 pp | **63.8%** | 5.6% | **52.1%** | 7.3% | +44.8 pp | +5.60 m |
 
 Across these six public runs, the coverage profile averages **-9.7 pp**
 Positioning-rate deficit, **+44.9 pp** PPC official-score lead, and
@@ -481,7 +481,7 @@ Hmed is **0.298 m** versus 0.553 m.
 |---|---:|---:|:---:|:---:|:---:|
 | RTKLIB demo5 b34k | 205 | 2.50% | 0.567 | 25.622 | 43.375 |
 | libgnss++ default | 1298 (+1093) | 11.83% | 0.359 | **4.773** | **11.537** |
-| libgnss++ `--preset odaiba` | **8002** (+7797) | **78.92%** | **0.043** | 5.293 | 15.307 |
+| libgnss++ `--preset odaiba` | **7961** (+6663) | **79.00%** | **0.043** | 5.284 | 13.892 |
 
 `--preset odaiba` is the `low-cost` profile plus Melbourne-Wubbena wide-lane
 AR averaged over each satellite's continuous arc
@@ -489,19 +489,28 @@ AR averaged over each satellite's continuous arc
 gates it against the default arm on Fix count and Hmed; its all-epoch Hp95 and
 Vp95 are reported, not gated.
 
-These numbers were measured on 2026-10-10 on the original 10 Hz Trimble rover
-(develop `31d7177f`, Linux gcc 13.3 Release; demo5 b34k is unchanged from
-2026-09-29). They supersede the 2026-09-29 values (default 922 fixes, Hp95
-5.873 m, Vp95 16.419 m; preset 6115 fixes, Hp95 5.131 m, Vp95 9.740 m), which
-predate the BeiDou B1I mapping (#577) and later develop changes.
+These numbers were measured on 2026-10-11 on the original 10 Hz Trimble rover
+(develop `ced3d057` plus the Doppler/phase slip-test interval fix, Linux gcc
+13.3 Release; demo5 b34k is unchanged from 2026-09-29). The default arm is
+bit-identical to the 2026-10-10 measurement; the slip-test fix only moved the
+preset row (2026-10-10: 8002 fixes, Hp95 5.293 m, Vp95 15.307 m). Both
+supersede the 2026-09-29 values (default 922 fixes, Hp95 5.873 m, Vp95
+16.419 m; preset 6115 fixes, Hp95 5.131 m, Vp95 9.740 m), which predate the
+BeiDou B1I mapping (#577) and later develop changes.
 
-The preset trades a heavier FLOAT tail for fixes: 6.2x the default arm's fixes
-and Hmed 0.043 vs 0.359 m, but all-epoch Hp95/Vp95 0.52 m and 3.77 m above the
+The preset trades a heavier FLOAT tail for fixes: 6.1x the default arm's fixes
+and Hmed 0.043 vs 0.359 m, but all-epoch Hp95/Vp95 0.51 m and 2.35 m above the
 default. The tail is two stationary deep-canyon windows (tow 273750-273860 and
-274230-274300) where FLOAT/SPP epochs carry 10-29 m vertical error from biased
-code; the preset publishes about 830 more FLOAT epochs than the default, and
-its Vp95 falls inside that plateau. On the 9,615 epochs both arms publish, the
-preset Vp95 is lower (7.38 vs 9.41 m). The 2026-09-29 preset Vp95 of 9.74 m
+274230-274300) where FLOAT/SPP epochs carry up to 28 m vertical error from
+biased code. They hold 604 of the preset's 629 epochs with more than 10 m
+vertical error (941 of 972 for the default arm), and the preset's Vp95 falls
+inside that plateau: its median vertical error in the first window is 17.6 m
+against 12.2 m for the default. The preset publishes 10,077 epochs (1,935
+FLOAT) against 10,973 (9,577 FLOAT) for the default. Unlike on 2026-10-10
+(7.38 vs 9.41 m on the epochs both arms published), the preset Vp95 is no
+longer lower on common epochs: on the 9,906 epochs both arms publish it is
+11.81 m against 10.52 m (Hp95 5.11 vs 4.57 m), while Hmed stays far lower (0.042
+vs 0.318 m). The 2026-09-29 preset Vp95 of 9.74 m
 held only because two FLOAT post-filters (the non-FIX drift guard and the FLOAT
 bridge-tail guard) happened to blank those windows; #577 (BeiDou B1I was read
 at the B1C frequency, a 0.9% wavelength error) and the RTK-internal SPP sigma
