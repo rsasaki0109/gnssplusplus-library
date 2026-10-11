@@ -452,6 +452,10 @@ if(GTest_FOUND)
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_mode_compare.py
     )
     add_test(
+        NAME python_uncertainty_eval_tests
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_uncertainty_eval.py
+    )
+    add_test(
         NAME python_pos_uncertainty_columns_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_pos_uncertainty_columns.py
     )
@@ -862,6 +866,7 @@ if(GTest_FOUND)
         python_madoca_satellite_set_diff_tests
         python_mode_compare_tests
         python_pos_uncertainty_columns_tests
+        python_uncertainty_eval_tests
         python_performance_report_tests
         python_smartphone_quality_report_tests
         python_smartphone_raw_quality_control_tests

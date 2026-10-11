@@ -22,6 +22,7 @@ Examples:
 - `gnss robotics-smoke`
 - `gnss spp`
 - `gnss solve` (`--pos-uncertainty` appends per-epoch sigma columns, see below)
+- `gnss uncertainty-eval` (truth-based honesty check of those sigma columns)
 - `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)
 - `gnss clas-ppp`
 - `gnss qzss-l6-info` (`--compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`, `--compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`, `--compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`, `--compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`, `--compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`, `--compact-code-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-code-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank|delayed-15s-bank>`, `--compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`, `--compact-bias-row-materialization <overlap-only|selected-satellite-base-extend|all-base-satellite-extend>`, `--compact-row-construction-policy <independent|coupled-code-phase|row-first-value-second|network-row-driven>`)
@@ -83,6 +84,19 @@ ECEF covariance from these columns. The sigma is a model output, not a
 certified bound: the default RTK reported covariance can be a constant (see
 `--rtk-reported-covariance`). `gnss solve` has no NMEA output, so no GST
 sentence is produced.
+
+`gnss uncertainty-eval --pos run.pos --reference-csv reference.csv
+[--out-json s.json --out-csv epochs.csv --out-stanford-csv bins.csv]` matches
+the epochs to a PPC / UrbanNav `reference.csv` (`--match-tolerance-s`, default
+0.25 s) and reports, for FIXED, FLOAT and all epochs: normalized errors
+`e_H/sigma_H` (`sigma_H = sqrt(sdn^2+sde^2)`) and `|e_U|/sdu` (median, p95,
+p99), exceedance fractions `P(|e| > k*sigma)` for k = 1, 2, 3, 5 beside the
+Gaussian expectation, and Stanford-diagram bin counts of error against a
+`K*sigma` bound (`--k-h`/`--k-v`, default 5.33) split into nominal, misleading
+(error above the bound) and, with `--alert-limit-h/-v`, unavailable (bound above
+the alert limit). `K*sigma` is a diagnostic proxy and is **not** a certified
+protection level. A PNG is written with `--out-png` only when matplotlib is
+installed.
 
 ## Docker
 
