@@ -353,3 +353,52 @@ TEST(RTKValidationTest, FixedBridgeBurstGuardKeepsLongOrContinuousFixedRuns) {
     EXPECT_EQ(long_result.rejected_epochs, 0);
     EXPECT_EQ(long_result.solutions.size(), long_segment.size());
 }
+
+TEST(KinematicPostFilterTest, InactiveUntilAFixHasBeenKept) {
+    rtk_validation::KinematicPostFilter filter;
+    const auto float0 = makeValidationSolution(100.0, SolutionStatus::FLOAT, Eigen::Vector3d::Zero(), 10.0);
+    const auto float_jump = makeValidationSolution(101.0, SolutionStatus::FLOAT, Eigen::Vector3d::Zero(), 50.0);
+    EXPECT_FALSE(filter.exceedsHeightStep(float0));  // no anchor yet
+    filter.accept(float0);
+    EXPECT_TRUE(filter.hasAnchor());
+    EXPECT_FALSE(filter.armed());
+    EXPECT_FALSE(filter.exceedsHeightStep(float_jump));  // anchor, but no FIX kept yet
+    filter.accept(float_jump);
+    const auto fix = makeValidationSolution(102.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 50.1);
+    EXPECT_FALSE(filter.exceedsHeightStep(fix));
+    filter.accept(fix);
+    EXPECT_TRUE(filter.armed());
+}
+
+TEST(KinematicPostFilterTest, DropsHeightStepBeyondMaxOfFloorAndRateTimesDt) {
+    rtk_validation::KinematicPostFilter filter;
+    filter.accept(makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.0));
+    // dt = 0.2 s: limit is the 1 m floor (4 m/s * 0.2 s = 0.8 m is NOT rounded up to 1 s).
+    EXPECT_FALSE(filter.exceedsHeightStep(makeValidationSolution(100.2, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.99)));
+    EXPECT_TRUE(filter.exceedsHeightStep(makeValidationSolution(100.2, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 11.01)));
+    // dt = 2 s: limit grows to 8 m, symmetric in sign.
+    EXPECT_FALSE(filter.exceedsHeightStep(makeValidationSolution(102.0, SolutionStatus::FLOAT, Eigen::Vector3d::Zero(), 17.9)));
+    EXPECT_TRUE(filter.exceedsHeightStep(makeValidationSolution(102.0, SolutionStatus::FLOAT, Eigen::Vector3d::Zero(), 1.9)));
+    // dt <= 0 falls back to 1 s: limit 4 m.
+    EXPECT_FALSE(filter.exceedsHeightStep(makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 13.9)));
+    EXPECT_TRUE(filter.exceedsHeightStep(makeValidationSolution(99.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 14.1)));
+}
+
+TEST(KinematicPostFilterTest, DroppedEpochDoesNotAdvanceTheAnchor) {
+    rtk_validation::KinematicPostFilter filter;
+    filter.accept(makeValidationSolution(100.0, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.0));
+    // A run of bad epochs is judged against the same kept anchor (the caller does not accept them).
+    for (int i = 1; i <= 5; ++i) {
+        const auto bad = makeValidationSolution(100.0 + 0.2 * i, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 20.0);
+        EXPECT_TRUE(filter.exceedsHeightStep(bad)) << i;
+    }
+    EXPECT_DOUBLE_EQ(filter.anchor().time.tow, 100.0);
+    // A good epoch near the anchor is kept and moves it.
+    const auto good = makeValidationSolution(101.2, SolutionStatus::FIXED, Eigen::Vector3d::Zero(), 10.5);
+    EXPECT_FALSE(filter.exceedsHeightStep(good));
+    filter.accept(good);
+    EXPECT_DOUBLE_EQ(filter.anchor().time.tow, 101.2);
+    filter.reset();
+    EXPECT_FALSE(filter.hasAnchor());
+    EXPECT_FALSE(filter.armed());
+}

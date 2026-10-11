@@ -243,6 +243,50 @@ timings, `gnss_solve` output unchanged); the behaviour changes only in the fault
 `--reconnect[-delay-ms N][-attempts N]` is opt-in on purpose: without it a finite NTRIP stream still ends
 the run, and the summary line only gains `rover_reconnects=` / `base_reconnects=` when it is given.
 
+## Wrong FIX on the real-time path
+
+**Do not trust a `gnss live` FIX in a dense urban canyon.** In GPS-only recorded
+replays, `gnss live --preset low-cost` published FIX epochs of which 48.7 % were
+more than 0.5 m off on UrbanNav Shinjuku (Trimble rover; 1710 of 3510) and
+32.4 % on Shinjuku (u-blox), against 0.7–17.9 % on the PPC runs below. `gnss
+live` lacks `gnss solve`'s whole-solution post-filters, and GPS alone gives weak
+ambiguity geometry (multi-constellation MSM is limit 1 below).
+
+A frozen-contract check (2026-10-11) of
+`--preset low-cost --kinematic-post-filter` plus `FixRecoveryGuard` was
+**No-Go**. The combination was chosen on PPC Tokyo run1 only and checked once on
+nine other GPS-only replays: PPC Tokyo run2–3 and Nagoya run1–3, and UrbanNav
+Shinjuku and Odaiba with the Trimble and u-blox rovers (surveyed base).
+
+| Pooled over the 9 check runs | emitted | FIX | correct | wrong | Wrong/FIX |
+|---|---|---|---|---|---|
+| `--preset low-cost` | 59472 | 26836 | 23470 | 3366 | 12.5 % |
+| + `--kinematic-post-filter` + FixRecoveryGuard | 47064 | 13578 | 12787 | 791 | 5.8 % |
+
+| Gate | Result |
+|---|---|
+| Wrong FIX −50 % | pass (−76 %) |
+| Pooled Wrong/FIX ≤ 10 % | pass |
+| Correct FIX kept ≥ 60 % | **fail** (54.5 %) |
+| No run with a higher Wrong/FIX | **fail**: Tokyo run2 7.0 → 14.4 %, Shinjuku Trimble 48.7 → 98.8 % |
+
+Per-flag ablation on the same nine runs, run after the gates (not a gate):
+
+| Arm | emitted | FIX | correct | wrong | Wrong/FIX |
+|---|---|---|---|---|---|
+| `--kinematic-post-filter` only | 47077 | 25654 | 23178 | 2476 | 9.7 % |
+| FixRecoveryGuard only | 59467 | 14124 | 12909 | 1215 | 8.6 % |
+
+- **FixRecoveryGuard.** It removes almost half of all FIX epochs. On Shinjuku
+  Trimble it keeps the wrong ones (346 FIX, 343 wrong), so it is not offered for
+  `gnss live`.
+- **`--kinematic-post-filter`.** It is offered as an opt-in flag (see
+  [Interfaces](interfaces.md)). It keeps 98.8 % of correct FIX, makes no run's
+  Wrong/FIX higher, and removes 26 % of wrong FIX.
+- **Status of these numbers.** They come from the ablation run after the No-Go
+  decision on the same check runs, so they describe the flag rather than prove
+  it. They are not evidence for a default.
+
 ## Limits found and not fixed
 
 Found by the harness, deliberately not changed here (each needs a design decision or is larger than a bug fix):

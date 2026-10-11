@@ -28,6 +28,41 @@ double horizontalDistanceFromOrigin(const PositionSolution& origin,
 
 }  // namespace
 
+double KinematicPostFilter::anchorDt(const PositionSolution& candidate) const {
+    // Only non-positive / non-finite dt falls back to 1 s (unlike normalizedDt(), which also
+    // replaces dt < 0.5 s): this is gnss_solve's historical kinematic post-filter rule.
+    double dt = candidate.time - anchor_.time;
+    if (!std::isfinite(dt) || dt <= 0.0) {
+        dt = 1.0;
+    }
+    return dt;
+}
+
+bool KinematicPostFilter::exceedsHeightStep(const PositionSolution& candidate) const {
+    if (!armed()) {
+        return false;
+    }
+    const double dt = anchorDt(candidate);
+    const double height_step = std::abs(candidate.position_geodetic.height -
+                                        anchor_.position_geodetic.height);
+    const double max_height_step = std::max(config_.min_step_m, config_.max_rate_mps * dt);
+    return height_step > max_height_step;
+}
+
+void KinematicPostFilter::accept(const PositionSolution& kept) {
+    anchor_ = kept;
+    have_anchor_ = true;
+    if (kept.isFixed()) {
+        have_kept_fixed_ = true;
+    }
+}
+
+void KinematicPostFilter::reset() {
+    anchor_ = PositionSolution{};
+    have_anchor_ = false;
+    have_kept_fixed_ = false;
+}
+
 double normalizedDt(double dt_seconds, double fallback_dt_seconds) {
     if (!std::isfinite(dt_seconds) || dt_seconds < 0.5) {
         return fallback_dt_seconds;

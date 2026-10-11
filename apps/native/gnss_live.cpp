@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <libgnss++/algorithms/rtk.hpp>
+#include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
@@ -103,6 +104,8 @@ struct LiveConfig {
     bool enable_glonass = true;
     bool enable_beidou = true;
     GlonassARChoice glonass_ar = GlonassARChoice::OFF;
+    // Opt-in causal output guard (default off; see printUsage).
+    bool kinematic_post_filter = false;
     ModeChoice mode = ModeChoice::KINEMATIC;
     int rover_ubx_baud = 115200;
     RTKTuningPreset preset = RTKTuningPreset::NONE;
@@ -564,6 +567,10 @@ void printUsage(const char* argv0) {
         << "  --no-glonass               Disable GLONASS carrier processing\n"
         << "  --no-beidou                Disable BeiDou carrier processing\n"
         << "  --glonass-ar <off|on|autocal>\n"
+        << "  --kinematic-post-filter    Causal output guard (default: off): once a FIX has been written, do not\n"
+        << "                            write an epoch whose height differs from the last written epoch by more\n"
+        << "                            than max(1 m, 4 m/s * dt); a dropped epoch does not move the anchor.\n"
+        << "                            Same rule as gnss_solve's kinematic post-filter (shared implementation)\n"
         << "  --quiet                    Suppress per-epoch prints\n"
         << "  --verbose                  Print per-epoch solve details\n"
         << "  -h, --help                 Show this help\n";
@@ -751,6 +758,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.enable_beidou = false;
         } else if (arg == "--glonass-ar" && i + 1 < argc) {
             config.glonass_ar = parseGlonassARChoice(argv[++i], argv[0]);
+        } else if (arg == "--kinematic-post-filter") {
+            config.kinematic_post_filter = true;
         } else if (arg == "--quiet") {
             config.quiet = true;
         } else if (arg == "--verbose") {
@@ -1144,6 +1153,8 @@ int main(int argc, char** argv) {
         size_t skipped_rover_epochs = 0;
         size_t written_solutions = 0;
         size_t fixed_solutions = 0;
+        size_t post_filter_dropped_epochs = 0;
+        libgnss::rtk_validation::KinematicPostFilter kinematic_post_filter;
         size_t nav_event_updates = 0;
         size_t station_position_updates = 0;
         Eigen::Vector3d rover_seed = Eigen::Vector3d::Zero();
@@ -1321,7 +1332,16 @@ int main(int argc, char** argv) {
             }
 
             const auto solution = rtk.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
-            if (solution.isValid()) {
+            bool write_epoch = solution.isValid();
+            if (write_epoch && config.kinematic_post_filter) {
+                if (kinematic_post_filter.exceedsHeightStep(solution)) {
+                    write_epoch = false;
+                    ++post_filter_dropped_epochs;
+                } else {
+                    kinematic_post_filter.accept(solution);
+                }
+            }
+            if (write_epoch) {
                 writer.writeEpoch(solution, epoch_differential_age_s);
                 ++written_solutions;
                 ++solved_epochs;
@@ -1437,6 +1457,9 @@ int main(int argc, char** argv) {
                   << " effective_epoch_rate_hz=" << effective_epoch_rate_hz
                   << " out=" << config.output_pos_path
                   << " format=" << outputFormatString(config.output_format);
+        if (config.kinematic_post_filter) {
+            std::cout << " post_filter_dropped_epochs=" << post_filter_dropped_epochs;
+        }
         if (config.reconnect) {
             std::cout << " rover_reconnects=" << rover_reconnects
                       << " base_reconnects=" << base_reconnects;
