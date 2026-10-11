@@ -51,12 +51,21 @@ double RTKProcessor::varerr(double elevation, bool is_phase, double snr_dbhz) co
         snr_dbhz > 0.0 &&
         rtk_config_.snr_reference_dbhz > 0.0 &&
         rtk_config_.snr_max_variance_scale >= 1.0) {
-        const double snr_deficit_db = std::max(0.0, rtk_config_.snr_reference_dbhz - snr_dbhz);
+        double snr_reference_dbhz = rtk_config_.snr_reference_dbhz;
+        if (rtk_config_.snr_elevation_aware) {
+            snr_reference_dbhz = std::min(
+                snr_reference_dbhz,
+                rtk_config_.snr_elevation_floor_dbhz +
+                    rtk_config_.snr_elevation_gain_dbhz * sin_el);
+        }
+        const double snr_deficit_db = std::max(0.0, snr_reference_dbhz - snr_dbhz);
         const double variance_scale =
             std::clamp(std::pow(10.0, snr_deficit_db / 10.0),
                        1.0,
                        rtk_config_.snr_max_variance_scale);
-        variance *= variance_scale;
+        if (!(rtk_config_.snr_inflate_code_only && is_phase)) {
+            variance *= variance_scale;
+        }
     }
     return variance;
 }

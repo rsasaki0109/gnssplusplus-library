@@ -447,6 +447,16 @@ def parse_args() -> argparse.Namespace:
         help="Apply RTK SNR weighting only when baseline length is at least this many meters.",
     )
     parser.add_argument(
+        "--rtk-snr-elevation-aware",
+        action="store_true",
+        help="Measure the RTK SNR deficit against an elevation-dependent expected C/N0.",
+    )
+    parser.add_argument(
+        "--rtk-snr-code-only",
+        action="store_true",
+        help="Apply the RTK SNR variance inflation to code rows only.",
+    )
+    parser.add_argument(
         "--rtk-adaptive-noise",
         action="store_true",
         help="navi.776: enable innovation-based adaptive RTK measurement variance.",
@@ -1582,6 +1592,10 @@ def run_solver(
             )
         if getattr(args, "rtk_snr_min_baseline", None) is not None:
             command.extend(["--rtk-snr-min-baseline", str(args.rtk_snr_min_baseline)])
+        if getattr(args, "rtk_snr_elevation_aware", False):
+            command.append("--rtk-snr-elevation-aware")
+        if getattr(args, "rtk_snr_code_only", False):
+            command.append("--rtk-snr-code-only")
         if getattr(args, "cmc_ref", False):
             command.append("--cmc-ref")
         if getattr(args, "cmc_ref_level", None) is not None:

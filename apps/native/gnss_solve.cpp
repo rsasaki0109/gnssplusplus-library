@@ -141,6 +141,8 @@ struct SolveConfig {
     double snr_reference_dbhz = 45.0;
     double snr_max_variance_scale = 25.0;
     double snr_min_baseline_m = 0.0;
+    bool snr_elevation_aware = false;
+    bool snr_inflate_code_only = false;
     double cycle_slip_threshold = 0.05;
     double doppler_slip_threshold = 0.20;
     double code_slip_threshold = 5.0;
@@ -1546,6 +1548,11 @@ void printAdvancedUsage(const char* program_name) {
         << "  --rtk-snr-min-baseline <m>\n"
         << "                             Apply RTK SNR weighting only above this baseline length\n"
         << "                             (default: 0, disabled)\n"
+        << "  --rtk-snr-elevation-aware  Measure the SNR deficit against an elevation-dependent\n"
+        << "                             expected C/N0 (33 + 15 sin(el), capped by the reference)\n"
+        << "                             instead of the constant reference (default: off)\n"
+        << "  --rtk-snr-code-only        Apply the SNR variance inflation to code rows only\n"
+        << "                             (default: off)\n"
         << "  --cycle-slip-threshold <m> Geometry-free L1/L2 slip threshold (default: 0.05)\n"
         << "  --doppler-slip-threshold <m>\n"
         << "                             Doppler-predicted phase slip threshold (default: 0.20)\n"
@@ -2638,6 +2645,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.snr_max_variance_scale = std::stod(argv[++i]);
         } else if (arg == "--rtk-snr-min-baseline" && i + 1 < argc) {
             config.snr_min_baseline_m = std::stod(argv[++i]);
+        } else if (arg == "--rtk-snr-elevation-aware") {
+            config.snr_elevation_aware = true;
+        } else if (arg == "--rtk-snr-code-only") {
+            config.snr_inflate_code_only = true;
         } else if (arg == "--cycle-slip-threshold" && i + 1 < argc) {
             config.cycle_slip_threshold = std::stod(argv[++i]);
         } else if (arg == "--doppler-slip-threshold" && i + 1 < argc) {
@@ -3623,6 +3634,8 @@ int main(int argc, char* argv[]) {
         rtk_config.snr_reference_dbhz = config.snr_reference_dbhz;
         rtk_config.snr_max_variance_scale = config.snr_max_variance_scale;
         rtk_config.snr_min_baseline_m = config.snr_min_baseline_m;
+        rtk_config.snr_elevation_aware = config.snr_elevation_aware;
+        rtk_config.snr_inflate_code_only = config.snr_inflate_code_only;
         rtk_config.cycle_slip_threshold = config.cycle_slip_threshold;
         rtk_config.doppler_slip_threshold = config.doppler_slip_threshold;
         rtk_config.code_slip_threshold = config.code_slip_threshold;

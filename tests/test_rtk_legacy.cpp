@@ -576,6 +576,45 @@ TEST(RTKLegacyCompatibilityStandaloneTest, SnrWeightingDefaultDisabledAndConfigu
     EXPECT_DOUBLE_EQ(Peer::varerr(processor, elevation, true, 35.0), default_variance);
 }
 
+TEST(RTKLegacyCompatibilityStandaloneTest, SnrElevationAwareReferenceAndCodeOnlyInflation) {
+    RTKProcessor processor;
+    EXPECT_FALSE(processor.getRTKConfig().snr_elevation_aware);
+    EXPECT_FALSE(processor.getRTKConfig().snr_inflate_code_only);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_elevation_floor_dbhz, 33.0);
+    EXPECT_DOUBLE_EQ(processor.getRTKConfig().snr_elevation_gain_dbhz, 15.0);
+
+    const double elevation = 30.0 * M_PI / 180.0;
+    const double model_phase = Peer::varerr(processor, elevation, true, 0.0);
+    const double model_code = Peer::varerr(processor, elevation, false, 0.0);
+
+    RTKProcessor::RTKConfig cfg;
+    cfg.enable_snr_weighting = true;
+    cfg.snr_reference_dbhz = 45.0;
+    cfg.snr_max_variance_scale = 1.0e6;
+    processor.setRTKConfig(cfg);
+    // Constant reference: 40.5 dB-Hz is already 4.5 dB below it at any elevation.
+    EXPECT_NEAR(Peer::varerr(processor, elevation, false, 40.5),
+                model_code * std::pow(10.0, 0.45), 1e-9);
+
+    cfg.snr_elevation_aware = true;
+    processor.setRTKConfig(cfg);
+    // 30 deg: expected 33 + 15 sin(30 deg) = 40.5 dB-Hz -> no inflation at 40.5,
+    // 10 dB of deficit at 30.5.
+    EXPECT_DOUBLE_EQ(Peer::varerr(processor, elevation, false, 40.5), model_code);
+    EXPECT_NEAR(Peer::varerr(processor, elevation, false, 30.5), model_code * 10.0, 1e-9);
+    EXPECT_NEAR(Peer::varerr(processor, elevation, true, 30.5), model_phase * 10.0, 1e-12);
+    // Zenith side: the expectation is capped by the constant reference.
+    const double zenith = 80.0 * M_PI / 180.0;
+    const double zenith_code = Peer::varerr(processor, zenith, false, 0.0);
+    EXPECT_DOUBLE_EQ(Peer::varerr(processor, zenith, false, 45.0), zenith_code);
+    EXPECT_NEAR(Peer::varerr(processor, zenith, false, 35.0), zenith_code * 10.0, 1e-9);
+
+    cfg.snr_inflate_code_only = true;
+    processor.setRTKConfig(cfg);
+    EXPECT_NEAR(Peer::varerr(processor, elevation, false, 30.5), model_code * 10.0, 1e-9);
+    EXPECT_DOUBLE_EQ(Peer::varerr(processor, elevation, true, 30.5), model_phase);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, DynamicSlipThresholdFloorConfigurable) {
     RTKProcessor processor;
     EXPECT_TRUE(processor.getRTKConfig().use_dynamic_slip_threshold_floor);
