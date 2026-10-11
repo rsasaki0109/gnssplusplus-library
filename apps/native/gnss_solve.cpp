@@ -143,6 +143,7 @@ struct SolveConfig {
     double snr_min_baseline_m = 0.0;
     bool snr_elevation_aware = false;
     bool snr_inflate_code_only = false;
+    bool enable_canyon_carrier_prior = false;
     double cycle_slip_threshold = 0.05;
     double doppler_slip_threshold = 0.20;
     double code_slip_threshold = 5.0;
@@ -1553,6 +1554,13 @@ void printAdvancedUsage(const char* program_name) {
         << "                             instead of the constant reference (default: off)\n"
         << "  --rtk-snr-code-only        Apply the SNR variance inflation to code rows only\n"
         << "                             (default: off)\n"
+        << "  --rtk-canyon-carrier-prior Kinematic RTK: while the code of a satellite above 45 deg\n"
+        << "                             disagrees (>3 m) with the position advanced from the\n"
+        << "                             previous posterior by a validated time-differenced\n"
+        << "                             carrier displacement (blocked-sky NLOS, e.g. a stop\n"
+        << "                             under an overpass), keep that position/ambiguity\n"
+        << "                             posterior instead of re-seeding the position from SPP\n"
+        << "                             (default: off)\n"
         << "  --cycle-slip-threshold <m> Geometry-free L1/L2 slip threshold (default: 0.05)\n"
         << "  --doppler-slip-threshold <m>\n"
         << "                             Doppler-predicted phase slip threshold (default: 0.20)\n"
@@ -2649,6 +2657,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.snr_elevation_aware = true;
         } else if (arg == "--rtk-snr-code-only") {
             config.snr_inflate_code_only = true;
+        } else if (arg == "--rtk-canyon-carrier-prior") {
+            config.enable_canyon_carrier_prior = true;
         } else if (arg == "--cycle-slip-threshold" && i + 1 < argc) {
             config.cycle_slip_threshold = std::stod(argv[++i]);
         } else if (arg == "--doppler-slip-threshold" && i + 1 < argc) {
@@ -3636,6 +3646,7 @@ int main(int argc, char* argv[]) {
         rtk_config.snr_min_baseline_m = config.snr_min_baseline_m;
         rtk_config.snr_elevation_aware = config.snr_elevation_aware;
         rtk_config.snr_inflate_code_only = config.snr_inflate_code_only;
+        rtk_config.enable_canyon_carrier_prior = config.enable_canyon_carrier_prior;
         rtk_config.cycle_slip_threshold = config.cycle_slip_threshold;
         rtk_config.doppler_slip_threshold = config.doppler_slip_threshold;
         rtk_config.code_slip_threshold = config.code_slip_threshold;
@@ -4911,6 +4922,16 @@ int main(int argc, char* argv[]) {
             std::cout << "  CMC-aware reference selection: enabled"
                       << " suspect_epochs=" << cmc_ref_diag.suspect_epoch_count
                       << " switches=" << cmc_ref_diag.switch_count << std::endl;
+        }
+        if (config.enable_canyon_carrier_prior) {
+            const auto prior_stats = rtk_processor.getCarrierPriorStats();
+            std::cout << "  canyon carrier prior: enabled"
+                      << " epochs=" << prior_stats.epochs_evaluated
+                      << " tdcp_valid=" << prior_stats.tdcp_valid_epochs
+                      << " bridged=" << prior_stats.bridged_epochs
+                      << " engaged_epochs=" << prior_stats.engaged_epochs
+                      << " engagements=" << prior_stats.engagements
+                      << " contradictions=" << prior_stats.contradictions << std::endl;
         }
         if (rtk_config.position_mode != libgnss::RTKProcessor::RTKConfig::PositionMode::STATIC) {
             std::cout << "  non-FIX drift guard: "

@@ -130,6 +130,14 @@ bool RTKProcessor::floatResidualExceedsReacquisitionGate() const {
     if (rtk_config_.ar_policy == RTKConfig::ARPolicy::DEMO5_CONTINUOUS) {
         return false;
     }
+    // While the carrier prior holds the position, large prefit code residuals
+    // are the blocked-sky code the prior exists to ignore (the filter rejects
+    // those rows at its 3 m outlier gate). They say nothing about the float
+    // position or ambiguities, and a reacquisition reset here would throw the
+    // carrier-defined ambiguities away.
+    if (rtk_config_.enable_canyon_carrier_prior && carrier_prior_.engaged_this_epoch) {
+        return false;
+    }
     const double max_prefit_rms = rtk_config_.max_float_prefit_residual_rms_m;
     if (std::isfinite(max_prefit_rms) && max_prefit_rms > 0.0 &&
         std::isfinite(current_update_diagnostics_.prefit_residual_rms_m) &&
@@ -332,6 +340,9 @@ void RTKProcessor::recordFallbackEpoch(
 void RTKProcessor::resetPositionToSPP(
     const ObservationData& rover_obs,
     const NavigationData& nav) {
+    if (rtk_config_.enable_canyon_carrier_prior) {
+        captureCarrierPriorSnapshot();
+    }
     // M1 time updates are strictly single-use. Consume before any mode return
     // so STATIC/MOVING_BASE or a caller mode change cannot retain a stale IMU
     // increment for a later kinematic epoch.

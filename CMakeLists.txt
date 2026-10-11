@@ -160,6 +160,8 @@ set(GNSS_RTK_RUNTIME_SOURCES
     src/algorithms/rtk_ddpr_anchor.cpp
     src/algorithms/rtk_update.cpp
     src/algorithms/rtk_ins_time_update.cpp
+    src/algorithms/rtk_carrier_prior.cpp
+    src/algorithms/rtk_carrier_prior_epoch.cpp
     src/algorithms/rtk_covariance_consistency.cpp
     src/algorithms/rtk_tdcp_diagnostics.cpp
     src/algorithms/rtk_validation.cpp

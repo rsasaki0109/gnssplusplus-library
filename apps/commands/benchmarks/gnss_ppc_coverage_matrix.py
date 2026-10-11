@@ -285,6 +285,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rtk-snr-min-baseline", type=float, default=None)
     parser.add_argument("--rtk-snr-elevation-aware", action="store_true")
     parser.add_argument("--rtk-snr-code-only", action="store_true")
+    parser.add_argument("--rtk-canyon-carrier-prior", action="store_true")
     parser.add_argument("--cycle-slip-threshold", type=float, default=None)
     parser.add_argument("--doppler-slip-threshold", type=float, default=None)
     parser.add_argument("--code-slip-threshold", type=float, default=None)
@@ -667,6 +668,8 @@ def build_ppc_demo_command(
         command.append("--rtk-snr-elevation-aware")
     if getattr(args, "rtk_snr_code_only", False):
         command.append("--rtk-snr-code-only")
+    if getattr(args, "rtk_canyon_carrier_prior", False):
+        command.append("--rtk-canyon-carrier-prior")
     if getattr(args, "cycle_slip_threshold", None) is not None:
         command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
     if getattr(args, "doppler_slip_threshold", None) is not None:

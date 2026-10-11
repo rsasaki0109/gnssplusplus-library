@@ -103,6 +103,8 @@ PositionSolution RTKProcessor::processEpoch(const ObservationData& rover_obs, co
 
 void RTKProcessor::reset() {
     filter_initialized_ = false;
+    carrier_prior_ = CarrierPriorRuntime{};
+    carrier_prior_stats_ = CarrierPriorStats{};
     rover_seed_from_base_fallback_ = false;
     current_spp_solution_ = PositionSolution{};
     adaptive_noise_tracker_.clear();
