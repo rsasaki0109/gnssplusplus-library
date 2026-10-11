@@ -44,6 +44,7 @@ nav:
       - Robotics Quick Start: robotics_quickstart.md
       - Research Quick Start: research_quickstart.md
       - Urban RTK and IMU continuity: use_cases/urban_rtk_fgo.md
+      - Urban canyon RTK options: use_cases/urban_canyon_rtk_options.md
       - R1 urban RTK/IMU field checklist: use_cases/urban_rtk_imu_field_checklist.md
       - Japan static survey: use_cases/japan_static_survey.md
       - Structural displacement monitoring: use_cases/structural_displacement_monitoring.md
