@@ -308,6 +308,16 @@ public:
     RTCMProcessor::RTCMStats getStats() const;
 
     bool isNtripSource() const { return ntrip_client_ != nullptr; }
+    /// True when the source was opened as tcp://host:port.
+    bool isTcpStream() const;
+    /**
+     * @brief Re-establish dropped NTRIP or tcp:// connections.
+     *
+     * NTRIP reconnects inside NTRIPClient (one attempt per readMessage call). For tcp:// the
+     * reader closes the dead socket, waits @p delay_ms and connects again; readMessage()
+     * returns false while the peer is unreachable, and the caller keeps calling it. Has no
+     * effect on file and serial sources.
+     */
     void setAutoReconnect(bool enabled, int delay_ms = 2000);
     int reconnectCount() const;
     bool isConnected() const;
@@ -323,6 +333,11 @@ private:
     NTRIPClient* ntrip_client_ = nullptr;
     int serial_fd_ = -1;
     int tcp_fd_ = -1;
+    bool auto_reconnect_ = false;
+    int reconnect_delay_ms_ = 2000;
+    int tcp_reconnect_count_ = 0;
+    std::string tcp_last_error_;
+    bool reconnectTcp();
     
     // Stream-specific implementations would go here
     bool readFromFile(const std::string& filename);

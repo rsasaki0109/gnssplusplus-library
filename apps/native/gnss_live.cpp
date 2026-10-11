@@ -77,6 +77,9 @@ struct LiveConfig {
     size_t base_message_limit = 0;
     bool quiet = false;
     bool verbose = false;
+    bool reconnect = false;
+    int reconnect_delay_ms = 2000;
+    int reconnect_attempts = 0;
     bool enable_base_interpolation = true;
     double base_hold_seconds = kDefaultBaseHoldSeconds;
     bool base_position_override = false;
@@ -120,6 +123,10 @@ struct SourceState {
     size_t messages_read = 0;
     size_t message_limit = 0;
     bool eof = false;
+    // --reconnect: keep retrying an NTRIP/tcp:// source that drops or goes quiet instead of
+    // treating the first failed read as the end of the stream (0 attempts = retry forever).
+    bool reconnect = false;
+    int reconnect_attempts = 0;
 };
 
 enum class RoverInputKind {
@@ -528,6 +535,9 @@ void printUsage(const char* argv0) {
         << "  --max-epochs <n>           Stop after n solved epochs\n"
         << "  --rover-message-limit <n>  Stop rover ingest after n RTCM messages (0 = all)\n"
         << "  --base-message-limit <n>   Stop base ingest after n RTCM messages (0 = all)\n"
+        << "  --reconnect                Reconnect NTRIP/tcp:// sources that drop or stall (default: end at the first failed read)\n"
+        << "  --reconnect-delay-ms <ms>  Delay between reconnect attempts (default: 2000)\n"
+        << "  --reconnect-attempts <n>   Give up after n consecutive failed reads/reconnects (0 = never, default: 0)\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --base-hold-seconds <v>    Reuse the latest base epoch for up to v seconds (default: 0.5)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position\n"
@@ -669,6 +679,12 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.rover_message_limit = static_cast<size_t>(std::stoull(argv[++i]));
         } else if (arg == "--base-message-limit" && i + 1 < argc) {
             config.base_message_limit = static_cast<size_t>(std::stoull(argv[++i]));
+        } else if (arg == "--reconnect") {
+            config.reconnect = true;
+        } else if (arg == "--reconnect-delay-ms" && i + 1 < argc) {
+            config.reconnect_delay_ms = std::stoi(argv[++i]);
+        } else if (arg == "--reconnect-attempts" && i + 1 < argc) {
+            config.reconnect_attempts = std::stoi(argv[++i]);
         } else if (arg == "--no-base-interp") {
             config.enable_base_interpolation = false;
         } else if (arg == "--base-hold-seconds" && i + 1 < argc) {
@@ -792,6 +808,12 @@ LiveConfig parseArguments(int argc, char** argv) {
     if (config.rover_ubx_baud <= 0) {
         argumentError("--rover-ubx-baud must be > 0", argv[0]);
     }
+    if (config.reconnect_delay_ms < 0) {
+        argumentError("--reconnect-delay-ms must be >= 0", argv[0]);
+    }
+    if (config.reconnect_attempts < 0) {
+        argumentError("--reconnect-attempts must be >= 0", argv[0]);
+    }
     return config;
 }
 
@@ -813,12 +835,23 @@ bool loadNavigationRinex(const std::string& path, libgnss::NavigationData& nav_d
     return true;
 }
 
-bool openSource(const std::string& path, size_t message_limit, SourceState& source) {
+bool openSource(const std::string& path, size_t message_limit, SourceState& source,
+                const LiveConfig& config) {
     source.messages_read = 0;
     source.message_limit = message_limit;
     source.eof = false;
     source.decoder.clear();
-    return source.reader.open(path);
+    source.reconnect = false;
+    source.reconnect_attempts = 0;
+    if (!source.reader.open(path)) {
+        return false;
+    }
+    if (config.reconnect && (source.reader.isNtripSource() || source.reader.isTcpStream())) {
+        source.reader.setAutoReconnect(true, config.reconnect_delay_ms);
+        source.reconnect = true;
+        source.reconnect_attempts = config.reconnect_attempts;
+    }
+    return true;
 }
 
 std::string resolveSerialPath(const std::string& path) {
@@ -907,11 +940,19 @@ bool readNextObservation(SourceState& source,
                          std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
     events.clear();
     libgnss::io::RTCMMessage raw_message;
+    int failed_reads = 0;
     while (source.message_limit == 0 || source.messages_read < source.message_limit) {
         if (!source.reader.readMessage(raw_message)) {
+            // With --reconnect an empty read (NTRIP timeout, dropped link being re-established)
+            // is not the end of the stream; keep trying until the attempt budget runs out.
+            if (source.reconnect &&
+                (source.reconnect_attempts == 0 || ++failed_reads < source.reconnect_attempts)) {
+                continue;
+            }
             source.eof = true;
             return false;
         }
+        failed_reads = 0;
         ++source.messages_read;
         const auto frame = buildRtcmFrame(raw_message);
         std::vector<libgnss::io::RTCMStreamDecoder::Event> frame_events;
@@ -1008,7 +1049,7 @@ int main(int argc, char** argv) {
         RoverUbxSource rover_ubx_source;
         SourceState base_source;
         if (rover_input_kind == RoverInputKind::RTCM) {
-            if (!openSource(config.rover_rtcm_path, config.rover_message_limit, rover_rtcm_source)) {
+            if (!openSource(config.rover_rtcm_path, config.rover_message_limit, rover_rtcm_source, config)) {
                 std::cerr << "Error: failed to open rover RTCM source: "
                           << config.rover_rtcm_path << "\n";
                 return 1;
@@ -1020,7 +1061,7 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
-        if (!openSource(config.base_rtcm_path, config.base_message_limit, base_source)) {
+        if (!openSource(config.base_rtcm_path, config.base_message_limit, base_source, config)) {
             std::cerr << "Error: failed to open base RTCM source: "
                       << config.base_rtcm_path << "\n";
             return 1;
@@ -1332,6 +1373,8 @@ int main(int argc, char** argv) {
                 ? summarizeRtcmSource(rover_rtcm_source)
                 : summarizeUbxSource(rover_ubx_source);
         const DecoderSummaryStats base_stats = summarizeRtcmSource(base_source);
+        const int rover_reconnects = rover_rtcm_source.reader.reconnectCount();
+        const int base_reconnects = base_source.reader.reconnectCount();
 
         writer.close();
         if (rover_input_kind == RoverInputKind::RTCM) {
@@ -1388,8 +1431,12 @@ int main(int argc, char** argv) {
                   << " realtime_factor=" << realtime_factor
                   << " effective_epoch_rate_hz=" << effective_epoch_rate_hz
                   << " out=" << config.output_pos_path
-                  << " format=" << outputFormatString(config.output_format)
-                  << "\n";
+                  << " format=" << outputFormatString(config.output_format);
+        if (config.reconnect) {
+            std::cout << " rover_reconnects=" << rover_reconnects
+                      << " base_reconnects=" << base_reconnects;
+        }
+        std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
