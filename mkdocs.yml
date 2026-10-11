@@ -68,6 +68,7 @@ nav:
       - Broadcast kinematic PPP (urban): broadcast_kinematic_ppp.md
       - RTK tuning gates: rtk_tuning_gates.md
       - PPC reproduction: ppc_reproduction.md
+      - Real-time stress harness: realtime_stress.md
       - Architecture: architecture.md
       - IMU fusion: imu_fusion.md
       - Online position velocity attitude: online_pva.md

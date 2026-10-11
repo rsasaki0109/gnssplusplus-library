@@ -47,6 +47,7 @@ This is an offline plumbing check, not a field-accuracy claim.
 | [Architecture](architecture.md) | [Validation & sign-off](validation.md) | [Interfaces](interfaces.md) |
 | [IMU fusion](imu_fusion.md) | [Benchmarks](benchmarks.md) | [Quick Start commands](quickstart.md) |
 | [Tight coupling](tight_coupling.md) | [PPC reproduction](ppc_reproduction.md) | [Experiments](experiments.md) |
+| | [Real-time stress harness](realtime_stress.md) | |
 
 ## Visuals
 

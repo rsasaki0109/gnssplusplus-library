@@ -615,6 +615,9 @@ python3 apps/gnss.py ppp-products-signoff \
 - realtime factor,
 - effective epoch rate.
 
+`gnss realtime-stress` replays a recorded run as paced RTCM3 over TCP/NTRIP with injected link faults and measures
+survival, latency, recovery, accuracy, RSS/CPU and parity with batch solving; see [Real-time stress harness](realtime_stress.md).
+
 `gnss moving-base-signoff` verifies real moving-base datasets with a reference CSV carrying per-epoch base/rover ECEF coordinates. It can gate:
 
 - valid and matched epochs,
