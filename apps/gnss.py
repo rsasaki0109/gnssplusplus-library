@@ -406,6 +406,11 @@ COMMANDS = {
         "target": "gnss_live",
         "summary": "Continuously solve RTCM or UBX rover input against RTCM base corrections into a live RTK solution file.",
     },
+    "rtcm-encode": {
+        "kind": "binary",
+        "target": "gnss_rtcm_encode",
+        "summary": "Encode recorded RINEX observations (+ nav) into an RTCM3 stream with a per-epoch index for replay.",
+    },
     "live-signoff": {
         "kind": "python",
         "target": python_target("gnss_live_signoff.py"),
