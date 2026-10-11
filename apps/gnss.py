@@ -406,6 +406,11 @@ COMMANDS = {
         "target": "gnss_live",
         "summary": "Continuously solve RTCM or UBX rover input against RTCM base corrections into a live RTK solution file.",
     },
+    "realtime-stress": {
+        "kind": "python",
+        "target": python_target("gnss_realtime_stress.py"),
+        "summary": "Replay a recorded RINEX run as paced RTCM3 over TCP/NTRIP with fault injection and measure gnss live survival, latency, recovery, accuracy, RSS and batch parity.",
+    },
     "rtcm-encode": {
         "kind": "binary",
         "target": "gnss_rtcm_encode",
