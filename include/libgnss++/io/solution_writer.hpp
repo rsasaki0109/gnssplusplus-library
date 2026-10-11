@@ -11,6 +11,8 @@
 #include <libgnss++/core/solution.hpp>
 #include <fstream>
 #include <iomanip>
+#include <limits>
+#include <sstream>
 #include <string>
 #include <cmath>
 
@@ -48,8 +50,9 @@ public:
 
     SolutionWriter() = default;
 
-    explicit SolutionWriter(const std::string& filename, Format fmt = Format::POS) {
-        open(filename, fmt);
+    explicit SolutionWriter(const std::string& filename, Format fmt = Format::POS,
+                            bool uncertainty_columns = false) {
+        open(filename, fmt, uncertainty_columns);
     }
 
     ~SolutionWriter() { close(); }
@@ -66,11 +69,17 @@ public:
      * @brief Open output file.
      * @param filename Path to the output file.
      * @param fmt      Output format (default: POS).
+     * @param uncertainty_columns Append the per-epoch uncertainty columns
+     *        (see kUncertaintyHeaderColumns) to POS rows and the POS header.
+     *        Ignored for LLH/XYZ. Default false keeps the output byte-identical
+     *        to earlier releases.
      * @return true if the file was opened successfully.
      */
-    bool open(const std::string& filename, Format fmt = Format::POS) {
+    bool open(const std::string& filename, Format fmt = Format::POS,
+              bool uncertainty_columns = false) {
         close();
         format_ = fmt;
+        uncertainty_columns_ = uncertainty_columns && fmt == Format::POS;
         file_.open(filename);
         if (!file_.is_open()) return false;
         writeHeader();
@@ -97,7 +106,11 @@ public:
                      "Status NumSat PDOP Ratio Baseline(m) RTKIter RTKObs RTKPhaseObs "
                      "RTKCodeObs RTKOutliers RTKPrefitRMS(m) RTKPrefitMax(m) "
                      "RTKPostSuppressRMS(m) RTKPostSuppressMax(m) RTKUpdateNIS "
-                     "RTKUpdateNISPerObs RTKUpdateNISRejected\n";
+                     "RTKUpdateNISPerObs RTKUpdateNISRejected";
+            if (uncertainty_columns_) {
+                file_ << ' ' << kUncertaintyHeaderColumns;
+            }
+            file_ << "\n";
             break;
         case Format::LLH:
             file_ << "% GPS_Week GPS_TOW Lat(deg) Lon(deg) Height(m) Status\n";
@@ -109,11 +122,67 @@ public:
         file_.flush();
     }
 
+    /// Names of the columns appended by the uncertainty option (POS only).
+    static constexpr const char* kUncertaintyHeaderColumns =
+        "sdn(m) sde(m) sdu(m) sdne(m) sdeu(m) sdun(m) DiffAge(s)";
+
+    /**
+     * @brief Format the uncertainty columns for one epoch (each preceded by a space).
+     *
+     * sdn/sde/sdu are 1-sigma standard deviations in metres from the local
+     * ENU position covariance (PositionSolution::positionCovarianceEnu()).
+     * sdne/sdeu/sdun use the RTKLIB signed-square-root convention
+     * (sign(cov) * sqrt(|cov|)). The last field is the age of the
+     * differential correction in seconds (rover time minus the base
+     * observation time used). Any value that is unavailable (non-finite
+     * covariance, negative variance, age not supplied) is written as "nan".
+     */
+    static std::string formatUncertaintyColumns(const PositionSolution& sol,
+                                                double differential_age_s) {
+        const double nan = std::numeric_limits<double>::quiet_NaN();
+        const Matrix3d cov = sol.positionCovarianceEnu();  // rows/cols: E, N, U
+        const auto sigma = [&](double variance) {
+            return std::isfinite(variance) && variance >= 0.0 ? std::sqrt(variance) : nan;
+        };
+        const auto signed_sqrt = [&](double covariance) {
+            return std::isfinite(covariance) ? std::copysign(std::sqrt(std::abs(covariance)), covariance)
+                                             : nan;
+        };
+        const double values[] = {
+            sigma(cov(1, 1)),        // sdn
+            sigma(cov(0, 0)),        // sde
+            sigma(cov(2, 2)),        // sdu
+            signed_sqrt(cov(1, 0)),  // sdne
+            signed_sqrt(cov(0, 2)),  // sdeu
+            signed_sqrt(cov(2, 1)),  // sdun
+            std::isfinite(differential_age_s) ? differential_age_s : nan,
+        };
+        std::ostringstream out;
+        out << std::fixed;
+        for (int i = 0; i < 7; ++i) {
+            out << ' ';
+            if (std::isfinite(values[i])) {
+                const int precision = i == 6 ? 3 : 5;
+                // Avoid printing "-0.00000" for tiny negative cross terms.
+                const double value =
+                    std::abs(values[i]) < 0.5 * std::pow(10.0, -precision) ? 0.0 : values[i];
+                out << std::setprecision(precision) << value;
+            } else {
+                out << "nan";
+            }
+        }
+        return out.str();
+    }
+
     /**
      * @brief Write a single epoch's solution.
      * @param sol The position solution for this epoch.
+     * @param differential_age_s Age of differential in seconds for the
+     *        uncertainty columns (NaN when unknown). Unused unless the
+     *        writer was opened with uncertainty_columns.
      */
-    void writeEpoch(const PositionSolution& sol) {
+    void writeEpoch(const PositionSolution& sol,
+                    double differential_age_s = std::numeric_limits<double>::quiet_NaN()) {
         if (!file_.is_open()) return;
 
         file_ << std::fixed;
@@ -147,8 +216,11 @@ public:
                   << sol.rtk_update_post_suppression_residual_max_m << " "
                   << sol.rtk_update_normalized_innovation_squared << " "
                   << sol.rtk_update_normalized_innovation_squared_per_observation << " "
-                  << sol.rtk_update_rejected_by_innovation_gate
-                  << "\n";
+                  << sol.rtk_update_rejected_by_innovation_gate;
+            if (uncertainty_columns_) {
+                file_ << formatUncertaintyColumns(sol, differential_age_s);
+            }
+            file_ << "\n";
             break;
 
         case Format::LLH:
@@ -197,6 +269,7 @@ public:
 private:
     std::ofstream file_;
     Format format_ = Format::POS;
+    bool uncertainty_columns_ = false;
     size_t epochs_written_ = 0;
 };
 

@@ -21,7 +21,7 @@ Examples:
 - `gnss field-report`
 - `gnss robotics-smoke`
 - `gnss spp`
-- `gnss solve`
+- `gnss solve` (`--pos-uncertainty` appends per-epoch sigma columns, see below)
 - `gnss ppp` (`--nav`, `--sp3`, `--clk`, `--ionex`, `--dcb`, `--ssr`, `--ssr-rtcm`)
 - `gnss clas-ppp`
 - `gnss qzss-l6-info` (`--compact-flush-policy <lag-tolerant-union|orbit-or-clock-only|orbit-and-clock-only>`, `--compact-atmos-merge-policy <stec-coeff-carry|no-carry|network-locked-stec-coeff-carry>`, `--compact-atmos-subtype-merge-policy <union|gridded-priority|combined-priority>`, `--compact-phase-bias-merge-policy <latest-union|message-reset|selected-mask-prune>`, `--compact-phase-bias-source-policy <arrival-order|subtype5-priority|subtype6-priority>`, `--compact-code-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-code-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank|delayed-15s-bank>`, `--compact-phase-bias-composition-policy <direct-values|base-plus-network|base-only-if-present>`, `--compact-phase-bias-bank-policy <pending-epoch|same-30s-bank|close-30s-bank|latest-preceding-bank>`, `--compact-bias-row-materialization <overlap-only|selected-satellite-base-extend|all-base-satellite-extend>`, `--compact-row-construction-policy <independent|coupled-code-phase|row-first-value-second|network-row-driven>`)
@@ -63,6 +63,26 @@ selector knobs used by the experiment lane:
 - `--clas-residual-sampling <indexed-or-mean|indexed-only|mean-only>`
 - `--clas-atmos-selection <grid-first|grid-guarded|balanced|freshness-first>`
 - `--clas-atmos-stale-after-seconds <seconds>`
+
+### Per-epoch uncertainty in `.pos` (`--pos-uncertainty`)
+
+`gnss solve`, `gnss replay` and `gnss live` accept `--pos-uncertainty` (default
+off; with it off the `.pos` is byte-identical to earlier releases, and it
+requires `--format pos`). It appends seven columns after
+`RTKUpdateNISRejected` and declares them in the `% GPS_Week ...` header:
+
+| Column | Meaning |
+| --- | --- |
+| `sdn(m) sde(m) sdu(m)` | 1-sigma north/east/up standard deviation in metres, from `PositionSolution::positionCovarianceEnu()` |
+| `sdne(m) sdeu(m) sdun(m)` | covariance cross terms, RTKLIB signed square root `sign(c)*sqrt(abs(c))` |
+| `DiffAge(s)` | rover epoch time minus the base observation time used (`0` for an exactly matched base epoch; for an interpolated or held base epoch, the age of the older sample) |
+
+Unavailable values are written as `nan`. Existing column positions do not move,
+so index-based readers keep working; `Solution::loadFromFile` also rebuilds the
+ECEF covariance from these columns. The sigma is a model output, not a
+certified bound: the default RTK reported covariance can be a constant (see
+`--rtk-reported-covariance`). `gnss solve` has no NMEA output, so no GST
+sentence is produced.
 
 ## Docker
 

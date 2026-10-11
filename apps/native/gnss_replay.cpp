@@ -57,6 +57,7 @@ struct ReplayConfig {
     std::string nav_rinex_path;
     std::string output_pos_path = "output/replay_solution.pos";
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
+    bool pos_uncertainty = false;
     ModeChoice mode = ModeChoice::KINEMATIC;
     bool verbose = false;
     bool quiet = false;
@@ -126,6 +127,7 @@ void printUsage(const char* argv0) {
         << "  Output\n"
         << "    --out <file>              Output solution file (default: output/replay_solution.pos)\n"
         << "    --format <pos|llh|xyz>    Output format (default: pos)\n"
+        << "    --pos-uncertainty         Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
         << "  Solver\n"
         << "    --mode <kinematic|static|moving-base> Replay mode (default: kinematic)\n"
         << "    --ratio <value>           Ambiguity ratio threshold (default: 3.0)\n"
@@ -265,6 +267,8 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.output_pos_path = argv[++i];
         } else if (arg == "--format" && i + 1 < argc) {
             config.output_format = parseOutputFormat(argv[++i], argv[0]);
+        } else if (arg == "--pos-uncertainty") {
+            config.pos_uncertainty = true;
         } else if (arg == "--mode" && i + 1 < argc) {
             config.mode = parseMode(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
@@ -383,6 +387,10 @@ ReplayConfig parseArguments(int argc, char** argv) {
     }
     if (config.max_float_prefit_residual_reset_streak < 1) {
         argumentError("--max-float-prefit-reset-streak must be >= 1", argv[0]);
+    }
+    if (config.pos_uncertainty &&
+        config.output_format != libgnss::io::SolutionWriter::Format::POS) {
+        argumentError("--pos-uncertainty requires --format pos", argv[0]);
     }
     if (!config.base_rtcm_path.empty() &&
         config.base_rtcm_path.rfind("ntrip://", 0) == 0 &&
@@ -658,7 +666,7 @@ size_t runReplay(const ReplayConfig& config) {
     rtk.setBasePosition(base_position);
 
     libgnss::io::SolutionWriter writer;
-    if (!writer.open(config.output_pos_path, config.output_format)) {
+    if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty)) {
         throw std::runtime_error("failed to open output file: " + config.output_pos_path);
     }
 
@@ -706,7 +714,8 @@ size_t runReplay(const ReplayConfig& config) {
             continue;
         }
 
-        writer.writeEpoch(solution);
+        // Replay only uses exactly aligned base epochs.
+        writer.writeEpoch(solution, timeDiffSeconds(rover_obs.time, base_epochs[base_index].time));
         ++written_solutions;
         if (solution.isFixed()) {
             ++fixed_solutions;
