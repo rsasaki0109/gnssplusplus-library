@@ -7,6 +7,12 @@ Wrong FIX is `status == FIXED` with post-run 3D reference error above 0.50 m.
 
 ## Current recommendation
 
+Holdout check (2026-10-11): on six UrbanNav runs that were not used to select
+it, this profile is No-Go as a `gnss_solve` default; with `--preset low-cost`
+it cuts Tokyo wrong FIX by 63 % but changes the emitted epoch set, and on the
+current `gnss_solve` low-cost pipeline the PPC reduction is 46 %, not the
+7.4 % -> 1.7 % below. See [wrong-FIX holdout](rtk_wrong_fix_holdout.md).
+
 The final deployable status profile is the sigma-profile replay with
 `--demote-fixed-status-nis-per-obs 2 --demote-fixed-status-max-ratio 4`.
 It minimizes the measured Wrong/FIX rate among the current real-time-only sweep
