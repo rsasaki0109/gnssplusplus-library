@@ -644,6 +644,12 @@ void RTKProcessor::updateBias(const std::map<SatelliteId, SatelliteData>& sat_da
             for (const auto& [sat, b] : bias) {
                 auto idx_it = indices.find(sat);
                 if (idx_it != indices.end() && filter_state_.state(idx_it->second) != 0.0) continue;
+                if (rtk_config_.enable_canyon_carrier_prior &&
+                    carrier_prior_.engaged_this_epoch &&
+                    initializeAmbiguityFromCarrierPrior(sat, freq, sat_data)) {
+                    lock_counts[sat] = 0;
+                    continue;
+                }
                 if (freq == 0) getOrCreateN1Index(sat, b);
                 else if (freq == 1) getOrCreateN2Index(sat, b);
                 else getOrCreateN5Index(sat, b);

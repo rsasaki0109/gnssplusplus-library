@@ -272,6 +272,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             return fallback_spp();
         }
 
+        if (rtk_config_.enable_canyon_carrier_prior) {
+            applyCarrierPrior(rover_obs, sat_data);
+        }
+
         // WP9/WP10: cache this epoch's NLOS fraction (sat_data is only
         // available locally here) for two downstream readers: WP9's
         // rememberSolution() jump-gate relax check (same epoch), and
@@ -345,6 +349,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - filter_started)
                 .count();
+
+        if (rtk_config_.enable_canyon_carrier_prior) {
+            finishCarrierPriorEpoch(filter_ok);
+        }
 
         if (filter_ok) {
             incrementLockCounts(sat_data);

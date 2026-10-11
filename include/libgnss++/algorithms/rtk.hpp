@@ -7,6 +7,7 @@
 #include "nlos_weights.hpp"
 #include "float_trust_policy.hpp"
 #include "rtk_adaptive_noise.hpp"
+#include "rtk_carrier_prior.hpp"
 #include "rtk_float_stabilizer.hpp"
 #include "rtk_cmc_reference.hpp"
 #include "fixed_quality_gate.hpp"
@@ -177,6 +178,18 @@ public:
         /// carrier loses lock, so the phase rows keep their weight and the fix
         /// rate is not traded for code robustness. Default off.
         bool snr_inflate_code_only = false;
+
+        /// Carrier-propagated position prior for NLOS canyons (opt-in). In a
+        /// kinematic run the position is re-seeded from SPP every epoch, which
+        /// discards the position/ambiguity cross-covariance. While the code of
+        /// a satellite above 45 deg disagrees (> 3 m) with the position
+        /// advanced from the previous posterior by a validated time-differenced
+        /// carrier displacement (code blocked by an overpass, carrier intact), the
+        /// re-seed is replaced by that propagation so code biases cannot define
+        /// the otherwise unobservable ambiguity/position combinations. See
+        /// rtk_carrier_prior.hpp for the constants. Default off, bit-identical
+        /// when off.
+        bool enable_canyon_carrier_prior = false;
 
         /// Innovation-based adaptive measurement variance (Motooka 2026,
         /// NAVIGATION navi.776): per-satellite EWMA of v^2 - HPH' - ref_var
@@ -1702,6 +1715,21 @@ public:
         return stats;
     }
 
+    /// RTKConfig::enable_canyon_carrier_prior counters since construction or
+    /// reset(). All zero while the option is off.
+    struct CarrierPriorStats {
+        std::size_t epochs_evaluated = 0;
+        std::size_t tdcp_valid_epochs = 0;
+        std::size_t tdcp_invalid_epochs = 0;
+        std::size_t bridged_epochs = 0;
+        std::size_t engaged_epochs = 0;
+        std::size_t engagements = 0;
+        std::size_t contradictions = 0;
+        std::size_t phase_initialised_ambiguities = 0;
+        bool engaged_last_epoch = false;
+    };
+    CarrierPriorStats getCarrierPriorStats() const { return carrier_prior_stats_; }
+
     /// Return RTK's current FLOAT posterior antenna position/covariance. The
     /// ambiguity-fixed candidate is intentionally not used as the INS anchor.
     bool getFloatPosteriorPosition(Vector3d& position_ecef,
@@ -2289,6 +2317,55 @@ private:
      * Kinematic position reset: SPP position with large variance (RTKLIB udpos)
      */
     void resetPositionToSPP(const ObservationData& rover_obs, const NavigationData& nav);
+
+    /**
+     * RTKConfig::enable_canyon_carrier_prior: capture the previous posterior's
+     * position rows before the re-seed, advance them by a TDCP displacement and
+     * restore them instead of the re-seed while the monitor is engaged.
+     */
+    void captureCarrierPriorSnapshot();
+    void applyCarrierPrior(const ObservationData& rover_obs,
+                           const std::map<SatelliteId, SatelliteData>& sat_data);
+    void finishCarrierPriorEpoch(bool filter_ok);
+    /// Phase-based ambiguity (re)initialisation while the prior is engaged:
+    /// the new single-difference ambiguity is the one that makes the
+    /// double-difference carrier residual against an existing, tight ambiguity
+    /// zero at the carrier-propagated position (instead of b = cp - pr / lambda),
+    /// and enters the filter with its exact linear covariance to position and
+    /// the anchor. Returns false (caller uses the code-based seed) when no
+    /// usable anchor exists.
+    bool initializeAmbiguityFromCarrierPrior(
+        const SatelliteId& sat, int freq,
+        const std::map<SatelliteId, SatelliteData>& sat_data);
+
+    // RTKConfig::enable_canyon_carrier_prior runtime (rtk_carrier_prior_epoch.cpp).
+    struct CarrierPriorRuntime {
+        // Posterior position rows of the previous epoch, captured before the
+        // kinematic re-seed overwrites them.
+        bool snapshot_valid = false;
+        Eigen::Vector3d snapshot_baseline = Eigen::Vector3d::Zero();
+        Eigen::MatrixXd snapshot_rows;  // 3 x n: covariance.topRows<3>()
+        // Previous epoch's satellite data / time for the TDCP difference.
+        bool has_previous = false;
+        GNSSTime previous_time;
+        std::map<SatelliteId, SatelliteData> previous_sat_data;
+        // Last validated TDCP velocity (constant-velocity bridge).
+        bool has_velocity = false;
+        Eigen::Vector3d velocity_ecef = Eigen::Vector3d::Zero();
+        GNSSTime velocity_time;
+        // Previous epoch ended with a code/carrier-consistent update.
+        bool previous_healthy = false;
+        // The filter state now held is the posterior of a completed update.
+        bool posterior_valid = false;
+        // Set by applyCarrierPrior for the epoch being processed and kept
+        // until the next applyCarrierPrior call, so the post-update gates of
+        // the same epoch can see it.
+        bool engaged_this_epoch = false;
+        Eigen::Vector3d prior_position_baseline = Eigen::Vector3d::Zero();
+        rtk_carrier_prior::Monitor monitor;
+    };
+    CarrierPriorRuntime carrier_prior_;
+    CarrierPriorStats carrier_prior_stats_;
 
     /**
      * Reset ambiguity states after N consecutive float epochs (experimental gate).

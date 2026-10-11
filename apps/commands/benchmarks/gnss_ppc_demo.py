@@ -457,6 +457,13 @@ def parse_args() -> argparse.Namespace:
         help="Apply the RTK SNR variance inflation to code rows only.",
     )
     parser.add_argument(
+        "--rtk-canyon-carrier-prior",
+        action="store_true",
+        help="Keep the RTK position/ambiguity posterior, advanced by validated "
+        "time-differenced carrier phase, instead of re-seeding from SPP while "
+        "zenith-side code is inconsistent with it (blocked-sky NLOS).",
+    )
+    parser.add_argument(
         "--rtk-adaptive-noise",
         action="store_true",
         help="navi.776: enable innovation-based adaptive RTK measurement variance.",
@@ -1596,6 +1603,8 @@ def run_solver(
             command.append("--rtk-snr-elevation-aware")
         if getattr(args, "rtk_snr_code_only", False):
             command.append("--rtk-snr-code-only")
+        if getattr(args, "rtk_canyon_carrier_prior", False):
+            command.append("--rtk-canyon-carrier-prior")
         if getattr(args, "cmc_ref", False):
             command.append("--cmc-ref")
         if getattr(args, "cmc_ref_level", None) is not None:
