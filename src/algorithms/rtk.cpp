@@ -152,6 +152,7 @@ void RTKProcessor::reset() {
     doppler_phase_history_l1_m_.clear();
     doppler_phase_history_l2_m_.clear();
     doppler_phase_history_l5_m_.clear();
+    has_doppler_history_time_ = false;
     half_cycle_lli_history_.clear();
     code_phase_history_l1_m_.clear();
     code_phase_history_l2_m_.clear();
@@ -565,7 +566,7 @@ std::vector<RTKProcessor::DoubleDifference> RTKProcessor::formDoubleDifferences(
         const_cast<RTKProcessor*>(this)->current_sat_data_ = sat_data;
         const double bias_dt =
             has_last_epoch_ ? std::max(rover_obs.time - last_epoch_time_, 1e-3) : 1.0;
-        const_cast<RTKProcessor*>(this)->updateBias(sat_data, bias_dt);
+        const_cast<RTKProcessor*>(this)->updateBias(sat_data, bias_dt, rover_obs.time);
     }
 
     std::vector<DoubleDifference> measurements;

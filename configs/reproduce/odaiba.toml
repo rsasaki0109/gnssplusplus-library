@@ -135,15 +135,19 @@ foreach = [
 # `--preset odaiba` = low-cost profile + arc-smoothed MW wide-lane AR
 # (--wide-lane-min-arc-samples 100). Gated against the default arm: more fixes
 # and lower Hmed. Its Hp95/Vp95 over all emitted epochs are reported, not
-# gated: the preset publishes ~830 more FLOAT epochs than the default, mostly
-# in two stationary deep-canyon windows (tow 273750-273860, 274230-274300)
-# with 10-29 m vertical error, so its all-epoch Vp95 sits inside that plateau.
+# gated: the preset's 10 m+ vertical errors are almost all (604 of 629) in two
+# stationary deep-canyon windows (tow 273750-273860, 274230-274300) with up to
+# 28 m vertical error, so its all-epoch Vp95 sits inside that plateau.
 # The old 2026-09-29 gate (preset Vp95 9.74 < default 16.42 m) held only
 # because two FLOAT post-filters happened to blank those windows; the BeiDou
 # B1I fix (#577) and the RTK-internal SPP sigma gate (#588) changed the fix
 # pattern so they no longer fire. With the filters off the pre-#577 preset
-# Vp95 was already 14.74 m. On epochs both arms emit the preset Vp95 is lower
-# (7.38 vs 9.41 m). See docs/benchmarks.md.
+# Vp95 was already 14.74 m. After the Doppler/phase slip-test interval fix
+# (2026-10-11: preset 7961 fixes, Hp95 5.284 m, Vp95 13.892 m; default arm
+# unchanged) the preset Vp95 is also higher on the 9,906 epochs both arms emit
+# (11.81 vs 10.52 m). An earlier "lower on common epochs" figure (7.38 vs
+# 9.41 m on 9,615 epochs) used a different epoch matching and is not
+# comparable; it is withdrawn. See docs/benchmarks.md.
 [[metrics]]
 name = "preset odaiba fix epochs minus default"
 source = "{work_dir}/preset_odaiba/summary.json"
@@ -180,9 +184,9 @@ path = "libgnss_all_epochs.{field}"
 gate = false
 readme = "docs/benchmarks.md table"
 foreach = [
-  { field = "fix_epochs", expected = 8002.000, abs_tol = 120 },
-  { field = "fix_rate_pct", expected = 78.915, abs_tol = 1.2 },
+  { field = "fix_epochs", expected = 7961.000, abs_tol = 120 },
+  { field = "fix_rate_pct", expected = 79.002, abs_tol = 1.2 },
   { field = "median_h_m", expected = 0.043, abs_tol = 0.01 },
-  { field = "p95_h_m", expected = 5.293, abs_tol = 0.1 },
-  { field = "p95_abs_up_m", expected = 15.307, abs_tol = 0.2 },
+  { field = "p95_h_m", expected = 5.284, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 13.892, abs_tol = 0.2 },
 ]

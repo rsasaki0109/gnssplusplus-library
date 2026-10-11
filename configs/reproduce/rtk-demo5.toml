@@ -6,7 +6,7 @@
 name = "rtk-demo5"
 status = "ready"
 title = "PPC Tokyo/Nagoya RTK coverage profile vs RTKLIB demo5 (six runs)"
-readme_row = "RTK: +57.0 pp fix rate, +44.9 pp official score, -11.33 m P95 H; positioning -9.7 pp"
+readme_row = "RTK: +56.9 pp fix rate, +44.9 pp official score, -11.33 m P95 H; positioning -9.7 pp"
 runtime_estimate = "~30 min"
 docs = "docs/benchmarks.md"
 
@@ -60,15 +60,17 @@ argv = [
 
 # README values, reproduced 2026-10-10 with demo5 b34k (55a0f2c) and the tracked
 # config (libgnss++ develop 31d7177f, Linux gcc 13.3 Release; the 2026-09-28 MSVC
-# values were +56.8 / +45.4 / -11.44 / -9.5). Tolerances absorb compiler/platform
-# differences of the libgnss++ build.
+# values were +56.8 / +45.4 / -11.44 / -9.5), then refreshed 2026-10-11 for the
+# Doppler/phase slip-test interval fix (059b1b2e; was +57.0 pp fix rate, per-run
+# fix 83.95 / 84.27 / 80.56 / 79.39 / 63.59 / 63.85). Tolerances absorb
+# compiler/platform differences of the libgnss++ build.
 [[metrics]]
 name = "avg fix rate delta vs demo5 (pp)"
 source = "{work_dir}/summary.json"
 path = "aggregates.avg_fix_delta_pct"
-expected = 57.0
+expected = 56.9
 abs_tol = 0.5
-readme = "+57.0 pp fix rate"
+readme = "+56.9 pp fix rate"
 
 [[metrics]]
 name = "avg official score delta vs demo5 (pp)"
@@ -103,12 +105,12 @@ abs_tol = 0.5
 gate = false
 readme = "docs/benchmarks.md table (not gated)"
 foreach = [
-  { key = "tokyo_run1", expected = 83.95 },
-  { key = "tokyo_run2", expected = 84.27 },
-  { key = "tokyo_run3", expected = 80.56 },
+  { key = "tokyo_run1", expected = 83.85 },
+  { key = "tokyo_run2", expected = 84.48 },
+  { key = "tokyo_run3", expected = 79.89 },
   { key = "nagoya_run1", expected = 79.39 },
   { key = "nagoya_run2", expected = 63.59 },
-  { key = "nagoya_run3", expected = 63.85 },
+  { key = "nagoya_run3", expected = 63.84 },
 ]
 
 [[metrics]]

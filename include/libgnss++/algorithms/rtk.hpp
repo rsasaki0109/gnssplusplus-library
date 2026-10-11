@@ -2104,6 +2104,14 @@ private:
     std::map<SatelliteId, double> doppler_phase_history_l1_m_;
     std::map<SatelliteId, double> doppler_phase_history_l2_m_;
     std::map<SatelliteId, double> doppler_phase_history_l5_m_;  // Phase 18 Step 5
+    // Time of the observations the doppler_phase_history_* maps hold. The
+    // Doppler/phase slip test must use the interval between the stored sample
+    // and the current one; the generic state dt (time since the last
+    // *remembered* solution) is larger whenever the previous epoch was
+    // rejected, which turns the receiver-clock-drift term of the
+    // single-difference range rate into a false slip on every satellite.
+    GNSSTime doppler_history_time_;
+    bool has_doppler_history_time_ = false;
     // RTKConfig::use_half_cycle_lli: previous-epoch LLI bit1 per
     // (satellite, frequency index), {rover, base}. Kept across observation
     // gaps like demo5's ssat.slip LLI memory; cleared in reset().
@@ -2249,7 +2257,8 @@ private:
     /**
      * Update SD biases (RTKLIB udbias): initialize new, reset slipped
      */
-    void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s);
+    void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s,
+                    const GNSSTime& epoch_time);
     void updateTdcpDiagnostics(const std::map<SatelliteId, SatelliteData>& sat_data,
                                double dt_s);
 
