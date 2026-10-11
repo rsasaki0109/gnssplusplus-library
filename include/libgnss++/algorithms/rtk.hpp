@@ -159,6 +159,24 @@ public:
         double snr_reference_dbhz = 45.0;         // No inflation at or above this SNR
         double snr_max_variance_scale = 25.0;     // Clamp low-SNR variance inflation
         double snr_min_baseline_m = 0.0;          // Optional baseline-length floor for SNR weighting
+        /// Measure the C/N0 deficit against an elevation-dependent expectation
+        /// (open-sky typical C/N0 ~ floor + gain * sin(el), capped by
+        /// snr_reference_dbhz) instead of the constant snr_reference_dbhz.
+        /// With the constant reference a low-elevation satellite is penalised
+        /// by C/N0 although its 1/sin^2(el) term already covers it, while a
+        /// zenith-side satellite whose direct signal is blocked (an overpass:
+        /// 48 -> 33 dB-Hz at 66 deg) is not penalised more than the former.
+        /// Precedent: C/N0-based stochastic models (Brunner et al. 1999
+        /// SIGMA-eps, Hartinger & Brunner 1999) and RTKLIB's elevation-binned
+        /// snrmask. Default off, bit-identical when off.
+        bool snr_elevation_aware = false;
+        double snr_elevation_floor_dbhz = 33.0;   // expected C/N0 at the horizon
+        double snr_elevation_gain_dbhz = 15.0;    // added at zenith
+        /// Apply the C/N0 inflation to the code variance only. NLOS/multipath
+        /// corrupts the code (a 10+ m bias at 12-15 dB loss) long before the
+        /// carrier loses lock, so the phase rows keep their weight and the fix
+        /// rate is not traded for code robustness. Default off.
+        bool snr_inflate_code_only = false;
 
         /// Innovation-based adaptive measurement variance (Motooka 2026,
         /// NAVIGATION navi.776): per-satellite EWMA of v^2 - HPH' - ref_var

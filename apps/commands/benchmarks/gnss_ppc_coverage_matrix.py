@@ -283,6 +283,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rtk-snr-reference-dbhz", type=float, default=None)
     parser.add_argument("--rtk-snr-max-variance-scale", type=float, default=None)
     parser.add_argument("--rtk-snr-min-baseline", type=float, default=None)
+    parser.add_argument("--rtk-snr-elevation-aware", action="store_true")
+    parser.add_argument("--rtk-snr-code-only", action="store_true")
     parser.add_argument("--cycle-slip-threshold", type=float, default=None)
     parser.add_argument("--doppler-slip-threshold", type=float, default=None)
     parser.add_argument("--code-slip-threshold", type=float, default=None)
@@ -661,6 +663,10 @@ def build_ppc_demo_command(
         command.extend(["--rtk-snr-max-variance-scale", str(args.rtk_snr_max_variance_scale)])
     if getattr(args, "rtk_snr_min_baseline", None) is not None:
         command.extend(["--rtk-snr-min-baseline", str(args.rtk_snr_min_baseline)])
+    if getattr(args, "rtk_snr_elevation_aware", False):
+        command.append("--rtk-snr-elevation-aware")
+    if getattr(args, "rtk_snr_code_only", False):
+        command.append("--rtk-snr-code-only")
     if getattr(args, "cycle_slip_threshold", None) is not None:
         command.extend(["--cycle-slip-threshold", str(args.cycle_slip_threshold)])
     if getattr(args, "doppler_slip_threshold", None) is not None:
