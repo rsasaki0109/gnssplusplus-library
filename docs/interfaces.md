@@ -231,7 +231,7 @@ stress harness](realtime_stress.md#base-outage-spp-fallback).
 `gnss solve`, `gnss replay` and `gnss live` accept `--pos-uncertainty` (default
 off; with it off the `.pos` is byte-identical to earlier releases, and it
 requires `--format pos`). It appends seven columns after
-`RTKUpdateNISRejected` and declares them in the `% GPS_Week ...` header:
+`RTKUpdateNISRejected` and declare them in the `% GPS_Week ...` header:
 
 | Column | Meaning |
 | --- | --- |
@@ -261,10 +261,11 @@ installed.
 
 ### Float-fix distance in `.pos` (`--pos-fix-diagnostics`)
 
-`gnss live --pos-fix-diagnostics` (default off; with it off the `.pos` is
-byte-identical to earlier releases, and it requires `--format pos`) appends two
+`gnss live --pos-fix-diagnostics`, `gnss solve --pos-fix-diagnostics` and
+`gnss replay --pos-fix-diagnostics` (default off; with it off the `.pos` is
+byte-identical to earlier releases, and it requires `--format pos`) append two
 columns after every other column (after `DiffAge(s)` when `--pos-uncertainty`
-is also on) and declares them in the `% GPS_Week ...` header:
+is also on) and declare them in the `% GPS_Week ...` header:
 
 | Column | Meaning |
 | --- | --- |
@@ -276,8 +277,81 @@ The float position is recorded read-only next to the solution
 (`PositionSolution::rtk_float_position_ecef`); no filter state, position,
 status or covariance changes, and every other column is byte-identical to a run
 without the flag. Existing column positions do not move, so index-based
-readers and `Solution::loadFromFile` keep working. It is wired into `gnss live`
-only: `gnss solve` and `gnss replay` do not have it.
+readers and `Solution::loadFromFile` keep working.
+
+#### `gnss solve`: only for the RTK epoch's own fixed position
+
+`gnss solve` post-processes the RTK epochs before writing them, so the value is
+defined against the **written** row: the distance between the epoch's FLOAT
+position and the position written in that row, reported only when the written
+status is `FIXED` **and** the written position is still the RTK epoch's own
+fixed position. Otherwise both columns are `nan`. `gnss solve` records the
+position of every epoch that `RTKProcessor` returned as `FIXED` (read-only,
+before any post-processing) and compares the written row with it bit for bit
+at write time, so the rule holds for every step below without per-step
+bookkeeping. Every non-`FIXED` row is `nan`. Post-processing that changes what
+is written for an RTK `FIXED` epoch:
+
+| Step | What it does to a `FIXED` epoch | Written |
+| --- | --- | --- |
+| `--demote-fixed-status-*`, `--fix-recovery`, the realtime integrity gate | demotes the status to `FLOAT` | `FLOAT` row, `nan` |
+| library fixed-quality gate (when enabled by a preset or option) | demotes to `FLOAT`, or can promote an epoch to `FIXED` at another candidate position | `FLOAT` row, or a `FIXED` row that is not the RTK epoch's own fixed position: `nan` |
+| kinematic post-filter (on by default), height-step jump | drops the epoch, or replaces it with a propagated `FLOAT` continuity row | no row, or `FLOAT` row with `nan` |
+| non-FIX drift, SPP height-step, FLOAT bridge-tail and FIXED bridge-burst guards | remove rows; they never edit a kept row | no row |
+| `--safe-availability-fallback` re-insertion of removed epochs | re-inserts the epoch as `SPP` / `PROPAGATED` | `nan` |
+
+The SPP / continuity / propagated fallbacks that replace a rejected non-`FIXED`
+solution only ever produce non-`FIXED` rows, so they are `nan` too. A written
+`FIXED` row whose position differs from the RTK epoch's own, or whose epoch
+carried no float reference, is `nan` as well (the `fix diagnostics:` line
+counts them as `nan_modified_fixed_rows` and `nan_no_float_reference_rows`);
+neither occurs in the runs below.
+
+Measured (flag on, `--mode kinematic --preset low-cost`, RINEX, develop
+`36f05743` plus this option; `gnss solve` prints a `fix diagnostics:` summary
+line with these counts):
+
+| Run | RTK `FIXED` epochs | written `FIXED` rows | finite | `FIXED` rows with `nan` | `FIXED` epochs without a row |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| PPC tokyo run1 | 8,432 | 8,271 | 8,271 | 0 | 161 |
+| PPC tokyo run2 | 7,204 | 7,141 | 7,141 | 0 | 63 |
+| PPC tokyo run3 | 11,115 | 10,960 | 10,960 | 0 | 155 |
+| PPC nagoya run1 | 4,853 | 4,829 | 4,829 | 0 | 24 |
+| PPC nagoya run2 | 4,580 | 4,544 | 4,544 | 0 | 36 |
+| PPC nagoya run3 | 2,343 | 2,209 | 2,209 | 0 | 134 |
+
+On tokyo run1 all 161 missing epochs are removed by the kinematic post-filter's
+height-step drop (with `--no-kinematic-post-filter` all 8,432 are written, each
+with finite columns). With the demotion options (`--demote-fixed-status-nis-per-obs 2
+--demote-fixed-status-max-ratio 4`) demoted epochs are written as `FLOAT` with
+`nan`; in a 5,000-epoch run every written `FIXED` row is still finite. So with these settings the
+`nan` on a `FIXED` epoch always means "the row is not `FIXED` any more" and a
+written `FIXED` row always has a value. The float position is the epoch's own
+float solution, so the same caveats as for `gnss live` apply.
+
+`gnss replay` writes the RTK epoch result directly (no post-processing), so it
+uses the `gnss live` definition: finite exactly on `FIXED` rows.
+
+Measured separation with `gnss solve` (descriptive, seen data; nothing was
+tuned on it and no threshold is recommended): AUROC of `FloatFixH` alone for a
+wrong FIX (FIXED with 3D error > 0.5 m against `reference.csv`, nearest epoch
+within 0.25 s) against a correct FIX, `gnss solve --mode kinematic --preset
+low-cost`, RINEX inputs, written `FIXED` rows (all finite):
+
+| Run | scored `FIXED` rows | wrong FIX | AUROC `FloatFixH` |
+| --- | ---: | ---: | ---: |
+| PPC tokyo run1 | 8,271 | 494 | 0.76 |
+| PPC tokyo run2 | 7,141 | 67 | 0.88 |
+| PPC tokyo run3 | 10,960 | 191 | 0.84 |
+| PPC nagoya run1 | 4,829 | 245 | 0.84 |
+| PPC nagoya run2 | 4,544 | 64 | 0.98 |
+| PPC nagoya run3 | 2,209 | 219 | 0.78 |
+
+Pooled 0.82 (36,674 correct, 1,280 wrong). These are the same six PPC runs the
+option was examined on, so the numbers are not a held-out result, and they do
+not by themselves transfer to other receivers or environments. The `gnss live`
+table above uses RTCM replays and a different fix set, so the two are not
+directly comparable.
 
 This is a **diagnostic, not an integrity bound**: it is a number to threshold or
 log, not a certified protection level, and it carries no unit of probability. A

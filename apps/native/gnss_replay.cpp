@@ -61,6 +61,7 @@ struct ReplayConfig {
     std::string output_pos_path = "output/replay_solution.pos";
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
     bool pos_uncertainty = false;
+    bool pos_fix_diagnostics = false;
     ModeChoice mode = ModeChoice::KINEMATIC;
     bool verbose = false;
     bool quiet = false;
@@ -133,6 +134,7 @@ void printUsage(const char* argv0) {
         << "    --out <file>              Output solution file (default: output/replay_solution.pos)\n"
         << "    --format <pos|llh|xyz>    Output format (default: pos)\n"
         << "    --pos-uncertainty         Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
+        << "    --pos-fix-diagnostics     Append FloatFixH(m) FloatFixU(m) to .pos rows (nan unless FIXED; diagnostic only)\n"
         << "  Solver\n"
         << "    --mode <kinematic|static|moving-base> Replay mode (default: kinematic)\n"
         << "    --ratio <value>           Ambiguity ratio threshold (default: 3.0)\n"
@@ -276,6 +278,8 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.output_format = parseOutputFormat(argv[++i], argv[0]);
         } else if (arg == "--pos-uncertainty") {
             config.pos_uncertainty = true;
+        } else if (arg == "--pos-fix-diagnostics") {
+            config.pos_fix_diagnostics = true;
         } else if (arg == "--mode" && i + 1 < argc) {
             config.mode = parseMode(argv[++i], argv[0]);
         } else if (arg == "--ratio" && i + 1 < argc) {
@@ -400,6 +404,10 @@ ReplayConfig parseArguments(int argc, char** argv) {
     if (config.pos_uncertainty &&
         config.output_format != libgnss::io::SolutionWriter::Format::POS) {
         argumentError("--pos-uncertainty requires --format pos", argv[0]);
+    }
+    if (config.pos_fix_diagnostics &&
+        config.output_format != libgnss::io::SolutionWriter::Format::POS) {
+        argumentError("--pos-fix-diagnostics requires --format pos", argv[0]);
     }
     if (!config.base_rtcm_path.empty() &&
         config.base_rtcm_path.rfind("ntrip://", 0) == 0 &&
@@ -714,7 +722,8 @@ size_t runReplay(const ReplayConfig& config) {
     rtk.setBasePosition(base_position);
 
     libgnss::io::SolutionWriter writer;
-    if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty)) {
+    if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty,
+                     config.pos_fix_diagnostics)) {
         throw std::runtime_error("failed to open output file: " + config.output_pos_path);
     }
 
