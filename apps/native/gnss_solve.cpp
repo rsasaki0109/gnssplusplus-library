@@ -4804,63 +4804,54 @@ int main(int argc, char* argv[]) {
             // pointing at the prior trusted anchor.
             libgnss::Solution filtered_solution;
             filtered_solution.solutions.reserve(solution.solutions.size());
-            bool have_kept_fixed = false;
-            const libgnss::PositionSolution* last_kept = nullptr;
+            // Shared with gnss_live (--kinematic-post-filter): the verdict for an epoch
+            // depends only on the last kept epoch, so the same filter runs causally.
+            libgnss::rtk_validation::KinematicPostFilter height_step_filter(
+                libgnss::rtk_validation::KinematicPostFilterConfig{
+                    kDefaultVerticalStepGuardMeters, 4.0});
             for (const auto& epoch_solution : solution.solutions) {
                 if (!epoch_solution.isValid()) {
                     continue;
                 }
 
-                if (last_kept != nullptr && have_kept_fixed) {
-                    double dt = epoch_solution.time - last_kept->time;
-                    if (!std::isfinite(dt) || dt <= 0.0) {
-                        dt = 1.0;
+                if (height_step_filter.exceedsHeightStep(epoch_solution)) {
+                    const double dt = height_step_filter.anchorDt(epoch_solution);
+                    const auto& last_kept = height_step_filter.anchor();
+                    const auto continuity =
+                        libgnss::safe_float_continuity::propagate(
+                            rtk_config.safe_float_continuity,
+                            last_kept.position_ecef,
+                            dt,
+                            last_kept.velocity_ecef,
+                            dt);
+                    if (
+                        last_kept.has_velocity &&
+                        continuity.valid) {
+                        auto replacement = last_kept;
+                        replacement.time = epoch_solution.time;
+                        replacement.status =
+                            libgnss::SolutionStatus::FLOAT;
+                        replacement.position_ecef =
+                            continuity.position_ecef;
+                        replacement.position_geodetic =
+                            libgnss::spp_utils::ecefToGeodetic(
+                                replacement.position_ecef);
+                        replacement.position_covariance =
+                            Eigen::Matrix3d::Identity() *
+                            continuity.position_variance_m2;
+                        replacement.num_satellites = 4;
+                        replacement.ratio = 0.0;
+                        replacement.num_fixed_ambiguities = 0;
+                        filtered_solution.addSolution(replacement);
+                        ++kinematic_postfilter_continuity_epochs;
                     }
-                    const double height_step = std::abs(
-                        epoch_solution.position_geodetic.height -
-                        last_kept->position_geodetic.height);
-                    const double max_height_step =
-                        std::max(kDefaultVerticalStepGuardMeters, 4.0 * dt);
-                    if (height_step > max_height_step) {
-                        const auto continuity =
-                            libgnss::safe_float_continuity::propagate(
-                                rtk_config.safe_float_continuity,
-                                last_kept->position_ecef,
-                                dt,
-                                last_kept->velocity_ecef,
-                                dt);
-                        if (
-                            last_kept->has_velocity &&
-                            continuity.valid) {
-                            auto replacement = *last_kept;
-                            replacement.time = epoch_solution.time;
-                            replacement.status =
-                                libgnss::SolutionStatus::FLOAT;
-                            replacement.position_ecef =
-                                continuity.position_ecef;
-                            replacement.position_geodetic =
-                                libgnss::spp_utils::ecefToGeodetic(
-                                    replacement.position_ecef);
-                            replacement.position_covariance =
-                                Eigen::Matrix3d::Identity() *
-                                continuity.position_variance_m2;
-                            replacement.num_satellites = 4;
-                            replacement.ratio = 0.0;
-                            replacement.num_fixed_ambiguities = 0;
-                            filtered_solution.addSolution(replacement);
-                            ++kinematic_postfilter_continuity_epochs;
-                        }
-                        // Never advance the trusted post-filter anchor with a
-                        // propagated replacement.
-                        continue;
-                    }
+                    // Never advance the trusted post-filter anchor with a
+                    // propagated replacement.
+                    continue;
                 }
 
                 filtered_solution.addSolution(epoch_solution);
-                last_kept = &filtered_solution.solutions.back();
-                if (epoch_solution.isFixed()) {
-                    have_kept_fixed = true;
-                }
+                height_step_filter.accept(epoch_solution);
             }
             solution = std::move(filtered_solution);
         }

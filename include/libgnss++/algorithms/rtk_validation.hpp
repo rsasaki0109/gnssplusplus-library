@@ -64,6 +64,44 @@ struct FixedBridgeBurstGuardResult {
     int rejected_epochs = 0;
 };
 
+/** Kinematic output post-filter (height-step drop), one implementation shared by the batch
+ * `gnss_solve` pass and the real-time `gnss_live` output path.
+ *
+ * Causal by construction: the verdict for an epoch depends only on the last *kept* epoch.
+ * Once a FIX has been kept, an epoch whose height differs from the anchor by more than
+ * max(min_step_m, max_rate_mps * dt) is dropped (dt <= 0 or non-finite -> 1 s). A dropped epoch
+ * never advances the anchor, so the anchor cannot be walked off by a run of bad epochs.
+ * Usage per valid epoch: `if (!filter.exceedsHeightStep(s)) { emit(s); filter.accept(s); }`. */
+struct KinematicPostFilterConfig {
+    double min_step_m = 1.0;
+    double max_rate_mps = 4.0;
+};
+
+class KinematicPostFilter {
+public:
+    explicit KinematicPostFilter(const KinematicPostFilterConfig& config = KinematicPostFilterConfig{})
+        : config_(config) {}
+
+    /** Delta time to the anchor (normalized), only meaningful when hasAnchor(). */
+    double anchorDt(const PositionSolution& candidate) const;
+    /** True when the filter is armed (a FIX was kept) and `candidate` steps too far in height. */
+    bool exceedsHeightStep(const PositionSolution& candidate) const;
+    /** Record a kept epoch as the new anchor. */
+    void accept(const PositionSolution& kept);
+    void reset();
+
+    bool hasAnchor() const { return have_anchor_; }
+    bool armed() const { return have_anchor_ && have_kept_fixed_; }
+    const PositionSolution& anchor() const { return anchor_; }
+    const KinematicPostFilterConfig& config() const { return config_; }
+
+private:
+    KinematicPostFilterConfig config_;
+    PositionSolution anchor_;
+    bool have_anchor_ = false;
+    bool have_kept_fixed_ = false;
+};
+
 double normalizedDt(double dt_seconds, double fallback_dt_seconds = 1.0);
 
 double adaptiveJumpLimit(double dt_seconds, double min_jump_m, double rate_m_per_s);

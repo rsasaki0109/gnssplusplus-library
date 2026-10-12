@@ -67,6 +67,19 @@ selector knobs used by the experiment lane:
 - `--clas-atmos-selection <grid-first|grid-guarded|balanced|freshness-first>`
 - `--clas-atmos-stale-after-seconds <seconds>`
 
+### Causal output guard for `gnss live` (`--kinematic-post-filter`)
+
+Opt-in (default off; without it `gnss live` output is byte-identical to
+earlier releases) and adds no output delay. Once a FIX has been written, an
+epoch whose height differs from the last *written* epoch by more than
+`max(1 m, 4 m/s * dt)` (`dt <= 0` counts as 1 s) is not written, and a dropped
+epoch does not move the anchor. This is the height-step rule of `gnss solve`'s
+kinematic post-filter; both tools share one implementation
+(`rtk_validation::KinematicPostFilter`). With the flag the `summary:` line
+gains `post_filter_dropped_epochs=`; dropped epochs are missing rows in the
+`.pos`. Measured effect and its limits: [Real-time stress
+harness](realtime_stress.md#wrong-fix-on-the-real-time-path).
+
 ### Per-epoch uncertainty in `.pos` (`--pos-uncertainty`)
 
 `gnss solve`, `gnss replay` and `gnss live` accept `--pos-uncertainty` (default

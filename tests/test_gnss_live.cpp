@@ -1233,6 +1233,42 @@ TEST(GNSSLiveRecordedStreamTest, ReportsRtcmCrcFailuresInDecoderErrorSummary) {
 }
 
 
+TEST(GNSSLiveRecordedStreamTest, KinematicPostFilterIsOptInAndSmokeRuns) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_output_guards");
+    const std::string inputs = "--rover-rtcm \"" + (fixture / "rover.rtcm").string() + "\" --base-rtcm \"" +
+                               (fixture / "base.rtcm").string() + "\" --preset low-cost";
+
+    const fs::path base_out = temp_dir / "baseline.pos";
+    const fs::path base_log = temp_dir / "baseline.log";
+    ASSERT_EQ(runLiveCapture(inputs + " --out \"" + base_out.string() + "\"", base_log), 0) << readTextFile(base_log);
+    const std::string baseline = readTextFile(base_log);
+    // Opt-in: without the flag the summary carries no guard counter.
+    EXPECT_EQ(baseline.find("post_filter_dropped_epochs"), std::string::npos) << baseline;
+
+    const fs::path guard_out = temp_dir / "guarded.pos";
+    const fs::path guard_log = temp_dir / "guarded.log";
+    ASSERT_EQ(runLiveCapture(inputs + " --kinematic-post-filter --out \"" + guard_out.string() + "\"",
+                             guard_log),
+              0)
+        << readTextFile(guard_log);
+    const std::string guarded = readTextFile(guard_log);
+    EXPECT_NE(guarded.find("post_filter_dropped_epochs="), std::string::npos) << guarded;
+    const double baseline_written = extractSummaryDouble(baseline, "written_solutions");
+    const double guarded_written = extractSummaryDouble(guarded, "written_solutions");
+    const double dropped = extractSummaryDouble(guarded, "post_filter_dropped_epochs");
+    EXPECT_GT(guarded_written, 0.0) << guarded;
+    // Every dropped epoch is a missing row; nothing is added.
+    EXPECT_LE(guarded_written, baseline_written) << guarded;
+    EXPECT_GE(dropped, 0.0) << guarded;
+    EXPECT_LE(extractSummaryDouble(guarded, "fixed_solutions"), extractSummaryDouble(baseline, "fixed_solutions"))
+        << guarded;
+
+    fs::remove_all(temp_dir);
+}
+
 TEST(GNSSLiveRecordedStreamTest, RebroadcastEphemeridesDoNotGrowTheNavigationDatabase) {
     namespace fs = std::filesystem;
     const fs::path fixture = realtimeFixtureDir();
