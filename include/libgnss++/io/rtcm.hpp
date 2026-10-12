@@ -333,6 +333,20 @@ public:
      */
     void setAutoReconnect(bool enabled, int delay_ms = 2000);
     int reconnectCount() const;
+    /**
+     * @brief Opt-in stall watchdog for tcp:// and serial/device sources (0 = off, the default).
+     *
+     * With @p timeout_ms > 0 readMessage() polls the descriptor for readability before each
+     * read(). If no byte arrives for @p timeout_ms the source is stalled: stallCount() is
+     * incremented, lastReadStalled() is true, and readMessage() returns false. A tcp:// source
+     * with setAutoReconnect(true) also closes the socket and reconnects (the stall counts as a
+     * failed read for the caller); otherwise the caller sees an end of stream. NTRIP sources
+     * keep their own select() timeout and file sources are unaffected.
+     */
+    void setStallTimeoutMs(int timeout_ms);
+    int stallCount() const { return stall_count_; }
+    /// True when the most recent readMessage() call returned false because of a stall.
+    bool lastReadStalled() const { return last_read_stalled_; }
     bool isConnected() const;
     std::string lastError() const;
     const std::string& source() const { return source_; }
@@ -349,6 +363,9 @@ private:
     bool auto_reconnect_ = false;
     int reconnect_delay_ms_ = 2000;
     int tcp_reconnect_count_ = 0;
+    int stall_timeout_ms_ = 0;
+    int stall_count_ = 0;
+    bool last_read_stalled_ = false;
     std::string tcp_last_error_;
     bool reconnectTcp();
     
@@ -358,6 +375,13 @@ private:
     bool readFromSerial(const std::string& source);
     bool readFromTcp(const std::string& source);
 };
+
+/**
+ * @brief Wait up to @p timeout_ms for @p fd to become readable (poll(2), EINTR-safe).
+ * @return 1 when readable (or hung up / errored, so the next read() reports it), 0 on timeout,
+ *         -1 on a poll failure. Always 1 on platforms without poll().
+ */
+int waitForReadable(int fd, int timeout_ms);
 
 /**
  * @brief Merge the GPS (1019) and Galileo (1045/1046) broadcast ephemerides

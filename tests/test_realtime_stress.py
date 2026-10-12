@@ -13,6 +13,7 @@ import math
 import os
 import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 
@@ -41,6 +42,10 @@ def have_live() -> bool:
         return True
     except SystemExit:
         return False
+
+
+def live_has_flag(flag: str) -> bool:
+    return have_live() and rt.binary_supports(rt.find_binary("gnss_live", build_dir()), flag)
 
 
 class FramingTests(unittest.TestCase):
@@ -131,6 +136,56 @@ class FaultTests(unittest.TestCase):
             self.assertGreaterEqual(len(bad), 1)
         finally:
             srv.stop()
+
+    def test_blackhole_parse(self) -> None:
+        f = rt.Fault.parse("base_blackhole@100")
+        self.assertEqual((f.kind, f.at, f.dur, f.value), ("base_blackhole", 100.0, 0.0, 0.0))
+        self.assertIn("rover_blackhole", rt.FAULT_KINDS)
+        with self.assertRaises(ValueError):
+            rt.Fault.parse("rover_blackhole@100+10")  # open ended: dur must be 0
+
+    def test_blackhole_keeps_the_connection_open_and_silent(self) -> None:
+        import socket
+        plan = rt.StreamPlan.load("base", FIXTURE / "base.rtcm", FIXTURE / "base.idx")
+        clock = rt.StreamClock(1.0)
+        srv = rt.StreamServer("base", plan, clock, [rt.Fault("base_blackhole", 10.0)])
+
+        def event(stream_t: float) -> rt._Event:
+            meta = {"loop": 0, "index": 0, "tow": 0.0, "stream_t": stream_t, "sched_wall": 0.0, "bytes": 3}
+            return rt._Event(0.0, 0, b"abc", meta)
+
+        server_end, client_end = socket.socketpair()
+        client_end.settimeout(0.2)
+        try:
+            srv._client, srv._client_since = server_end, -math.inf
+            self.assertFalse(srv._is_blackholed(9.0))
+            self.assertTrue(srv._is_blackholed(10.0))
+            srv._send(event(9.0))
+            self.assertEqual(client_end.recv(16), b"abc")
+            srv._send(event(11.0))
+            with self.assertRaises(socket.timeout):
+                client_end.recv(16)  # silent, but not closed (a close would return b"")
+            self.assertEqual(srv.counters["epochs_blackholed"], 1)
+            self.assertEqual(srv.log[-1]["dropped_reason"], "blackhole")
+            # a connection made after the fault is served normally
+            srv._client_since = 12.0
+            self.assertFalse(srv._is_blackholed(13.0))
+            srv._send(event(13.0))
+            self.assertEqual(client_end.recv(16), b"abc")
+            # replacing a silenced connection holds it open instead of closing it
+            srv._client_since = -math.inf
+            clock.t0 = time.monotonic() - 20.0
+            clock.started.set()
+            srv._drop_client(keep_if_blackholed=True)
+            self.assertEqual(srv.counters["connections_blackholed"], 1)
+            with self.assertRaises(socket.timeout):
+                client_end.recv(16)
+            srv._close_held()
+            self.assertEqual(client_end.recv(16), b"")
+        finally:
+            srv.stop()
+            client_end.close()
+            server_end.close()
 
     def test_stats_helpers(self) -> None:
         self.assertAlmostEqual(rt.percentile([1.0, 2.0, 3.0, 4.0], 0.5), 2.5)
@@ -239,6 +294,33 @@ class SmokeSuiteTests(unittest.TestCase):
         self.assertTrue(ntrip["survived_to_end"], ntrip["process"])
         self.assertEqual(ntrip["output_epochs"], self.results["baseline"]["output_epochs"])
         self.assertEqual(ntrip["input"]["rover_counters"]["connections"], 1)
+
+    def _run_blackhole(self, name: str, fault: str, watchdog: bool) -> dict:
+        out = Path(self.tmp.name) / name
+        argv = ["--bin-dir", build_dir() or "", "run", "--prepared", str(FIXTURE), "--out-dir", str(out),
+                "--speed", "20", "--name", name, "--fault", fault, "--allow-failure"]
+        if watchdog:
+            # 300 ms of wall time is 6 stream seconds at 20x
+            argv += ["--reconnect", "--live-arg=--stall-timeout-ms", "--live-arg=300"]
+        self.assertEqual(cli.main(argv), 0)
+        return json.loads((out / "result.json").read_text())
+
+    @unittest.skipUnless(live_has_flag("--stall-timeout-ms"), "gnss_live has no --stall-timeout-ms")
+    def test_blackhole_hangs_without_the_watchdog_and_recovers_with_it(self) -> None:
+        for target in ("base", "rover"):
+            fault = f"{target}_blackhole@10"
+            plain = self._run_blackhole(f"{target}_blackhole_plain", fault, watchdog=False)
+            self.assertIsNone(plain["faults"][0]["first_solution_after_s"], plain["faults"][0])
+            self.assertGreater(plain["input"][f"{target}_counters"]["epochs_blackholed"], 0)
+            guarded = self._run_blackhole(f"{target}_blackhole_watchdog", fault, watchdog=True)
+            rep = guarded["faults"][0]
+            self.assertTrue(guarded["survived_to_end"], guarded["process"])
+            self.assertTrue(rep["detected"], rep)
+            self.assertGreaterEqual(guarded["live_totals"][f"{target}_stalls"], 1)
+            self.assertGreaterEqual(guarded["input"][f"{target}_counters"]["connections"], 2)
+            self.assertIsNotNone(rep["first_solution_after_s"])
+            self.assertLess(rep["first_solution_after_s"], 20.0)
+            self.assertGreater(guarded["output_epochs"], plain["output_epochs"])
 
     def test_suite_exit_code_and_files(self) -> None:
         self.assertEqual(self.rc, 0)

@@ -57,9 +57,17 @@ the same shape at 1x and 20x):
 | `corrupt_base@t=p`, `corrupt_rover@t=p` | flip one random bit in a fraction `p` of frames (CRC failures, bad lengths) |
 | `rover_disconnect@t+d`, `base_disconnect@t+d` | server closes the connection and refuses reconnects for `d` s |
 | `server_restart@t+d` | both servers go down for `d` s |
+| `base_blackhole@t`, `rover_blackhole@t` | from `t` the server stops sending on the connection that exists at `t` but keeps it open (no FIN, no RST) until the client closes it or the run ends. A connection made after `t` is served normally from the live position in the schedule. Open ended: `dur` must be 0 (`base_blackhole@100+10` is rejected). Exercises `gnss live --stall-timeout-ms`. |
 
 `--supervise` relaunches `gnss_live` when it exits early (what an init system would do);
-`--reconnect` runs it with its own `--reconnect`.
+`--reconnect` runs it with its own `--reconnect` (`--reconnect-delay-ms` sets its delay, default 200;
+the attempt budget is sized by the harness). Any other `gnss_live` option goes through `--live-arg=...`, e.g.
+`--live-arg=--stall-timeout-ms --live-arg=5000` for the stall watchdog.
+
+Every fault report also carries `first_solution_after_s` (stream time between the fault start and the moment
+`gnss_live` wrote the first row for data at or after it), `first_solution_data_s` (data time of that row minus the fault start)
+and `solutions_from_30s_after` (rows with data time from `t+30` to the end of the stream). A blackhole report adds
+`rover_stalls_reported` / `base_stalls_reported` (from the `summary:` line) and the server's `epochs_blackholed`.
 
 ## What is measured
 
@@ -370,10 +378,15 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    (p50 0.41 s, max 0.82 s with a 1 Hz base), also with `--no-base-interp`, which only changes which base is used.
    A real low-latency mode would solve on arrival with the held or extrapolated base
    (see [online base extrapolation](online_rtk_base_extrapolation_v1.md)).
-3. **No watchdog on TCP reads.** A silent but connected `tcp://` source blocks in `read()` with no timeout, so a dead peer
-   that never sends a FIN would block it too (not tested here); during a base outage the rover is not read either. Rover epochs that
-   cannot get a base within 2 s are skipped without any output, so there is no SPP or dead-reckoned fallback for the
-   outage.
+3. **TCP reads have a watchdog only when asked for.** A silent but connected `tcp://` source blocks in `read()` with no
+   timeout, so a dead peer that never sends a FIN blocks `gnss live`; the `base_blackhole` / `rover_blackhole` faults
+   reproduce it. Opt-in fix: `gnss live --stall-timeout-ms <ms>` (with `--reconnect`, see
+   [Interfaces](interfaces.md#stall-watchdog-for-gnss-live-stall-timeout-ms)); the default `0` keeps the blocking read. Still the case:
+   the flag is off by default; it covers `tcp://` and serial/device reads but not NTRIP (which keeps its own `select()`
+   timeout and does not reconnect on a quiet caster) or files; serial/device sources cannot reconnect, a stall ends them;
+   the rover is not read while `gnss live` waits on the base (and vice versa), so during a base outage the rover socket just
+   fills and recovery starts only after the stall timeout plus the reconnect delay; rover epochs that cannot get a base
+   within 2 s are skipped without any output, so there is still no SPP or dead-reckoned fallback for the outage.
 4. **The GPS week.** Fixed for `gnss live`: `RTCMStreamDecoder` keeps one GPST reference (seeded from `--nav-rinex`,
    else from the first GPS/Galileo/BeiDou/QZSS ephemeris in either stream), resolves TOW-only observations to the nearest
    week, follows the stream across a week rollover, and dates GLONASS MSM epochs and 1020 ephemerides from it instead of the
