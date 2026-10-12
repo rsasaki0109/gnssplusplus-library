@@ -1549,3 +1549,173 @@ TEST(GNSSLiveRecordedStreamTest, ReconnectKeepsWaitingThroughNtripReadTimeout) {
     fs::remove_all(temp_dir);
 }
 #endif
+
+// ---------------------------------------------------------------------------------------------
+// --base-outage-fallback spp: rover epochs without a usable base get an SPP row (status 1), never
+// FLOAT/FIXED, and the RTK rows are unchanged.
+// ---------------------------------------------------------------------------------------------
+namespace {
+
+struct PosRow {
+    std::string line;
+    double tow = 0.0;
+    int status = 0;
+};
+
+std::vector<PosRow> readPosRows(const std::filesystem::path& path) {
+    std::ifstream input(path);
+    std::vector<PosRow> rows;
+    std::string line;
+    while (std::getline(input, line)) {
+        if (line.empty() || line[0] == '%') continue;
+        std::istringstream in(line);
+        double week = 0.0, tow = 0.0, x = 0.0, y = 0.0, z = 0.0, lat = 0.0, lon = 0.0, height = 0.0;
+        int status = 0;
+        if (in >> week >> tow >> x >> y >> z >> lat >> lon >> height >> status) {
+            rows.push_back({line, tow, status});
+        }
+    }
+    return rows;
+}
+
+constexpr double kFixtureT0 = 187470.0;
+constexpr int kSppStatus = static_cast<int>(SolutionStatus::SPP);
+
+}  // namespace
+
+TEST(GNSSLiveRecordedStreamTest, BaseOutageFallbackWritesSppRowsOnlyWithTheFlagInFileMode) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+
+    // Base epochs 11..20 (tow 187481..187490) are missing: an 11 s hole between base epochs.
+    const auto base = readBinaryFile(fixture / "base.rtcm");
+    const auto base_epochs = readFixtureIndex(fixture / "base.idx");
+    ASSERT_GT(base_epochs.size(), 30U);
+    auto gapped = epochBytes(base, base_epochs, 0, 11);
+    const auto tail = epochBytes(base, base_epochs, 21, base_epochs.size());
+    gapped.insert(gapped.end(), tail.begin(), tail.end());
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_outage_fallback_file");
+    const fs::path base_path = temp_dir / "base_gap.rtcm";
+    {
+        std::ofstream output(base_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(gapped.data()), static_cast<std::streamsize>(gapped.size()));
+    }
+    const std::string inputs = "--rover-rtcm \"" + (fixture / "rover.rtcm").string() + "\" --base-rtcm \"" +
+                               base_path.string() + "\"";
+
+    const fs::path plain_pos = temp_dir / "plain.pos";
+    const fs::path plain_log = temp_dir / "plain.log";
+    ASSERT_EQ(runLiveCapture(inputs + " --out \"" + plain_pos.string() + "\"", plain_log), 0) << readTextFile(plain_log);
+    const std::string plain = readTextFile(plain_log);
+    // Opt-in: no counter without the flag.
+    EXPECT_EQ(plain.find("fallback_spp_epochs"), std::string::npos) << plain;
+
+    const fs::path fb_pos = temp_dir / "fallback.pos";
+    const fs::path fb_log = temp_dir / "fallback.log";
+    ASSERT_EQ(runLiveCapture(inputs + " --base-outage-fallback spp --out \"" + fb_pos.string() + "\"", fb_log), 0)
+        << readTextFile(fb_log);
+    const std::string fb = readTextFile(fb_log);
+    EXPECT_GT(extractSummaryDouble(fb, "fallback_spp_epochs"), 30.0) << fb;
+
+    const auto plain_rows = readPosRows(plain_pos);
+    const auto fb_rows = readPosRows(fb_pos);
+    ASSERT_FALSE(plain_rows.empty());
+
+    // Strictly inside the hole (past the 0.5 s base hold, before the next base epoch).
+    const double hole_begin = kFixtureT0 + 11.0;
+    const double hole_end = kFixtureT0 + 20.0;
+    size_t plain_in_hole = 0, fb_in_hole = 0;
+    for (const auto& row : plain_rows) {
+        if (row.tow >= hole_begin && row.tow <= hole_end) ++plain_in_hole;
+    }
+    for (const auto& row : fb_rows) {
+        if (row.tow >= hole_begin && row.tow <= hole_end) {
+            ++fb_in_hole;
+            EXPECT_EQ(row.status, kSppStatus) << row.line;  // never FLOAT/FIXED in the hole
+        }
+    }
+    EXPECT_EQ(plain_in_hole, 0U);
+    EXPECT_GE(fb_in_hole, 40U);  // 9 s at 5 Hz is 46 epochs
+
+    // Every non-SPP row of the fallback run is a row of the plain run, in the same order: the RTK
+    // filter state is not touched by the fallback epochs.
+    std::vector<std::string> fb_rtk, plain_all;
+    for (const auto& row : fb_rows) {
+        if (row.status != kSppStatus) fb_rtk.push_back(row.line);
+    }
+    for (const auto& row : plain_rows) plain_all.push_back(row.line);
+    EXPECT_EQ(fb_rtk, plain_all);
+
+    fs::remove_all(temp_dir);
+}
+
+#ifndef _WIN32
+TEST(GNSSLiveRecordedStreamTest, BaseOutageFallbackKeepsTheRoverFlowingWhileATcpBaseIsSilent) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "rover.rtcm")) << fixture;
+    const auto rover = readBinaryFile(fixture / "rover.rtcm");
+    const auto rover_epochs = readFixtureIndex(fixture / "rover.idx");
+    const auto base = readBinaryFile(fixture / "base.rtcm");
+    const auto base_epochs = readFixtureIndex(fixture / "base.idx");
+    ASSERT_GT(rover_epochs.size(), 150U);
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_outage_fallback_tcp");
+    const fs::path out_path = temp_dir / "live.pos";
+    const fs::path log_path = temp_dir / "live.log";
+
+    // The base sends 11 epochs (tow 187470..187480), then the link stays up and silent for 4 s and
+    // closes. The rover sends its whole recording at once.
+    auto rover_script = [&]() {
+        std::vector<std::vector<ScriptedRtcmServer::Step>> connections(1);
+        connections[0].push_back({epochBytes(rover, rover_epochs, 0, rover_epochs.size()), 0});
+        return connections;
+    };
+    auto base_script = [&]() {
+        std::vector<std::vector<ScriptedRtcmServer::Step>> connections(1);
+        connections[0].push_back({epochBytes(base, base_epochs, 0, 11), 4000});
+        return connections;
+    };
+
+    {
+        // Default: the base read blocks, the rover is not read, nothing is written during the outage.
+        ScriptedRtcmServer rover_server(rover_script(), false);
+        ScriptedRtcmServer base_server(base_script(), false);
+        const int rc = runLiveCapture("--rover-rtcm tcp://127.0.0.1:" + std::to_string(rover_server.port()) +
+                                          " --base-rtcm tcp://127.0.0.1:" + std::to_string(base_server.port()) +
+                                          " --out \"" + out_path.string() + "\"",
+                                      log_path);
+        const std::string log = readTextFile(log_path);
+        EXPECT_EQ(rc, 0) << log;
+        EXPECT_EQ(log.find("fallback_spp_epochs"), std::string::npos) << log;
+        EXPECT_EQ(extractSummaryToken(log, "termination"), "base_source_exhausted") << log;
+        EXPECT_LE(extractSummaryDouble(log, "written_solutions"), 60.0) << log;
+    }
+    {
+        ScriptedRtcmServer rover_server(rover_script(), false);
+        ScriptedRtcmServer base_server(base_script(), false);
+        const auto begin = std::chrono::steady_clock::now();
+        const int rc = runLiveCapture("--rover-rtcm tcp://127.0.0.1:" + std::to_string(rover_server.port()) +
+                                          " --base-rtcm tcp://127.0.0.1:" + std::to_string(base_server.port()) +
+                                          " --base-outage-fallback spp --out \"" + out_path.string() + "\"",
+                                      log_path);
+        const double wall_s =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - begin).count();
+        const std::string log = readTextFile(log_path);
+        EXPECT_EQ(rc, 0) << log;
+        // The rover ends first; the blocked base thread is aborted, not waited for.
+        EXPECT_EQ(extractSummaryToken(log, "termination"), "rover_source_exhausted") << log;
+        EXPECT_GE(extractSummaryDouble(log, "fallback_spp_epochs"), 100.0) << log;
+        EXPECT_LT(wall_s, 3.9) << "fallback run waited for the silent base\n" << log;
+        for (const auto& row : readPosRows(out_path)) {
+            if (row.tow > kFixtureT0 + 11.0) {
+                EXPECT_EQ(row.status, kSppStatus) << row.line;  // never FLOAT/FIXED without a base
+            }
+        }
+    }
+
+    fs::remove_all(temp_dir);
+}
+#endif
