@@ -112,6 +112,24 @@ TEST(ObservationEpochAssembler, DuplicateSatelliteSignalKeepsFirst) {
     }
 }
 
+TEST(ObservationEpochAssembler, MergeKeepsTrackingObservationsAndPositionOfLaterParts) {
+    io::ObservationEpochAssembler assembler;
+    const GNSSTime t(2200, 100.0);
+    auto gps = makePart(t, {makeRow(GNSSSystem::GPS, 3, SignalType::GPS_L1CA, 2.1e7)});
+    gps.addRinexTrackingObservation("1C", gps.observations[0]);
+    auto gal = makePart(t, {makeRow(GNSSSystem::Galileo, 11, SignalType::GAL_E5A, 2.3e7)});
+    gal.addRinexTrackingObservation("5Q", gal.observations[0]);
+    gal.addRinexTrackingObservation("5I", gal.observations[0]);
+    gal.receiver_position = Vector3d(1.0, 2.0, 3.0);
+    EXPECT_TRUE(assembler.push(gps, true).empty());
+    const auto out = assembler.push(gal, false);
+    ASSERT_EQ(out.size(), 1U);
+    EXPECT_EQ(out[0].observations.size(), 2U);
+    EXPECT_EQ(out[0].rinex_tracking_observations.size(), 3U);
+    EXPECT_NE(out[0].getRinexTrackingObservation(SatelliteId(GNSSSystem::Galileo, 11), "5I"), nullptr);
+    EXPECT_NEAR(out[0].receiver_position.x(), 1.0, 0.0);
+}
+
 TEST(ObservationEpochAssembler, FlushEmitsPendingEpochOnce) {
     io::ObservationEpochAssembler assembler;
     const GNSSTime t(2200, 100.0);

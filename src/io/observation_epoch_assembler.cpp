@@ -19,6 +19,17 @@ void mergePart(ObservationData& pending, const ObservationData& part) {
             pending.observations.push_back(obs);
         }
     }
+    // The RTCM decoder also keeps every tracking code of a satellite here (used by the
+    // RINEX writer); carry them over so that a merged epoch loses nothing a part had.
+    for (const auto& [key, obs] : part.rinex_tracking_observations) {
+        pending.rinex_tracking_observations.emplace(key, obs);
+    }
+    for (const auto& [key, code] : part.rinex_frequency_slots) {
+        pending.rinex_frequency_slots.emplace(key, code);
+    }
+    if (pending.receiver_position.norm() == 0.0 && part.receiver_position.norm() > 0.0) {
+        pending.receiver_position = part.receiver_position;
+    }
 }
 
 }  // namespace
