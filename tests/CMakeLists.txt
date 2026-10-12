@@ -146,6 +146,7 @@ if(GTest_FOUND)
         test_rtcm_stream_reference.cpp
         test_ubx.cpp
         test_galileo_has.cpp
+        test_ephemeris_tiebreak.cpp
         test_sofa_vendor.cpp
         test_ginan_iers2010_vendor.cpp
         test_iers_earth_rotation.cpp
