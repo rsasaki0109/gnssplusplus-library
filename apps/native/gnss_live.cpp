@@ -9,14 +9,21 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <atomic>
+#include <condition_variable>
+#include <functional>
 #include <limits>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_validation.hpp>
+#include <libgnss++/algorithms/spp.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -88,6 +95,9 @@ struct LiveConfig {
     int reconnect_attempts = 0;
     // Opt-in stall watchdog for tcp:// and serial/device sources (0 = off, blocking reads).
     int stall_timeout_ms = 0;
+    // Opt-in (--base-outage-fallback spp): a rover epoch that would be skipped for lack of a
+    // base is solved with SPP and written with status SPP; live sources get reader threads.
+    bool base_outage_fallback = false;
     bool enable_base_interpolation = true;
     // Merge the per-constellation MSM messages of one epoch (RTCM multiple-message
     // bit) into a single epoch; --no-rtcm-epoch-assembly restores one epoch per message.
@@ -130,6 +140,120 @@ struct LiveConfig {
     bool max_float_prefit_residual_reset_streak_set = false;
 };
 
+using SteadyClock = std::chrono::steady_clock;
+using Deadline = std::optional<SteadyClock::time_point>;
+
+enum class PopStatus {
+    ITEM,
+    TIMEOUT,
+    CLOSED
+};
+
+// Bounded single-producer/single-consumer hand-off between a reader thread and the main loop.
+// Only used by the opt-in --base-outage-fallback path; without the flag no thread is created.
+// The reader thread does blocking I/O only: every decoder, assembler and solver stays on the
+// main thread.
+template <typename Item>
+class BoundedPump {
+public:
+    explicit BoundedPump(size_t capacity) : capacity_(capacity) {}
+    BoundedPump(const BoundedPump&) = delete;
+    BoundedPump& operator=(const BoundedPump&) = delete;
+    ~BoundedPump() { stop(); }
+
+    void start(std::function<void()> body, std::function<void()> abort_blocking_read) {
+        abort_ = std::move(abort_blocking_read);
+        thread_ = std::thread(std::move(body));
+    }
+
+    // Producer: false when the pump is being stopped.
+    bool push(Item&& item) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        not_full_.wait(lock, [&] { return queue_.size() < capacity_ || stopping_.load(); });
+        if (stopping_.load()) {
+            return false;
+        }
+        queue_.push_back(std::move(item));
+        not_empty_.notify_one();
+        return true;
+    }
+
+    void closeProducer() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            closed_ = true;
+        }
+        not_empty_.notify_all();
+    }
+
+    bool stopRequested() const { return stopping_.load(); }
+
+    // Consumer: queued items are always delivered first; TIMEOUT only when the queue is empty
+    // at the (absolute) deadline; CLOSED when the producer ended and the queue is drained.
+    PopStatus pop(Item& out, const Deadline& deadline) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        const auto ready = [&] { return !queue_.empty() || closed_ || stopping_.load(); };
+        if (deadline) {
+            if (!not_empty_.wait_until(lock, *deadline, ready)) {
+                return PopStatus::TIMEOUT;
+            }
+        } else {
+            not_empty_.wait(lock, ready);
+        }
+        if (queue_.empty()) {
+            return PopStatus::CLOSED;
+        }
+        out = std::move(queue_.front());
+        queue_.pop_front();
+        not_full_.notify_one();
+        return PopStatus::ITEM;
+    }
+
+    // Idempotent: wakes the producer, aborts its blocking read and joins the thread.
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            stopping_.store(true);
+        }
+        not_full_.notify_all();
+        not_empty_.notify_all();
+        if (abort_) {
+            abort_();
+        }
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+
+private:
+    const size_t capacity_;
+    std::mutex mutex_;
+    std::condition_variable not_empty_;
+    std::condition_variable not_full_;
+    std::deque<Item> queue_;
+    bool closed_ = false;
+    std::atomic<bool> stopping_{false};
+    std::function<void()> abort_;
+    std::thread thread_;
+};
+
+constexpr size_t kPumpQueueCapacity = 4096;
+constexpr int kPumpPollSliceMs = 50;
+
+// One RTCMReader::readMessage() result; ok == false is a failed read (EOF, stall, reconnect failure).
+struct RtcmItem {
+    bool ok = false;
+    bool stalled = false;
+    libgnss::io::RTCMMessage message;
+};
+
+// One chunk of rover UBX bytes; eof marks the end of the device (stalled: because of the watchdog).
+struct UbxChunk {
+    std::vector<uint8_t> data;
+    bool eof = false;
+    bool stalled = false;
+};
+
 struct SourceState {
     libgnss::io::RTCMReader reader;
     libgnss::io::RTCMStreamDecoder decoder;
@@ -145,7 +269,16 @@ struct SourceState {
     // treating the first failed read as the end of the stream (0 attempts = retry forever).
     bool reconnect = false;
     int reconnect_attempts = 0;
+    // --base-outage-fallback on a live source: reader thread feeding readNextObservation().
+    // Declared last so it is stopped (joined) before the reader it uses is destroyed.
+    int pump_failed_reads = 0;
+    bool pump_last_stalled = false;
+    std::unique_ptr<BoundedPump<RtcmItem>> pump;
 };
+
+bool sourceLastReadStalled(const SourceState& source) {
+    return source.pump ? source.pump_last_stalled : source.reader.lastReadStalled();
+}
 
 enum class RoverInputKind {
     RTCM,
@@ -165,6 +298,7 @@ struct RoverUbxSource {
     bool last_read_stalled = false;
     bool serial = false;
     bool eof = false;
+    std::unique_ptr<BoundedPump<UbxChunk>> pump;
 };
 
 struct DecoderSummaryStats {
@@ -564,6 +698,12 @@ void printUsage(const char* argv0) {
         << "                            (default: 0 = off, blocking reads). With --reconnect a stalled tcp:// source is\n"
         << "                            closed and reconnected (counts as a failed read); otherwise the source ends like EOF.\n"
         << "                            NTRIP keeps its own timeout; file inputs are unaffected.\n"
+        << "  --base-outage-fallback spp Solve rover epochs that have no usable base with SPP and write them with status SPP\n"
+        << "                            (never FLOAT/FIXED; RTK state untouched; default: off, such epochs are skipped).\n"
+        << "                            On tcp/ntrip/serial sources each live source is read by its own thread, so output\n"
+        << "                            continues while the base is silent; an epoch is baseless after max(1 s,\n"
+        << "                            --base-hold-seconds + base interval) of wall time without a new base epoch.\n"
+        << "                            Adds fallback_spp_epochs= to the summary.\n"
         << "  --no-rtcm-epoch-assembly   Treat every RTCM observation message as its own epoch (default: merge the\n"
         << "                            per-constellation MSM messages of one epoch using the multiple-message bit)\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
@@ -719,6 +859,12 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.reconnect_attempts = std::stoi(argv[++i]);
         } else if (arg == "--stall-timeout-ms" && i + 1 < argc) {
             config.stall_timeout_ms = std::stoi(argv[++i]);
+        } else if (arg == "--base-outage-fallback" && i + 1 < argc) {
+            const std::string fallback = argv[++i];
+            if (fallback != "spp") {
+                argumentError("--base-outage-fallback accepts only 'spp'", argv[0]);
+            }
+            config.base_outage_fallback = true;
         } else if (arg == "--no-rtcm-epoch-assembly") {
             config.assemble_rtcm_epochs = false;
         } else if (arg == "--no-base-interp") {
@@ -985,9 +1131,14 @@ bool openRoverUbxSource(const std::string& path, int baud, RoverUbxSource& sourc
 #endif
 }
 
+// deadline/timed_out are only meaningful for a source with a reader thread (--base-outage-fallback):
+// a queue that stays empty until the deadline returns false with *timed_out set, and the source
+// is NOT marked ended. A source without a pump reads (and blocks) exactly as before.
 bool readNextObservation(SourceState& source,
                          libgnss::ObservationData& obs,
-                         std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
+                         std::vector<libgnss::io::RTCMStreamDecoder::Event>& events,
+                         const Deadline& deadline = std::nullopt,
+                         bool* timed_out = nullptr) {
     events.clear();
     auto popReady = [&]() {
         if (source.ready_epochs.empty()) {
@@ -1001,10 +1152,30 @@ bool readNextObservation(SourceState& source,
         return true;
     }
     libgnss::io::RTCMMessage raw_message;
-    int failed_reads = 0;
+    int local_failed_reads = 0;
+    int& failed_reads = source.pump ? source.pump_failed_reads : local_failed_reads;
     while (!source.input_ended &&
            (source.message_limit == 0 || source.messages_read < source.message_limit)) {
-        if (!source.reader.readMessage(raw_message)) {
+        bool fetched = false;
+        if (source.pump) {
+            RtcmItem item;
+            const PopStatus status = source.pump->pop(item, deadline);
+            if (status == PopStatus::TIMEOUT) {
+                if (timed_out) {
+                    *timed_out = true;
+                }
+                return false;
+            }
+            if (status == PopStatus::CLOSED) {
+                break;
+            }
+            fetched = item.ok;
+            source.pump_last_stalled = item.stalled;
+            raw_message = std::move(item.message);
+        } else {
+            fetched = source.reader.readMessage(raw_message);
+        }
+        if (!fetched) {
             // With --reconnect an empty read (NTRIP timeout, dropped link being re-established)
             // is not the end of the stream; keep trying until the attempt budget runs out.
             if (source.reconnect &&
@@ -1056,7 +1227,19 @@ bool readNextUbxObservation(RoverUbxSource& source,
 
     while (true) {
         size_t bytes_read = 0;
-        if (source.serial) {
+        if (source.pump) {
+            UbxChunk item;
+            if (source.pump->pop(item, std::nullopt) != PopStatus::ITEM || item.eof) {
+                if (item.stalled) {
+                    ++source.stalls;
+                    source.last_read_stalled = true;
+                }
+                source.eof = true;
+                return false;
+            }
+            chunk = std::move(item.data);
+            bytes_read = chunk.size();
+        } else if (source.serial) {
 #ifndef _WIN32
             // Opt-in stall watchdog (same poll() wait as RTCMReader); a serial device cannot be
             // reconnected, so a stall ends the rover source like EOF.
@@ -1104,6 +1287,95 @@ bool readNextUbxObservation(RoverUbxSource& source,
             }
         }
     }
+}
+
+// Start the reader thread of a live RTCM source (--base-outage-fallback only).
+void startRtcmPump(SourceState& source) {
+    source.reader.setAbortable(true);
+    source.pump = std::make_unique<BoundedPump<RtcmItem>>(kPumpQueueCapacity);
+    auto* pump = source.pump.get();
+    libgnss::io::RTCMReader* reader = &source.reader;
+    const bool keep_reading_after_failure = source.reconnect;
+    pump->start(
+        [pump, reader, keep_reading_after_failure] {
+            try {
+                while (!pump->stopRequested()) {
+                    RtcmItem item;
+                    item.ok = reader->readMessage(item.message);
+                    item.stalled = reader->lastReadStalled();
+                    if (pump->stopRequested()) {
+                        break;
+                    }
+                    const bool ok = item.ok;
+                    if (!pump->push(std::move(item))) {
+                        break;
+                    }
+                    if (!ok && !keep_reading_after_failure) {
+                        break;
+                    }
+                }
+            } catch (...) {
+                RtcmItem failed;
+                pump->push(std::move(failed));
+            }
+            pump->closeProducer();
+        },
+        [reader] { reader->requestAbort(); });
+}
+
+#ifndef _WIN32
+// Start the reader thread of a serial rover UBX device (--base-outage-fallback only).
+void startUbxPump(RoverUbxSource& source) {
+    source.pump = std::make_unique<BoundedPump<UbxChunk>>(kPumpQueueCapacity);
+    auto* pump = source.pump.get();
+    const int fd = source.serial_fd;
+    const int stall_timeout_ms = source.stall_timeout_ms;
+    pump->start(
+        [pump, fd, stall_timeout_ms] {
+            std::vector<uint8_t> buffer(4096);
+            auto last_data = SteadyClock::now();
+            while (!pump->stopRequested()) {
+                if (libgnss::io::waitForReadable(fd, kPumpPollSliceMs) == 0) {
+                    if (stall_timeout_ms > 0 &&
+                        SteadyClock::now() - last_data >= std::chrono::milliseconds(stall_timeout_ms)) {
+                        UbxChunk stalled;
+                        stalled.eof = true;
+                        stalled.stalled = true;
+                        pump->push(std::move(stalled));
+                        break;
+                    }
+                    continue;
+                }
+                const ssize_t count = ::read(fd, buffer.data(), buffer.size());
+                if (count < 0 && errno == EINTR) {
+                    continue;
+                }
+                UbxChunk chunk;
+                if (count <= 0) {
+                    chunk.eof = true;
+                    pump->push(std::move(chunk));
+                    break;
+                }
+                chunk.data.assign(buffer.begin(), buffer.begin() + count);
+                last_data = SteadyClock::now();
+                if (!pump->push(std::move(chunk))) {
+                    break;
+                }
+            }
+            pump->closeProducer();
+        },
+        {});
+}
+#endif
+
+// The SPP configuration the RTK processor uses for its own seed (rtk_internal::makeRTKSppConfig).
+libgnss::SPPProcessor::SPPConfig makeFallbackSppConfig(const LiveConfig& config) {
+    libgnss::SPPProcessor::SPPConfig spp_config;
+    spp_config.use_multi_constellation = true;
+    spp_config.enable_glonass = config.enable_glonass;
+    spp_config.enable_beidou = config.enable_beidou;
+    spp_config.max_position_sigma_m = 1000.0;
+    return spp_config;
 }
 
 DecoderSummaryStats summarizeRtcmSource(const SourceState& source) {
@@ -1240,6 +1512,28 @@ int main(int argc, char** argv) {
                 base_source.decoder.setReferenceTime(*rover_ref);
             }
         };
+        // --base-outage-fallback: each live (tcp/ntrip/serial) source gets a reader thread so that
+        // the rover keeps being read while the base is silent. File sources and the default
+        // (flag off) path read inline and create no thread.
+        const bool fallback_enabled = config.base_outage_fallback;
+        if (fallback_enabled) {
+            if (base_source.reader.isLiveStream()) {
+                startRtcmPump(base_source);
+            }
+            if (rover_input_kind == RoverInputKind::RTCM) {
+                if (rover_rtcm_source.reader.isLiveStream()) {
+                    startRtcmPump(rover_rtcm_source);
+                }
+            }
+#ifndef _WIN32
+            else if (rover_ubx_source.serial) {
+                startUbxPump(rover_ubx_source);
+            }
+#endif
+        }
+        const bool base_threaded = base_source.pump != nullptr;
+        libgnss::SPPProcessor fallback_spp(makeFallbackSppConfig(config));
+
         // The base is read first so that its ephemeris burst can seed the rover decoder before the
         // rover's first epoch is decoded.
         bool base_ok = readNextObservation(base_source, base_obs, base_events);
@@ -1255,6 +1549,7 @@ int main(int argc, char** argv) {
         size_t interpolated_base_epochs = 0;
         size_t held_base_epochs = 0;
         size_t skipped_rover_epochs = 0;
+        size_t fallback_spp_epochs = 0;
         size_t written_solutions = 0;
         size_t fixed_solutions = 0;
         size_t post_filter_dropped_epochs = 0;
@@ -1309,6 +1604,41 @@ int main(int argc, char** argv) {
             }
         };
 
+        // Base silence clock for --base-outage-fallback (threaded base only): wall time of the newest
+        // base epoch taken from the source, and the base epoch spacing (data time). A rover epoch is
+        // baseless once max(1 s, base hold + base interval) of wall time passed with no newer base epoch.
+        bool base_waiting = false;  // the last base read timed out (source silent, not ended)
+        auto last_base_obs_wall = SteadyClock::now();
+        double base_interval_s = 1.0;
+        bool base_interval_measured = false;
+        bool have_prev_base_time = false;
+        libgnss::GNSSTime prev_base_time;
+        auto noteBaseEpoch = [&](const libgnss::ObservationData& epoch) {
+            if (!base_threaded) {
+                return;
+            }
+            last_base_obs_wall = SteadyClock::now();
+            if (have_prev_base_time) {
+                const double dt = timeDiffSeconds(epoch.time, prev_base_time);
+                // The first spacing sets the interval; later ones count only while within 2x of it
+                // (a gap after an outage must not stretch the timeout).
+                if (dt > 1e-3 && dt <= 60.0 && (!base_interval_measured || dt <= 2.0 * base_interval_s)) {
+                    base_interval_s = dt;
+                    base_interval_measured = true;
+                }
+            }
+            prev_base_time = epoch.time;
+            have_prev_base_time = true;
+        };
+        auto baseDeadline = [&]() -> Deadline {
+            if (!base_threaded) {
+                return std::nullopt;
+            }
+            const double timeout_s = std::max(1.0, config.base_hold_seconds + base_interval_s);
+            return last_base_obs_wall + std::chrono::duration_cast<SteadyClock::duration>(
+                                            std::chrono::duration<double>(timeout_s));
+        };
+
         if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
             applyEvents(rover_events);
         }
@@ -1320,9 +1650,25 @@ int main(int argc, char** argv) {
         }
         if (base_ok) {
             normalizeObservationWeek(base_obs);
+            noteBaseEpoch(base_obs);
         }
 
-        while (rover_ok && base_ok && (config.max_epochs < 0 || solved_epochs < config.max_epochs)) {
+        while (rover_ok && (base_ok || base_waiting) &&
+               (config.max_epochs < 0 || solved_epochs < config.max_epochs)) {
+            if (base_waiting) {
+                // The previous base read timed out: look again (blocking only until the silence deadline).
+                bool timed_out = false;
+                base_ok = readNextObservation(base_source, base_obs, base_events, baseDeadline(), &timed_out);
+                if (base_ok) {
+                    applyEvents(base_events);
+                    normalizeObservationWeek(base_obs);
+                    noteBaseEpoch(base_obs);
+                    base_waiting = false;
+                } else if (!timed_out) {
+                    base_waiting = false;  // the base source ended
+                    break;
+                }
+            }
             if (rover_obs.receiver_position.norm() == 0.0) {
                 rover_obs.receiver_position = rover_seed.norm() > 0.0
                     ? rover_seed
@@ -1339,10 +1685,14 @@ int main(int argc, char** argv) {
                 have_lower_base = true;
                 previous_base_obs = base_obs;
                 has_previous_base = true;
-                base_ok = readNextObservation(base_source, base_obs, base_events);
+                bool base_timed_out = false;
+                base_ok = readNextObservation(base_source, base_obs, base_events, baseDeadline(), &base_timed_out);
                 if (base_ok) {
                     applyEvents(base_events);
                     normalizeObservationWeek(base_obs);
+                    noteBaseEpoch(base_obs);
+                } else if (base_timed_out) {
+                    base_waiting = true;
                 }
             }
 
@@ -1419,6 +1769,27 @@ int main(int argc, char** argv) {
                               << "\n";
                 }
                 ++skipped_rover_epochs;
+                if (fallback_enabled) {
+                    // No usable base for this rover epoch: a single-point solution, never FLOAT/FIXED.
+                    // The RTK processor, the output guards and the rover seed are not touched.
+                    const auto spp_solution = fallback_spp.processEpoch(rover_obs, nav_data);
+                    if (spp_solution.status == libgnss::SolutionStatus::SPP && spp_solution.isValid()) {
+                        writer.writeEpoch(spp_solution, std::numeric_limits<double>::quiet_NaN());
+                        ++written_solutions;
+                        ++solved_epochs;
+                        ++fallback_spp_epochs;
+                        if (config.verbose && !config.quiet) {
+                            std::cout << "fallback tow=" << std::fixed << std::setprecision(3)
+                                      << spp_solution.time.tow << " status="
+                                      << static_cast<int>(spp_solution.status)
+                                      << " sats=" << spp_solution.num_satellites << "\n";
+                        }
+                        if (config.max_epochs >= 0 && solved_epochs >= config.max_epochs) {
+                            termination_reason = "max_epochs_reached";
+                            break;
+                        }
+                    }
+                }
                 rover_ok = rover_input_kind == RoverInputKind::RTCM
                     ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
                     : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
@@ -1492,10 +1863,22 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Stop and join the reader threads (EOF, stall, max-epochs or an ended source): a blocked
+        // read is aborted by RTCMReader::requestAbort() / the pump's stop flag, never left detached.
+        if (base_source.pump) {
+            base_source.pump->stop();
+        }
+        if (rover_rtcm_source.pump) {
+            rover_rtcm_source.pump->stop();
+        }
+        if (rover_ubx_source.pump) {
+            rover_ubx_source.pump->stop();
+        }
+
         const bool rover_stalled = !rover_ok && (rover_input_kind == RoverInputKind::RTCM
-            ? rover_rtcm_source.reader.lastReadStalled()
+            ? sourceLastReadStalled(rover_rtcm_source)
             : rover_ubx_source.last_read_stalled);
-        const bool base_stalled = !base_ok && base_source.reader.lastReadStalled();
+        const bool base_stalled = !base_ok && !base_waiting && sourceLastReadStalled(base_source);
         if (termination_reason == "running") {
             if (rover_stalled) {
                 termination_reason = "rover_source_stalled";
@@ -1598,6 +1981,9 @@ int main(int argc, char** argv) {
         if (config.stall_timeout_ms > 0) {
             std::cout << " rover_stalls=" << rover_stalls
                       << " base_stalls=" << base_stalls;
+        }
+        if (config.base_outage_fallback) {
+            std::cout << " fallback_spp_epochs=" << fallback_spp_epochs;
         }
         std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;

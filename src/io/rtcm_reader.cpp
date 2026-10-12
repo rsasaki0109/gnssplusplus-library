@@ -29,6 +29,11 @@ namespace libgnss {
 namespace io {
 using namespace rtcm_internal;
 
+namespace {
+// Poll slice of the opt-in abortable reads (RTCMReader::setAbortable).
+constexpr int kAbortPollSliceMs = 50;
+}  // namespace
+
 bool RTCMReader::open(const std::string& source) {
     close();
     source_ = source;
@@ -72,6 +77,7 @@ void RTCMReader::close() {
     tcp_reconnect_count_ = 0;
     stall_count_ = 0;
     last_read_stalled_ = false;
+    abort_requested_.store(false);
     tcp_last_error_.clear();
     processor_.clear();
     processor_.resetStats();
@@ -104,7 +110,7 @@ int waitForReadable(int fd, int timeout_ms) {
 
 bool RTCMReader::readMessage(RTCMMessage& message) {
     last_read_stalled_ = false;
-    if (!is_open_) {
+    if (!is_open_ || (abortable_ && abort_requested_.load())) {
         return false;
     }
 
@@ -176,7 +182,28 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
 
         // Opt-in stall watchdog: a connected peer that never sends (and never closes) would
         // otherwise block in read() forever.
-        if (stall_timeout_ms_ > 0 && waitForReadable(stream_fd, stall_timeout_ms_) == 0) {
+        bool stalled = false;
+        if (abortable_) {
+            // Opt-in: wait in short slices so requestAbort() from another thread ends the wait.
+            const auto wait_begin = std::chrono::steady_clock::now();
+            while (true) {
+                if (waitForReadable(stream_fd, kAbortPollSliceMs) != 0) {
+                    break;
+                }
+                if (abort_requested_.load()) {
+                    return false;
+                }
+                if (stall_timeout_ms_ > 0 &&
+                    std::chrono::steady_clock::now() - wait_begin >=
+                        std::chrono::milliseconds(stall_timeout_ms_)) {
+                    stalled = true;
+                    break;
+                }
+            }
+        } else if (stall_timeout_ms_ > 0 && waitForReadable(stream_fd, stall_timeout_ms_) == 0) {
+            stalled = true;
+        }
+        if (stalled) {
             ++stall_count_;
             if (tcp_reconnecting) {
                 tcp_last_error_ = "tcp stalled: no data for " + std::to_string(stall_timeout_ms_) + " ms";
@@ -219,6 +246,10 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
 #endif
 }
 
+bool RTCMReader::isLiveStream() const {
+    return is_open_ && (ntrip_client_ != nullptr || serial_fd_ >= 0 || isTcpStream());
+}
+
 bool RTCMReader::isTcpStream() const {
     return is_open_ && ntrip_client_ == nullptr && serial_fd_ < 0 && rtcm_internal::isTcpSource(source_);
 }
@@ -233,7 +264,17 @@ bool RTCMReader::reconnectTcp() {
     buffer_.clear();
     buffer_pos_ = 0;
     ++tcp_reconnect_count_;
-    if (reconnect_delay_ms_ > 0) {
+    if (abortable_) {
+        for (int slept = 0; slept < reconnect_delay_ms_ && !abort_requested_.load();
+             slept += kAbortPollSliceMs) {
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(std::min(kAbortPollSliceMs, reconnect_delay_ms_ - slept)));
+        }
+        if (abort_requested_.load()) {
+            tcp_last_error_ = "aborted";
+            return false;
+        }
+    } else if (reconnect_delay_ms_ > 0) {
         std::this_thread::sleep_for(std::chrono::milliseconds(reconnect_delay_ms_));
     }
     try {

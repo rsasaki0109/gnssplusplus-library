@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <string>
 #include <vector>
 #include <map>
@@ -350,6 +351,19 @@ public:
     bool isConnected() const;
     std::string lastError() const;
     const std::string& source() const { return source_; }
+    /// True for a tcp://, ntrip:// or serial/device source (a live stream that can go quiet).
+    bool isLiveStream() const;
+    /**
+     * @brief Let another thread end a blocking readMessage() (opt-in, default off).
+     *
+     * With @p enabled the tcp:// and serial/device waits for data (and the reconnect delay)
+     * are done in short poll() slices that check requestAbort(). Once an abort is requested
+     * readMessage() returns false without touching the stall counters. NTRIP sources keep
+     * their own bounded select() timeout. Only the thread that calls readMessage() may use
+     * the other members; requestAbort() is the one call that is safe from any thread.
+     */
+    void setAbortable(bool enabled) { abortable_ = enabled; }
+    void requestAbort() { abort_requested_.store(true); }
 
 private:
     RTCMProcessor processor_;
@@ -366,6 +380,8 @@ private:
     int stall_timeout_ms_ = 0;
     int stall_count_ = 0;
     bool last_read_stalled_ = false;
+    bool abortable_ = false;
+    std::atomic<bool> abort_requested_{false};
     std::string tcp_last_error_;
     bool reconnectTcp();
     

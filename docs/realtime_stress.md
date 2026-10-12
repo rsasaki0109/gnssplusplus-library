@@ -364,6 +364,31 @@ error > 0.5 m):
 * Tokyo run1 was used while developing the change. Tokyo run2 and Nagoya run1 were check runs of the No-Go
   first version.
 
+## Base-outage SPP fallback
+
+`gnss live --base-outage-fallback spp` ([Interfaces](interfaces.md#base-outage-spp-fallback-for-gnss-live-base-outage-fallback-spp))
+answers the remainder of limit 3 below: during a base outage the rover epochs that cannot get a base are solved with the
+library's SPP solver and written with status `SPP`, never `FLOAT`/`FIXED`, and the RTK state is not touched.
+Each live source gets a reader thread so the rover keeps flowing while the base is silent. Measured on the same setup as the stall
+watchdog (PPC Tokyo run1, GPS only, 420 s window, 5 Hz rover / 1 Hz base, `moving` profile, TCP, first fault at 100 s, one run each, four
+runs in parallel on a 4 vCPU VM; the gates were fixed before the first scored run):
+
+| run | result |
+|---|---|
+| `base_outage@100+30`, no flag | 0 of 141 rover epochs in [101 s, 129 s] get a row; 154 rover epochs skipped without output |
+| `base_outage@100+30`, `--base-outage-fallback spp` | 141 of 141 rows, all `SPP`; latency p50 0.00 s, p95 0.00 s, max 0.04 s; SPP 3D error vs the reference p50 8.5 m, p95 9.4 m, max 9.5 m (code-only, urban GPS-only, ~7 satellites) |
+| recovery | first `FLOAT` row after the outage written at 130.00 s (no flag: 130.00 s); `FLOAT`+`FIXED` rows from 160 s to the end: 1100 against 1100 without the flag |
+| `base_blackhole@100` + `--stall-timeout-ms 5000 --reconnect --reconnect-delay-ms 2000`, no fallback | 0 of 26 rover epochs in [101 s, 106 s] get a row |
+| the same with the fallback | 26 of 26, all `SPP`; the run ends with exit 0; `FLOAT`+`FIXED` rows from 130 s: 1250, as in the clean run |
+| clean 1x and 20x, with the flag | `.pos` byte-identical to the run without it, `fallback_spp_epochs=0` |
+
+Details worth knowing: the flag changes nothing without an outage, and nothing at all when it is off (the `.pos` of the default
+path is byte-identical to the previous release on the fixture, on Tokyo run1 and on a clean TCP run). Epochs within `--base-hold-seconds` of the
+last base epoch are still RTK epochs with the held base; only the epochs after that become `SPP`, a silence timeout of
+`max(1 s, hold + base interval)` (1.5 s here) after the newest base epoch, so the first rows of an outage are written about 1.3 s late
+(those are the held `FLOAT` rows) and the `SPP` rows after that on arrival. The timeout is wall time on the main thread, so a base that is merely
+slower than 1.5 s per epoch would be treated as in outage.
+
 ## Limits found and not fixed
 
 Found by the harness, deliberately not changed here (each needs a design decision or is larger than a bug fix):
@@ -386,7 +411,12 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    timeout and does not reconnect on a quiet caster) or files; serial/device sources cannot reconnect, a stall ends them;
    the rover is not read while `gnss live` waits on the base (and vice versa), so during a base outage the rover socket just
    fills and recovery starts only after the stall timeout plus the reconnect delay; rover epochs that cannot get a base
-   within 2 s are skipped without any output, so there is still no SPP or dead-reckoned fallback for the outage.
+   within 2 s are skipped without any output.
+   Fixed, opt-in: `gnss live --base-outage-fallback spp` reads every live source in its own thread and writes an SPP row (status `SPP`,
+   never `FLOAT`/`FIXED`, RTK state untouched) for each rover epoch that has no base after `max(1 s, base hold + base interval)` of
+   wall time (see [Base-outage SPP fallback](#base-outage-spp-fallback)). Still the case: the flag is off by default; the fallback is
+   single-point positioning (meters, no dead reckoning), a base that never delivers its first epoch or whose source has ended still
+   stops the run, NTRIP reads keep their own bounded select() wait, and the rover is still waited for when it is the silent source.
 4. **The GPS week.** Fixed for `gnss live`: `RTCMStreamDecoder` keeps one GPST reference (seeded from `--nav-rinex`,
    else from the first GPS/Galileo/BeiDou/QZSS ephemeris in either stream), resolves TOW-only observations to the nearest
    week, follows the stream across a week rollover, and dates GLONASS MSM epochs and 1020 ephemerides from it instead of the

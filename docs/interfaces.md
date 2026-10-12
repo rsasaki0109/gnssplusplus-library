@@ -172,8 +172,59 @@ What it applies to:
 
 Only the source being read can stall: while `gnss live` waits on the base, the
 rover socket is not read (and vice versa), so a stall is detected on the source
-that is blocked. See [Real-time stress harness](realtime_stress.md) for the
+that is blocked (unless [`--base-outage-fallback spp`](#base-outage-spp-fallback-for-gnss-live-base-outage-fallback-spp)
+is given, which reads every live source in its own thread). See [Real-time stress harness](realtime_stress.md) for the
 `base_blackhole` / `rover_blackhole` faults that exercise it.
+
+### Base-outage SPP fallback for `gnss live` (`--base-outage-fallback spp`)
+
+Opt-in (default off: the code path, the `.pos` and the `summary:` line are exactly
+what they were). Without it a rover epoch that gets no base (no exact,
+interpolated or held base) is skipped without any output, and while the base
+source is silent `gnss live` blocks on the base read and does not read the rover
+at all, so a base outage means no output for its whole length.
+
+With `--base-outage-fallback spp`:
+
+- A rover epoch that would be skipped for lack of a base is solved with the
+  library's single-point solver (`SPPProcessor`, configured as the RTK
+  processor configures its own SPP seed) and written with status `SPP` (`1` in
+  the `.pos`). It is never `FLOAT` or `FIXED`. The RTK processor, its
+  filter state, the rover seed and the `--kinematic-post-filter` are not touched
+  by these epochs; RTK resumes on the next epoch that has a base, as it does
+  today. The rows carry no differential age (`NaN` with `--pos-uncertainty`).
+- **File sources**: the existing alignment decides. Every epoch it would skip
+  gets an SPP row immediately, so base epochs missing for a span give SPP rows
+  in the span and the RTK rows elsewhere are byte-identical to a run without the
+  flag.
+- **Live sources** (`tcp://`, `ntrip://`, `serial://`/device base or rover,
+  including a serial `--rover-ubx`): each live source is read by its own thread
+  into a bounded queue (4096 messages or UBX chunks), so a silent base no longer
+  stops the rover from being read. The threads only do blocking I/O; decoding,
+  epoch assembly, alignment and all solvers stay on the main thread. A rover epoch
+  is declared baseless once `max(1 s, --base-hold-seconds + base interval)` of wall
+  time has passed since the newest base epoch was taken from the source (the base
+  interval is the spacing of the first two base epochs, then tracked within 2x, so
+  an outage gap cannot stretch it) and no newer base epoch is queued. A rover epoch
+  that the `--base-hold-seconds` window still covers is held (RTK) as before.
+  The default timeout is 1.5 s (1 Hz base, 0.5 s hold).
+- Without the flag no thread is created. With it, the threads stop on every exit
+  path (EOF, `--stall-timeout-ms` termination, `--max-epochs`, an exception):
+  blocking waits run in 50 ms `poll()` slices that check an abort flag
+  (`RTCMReader::setAbortable()` / `requestAbort()`), and the threads are joined
+  before the summary is printed. NTRIP keeps its own bounded `select()` wait.
+- The `summary:` line gains `fallback_spp_epochs=` (only with the flag).
+  `skipped_rover_epochs` still counts every epoch that got no RTK base; the SPP
+  rows are counted in `fallback_spp_epochs` and in `written_solutions`.
+
+Not covered: a base that never delivers a first epoch (the first aligned pair is
+still awaited, because the week, the base position and the ephemerides come from
+the base stream unless `--nav-rinex` and `--base-ecef` are given); a base source
+that has *ended* (EOF, `--stall-timeout-ms` without `--reconnect`, exhausted
+`--reconnect-attempts`) still ends the run as before; a silent rover is still
+waited for. The fallback is a code-only position: its accuracy is that of
+single-point positioning with the broadcast ephemerides. Measured: [Real-time
+stress harness](realtime_stress.md#base-outage-spp-fallback).
 
 ### Per-epoch uncertainty in `.pos` (`--pos-uncertainty`)
 
