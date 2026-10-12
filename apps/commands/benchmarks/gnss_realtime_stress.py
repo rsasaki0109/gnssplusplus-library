@@ -455,12 +455,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--run-dir", required=True, help="Directory with rover.obs, base.obs, base.nav, reference.csv (e.g. PPC run).")
     p.add_argument("--out-dir", required=True)
     p.add_argument("--rover-obs"), p.add_argument("--base-obs"), p.add_argument("--nav"), p.add_argument("--reference")
-    p.add_argument("--systems", default="G", help="Constellations to encode. gnss_live currently needs one observation "
-                   "message per epoch, so only G is reliable (default).")
+    p.add_argument("--systems", default="G", help="Constellations to encode, e.g. G,R,E,J,C (gnss_live assembles the "
+                   "per-constellation MSM messages of an epoch). The base stream carries only 1019/1020 ephemerides, "
+                   "so for E/J/C also give run --live-arg=--nav-rinex --live-arg=<base.nav>. Default G, the setting "
+                   "of the fault-matrix and soak results.")
     p.add_argument("--format", default="msm7", choices=("msm7", "msm5", "msm4", "legacy"))
     p.add_argument("--start-offset", type=float, default=0.0)
     p.add_argument("--duration", type=float, default=0.0)
-    p.add_argument("--eph-interval", type=float, default=30.0, help="Seconds between repeats of each 1019 (default 30).")
+    p.add_argument("--eph-interval", type=float, default=30.0, help="Seconds between repeats of each 1019/1020 (default 30).")
     p.set_defaults(func=prepare)
 
     def add_run_args(q: argparse.ArgumentParser) -> None:
