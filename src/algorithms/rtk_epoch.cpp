@@ -787,6 +787,14 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 }
             }
 
+            if (applied_fix_solution &&
+                solution.status == SolutionStatus::FIXED) {
+                // Read-only record of this epoch's float position for the
+                // --pos-fix-diagnostics columns (io/solution_writer.hpp).
+                solution.rtk_float_reference_valid = true;
+                solution.rtk_float_position_ecef = float_solution.position_ecef;
+            }
+
             if (!applied_fix_solution && !forced_fixed_reacquisition_reset) {
                 restoreHoldState(
                     fixed_prefit_quarantine ? HoldStateSnapshot{} : saved_hold_state);

@@ -376,6 +376,93 @@ TEST_F(TypesTest, SolutionWriterUncertaintyColumnsAreNanWhenUnavailable) {
     EXPECT_EQ(partial_tokens[6], "2.000");
 }
 
+TEST_F(TypesTest, SolutionWriterFixDiagnosticColumnsAreOptInAndAppendedLast) {
+    const std::filesystem::path off_path =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_writer_fixdiag_off_test.pos";
+    const std::filesystem::path diag_path =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_writer_fixdiag_on_test.pos";
+    const std::filesystem::path both_path =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_writer_fixdiag_both_test.pos";
+    // Float reference 3 m east, 4 m north and 1.5 m below the fixed position.
+    PositionSolution fixed = makeSolutionWithEnuCovariance();
+    const double lat = 35.0 * M_PI / 180.0;
+    const double lon = 139.0 * M_PI / 180.0;
+    const Matrix3d rotation = ecefToEnuTestRotation(lat, lon);
+    fixed.rtk_float_reference_valid = true;
+    fixed.rtk_float_position_ecef =
+        fixed.position_ecef + rotation.transpose() * Vector3d(3.0, 4.0, -1.5);
+    PositionSolution float_epoch = fixed;
+    float_epoch.status = SolutionStatus::FLOAT;  // reference present but not FIXED
+    PositionSolution no_reference = makeSolutionWithEnuCovariance();  // FIXED, no record
+    {
+        io::SolutionWriter off;
+        ASSERT_TRUE(off.open(off_path.string()));
+        io::SolutionWriter diag;
+        ASSERT_TRUE(diag.open(diag_path.string(), io::SolutionWriter::Format::POS, false, true));
+        io::SolutionWriter both;
+        ASSERT_TRUE(both.open(both_path.string(), io::SolutionWriter::Format::POS, true, true));
+        for (const auto* sol : {&fixed, &float_epoch, &no_reference}) {
+            off.writeEpoch(*sol);
+            diag.writeEpoch(*sol);
+            both.writeEpoch(*sol, 0.25);
+        }
+    }
+    const auto off_lines = readLines(off_path);
+    const auto diag_lines = readLines(diag_path);
+    const auto both_lines = readLines(both_path);
+    std::filesystem::remove(off_path);
+    std::filesystem::remove(diag_path);
+    std::filesystem::remove(both_path);
+
+    ASSERT_EQ(diag_lines.size(), 5u);
+    ASSERT_EQ(both_lines.size(), 5u);
+    const auto header = splitTokens(diag_lines[1].substr(1));
+    ASSERT_EQ(header.size(), 25u + 2u);
+    EXPECT_EQ(header[25], "FloatFixH(m)");
+    EXPECT_EQ(header[26], "FloatFixU(m)");
+    const auto both_header = splitTokens(both_lines[1].substr(1));
+    ASSERT_EQ(both_header.size(), 25u + 7u + 2u);
+    EXPECT_EQ(both_header[31], "DiffAge(s)");
+    EXPECT_EQ(both_header[32], "FloatFixH(m)");
+    EXPECT_EQ(both_header[33], "FloatFixU(m)");
+
+    // Legacy columns are byte-identical; the new columns come last.
+    for (size_t i = 2; i < 5; ++i) {
+        EXPECT_EQ(diag_lines[i].compare(0, off_lines[i].size(), off_lines[i]), 0);
+        EXPECT_EQ(both_lines[i].compare(0, off_lines[i].size(), off_lines[i]), 0);
+    }
+    const auto fixed_row = splitTokens(diag_lines[2]);
+    ASSERT_EQ(fixed_row.size(), 27u);
+    EXPECT_NEAR(std::stod(fixed_row[25]), 5.0, 1e-4);
+    EXPECT_NEAR(std::stod(fixed_row[26]), 1.5, 1e-4);
+    const auto both_row = splitTokens(both_lines[2]);
+    ASSERT_EQ(both_row.size(), 34u);
+    EXPECT_EQ(both_row[32], fixed_row[25]);
+    EXPECT_EQ(both_row[33], fixed_row[26]);
+    for (size_t i = 3; i < 5; ++i) {
+        const auto row = splitTokens(diag_lines[i]);
+        ASSERT_EQ(row.size(), 27u);
+        EXPECT_EQ(row[25], "nan");
+        EXPECT_EQ(row[26], "nan");
+    }
+
+    // The loader tolerates the trailing columns.
+    Solution loaded;
+    const std::filesystem::path roundtrip =
+        std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_writer_fixdiag_roundtrip_test.pos";
+    {
+        io::SolutionWriter writer;
+        ASSERT_TRUE(writer.open(roundtrip.string(), io::SolutionWriter::Format::POS, true, true));
+        writer.writeEpoch(fixed, 0.0);
+        writer.writeEpoch(float_epoch);
+    }
+    ASSERT_TRUE(loaded.loadFromFile(roundtrip.string()));
+    std::filesystem::remove(roundtrip);
+    ASSERT_EQ(loaded.solutions.size(), 2u);
+    EXPECT_DOUBLE_EQ(loaded.solutions[0].ratio, 4.5);
+    EXPECT_NEAR(loaded.solutions[0].positionCovarianceEnu()(0, 0), 0.02 * 0.02, 1e-8);
+}
+
 TEST_F(TypesTest, SolutionLoaderRoundTripsUncertaintyColumnsAndToleratesNan) {
     const std::filesystem::path path =
         std::filesystem::path(GNSSPP_BINARY_DIR) / "solution_writer_unc_roundtrip_test.pos";

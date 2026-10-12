@@ -140,6 +140,12 @@ struct PositionSolution {
     double rtk_covariance_variance_factor = 1.0;
     double rtk_covariance_spp_scale = 1.0;
     bool rtk_reported_covariance_replaced = false;
+    // Float position of the same epoch (ECEF), computed before ambiguity
+    // resolution, recorded on RTK FIXED solutions only. Read-only metadata for
+    // the --pos-fix-diagnostics .pos columns; nothing in the solver reads it.
+    bool rtk_float_reference_valid = false;
+    Vector3d rtk_float_position_ecef =
+        Vector3d::Constant(std::numeric_limits<double>::quiet_NaN());
     
     // Satellite information
     std::vector<SatelliteId> satellites_used;
