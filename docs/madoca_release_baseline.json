@@ -10,7 +10,7 @@
       "candidate_status_counts": {
         "5": 118
       },
-      "delta_max_3d_m": 2.189548544457379,
+      "delta_max_3d_m": 2.4484027664977206,
       "delta_rms_3d_m": 0.6333448672044429,
       "matched_epochs": 118,
       "missed_fixes": 0,
@@ -60,7 +60,7 @@
       "candidate_status_counts": {
         "5": 713
       },
-      "delta_max_3d_m": 2.189548544457379,
+      "delta_max_3d_m": 2.4484027664977206,
       "delta_rms_3d_m": 0.30421638493818065,
       "matched_epochs": 713,
       "missed_fixes": 0,
@@ -90,7 +90,7 @@
       "delta_max_3d_m": 0.4679434691068333,
       "delta_rms_3d_m": 0.06480974657394407,
       "matched_epochs": 118,
-      "missed_fixes": 1,
+      "missed_fixes": 2,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 1,
         "madoca_l6d_constraint_position_gate_epochs": 117,
@@ -98,11 +98,12 @@
       },
       "native_runtime_s": 9.629612201999407,
       "status_pair_counts": {
-        "1->5": 1,
-        "1->6": 107,
-        "6->5": 10
+        "1->5": 2,
+        "1->6": 106,
+        "6->5": 9,
+        "6->6": 1
       },
-      "wrong_fixes": 0
+      "wrong_fixes": 1
     },
     "alic.pppar-ion.24h": {
       "base_only_epochs": 23,
@@ -148,7 +149,7 @@
       "delta_max_3d_m": 0.4679434691068333,
       "delta_rms_3d_m": 0.06788443368825045,
       "matched_epochs": 713,
-      "missed_fixes": 1,
+      "missed_fixes": 2,
       "native_row_counts": {
         "madoca_l6d_constraint_epochs": 1,
         "madoca_l6d_constraint_position_gate_epochs": 712,
@@ -156,11 +157,12 @@
       },
       "native_runtime_s": 38.80786048999926,
       "status_pair_counts": {
-        "1->5": 1,
-        "1->6": 702,
-        "6->5": 10
+        "1->5": 2,
+        "1->6": 701,
+        "6->5": 9,
+        "6->6": 1
       },
-      "wrong_fixes": 0
+      "wrong_fixes": 1
     },
     "alic.pppar.1h": {
       "base_only_epochs": 0,
@@ -336,8 +338,8 @@
       "boundary_max_delta_3d_m": 0.2759272510010001,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 29,
-        "6": 89
+        "5": 27,
+        "6": 91
       },
       "delta_max_3d_m": 0.4826277238332499,
       "delta_rms_3d_m": 0.25659075945906673,
@@ -350,8 +352,8 @@
       },
       "native_runtime_s": 10.386064764000366,
       "status_pair_counts": {
-        "1->5": 8,
-        "1->6": 89,
+        "1->5": 6,
+        "1->6": 91,
         "6->5": 21
       },
       "wrong_fixes": 0
@@ -394,8 +396,8 @@
       "boundary_max_delta_3d_m": 0.29478379262475907,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 105,
-        "6": 608
+        "5": 51,
+        "6": 662
       },
       "delta_max_3d_m": 0.4826277238332499,
       "delta_rms_3d_m": 0.1826056177591525,
@@ -408,8 +410,8 @@
       },
       "native_runtime_s": 38.12038253399987,
       "status_pair_counts": {
-        "1->5": 84,
-        "1->6": 608,
+        "1->5": 30,
+        "1->6": 662,
         "6->5": 21
       },
       "wrong_fixes": 0
@@ -480,8 +482,8 @@
       "boundary_max_delta_3d_m": 0.2940535550794953,
       "candidate_only_epochs": 0,
       "candidate_status_counts": {
-        "5": 86,
-        "6": 627
+        "5": 34,
+        "6": 679
       },
       "delta_max_3d_m": 0.47406375508602866,
       "delta_rms_3d_m": 0.16204316868841126,
@@ -494,8 +496,8 @@
       },
       "native_runtime_s": 36.12640814400038,
       "status_pair_counts": {
-        "1->5": 76,
-        "1->6": 627,
+        "1->5": 24,
+        "1->6": 679,
         "6->5": 10
       },
       "wrong_fixes": 0
