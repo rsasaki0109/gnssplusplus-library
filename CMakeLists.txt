@@ -90,6 +90,7 @@ set(GNSS_SOURCES
     src/io/rtcm_decode_nav.cpp
     src/io/rtcm_reader.cpp
     src/io/rtcm_stream.cpp
+    src/io/observation_epoch_assembler.cpp
     src/io/ubx.cpp
     src/io/qzss_l6.cpp
     src/io/madoca_l6.cpp

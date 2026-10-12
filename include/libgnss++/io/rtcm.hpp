@@ -168,10 +168,14 @@ public:
      * @brief Encode observation data to RTCM
      * @param obs_data Observation data to encode
      * @param message_type RTCM message type to use
+     * @param more_follows Value of the MSM multiple-message bit (legacy 1003/1004:
+     *        synchronous GNSS flag): true when further observation messages of the
+     *        same epoch follow. Default false keeps the historical output.
      * @return Encoded RTCM message
      */
     RTCMMessage encodeObservations(const ObservationData& obs_data,
-                                 RTCMMessageType message_type = RTCMMessageType::RTCM_1004);
+                                 RTCMMessageType message_type = RTCMMessageType::RTCM_1004,
+                                 bool more_follows = false);
     
     /**
      * @brief Encode ephemeris to RTCM
@@ -219,6 +223,14 @@ public:
     bool decodeObservationData(const RTCMMessage& message, ObservationData& obs_data);
 
     /**
+     * @brief Multiple-message bit of the last observation message passed to
+     *        decodeObservationData (MSM multiple message bit; legacy 1003/1004
+     *        synchronous GNSS flag). True means more messages of the same epoch
+     *        follow. Reset to false at the start of every decode call.
+     */
+    bool lastObservationMoreFollows() const { return last_observation_more_follows_; }
+
+    /**
      * @brief Decode an RTCM ephemeris payload into NavigationData
      */
     bool decodeNavigationData(const RTCMMessage& message, NavigationData& nav_data);
@@ -254,6 +266,7 @@ private:
     bool has_reference_position_ = false;
     RTCMStats stats_;
     std::map<SatelliteId, int> glonass_frequency_channels_;
+    bool last_observation_more_follows_ = false;
     
     // Internal decoding functions
     bool decodeObservationMessage(const RTCMMessage& message, ObservationData& obs_data);

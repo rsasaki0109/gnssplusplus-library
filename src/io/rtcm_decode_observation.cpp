@@ -30,6 +30,7 @@ namespace io {
 using namespace rtcm_internal;
 
 bool RTCMProcessor::decodeObservationMessage(const RTCMMessage& message, ObservationData& obs_data) {
+    last_observation_more_follows_ = false;
     if (isGlonassMsmMessageType(message.type)) {
         const bool msm5 = isMsm5MessageType(message.type);
         const bool msm6 = isMsm6MessageType(message.type);
@@ -49,6 +50,8 @@ bool RTCMProcessor::decodeObservationMessage(const RTCMMessage& message, Observa
         const uint32_t epoch_field =
             static_cast<uint32_t>(readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 30));
         bit_pos += 30;
+        last_observation_more_follows_ =
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 1) != 0;
         bit_pos += 1;  // multiple message bit
         bit_pos += 3;  // issue of data station
         bit_pos += 7;  // session transmit time
@@ -338,6 +341,8 @@ bool RTCMProcessor::decodeObservationMessage(const RTCMMessage& message, Observa
         const uint32_t epoch_ms =
             static_cast<uint32_t>(readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 30));
         bit_pos += 30;
+        last_observation_more_follows_ =
+            readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 1) != 0;
         bit_pos += 1;  // multiple message bit
         bit_pos += 3;  // issue of data station
         bit_pos += 7;  // session transmit time
@@ -598,6 +603,8 @@ bool RTCMProcessor::decodeObservationMessage(const RTCMMessage& message, Observa
     const uint32_t epoch_ms =
         static_cast<uint32_t>(readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 30));
     bit_pos += 30;
+    last_observation_more_follows_ =
+        readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 1) != 0;
     bit_pos += 1;  // synchronous GNSS flag
     const uint64_t num_sats = readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 5);
     bit_pos += 5;

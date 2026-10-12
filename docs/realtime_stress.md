@@ -8,8 +8,9 @@ injects link faults and measures what `gnss live` does. There is no receiver in 
     This is a **recorded-data replay on loopback**, not a field soak. It shows how `gnss live`
     behaves when a faithful byte stream is late, missing, corrupted, split or cut. It does not
     show behaviour on a real network (MTU splitting, bufferbloat, caster quirks), with a real
-    receiver, with multi-constellation MSM (see [Limits found](#limits-found-and-not-fixed)),
-    or over days. The "soak" below is a 60 minute wall-clock run at 60x that loops the 40 minute
+    receiver, or over days. The fault, soak and pacing results below are GPS-only;
+    multi-constellation MSM was checked separately (see
+    [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)). The "soak" below is a 60 minute wall-clock run at 60x that loops the 40 minute
     PPC run about 90 times (about 62 hours of stream time), not a 60 hour test.
 
 ## Commands
@@ -80,8 +81,8 @@ Output per scenario: `result.json`, `epochs.csv` (one row per solution with wall
 ## Method notes
 
 * Data: PPC Tokyo run1, rover 5 Hz and base 1 Hz, GPS only (L1/L2/L5) encoded as MSM7, 1005 every 10 s and 1019
-  round-robin so each satellite repeats every 30 s. `gnss_live` currently consumes one observation message per
-  epoch, so only one constellation per stream is usable (see below).
+  round-robin so each satellite repeats every 30 s. These runs predate multi-constellation epoch assembly, when
+  `gnss_live` consumed one observation message per epoch, so only one constellation per stream was usable.
 * Loops shift every timestamp by a multiple of 16 s and rotate the right ascension of each 1019 by
   `OMEGA_E * shift`, so the shifted broadcast orbit gives the same ECEF track: each loop is the same
   physics at a later time. The loop gap is 60 s of silence.
@@ -250,7 +251,9 @@ replays, `gnss live --preset low-cost` published FIX epochs of which 48.7 % were
 more than 0.5 m off on UrbanNav Shinjuku (Trimble rover; 1710 of 3510) and
 32.4 % on Shinjuku (u-blox), against 0.7–17.9 % on the PPC runs below. `gnss
 live` lacks `gnss solve`'s whole-solution post-filters, and GPS alone gives weak
-ambiguity geometry (multi-constellation MSM is limit 1 below).
+ambiguity geometry. Multi-constellation MSM now works in `gnss live` and lowers
+Wrong/FIX on every PPC run (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly));
+the UrbanNav Shinjuku runs have not been replayed multi-constellation yet.
 
 A frozen-contract check (2026-10-11) of
 `--preset low-cost --kinematic-post-filter` plus `FixRecoveryGuard` was
@@ -287,11 +290,59 @@ Per-flag ablation on the same nine runs, run after the gates (not a gate):
   decision on the same check runs, so they describe the flag rather than prove
   it. They are not evidence for a default.
 
+## Multi-constellation MSM (epoch assembly)
+
+A receiver sends one MSM message per constellation with the same time tag. `gnss live` used to treat every
+observation message as an epoch (limit 1 below), so only GPS-only streams worked. Two changes fix this, both on
+by default:
+
+* Messages are merged into one epoch until a message has the RTCM "multiple message" bit cleared, which adds no
+  latency. A time change also closes the epoch, so a lost last message never merges two epochs. The escape
+  hatch is `--no-rtcm-epoch-assembly` ([Interfaces](interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly)).
+  `gnss rtcm-encode` now sets the bit on every observation message of an epoch except the last.
+* The decoder dates epochs from a GPST reference taken from the stream instead of the host clock (limit 4
+  below). Without that, a 2024 recording replayed on a 2026 host gave 1 solution, because GLONASS epochs took
+  the host week.
+
+Frozen-contract check (2026-10-12). It covered PPC Tokyo run2–3 and Nagoya run1–2, encoded G+R+E+J+C MSM7
+(rover 5 Hz, base 1 Hz), with `--nav-rinex base.nav` and the real host clock. A first version without the
+reference time was No-Go: the head epoch of every stream split in two, and the runs only worked with the
+host clock set to the data date.
+
+| gate | result |
+|---|---|
+| GPS-only path unchanged | 30/30 byte-identical comparisons against the previous develop (encoder, `gnss live` bare and low-cost, `gnss convert`, `gnss solve`) |
+| assembled epochs | 8 streams: assembled = sent epochs, 0 duplicate times, 100 % equal to the per-message decoded union, 0 wrong week/TOW (one epoch per message before: 4x the epochs, ≤ 0.07 % equal) |
+| `gnss live` vs `gnss solve` on the same decoded epochs (bare) | 100 % of batch epochs common; status agreement 99.32–99.96 %; both-FIXED horizontal difference p50 0.22–0.42 cm |
+| paced over TCP (Tokyo run3, 300 s, 20x) | byte-identical to the file run, exit 0 |
+| host-clock independence | byte-identical `.pos` with the real clock and with the clock at the data date: multi-GNSS + `--nav-rinex` (Tokyo run3), and G+R with 1019/1020 in the base stream and no navigation RINEX (Nagoya run2, 98.1 % of rover epochs solved) |
+
+Multi-GNSS against GPS-only, `gnss live --preset low-cost` (all six PPC runs, report only, wrong FIX = FIXED with 3D
+error > 0.5 m):
+
+| run | solutions / rover epochs, GPS → multi | FIX % of epochs, GPS → multi | wrong FIX, GPS → multi | Wrong/FIX, GPS → multi |
+|---|---|---|---|---|
+| Tokyo run1 | 0.66 → 0.99 | 34.3 → 66.1 | 451 → 247 | 11.0 % → 3.1 % |
+| Tokyo run2 | 0.74 → 1.00 | 44.6 → 78.0 | 201 → 141 | 4.9 % → 2.0 % |
+| Tokyo run3 | 0.79 → 1.00 | 49.6 → 64.7 | 530 → 274 | 7.0 % → 2.8 % |
+| Nagoya run1 | 0.79 → 0.99 | 35.9 → 69.1 | 122 → 137 | 4.5 % → 2.6 % |
+| Nagoya run2 | 0.60 → 1.00 | 30.6 → 45.7 | 126 → 52 | 4.4 % → 1.2 % |
+| Nagoya run3 | 0.56 → 1.00 | 17.6 → 37.8 | 152 → 72 | 16.6 % → 3.7 % |
+
+* Wrong/FIX was lower with multi-GNSS in 11 of the 12 run/profile pairs, bare and low-cost, and equal in 1.
+  Wrong fixes do not go away: there are still tens to hundreds per run with the low-cost preset, and on Nagoya run1
+  the count rose (122 → 137) because many more epochs were fixed.
+* Multi-GNSS costs CPU. The offline realtime factor fell from about 220–335x to about 31–71x, measured with four
+  runs in parallel on a 4 vCPU VM. At 20x pacing the first 300 s of Tokyo run3 had a latency p50 of 0.35–0.84 s
+  (0.05 s elsewhere). At 1x there is ample margin.
+* Tokyo run1 was used while developing the change. Tokyo run2 and Nagoya run1 were check runs of the No-Go
+  first version.
+
 ## Limits found and not fixed
 
 Found by the harness, deliberately not changed here (each needs a design decision or is larger than a bug fix):
 
-1. **`gnss live` handles one observation message per epoch, so real multi-constellation MSM does not work.**
+1. **`gnss live` handles one observation message per epoch, so real multi-constellation MSM does not work.** (Addressed: MSM epochs are now assembled using the multiple-message bit, see [Interfaces](interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly); the text below describes the behaviour before that change.)
    Each constellation arrives as its own MSM message with the same time tag, and `readNextObservation` treats every
    observation message as an epoch. A 5 min window encoded as G+R+E+J+C MSM7 produced 1 solution (6004 rover
    messages, 4800 skipped epochs, a bogus 7e7 s solution span). `gnss replay` has the same assumption. The harness
@@ -305,12 +356,14 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    that never sends a FIN would block it too (not tested here); during a base outage the rover is not read either. Rover epochs that
    cannot get a base within 2 s are skipped without any output, so there is no SPP or dead-reckoned fallback for the
    outage.
-4. **The GPS week comes from the first stored ephemeris, or from the host clock.** `inferObservationWeekContext`
-   returns the week of the first ephemeris in the map, which (from reading the code, not exercised here) stays the
-   oldest one, so a continuous run across a GPS week rollover would not advance the week. Ephemerides of some systems (GLONASS 1020) are dated from the host
-   clock, so replaying old data that includes them, or joining a stream before the first ephemeris, mixes weeks
-   (a mid-stream relaunch produced 0 solutions until the encoder stopped emitting GLONASS ephemerides, which is where the mismatch was traced). A real stream
-   with a correct host clock is not affected; the harness soak stays inside one week.
+4. **The GPS week.** Fixed for `gnss live`: `RTCMStreamDecoder` keeps one GPST reference (seeded from `--nav-rinex`,
+   else from the first GPS/Galileo/BeiDou/QZSS ephemeris in either stream), resolves TOW-only observations to the nearest
+   week, follows the stream across a week rollover, and dates GLONASS MSM epochs and 1020 ephemerides from it instead of the
+   host clock, so replaying old recordings no longer depends on the host clock when a reference exists. Not fixed: a stream with
+   neither `--nav-rinex` nor any GPS/Galileo/BeiDou/QZSS ephemeris before its first epochs has no reference (head epochs stay week 0,
+   GLONASS is host-clock dated); a GLONASS 1020 that arrives before any reference is still dated from the host clock;
+   the 10-bit week of a 1019 is still expanded around the host clock until a reference exists; and `gnss replay`'s RTCM base path has no
+   reference at all.
 5. **Cold start after a restart is optimistic.** With the `moving` option set the first 30 s after a relaunch
    contained only wrong fixes (32 epochs, median error 2.5 m), and the bare static gate refuses most fixes of a moving
    rover (2.9 % against 49.5 % fixed over the run, but 0 against 1055 wrong fixes). `gnss live` has no

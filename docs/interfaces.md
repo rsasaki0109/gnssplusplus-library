@@ -67,6 +67,57 @@ selector knobs used by the experiment lane:
 - `--clas-atmos-selection <grid-first|grid-guarded|balanced|freshness-first>`
 - `--clas-atmos-stale-after-seconds <seconds>`
 
+### Multi-constellation RTCM epoch assembly (`--no-rtcm-epoch-assembly`)
+
+A receiver sends one MSM message per constellation with the same time tag and
+sets the RTCM "multiple message" bit (legacy 1003/1004: synchronous GNSS flag)
+on every message of the epoch except the last. `gnss live` (rover and base RTCM),
+`gnss replay` (base RTCM) and `gnss convert` (RTCM to RINEX) merge those parts
+into one epoch with one shared implementation
+(`io::ObservationEpochAssembler`, fed by `RTCMStreamDecoder::Event::
+observation_more_follows` or `RTCMProcessor::lastObservationMoreFollows()`):
+
+- a part whose time differs from the pending epoch by more than 1 ms emits the
+  pending epoch first (a lost last message cannot merge two epochs);
+- otherwise it is merged; a (satellite, signal) already present is kept once;
+- bit 0 emits the epoch immediately, so no latency is added;
+- the pending epoch is flushed at end of stream.
+
+A stream whose messages all carry bit 0 (every GPS-only stream) is unchanged.
+It is on by default; `--no-rtcm-epoch-assembly` (in all three tools) restores
+one epoch per observation message. `gnss rtcm-encode` sets the bit on every
+observation message of an epoch except the last one emitted
+(`RTCMProcessor::encodeObservations(..., more_follows)` defaults to `false`).
+`gnss stream` only prints one diagnostic line per message and does not build
+epochs, so it is not affected.
+
+Parts can only be merged if their full GPST agrees, so `RTCMStreamDecoder`
+keeps one GPST reference (`setReferenceTime`, `referenceTime`):
+
+- non-GLONASS MSM messages carry only a time of week; the decoder gives such a
+  part (week 0, or BeiDou's week-1 wrap) the week nearest to the reference, and
+  the reference follows every resolved observation time (so a week rollover is
+  followed);
+- while a reference exists it is passed to the processor before every message,
+  so GLONASS MSM epochs and 1020 ephemerides are dated from the stream and not
+  from the host clock;
+- the reference is seeded explicitly, otherwise from the toe of the first
+  decoded GPS/Galileo/BeiDou/QZSS ephemeris. A time derived from the host clock
+  (GLONASS MSM or 1020 decoded without a reference) never seeds or advances it;
+- without a reference TOW-only parts stay week 0 and GLONASS uses the host
+  clock, as before.
+
+`gnss live` seeds both RTCM decoders from `--nav-rinex` (latest GPS toe); when
+one decoder obtains a reference from stream ephemerides and the other has none
+(a rover stream normally carries none) the other is seeded with it, and a
+week-0 epoch from a UBX rover is given the week nearest to the newest decoder
+reference. Without `--nav-rinex` and without any ephemeris in either stream the
+head of the stream is not resolved (week 0, host-clock GLONASS).
+`gnss convert` keeps its own `--gps-week` resolution. `gnss replay`'s RTCM base
+path decodes with a bare `RTCMProcessor` (no reference), so there the assembler
+can only merge parts whose weeks agree (known limit; use `--base-rinex` or
+convert to RINEX first for multi-constellation bases).
+
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 
 Opt-in (default off; without it `gnss live` output is byte-identical to

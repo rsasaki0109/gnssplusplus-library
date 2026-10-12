@@ -1,6 +1,7 @@
 #include <Eigen/Dense>
 
 #include <chrono>
+#include <deque>
 #include <cmath>
 #include <cstdint>
 #include <exception>
@@ -10,12 +11,14 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/io/rtcm_stream.hpp>
@@ -84,6 +87,9 @@ struct LiveConfig {
     int reconnect_delay_ms = 2000;
     int reconnect_attempts = 0;
     bool enable_base_interpolation = true;
+    // Merge the per-constellation MSM messages of one epoch (RTCM multiple-message
+    // bit) into a single epoch; --no-rtcm-epoch-assembly restores one epoch per message.
+    bool assemble_rtcm_epochs = true;
     double base_hold_seconds = kDefaultBaseHoldSeconds;
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
@@ -128,6 +134,11 @@ struct SourceState {
     size_t messages_read = 0;
     size_t message_limit = 0;
     bool eof = false;
+    // RTCM epoch assembly (see LiveConfig::assemble_rtcm_epochs).
+    bool assemble_epochs = true;
+    bool input_ended = false;
+    libgnss::io::ObservationEpochAssembler assembler;
+    std::deque<libgnss::ObservationData> ready_epochs;
     // --reconnect: keep retrying an NTRIP/tcp:// source that drops or goes quiet instead of
     // treating the first failed read as the end of the stream (0 attempts = retry forever).
     bool reconnect = false;
@@ -543,6 +554,8 @@ void printUsage(const char* argv0) {
         << "  --reconnect                Reconnect NTRIP/tcp:// sources that drop or stall (default: end at the first failed read)\n"
         << "  --reconnect-delay-ms <ms>  Delay between reconnect attempts (default: 2000)\n"
         << "  --reconnect-attempts <n>   Give up after n consecutive failed reads/reconnects (0 = never, default: 0)\n"
+        << "  --no-rtcm-epoch-assembly   Treat every RTCM observation message as its own epoch (default: merge the\n"
+        << "                            per-constellation MSM messages of one epoch using the multiple-message bit)\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --base-hold-seconds <v>    Reuse the latest base epoch for up to v seconds (default: 0.5)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position\n"
@@ -694,6 +707,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.reconnect_delay_ms = std::stoi(argv[++i]);
         } else if (arg == "--reconnect-attempts" && i + 1 < argc) {
             config.reconnect_attempts = std::stoi(argv[++i]);
+        } else if (arg == "--no-rtcm-epoch-assembly") {
+            config.assemble_rtcm_epochs = false;
         } else if (arg == "--no-base-interp") {
             config.enable_base_interpolation = false;
         } else if (arg == "--base-hold-seconds" && i + 1 < argc) {
@@ -852,6 +867,10 @@ bool openSource(const std::string& path, size_t message_limit, SourceState& sour
     source.message_limit = message_limit;
     source.eof = false;
     source.decoder.clear();
+    source.assemble_epochs = config.assemble_rtcm_epochs;
+    source.input_ended = false;
+    source.assembler.clear();
+    source.ready_epochs.clear();
     source.reconnect = false;
     source.reconnect_attempts = 0;
     if (!source.reader.open(path)) {
@@ -950,9 +969,21 @@ bool readNextObservation(SourceState& source,
                          libgnss::ObservationData& obs,
                          std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
     events.clear();
+    auto popReady = [&]() {
+        if (source.ready_epochs.empty()) {
+            return false;
+        }
+        obs = std::move(source.ready_epochs.front());
+        source.ready_epochs.pop_front();
+        return true;
+    };
+    if (popReady()) {
+        return true;
+    }
     libgnss::io::RTCMMessage raw_message;
     int failed_reads = 0;
-    while (source.message_limit == 0 || source.messages_read < source.message_limit) {
+    while (!source.input_ended &&
+           (source.message_limit == 0 || source.messages_read < source.message_limit)) {
         if (!source.reader.readMessage(raw_message)) {
             // With --reconnect an empty read (NTRIP timeout, dropped link being re-established)
             // is not the end of the stream; keep trying until the attempt budget runs out.
@@ -960,8 +991,7 @@ bool readNextObservation(SourceState& source,
                 (source.reconnect_attempts == 0 || ++failed_reads < source.reconnect_attempts)) {
                 continue;
             }
-            source.eof = true;
-            return false;
+            break;
         }
         failed_reads = 0;
         ++source.messages_read;
@@ -970,11 +1000,28 @@ bool readNextObservation(SourceState& source,
         source.decoder.pushFrame(frame.data(), frame.size(), frame_events);
         events.insert(events.end(), frame_events.begin(), frame_events.end());
         for (const auto& event : frame_events) {
-            if (event.has_observation) {
+            if (!event.has_observation) {
+                continue;
+            }
+            if (!source.assemble_epochs) {
                 obs = event.observation;
                 return true;
             }
+            for (auto& epoch : source.assembler.push(event.observation, event.observation_more_follows)) {
+                source.ready_epochs.push_back(std::move(epoch));
+            }
         }
+        if (popReady()) {
+            return true;
+        }
+    }
+    // End of stream: a pending (partially assembled) epoch must still be processed.
+    source.input_ended = true;
+    for (auto& epoch : source.assembler.flush()) {
+        source.ready_epochs.push_back(std::move(epoch));
+    }
+    if (popReady()) {
+        return true;
     }
     source.eof = true;
     return false;
@@ -1088,6 +1135,15 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        // Seed the RTCM decoders' GPST reference from the navigation RINEX (latest GPS toe) so that
+        // TOW-only parts get their week and GLONASS epochs are dated from the data, not the host clock.
+        if (const auto seed = libgnss::io::RTCMStreamDecoder::referenceFromNavigation(nav_data)) {
+            base_source.decoder.setReferenceTime(*seed);
+            if (rover_input_kind == RoverInputKind::RTCM) {
+                rover_rtcm_source.decoder.setReferenceTime(*seed);
+            }
+        }
+
         libgnss::RTKProcessor rtk;
         libgnss::RTKProcessor::RTKConfig rtk_config;
         rtk_config.position_mode =
@@ -1139,10 +1195,27 @@ int main(int argc, char** argv) {
         std::vector<libgnss::io::RTCMStreamDecoder::Event> base_events;
         std::vector<libgnss::io::UBXStreamDecoder::Event> rover_ubx_events;
 
+        // When one RTCM decoder obtains a GPST reference (ephemerides) and the other has none (the rover
+        // stream usually carries no ephemerides), the other is seeded with it.
+        auto shareReferences = [&]() {
+            if (rover_input_kind != RoverInputKind::RTCM) {
+                return;
+            }
+            const auto rover_ref = rover_rtcm_source.decoder.referenceTime();
+            const auto base_ref = base_source.decoder.referenceTime();
+            if (base_ref && !rover_ref) {
+                rover_rtcm_source.decoder.setReferenceTime(*base_ref);
+            } else if (rover_ref && !base_ref) {
+                base_source.decoder.setReferenceTime(*rover_ref);
+            }
+        };
+        // The base is read first so that its ephemeris burst can seed the rover decoder before the
+        // rover's first epoch is decoded.
+        bool base_ok = readNextObservation(base_source, base_obs, base_events);
+        shareReferences();
         bool rover_ok = rover_input_kind == RoverInputKind::RTCM
             ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
             : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
-        bool base_ok = readNextObservation(base_source, base_obs, base_events);
         const bool initial_rover_observation_ok = rover_ok;
         const bool initial_base_observation_ok = base_ok;
 
@@ -1179,9 +1252,24 @@ int main(int argc, char** argv) {
                     ++station_position_updates;
                 }
             }
+            shareReferences();
         };
+        // A week-0 (TOW-only) epoch gets the week nearest to the newest decoder reference; the
+        // oldest-ephemeris week is only the fallback when no decoder has a reference (UBX rover
+        // without a base reference).
         auto normalizeObservationWeek = [&](libgnss::ObservationData& obs) {
             if (obs.time.week != 0) {
+                return;
+            }
+            std::optional<libgnss::GNSSTime> newest = base_source.decoder.referenceTime();
+            if (rover_input_kind == RoverInputKind::RTCM) {
+                const auto rover_ref = rover_rtcm_source.decoder.referenceTime();
+                if (rover_ref && (!newest || *rover_ref - *newest > 0.0)) {
+                    newest = rover_ref;
+                }
+            }
+            if (newest) {
+                obs.time = libgnss::io::RTCMStreamDecoder::resolveTowOnlyTime(obs.time, *newest);
                 return;
             }
             const int week = inferObservationWeekContext(nav_data);

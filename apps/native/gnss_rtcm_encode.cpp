@@ -358,6 +358,15 @@ int main(int argc, char** argv) {
             }
         }
 
+        // One observation message per system. Per RTCM 10403.x the multiple-message bit
+        // is 1 on every message of the epoch except the last one actually emitted, so
+        // "last" is decided after the (possibly empty/invalid) messages are known.
+        struct PendingObsMessage {
+            const SystemPlan* plan;
+            libgnss::ObservationData selected;
+            RTCMMessage msg;
+        };
+        std::vector<PendingObsMessage> obs_msgs;
         for (const auto& plan : plans) {
             libgnss::ObservationData selected = epoch;
             if (cfg.format == Format::LEGACY) {
@@ -369,9 +378,17 @@ int main(int argc, char** argv) {
                     selected.observations.end());
             }
             if (selected.observations.empty()) continue;
-            const RTCMMessage msg = encoder.encodeObservations(selected, plan.type);
+            RTCMMessage msg = encoder.encodeObservations(selected, plan.type);
             if (!msg.valid) continue;
-            frameOut(msg, chunk);
+            obs_msgs.push_back({&plan, std::move(selected), std::move(msg)});
+        }
+        for (size_t i = 0; i < obs_msgs.size(); ++i) {
+            if (i + 1 < obs_msgs.size()) {
+                RTCMMessage flagged = encoder.encodeObservations(
+                    obs_msgs[i].selected, obs_msgs[i].plan->type, /*more_follows=*/true);
+                if (flagged.valid) obs_msgs[i].msg = std::move(flagged);
+            }
+            frameOut(obs_msgs[i].msg, chunk);
             ++chunk_obs;
         }
         if (chunk_obs == 0) {
