@@ -39,7 +39,12 @@ python3 apps/gnss.py realtime-stress run --prepared output/rt/full --out-dir out
 ```
 
 `gnss rtcm-encode` is the underlying encoder (`--systems G,R,E,J,C`, `--format msm7|msm5|msm4|legacy`,
-`--station`, `--rinex-out`). The ctest lane `python_realtime_stress_tests` replays a tracked 40 s
+`--station`, `--rinex-out`, `--eph-systems`). `prepare --eph-systems G,R,E,J,C` puts Galileo, QZSS and BeiDou
+ephemerides (1045/1046, 1044, 1042) in the base stream next to 1019/1020; it is passed to the base encode only
+and the default (not passed, so the encoder's `G,R`) leaves the command line and the bytes unchanged. Only
+systems that are also in `--systems` are broadcast. See [Ephemerides in the base
+stream](#ephemerides-in-the-base-stream-eph-systems). `--loops` time-shifts GPS MSM and 1019 frames only, so a looped
+soak of a stream with 1042/1044/1045/1046 keeps their original times. The ctest lane `python_realtime_stress_tests` replays a tracked 40 s
 fixture (`tests/fixtures/realtime_stress`) at 20x against the built `gnss_live` in about 17 s
 and checks survival plus detection of every fault kind.
 
@@ -363,6 +368,66 @@ error > 0.5 m):
   (0.05 s elsewhere). At 1x there is ample margin.
 * Tokyo run1 was used while developing the change. Tokyo run2 and Nagoya run1 were check runs of the No-Go
   first version.
+
+## Ephemerides in the base stream (`--eph-systems`)
+
+Until now the encoded base stream carried 1019 and 1020 only, so a G+R+E+J+C replay without `--nav-rinex` solved with
+G+R only (Tokyo run3, 120 s, 20x: FIX 0.519 against 0.952 with `--nav-rinex`). `gnss rtcm-encode --eph-systems
+G,R,E,J,C` adds 1045/1046 (Galileo F/NAV, I/NAV), 1044 (QZSS) and 1042 (BeiDou), and the library now decodes
+1042/1044 and routes 1042/1044/1045/1046 like 1019/1020 ([Interfaces](interfaces.md#rtcm-ephemeris-messages-gnss-rtcm-encode-eph-systems)).
+
+Frozen-contract check (2026-10-12), against develop `9d58ef51` (which includes the deterministic same-toe ephemeris
+order of #615): **Go**, all of G0 to G4 pass. It ran end to end on the four UrbanNav Tokyo runs (2018-12-19: Shinjuku
+and Odaiba, Trimble and u-blox rovers; base `base_trimble.obs`, the DLR BCEmerge `base.nav`, Applanix `reference.csv`,
+surveyed `--base-ecef -3961904.9530 3348993.7578 3698211.7553`), data that was not used while building the feature.
+G+R+E+J+C MSM7, rover at its native rate (10 Hz Trimble, 5 Hz u-blox), base 1 Hz, `gnss live --preset low-cost`, offline on
+the files. Arm S: base stream with `--eph-systems G,R,E,J,C`, no `--nav-rinex`. Arm N: the same streams with
+`--nav-rinex base.nav`. Arm O: today's base stream (`G,R`), no `--nav-rinex`. The BCEmerge file has no
+`IONOSPHERIC CORR` header lines, so neither S nor N applies a broadcast ionosphere model and the comparison isolates
+the ephemeris path.
+
+| gate | result |
+|---|---|
+| default output unchanged | 23 of 23 files byte-identical to develop `9d58ef51`: the regenerated tracked fixture (harness `prepare`, equal to the tracked bytes), `gnss rtcm-encode` of Tokyo run1 base with `--systems G` and `G,R,E,J,C` (bytes, index, summary), the G+R+E+J+C rover stream, `gnss live` on the fixture (bare, `--preset low-cost`) and on Tokyo run1 multi-GNSS with `--nav-rinex`, `gnss convert` of the fixture (the wall-clock `PGM / RUN BY / DATE` header line excluded) |
+| encode, decode, compare (UrbanNav `base.nav`) | 5436 Galileo (4645), BeiDou (696) and QZSS (95) records: 100 % encoded, 100 % within 0.053 mm and 5e-16 s of the source record at nine times, toe-2 h to toe+2 h |
+| RTKLIB 2.4.3 b34 parity, both directions | 100 % of the same records (our encoder into RTKLIB's decoder: 0.63 mm / 5e-15 s at worst; RTKLIB's encoder into ours: 0.053 mm / 5e-16 s); 693 of 696 BeiDou 1042 frames bit-identical to RTKLIB's |
+| end to end, S against N | pass in all 4 runs: status agreement 99.4 to 100 % (criterion 97 %), S has 1.000 of N's solutions, both-FIXED horizontal difference p50 0 m (criterion 0.01 m) |
+| safety, pooled | S Wrong/FIX 6.42 % (1867 of 29,059 FIXED), N 6.35 % (1836 of 28,916): +0.08 pp (limit +1.0 pp) |
+| paced over TCP (Shinjuku Trimble, first 300 s, 20x), arm S | exit 0, 2987 of 2987 rows, `.pos` byte-identical to the offline run on the same files (latency p50 0.04 s, p95 0.05 s) |
+
+Per run, `gnss live --preset low-cost` (report only for the O, N and S columns; wrong FIX = FIXED with 3D error above
+0.5 m against `reference.csv`, nearest epoch within 0.25 s; `ns` is the mean `NumSat` column of the `.pos`):
+
+| run | rover epochs | S/N solutions | S vs N status agreement | mean `ns` O, N, S | FIX % O, N, S | wrong FIX O, N, S | Wrong/FIX O, N, S |
+|---|---|---|---|---|---|---|---|
+| Shinjuku Trimble | 20,783 | 1.000 | 99.4 % | 5.7, 10.7, 10.7 | 15.7, 65.6, 66.2 | 1649, 905, 898 | 50.5, 6.6, 6.5 % |
+| Shinjuku u-blox | 10,476 | 1.000 | 99.8 % | 5.4, 10.8, 10.8 | 5.9, 47.6, 47.6 | 202, 258, 264 | 32.4, 5.2, 5.3 % |
+| Odaiba Trimble | 12,399 | 1.000 | 100.0 % | 5.4, 11.3, 11.3 | 35.6, 62.1, 62.1 | 125, 81, 81 | 2.8, 1.1, 1.1 % |
+| Odaiba u-blox | 6206 | 1.000 | 99.6 % | 5.6, 11.8, 11.8 | 0.0, 41.7, 42.1 | 0, 592, 624 | 0.0, 22.9, 23.9 % |
+
+* All five criteria pass in every run, including mean `ns` of S at least 5.1 above O: Galileo, QZSS and BeiDou
+  satellites are used from the stream alone. S and N agree on the status of 99.4 to 100 % of the epochs. The
+  both-FIXED horizontal difference is 0 m at p50 and p95 in every run; the largest single difference is 2.1 m (Odaiba
+  u-blox).
+* The Wrong/FIX levels are those of the urban canyon, not of the ephemeris source: S and N differ by at most 1.0 pp in a
+  run (Odaiba u-blox 23.9 against 22.9 %), and pooled O has 23.8 % (1976 of 8308) on fewer FIXED epochs. Keep the
+  caution in [Wrong FIX on the real-time path](#wrong-fix-on-the-real-time-path) for these receivers.
+* Base stream size: O 6.7 to 7.2 kbit/s, S 7.9 to 8.3 kbit/s, 1.2 kbit/s more with the five systems.
+* Realtime factor offline (three `gnss_live` processes in parallel on a 4 vCPU VM, so it is noisy): O 156 to 314x, N 33 to 96x,
+  S 35 to 106x.
+
+The first version of this check (v1, PPC Tokyo run2-3 and Nagoya run1-3, against develop `f32ea3b5`) was No-Go on one
+criterion: status agreement of S against N was 77 to 91 % against 97 %. The cause was not the ephemerides. The PPC
+navigation files carry an `IONOSPHERIC CORR` header that only the `--nav-rinex` arm reads (without a navigation RINEX
+`gnss live` applies no Klobuchar model in its SPP seed, because `nav.ionosphere_model.valid` is false), and the Galileo
+F/NAV against I/NAV choice at an equal toe depended on insertion order, which #615 fixed. A stream carries no ionosphere
+parameters, so with a PPC-style navigation file `--nav-rinex` is not equivalent to ephemerides in the stream.
+
+QZSS: the UrbanNav `base.nav` holds 95 real QZSS records (J01, J02, J03, J07) and the PPC navigation files hold
+26 to 75 per file; they were used in arms S (as 1044) and N (from the file), and in the round trips and RTKLIB parity
+above. No 1044 stream from a real receiver or caster was available, so no 1044 message has been checked as a
+live broadcast; QZSS rests on the real records through the encode, decode and compare round trips and the bit-level
+comparison with RTKLIB.
 
 ## Base-outage SPP fallback
 
