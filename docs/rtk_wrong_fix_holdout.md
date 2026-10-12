@@ -114,7 +114,7 @@ HK Harsh additionally has a genuine vertical error on its fixes (median
 
 ## Related integrity results (same effort, No-Go)
 
-Two more experiments in this effort were run under frozen contracts and were
+These experiments in this effort were run under frozen contracts and were
 No-Go:
 
 - **Honest reported covariance.** `SPP_CONSISTENCY_SCALED` for FLOAT, and for
@@ -130,6 +130,43 @@ No-Go:
   `--rtk-canyon-carrier-prior` is engaged, or within 30 s after release.
   - It removed the `--preset odaiba` + SNR + prior wrong-fix burst (1009 → 6).
   - It cost 18.5 % of preset fixes and −0.29 pp PPC official.
+- **Calibrated reported uncertainty for `gnss live` (2026-10-12).** The
+  reported σ was fitted to measured errors.
+  - Form:
+    - FLOAT: σ = max(f, k · σ_float).
+    - FIXED: σ = max(f, k · sqrt(σ_float² + d²)), where d is the distance
+      between the epoch's float and fixed positions.
+  - Fitting: one floor f and one factor k per status and component (8
+    constants), fitted on the six PPC runs (G+R+E+J+C MSM7,
+    `--preset low-cost`) by a fixed rule. The rule targets 1 % of errors
+    above 3σ.
+  - Check: once on the four UrbanNav Tokyo runs, which were never used for σ
+    (29,273 FIXED and 13,592 FLOAT epochs).
+
+  | Holdout result | Calibrated | Legacy (constant 0.1 m) | Gate |
+  |---|---|---|---|
+  | FLOAT, share of errors above 3σ (horizontal / vertical) | 0.85 % / 0.24 % | 88 % / 91 % | ≤ 2 %: pass |
+  | FIXED, share of errors above 3σ (horizontal / vertical) | 0.80 % / **2.43 %** | 8.2 % / 8.6 % | ≤ 2 %: **fail** (vertical) |
+  | AUROC of σ_H, wrong vs correct FIX | **0.88** (0.82–0.99 per run) | 0.50 | ≥ 0.75: pass |
+  | Median σ_H of correct FIX | **0.168 m** | 0.141 m | ≤ 0.10 m: **fail** |
+
+  **Decision: No-Go**, and the option was not merged. The float–fixed
+  distance separates wrong fixes well: AUROC 0.88, where the constant σ
+  cannot separate them at all. But the vertical FIXED σ is too small on two
+  runs, and correct fixes get σ_H of 0.17 m (0.79 m on Odaiba u-blox). The
+  FLOAT σ comes out at metre level (median about 11 m), because the training
+  FLOAT errors have a heavy tail. A follow-up needs a holdout that has not
+  been used for σ. The UrbanNav Tokyo runs now have been.
+- **Fresh evaluation data.** A search on 2026-10-12 found one fresh
+  dual-frequency urban run with an open base and post-processed truth:
+  UrbanNav HK Medium-Urban-1 (TST, 13 min). It is too weak to decide a 0.5 m
+  wrong-FIX label.
+  - Dual-frequency carrier phase is sparse: 4 or more GPS satellites in only
+    53 epochs on the NovAtel rover.
+  - The truth is mostly quality class 2.
+  - It shares the lever-arm offset of the Deep and Harsh runs, about −0.57 m
+    forward. Estimated on Deep and Harsh, applying that offset left a median
+    horizontal error of 0.105 m.
 
 Measurement tools for this work are `gnss_solve --pos-uncertainty` and
 `gnss uncertainty-eval` (see [Interfaces](interfaces.md)).
