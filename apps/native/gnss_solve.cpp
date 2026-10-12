@@ -111,6 +111,7 @@ struct SolveConfig {
     std::string rtk_covariance_log_path;
     // Opt-in: append sdn/sde/sdu/sdne/sdeu/sdun and DiffAge(s) to .pos rows.
     bool pos_uncertainty = false;
+    bool pos_fix_diagnostics = false;
     std::string timing_csv_path;
     double rtk_update_outlier_threshold = 0.0;
     bool student_t_rtk_front_end = false;
@@ -1517,6 +1518,11 @@ void printAdvancedUsage(const char* program_name) {
         << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m, 1-sigma, local ENU,\n"
         << "                             RTKLIB signed-sqrt cross terms) and DiffAge(s) to .pos rows\n"
         << "                             (--format pos only; default off = byte-identical output)\n"
+        << "  --pos-fix-diagnostics      Append FloatFixH(m) FloatFixU(m) to .pos rows: horizontal / vertical distance\n"
+        << "                             between the RTK epoch's float and FIXED positions. nan unless the written row\n"
+        << "                             is FIXED and still the RTK epoch's own fixed position (post-processing that\n"
+        << "                             changed its position or status gives nan). Diagnostic only, not an integrity bound\n"
+        << "                             (--format pos only; default off = byte-identical output)\n"
         << "  --arfilter                 Require extra ratio margin for subset AR fixes\n"
         << "  --no-arfilter              Disable subset AR filter margin even if a preset enables it\n"
         << "  --arfilter-margin <v>      Extra ratio margin for --arfilter (default: 0.25)\n"
@@ -2543,6 +2549,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.pos_uncertainty = true;
             continue;
         }
+        if (arg == "--pos-fix-diagnostics") {
+            config.pos_fix_diagnostics = true;
+            continue;
+        }
         // Keep these late-chain options standalone as well. Besides making
         // the parser easier to extend, this keeps MSVC below C1061's nested
         // else-if limit.
@@ -3428,6 +3438,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         config.output_format != libgnss::io::SolutionWriter::Format::POS) {
         argumentError("--pos-uncertainty requires --format pos", argv[0]);
     }
+    if (config.pos_fix_diagnostics &&
+        config.output_format != libgnss::io::SolutionWriter::Format::POS) {
+        argumentError("--pos-fix-diagnostics requires --format pos", argv[0]);
+    }
 
     return config;
 }
@@ -3511,23 +3525,71 @@ long long differentialAgeKey(const libgnss::GNSSTime& time) {
     return std::llround((static_cast<double>(time.week) * 604800.0 + time.tow) * 1000.0);
 }
 
+// RTK epoch results that were FIXED as returned by RTKProcessor, keyed like
+// DifferentialAgeMap, with the exact fixed position. Read-only record for
+// --pos-fix-diagnostics: a written row keeps its float-fix distance only if it
+// is FIXED and its position is bit-identical to this one, i.e. nothing in
+// gnss_solve's post-processing replaced it. Only populated when the option is on.
+using RtkOwnFixedMap = std::map<long long, Eigen::Vector3d>;
+
+// Counters for the --pos-fix-diagnostics summary line.
+struct FixDiagnosticStats {
+    size_t rtk_fixed_epochs = 0;             // epochs FIXED as returned by RTKProcessor
+    size_t written_fixed_rows = 0;           // rows written with status FIXED
+    size_t finite_rows = 0;                  // FIXED rows with finite columns
+    size_t fixed_nan_modified = 0;           // FIXED rows nan: not the RTK epoch's own fixed position
+    size_t fixed_nan_no_reference = 0;       // FIXED rows nan: RTK epoch carried no float reference
+    size_t rtk_fixed_not_written_as_own = 0; // RTK-FIXED epochs written non-FIXED, modified or dropped
+};
+
 bool writeSolutions(const SolveConfig& config, const libgnss::Solution& solution,
-                    const DifferentialAgeMap& differential_age) {
+                    const DifferentialAgeMap& differential_age,
+                    const RtkOwnFixedMap& rtk_own_fixed, FixDiagnosticStats& fix_stats) {
     libgnss::io::SolutionWriter writer;
-    if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty)) {
+    if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty,
+                     config.pos_fix_diagnostics)) {
         std::cerr << "Error: failed to open output file: " << config.output_pos_path << std::endl;
         return false;
     }
 
+    size_t written_as_own = 0;
     for (const auto& epoch_solution : solution.solutions) {
         double age_s = std::numeric_limits<double>::quiet_NaN();
         if (config.pos_uncertainty) {
             const auto age_it = differential_age.find(differentialAgeKey(epoch_solution.time));
             if (age_it != differential_age.end()) age_s = age_it->second;
         }
+        if (config.pos_fix_diagnostics) {
+            const auto own_it = rtk_own_fixed.find(differentialAgeKey(epoch_solution.time));
+            const bool is_fixed = epoch_solution.status == libgnss::SolutionStatus::FIXED;
+            const bool own_position = is_fixed && own_it != rtk_own_fixed.end() &&
+                                      epoch_solution.position_ecef == own_it->second;
+            if (own_position) ++written_as_own;
+            if (is_fixed) {
+                ++fix_stats.written_fixed_rows;
+                if (own_position && epoch_solution.rtk_float_reference_valid &&
+                    epoch_solution.rtk_float_position_ecef.allFinite()) {
+                    ++fix_stats.finite_rows;
+                } else if (own_position) {
+                    ++fix_stats.fixed_nan_no_reference;
+                } else {
+                    ++fix_stats.fixed_nan_modified;
+                }
+            }
+            if (!own_position && epoch_solution.rtk_float_reference_valid) {
+                // Post-processing changed this row (status or position): the
+                // float reference no longer belongs to it, so write nan.
+                auto row = epoch_solution;
+                row.rtk_float_reference_valid = false;
+                writer.writeEpoch(row, age_s);
+                continue;
+            }
+        }
         writer.writeEpoch(epoch_solution, age_s);
     }
     writer.close();
+    fix_stats.rtk_fixed_epochs = rtk_own_fixed.size();
+    fix_stats.rtk_fixed_not_written_as_own = rtk_own_fixed.size() - written_as_own;
 
     if (config.write_kml && !solution.writeKML(config.output_kml_path)) {
         std::cerr << "Error: failed to write KML output: " << config.output_kml_path << std::endl;
@@ -4058,6 +4120,8 @@ int main(int argc, char* argv[]) {
         }
 
         DifferentialAgeMap differential_age_s;
+        RtkOwnFixedMap rtk_own_fixed_positions;
+        FixDiagnosticStats fix_diagnostic_stats;
         int processed_rover_epochs = 0;
         int valid_solution_count = 0;
         int fixed_solution_count = 0;
@@ -4186,6 +4250,13 @@ int main(int argc, char* argv[]) {
                                          ? std::chrono::steady_clock::now()
                                          : std::chrono::steady_clock::time_point{};
             auto pos_solution = rtk_processor.processRTKEpoch(rover_obs, aligned_base_obs, nav_data);
+            if (config.pos_fix_diagnostics &&
+                pos_solution.status == libgnss::SolutionStatus::FIXED) {
+                // Read-only record of the RTK epoch's own fixed position, taken
+                // before any gnss_solve post-processing (see writeSolutions).
+                rtk_own_fixed_positions[differentialAgeKey(rover_obs.time)] =
+                    pos_solution.position_ecef;
+            }
             if (timing_enabled) {
                 const double elapsed_ms =
                     std::chrono::duration<double, std::milli>(
@@ -4912,7 +4983,8 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: no valid solutions were produced" << std::endl;
             return 1;
         }
-        if (!writeSolutions(config, solution, differential_age_s)) {
+        if (!writeSolutions(config, solution, differential_age_s, rtk_own_fixed_positions,
+                            fix_diagnostic_stats)) {
             return 1;
         }
 
@@ -5015,6 +5087,15 @@ int main(int argc, char* argv[]) {
                           << "% qualified as demotion authority)";
             }
             std::cout << std::endl;
+        }
+        if (config.pos_fix_diagnostics) {
+            std::cout << "  fix diagnostics: rtk_fixed_epochs=" << fix_diagnostic_stats.rtk_fixed_epochs
+                      << " written_fixed_rows=" << fix_diagnostic_stats.written_fixed_rows
+                      << " finite_rows=" << fix_diagnostic_stats.finite_rows
+                      << " nan_modified_fixed_rows=" << fix_diagnostic_stats.fixed_nan_modified
+                      << " nan_no_float_reference_rows=" << fix_diagnostic_stats.fixed_nan_no_reference
+                      << " rtk_fixed_not_written_as_own="
+                      << fix_diagnostic_stats.rtk_fixed_not_written_as_own << std::endl;
         }
         std::cout << "  output written: " << config.output_pos_path << std::endl;
         if (config.write_kml) {
