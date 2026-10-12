@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Existing Python .pos readers must tolerate the `--pos-uncertainty` columns."""
+"""Existing Python .pos readers must tolerate the `--pos-uncertainty` and `--pos-fix-diagnostics` columns."""
 
 from __future__ import annotations
 
@@ -46,6 +46,7 @@ LEGACY_HEADER = (
     "RTKUpdateNISPerObs RTKUpdateNISRejected"
 )
 UNCERTAINTY_HEADER = " sdn(m) sde(m) sdu(m) sdne(m) sdeu(m) sdun(m) DiffAge(s)"
+FIX_DIAGNOSTIC_HEADER = " FloatFixH(m) FloatFixU(m)"
 LEGACY_ROW = (
     "2324 187874.600 -3960753.0205 3349128.2293 3699284.1213 35.678352935 139.782852400 "
     "41.0166 4 26 2.00 37.9 1579.5928 2 58 29 29 7 3.4127 18.0081 0.5938 2.9486 43.4283 "
@@ -54,7 +55,8 @@ LEGACY_ROW = (
 
 
 class PosUncertaintyColumnsReaderTest(unittest.TestCase):
-    def write_pos(self, directory: Path, with_columns: bool, nan_tail: bool = False) -> Path:
+    def write_pos(self, directory: Path, with_columns: bool, nan_tail: bool = False,
+                  fix_diagnostics: bool = False) -> Path:
         path = directory / ("unc.pos" if with_columns else "legacy.pos")
         header = LEGACY_HEADER + (UNCERTAINTY_HEADER if with_columns else "")
         row = LEGACY_ROW
@@ -62,14 +64,29 @@ class PosUncertaintyColumnsReaderTest(unittest.TestCase):
             row += " nan nan nan nan nan nan nan" if nan_tail else (
                 " 0.01000 0.02000 0.03000 -0.00700 0.00000 0.00000 0.600"
             )
+        if fix_diagnostics:
+            path = directory / ("fixdiag_unc.pos" if with_columns else "fixdiag.pos")
+            header += FIX_DIAGNOSTIC_HEADER
+            row += " nan nan" if nan_tail else " 0.12345 0.04321"
         path.write_text(f"% LibGNSS++ Position Solution\n{header}\n{row}\n", encoding="ascii")
         return path
 
     def test_python_readers_ignore_appended_columns(self) -> None:
-        for nan_tail in (False, True):
-            with self.subTest(nan_tail=nan_tail), tempfile.TemporaryDirectory(prefix="gnss_pos_unc_") as tmp:
+        # (uncertainty columns, --pos-fix-diagnostics columns, nan values)
+        for with_columns, fix_diagnostics, nan_tail in (
+            (True, False, False),
+            (True, False, True),
+            (False, True, False),
+            (False, True, True),
+            (True, True, False),
+            (True, True, True),
+        ):
+            with self.subTest(with_columns=with_columns, fix_diagnostics=fix_diagnostics,
+                              nan_tail=nan_tail), \
+                    tempfile.TemporaryDirectory(prefix="gnss_pos_unc_") as tmp:
                 legacy = self.write_pos(Path(tmp), with_columns=False)
-                extended = self.write_pos(Path(tmp), with_columns=True, nan_tail=nan_tail)
+                extended = self.write_pos(Path(tmp), with_columns=with_columns,
+                                          nan_tail=nan_tail, fix_diagnostics=fix_diagnostics)
 
                 old_rows = artifacts.load_pos(legacy)
                 new_rows = artifacts.load_pos(extended)

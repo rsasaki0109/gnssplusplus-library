@@ -259,6 +259,62 @@ the alert limit). `K*sigma` is a diagnostic proxy and is **not** a certified
 protection level. A PNG is written with `--out-png` only when matplotlib is
 installed.
 
+### Float-fix distance in `.pos` (`--pos-fix-diagnostics`)
+
+`gnss live --pos-fix-diagnostics` (default off; with it off the `.pos` is
+byte-identical to earlier releases, and it requires `--format pos`) appends two
+columns after every other column (after `DiffAge(s)` when `--pos-uncertainty`
+is also on) and declares them in the `% GPS_Week ...` header:
+
+| Column | Meaning |
+| --- | --- |
+| `FloatFixH(m)` | horizontal distance, in the local ENU frame at the FIXED position, between the epoch's FLOAT position (computed before ambiguity resolution) and the FIXED position |
+| `FloatFixU(m)` | absolute vertical difference between the same two positions |
+
+Both are `nan` on every row that is not `FIXED` (FLOAT, SPP and fallback rows).
+The float position is recorded read-only next to the solution
+(`PositionSolution::rtk_float_position_ecef`); no filter state, position,
+status or covariance changes, and every other column is byte-identical to a run
+without the flag. Existing column positions do not move, so index-based
+readers and `Solution::loadFromFile` keep working. It is wired into `gnss live`
+only: `gnss solve` and `gnss replay` do not have it.
+
+This is a **diagnostic, not an integrity bound**: it is a number to threshold or
+log, not a certified protection level, and it carries no unit of probability. A
+large value means the integer solution moved the position far from what the
+float filter believed, which is more common on wrong fixes, but a small value
+does not make a fix correct.
+
+Measured separation (descriptive, seen data; nothing was tuned on it and no
+threshold is recommended): AUROC of `FloatFixH` alone for a wrong FIX (FIXED
+with 3D error > 0.5 m against `reference.csv`, nearest epoch within 0.25 s)
+against a correct FIX, `gnss live --preset low-cost`, multi-GNSS RTCM replay,
+one run each:
+
+| Run | FIXED epochs | wrong FIX | AUROC `FloatFixH` |
+| --- | ---: | ---: | ---: |
+| UrbanNav Odaiba (Trimble) | 7687 | 78 | 0.81 |
+| UrbanNav Odaiba (u-blox) | 2580 | 574 | 0.74 |
+| UrbanNav Shinjuku (Trimble) | 13963 | 1687 | 0.73 |
+| UrbanNav Shinjuku (u-blox) | 5043 | 276 | 0.75 |
+| PPC tokyo run1 | 7884 | 247 | 0.80 |
+| PPC tokyo run2 | 7142 | 141 | 0.90 |
+| PPC tokyo run3 | 9897 | 274 | 0.84 |
+| PPC nagoya run1 | 5252 | 137 | 0.77 |
+| PPC nagoya run2 | 4321 | 52 | 0.95 |
+| PPC nagoya run3 | 1964 | 72 | 0.78 |
+
+Pooled: UrbanNav Tokyo 0.78, PPC 0.83. The AUROC is a ranking statistic over this data, with no threshold and no
+false-alarm rate. Per run the median `FloatFixH` is 2 to 8 mm for a correct FIX
+and 1 to 59 cm for a wrong FIX, and the two distributions overlap. Provenance:
+develop `e35583e1` plus this option; the four UrbanNav Tokyo runs (Odaiba and
+Shinjuku, Trimble and u-blox, Applanix `reference.csv`, base ECEF
+`-3961904.9530 3348993.7578 3698211.7553`) and the six PPC runs (Tokyo and
+Nagoya runs 1 to 3, PPC `reference.csv`, `base.nav`), all replayed as
+multi-GNSS RTCM MSM streams re-encoded from the RINEX observations. These are
+the same data the option was examined on, so they are not a held-out result and
+they do not by themselves transfer to other receivers or environments.
+
 ## Docker
 
 The repo also ships a multi-stage `Dockerfile`. The runtime image installs:

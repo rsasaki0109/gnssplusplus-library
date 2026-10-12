@@ -8,6 +8,7 @@
  * Solution::writeToFile() method for real-time or large-dataset use cases.
  */
 
+#include <libgnss++/core/coordinates.hpp>
 #include <libgnss++/core/solution.hpp>
 #include <fstream>
 #include <iomanip>
@@ -51,8 +52,9 @@ public:
     SolutionWriter() = default;
 
     explicit SolutionWriter(const std::string& filename, Format fmt = Format::POS,
-                            bool uncertainty_columns = false) {
-        open(filename, fmt, uncertainty_columns);
+                            bool uncertainty_columns = false,
+                            bool fix_diagnostic_columns = false) {
+        open(filename, fmt, uncertainty_columns, fix_diagnostic_columns);
     }
 
     ~SolutionWriter() { close(); }
@@ -73,13 +75,19 @@ public:
      *        (see kUncertaintyHeaderColumns) to POS rows and the POS header.
      *        Ignored for LLH/XYZ. Default false keeps the output byte-identical
      *        to earlier releases.
+     * @param fix_diagnostic_columns Append the float-fix distance columns
+     *        (see kFixDiagnosticHeaderColumns) after any other columns.
+     *        Ignored for LLH/XYZ. Default false keeps the output
+     *        byte-identical to earlier releases.
      * @return true if the file was opened successfully.
      */
     bool open(const std::string& filename, Format fmt = Format::POS,
-              bool uncertainty_columns = false) {
+              bool uncertainty_columns = false,
+              bool fix_diagnostic_columns = false) {
         close();
         format_ = fmt;
         uncertainty_columns_ = uncertainty_columns && fmt == Format::POS;
+        fix_diagnostic_columns_ = fix_diagnostic_columns && fmt == Format::POS;
         file_.open(filename);
         if (!file_.is_open()) return false;
         writeHeader();
@@ -110,6 +118,9 @@ public:
             if (uncertainty_columns_) {
                 file_ << ' ' << kUncertaintyHeaderColumns;
             }
+            if (fix_diagnostic_columns_) {
+                file_ << ' ' << kFixDiagnosticHeaderColumns;
+            }
             file_ << "\n";
             break;
         case Format::LLH:
@@ -125,6 +136,45 @@ public:
     /// Names of the columns appended by the uncertainty option (POS only).
     static constexpr const char* kUncertaintyHeaderColumns =
         "sdn(m) sde(m) sdu(m) sdne(m) sdeu(m) sdun(m) DiffAge(s)";
+
+    /// Names of the columns appended by the fix-diagnostics option (POS only).
+    static constexpr const char* kFixDiagnosticHeaderColumns = "FloatFixH(m) FloatFixU(m)";
+
+    /**
+     * @brief Format the float-fix distance columns for one epoch (each preceded by a space).
+     *
+     * FloatFixH is the horizontal distance and FloatFixU the absolute vertical
+     * difference, in the local ENU frame at the FIXED position, between the
+     * epoch's float position (computed before ambiguity resolution, recorded
+     * by RTKProcessor on FIXED solutions) and the FIXED position. Both are
+     * "nan" for any other status or when the float reference is unavailable.
+     * A diagnostic only, not an integrity bound.
+     */
+    static std::string formatFixDiagnosticColumns(const PositionSolution& sol) {
+        double d_h = std::numeric_limits<double>::quiet_NaN();
+        double d_u = d_h;
+        if (sol.status == SolutionStatus::FIXED && sol.rtk_float_reference_valid &&
+            sol.rtk_float_position_ecef.allFinite() && sol.position_ecef.allFinite() &&
+            sol.position_ecef.norm() > 1e6) {
+            double lat = 0.0, lon = 0.0, h = 0.0;
+            ecef2geodetic(sol.position_ecef, lat, lon, h);
+            const Vector3d diff =
+                ecef2enu(sol.rtk_float_position_ecef - sol.position_ecef, lat, lon);
+            d_h = std::hypot(diff.x(), diff.y());
+            d_u = std::abs(diff.z());
+        }
+        std::ostringstream out;
+        out << std::fixed << std::setprecision(5);
+        for (const double value : {d_h, d_u}) {
+            out << ' ';
+            if (std::isfinite(value)) {
+                out << value;
+            } else {
+                out << "nan";
+            }
+        }
+        return out.str();
+    }
 
     /**
      * @brief Format the uncertainty columns for one epoch (each preceded by a space).
@@ -220,6 +270,9 @@ public:
             if (uncertainty_columns_) {
                 file_ << formatUncertaintyColumns(sol, differential_age_s);
             }
+            if (fix_diagnostic_columns_) {
+                file_ << formatFixDiagnosticColumns(sol);
+            }
             file_ << "\n";
             break;
 
@@ -270,6 +323,7 @@ private:
     std::ofstream file_;
     Format format_ = Format::POS;
     bool uncertainty_columns_ = false;
+    bool fix_diagnostic_columns_ = false;
     size_t epochs_written_ = 0;
 };
 

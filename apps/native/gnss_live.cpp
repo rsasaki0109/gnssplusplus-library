@@ -85,6 +85,7 @@ struct LiveConfig {
     std::string output_pos_path = "output/live_solution.pos";
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
     bool pos_uncertainty = false;
+    bool pos_fix_diagnostics = false;
     int max_epochs = -1;
     size_t rover_message_limit = 0;
     size_t base_message_limit = 0;
@@ -688,6 +689,8 @@ void printUsage(const char* argv0) {
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
         << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
+        << "  --pos-fix-diagnostics      Append FloatFixH(m) FloatFixU(m) to .pos rows: horizontal / vertical distance between the\n"
+        << "                            epoch's float and FIXED positions (nan unless FIXED). Diagnostic only, not an integrity bound\n"
         << "  --max-epochs <n>           Stop after n solved epochs\n"
         << "  --rover-message-limit <n>  Stop rover ingest after n RTCM messages (0 = all)\n"
         << "  --base-message-limit <n>   Stop base ingest after n RTCM messages (0 = all)\n"
@@ -845,6 +848,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.output_format = parseOutputFormat(argv[++i], argv[0]);
         } else if (arg == "--pos-uncertainty") {
             config.pos_uncertainty = true;
+        } else if (arg == "--pos-fix-diagnostics") {
+            config.pos_fix_diagnostics = true;
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             config.max_epochs = std::stoi(argv[++i]);
         } else if (arg == "--rover-message-limit" && i + 1 < argc) {
@@ -988,6 +993,10 @@ LiveConfig parseArguments(int argc, char** argv) {
     if (config.pos_uncertainty &&
         config.output_format != libgnss::io::SolutionWriter::Format::POS) {
         argumentError("--pos-uncertainty requires --format pos", argv[0]);
+    }
+    if (config.pos_fix_diagnostics &&
+        config.output_format != libgnss::io::SolutionWriter::Format::POS) {
+        argumentError("--pos-fix-diagnostics requires --format pos", argv[0]);
     }
     if (config.rover_ubx_baud <= 0) {
         argumentError("--rover-ubx-baud must be > 0", argv[0]);
@@ -1487,7 +1496,8 @@ int main(int argc, char** argv) {
         }
 
         libgnss::io::SolutionWriter writer;
-        if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty)) {
+        if (!writer.open(config.output_pos_path, config.output_format, config.pos_uncertainty,
+                         config.pos_fix_diagnostics)) {
             std::cerr << "Error: failed to open output file\n";
             return 1;
         }

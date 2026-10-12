@@ -1269,6 +1269,71 @@ TEST(GNSSLiveRecordedStreamTest, KinematicPostFilterIsOptInAndSmokeRuns) {
     fs::remove_all(temp_dir);
 }
 
+TEST(GNSSLiveRecordedStreamTest, PosFixDiagnosticsAreOptInAndLeaveOtherColumnsUnchanged) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_fix_diag");
+    const std::string inputs = "--rover-rtcm \"" + (fixture / "rover.rtcm").string() + "\" --base-rtcm \"" +
+                               (fixture / "base.rtcm").string() + "\" --preset low-cost";
+
+    const fs::path off_out = temp_dir / "off.pos";
+    const fs::path on_out = temp_dir / "on.pos";
+    const fs::path log = temp_dir / "run.log";
+    ASSERT_EQ(runLiveCapture(inputs + " --out \"" + off_out.string() + "\"", log), 0) << readTextFile(log);
+    ASSERT_EQ(runLiveCapture(inputs + " --pos-fix-diagnostics --out \"" + on_out.string() + "\"", log), 0)
+        << readTextFile(log);
+
+    const auto split_lines = [](const std::string& text) {
+        std::vector<std::string> lines;
+        std::istringstream stream(text);
+        std::string line;
+        while (std::getline(stream, line)) lines.push_back(line);
+        return lines;
+    };
+    const auto off_lines = split_lines(readTextFile(off_out));
+    const auto on_lines = split_lines(readTextFile(on_out));
+    ASSERT_EQ(off_lines.size(), on_lines.size());
+    ASSERT_GT(off_lines.size(), 3u);
+    EXPECT_EQ(off_lines[1].find("FloatFixH"), std::string::npos);
+    EXPECT_EQ(on_lines[1], off_lines[1] + " FloatFixH(m) FloatFixU(m)");
+
+    size_t fixed_rows = 0;
+    for (size_t i = 2; i < off_lines.size(); ++i) {
+        // Every column except the two appended ones is byte-identical.
+        ASSERT_EQ(on_lines[i].compare(0, off_lines[i].size(), off_lines[i]), 0) << i;
+        std::istringstream tail(on_lines[i].substr(off_lines[i].size()));
+        std::string h_token;
+        std::string u_token;
+        ASSERT_TRUE(static_cast<bool>(tail >> h_token >> u_token)) << on_lines[i];
+        std::istringstream status_stream(off_lines[i]);
+        std::string token;
+        int status = -1;
+        for (int column = 0; column < 9 && (status_stream >> token); ++column) {
+            if (column == 8) status = std::stoi(token);
+        }
+        if (status == static_cast<int>(libgnss::SolutionStatus::FIXED)) {
+            ++fixed_rows;
+            EXPECT_TRUE(std::isfinite(std::stod(h_token))) << on_lines[i];
+            EXPECT_TRUE(std::isfinite(std::stod(u_token))) << on_lines[i];
+            EXPECT_GE(std::stod(h_token), 0.0);
+            EXPECT_GE(std::stod(u_token), 0.0);
+        } else {
+            EXPECT_EQ(h_token, "nan") << on_lines[i];
+            EXPECT_EQ(u_token, "nan") << on_lines[i];
+        }
+    }
+    EXPECT_GT(fixed_rows, 0u) << "fixture should contain FIXED epochs";
+
+    // Requires --format pos.
+    EXPECT_NE(runLiveCapture(inputs + " --format llh --pos-fix-diagnostics --out \"" +
+                                 (temp_dir / "llh.pos").string() + "\"",
+                             log),
+              0);
+
+    fs::remove_all(temp_dir);
+}
+
 TEST(GNSSLiveRecordedStreamTest, RebroadcastEphemeridesDoNotGrowTheNavigationDatabase) {
     namespace fs = std::filesystem;
     const fs::path fixture = realtimeFixtureDir();
