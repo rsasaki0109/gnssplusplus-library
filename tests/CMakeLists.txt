@@ -143,6 +143,7 @@ if(GTest_FOUND)
         test_rtcm.cpp
         test_rtcm_stream.cpp
         test_observation_epoch_assembler.cpp
+        test_rtcm_stream_reference.cpp
         test_ubx.cpp
         test_galileo_has.cpp
         test_sofa_vendor.cpp

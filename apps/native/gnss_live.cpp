@@ -11,6 +11,7 @@
 #include <iostream>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -1134,6 +1135,15 @@ int main(int argc, char** argv) {
             return 1;
         }
 
+        // Seed the RTCM decoders' GPST reference from the navigation RINEX (latest GPS toe) so that
+        // TOW-only parts get their week and GLONASS epochs are dated from the data, not the host clock.
+        if (const auto seed = libgnss::io::RTCMStreamDecoder::referenceFromNavigation(nav_data)) {
+            base_source.decoder.setReferenceTime(*seed);
+            if (rover_input_kind == RoverInputKind::RTCM) {
+                rover_rtcm_source.decoder.setReferenceTime(*seed);
+            }
+        }
+
         libgnss::RTKProcessor rtk;
         libgnss::RTKProcessor::RTKConfig rtk_config;
         rtk_config.position_mode =
@@ -1185,10 +1195,27 @@ int main(int argc, char** argv) {
         std::vector<libgnss::io::RTCMStreamDecoder::Event> base_events;
         std::vector<libgnss::io::UBXStreamDecoder::Event> rover_ubx_events;
 
+        // When one RTCM decoder obtains a GPST reference (ephemerides) and the other has none (the rover
+        // stream usually carries no ephemerides), the other is seeded with it.
+        auto shareReferences = [&]() {
+            if (rover_input_kind != RoverInputKind::RTCM) {
+                return;
+            }
+            const auto rover_ref = rover_rtcm_source.decoder.referenceTime();
+            const auto base_ref = base_source.decoder.referenceTime();
+            if (base_ref && !rover_ref) {
+                rover_rtcm_source.decoder.setReferenceTime(*base_ref);
+            } else if (rover_ref && !base_ref) {
+                base_source.decoder.setReferenceTime(*rover_ref);
+            }
+        };
+        // The base is read first so that its ephemeris burst can seed the rover decoder before the
+        // rover's first epoch is decoded.
+        bool base_ok = readNextObservation(base_source, base_obs, base_events);
+        shareReferences();
         bool rover_ok = rover_input_kind == RoverInputKind::RTCM
             ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
             : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
-        bool base_ok = readNextObservation(base_source, base_obs, base_events);
         const bool initial_rover_observation_ok = rover_ok;
         const bool initial_base_observation_ok = base_ok;
 
@@ -1225,9 +1252,24 @@ int main(int argc, char** argv) {
                     ++station_position_updates;
                 }
             }
+            shareReferences();
         };
+        // A week-0 (TOW-only) epoch gets the week nearest to the newest decoder reference; the
+        // oldest-ephemeris week is only the fallback when no decoder has a reference (UBX rover
+        // without a base reference).
         auto normalizeObservationWeek = [&](libgnss::ObservationData& obs) {
             if (obs.time.week != 0) {
+                return;
+            }
+            std::optional<libgnss::GNSSTime> newest = base_source.decoder.referenceTime();
+            if (rover_input_kind == RoverInputKind::RTCM) {
+                const auto rover_ref = rover_rtcm_source.decoder.referenceTime();
+                if (rover_ref && (!newest || *rover_ref - *newest > 0.0)) {
+                    newest = rover_ref;
+                }
+            }
+            if (newest) {
+                obs.time = libgnss::io::RTCMStreamDecoder::resolveTowOnlyTime(obs.time, *newest);
                 return;
             }
             const int week = inferObservationWeekContext(nav_data);

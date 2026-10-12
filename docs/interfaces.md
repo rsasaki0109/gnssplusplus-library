@@ -89,10 +89,34 @@ one epoch per observation message. `gnss rtcm-encode` sets the bit on every
 observation message of an epoch except the last one emitted
 (`RTCMProcessor::encodeObservations(..., more_follows)` defaults to `false`).
 `gnss stream` only prints one diagnostic line per message and does not build
-epochs, so it is not affected. Time tags are only comparable if their weeks
-agree: GLONASS MSM epochs are resolved against the host clock when the decoder
-has no reference time (see Limits found 4 in [Real-time
-stress](realtime_stress.md)).
+epochs, so it is not affected.
+
+Parts can only be merged if their full GPST agrees, so `RTCMStreamDecoder`
+keeps one GPST reference (`setReferenceTime`, `referenceTime`):
+
+- non-GLONASS MSM messages carry only a time of week; the decoder gives such a
+  part (week 0, or BeiDou's week-1 wrap) the week nearest to the reference, and
+  the reference follows every resolved observation time (so a week rollover is
+  followed);
+- while a reference exists it is passed to the processor before every message,
+  so GLONASS MSM epochs and 1020 ephemerides are dated from the stream and not
+  from the host clock;
+- the reference is seeded explicitly, otherwise from the toe of the first
+  decoded GPS/Galileo/BeiDou/QZSS ephemeris. A time derived from the host clock
+  (GLONASS MSM or 1020 decoded without a reference) never seeds or advances it;
+- without a reference TOW-only parts stay week 0 and GLONASS uses the host
+  clock, as before.
+
+`gnss live` seeds both RTCM decoders from `--nav-rinex` (latest GPS toe); when
+one decoder obtains a reference from stream ephemerides and the other has none
+(a rover stream normally carries none) the other is seeded with it, and a
+week-0 epoch from a UBX rover is given the week nearest to the newest decoder
+reference. Without `--nav-rinex` and without any ephemeris in either stream the
+head of the stream is not resolved (week 0, host-clock GLONASS).
+`gnss convert` keeps its own `--gps-week` resolution. `gnss replay`'s RTCM base
+path decodes with a bare `RTCMProcessor` (no reference), so there the assembler
+can only merge parts whose weeks agree (known limit; use `--base-rinex` or
+convert to RINEX first for multi-constellation bases).
 
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 

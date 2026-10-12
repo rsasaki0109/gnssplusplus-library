@@ -305,12 +305,14 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    that never sends a FIN would block it too (not tested here); during a base outage the rover is not read either. Rover epochs that
    cannot get a base within 2 s are skipped without any output, so there is no SPP or dead-reckoned fallback for the
    outage.
-4. **The GPS week comes from the first stored ephemeris, or from the host clock.** `inferObservationWeekContext`
-   returns the week of the first ephemeris in the map, which (from reading the code, not exercised here) stays the
-   oldest one, so a continuous run across a GPS week rollover would not advance the week. Ephemerides of some systems (GLONASS 1020) are dated from the host
-   clock, so replaying old data that includes them, or joining a stream before the first ephemeris, mixes weeks
-   (a mid-stream relaunch produced 0 solutions until the encoder stopped emitting GLONASS ephemerides, which is where the mismatch was traced). A real stream
-   with a correct host clock is not affected; the harness soak stays inside one week.
+4. **The GPS week.** Fixed for `gnss live`: `RTCMStreamDecoder` keeps one GPST reference (seeded from `--nav-rinex`,
+   else from the first GPS/Galileo/BeiDou/QZSS ephemeris in either stream), resolves TOW-only observations to the nearest
+   week, follows the stream across a week rollover, and dates GLONASS MSM epochs and 1020 ephemerides from it instead of the
+   host clock, so replaying old recordings no longer depends on the host clock when a reference exists. Not fixed: a stream with
+   neither `--nav-rinex` nor any GPS/Galileo/BeiDou/QZSS ephemeris before its first epochs has no reference (head epochs stay week 0,
+   GLONASS is host-clock dated); a GLONASS 1020 that arrives before any reference is still dated from the host clock;
+   the 10-bit week of a 1019 is still expanded around the host clock until a reference exists; and `gnss replay`'s RTCM base path has no
+   reference at all.
 5. **Cold start after a restart is optimistic.** With the `moving` option set the first 30 s after a relaunch
    contained only wrong fixes (32 epochs, median error 2.5 m), and the bare static gate refuses most fixes of a moving
    rover (2.9 % against 49.5 % fixed over the run, but 0 against 1055 wrong fixes). `gnss live` has no
