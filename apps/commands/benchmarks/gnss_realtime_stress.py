@@ -70,6 +70,7 @@ def prepare(args: argparse.Namespace) -> int:
     for role, obs, extra in (
         ("rover", rover_obs, ["--rinex-out", str(out_dir / "rover_src.obs")]),
         ("base", base_obs, ["--nav", str(nav), "--station", "--eph-interval", str(args.eph_interval),
+                            *(["--eph-systems", args.eph_systems] if args.eph_systems else []),
                             "--rinex-out", str(out_dir / "base_src.obs")]),
     ):
         cmd = [encode, "--obs", str(obs), "--out", str(out_dir / f"{role}.rtcm"),
@@ -85,6 +86,7 @@ def prepare(args: argparse.Namespace) -> int:
         "kind": "gnss_realtime_stress_prepared",
         "source_run": str(run_dir),
         "systems": args.systems,
+        **({"eph_systems": args.eph_systems} if args.eph_systems else {}),
         "format": args.format,
         "window": {"start_offset": args.start_offset, "duration": args.duration},
         "files": {
@@ -456,13 +458,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--out-dir", required=True)
     p.add_argument("--rover-obs"), p.add_argument("--base-obs"), p.add_argument("--nav"), p.add_argument("--reference")
     p.add_argument("--systems", default="G", help="Constellations to encode, e.g. G,R,E,J,C (gnss_live assembles the "
-                   "per-constellation MSM messages of an epoch). The base stream carries only 1019/1020 ephemerides, "
-                   "so for E/J/C also give run --live-arg=--nav-rinex --live-arg=<base.nav>. Default G, the setting "
-                   "of the fault-matrix and soak results.")
+                   "per-constellation MSM messages of an epoch). By default the base stream carries only 1019/1020 "
+                   "ephemerides, so for E/J/C also pass --eph-systems (below) or give run "
+                   "--live-arg=--nav-rinex --live-arg=<base.nav>. Default G, the setting of the fault-matrix and "
+                   "soak results.")
+    p.add_argument("--eph-systems", default=None, metavar="LIST",
+                   help="Constellations that get ephemeris messages in the base stream, passed to gnss_rtcm_encode "
+                   "(base only): G 1019, R 1020, E 1045/1046, J 1044, C 1042. Only systems that are also in "
+                   "--systems are broadcast. Default: not passed, so the encoder's own default G,R applies.")
     p.add_argument("--format", default="msm7", choices=("msm7", "msm5", "msm4", "legacy"))
     p.add_argument("--start-offset", type=float, default=0.0)
     p.add_argument("--duration", type=float, default=0.0)
-    p.add_argument("--eph-interval", type=float, default=30.0, help="Seconds between repeats of each 1019/1020 (default 30).")
+    p.add_argument("--eph-interval", type=float, default=30.0, help="Seconds between repeats of each ephemeris message (default 30).")
     p.set_defaults(func=prepare)
 
     def add_run_args(q: argparse.ArgumentParser) -> None:

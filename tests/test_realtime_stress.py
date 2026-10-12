@@ -218,6 +218,89 @@ class FaultTests(unittest.TestCase):
 
 
 @unittest.skipUnless(have_live(), "gnss_live is not built")
+class PrepareEphSystemsTests(unittest.TestCase):
+    """`prepare --eph-systems` reaches the base encode only, and its default leaves the command unchanged."""
+
+    def _run_prepare(self, extra: list[str]) -> tuple[list[list[str]], dict]:
+        import subprocess
+        from unittest import mock
+
+        commands: list[list[str]] = []
+
+        def fake_run(cmd, **kwargs):
+            commands.append(list(cmd))
+            summary = {"epochs_written": 3}
+            return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(summary) + "\n", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            run_dir = Path(tmp) / "run"
+            run_dir.mkdir()
+            for name in ("rover.obs", "base.obs", "base.nav"):
+                (run_dir / name).write_text("x")
+            out_dir = Path(tmp) / "out"
+            args = cli.build_parser().parse_args(
+                ["prepare", "--run-dir", str(run_dir), "--out-dir", str(out_dir), *extra])
+            with mock.patch.object(cli, "find_binary", return_value="gnss_rtcm_encode"), \
+                    mock.patch.object(cli.subprocess, "run", side_effect=fake_run), \
+                    mock.patch("builtins.print"):
+                self.assertEqual(cli.prepare(args), 0)
+            manifest = json.loads((out_dir / "manifest.json").read_text())
+            commands = [[token.replace(tmp, "<tmp>") for token in cmd] for cmd in commands]
+        return commands, manifest
+
+    def test_default_leaves_the_command_line_unchanged(self) -> None:
+        commands, manifest = self._run_prepare(["--systems", "G,R,E,J,C"])
+        self.assertEqual(len(commands), 2)
+        for cmd in commands:
+            self.assertNotIn("--eph-systems", cmd)
+        self.assertNotIn("eph_systems", manifest)
+
+    def test_eph_systems_goes_to_the_base_encode_only(self) -> None:
+        commands, manifest = self._run_prepare(["--systems", "G,R,E,J,C", "--eph-systems", "G,R,E,J,C"])
+        rover, base = commands
+        self.assertNotIn("--eph-systems", rover)
+        self.assertEqual(base[base.index("--eph-systems") + 1], "G,R,E,J,C")
+        self.assertEqual(manifest["eph_systems"], "G,R,E,J,C")
+        # everything else on the base command line is what the default run builds
+        default_base = self._run_prepare(["--systems", "G,R,E,J,C"])[0][1]
+        stripped = list(base)
+        i = stripped.index("--eph-systems")
+        del stripped[i:i + 2]
+        self.assertEqual(stripped, default_base)
+
+
+class EncoderEphSystemsOptionTests(unittest.TestCase):
+    """`gnss_rtcm_encode --eph-systems` argument handling (needs a built gnss_rtcm_encode)."""
+
+    def setUp(self) -> None:
+        try:
+            self.encode = rt.find_binary("gnss_rtcm_encode", build_dir())
+        except SystemExit:
+            self.skipTest("gnss_rtcm_encode is not built")
+
+    def _run(self, *args: str):
+        import subprocess
+
+        return subprocess.run([self.encode, "--obs", "missing.obs", "--out", "unused.rtcm", *args],
+                              capture_output=True, text=True, timeout=30)
+
+    def test_rejects_unknown_system_letter(self) -> None:
+        done = self._run("--eph-systems", "G,X")
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("unsupported --eph-systems entry: X", done.stderr)
+
+    def test_rejects_empty_list(self) -> None:
+        done = self._run("--eph-systems", ",")
+        self.assertEqual(done.returncode, 1)
+        self.assertIn("--eph-systems needs at least one", done.stderr)
+
+    def test_help_lists_the_option(self) -> None:
+        import subprocess
+
+        done = subprocess.run([self.encode, "--help"], capture_output=True, text=True, timeout=30)
+        self.assertIn("--eph-systems", done.stdout + done.stderr)
+
+
 class SmokeSuiteTests(unittest.TestCase):
     """Runs the smoke preset (every fault kind) against the real gnss_live at 20x on the fixture."""
 

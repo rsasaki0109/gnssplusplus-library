@@ -222,3 +222,72 @@ TEST(RtcmStreamReference, ReferenceFromNavigationIsTheLatestGpsToe) {
     EXPECT_EQ(ref->week, 2324);
     EXPECT_NEAR(ref->tow, 201600.0, 1e-9);
 }
+
+namespace {
+
+// A plausible Kepler record for `system` that fits every field of its RTCM ephemeris message.
+Ephemeris keplerEphemeris(GNSSSystem system, int prn, const GNSSTime& toe, double sqrt_a) {
+    Ephemeris eph = gpsEphemeris(prn, toe);
+    eph.satellite = SatelliteId(system, static_cast<uint8_t>(prn));
+    eph.sqrt_a = sqrt_a;
+    eph.e = 0.002;
+    eph.i0 = 0.96;
+    eph.omega0 = 1.0;
+    eph.omega = 0.5;
+    eph.m0 = 0.25;
+    eph.sv_accuracy = 2.4;
+    eph.sv_health = 0.0;
+    eph.valid = true;
+    return eph;
+}
+
+}  // namespace
+
+TEST(RtcmStreamReference, BeiDouQzssAndGalileoEphemeridesAreDecodedAndSeedTheReference) {
+    io::RTCMProcessor encoder;
+
+    {
+        // BeiDou: toe/toc are GPST, week is the BDT week (GPS week 2324 = BDT week 968).
+        io::RTCMStreamDecoder decoder;
+        Ephemeris bds = keplerEphemeris(GNSSSystem::BeiDou, 21, GNSSTime(2324, 187214.0), 5282.635);
+        bds.week = 968;
+        bds.toes = 187200.0;
+        const auto frame = frameOf(encoder.encodeEphemeris(bds));
+        std::vector<io::RTCMStreamDecoder::Event> events;
+        ASSERT_TRUE(decoder.pushFrame(frame.data(), frame.size(), events));
+        ASSERT_EQ(events.size(), 1U);
+        EXPECT_EQ(events.front().message_type, io::RTCMMessageType::RTCM_1042);
+        EXPECT_TRUE(events.front().has_navigation);
+        EXPECT_EQ(decoder.getNavigationData().getEphemeris(bds.satellite).size(), 1U);
+        ASSERT_TRUE(decoder.referenceTime().has_value());
+        EXPECT_EQ(decoder.referenceTime()->week, 2324);
+        EXPECT_NEAR(decoder.referenceTime()->tow, 187214.0, 1e-6);
+    }
+    {
+        io::RTCMStreamDecoder decoder;
+        Ephemeris qzss = keplerEphemeris(GNSSSystem::QZSS, 2, GNSSTime(2324, 187200.0), 6493.5);
+        const auto frame = frameOf(encoder.encodeEphemeris(qzss));
+        std::vector<io::RTCMStreamDecoder::Event> events;
+        ASSERT_TRUE(decoder.pushFrame(frame.data(), frame.size(), events));
+        ASSERT_EQ(events.size(), 1U);
+        EXPECT_EQ(events.front().message_type, io::RTCMMessageType::RTCM_1044);
+        EXPECT_TRUE(events.front().has_navigation);
+        EXPECT_EQ(decoder.getNavigationData().getEphemeris(qzss.satellite).size(), 1U);
+        ASSERT_TRUE(decoder.referenceTime().has_value());
+        EXPECT_EQ(decoder.referenceTime()->week, 2324);
+    }
+    {
+        io::RTCMStreamDecoder decoder;
+        Ephemeris gal = keplerEphemeris(GNSSSystem::Galileo, 11, GNSSTime(2324, 187200.0), 5440.6);
+        gal.data_source_code = 513;
+        gal.iode = 47;
+        const auto frame = frameOf(encoder.encodeEphemeris(gal));
+        std::vector<io::RTCMStreamDecoder::Event> events;
+        ASSERT_TRUE(decoder.pushFrame(frame.data(), frame.size(), events));
+        ASSERT_EQ(events.size(), 1U);
+        EXPECT_EQ(events.front().message_type, io::RTCMMessageType::RTCM_1046);
+        EXPECT_TRUE(events.front().has_navigation);
+        ASSERT_TRUE(decoder.referenceTime().has_value());
+        EXPECT_EQ(decoder.referenceTime()->week, 2324);
+    }
+}

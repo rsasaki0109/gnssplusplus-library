@@ -1047,6 +1047,316 @@ RTCMMessage RTCMProcessor::encodeEphemeris(const Ephemeris& ephemeris) {
         return message;
     }
 
+    // Kepler-element fields shared by the Galileo (1045/1046), BeiDou (1042)
+    // and QZSS (1044) messages. Each message has its own bit widths and scale
+    // factors, so every value is quantized and range checked at the call site.
+    const auto quantize = [](double value, double scale) {
+        return static_cast<int64_t>(std::llround(value / scale));
+    };
+    const auto fitsSigned = [](int64_t value, int bits) {
+        return value >= -(1LL << (bits - 1)) && value <= ((1LL << (bits - 1)) - 1);
+    };
+    const auto fitsUnsigned = [](uint64_t value, int bits) {
+        return value <= ((1ULL << bits) - 1ULL);
+    };
+
+    if (ephemeris.satellite.system == GNSSSystem::Galileo &&
+        ephemeris.satellite.prn >= 1 && ephemeris.satellite.prn <= 36 &&
+        ephemeris.sqrt_a > 0.0) {
+        // RTCM 10403.3 3.5.13. The record's navigation message decides between
+        // F/NAV (1045) and I/NAV (1046); a record whose type is unknown is skipped.
+        bool inav = false;
+        if (ephemeris.navigation_message_type == NavigationMessageType::INAV) {
+            inav = true;
+        } else if (ephemeris.navigation_message_type == NavigationMessageType::FNAV) {
+            inav = false;
+        } else {
+            const bool inav_source = (ephemeris.data_source_code &
+                (galileo_data_source::kInavE1B | galileo_data_source::kInavE5bI)) != 0;
+            const bool fnav_source =
+                (ephemeris.data_source_code & galileo_data_source::kFnavE5aI) != 0;
+            if (inav_source == fnav_source) {
+                return RTCMMessage();
+            }
+            inav = inav_source;
+        }
+
+        const int gst_week = static_cast<int>(ephemeris.week) - 1024;
+        const double toe_seconds = ephemeris.toes != 0.0 ? ephemeris.toes : ephemeris.toe.tow;
+        const double toc_seconds = ephemeris.toc.tow;
+        const double sisa_meters = ephemeris.sv_accuracy;
+        const uint8_t sisa_index = (std::isfinite(sisa_meters) && sisa_meters >= 0.0)
+                                       ? galileoSisaIndexFromMeters(sisa_meters)
+                                       : ephemeris.ura;
+        const int svh = static_cast<int>(
+            (std::isfinite(ephemeris.sv_health) && ephemeris.sv_health >= 0.0)
+                ? ephemeris.sv_health : static_cast<double>(ephemeris.health));
+        const int64_t idot = quantize(ephemeris.idot, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t af2 = quantize(ephemeris.af2, kPow2Neg59);
+        const int64_t af1 = quantize(ephemeris.af1, kPow2Neg46);
+        const int64_t af0 = quantize(ephemeris.af0, kPow2Neg34);
+        const int64_t crs = quantize(ephemeris.crs, kPow2Neg5);
+        const int64_t delta_n = quantize(ephemeris.delta_n, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t m0 = quantize(ephemeris.m0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t cuc = quantize(ephemeris.cuc, kPow2Neg29);
+        const uint64_t eccentricity = static_cast<uint64_t>(quantize(ephemeris.e, kPow2Neg33));
+        const int64_t cus = quantize(ephemeris.cus, kPow2Neg29);
+        const uint64_t sqrt_a = static_cast<uint64_t>(quantize(ephemeris.sqrt_a, kPow2Neg19));
+        const int64_t cic = quantize(ephemeris.cic, kPow2Neg29);
+        const int64_t omega0 = quantize(ephemeris.omega0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t cis = quantize(ephemeris.cis, kPow2Neg29);
+        const int64_t i0 = quantize(ephemeris.i0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t crc = quantize(ephemeris.crc, kPow2Neg5);
+        const int64_t omega = quantize(ephemeris.omega, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t omega_dot = quantize(ephemeris.omega_dot, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t bgd_e5a = quantize(ephemeris.tgd, kPow2Neg32);
+        const int64_t bgd_e5b = quantize(ephemeris.tgd_secondary, kPow2Neg32);
+        const int64_t toe = quantize(toe_seconds, 60.0);
+        const int64_t toc = quantize(toc_seconds, 60.0);
+
+        if (gst_week < 0 || gst_week > 4095 ||
+            ephemeris.iode > 1023U ||
+            !fitsSigned(idot, 14) || !fitsSigned(af2, 6) || !fitsSigned(af1, 21) ||
+            !fitsSigned(af0, 31) || !fitsSigned(crs, 16) || !fitsSigned(delta_n, 16) ||
+            !fitsSigned(m0, 32) || !fitsSigned(cuc, 16) ||
+            eccentricity > 0xFFFFFFFFULL || !fitsSigned(cus, 16) ||
+            sqrt_a > 0xFFFFFFFFULL || !fitsSigned(cic, 16) ||
+            !fitsSigned(omega0, 32) || !fitsSigned(cis, 16) || !fitsSigned(i0, 32) ||
+            !fitsSigned(crc, 16) || !fitsSigned(omega, 32) || !fitsSigned(omega_dot, 24) ||
+            !fitsSigned(bgd_e5a, 10) || (inav && !fitsSigned(bgd_e5b, 10)) ||
+            toe < 0 || !fitsUnsigned(static_cast<uint64_t>(toe), 14) ||
+            toc < 0 || !fitsUnsigned(static_cast<uint64_t>(toc), 14)) {
+            return RTCMMessage();
+        }
+
+        std::vector<uint8_t> payload(inav ? 63 : 62, 0);
+        int bit_pos = 0;
+        writeUnsignedBits(payload, bit_pos, 12, inav ? 1046 : 1045); bit_pos += 12;
+        writeUnsignedBits(payload, bit_pos, 6, ephemeris.satellite.prn); bit_pos += 6;
+        writeUnsignedBits(payload, bit_pos, 12, static_cast<uint64_t>(gst_week)); bit_pos += 12;
+        writeUnsignedBits(payload, bit_pos, 10, ephemeris.iode); bit_pos += 10;
+        writeUnsignedBits(payload, bit_pos, 8, sisa_index); bit_pos += 8;
+        writeSignedBits(payload, bit_pos, 14, idot); bit_pos += 14;
+        writeUnsignedBits(payload, bit_pos, 14, static_cast<uint64_t>(toc)); bit_pos += 14;
+        writeSignedBits(payload, bit_pos, 6, af2); bit_pos += 6;
+        writeSignedBits(payload, bit_pos, 21, af1); bit_pos += 21;
+        writeSignedBits(payload, bit_pos, 31, af0); bit_pos += 31;
+        writeSignedBits(payload, bit_pos, 16, crs); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 16, delta_n); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, m0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, cuc); bit_pos += 16;
+        writeUnsignedBits(payload, bit_pos, 32, eccentricity); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, cus); bit_pos += 16;
+        writeUnsignedBits(payload, bit_pos, 32, sqrt_a); bit_pos += 32;
+        writeUnsignedBits(payload, bit_pos, 14, static_cast<uint64_t>(toe)); bit_pos += 14;
+        writeSignedBits(payload, bit_pos, 16, cic); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, omega0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, cis); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, i0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, crc); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, omega); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 24, omega_dot); bit_pos += 24;
+        writeSignedBits(payload, bit_pos, 10, bgd_e5a); bit_pos += 10;
+        if (inav) {
+            writeSignedBits(payload, bit_pos, 10, bgd_e5b); bit_pos += 10;
+            writeUnsignedBits(payload, bit_pos, 2, static_cast<uint64_t>((svh >> 7) & 0x3)); bit_pos += 2;
+            writeUnsignedBits(payload, bit_pos, 1, static_cast<uint64_t>((svh >> 6) & 0x1)); bit_pos += 1;
+            writeUnsignedBits(payload, bit_pos, 2, static_cast<uint64_t>((svh >> 1) & 0x3)); bit_pos += 2;
+            writeUnsignedBits(payload, bit_pos, 1, static_cast<uint64_t>(svh & 0x1)); bit_pos += 1;
+        } else {
+            writeUnsignedBits(payload, bit_pos, 2, static_cast<uint64_t>((svh >> 4) & 0x3)); bit_pos += 2;
+            writeUnsignedBits(payload, bit_pos, 1, static_cast<uint64_t>((svh >> 3) & 0x1)); bit_pos += 1;
+            writeUnsignedBits(payload, bit_pos, 7, 0); bit_pos += 7;
+        }
+
+        RTCMMessage message;
+        message.type = inav ? RTCMMessageType::RTCM_1046 : RTCMMessageType::RTCM_1045;
+        message.length = static_cast<uint16_t>(payload.size());
+        message.data = std::move(payload);
+        message.valid = true;
+        return message;
+    }
+
+    if (ephemeris.satellite.system == GNSSSystem::BeiDou &&
+        ephemeris.satellite.prn >= 1 && ephemeris.satellite.prn <= 63 &&
+        ephemeris.sqrt_a > 0.0) {
+        // RTCM 10403.3 3.5.12. toe/toc are BDT in the message; the library holds
+        // them in GPST (BDT + 14 s) with the raw BDT toe seconds in `toes` and the
+        // BDT week in `week`, which is what the RINEX reader produces.
+        const double toe_seconds =
+            ephemeris.toes != 0.0 ? ephemeris.toes : (ephemeris.toe - kBdtToGpstSeconds).tow;
+        const double toc_seconds = (ephemeris.toc - kBdtToGpstSeconds).tow;
+        const uint8_t ura_index =
+            (std::isfinite(ephemeris.sv_accuracy) && ephemeris.sv_accuracy > 0.0)
+                ? uraIndexFromMeters(ephemeris.sv_accuracy)
+                : ephemeris.ura;
+        const int64_t idot = quantize(ephemeris.idot, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t af2 = quantize(ephemeris.af2, kPow2Neg66);
+        const int64_t af1 = quantize(ephemeris.af1, kPow2Neg50);
+        const int64_t af0 = quantize(ephemeris.af0, kPow2Neg33);
+        const int64_t crs = quantize(ephemeris.crs, kPow2Neg6);
+        const int64_t delta_n = quantize(ephemeris.delta_n, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t m0 = quantize(ephemeris.m0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t cuc = quantize(ephemeris.cuc, kPow2Neg31);
+        const uint64_t eccentricity = static_cast<uint64_t>(quantize(ephemeris.e, kPow2Neg33));
+        const int64_t cus = quantize(ephemeris.cus, kPow2Neg31);
+        const uint64_t sqrt_a = static_cast<uint64_t>(quantize(ephemeris.sqrt_a, kPow2Neg19));
+        const int64_t cic = quantize(ephemeris.cic, kPow2Neg31);
+        const int64_t omega0 = quantize(ephemeris.omega0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t cis = quantize(ephemeris.cis, kPow2Neg31);
+        const int64_t i0 = quantize(ephemeris.i0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t crc = quantize(ephemeris.crc, kPow2Neg6);
+        const int64_t omega = quantize(ephemeris.omega, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t omega_dot = quantize(ephemeris.omega_dot, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t tgd1 = quantize(ephemeris.tgd, 1e-10);
+        const int64_t tgd2 = quantize(ephemeris.tgd_secondary, 1e-10);
+        const int64_t toe = quantize(toe_seconds, 8.0);
+        const int64_t toc = quantize(toc_seconds, 8.0);
+
+        if (ephemeris.week > 8191U ||
+            !fitsSigned(idot, 14) || !fitsSigned(af2, 11) || !fitsSigned(af1, 22) ||
+            !fitsSigned(af0, 24) || !fitsSigned(crs, 18) || !fitsSigned(delta_n, 16) ||
+            !fitsSigned(m0, 32) || !fitsSigned(cuc, 18) ||
+            eccentricity > 0xFFFFFFFFULL || !fitsSigned(cus, 18) ||
+            sqrt_a > 0xFFFFFFFFULL || !fitsSigned(cic, 18) ||
+            !fitsSigned(omega0, 32) || !fitsSigned(cis, 18) || !fitsSigned(i0, 32) ||
+            !fitsSigned(crc, 18) || !fitsSigned(omega, 32) || !fitsSigned(omega_dot, 24) ||
+            !fitsSigned(tgd1, 10) || !fitsSigned(tgd2, 10) ||
+            toe < 0 || !fitsUnsigned(static_cast<uint64_t>(toe), 17) ||
+            toc < 0 || !fitsUnsigned(static_cast<uint64_t>(toc), 17)) {
+            return RTCMMessage();
+        }
+
+        std::vector<uint8_t> payload(64, 0);
+        int bit_pos = 0;
+        writeUnsignedBits(payload, bit_pos, 12, 1042); bit_pos += 12;
+        writeUnsignedBits(payload, bit_pos, 6, ephemeris.satellite.prn); bit_pos += 6;
+        writeUnsignedBits(payload, bit_pos, 13, ephemeris.week); bit_pos += 13;
+        writeUnsignedBits(payload, bit_pos, 4, ura_index); bit_pos += 4;
+        writeSignedBits(payload, bit_pos, 14, idot); bit_pos += 14;
+        writeUnsignedBits(payload, bit_pos, 5, ephemeris.iode & 0x1FU); bit_pos += 5;
+        writeUnsignedBits(payload, bit_pos, 17, static_cast<uint64_t>(toc)); bit_pos += 17;
+        writeSignedBits(payload, bit_pos, 11, af2); bit_pos += 11;
+        writeSignedBits(payload, bit_pos, 22, af1); bit_pos += 22;
+        writeSignedBits(payload, bit_pos, 24, af0); bit_pos += 24;
+        writeUnsignedBits(payload, bit_pos, 5, ephemeris.iodc & 0x1FU); bit_pos += 5;
+        writeSignedBits(payload, bit_pos, 18, crs); bit_pos += 18;
+        writeSignedBits(payload, bit_pos, 16, delta_n); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, m0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 18, cuc); bit_pos += 18;
+        writeUnsignedBits(payload, bit_pos, 32, eccentricity); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 18, cus); bit_pos += 18;
+        writeUnsignedBits(payload, bit_pos, 32, sqrt_a); bit_pos += 32;
+        writeUnsignedBits(payload, bit_pos, 17, static_cast<uint64_t>(toe)); bit_pos += 17;
+        writeSignedBits(payload, bit_pos, 18, cic); bit_pos += 18;
+        writeSignedBits(payload, bit_pos, 32, omega0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 18, cis); bit_pos += 18;
+        writeSignedBits(payload, bit_pos, 32, i0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 18, crc); bit_pos += 18;
+        writeSignedBits(payload, bit_pos, 32, omega); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 24, omega_dot); bit_pos += 24;
+        writeSignedBits(payload, bit_pos, 10, tgd1); bit_pos += 10;
+        writeSignedBits(payload, bit_pos, 10, tgd2); bit_pos += 10;
+        writeUnsignedBits(payload, bit_pos, 1, ephemeris.health != 0 ? 1U : 0U); bit_pos += 1;
+
+        RTCMMessage message;
+        message.type = RTCMMessageType::RTCM_1042;
+        message.length = static_cast<uint16_t>(payload.size());
+        message.data = std::move(payload);
+        message.valid = true;
+        return message;
+    }
+
+    if (ephemeris.satellite.system == GNSSSystem::QZSS &&
+        ((ephemeris.satellite.prn >= 1 && ephemeris.satellite.prn <= 10) ||
+         (ephemeris.satellite.prn >= 193 && ephemeris.satellite.prn <= 202)) &&
+        ephemeris.sqrt_a > 0.0) {
+        // RTCM 10403.3 QZSS ephemeris (message 1044). The 4-bit satellite field is the
+        // PRN within the QZSS range (1 -> PRN 193); the library stores J01 as 1.
+        const int qzss_prn = ephemeris.satellite.prn >= 193 ? ephemeris.satellite.prn - 192
+                                                            : ephemeris.satellite.prn;
+        const double toe_seconds = ephemeris.toes != 0.0 ? ephemeris.toes : ephemeris.toe.tow;
+        const double toc_seconds = ephemeris.toc.tow;
+        const uint8_t ura_index =
+            (std::isfinite(ephemeris.sv_accuracy) && ephemeris.sv_accuracy > 0.0)
+                ? uraIndexFromMeters(ephemeris.sv_accuracy)
+                : ephemeris.ura;
+        const int64_t idot = quantize(ephemeris.idot, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t af2 = quantize(ephemeris.af2, kPow2Neg55);
+        const int64_t af1 = quantize(ephemeris.af1, kPow2Neg43);
+        const int64_t af0 = quantize(ephemeris.af0, kPow2Neg31);
+        const int64_t crs = quantize(ephemeris.crs, kPow2Neg5);
+        const int64_t delta_n = quantize(ephemeris.delta_n, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t m0 = quantize(ephemeris.m0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t cuc = quantize(ephemeris.cuc, kPow2Neg29);
+        const uint64_t eccentricity = static_cast<uint64_t>(quantize(ephemeris.e, kPow2Neg33));
+        const int64_t cus = quantize(ephemeris.cus, kPow2Neg29);
+        const uint64_t sqrt_a = static_cast<uint64_t>(quantize(ephemeris.sqrt_a, kPow2Neg19));
+        const int64_t cic = quantize(ephemeris.cic, kPow2Neg29);
+        const int64_t omega0 = quantize(ephemeris.omega0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t cis = quantize(ephemeris.cis, kPow2Neg29);
+        const int64_t i0 = quantize(ephemeris.i0, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t crc = quantize(ephemeris.crc, kPow2Neg5);
+        const int64_t omega = quantize(ephemeris.omega, kPow2Neg31 * kSemiCircleToRadians);
+        const int64_t omega_dot = quantize(ephemeris.omega_dot, kPow2Neg43 * kSemiCircleToRadians);
+        const int64_t tgd = quantize(ephemeris.tgd, kPow2Neg31);
+        const int64_t toe = quantize(toe_seconds, 16.0);
+        const int64_t toc = quantize(toc_seconds, 16.0);
+
+        if (!fitsSigned(idot, 14) || !fitsSigned(af2, 8) || !fitsSigned(af1, 16) ||
+            !fitsSigned(af0, 22) || !fitsSigned(crs, 16) || !fitsSigned(delta_n, 16) ||
+            !fitsSigned(m0, 32) || !fitsSigned(cuc, 16) ||
+            eccentricity > 0xFFFFFFFFULL || !fitsSigned(cus, 16) ||
+            sqrt_a > 0xFFFFFFFFULL || !fitsSigned(cic, 16) ||
+            !fitsSigned(omega0, 32) || !fitsSigned(cis, 16) || !fitsSigned(i0, 32) ||
+            !fitsSigned(crc, 16) || !fitsSigned(omega, 32) || !fitsSigned(omega_dot, 24) ||
+            !fitsSigned(tgd, 8) ||
+            toe < 0 || !fitsUnsigned(static_cast<uint64_t>(toe), 16) ||
+            toc < 0 || !fitsUnsigned(static_cast<uint64_t>(toc), 16)) {
+            return RTCMMessage();
+        }
+
+        std::vector<uint8_t> payload(61, 0);
+        int bit_pos = 0;
+        writeUnsignedBits(payload, bit_pos, 12, 1044); bit_pos += 12;
+        writeUnsignedBits(payload, bit_pos, 4, static_cast<uint64_t>(qzss_prn)); bit_pos += 4;
+        writeUnsignedBits(payload, bit_pos, 16, static_cast<uint64_t>(toc)); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 8, af2); bit_pos += 8;
+        writeSignedBits(payload, bit_pos, 16, af1); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 22, af0); bit_pos += 22;
+        writeUnsignedBits(payload, bit_pos, 8, ephemeris.iode & 0xFFU); bit_pos += 8;
+        writeSignedBits(payload, bit_pos, 16, crs); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 16, delta_n); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, m0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, cuc); bit_pos += 16;
+        writeUnsignedBits(payload, bit_pos, 32, eccentricity); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, cus); bit_pos += 16;
+        writeUnsignedBits(payload, bit_pos, 32, sqrt_a); bit_pos += 32;
+        writeUnsignedBits(payload, bit_pos, 16, static_cast<uint64_t>(toe)); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 16, cic); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, omega0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, cis); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, i0); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 16, crc); bit_pos += 16;
+        writeSignedBits(payload, bit_pos, 32, omega); bit_pos += 32;
+        writeSignedBits(payload, bit_pos, 24, omega_dot); bit_pos += 24;
+        writeSignedBits(payload, bit_pos, 14, idot); bit_pos += 14;
+        writeUnsignedBits(payload, bit_pos, 2, 0); bit_pos += 2;  // L2 code indicator
+        writeUnsignedBits(payload, bit_pos, 10, ephemeris.week % 1024U); bit_pos += 10;
+        writeUnsignedBits(payload, bit_pos, 4, ura_index); bit_pos += 4;
+        writeUnsignedBits(payload, bit_pos, 6, ephemeris.health & 0x3FU); bit_pos += 6;
+        writeSignedBits(payload, bit_pos, 8, tgd); bit_pos += 8;
+        writeUnsignedBits(payload, bit_pos, 10, ephemeris.iodc & 0x03FFU); bit_pos += 10;
+        writeUnsignedBits(payload, bit_pos, 1, 0); bit_pos += 1;  // fit interval: 2 hours
+
+        RTCMMessage message;
+        message.type = RTCMMessageType::RTCM_1044;
+        message.length = static_cast<uint16_t>(payload.size());
+        message.data = std::move(payload);
+        message.valid = true;
+        return message;
+    }
+
     return RTCMMessage();
 }
 

@@ -35,6 +35,8 @@ enum class RTCMMessageType : uint16_t {
     RTCM_1019 = 1019,  ///< GPS ephemeris
     RTCM_1020 = 1020,  ///< GLONASS ephemeris
     RTCM_1033 = 1033,  ///< Receiver and antenna descriptors
+    RTCM_1042 = 1042,  ///< BeiDou ephemeris
+    RTCM_1044 = 1044,  ///< QZSS ephemeris
     RTCM_1045 = 1045,  ///< Galileo F/NAV ephemeris
     RTCM_1046 = 1046,  ///< Galileo I/NAV ephemeris
     RTCM_1057 = 1057,  ///< GPS SSR orbit correction
@@ -180,8 +182,14 @@ public:
     
     /**
      * @brief Encode ephemeris to RTCM
+     *
+     * GPS -> 1019, GLONASS -> 1020, Galileo -> 1045 (F/NAV) or 1046 (I/NAV),
+     * BeiDou -> 1042, QZSS -> 1044. The Galileo message follows the record's
+     * navigation message type, or its RINEX data-source word; a record whose
+     * type cannot be determined is not encoded.
      * @param ephemeris Ephemeris data to encode
-     * @return Encoded RTCM message
+     * @return Encoded RTCM message; an invalid (default) message when the
+     *         record is unsupported or a field does not fit its RTCM range
      */
     RTCMMessage encodeEphemeris(const Ephemeris& ephemeris);
     

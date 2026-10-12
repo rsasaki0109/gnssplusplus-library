@@ -4,8 +4,8 @@
 // socket by `gnss realtime-stress`; there is no receiver in the loop.
 //
 // The stream layout mirrors a reference-station feed: periodic 1005 station
-// position, round-robin 1019/1020 broadcast ephemerides, and one observation
-// message per constellation for every epoch. The index file has one line per
+// position, round-robin 1019/1020 broadcast ephemerides (plus 1042/1044/1045/1046
+// with --eph-systems), and one observation message per constellation for every epoch. The index file has one line per
 // epoch: "<tow> <week> <byte_offset> <byte_length> <obs_messages> <aux_messages>".
 // The aux messages (station/ephemeris) are placed in front of the epoch they
 // are attached to, so a consumer can pace the stream per epoch without
@@ -47,6 +47,7 @@ struct Config {
     std::string summary_path;
     std::string rinex_out_path;
     std::string systems = "G";
+    std::string eph_systems = "GR";    // constellations that get ephemeris messages
     Format format = Format::MSM7;
     double start_offset_s = 0.0;
     double duration_s = 0.0;   // 0 = until end of file
@@ -62,7 +63,7 @@ struct Config {
 void usage(const char* argv0) {
     std::cerr
         << "Usage: " << argv0 << " --obs <rinex> --out <file.rtcm> [options]\n"
-        << "  --nav <rinex>            Broadcast navigation; enables 1019/1020 ephemeris messages\n"
+        << "  --nav <rinex>            Broadcast navigation; enables ephemeris messages (see --eph-systems)\n"
         << "  --index <file>           Per-epoch index (tow week offset length obs_msgs aux_msgs)\n"
         << "  --summary-json <file>    Write a small JSON summary of what was encoded\n"
         << "  --rinex-out <file>       Also write the exact encoded epochs as RINEX (batch-parity input)\n"
@@ -73,6 +74,9 @@ void usage(const char* argv0) {
         << "  --start-offset <s>       Skip the first s seconds of the file\n"
         << "  --duration <s>           Encode at most s seconds (0 = all)\n"
         << "  --decimate <n>           Keep every n-th epoch (default 1)\n"
+        << "  --eph-systems <G,R,E,J,C>  Constellations that get ephemeris messages (default: G,R):\n"
+        << "                           G 1019, R 1020, E 1045/1046, J 1044, C 1042. Only systems that\n"
+        << "                           are also in --systems are broadcast.\n"
         << "  --eph-interval <s>       Ephemeris repeat interval (default 30, 0 = off)\n"
         << "  --station-interval <s>   Station repeat interval (default 10)\n"
         << "  --no-eph-burst           Do not emit all ephemerides before the first epoch\n";
@@ -195,6 +199,22 @@ int main(int argc, char** argv) {
         } else if (arg == "--start-offset" && need(1)) cfg.start_offset_s = std::stod(argv[++i]);
         else if (arg == "--duration" && need(1)) cfg.duration_s = std::stod(argv[++i]);
         else if (arg == "--decimate" && need(1)) cfg.decimate = std::max(1, std::stoi(argv[++i]));
+        else if (arg == "--eph-systems" && need(1)) {
+            cfg.eph_systems.clear();
+            for (char c : std::string(argv[++i])) {
+                if (c == ',') continue;
+                c = static_cast<char>(std::toupper(c));
+                if (std::string("GRECJ").find(c) == std::string::npos) {
+                    std::cerr << "unsupported --eph-systems entry: " << c << " (use G,R,E,J,C)\n";
+                    return 1;
+                }
+                if (cfg.eph_systems.find(c) == std::string::npos) cfg.eph_systems.push_back(c);
+            }
+            if (cfg.eph_systems.empty()) {
+                std::cerr << "--eph-systems needs at least one of G,R,E,J,C\n";
+                return 1;
+            }
+        }
         else if (arg == "--eph-interval" && need(1)) cfg.eph_interval_s = std::stod(argv[++i]);
         else if (arg == "--station-interval" && need(1)) cfg.station_interval_s = std::stod(argv[++i]);
         else if (arg == "--no-eph-burst") cfg.eph_burst = false;
@@ -234,11 +254,22 @@ int main(int argc, char** argv) {
         // Only broadcast ephemerides for constellations whose observations are in the stream: a
         // consumer infers the GPS week from the first ephemeris it sees, and decoded GLONASS
         // ephemerides carry a host-clock-derived week that is wrong for replayed old data.
+        // --eph-systems further restricts which of those constellations get ephemeris messages.
+        const auto systemLetter = [](GNSSSystem system) -> char {
+            switch (system) {
+                case GNSSSystem::GPS: return 'G';
+                case GNSSSystem::GLONASS: return 'R';
+                case GNSSSystem::Galileo: return 'E';
+                case GNSSSystem::QZSS: return 'J';
+                case GNSSSystem::BeiDou: return 'C';
+                default: return '\0';
+            }
+        };
         for (const auto& [sat, list] : nav.ephemeris_data) {
             (void)list;
-            const bool wanted_gps = sat.system == GNSSSystem::GPS && cfg.systems.find('G') != std::string::npos;
-            const bool wanted_glo = sat.system == GNSSSystem::GLONASS && cfg.systems.find('R') != std::string::npos;
-            if (wanted_gps || wanted_glo) {
+            const char letter = systemLetter(sat.system);
+            if (letter != '\0' && cfg.systems.find(letter) != std::string::npos &&
+                cfg.eph_systems.find(letter) != std::string::npos) {
                 eph_sats.push_back(sat);
             }
         }
