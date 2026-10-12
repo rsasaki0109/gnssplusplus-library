@@ -673,6 +673,12 @@ if(GTest_FOUND)
         NAME python_use_case_guide_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_use_case_guides.py
     )
+    # The real-time guide's First output command runs against the built gnss_live
+    # (skips cleanly when the binary is absent).
+    set_tests_properties(
+        python_use_case_guide_tests
+        PROPERTIES ENVIRONMENT "GNSSPP_BUILD_DIR=${CMAKE_BINARY_DIR}"
+    )
     add_test(
         NAME python_urban_bridge_score_tests
         COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_urban_bridge_score.py

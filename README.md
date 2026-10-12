@@ -16,6 +16,7 @@ handling without an external RTKLIB runtime.
 
 [Choose a use case](docs/use_cases.md): [urban RTK + IMU continuity](docs/use_cases/urban_rtk_fgo.md),
 [urban canyon RTK options](docs/use_cases/urban_canyon_rtk_options.md),
+[real-time RTK with `gnss live`](docs/use_cases/realtime_rtk_gnss_live.md),
 [RTKLIB migration](docs/use_cases/rtklib_migration.md),
 [ROS2 receiver/bag replay](docs/use_cases/ros2.md), or [QZSS L6 / CLAS / MADOCA](docs/use_cases/qzss_l6.md).
 
