@@ -246,14 +246,32 @@ the run, and the summary line only gains `rover_reconnects=` / `base_reconnects=
 
 ## Wrong FIX on the real-time path
 
-**Do not trust a `gnss live` FIX in a dense urban canyon.** In GPS-only recorded
-replays, `gnss live --preset low-cost` published FIX epochs of which 48.7 % were
-more than 0.5 m off on UrbanNav Shinjuku (Trimble rover; 1710 of 3510) and
-32.4 % on Shinjuku (u-blox), against 0.7–17.9 % on the PPC runs below. `gnss
-live` lacks `gnss solve`'s whole-solution post-filters, and GPS alone gives weak
-ambiguity geometry. Multi-constellation MSM now works in `gnss live` and lowers
-Wrong/FIX on every PPC run (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly));
-the UrbanNav Shinjuku runs have not been replayed multi-constellation yet.
+**Do not trust a `gnss live` FIX in a dense urban canyon.** Even with all
+constellations, `gnss live --preset low-cost` published FIX epochs that were more
+than 0.5 m off on three of the four UrbanNav Tokyo runs at rates above 5 %. These
+are offline replays of the 2018-12-19 runs: G+R+E+J+C MSM7, `--nav-rinex`, the
+surveyed base and the real host clock, measured against a contract frozen
+before the run on 2026-10-12.
+
+| UrbanNav Tokyo, `--preset low-cost` | FIX, GPS-only → multi | wrong FIX, GPS-only → multi | Wrong/FIX, GPS-only → multi | FIXED 3D p95, multi |
+|---|---|---|---|---|
+| Shinjuku, Trimble rover | 3511 → 13963 | 1711 → 1687 | 48.7 % → **12.1 %** | 1.59 m |
+| Shinjuku, u-blox rover | 623 → 5043 | 202 → 276 | 32.4 % → **5.5 %** | 0.60 m |
+| Odaiba, Trimble rover | 4419 → 7687 | 125 → 78 | 2.8 % → 1.0 % | 0.17 m |
+| Odaiba, u-blox rover | 0 → 2580 | 0 → 574 | – → **22.2 %** | 3.30 m |
+
+* Multi-GNSS fixes three to eight times more epochs and cuts Wrong/FIX on both Shinjuku runs and on Odaiba
+  Trimble. The number of wrong fixes does not go down much. On Odaiba u-blox, GPS alone never fixes, while
+  multi-GNSS fixes 42 % of epochs and 22 % of those fixes are wrong.
+* Most of these wrong fixes are decimetres to a few metres off, not tens of metres: see the FIXED 3D p95
+  column. That still matters for anything that trusts the FIX flag.
+* `--kinematic-post-filter` (opt-in) lowers multi-GNSS Wrong/FIX only slightly (12.1 → 11.2 %, 5.5 → 4.8 %,
+  1.0 → 0.4 %, 22.2 → 20.5 %). It cuts the all-solution 3D p95 several-fold (Shinjuku Trimble 65 → 4 m) by
+  withholding 18–34 % of solutions. It does not remove wrong fixes.
+* On the PPC runs the multi-GNSS low-cost Wrong/FIX is 1.2–3.7 %
+  (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)).
+* `gnss live` lacks `gnss solve`'s whole-solution post-filters.
+* The GPS-only numbers (48.7 % and 32.4 %) come from the GPS-only replay described below.
 
 A frozen-contract check (2026-10-11) of
 `--preset low-cost --kinematic-post-filter` plus `FixRecoveryGuard` was
