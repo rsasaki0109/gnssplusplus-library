@@ -288,6 +288,12 @@ public:
 
     /**
      * @brief Add ephemeris data
+     *
+     * Each satellite's records are kept sorted by toe, with ties broken by a
+     * fixed total order (Galileo I/NAV before F/NAV, then data_source_code,
+     * iode, iodc, toc, af0..af2, ...), so the stored order, and therefore the
+     * record getEphemeris() picks among equal-toe copies, does not depend on
+     * the order records were added in.
      */
     void addEphemeris(const Ephemeris& eph);
 
