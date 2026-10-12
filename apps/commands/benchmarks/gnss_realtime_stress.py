@@ -257,7 +257,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     scenario = Scenario(
         name=args.name, speed=args.speed, transport=args.transport, faults=faults,
         start_offset=args.start_offset, duration=args.duration, loops=args.loops, loop_gap=args.loop_gap, max_wall=args.max_wall,
-        supervise=args.supervise, restart_delay=args.restart_delay, reconnect=args.reconnect, live_args=live_args_for(args),
+        supervise=args.supervise, restart_delay=args.restart_delay, reconnect=args.reconnect,
+        reconnect_delay_ms=args.reconnect_delay_ms, live_args=live_args_for(args),
         sample_interval=args.sample_interval, compact=args.compact, batch_parity=args.batch_parity,
     )
     out_dir = Path(args.out_dir)
@@ -485,6 +486,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--loop-gap", type=float, default=60.0, help="Silent gap (stream s) between repeats of the window.")
     p.add_argument("--max-wall", type=float, default=0.0, help="Wall-clock cap in seconds (soak).")
     p.add_argument("--reconnect", action="store_true", help="Run gnss_live with --reconnect (needs a build that has it).")
+    p.add_argument("--reconnect-delay-ms", type=int, default=200,
+                   help="Delay between gnss_live reconnect attempts when --reconnect is set (default 200).")
     p.add_argument("--supervise", action="store_true", help="Restart gnss_live if it exits before the stream ends.")
     p.add_argument("--restart-delay", type=float, default=1.0)
     p.add_argument("--compact", action="store_true", help="Keep only time/status per output epoch (long soaks).")

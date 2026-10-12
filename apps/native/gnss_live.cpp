@@ -86,6 +86,8 @@ struct LiveConfig {
     bool reconnect = false;
     int reconnect_delay_ms = 2000;
     int reconnect_attempts = 0;
+    // Opt-in stall watchdog for tcp:// and serial/device sources (0 = off, blocking reads).
+    int stall_timeout_ms = 0;
     bool enable_base_interpolation = true;
     // Merge the per-constellation MSM messages of one epoch (RTCM multiple-message
     // bit) into a single epoch; --no-rtcm-epoch-assembly restores one epoch per message.
@@ -157,6 +159,10 @@ struct RoverUbxSource {
     int serial_fd = -1;
 #endif
     size_t bytes_read = 0;
+    // --stall-timeout-ms for a serial/device rover (file input is unaffected).
+    int stall_timeout_ms = 0;
+    int stalls = 0;
+    bool last_read_stalled = false;
     bool serial = false;
     bool eof = false;
 };
@@ -554,6 +560,10 @@ void printUsage(const char* argv0) {
         << "  --reconnect                Reconnect NTRIP/tcp:// sources that drop or stall (default: end at the first failed read)\n"
         << "  --reconnect-delay-ms <ms>  Delay between reconnect attempts (default: 2000)\n"
         << "  --reconnect-attempts <n>   Give up after n consecutive failed reads/reconnects (0 = never, default: 0)\n"
+        << "  --stall-timeout-ms <ms>    Treat a tcp:// or serial/device source that sends no byte for <ms> as stalled\n"
+        << "                            (default: 0 = off, blocking reads). With --reconnect a stalled tcp:// source is\n"
+        << "                            closed and reconnected (counts as a failed read); otherwise the source ends like EOF.\n"
+        << "                            NTRIP keeps its own timeout; file inputs are unaffected.\n"
         << "  --no-rtcm-epoch-assembly   Treat every RTCM observation message as its own epoch (default: merge the\n"
         << "                            per-constellation MSM messages of one epoch using the multiple-message bit)\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
@@ -707,6 +717,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.reconnect_delay_ms = std::stoi(argv[++i]);
         } else if (arg == "--reconnect-attempts" && i + 1 < argc) {
             config.reconnect_attempts = std::stoi(argv[++i]);
+        } else if (arg == "--stall-timeout-ms" && i + 1 < argc) {
+            config.stall_timeout_ms = std::stoi(argv[++i]);
         } else if (arg == "--no-rtcm-epoch-assembly") {
             config.assemble_rtcm_epochs = false;
         } else if (arg == "--no-base-interp") {
@@ -837,6 +849,9 @@ LiveConfig parseArguments(int argc, char** argv) {
     if (config.reconnect_delay_ms < 0) {
         argumentError("--reconnect-delay-ms must be >= 0", argv[0]);
     }
+    if (config.stall_timeout_ms < 0) {
+        argumentError("--stall-timeout-ms must be >= 0", argv[0]);
+    }
     if (config.reconnect_attempts < 0) {
         argumentError("--reconnect-attempts must be >= 0", argv[0]);
     }
@@ -880,6 +895,9 @@ bool openSource(const std::string& path, size_t message_limit, SourceState& sour
         source.reader.setAutoReconnect(true, config.reconnect_delay_ms);
         source.reconnect = true;
         source.reconnect_attempts = config.reconnect_attempts;
+    }
+    if (config.stall_timeout_ms > 0) {
+        source.reader.setStallTimeoutMs(config.stall_timeout_ms);
     }
     return true;
 }
@@ -927,6 +945,8 @@ bool openRoverUbxSource(const std::string& path, int baud, RoverUbxSource& sourc
     source.decoder.clear();
     source.bytes_read = 0;
     source.eof = false;
+    source.stalls = 0;
+    source.last_read_stalled = false;
     source.serial = false;
     source.file = std::ifstream();
 #ifndef _WIN32
@@ -1031,12 +1051,22 @@ bool readNextUbxObservation(RoverUbxSource& source,
                             libgnss::ObservationData& obs,
                             std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
     events.clear();
+    source.last_read_stalled = false;
     std::vector<uint8_t> chunk(4096);
 
     while (true) {
         size_t bytes_read = 0;
         if (source.serial) {
 #ifndef _WIN32
+            // Opt-in stall watchdog (same poll() wait as RTCMReader); a serial device cannot be
+            // reconnected, so a stall ends the rover source like EOF.
+            if (source.stall_timeout_ms > 0 &&
+                libgnss::io::waitForReadable(source.serial_fd, source.stall_timeout_ms) == 0) {
+                ++source.stalls;
+                source.last_read_stalled = true;
+                source.eof = true;
+                return false;
+            }
             const ssize_t count = ::read(source.serial_fd, chunk.data(), chunk.size());
             if (count < 0) {
                 if (errno == EINTR) {
@@ -1118,6 +1148,7 @@ int main(int argc, char** argv) {
                           << config.rover_ubx_path << "\n";
                 return 1;
             }
+            rover_ubx_source.stall_timeout_ms = config.stall_timeout_ms;
         }
         if (!openSource(config.base_rtcm_path, config.base_message_limit, base_source, config)) {
             std::cerr << "Error: failed to open base RTCM source: "
@@ -1461,8 +1492,16 @@ int main(int argc, char** argv) {
             }
         }
 
+        const bool rover_stalled = !rover_ok && (rover_input_kind == RoverInputKind::RTCM
+            ? rover_rtcm_source.reader.lastReadStalled()
+            : rover_ubx_source.last_read_stalled);
+        const bool base_stalled = !base_ok && base_source.reader.lastReadStalled();
         if (termination_reason == "running") {
-            if (!initial_rover_observation_ok) {
+            if (rover_stalled) {
+                termination_reason = "rover_source_stalled";
+            } else if (base_stalled) {
+                termination_reason = "base_source_stalled";
+            } else if (!initial_rover_observation_ok) {
                 termination_reason = "no_initial_rover_observation";
             } else if (!initial_base_observation_ok) {
                 termination_reason = "no_initial_base_observation";
@@ -1488,6 +1527,10 @@ int main(int argc, char** argv) {
         const DecoderSummaryStats base_stats = summarizeRtcmSource(base_source);
         const int rover_reconnects = rover_rtcm_source.reader.reconnectCount();
         const int base_reconnects = base_source.reader.reconnectCount();
+        const int rover_stalls = rover_input_kind == RoverInputKind::RTCM
+            ? rover_rtcm_source.reader.stallCount()
+            : rover_ubx_source.stalls;
+        const int base_stalls = base_source.reader.stallCount();
 
         writer.close();
         if (rover_input_kind == RoverInputKind::RTCM) {
@@ -1551,6 +1594,10 @@ int main(int argc, char** argv) {
         if (config.reconnect) {
             std::cout << " rover_reconnects=" << rover_reconnects
                       << " base_reconnects=" << base_reconnects;
+        }
+        if (config.stall_timeout_ms > 0) {
+            std::cout << " rover_stalls=" << rover_stalls
+                      << " base_stalls=" << base_stalls;
         }
         std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;

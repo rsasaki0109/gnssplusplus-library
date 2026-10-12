@@ -211,7 +211,11 @@ FAULT_KINDS = (
     "rover_disconnect",  # rover server drops the connection and refuses reconnects for `dur` s
     "base_disconnect",   # same for base
     "server_restart",    # both servers go down for `dur` s
+    "base_blackhole",    # at `at` the current base connection stays open but nothing more is sent on it
+    "rover_blackhole",   # same for rover; a new connection is served normally (`dur` must be 0)
 )
+
+BLACKHOLE_KINDS = ("base_blackhole", "rover_blackhole")
 
 
 @dataclass
@@ -224,6 +228,9 @@ class Fault:
     def __post_init__(self) -> None:
         if self.kind not in FAULT_KINDS:
             raise ValueError(f"unknown fault kind {self.kind!r}; expected one of {', '.join(FAULT_KINDS)}")
+        if self.kind in BLACKHOLE_KINDS and self.dur != 0.0:
+            raise ValueError(f"{self.kind} is open ended (the connection stays silent until the client "
+                             f"reconnects); dur must be 0, got {self.dur}")
 
     @property
     def end(self) -> float:
@@ -331,12 +338,17 @@ class StreamServer:
         self._listener_lock = threading.Lock()
         self._client: socket.socket | None = None
         self._client_lock = threading.Lock()
+        # stream time at which the current client connected (-inf before the clock starts)
+        self._client_since = -math.inf
+        # connections silenced by a *_blackhole fault, kept open until stop()
+        self._held: list[socket.socket] = []
         self.port = port
         self.log: list[dict[str, Any]] = []
         self.counters: dict[str, int] = {
             "epochs_planned": 0, "epochs_sent": 0, "epochs_dropped": 0, "frames_corrupted": 0,
             "frames_sent": 0, "bytes_sent": 0, "connections": 0, "disconnects_forced": 0,
-            "send_errors": 0, "epochs_no_client": 0, "epochs_reordered": 0,
+            "send_errors": 0, "epochs_no_client": 0, "epochs_reordered": 0, "epochs_blackholed": 0,
+            "connections_blackholed": 0,
         }
         self.connection_times: list[float] = []
         self.finished = threading.Event()
@@ -372,10 +384,29 @@ class StreamServer:
             return f"ntrip://127.0.0.1:{self.port}/{self.mountpoint}"
         return f"tcp://127.0.0.1:{self.port}"
 
-    def _drop_client(self) -> None:
+    def _blackhole_at(self) -> float | None:
+        """Time of the first blackhole fault that silenced the connection made at `_client_since`."""
+        for f in self.faults:
+            if f.kind == f"{self.name}_blackhole" and self._client_since < f.at:
+                return f.at
+        return None
+
+    def _is_blackholed(self, stream_t: float) -> bool:
+        """True when the current connection predates a blackhole fault that is already in effect."""
+        at = self._blackhole_at()
+        return at is not None and stream_t >= at
+
+    def _drop_client(self, keep_if_blackholed: bool = False) -> None:
         with self._client_lock:
             client, self._client = self._client, None
-        if client is not None:
+            held = False
+            if client is not None and keep_if_blackholed and self.clock.started.is_set():
+                if self._is_blackholed(self.clock.stream_time()):
+                    # A dead peer never sends FIN: keep our end open until the harness stops.
+                    self._held.append(client)
+                    self.counters["connections_blackholed"] += 1
+                    held = True
+        if client is not None and not held:
             try:
                 client.shutdown(socket.SHUT_RDWR)
             except OSError:
@@ -454,9 +485,10 @@ class StreamServer:
                 conn.close()
                 continue
             conn.settimeout(None)
-            self._drop_client()
+            self._drop_client(keep_if_blackholed=True)
             with self._client_lock:
                 self._client = conn
+                self._client_since = self.clock.stream_time() if self.clock.started.is_set() else -math.inf
             self.counters["connections"] += 1
             self.connection_times.append(time.monotonic())
             if not self._first_client.is_set():
@@ -538,6 +570,14 @@ class StreamServer:
             meta["sent"] = False
             meta["dropped_reason"] = "no_client"
             self.counters["epochs_no_client"] += 1
+            self._log(meta)
+            return
+        if self._is_blackholed(meta["stream_t"]):
+            # *_blackhole: the connection stays open but is silent from `at` on.
+            meta["sent"] = False
+            meta["dropped_reason"] = "blackhole"
+            meta["fault"] = f"{self.name}_blackhole"
+            self.counters["epochs_blackholed"] += 1
             self._log(meta)
             return
         try:
@@ -627,9 +667,18 @@ class StreamServer:
         self._acceptor.start()
         self._sender.start()
 
+    def _close_held(self) -> None:
+        held, self._held = self._held, []
+        for conn in held:
+            try:
+                conn.close()
+            except OSError:
+                pass
+
     def stop(self) -> None:
         self.stop_event.set()
         self._drop_client()
+        self._close_held()
         self._unbind()
         for t in (self._sender, self._acceptor):
             if t is not None:
@@ -644,6 +693,7 @@ class StreamServer:
         time.sleep(linger)
         self._ended = True
         self._drop_client()
+        self._close_held()
         self._unbind()
 
 
@@ -1234,6 +1284,8 @@ def analyze_scenario(scenario: Scenario, runs: list[LiveRun], rover_srv: StreamS
     err_rows: list[tuple[float, float, float, int, float]] = []
     rows_out: list[dict[str, Any]] = []
     status_seq: list[tuple[float, int]] = []
+    # (data stream time, stream time at which gnss_live wrote the row) per output epoch
+    prod_seq: list[tuple[float, float]] = []
     total_rows = 0
     for run in runs:
         for r in run.rows:
@@ -1250,8 +1302,10 @@ def analyze_scenario(scenario: Scenario, runs: list[LiveRun], rover_srv: StreamS
             if latency is not None:
                 latencies.append(latency)
             status_seq.append((stream_t, status))
+            prod_t = clock.stream_time(mono)
+            prod_seq.append((stream_t, prod_t))
             row: dict[str, Any] = {"run": run.index, "mono": mono, "tow": tow, "stream_t": stream_t,
-                                   "status": status, "latency_s": latency}
+                                   "status": status, "latency_s": latency, "prod_stream_t": prod_t}
             if len(r) > 4:
                 row.update(x=r[4], y=r[5], z=r[6], nsat=r[7], ratio=r[8])
                 if reference is not None and shift_period == 0.0:
@@ -1262,7 +1316,8 @@ def analyze_scenario(scenario: Scenario, runs: list[LiveRun], rover_srv: StreamS
             rows_out.append(row)
     status_seq.sort()
     if rows_out:
-        cols = ["run", "wall_s", "tow", "stream_t", "status", "latency_s", "nsat", "ratio", "e", "n", "u"]
+        cols = ["run", "wall_s", "tow", "stream_t", "status", "latency_s", "nsat", "ratio", "e", "n", "u",
+                "prod_stream_t"]
         t_base = runs[0].started
         with open(out_dir / "epochs.csv", "w", newline="") as fh:
             w = csv.writer(fh)
@@ -1299,12 +1354,13 @@ def analyze_scenario(scenario: Scenario, runs: list[LiveRun], rover_srv: StreamS
                             e.get("corrupted_frames", 0), int(bool(e.get("reordered")))])
 
     summaries = [r.summary for r in runs]
-    agg_keys = ("rover_decoder_errors", "base_decoder_errors", "skipped_rover_epochs", "held_base_epochs",
+    agg_keys = ("rover_stalls", "base_stalls", "rover_reconnects", "base_reconnects", "rover_decoder_errors", "base_decoder_errors", "skipped_rover_epochs", "held_base_epochs",
                 "interpolated_base_epochs", "exact_base_epochs", "written_solutions", "fixed_solutions",
                 "aligned_epochs", "rover_messages", "base_messages")
     live_totals = {k: sum(int(s.get(k, 0) or 0) for s in summaries) for k in agg_keys}
     window_len = rover_srv.plan.span
-    fault_reports = evaluate_faults(scenario, runs, status_seq, latencies, rover_srv, base_srv, live_totals)
+    fault_reports = evaluate_faults(scenario, runs, status_seq, latencies, rover_srv, base_srv, live_totals,
+                                    prod_seq=prod_seq, stream_end=window_len + shift_period * rover_srv.last_loop)
 
     last = runs[-1] if runs else None
     single = len(runs) == 1
@@ -1409,7 +1465,8 @@ def window_accuracy(scenario: Scenario, err_rows: list[tuple[float, float, float
 
 def evaluate_faults(scenario: Scenario, runs: list[LiveRun], status_seq: list[tuple[float, int]],
                     latencies: list[float], rover_srv: StreamServer, base_srv: StreamServer,
-                    totals: dict[str, int]) -> list[dict[str, Any]]:
+                    totals: dict[str, int], prod_seq: list[tuple[float, float]] | None = None,
+                    stream_end: float = 0.0) -> list[dict[str, Any]]:
     """Per fault: was it detected/reported by gnss_live, and how long did FLOAT/FIX take to come back."""
     reports = []
     times = [t for t, _ in status_seq]
@@ -1430,6 +1487,13 @@ def evaluate_faults(scenario: Scenario, runs: list[LiveRun], status_seq: list[tu
             if t2 >= f.at and t1 <= end + 60.0:
                 gap = max(gap, t2 - t1)
         rep["max_output_gap_s"] = gap
+        if prod_seq is not None:
+            # "Recovery" as seen by a user: when the first row for post-fault data was written
+            # (production time), alongside the data time of that first row.
+            post = [(d, p) for d, p in prod_seq if d >= f.at]
+            rep["first_solution_after_s"] = (min(p for _, p in post) - f.at) if post else None
+            rep["first_solution_data_s"] = (min(d for d, _ in post) - f.at) if post else None
+            rep["solutions_from_30s_after"] = sum(1 for d, _ in prod_seq if f.at + 30.0 <= d < stream_end + 1e-6)
         evidence: list[str] = []
         kind = f.kind
         if kind.startswith("corrupt_"):
@@ -1448,6 +1512,26 @@ def evaluate_faults(scenario: Scenario, runs: list[LiveRun], status_seq: list[tu
                 evidence.append("client_reconnected")
             if early_exit:
                 evidence.append("process_exit:" + str(early_exit[0].summary.get("termination")))
+        elif kind in BLACKHOLE_KINDS:
+            target = kind.split("_", 1)[0]
+            srv = rover_srv if target == "rover" else base_srv
+            stalls = totals.get(f"{target}_stalls", 0)
+            rep["epochs_blackholed"] = srv.counters["epochs_blackholed"]
+            rep["connections_blackholed"] = srv.counters["connections_blackholed"]
+            rep["connections"] = {"rover": rover_srv.counters["connections"], "base": base_srv.counters["connections"]}
+            rep[f"{target}_stalls_reported"] = stalls
+            rep["process_exits_before_stream_end"] = len(early_exit)
+            if stalls > 0:
+                evidence.append(f"{target}_stalls={stalls}")
+            if srv.counters["connections"] > 1:
+                evidence.append("client_reconnected")
+            if gap >= 1.0:
+                evidence.append(f"output_gap={gap:.1f}s")
+            if early_exit:
+                evidence.append("process_exit:" + str(early_exit[0].summary.get("termination")))
+            stalled_exit = [r for r in runs if str(r.summary.get("termination", "")).endswith("_source_stalled")]
+            if stalled_exit:
+                evidence.append("process_exit:" + str(stalled_exit[0].summary.get("termination")))
         elif kind in ("base_outage", "base_stall", "rover_outage"):
             if kind == "base_stall" and latencies and max(latencies) >= 0.5 * f.dur / max(scenario.speed, 1e-9):
                 evidence.append(f"latency_max={max(latencies):.2f}s")

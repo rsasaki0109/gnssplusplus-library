@@ -131,6 +131,45 @@ gains `post_filter_dropped_epochs=`; dropped epochs are missing rows in the
 `.pos`. Measured effect and its limits: [Real-time stress
 harness](realtime_stress.md#wrong-fix-on-the-real-time-path).
 
+### Stall watchdog for `gnss live` (`--stall-timeout-ms`)
+
+Opt-in (default `0` = off: reads block as before and the output, including the
+`summary:` line, is unchanged). A `tcp://` source that stays connected but sends
+nothing blocks `read()` forever; `--reconnect` only reacts to read errors and
+EOF, so a dead peer that never sends a FIN hangs `gnss live`.
+
+With `--stall-timeout-ms <ms>` (`> 0`) `gnss live` polls a `tcp://` or
+`serial://`/device source for readability before each `read()`. If no byte
+arrives for `<ms>` the source is *stalled*:
+
+- with `--reconnect` (`tcp://` only): the socket is closed and reopened,
+  following `--reconnect-delay-ms` and `--reconnect-attempts`; a stall counts as
+  a failed read, so `n` consecutive stalls exhaust `--reconnect-attempts n`;
+- without `--reconnect`, and for serial/device sources (which have no reconnect):
+  the source ends like EOF.
+
+The `summary:` line gains `rover_stalls=` and `base_stalls=` (only when the flag
+is set), and `termination=rover_source_stalled` / `base_source_stalled` when a
+stall is what ended the run. The timer measures silence on the descriptor, not
+epoch rate, so it is a transport-level dead-peer detector; pick a value above the
+longest gap the peer legitimately leaves (a 1 Hz base needs well above 1000).
+
+What it applies to:
+
+- `tcp://` rover/base: yes. `serial://` / device base or rover RTCM: yes.
+- `--rover-ubx` from a serial device: yes, the same `poll()` before the device
+  `read()`; a stall ends the rover source (no reconnect for serial). A UBX file: no.
+- RTCM files: no effect.
+- NTRIP (`ntrip://`, `http(s)://`): unchanged. `NTRIPClient` already waits with
+  `select()` (1 s per read) and returns "no message" on a quiet but connected caster;
+  it reconnects only when the socket is closed, not when the caster is silent, and
+  `--stall-timeout-ms` does not change that or reuse its timeout.
+
+Only the source being read can stall: while `gnss live` waits on the base, the
+rover socket is not read (and vice versa), so a stall is detected on the source
+that is blocked. See [Real-time stress harness](realtime_stress.md) for the
+`base_blackhole` / `rover_blackhole` faults that exercise it.
+
 ### Per-epoch uncertainty in `.pos` (`--pos-uncertainty`)
 
 `gnss solve`, `gnss replay` and `gnss live` accept `--pos-uncertainty` (default

@@ -14,6 +14,7 @@
 
 #ifndef _WIN32
 #include <netdb.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <cerrno>
 #include <fcntl.h>
@@ -69,12 +70,40 @@ void RTCMReader::close() {
     buffer_pos_ = 0;
     is_open_ = false;
     tcp_reconnect_count_ = 0;
+    stall_count_ = 0;
+    last_read_stalled_ = false;
     tcp_last_error_.clear();
     processor_.clear();
     processor_.resetStats();
 }
 
+int waitForReadable(int fd, int timeout_ms) {
+#ifndef _WIN32
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::max(timeout_ms, 0));
+    while (true) {
+        const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now());
+        pollfd pfd{};
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        const int rc = ::poll(&pfd, 1, static_cast<int>(std::max<std::chrono::milliseconds::rep>(remaining.count(), 0)));
+        if (rc < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return -1;
+        }
+        return rc > 0 ? 1 : 0;
+    }
+#else
+    (void)fd;
+    (void)timeout_ms;
+    return 1;
+#endif
+}
+
 bool RTCMReader::readMessage(RTCMMessage& message) {
+    last_read_stalled_ = false;
     if (!is_open_) {
         return false;
     }
@@ -143,6 +172,18 @@ bool RTCMReader::readMessage(RTCMMessage& message) {
         if (buffer_pos_ > 0) {
             buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(buffer_pos_));
             buffer_pos_ = 0;
+        }
+
+        // Opt-in stall watchdog: a connected peer that never sends (and never closes) would
+        // otherwise block in read() forever.
+        if (stall_timeout_ms_ > 0 && waitForReadable(stream_fd, stall_timeout_ms_) == 0) {
+            ++stall_count_;
+            if (tcp_reconnecting) {
+                tcp_last_error_ = "tcp stalled: no data for " + std::to_string(stall_timeout_ms_) + " ms";
+                reconnectTcp();  // a failed attempt is retried by the next readMessage() call
+            }
+            last_read_stalled_ = true;
+            return false;
         }
 
         const ssize_t count = ::read(stream_fd, chunk.data(), chunk.size());
@@ -297,6 +338,10 @@ void RTCMReader::setAutoReconnect(bool enabled, int delay_ms) {
     if (ntrip_client_) {
         ntrip_client_->setAutoReconnect(enabled, delay_ms);
     }
+}
+
+void RTCMReader::setStallTimeoutMs(int timeout_ms) {
+    stall_timeout_ms_ = timeout_ms < 0 ? 0 : timeout_ms;
 }
 
 int RTCMReader::reconnectCount() const {
