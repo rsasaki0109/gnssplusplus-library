@@ -778,7 +778,7 @@ jobs:
           test "$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["madoca_l6d_constraint_rows"])')" -eq 9
           test "$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["madoca_l6d_constraint_position_gate_epochs"])')" -eq 117
           ion_fixed_solutions="$(python3 -c 'import json; print(json.load(open("native_pppar_ion_smoke.json"))["ppp_fixed_solutions"])')"
-          test "$ion_fixed_solutions" -eq 89
+          test "$ion_fixed_solutions" -eq 91
           python3 "${GITHUB_WORKSPACE}/scripts/analysis/madoca_solution_diff.py" \
             madocalib_pppar_ion_smoke.pos \
             native_pppar_ion_smoke.pos \
@@ -794,7 +794,7 @@ jobs:
           ion_wrong_fixes="$(awk -F, 'NR > 1 && $6 == 6 && $5 != 1 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
           test "$ion_wrong_fixes" -eq 0
           ion_missed_fixes="$(awk -F, 'NR > 1 && $5 == 1 && $6 != 6 {n++} END {print n+0}' madoca_pppar_ion_solution_matches.csv)"
-          test "$ion_missed_fixes" -eq 8
+          test "$ion_missed_fixes" -eq 6
           python3 -c 'import json; m2=json.load(open("madoca_pppar_solution_diff.json")); ion=json.load(open("madoca_pppar_ion_solution_diff.json")); assert ion["base"]["reference_rms_3d_m"] <= m2["base"]["reference_rms_3d_m"]; assert ion["candidate"]["reference_rms_3d_m"] <= m2["candidate"]["reference_rms_3d_m"]; assert ion["comparison"]["delta_rms_3d_m"] <= 0.25; assert ion["events"]["max_delta_3d"]["delta_3d_m"] <= 1.0'
           # Kinematic ionosphere-free float vs the bridge default ppp profile
           # (MADOCALIB ppp-kine dual-freq). Both commit one measurement update

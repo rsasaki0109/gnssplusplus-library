@@ -389,6 +389,23 @@ multi-GNSS RTCM MSM streams re-encoded from the RINEX observations. These are
 the same data the option was examined on, so they are not a held-out result and
 they do not by themselves transfer to other receivers or environments.
 
+### Broadcast ephemeris selection among same-toe copies
+
+Merged RINEX navigation files and multi-stream RTCM carry more than one copy of
+a broadcast record with the same toe: for Galileo an I/NAV and an F/NAV copy
+(their `af0` differs by decimetres, because the clocks reference E5b/E1 and
+E5a/E1). `NavigationData::getEphemeris()` takes the first record of the
+smallest age, so the copy used depended on the order in which the records
+were added (RINEX load, `gnss live` merge, RTCM decode, copy). Each satellite's
+records are now kept in a fixed total order: toe, then, for Galileo only, I/NAV
+(data-source bit 9) before records without it, then `data_source_code`, `iode`,
+`iodc`, `toc`, `af0`, `af1`, `af2` and the remaining fields. A same-toe Galileo
+I/NAV record is therefore always selected over its F/NAV copy; a lone F/NAV
+record is still used (nothing is filtered), and non-Galileo ties are resolved by
+the same order instead of by insertion order. The `.pos` of `gnss solve`,
+`gnss live` and `gnss ppp` no longer changes when the navigation records are
+permuted. `GNSS_PPP_GAL_INAV` and `setGalileoEphemerisSource` are unchanged.
+
 ## Docker
 
 The repo also ships a multi-stage `Dockerfile`. The runtime image installs:
