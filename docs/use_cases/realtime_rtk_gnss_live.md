@@ -223,6 +223,7 @@ python3 apps/gnss.py realtime-stress run \
     --prepared output/rt/prep --out-dir output/rt/outage \
     --speed 1 --transport ntrip --reconnect \
     --live-profile default --live-arg=--preset --live-arg=low-cost \
+    --live-arg=--nav-rinex --live-arg=data/PPC-Dataset/tokyo/run1/base.nav \
     --live-arg=--stall-timeout-ms --live-arg=5000 \
     --live-arg=--base-outage-fallback --live-arg=spp \
     --fault base_outage@100+30
@@ -235,6 +236,10 @@ python3 apps/gnss.py realtime-stress run \
   [Real-time stress](../realtime_stress.md) are GPS-only except the
   [multi-constellation check](../realtime_stress.md#multi-constellation-msm-epoch-assembly)
   (G+R+E+J+C MSM7). Encode the constellations your field receiver sends.
+  The encoded base stream carries only GPS and GLONASS ephemerides
+  (1019/1020), so pass the run's navigation RINEX with `--nav-rinex` as above;
+  without it Galileo, QZSS and BeiDou satellites have no ephemeris and the
+  replay solves with G+R only.
 - Faults are `--fault kind@at+dur=value`, in stream seconds
   ([Fault syntax](../realtime_stress.md#fault-syntax)). Useful ones:
   `base_outage@100+30` (data dropped, link up), `base_stall@100+10`,
@@ -316,6 +321,13 @@ replays and then on your own recorded drives:
    wrong one). No threshold was tuned or is recommended
    ([Float-fix distance](../interfaces.md#float-fix-distance-in-pos-pos-fix-diagnostics)).
    A small value does not make a FIX correct.
+
+   `gnss solve --pos-fix-diagnostics` and `gnss replay --pos-fix-diagnostics`
+   write the same two columns, so you can compare the live run with a
+   post-processed run on the logged data. There a FIXED row gets a value only
+   if its written position is still the RTK epoch's own fixed position;
+   otherwise it is `nan`. A FIXED row moved by post-processing is one example
+   ([`gnss solve` rule](../interfaces.md#gnss-solve-only-for-the-rtk-epochs-own-fixed-position)).
 
 ## Boundary
 
