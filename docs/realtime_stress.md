@@ -393,8 +393,10 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    host clock, so replaying old recordings no longer depends on the host clock when a reference exists. Not fixed: a stream with
    neither `--nav-rinex` nor any GPS/Galileo/BeiDou/QZSS ephemeris before its first epochs has no reference (head epochs stay week 0,
    GLONASS is host-clock dated); a GLONASS 1020 that arrives before any reference is still dated from the host clock;
-   the 10-bit week of a 1019 is still expanded around the host clock until a reference exists; and `gnss replay`'s RTCM base path has no
-   reference at all.
+   and the 10-bit week of a 1019 is still expanded around the host clock until a reference exists. `gnss replay --base-rtcm` now uses
+   the same decoder and reference (seeded from `--nav-rinex`, else from the first in-stream ephemeris); before that its raw
+   `RTCMProcessor` left GPS/Galileo/QZSS/BeiDou parts in week 0 and dated GLONASS from the host clock, so a GPS-only base never
+   aligned to a RINEX rover and a multi-GNSS one only matched on the GLONASS parts, and only when the host clock was near the data date.
 5. **Cold start after a restart is optimistic.** With the `moving` option set the first 30 s after a relaunch
    contained only wrong fixes (32 epochs, median error 2.5 m), and the bare static gate refuses most fixes of a moving
    rover (2.9 % against 49.5 % fixed over the run, but 0 against 1055 wrong fixes). `gnss live` has no
