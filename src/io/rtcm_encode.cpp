@@ -28,7 +28,9 @@ namespace io {
 using namespace rtcm_internal;
 
 RTCMMessage RTCMProcessor::encodeObservations(const ObservationData& obs_data,
-                                             RTCMMessageType message_type) {
+                                             RTCMMessageType message_type,
+                                             bool more_follows) {
+    const uint64_t more_follows_bit = more_follows ? 1U : 0U;
     if (isGlonassMsmMessageType(message_type)) {
         const bool msm5 = isMsm5MessageType(message_type);
         const bool msm6 = isMsm6MessageType(message_type);
@@ -210,7 +212,7 @@ RTCMMessage RTCMProcessor::encodeObservations(const ObservationData& obs_data,
         writeUnsignedBits(payload, bit_pos, 12, static_cast<uint16_t>(message_type)); bit_pos += 12;
         writeUnsignedBits(payload, bit_pos, 12, 0); bit_pos += 12;
         writeUnsignedBits(payload, bit_pos, 30, gpstToGlonassMsmEpoch(obs_data.time)); bit_pos += 30;
-        writeUnsignedBits(payload, bit_pos, 1, 0); bit_pos += 1;
+        writeUnsignedBits(payload, bit_pos, 1, more_follows_bit); bit_pos += 1;
         writeUnsignedBits(payload, bit_pos, 3, 0); bit_pos += 3;
         writeUnsignedBits(payload, bit_pos, 7, 0); bit_pos += 7;
         writeUnsignedBits(payload, bit_pos, 2, 0); bit_pos += 2;
@@ -530,7 +532,7 @@ RTCMMessage RTCMProcessor::encodeObservations(const ObservationData& obs_data,
         writeUnsignedBits(payload, bit_pos, 12, static_cast<uint16_t>(message_type)); bit_pos += 12;
         writeUnsignedBits(payload, bit_pos, 12, 0); bit_pos += 12;
         writeUnsignedBits(payload, bit_pos, 30, fixedFrequencyMsmEpochMs(message_type, obs_data.time)); bit_pos += 30;
-        writeUnsignedBits(payload, bit_pos, 1, 0); bit_pos += 1;
+        writeUnsignedBits(payload, bit_pos, 1, more_follows_bit); bit_pos += 1;
         writeUnsignedBits(payload, bit_pos, 3, 0); bit_pos += 3;
         writeUnsignedBits(payload, bit_pos, 7, 0); bit_pos += 7;
         writeUnsignedBits(payload, bit_pos, 2, 0); bit_pos += 2;
@@ -815,7 +817,7 @@ RTCMMessage RTCMProcessor::encodeObservations(const ObservationData& obs_data,
     writeUnsignedBits(payload, bit_pos, 12, 0); bit_pos += 12;
     const uint32_t epoch_ms = rtcm_utils::gpsTimeToRTCMTime(obs_data.time);
     writeUnsignedBits(payload, bit_pos, 30, epoch_ms); bit_pos += 30;
-    writeUnsignedBits(payload, bit_pos, 1, 0); bit_pos += 1;
+    writeUnsignedBits(payload, bit_pos, 1, more_follows_bit); bit_pos += 1;
     writeUnsignedBits(payload, bit_pos, 5, static_cast<uint64_t>(num_sats)); bit_pos += 5;
     writeUnsignedBits(payload, bit_pos, 1, 0); bit_pos += 1;
     writeUnsignedBits(payload, bit_pos, 3, 0); bit_pos += 3;

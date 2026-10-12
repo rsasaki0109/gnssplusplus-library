@@ -291,7 +291,7 @@ Per-flag ablation on the same nine runs, run after the gates (not a gate):
 
 Found by the harness, deliberately not changed here (each needs a design decision or is larger than a bug fix):
 
-1. **`gnss live` handles one observation message per epoch, so real multi-constellation MSM does not work.**
+1. **`gnss live` handles one observation message per epoch, so real multi-constellation MSM does not work.** (Addressed: MSM epochs are now assembled using the multiple-message bit, see [Interfaces](interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly); the text below describes the behaviour before that change.)
    Each constellation arrives as its own MSM message with the same time tag, and `readNextObservation` treats every
    observation message as an epoch. A 5 min window encoded as G+R+E+J+C MSM7 produced 1 solution (6004 rover
    messages, 4800 skipped epochs, a bogus 7e7 s solution span). `gnss replay` has the same assumption. The harness

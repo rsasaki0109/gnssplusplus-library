@@ -15,6 +15,9 @@ public:
         RTCMMessageType message_type = RTCMMessageType::RTCM_UNKNOWN;
         bool has_observation = false;
         ObservationData observation;
+        // RTCM multiple-message bit (MSM) / synchronous GNSS flag (legacy):
+        // true when more observation messages of the same epoch follow.
+        bool observation_more_follows = false;
         bool has_navigation = false;
         NavigationData navigation;
         bool has_station_position = false;

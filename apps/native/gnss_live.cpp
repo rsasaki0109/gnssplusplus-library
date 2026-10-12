@@ -1,6 +1,7 @@
 #include <Eigen/Dense>
 
 #include <chrono>
+#include <deque>
 #include <cmath>
 #include <cstdint>
 #include <exception>
@@ -16,6 +17,7 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/algorithms/rtk_validation.hpp>
 #include <libgnss++/core/constants.hpp>
+#include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/io/rtcm_stream.hpp>
@@ -84,6 +86,9 @@ struct LiveConfig {
     int reconnect_delay_ms = 2000;
     int reconnect_attempts = 0;
     bool enable_base_interpolation = true;
+    // Merge the per-constellation MSM messages of one epoch (RTCM multiple-message
+    // bit) into a single epoch; --no-rtcm-epoch-assembly restores one epoch per message.
+    bool assemble_rtcm_epochs = true;
     double base_hold_seconds = kDefaultBaseHoldSeconds;
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
@@ -128,6 +133,11 @@ struct SourceState {
     size_t messages_read = 0;
     size_t message_limit = 0;
     bool eof = false;
+    // RTCM epoch assembly (see LiveConfig::assemble_rtcm_epochs).
+    bool assemble_epochs = true;
+    bool input_ended = false;
+    libgnss::io::ObservationEpochAssembler assembler;
+    std::deque<libgnss::ObservationData> ready_epochs;
     // --reconnect: keep retrying an NTRIP/tcp:// source that drops or goes quiet instead of
     // treating the first failed read as the end of the stream (0 attempts = retry forever).
     bool reconnect = false;
@@ -543,6 +553,8 @@ void printUsage(const char* argv0) {
         << "  --reconnect                Reconnect NTRIP/tcp:// sources that drop or stall (default: end at the first failed read)\n"
         << "  --reconnect-delay-ms <ms>  Delay between reconnect attempts (default: 2000)\n"
         << "  --reconnect-attempts <n>   Give up after n consecutive failed reads/reconnects (0 = never, default: 0)\n"
+        << "  --no-rtcm-epoch-assembly   Treat every RTCM observation message as its own epoch (default: merge the\n"
+        << "                            per-constellation MSM messages of one epoch using the multiple-message bit)\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
         << "  --base-hold-seconds <v>    Reuse the latest base epoch for up to v seconds (default: 0.5)\n"
         << "  --base-ecef <x> <y> <z>    Override base ECEF position\n"
@@ -694,6 +706,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.reconnect_delay_ms = std::stoi(argv[++i]);
         } else if (arg == "--reconnect-attempts" && i + 1 < argc) {
             config.reconnect_attempts = std::stoi(argv[++i]);
+        } else if (arg == "--no-rtcm-epoch-assembly") {
+            config.assemble_rtcm_epochs = false;
         } else if (arg == "--no-base-interp") {
             config.enable_base_interpolation = false;
         } else if (arg == "--base-hold-seconds" && i + 1 < argc) {
@@ -852,6 +866,10 @@ bool openSource(const std::string& path, size_t message_limit, SourceState& sour
     source.message_limit = message_limit;
     source.eof = false;
     source.decoder.clear();
+    source.assemble_epochs = config.assemble_rtcm_epochs;
+    source.input_ended = false;
+    source.assembler.clear();
+    source.ready_epochs.clear();
     source.reconnect = false;
     source.reconnect_attempts = 0;
     if (!source.reader.open(path)) {
@@ -950,9 +968,21 @@ bool readNextObservation(SourceState& source,
                          libgnss::ObservationData& obs,
                          std::vector<libgnss::io::RTCMStreamDecoder::Event>& events) {
     events.clear();
+    auto popReady = [&]() {
+        if (source.ready_epochs.empty()) {
+            return false;
+        }
+        obs = std::move(source.ready_epochs.front());
+        source.ready_epochs.pop_front();
+        return true;
+    };
+    if (popReady()) {
+        return true;
+    }
     libgnss::io::RTCMMessage raw_message;
     int failed_reads = 0;
-    while (source.message_limit == 0 || source.messages_read < source.message_limit) {
+    while (!source.input_ended &&
+           (source.message_limit == 0 || source.messages_read < source.message_limit)) {
         if (!source.reader.readMessage(raw_message)) {
             // With --reconnect an empty read (NTRIP timeout, dropped link being re-established)
             // is not the end of the stream; keep trying until the attempt budget runs out.
@@ -960,8 +990,7 @@ bool readNextObservation(SourceState& source,
                 (source.reconnect_attempts == 0 || ++failed_reads < source.reconnect_attempts)) {
                 continue;
             }
-            source.eof = true;
-            return false;
+            break;
         }
         failed_reads = 0;
         ++source.messages_read;
@@ -970,11 +999,28 @@ bool readNextObservation(SourceState& source,
         source.decoder.pushFrame(frame.data(), frame.size(), frame_events);
         events.insert(events.end(), frame_events.begin(), frame_events.end());
         for (const auto& event : frame_events) {
-            if (event.has_observation) {
+            if (!event.has_observation) {
+                continue;
+            }
+            if (!source.assemble_epochs) {
                 obs = event.observation;
                 return true;
             }
+            for (auto& epoch : source.assembler.push(event.observation, event.observation_more_follows)) {
+                source.ready_epochs.push_back(std::move(epoch));
+            }
         }
+        if (popReady()) {
+            return true;
+        }
+    }
+    // End of stream: a pending (partially assembled) epoch must still be processed.
+    source.input_ended = true;
+    for (auto& epoch : source.assembler.flush()) {
+        source.ready_epochs.push_back(std::move(epoch));
+    }
+    if (popReady()) {
+        return true;
     }
     source.eof = true;
     return false;

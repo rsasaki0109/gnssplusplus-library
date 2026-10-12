@@ -54,6 +54,7 @@ bool RTCMStreamDecoder::pushFrame(const uint8_t* buffer, size_t size, std::vecto
 
         if (rtcm_utils::isObservationMessage(message.type)) {
             event.has_observation = processor_.decodeObservationData(message, event.observation);
+            event.observation_more_follows = processor_.lastObservationMoreFollows();
             if (event.has_observation) {
                 if (event.observation.time.week == 0 && observation_week_context_ > 0) {
                     event.observation.time.week = observation_week_context_;

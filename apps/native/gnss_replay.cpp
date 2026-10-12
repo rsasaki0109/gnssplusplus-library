@@ -15,6 +15,7 @@
 #include <libgnss++/algorithms/rtk.hpp>
 #include <libgnss++/core/constants.hpp>
 #include <libgnss++/io/rinex.hpp>
+#include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/io/ubx.hpp>
@@ -63,6 +64,8 @@ struct ReplayConfig {
     bool quiet = false;
     int max_epochs = -1;
     size_t rtcm_message_limit = 0;
+    // Merge per-constellation MSM messages of one epoch (RTCM multiple-message bit).
+    bool assemble_rtcm_epochs = true;
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
     double ratio_threshold = 3.0;
@@ -152,6 +155,8 @@ void printUsage(const char* argv0) {
         << "  Replay\n"
         << "    --max-epochs <n>          Stop after n rover epochs\n"
         << "    --rtcm-message-limit <n>  Stop RTCM ingest after n messages (0 = all)\n"
+        << "    --no-rtcm-epoch-assembly  Treat every base RTCM observation message as its own epoch\n"
+        << "                              (default: merge the per-constellation MSM messages of one epoch)\n"
         << "    --base-ecef <x> <y> <z>   Override base ECEF position\n"
         << "    --quiet                   Suppress per-epoch prints\n"
         << "    --verbose                 Print per-epoch solve details\n"
@@ -322,6 +327,8 @@ ReplayConfig parseArguments(int argc, char** argv) {
             config.glonass_ar = parseGlonassARChoice(argv[++i], argv[0]);
         } else if (arg == "--max-epochs" && i + 1 < argc) {
             config.max_epochs = std::stoi(argv[++i]);
+        } else if (arg == "--no-rtcm-epoch-assembly") {
+            config.assemble_rtcm_epochs = false;
         } else if (arg == "--rtcm-message-limit" && i + 1 < argc) {
             config.rtcm_message_limit = static_cast<size_t>(std::stoull(argv[++i]));
         } else if (arg == "--base-ecef" && i + 3 < argc) {
@@ -518,6 +525,7 @@ bool loadBaseUbx(const std::string& ubx_path,
 
 bool loadBaseRtcm(const std::string& source,
                   size_t message_limit,
+                  bool assemble_epochs,
                   std::vector<libgnss::ObservationData>& base_epochs,
                   libgnss::NavigationData& nav_data,
                   Eigen::Vector3d& base_position,
@@ -528,6 +536,7 @@ bool loadBaseRtcm(const std::string& source,
     }
 
     libgnss::io::RTCMProcessor processor;
+    libgnss::io::ObservationEpochAssembler assembler;
     size_t message_count = 0;
     libgnss::io::RTCMMessage raw_message;
     while ((message_limit == 0 || message_count < message_limit) && reader.readMessage(raw_message)) {
@@ -538,7 +547,13 @@ bool loadBaseRtcm(const std::string& source,
             if (libgnss::io::rtcm_utils::isObservationMessage(message.type)) {
                 libgnss::ObservationData obs_data;
                 if (processor.decodeObservationData(message, obs_data)) {
-                    base_epochs.push_back(obs_data);
+                    if (assemble_epochs) {
+                        for (auto& epoch : assembler.push(obs_data, processor.lastObservationMoreFollows())) {
+                            base_epochs.push_back(std::move(epoch));
+                        }
+                    } else {
+                        base_epochs.push_back(obs_data);
+                    }
                 }
             } else if (libgnss::io::rtcm_utils::isEphemerisMessage(message.type)) {
                 libgnss::NavigationData increment;
@@ -547,6 +562,10 @@ bool loadBaseRtcm(const std::string& source,
                 }
             }
         }
+    }
+    // A pending (partially assembled) epoch at end of stream is still an epoch.
+    for (auto& epoch : assembler.flush()) {
+        base_epochs.push_back(std::move(epoch));
     }
     if (processor.hasReferencePosition()) {
         base_position = processor.getReferencePosition();
@@ -608,6 +627,7 @@ size_t runReplay(const ReplayConfig& config) {
     } else {
         if (!loadBaseRtcm(config.base_rtcm_path,
                           config.rtcm_message_limit,
+                          config.assemble_rtcm_epochs,
                           base_epochs,
                           nav_data,
                           base_position,

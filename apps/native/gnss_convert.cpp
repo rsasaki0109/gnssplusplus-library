@@ -1,3 +1,4 @@
+#include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/io/ubx.hpp>
@@ -45,6 +46,10 @@ struct ConvertConfig {
     InputFormat format = InputFormat::RTCM;
     size_t limit = 0;
     bool quiet = false;
+    // RTCM -> RINEX: merge the per-constellation MSM messages of one epoch into one
+    // RINEX epoch (RTCM multiple-message bit). --no-rtcm-epoch-assembly writes one
+    // epoch per message.
+    bool assemble_rtcm_epochs = true;
     // RTCM carries only the GPS time of week; this supplies the week.
     bool has_gps_week = false;
     int gps_week = 0;
@@ -118,6 +123,8 @@ void printUsage(const char* argv0) {
         << "  --gps-week <week>         RTCM only: GPS week of the data (RTCM messages carry\n"
         << "                            only the time of week; default: current week)\n"
         << "  --limit <count>           Stop after this many decoded messages (0 = all)\n"
+        << "  --no-rtcm-epoch-assembly  RTCM input: write one RINEX epoch per observation message (default: merge\n"
+        << "                            the per-constellation MSM messages of one epoch using the multiple-message bit)\n"
         << "  --quiet                   Suppress per-message type lines\n"
         << "  --help                    Show this help text\n";
 }
@@ -151,6 +158,8 @@ ConvertConfig parseArguments(int argc, char** argv) {
             config.has_gps_week = true;
         } else if (arg == "--limit" && i + 1 < argc) {
             config.limit = static_cast<size_t>(std::stoull(argv[++i]));
+        } else if (arg == "--no-rtcm-epoch-assembly") {
+            config.assemble_rtcm_epochs = false;
         } else if (arg == "--quiet") {
             config.quiet = true;
         } else if (arg == "--help" || arg == "-h") {
@@ -1318,6 +1327,26 @@ int runRTCMConversion(const ConvertConfig& config) {
     size_t exported_nav_messages = 0;
     size_t skipped_nav_messages = 0;
 
+    // Writes one observation epoch, opening the RINEX file on first use.
+    auto writeObsEpoch = [&](const libgnss::ObservationData& epoch) {
+        if (!obs_writer_open) {
+            if (!obs_writer.createObservationFile(config.obs_out_path, makeObservationHeader())) {
+                std::cerr << "Error: failed to create observation RINEX: "
+                          << config.obs_out_path << "\n";
+                return false;
+            }
+            obs_writer_open = true;
+        }
+        if (!obs_writer.writeObservationEpoch(epoch)) {
+            std::cerr << "Error: failed to write observation epoch to "
+                      << config.obs_out_path << "\n";
+            return false;
+        }
+        ++exported_obs_epochs;
+        return true;
+    };
+    libgnss::io::ObservationEpochAssembler assembler;
+
     libgnss::io::RTCMMessage message;
     while ((config.limit == 0 || processed_messages < config.limit) && reader.readMessage(message)) {
         ++processed_messages;
@@ -1350,20 +1379,16 @@ int runRTCMConversion(const ConvertConfig& config) {
                     obs_data.time.week = resolved_week;
                     processor.setReferenceTime(libgnss::GNSSTime(resolved_week, tow));
                 }
-                if (!obs_writer_open) {
-                    if (!obs_writer.createObservationFile(config.obs_out_path, makeObservationHeader())) {
-                        std::cerr << "Error: failed to create observation RINEX: "
-                                  << config.obs_out_path << "\n";
-                        return 1;
+                if (config.assemble_rtcm_epochs) {
+                    for (const auto& epoch :
+                         assembler.push(obs_data, processor.lastObservationMoreFollows())) {
+                        if (!writeObsEpoch(epoch)) {
+                            return 1;
+                        }
                     }
-                    obs_writer_open = true;
-                }
-                if (!obs_writer.writeObservationEpoch(obs_data)) {
-                    std::cerr << "Error: failed to write observation epoch to "
-                              << config.obs_out_path << "\n";
+                } else if (!writeObsEpoch(obs_data)) {
                     return 1;
                 }
-                ++exported_obs_epochs;
             }
         }
 
@@ -1389,6 +1414,15 @@ int runRTCMConversion(const ConvertConfig& config) {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // A pending (partially assembled) epoch at end of stream is still an epoch.
+    if (!config.obs_out_path.empty()) {
+        for (const auto& epoch : assembler.flush()) {
+            if (!writeObsEpoch(epoch)) {
+                return 1;
             }
         }
     }

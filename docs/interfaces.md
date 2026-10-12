@@ -67,6 +67,33 @@ selector knobs used by the experiment lane:
 - `--clas-atmos-selection <grid-first|grid-guarded|balanced|freshness-first>`
 - `--clas-atmos-stale-after-seconds <seconds>`
 
+### Multi-constellation RTCM epoch assembly (`--no-rtcm-epoch-assembly`)
+
+A receiver sends one MSM message per constellation with the same time tag and
+sets the RTCM "multiple message" bit (legacy 1003/1004: synchronous GNSS flag)
+on every message of the epoch except the last. `gnss live` (rover and base RTCM),
+`gnss replay` (base RTCM) and `gnss convert` (RTCM to RINEX) merge those parts
+into one epoch with one shared implementation
+(`io::ObservationEpochAssembler`, fed by `RTCMStreamDecoder::Event::
+observation_more_follows` or `RTCMProcessor::lastObservationMoreFollows()`):
+
+- a part whose time differs from the pending epoch by more than 1 ms emits the
+  pending epoch first (a lost last message cannot merge two epochs);
+- otherwise it is merged; a (satellite, signal) already present is kept once;
+- bit 0 emits the epoch immediately, so no latency is added;
+- the pending epoch is flushed at end of stream.
+
+A stream whose messages all carry bit 0 (every GPS-only stream) is unchanged.
+It is on by default; `--no-rtcm-epoch-assembly` (in all three tools) restores
+one epoch per observation message. `gnss rtcm-encode` sets the bit on every
+observation message of an epoch except the last one emitted
+(`RTCMProcessor::encodeObservations(..., more_follows)` defaults to `false`).
+`gnss stream` only prints one diagnostic line per message and does not build
+epochs, so it is not affected. Time tags are only comparable if their weeks
+agree: GLONASS MSM epochs are resolved against the host clock when the decoder
+has no reference time (see Limits found 4 in [Real-time
+stress](realtime_stress.md)).
+
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 
 Opt-in (default off; without it `gnss live` output is byte-identical to
