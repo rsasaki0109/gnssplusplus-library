@@ -123,6 +123,76 @@ no early ephemeris) are resolved against that first reference after the pass.
 Only a stream with neither a `--nav-rinex` nor any such ephemeris stays in
 week 0 and cannot be aligned to a rover RINEX.
 
+### RTCM ephemeris messages (`gnss rtcm-encode --eph-systems`)
+
+`RTCMProcessor` decodes and encodes broadcast ephemeris messages for five
+constellations:
+
+| message | constellation | notes |
+|---|---|---|
+| 1019 | GPS | |
+| 1020 | GLONASS | time tag resolved against the stream reference, not the host clock |
+| 1042 | BeiDou | layout and scaling as RTKLIB 2.4.3 b34 `decode_type1042` |
+| 1044 | QZSS | as `decode_type1044` |
+| 1045 / 1046 | Galileo F/NAV / I/NAV | as `decode_type1045/1046` |
+
+The decoded `Ephemeris` is the record the RINEX navigation reader produces for
+the same broadcast:
+
+- BeiDou: `toe` and `toc` are GPST (BDT week + 1356, + 14 s); `week` is the BDT
+  week and `toes` the raw BDT toe seconds, which the satellite-position code
+  uses. `tgd` is TGD1 (B1/B3), `tgd_secondary` is TGD2 (B2/B3), `iode` is AODE
+  and `iodc` is AODC. GEO satellites (PRN 1 to 5 and 59 to 63) need nothing
+  extra: the position code selects the GEO orbit model from the PRN.
+- QZSS: the library stores PRNs as printed in RINEX (J01 is 1), and the 4-bit
+  satellite field of 1044 is that number. The 10-bit week is resolved like
+  1019: against the stream reference when one exists.
+- Galileo: 1045 sets `data_source_code` to the F/NAV word (258) and 1046 to the
+  I/NAV word (513), as before.
+- In all three, `toc` is placed in the week nearest `toe`.
+
+`isEphemerisMessage()` is true for all six types, so `RTCMStreamDecoder`
+(`gnss live`, `gnss replay --base-rtcm`), `gnss convert --nav-out` and
+`gnss stream --decode-navigation` decode them. Before this, 1045/1046 were decoded
+only by `mergeRTCMEphemerides` (used by `gnss ppp --ssr-rtcm`), which is
+unchanged and still merges GPS 1019 and Galileo 1045/1046 only. A decoded
+GPS, Galileo, BeiDou or QZSS ephemeris can seed the stream reference (see
+above).
+
+`RTCMProcessor::encodeEphemeris` writes the same six messages. The Galileo
+message follows the record's `navigation_message_type`, else its RINEX
+data-source word; a record whose type cannot be determined is not encoded. A
+value that does not fit its field (for example a BeiDou `af0` beyond 24 bits)
+gives an invalid message, as for 1019. Not carried: the L2 code and fit
+interval bits of 1044, and the Galileo reserved bits.
+
+`gnss rtcm-encode --eph-systems <G,R,E,J,C>` selects the constellations that get
+ephemeris messages: G 1019, R 1020, E 1045/1046, J 1044, C 1042. The default
+is `G,R`, which gives the same bytes as before the option existed. Only
+systems that are also in `--systems` are broadcast, because a consumer infers
+the week from the first ephemeris it sees. Round-robin (`--eph-interval`) and
+the initial burst (`--no-eph-burst`) cover the added systems. `gnss
+realtime-stress prepare --eph-systems` passes the list to the base encode
+only; without it the command line is unchanged.
+
+Verification on the navigation file of the UrbanNav Tokyo runs (DLR BCEmerge `base.nav`): every Galileo (4645),
+BeiDou (696) and QZSS (95, J01, J02, J03, J07) record was encoded, decoded and compared with the library's own
+satellite position and clock function at nine times from toe - 2 h to toe + 2 h. All 5436 were encoded, and the worst
+difference was 0.053 mm in position and 5e-16 s in clock. The same records, decoded by RTKLIB 2.4.3 b34 `rtcm3.c` and
+re-read from its RINEX output (0.63 mm and 5e-15 s at worst), and encoded by RTKLIB `gen_rtcm3` and decoded by the
+library (the same 0.053 mm), agreed within the tolerance of 0.01 m and 1e-11 s. 693 of the 696 BeiDou 1042 frames are
+bit-identical to RTKLIB's. RTKLIB differs from the encoder in the Galileo SISA index (it truncates where the encoder
+takes the nearest index), and in the 1044 L2 code and fit interval bits. No 1044 stream from a real receiver or caster
+was available: the real QZSS records are covered by those round trips and by the bit-level comparison with RTKLIB, not
+by a live broadcast.
+
+Ephemerides in the stream are not a drop-in for `--nav-rinex` when the file has an `IONOSPHERIC CORR` header (the PPC
+navigation files do): `gnss live --nav-rinex` reads those parameters and applies a Klobuchar model in its SPP seed, and a
+stream carries none, so without a navigation RINEX `nav.ionosphere_model.valid` stays false and no model is applied.
+With a file that has no such header (the UrbanNav BCEmerge file) the two give the same status on 99.4 to 100 % of the
+epochs and the same position to the print precision at p50
+([measured](realtime_stress.md#ephemerides-in-the-base-stream-eph-systems)).
+
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 
 Opt-in (default off; without it `gnss live` output is byte-identical to

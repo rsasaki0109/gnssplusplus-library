@@ -38,8 +38,14 @@ constexpr double kRTCMGpsPrUnitMeters = constants::SPEED_OF_LIGHT * 0.001;
 constexpr double kRTCMGpsPseudorangeResolution = 0.02;
 constexpr double kRTCMGpsPhaseResolution = 0.0005;
 constexpr double kRTCMCn0Resolution = 0.25;
+// BeiDou time (BDT) in the library's GPST representation: BDT week 0 starts at
+// GPS week 1356, and GPST = BDT + 14 s. This is what the RINEX navigation reader
+// does for toe/toc of a BeiDou record (src/io/rinex.cpp bdtWeekTowToGpst).
+constexpr int kBdtWeekOffset = 1356;
+constexpr double kBdtToGpstSeconds = 14.0;
 constexpr double kSemiCircleToRadians = 3.14159265358979323846;
 constexpr double kPow2Neg5 = 3.12500000000000000000e-02;
+constexpr double kPow2Neg6 = 1.56250000000000000000e-02;
 constexpr double kPow2Neg10 = 9.76562500000000000000e-04;
 constexpr double kPow2Neg11 = 4.88281250000000000000e-04;
 constexpr double kPow2Neg19 = 1.90734863281250000000e-06;
@@ -54,8 +60,10 @@ constexpr double kPow2Neg34 = 5.82076609134674072266e-11;
 constexpr double kPow2Neg40 = 9.09494701772928237915e-13;
 constexpr double kPow2Neg43 = 1.13686837721616029739e-13;
 constexpr double kPow2Neg46 = 1.42108547152020037174e-14;
+constexpr double kPow2Neg50 = 8.88178419700125232339e-16;
 constexpr double kPow2Neg55 = 2.77555756156289135106e-17;
 constexpr double kPow2Neg59 = 1.73472347597680709441e-18;
+constexpr double kPow2Neg66 = 1.35525271560688054251e-20;
 constexpr uint16_t kMinimumExpandedGpsWeek = 1560;
 constexpr double kSecondsPerDay = 86400.0;
 constexpr double kHalfDaySeconds = 43200.0;
@@ -1358,6 +1366,24 @@ inline double uraMetersFromIndex(uint8_t ura_index) {
 
 // Galileo SISA index to metres (core/navigation.hpp); 255 = NAPA -> -1.
 using libgnss::galileoSisaMeters;
+
+// Inverse of galileoSisaMeters: the SISA index nearest to a value in metres.
+// Negative, non-finite or out-of-range values map to 255 (NAPA).
+inline uint8_t galileoSisaIndexFromMeters(double sisa_meters) {
+    if (!std::isfinite(sisa_meters) || sisa_meters < 0.0) {
+        return 255U;
+    }
+    uint8_t best = 255U;
+    double best_error = std::numeric_limits<double>::infinity();
+    for (uint8_t i = 0; i <= 125U; ++i) {
+        const double error = std::abs(galileoSisaMeters(i) - sisa_meters);
+        if (error < best_error) {
+            best_error = error;
+            best = i;
+        }
+    }
+    return best_error <= 0.08 ? best : static_cast<uint8_t>(255U);
+}
 
 inline double uraMetersFromSsrIndex(uint8_t ura_index) {
     if (ura_index == 0U) {

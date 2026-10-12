@@ -1128,8 +1128,9 @@ def _prefix_ephemeris(plan: StreamPlan, upto_index: int) -> bytes:
     for i in range(upto_index):
         for frame in split_frames(plan.chunk(i)):
             t = frame_type(frame)
-            if t in (1005, 1019, 1020):
-                key = (t, _get_bits(frame, 24 + 12, 6) if t in (1019, 1020) else 0)
+            if t in (1005, 1019, 1020, 1042, 1044, 1045, 1046):
+                # 1044 carries a 4-bit QZSS PRN, the other ephemeris messages a 6-bit one
+                key = (t, _get_bits(frame, 24 + 12, 4 if t == 1044 else 6) if t != 1005 else 0)
                 chunks[key] = frame
     return b"".join(chunks.values())
 

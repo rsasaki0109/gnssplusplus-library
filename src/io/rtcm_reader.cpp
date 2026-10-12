@@ -467,6 +467,8 @@ std::string getMessageTypeName(RTCMMessageType type) {
         case RTCMMessageType::RTCM_1019: return "GPS Ephemeris";
         case RTCMMessageType::RTCM_1020: return "GLONASS Ephemeris";
         case RTCMMessageType::RTCM_1033: return "Receiver And Antenna Descriptor";
+        case RTCMMessageType::RTCM_1042: return "BeiDou Ephemeris";
+        case RTCMMessageType::RTCM_1044: return "QZSS Ephemeris";
         case RTCMMessageType::RTCM_1045: return "Galileo F/NAV Ephemeris";
         case RTCMMessageType::RTCM_1046: return "Galileo I/NAV Ephemeris";
         case RTCMMessageType::RTCM_1057: return "GPS SSR Orbit Correction";
@@ -542,7 +544,9 @@ bool isObservationMessage(RTCMMessageType type) {
 
 bool isEphemerisMessage(RTCMMessageType type) {
     auto type_val = static_cast<uint16_t>(type);
-    return type_val == 1019 || type_val == 1020;
+    // GPS, GLONASS, BeiDou, QZSS, Galileo F/NAV and Galileo I/NAV ephemerides.
+    return type_val == 1019 || type_val == 1020 || type_val == 1042 ||
+           type_val == 1044 || type_val == 1045 || type_val == 1046;
 }
 
 bool isSSRMessage(RTCMMessageType type) {

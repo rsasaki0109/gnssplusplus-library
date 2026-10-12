@@ -1961,6 +1961,338 @@ TEST_F(RTCMProcessorTest, DecodesGalileo1045FnavEphemeris) {
     EXPECT_DOUBLE_EQ(records.front().tgd_secondary, 0.0);
 }
 
+namespace {
+
+// Broadcast ephemerides copied from the PPC Tokyo run1 base.nav (RINEX 3.04, week 2324):
+// BeiDou GEO C01, IGSO C06, MEO C21, BDS-3 GEO C59, QZSS J02, and one Galileo
+// I/NAV (data source 513) and one F/NAV (258) record for E11.
+const char* const kMultiGnssRinexRecords = R"NAV(
+C 1 2024 07 23 02 00 00 0.909820664674D-03 0.252242671195D-11 0.000000000000D+00
+     0.100000000000D+01-0.139171875000D+03 0.146577534114D-08-0.218646454172D+01
+    -0.467104837298D-05 0.157431117259D-03 0.252700410783D-04 0.649349957848D+04
+     0.180000000000D+06-0.265426933765D-07-0.286435686972D+01-0.166241079569D-06
+     0.971413431497D-01-0.766609375000D+03 0.184855206540D+01-0.546451333320D-09
+     0.673599486694D-09 0.300000000000D+01 0.968000000000D+03 0.000000000000D+00
+     0.200000000000D+01 0.000000000000D+00-0.519999998616D-08-0.970000000000D-08
+     0.180000000000D+06 0.000000000000D+00 0.000000000000D+00 0.000000000000D+00
+C 6 2024 07 23 05 00 00 0.615941942669D-03 0.334718919248D-10-0.253432257818D-17
+     0.500000000000D+01 0.171562500000D+02 0.971111879279D-09 0.192159715529D+01
+     0.960193574429D-06 0.412149005570D-02 0.244695693254D-04 0.649344354057D+04
+     0.190800000000D+06-0.605359673500D-07-0.226918759835D+01-0.619329512119D-07
+     0.946844551830D+00-0.522968750000D+03-0.270144266536D+01-0.170471386532D-08
+     0.113540443701D-08 0.100000000000D+01 0.968000000000D+03 0.000000000000D+00
+     0.200000000000D+01 0.000000000000D+00 0.859999982339D-08-0.150000000000D-08
+     0.191010000000D+06 0.500000000000D+01 0.000000000000D+00 0.000000000000D+00
+C21 2024 07 23 02 00 00-0.953022507019D-03 0.532107691242D-11 0.000000000000D+00
+     0.100000000000D+01-0.139343750000D+03 0.360872174632D-08 0.140740298897D+01
+    -0.711809843779D-05 0.626183347777D-03 0.356649979949D-05 0.528263537598D+04
+     0.180000000000D+06 0.284053385258D-07 0.256465408738D+01-0.484287738800D-07
+     0.978471787403D+00 0.299750000000D+03-0.270895315512D+00-0.696850455190D-08
+    -0.225723688012D-09 0.100000000000D+01 0.968000000000D+03 0.000000000000D+00
+     0.200000000000D+01 0.000000000000D+00 0.111000000302D-07 0.111000000000D-07
+     0.180000000000D+06 0.100000000000D+01 0.000000000000D+00 0.000000000000D+00
+C59 2024 07 23 02 00 00 0.285683199763D-06 0.746069872548D-13 0.000000000000D+00
+     0.100000000000D+01-0.740625000000D+02 0.207937232849D-08 0.610420240625D-01
+    -0.251457095146D-05 0.416417140514D-03 0.259722582996D-04 0.649340690613D+04
+     0.180000000000D+06-0.316649675369D-07-0.281519303972D+01-0.175088644028D-06
+     0.119591207922D+00-0.786875000000D+03-0.526095528619D+00-0.114647632677D-08
+     0.694671793011D-09 0.300000000000D+01 0.968000000000D+03 0.000000000000D+00
+     0.200000000000D+01 0.000000000000D+00 0.415999998893D-07 0.416000000000D-07
+     0.180000000000D+06 0.100000000000D+01 0.000000000000D+00 0.000000000000D+00
+J 2 2024 07 23 03 00 00-0.603031367064D-06 0.000000000000D+00 0.000000000000D+00
+     0.201000000000D+03-0.193437500000D+03 0.350621747660D-08-0.605420355285D+00
+    -0.668503344059D-05 0.754397899145D-01 0.155717134476D-05 0.649333202171D+04
+     0.183600000000D+06-0.467523932457D-06-0.800676388277D+00 0.614672899246D-07
+     0.706717367398D+00 0.104000000000D+03-0.158095283452D+01-0.384015995808D-08
+    -0.762531762509D-09 0.200000000000D+01 0.232400000000D+04 0.100000000000D+01
+     0.280000000000D+01 0.100000000000D+01 0.139698386192D-08 0.969000000000D+03
+     0.183576000000D+06 0.100000000000D+01 0.000000000000D+00 0.000000000000D+00
+E11 2024 07 23 02 10 00 0.228517357027D-02-0.117410081657D-09-0.346944695195D-17
+     0.470000000000D+02 0.186156250000D+03 0.236724146225D-08 0.506745846193D+00
+     0.865757465363D-05 0.475415377878D-03 0.643357634544D-05 0.544061244583D+04
+     0.180600000000D+06 0.279396772385D-07 0.107104692581D+01-0.540167093277D-07
+     0.996917270886D+00 0.222343750000D+03 0.133393198218D+01-0.545272712797D-08
+     0.280725979078D-09 0.513000000000D+03 0.232400000000D+04 0.000000000000D+00
+     0.312000000000D+01 0.000000000000D+00-0.149011611938D-07-0.167638063431D-07
+     0.181285000000D+06 0.000000000000D+00 0.000000000000D+00 0.000000000000D+00
+E11 2024 07 23 02 10 00 0.228517508367D-02-0.117395870802D-09-0.346944695195D-17
+     0.470000000000D+02 0.186156250000D+03 0.236724146225D-08 0.506745846193D+00
+     0.865757465363D-05 0.475415377878D-03 0.643357634544D-05 0.544061244583D+04
+     0.180600000000D+06 0.279396772385D-07 0.107104692581D+01-0.540167093277D-07
+     0.996917270886D+00 0.222343750000D+03 0.133393198218D+01-0.545272712797D-08
+     0.280725979078D-09 0.258000000000D+03 0.232400000000D+04 0.000000000000D+00
+     0.312000000000D+01 0.000000000000D+00-0.149011611938D-07 0.000000000000D+00
+     0.181320000000D+06 0.000000000000D+00 0.000000000000D+00 0.000000000000D+00
+)NAV";
+
+std::vector<Ephemeris> readMultiGnssRecords() {
+    const auto path = std::filesystem::temp_directory_path() / "libgnss_test_rtcm_multi_eph.nav";
+    {
+        std::ofstream out(path);
+        out << "     3.04           N: GNSS NAV DATA    M: MIXED NAV DATA   RINEX VERSION / TYPE\n"
+            << std::string(60, ' ') << "END OF HEADER\n"
+            << (kMultiGnssRinexRecords + 1);
+    }
+    io::RINEXReader reader;
+    NavigationData nav;
+    std::vector<Ephemeris> records;
+    if (reader.open(path.string()) && reader.readNavigationData(nav)) {
+        for (const auto& [sat, list] : nav.ephemeris_data) {
+            (void)sat;
+            records.insert(records.end(), list.begin(), list.end());
+        }
+    }
+    reader.close();
+    std::filesystem::remove(path);
+    return records;
+}
+
+const Ephemeris* findRecord(const std::vector<Ephemeris>& records, GNSSSystem system, int prn,
+                            int data_source = -1) {
+    for (const auto& eph : records) {
+        if (eph.satellite.system == system && eph.satellite.prn == prn &&
+            (data_source < 0 || eph.data_source_code == data_source)) {
+            return &eph;
+        }
+    }
+    return nullptr;
+}
+
+// The satellite-state comparison used by the multi-GNSS ephemeris contract:
+// nine epochs from toe-2h to toe+2h every 30 min, 1 cm and 1e-11 s.
+void expectSameSatelliteState(const Ephemeris& expected, const Ephemeris& actual) {
+    for (int k = -4; k <= 4; ++k) {
+        const GNSSTime t = expected.toe + 1800.0 * k;
+        Vector3d p0, v0, p1, v1;
+        double c0 = 0.0, d0 = 0.0, c1 = 0.0, d1 = 0.0;
+        ASSERT_TRUE(expected.calculateSatelliteState(t, p0, v0, c0, d0));
+        ASSERT_TRUE(actual.calculateSatelliteState(t, p1, v1, c1, d1));
+        EXPECT_LE((p0 - p1).norm(), 0.01) << "k=" << k;
+        EXPECT_LE(std::abs(c0 - c1), 1e-11) << "k=" << k;
+    }
+}
+
+Ephemeris encodeAndDecode(io::RTCMProcessor& processor, const Ephemeris& input,
+                          io::RTCMMessageType expected_type) {
+    const io::RTCMMessage encoded = processor.encodeEphemeris(input);
+    EXPECT_TRUE(encoded.valid);
+    EXPECT_EQ(encoded.type, expected_type);
+    const auto frame = buildRtcmFrame(encoded);
+    const auto messages = processor.decode(frame.data(), frame.size());
+    EXPECT_EQ(messages.size(), 1U);
+    NavigationData nav;
+    if (messages.empty() || !processor.decodeNavigationData(messages.front(), nav)) {
+        return Ephemeris();
+    }
+    const auto it = nav.ephemeris_data.find(input.satellite);
+    if (it == nav.ephemeris_data.end() || it->second.size() != 1U) {
+        ADD_FAILURE() << "decoded record missing";
+        return Ephemeris();
+    }
+    return it->second.front();
+}
+
+void expectSameRepresentation(const Ephemeris& expected, const Ephemeris& actual) {
+    EXPECT_EQ(actual.satellite, expected.satellite);
+    EXPECT_EQ(actual.week, expected.week);
+    EXPECT_NEAR(actual.toe - expected.toe, 0.0, 1e-6);
+    EXPECT_NEAR(actual.toc - expected.toc, 0.0, 1e-6);
+    EXPECT_NEAR(actual.toes, expected.toes, 1e-6);
+    EXPECT_EQ(actual.health, expected.health);
+    EXPECT_NEAR(actual.sv_health, expected.sv_health, 1e-9);
+    EXPECT_EQ(actual.iode, expected.iode);
+    EXPECT_NEAR(actual.tgd, expected.tgd, 1.1e-10);
+}
+
+}  // namespace
+
+TEST_F(RTCMProcessorTest, BeiDou1042RoundTripMatchesRinexRecord) {
+    const auto records = readMultiGnssRecords();
+    // C01 and C59 are GEO satellites, C06 is IGSO, C21 is MEO.
+    for (const int prn : {1, 6, 21, 59}) {
+        SCOPED_TRACE("C" + std::to_string(prn));
+        const Ephemeris* input = findRecord(records, GNSSSystem::BeiDou, prn);
+        ASSERT_NE(input, nullptr);
+        const Ephemeris decoded = encodeAndDecode(processor, *input, io::RTCMMessageType::RTCM_1042);
+        expectSameRepresentation(*input, decoded);
+        EXPECT_EQ(decoded.iodc, input->iodc);
+        EXPECT_NEAR(decoded.tgd_secondary, input->tgd_secondary, 1.1e-10);
+        expectSameSatelliteState(*input, decoded);
+        // toe/toc are GPST (BDT + 14 s) with the BDT week in `week`, as the RINEX reader holds them.
+        EXPECT_EQ(decoded.week, 968U);
+        EXPECT_EQ(decoded.toe.week, 2324);
+        EXPECT_NEAR(decoded.toes + 14.0, decoded.toe.tow, 1e-9);
+    }
+}
+
+TEST_F(RTCMProcessorTest, BeiDou1042GeoUsesGeoOrbitModel) {
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* geo = findRecord(records, GNSSSystem::BeiDou, 1);
+    ASSERT_NE(geo, nullptr);
+    const Ephemeris decoded = encodeAndDecode(processor, *geo, io::RTCMMessageType::RTCM_1042);
+    Vector3d pos, vel;
+    double bias = 0.0, drift = 0.0;
+    ASSERT_TRUE(decoded.calculateSatelliteState(decoded.toe, pos, vel, bias, drift));
+    // A GEO satellite is almost stationary in ECEF, an MEO satellite moves ~3.6 km/s.
+    EXPECT_LT(vel.norm(), 100.0);
+    EXPECT_NEAR(pos.norm(), 42.16e6, 0.1e6);
+}
+
+TEST_F(RTCMProcessorTest, BeiDou1042RejectsOutOfRangeAndShortPayloads) {
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* base = findRecord(records, GNSSSystem::BeiDou, 21);
+    ASSERT_NE(base, nullptr);
+    Ephemeris bad = *base;
+    bad.af0 = 1.0e-3;  // 24-bit field with 2^-33 s resolution tops out near 0.98 ms
+    EXPECT_FALSE(processor.encodeEphemeris(bad).valid);
+    bad = *base;
+    bad.week = 9000;
+    EXPECT_FALSE(processor.encodeEphemeris(bad).valid);
+    bad = *base;
+    bad.satellite.prn = 64;
+    EXPECT_FALSE(processor.encodeEphemeris(bad).valid);
+
+    io::RTCMMessage truncated = processor.encodeEphemeris(*base);
+    ASSERT_TRUE(truncated.valid);
+    truncated.data.resize(40);
+    NavigationData nav;
+    EXPECT_FALSE(processor.decodeNavigationData(truncated, nav));
+}
+
+TEST_F(RTCMProcessorTest, BeiDou1042ClockEpochAcrossWeekBoundaryStaysNearToe) {
+    // toe just after the BDT week rollover, toc just before it.
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* base = findRecord(records, GNSSSystem::BeiDou, 21);
+    ASSERT_NE(base, nullptr);
+    Ephemeris input = *base;
+    input.toes = 0.0;
+    input.week = 969;
+    input.toe = GNSSTime(969 + 1356, 0.0) + 14.0;
+    input.toc = GNSSTime(968 + 1356, 604800.0 - 8.0) + 14.0;
+    const Ephemeris decoded = encodeAndDecode(processor, input, io::RTCMMessageType::RTCM_1042);
+    EXPECT_NEAR(decoded.toe - input.toe, 0.0, 1e-6);
+    EXPECT_NEAR(decoded.toc - input.toc, 0.0, 1e-6);
+}
+
+TEST_F(RTCMProcessorTest, Qzss1044RoundTripMatchesRinexRecord) {
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* input = findRecord(records, GNSSSystem::QZSS, 2);
+    ASSERT_NE(input, nullptr);
+    ASSERT_EQ(input->week, 2324U);
+
+    // Without a reference time the 10-bit week is resolved against the host clock,
+    // so give the processor a stream reference as the stream decoder does.
+    processor.setReferenceTime(GNSSTime(2324, 10800.0));
+    const Ephemeris decoded = encodeAndDecode(processor, *input, io::RTCMMessageType::RTCM_1044);
+    expectSameRepresentation(*input, decoded);
+    EXPECT_EQ(decoded.satellite.prn, 2);
+    EXPECT_EQ(decoded.iodc, input->iodc);
+    expectSameSatelliteState(*input, decoded);
+}
+
+TEST_F(RTCMProcessorTest, Qzss1044PrnNumberingAndLimits) {
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* base = findRecord(records, GNSSSystem::QZSS, 2);
+    ASSERT_NE(base, nullptr);
+    processor.setReferenceTime(GNSSTime(2324, 10800.0));
+
+    // J01..J07 are stored as 1..7 (RINEX numbering); the message field is the same number.
+    for (int prn = 1; prn <= 7; ++prn) {
+        Ephemeris input = *base;
+        input.satellite = SatelliteId(GNSSSystem::QZSS, static_cast<uint8_t>(prn));
+        const Ephemeris decoded = encodeAndDecode(processor, input, io::RTCMMessageType::RTCM_1044);
+        EXPECT_EQ(decoded.satellite, input.satellite);
+    }
+    // The 193..202 numbering is accepted and maps to the same field.
+    Ephemeris high = *base;
+    high.satellite = SatelliteId(GNSSSystem::QZSS, 194);
+    const io::RTCMMessage encoded = processor.encodeEphemeris(high);
+    ASSERT_TRUE(encoded.valid);
+    NavigationData nav;
+    ASSERT_TRUE(processor.decodeNavigationData(encoded, nav));
+    EXPECT_EQ(nav.ephemeris_data.begin()->first.prn, 2);
+
+    Ephemeris invalid = *base;
+    invalid.satellite = SatelliteId(GNSSSystem::QZSS, 11);
+    EXPECT_FALSE(processor.encodeEphemeris(invalid).valid);
+    invalid = *base;
+    invalid.af2 = 1.0e-10;  // 8-bit field with 2^-55 resolution
+    EXPECT_FALSE(processor.encodeEphemeris(invalid).valid);
+}
+
+TEST_F(RTCMProcessorTest, Qzss1044WeekFollowsReferenceTime) {
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* base = findRecord(records, GNSSSystem::QZSS, 2);
+    ASSERT_NE(base, nullptr);
+    const io::RTCMMessage encoded = processor.encodeEphemeris(*base);
+    ASSERT_TRUE(encoded.valid);
+    for (const int reference_week : {2324, 2330, 2800}) {
+        processor.setReferenceTime(GNSSTime(reference_week, 1000.0));
+        NavigationData nav;
+        ASSERT_TRUE(processor.decodeNavigationData(encoded, nav));
+        // 2324 mod 1024 = 276: the nearest week to the reference.
+        const int expected = 276 + 1024 * ((reference_week - 276 + 512) / 1024);
+        EXPECT_EQ(nav.ephemeris_data.begin()->second.front().week, expected);
+    }
+}
+
+TEST_F(RTCMProcessorTest, Galileo1045And1046EncodeFollowsNavigationMessageType) {
+    const auto records = readMultiGnssRecords();
+    const Ephemeris* inav = findRecord(records, GNSSSystem::Galileo, 11, 513);
+    const Ephemeris* fnav = findRecord(records, GNSSSystem::Galileo, 11, 258);
+    ASSERT_NE(inav, nullptr);
+    ASSERT_NE(fnav, nullptr);
+
+    const Ephemeris decoded_inav =
+        encodeAndDecode(processor, *inav, io::RTCMMessageType::RTCM_1046);
+    expectSameRepresentation(*inav, decoded_inav);
+    EXPECT_EQ(decoded_inav.data_source_code, 513);
+    EXPECT_NEAR(decoded_inav.tgd_secondary, inav->tgd_secondary, 2.4e-10);
+    EXPECT_NEAR(decoded_inav.sv_accuracy, inav->sv_accuracy, 1e-9);
+    expectSameSatelliteState(*inav, decoded_inav);
+
+    const Ephemeris decoded_fnav =
+        encodeAndDecode(processor, *fnav, io::RTCMMessageType::RTCM_1045);
+    expectSameRepresentation(*fnav, decoded_fnav);
+    EXPECT_EQ(decoded_fnav.data_source_code, 258);
+    expectSameSatelliteState(*fnav, decoded_fnav);
+
+    // The explicit navigation message type wins over the data-source word.
+    Ephemeris typed = *fnav;
+    typed.navigation_message_type = NavigationMessageType::INAV;
+    EXPECT_EQ(processor.encodeEphemeris(typed).type, io::RTCMMessageType::RTCM_1046);
+
+    // A record whose type cannot be determined is skipped.
+    Ephemeris unknown = *inav;
+    unknown.data_source_code = 0;
+    unknown.navigation_message_type = NavigationMessageType::Unknown;
+    EXPECT_FALSE(processor.encodeEphemeris(unknown).valid);
+    // So is one that claims both.
+    Ephemeris both = *inav;
+    both.data_source_code = 513 | 2;
+    EXPECT_FALSE(processor.encodeEphemeris(both).valid);
+
+    Ephemeris out_of_range = *inav;
+    out_of_range.week = 1000;  // before GST week 0
+    EXPECT_FALSE(processor.encodeEphemeris(out_of_range).valid);
+    out_of_range = *inav;
+    out_of_range.iode = 1024;
+    EXPECT_FALSE(processor.encodeEphemeris(out_of_range).valid);
+}
+
+TEST_F(RTCMProcessorTest, MultiGnssEphemerisMessagesAreRoutedAsEphemerides) {
+    for (const auto type :
+         {io::RTCMMessageType::RTCM_1019, io::RTCMMessageType::RTCM_1020,
+          io::RTCMMessageType::RTCM_1042, io::RTCMMessageType::RTCM_1044,
+          io::RTCMMessageType::RTCM_1045, io::RTCMMessageType::RTCM_1046}) {
+        EXPECT_TRUE(io::rtcm_utils::isEphemerisMessage(type));
+    }
+    EXPECT_FALSE(io::rtcm_utils::isEphemerisMessage(io::RTCMMessageType::RTCM_1005));
+    EXPECT_FALSE(io::rtcm_utils::isEphemerisMessage(io::RTCMMessageType::RTCM_1077));
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1042), "BeiDou Ephemeris");
+    EXPECT_EQ(io::rtcm_utils::getMessageTypeName(io::RTCMMessageType::RTCM_1044), "QZSS Ephemeris");
+}
+
 TEST_F(RTCMProcessorTest, Galileo1045And1046RoundTripThroughRinexNavigation) {
     // RTCM 1046 (I/NAV) and 1045 (F/NAV) -> RINEX navigation -> reader keeps
     // the data-source word and SISA in metres (index 107 = 3.12 m).

@@ -138,7 +138,7 @@ radio link:
 | `--rover-rtcm <path\|ntrip://\|tcp://>` | Rover as RTCM3 observations. |
 | `--rover-ubx <file\|serial://\|/dev/tty...>` and `--rover-ubx-baud` | Rover as u-blox UBX instead (give one of the two rover flags). Baud default is 115200. |
 | `--base-rtcm <path\|ntrip://\|tcp://\|serial://>` | Base RTCM3. NTRIP URLs take `ntrip://user:password@host[:port]/MOUNT`. Required. |
-| `--nav-rinex <file>` | Supplemental broadcast navigation. It seeds the GPST week reference of both RTCM decoders (latest GPS toe) and supplies ephemerides. Multi-constellation needs an ephemeris for every system you want used, from this file or from ephemeris messages in the base stream; the multi-GNSS checks in [Real-time stress](../realtime_stress.md#multi-constellation-msm-epoch-assembly) all used `--nav-rinex`. It is optional on the fixture above because the base stream sends 1019. Without it and without any ephemeris in either stream, the head of the stream stays in week 0 ([Interfaces](../interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly)). |
+| `--nav-rinex <file>` | Supplemental broadcast navigation. It seeds the GPST week reference of both RTCM decoders (latest GPS toe) and supplies ephemerides. Multi-constellation needs an ephemeris for every system you want used, from this file or from 1019/1020/1042/1044/1045/1046 messages in the base stream; the multi-GNSS checks in [Real-time stress](../realtime_stress.md#multi-constellation-msm-epoch-assembly) all used `--nav-rinex`. It is optional on the fixture above because the base stream sends 1019. Without it and without any ephemeris in either stream, the head of the stream stays in week 0 ([Interfaces](../interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly)). |
 | `--base-ecef <x> <y> <z>` | Overrides the base position from the stream. Use it when the position in the 1005 message is not your surveyed mark. |
 
 Multi-constellation MSM needs no flag: the per-constellation messages of one
@@ -236,10 +236,16 @@ python3 apps/gnss.py realtime-stress run \
   [Real-time stress](../realtime_stress.md) are GPS-only except the
   [multi-constellation check](../realtime_stress.md#multi-constellation-msm-epoch-assembly)
   (G+R+E+J+C MSM7). Encode the constellations your field receiver sends.
-  The encoded base stream carries only GPS and GLONASS ephemerides
-  (1019/1020), so pass the run's navigation RINEX with `--nav-rinex` as above;
-  without it Galileo, QZSS and BeiDou satellites have no ephemeris and the
-  replay solves with G+R only.
+  By default the encoded base stream carries only GPS and GLONASS ephemerides
+  (1019/1020), so pass the run's navigation RINEX with `--nav-rinex` as above,
+  or add `--eph-systems G,R,E,J,C` to `prepare` to put Galileo, QZSS and BeiDou
+  ephemerides (1045/1046, 1044, 1042) in the base stream; without either,
+  Galileo, QZSS and BeiDou satellites have no ephemeris and the replay solves
+  with G+R only. The two are equivalent only when the navigation file has no
+  `IONOSPHERIC CORR` header: `--nav-rinex` also supplies those ionosphere
+  parameters (the PPC files have them, the UrbanNav BCEmerge file does not), a
+  stream cannot, and the solutions then differ
+  ([measured](../realtime_stress.md#ephemerides-in-the-base-stream-eph-systems)).
 - Faults are `--fault kind@at+dur=value`, in stream seconds
   ([Fault syntax](../realtime_stress.md#fault-syntax)). Useful ones:
   `base_outage@100+30` (data dropped, link up), `base_stall@100+10`,
