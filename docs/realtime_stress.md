@@ -403,6 +403,28 @@ Found by the harness, deliberately not changed here (each needs a design decisio
    (p50 0.41 s, max 0.82 s with a 1 Hz base), also with `--no-base-interp`, which only changes which base is used.
    A real low-latency mode would solve on arrival with the held or extrapolated base
    (see [online base extrapolation](online_rtk_base_extrapolation_v1.md)).
+
+   A frozen-contract check of such a mode (2026-10-12) was **No-Go**, and the code was not merged. The candidate:
+   * solved each rover epoch on arrival;
+   * used the exact base if one was already read, otherwise the latest earlier base carried to the rover time by the
+     causal geometry-corrected hold `rtk_base_alignment::holdBaseEpoch`, up to 2.0 s old.
+
+   Check runs were PPC Tokyo run2–3 and Nagoya run1–3: G+R+E+J+C MSM7, `--preset low-cost`, `--nav-rinex`.
+
+   | | default (interpolating) | solve on arrival |
+   |---|---|---|
+   | latency p50 / p95, 1x TCP, 300 s of Tokyo run2 | 0.416 / 0.816 s | **0.007 / 0.022 s** |
+   | FIX, pooled | 28,576 | 28,131 (98.4 %) |
+   | wrong FIX (> 0.5 m), pooled | 676 (2.37 %) | 695 (2.47 %) |
+   | Wrong/FIX, Nagoya run3 | 72 / 1964 = 3.67 % | **153 / 2148 = 7.12 %** (gate: ≤ +2 pp) |
+   | median horizontal error of correct FIX | 0.0280 m | 0.0294 m |
+
+   * The latency goal was met, and the pooled numbers barely moved.
+   * Per run, Wrong/FIX changed by −0.8 to +3.5 pp, and Nagoya run3 nearly doubled.
+   * Tokyo run1 was used during development and was not scored. On it, Wrong/FIX went from 3.1 % to 10.8 %.
+   * Holding a base forward over a sub-second gap is therefore not safe enough on this data to ship, even opt-in.
+   * A follow-up, such as a shorter maximum age or never declaring FIXED on a held base, needs check runs that have not
+     been seen. These PPC runs now have been.
 3. **TCP reads have a watchdog only when asked for.** A silent but connected `tcp://` source blocks in `read()` with no
    timeout, so a dead peer that never sends a FIN blocks `gnss live`; the `base_blackhole` / `rover_blackhole` faults
    reproduce it. Opt-in fix: `gnss live --stall-timeout-ms <ms>` (with `--reconnect`, see
