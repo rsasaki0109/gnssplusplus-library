@@ -36,6 +36,46 @@ class RuntimeReceiverCases:
                 if line and not line.startswith("%")
             ]
             self.assertGreater(len(solution_lines), 0)
+    def test_replay_base_rtcm_resolves_the_stream_week(self) -> None:
+        # GPS MSM carries only a time of week; gnss replay must date the base epochs from the stream
+        # reference (nav RINEX seed, else the in-stream 1019), not leave them in week 0.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_replay_rtcm_week_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_nav = temp_root / "base.nav"
+            for src, flag, out in (
+                (fixture / "rover.rtcm", "--obs-out", rover_obs),
+                (fixture / "base.rtcm", "--nav-out", base_nav),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(src),
+                    flag, str(out), "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+
+            for label, extra in (
+                ("stream-ephemeris seed", []),
+                ("nav-rinex seed", ["--nav-rinex", str(base_nav)]),
+            ):
+                output_path = temp_root / f"replay_{len(extra)}.pos"
+                result = self.run_gnss(
+                    "replay",
+                    "--rover-rinex", str(rover_obs),
+                    "--base-rtcm", str(fixture / "base.rtcm"),
+                    *extra,
+                    "--out", str(output_path),
+                    "--quiet",
+                )
+                self.assertEqual(result.returncode, 0, msg=f"{label}: {result.stderr}")
+                records = [
+                    line.split()
+                    for line in output_path.read_text(encoding="ascii").splitlines()
+                    if line and not line.startswith("%")
+                ]
+                self.assertGreaterEqual(len(records), 30, msg=label)
+                self.assertEqual({row[0] for row in records}, {"2324"}, msg=label)
+
     def test_replay_supports_moving_base_mode(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_replay_moving_base_") as temp_dir:
             temp_root = Path(temp_dir)

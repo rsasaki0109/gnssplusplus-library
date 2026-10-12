@@ -113,10 +113,15 @@ one decoder obtains a reference from stream ephemerides and the other has none
 week-0 epoch from a UBX rover is given the week nearest to the newest decoder
 reference. Without `--nav-rinex` and without any ephemeris in either stream the
 head of the stream is not resolved (week 0, host-clock GLONASS).
-`gnss convert` keeps its own `--gps-week` resolution. `gnss replay`'s RTCM base
-path decodes with a bare `RTCMProcessor` (no reference), so there the assembler
-can only merge parts whose weeks agree (known limit; use `--base-rinex` or
-convert to RINEX first for multi-constellation bases).
+`gnss convert` keeps its own `--gps-week` resolution. `gnss replay --base-rtcm`
+decodes the base with the same `RTCMStreamDecoder` (and the same assembler): it
+is seeded from `--nav-rinex` (latest GPS toe) when given, otherwise from the
+first in-stream GPS/Galileo/BeiDou/QZSS ephemeris, so the base epochs get the
+same GPST week as a rover RINEX and the result does not depend on the host
+clock. Base epochs decoded before an in-stream seed existed (no `--nav-rinex`,
+no early ephemeris) are resolved against that first reference after the pass.
+Only a stream with neither a `--nav-rinex` nor any such ephemeris stays in
+week 0 and cannot be aligned to a rover RINEX.
 
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 

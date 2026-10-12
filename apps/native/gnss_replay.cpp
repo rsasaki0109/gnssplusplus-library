@@ -9,6 +9,7 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,7 @@
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/observation_epoch_assembler.hpp>
 #include <libgnss++/io/rtcm.hpp>
+#include <libgnss++/io/rtcm_stream.hpp>
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/io/ubx.hpp>
 
@@ -523,9 +525,14 @@ bool loadBaseUbx(const std::string& ubx_path,
     return !base_epochs.empty();
 }
 
+// Decodes the base RTCM stream with RTCMStreamDecoder so TOW-only MSM parts get a full GPST week
+// (and GLONASS epochs are dated from the stream, not the host clock), exactly as in gnss_live.
+// `seed` is the latest GPS toe of the --nav-rinex data when one was given; otherwise the decoder
+// seeds itself from the first in-stream GPS/Galileo/BeiDou/QZSS ephemeris.
 bool loadBaseRtcm(const std::string& source,
                   size_t message_limit,
                   bool assemble_epochs,
+                  const std::optional<libgnss::GNSSTime>& seed,
                   std::vector<libgnss::ObservationData>& base_epochs,
                   libgnss::NavigationData& nav_data,
                   Eigen::Vector3d& base_position,
@@ -535,40 +542,52 @@ bool loadBaseRtcm(const std::string& source,
         return false;
     }
 
-    libgnss::io::RTCMProcessor processor;
+    libgnss::io::RTCMStreamDecoder decoder;
+    if (seed) {
+        decoder.setReferenceTime(*seed);
+    }
     libgnss::io::ObservationEpochAssembler assembler;
+    // First reference the decoder had; epochs decoded before it existed (head of a stream with
+    // neither a navigation RINEX nor an early ephemeris) are still TOW-only (week 0) and are
+    // resolved against it after the pass, with the same nearest-week rule.
+    std::optional<libgnss::GNSSTime> first_reference = decoder.referenceTime();
     size_t message_count = 0;
     libgnss::io::RTCMMessage raw_message;
+    std::vector<libgnss::io::RTCMStreamDecoder::Event> events;
     while ((message_limit == 0 || message_count < message_limit) && reader.readMessage(raw_message)) {
         ++message_count;
         const auto frame = buildRtcmFrame(raw_message);
-        const auto decoded_messages = processor.decode(frame.data(), frame.size());
-        for (const auto& message : decoded_messages) {
-            if (libgnss::io::rtcm_utils::isObservationMessage(message.type)) {
-                libgnss::ObservationData obs_data;
-                if (processor.decodeObservationData(message, obs_data)) {
-                    if (assemble_epochs) {
-                        for (auto& epoch : assembler.push(obs_data, processor.lastObservationMoreFollows())) {
-                            base_epochs.push_back(std::move(epoch));
-                        }
-                    } else {
-                        base_epochs.push_back(obs_data);
+        decoder.pushFrame(frame.data(), frame.size(), events);
+        for (auto& event : events) {
+            if (event.has_observation) {
+                if (assemble_epochs) {
+                    for (auto& epoch : assembler.push(event.observation, event.observation_more_follows)) {
+                        base_epochs.push_back(std::move(epoch));
                     }
+                } else {
+                    base_epochs.push_back(event.observation);
                 }
-            } else if (libgnss::io::rtcm_utils::isEphemerisMessage(message.type)) {
-                libgnss::NavigationData increment;
-                if (processor.decodeNavigationData(message, increment)) {
-                    mergeNavigationData(nav_data, increment);
-                }
+            } else if (event.has_navigation) {
+                mergeNavigationData(nav_data, event.navigation);
             }
+        }
+        if (!first_reference) {
+            first_reference = decoder.referenceTime();
         }
     }
     // A pending (partially assembled) epoch at end of stream is still an epoch.
     for (auto& epoch : assembler.flush()) {
         base_epochs.push_back(std::move(epoch));
     }
-    if (processor.hasReferencePosition()) {
-        base_position = processor.getReferencePosition();
+    if (first_reference) {
+        for (auto& epoch : base_epochs) {
+            if (epoch.time.week == 0) {
+                epoch.time = libgnss::io::RTCMStreamDecoder::resolveTowOnlyTime(epoch.time, *first_reference);
+            }
+        }
+    }
+    if (decoder.hasStationPosition()) {
+        base_position = decoder.getStationPosition();
         have_base_position = true;
     }
     reader.close();
@@ -625,18 +644,27 @@ size_t runReplay(const ReplayConfig& config) {
             throw std::runtime_error("failed to load base UBX observations/navigation");
         }
     } else {
+        // The navigation RINEX is read first (into its own container) only to seed the stream's
+        // GPST reference; it is merged after the in-stream ephemerides, as before.
+        libgnss::NavigationData supplemental_nav;
+        std::optional<libgnss::GNSSTime> stream_reference_seed;
+        if (!config.nav_rinex_path.empty()) {
+            if (!loadNavigationRinex(config.nav_rinex_path, supplemental_nav)) {
+                throw std::runtime_error("failed to load supplemental navigation RINEX");
+            }
+            stream_reference_seed = libgnss::io::RTCMStreamDecoder::referenceFromNavigation(supplemental_nav);
+        }
         if (!loadBaseRtcm(config.base_rtcm_path,
                           config.rtcm_message_limit,
                           config.assemble_rtcm_epochs,
+                          stream_reference_seed,
                           base_epochs,
                           nav_data,
                           base_position,
                           have_base_position)) {
             throw std::runtime_error("failed to load base RTCM observations");
         }
-        if (!config.nav_rinex_path.empty() && !loadNavigationRinex(config.nav_rinex_path, nav_data)) {
-            throw std::runtime_error("failed to load supplemental navigation RINEX");
-        }
+        mergeNavigationData(nav_data, supplemental_nav);
     }
 
     if (nav_data.ephemeris_data.empty()) {
