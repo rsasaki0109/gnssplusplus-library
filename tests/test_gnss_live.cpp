@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -1330,6 +1331,104 @@ TEST(GNSSLiveRecordedStreamTest, PosFixDiagnosticsAreOptInAndLeaveOtherColumnsUn
                                  (temp_dir / "llh.pos").string() + "\"",
                              log),
               0);
+
+    fs::remove_all(temp_dir);
+}
+
+// gnss_live reads a UBX rover in 4096-byte chunks. A RAWX-only stream (or a high rate) completes
+// several UBX-RXM-RAWX epochs per chunk; the reader used to return only the first and silently
+// drop the rest. The same epochs, each alone in its own 4096-byte block, are the reference.
+TEST(GNSSLiveRecordedStreamTest, UbxRoverEpochsPackedIntoOneReadAreAllProcessed) {
+    namespace fs = std::filesystem;
+    const fs::path fixture = realtimeFixtureDir();
+    ASSERT_TRUE(fs::exists(fixture / "rover.rtcm")) << fixture;
+    ASSERT_TRUE(fs::exists(fixture / "base.rtcm")) << fixture;
+
+    int week = 0;
+    {
+        std::ifstream index(fixture / "rover.idx");
+        double tow = 0.0;
+        ASSERT_TRUE(static_cast<bool>(index >> tow >> week));
+    }
+    ASSERT_GT(week, 0);
+
+    // The recorded 5 Hz rover epochs, re-encoded as UBX-RXM-RAWX (MSM epochs are TOW-only).
+    io::RTCMReader reader;
+    ASSERT_TRUE(reader.open((fixture / "rover.rtcm").string()));
+    io::RTCMStreamDecoder decoder;
+    io::RTCMMessage message;
+    std::vector<std::vector<uint8_t>> rawx;
+    while (reader.readMessage(message)) {
+        const auto frame = buildRtcmFrame(message);
+        std::vector<io::RTCMStreamDecoder::Event> events;
+        decoder.pushFrame(frame.data(), frame.size(), events);
+        for (auto& event : events) {
+            if (!event.has_observation) continue;
+            ObservationData epoch = event.observation;
+            if (epoch.time.week == 0) epoch.time.week = week;
+            rawx.push_back(buildUbxRawxMessage(epoch));
+        }
+    }
+    const size_t epoch_count = rawx.size();
+    ASSERT_GT(epoch_count, 150U);
+
+    constexpr size_t kReadSize = 4096;  // gnss_live's rover read size
+    std::vector<uint8_t> packed;
+    std::vector<uint8_t> spaced;
+    std::map<size_t, size_t> completed_per_read;
+    for (const auto& frame : rawx) {
+        ASSERT_LT(frame.size(), kReadSize);
+        packed.insert(packed.end(), frame.begin(), frame.end());
+        ++completed_per_read[(packed.size() - 1) / kReadSize];
+        spaced.insert(spaced.end(), frame.begin(), frame.end());
+        spaced.resize(spaced.size() + (kReadSize - frame.size()), 0x00);  // one epoch per read
+    }
+    size_t max_completed = 0;
+    for (const auto& [read_index, completed] : completed_per_read) {
+        (void)read_index;
+        max_completed = std::max(max_completed, completed);
+    }
+    ASSERT_GE(max_completed, 3U) << "the packed stream must complete several epochs in one read";
+
+    const fs::path temp_dir = makeUniqueTempDir("gnss_live_ubx_packed_rawx");
+    const fs::path packed_path = temp_dir / "packed.ubx";
+    const fs::path spaced_path = temp_dir / "spaced.ubx";
+    writeBinaryFile(packed_path, {packed});
+    writeBinaryFile(spaced_path, {spaced});
+
+    const std::string base_args = "--base-rtcm \"" + (fixture / "base.rtcm").string() + "\" --preset low-cost";
+    const fs::path packed_out = temp_dir / "packed.pos";
+    const fs::path spaced_out = temp_dir / "spaced.pos";
+    const fs::path packed_log = temp_dir / "packed.log";
+    const fs::path spaced_log = temp_dir / "spaced.log";
+    ASSERT_EQ(runLiveCapture("--rover-ubx \"" + spaced_path.string() + "\" " + base_args + " --out \"" +
+                                 spaced_out.string() + "\"",
+                             spaced_log),
+              0)
+        << readTextFile(spaced_log);
+    ASSERT_EQ(runLiveCapture("--rover-ubx \"" + packed_path.string() + "\" " + base_args + " --out \"" +
+                                 packed_out.string() + "\"",
+                             packed_log),
+              0)
+        << readTextFile(packed_log);
+
+    const std::string spaced_summary = readTextFile(spaced_log);
+    const std::string packed_summary = readTextFile(packed_log);
+    const std::string expected = std::to_string(epoch_count);
+    // Reference layout: every epoch reaches the solver.
+    EXPECT_EQ(extractSummaryToken(spaced_summary, "aligned_epochs"), expected) << spaced_summary;
+    EXPECT_EQ(extractSummaryToken(spaced_summary, "rover_valid_messages"), expected) << spaced_summary;
+    // Packed layout: the same epochs, the same result.
+    EXPECT_EQ(extractSummaryToken(packed_summary, "rover_valid_messages"), expected) << packed_summary;
+    EXPECT_EQ(extractSummaryToken(packed_summary, "aligned_epochs"), expected) << packed_summary;
+    EXPECT_EQ(extractSummaryToken(packed_summary, "skipped_rover_epochs"), "0") << packed_summary;
+    EXPECT_EQ(extractSummaryToken(packed_summary, "termination"), "rover_source_exhausted") << packed_summary;
+    EXPECT_GT(extractSummaryDouble(packed_summary, "written_solutions"), 100.0) << packed_summary;
+    EXPECT_EQ(extractSummaryToken(packed_summary, "written_solutions"),
+              extractSummaryToken(spaced_summary, "written_solutions"));
+    EXPECT_EQ(extractSummaryToken(packed_summary, "fixed_solutions"),
+              extractSummaryToken(spaced_summary, "fixed_solutions"));
+    EXPECT_EQ(readTextFile(packed_out), readTextFile(spaced_out));
 
     fs::remove_all(temp_dir);
 }

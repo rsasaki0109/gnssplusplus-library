@@ -299,6 +299,9 @@ struct RoverUbxSource {
     bool last_read_stalled = false;
     bool serial = false;
     bool eof = false;
+    // A 4096-byte read can complete several RXM-RAWX epochs (a RAWX-only stream, a high rate);
+    // readNextUbxObservation() hands out one epoch per call, so the rest wait here, in order.
+    std::deque<libgnss::ObservationData> pending_observations;
     std::unique_ptr<BoundedPump<UbxChunk>> pump;
 };
 
@@ -1103,6 +1106,7 @@ bool openRoverUbxSource(const std::string& path, int baud, RoverUbxSource& sourc
     source.stalls = 0;
     source.last_read_stalled = false;
     source.serial = false;
+    source.pending_observations.clear();
     source.file = std::ifstream();
 #ifndef _WIN32
     if (source.serial_fd >= 0) {
@@ -1232,6 +1236,14 @@ bool readNextUbxObservation(RoverUbxSource& source,
                             std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
     events.clear();
     source.last_read_stalled = false;
+    // Epochs an earlier chunk completed after the one already returned come first, before any
+    // further read (and so before eof or a stall is reported). Their chunk's events went out
+    // with the first epoch, so `events` stays empty here.
+    if (!source.pending_observations.empty()) {
+        obs = std::move(source.pending_observations.front());
+        source.pending_observations.pop_front();
+        return true;
+    }
     std::vector<uint8_t> chunk(4096);
 
     while (true) {
@@ -1289,11 +1301,20 @@ bool readNextUbxObservation(RoverUbxSource& source,
         std::vector<libgnss::io::UBXStreamDecoder::Event> chunk_events;
         source.decoder.pushBytes(chunk.data(), bytes_read, chunk_events);
         events.insert(events.end(), chunk_events.begin(), chunk_events.end());
+        bool have_observation = false;
         for (const auto& event : chunk_events) {
-            if (event.has_observation) {
-                obs = event.observation;
-                return true;
+            if (!event.has_observation) {
+                continue;
             }
+            if (!have_observation) {
+                obs = event.observation;
+                have_observation = true;
+            } else {
+                source.pending_observations.push_back(event.observation);
+            }
+        }
+        if (have_observation) {
+            return true;
         }
     }
 }
