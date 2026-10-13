@@ -541,7 +541,7 @@ size_t UBXNavDecoder::pushGalileo(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     eph.ura = static_cast<uint8_t>(sisa);
     eph.sv_accuracy = galileoSisaMeters(eph.ura);
     const int svh = (e5b_hs << 7) | (e5b_dvs << 6) | (e1b_hs << 1) | e1b_dvs;
-    eph.health = static_cast<uint8_t>(svh & 0xFF);
+    eph.health = static_cast<uint16_t>(svh);  // full width: E5b HS occupies bits 7-8 (as #621 / the RINEX reader)
     eph.sv_health = static_cast<double>(svh);
     eph.data_source_code = galileo_data_source::kInavE1B | galileo_data_source::kClockE5bE1;
     eph.navigation_message_type = NavigationMessageType::INAV;

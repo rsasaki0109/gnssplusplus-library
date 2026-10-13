@@ -761,13 +761,14 @@ TEST(UBXNavDecodeTest, GalileoHealthFlagsAreDecodedAndOnlyE1bOnesMakeTheRecordUn
         {0, 2, 0, 0, false},
         {0, 0, 0, 1, false},   // E1-B DVS
         {3, 0, 1, 0, true},    // E5b flags alone: the E1-B signal is fine
+        {2, 0, 0, 0, true},    // E5b HS = 2 sets health bit 8: kept, not truncated
     };
     for (const auto& c : cases) {
         io::UBXNavDecoder decoder;
         const auto out = decodeRows(decoder, galileoWithHealth(c.e5b_hs, c.e1b_hs, c.e5b_dvs, c.e1b_dvs));
         ASSERT_EQ(out.size(), 1U) << c.e5b_hs << c.e1b_hs << c.e5b_dvs << c.e1b_dvs;
         const int svh = (c.e5b_hs << 7) | (c.e5b_dvs << 6) | (c.e1b_hs << 1) | c.e1b_dvs;
-        EXPECT_EQ(out.front().health, svh & 0xFF);  // RINEX Galileo health word; `health` keeps its low byte
+        EXPECT_EQ(out.front().health, svh);  // RINEX Galileo health word, full width (E5b HS in bits 7-8)
         EXPECT_EQ(out.front().sv_health, static_cast<double>(svh));
         EXPECT_EQ(io::ubxNavEphemerisUsable(out.front()), c.usable);
     }
