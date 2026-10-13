@@ -1579,3 +1579,31 @@ TEST(UBXNavAcceptConfirmTest, IssueFieldsAreTheOnesTheDecoderUsesToSuppressRepea
         EXPECT_FALSE(io::ubxNavSameIssue(base, other_sat)) << c.name;
     }
 }
+
+TEST(UBXNavAcceptConfirmTest, ADifferingCopyOfAConfirmedRecordThatNeverReachedTheDatabaseIsMergedAtOnce) {
+    // A satellite broadcasts health 63 for an issue and then clears it without a new toe (BeiDou does this
+    // within one toe; the same issue, a different record).
+    const Ephemeris good = decodedG21();
+    Ephemeris unhealthy = good;
+    unhealthy.health = 63;
+    io::UBXNavAcceptConfirm merge;
+    NavigationData nav;
+    EXPECT_FALSE(merge.push(makeCopy(unhealthy, 1, 3), nav).merged);
+    EXPECT_TRUE(merge.push(makeCopy(unhealthy, 4, 6), nav).confirmed);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 0U);
+    // The healthy copy is a record the database does not hold: merged at once, not a conflict.
+    const auto healthy = merge.push(makeCopy(good, 7, 9), nav);
+    EXPECT_TRUE(healthy.merged);
+    EXPECT_FALSE(healthy.conflict);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 1U);
+    EXPECT_EQ(merge.counters().at(GNSSSystem::GPS).diverged_after_confirm, 0U);
+    EXPECT_EQ(merge.unconfirmed(), 1U);
+    EXPECT_TRUE(merge.push(makeCopy(good, 10, 12), nav).confirmed);
+    EXPECT_EQ(merge.unconfirmed(), 0U);
+    // Once the healthy record is confirmed and in the database, a later unhealthy copy is ignored.
+    EXPECT_FALSE(merge.push(makeCopy(unhealthy, 13, 15), nav).conflict);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 1U);
+    EXPECT_EQ(merge.counters().at(GNSSSystem::GPS).diverged_after_confirm, 1U);
+    EXPECT_EQ(merge.retracted(), 0U);
+    EXPECT_FALSE(merge.inFallback(kG21));
+}

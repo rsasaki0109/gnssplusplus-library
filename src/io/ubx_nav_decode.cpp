@@ -1175,12 +1175,24 @@ UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::push(const UBXNavDecoded& copy
 
     Entry& entry = sat.entries[found];
     if (entry.confirmed) {
-        // Rule 4: two agreeing transmissions outweigh one differing copy.
         if (ubxNavSameRecord(copy.eph, entry.eph)) {
             ++counters.duplicates;
-        } else {
-            ++counters.diverged_after_confirm;
+            return outcome;
         }
+        if (entry.merged) {
+            // Rule 4: two agreeing transmissions outweigh one differing copy.
+            ++counters.diverged_after_confirm;
+            return outcome;
+        }
+        // The confirmed record never reached the database (the health rule refused it, or the database
+        // already held the issue).  A differing copy is a record the database does not hold: rule 1 again.
+        // (A BeiDou satellite that clears its health flag within one toe is the case seen in development logs.)
+        Entry fresh;
+        fresh.eph = copy.eph;
+        fresh.reception = copy.reception;
+        fresh.merged = release(copy.eph, nav, counters, outcome);
+        sat.entries.erase(sat.entries.begin() + static_cast<std::ptrdiff_t>(found));
+        sat.entries.push_back(std::move(fresh));
         return outcome;
     }
     if (ubxNavSameRecord(copy.eph, entry.eph)) {
@@ -1216,15 +1228,19 @@ UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::pushFallback(const UBXNavDecod
                                                                NavigationData& nav, SatState& sat,
                                                                Counters& counters) {
     Outcome outcome;
-    // A record confirmed earlier for this issue stands (duplicates and differing copies alike).
+    // A record confirmed earlier for this issue stands: a repeat of it is a duplicate, and a differing copy is ignored
+    // when that record is in the database (rule 4).  A differing copy of a confirmed record that never reached the
+    // database is a candidate like any other.
     for (const Entry& entry : sat.entries) {
         if (entry.confirmed && ubxNavSameIssue(entry.eph, copy.eph)) {
             if (ubxNavSameRecord(copy.eph, entry.eph)) {
                 ++counters.duplicates;
-            } else {
-                ++counters.diverged_after_confirm;
+                return outcome;
             }
-            return outcome;
+            if (entry.merged) {
+                ++counters.diverged_after_confirm;
+                return outcome;
+            }
         }
     }
     for (size_t i = 0; i < sat.pending.size(); ++i) {

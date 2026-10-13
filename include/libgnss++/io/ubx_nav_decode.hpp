@@ -325,9 +325,12 @@ bool ubxNavSameIssue(const Ephemeris& a, const Ephemeris& b);
  *     candidate is added to them (a conflict again); at most kMaxPending (4) candidates are kept, the
  *     oldest dropped.  A copy equal to a record already confirmed is a duplicate.  After the
  *     confirmation the satellite returns to rule 1.
- *  4. A copy that differs from a record already *confirmed* (same issue) is ignored and counted
- *     (`diverged_after_confirm`): two agreeing transmissions outweigh one differing copy, so the
- *     confirmed record is never retracted.
+ *  4. A copy that differs from a record already *confirmed* (same issue) and merged is ignored and
+ *     counted (`diverged_after_confirm`): two agreeing transmissions outweigh one differing copy, so
+ *     a confirmed record is never retracted.  If the confirmed record never reached the database
+ *     (the health rule refused it, e.g. a BeiDou satellite that clears its health flag within one toe,
+ *     or the database already held the issue), a differing copy is a record the database does not
+ *     hold and follows rule 1 (merged at once, health rule first); in fallback it is a candidate.
  *
  * Only a record this object merged is ever removed, and only if it is still in the database in
  * every field.  Records D3 saw but that the database already held (e.g. from `--nav-rinex`) or that D1

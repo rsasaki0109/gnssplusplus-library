@@ -272,9 +272,12 @@ frame set the decoder produces (also the repeats it does not emit):
    corrupted one, so the next copy equal to the first confirms it (at most four
    candidates are kept). After a confirmation the satellite is back at rule 1 for its
    next record.
-4. A copy that differs from a record that was already confirmed is ignored: two
-   agreeing transmissions outweigh one differing copy, so a confirmed record is never
-   retracted.
+4. A copy that differs from a record that was already confirmed and is in the
+   navigation data is ignored: two agreeing transmissions outweigh one differing copy,
+   so a confirmed record is never retracted. If the confirmed record never got into the
+   navigation data (the health rule refused it), a differing copy is a record the
+   navigation data does not hold and follows rule 1; BeiDou satellites clear their health
+   flag within one toe this way.
 
 Counters on the `summary:` line: `ubx_nav_conflicts=` is the number of copies that
 differed from an unconfirmed copy (a conflict at rule 3, and every later copy that
