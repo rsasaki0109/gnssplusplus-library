@@ -41,11 +41,7 @@ Vector3d earthRotationCorrected(const Vector3d& satellite_position,
 
 bool isHealthyForPositioning(const Observation& observation,
                              const Ephemeris& ephemeris) {
-    int health = static_cast<int>(ephemeris.health);
-    if (observation.satellite.system == GNSSSystem::QZSS) {
-        health &= 0xFE;
-    }
-    return health == 0;
+    return ephemerisHealthy(ephemeris, observation.satellite.system);
 }
 
 double groupDelayCorrectionMeters(const Observation& observation,

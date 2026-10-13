@@ -875,3 +875,39 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFi
 }
 
 }  // namespace
+
+// ephemerisHealthy(): the single satellite health rule shared by SPP, PPP and FGO.
+TEST(EphemerisHealthyTest, FullWidthWordAndQzssMask) {
+    Ephemeris gps;
+    gps.satellite = SatelliteId(GNSSSystem::GPS, 5);
+    gps.health = 0;
+    EXPECT_TRUE(ephemerisHealthy(gps));
+    gps.health = 1;  // GPS has no masked bit
+    EXPECT_FALSE(ephemerisHealthy(gps));
+    gps.health = 256;
+    EXPECT_FALSE(ephemerisHealthy(gps));
+
+    Ephemeris gal;
+    gal.satellite = SatelliteId(GNSSSystem::Galileo, 7);
+    gal.health = 256;  // E5b HS bit 8: must not be truncated away
+    EXPECT_EQ(gal.health, 256);
+    EXPECT_FALSE(ephemerisHealthy(gal));
+    gal.health = 0x1FF;
+    EXPECT_FALSE(ephemerisHealthy(gal));
+
+    Ephemeris qzss;
+    qzss.satellite = SatelliteId(GNSSSystem::QZSS, 193);
+    qzss.health = 1;
+    EXPECT_TRUE(ephemerisHealthy(qzss));
+    qzss.health = 3;
+    EXPECT_FALSE(ephemerisHealthy(qzss));
+    qzss.health = 256;
+    EXPECT_FALSE(ephemerisHealthy(qzss));
+    qzss.health = 0x101;  // bit 0 masked, bit 8 still set
+    EXPECT_FALSE(ephemerisHealthy(qzss));
+
+    // The explicit-system overload decides the QZSS rule, not the record.
+    gps.health = 1;
+    EXPECT_TRUE(ephemerisHealthy(gps, GNSSSystem::QZSS));
+    EXPECT_FALSE(ephemerisHealthy(gps, GNSSSystem::GPS));
+}

@@ -476,6 +476,33 @@ the same order instead of by insertion order. The `.pos` of `gnss solve`,
 `gnss live` and `gnss ppp` no longer changes when the navigation records are
 permuted. `GNSS_PPP_GAL_INAV` and `setGalileoEphemerisSource` are unchanged.
 
+### Satellite health rule
+
+`gnss spp`, `gnss ppp` and the FGO tools exclude a satellite whose broadcast
+ephemeris is flagged unhealthy. They share one rule,
+`libgnss::ephemerisHealthy()` (`core/navigation.hpp`): the full health word must
+be zero, except that QZSS masks bit 0 (the L6 health bit, which does not affect
+L1/L2/L5), as RTKLIB `satexclude()` does. There is no GLONASS special case and no
+URA/variance rule. `Ephemeris::health` is `uint16_t` and every reader (RINEX
+2/3/4, RTCM 1019/1020/1042/1044/1045/1046, `gnss convert`) stores the whole word.
+It used to be `uint8_t`, which wrapped a Galileo E5b health word with only bit 8
+set (256) to 0 and made that satellite look healthy.
+
+RTK (`gnss solve`, `gnss live`, `gnss replay`) does **not** apply this rule; it
+uses a satellite whatever its health flag. Applying it was checked under a
+contract frozen before the run (2026-10-13) and was No-Go. On the UrbanNav Tokyo
+merged `base.nav`, the BDS-3 satellites C18, C23 and C24 are flagged health=1
+all day (they were in test at the time), and one of them was in the double
+differences on 44 to 76 % of the epochs of the four Shinjuku and Odaiba runs.
+Excluding them, pooled over the four runs with `--preset low-cost`, moved
+FIXED epochs with a 3D error above 0.5 m from 7.47 % to 7.58 % of FIXED in
+`gnss solve` and from 6.35 % to 9.50 % in multi-GNSS `gnss live` (limit +1.0
+point), so the rule is not applied. On the six PPC runs and HK Medium-Urban-1 no
+unhealthy satellite is observed by both receivers and the rule would change
+nothing. If your navigation data carries ephemerides that are unhealthy because
+they are wrong (rather than flagged during a test campaign), RTK will still use
+them.
+
 ## Docker
 
 The repo also ships a multi-stage `Dockerfile`. The runtime image installs:

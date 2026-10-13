@@ -133,7 +133,7 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
         eph.tgd = static_cast<double>(
             readSignedBits(message.data.data(), message.data.size(), bit_pos, 8)) * kPow2Neg31;
         bit_pos += 8;
-        eph.health = static_cast<uint8_t>(
+        eph.health = static_cast<uint16_t>(
             readUnsignedBits(message.data.data(), message.data.size(), bit_pos, 6));
         eph.sv_health = static_cast<double>(eph.health);
         bit_pos += 6;
@@ -327,7 +327,9 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
                 galileo_data_source::kFnavE5aI | galileo_data_source::kClockE5aE1;
             eph.navigation_message_type = NavigationMessageType::FNAV;
         }
-        eph.health = static_cast<uint8_t>(svh & 0xFF);
+        // Keep the full Galileo health word: E5b HS occupies bits 7-8, so an
+        // 8-bit store would wrap HS=2 (word 256) to "healthy".
+        eph.health = static_cast<uint16_t>(svh);
         eph.sv_health = static_cast<double>(svh);
         // Galileo week in the libgnss++/RINEX convention is aligned with the
         // GPS week: GST week + 1024.
@@ -399,7 +401,7 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
         eph.tgd = s(10) * 1e-10;            // TGD1 (B1/B3)
         eph.tgd_secondary = s(10) * 1e-10;  // TGD2 (B2/B3)
         const int svh = static_cast<int>(u(1));
-        eph.health = static_cast<uint8_t>(svh);
+        eph.health = static_cast<uint16_t>(svh);
         eph.sv_health = static_cast<double>(svh);
 
         eph.week = static_cast<uint16_t>(bdt_week);
@@ -472,7 +474,7 @@ bool RTCMProcessor::decodeEphemerisMessage(const RTCMMessage& message, Navigatio
         const uint8_t sva = static_cast<uint8_t>(u(4));
         eph.ura = sva;
         eph.sv_accuracy = uraMetersFromIndex(sva);
-        eph.health = static_cast<uint8_t>(u(6));
+        eph.health = static_cast<uint16_t>(u(6));
         eph.sv_health = static_cast<double>(eph.health);
         eph.tgd = s(8) * kPow2Neg31;
         eph.iodc = static_cast<uint16_t>(u(10));

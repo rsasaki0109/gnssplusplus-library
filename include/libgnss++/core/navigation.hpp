@@ -159,7 +159,7 @@ struct Ephemeris {
     
     // Status and accuracy
     uint16_t week;          ///< GPS week number
-    uint8_t health;         ///< Satellite health
+    uint16_t health;        ///< Satellite health word, stored at full width (Galileo E5b HS lives in bits 7-8); 0 = healthy
     double sv_health;       ///< Satellite health (double format)
     double sv_accuracy;     ///< Satellite accuracy
     uint8_t ura;            ///< User range accuracy index
@@ -197,6 +197,29 @@ struct Ephemeris {
      */
     double getAge(const GNSSTime& time) const;
 };
+
+/**
+ * @brief Whether a broadcast ephemeris is marked healthy (RTKLIB satexclude()).
+ *
+ * Healthy means the full-width health word is zero. For QZSS, bit 0 (the L6
+ * LEX health bit) is masked because it does not affect L1/L2/L5 positioning;
+ * any other set bit, or any non-zero health on the other systems, is unhealthy.
+ * No GLONASS special case and no URA/variance rule.
+ *
+ * @param system System whose rule applies (QZSS masks bit 0).
+ */
+inline bool ephemerisHealthy(const Ephemeris& eph, GNSSSystem system) {
+    uint32_t health = eph.health;
+    if (system == GNSSSystem::QZSS) {
+        health &= ~static_cast<uint32_t>(1);
+    }
+    return health == 0;
+}
+
+/// Same as above, taking the system from the ephemeris' own satellite id.
+inline bool ephemerisHealthy(const Ephemeris& eph) {
+    return ephemerisHealthy(eph, eph.satellite.system);
+}
 
 /**
  * @brief Ionospheric model parameters
