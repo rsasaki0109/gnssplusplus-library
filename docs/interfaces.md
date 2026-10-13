@@ -229,7 +229,8 @@ latest one before the host clock as in RTKLIB, so old logs decode correctly.
 
 **`gnss live --ubx-nav`** (default off; without it the `.pos`, the options and
 the output are byte-identical to earlier releases). Decoded ephemerides are
-merged with `addEphemerisIfNew`, like RTCM ephemerides. The first decoded GPS
+confirmed twice (below) and then merged with `addEphemerisIfNew`, like RTCM
+ephemerides. The first decoded GPS
 Klobuchar set is used when no ionosphere model is valid yet; a `--nav-rinex`
 that has an `IONOSPHERIC CORR` header wins. With the flag the rover's first
 RAWX epoch is read before the base and becomes the GPST reference of the base
@@ -239,15 +240,33 @@ record whose health marks the satellite unusable and counts it: GPS and QZSS
 LNAV `svh` other than 0, Galileo E1-B `HS` or `DVS` other than 0, BeiDou `SatH1`
 other than 0, GLONASS `Bn` MSB set or string-3 `ln` set (`Ephemeris::glonass_ln`,
 filled by this decoder only). The `summary:` line gains `ubx_nav_ephemerides=`
-(records added), `ubx_nav_klobuchar=` (0/1) and `ubx_nav_unhealthy_skipped=`.
-`--ubx-nav` needs `--rover-ubx`.
+(records added), `ubx_nav_klobuchar=` (0/1), `ubx_nav_unhealthy_skipped=`,
+`ubx_nav_unconfirmed=` and `ubx_nav_conflicts=`. `--ubx-nav` needs `--rover-ubx`.
+
+**Confirm-twice.** `--ubx-nav` and `--nav-rinex-out` accept a record only when the
+decoder has produced the same record twice from different transmissions
+(`UBXNavConfirmTwice`). "The same" is every broadcast field of the `Ephemeris`,
+bit for bit; only `tof`, which is resolved against the receiver clock, is left
+out. "Different transmissions" means the second copy is assembled entirely from
+SFRBX messages received after the last message of the first, so a copy that
+reuses a stored subframe of the first one does not count. A copy that differs
+from the pending one replaces it (`ubx_nav_conflicts=`, counted in `nav_rinex:`
+as `conflicts=`), a copy equal to an already accepted record is a duplicate, and
+`ubx_nav_unconfirmed=` / `unconfirmed=` counts the pending ones that were never
+confirmed, replaced or left at the end. A record that was corrupted in one
+transmission and passed the checks above (the GLONASS record of the measurement
+below) is therefore never accepted, at the price of one more transmission before
+every new ephemeris is used: 30 s at the median, 60 to 111 s at the 95th
+percentile and 240 s at most per system on the 2.67 h log below. The decoder
+(`UBXNavDecoder`, also behind `gnss ubx-info --decode-nav`) still reports every
+record, so the counts under "Measured" are decoder output, before this step.
 
 **`gnss convert --format ubx --nav-rinex-out <file>`** writes the decoded
 ephemerides as RINEX 3.04 navigation, with the last decoded Klobuchar set as
 `GPSA`/`GPSB` header lines, when the input ends, and prints a `nav_rinex:` line
-(count per system, `klobuchar=0|1`). It writes every record the receiver sent,
+(count per system, `klobuchar=0|1`, `unconfirmed=`, `conflicts=`). It writes every record the receiver sent,
 unhealthy ones included, with their health word: a converter keeps what it was
-given. It is separate from `--nav-out`, which keeps its own converter-side
+given, and only once confirmed twice. It is separate from `--nav-out`, which keeps its own converter-side
 decoders and writes no Klobuchar lines. `gnss ubx-info --decode-nav` prints a
 `nav_decode:` line with the same counts (also unfiltered).
 
@@ -263,7 +282,8 @@ Each record is as old as its subframes: decoding does not check the ephemeris
 against the time. GLONASS strings are protected by a Hamming code only, which is
 accepted with the single-error allowance of RTKLIB and cannot reject every
 multi-bit error: one record in the measurement below (R16, `tb` 12 where the other
-strings of the frame say 15) is such a corruption, decoded identically by RTKLIB.
+strings of the frame say 15) is such a corruption, decoded identically by RTKLIB;
+confirm-twice does not accept it, because the satellite never repeats it.
 
 `gnss live --rover-ubx` reads a UBX file in 4096-byte chunks and takes the first
 RAWX epoch of each chunk, so a log with several epochs per chunk loses the others
