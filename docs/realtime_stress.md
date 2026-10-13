@@ -264,27 +264,37 @@ constellations, `gnss live --preset low-cost` published FIX epochs that were mor
 than 0.5 m off on three of the four UrbanNav Tokyo runs at rates above 5 %. These
 are offline replays of the 2018-12-19 runs: G+R+E+J+C MSM7, `--nav-rinex`, the
 surveyed base and the real host clock, measured against a contract frozen
-before the run on 2026-10-12.
+before the run on 2026-10-12. The numbers below were measured on develop
+`52853076`; the contract was first run on `b9a6e243`, and the multi-GNSS
+numbers changed between the two (see the last bullet).
 
 | UrbanNav Tokyo, `--preset low-cost` | FIX, GPS-only → multi | wrong FIX, GPS-only → multi | Wrong/FIX, GPS-only → multi | FIXED 3D p95, multi |
 |---|---|---|---|---|
-| Shinjuku, Trimble rover | 3511 → 13963 | 1711 → 1687 | 48.7 % → **12.1 %** | 1.59 m |
-| Shinjuku, u-blox rover | 623 → 5043 | 202 → 276 | 32.4 % → **5.5 %** | 0.60 m |
-| Odaiba, Trimble rover | 4419 → 7687 | 125 → 78 | 2.8 % → 1.0 % | 0.17 m |
-| Odaiba, u-blox rover | 0 → 2580 | 0 → 574 | – → **22.2 %** | 3.30 m |
+| Shinjuku, Trimble rover | 3511 → 13636 | 1711 → 905 | 48.7 % → **6.6 %** | 0.78 m |
+| Shinjuku, u-blox rover | 623 → 4988 | 202 → 258 | 32.4 % → **5.2 %** | 0.51 m |
+| Odaiba, Trimble rover | 4419 → 7704 | 125 → 81 | 2.8 % → 1.1 % | 0.17 m |
+| Odaiba, u-blox rover | 0 → 2588 | 0 → 592 | – → **22.9 %** | 3.31 m |
 
-* Multi-GNSS fixes three to eight times more epochs and cuts Wrong/FIX on both Shinjuku runs and on Odaiba
-  Trimble. The number of wrong fixes does not go down much. On Odaiba u-blox, GPS alone never fixes, while
-  multi-GNSS fixes 42 % of epochs and 22 % of those fixes are wrong.
+* Multi-GNSS fixes 3.9 and 8.0 times as many epochs on the two Shinjuku runs and 1.7 times as many on Odaiba
+  Trimble, and cuts Wrong/FIX on all three. The number of wrong fixes falls on Shinjuku Trimble (1711 → 905)
+  and Odaiba Trimble (125 → 81) and rises on Shinjuku u-blox (202 → 258). On Odaiba u-blox, GPS alone never
+  fixes, while multi-GNSS fixes 42 % of epochs and 23 % of those fixes are wrong.
 * Most of these wrong fixes are decimetres to a few metres off, not tens of metres: see the FIXED 3D p95
   column. That still matters for anything that trusts the FIX flag.
-* `--kinematic-post-filter` (opt-in) lowers multi-GNSS Wrong/FIX only slightly (12.1 → 11.2 %, 5.5 → 4.8 %,
-  1.0 → 0.4 %, 22.2 → 20.5 %). It cuts the all-solution 3D p95 several-fold (Shinjuku Trimble 65 → 4 m) by
-  withholding 18–34 % of solutions. It does not remove wrong fixes.
-* On the PPC runs the multi-GNSS low-cost Wrong/FIX is 1.2–3.7 %
-  (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)).
+* `--kinematic-post-filter` (opt-in) lowers multi-GNSS Wrong/FIX only slightly (6.6 → 5.0 %, 5.2 → 4.3 %,
+  1.1 → 0.4 %, 22.9 → 21.1 %). It cuts the all-solution 3D p95 several-fold (Shinjuku Trimble 65 → 5 m) by
+  withholding 19–33 % of solutions. It does not remove wrong fixes.
+* On the PPC runs the multi-GNSS low-cost Wrong/FIX was 1.2–3.7 %
+  (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)), measured before #615 and not
+  re-measured since.
 * `gnss live` lacks `gnss solve`'s whole-solution post-filters.
 * The GPS-only numbers (48.7 % and 32.4 %) come from the GPS-only replay described below.
+* Change since the first run of this contract (`b9a6e243`, which gave Wrong/FIX 12.1 %, 5.5 %, 1.0 % and
+  22.2 % in the table order above, and 11.2 %, 4.8 %, 0.4 % and 20.5 % with `--kinematic-post-filter`): the
+  encoded streams and all GPS-only arms are identical in the two runs, and the multi-GNSS low-cost arms
+  differ. Rebuilding develop at `f32ea3b5` (before #615) reproduced all four earlier multi-GNSS low-cost
+  results, and `9d58ef51` (#615, deterministic same-toe ephemeris order, Galileo I/NAV first) gave the new
+  ones. The decision rule is unchanged: three of the four runs are still above 5 %.
 
 A frozen-contract check (2026-10-11) of
 `--preset low-cost --kinematic-post-filter` plus `FixRecoveryGuard` was
