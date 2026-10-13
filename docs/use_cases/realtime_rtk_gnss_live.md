@@ -139,7 +139,67 @@ radio link:
 | `--rover-ubx <file\|serial://\|/dev/tty...>` and `--rover-ubx-baud` | Rover as u-blox UBX instead (give one of the two rover flags). Baud default is 115200. |
 | `--base-rtcm <path\|ntrip://\|tcp://\|serial://>` | Base RTCM3. NTRIP URLs take `ntrip://user:password@host[:port]/MOUNT`. Required. |
 | `--nav-rinex <file>` | Supplemental broadcast navigation. It seeds the GPST week reference of both RTCM decoders (latest GPS toe) and supplies ephemerides. Multi-constellation needs an ephemeris for every system you want used, from this file or from 1019/1020/1042/1044/1045/1046 messages in the base stream; the multi-GNSS checks in [Real-time stress](../realtime_stress.md#multi-constellation-msm-epoch-assembly) all used `--nav-rinex`. It is optional on the fixture above because the base stream sends 1019. Without it and without any ephemeris in either stream, the head of the stream stays in week 0 ([Interfaces](../interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly)). |
+| `--ubx-nav` | With `--rover-ubx`: decode the rover's `UBX-RXM-SFRBX` into broadcast ephemerides (GPS/QZSS L1 C/A, Galileo E1-B, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set, and merge them like RTCM ephemerides. Default off. See [below](#a-u-blox-rover-without-a-navigation-file). |
 | `--base-ecef <x> <y> <z>` | Overrides the base position from the stream. Use it when the position in the 1005 message is not your surveyed mark. |
+
+### A u-blox rover without a navigation file
+
+A u-blox receiver already logs the subframes it decodes, so with `--ubx-nav` a
+rover needs neither `--nav-rinex` nor a base that sends ephemerides:
+
+```bash
+./build/apps/gnss_live \
+  --rover-ubx /dev/ttyACM0 --rover-ubx-baud 115200 \
+  --base-rtcm tcp://192.168.1.60:5019 --ubx-nav \
+  --preset low-cost --out output/live/run.pos
+```
+
+The rover has to log `UBX-RXM-RAWX` (the observations) and `UBX-RXM-SFRBX` (the
+subframes). The first RAWX epoch is also taken as the GPST reference of the base
+decoder, so a base stream without ephemerides is dated correctly. Solutions start
+once a satellite's ephemeris is complete: a median of 17 to 49 s per system after it
+is first tracked, and minutes for a satellite the receiver does not decode
+(measured on three logs of 2.67 to 4 h, [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out)).
+A record is merged at once, from its first complete copy, when the satellite has no valid
+record yet, so the start-up is not delayed by a repeat interval. If a later copy of the same issue
+differs, the merged record is taken back out and that satellite is not used again until two equal
+copies from different transmissions exist (accept, then confirm). A new issue of a satellite that
+already holds a valid record of this kind (for example the next two-hourly GPS set) waits for a
+second copy before it is merged, so a copy corrupted in its issue field (a wrong toe or GLONASS `tb`)
+is not merged; and when any record is confirmed, the satellite's unconfirmed records of other
+issues are taken back out, which removes a corrupted first copy merged at first acquisition. The cost
+is that a corrupted record merged at first acquisition is selectable until it is retracted, and one
+that is never followed by a confirmed issue of its satellite is never retracted.
+Records whose health flags mark the satellite unusable (GPS/QZSS health 63,
+Galileo E1-B health or data-validity flags, BeiDou health 1, GLONASS `Bn` or `ln`)
+are skipped and counted; a receiver forwards such default sets, IGS BRDC files do
+not carry them, and without the rule they were picked among the real records of the
+same toe. The `summary:` line gains `ubx_nav_ephemerides=` (records added),
+`ubx_nav_klobuchar=`, `ubx_nav_unhealthy_skipped=`, `ubx_nav_unconfirmed=` (records
+merged and never confirmed by a second transmission, plus the candidates never confirmed:
+copies still held or forgotten, and, for a satellite in fallback, replaced or pending ones),
+`ubx_nav_conflicts=` (copies that differed from an
+unconfirmed copy of the same issue), `ubx_nav_retracted=` (merged records taken back
+out because of a conflict or by the clean-up on a confirmation) and
+`ubx_nav_held_new_issue=` (copies of a new issue held until a second transmission because the
+satellite already held a valid record). `gnss convert --format ubx --nav-rinex-out`
+writes every record, unhealthy ones with their health word, as a RINEX navigation
+file; it keeps confirm-twice (a record is written once a second transmission has
+produced the same record), because a file has no start-up latency to protect.
+
+Against `--nav-rinex` with the IGS BRDC files, on a log that was held out (3DOM
+rover B, 4 h at 1 Hz, static, base about 3.6 km away, `--preset low-cost`, base
+stream without ephemeris messages), `--ubx-nav` gave 14 379 against 14 400
+solutions, the same status on 99.83 % of the epochs, 14 375 against 14 396 FIXED
+epochs, a horizontal difference between the two FIXED positions of 0.0000 m at p50
+and 0.0097 m at most, and no FIXED epoch more than 0.5 m from the median FIXED
+position of the `--nav-rinex` run (0 against 0). The 21 missing solutions are the
+first 21 s of the run, until enough ephemerides were complete. On that log and on
+a 3 h Laura Bassi log, every healthy record that a second transmission confirmed
+matched an IGS BRDC record of the same issue and toe. **`--ubx-nav` was run end to
+end only on static rovers with a clear sky**: it is not validated on a moving rover
+or in a canyon. The measurements, their history and their limits are in
+[Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out).
 
 Multi-constellation MSM needs no flag: the per-constellation messages of one
 epoch are merged into one epoch using the RTCM multiple-message bit, with no

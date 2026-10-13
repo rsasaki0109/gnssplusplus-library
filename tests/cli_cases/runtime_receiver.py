@@ -107,6 +107,7 @@ class RuntimeReceiverCases:
         self.assertIn("Usage:", result.stdout)
         self.assertIn("--rover-rtcm", result.stdout)
         self.assertIn("--rover-ubx", result.stdout)
+        self.assertIn("--ubx-nav", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
         self.assertIn("--mode <kinematic|moving-base>", result.stdout)
         self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
@@ -119,6 +120,272 @@ class RuntimeReceiverCases:
         self.assertIn("--min-full-ratio-for-subset-ar", result.stdout)
         self.assertIn("--max-pos-jump-rate", result.stdout)
         self.assertIn("--max-float-prefit-rms", result.stdout)
+    def test_live_ubx_nav_requires_a_ubx_rover(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_arg_") as temp_dir:
+            temp_root = Path(temp_dir)
+            result = self.run_gnss(
+                "live",
+                "--rover-rtcm",
+                str(temp_root / "rover.rtcm3"),
+                "--base-rtcm",
+                str(temp_root / "base.rtcm3"),
+                "--ubx-nav",
+                "--quiet",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--ubx-nav requires --rover-ubx", result.stderr)
+    def test_live_ubx_nav_merges_sfrbx_ephemerides_only_when_enabled(self) -> None:
+        # Real X20 frames (GPS G10, Galileo E04, BeiDou C27) after a RAWX epoch that supplies the
+        # GPST reference; the base is the recorded RTCM fixture, which is not time-aligned with the
+        # rover, so no solution is written: the summary counters are what is checked.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_path = temp_root / "rover.ubx"
+            # The excerpt is sent twice: accept-then-confirm (D3) merges a record at once and a second
+            # transmission of the same record confirms it, so a single copy would be counted as unconfirmed.
+            rover_path.write_bytes(
+                build_rawx_message(week=2374, tow=244800.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244801.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244802.0)
+            )
+            common = [
+                "live",
+                "--rover-ubx",
+                str(rover_path),
+                "--base-rtcm",
+                str(fixture),
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            ]
+            plain = self.run_gnss(*common)
+            self.assertIn("rover_source=ubx", plain.stdout)
+            self.assertNotIn("ubx_nav_ephemerides", plain.stdout)
+
+            enabled = self.run_gnss(*common, "--ubx-nav")
+            self.assertIn("rover_source=ubx", enabled.stdout)
+            self.assertIn(
+                "ubx_nav_ephemerides=3 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0 ubx_nav_held_new_issue=0",
+                enabled.stdout,
+            )
+
+            # One transmission only (D3): the three records are merged at once and, with no second copy,
+            # stay unconfirmed. (Under confirm-twice, D2, none of them reached the database.)
+            single_path = temp_root / "rover_single.ubx"
+            single_path.write_bytes(
+                build_rawx_message(week=2374, tow=244800.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244801.0)
+            )
+            single = self.run_gnss(*common[:2], str(single_path), *common[3:], "--ubx-nav")
+            self.assertIn(
+                "ubx_nav_ephemerides=3 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=3 ubx_nav_conflicts=0 ubx_nav_retracted=0 ubx_nav_held_new_issue=0",
+                single.stdout,
+            )
+
+    def test_live_ubx_nav_takes_a_merged_record_back_when_a_second_copy_differs(self) -> None:
+        # Two complete GPS sets of G12 that differ in the health field (the same IODE, toe and toc, so the
+        # decoder itself would call the second a repeat). Accept-then-confirm (D3, which replaced the
+        # confirm-twice expectations of this test): the first copy is merged at once; a differing second
+        # copy removes it (ubx_nav_retracted) and the satellite then needs two equal copies from different
+        # transmissions before anything is merged for it again.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_conflict_") as temp_dir:
+            temp_root = Path(temp_dir)
+
+            def run(healths):
+                rover_path = temp_root / ("rover_" + "_".join(str(h) for h in healths) + ".ubx")
+                rover_path.write_bytes(
+                    build_rawx_message()
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=12, health=h) for h in healths for n in (1, 2, 3)
+                    )
+                    + build_rawx_message(tow=345601.125)
+                )
+                return self.run_gnss(
+                    "live",
+                    "--rover-ubx",
+                    str(rover_path),
+                    "--base-rtcm",
+                    str(fixture),
+                    "--out",
+                    str(temp_root / "live.pos"),
+                    "--ubx-nav",
+                    "--quiet",
+                )
+
+            # healthy, unhealthy: merged, then retracted; the unhealthy copy is pending (unconfirmed).
+            differing = run((0, 63))
+            self.assertIn(
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=1 ubx_nav_retracted=1 ubx_nav_held_new_issue=0",
+                differing.stdout,
+            )
+            # healthy, unhealthy, unhealthy: the repeat confirms the unhealthy record, which the health
+            # rule skips; the satellite ends without a record.
+            confirmed = run((0, 63, 63))
+            self.assertIn(
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=1 ubx_nav_retracted=1 ubx_nav_held_new_issue=0",
+                confirmed.stdout,
+            )
+            # healthy, unhealthy, healthy: the next good copy confirms the first record, which is merged
+            # again (counted twice in ubx_nav_ephemerides); the differing copy was never confirmed.
+            recovered = run((0, 63, 0))
+            self.assertIn(
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=1 ubx_nav_retracted=1 ubx_nav_held_new_issue=0",
+                recovered.stdout,
+            )
+    def test_live_ubx_nav_holds_a_new_issue_while_the_satellite_holds_a_valid_record(self) -> None:
+        # D4 rule A: G12 issue 1 (IODE 77, toe 345600) is merged at once. A second issue (IODE 78, toe two
+        # hours later) arrives while issue 1 is held and valid, so it waits for a second transmission
+        # (ubx_nav_held_new_issue); rule B: the second issue's confirmation removes an unconfirmed issue 1.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_held_") as temp_dir:
+            temp_root = Path(temp_dir)
+
+            def run(name, issues):
+                rover_path = temp_root / f"rover_{name}.ubx"
+                rover_path.write_bytes(
+                    build_rawx_message()
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=12, iode=iode, toe_offset_s=offset)
+                        for iode, offset in issues
+                        for n in (1, 2, 3)
+                    )
+                    + build_rawx_message(tow=345601.125)
+                )
+                return self.run_gnss(
+                    "live",
+                    "--rover-ubx",
+                    str(rover_path),
+                    "--base-rtcm",
+                    str(fixture),
+                    "--out",
+                    str(temp_root / f"live_{name}.pos"),
+                    "--ubx-nav",
+                    "--quiet",
+                )
+
+            issue1, issue2 = (77, 0), (78, 7200)
+            # Issue 1 twice (merged, confirmed), issue 2 once: held, never merged (a single, possibly
+            # corrupted copy of a new issue); it counts as unconfirmed.
+            held = run("held", [issue1, issue1, issue2])
+            self.assertIn(
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=0 ubx_nav_retracted=0 ubx_nav_held_new_issue=1",
+                held.stdout,
+            )
+            # Issue 1 twice, issue 2 twice: issue 2 is merged by its second copy.
+            confirmed = run("confirmed", [issue1, issue1, issue2, issue2])
+            self.assertIn(
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0 ubx_nav_held_new_issue=1",
+                confirmed.stdout,
+            )
+            # Issue 1 once (unconfirmed), issue 2 twice: issue 2 is held, then merged and confirmed, and
+            # the unconfirmed issue 1 is removed (counted in ubx_nav_retracted).
+            cleaned = run("cleaned", [issue1, issue2, issue2])
+            self.assertIn(
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=1 ubx_nav_held_new_issue=1",
+                cleaned.stdout,
+            )
+
+    def test_live_ubx_nav_dates_a_base_without_ephemerides_from_the_rover_time(self) -> None:
+        # The recorded base stream with its ephemeris messages removed has no GPST reference, so its
+        # TOW-only epochs are dated from the host clock. With --ubx-nav the rover's first RAWX epoch
+        # is that reference and the epochs align; without it none do (unchanged behaviour).
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        stream = (fixture / "base.rtcm").read_bytes()
+        kept = bytearray()
+        index = 0
+        while index + 6 <= len(stream):
+            if stream[index] != 0xD3:
+                index += 1
+                continue
+            length = ((stream[index + 1] & 0x03) << 8) | stream[index + 2]
+            frame = stream[index : index + 6 + length]
+            message_type = (frame[3] << 4) | (frame[4] >> 4)
+            if message_type not in (1019, 1020, 1042, 1044, 1045, 1046):
+                kept += frame
+            index += 6 + length
+        first_epochs = [line.split() for line in (fixture / "base.idx").read_text().splitlines()[1:4]]
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_ref_") as temp_dir:
+            temp_root = Path(temp_dir)
+            (temp_root / "base_no_eph.rtcm").write_bytes(bytes(kept))
+            (temp_root / "rover.ubx").write_bytes(
+                b"".join(build_rawx_message(week=int(week), tow=float(tow)) for tow, week, *_ in first_epochs)
+            )
+            common = [
+                "live",
+                "--rover-ubx",
+                str(temp_root / "rover.ubx"),
+                "--base-rtcm",
+                str(temp_root / "base_no_eph.rtcm"),
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            ]
+            plain = self.run_gnss(*common)
+            self.assertIn("aligned_epochs=0", plain.stdout)
+            enabled = self.run_gnss(*common, "--ubx-nav")
+            self.assertRegex(enabled.stdout, r"aligned_epochs=[1-9]")
+            self.assertIn("ubx_nav_ephemerides=0", enabled.stdout)
+    def test_live_ubx_nav_skips_unhealthy_ephemerides(self) -> None:
+        # G12 is healthy, G13 broadcasts svh=63 (the receiver forwards default data sets like this).
+        # --ubx-nav must merge only G12 and count the other one; with a healthy G13 both are merged.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_health_") as temp_dir:
+            temp_root = Path(temp_dir)
+
+            def run(g13_health: int):
+                rover_path = temp_root / f"rover_{g13_health}.ubx"
+                # Two transmissions of each set (accept-then-confirm); the health rule applies to a record
+                # before it is merged.
+                rover_path.write_bytes(
+                    build_rawx_message()
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=12) for _ in range(2) for n in (1, 2, 3)
+                    )
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=13, health=g13_health)
+                        for _ in range(2)
+                        for n in (1, 2, 3)
+                    )
+                    + build_rawx_message(tow=345601.125)
+                )
+                return self.run_gnss(
+                    "live",
+                    "--rover-ubx",
+                    str(rover_path),
+                    "--base-rtcm",
+                    str(fixture),
+                    "--out",
+                    str(temp_root / f"live_{g13_health}.pos"),
+                    "--ubx-nav",
+                    "--quiet",
+                )
+
+            unhealthy = run(63)
+            self.assertIn(
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0 ubx_nav_held_new_issue=0",
+                unhealthy.stdout,
+            )
+            healthy = run(0)
+            self.assertIn(
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0 ubx_nav_held_new_issue=0",
+                healthy.stdout,
+            )
+
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)

@@ -935,6 +935,8 @@ def usage() -> str:
             "  python3 apps/gnss.py convert --format ubx --input logs/session.ubx --obs-out output/session.obs",
             "  python3 apps/gnss.py convert --format ubx --input logs/session.ubx --nav-out output/session.nav",
             "    # exports GPS/QZSS/Galileo/GLONASS/BeiDou broadcast nav from RXM-SFRBX when available",
+            "  python3 apps/gnss.py convert --format ubx --input logs/session.ubx --nav-rinex-out output/session_sfrbx.nav",
+            "    # library SFRBX decoder (checked, with the GPS Klobuchar GPSA/GPSB header lines); needs RAWX in the log for GPS/QZSS/GLONASS",
             "  python3 apps/gnss.py convert --format ubx --input logs/session.ubx --sfrbx-out output/session_sfrbx.csv",
             "  python3 apps/gnss.py social-card --lib-pos output/rtk_solution.pos --rtklib-pos output/driving_rtklib_rtk.pos --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv --output docs/driving_odaiba_social_card.png",
             "  python3 apps/gnss.py architecture-card --output docs/libgnsspp_architecture.png",

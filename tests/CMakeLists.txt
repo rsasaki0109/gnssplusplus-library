@@ -145,6 +145,7 @@ if(GTest_FOUND)
         test_observation_epoch_assembler.cpp
         test_rtcm_stream_reference.cpp
         test_ubx.cpp
+        test_ubx_nav_decode.cpp
         test_galileo_has.cpp
         test_ephemeris_tiebreak.cpp
         test_sofa_vendor.cpp
