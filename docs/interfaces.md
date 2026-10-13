@@ -331,7 +331,7 @@ confirm-twice removes that this does not, and `gnss convert --nav-rinex-out`
 therefore keeps confirm-twice. While the satellite holds a valid record, a corrupted
 new issue is not merged at all (rule A). The cost of rule A is that a genuine new issue waits for
 its second copy while the satellite holds a valid record (one repeat of the frame set, 30 s at the
-median in the measurement below); the older record serves meanwhile.
+median on both held-out logs below, 210 s at most); the older record serves meanwhile.
 
 **Confirm-twice (`gnss convert --nav-rinex-out`).** The converter writes a record only
 when the decoder has produced the same record twice from different transmissions
@@ -344,12 +344,15 @@ reuses a stored subframe of the first one does not count. A copy that differs
 from the pending one replaces it (counted in `nav_rinex:` as `conflicts=`), a copy
 equal to an already accepted record is a duplicate, and `unconfirmed=` counts the
 pending ones that were never confirmed, replaced or left at the end. A record that was corrupted in one
-transmission and passed the checks above (the GLONASS record of the measurement
-below) is therefore never accepted, at the price of one more transmission before
-every new ephemeris is written: 30 s at the median, 60 to 111 s at the 95th
-percentile and 240 s at most per system on the 2.67 h log below. The decoder
-(`UBXNavDecoder`, also behind `gnss ubx-info --decode-nav`) still reports every
-record, so the counts under "Measured" are decoder output, before this step.
+transmission and passed the checks above (the GLONASS record of the round-2
+measurement below) is therefore never accepted, at the price of one more transmission before
+every new ephemeris is written: on the 2.67 h round-2 log below 30 s at the
+median, 60 to 111 s at the 95th percentile and 240 s at most per system; on the two
+held-out logs 30 s, 30 to 150 s and 630 s. The
+decoder (`UBXNavDecoder`, also behind `gnss ubx-info --decode-nav`) still reports
+every record, so the counts of decoded records and the comparison with RTKLIB
+under "Measured" are decoder output, before this step; the rows for confirmed
+records are after it.
 
 **`gnss convert --format ubx --nav-rinex-out <file>`** writes the decoded
 ephemerides as RINEX 3.04 navigation, with the last decoded Klobuchar set as
@@ -371,7 +374,7 @@ a record loaded from a RINEX file or an RTCM stream is still selected on toe alo
 Each record is as old as its subframes: decoding does not check the ephemeris
 against the time. GLONASS strings are protected by a Hamming code only, which is
 accepted with the single-error allowance of RTKLIB and cannot reject every
-multi-bit error: one record in the measurement below (R16, `tb` 12 where the other
+multi-bit error: one record in the round-2 measurement below (R16, `tb` 12 where the other
 strings of the frame say 15) is such a corruption, decoded identically by RTKLIB;
 confirm-twice (`--nav-rinex-out`, and a satellite in fallback) does not accept it,
 because the satellite never repeats it. `--ubx-nav` merges a first copy at once when
@@ -380,24 +383,130 @@ second copy to differ from it, stays (counted in `ubx_nav_unconfirmed=`) until
 another issue of that satellite is confirmed, which removes it (rule B,
 `ubx_nav_retracted=`); with a valid record held it would not have been merged at all (rule A).
 
-`gnss live --rover-ubx` reads a UBX file in 4096-byte chunks and takes the first
-RAWX epoch of each chunk, so a log with several epochs per chunk loses the others
-(a 139 kB log of 201 epochs gave 34 aligned epochs). That predates `--ubx-nav`
-and is unchanged; the 3DOM log has one epoch per 5 kB and lost none.
+Measured. History: five rounds, each against a written plan with its thresholds
+fixed in advance. Round 1 failed several gates for causes outside the decoder
+arithmetic (forwarded default data sets selected among real records, a completeness
+definition, and an RTKLIB that cannot decode u-blox Galileo E1-B). Round 2 added the
+health rule above, redefined those gates and was scored on logs not used before
+(develop `0f4153dc`). Round 3 made `--ubx-nav` wait for a second transmission before
+it uses a record (confirm-twice) and was stopped before scoring: on the development
+log (3DOM rover A, below) the delay of one repeat at the cold start made the filter
+fix one L1 cycle off and hold that fix, 283 FIXED epochs more than 0.5 m from the
+reference against 0 without the delay. Round 4 (accept, then confirm) was scored on
+Laura Bassi 2025-10-16 and 3DOM rover B 2025-06-05 and was a No-Go on one
+availability gate, GLONASS on the Laura Bassi log, 10 of 12 satellites. The
+evaluation took a satellite's health from the BRDC, which holds Bn only, while the
+receiver broadcast the string-3 flag ln = 1 for two satellites (R10, R20), which
+`--ubx-nav` skips as intended: a definition error in the evaluation, not a decoder
+fault. Every other gate of round 4 passed, its end-to-end run included. Round 5
+added rules A and B (round 4 did not cover a copy corrupted in an issue field, found
+on a development log) and fixed the availability definition (a satellite counts when
+RTKLIB, run on the same log up to that time, holds a healthy valid record for it;
+below). It was scored on the two held-out logs that follow, with every rule, script
+and threshold frozen before those logs were decoded, solved or compared with RTKLIB;
+they were acquired by framing and hashing only. The logs of rounds 1 to 4 are
+development data from round 5 on.
 
-Measured. History: the first round, scored on two logs against a frozen plan,
-failed several gates for causes outside the decoder arithmetic (forwarded default
-data sets selected among real records, a completeness definition, and an RTKLIB
-that cannot decode u-blox Galileo E1-B); the second round added the health rule
-above, redefined those gates and was scored on logs not used before (develop
-`0f4153dc`).
+*Scored round: two held-out logs.* C7 is Laura Bassi, 2025-10-17, first 3 h (L1/L5
+receiver, 2 Hz, 21 598 RAWX and 193 747 SFRBX messages), BRDC 2025/288 to 291. C8 is
+3DOM rover B, 2025-06-06, first 4 h (u-blox F9P, 1 Hz, 14 400 RAWX and 399 652 SFRBX
+messages), with the same-day base file of station MOCA, BRDC 2025/156 to 158. The
+BRDC reference is the union of the daily IGS BKG files from the day before to the
+day after the span. The C8 base cut starts 28 s before the first rover epoch, not
+the planned 60 s, because the same-day base file begins there. Galileo E5a, BeiDou
+B2a and GPS L5 CNAV messages are counted and not decoded. A record is compared with
+the BRDC record of the same satellite, issue (IODE, IODnav, AODE or tb) and toe by
+the library's own satellite position and clock at nine times from toe - 2 h to toe +
+2 h (GLONASS seven times, tb +- 15 min). Fixed in advance: at least 99 % of the
+confirmed healthy records matched a BRDC record and every matched record passed the
+comparison, at least 95 % of the counted satellites available per system (a system
+with fewer than 5 counted satellites is only reported), at most 1 % of the union
+different from RTKLIB. QZSS: no QZSS ephemeris was decoded in either log, so it was
+not evaluated.
 
-*Held-out log (Laura Bassi, 2025-10-15, L1/L5 receiver, 2.67 h, 2 Hz, IGS BKG BRDC
-2025/288; Galileo E5a, BeiDou B2a and GPS L5 CNAV messages are counted and not
-decoded).* A decoded record is compared with the BRDC record of the same
-satellite, issue (IODE, IODnav, AODE or tb) and toe by the library's own
-satellite position and clock at nine times from toe - 2 h to toe + 2 h (GLONASS
-seven times, tb +- 15 min).
+C7, Laura Bassi 2025-10-17, 3 h:
+
+| | GPS | GLONASS | Galileo | BeiDou |
+|---|---|---|---|---|
+| Healthy records among those confirmed by a second transmission (the records `--nav-rinex-out` writes) that match a BRDC record of the same issue and toe and pass the comparison | 32 of 32 | 63 of 63 | 107 of 107 | 50 of 50 |
+| Worst difference of the records `--ubx-nav` merged (all matched a BRDC record) | 0.26 mm, 4.8e-16 s | 0.074 mm, 5.0e-16 s | 0.033 mm, 4.9e-16 s | 0.23 mm, 5.0e-16 s |
+| Counted satellites with a healthy valid record in the `--ubx-nav` database 15 min after their first epoch | 10 of 10 | 12 of 12 | 10 of 10 | 16 of 16 |
+| Time from a satellite's first RAWX epoch to its first healthy merged record (satellites that got one), median / 95th percentile | 40.0 s / 1988.7 s | 41.8 s / 544.8 s | 49.0 s / 1350.2 s | 24.0 s / 1950.2 s |
+| Records of the decoder output (all health) that RTKLIB 2.4.3 b34 `convbin` also gives, with the two changes below | 35 of 35 | 65 of 65 | 107 of 107 | 60 of 60 |
+
+C8, 3DOM rover B 2025-06-06, 4 h:
+
+| | GPS | GLONASS | Galileo | BeiDou |
+|---|---|---|---|---|
+| Healthy records among those confirmed by a second transmission that match a BRDC record of the same issue and toe and pass the comparison | 29 of 29 | 62 of 62 | 139 of 139 | 48 of 48 |
+| Worst difference of the records `--ubx-nav` merged (all matched a BRDC record) | 0.25 mm, 4.7e-16 s | 0.069 mm, 4.8e-16 s | 0.034 mm, 4.5e-16 s | 0.39 mm, 4.8e-16 s |
+| Counted satellites with a healthy valid record in the `--ubx-nav` database 15 min after their first epoch | 14 of 14 | 14 of 14 | 12 of 12 | 14 of 14 |
+| Time from a satellite's first RAWX epoch to its first healthy merged record (satellites that got one), median / 95th percentile | 20.0 s / 1113.2 s | 28.0 s / 1416.9 s | 29.0 s / 45.8 s | 34.0 s / 523.2 s |
+| Records of the decoder output (all health) that RTKLIB also gives | 38 of 38 | 67 of 67 | 147 of 147 | 48 of 48 |
+
+Every gate passed on both logs. The difference to RTKLIB is 0.00 % of the union in
+every system, and every common record passes the comparison. The last GPS Klobuchar
+set of each log (112 sets decoded on C7, 167 on C8) equals the RTKLIB value in every
+printed digit; it differs from the header of the daily BRDC file, which is not
+scored. Not scored: 9 BeiDou records on C7 and 1 GPS record on C8 are unhealthy and
+were skipped by `--ubx-nav`. An independent extraction of Bn and ln from the raw
+GLONASS strings agrees with the decoder on every GLONASS record of both logs, and
+none had Bn MSB = 1 or ln = 1, so the GLONASS rows do not test the GLONASS health
+rule.
+
+A satellite is counted in the availability row when it had RAWX observations for at
+least 30 min, RTKLIB (`convbin` run on the same log up to 15 min after the
+satellite's first epoch) holds a record for it that is valid at that time and
+healthy, and the receiver forwarded the frames of one record at least twice by then.
+Not counted on C7: G03 and C42 (RTKLIB holds no record valid at that time), C49 and
+C50 (SatH1 = 1 in the received broadcast) and E36 (frame count); none on C8. The
+count with the record and its health taken from the BRDC (GLONASS ln from the raw
+string 3), reported beside it, also gives 100 % in every system on both logs. A copy
+of a new issue that rule A held was merged a median of 30 s after it was first held
+on both logs (95th percentile 30 to 78 s per system, 210 s at most).
+
+*End to end on C8 (held out).* N is `gnss live --nav-rinex` with the three BRDC days
+merged (76 723 records), U is `gnss live --ubx-nav` with no navigation file. Both
+read the rover log with `--rover-ubx` and use `--preset low-cost`. The base is the
+same-day MOCA observation file (about 3.6 km from the rover, base position from the
+RINEX header), encoded to RTCM MSM7 for GPS, GLONASS and Galileo with `gnss
+rtcm-encode` and no ephemeris messages, so BeiDou ephemerides were decoded and not
+used in the solution. The reference is the median ECEF position of the 14 396 FIXED
+epochs of N, 4349567.9459 857394.7004 4570736.8047 m, taken from the N output alone
+before the U output was read.
+
+| | N (`--nav-rinex`) | U (`--ubx-nav`) |
+|---|---|---|
+| Solutions | 14 400 | 14 379 (99.85 % of N) |
+| FIXED epochs | 14 396 | 14 375 (99.85 % of N) |
+| Same status as N | | 99.83 % of N's epochs |
+| Both FIXED (14 375 epochs): horizontal difference, p50 / p95 / max | | 0.0000 / 0.0006 / 0.0097 m |
+| FIXED epochs more than 0.5 m (3D) from the reference | 0 | 0 |
+
+U lacks the first 21 epochs of N (its first solution is 21 s after the first rover
+epoch, when enough ephemerides were complete) and no later one. With confirm-twice
+instead (the rule of `--nav-rinex-out`, report-only arm) the first 50 epochs would
+be missing: 14 350 solutions and 14 338 FIXED epochs, also with no FIXED epoch more
+than 0.5 m from the reference; on this log confirm-twice caused no wrong FIX, on
+rover A it did (below). Without the health rule the counts are the same here (14 379
+solutions, 14 375 FIXED epochs, none more than 0.5 m): the log holds one unhealthy
+GPS record, so it hardly tests that rule. The `summary:` line of U reads `ubx_nav_ephemerides=283`,
+`ubx_nav_klobuchar=1`, `ubx_nav_unhealthy_skipped=1`, `ubx_nav_unconfirmed=16`,
+`ubx_nav_conflicts=0`, `ubx_nav_retracted=5` and `ubx_nav_held_new_issue=236`. All
+283 merged records matched a BRDC record. No copy differed from an earlier copy of
+its issue on C8, and none did in the offline replay of the merge on C7, so no
+corrupted record was met on either held-out log and the retraction of one is covered
+by unit tests only. The 5 retracted records are Galileo issue 107 of E04, E06, E13,
+E15 and E27: correct records (within 2.2e-5 m of the BRDC record), merged at
+04:00:57 GPST, 29 s after the first rover epoch, and taken out by rule B 60 s later,
+when issue 108 of the same satellite was confirmed. The 16 unconfirmed are held
+copies that matched a BRDC record and got no second copy before the log ended (13 of
+them within its last 9 s).
+
+*Round-2 measurement (Laura Bassi, 2025-10-15, L1/L5 receiver, 2.67 h, 2 Hz, IGS
+BKG BRDC 2025/288; Galileo E5a, BeiDou B2a and GPS L5 CNAV messages are counted
+and not decoded).* This log was held out in round 2 and has been development data
+since round 3. Records are compared with the BRDC as for the scored logs above.
 
 | | GPS | GLONASS | Galileo | BeiDou | QZSS |
 |---|---|---|---|---|---|
@@ -420,43 +529,42 @@ health 1; BRDC carries four of them.
 
 Time from the first RAWX epoch of a satellite to its first ephemeris (median / 95th
 percentile): GPS 32.5 s / 1952 s, GLONASS 36.5 s / 2037 s, Galileo 41.5 s / 241 s,
-BeiDou 16.5 s / 1500 s. For a satellite tracked for at least 30 min with at least one
+BeiDou 16.5 s / 1500 s. With the availability definition of that round (replaced in
+round 5), for a satellite tracked for at least 30 min with at least one
 LNAV/I-NAV/D1/strings message in its first 15 min, a healthy ephemeris valid at 15
-min had been decoded for GPS 11 of 12 (92 %), GLONASS 14 of 14, Galileo 11 of 11
-and BeiDou 11 of 13; the misses are a rising GPS satellite for which the receiver
+min had been decoded for GPS 11 of 12 (92 %), GLONASS 14 of 14, Galileo 11 of 11 and
+BeiDou 11 of 13; the misses are a rising GPS satellite for which the receiver
 forwarded 3 messages in 15 min, a BeiDou satellite with 4, and BeiDou C49, whose
-health is 1 throughout. One tracked BeiDou satellite had no message in its first
-15 min and is not counted.
+health is 1 throughout. One tracked BeiDou satellite had no message in its first 15
+min and is not counted.
 
-RTKLIB b34 decodes none of the Galileo records: it takes an E1-B message of 8
-words (every protocol 27 and later receiver) for E5b-I and drops it, and wants a
-word type 6 in the buffer. With one line changed (E5b-I told by `sigId`) it
-returns exactly the records of this decoder. `convbin` also scans the file once
-before converting and keeps the subframe buffers, so its first records can be
-completed with subframes from the end of the file; the comparison above uses a
+RTKLIB b34 decodes none of the Galileo records: it takes an E1-B message of 8 words
+(every protocol 27 and later receiver) for E5b-I and drops it, and wants a word type
+6 in the buffer. With one line changed (E5b-I told by `sigId`) it returns exactly
+the records of this decoder. `convbin` also scans the file once before converting
+and keeps the subframe buffers, so its first records can be completed with subframes
+from the end of the file; every comparison with RTKLIB in this section uses a
 conversion pass with those buffers cleared. A differential run of the decoder
 against RTKLIB's `input_raw` on 12 000 random but consistent records (QZSS and
 BeiDou D2 included, 2000 per layout) gave identical records to 1e-12, and the
-single-pass decoders agree on every record of this log to 1e-12 relative.
+single-pass decoders agree on every record of the round-2 log to 1e-12 relative.
 
-*End to end.* `--ubx-nav` against `--nav-rinex` is **not validated on a held-out
-log**: no rover log with a same-day base that was not used before was available
-to this evaluation (the 3DOM archive is a single 5.9 GB xz stream in random
-order, and finding the day the plan called for exceeded the download budget). On
-the log used while developing the rule (3DOM rover A, 2025-06-04, 5.25 h, base
-3.6 km away, base encoded to RTCM without ephemeris messages, `--preset
-low-cost`, BRDC 2025/155, 18 895 rover epochs), `--ubx-nav` gave 18 877 against
-18 895 solutions, the same status on 99.88 % of the epochs, 18 873 against 18
-891 FIXED epochs, a horizontal difference between the two FIXED positions of 0.0
-mm at p50 and 12.6 mm at most, and no FIXED epoch more than 0.5 m from the
-median FIXED position of the `--nav-rinex` run. The 15 unhealthy records of that
-log (GPS and QZSS health 63, BeiDou health 1) were skipped. Without the health
-rule the same run had 18 700 FIXED epochs and 975 FIXED epochs more than 0.5 m
-from that position (up to 1.2 m from the `--nav-rinex` position of the same
-epoch), because a default data set of G23 and G27 with the same toe as the real
-one was selected. A rover with a clear sky and a base 3.6 km away is the easy
-case: nothing here says how `--ubx-nav` behaves in a canyon, with a poor antenna
-or on a moving rover.
+*Development log, end to end (3DOM rover A, 2025-06-04, 5.25 h, 1 Hz, base 3.6 km
+away, same setup, BRDC 2025/155, 18 895 rover epochs).* The rules were developed on
+this log, so it is not independent evidence. With the final rules `--ubx-nav` gave
+18 877 against 18 895 solutions, the same status on 99.88 % of the epochs, 18 873
+against 18 891 FIXED epochs, a horizontal difference between the two FIXED positions
+of 0.0001 m at p50, 0.0010 m at p95 and 0.0126 m at most, and no FIXED epoch more
+than 0.5 m from the median FIXED position of the `--nav-rinex` run. The 15 unhealthy
+records of that log (GPS and QZSS health 63, BeiDou health 1) were skipped. Without
+the health rule the same run had 18 700 FIXED epochs and 975 FIXED epochs more than
+0.5 m from that position (up to 1.2 m from the `--nav-rinex` position of the same
+epoch), because a default data set of G23 and G27 with the same toe as the real one
+was selected. With confirm-twice instead of accept-then-confirm (round 3) it had 16
+970 FIXED epochs and 283 more than 0.5 m. A rover with a clear sky and a base 3.6 km
+away is the easy case, and both end-to-end logs are static rovers of the same data
+set: nothing here says how `--ubx-nav` behaves in a canyon, with a poor antenna or
+on a moving rover.
 
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 

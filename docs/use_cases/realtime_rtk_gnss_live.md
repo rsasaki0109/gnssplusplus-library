@@ -157,9 +157,9 @@ rover needs neither `--nav-rinex` nor a base that sends ephemerides:
 The rover has to log `UBX-RXM-RAWX` (the observations) and `UBX-RXM-SFRBX` (the
 subframes). The first RAWX epoch is also taken as the GPST reference of the base
 decoder, so a base stream without ephemerides is dated correctly. Solutions start
-once a satellite's ephemeris is complete: a median of 17 to 42 s after it is first
-tracked, and minutes for a satellite the receiver does not decode (measured on a
-2.67 h log, [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out)).
+once a satellite's ephemeris is complete: a median of 17 to 49 s per system after it
+is first tracked, and minutes for a satellite the receiver does not decode
+(measured on three logs of 2.67 to 4 h, [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out)).
 A record is merged at once, from its first complete copy, when the satellite has no valid
 record yet, so the start-up is not delayed by a repeat interval. If a later copy of the same issue
 differs, the merged record is taken back out and that satellite is not used again until two equal
@@ -185,11 +185,21 @@ out because of a conflict or by the clean-up on a confirmation) and
 satellite already held a valid record). `gnss convert --format ubx --nav-rinex-out`
 writes every record, unhealthy ones with their health word, as a RINEX navigation
 file; it keeps confirm-twice (a record is written once a second transmission has
-produced the same record), because a file has no start-up latency to protect. Against `--nav-rinex` with the IGS BRDC file, the run on a 5.25 h log with a
-3.6 km baseline gave 99.9 % of the solutions, 99.9 % of the FIXED epochs and the
-same FIXED position to 12.6 mm at most. That is the log the rule was developed on:
-**`--ubx-nav` is not validated end to end on a log that was held out**, and not on a
-moving rover or in a canyon.
+produced the same record), because a file has no start-up latency to protect.
+
+Against `--nav-rinex` with the IGS BRDC files, on a log that was held out (3DOM
+rover B, 4 h at 1 Hz, static, base about 3.6 km away, `--preset low-cost`, base
+stream without ephemeris messages), `--ubx-nav` gave 14 379 against 14 400
+solutions, the same status on 99.83 % of the epochs, 14 375 against 14 396 FIXED
+epochs, a horizontal difference between the two FIXED positions of 0.0000 m at p50
+and 0.0097 m at most, and no FIXED epoch more than 0.5 m from the median FIXED
+position of the `--nav-rinex` run (0 against 0). The 21 missing solutions are the
+first 21 s of the run, until enough ephemerides were complete. On that log and on
+a 3 h Laura Bassi log, every healthy record that a second transmission confirmed
+matched an IGS BRDC record of the same issue and toe. **`--ubx-nav` was run end to
+end only on static rovers with a clear sky**: it is not validated on a moving rover
+or in a canyon. The measurements, their history and their limits are in
+[Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out).
 
 Multi-constellation MSM needs no flag: the per-constellation messages of one
 epoch are merged into one epoch using the RTCM multiple-message bit, with no
