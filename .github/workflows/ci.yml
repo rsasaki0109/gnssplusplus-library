@@ -607,7 +607,7 @@ jobs:
           -DMADOCALIB_ROOT_DIR="${GITHUB_WORKSPACE}/external/madocalib"
 
     - name: Build MadocaParity tests and oracle tool
-      run: cmake --build build-madoca-parity --config Release --parallel --target gnss_madoca_parity_tests gnss_madocalib_oracle
+      run: cmake --build build-madoca-parity --config Release --parallel 4 --target gnss_madoca_parity_tests gnss_madocalib_oracle
 
     - name: Show MADOCA ccache stats
       run: ccache -s
