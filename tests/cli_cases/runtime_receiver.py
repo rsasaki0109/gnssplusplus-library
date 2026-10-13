@@ -142,8 +142,8 @@ class RuntimeReceiverCases:
         with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_") as temp_dir:
             temp_root = Path(temp_dir)
             rover_path = temp_root / "rover.ubx"
-            # The excerpt is sent twice: confirm-twice (D2) accepts a record when a second transmission
-            # produces the same record, so a single copy would be counted as unconfirmed instead.
+            # The excerpt is sent twice: accept-then-confirm (D3) merges a record at once and a second
+            # transmission of the same record confirms it, so a single copy would be counted as unconfirmed.
             rover_path.write_bytes(
                 build_rawx_message(week=2374, tow=244800.0)
                 + build_x20_sfrbx_excerpt()
@@ -169,11 +169,12 @@ class RuntimeReceiverCases:
             self.assertIn("rover_source=ubx", enabled.stdout)
             self.assertIn(
                 "ubx_nav_ephemerides=3 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
-                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0",
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0",
                 enabled.stdout,
             )
 
-            # One transmission only: the three records stay candidates and none reaches the database.
+            # One transmission only (D3): the three records are merged at once and, with no second copy,
+            # stay unconfirmed. (Under confirm-twice, D2, none of them reached the database.)
             single_path = temp_root / "rover_single.ubx"
             single_path.write_bytes(
                 build_rawx_message(week=2374, tow=244800.0)
@@ -182,15 +183,17 @@ class RuntimeReceiverCases:
             )
             single = self.run_gnss(*common[:2], str(single_path), *common[3:], "--ubx-nav")
             self.assertIn(
-                "ubx_nav_ephemerides=0 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
-                "ubx_nav_unconfirmed=3 ubx_nav_conflicts=0",
+                "ubx_nav_ephemerides=3 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=3 ubx_nav_conflicts=0 ubx_nav_retracted=0",
                 single.stdout,
             )
 
-    def test_live_ubx_nav_does_not_accept_two_differing_copies(self) -> None:
+    def test_live_ubx_nav_takes_a_merged_record_back_when_a_second_copy_differs(self) -> None:
         # Two complete GPS sets of G12 that differ in the health field (the same IODE, toe and toc, so the
-        # decoder itself would call the second a repeat): they do not confirm each other. A third copy equal
-        # to the second then does.
+        # decoder itself would call the second a repeat). Accept-then-confirm (D3, which replaced the
+        # confirm-twice expectations of this test): the first copy is merged at once; a differing second
+        # copy removes it (ubx_nav_retracted) and the satellite then needs two equal copies from different
+        # transmissions before anything is merged for it again.
         fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
         with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_conflict_") as temp_dir:
             temp_root = Path(temp_dir)
@@ -216,17 +219,28 @@ class RuntimeReceiverCases:
                     "--quiet",
                 )
 
+            # healthy, unhealthy: merged, then retracted; the unhealthy copy is pending (unconfirmed).
             differing = run((0, 63))
             self.assertIn(
-                "ubx_nav_ephemerides=0 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
-                "ubx_nav_unconfirmed=2 ubx_nav_conflicts=1",
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=1 ubx_nav_retracted=1",
                 differing.stdout,
             )
+            # healthy, unhealthy, unhealthy: the repeat confirms the unhealthy record, which the health
+            # rule skips; the satellite ends without a record.
             confirmed = run((0, 63, 63))
             self.assertIn(
-                "ubx_nav_ephemerides=0 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
-                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=1",
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=1 ubx_nav_retracted=1",
                 confirmed.stdout,
+            )
+            # healthy, unhealthy, healthy: the next good copy confirms the first record, which is merged
+            # again (counted twice in ubx_nav_ephemerides); the differing copy was never confirmed.
+            recovered = run((0, 63, 0))
+            self.assertIn(
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=1 ubx_nav_retracted=1",
+                recovered.stdout,
             )
     def test_live_ubx_nav_dates_a_base_without_ephemerides_from_the_rover_time(self) -> None:
         # The recorded base stream with its ephemeris messages removed has no GPST reference, so its
@@ -277,7 +291,8 @@ class RuntimeReceiverCases:
 
             def run(g13_health: int):
                 rover_path = temp_root / f"rover_{g13_health}.ubx"
-                # Two transmissions of each set (confirm-twice), health is applied after it.
+                # Two transmissions of each set (accept-then-confirm); the health rule applies to a record
+                # before it is merged.
                 rover_path.write_bytes(
                     build_rawx_message()
                     + b"".join(
@@ -305,13 +320,13 @@ class RuntimeReceiverCases:
             unhealthy = run(63)
             self.assertIn(
                 "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
-                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0",
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0",
                 unhealthy.stdout,
             )
             healthy = run(0)
             self.assertIn(
                 "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
-                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0",
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0 ubx_nav_retracted=0",
                 healthy.stdout,
             )
 

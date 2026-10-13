@@ -695,9 +695,11 @@ void printUsage(const char* argv0) {
         << "  --nav-rinex <file>         Supplemental broadcast navigation RINEX\n"
         << "  --ubx-nav                  With --rover-ubx: decode the rover's UBX-RXM-SFRBX into broadcast ephemerides\n"
         << "                            (GPS/QZSS LNAV, Galileo E1-B I/NAV, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set\n"
-        << "                            and merge them like RTCM ephemerides once a second transmission has produced the same record\n"
-        << "                            (ubx_nav_unconfirmed, ubx_nav_conflicts), skipping records whose health flags mark the satellite\n"
-        << "                            unusable (counted as ubx_nav_unhealthy_skipped); a --nav-rinex ionosphere model wins (default: off)\n"
+        << "                            and merge them like RTCM ephemerides: a record at once, taken back out if a later copy of the\n"
+        << "                            same issue differs (ubx_nav_conflicts, ubx_nav_retracted; that satellite then needs two equal copies\n"
+        << "                            before anything is merged again; ubx_nav_unconfirmed counts records never confirmed), skipping\n"
+        << "                            records whose health flags mark the satellite unusable (counted as ubx_nav_unhealthy_skipped);\n"
+        << "                            a --nav-rinex ionosphere model wins (default: off)\n"
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
         << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
@@ -1546,11 +1548,9 @@ int main(int argc, char** argv) {
         // --ubx-nav: ephemerides and the Klobuchar set decoded from the rover's UBX-RXM-SFRBX. The
         // decoder's GPST reference is the newest RAWX epoch; events are applied in stream order.
         libgnss::io::UBXNavDecoder ubx_nav_decoder;
-        libgnss::io::UBXNavConfirmTwice ubx_nav_confirm;
+        libgnss::io::UBXNavAcceptConfirm ubx_nav_merge;
         std::vector<libgnss::Ephemeris> ubx_nav_new;
         std::vector<libgnss::io::UBXNavDecoded> ubx_nav_copies;
-        size_t ubx_nav_ephemerides = 0;
-        size_t ubx_nav_unhealthy_skipped = 0;
         auto applyUbxNavEvents = [&](const std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
             if (!config.ubx_nav) {
                 return;
@@ -1564,21 +1564,11 @@ int main(int argc, char** argv) {
                     ubx_nav_copies.clear();
                     ubx_nav_decoder.pushSfrbx(event.sfrbx, ubx_nav_new, &ubx_nav_copies);
                     for (const auto& copy : ubx_nav_copies) {
-                        // Confirm-twice first: a record enters the database only once a second
-                        // transmission has produced the same record.
-                        if (!ubx_nav_confirm.push(copy).accepted) {
-                            continue;
-                        }
-                        const libgnss::Ephemeris& eph = copy.eph;
-                        // The receiver forwards unhealthy and default sets (e.g. GPS svh=63) that
-                        // broadcast navigation files do not carry; they must not reach the database.
-                        if (!libgnss::io::ubxNavEphemerisUsable(eph)) {
-                            ++ubx_nav_unhealthy_skipped;
-                            continue;
-                        }
-                        if (nav_data.addEphemerisIfNew(eph)) {
-                            ++ubx_nav_ephemerides;
-                        }
+                        // Accept, then confirm (D3): the first copy of a record is merged at once
+                        // (after the health rule); a differing second copy takes it back out and the
+                        // satellite waits for two equal copies (confirm-twice) before anything is
+                        // merged for it again.
+                        ubx_nav_merge.push(copy, nav_data);
                     }
                 }
             }
@@ -2096,11 +2086,12 @@ int main(int argc, char** argv) {
             std::cout << " fallback_spp_epochs=" << fallback_spp_epochs;
         }
         if (config.ubx_nav) {
-            std::cout << " ubx_nav_ephemerides=" << ubx_nav_ephemerides
+            std::cout << " ubx_nav_ephemerides=" << ubx_nav_merge.merged()
                       << " ubx_nav_klobuchar=" << (ubx_nav_decoder.hasKlobuchar() ? 1 : 0)
-                      << " ubx_nav_unhealthy_skipped=" << ubx_nav_unhealthy_skipped
-                      << " ubx_nav_unconfirmed=" << ubx_nav_confirm.unconfirmed()
-                      << " ubx_nav_conflicts=" << ubx_nav_confirm.conflicts();
+                      << " ubx_nav_unhealthy_skipped=" << ubx_nav_merge.unhealthySkipped()
+                      << " ubx_nav_unconfirmed=" << ubx_nav_merge.unconfirmed()
+                      << " ubx_nav_conflicts=" << ubx_nav_merge.conflicts()
+                      << " ubx_nav_retracted=" << ubx_nav_merge.retracted();
         }
         std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;

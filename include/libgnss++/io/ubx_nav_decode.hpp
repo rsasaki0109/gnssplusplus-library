@@ -288,6 +288,129 @@ private:
     std::map<GNSSSystem, Counters> counters_;
 };
 
+/**
+ * @brief True when two decoded records are copies of one issue of the same satellite.
+ *
+ * The issue fields are the ones the decoder itself uses to suppress repeats (`UBXNavDecoded::emitted`):
+ * GPS/QZSS IODE, IODC, toe and toc; Galileo IODnav, toe and toc; BeiDou toe; GLONASS IODE (the
+ * ephemeris reference time index).  Two copies of one issue are expected to carry the same broadcast
+ * content (ubxNavSameRecord()); a pair that does not is a conflict.
+ */
+bool ubxNavSameIssue(const Ephemeris& a, const Ephemeris& b);
+
+/**
+ * @brief Accept, then confirm (D3): the `gnss live --ubx-nav` merge.
+ *
+ * D2 (UBXNavConfirmTwice) delays every record by one repeat of its frame set, which at start-up leaves
+ * the filter without ephemerides for most satellites.  D3 merges the first copy at once and uses the
+ * second copy only to catch a corrupted one:
+ *
+ * Per satellite (copies come from UBXNavDecoder::pushSfrbx(..., &decoded), every one of them):
+ *  1. A copy of an issue D3 has not seen for the satellite is merged at once (health rule D1 first:
+ *     an unusable record is counted as unhealthy-skipped and not merged).  This holds for the first
+ *     record of a satellite and for every later new issue (new IODE/toe); the previous record stays in
+ *     the database.
+ *  2. A later copy of that issue:
+ *      - equal (ubxNavSameRecord) and built entirely from SFRBX messages received after the last
+ *        message of the first copy (a different transmission, D2's rule): the record is *confirmed*;
+ *      - equal but sharing a message with the first copy: the same transmission seen again, nothing
+ *        changes;
+ *      - different: a *conflict*.  The record D3 merged is removed from the database
+ *        (NavigationData::removeEphemeris, exact record only) and the satellite falls back to D2.
+ *  3. Fallback (D2 confirm-twice for that satellite only): nothing is merged until two equal copies
+ *     from different transmissions exist.  The pending candidates are the copies seen since the
+ *     conflict *and the record that was just removed* (the first copy), because either of the two
+ *     differing copies may be the corrupted one; the next copy equal to a pending candidate, from a
+ *     transmission after it, confirms it and is merged (D1 first).  A copy equal to no pending
+ *     candidate is added to them (a conflict again); at most kMaxPending (4) candidates are kept, the
+ *     oldest dropped.  A copy equal to a record already confirmed is a duplicate.  After the
+ *     confirmation the satellite returns to rule 1.
+ *  4. A copy that differs from a record already *confirmed* (same issue) is ignored and counted
+ *     (`diverged_after_confirm`): two agreeing transmissions outweigh one differing copy, so the
+ *     confirmed record is never retracted.
+ *
+ * Only a record this object merged is ever removed, and only if it is still in the database in
+ * every field.  Records D3 saw but that the database already held (e.g. from `--nav-rinex`) or that D1
+ * refused are never touched.  Unused with `--nav-rinex-out`, which keeps D2.
+ *
+ * Bookkeeping per satellite: the last kMaxEntries (8) issues seen, each with its first copy and its
+ * state (merged, confirmed); the fallback flag and its pending candidates.
+ */
+class UBXNavAcceptConfirm {
+public:
+    struct Counters {
+        size_t copies = 0;                ///< complete frame sets seen
+        size_t merged = 0;                ///< records added to the database (rule 1 and fallback confirmations)
+        size_t confirmed = 0;             ///< records confirmed by a second transmission
+        size_t conflicts = 0;             ///< a copy that differed from an unconfirmed copy of the same issue
+        size_t retracted = 0;             ///< merged records removed from the database because of a conflict
+        size_t duplicates = 0;            ///< copies equal to a confirmed record
+        size_t same_transmission = 0;     ///< equal copies that shared a message with the pending first copy
+        size_t unhealthy_skipped = 0;     ///< records due for merging that the health rule refused
+        size_t already_present = 0;       ///< records due for merging that the database already held
+        size_t diverged_after_confirm = 0;///< differing copies of an already confirmed issue (ignored)
+        size_t dropped_unconfirmed = 0;   ///< merged or pending records forgotten without confirmation
+    };
+    /// A record D3 merged and then removed from the database again.
+    struct Retraction {
+        Ephemeris eph;
+        UBXNavReception merged;           ///< reception of the copy that was merged
+    };
+    struct Outcome {
+        bool merged = false;              ///< `copy.eph` was added to the database
+        bool confirmed = false;           ///< a record was confirmed by this copy
+        bool conflict = false;            ///< this copy conflicted with an unconfirmed one
+        bool unhealthy_skipped = false;   ///< `copy.eph` was due for merging and the health rule refused it
+        UBXNavReception first_copy;       ///< reception of the confirmed record's first copy (when confirmed)
+        std::vector<Retraction> retracted;///< records removed by this copy
+    };
+
+    static constexpr size_t kMaxEntries = 8;
+    static constexpr size_t kMaxPending = 4;
+
+    /// Process one copy: decide, apply the health rule and merge into or remove from `nav`.
+    Outcome push(const UBXNavDecoded& copy, NavigationData& nav);
+
+    /// Merged records not confirmed so far (including those forgotten unconfirmed) plus the fallback
+    /// candidates that were never confirmed (replaced or still pending).  Retracted records are counted
+    /// by retracted(), not here.
+    size_t unconfirmed() const;
+    std::map<GNSSSystem, size_t> unconfirmedBySystem() const;
+    size_t merged() const;
+    size_t confirmed() const;
+    size_t conflicts() const;
+    size_t retracted() const;
+    size_t unhealthySkipped() const;
+    const std::map<GNSSSystem, Counters>& counters() const { return counters_; }
+    /// True while the satellite is in fallback (after a conflict, before a confirmation).
+    bool inFallback(const SatelliteId& sat) const;
+    void clear();
+
+private:
+    struct Entry {
+        Ephemeris eph;
+        UBXNavReception reception;
+        bool merged = false;      ///< D3 added it to the database (and it was not removed since)
+        bool confirmed = false;
+    };
+    struct Pending {
+        Ephemeris eph;
+        UBXNavReception reception;
+        bool seed = false;        ///< the record removed by the conflict: already counted as retracted
+    };
+    struct SatState {
+        std::vector<Entry> entries;   ///< oldest first
+        bool fallback = false;
+        std::vector<Pending> pending; ///< oldest first, only while in fallback
+    };
+    /// D1, then the database; returns true when `eph` was added.
+    bool release(const Ephemeris& eph, NavigationData& nav, Counters& counters, Outcome& outcome);
+    Outcome pushFallback(const UBXNavDecoded& copy, NavigationData& nav, SatState& sat, Counters& counters);
+
+    std::map<SatelliteId, SatState> sats_;
+    std::map<GNSSSystem, Counters> counters_;
+};
+
 namespace ubx_utils {
 
 /// CRC-24Q (Galileo I/NAV / RTCM 3 polynomial 0x1864CFB, zero initial value) over `size` bytes.

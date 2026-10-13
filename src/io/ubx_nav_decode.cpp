@@ -4,6 +4,8 @@
 #include <cmath>
 #include <limits>
 #include <cstring>
+#include <cstddef>
+#include <utility>
 
 #include "rtcm_internal.hpp"
 
@@ -256,30 +258,7 @@ bool UBXNavDecoder::emit(const Ephemeris& eph, const UBXNavReception& reception,
                          std::vector<Ephemeris>& out) {
     auto& st = systemStats(eph.satellite.system);
     const auto last = last_emitted_.find(eph.satellite);
-    bool duplicate = false;
-    if (last != last_emitted_.end()) {
-        const Ephemeris& l = last->second;
-        bool same = false;
-        switch (eph.satellite.system) {
-            case GNSSSystem::GPS:
-            case GNSSSystem::QZSS:
-                same = l.iode == eph.iode && l.iodc == eph.iodc && l.toe == eph.toe &&
-                       l.toc == eph.toc;
-                break;
-            case GNSSSystem::Galileo:
-                same = l.iode == eph.iode && l.toe == eph.toe && l.toc == eph.toc;
-                break;
-            case GNSSSystem::BeiDou:
-                same = l.toe == eph.toe;
-                break;
-            case GNSSSystem::GLONASS:
-                same = l.iode == eph.iode;
-                break;
-            default:
-                break;
-        }
-        duplicate = same;
-    }
+    const bool duplicate = last != last_emitted_.end() && ubxNavSameIssue(last->second, eph);
     if (decoded_ != nullptr) {
         decoded_->push_back({eph, reception, !duplicate});
     }
@@ -996,6 +975,25 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     return emit(eph, reception, out) ? 1 : 0;
 }
 
+bool ubxNavSameIssue(const Ephemeris& a, const Ephemeris& b) {
+    if (!(a.satellite == b.satellite)) {
+        return false;
+    }
+    switch (a.satellite.system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::QZSS:
+            return a.iode == b.iode && a.iodc == b.iodc && a.toe == b.toe && a.toc == b.toc;
+        case GNSSSystem::Galileo:
+            return a.iode == b.iode && a.toe == b.toe && a.toc == b.toc;
+        case GNSSSystem::BeiDou:
+            return a.toe == b.toe;
+        case GNSSSystem::GLONASS:
+            return a.iode == b.iode;
+        default:
+            return false;
+    }
+}
+
 bool ubxNavEphemerisUsable(const Ephemeris& eph) {
     switch (eph.satellite.system) {
         case GNSSSystem::GPS:
@@ -1115,6 +1113,230 @@ size_t UBXNavConfirmTwice::accepted() const {
 }
 
 void UBXNavConfirmTwice::clear() {
+    sats_.clear();
+    counters_.clear();
+}
+
+// ---------------------------------------------------------------------------
+// D3: accept, then confirm
+// ---------------------------------------------------------------------------
+
+bool UBXNavAcceptConfirm::release(const Ephemeris& eph, NavigationData& nav, Counters& counters,
+                                  Outcome& outcome) {
+    // The receiver forwards unhealthy and default sets (e.g. GPS svh=63) that broadcast navigation
+    // files do not carry; they must not reach the database.
+    if (!ubxNavEphemerisUsable(eph)) {
+        ++counters.unhealthy_skipped;
+        outcome.unhealthy_skipped = true;
+        return false;
+    }
+    if (!nav.addEphemerisIfNew(eph)) {
+        ++counters.already_present;
+        return false;
+    }
+    ++counters.merged;
+    outcome.merged = true;
+    return true;
+}
+
+UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::push(const UBXNavDecoded& copy, NavigationData& nav) {
+    SatState& sat = sats_[copy.eph.satellite];
+    Counters& counters = counters_[copy.eph.satellite.system];
+    ++counters.copies;
+    if (sat.fallback) {
+        return pushFallback(copy, nav, sat, counters);
+    }
+
+    Outcome outcome;
+    // The newest entry of the same issue, if D3 has seen this issue for the satellite.
+    size_t found = sat.entries.size();
+    for (size_t i = sat.entries.size(); i-- > 0;) {
+        if (ubxNavSameIssue(sat.entries[i].eph, copy.eph)) {
+            found = i;
+            break;
+        }
+    }
+
+    if (found == sat.entries.size()) {
+        // Rule 1 (first record) and rule 3 (a new issue): merge at once; earlier records stay.
+        Entry entry;
+        entry.eph = copy.eph;
+        entry.reception = copy.reception;
+        entry.merged = release(copy.eph, nav, counters, outcome);
+        sat.entries.push_back(std::move(entry));
+        while (sat.entries.size() > kMaxEntries) {
+            if (sat.entries.front().merged && !sat.entries.front().confirmed) {
+                ++counters.dropped_unconfirmed;
+            }
+            sat.entries.erase(sat.entries.begin());
+        }
+        return outcome;
+    }
+
+    Entry& entry = sat.entries[found];
+    if (entry.confirmed) {
+        // Rule 4: two agreeing transmissions outweigh one differing copy.
+        if (ubxNavSameRecord(copy.eph, entry.eph)) {
+            ++counters.duplicates;
+        } else {
+            ++counters.diverged_after_confirm;
+        }
+        return outcome;
+    }
+    if (ubxNavSameRecord(copy.eph, entry.eph)) {
+        if (copy.reception.first_seq > entry.reception.last_seq) {
+            entry.confirmed = true;
+            ++counters.confirmed;
+            outcome.confirmed = true;
+            outcome.first_copy = entry.reception;
+        } else {
+            ++counters.same_transmission;  // shares a message with the first copy: not a second transmission
+        }
+        return outcome;
+    }
+
+    // Rule 2, conflict: take the merged record back and fall back to D2 for this satellite.
+    ++counters.conflicts;
+    outcome.conflict = true;
+    if (entry.merged && nav.removeEphemeris(entry.eph)) {
+        ++counters.retracted;
+        outcome.retracted.push_back({entry.eph, entry.reception});
+    }
+    // Either of the two differing copies may be the corrupted one, so the first stays a candidate
+    // (a seed: already counted as retracted) next to the new one.
+    sat.pending.clear();
+    sat.pending.push_back({entry.eph, entry.reception, true});
+    sat.pending.push_back({copy.eph, copy.reception, false});
+    sat.fallback = true;
+    sat.entries.erase(sat.entries.begin() + static_cast<std::ptrdiff_t>(found));
+    return outcome;
+}
+
+UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::pushFallback(const UBXNavDecoded& copy,
+                                                               NavigationData& nav, SatState& sat,
+                                                               Counters& counters) {
+    Outcome outcome;
+    // A record confirmed earlier for this issue stands (duplicates and differing copies alike).
+    for (const Entry& entry : sat.entries) {
+        if (entry.confirmed && ubxNavSameIssue(entry.eph, copy.eph)) {
+            if (ubxNavSameRecord(copy.eph, entry.eph)) {
+                ++counters.duplicates;
+            } else {
+                ++counters.diverged_after_confirm;
+            }
+            return outcome;
+        }
+    }
+    for (size_t i = 0; i < sat.pending.size(); ++i) {
+        const Pending& candidate = sat.pending[i];
+        if (!ubxNavSameRecord(copy.eph, candidate.eph)) {
+            continue;
+        }
+        if (copy.reception.first_seq <= candidate.reception.last_seq) {
+            ++counters.same_transmission;
+            return outcome;
+        }
+        // Two equal copies from different transmissions: confirmed.  The other candidates are
+        // forgotten; the ones that were copies (not the retracted seed) were never confirmed.
+        ++counters.confirmed;
+        outcome.confirmed = true;
+        outcome.first_copy = candidate.reception;
+        for (size_t j = 0; j < sat.pending.size(); ++j) {
+            if (j != i && !sat.pending[j].seed) {
+                ++counters.dropped_unconfirmed;
+            }
+        }
+        Entry entry;
+        entry.eph = copy.eph;
+        entry.reception = candidate.reception;
+        entry.confirmed = true;
+        // An unconfirmed entry of this issue left from before the conflict is superseded by it.
+        bool stale_merged = false;
+        for (size_t k = sat.entries.size(); k-- > 0;) {
+            if (ubxNavSameIssue(sat.entries[k].eph, copy.eph)) {
+                stale_merged = stale_merged || sat.entries[k].merged;
+                sat.entries.erase(sat.entries.begin() + static_cast<std::ptrdiff_t>(k));
+            }
+        }
+        entry.merged = stale_merged || release(copy.eph, nav, counters, outcome);
+        sat.entries.push_back(std::move(entry));
+        while (sat.entries.size() > kMaxEntries) {
+            if (sat.entries.front().merged && !sat.entries.front().confirmed) {
+                ++counters.dropped_unconfirmed;
+            }
+            sat.entries.erase(sat.entries.begin());
+        }
+        sat.pending.clear();
+        sat.fallback = false;
+        return outcome;
+    }
+    // Equal to no pending candidate: another differing copy (D2: the candidate is replaced; here the
+    // earlier ones stay, up to kMaxPending, because the one that matches a later copy may be any of them).
+    ++counters.conflicts;
+    outcome.conflict = true;
+    sat.pending.push_back({copy.eph, copy.reception, false});
+    if (sat.pending.size() > kMaxPending) {
+        if (!sat.pending.front().seed) {
+            ++counters.dropped_unconfirmed;
+        }
+        sat.pending.erase(sat.pending.begin());
+    }
+    return outcome;
+}
+
+std::map<GNSSSystem, size_t> UBXNavAcceptConfirm::unconfirmedBySystem() const {
+    std::map<GNSSSystem, size_t> result;
+    for (const auto& [system, c] : counters_) {
+        result[system] += c.dropped_unconfirmed;
+    }
+    for (const auto& [sat_id, sat] : sats_) {
+        for (const Entry& entry : sat.entries) {
+            if (entry.merged && !entry.confirmed) {
+                ++result[sat_id.system];
+            }
+        }
+        for (const Pending& candidate : sat.pending) {
+            if (!candidate.seed) {
+                ++result[sat_id.system];
+            }
+        }
+    }
+    return result;
+}
+
+size_t UBXNavAcceptConfirm::unconfirmed() const {
+    size_t n = 0;
+    for (const auto& [system, count] : unconfirmedBySystem()) {
+        n += count;
+    }
+    return n;
+}
+
+namespace {
+template <typename Member>
+size_t sumCounter(const std::map<GNSSSystem, UBXNavAcceptConfirm::Counters>& counters, Member member) {
+    size_t n = 0;
+    for (const auto& [system, c] : counters) {
+        n += c.*member;
+    }
+    return n;
+}
+}  // namespace
+
+size_t UBXNavAcceptConfirm::merged() const { return sumCounter(counters_, &Counters::merged); }
+size_t UBXNavAcceptConfirm::confirmed() const { return sumCounter(counters_, &Counters::confirmed); }
+size_t UBXNavAcceptConfirm::conflicts() const { return sumCounter(counters_, &Counters::conflicts); }
+size_t UBXNavAcceptConfirm::retracted() const { return sumCounter(counters_, &Counters::retracted); }
+size_t UBXNavAcceptConfirm::unhealthySkipped() const {
+    return sumCounter(counters_, &Counters::unhealthy_skipped);
+}
+
+bool UBXNavAcceptConfirm::inFallback(const SatelliteId& sat) const {
+    const auto it = sats_.find(sat);
+    return it != sats_.end() && it->second.fallback;
+}
+
+void UBXNavAcceptConfirm::clear() {
     sats_.clear();
     counters_.clear();
 }

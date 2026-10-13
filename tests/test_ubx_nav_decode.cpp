@@ -1130,3 +1130,452 @@ TEST(UBXNavConfirmTwiceTest, SameRecordComparesEveryBroadcastFieldAndIgnoresTheT
         EXPECT_TRUE(io::ubxNavSameRecord(glo.front(), other));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Accept, then confirm (design change D3, `gnss live --ubx-nav`): the first
+// copy of a record is merged at once; a differing later copy of the same issue
+// takes it back out and the satellite falls back to confirm-twice.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Decoder + D3, driven the way `gnss live --ubx-nav` does.
+struct AcceptRun {
+    io::UBXNavDecoder decoder;
+    io::UBXNavAcceptConfirm merge;
+    NavigationData nav;
+    std::vector<io::UBXNavDecoded> copies_seen;
+    std::vector<io::UBXNavAcceptConfirm::Outcome> outcomes;
+
+    AcceptRun() { decoder.setReferenceTime(kReference); }
+
+    void push(const SfrbxRow& row) {
+        std::vector<Ephemeris> out;
+        std::vector<io::UBXNavDecoded> copies;
+        decoder.pushSfrbx(toSfrbx(row), out, &copies);
+        for (const auto& copy : copies) {
+            copies_seen.push_back(copy);
+            outcomes.push_back(merge.push(copy, nav));
+        }
+    }
+    void push(const std::vector<SfrbxRow>& rows) {
+        for (const auto& row : rows) push(row);
+    }
+    size_t stored(const SatelliteId& sat) const { return nav.getEphemeris(sat).size(); }
+    io::UBXNavAcceptConfirm::Counters counters(GNSSSystem system) const {
+        const auto it = merge.counters().find(system);
+        return it == merge.counters().end() ? io::UBXNavAcceptConfirm::Counters() : it->second;
+    }
+};
+
+io::UBXNavDecoded makeCopy(const Ephemeris& eph, uint64_t first_seq, uint64_t last_seq) {
+    io::UBXNavDecoded copy;
+    copy.eph = eph;
+    copy.reception.first_seq = first_seq;
+    copy.reception.last_seq = last_seq;
+    copy.emitted = true;
+    return copy;
+}
+
+Ephemeris decodedG21() {
+    io::UBXNavDecoder decoder;
+    decoder.setReferenceTime(kReference);
+    const auto records = decodeRows(decoder, kG21Iode25);
+    return records.empty() ? Ephemeris() : records.front();
+}
+
+const SatelliteId kG21(GNSSSystem::GPS, 21);
+const SatelliteId kG24(GNSSSystem::GPS, 24);
+const SatelliteId kE30(GNSSSystem::Galileo, 30);
+
+}  // namespace
+
+TEST(UBXNavAcceptConfirmTest, AFirstCopyIsMergedImmediately) {
+    const struct { const char* name; const std::vector<SfrbxRow>* rows; } cases[] = {
+        {"GPS", &kG21Iode25}, {"Galileo", &kE30Inav}, {"BeiDou D1", &kC12D1}, {"BeiDou D2", &kC03D2Pages},
+        {"QZSS", &kJ03Lnav}, {"GLONASS", &kR04Strings}};
+    for (const auto& c : cases) {
+        AcceptRun run;
+        if (c.rows == &kJ03Lnav) {
+            run.decoder.setReferenceTime(GNSSTime(2200, 345600.125));
+        } else if (c.rows == &kR04Strings) {
+            run.decoder.setReferenceTime(GNSSTime(2331, 198746.0));
+        }
+        run.push(*c.rows);
+        ASSERT_EQ(run.copies_seen.size(), 1U) << c.name;
+        // The first copy is in the database, no second transmission needed.
+        ASSERT_TRUE(run.outcomes.front().merged) << c.name;
+        const SatelliteId sat = run.copies_seen.front().eph.satellite;
+        ASSERT_EQ(run.stored(sat), 1U) << c.name;
+        EXPECT_TRUE(io::ubxNavSameRecord(run.nav.getEphemeris(sat).front(), run.copies_seen.front().eph)) << c.name;
+        EXPECT_EQ(run.merge.merged(), 1U) << c.name;
+        EXPECT_EQ(run.merge.confirmed(), 0U) << c.name;
+        EXPECT_EQ(run.merge.unconfirmed(), 1U) << c.name;   // merged, not confirmed yet
+        EXPECT_EQ(run.merge.conflicts(), 0U) << c.name;
+        EXPECT_EQ(run.merge.retracted(), 0U) << c.name;
+        // A copy that reuses a message of the first one (the last message arriving again) is the same
+        // transmission seen again, not a confirmation.
+        if (sat.system == GNSSSystem::GPS) {
+            run.push(c.rows->back());
+            ASSERT_EQ(run.copies_seen.size(), 2U) << c.name;
+            EXPECT_TRUE(io::ubxNavSameRecord(run.copies_seen[0].eph, run.copies_seen[1].eph)) << c.name;
+            EXPECT_FALSE(run.outcomes.back().confirmed) << c.name;
+            EXPECT_EQ(run.counters(sat.system).same_transmission, 1U) << c.name;
+            EXPECT_EQ(run.merge.confirmed(), 0U) << c.name;
+            EXPECT_EQ(run.merge.unconfirmed(), 1U) << c.name;
+        }
+        // The second transmission confirms it; the database is not touched again.
+        const std::uint64_t revision = run.nav.getRevision();
+        run.push(*c.rows);
+        EXPECT_TRUE(run.outcomes.back().confirmed) << c.name;
+        EXPECT_FALSE(run.outcomes.back().merged) << c.name;
+        EXPECT_EQ(run.nav.getRevision(), revision) << c.name;
+        EXPECT_EQ(run.stored(sat), 1U) << c.name;
+        EXPECT_EQ(run.merge.confirmed(), 1U) << c.name;
+        EXPECT_EQ(run.merge.unconfirmed(), 0U) << c.name;
+        EXPECT_LT(run.outcomes.back().first_copy.last_seq, run.copies_seen.back().reception.first_seq) << c.name;
+        // A third copy is a duplicate of the confirmed record.
+        run.push(*c.rows);
+        EXPECT_EQ(run.counters(sat.system).duplicates, 1U) << c.name;
+        EXPECT_EQ(run.stored(sat), 1U) << c.name;
+        EXPECT_FALSE(run.merge.inFallback(sat)) << c.name;
+    }
+}
+
+TEST(UBXNavAcceptConfirmTest, ADifferingSecondCopyRemovesTheRecordAndBlocksTheSatellite) {
+    const struct {
+        const char* name;
+        SatelliteId sat;
+        const std::vector<SfrbxRow>* good;
+        std::vector<SfrbxRow> corrupted_a;
+        std::vector<SfrbxRow> corrupted_b;
+        GNSSSystem system;
+    } cases[] = {
+        {"GPS", kG21, &kG21Iode25, corruptedG21(0x1000U), corruptedG21(0x2000U), GNSSSystem::GPS},
+        {"Galileo", kE30, &kE30Inav, corruptedE30(), [] {
+             std::vector<SfrbxRow> rows = kE30Inav;
+             setWordBit(rows[2].words, 61, !wordBit(rows[2].words, 61));
+             refreshGalileoCrc(rows[2].words);
+             return rows;
+         }(), GNSSSystem::Galileo}};
+    for (const auto& c : cases) {
+        AcceptRun run;
+        run.push(*c.good);                       // A: merged at once
+        ASSERT_EQ(run.stored(c.sat), 1U) << c.name;
+        const Ephemeris a = run.nav.getEphemeris(c.sat).front();
+        run.push(c.corrupted_a);                 // B differs from A (same issue): conflict
+        ASSERT_EQ(run.outcomes.size(), 2U) << c.name;
+        const auto& conflict = run.outcomes.back();
+        EXPECT_TRUE(conflict.conflict) << c.name;
+        ASSERT_EQ(conflict.retracted.size(), 1U) << c.name;
+        EXPECT_TRUE(io::ubxNavSameRecord(conflict.retracted.front().eph, a)) << c.name;
+        EXPECT_EQ(conflict.retracted.front().merged.last_seq, run.copies_seen.front().reception.last_seq) << c.name;
+        EXPECT_EQ(run.stored(c.sat), 0U) << c.name;                  // the merged record is gone
+        EXPECT_TRUE(run.merge.inFallback(c.sat)) << c.name;
+        EXPECT_EQ(run.merge.conflicts(), 1U) << c.name;
+        EXPECT_EQ(run.merge.retracted(), 1U) << c.name;
+        EXPECT_EQ(run.merge.merged(), 1U) << c.name;
+
+        // A third, different set (C): nothing is merged, another conflict.
+        run.push(c.corrupted_b);
+        EXPECT_EQ(run.stored(c.sat), 0U) << c.name;
+        EXPECT_EQ(run.merge.conflicts(), 2U) << c.name;
+        EXPECT_EQ(run.merge.retracted(), 1U) << c.name;
+
+        // C's last message arrives again: the same transmission, not a confirmation.
+        run.push(c.corrupted_b.back());
+        EXPECT_EQ(run.stored(c.sat), 0U) << c.name;
+        EXPECT_TRUE(run.merge.inFallback(c.sat)) << c.name;
+        EXPECT_GE(run.counters(c.system).same_transmission, 1U) << c.name;
+
+        // A whole new transmission of C: two equal copies from different transmissions.  Only now is
+        // anything merged for the satellite again.
+        run.push(c.corrupted_b);
+        EXPECT_TRUE(run.outcomes.back().confirmed) << c.name;
+        EXPECT_TRUE(run.outcomes.back().merged) << c.name;
+        EXPECT_EQ(run.stored(c.sat), 1U) << c.name;
+        EXPECT_TRUE(io::ubxNavSameRecord(run.nav.getEphemeris(c.sat).front(), run.copies_seen.back().eph)) << c.name;
+        EXPECT_FALSE(run.merge.inFallback(c.sat)) << c.name;
+        EXPECT_EQ(run.merge.confirmed(), 1U) << c.name;
+        EXPECT_EQ(run.merge.merged(), 2U) << c.name;
+    }
+}
+
+TEST(UBXNavAcceptConfirmTest, ACorruptedSecondCopyDoesNotReplaceAGoodFirstRecord) {
+    io::UBXNavDecoder reference;
+    reference.setReferenceTime(kReference);
+    const auto good = decodeRows(reference, kG21Iode25);
+    ASSERT_EQ(good.size(), 1U);
+
+    // Good, corrupted, good: the corrupted copy is not merged (the database would not take a second
+    // record of the issue anyway), the good record is taken out because the two differ, and the next good
+    // copy confirms the first one and puts it back.
+    {
+        AcceptRun run;
+        run.push(kG21Iode25);
+        run.push(corruptedG21());
+        EXPECT_EQ(run.stored(kG21), 0U);
+        EXPECT_TRUE(run.merge.inFallback(kG21));
+        run.push(kG21Iode25);
+        EXPECT_TRUE(run.outcomes.back().confirmed);
+        EXPECT_TRUE(run.outcomes.back().merged);
+        ASSERT_EQ(run.stored(kG21), 1U);
+        EXPECT_TRUE(io::ubxNavSameRecord(run.nav.getEphemeris(kG21).front(), good.front()));
+        EXPECT_FALSE(run.merge.inFallback(kG21));
+        EXPECT_EQ(run.merge.merged(), 2U);
+        EXPECT_EQ(run.merge.retracted(), 1U);
+        EXPECT_EQ(run.merge.conflicts(), 1U);
+        EXPECT_EQ(run.merge.confirmed(), 1U);
+        EXPECT_EQ(run.merge.unconfirmed(), 1U);   // the corrupted copy was never confirmed
+        // A later corrupted copy cannot undo a confirmed record.
+        run.push(corruptedG21(0x4000U));
+        EXPECT_EQ(run.stored(kG21), 1U);
+        EXPECT_EQ(run.counters(GNSSSystem::GPS).diverged_after_confirm, 1U);
+        EXPECT_EQ(run.merge.retracted(), 1U);
+        EXPECT_FALSE(run.merge.inFallback(kG21));
+    }
+    // Corrupted, good, good: the corrupted *first* copy is merged at once (the cost of D3), the good second
+    // copy exposes it, and the next good copy confirms the second one.
+    {
+        AcceptRun run;
+        run.push(corruptedG21());
+        ASSERT_EQ(run.stored(kG21), 1U);
+        EXPECT_FALSE(io::ubxNavSameRecord(run.nav.getEphemeris(kG21).front(), good.front()));
+        run.push(kG21Iode25);
+        EXPECT_EQ(run.stored(kG21), 0U);
+        EXPECT_EQ(run.merge.retracted(), 1U);
+        run.push(kG21Iode25);
+        ASSERT_EQ(run.stored(kG21), 1U);
+        EXPECT_TRUE(io::ubxNavSameRecord(run.nav.getEphemeris(kG21).front(), good.front()));
+        EXPECT_EQ(run.merge.merged(), 2U);
+        EXPECT_EQ(run.merge.unconfirmed(), 0U);   // the corrupted record was retracted, not left unconfirmed
+    }
+    // A corrupted copy that never repeats is merged and stays unconfirmed (there is no second copy to
+    // compare with): that is what ubx_nav_unconfirmed reports.
+    {
+        AcceptRun run;
+        run.push(corruptedG21());
+        EXPECT_EQ(run.stored(kG21), 1U);
+        EXPECT_EQ(run.merge.unconfirmed(), 1U);
+        EXPECT_EQ(run.merge.retracted(), 0U);
+    }
+}
+
+TEST(UBXNavAcceptConfirmTest, OtherSatellitesAreUnaffectedByOnesConflict) {
+    AcceptRun run;
+    run.push(kG21Iode25);
+    run.push(kG24Iode7);
+    run.push(kE30Inav);
+    ASSERT_EQ(run.stored(kG21), 1U);
+    ASSERT_EQ(run.stored(kG24), 1U);
+    ASSERT_EQ(run.stored(kE30), 1U);
+    const std::vector<Ephemeris> g24_before = run.nav.getEphemeris(kG24);
+    const std::vector<Ephemeris> e30_before = run.nav.getEphemeris(kE30);
+
+    run.push(corruptedG21());                       // G21 conflicts
+    EXPECT_EQ(run.stored(kG21), 0U);
+    EXPECT_TRUE(run.merge.inFallback(kG21));
+    // G24 and E30 are untouched and confirm normally on their second copies.
+    EXPECT_FALSE(run.merge.inFallback(kG24));
+    EXPECT_FALSE(run.merge.inFallback(kE30));
+    run.push(kG24Iode7);
+    EXPECT_TRUE(run.outcomes.back().confirmed);
+    run.push(kE30Inav);
+    EXPECT_TRUE(run.outcomes.back().confirmed);
+    ASSERT_EQ(run.stored(kG24), 1U);
+    ASSERT_EQ(run.stored(kE30), 1U);
+    EXPECT_TRUE(io::ubxNavSameRecord(run.nav.getEphemeris(kG24).front(), g24_before.front()));
+    EXPECT_TRUE(io::ubxNavSameRecord(run.nav.getEphemeris(kE30).front(), e30_before.front()));
+    EXPECT_EQ(run.counters(GNSSSystem::GPS).conflicts, 1U);
+    EXPECT_EQ(run.counters(GNSSSystem::GPS).retracted, 1U);
+    EXPECT_EQ(run.counters(GNSSSystem::GPS).confirmed, 1U);       // G24
+    EXPECT_EQ(run.counters(GNSSSystem::Galileo).conflicts, 0U);
+    EXPECT_EQ(run.counters(GNSSSystem::Galileo).retracted, 0U);
+    EXPECT_EQ(run.counters(GNSSSystem::Galileo).confirmed, 1U);
+    // G21 stays blocked while the others carry on.
+    run.push(kG24Iode7);
+    EXPECT_EQ(run.stored(kG21), 0U);
+    EXPECT_EQ(run.counters(GNSSSystem::GPS).duplicates, 1U);
+}
+
+TEST(UBXNavAcceptConfirmTest, ANewIssueIsMergedAtOnceAndTheSatelliteReturnsToThatRuleAfterAConfirmation) {
+    const Ephemeris a = decodedG21();
+    ASSERT_EQ(a.satellite, kG21);
+    // Issue B: a later IODE, toe and toc of the same satellite.
+    Ephemeris b = a;
+    b.iode = static_cast<uint16_t>(a.iode + 1);
+    b.iodc = static_cast<uint16_t>(a.iodc + 1);
+    b.toe = GNSSTime(a.toe.week, a.toe.tow + 7200.0);
+    b.toc = b.toe;
+    b.af0 = a.af0 * 1.01;
+    ASSERT_FALSE(io::ubxNavSameIssue(a, b));
+    Ephemeris a_other = a;
+    a_other.af0 += 1e-9;
+    EXPECT_TRUE(io::ubxNavSameIssue(a, a_other));
+    EXPECT_FALSE(io::ubxNavSameRecord(a, a_other));
+
+    io::UBXNavAcceptConfirm merge;
+    NavigationData nav;
+    EXPECT_TRUE(merge.push(makeCopy(a, 1, 3), nav).merged);
+    EXPECT_TRUE(merge.push(makeCopy(b, 4, 6), nav).merged);      // new issue: merged at once, no confirmation needed
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 2U);               // the previous record stays
+    EXPECT_EQ(merge.conflicts(), 0U);
+    EXPECT_EQ(merge.unconfirmed(), 2U);
+    // Late copies confirm each issue separately.
+    EXPECT_TRUE(merge.push(makeCopy(a, 7, 9), nav).confirmed);
+    EXPECT_TRUE(merge.push(makeCopy(b, 10, 12), nav).confirmed);
+    EXPECT_EQ(merge.unconfirmed(), 0U);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 2U);
+
+    // After a conflict and a confirmation the satellite is back to rule 1 for its next record.
+    Ephemeris c = b;
+    c.iode = static_cast<uint16_t>(b.iode + 1);
+    c.iodc = static_cast<uint16_t>(b.iodc + 1);
+    c.toe = GNSSTime(b.toe.week, b.toe.tow + 7200.0);
+    c.toc = c.toe;
+    Ephemeris c_bad = c;
+    c_bad.omega0 += 1e-6;
+    ASSERT_TRUE(io::ubxNavSameIssue(c, c_bad));
+    EXPECT_TRUE(merge.push(makeCopy(c, 13, 15), nav).merged);
+    const auto conflict = merge.push(makeCopy(c_bad, 16, 18), nav);
+    EXPECT_TRUE(conflict.conflict);
+    ASSERT_EQ(conflict.retracted.size(), 1U);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 2U);               // only C was removed; A and B stay
+    EXPECT_TRUE(merge.inFallback(kG21));
+    // In fallback a copy of another issue is not merged at once.
+    Ephemeris d = c;
+    d.iode = static_cast<uint16_t>(c.iode + 1);
+    d.iodc = static_cast<uint16_t>(c.iodc + 1);
+    d.toe = GNSSTime(c.toe.week, c.toe.tow + 7200.0);
+    d.toc = d.toe;
+    EXPECT_FALSE(merge.push(makeCopy(d, 19, 21), nav).merged);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 2U);
+    EXPECT_TRUE(merge.push(makeCopy(c, 22, 24), nav).confirmed);       // the retracted record's next copy
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 3U);
+    EXPECT_FALSE(merge.inFallback(kG21));
+    EXPECT_TRUE(merge.push(makeCopy(d, 25, 27), nav).merged);          // rule 1 again
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 4U);
+    // c_bad and d were pending and never confirmed (d is now merged and unconfirmed by rule 1; the old
+    // pending copy of d was dropped).
+    EXPECT_EQ(merge.retracted(), 1U);
+}
+
+TEST(UBXNavAcceptConfirmTest, OnlyARecordItMergedIsEverRemovedAndTheHealthRuleComesFirst) {
+    const Ephemeris good = decodedG21();
+    Ephemeris bad = good;
+    bad.omega0 += 1e-6;
+
+    // A record the database already holds (e.g. from --nav-rinex) is not merged, so a conflict has
+    // nothing of D3's to remove and the stored record stays.
+    {
+        io::UBXNavAcceptConfirm merge;
+        NavigationData nav;
+        Ephemeris from_file = good;
+        from_file.af0 += 0.0;      // same issue, held by the database
+        nav.addEphemeris(from_file);
+        const auto first = merge.push(makeCopy(good, 1, 3), nav);
+        EXPECT_FALSE(first.merged);
+        EXPECT_EQ(merge.counters().at(GNSSSystem::GPS).already_present, 1U);
+        const auto conflict = merge.push(makeCopy(bad, 4, 6), nav);
+        EXPECT_TRUE(conflict.conflict);
+        EXPECT_TRUE(conflict.retracted.empty());
+        EXPECT_EQ(merge.retracted(), 0U);
+        EXPECT_EQ(nav.getEphemeris(kG21).size(), 1U);
+        EXPECT_TRUE(merge.inFallback(kG21));
+    }
+    // An unhealthy first copy is not merged (D1); the healthy copy that follows differs (health is part
+    // of the record): a conflict with nothing to retract, then two healthy copies merge it.
+    {
+        io::UBXNavAcceptConfirm merge;
+        NavigationData nav;
+        Ephemeris unhealthy = good;
+        unhealthy.health = 63;
+        const auto first = merge.push(makeCopy(unhealthy, 1, 3), nav);
+        EXPECT_FALSE(first.merged);
+        EXPECT_TRUE(first.unhealthy_skipped);
+        EXPECT_EQ(nav.getEphemeris(kG21).size(), 0U);
+        EXPECT_EQ(merge.unconfirmed(), 0U);           // it was never merged
+        EXPECT_TRUE(merge.push(makeCopy(good, 4, 6), nav).conflict);
+        EXPECT_EQ(merge.retracted(), 0U);
+        EXPECT_EQ(nav.getEphemeris(kG21).size(), 0U);
+        EXPECT_TRUE(merge.push(makeCopy(good, 7, 9), nav).merged);   // the second healthy copy confirms and merges
+        EXPECT_EQ(nav.getEphemeris(kG21).size(), 1U);
+        EXPECT_EQ(merge.unhealthySkipped(), 1U);
+    }
+    // Merged healthy, then a copy that says unhealthy: conflict and retraction; the unhealthy record is
+    // confirmed by its repeat and skipped by the health rule, so the satellite ends with no record.
+    {
+        io::UBXNavAcceptConfirm merge;
+        NavigationData nav;
+        Ephemeris unhealthy = good;
+        unhealthy.health = 63;
+        EXPECT_TRUE(merge.push(makeCopy(good, 1, 3), nav).merged);
+        EXPECT_TRUE(merge.push(makeCopy(unhealthy, 4, 6), nav).conflict);
+        EXPECT_EQ(nav.getEphemeris(kG21).size(), 0U);
+        const auto confirmed = merge.push(makeCopy(unhealthy, 7, 9), nav);
+        EXPECT_TRUE(confirmed.confirmed);
+        EXPECT_TRUE(confirmed.unhealthy_skipped);
+        EXPECT_EQ(nav.getEphemeris(kG21).size(), 0U);
+        EXPECT_EQ(merge.retracted(), 1U);
+        EXPECT_EQ(merge.unhealthySkipped(), 1U);
+        EXPECT_EQ(merge.unconfirmed(), 0U);
+    }
+}
+
+TEST(UBXNavAcceptConfirmTest, FallbackKeepsAtMostFourCandidatesAndForgetsTheOldest) {
+    const Ephemeris a = decodedG21();
+    io::UBXNavAcceptConfirm merge;
+    NavigationData nav;
+    ASSERT_TRUE(merge.push(makeCopy(a, 1, 3), nav).merged);
+    uint64_t seq = 4;
+    // Six pairwise different copies of the issue: the seed A and the first copies fall out of the list.
+    for (int i = 1; i <= 6; ++i) {
+        Ephemeris other = a;
+        other.omega0 += 1e-6 * i;
+        EXPECT_TRUE(merge.push(makeCopy(other, seq, seq + 2), nav).conflict);
+        seq += 3;
+    }
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 0U);
+    EXPECT_EQ(merge.conflicts(), 6U);
+    EXPECT_EQ(merge.retracted(), 1U);
+    // The retracted seed has been forgotten: a copy of A no longer confirms anything.
+    EXPECT_FALSE(merge.push(makeCopy(a, seq, seq + 2), nav).confirmed);
+    seq += 3;
+    // The most recent copy is still pending and is confirmed by an equal copy from a new transmission.
+    Ephemeris last = a;
+    last.omega0 += 1e-6 * 6;
+    EXPECT_TRUE(merge.push(makeCopy(last, seq, seq + 2), nav).confirmed);
+    EXPECT_EQ(nav.getEphemeris(kG21).size(), 1U);
+    EXPECT_FALSE(merge.inFallback(kG21));
+}
+
+TEST(UBXNavAcceptConfirmTest, IssueFieldsAreTheOnesTheDecoderUsesToSuppressRepeats) {
+    const struct { const char* name; const std::vector<SfrbxRow>* rows; GNSSTime reference; } cases[] = {
+        {"GPS", &kG21Iode25, kReference}, {"Galileo", &kE30Inav, kReference}, {"BeiDou D1", &kC12D1, kReference},
+        {"GLONASS", &kR04Strings, GNSSTime(2331, 198746.0)}};
+    for (const auto& c : cases) {
+        io::UBXNavDecoder decoder;
+        decoder.setReferenceTime(c.reference);
+        const auto records = decodeRows(decoder, *c.rows);
+        ASSERT_EQ(records.size(), 1U) << c.name;
+        const Ephemeris& base = records.front();
+        EXPECT_TRUE(io::ubxNavSameIssue(base, base)) << c.name;
+        Ephemeris orbit = base;       // a different orbit term is still the same issue (and a different record)
+        orbit.omega0 += 1e-6;
+        orbit.glonass_position.x() += 1.0;
+        EXPECT_TRUE(io::ubxNavSameIssue(base, orbit)) << c.name;
+        EXPECT_FALSE(io::ubxNavSameRecord(base, orbit)) << c.name;
+        Ephemeris issue = base;       // a different issue field is a new issue
+        switch (base.satellite.system) {
+            case GNSSSystem::BeiDou:
+                issue.toe = GNSSTime(base.toe.week, base.toe.tow + 3600.0);
+                break;
+            default:
+                issue.iode = static_cast<uint16_t>(base.iode + 1);
+                break;
+        }
+        EXPECT_FALSE(io::ubxNavSameIssue(base, issue)) << c.name;
+        Ephemeris other_sat = base;
+        other_sat.satellite = SatelliteId(base.satellite.system, base.satellite.prn + 1);
+        EXPECT_FALSE(io::ubxNavSameIssue(base, other_sat)) << c.name;
+    }
+}
