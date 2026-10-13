@@ -833,3 +833,300 @@ TEST(UBXNavDecodeTest, GlonassLnFlagIsDecodedAndMakesTheRecordUnusable) {
     EXPECT_EQ(out.front().health, 0);  // Bn is untouched
     EXPECT_FALSE(io::ubxNavEphemerisUsable(out.front()));
 }
+
+// ---------------------------------------------------------------------------
+// Confirm-twice (design change D2): a record is accepted only when the same
+// record comes from two different transmissions, i.e. the second copy is built
+// entirely from SFRBX messages received after the last message of the first.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Decoder + confirm-twice, driven the way `gnss live --ubx-nav` and `gnss convert --nav-rinex-out` do.
+struct ConfirmRun {
+    io::UBXNavDecoder decoder;
+    io::UBXNavConfirmTwice confirm;
+    std::vector<Ephemeris> accepted;
+    std::vector<io::UBXNavConfirmTwice::Outcome> outcomes;
+    std::vector<io::UBXNavDecoded> copies_seen;
+    size_t emitted_by_decoder = 0;
+
+    ConfirmRun() { decoder.setReferenceTime(kReference); }
+
+    void push(const SfrbxRow& row) {
+        std::vector<Ephemeris> out;
+        std::vector<io::UBXNavDecoded> copies;
+        decoder.pushSfrbx(toSfrbx(row), out, &copies);
+        emitted_by_decoder += out.size();
+        for (const auto& copy : copies) {
+            copies_seen.push_back(copy);
+            const auto outcome = confirm.push(copy);
+            if (outcome.accepted) {
+                accepted.push_back(copy.eph);
+                outcomes.push_back(outcome);
+            }
+        }
+    }
+    void push(const std::vector<SfrbxRow>& rows) {
+        for (const auto& row : rows) push(row);
+    }
+};
+
+// G21 with one data bit of subframe 2 flipped: still a consistent set (IODE untouched), a different record.
+std::vector<SfrbxRow> corruptedG21(uint32_t xor_mask = 0x1000U, size_t word = 5) {
+    std::vector<SfrbxRow> rows = kG21Iode25;
+    rows[1].words[word] ^= xor_mask;
+    return rows;
+}
+
+// Galileo E30 with one data bit of word type 3 flipped and the CRC rewritten (a CRC-clean corrupt set).
+std::vector<SfrbxRow> corruptedE30() {
+    std::vector<SfrbxRow> rows = kE30Inav;
+    setWordBit(rows[2].words, 60, !wordBit(rows[2].words, 60));
+    refreshGalileoCrc(rows[2].words);
+    return rows;
+}
+
+}  // namespace
+
+TEST(UBXNavConfirmTwiceTest, SingleCorruptedCopyIsNeverAccepted) {
+    {
+        ConfirmRun run;
+        run.push(corruptedG21());
+        ASSERT_EQ(run.copies_seen.size(), 1U);  // it decodes: the consistency checks do not catch it
+        EXPECT_TRUE(run.accepted.empty());
+        EXPECT_EQ(run.confirm.unconfirmed(), 1U);
+        EXPECT_EQ(run.confirm.conflicts(), 0U);
+    }
+    {
+        ConfirmRun run;
+        run.push(corruptedE30());
+        ASSERT_EQ(run.copies_seen.size(), 1U);
+        EXPECT_TRUE(run.accepted.empty());
+        EXPECT_EQ(run.confirm.unconfirmed(), 1U);
+    }
+    {
+        // The corrupted copy first, the good set twice after it: the good record is accepted on its
+        // second copy and the corrupted record never is, although it came first and the decoder (which
+        // only suppresses repeats of the last emitted record) treats the good sets as duplicates of it.
+        ConfirmRun run;
+        run.push(corruptedG21());
+        run.push(kG21Iode25);
+        EXPECT_TRUE(run.accepted.empty());
+        EXPECT_EQ(run.confirm.conflicts(), 1U);
+        EXPECT_EQ(run.emitted_by_decoder, 1U);  // the decoder itself emitted only the corrupted one
+        run.push(kG21Iode25);
+        ASSERT_EQ(run.accepted.size(), 1U);
+        io::UBXNavDecoder reference;
+        reference.setReferenceTime(kReference);
+        const auto good = decodeRows(reference, kG21Iode25);
+        ASSERT_EQ(good.size(), 1U);
+        EXPECT_TRUE(io::ubxNavSameRecord(run.accepted.front(), good.front()));
+        EXPECT_FALSE(io::ubxNavSameRecord(run.accepted.front(), run.copies_seen.front().eph));
+    }
+}
+
+TEST(UBXNavConfirmTwiceTest, TwoIdenticalCopiesAreAcceptedOnTheSecond) {
+    const struct { const char* name; const std::vector<SfrbxRow>* rows; } cases[] = {
+        {"GPS", &kG21Iode25}, {"Galileo", &kE30Inav}, {"BeiDou D1", &kC12D1}, {"BeiDou D2", &kC03D2Pages},
+        {"QZSS", &kJ03Lnav}};
+    for (const auto& c : cases) {
+        ConfirmRun run;
+        run.decoder.setReferenceTime(c.rows == &kJ03Lnav ? GNSSTime(2200, 345600.125) : kReference);
+        run.push(*c.rows);
+        EXPECT_TRUE(run.accepted.empty()) << c.name;
+        EXPECT_EQ(run.confirm.unconfirmed(), 1U) << c.name;
+        run.push(*c.rows);
+        ASSERT_EQ(run.accepted.size(), 1U) << c.name;
+        EXPECT_EQ(run.confirm.unconfirmed(), 0U) << c.name;
+        EXPECT_EQ(run.confirm.accepted(), 1U) << c.name;
+        // The first copy was complete when the second copy's first message arrived.
+        EXPECT_LT(run.outcomes.front().first_copy.last_seq, run.copies_seen.back().reception.first_seq) << c.name;
+        // A third copy is a duplicate of the accepted record.
+        run.push(*c.rows);
+        EXPECT_EQ(run.accepted.size(), 1U) << c.name;
+        EXPECT_EQ(run.confirm.counters().at(run.accepted.front().satellite.system).duplicates, 1U) << c.name;
+    }
+    // GLONASS needs the receiver time of day.
+    ConfirmRun glonass;
+    glonass.decoder.setReferenceTime(GNSSTime(2331, 198746.0));
+    // Fields no GLONASS string carries must still be deterministic: the comparison is bit for bit.
+    {
+        io::UBXNavDecoder probe;
+        probe.setReferenceTime(GNSSTime(2331, 198746.0));
+        const auto record = decodeRows(probe, kR04Strings);
+        ASSERT_EQ(record.size(), 1U);
+        EXPECT_EQ(record.front().i_dot, 0.0);
+        EXPECT_EQ(record.front().sv_accuracy, 0.0);
+    }
+    glonass.push(kR04Strings);
+    EXPECT_TRUE(glonass.accepted.empty());
+    glonass.push(kR04Strings);
+    EXPECT_EQ(glonass.accepted.size(), 1U);
+}
+
+TEST(UBXNavConfirmTwiceTest, CopiesThatDifferDoNotConfirmEachOther) {
+    ConfirmRun run;
+    run.push(corruptedG21(0x1000U));        // candidate B
+    run.push(corruptedG21(0x2000U));        // C differs from B: replaces it
+    run.push(kG21Iode25);                   // A differs from C: replaces it
+    run.push(corruptedG21(0x1000U));        // B again, differs from A
+    EXPECT_TRUE(run.accepted.empty());
+    EXPECT_EQ(run.confirm.conflicts(), 3U);
+    EXPECT_EQ(run.confirm.unconfirmed(), 4U);   // all four candidates; none confirmed
+    EXPECT_EQ(run.confirm.counters().at(GNSSSystem::GPS).accepted, 0U);
+    // The same differing sets for Galileo.
+    ConfirmRun galileo;
+    galileo.push(kE30Inav);
+    galileo.push(corruptedE30());
+    EXPECT_TRUE(galileo.accepted.empty());
+    EXPECT_EQ(galileo.confirm.conflicts(), 1U);
+    galileo.push(corruptedE30());           // the second copy of the corrupted set confirms *it*: two
+    EXPECT_EQ(galileo.accepted.size(), 1U); // transmissions agreeing is all the rule can ask for
+}
+
+TEST(UBXNavConfirmTwiceTest, CopiesBuiltFromOverlappingMessagesAreNotTwoTransmissions) {
+    ConfirmRun run;
+    run.push(kG21Iode25);                                  // messages 1-3: the candidate
+    ASSERT_EQ(run.copies_seen.size(), 1U);
+    EXPECT_EQ(run.copies_seen[0].reception.first_seq, 1U);
+    EXPECT_EQ(run.copies_seen[0].reception.last_seq, 3U);
+    // Subframe 3 arrives again; subframes 1 and 2 are still the stored ones from messages 1 and 2.
+    run.push(kG21Iode25[2]);
+    ASSERT_EQ(run.copies_seen.size(), 2U);
+    EXPECT_EQ(run.copies_seen[1].reception.first_seq, 1U);
+    EXPECT_EQ(run.copies_seen[1].reception.last_seq, 4U);
+    EXPECT_TRUE(io::ubxNavSameRecord(run.copies_seen[0].eph, run.copies_seen[1].eph));
+    EXPECT_TRUE(run.accepted.empty());
+    EXPECT_EQ(run.confirm.counters().at(GNSSSystem::GPS).same_transmission, 1U);
+    EXPECT_EQ(run.confirm.unconfirmed(), 1U);
+    // Subframes 2 and 3 again (messages 5, 6); subframe 1 is still the one from message 1.
+    run.push(kG21Iode25[1]);
+    run.push(kG21Iode25[2]);
+    EXPECT_TRUE(run.accepted.empty());
+    EXPECT_EQ(run.confirm.counters().at(GNSSSystem::GPS).same_transmission, 2U);
+    // Subframe 1 again (message 7); subframe 3 (message 8) now completes a set made of messages 7, 5 and 8,
+    // all received after message 3, the last message of the candidate: a second transmission.
+    run.push(kG21Iode25[0]);
+    EXPECT_TRUE(run.accepted.empty());
+    run.push(kG21Iode25[2]);
+    ASSERT_EQ(run.accepted.size(), 1U);
+    EXPECT_EQ(run.copies_seen.back().reception.first_seq, 5U);
+    EXPECT_GT(run.copies_seen.back().reception.first_seq, run.outcomes.front().first_copy.last_seq);
+}
+
+TEST(UBXNavConfirmTwiceTest, ReceptionRangeFollowsTheFramesActuallyUsed) {
+    io::UBXNavDecoder decoder;
+    decoder.setReferenceTime(kReference);
+    std::vector<Ephemeris> out;
+    std::vector<io::UBXNavDecoded> copies;
+    // An unrelated satellite's message and a subframe 4 in between do not belong to the record.
+    decoder.pushSfrbx(toSfrbx(kG24Iode7[0]), out, &copies);   // message 1 (G24)
+    decoder.pushSfrbx(toSfrbx(kG21Iode25[0]), out, &copies);  // message 2
+    decoder.pushSfrbx(toSfrbx(kG02Subframe4Page18), out, &copies);  // message 3 (G02)
+    decoder.pushSfrbx(toSfrbx(kG21Iode25[1]), out, &copies);  // message 4
+    EXPECT_TRUE(copies.empty());
+    decoder.setReferenceTime(GNSSTime(2331, 198712.0));
+    decoder.pushSfrbx(toSfrbx(kG21Iode25[2]), out, &copies);  // message 5 completes G21
+    ASSERT_EQ(copies.size(), 1U);
+    EXPECT_TRUE(copies[0].emitted);
+    EXPECT_EQ(copies[0].reception.first_seq, 2U);
+    EXPECT_EQ(copies[0].reception.last_seq, 5U);
+    EXPECT_DOUBLE_EQ(copies[0].reception.first_gpst_s, kReference.week * 604800.0 + kReference.tow);
+    EXPECT_DOUBLE_EQ(copies[0].reception.last_gpst_s, kReference.week * 604800.0 + 198712.0);
+    // A repeat is reported in `decoded` (emitted = false) but not in `out`.
+    copies.clear();
+    out.clear();
+    decoder.pushSfrbx(toSfrbx(kG21Iode25[2]), out, &copies);
+    EXPECT_TRUE(out.empty());
+    ASSERT_EQ(copies.size(), 1U);
+    EXPECT_FALSE(copies[0].emitted);
+}
+
+TEST(UBXNavConfirmTwiceTest, SameRecordComparesEveryBroadcastFieldAndIgnoresTheTransmissionTime) {
+    io::UBXNavDecoder decoder;
+    decoder.setReferenceTime(kReference);
+    const auto gps = decodeRows(decoder, kG21Iode25);
+    ASSERT_EQ(gps.size(), 1U);
+    io::UBXNavDecoder glo_decoder;
+    glo_decoder.setReferenceTime(GNSSTime(2331, 198746.0));
+    const auto glo = decodeRows(glo_decoder, kR04Strings);
+    ASSERT_EQ(glo.size(), 1U);
+
+    const Ephemeris base = gps.front();
+    EXPECT_TRUE(io::ubxNavSameRecord(base, base));
+    {
+        Ephemeris other = base;
+        other.tof = other.tof + 30.0;  // reception-derived: ignored
+        EXPECT_TRUE(io::ubxNavSameRecord(base, other));
+    }
+    const std::vector<std::pair<const char*, void (*)(Ephemeris&)>> mutations = {
+        {"satellite", [](Ephemeris& e) { e.satellite = SatelliteId(GNSSSystem::GPS, 22); }},
+        {"toe", [](Ephemeris& e) { e.toe = e.toe + 16.0; }},
+        {"toc", [](Ephemeris& e) { e.toc = e.toc + 16.0; }},
+        {"toes", [](Ephemeris& e) { e.toes += 16.0; }},
+        {"sqrt_a", [](Ephemeris& e) { e.sqrt_a = std::nextafter(e.sqrt_a, 1e9); }},
+        {"e", [](Ephemeris& e) { e.e = std::nextafter(e.e, 1.0); }},
+        {"i0", [](Ephemeris& e) { e.i0 = std::nextafter(e.i0, 1e9); }},
+        {"omega0", [](Ephemeris& e) { e.omega0 = std::nextafter(e.omega0, 1e9); }},
+        {"omega", [](Ephemeris& e) { e.omega = std::nextafter(e.omega, 1e9); }},
+        {"m0", [](Ephemeris& e) { e.m0 = std::nextafter(e.m0, 1e9); }},
+        {"delta_n", [](Ephemeris& e) { e.delta_n = std::nextafter(e.delta_n, 1e9); }},
+        {"idot", [](Ephemeris& e) { e.idot = std::nextafter(e.idot, 1e9); }},
+        {"i_dot", [](Ephemeris& e) { e.i_dot = std::nextafter(e.i_dot, 1e9); }},
+        {"omega_dot", [](Ephemeris& e) { e.omega_dot = std::nextafter(e.omega_dot, 1e9); }},
+        {"cuc", [](Ephemeris& e) { e.cuc = std::nextafter(e.cuc, 1e9); }},
+        {"cus", [](Ephemeris& e) { e.cus = std::nextafter(e.cus, 1e9); }},
+        {"crc", [](Ephemeris& e) { e.crc = std::nextafter(e.crc, 1e9); }},
+        {"crs", [](Ephemeris& e) { e.crs = std::nextafter(e.crs, 1e9); }},
+        {"cic", [](Ephemeris& e) { e.cic = std::nextafter(e.cic, 1e9); }},
+        {"cis", [](Ephemeris& e) { e.cis = std::nextafter(e.cis, 1e9); }},
+        {"af0", [](Ephemeris& e) { e.af0 = std::nextafter(e.af0, 1e9); }},
+        {"af1", [](Ephemeris& e) { e.af1 = std::nextafter(e.af1, 1e9); }},
+        {"af2", [](Ephemeris& e) { e.af2 = std::nextafter(e.af2, 1e9); }},
+        {"tgd", [](Ephemeris& e) { e.tgd = std::nextafter(e.tgd, 1e9); }},
+        {"tgd_secondary", [](Ephemeris& e) { e.tgd_secondary = std::nextafter(e.tgd_secondary, 1e9); }},
+        {"week", [](Ephemeris& e) { e.week += 1; }},
+        {"health", [](Ephemeris& e) { e.health = 63; }},
+        {"sv_health", [](Ephemeris& e) { e.sv_health = 63.0; }},
+        {"sv_accuracy", [](Ephemeris& e) { e.sv_accuracy += 1.0; }},
+        {"ura", [](Ephemeris& e) { e.ura += 1; }},
+        {"iodc", [](Ephemeris& e) { e.iodc += 1; }},
+        {"iode", [](Ephemeris& e) { e.iode += 1; }},
+        {"data_source_code", [](Ephemeris& e) { e.data_source_code += 1; }},
+        {"navigation_message_type", [](Ephemeris& e) { e.navigation_message_type = NavigationMessageType::INAV; }},
+        {"valid", [](Ephemeris& e) { e.valid = false; }},
+    };
+    for (const auto& [name, mutate] : mutations) {
+        Ephemeris other = base;
+        mutate(other);
+        EXPECT_FALSE(io::ubxNavSameRecord(base, other)) << name;
+    }
+    {
+        Ephemeris other = base;
+        other.af0 = -0.0;  // bit-for-bit: +0 and -0 differ
+        Ephemeris zero = base;
+        zero.af0 = 0.0;
+        EXPECT_FALSE(io::ubxNavSameRecord(zero, other));
+    }
+    const std::vector<std::pair<const char*, void (*)(Ephemeris&)>> glonass_mutations = {
+        {"glonass_taun", [](Ephemeris& e) { e.glonass_taun = std::nextafter(e.glonass_taun, 1.0); }},
+        {"glonass_gamn", [](Ephemeris& e) { e.glonass_gamn = std::nextafter(e.glonass_gamn, 1.0); }},
+        {"glonass_position", [](Ephemeris& e) { e.glonass_position.x() = std::nextafter(e.glonass_position.x(), 1e9); }},
+        {"glonass_velocity", [](Ephemeris& e) { e.glonass_velocity.y() = std::nextafter(e.glonass_velocity.y(), 1e9); }},
+        {"glonass_acceleration", [](Ephemeris& e) { e.glonass_acceleration.z() = std::nextafter(e.glonass_acceleration.z(), 1e9); }},
+        {"glonass_frequency_channel", [](Ephemeris& e) { e.glonass_frequency_channel += 1; }},
+        {"glonass_frequency_channel_present", [](Ephemeris& e) { e.glonass_frequency_channel_present = !e.glonass_frequency_channel_present; }},
+        {"glonass_age", [](Ephemeris& e) { e.glonass_age += 1; }},
+        {"glonass_ln", [](Ephemeris& e) { e.glonass_ln += 1; }},
+    };
+    for (const auto& [name, mutate] : glonass_mutations) {
+        Ephemeris other = glo.front();
+        mutate(other);
+        EXPECT_FALSE(io::ubxNavSameRecord(glo.front(), other)) << name;
+    }
+    {
+        Ephemeris other = glo.front();
+        other.tof = other.tof + 30.0;
+        EXPECT_TRUE(io::ubxNavSameRecord(glo.front(), other));
+    }
+}

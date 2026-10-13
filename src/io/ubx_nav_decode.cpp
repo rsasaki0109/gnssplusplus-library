@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <cstring>
 
 #include "rtcm_internal.hpp"
 
@@ -201,6 +203,8 @@ void UBXNavDecoder::clear() {
     beidou_.clear();
     glonass_.clear();
     last_emitted_.clear();
+    message_seq_ = 0;
+    decoded_ = nullptr;
 }
 
 void UBXNavDecoder::setReferenceTime(const GNSSTime& gpst) {
@@ -208,9 +212,51 @@ void UBXNavDecoder::setReferenceTime(const GNSSTime& gpst) {
     has_reference_ = true;
 }
 
-bool UBXNavDecoder::emit(const Ephemeris& eph, std::vector<Ephemeris>& out) {
+namespace {
+
+// Ephemeris::Ephemeris() leaves i_dot, sv_health and sv_accuracy uninitialised.  Not every system fills them
+// (GLONASS has no i_dot or sv_accuracy), and confirm-twice compares records bit for bit, so start from zeros.
+Ephemeris freshEphemeris() {
+    Ephemeris eph;
+    eph.i_dot = 0.0;
+    eph.sv_health = 0.0;
+    eph.sv_accuracy = 0.0;
+    return eph;
+}
+
+}  // namespace
+
+UBXNavDecoder::Stamp UBXNavDecoder::nowStamp() const {
+    Stamp stamp;
+    stamp.seq = message_seq_;
+    stamp.gpst_s = has_reference_ ? reference_.week * 604800.0 + reference_.tow
+                                  : std::numeric_limits<double>::quiet_NaN();
+    return stamp;
+}
+
+UBXNavReception UBXNavDecoder::receptionOf(const std::vector<Stamp>& used) {
+    UBXNavReception rx;
+    rx.first_seq = std::numeric_limits<uint64_t>::max();
+    rx.first_gpst_s = std::numeric_limits<double>::quiet_NaN();
+    rx.last_gpst_s = std::numeric_limits<double>::quiet_NaN();
+    for (const Stamp& stamp : used) {
+        if (stamp.seq < rx.first_seq) {
+            rx.first_seq = stamp.seq;
+            rx.first_gpst_s = stamp.gpst_s;
+        }
+        if (stamp.seq >= rx.last_seq) {
+            rx.last_seq = stamp.seq;
+            rx.last_gpst_s = stamp.gpst_s;
+        }
+    }
+    return rx;
+}
+
+bool UBXNavDecoder::emit(const Ephemeris& eph, const UBXNavReception& reception,
+                         std::vector<Ephemeris>& out) {
     auto& st = systemStats(eph.satellite.system);
     const auto last = last_emitted_.find(eph.satellite);
+    bool duplicate = false;
     if (last != last_emitted_.end()) {
         const Ephemeris& l = last->second;
         bool same = false;
@@ -232,10 +278,14 @@ bool UBXNavDecoder::emit(const Ephemeris& eph, std::vector<Ephemeris>& out) {
             default:
                 break;
         }
-        if (same) {
-            ++st.duplicates;
-            return false;
-        }
+        duplicate = same;
+    }
+    if (decoded_ != nullptr) {
+        decoded_->push_back({eph, reception, !duplicate});
+    }
+    if (duplicate) {
+        ++st.duplicates;
+        return false;
     }
     last_emitted_[eph.satellite] = eph;
     ++st.ephemerides;
@@ -243,20 +293,30 @@ bool UBXNavDecoder::emit(const Ephemeris& eph, std::vector<Ephemeris>& out) {
     return true;
 }
 
-size_t UBXNavDecoder::pushSfrbx(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out) {
+size_t UBXNavDecoder::pushSfrbx(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out,
+                                std::vector<UBXNavDecoded>* decoded) {
+    ++message_seq_;
+    decoded_ = decoded;
+    size_t emitted = 0;
     switch (sfrbx.system) {
         case GNSSSystem::GPS:
         case GNSSSystem::QZSS:
-            return pushGps(sfrbx, out);
+            emitted = pushGps(sfrbx, out);
+            break;
         case GNSSSystem::Galileo:
-            return pushGalileo(sfrbx, out);
+            emitted = pushGalileo(sfrbx, out);
+            break;
         case GNSSSystem::BeiDou:
-            return pushBeiDou(sfrbx, out);
+            emitted = pushBeiDou(sfrbx, out);
+            break;
         case GNSSSystem::GLONASS:
-            return pushGlonass(sfrbx, out);
+            emitted = pushGlonass(sfrbx, out);
+            break;
         default:
-            return 0;
+            break;
     }
+    decoded_ = nullptr;
+    return emitted;
 }
 
 // --- GPS / QZSS L1 C/A LNAV -----------------------------------------------------
@@ -286,6 +346,7 @@ size_t UBXNavDecoder::pushGps(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out
     GpsState& state = gps_[{sfrbx.system, sfrbx.sv_id, 0}];
     std::copy(buff, buff + 30, state.subframes.begin() + (id - 1) * 30);
     state.present[static_cast<size_t>(id - 1)] = true;
+    state.stamp[static_cast<size_t>(id - 1)] = nowStamp();
 
     if (id == 4) {
         // Subframe 4 page 18 (SV id 56): ionospheric model (GPS only).
@@ -325,7 +386,7 @@ size_t UBXNavDecoder::pushGps(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out
         return 0;
     }
     const uint8_t* b = state.subframes.data();
-    Ephemeris eph;
+    Ephemeris eph = freshEphemeris();
     int i = 240 * 0 + 24;  // subframe 1
     const double tow1 = getbitu(b, i, 17) * 6.0; i += 17 + 2;
     const int id1 = static_cast<int>(getbitu(b, i, 3)); i += 3 + 2;
@@ -400,7 +461,8 @@ size_t UBXNavDecoder::pushGps(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out
     eph.toe = GNSSTime(week, eph.toes);
     eph.toc = nearestTo(eph.toe, week, toc);
     eph.valid = true;
-    return emit(eph, out) ? 1 : 0;
+    const UBXNavReception reception = receptionOf({state.stamp[0], state.stamp[1], state.stamp[2]});
+    return emit(eph, reception, out) ? 1 : 0;
 }
 
 // --- Galileo E1-B I/NAV ---------------------------------------------------------
@@ -458,6 +520,7 @@ size_t UBXNavDecoder::pushGalileo(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
         slot[i] = static_cast<uint8_t>(getbitu(buff, j, 8));
     }
     state.present[static_cast<size_t>(type)] = true;
+    state.stamp[static_cast<size_t>(type)] = nowStamp();
     if (type != 5) {
         return 0;
     }
@@ -469,7 +532,7 @@ size_t UBXNavDecoder::pushGalileo(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     }
 
     const uint8_t* b = state.words.data();
-    Ephemeris eph;
+    Ephemeris eph = freshEphemeris();
     int type_w[5];
     int iod_nav[4];
     int i = 128;  // word type 1
@@ -558,7 +621,10 @@ size_t UBXNavDecoder::pushGalileo(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     eph.toe = GNSSTime(week + 1024, eph.toes);
     eph.toc = nearestTo(eph.toe, week + 1024, toc);
     eph.valid = true;
-    return emit(eph, out) ? 1 : 0;
+    // Word types 1-5 (type 0 and 6 are not used by the record).
+    const UBXNavReception reception = receptionOf(
+        {state.stamp[1], state.stamp[2], state.stamp[3], state.stamp[4], state.stamp[5]});
+    return emit(eph, reception, out) ? 1 : 0;
 }
 
 // --- BeiDou D1 / D2 -------------------------------------------------------------
@@ -583,7 +649,7 @@ size_t UBXNavDecoder::pushBeiDou(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& 
     }
     const bool geo = ubx_utils::isSfrbxBeiDouD2(sfrbx);
     BeiDouState& state = beidou_[{sfrbx.system, sfrbx.sv_id, static_cast<uint8_t>(geo ? 1 : 0)}];
-    Ephemeris eph;
+    Ephemeris eph = freshEphemeris();
     double toc_bds = 0.0;
     double sow1 = 0.0;
     int bdt_week = 0;
@@ -593,6 +659,7 @@ size_t UBXNavDecoder::pushBeiDou(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& 
     if (!geo) {
         std::copy(buff, buff + 38, state.frames.begin() + (id - 1) * 38);
         state.present[static_cast<size_t>(id - 1)] = true;
+        state.stamp[static_cast<size_t>(id - 1)] = nowStamp();
         if (id != 3) {
             return 0;
         }
@@ -663,6 +730,7 @@ size_t UBXNavDecoder::pushBeiDou(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& 
         }
         std::copy(buff, buff + 38, state.frames.begin() + (pgn - 1) * 38);
         state.present[static_cast<size_t>(pgn - 1)] = true;
+        state.stamp[static_cast<size_t>(pgn - 1)] = nowStamp();
         if (pgn != 10) {
             return 0;
         }
@@ -787,7 +855,17 @@ size_t UBXNavDecoder::pushBeiDou(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& 
     eph.toc = nearestTo(eph.toe, bdt_week + kBdtWeekOffset, toc_bds) + kBdtToGpst;
     eph.tof = GNSSTime(bdt_week + kBdtWeekOffset, sow1) + kBdtToGpst;
     eph.valid = true;
-    return emit(eph, out) ? 1 : 0;
+    // D1: subframes 1-3.  D2: pages 1 and 3-10 (page 2 and the other subframes are not used).
+    std::vector<Stamp> used;
+    if (geo) {
+        for (size_t page : {0, 2, 3, 4, 5, 6, 7, 8, 9}) {
+            used.push_back(state.stamp[page]);
+        }
+    } else {
+        used = {state.stamp[0], state.stamp[1], state.stamp[2]};
+    }
+    const UBXNavReception reception = receptionOf(used);
+    return emit(eph, reception, out) ? 1 : 0;
 }
 
 // --- GLONASS L1OF / L2OF --------------------------------------------------------
@@ -833,6 +911,7 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     }
     std::copy(buff, buff + 10, state.strings.begin() + (m - 1) * 10);
     state.present[static_cast<size_t>(m - 1)] = true;
+    state.stamp[static_cast<size_t>(m - 1)] = nowStamp();
     if (m != 4) {
         return 0;
     }
@@ -848,7 +927,7 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     }
 
     const uint8_t* b = state.strings.data();
-    Ephemeris eph;
+    Ephemeris eph = freshEphemeris();
     int i = 1;
     // string 1
     const int frn1 = static_cast<int>(getbitu(b, i, 4)); i += 4 + 2;
@@ -912,7 +991,9 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     eph.toc = eph.toe;
     eph.week = static_cast<uint16_t>(eph.toe.week);
     eph.valid = true;
-    return emit(eph, out) ? 1 : 0;
+    const UBXNavReception reception =
+        receptionOf({state.stamp[0], state.stamp[1], state.stamp[2], state.stamp[3]});
+    return emit(eph, reception, out) ? 1 : 0;
 }
 
 bool ubxNavEphemerisUsable(const Ephemeris& eph) {
@@ -929,6 +1010,113 @@ bool ubxNavEphemerisUsable(const Ephemeris& eph) {
         default:
             return true;
     }
+}
+
+namespace {
+
+bool sameBits(double a, double b) {
+    return std::memcmp(&a, &b, sizeof(double)) == 0;
+}
+
+bool sameTime(const GNSSTime& a, const GNSSTime& b) {
+    return a.week == b.week && sameBits(a.tow, b.tow);
+}
+
+bool sameVector(const Vector3d& a, const Vector3d& b) {
+    return sameBits(a.x(), b.x()) && sameBits(a.y(), b.y()) && sameBits(a.z(), b.z());
+}
+
+}  // namespace
+
+bool ubxNavSameRecord(const Ephemeris& a, const Ephemeris& b) {
+    // Every Ephemeris member is either compared here or listed as excluded in ubx_nav_decode.hpp:
+    // `tof` (reception-derived: transmission time resolved against the receiver clock) and the
+    // fields this decoder never fills (glonass_cdma_data, glonass_canonical_geph_*).
+    return a.satellite == b.satellite &&
+           sameTime(a.toe, b.toe) && sameTime(a.toc, b.toc) && sameBits(a.toes, b.toes) &&
+           sameBits(a.sqrt_a, b.sqrt_a) && sameBits(a.e, b.e) && sameBits(a.i0, b.i0) &&
+           sameBits(a.omega0, b.omega0) && sameBits(a.omega, b.omega) && sameBits(a.m0, b.m0) &&
+           sameBits(a.delta_n, b.delta_n) && sameBits(a.idot, b.idot) && sameBits(a.i_dot, b.i_dot) &&
+           sameBits(a.omega_dot, b.omega_dot) &&
+           sameBits(a.cuc, b.cuc) && sameBits(a.cus, b.cus) && sameBits(a.crc, b.crc) &&
+           sameBits(a.crs, b.crs) && sameBits(a.cic, b.cic) && sameBits(a.cis, b.cis) &&
+           sameBits(a.af0, b.af0) && sameBits(a.af1, b.af1) && sameBits(a.af2, b.af2) &&
+           sameBits(a.tgd, b.tgd) && sameBits(a.tgd_secondary, b.tgd_secondary) &&
+           sameBits(a.glonass_taun, b.glonass_taun) && sameBits(a.glonass_gamn, b.glonass_gamn) &&
+           sameVector(a.glonass_position, b.glonass_position) &&
+           sameVector(a.glonass_velocity, b.glonass_velocity) &&
+           sameVector(a.glonass_acceleration, b.glonass_acceleration) &&
+           a.glonass_frequency_channel == b.glonass_frequency_channel &&
+           a.glonass_frequency_channel_present == b.glonass_frequency_channel_present &&
+           a.glonass_age == b.glonass_age && a.glonass_ln == b.glonass_ln &&
+           a.week == b.week && a.health == b.health && sameBits(a.sv_health, b.sv_health) &&
+           sameBits(a.sv_accuracy, b.sv_accuracy) && a.ura == b.ura && a.iodc == b.iodc &&
+           a.iode == b.iode && a.data_source_code == b.data_source_code &&
+           a.navigation_message_type == b.navigation_message_type && a.valid == b.valid;
+}
+
+UBXNavConfirmTwice::Outcome UBXNavConfirmTwice::push(const UBXNavDecoded& copy) {
+    Outcome outcome;
+    SatState& sat = sats_[copy.eph.satellite];
+    Counters& counters = counters_[copy.eph.satellite.system];
+    ++counters.copies;
+
+    if (sat.accepted && ubxNavSameRecord(copy.eph, *sat.accepted)) {
+        ++counters.duplicates;
+        return outcome;
+    }
+    if (!sat.candidate) {
+        sat.candidate = copy.eph;
+        sat.candidate_reception = copy.reception;
+        ++counters.candidates;
+        return outcome;
+    }
+    if (!ubxNavSameRecord(copy.eph, *sat.candidate)) {
+        ++counters.conflicts;
+        ++counters.candidates;
+        sat.candidate = copy.eph;
+        sat.candidate_reception = copy.reception;
+        return outcome;
+    }
+    if (copy.reception.first_seq <= sat.candidate_reception.last_seq) {
+        ++counters.same_transmission;  // shares a message with the candidate: not a second transmission
+        return outcome;
+    }
+    ++counters.accepted;
+    outcome.accepted = true;
+    outcome.first_copy = sat.candidate_reception;
+    sat.accepted = copy.eph;
+    sat.candidate.reset();
+    return outcome;
+}
+
+size_t UBXNavConfirmTwice::unconfirmed() const {
+    size_t n = 0;
+    for (const auto& [system, c] : counters_) {
+        n += c.candidates - c.accepted;
+    }
+    return n;
+}
+
+size_t UBXNavConfirmTwice::conflicts() const {
+    size_t n = 0;
+    for (const auto& [system, c] : counters_) {
+        n += c.conflicts;
+    }
+    return n;
+}
+
+size_t UBXNavConfirmTwice::accepted() const {
+    size_t n = 0;
+    for (const auto& [system, c] : counters_) {
+        n += c.accepted;
+    }
+    return n;
+}
+
+void UBXNavConfirmTwice::clear() {
+    sats_.clear();
+    counters_.clear();
 }
 
 }  // namespace io

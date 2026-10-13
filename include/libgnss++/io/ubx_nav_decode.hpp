@@ -37,6 +37,34 @@ struct UBXNavDecodeStats {
 };
 
 /**
+ * @brief Which SFRBX messages a decoded record was assembled from.
+ *
+ * `seq` numbers are the decoder's own count of the SFRBX messages passed to pushSfrbx() (1 for the
+ * first message of any system or signal; out-of-scope messages count too).  A record is built from
+ * the stored frames of its satellite, so its oldest message can be far older than the one that
+ * completed it: `first_seq` is the oldest message of any frame the record actually uses (GPS/QZSS
+ * subframes 1-3, Galileo word types 1-5, BeiDou D1 subframes 1-3 or D2 pages 1, 3-10, GLONASS
+ * strings 1-4) and `last_seq` the completing message.  The `*_gpst_s` times are the receiver GPST
+ * (week * 604800 + tow) of the newest RAWX epoch seen when those messages arrived; NaN while the
+ * decoder has no time reference.
+ */
+struct UBXNavReception {
+    uint64_t first_seq = 0;
+    uint64_t last_seq = 0;
+    double first_gpst_s = 0.0;
+    double last_gpst_s = 0.0;
+};
+
+/// One complete frame set decoded by UBXNavDecoder, before its duplicate suppression.
+struct UBXNavDecoded {
+    Ephemeris eph;
+    UBXNavReception reception;
+    /// True when the decoder also appended it to `out` of pushSfrbx() (it differs from the last
+    /// record emitted for the satellite in the decoder's issue fields); false for a repeat of it.
+    bool emitted = false;
+};
+
+/**
  * @brief Broadcast ephemerides and the GPS Klobuchar set from UBX-RXM-SFRBX.
  *
  * Accumulates the navigation words of each (system, satellite, message
@@ -89,9 +117,13 @@ public:
 
     /**
      * @brief Feed one UBX-RXM-SFRBX message.
+     * @param decoded optional; receives every complete frame set decoded from this message (0 or 1)
+     *        with the messages it was built from, including a repeat of the last emitted record
+     *        that `out` leaves out.  Confirm-twice (UBXNavConfirmTwice) needs those repeats.
      * @return number of ephemerides appended to `out` (0 or 1).
      */
-    size_t pushSfrbx(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out);
+    size_t pushSfrbx(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out,
+                     std::vector<UBXNavDecoded>* decoded = nullptr);
 
     /// True once a GPS Klobuchar set has been decoded.
     bool hasKlobuchar() const { return klobuchar_.valid; }
@@ -101,21 +133,30 @@ public:
     const UBXNavDecodeStats& stats() const { return stats_; }
 
 private:
+    /// Reception of the message that last wrote a stored frame.
+    struct Stamp {
+        uint64_t seq = 0;
+        double gpst_s = 0.0;
+    };
     struct GpsState {
         std::array<uint8_t, 150> subframes{};  ///< 5 x 30 bytes, 24 data bits per word, parity removed
         std::array<bool, 5> present{};
+        std::array<Stamp, 5> stamp{};
     };
     struct GalileoState {
         std::array<uint8_t, 7 * 16> words{};   ///< word types 0-6, 128 bits each
         std::array<bool, 7> present{};
+        std::array<Stamp, 7> stamp{};
     };
     struct BeiDouState {
         std::array<uint8_t, 11 * 38> frames{}; ///< D1: subframes 1-5; D2: pages 1-10 (+ page 102)
         std::array<bool, 11> present{};
+        std::array<Stamp, 11> stamp{};
     };
     struct GlonassState {
         std::array<uint8_t, 40> strings{};     ///< strings 1-4, 80 bits each
         std::array<bool, 4> present{};
+        std::array<Stamp, 4> stamp{};
         std::array<uint8_t, 2> frame_id{};
         bool has_frame_id = false;
     };
@@ -135,11 +176,16 @@ private:
     size_t pushBeiDou(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out);
     size_t pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>& out);
 
-    bool emit(const Ephemeris& eph, std::vector<Ephemeris>& out);
+    Stamp nowStamp() const;
+    /// Reception of a record built from the frames stamped `used` (the newest is the current message).
+    static UBXNavReception receptionOf(const std::vector<Stamp>& used);
+    bool emit(const Ephemeris& eph, const UBXNavReception& reception, std::vector<Ephemeris>& out);
     UBXNavDecodeStats::SystemStats& systemStats(GNSSSystem system) { return stats_.systems[system]; }
 
     GNSSTime reference_;
     bool has_reference_ = false;
+    uint64_t message_seq_ = 0;                ///< SFRBX messages pushed so far
+    std::vector<UBXNavDecoded>* decoded_ = nullptr;  ///< pushSfrbx() output of the call in progress
     UBXNavDecodeStats stats_;
     IonosphereModel klobuchar_;
 
@@ -162,6 +208,85 @@ private:
  *  - GLONASS: Bn MSB == 0 and string-3 ln == 0 (`Ephemeris::glonass_ln`; 0 when not present).
  */
 bool ubxNavEphemerisUsable(const Ephemeris& eph);
+
+/**
+ * @brief True when two decoded records carry the same broadcast content, bit for bit.
+ *
+ * Compared: satellite; toe, toc, toes and week; every orbit, clock and group-delay term (doubles by
+ * bit pattern, so +0 and -0 differ); GLONASS state vector, acceleration, tau_n, gamma_n, frequency
+ * channel (and whether it is present), age and ln; health, sv_health, URA / SISA, IODC, IODE, the
+ * RINEX data-source word and the Galileo I/NAV flag (navigation_message_type), valid.
+ *
+ * Not compared, because the decoder derives them from the moment of reception:
+ *  - `tof` (time of frame): the HOW / word-type-5 / BeiDou SOW / GLONASS tk of the transmission,
+ *    resolved against the receiver time.  It differs between two transmissions of one record.
+ * Not populated by this decoder, so not compared: `glonass_cdma_data`,
+ * `glonass_canonical_geph_data_valid`, `glonass_canonical_geph_reject_reason`.
+ * The week of toe, toc and `week` is resolved against the receiver time, but it follows the
+ * broadcast toe, so two copies of one record agree on it; a copy pair that straddles a week
+ * resolution edge would simply not match (the safe direction: one more transmission is needed).
+ */
+bool ubxNavSameRecord(const Ephemeris& a, const Ephemeris& b);
+
+/**
+ * @brief Confirm-twice (D2): accept a decoded ephemeris only after two transmissions agree.
+ *
+ * A frame set with an undetected error (one GLONASS string that passed the Hamming check put a
+ * satellite up to 9,470 km off in a development log) can decode into a record that passes every
+ * consistency check, and the receiver forwards it once.  The satellite never repeats such a record,
+ * so requiring the same record from two *different transmissions* removes it.  The price is one
+ * transmission interval of the frame set (for GPS/QZSS LNAV, Galileo I/NAV and GLONASS the 30 s frame
+ * repeat; BeiDou D1/D2 likewise one repeat of the frame set) on the first appearance of every new
+ * ephemeris.
+ *
+ * Per satellite:
+ *  - a copy equal to the last accepted record is a duplicate and changes nothing;
+ *  - otherwise, with no candidate, it becomes the candidate;
+ *  - a copy equal to the candidate and built entirely from SFRBX messages received after the last
+ *    message of the candidate (reception.first_seq > candidate.last_seq) confirms it: the record is
+ *    accepted and the candidate cleared;
+ *  - a copy equal to the candidate but built from some of the same messages (or older ones) is the
+ *    same transmission seen again, not a confirmation; the candidate is kept as it is;
+ *  - a copy that differs from the candidate replaces it (a conflict) and nothing is accepted.
+ *
+ * Feed it every copy from UBXNavDecoder::pushSfrbx(..., &decoded), not the deduplicated `out`:
+ * the repeat of a record is exactly what confirms it.
+ */
+class UBXNavConfirmTwice {
+public:
+    struct Counters {
+        size_t copies = 0;            ///< complete frame sets seen
+        size_t candidates = 0;        ///< copies that became the candidate
+        size_t accepted = 0;          ///< candidates confirmed by a second transmission
+        size_t duplicates = 0;        ///< copies equal to the last accepted record
+        size_t conflicts = 0;         ///< candidates replaced by a differing copy
+        size_t same_transmission = 0; ///< equal copies that shared a message with the candidate
+    };
+    struct Outcome {
+        bool accepted = false;
+        UBXNavReception first_copy;   ///< reception of the confirmed candidate (valid when accepted)
+    };
+
+    /// Process one copy.  `copy.eph` is the accepted record when `accepted` is set.
+    Outcome push(const UBXNavDecoded& copy);
+
+    /// Candidates that were not confirmed: replaced ones plus the ones still pending.
+    size_t unconfirmed() const;
+    size_t conflicts() const;
+    size_t accepted() const;
+    /// Per-system counters (keyed by the record's satellite system).
+    const std::map<GNSSSystem, Counters>& counters() const { return counters_; }
+    void clear();
+
+private:
+    struct SatState {
+        std::optional<Ephemeris> accepted;
+        std::optional<Ephemeris> candidate;
+        UBXNavReception candidate_reception;
+    };
+    std::map<SatelliteId, SatState> sats_;
+    std::map<GNSSSystem, Counters> counters_;
+};
 
 namespace ubx_utils {
 
