@@ -160,22 +160,29 @@ decoder, so a base stream without ephemerides is dated correctly. Solutions star
 once a satellite's ephemeris is complete: a median of 17 to 42 s after it is first
 tracked, and minutes for a satellite the receiver does not decode (measured on a
 2.67 h log, [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out)).
-A record is merged at once, from its first complete copy, so a new ephemeris is not
-delayed by a repeat interval. If a later copy of the same issue differs, the merged
-record is taken back out and that satellite is not used again until two equal
-copies from different transmissions exist (accept, then confirm). The cost is that a
-corrupted record is selectable from its first copy until a differing second copy
-retracts it, and one that the satellite never repeats is never retracted.
+A record is merged at once, from its first complete copy, when the satellite has no valid
+record yet, so the start-up is not delayed by a repeat interval. If a later copy of the same issue
+differs, the merged record is taken back out and that satellite is not used again until two equal
+copies from different transmissions exist (accept, then confirm). A new issue of a satellite that
+already holds a valid record of this kind (for example the next two-hourly GPS set) waits for a
+second copy before it is merged, so a copy corrupted in its issue field (a wrong toe or GLONASS `tb`)
+is not merged; and when any record is confirmed, the satellite's unconfirmed records of other
+issues are taken back out, which removes a corrupted first copy merged at first acquisition. The cost
+is that a corrupted record merged at first acquisition is selectable until it is retracted, and one
+that is never followed by a confirmed issue of its satellite is never retracted.
 Records whose health flags mark the satellite unusable (GPS/QZSS health 63,
 Galileo E1-B health or data-validity flags, BeiDou health 1, GLONASS `Bn` or `ln`)
 are skipped and counted; a receiver forwards such default sets, IGS BRDC files do
 not carry them, and without the rule they were picked among the real records of the
 same toe. The `summary:` line gains `ubx_nav_ephemerides=` (records added),
 `ubx_nav_klobuchar=`, `ubx_nav_unhealthy_skipped=`, `ubx_nav_unconfirmed=` (records
-merged and never confirmed by a second transmission, plus, for a satellite in fallback,
-candidates never confirmed), `ubx_nav_conflicts=` (copies that differed from an
-unconfirmed copy of the same issue) and `ubx_nav_retracted=` (merged records taken back
-out because of a conflict). `gnss convert --format ubx --nav-rinex-out`
+merged and never confirmed by a second transmission, plus the candidates never confirmed:
+copies still held or forgotten, and, for a satellite in fallback, replaced or pending ones),
+`ubx_nav_conflicts=` (copies that differed from an
+unconfirmed copy of the same issue), `ubx_nav_retracted=` (merged records taken back
+out because of a conflict or by the clean-up on a confirmation) and
+`ubx_nav_held_new_issue=` (copies of a new issue held until a second transmission because the
+satellite already held a valid record). `gnss convert --format ubx --nav-rinex-out`
 writes every record, unhealthy ones with their health word, as a RINEX navigation
 file; it keeps confirm-twice (a record is written once a second transmission has
 produced the same record), because a file has no start-up latency to protect. Against `--nav-rinex` with the IGS BRDC file, the run on a 5.25 h log with a
