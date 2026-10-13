@@ -529,6 +529,30 @@ bool NavigationData::addEphemerisIfNew(const Ephemeris& eph) {
     return true;
 }
 
+bool NavigationData::removeEphemeris(const Ephemeris& eph) {
+    const auto it = ephemeris_data.find(eph.satellite);
+    if (it == ephemeris_data.end()) {
+        return false;
+    }
+    auto& list = it->second;
+    // compareEphemerisOrder() runs through every field except the satellite (one list per
+    // satellite) and glonass_ln, so equality here means "the same record in every field".
+    const auto match = std::find_if(list.begin(), list.end(), [&eph](const Ephemeris& stored) {
+        return stored.satellite == eph.satellite && stored.glonass_ln == eph.glonass_ln &&
+               compareEphemerisOrder(stored, eph) == 0;
+    });
+    if (match == list.end()) {
+        return false;
+    }
+    list.erase(match);
+    if (list.empty()) {
+        ephemeris_data.erase(it);
+    }
+    satellite_state_cache_.clear();
+    ++revision_;
+    return true;
+}
+
 void NavigationData::clear() {
     ephemeris_data.clear();
     satellite_state_cache_.clear();

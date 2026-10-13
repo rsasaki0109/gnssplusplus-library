@@ -331,6 +331,18 @@ public:
      * Useful when merging ephemerides decoded from a stream that repeats them.
      */
     bool addEphemerisIfNew(const Ephemeris& eph);
+
+    /**
+     * @brief Remove exactly one stored record, identified by every field.
+     *
+     * Erases the first record of `eph.satellite` that equals `eph` in every
+     * field (the same total order addEphemeris() sorts by, plus the satellite
+     * and GLONASS ln); a record that merely shares satellite, issue or toe is
+     * left alone.  Returns true when a record was erased.  Used by
+     * `gnss live --ubx-nav` to take back a record it merged and later found
+     * to conflict with a second copy of the same issue; nothing else calls it.
+     */
+    bool removeEphemeris(const Ephemeris& eph);
     
     /**
      * @brief Get best ephemeris for satellite at given time
