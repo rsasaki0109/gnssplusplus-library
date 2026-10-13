@@ -1445,6 +1445,11 @@ class StreamProtocolCases:
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             self.assertIn("sfrbx=19", result.stdout)
+
+            quiet = self.run_gnss("ubx-info", "--input", str(input_path), "--quiet")
+            self.assertEqual(quiet.returncode, 0, msg=quiet.stderr)
+            self.assertIn("sfrbx=19", quiet.stdout)
+            self.assertNotIn("subframe:", quiet.stdout)
             for expected in (
                 "subframe: system=GPS sv=10 words=10 kind=GPS_LNAV frame_id=3 sig_id=0",
                 "subframe: system=Galileo sv=4 words=8 kind=GAL_INAV frame_id=0 sig_id=1",
