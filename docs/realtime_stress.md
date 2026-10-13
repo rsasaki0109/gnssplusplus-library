@@ -284,8 +284,9 @@ numbers changed between the two (see the last bullet).
 * `--kinematic-post-filter` (opt-in) lowers multi-GNSS Wrong/FIX only slightly (6.6 → 5.0 %, 5.2 → 4.3 %,
   1.1 → 0.4 %, 22.9 → 21.1 %). It cuts the all-solution 3D p95 several-fold (Shinjuku Trimble 65 → 5 m) by
   withholding 19–33 % of solutions. It does not remove wrong fixes.
-* On the PPC runs the multi-GNSS low-cost Wrong/FIX is 1.2–3.7 %
-  (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)).
+* On the PPC runs the multi-GNSS low-cost Wrong/FIX was 1.2–3.7 %
+  (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)), measured before #615 and not
+  re-measured since.
 * `gnss live` lacks `gnss solve`'s whole-solution post-filters.
 * The GPS-only numbers (48.7 % and 32.4 %) come from the GPS-only replay described below.
 * Change since the first run of this contract (`b9a6e243`, which gave Wrong/FIX 12.1 %, 5.5 %, 1.0 % and

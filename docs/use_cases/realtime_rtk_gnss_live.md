@@ -357,7 +357,8 @@ number of wrong fixes falls on the two Trimble runs but rises on Shinjuku
 u-blox (202 to 258), and on Odaiba u-blox 23 % of the fixes are wrong. Most are
 decimetres to a few metres off rather than tens of metres, which still matters
 for anything that trusts the FIX flag. On the PPC replays the multi-GNSS
-low-cost Wrong/FIX is 1.2 to 3.7 %. An earlier run of the same contract on
+low-cost Wrong/FIX was 1.2 to 3.7 % (measured before #615, not re-measured).
+An earlier run of the same contract on
 `b9a6e243` gave 12.1 %, 5.5 %, 1.0 % and 22.2 % in the table order; #615, the
 deterministic same-toe ephemeris order, changed the multi-GNSS numbers
 ([details](../realtime_stress.md#wrong-fix-on-the-real-time-path)).
