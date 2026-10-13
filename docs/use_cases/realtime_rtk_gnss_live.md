@@ -160,18 +160,25 @@ decoder, so a base stream without ephemerides is dated correctly. Solutions star
 once a satellite's ephemeris is complete: a median of 17 to 42 s after it is first
 tracked, and minutes for a satellite the receiver does not decode (measured on a
 2.67 h log, [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out)).
-A record is merged only after a second transmission has produced the same record,
-which adds one repeat interval to each new ephemeris (30 s at the median on that log), and
-removes a record that was corrupted in one transmission.
+A record is merged at once, from its first complete copy, so a new ephemeris is not
+delayed by a repeat interval. If a later copy of the same issue differs, the merged
+record is taken back out and that satellite is not used again until two equal
+copies from different transmissions exist (accept, then confirm). The cost is that a
+corrupted record is selectable from its first copy until a differing second copy
+retracts it, and one that the satellite never repeats is never retracted.
 Records whose health flags mark the satellite unusable (GPS/QZSS health 63,
 Galileo E1-B health or data-validity flags, BeiDou health 1, GLONASS `Bn` or `ln`)
 are skipped and counted; a receiver forwards such default sets, IGS BRDC files do
 not carry them, and without the rule they were picked among the real records of the
-same toe. The `summary:` line gains `ubx_nav_ephemerides=`, `ubx_nav_klobuchar=`,
-`ubx_nav_unhealthy_skipped=`, `ubx_nav_unconfirmed=` (candidates never confirmed) and
-`ubx_nav_conflicts=` (candidates replaced by a differing copy). `gnss convert --format ubx --nav-rinex-out`
+same toe. The `summary:` line gains `ubx_nav_ephemerides=` (records added),
+`ubx_nav_klobuchar=`, `ubx_nav_unhealthy_skipped=`, `ubx_nav_unconfirmed=` (records
+merged and never confirmed by a second transmission, plus, for a satellite in fallback,
+candidates never confirmed), `ubx_nav_conflicts=` (copies that differed from an
+unconfirmed copy of the same issue) and `ubx_nav_retracted=` (merged records taken back
+out because of a conflict). `gnss convert --format ubx --nav-rinex-out`
 writes every record, unhealthy ones with their health word, as a RINEX navigation
-file. Against `--nav-rinex` with the IGS BRDC file, the run on a 5.25 h log with a
+file; it keeps confirm-twice (a record is written once a second transmission has
+produced the same record), because a file has no start-up latency to protect. Against `--nav-rinex` with the IGS BRDC file, the run on a 5.25 h log with a
 3.6 km baseline gave 99.9 % of the solutions, 99.9 % of the FIXED epochs and the
 same FIXED position to 12.6 mm at most. That is the log the rule was developed on:
 **`--ubx-nav` is not validated end to end on a log that was held out**, and not on a

@@ -229,8 +229,9 @@ latest one before the host clock as in RTKLIB, so old logs decode correctly.
 
 **`gnss live --ubx-nav`** (default off; without it the `.pos`, the options and
 the output are byte-identical to earlier releases). Decoded ephemerides are
-confirmed twice (below) and then merged with `addEphemerisIfNew`, like RTCM
-ephemerides. The first decoded GPS
+merged with `addEphemerisIfNew`, like RTCM ephemerides: the first copy of a
+record at once, taken back out if a later copy of the same issue differs
+(accept, then confirm; below). The first decoded GPS
 Klobuchar set is used when no ionosphere model is valid yet; a `--nav-rinex`
 that has an `IONOSPHERIC CORR` header wins. With the flag the rover's first
 RAWX epoch is read before the base and becomes the GPST reference of the base
@@ -240,23 +241,75 @@ record whose health marks the satellite unusable and counts it: GPS and QZSS
 LNAV `svh` other than 0, Galileo E1-B `HS` or `DVS` other than 0, BeiDou `SatH1`
 other than 0, GLONASS `Bn` MSB set or string-3 `ln` set (`Ephemeris::glonass_ln`,
 filled by this decoder only). The `summary:` line gains `ubx_nav_ephemerides=`
-(records added), `ubx_nav_klobuchar=` (0/1), `ubx_nav_unhealthy_skipped=`,
-`ubx_nav_unconfirmed=` and `ubx_nav_conflicts=`. `--ubx-nav` needs `--rover-ubx`.
+(records added to the database, a record that was retracted and merged again
+counts twice), `ubx_nav_klobuchar=` (0/1), `ubx_nav_unhealthy_skipped=`,
+`ubx_nav_unconfirmed=`, `ubx_nav_conflicts=` and `ubx_nav_retracted=`
+(defined below). `--ubx-nav` needs `--rover-ubx`.
 
-**Confirm-twice.** `--ubx-nav` and `--nav-rinex-out` accept a record only when the
-decoder has produced the same record twice from different transmissions
-(`UBXNavConfirmTwice`). "The same" is every broadcast field of the `Ephemeris`,
+**Accept, then confirm (`gnss live --ubx-nav`).** Waiting for a second
+transmission before using an ephemeris (confirm-twice, below) delays every record
+by one repeat of its frame set: at a cold start the filter had ephemerides for
+only a few satellites for the first minute, and on one development log it fixed
+one L1 cycle off and held that fix. `--ubx-nav` therefore merges a record at once
+and uses the second copy only to catch a corrupted one
+(`UBXNavAcceptConfirm`, `ubx_nav_decode.hpp`). Per satellite, on every complete
+frame set the decoder produces (also the repeats it does not emit):
+
+1. A copy of an issue not seen for that satellite (the first record, or a new
+   IODE/toe) is merged at once, after the health rule. The previous record stays.
+   "Issue" is what the decoder itself uses to tell repeats: GPS/QZSS IODE, IODC,
+   toe and toc; Galileo IODnav, toe and toc; BeiDou toe; GLONASS IODE.
+2. A later copy of that issue that is equal in every broadcast field (as in
+   confirm-twice) and assembled entirely from SFRBX messages received after the
+   first copy's last message *confirms* it. An equal copy that reuses a message of
+   the first one is the same transmission and changes nothing.
+3. A later copy that differs is a *conflict*. The record that was merged is removed
+   from the navigation data (`NavigationData::removeEphemeris`, which erases only a
+   record equal in every field, so a record that came from `--nav-rinex` or RTCM is
+   never touched), and that satellite falls back to confirm-twice: nothing is merged
+   for it until two equal copies from different transmissions exist. The first copy
+   stays a pending candidate next to the differing one, because either may be the
+   corrupted one, so the next copy equal to the first confirms it (at most four
+   candidates are kept). After a confirmation the satellite is back at rule 1 for its
+   next record.
+4. A copy that differs from a record that was already confirmed is ignored: two
+   agreeing transmissions outweigh one differing copy, so a confirmed record is never
+   retracted.
+
+Counters on the `summary:` line: `ubx_nav_conflicts=` is the number of copies that
+differed from an unconfirmed copy (a conflict at rule 3, and every later copy that
+matched no pending candidate of a satellite in fallback); `ubx_nav_retracted=`
+the records actually removed from the navigation data by rule 3;
+`ubx_nav_unconfirmed=` the records merged and never confirmed (still unconfirmed at
+the end, or forgotten unconfirmed), plus, for satellites in fallback, the
+candidates that were never confirmed (replaced or left pending; the retracted record
+is counted by `ubx_nav_retracted=` and not again here). A single transmission of a
+record, such as a satellite that sets after one frame set, therefore shows up as
+`ubx_nav_unconfirmed=`, not as a conflict.
+
+The price of merging at once is the exposure: a copy corrupted in a way the
+decoder's checks do not catch is in the navigation data from its first copy until a
+second copy of the same issue arrives (one repeat of the frame set, 30 s at the
+median) and is retracted. A corrupted record that its satellite never repeats is
+never retracted and stays selectable for its validity window; it is the one thing
+confirm-twice removes that this does not, and `gnss convert --nav-rinex-out`
+therefore keeps confirm-twice. A corruption that lands in an issue field makes the
+copy look like a new issue (rule 1), and is merged at once as well.
+
+**Confirm-twice (`gnss convert --nav-rinex-out`).** The converter writes a record only
+when the decoder has produced the same record twice from different transmissions
+(`UBXNavConfirmTwice`); a file has no start-up latency to protect. (`--ubx-nav`
+uses it only for a satellite in fallback, above.) "The same" is every broadcast field of the `Ephemeris`,
 bit for bit; only `tof`, which is resolved against the receiver clock, is left
 out. "Different transmissions" means the second copy is assembled entirely from
 SFRBX messages received after the last message of the first, so a copy that
 reuses a stored subframe of the first one does not count. A copy that differs
-from the pending one replaces it (`ubx_nav_conflicts=`, counted in `nav_rinex:`
-as `conflicts=`), a copy equal to an already accepted record is a duplicate, and
-`ubx_nav_unconfirmed=` / `unconfirmed=` counts the pending ones that were never
-confirmed, replaced or left at the end. A record that was corrupted in one
+from the pending one replaces it (counted in `nav_rinex:` as `conflicts=`), a copy
+equal to an already accepted record is a duplicate, and `unconfirmed=` counts the
+pending ones that were never confirmed, replaced or left at the end. A record that was corrupted in one
 transmission and passed the checks above (the GLONASS record of the measurement
 below) is therefore never accepted, at the price of one more transmission before
-every new ephemeris is used: 30 s at the median, 60 to 111 s at the 95th
+every new ephemeris is written: 30 s at the median, 60 to 111 s at the 95th
 percentile and 240 s at most per system on the 2.67 h log below. The decoder
 (`UBXNavDecoder`, also behind `gnss ubx-info --decode-nav`) still reports every
 record, so the counts under "Measured" are decoder output, before this step.
@@ -266,7 +319,7 @@ ephemerides as RINEX 3.04 navigation, with the last decoded Klobuchar set as
 `GPSA`/`GPSB` header lines, when the input ends, and prints a `nav_rinex:` line
 (count per system, `klobuchar=0|1`, `unconfirmed=`, `conflicts=`). It writes every record the receiver sent,
 unhealthy ones included, with their health word: a converter keeps what it was
-given, and only once confirmed twice. It is separate from `--nav-out`, which keeps its own converter-side
+given, and only once confirmed twice (unchanged by accept-then-confirm). It is separate from `--nav-out`, which keeps its own converter-side
 decoders and writes no Klobuchar lines. `gnss ubx-info --decode-nav` prints a
 `nav_decode:` line with the same counts (also unfiltered).
 
@@ -283,7 +336,10 @@ against the time. GLONASS strings are protected by a Hamming code only, which is
 accepted with the single-error allowance of RTKLIB and cannot reject every
 multi-bit error: one record in the measurement below (R16, `tb` 12 where the other
 strings of the frame say 15) is such a corruption, decoded identically by RTKLIB;
-confirm-twice does not accept it, because the satellite never repeats it.
+confirm-twice (`--nav-rinex-out`, and a satellite in fallback) does not accept it,
+because the satellite never repeats it. `--ubx-nav` merges a first copy at once, so
+a record like that one is merged and, with no second copy to differ from it, stays
+(counted in `ubx_nav_unconfirmed=`) for its validity window.
 
 `gnss live --rover-ubx` reads a UBX file in 4096-byte chunks and takes the first
 RAWX epoch of each chunk, so a log with several epochs per chunk loses the others
