@@ -1444,8 +1444,13 @@ class StreamProtocolCases:
             input_path = temp_root / "x20_with_time.ubx"
             output_path = temp_root / "x20_decoded.nav"
             legacy_path = temp_root / "x20_legacy.nav"
+            # Two transmissions of the excerpt: --nav-rinex-out writes a record once a second
+            # transmission produced the same record (confirm-twice).
             input_path.write_bytes(
-                build_rawx_message(week=2374, tow=244800.0) + build_x20_sfrbx_excerpt()
+                build_rawx_message(week=2374, tow=244800.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244801.0)
+                + build_x20_sfrbx_excerpt()
             )
 
             result = self.run_gnss(
@@ -1462,7 +1467,10 @@ class StreamProtocolCases:
             )
 
             self.assertEqual(result.returncode, 0, msg=result.stderr)
-            self.assertIn("nav_rinex: ephemerides=3 GPS=1 Galileo=1 BeiDou=1 klobuchar=0", result.stdout)
+            self.assertIn(
+                "nav_rinex: ephemerides=3 GPS=1 Galileo=1 BeiDou=1 klobuchar=0 unconfirmed=0 conflicts=0",
+                result.stdout,
+            )
             exported = output_path.read_text(encoding="ascii")
             self.assertTrue(exported.startswith("     3.04           NAVIGATION DATA     M"))
             self.assertIn("END OF HEADER", exported)
@@ -1498,7 +1506,7 @@ class StreamProtocolCases:
             temp_root = Path(temp_dir)
             input_path = temp_root / "x20_no_time.ubx"
             output_path = temp_root / "x20_no_time.nav"
-            input_path.write_bytes(build_x20_sfrbx_excerpt())
+            input_path.write_bytes(build_x20_sfrbx_excerpt() * 2)  # two transmissions (confirm-twice)
 
             result = self.run_gnss(
                 "convert",
@@ -1514,6 +1522,8 @@ class StreamProtocolCases:
             self.assertEqual(result.returncode, 0, msg=result.stderr)
             # GPS needs the receiver time to resolve the 10-bit week; E1-B and D1 carry full weeks.
             self.assertIn("nav_rinex: ephemerides=2 Galileo=1 BeiDou=1 klobuchar=0", result.stdout)
+            # The GPS sets cannot be decoded without a time reference, so they are not even candidates.
+            self.assertIn("unconfirmed=0 conflicts=0", result.stdout)
             exported = output_path.read_text(encoding="ascii")
             self.assertNotIn("\nG10", exported)
             self.assertIn("E04 2025  7  8 19 20  0", exported)
@@ -1530,9 +1540,7 @@ class StreamProtocolCases:
             output_path = temp_root / "iono.nav"
             input_path.write_bytes(
                 build_rawx_message()
-                + build_gps_lnav_sfrbx_message(1)
-                + build_gps_lnav_sfrbx_message(2)
-                + build_gps_lnav_sfrbx_message(3)
+                + b"".join(build_gps_lnav_sfrbx_message(n) for _ in range(2) for n in (1, 2, 3))
                 + build_sfrbx_words_message(0, 2, 0, 0, page18)
             )
 
@@ -1568,8 +1576,10 @@ class StreamProtocolCases:
             output_path = temp_root / "health.nav"
             input_path.write_bytes(
                 build_rawx_message()
-                + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=12) for n in (1, 2, 3))
-                + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=13, health=63) for n in (1, 2, 3))
+                + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=12) for _ in range(2) for n in (1, 2, 3))
+                + b"".join(
+                    build_gps_lnav_sfrbx_message(n, sv_id=13, health=63) for _ in range(2) for n in (1, 2, 3)
+                )
             )
 
             result = self.run_gnss(
@@ -1592,6 +1602,45 @@ class StreamProtocolCases:
                     # broadcast orbit 6 line: SV accuracy, SV health, TGD, IODC
                     health_by_sat[line[:3]] = float(lines[index + 6][23:42].replace("D", "E"))
             self.assertEqual(health_by_sat, {"G12": 0.0, "G13": 63.0})
+
+    def test_convert_nav_rinex_out_needs_a_second_transmission(self) -> None:
+        # Confirm-twice: one transmission of a set writes nothing (the record stays a candidate); two
+        # differing ones (health 0 then 63, same IODE/toe) conflict and write nothing; the same one twice
+        # is written once.
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_nav_rinex_d2_") as temp_dir:
+            temp_root = Path(temp_dir)
+
+            def convert(name: str, healths) -> str:
+                input_path = temp_root / f"{name}.ubx"
+                output_path = temp_root / f"{name}.nav"
+                input_path.write_bytes(
+                    build_rawx_message()
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=12, health=h) for h in healths for n in (1, 2, 3)
+                    )
+                )
+                result = self.run_gnss(
+                    "convert",
+                    "--format",
+                    "ubx",
+                    "--input",
+                    str(input_path),
+                    "--nav-rinex-out",
+                    str(output_path),
+                    "--quiet",
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                return result.stdout
+
+            self.assertIn(
+                "nav_rinex: ephemerides=0 klobuchar=0 unconfirmed=1 conflicts=0", convert("single", (0,))
+            )
+            self.assertIn(
+                "nav_rinex: ephemerides=0 klobuchar=0 unconfirmed=2 conflicts=1", convert("differ", (0, 63))
+            )
+            self.assertIn(
+                "nav_rinex: ephemerides=1 GPS=1 klobuchar=0 unconfirmed=0 conflicts=0", convert("twice", (0, 0))
+            )
 
     def test_convert_nav_rinex_out_requires_ubx_format(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_convert_nav_rinex_fmt_") as temp_dir:

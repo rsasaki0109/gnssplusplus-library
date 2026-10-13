@@ -124,7 +124,8 @@ void printUsage(const char* argv0) {
         << "  --sfrbx-out <file>        Export UBX RXM-SFRBX subframes to CSV\n"
         << "  --nav-rinex-out <file>    UBX only: decode RXM-SFRBX into broadcast ephemerides (GPS/QZSS LNAV,\n"
         << "                            Galileo E1-B I/NAV, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set and\n"
-        << "                            write them as a RINEX 3.04 nav file when the input ends\n"
+        << "                            write them as a RINEX 3.04 nav file when the input ends (a record is\n"
+        << "                            written once a second transmission produced the same record)\n"
         << "  --gps-week <week>         RTCM only: GPS week of the data (RTCM messages carry\n"
         << "                            only the time of week; default: current week)\n"
         << "  --limit <count>           Stop after this many decoded messages (0 = all)\n"
@@ -1482,8 +1483,12 @@ int runUBXConversion(const ConvertConfig& config) {
     std::map<libgnss::SatelliteId, BdsD2FrameSet> bds_d2_frames;
     std::map<libgnss::SatelliteId, libgnss::Ephemeris> last_exported_ephemeris;
     // --nav-rinex-out: library SFRBX decoder; the time reference is the RAWX epoch time.
+    // Records are written once confirmed by a second transmission (UBXNavConfirmTwice), health as received.
     libgnss::io::UBXNavDecoder nav_rinex_decoder;
+    libgnss::io::UBXNavConfirmTwice nav_rinex_confirm;
     std::vector<libgnss::Ephemeris> nav_rinex_ephemerides;
+    std::vector<libgnss::Ephemeris> nav_rinex_new;
+    std::vector<libgnss::io::UBXNavDecoded> nav_rinex_copies;
     libgnss::GNSSTime nav_time_hint = currentGpstApprox();
     bool has_nav_time_hint = false;
 
@@ -1529,7 +1534,14 @@ int runUBXConversion(const ConvertConfig& config) {
                     nav_rinex_decoder.setReferenceTime(event.observation.time);
                 }
                 if (event.has_sfrbx) {
-                    nav_rinex_decoder.pushSfrbx(event.sfrbx, nav_rinex_ephemerides);
+                    nav_rinex_new.clear();
+                    nav_rinex_copies.clear();
+                    nav_rinex_decoder.pushSfrbx(event.sfrbx, nav_rinex_new, &nav_rinex_copies);
+                    for (const auto& copy : nav_rinex_copies) {
+                        if (nav_rinex_confirm.push(copy).accepted) {
+                            nav_rinex_ephemerides.push_back(copy.eph);
+                        }
+                    }
                 }
             }
 
@@ -1911,7 +1923,9 @@ int runUBXConversion(const ConvertConfig& config) {
         for (const auto& [system, count] : per_system) {
             std::cout << " " << systemName(system) << "=" << count;
         }
-        std::cout << " klobuchar=" << (nav_rinex_decoder.hasKlobuchar() ? 1 : 0) << "\n";
+        std::cout << " klobuchar=" << (nav_rinex_decoder.hasKlobuchar() ? 1 : 0)
+                  << " unconfirmed=" << nav_rinex_confirm.unconfirmed()
+                  << " conflicts=" << nav_rinex_confirm.conflicts() << "\n";
     }
 
     const auto stats = decoder.getStats();

@@ -142,10 +142,14 @@ class RuntimeReceiverCases:
         with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_") as temp_dir:
             temp_root = Path(temp_dir)
             rover_path = temp_root / "rover.ubx"
+            # The excerpt is sent twice: confirm-twice (D2) accepts a record when a second transmission
+            # produces the same record, so a single copy would be counted as unconfirmed instead.
             rover_path.write_bytes(
                 build_rawx_message(week=2374, tow=244800.0)
                 + build_x20_sfrbx_excerpt()
                 + build_rawx_message(week=2374, tow=244801.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244802.0)
             )
             common = [
                 "live",
@@ -163,7 +167,67 @@ class RuntimeReceiverCases:
 
             enabled = self.run_gnss(*common, "--ubx-nav")
             self.assertIn("rover_source=ubx", enabled.stdout)
-            self.assertIn("ubx_nav_ephemerides=3 ubx_nav_klobuchar=0", enabled.stdout)
+            self.assertIn(
+                "ubx_nav_ephemerides=3 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0",
+                enabled.stdout,
+            )
+
+            # One transmission only: the three records stay candidates and none reaches the database.
+            single_path = temp_root / "rover_single.ubx"
+            single_path.write_bytes(
+                build_rawx_message(week=2374, tow=244800.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244801.0)
+            )
+            single = self.run_gnss(*common[:2], str(single_path), *common[3:], "--ubx-nav")
+            self.assertIn(
+                "ubx_nav_ephemerides=0 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=3 ubx_nav_conflicts=0",
+                single.stdout,
+            )
+
+    def test_live_ubx_nav_does_not_accept_two_differing_copies(self) -> None:
+        # Two complete GPS sets of G12 that differ in the health field (the same IODE, toe and toc, so the
+        # decoder itself would call the second a repeat): they do not confirm each other. A third copy equal
+        # to the second then does.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_conflict_") as temp_dir:
+            temp_root = Path(temp_dir)
+
+            def run(healths):
+                rover_path = temp_root / ("rover_" + "_".join(str(h) for h in healths) + ".ubx")
+                rover_path.write_bytes(
+                    build_rawx_message()
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=12, health=h) for h in healths for n in (1, 2, 3)
+                    )
+                    + build_rawx_message(tow=345601.125)
+                )
+                return self.run_gnss(
+                    "live",
+                    "--rover-ubx",
+                    str(rover_path),
+                    "--base-rtcm",
+                    str(fixture),
+                    "--out",
+                    str(temp_root / "live.pos"),
+                    "--ubx-nav",
+                    "--quiet",
+                )
+
+            differing = run((0, 63))
+            self.assertIn(
+                "ubx_nav_ephemerides=0 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=2 ubx_nav_conflicts=1",
+                differing.stdout,
+            )
+            confirmed = run((0, 63, 63))
+            self.assertIn(
+                "ubx_nav_ephemerides=0 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
+                "ubx_nav_unconfirmed=1 ubx_nav_conflicts=1",
+                confirmed.stdout,
+            )
     def test_live_ubx_nav_dates_a_base_without_ephemerides_from_the_rover_time(self) -> None:
         # The recorded base stream with its ephemeris messages removed has no GPST reference, so its
         # TOW-only epochs are dated from the host clock. With --ubx-nav the rover's first RAWX epoch
@@ -213,11 +277,16 @@ class RuntimeReceiverCases:
 
             def run(g13_health: int):
                 rover_path = temp_root / f"rover_{g13_health}.ubx"
+                # Two transmissions of each set (confirm-twice), health is applied after it.
                 rover_path.write_bytes(
                     build_rawx_message()
-                    + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=12) for n in (1, 2, 3))
                     + b"".join(
-                        build_gps_lnav_sfrbx_message(n, sv_id=13, health=g13_health) for n in (1, 2, 3)
+                        build_gps_lnav_sfrbx_message(n, sv_id=12) for _ in range(2) for n in (1, 2, 3)
+                    )
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=13, health=g13_health)
+                        for _ in range(2)
+                        for n in (1, 2, 3)
                     )
                     + build_rawx_message(tow=345601.125)
                 )
@@ -235,12 +304,14 @@ class RuntimeReceiverCases:
 
             unhealthy = run(63)
             self.assertIn(
-                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1",
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0",
                 unhealthy.stdout,
             )
             healthy = run(0)
             self.assertIn(
-                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0",
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0 "
+                "ubx_nav_unconfirmed=0 ubx_nav_conflicts=0",
                 healthy.stdout,
             )
 
