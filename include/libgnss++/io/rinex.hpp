@@ -346,6 +346,16 @@ public:
      */
     bool createNavigationFile(const std::string& filename,
                             const RINEXReader::RINEXHeader& header);
+
+    /**
+     * @brief Create navigation file with a GPS Klobuchar set in the header
+     *
+     * Writes the `GPSA` / `GPSB` IONOSPHERIC CORR lines (RINEX 3, 4 x E12.4)
+     * when `klobuchar.valid`; otherwise identical to the two-argument overload.
+     */
+    bool createNavigationFile(const std::string& filename,
+                            const RINEXReader::RINEXHeader& header,
+                            const IonosphereModel& klobuchar);
     
     /**
      * @brief Write observation epoch
@@ -383,6 +393,7 @@ private:
 
     std::ofstream file_;
     RINEXReader::RINEXHeader header_;
+    IonosphereModel header_klobuchar_;
     std::unique_ptr<ObservationBuffer> observation_buffer_;
     double checkpoint_interval_s_ = 5.0;
     

@@ -107,6 +107,7 @@ class RuntimeReceiverCases:
         self.assertIn("Usage:", result.stdout)
         self.assertIn("--rover-rtcm", result.stdout)
         self.assertIn("--rover-ubx", result.stdout)
+        self.assertIn("--ubx-nav", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
         self.assertIn("--mode <kinematic|moving-base>", result.stdout)
         self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
@@ -119,6 +120,50 @@ class RuntimeReceiverCases:
         self.assertIn("--min-full-ratio-for-subset-ar", result.stdout)
         self.assertIn("--max-pos-jump-rate", result.stdout)
         self.assertIn("--max-float-prefit-rms", result.stdout)
+    def test_live_ubx_nav_requires_a_ubx_rover(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_arg_") as temp_dir:
+            temp_root = Path(temp_dir)
+            result = self.run_gnss(
+                "live",
+                "--rover-rtcm",
+                str(temp_root / "rover.rtcm3"),
+                "--base-rtcm",
+                str(temp_root / "base.rtcm3"),
+                "--ubx-nav",
+                "--quiet",
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("--ubx-nav requires --rover-ubx", result.stderr)
+    def test_live_ubx_nav_merges_sfrbx_ephemerides_only_when_enabled(self) -> None:
+        # Real X20 frames (GPS G10, Galileo E04, BeiDou C27) after a RAWX epoch that supplies the
+        # GPST reference; the base is the recorded RTCM fixture, which is not time-aligned with the
+        # rover, so no solution is written: the summary counters are what is checked.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_path = temp_root / "rover.ubx"
+            rover_path.write_bytes(
+                build_rawx_message(week=2374, tow=244800.0)
+                + build_x20_sfrbx_excerpt()
+                + build_rawx_message(week=2374, tow=244801.0)
+            )
+            common = [
+                "live",
+                "--rover-ubx",
+                str(rover_path),
+                "--base-rtcm",
+                str(fixture),
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            ]
+            plain = self.run_gnss(*common)
+            self.assertIn("rover_source=ubx", plain.stdout)
+            self.assertNotIn("ubx_nav_ephemerides", plain.stdout)
+
+            enabled = self.run_gnss(*common, "--ubx-nav")
+            self.assertIn("rover_source=ubx", enabled.stdout)
+            self.assertIn("ubx_nav_ephemerides=3 ubx_nav_klobuchar=0", enabled.stdout)
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)

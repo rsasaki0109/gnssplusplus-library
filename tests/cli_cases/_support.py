@@ -701,15 +701,15 @@ def build_nav_pvt_message() -> bytes:
     return build_ubx_message(0x01, 0x07, payload)
 
 
-def build_rawx_message(measurements=None) -> bytes:
+def build_rawx_message(measurements=None, *, week: int = 2200, tow: float = 345600.125) -> bytes:
     if measurements is None:
         measurements = [
             (20200000.25, 110000.5, -1234.5, 0, 12, 0, 500, 45, 0x03),
         ]
 
     payload = bytearray()
-    payload.extend(struct.pack("<d", 345600.125))
-    payload.extend(struct.pack("<H", 2200))
+    payload.extend(struct.pack("<d", tow))
+    payload.extend(struct.pack("<H", week))
     payload.extend(bytes([18, len(measurements), 0x01, 0x01, 0x00, 0x00]))
 
     for pseudorange, carrier_phase, doppler, gnss_id, sv_id, sig_id, locktime, cno, trk_stat in measurements:
@@ -733,6 +733,13 @@ def build_mixed_rawx_message() -> bytes:
             (24500000.25, 150000.875, 8.0, 5, 3, 0, 420, 39, 0x03),
         ]
     )
+
+
+def build_sfrbx_words_message(gnss_id: int, sv_id: int, sig_id: int, freq_id: int, words) -> bytes:
+    payload = bytearray([gnss_id, sv_id, sig_id, freq_id, len(words), 0x01, 0x02, 0x00])
+    for word in words:
+        payload.extend(struct.pack("<I", word))
+    return build_ubx_message(0x02, 0x13, bytes(payload))
 
 
 def build_sfrbx_message() -> bytes:

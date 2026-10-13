@@ -1,5 +1,6 @@
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/ubx.hpp>
+#include <libgnss++/io/ubx_nav_decode.hpp>
 
 #include <array>
 #include <cmath>
@@ -8,6 +9,7 @@
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <map>
 #include <system_error>
 #include <string>
 #include <vector>
@@ -35,7 +37,8 @@ void printUsage(const char* argv0) {
         << "Usage: " << argv0 << " --input <file.ubx|serial://...|/dev/tty...> [options]\n"
         << "Options:\n"
         << "  --limit <count>           Stop after this many decoded UBX messages (0 = all)\n"
-        << "  --decode-nav             Print decoded NAV-PVT and RXM-SFRBX summaries\n"
+        << "  --decode-nav             Print decoded NAV-PVT and RXM-SFRBX summaries and, before the summary\n"
+        << "                           line, the number of broadcast ephemerides decoded from them per system\n"
         << "  --decode-observations    Print decoded RXM-RAWX summaries\n"
         << "  --obs-rinex-out <file>   Export decoded RAWX epochs to a RINEX 3.04 observation file\n"
         << "  --quiet                  Suppress per-message type lines\n"
@@ -116,6 +119,8 @@ int main(int argc, char** argv) {
     size_t sfrbx_count = 0;
     size_t rawx_count = 0;
     size_t exported_obs_epochs = 0;
+    libgnss::io::UBXNavDecoder nav_decoder;
+    std::vector<libgnss::Ephemeris> decoded_ephemerides;
     std::vector<libgnss::io::UBXStreamDecoder::Event> events;
 
     while ((limit == 0 || processed_messages < limit) &&
@@ -138,6 +143,15 @@ int main(int argc, char** argv) {
                           << ", id=0x" << std::setw(2)
                           << static_cast<int>(event.message.message_id)
                           << std::dec << std::setfill(' ') << ")\n";
+            }
+
+            if (decode_nav) {
+                if (event.has_observation) {
+                    nav_decoder.setReferenceTime(event.observation.time);
+                }
+                if (event.has_sfrbx) {
+                    nav_decoder.pushSfrbx(event.sfrbx, decoded_ephemerides);
+                }
             }
 
             if (event.has_nav_pvt) {
@@ -233,6 +247,24 @@ int main(int argc, char** argv) {
 
     closeUbxInputSource(input_source);
     const auto stats = decoder.getStats();
+
+    if (decode_nav) {
+        std::map<libgnss::GNSSSystem, size_t> per_system;
+        for (const auto& ephemeris : decoded_ephemerides) {
+            ++per_system[ephemeris.satellite.system];
+        }
+        const auto count = [&per_system](libgnss::GNSSSystem system) {
+            const auto it = per_system.find(system);
+            return it == per_system.end() ? size_t{0} : it->second;
+        };
+        std::cout << "nav_decode: ephemerides=" << decoded_ephemerides.size()
+                  << " gps=" << count(libgnss::GNSSSystem::GPS)
+                  << " qzss=" << count(libgnss::GNSSSystem::QZSS)
+                  << " galileo=" << count(libgnss::GNSSSystem::Galileo)
+                  << " beidou=" << count(libgnss::GNSSSystem::BeiDou)
+                  << " glonass=" << count(libgnss::GNSSSystem::GLONASS)
+                  << " klobuchar=" << (nav_decoder.hasKlobuchar() ? 1 : 0) << "\n";
+    }
 
     std::cout << "summary: processed_messages=" << processed_messages
               << " valid_messages=" << stats.valid_messages

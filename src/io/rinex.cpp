@@ -3245,13 +3245,33 @@ bool RINEXWriter::writeHeader(const RINEXReader::RINEXHeader& header) {
     
     file_ << "LibGNSS++           User                ";
     file_ << "20240101 000000 UTC PGM / RUN BY / DATE\n";
-    
+
+    if (header.file_type == RINEXReader::FileType::NAVIGATION && header_klobuchar_.valid) {
+        // RINEX 3 IONOSPHERIC CORR: A4, 1X, 4E12.4, 7X, A1, 1X, I2, 1X, label from column 61.
+        const auto line = [this](const char* type, const double (&c)[4]) {
+            char buffer[128];
+            std::snprintf(buffer, sizeof buffer, "%-4s %12.4E%12.4E%12.4E%12.4E", type, c[0], c[1],
+                          c[2], c[3]);
+            std::string text(buffer);
+            text.resize(60, ' ');
+            file_ << text << "IONOSPHERIC CORR\n";
+        };
+        line("GPSA", header_klobuchar_.alpha);
+        line("GPSB", header_klobuchar_.beta);
+    }
+
     file_ << "                                                            END OF HEADER\n";
     
     return true;
 }
 
 bool RINEXWriter::createNavigationFile(const std::string& filename, const RINEXReader::RINEXHeader& header) {
+    return createNavigationFile(filename, header, IonosphereModel());
+}
+
+bool RINEXWriter::createNavigationFile(const std::string& filename,
+                                       const RINEXReader::RINEXHeader& header,
+                                       const IonosphereModel& klobuchar) {
     close();
     file_.open(filename);
     if (!file_.is_open()) {
@@ -3259,6 +3279,7 @@ bool RINEXWriter::createNavigationFile(const std::string& filename, const RINEXR
     }
 
     header_ = header;
+    header_klobuchar_ = klobuchar;
     return writeHeader(header);
 }
 
