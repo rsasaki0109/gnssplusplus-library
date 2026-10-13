@@ -1139,6 +1139,59 @@ bool UBXNavAcceptConfirm::release(const Ephemeris& eph, NavigationData& nav, Cou
     return true;
 }
 
+bool UBXNavAcceptConfirm::covered(const SatState& sat, const UBXNavReception& reception) {
+    // The receiver GPST of the copy's completing message; unknown (NaN) until the first RAWX epoch.
+    // Without a time nothing can be said to be valid, so the satellite counts as uncovered (rule 1).
+    const double gpst_s = reception.last_gpst_s;
+    if (!std::isfinite(gpst_s)) {
+        return false;
+    }
+    const double week = std::floor(gpst_s / 604800.0);
+    const GNSSTime time(static_cast<int>(week), gpst_s - week * 604800.0);
+    for (const Entry& entry : sat.entries) {
+        if (entry.merged && entry.eph.isValid(time)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void UBXNavAcceptConfirm::retractUnconfirmed(SatState& sat, const Ephemeris& confirmed,
+                                             NavigationData& nav, Counters& counters,
+                                             Outcome& outcome) {
+    // Rule B.  Held copies were never merged and stay held; confirmed records are not touched.
+    for (size_t i = 0; i < sat.entries.size();) {
+        const Entry& entry = sat.entries[i];
+        if (!entry.merged || entry.confirmed || ubxNavSameIssue(entry.eph, confirmed)) {
+            ++i;
+            continue;
+        }
+        if (nav.removeEphemeris(entry.eph)) {
+            ++counters.retracted;
+            ++counters.retracted_by_confirmation;
+            outcome.retracted.push_back({entry.eph, entry.reception});
+        }
+        sat.entries.erase(sat.entries.begin() + static_cast<std::ptrdiff_t>(i));
+    }
+}
+
+void UBXNavAcceptConfirm::trimEntries(SatState& sat, Counters& counters) {
+    while (sat.entries.size() > kMaxEntries) {
+        // The entry just added (the last one) is never the one dropped.  Among the older ones a held copy
+        // (rule A) is only a candidate, so the oldest of those goes before the records that cover the
+        // satellite: a flood of corrupted new issues cannot push its valid record out of the list.
+        const auto newest = sat.entries.end() - 1;
+        auto drop = std::find_if(sat.entries.begin(), newest, [](const Entry& entry) { return entry.held; });
+        if (drop == newest) {
+            drop = sat.entries.begin();
+        }
+        if ((drop->merged || drop->held) && !drop->confirmed) {
+            ++counters.dropped_unconfirmed;
+        }
+        sat.entries.erase(drop);
+    }
+}
+
 UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::push(const UBXNavDecoded& copy, NavigationData& nav) {
     SatState& sat = sats_[copy.eph.satellite];
     Counters& counters = counters_[copy.eph.satellite.system];
@@ -1158,22 +1211,55 @@ UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::push(const UBXNavDecoded& copy
     }
 
     if (found == sat.entries.size()) {
-        // Rule 1 (first record) and rule 3 (a new issue): merge at once; earlier records stay.
         Entry entry;
         entry.eph = copy.eph;
         entry.reception = copy.reception;
-        entry.merged = release(copy.eph, nav, counters, outcome);
-        sat.entries.push_back(std::move(entry));
-        while (sat.entries.size() > kMaxEntries) {
-            if (sat.entries.front().merged && !sat.entries.front().confirmed) {
-                ++counters.dropped_unconfirmed;
-            }
-            sat.entries.erase(sat.entries.begin());
+        if (covered(sat, copy.reception)) {
+            // Rule A: a new issue while the satellite holds a valid record of ours is merged only once
+            // confirmed.  A copy corrupted in an issue field looks like this, and there is no second
+            // copy of it.
+            entry.held = true;
+            ++counters.held_new_issue;
+            outcome.held = true;
+        } else {
+            // Rule 1 (first record, or nothing valid held): merge at once; earlier records stay.
+            entry.merged = release(copy.eph, nav, counters, outcome);
         }
+        sat.entries.push_back(std::move(entry));
+        trimEntries(sat, counters);
         return outcome;
     }
 
     Entry& entry = sat.entries[found];
+    if (entry.held) {
+        // A copy held by rule A: nothing of it is in the database.
+        if (ubxNavSameRecord(copy.eph, entry.eph)) {
+            if (copy.reception.first_seq > entry.reception.last_seq) {
+                // Two equal copies from different transmissions: confirmed, merged now (D1 first).
+                const UBXNavReception first_copy = entry.reception;
+                entry.held = false;
+                entry.confirmed = true;
+                entry.merged = release(copy.eph, nav, counters, outcome);
+                ++counters.confirmed;
+                outcome.confirmed = true;
+                outcome.first_copy = first_copy;
+                retractUnconfirmed(sat, copy.eph, nav, counters, outcome);   // rule B (invalidates `entry`)
+            } else {
+                ++counters.same_transmission;
+            }
+            return outcome;
+        }
+        // Conflict between two copies of a held issue: nothing to remove.  The satellite falls back to
+        // confirm-twice with both copies as candidates (either may be the corrupted one).
+        ++counters.conflicts;
+        outcome.conflict = true;
+        sat.pending.clear();
+        sat.pending.push_back({entry.eph, entry.reception, false});
+        sat.pending.push_back({copy.eph, copy.reception, false});
+        sat.fallback = true;
+        sat.entries.erase(sat.entries.begin() + static_cast<std::ptrdiff_t>(found));
+        return outcome;
+    }
     if (entry.confirmed) {
         if (ubxNavSameRecord(copy.eph, entry.eph)) {
             ++counters.duplicates;
@@ -1201,6 +1287,7 @@ UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::push(const UBXNavDecoded& copy
             ++counters.confirmed;
             outcome.confirmed = true;
             outcome.first_copy = entry.reception;
+            retractUnconfirmed(sat, copy.eph, nav, counters, outcome);   // rule B (invalidates `entry`)
         } else {
             ++counters.same_transmission;  // shares a message with the first copy: not a second transmission
         }
@@ -1276,12 +1363,8 @@ UBXNavAcceptConfirm::Outcome UBXNavAcceptConfirm::pushFallback(const UBXNavDecod
         }
         entry.merged = stale_merged || release(copy.eph, nav, counters, outcome);
         sat.entries.push_back(std::move(entry));
-        while (sat.entries.size() > kMaxEntries) {
-            if (sat.entries.front().merged && !sat.entries.front().confirmed) {
-                ++counters.dropped_unconfirmed;
-            }
-            sat.entries.erase(sat.entries.begin());
-        }
+        retractUnconfirmed(sat, copy.eph, nav, counters, outcome);   // rule B
+        trimEntries(sat, counters);
         sat.pending.clear();
         sat.fallback = false;
         return outcome;
@@ -1307,7 +1390,7 @@ std::map<GNSSSystem, size_t> UBXNavAcceptConfirm::unconfirmedBySystem() const {
     }
     for (const auto& [sat_id, sat] : sats_) {
         for (const Entry& entry : sat.entries) {
-            if (entry.merged && !entry.confirmed) {
+            if ((entry.merged || entry.held) && !entry.confirmed) {
                 ++result[sat_id.system];
             }
         }
@@ -1343,8 +1426,21 @@ size_t UBXNavAcceptConfirm::merged() const { return sumCounter(counters_, &Count
 size_t UBXNavAcceptConfirm::confirmed() const { return sumCounter(counters_, &Counters::confirmed); }
 size_t UBXNavAcceptConfirm::conflicts() const { return sumCounter(counters_, &Counters::conflicts); }
 size_t UBXNavAcceptConfirm::retracted() const { return sumCounter(counters_, &Counters::retracted); }
+size_t UBXNavAcceptConfirm::heldNewIssue() const { return sumCounter(counters_, &Counters::held_new_issue); }
 size_t UBXNavAcceptConfirm::unhealthySkipped() const {
     return sumCounter(counters_, &Counters::unhealthy_skipped);
+}
+
+std::map<GNSSSystem, size_t> UBXNavAcceptConfirm::heldBySystem() const {
+    std::map<GNSSSystem, size_t> result;
+    for (const auto& [sat_id, sat] : sats_) {
+        for (const Entry& entry : sat.entries) {
+            if (entry.held) {
+                ++result[sat_id.system];
+            }
+        }
+    }
+    return result;
 }
 
 bool UBXNavAcceptConfirm::inFallback(const SatelliteId& sat) const {

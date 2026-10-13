@@ -299,24 +299,39 @@ private:
 bool ubxNavSameIssue(const Ephemeris& a, const Ephemeris& b);
 
 /**
- * @brief Accept, then confirm (D3): the `gnss live --ubx-nav` merge.
+ * @brief Accept, then confirm (D4 = D3 + rules A and B): the `gnss live --ubx-nav` merge.
  *
  * D2 (UBXNavConfirmTwice) delays every record by one repeat of its frame set, which at start-up leaves
  * the filter without ephemerides for most satellites.  D3 merges the first copy at once and uses the
- * second copy only to catch a corrupted one:
+ * second copy only to catch a corrupted one.  D3 does not catch a copy corrupted in an *issue* field
+ * (toe, IODE, tb): it looks like a new issue, is merged at once and no later copy differs from it.  D4
+ * adds two rules for that case:
  *
  * Per satellite (copies come from UBXNavDecoder::pushSfrbx(..., &decoded), every one of them):
- *  1. A copy of an issue D3 has not seen for the satellite is merged at once (health rule D1 first:
- *     an unusable record is counted as unhealthy-skipped and not merged).  This holds for the first
- *     record of a satellite and for every later new issue (new IODE/toe); the previous record stays in
- *     the database.
+ *  1. A copy of an issue D4 has not seen for the satellite is merged at once (health rule D1 first:
+ *     an unusable record is counted as unhealthy-skipped and not merged), unless rule A applies.  This
+ *     holds for the first record of a satellite and for every later new issue (new IODE/toe); the
+ *     previous record stays in the database.
+ *  A. (new issue while covered) If the satellite already holds a record this object merged, that is
+ *     still in the database and valid (`Ephemeris::isValid`) at the copy's reception time (the receiver
+ *     GPST of its completing message, `UBXNavReception::last_gpst_s`), the copy is *held*: it is
+ *     merged only once confirmed (two equal copies from different transmissions, rule 2's test; D1 is
+ *     applied when it is merged).  A held copy that is never repeated is never merged.  Without such a
+ *     record rule 1 applies unchanged.  A record the database holds from elsewhere (`--nav-rinex`,
+ *     RTCM) does not count, and neither does one with an unknown reception time.
  *  2. A later copy of that issue:
  *      - equal (ubxNavSameRecord) and built entirely from SFRBX messages received after the last
- *        message of the first copy (a different transmission, D2's rule): the record is *confirmed*;
+ *        message of the first copy (a different transmission, D2's rule): the record is *confirmed*
+ *        (a held record is merged now);
  *      - equal but sharing a message with the first copy: the same transmission seen again, nothing
  *        changes;
- *      - different: a *conflict*.  The record D3 merged is removed from the database
+ *      - different: a *conflict*.  The record D4 merged, if it did, is removed from the database
  *        (NavigationData::removeEphemeris, exact record only) and the satellite falls back to D2.
+ *  B. (confirmation cleans up) When a record of a satellite is confirmed, every *unconfirmed* record of
+ *     the same satellite that D4 merged and that has a different issue is removed from the database
+ *     (the same removal function) and counted as retracted.  A confirmed record is never removed by
+ *     this rule.  It runs on every confirmation, also one the health rule then refuses to merge and
+ *     one made in fallback.
  *  3. Fallback (D2 confirm-twice for that satellite only): nothing is merged until two equal copies
  *     from different transmissions exist.  The pending candidates are the copies seen since the
  *     conflict *and the record that was just removed* (the first copy), because either of the two
@@ -324,20 +339,25 @@ bool ubxNavSameIssue(const Ephemeris& a, const Ephemeris& b);
  *     transmission after it, confirms it and is merged (D1 first).  A copy equal to no pending
  *     candidate is added to them (a conflict again); at most kMaxPending (4) candidates are kept, the
  *     oldest dropped.  A copy equal to a record already confirmed is a duplicate.  After the
- *     confirmation the satellite returns to rule 1.
+ *     confirmation the satellite returns to rule 1.  A held copy that meets a differing second copy of
+ *     its issue is a conflict as well: nothing is removed (it was never merged), and the satellite falls
+ *     back with the held copy and the new one as candidates.
  *  4. A copy that differs from a record already *confirmed* (same issue) and merged is ignored and
  *     counted (`diverged_after_confirm`): two agreeing transmissions outweigh one differing copy, so
- *     a confirmed record is never retracted.  If the confirmed record never reached the database
- *     (the health rule refused it, e.g. a BeiDou satellite that clears its health flag within one toe,
- *     or the database already held the issue), a differing copy is a record the database does not
- *     hold and follows rule 1 (merged at once, health rule first); in fallback it is a candidate.
+ *     a confirmed record is never retracted by a copy.  If the confirmed record never reached the
+ *     database (the health rule refused it, e.g. a BeiDou satellite that clears its health flag within
+ *     one toe, or the database already held the issue), a differing copy is a record the database does
+ *     not hold and follows rule 1 (merged at once, health rule first; rule A does not apply because
+ *     the issue is not new); in fallback it is a candidate.
  *
  * Only a record this object merged is ever removed, and only if it is still in the database in
- * every field.  Records D3 saw but that the database already held (e.g. from `--nav-rinex`) or that D1
+ * every field.  Records D4 saw but that the database already held (e.g. from `--nav-rinex`) or that D1
  * refused are never touched.  Unused with `--nav-rinex-out`, which keeps D2.
  *
  * Bookkeeping per satellite: the last kMaxEntries (8) issues seen, each with its first copy and its
- * state (merged, confirmed); the fallback flag and its pending candidates.
+ * state (held, merged, confirmed); the fallback flag and its pending candidates.  When the list is
+ * full the oldest held copy goes first, otherwise the oldest entry (never the issue just added); an
+ * issue that falls out is forgotten.
  */
 class UBXNavAcceptConfirm {
 public:
@@ -346,7 +366,9 @@ public:
         size_t merged = 0;                ///< records added to the database (rule 1 and fallback confirmations)
         size_t confirmed = 0;             ///< records confirmed by a second transmission
         size_t conflicts = 0;             ///< a copy that differed from an unconfirmed copy of the same issue
-        size_t retracted = 0;             ///< merged records removed from the database because of a conflict
+        size_t retracted = 0;             ///< merged records removed from the database: by a conflict (rule 2) or by rule B
+        size_t retracted_by_confirmation = 0; ///< of `retracted`, the ones removed by rule B
+        size_t held_new_issue = 0;        ///< copies of a new issue held by rule A until confirmed
         size_t duplicates = 0;            ///< copies equal to a confirmed record
         size_t same_transmission = 0;     ///< equal copies that shared a message with the pending first copy
         size_t unhealthy_skipped = 0;     ///< records due for merging that the health rule refused
@@ -360,12 +382,13 @@ public:
         UBXNavReception merged;           ///< reception of the copy that was merged
     };
     struct Outcome {
-        bool merged = false;              ///< `copy.eph` was added to the database
+        bool merged = false;              ///< a record was added to the database (`copy.eph`, or the held record it confirmed)
         bool confirmed = false;           ///< a record was confirmed by this copy
+        bool held = false;                ///< `copy.eph` is a new issue held by rule A (not merged until confirmed)
         bool conflict = false;            ///< this copy conflicted with an unconfirmed one
         bool unhealthy_skipped = false;   ///< `copy.eph` was due for merging and the health rule refused it
         UBXNavReception first_copy;       ///< reception of the confirmed record's first copy (when confirmed)
-        std::vector<Retraction> retracted;///< records removed by this copy
+        std::vector<Retraction> retracted;///< records removed by this copy (rule 2 conflict or rule B)
     };
 
     static constexpr size_t kMaxEntries = 8;
@@ -374,16 +397,19 @@ public:
     /// Process one copy: decide, apply the health rule and merge into or remove from `nav`.
     Outcome push(const UBXNavDecoded& copy, NavigationData& nav);
 
-    /// Merged records not confirmed so far (including those forgotten unconfirmed) plus the fallback
-    /// candidates that were never confirmed (replaced or still pending).  Retracted records are counted
-    /// by retracted(), not here.
+    /// Merged records not confirmed so far (including those forgotten unconfirmed) plus the candidates
+    /// that were never confirmed: copies still held by rule A and fallback candidates (replaced or still
+    /// pending).  Retracted records are counted by retracted(), not here.
     size_t unconfirmed() const;
     std::map<GNSSSystem, size_t> unconfirmedBySystem() const;
     size_t merged() const;
     size_t confirmed() const;
     size_t conflicts() const;
     size_t retracted() const;
+    size_t heldNewIssue() const;
     size_t unhealthySkipped() const;
+    /// Copies currently held by rule A (not yet confirmed), per system.
+    std::map<GNSSSystem, size_t> heldBySystem() const;
     const std::map<GNSSSystem, Counters>& counters() const { return counters_; }
     /// True while the satellite is in fallback (after a conflict, before a confirmation).
     bool inFallback(const SatelliteId& sat) const;
@@ -393,8 +419,9 @@ private:
     struct Entry {
         Ephemeris eph;
         UBXNavReception reception;
-        bool merged = false;      ///< D3 added it to the database (and it was not removed since)
+        bool merged = false;      ///< D4 added it to the database (and it was not removed since)
         bool confirmed = false;
+        bool held = false;        ///< rule A: first copy of a new issue, not merged until confirmed
     };
     struct Pending {
         Ephemeris eph;
@@ -408,6 +435,13 @@ private:
     };
     /// D1, then the database; returns true when `eph` was added.
     bool release(const Ephemeris& eph, NavigationData& nav, Counters& counters, Outcome& outcome);
+    /// Rule A's test: the satellite holds a record D4 merged that is valid at the copy's reception time.
+    static bool covered(const SatState& sat, const UBXNavReception& reception);
+    /// Rule B: remove the satellite's unconfirmed merged records whose issue differs from `confirmed`.
+    static void retractUnconfirmed(SatState& sat, const Ephemeris& confirmed, NavigationData& nav,
+                                   Counters& counters, Outcome& outcome);
+    /// Keep the last kMaxEntries entries; a dropped one that was never confirmed is counted.
+    static void trimEntries(SatState& sat, Counters& counters);
     Outcome pushFallback(const UBXNavDecoded& copy, NavigationData& nav, SatState& sat, Counters& counters);
 
     std::map<SatelliteId, SatState> sats_;

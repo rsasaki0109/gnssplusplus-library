@@ -697,9 +697,11 @@ void printUsage(const char* argv0) {
         << "                            (GPS/QZSS LNAV, Galileo E1-B I/NAV, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set\n"
         << "                            and merge them like RTCM ephemerides: a record at once, taken back out if a later copy of the\n"
         << "                            same issue differs (ubx_nav_conflicts, ubx_nav_retracted; that satellite then needs two equal copies\n"
-        << "                            before anything is merged again; ubx_nav_unconfirmed counts records never confirmed), skipping\n"
-        << "                            records whose health flags mark the satellite unusable (counted as ubx_nav_unhealthy_skipped);\n"
-        << "                            a --nav-rinex ionosphere model wins (default: off)\n"
+        << "                            before anything is merged again; ubx_nav_unconfirmed counts records never confirmed). A new issue\n"
+        << "                            of a satellite that already holds a valid record of ours is held until a second copy confirms it\n"
+        << "                            (ubx_nav_held_new_issue), and a confirmation removes the satellite's unconfirmed records of other\n"
+        << "                            issues (counted in ubx_nav_retracted). Records whose health flags mark the satellite unusable are\n"
+        << "                            skipped (ubx_nav_unhealthy_skipped); a --nav-rinex ionosphere model wins (default: off)\n"
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
         << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
@@ -1564,10 +1566,12 @@ int main(int argc, char** argv) {
                     ubx_nav_copies.clear();
                     ubx_nav_decoder.pushSfrbx(event.sfrbx, ubx_nav_new, &ubx_nav_copies);
                     for (const auto& copy : ubx_nav_copies) {
-                        // Accept, then confirm (D3): the first copy of a record is merged at once
-                        // (after the health rule); a differing second copy takes it back out and the
-                        // satellite waits for two equal copies (confirm-twice) before anything is
-                        // merged for it again.
+                        // Accept, then confirm (D4): the first copy of a record is merged at once
+                        // (after the health rule) unless the satellite already holds a valid record
+                        // of ours, in which case a new issue waits for a second copy; a differing
+                        // second copy takes a merged record back out and the satellite waits for two
+                        // equal copies (confirm-twice) before anything is merged for it again; a
+                        // confirmation removes the satellite's unconfirmed records of other issues.
                         ubx_nav_merge.push(copy, nav_data);
                     }
                 }
@@ -2091,7 +2095,8 @@ int main(int argc, char** argv) {
                       << " ubx_nav_unhealthy_skipped=" << ubx_nav_merge.unhealthySkipped()
                       << " ubx_nav_unconfirmed=" << ubx_nav_merge.unconfirmed()
                       << " ubx_nav_conflicts=" << ubx_nav_merge.conflicts()
-                      << " ubx_nav_retracted=" << ubx_nav_merge.retracted();
+                      << " ubx_nav_retracted=" << ubx_nav_merge.retracted()
+                      << " ubx_nav_held_new_issue=" << ubx_nav_merge.heldNewIssue();
         }
         std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;

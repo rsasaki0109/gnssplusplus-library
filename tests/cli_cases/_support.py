@@ -1647,14 +1647,20 @@ def build_single_grid_residuals(
 
 
 def build_gps_lnav_sfrbx_message(
-    subframe_id: int, sv_id: int = 12, week: int = 2200, health: int = 0
+    subframe_id: int,
+    sv_id: int = 12,
+    week: int = 2200,
+    health: int = 0,
+    iode: int = 77,
+    toe_offset_s: int = 0,
 ) -> bytes:
+    # iode / toe_offset_s pick another issue of the same satellite (IODE = IODC low byte, toe = toc =
+    # 345600 + toe_offset_s); the defaults are the original single issue.
     payload_bits = bytearray(30)
     tow_seconds = 345600
-    toc_seconds = 345600
-    toes_seconds = 345600
-    iodc = 77
-    iode = 77
+    toc_seconds = 345600 + toe_offset_s
+    toes_seconds = 345600 + toe_offset_s
+    iodc = iode
 
     set_unsigned_bits(payload_bits, 24, 17, tow_seconds // 6)
     set_unsigned_bits(payload_bits, 43, 3, subframe_id)
