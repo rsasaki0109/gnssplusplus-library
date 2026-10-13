@@ -31,6 +31,7 @@
 #include <libgnss++/io/rtcm_stream.hpp>
 #include <libgnss++/io/solution_writer.hpp>
 #include <libgnss++/io/ubx.hpp>
+#include <libgnss++/io/ubx_nav_decode.hpp>
 #include <libgnss++/models/troposphere.hpp>
 
 #ifndef _WIN32
@@ -82,6 +83,9 @@ struct LiveConfig {
     std::string rover_ubx_path;
     std::string base_rtcm_path;
     std::string nav_rinex_path;
+    // Opt-in (--ubx-nav): decode broadcast ephemerides and the GPS Klobuchar set from the rover's
+    // UBX-RXM-SFRBX and merge them into the navigation database.
+    bool ubx_nav = false;
     std::string output_pos_path = "output/live_solution.pos";
     libgnss::io::SolutionWriter::Format output_format = libgnss::io::SolutionWriter::Format::POS;
     bool pos_uncertainty = false;
@@ -689,6 +693,15 @@ void printUsage(const char* argv0) {
         << "  --rover-ubx <path>         Rover UBX stream from file or serial device\n"
         << "  --rover-ubx-baud <baud>    Rover serial baud rate for UBX device input (default: 115200)\n"
         << "  --nav-rinex <file>         Supplemental broadcast navigation RINEX\n"
+        << "  --ubx-nav                  With --rover-ubx: decode the rover's UBX-RXM-SFRBX into broadcast ephemerides\n"
+        << "                            (GPS/QZSS LNAV, Galileo E1-B I/NAV, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set\n"
+        << "                            and merge them like RTCM ephemerides: a record at once, taken back out if a later copy of the\n"
+        << "                            same issue differs (ubx_nav_conflicts, ubx_nav_retracted; that satellite then needs two equal copies\n"
+        << "                            before anything is merged again; ubx_nav_unconfirmed counts records never confirmed). A new issue\n"
+        << "                            of a satellite that already holds a valid record of ours is held until a second copy confirms it\n"
+        << "                            (ubx_nav_held_new_issue), and a confirmation removes the satellite's unconfirmed records of other\n"
+        << "                            issues (counted in ubx_nav_retracted). Records whose health flags mark the satellite unusable are\n"
+        << "                            skipped (ubx_nav_unhealthy_skipped); a --nav-rinex ionosphere model wins (default: off)\n"
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
         << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
@@ -845,6 +858,8 @@ LiveConfig parseArguments(int argc, char** argv) {
             config.base_rtcm_path = argv[++i];
         } else if (arg == "--nav-rinex" && i + 1 < argc) {
             config.nav_rinex_path = argv[++i];
+        } else if (arg == "--ubx-nav") {
+            config.ubx_nav = true;
         } else if (arg == "--out" && i + 1 < argc) {
             config.output_pos_path = argv[++i];
         } else if (arg == "--format" && i + 1 < argc) {
@@ -959,6 +974,9 @@ LiveConfig parseArguments(int argc, char** argv) {
     }
     if (config.base_rtcm_path.empty()) {
         argumentError("--base-rtcm is required", argv[0]);
+    }
+    if (config.ubx_nav && !has_rover_ubx) {
+        argumentError("--ubx-nav requires --rover-ubx", argv[0]);
     }
     if (config.max_epochs == 0) {
         argumentError("--max-epochs must be != 0", argv[0]);
@@ -1529,6 +1547,45 @@ int main(int argc, char** argv) {
         std::vector<libgnss::io::RTCMStreamDecoder::Event> base_events;
         std::vector<libgnss::io::UBXStreamDecoder::Event> rover_ubx_events;
 
+        // --ubx-nav: ephemerides and the Klobuchar set decoded from the rover's UBX-RXM-SFRBX. The
+        // decoder's GPST reference is the newest RAWX epoch; events are applied in stream order.
+        libgnss::io::UBXNavDecoder ubx_nav_decoder;
+        libgnss::io::UBXNavAcceptConfirm ubx_nav_merge;
+        std::vector<libgnss::Ephemeris> ubx_nav_new;
+        std::vector<libgnss::io::UBXNavDecoded> ubx_nav_copies;
+        auto applyUbxNavEvents = [&](const std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
+            if (!config.ubx_nav) {
+                return;
+            }
+            for (const auto& event : events) {
+                if (event.has_observation) {
+                    ubx_nav_decoder.setReferenceTime(event.observation.time);
+                }
+                if (event.has_sfrbx) {
+                    ubx_nav_new.clear();
+                    ubx_nav_copies.clear();
+                    ubx_nav_decoder.pushSfrbx(event.sfrbx, ubx_nav_new, &ubx_nav_copies);
+                    for (const auto& copy : ubx_nav_copies) {
+                        // Accept, then confirm (D4): the first copy of a record is merged at once
+                        // (after the health rule) unless the satellite already holds a valid record
+                        // of ours, in which case a new issue waits for a second copy; a differing
+                        // second copy takes a merged record back out and the satellite waits for two
+                        // equal copies (confirm-twice) before anything is merged for it again; a
+                        // confirmation removes the satellite's unconfirmed records of other issues.
+                        ubx_nav_merge.push(copy, nav_data);
+                    }
+                }
+            }
+            if (!nav_data.ionosphere_model.valid && ubx_nav_decoder.hasKlobuchar()) {
+                nav_data.ionosphere_model = ubx_nav_decoder.klobuchar();
+            }
+        };
+        auto readRoverUbx = [&](libgnss::ObservationData& obs) {
+            const bool ok = readNextUbxObservation(rover_ubx_source, obs, rover_ubx_events);
+            applyUbxNavEvents(rover_ubx_events);
+            return ok;
+        };
+
         // When one RTCM decoder obtains a GPST reference (ephemerides) and the other has none (the rover
         // stream usually carries no ephemerides), the other is seeded with it.
         auto shareReferences = [&]() {
@@ -1565,13 +1622,29 @@ int main(int argc, char** argv) {
         const bool base_threaded = base_source.pump != nullptr;
         libgnss::SPPProcessor fallback_spp(makeFallbackSppConfig(config));
 
+        // --ubx-nav: a base stream without ephemerides (and no --nav-rinex) gives its decoder no GPST
+        // reference, so its TOW-only epochs would be dated from the host clock and never align with the
+        // rover. The rover's RAWX time is that reference: read the first rover epoch before the base.
+        bool rover_read_first = false;
+        bool rover_ok = false;
+        if (config.ubx_nav && rover_input_kind == RoverInputKind::UBX &&
+            !base_source.decoder.referenceTime()) {
+            rover_ok = readRoverUbx(rover_obs);
+            rover_read_first = true;
+            if (rover_ok && rover_obs.time.week > 0) {
+                base_source.decoder.setReferenceTime(rover_obs.time);
+            }
+        }
+
         // The base is read first so that its ephemeris burst can seed the rover decoder before the
         // rover's first epoch is decoded.
         bool base_ok = readNextObservation(base_source, base_obs, base_events);
         shareReferences();
-        bool rover_ok = rover_input_kind == RoverInputKind::RTCM
-            ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
-            : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+        if (!rover_read_first) {
+            rover_ok = rover_input_kind == RoverInputKind::RTCM
+                ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
+                : readRoverUbx(rover_obs);
+        }
         const bool initial_rover_observation_ok = rover_ok;
         const bool initial_base_observation_ok = base_ok;
 
@@ -1823,7 +1896,7 @@ int main(int argc, char** argv) {
                 }
                 rover_ok = rover_input_kind == RoverInputKind::RTCM
                     ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
-                    : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+                    : readRoverUbx(rover_obs);
                 if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
                     applyEvents(rover_events);
                     normalizeObservationWeek(rover_obs);
@@ -1842,7 +1915,7 @@ int main(int argc, char** argv) {
             if (!have_base_position || nav_data.ephemeris_data.empty()) {
                 rover_ok = rover_input_kind == RoverInputKind::RTCM
                     ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
-                    : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+                    : readRoverUbx(rover_obs);
                 if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
                     applyEvents(rover_events);
                     normalizeObservationWeek(rover_obs);
@@ -1885,7 +1958,7 @@ int main(int argc, char** argv) {
 
             rover_ok = rover_input_kind == RoverInputKind::RTCM
                 ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
-                : readNextUbxObservation(rover_ubx_source, rover_obs, rover_ubx_events);
+                : readRoverUbx(rover_obs);
             if (rover_ok && rover_input_kind == RoverInputKind::RTCM) {
                 applyEvents(rover_events);
                 normalizeObservationWeek(rover_obs);
@@ -2015,6 +2088,15 @@ int main(int argc, char** argv) {
         }
         if (config.base_outage_fallback) {
             std::cout << " fallback_spp_epochs=" << fallback_spp_epochs;
+        }
+        if (config.ubx_nav) {
+            std::cout << " ubx_nav_ephemerides=" << ubx_nav_merge.merged()
+                      << " ubx_nav_klobuchar=" << (ubx_nav_decoder.hasKlobuchar() ? 1 : 0)
+                      << " ubx_nav_unhealthy_skipped=" << ubx_nav_merge.unhealthySkipped()
+                      << " ubx_nav_unconfirmed=" << ubx_nav_merge.unconfirmed()
+                      << " ubx_nav_conflicts=" << ubx_nav_merge.conflicts()
+                      << " ubx_nav_retracted=" << ubx_nav_merge.retracted()
+                      << " ubx_nav_held_new_issue=" << ubx_nav_merge.heldNewIssue();
         }
         std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;

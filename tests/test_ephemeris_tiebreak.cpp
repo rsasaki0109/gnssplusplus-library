@@ -9,6 +9,8 @@
 #include <libgnss++/core/navigation.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
 #include <numeric>
 #include <tuple>
 #include <vector>
@@ -225,4 +227,93 @@ TEST(EphemerisTieBreakTest, CopyAndIfNewPathsKeepTheSameOrder) {
         ASSERT_NE(selected, nullptr);
         EXPECT_EQ(selected->data_source_code, kInavE1bSource);
     }
+}
+
+// NavigationData::removeEphemeris erases exactly one record, identified by every field.
+TEST(EphemerisRemovalTest, ErasesExactlyTheMatchingRecord) {
+    const auto sat = galileo(21);
+    const auto other_sat = galileo(22);
+    const Ephemeris first = makeEphemeris(sat, 3600.0, 5, 1.0e-4, kInavE1bSource);
+    const Ephemeris second = makeEphemeris(sat, 4200.0, 6, 2.0e-4, kInavE1bSource);
+    const Ephemeris third = makeEphemeris(sat, 4800.0, 7, 3.0e-4, kInavE1bSource);
+    const Ephemeris neighbour = makeEphemeris(other_sat, 3600.0, 5, 1.0e-4, kInavE1bSource);
+
+    NavigationData nav;
+    for (const auto& eph : {third, first, neighbour, second}) nav.addEphemeris(eph);
+    ASSERT_EQ(nav.getEphemeris(sat).size(), 3U);
+
+    // The query time selects `second`; once it is removed the selection moves on.
+    const GNSSTime query(2200, 4210.0);
+    ASSERT_NE(nav.getEphemeris(sat, query), nullptr);
+    EXPECT_EQ(nav.getEphemeris(sat, query)->iode, 6);
+    const std::uint64_t revision = nav.getRevision();
+    EXPECT_TRUE(nav.removeEphemeris(second));
+    EXPECT_GT(nav.getRevision(), revision);
+    const auto remaining = nav.getEphemeris(sat);
+    ASSERT_EQ(remaining.size(), 2U);
+    EXPECT_EQ(remaining[0].iode, 5);
+    EXPECT_EQ(remaining[1].iode, 7);
+    ASSERT_NE(nav.getEphemeris(sat, query), nullptr);
+    EXPECT_NE(nav.getEphemeris(sat, query)->iode, 6);       // the satellite state cache does not serve it
+    EXPECT_EQ(nav.getEphemeris(other_sat).size(), 1U);       // other satellites are untouched
+
+    // The same record is gone: a second removal finds nothing.
+    const std::uint64_t after = nav.getRevision();
+    EXPECT_FALSE(nav.removeEphemeris(second));
+    EXPECT_EQ(nav.getRevision(), after);                      // a miss changes nothing
+    EXPECT_EQ(nav.getEphemeris(sat).size(), 2U);
+}
+
+TEST(EphemerisRemovalTest, ARecordThatDiffersInAnyFieldIsLeftAlone) {
+    const auto sat = galileo(21);
+    const Ephemeris stored = makeEphemeris(sat, 3600.0, 5, 1.0e-4, kInavE1bSource);
+    NavigationData nav;
+    nav.addEphemeris(stored);
+    const std::uint64_t revision = nav.getRevision();
+
+    // Same satellite, issue and toe; one other field differs.
+    Ephemeris af0 = stored;
+    af0.af0 = std::nextafter(stored.af0, 1.0);
+    Ephemeris omega0 = stored;
+    omega0.omega0 += 1e-12;
+    Ephemeris health = stored;
+    health.health = 1;
+    Ephemeris ln = stored;
+    ln.glonass_ln = 1;
+    Ephemeris tof = stored;
+    tof.tof = GNSSTime(2200, 3601.0);
+    Ephemeris source = stored;
+    source.data_source_code = kFnavSource;
+    Ephemeris toc = stored;
+    toc.toc = GNSSTime(2200, 3601.0);
+    Ephemeris position = stored;
+    position.glonass_position.x() = 1.0;
+    for (const Ephemeris* probe : {&af0, &omega0, &health, &ln, &tof, &source, &toc, &position}) {
+        EXPECT_FALSE(nav.removeEphemeris(*probe));
+    }
+    // Same fields, other satellite.
+    Ephemeris other_sat = stored;
+    other_sat.satellite = galileo(22);
+    EXPECT_FALSE(nav.removeEphemeris(other_sat));
+    EXPECT_EQ(nav.getRevision(), revision);
+    EXPECT_EQ(nav.getEphemeris(sat).size(), 1U);
+
+    // The exact record goes; an empty satellite leaves no entry behind.
+    EXPECT_TRUE(nav.removeEphemeris(stored));
+    EXPECT_TRUE(nav.getEphemeris(sat).empty());
+    EXPECT_TRUE(nav.isEmpty());
+}
+
+TEST(EphemerisRemovalTest, OnlyOneOfTwoIdenticalRecordsIsErased) {
+    const auto sat = galileo(21);
+    const Ephemeris eph = makeEphemeris(sat, 3600.0, 5, 1.0e-4, kInavE1bSource);
+    NavigationData nav;
+    nav.addEphemeris(eph);
+    nav.addEphemeris(eph);       // addEphemeris does not de-duplicate
+    ASSERT_EQ(nav.getEphemeris(sat).size(), 2U);
+    EXPECT_TRUE(nav.removeEphemeris(eph));
+    EXPECT_EQ(nav.getEphemeris(sat).size(), 1U);
+    EXPECT_TRUE(nav.removeEphemeris(eph));
+    EXPECT_EQ(nav.getEphemeris(sat).size(), 0U);
+    EXPECT_FALSE(nav.removeEphemeris(eph));
 }

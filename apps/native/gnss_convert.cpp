@@ -2,6 +2,7 @@
 #include <libgnss++/io/rinex.hpp>
 #include <libgnss++/io/rtcm.hpp>
 #include <libgnss++/io/ubx.hpp>
+#include <libgnss++/io/ubx_nav_decode.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -43,6 +44,7 @@ struct ConvertConfig {
     std::string obs_out_path;
     std::string nav_out_path;
     std::string sfrbx_out_path;
+    std::string nav_rinex_out_path;
     InputFormat format = InputFormat::RTCM;
     size_t limit = 0;
     bool quiet = false;
@@ -120,6 +122,10 @@ void printUsage(const char* argv0) {
         << "  --obs-out <file>          Export decoded observations to a RINEX 3.04 observation file\n"
         << "  --nav-out <file>          Export decoded broadcast nav to a RINEX nav file\n"
         << "  --sfrbx-out <file>        Export UBX RXM-SFRBX subframes to CSV\n"
+        << "  --nav-rinex-out <file>    UBX only: decode RXM-SFRBX into broadcast ephemerides (GPS/QZSS LNAV,\n"
+        << "                            Galileo E1-B I/NAV, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set and\n"
+        << "                            write them as a RINEX 3.04 nav file when the input ends (a record is\n"
+        << "                            written once a second transmission produced the same record)\n"
         << "  --gps-week <week>         RTCM only: GPS week of the data (RTCM messages carry\n"
         << "                            only the time of week; default: current week)\n"
         << "  --limit <count>           Stop after this many decoded messages (0 = all)\n"
@@ -141,6 +147,8 @@ ConvertConfig parseArguments(int argc, char** argv) {
             config.nav_out_path = argv[++i];
         } else if (arg == "--sfrbx-out" && i + 1 < argc) {
             config.sfrbx_out_path = argv[++i];
+        } else if (arg == "--nav-rinex-out" && i + 1 < argc) {
+            config.nav_rinex_out_path = argv[++i];
         } else if (arg == "--format" && i + 1 < argc) {
             const std::string value = argv[++i];
             if (value == "rtcm") {
@@ -174,8 +182,12 @@ ConvertConfig parseArguments(int argc, char** argv) {
         throw std::invalid_argument("--input is required");
     }
     if (config.obs_out_path.empty() && config.nav_out_path.empty() &&
-        config.sfrbx_out_path.empty()) {
-        throw std::invalid_argument("provide at least one of --obs-out, --nav-out, or --sfrbx-out");
+        config.sfrbx_out_path.empty() && config.nav_rinex_out_path.empty()) {
+        throw std::invalid_argument(
+            "provide at least one of --obs-out, --nav-out, --sfrbx-out, or --nav-rinex-out");
+    }
+    if (!config.nav_rinex_out_path.empty() && config.format != InputFormat::UBX) {
+        throw std::invalid_argument("--nav-rinex-out requires --format ubx");
     }
     return config;
 }
@@ -1470,6 +1482,13 @@ int runUBXConversion(const ConvertConfig& config) {
     std::map<libgnss::SatelliteId, BdsD1FrameSet> bds_d1_frames;
     std::map<libgnss::SatelliteId, BdsD2FrameSet> bds_d2_frames;
     std::map<libgnss::SatelliteId, libgnss::Ephemeris> last_exported_ephemeris;
+    // --nav-rinex-out: library SFRBX decoder; the time reference is the RAWX epoch time.
+    // Records are written once confirmed by a second transmission (UBXNavConfirmTwice), health as received.
+    libgnss::io::UBXNavDecoder nav_rinex_decoder;
+    libgnss::io::UBXNavConfirmTwice nav_rinex_confirm;
+    std::vector<libgnss::Ephemeris> nav_rinex_ephemerides;
+    std::vector<libgnss::Ephemeris> nav_rinex_new;
+    std::vector<libgnss::io::UBXNavDecoded> nav_rinex_copies;
     libgnss::GNSSTime nav_time_hint = currentGpstApprox();
     bool has_nav_time_hint = false;
 
@@ -1508,6 +1527,22 @@ int runUBXConversion(const ConvertConfig& config) {
                     return 1;
                 }
                 ++exported_sfrbx_messages;
+            }
+
+            if (!config.nav_rinex_out_path.empty()) {
+                if (event.has_observation) {
+                    nav_rinex_decoder.setReferenceTime(event.observation.time);
+                }
+                if (event.has_sfrbx) {
+                    nav_rinex_new.clear();
+                    nav_rinex_copies.clear();
+                    nav_rinex_decoder.pushSfrbx(event.sfrbx, nav_rinex_new, &nav_rinex_copies);
+                    for (const auto& copy : nav_rinex_copies) {
+                        if (nav_rinex_confirm.push(copy).accepted) {
+                            nav_rinex_ephemerides.push_back(copy.eph);
+                        }
+                    }
+                }
             }
 
             if (event.has_nav_pvt && event.nav_pvt.valid_time) {
@@ -1867,6 +1902,31 @@ int runUBXConversion(const ConvertConfig& config) {
         sfrbx_writer.close();
     }
     closeUbxInputSource(input_source);
+
+    if (!config.nav_rinex_out_path.empty()) {
+        libgnss::io::RINEXWriter rinex_nav_writer;
+        bool written = rinex_nav_writer.createNavigationFile(
+            config.nav_rinex_out_path, makeNavigationHeader(), nav_rinex_decoder.klobuchar());
+        for (const auto& ephemeris : nav_rinex_ephemerides) {
+            written = written && rinex_nav_writer.writeNavigationMessage(ephemeris);
+        }
+        written = written && rinex_nav_writer.close();
+        if (!written) {
+            std::cerr << "Error: failed to write navigation RINEX: " << config.nav_rinex_out_path << "\n";
+            outputs_ok = false;
+        }
+        std::map<libgnss::GNSSSystem, size_t> per_system;
+        for (const auto& ephemeris : nav_rinex_ephemerides) {
+            ++per_system[ephemeris.satellite.system];
+        }
+        std::cout << "nav_rinex: ephemerides=" << nav_rinex_ephemerides.size();
+        for (const auto& [system, count] : per_system) {
+            std::cout << " " << systemName(system) << "=" << count;
+        }
+        std::cout << " klobuchar=" << (nav_rinex_decoder.hasKlobuchar() ? 1 : 0)
+                  << " unconfirmed=" << nav_rinex_confirm.unconfirmed()
+                  << " conflicts=" << nav_rinex_confirm.conflicts() << "\n";
+    }
 
     const auto stats = decoder.getStats();
     std::cout << "summary: processed_messages=" << processed_messages
