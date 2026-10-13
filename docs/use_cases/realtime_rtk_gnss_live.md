@@ -139,7 +139,39 @@ radio link:
 | `--rover-ubx <file\|serial://\|/dev/tty...>` and `--rover-ubx-baud` | Rover as u-blox UBX instead (give one of the two rover flags). Baud default is 115200. |
 | `--base-rtcm <path\|ntrip://\|tcp://\|serial://>` | Base RTCM3. NTRIP URLs take `ntrip://user:password@host[:port]/MOUNT`. Required. |
 | `--nav-rinex <file>` | Supplemental broadcast navigation. It seeds the GPST week reference of both RTCM decoders (latest GPS toe) and supplies ephemerides. Multi-constellation needs an ephemeris for every system you want used, from this file or from 1019/1020/1042/1044/1045/1046 messages in the base stream; the multi-GNSS checks in [Real-time stress](../realtime_stress.md#multi-constellation-msm-epoch-assembly) all used `--nav-rinex`. It is optional on the fixture above because the base stream sends 1019. Without it and without any ephemeris in either stream, the head of the stream stays in week 0 ([Interfaces](../interfaces.md#multi-constellation-rtcm-epoch-assembly-no-rtcm-epoch-assembly)). |
+| `--ubx-nav` | With `--rover-ubx`: decode the rover's `UBX-RXM-SFRBX` into broadcast ephemerides (GPS/QZSS L1 C/A, Galileo E1-B, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set, and merge them like RTCM ephemerides. Default off. See [below](#a-u-blox-rover-without-a-navigation-file). |
 | `--base-ecef <x> <y> <z>` | Overrides the base position from the stream. Use it when the position in the 1005 message is not your surveyed mark. |
+
+### A u-blox rover without a navigation file
+
+A u-blox receiver already logs the subframes it decodes, so with `--ubx-nav` a
+rover needs neither `--nav-rinex` nor a base that sends ephemerides:
+
+```bash
+./build/apps/gnss_live \
+  --rover-ubx /dev/ttyACM0 --rover-ubx-baud 115200 \
+  --base-rtcm tcp://192.168.1.60:5019 --ubx-nav \
+  --preset low-cost --out output/live/run.pos
+```
+
+The rover has to log `UBX-RXM-RAWX` (the observations) and `UBX-RXM-SFRBX` (the
+subframes). The first RAWX epoch is also taken as the GPST reference of the base
+decoder, so a base stream without ephemerides is dated correctly. Solutions start
+once a satellite's ephemeris is complete: a median of 17 to 42 s after it is first
+tracked, and minutes for a satellite the receiver does not decode (measured on a
+2.67 h log, [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out)).
+Records whose health flags mark the satellite unusable (GPS/QZSS health 63,
+Galileo E1-B health or data-validity flags, BeiDou health 1, GLONASS `Bn` or `ln`)
+are skipped and counted; a receiver forwards such default sets, IGS BRDC files do
+not carry them, and without the rule they were picked among the real records of the
+same toe. The `summary:` line gains `ubx_nav_ephemerides=`, `ubx_nav_klobuchar=`
+and `ubx_nav_unhealthy_skipped=`. `gnss convert --format ubx --nav-rinex-out`
+writes every record, unhealthy ones with their health word, as a RINEX navigation
+file. Against `--nav-rinex` with the IGS BRDC file, the run on a 5.25 h log with a
+3.6 km baseline gave 99.9 % of the solutions, 99.9 % of the FIXED epochs and the
+same FIXED position to 12.6 mm at most. That is the log the rule was developed on:
+**`--ubx-nav` is not validated end to end on a log that was held out**, and not on a
+moving rover or in a canyon.
 
 Multi-constellation MSM needs no flag: the per-constellation messages of one
 epoch are merged into one epoch using the RTCM multiple-message bit, with no

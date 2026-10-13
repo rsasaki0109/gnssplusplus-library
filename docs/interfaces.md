@@ -193,6 +193,156 @@ With a file that has no such header (the UrbanNav BCEmerge file) the two give th
 epochs and the same position to the print precision at p50
 ([measured](realtime_stress.md#ephemerides-in-the-base-stream-eph-systems)).
 
+### Broadcast ephemerides from a u-blox rover (`--ubx-nav`, `--nav-rinex-out`)
+
+A u-blox receiver logs the navigation subframes of the satellites it tracks
+(`UBX-RXM-SFRBX`). `UBXNavDecoder` (`ubx_nav_decode.hpp`) turns them into
+`Ephemeris` records and the GPS Klobuchar set, so a u-blox-only stream no
+longer needs a navigation RINEX or an RTCM base that sends ephemerides.
+
+| System | Signal (`sigId`) | Message | Record complete on | Checks |
+|---|---|---|---|---|
+| GPS, QZSS | L1 C/A (0) | LNAV subframes 1 to 3 | subframe 3 | IODE of subframes 2 and 3 equals the low byte of IODC |
+| GPS | L1 C/A (0) | subframe 4, page 18 (SV id 56) | Klobuchar alpha/beta, no ephemeris | none |
+| Galileo | E1-B (1; 0 before protocol 27) | I/NAV word types 1 to 5 | word type 5 | CRC-24Q of every page pair, one IODnav in word types 1 to 4, word type 4 names the satellite |
+| BeiDou MEO/IGSO | B1I, B2I, B3I D1 (0, 2, 4) | D1 subframes 1 to 3 | subframe 3 | consecutive subframe times, `toc == toe` |
+| BeiDou GEO | B1I, B2I, B3I D2 (1, 3, 10; or `sigId` 0 on PRN 1 to 5, 59 to 63) | D2 subframe 1, pages 1 to 10 | page 10 | consecutive page times, `toc == toe` |
+| GLONASS | L1OF, L2OF (0, 2) | strings 1 to 4 | string 4 | Hamming code of every string, string 4 names the slot |
+
+Not decoded: GPS and QZSS CNAV (L2C, L5), QZSS L1S, Galileo F/NAV (E5a) and
+E5b-I I/NAV, BeiDou B-CNAV (B1C, B2a), NavIC, SBAS. They are counted as skipped.
+
+The layouts, scale factors, completion triggers and consistency checks follow
+RTKLIB 2.4.3 b34 (`rcv/ublox.c`, `rcvraw.c`). GPS and BeiDou words are not
+parity-checked, as in RTKLIB: the receiver forwards only subframes that passed
+its own parity check. Signals of one message layout share a buffer, because a
+receiver forwards only some of the strings or subframes of each signal (BeiDou
+D1 on B1I and B2I, GLONASS L1OF and L2OF). Records are emitted in the form the
+RINEX navigation reader produces for the same broadcast; Galileo records carry
+the data-source word of RTCM 1046 (513: I/NAV E1-B, clock referenced to E5b/E1).
+
+**Time reference.** The 10-bit GPS and QZSS week and the GLONASS day need the
+receiver time, which is the newest `UBX-RXM-RAWX` epoch of the same stream.
+Without one those records are dropped (`no_time_reference`); Galileo and BeiDou
+carry full weeks. The GPS week is the one nearest to the reference, not the
+latest one before the host clock as in RTKLIB, so old logs decode correctly.
+
+**`gnss live --ubx-nav`** (default off; without it the `.pos`, the options and
+the output are byte-identical to earlier releases). Decoded ephemerides are
+merged with `addEphemerisIfNew`, like RTCM ephemerides. The first decoded GPS
+Klobuchar set is used when no ionosphere model is valid yet; a `--nav-rinex`
+that has an `IONOSPHERIC CORR` header wins. With the flag the rover's first
+RAWX epoch is read before the base and becomes the GPST reference of the base
+decoder when it has none: a base stream without ephemerides would otherwise be
+dated from the host clock and never align with the rover. `--ubx-nav` skips a
+record whose health marks the satellite unusable and counts it: GPS and QZSS
+LNAV `svh` other than 0, Galileo E1-B `HS` or `DVS` other than 0, BeiDou `SatH1`
+other than 0, GLONASS `Bn` MSB set or string-3 `ln` set (`Ephemeris::glonass_ln`,
+filled by this decoder only). The `summary:` line gains `ubx_nav_ephemerides=`
+(records added), `ubx_nav_klobuchar=` (0/1) and `ubx_nav_unhealthy_skipped=`.
+`--ubx-nav` needs `--rover-ubx`.
+
+**`gnss convert --format ubx --nav-rinex-out <file>`** writes the decoded
+ephemerides as RINEX 3.04 navigation, with the last decoded Klobuchar set as
+`GPSA`/`GPSB` header lines, when the input ends, and prints a `nav_rinex:` line
+(count per system, `klobuchar=0|1`). It writes every record the receiver sent,
+unhealthy ones included, with their health word: a converter keeps what it was
+given. It is separate from `--nav-out`, which keeps its own converter-side
+decoders and writes no Klobuchar lines. `gnss ubx-info --decode-nav` prints a
+`nav_decode:` line with the same counts (also unfiltered).
+
+Limits. A receiver forwards the navigation data only of satellites it decodes,
+and often only part of the subframes, so a satellite that is tracked but not
+decoded gets no ephemeris and a new one takes between a few seconds and a few
+minutes (see below). A satellite that broadcasts a default or unhealthy data set
+(GPS and QZSS health 63 with URA index 15, BeiDou health 1) gives a record like any
+other, which IGS BRDC files leave out; the decoder emits it, `--ubx-nav` skips it
+and `--nav-rinex-out` writes it. `getEphemeris` itself does not look at health, so
+a record loaded from a RINEX file or an RTCM stream is still selected on toe alone.
+Each record is as old as its subframes: decoding does not check the ephemeris
+against the time. GLONASS strings are protected by a Hamming code only, which is
+accepted with the single-error allowance of RTKLIB and cannot reject every
+multi-bit error: one record in the measurement below (R16, `tb` 12 where the other
+strings of the frame say 15) is such a corruption, decoded identically by RTKLIB.
+
+`gnss live --rover-ubx` reads a UBX file in 4096-byte chunks and takes the first
+RAWX epoch of each chunk, so a log with several epochs per chunk loses the others
+(a 139 kB log of 201 epochs gave 34 aligned epochs). That predates `--ubx-nav`
+and is unchanged; the 3DOM log has one epoch per 5 kB and lost none.
+
+Measured. History: the first round, scored on two logs against a frozen plan,
+failed several gates for causes outside the decoder arithmetic (forwarded default
+data sets selected among real records, a completeness definition, and an RTKLIB
+that cannot decode u-blox Galileo E1-B); the second round added the health rule
+above, redefined those gates and was scored on logs not used before (develop
+`0f4153dc`).
+
+*Held-out log (Laura Bassi, 2025-10-15, L1/L5 receiver, 2.67 h, 2 Hz, IGS BKG BRDC
+2025/288; Galileo E5a, BeiDou B2a and GPS L5 CNAV messages are counted and not
+decoded).* A decoded record is compared with the BRDC record of the same
+satellite, issue (IODE, IODnav, AODE or tb) and toe by the library's own
+satellite position and clock at nine times from toe - 2 h to toe + 2 h (GLONASS
+seven times, tb +- 15 min).
+
+| | GPS | GLONASS | Galileo | BeiDou | QZSS |
+|---|---|---|---|---|---|
+| Records decoded (of which unhealthy) | 37 (0) | 69 (0) | 92 (0) | 44 (5) | 0 |
+| Healthy records with a BRDC record of the same issue and toe | 37 of 37 | 68 of 69 | 89 of 92 | 30 of 39 | - |
+| The same, BRDC 2025/287 and 288 together | 37 of 37 | 68 of 69 | 92 of 92 | 39 of 39 | - |
+| Worst difference of the matched records | 0.23 mm, 5e-16 s | 0.07 mm, 5e-16 s | 0.22 mm, 1e-15 s | 0.27 mm, 5e-16 s | - |
+| Same records as RTKLIB 2.4.3 b34 `convbin` (Galileo: with the patch below) | 37 of 37 | 68 of 68 | 92 of 92 | 44 of 44 | - |
+
+The 13 healthy records without a BRDC match are 12 sets whose toe is on
+2025-10-14 (the log starts at 23:58:27 UTC, and the daily BRDC file of the 15th
+does not carry them; the file of the 14th does) and one GLONASS record (R16)
+whose `tb` field was corrupted in transit in a way the Hamming code does not
+reject: the other strings of that frame carry `tb` 15, and the record is up to 9
+470 km off the neighbouring records within 15 min of its toe. RTKLIB decodes the
+same record. The GPS Klobuchar sets (17 distinct ones) are identical to the
+RTKLIB values in every printed digit, and the last one equals the BRDC header at
+its print precision. The five unhealthy records are BeiDou satellites with
+health 1; BRDC carries four of them.
+
+Time from the first RAWX epoch of a satellite to its first ephemeris (median / 95th
+percentile): GPS 32.5 s / 1952 s, GLONASS 36.5 s / 2037 s, Galileo 41.5 s / 241 s,
+BeiDou 16.5 s / 1500 s. For a satellite tracked for at least 30 min with at least one
+LNAV/I-NAV/D1/strings message in its first 15 min, a healthy ephemeris valid at 15
+min had been decoded for GPS 11 of 12 (92 %), GLONASS 14 of 14, Galileo 11 of 11
+and BeiDou 11 of 13; the misses are a rising GPS satellite for which the receiver
+forwarded 3 messages in 15 min, a BeiDou satellite with 4, and BeiDou C49, whose
+health is 1 throughout. One tracked BeiDou satellite had no message in its first
+15 min and is not counted.
+
+RTKLIB b34 decodes none of the Galileo records: it takes an E1-B message of 8
+words (every protocol 27 and later receiver) for E5b-I and drops it, and wants a
+word type 6 in the buffer. With one line changed (E5b-I told by `sigId`) it
+returns exactly the records of this decoder. `convbin` also scans the file once
+before converting and keeps the subframe buffers, so its first records can be
+completed with subframes from the end of the file; the comparison above uses a
+conversion pass with those buffers cleared. A differential run of the decoder
+against RTKLIB's `input_raw` on 12 000 random but consistent records (QZSS and
+BeiDou D2 included, 2000 per layout) gave identical records to 1e-12, and the
+single-pass decoders agree on every record of this log to 1e-12 relative.
+
+*End to end.* `--ubx-nav` against `--nav-rinex` is **not validated on a held-out
+log**: no rover log with a same-day base that was not used before was available
+to this evaluation (the 3DOM archive is a single 5.9 GB xz stream in random
+order, and finding the day the plan called for exceeded the download budget). On
+the log used while developing the rule (3DOM rover A, 2025-06-04, 5.25 h, base
+3.6 km away, base encoded to RTCM without ephemeris messages, `--preset
+low-cost`, BRDC 2025/155, 18 895 rover epochs), `--ubx-nav` gave 18 877 against
+18 895 solutions, the same status on 99.88 % of the epochs, 18 873 against 18
+891 FIXED epochs, a horizontal difference between the two FIXED positions of 0.0
+mm at p50 and 12.6 mm at most, and no FIXED epoch more than 0.5 m from the
+median FIXED position of the `--nav-rinex` run. The 15 unhealthy records of that
+log (GPS and QZSS health 63, BeiDou health 1) were skipped. Without the health
+rule the same run had 18 700 FIXED epochs and 975 FIXED epochs more than 0.5 m
+from that position (up to 1.2 m from the `--nav-rinex` position of the same
+epoch), because a default data set of G23 and G27 with the same toe as the real
+one was selected. A rover with a clear sky and a base 3.6 km away is the easy
+case: nothing here says how `--ubx-nav` behaves in a canyon, with a poor antenna
+or on a moving rover.
+
 ### Causal output guard for `gnss live` (`--kinematic-post-filter`)
 
 Opt-in (default off; without it `gnss live` output is byte-identical to
