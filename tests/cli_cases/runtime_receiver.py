@@ -164,6 +164,46 @@ class RuntimeReceiverCases:
             enabled = self.run_gnss(*common, "--ubx-nav")
             self.assertIn("rover_source=ubx", enabled.stdout)
             self.assertIn("ubx_nav_ephemerides=3 ubx_nav_klobuchar=0", enabled.stdout)
+    def test_live_ubx_nav_dates_a_base_without_ephemerides_from_the_rover_time(self) -> None:
+        # The recorded base stream with its ephemeris messages removed has no GPST reference, so its
+        # TOW-only epochs are dated from the host clock. With --ubx-nav the rover's first RAWX epoch
+        # is that reference and the epochs align; without it none do (unchanged behaviour).
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        stream = (fixture / "base.rtcm").read_bytes()
+        kept = bytearray()
+        index = 0
+        while index + 6 <= len(stream):
+            if stream[index] != 0xD3:
+                index += 1
+                continue
+            length = ((stream[index + 1] & 0x03) << 8) | stream[index + 2]
+            frame = stream[index : index + 6 + length]
+            message_type = (frame[3] << 4) | (frame[4] >> 4)
+            if message_type not in (1019, 1020, 1042, 1044, 1045, 1046):
+                kept += frame
+            index += 6 + length
+        first_epochs = [line.split() for line in (fixture / "base.idx").read_text().splitlines()[1:4]]
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_ref_") as temp_dir:
+            temp_root = Path(temp_dir)
+            (temp_root / "base_no_eph.rtcm").write_bytes(bytes(kept))
+            (temp_root / "rover.ubx").write_bytes(
+                b"".join(build_rawx_message(week=int(week), tow=float(tow)) for tow, week, *_ in first_epochs)
+            )
+            common = [
+                "live",
+                "--rover-ubx",
+                str(temp_root / "rover.ubx"),
+                "--base-rtcm",
+                str(temp_root / "base_no_eph.rtcm"),
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            ]
+            plain = self.run_gnss(*common)
+            self.assertIn("aligned_epochs=0", plain.stdout)
+            enabled = self.run_gnss(*common, "--ubx-nav")
+            self.assertRegex(enabled.stdout, r"aligned_epochs=[1-9]")
+            self.assertIn("ubx_nav_ephemerides=0", enabled.stdout)
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)

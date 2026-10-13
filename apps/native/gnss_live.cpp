@@ -1610,13 +1610,29 @@ int main(int argc, char** argv) {
         const bool base_threaded = base_source.pump != nullptr;
         libgnss::SPPProcessor fallback_spp(makeFallbackSppConfig(config));
 
+        // --ubx-nav: a base stream without ephemerides (and no --nav-rinex) gives its decoder no GPST
+        // reference, so its TOW-only epochs would be dated from the host clock and never align with the
+        // rover. The rover's RAWX time is that reference: read the first rover epoch before the base.
+        bool rover_read_first = false;
+        bool rover_ok = false;
+        if (config.ubx_nav && rover_input_kind == RoverInputKind::UBX &&
+            !base_source.decoder.referenceTime()) {
+            rover_ok = readRoverUbx(rover_obs);
+            rover_read_first = true;
+            if (rover_ok && rover_obs.time.week > 0) {
+                base_source.decoder.setReferenceTime(rover_obs.time);
+            }
+        }
+
         // The base is read first so that its ephemeris burst can seed the rover decoder before the
         // rover's first epoch is decoded.
         bool base_ok = readNextObservation(base_source, base_obs, base_events);
         shareReferences();
-        bool rover_ok = rover_input_kind == RoverInputKind::RTCM
-            ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
-            : readRoverUbx(rover_obs);
+        if (!rover_read_first) {
+            rover_ok = rover_input_kind == RoverInputKind::RTCM
+                ? readNextObservation(rover_rtcm_source, rover_obs, rover_events)
+                : readRoverUbx(rover_obs);
+        }
         const bool initial_rover_observation_ok = rover_ok;
         const bool initial_base_observation_ok = base_ok;
 
