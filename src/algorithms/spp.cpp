@@ -2150,11 +2150,7 @@ std::vector<SPPProcessor::SPPObservation> SPPProcessor::validateObservations(
         // nonzero health on the remaining systems, excludes the satellite. The
         // MIZU BRDC nav carries unhealthy R11/R26/R27, E14/E18 and several BDS
         // GEO/IGSO; including them drove the SPP solution kilometers off.
-        int sv_health = static_cast<int>(eph->health);
-        if (observation.satellite.system == GNSSSystem::QZSS) {
-            sv_health &= 0xFE;
-        }
-        if (sv_health != 0) {
+        if (!ephemerisHealthy(*eph, observation.satellite.system)) {
             markPreprocessRow(diagnostics, input_row_index, false,
                               "unhealthy-satellite");
             continue;

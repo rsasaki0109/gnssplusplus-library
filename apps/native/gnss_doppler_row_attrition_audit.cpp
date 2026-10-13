@@ -323,9 +323,7 @@ bool supportedFgoSignal(const SatelliteId& satellite, SignalType signal) {
 
 bool healthyForPositioning(const Observation& observation,
                            const libgnss::Ephemeris& eph) {
-    int health = static_cast<int>(eph.health);
-    if (observation.satellite.system == GNSSSystem::QZSS) health &= 0xFE;
-    return health == 0;
+    return libgnss::ephemerisHealthy(eph, observation.satellite.system);
 }
 
 std::string rawSatelliteName(const RawDiagnostic& raw) {

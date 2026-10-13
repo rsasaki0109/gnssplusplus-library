@@ -113,14 +113,8 @@ std::vector<PPPProcessor::IonosphereFreeObs> PPPProcessor::formIonosphereFree(
         // excludes the satellite from the PPP measurement update. The MIZU BRDC
         // nav carries unhealthy R11/R26/R27, E14/E18 and several BDS GEO/IGSO
         // whose stale broadcast orbits otherwise drive the filter kilometers off.
-        if (eph != nullptr) {
-            int sv_health = static_cast<int>(eph->health);
-            if (sat.system == GNSSSystem::QZSS) {
-                sv_health &= 0xFE;
-            }
-            if (sv_health != 0) {
-                continue;
-            }
+        if (eph != nullptr && !ephemerisHealthy(*eph, sat.system)) {
+            continue;
         }
 
         IonosphereFreeObs entry;

@@ -1858,6 +1858,7 @@ struct GalileoEphemerisRaw {
     int64_t omega_dot = -1200;
     int64_t bgd_e5a = -5;
     int64_t bgd_e5b = -7;
+    int e5b_hs = 0;            // I/NAV E5b signal health status (2 bits)
 };
 
 io::RTCMMessage buildGalileoEphemerisMessage(const GalileoEphemerisRaw& raw, bool inav) {
@@ -1893,7 +1894,7 @@ io::RTCMMessage buildGalileoEphemerisMessage(const GalileoEphemerisRaw& raw, boo
     s(10, raw.bgd_e5a);
     if (inav) {
         s(10, raw.bgd_e5b);
-        u(2, 0);  // E5b health
+        u(2, static_cast<uint64_t>(raw.e5b_hs));  // E5b health
         u(1, 0);
         u(2, 1);  // E1-B health: out of service
         u(1, 0);
@@ -1945,6 +1946,33 @@ TEST_F(RTCMProcessorTest, DecodesGalileo1046InavEphemeris) {
     double clock_drift = 0.0;
     ASSERT_TRUE(eph.calculateSatelliteState(eph.toe + 60.0, pos, vel, clock_bias, clock_drift));
     EXPECT_NEAR(pos.norm(), 29.6e6, 0.2e6);
+}
+
+TEST_F(RTCMProcessorTest, Galileo1046KeepsE5bHealthStatusAboveEightBits) {
+    // E5b HS occupies bits 7-8 of the RINEX health word, so HS=2 is 256. An
+    // 8-bit health field wrapped that to 0 and made the satellite look healthy.
+    GalileoEphemerisRaw raw;
+    raw.e5b_hs = 2;
+    const auto frame = buildRtcmFrame(buildGalileoEphemerisMessage(raw, true));
+    const auto decoded_messages = processor.decode(frame.data(), frame.size());
+    ASSERT_EQ(decoded_messages.size(), 1U);
+    NavigationData nav_data;
+    ASSERT_TRUE(processor.decodeNavigationData(decoded_messages.front(), nav_data));
+    const auto records = nav_data.getEphemeris(SatelliteId(GNSSSystem::Galileo, raw.prn));
+    ASSERT_EQ(records.size(), 1U);
+    EXPECT_EQ(records.front().health, 256U + 2U);  // E5b HS=2 (bit 8) | E1-B HS=1 (bit 1)
+    EXPECT_DOUBLE_EQ(records.front().sv_health, 258.0);
+    EXPECT_FALSE(ephemerisHealthy(records.front()));
+
+    raw.e5b_hs = 3;
+    const auto frame3 = buildRtcmFrame(buildGalileoEphemerisMessage(raw, true));
+    const auto decoded3 = processor.decode(frame3.data(), frame3.size());
+    ASSERT_EQ(decoded3.size(), 1U);
+    NavigationData nav3;
+    ASSERT_TRUE(processor.decodeNavigationData(decoded3.front(), nav3));
+    const auto records3 = nav3.getEphemeris(SatelliteId(GNSSSystem::Galileo, raw.prn));
+    ASSERT_EQ(records3.size(), 1U);
+    EXPECT_EQ(records3.front().health, 384U + 2U);
 }
 
 TEST_F(RTCMProcessorTest, DecodesGalileo1045FnavEphemeris) {

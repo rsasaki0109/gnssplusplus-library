@@ -251,6 +251,15 @@ void annotateGlonassFrequencyChannel(Observation& observation,
     observation.glonass_frequency_channel = it->second;
 }
 
+// RINEX health words are stored at full width in Ephemeris::health (uint16_t)
+// so a Galileo E5b HS value (bit 8) cannot wrap to "healthy". Negative or NaN
+// inputs map to 0; values beyond the field saturate (still non-zero).
+inline uint16_t rinexHealthWord(double value) {
+    if (!(value > 0.0)) return 0;
+    if (value >= 65535.0) return 65535;
+    return static_cast<uint16_t>(value);
+}
+
 // RINEX loss-of-lock indicator: only '0'..'7' are defined.  Anything else
 // (blank, a stray '\r', garbage) means "no indicator" instead of a value
 // derived from `c - '0'` that could set the cycle-slip bit.
@@ -1011,7 +1020,7 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
                 record.acceleration_km_per_s2[0] * 1e3,
                 record.acceleration_km_per_s2[1] * 1e3,
                 record.acceleration_km_per_s2[2] * 1e3);
-            eph.health = static_cast<uint8_t>(record.signal_health);
+            eph.health = rinexHealthWord(static_cast<double>(record.signal_health));
             eph.valid = record.signal_health == 0 && record.data_validity == 0;
             eph.navigation_message_type = active_header.navigation_message_type;
 
@@ -1092,7 +1101,7 @@ bool RINEXReader::readRinex4NavigationData(NavigationData& nav_data) {
             eph.af0 = record.clock_bias_s;
             eph.af1 = record.clock_drift_s_per_s;
             eph.sv_health = static_cast<double>(record.health);
-            eph.health = static_cast<uint8_t>(record.health);
+            eph.health = rinexHealthWord(static_cast<double>(record.health));
             eph.sv_accuracy = static_cast<double>(record.accuracy_index);
             eph.valid = record.health == 0;
             eph.navigation_message_type = active_header.navigation_message_type;
@@ -2216,7 +2225,7 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
                 parseD(lines[1], c2, 19) * 1e3,
                 parseD(lines[2], c2, 19) * 1e3,
                 parseD(lines[3], c2, 19) * 1e3);
-            eph.health = static_cast<uint8_t>(std::max(0.0, parseD(lines[1], c3, 19)));
+            eph.health = rinexHealthWord(parseD(lines[1], c3, 19));
             // Preserve whether the broadcast FCN field was actually present.
             // Channel zero is valid, so the legacy numeric default cannot be
             // used as a presence sentinel by strict provenance consumers.
@@ -2356,7 +2365,7 @@ bool RINEXReader::parseNavigationMessage(const std::vector<std::string>& lines, 
 
         eph.sv_accuracy = sv_accuracy;
         eph.sv_health = sv_health;
-        eph.health = static_cast<uint8_t>(std::max(0.0, sv_health));
+        eph.health = rinexHealthWord(sv_health);
         eph.tgd = delay_1;
         eph.tgd_secondary = 0.0;
         eph.valid = true;

@@ -367,11 +367,7 @@ inline double groupDelayCorrectionMeters(
 }
 
 inline bool isHealthyForPositioning(const Observation& observation, const Ephemeris& eph) {
-    int sv_health = static_cast<int>(eph.health);
-    if (observation.satellite.system == GNSSSystem::QZSS) {
-        sv_health &= 0xFE;
-    }
-    return sv_health == 0;
+    return ephemerisHealthy(eph, observation.satellite.system);
 }
 
 inline Vector3d earthRotationCorrected(const Vector3d& satellite_position,

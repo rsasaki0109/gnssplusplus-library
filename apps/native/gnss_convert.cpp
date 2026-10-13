@@ -480,7 +480,7 @@ bool decodeGpsLnavEphemeris(const libgnss::SatelliteId& satellite,
         eph.ura = static_cast<uint8_t>(readBitsMsbFirst(sf1.data(), sf1.size(), bit, 4));
         eph.sv_accuracy = uraMetersFromIndex(eph.ura);
         bit += 4;
-        eph.health = static_cast<uint8_t>(readBitsMsbFirst(sf1.data(), sf1.size(), bit, 6));
+        eph.health = static_cast<uint16_t>(readBitsMsbFirst(sf1.data(), sf1.size(), bit, 6));
         eph.sv_health = static_cast<double>(eph.health);
         bit += 6;
         const uint16_t iodc_msb = static_cast<uint16_t>(readBitsMsbFirst(sf1.data(), sf1.size(), bit, 2));
@@ -646,7 +646,7 @@ bool decodeGlonassEphemeris(const libgnss::SatelliteId& satellite,
 
     const int frn2 = static_cast<int>(readBitsMsbFirst(frame_bytes.data(), frame_bytes.size(), bit, 4));
     bit += 4;
-    eph.health = static_cast<uint8_t>(
+    eph.health = static_cast<uint16_t>(
         readBitsMsbFirst(frame_bytes.data(), frame_bytes.size(), bit, 3));
     eph.sv_health = static_cast<double>(eph.health);
     bit += 3;
@@ -794,7 +794,7 @@ bool decodeBeiDouD1Ephemeris(const libgnss::SatelliteId& satellite,
 
     eph = libgnss::Ephemeris{};
     eph.satellite = satellite;
-    eph.health = static_cast<uint8_t>(readBitsMsbFirst(sf1.data(), sf1.size(), 42, 1));
+    eph.health = static_cast<uint16_t>(readBitsMsbFirst(sf1.data(), sf1.size(), 42, 1));
     eph.sv_health = static_cast<double>(eph.health);
     eph.iodc = static_cast<uint16_t>(readBitsMsbFirst(sf1.data(), sf1.size(), 43, 5));
     eph.ura = static_cast<uint8_t>(readBitsMsbFirst(sf1.data(), sf1.size(), 48, 4));
@@ -979,7 +979,7 @@ bool decodeBeiDouD2Ephemeris(const libgnss::SatelliteId& satellite,
 
     eph = libgnss::Ephemeris{};
     eph.satellite = satellite;
-    eph.health = static_cast<uint8_t>(readBitsMsbFirst(p1.data(), p1.size(), 46, 1));
+    eph.health = static_cast<uint16_t>(readBitsMsbFirst(p1.data(), p1.size(), 46, 1));
     eph.sv_health = static_cast<double>(eph.health);
     eph.iodc = static_cast<uint16_t>(readBitsMsbFirst(p1.data(), p1.size(), 47, 5));
     eph.ura = static_cast<uint8_t>(readBitsMsbFirst(p1.data(), p1.size(), 60, 4));
@@ -1279,7 +1279,7 @@ bool decodeGalileoInavEphemeris(const libgnss::SatelliteId& satellite,
     eph.af2 = af2;
     eph.tgd = bgd_e5a_e1;
     eph.tgd_secondary = bgd_e5b_e1;
-    eph.health = static_cast<uint8_t>((e5b_hs << 7) | (e5b_dvs << 6) | (e1b_hs << 1) | e1b_dvs);
+    eph.health = static_cast<uint16_t>((e5b_hs << 7) | (e5b_dvs << 6) | (e1b_hs << 1) | e1b_dvs);
     eph.sv_health = static_cast<double>(eph.health);
     eph.iode = static_cast<uint16_t>(iod_nav0);
     eph.iodc = static_cast<uint16_t>(iod_nav0);

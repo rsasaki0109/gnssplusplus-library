@@ -1485,6 +1485,47 @@ TEST(RINEXWriterTest, WritesGalileoNavigationMessageReadableByReader) {
     std::filesystem::remove(temp_path);
 }
 
+TEST(RINEXWriterTest, RoundTripsGalileoHealthWordAboveEightBits) {
+    const auto temp_path =
+        std::filesystem::temp_directory_path() / "libgnss_rinex_writer_test_gal_health.nav";
+    std::filesystem::remove(temp_path);
+
+    io::RINEXWriter writer;
+    io::RINEXReader::RINEXHeader header;
+    header.version = 3.04;
+    header.file_type = io::RINEXReader::FileType::NAVIGATION;
+    header.satellite_system = "M";
+    ASSERT_TRUE(writer.createNavigationFile(temp_path.string(), header));
+
+    // E5b HS = 2 is bit 8 (256); E1-B HS = 1 is bit 1. An 8-bit health field
+    // wrapped 258 to 2 and 256 to 0, making an E5b-flagged satellite healthy.
+    Ephemeris e5b_flagged = makeGalileoEphemeris();
+    e5b_flagged.sv_health = 256.0;
+    e5b_flagged.health = 256;
+    Ephemeris combined = makeGalileoEphemeris();
+    combined.satellite = SatelliteId(GNSSSystem::Galileo, 7);
+    combined.sv_health = 258.0;
+    combined.health = 258;
+    ASSERT_TRUE(writer.writeNavigationMessage(e5b_flagged));
+    ASSERT_TRUE(writer.writeNavigationMessage(combined));
+    writer.close();
+
+    io::RINEXReader reader;
+    ASSERT_TRUE(reader.open(temp_path.string()));
+    NavigationData nav_data;
+    ASSERT_TRUE(reader.readNavigationData(nav_data));
+    reader.close();
+
+    const Ephemeris& a = nav_data.ephemeris_data.at(SatelliteId(GNSSSystem::Galileo, 5)).front();
+    const Ephemeris& b = nav_data.ephemeris_data.at(SatelliteId(GNSSSystem::Galileo, 7)).front();
+    EXPECT_EQ(a.health, 256);
+    EXPECT_DOUBLE_EQ(a.sv_health, 256.0);
+    EXPECT_FALSE(ephemerisHealthy(a));
+    EXPECT_EQ(b.health, 258);
+    EXPECT_FALSE(ephemerisHealthy(b));
+    std::filesystem::remove(temp_path);
+}
+
 TEST(RINEXWriterTest, GalileoSisaIndexMapsToMetres) {
     // Galileo OS SIS ICD Table 89.
     EXPECT_DOUBLE_EQ(galileoSisaMeters(0), 0.0);

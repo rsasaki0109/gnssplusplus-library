@@ -44,11 +44,7 @@ inline std::string signalName(libgnss::SignalType signal) {
 
 inline bool isHealthyForPositioning(const libgnss::Observation& observation,
                                     const libgnss::Ephemeris& eph) {
-    int sv_health = static_cast<int>(eph.health);
-    if (observation.satellite.system == libgnss::GNSSSystem::QZSS) {
-        sv_health &= 0xFE;
-    }
-    return sv_health == 0;
+    return libgnss::ephemerisHealthy(eph, observation.satellite.system);
 }
 
 inline std::size_t clockGroup(libgnss::GNSSSystem system) {
