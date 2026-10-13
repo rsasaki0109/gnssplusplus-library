@@ -140,7 +140,7 @@ int main(int argc, char** argv) {
                           << std::dec << std::setfill(' ') << ")\n";
             }
 
-            if ((decode_nav || !obs_rinex_out.empty()) && event.has_nav_pvt) {
+            if (event.has_nav_pvt) {
                 ++nav_pvt_count;
                 if (decode_nav) {
                     std::cout << "  nav: fix_type=" << static_cast<int>(event.nav_pvt.fix_type)
@@ -155,8 +155,11 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            if (decode_nav && event.has_sfrbx) {
+            if (event.has_sfrbx) {
                 ++sfrbx_count;
+                if (!decode_nav) {
+                    continue;
+                }
                 libgnss::io::UBXSfrbxFrameInfo frame_info;
                 const bool has_frame_info =
                     libgnss::io::ubx_utils::decodeSfrbxFrameInfo(event.sfrbx, frame_info);
@@ -189,7 +192,7 @@ int main(int argc, char** argv) {
                 continue;
             }
 
-            if ((decode_observations || !obs_rinex_out.empty()) && event.has_observation) {
+            if (event.has_observation) {
                 ++rawx_count;
                 if (decode_observations) {
                     std::cout << "  obs: week=" << event.observation.time.week
