@@ -249,8 +249,8 @@ counts twice), `ubx_nav_klobuchar=` (0/1), `ubx_nav_unhealthy_skipped=`,
 **Accept, then confirm (`gnss live --ubx-nav`).** Waiting for a second
 transmission before using an ephemeris (confirm-twice, below) delays every record
 by one repeat of its frame set: at a cold start the filter had ephemerides for
-only a few satellites for the first minute, and on one development log it fixed
-one L1 cycle off and held that fix. `--ubx-nav` therefore merges a record at once
+only some of the satellites until the repeats arrived, and on one development log
+it fixed one L1 cycle off and held that fix. `--ubx-nav` therefore merges a record at once
 and uses the second copy only to catch a corrupted one
 (`UBXNavAcceptConfirm`, `ubx_nav_decode.hpp`). Per satellite, on every complete
 frame set the decoder produces (also the repeats it does not emit):
