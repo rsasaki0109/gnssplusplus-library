@@ -695,7 +695,8 @@ void printUsage(const char* argv0) {
         << "  --nav-rinex <file>         Supplemental broadcast navigation RINEX\n"
         << "  --ubx-nav                  With --rover-ubx: decode the rover's UBX-RXM-SFRBX into broadcast ephemerides\n"
         << "                            (GPS/QZSS LNAV, Galileo E1-B I/NAV, BeiDou D1/D2, GLONASS) and the GPS Klobuchar set\n"
-        << "                            and merge them like RTCM ephemerides; a --nav-rinex ionosphere model wins (default: off)\n"
+        << "                            and merge them like RTCM ephemerides, skipping records whose health flags mark the satellite\n"
+        << "                            unusable (counted as ubx_nav_unhealthy_skipped); a --nav-rinex ionosphere model wins (default: off)\n"
         << "  --out <file>               Output solution file (default: output/live_solution.pos)\n"
         << "  --format <pos|llh|xyz>     Output format (default: pos)\n"
         << "  --pos-uncertainty          Append sdn sde sdu sdne sdeu sdun (m) and DiffAge(s) to .pos rows\n"
@@ -1546,6 +1547,7 @@ int main(int argc, char** argv) {
         libgnss::io::UBXNavDecoder ubx_nav_decoder;
         std::vector<libgnss::Ephemeris> ubx_nav_new;
         size_t ubx_nav_ephemerides = 0;
+        size_t ubx_nav_unhealthy_skipped = 0;
         auto applyUbxNavEvents = [&](const std::vector<libgnss::io::UBXStreamDecoder::Event>& events) {
             if (!config.ubx_nav) {
                 return;
@@ -1558,6 +1560,12 @@ int main(int argc, char** argv) {
                     ubx_nav_new.clear();
                     ubx_nav_decoder.pushSfrbx(event.sfrbx, ubx_nav_new);
                     for (const auto& eph : ubx_nav_new) {
+                        // The receiver forwards unhealthy and default sets (e.g. GPS svh=63) that
+                        // broadcast navigation files do not carry; they must not reach the database.
+                        if (!libgnss::io::ubxNavEphemerisUsable(eph)) {
+                            ++ubx_nav_unhealthy_skipped;
+                            continue;
+                        }
                         if (nav_data.addEphemerisIfNew(eph)) {
                             ++ubx_nav_ephemerides;
                         }
@@ -2079,7 +2087,8 @@ int main(int argc, char** argv) {
         }
         if (config.ubx_nav) {
             std::cout << " ubx_nav_ephemerides=" << ubx_nav_ephemerides
-                      << " ubx_nav_klobuchar=" << (ubx_nav_decoder.hasKlobuchar() ? 1 : 0);
+                      << " ubx_nav_klobuchar=" << (ubx_nav_decoder.hasKlobuchar() ? 1 : 0)
+                      << " ubx_nav_unhealthy_skipped=" << ubx_nav_unhealthy_skipped;
         }
         std::cout << "\n";
         return written_solutions > 0 ? 0 : 1;

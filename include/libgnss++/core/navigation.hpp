@@ -156,6 +156,9 @@ struct Ephemeris {
     bool glonass_canonical_geph_data_valid = true;
     int glonass_canonical_geph_reject_reason = 0;
     int glonass_age = 0;
+    /// GLONASS string-3 health flag ln (1 = malfunction).  Only the UBX-RXM-SFRBX decoder fills it;
+    /// RINEX and RTCM records do not carry it and leave 0 (treated as "not present").
+    int glonass_ln = 0;
     
     // Status and accuracy
     uint16_t week;          ///< GPS week number

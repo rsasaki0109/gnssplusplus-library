@@ -1559,6 +1559,40 @@ class StreamProtocolCases:
             self.assertIn("G12 2022  3 10  0  0  0", exported)
             self.assertIn("5.153795890808D+03", exported)
 
+    def test_convert_nav_rinex_out_keeps_unhealthy_records(self) -> None:
+        # A converter keeps what the receiver sent: a GPS set with svh=63 is written with its health
+        # (only `gnss live --ubx-nav` leaves unhealthy records out of the navigation database).
+        with tempfile.TemporaryDirectory(prefix="gnss_convert_nav_rinex_health_") as temp_dir:
+            temp_root = Path(temp_dir)
+            input_path = temp_root / "health.ubx"
+            output_path = temp_root / "health.nav"
+            input_path.write_bytes(
+                build_rawx_message()
+                + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=12) for n in (1, 2, 3))
+                + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=13, health=63) for n in (1, 2, 3))
+            )
+
+            result = self.run_gnss(
+                "convert",
+                "--format",
+                "ubx",
+                "--input",
+                str(input_path),
+                "--nav-rinex-out",
+                str(output_path),
+                "--quiet",
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertIn("nav_rinex: ephemerides=2 GPS=2 klobuchar=0", result.stdout)
+            lines = output_path.read_text(encoding="ascii").splitlines()
+            health_by_sat = {}
+            for index, line in enumerate(lines):
+                if line[:1] == "G" and line[1:3].isdigit():
+                    # broadcast orbit 6 line: SV accuracy, SV health, TGD, IODC
+                    health_by_sat[line[:3]] = float(lines[index + 6][23:42].replace("D", "E"))
+            self.assertEqual(health_by_sat, {"G12": 0.0, "G13": 63.0})
+
     def test_convert_nav_rinex_out_requires_ubx_format(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_convert_nav_rinex_fmt_") as temp_dir:
             temp_root = Path(temp_dir)

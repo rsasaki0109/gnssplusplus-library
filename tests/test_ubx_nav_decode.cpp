@@ -647,3 +647,188 @@ TEST(UBXNavDecodeTest, Crc24qAndGlonassHammingHelpers) {
     string[3] ^= 0x30;
     EXPECT_FALSE(io::ubx_utils::testGlonassString(string));
 }
+
+// ---------------------------------------------------------------------------
+// Health (design change D1): the decoder keeps every record with its health as
+// received; ubxNavEphemerisUsable() is the rule `gnss live --ubx-nav` applies
+// before merging.
+// ---------------------------------------------------------------------------
+namespace {
+
+bool wordBit(const std::vector<uint32_t>& words, size_t bit) {
+    return (words[bit / 32] >> (31 - bit % 32)) & 1U;
+}
+
+void setWordBit(std::vector<uint32_t>& words, size_t bit, bool value) {
+    const uint32_t mask = 1U << (31 - bit % 32);
+    words[bit / 32] = value ? (words[bit / 32] | mask) : (words[bit / 32] & ~mask);
+}
+
+// Rewrite the CRC-24Q of a Galileo I/NAV E1-B page pair (8 words) after its data bits were edited:
+// 4 zero bits, 114 even-page bits, 82 odd-page bits.
+void refreshGalileoCrc(std::vector<uint32_t>& words) {
+    std::vector<bool> bits(4, false);
+    for (size_t k = 0; k < 114; ++k) bits.push_back(wordBit(words, k));
+    for (size_t k = 0; k < 82; ++k) bits.push_back(wordBit(words, 128 + k));
+    uint8_t buffer[25] = {0};
+    for (size_t k = 0; k < bits.size(); ++k) {
+        if (bits[k]) buffer[k / 8] |= static_cast<uint8_t>(0x80U >> (k % 8));
+    }
+    const uint32_t crc = io::ubx_utils::crc24q(buffer, sizeof buffer);
+    for (size_t k = 0; k < 24; ++k) {
+        setWordBit(words, 128 + 82 + k, (crc >> (23 - k)) & 1U);
+    }
+}
+
+std::vector<SfrbxRow> galileoWithHealth(int e5b_hs, int e1b_hs, int e5b_dvs, int e1b_dvs) {
+    std::vector<SfrbxRow> rows = kE30Inav;
+    auto& words = rows[4].words;  // word type 5
+    // 128-bit word bit p lives at page bit 2 + p; HS/DVS follow six 6/11/11/14/5/10/10-bit fields (bit 67).
+    const size_t base = 2 + 67;
+    setWordBit(words, base + 0, (e5b_hs >> 1) & 1);
+    setWordBit(words, base + 1, e5b_hs & 1);
+    setWordBit(words, base + 2, (e1b_hs >> 1) & 1);
+    setWordBit(words, base + 3, e1b_hs & 1);
+    setWordBit(words, base + 4, e5b_dvs & 1);
+    setWordBit(words, base + 5, e1b_dvs & 1);
+    refreshGalileoCrc(words);
+    return rows;
+}
+
+}  // namespace
+
+TEST(UBXNavDecodeTest, UsableRuleFollowsTheHealthFlagsOfEachSystem) {
+    Ephemeris eph;
+    eph.valid = true;
+
+    for (const auto system : {GNSSSystem::GPS, GNSSSystem::QZSS, GNSSSystem::BeiDou}) {
+        eph.satellite = SatelliteId(system, 5);
+        eph.health = 0;
+        EXPECT_TRUE(io::ubxNavEphemerisUsable(eph));
+        eph.health = 1;
+        EXPECT_FALSE(io::ubxNavEphemerisUsable(eph));
+    }
+    eph.satellite = SatelliteId(GNSSSystem::GPS, 5);
+    eph.health = 63;
+    EXPECT_FALSE(io::ubxNavEphemerisUsable(eph));
+
+    // Galileo: E1-B DVS (bit 0) and E1-B HS (bits 1-2) count, the E5b flags (bits 6-7) do not.
+    eph.satellite = SatelliteId(GNSSSystem::Galileo, 5);
+    for (int health = 0; health < 256; ++health) {
+        eph.health = static_cast<uint8_t>(health);
+        EXPECT_EQ(io::ubxNavEphemerisUsable(eph), (health & 0x07) == 0) << health;
+    }
+
+    // GLONASS: Bn MSB or ln; ln is 0 when absent (RINEX/RTCM records).
+    eph.satellite = SatelliteId(GNSSSystem::GLONASS, 5);
+    eph.health = 0;
+    eph.glonass_ln = 0;
+    EXPECT_TRUE(io::ubxNavEphemerisUsable(eph));
+    eph.health = 1;
+    EXPECT_FALSE(io::ubxNavEphemerisUsable(eph));
+    eph.health = 0;
+    eph.glonass_ln = 1;
+    EXPECT_FALSE(io::ubxNavEphemerisUsable(eph));
+}
+
+TEST(UBXNavDecodeTest, GpsUnhealthyRecordIsDecodedWithItsHealth) {
+    io::UBXNavDecoder decoder;
+    decoder.setReferenceTime(kReference);
+    std::vector<SfrbxRow> rows = kG21Iode25;
+    // LNAV svh = 63, a default data set as the receiver forwards them: 6 bits at data bits 64-69
+    // (parity is not checked for GPS), i.e. bits 13..8 of word 3 of subframe 1.
+    ASSERT_EQ((rows[0].words[2] >> 8) & 0x3FU, 0U);
+    rows[0].words[2] |= 0x3FU << 8;
+    const auto out = decodeRows(decoder, rows);
+    ASSERT_EQ(out.size(), 1U);
+    EXPECT_EQ(out.front().health, 63);
+    EXPECT_EQ(out.front().sv_health, 63.0);
+    EXPECT_FALSE(io::ubxNavEphemerisUsable(out.front()));
+
+    io::UBXNavDecoder healthy;
+    healthy.setReferenceTime(kReference);
+    const auto ok = decodeRows(healthy, kG21Iode25);
+    ASSERT_EQ(ok.size(), 1U);
+    EXPECT_EQ(ok.front().health, 0);
+    EXPECT_TRUE(io::ubxNavEphemerisUsable(ok.front()));
+}
+
+TEST(UBXNavDecodeTest, GalileoHealthFlagsAreDecodedAndOnlyE1bOnesMakeTheRecordUnusable) {
+    struct Case { int e5b_hs, e1b_hs, e5b_dvs, e1b_dvs; bool usable; };
+    const Case cases[] = {
+        {0, 0, 0, 0, true},
+        {0, 1, 0, 0, false},   // E1-B HS
+        {0, 2, 0, 0, false},
+        {0, 0, 0, 1, false},   // E1-B DVS
+        {3, 0, 1, 0, true},    // E5b flags alone: the E1-B signal is fine
+    };
+    for (const auto& c : cases) {
+        io::UBXNavDecoder decoder;
+        const auto out = decodeRows(decoder, galileoWithHealth(c.e5b_hs, c.e1b_hs, c.e5b_dvs, c.e1b_dvs));
+        ASSERT_EQ(out.size(), 1U) << c.e5b_hs << c.e1b_hs << c.e5b_dvs << c.e1b_dvs;
+        const int svh = (c.e5b_hs << 7) | (c.e5b_dvs << 6) | (c.e1b_hs << 1) | c.e1b_dvs;
+        EXPECT_EQ(out.front().health, svh & 0xFF);  // RINEX Galileo health word; `health` keeps its low byte
+        EXPECT_EQ(out.front().sv_health, static_cast<double>(svh));
+        EXPECT_EQ(io::ubxNavEphemerisUsable(out.front()), c.usable);
+    }
+}
+
+TEST(UBXNavDecodeTest, GlonassLnFlagIsDecodedAndMakesTheRecordUnusable) {
+    io::UBXNavDecoder decoder;
+    decoder.setReferenceTime(GNSSTime(2331, 198746.0));
+    const auto real = decodeRows(decoder, kR04Strings);
+    ASSERT_EQ(real.size(), 1U);
+    EXPECT_EQ(real.front().glonass_ln, 0);
+    EXPECT_TRUE(io::ubxNavEphemerisUsable(real.front()));
+
+    // Set ln (bit 20 of string 3, bit 0x0800 of its first word) and rewrite the Hamming check bits
+    // (string bits 77-84: low 3 bits of byte 9, top 5 bits of byte 10) until no check fails, so the
+    // single-error tolerance of the receiver-style test plays no part.
+    static const uint8_t kMask[8][11] = {
+        {0x55,0x55,0x5A,0xAA,0xAA,0xAA,0xB5,0x55,0x6A,0xD8,0x08},
+        {0x66,0x66,0x6C,0xCC,0xCC,0xCC,0xD9,0x99,0xB3,0x68,0x10},
+        {0x87,0x87,0x8F,0x0F,0x0F,0x0F,0x1E,0x1E,0x3C,0x70,0x20},
+        {0x07,0xF8,0x0F,0xF0,0x0F,0xF0,0x1F,0xE0,0x3F,0x80,0x40},
+        {0xF8,0x00,0x0F,0xFF,0xF0,0x00,0x1F,0xFF,0xC0,0x00,0x80},
+        {0x00,0x00,0x0F,0xFF,0xFF,0xFF,0xE0,0x00,0x00,0x01,0x00},
+        {0xFF,0xFF,0xF0,0x00,0x00,0x00,0x00,0x00,0x00,0x02,0x00},
+        {0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xF8}};
+    auto failingChecks = [&](const std::vector<uint32_t>& w) {
+        int failing = 0;
+        for (const auto& mask : kMask) {
+            int parity = 0;
+            for (int j = 0; j < 11; ++j) {
+                const uint8_t byte = static_cast<uint8_t>(w[static_cast<size_t>(j / 4)] >> (8 * (3 - j % 4)));
+                parity ^= __builtin_popcount(byte & mask[j]) & 1;
+            }
+            failing += parity;
+        }
+        return failing;
+    };
+    ASSERT_EQ(failingChecks(kR04Strings[2].words), 0);  // the recorded string is clean
+    auto string3 = kR04Strings[2];
+    ASSERT_EQ((string3.words[0] >> 8) & 0x08U, 0U);
+    string3.words[0] |= 0x0800U;
+    bool found = false;
+    for (uint32_t check = 0; check < 256 && !found; ++check) {
+        auto candidate = string3;
+        candidate.words[2] = (candidate.words[2] & ~((0x07U << 16) | (0xF8U << 8))) |
+                             (((check >> 5) & 0x07U) << 16) | ((check & 0x1FU) << 11);
+        if (failingChecks(candidate.words) == 0) {
+            string3 = candidate;
+            found = true;
+        }
+    }
+    ASSERT_TRUE(found);
+
+    io::UBXNavDecoder flagged;
+    flagged.setReferenceTime(GNSSTime(2331, 198746.0));
+    std::vector<SfrbxRow> rows = kR04Strings;
+    rows[2] = string3;
+    const auto out = decodeRows(flagged, rows);
+    ASSERT_EQ(out.size(), 1U);
+    EXPECT_EQ(flagged.stats().systems.at(GNSSSystem::GLONASS).dropped.count("hamming"), 0U);
+    EXPECT_EQ(out.front().glonass_ln, 1);
+    EXPECT_EQ(out.front().health, 0);  // Bn is untouched
+    EXPECT_FALSE(io::ubxNavEphemerisUsable(out.front()));
+}

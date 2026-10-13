@@ -1646,7 +1646,9 @@ def build_single_grid_residuals(
     return tuple(residuals)
 
 
-def build_gps_lnav_sfrbx_message(subframe_id: int, sv_id: int = 12, week: int = 2200) -> bytes:
+def build_gps_lnav_sfrbx_message(
+    subframe_id: int, sv_id: int = 12, week: int = 2200, health: int = 0
+) -> bytes:
     payload_bits = bytearray(30)
     tow_seconds = 345600
     toc_seconds = 345600
@@ -1665,7 +1667,7 @@ def build_gps_lnav_sfrbx_message(subframe_id: int, sv_id: int = 12, week: int = 
         bit += 2
         set_unsigned_bits(payload_bits, bit, 4, 0)
         bit += 4
-        set_unsigned_bits(payload_bits, bit, 6, 0)
+        set_unsigned_bits(payload_bits, bit, 6, health)  # LNAV svh
         bit += 6
         set_unsigned_bits(payload_bits, bit, 2, iodc >> 8)
         bit += 2

@@ -871,7 +871,8 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     const int frn3 = static_cast<int>(getbitu(b, i, 4)); i += 4;
     i += 1;  // P3
     eph.glonass_gamn = getbitg(b, i, 11) * kP2_40; i += 11 + 1;
-    i += 2 + 1;  // P, ln
+    i += 2;  // P
+    const int ln = static_cast<int>(getbitu(b, i, 1)); i += 1;  // ln: string-3 health flag
     eph.glonass_velocity.z() = getbitg(b, i, 24) * kP2_20 * 1E3; i += 24;
     eph.glonass_acceleration.z() = getbitg(b, i, 5) * kP2_30 * 1E3; i += 5;
     eph.glonass_position.z() = getbitg(b, i, 27) * kP2_11 * 1E3; i += 27 + 4;
@@ -899,6 +900,7 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     eph.glonass_frequency_channel_present = true;
     eph.health = static_cast<uint8_t>(bn);
     eph.sv_health = static_cast<double>(bn);
+    eph.glonass_ln = ln;
     eph.iode = static_cast<uint16_t>(tb & 0x7F);
 
     const GNSSTime ref_utc = rtcm_internal::gpstToUtcApprox(reference_);
@@ -911,6 +913,22 @@ size_t UBXNavDecoder::pushGlonass(const UBXSfrbx& sfrbx, std::vector<Ephemeris>&
     eph.week = static_cast<uint16_t>(eph.toe.week);
     eph.valid = true;
     return emit(eph, out) ? 1 : 0;
+}
+
+bool ubxNavEphemerisUsable(const Ephemeris& eph) {
+    switch (eph.satellite.system) {
+        case GNSSSystem::GPS:
+        case GNSSSystem::QZSS:
+            return eph.health == 0;                // LNAV svh (6 bits)
+        case GNSSSystem::Galileo:
+            return (eph.health & 0x07) == 0;       // E1-B DVS (bit 0) and E1-B HS (bits 1-2)
+        case GNSSSystem::BeiDou:
+            return eph.health == 0;                // SatH1
+        case GNSSSystem::GLONASS:
+            return eph.health == 0 && eph.glonass_ln == 0;  // Bn MSB, ln
+        default:
+            return true;
+    }
 }
 
 }  // namespace io

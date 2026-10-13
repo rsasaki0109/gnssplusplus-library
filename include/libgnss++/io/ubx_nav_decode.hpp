@@ -151,6 +151,18 @@ private:
     std::map<SatelliteId, Ephemeris> last_emitted_;
 };
 
+/**
+ * @brief True when the health flags of a decoded record say the satellite is usable.
+ *
+ * `gnss live --ubx-nav` merges only records for which this holds.  The decoder itself, and
+ * `--nav-rinex-out`, keep every record with its health as received.
+ *  - GPS/QZSS: LNAV svh == 0.
+ *  - Galileo: E1-B HS == 0 and E1-B DVS == 0 (the E5b flags are ignored).
+ *  - BeiDou: SatH1 == 0.
+ *  - GLONASS: Bn MSB == 0 and string-3 ln == 0 (`Ephemeris::glonass_ln`; 0 when not present).
+ */
+bool ubxNavEphemerisUsable(const Ephemeris& eph);
+
 namespace ubx_utils {
 
 /// CRC-24Q (Galileo I/NAV / RTCM 3 polynomial 0x1864CFB, zero initial value) over `size` bytes.

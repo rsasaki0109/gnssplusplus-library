@@ -204,6 +204,46 @@ class RuntimeReceiverCases:
             enabled = self.run_gnss(*common, "--ubx-nav")
             self.assertRegex(enabled.stdout, r"aligned_epochs=[1-9]")
             self.assertIn("ubx_nav_ephemerides=0", enabled.stdout)
+    def test_live_ubx_nav_skips_unhealthy_ephemerides(self) -> None:
+        # G12 is healthy, G13 broadcasts svh=63 (the receiver forwards default data sets like this).
+        # --ubx-nav must merge only G12 and count the other one; with a healthy G13 both are merged.
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress" / "base.rtcm"
+        with tempfile.TemporaryDirectory(prefix="gnss_live_ubx_nav_health_") as temp_dir:
+            temp_root = Path(temp_dir)
+
+            def run(g13_health: int):
+                rover_path = temp_root / f"rover_{g13_health}.ubx"
+                rover_path.write_bytes(
+                    build_rawx_message()
+                    + b"".join(build_gps_lnav_sfrbx_message(n, sv_id=12) for n in (1, 2, 3))
+                    + b"".join(
+                        build_gps_lnav_sfrbx_message(n, sv_id=13, health=g13_health) for n in (1, 2, 3)
+                    )
+                    + build_rawx_message(tow=345601.125)
+                )
+                return self.run_gnss(
+                    "live",
+                    "--rover-ubx",
+                    str(rover_path),
+                    "--base-rtcm",
+                    str(fixture),
+                    "--out",
+                    str(temp_root / f"live_{g13_health}.pos"),
+                    "--ubx-nav",
+                    "--quiet",
+                )
+
+            unhealthy = run(63)
+            self.assertIn(
+                "ubx_nav_ephemerides=1 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=1",
+                unhealthy.stdout,
+            )
+            healthy = run(0)
+            self.assertIn(
+                "ubx_nav_ephemerides=2 ubx_nav_klobuchar=0 ubx_nav_unhealthy_skipped=0",
+                healthy.stdout,
+            )
+
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
