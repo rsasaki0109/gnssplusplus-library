@@ -7,11 +7,20 @@ Practical notes for agents and contributors working in this repository.
 ```bash
 cmake -S . -B build
 cmake --build build -j$(nproc)
-ctest --test-dir build -j$(nproc)   # expect 71/71
+ctest --test-dir build -L core -j$(nproc)   # the CI gate; expect all to pass
 ```
 
 `ctest` covers the C++ gtest suites plus the Python lanes (CLI tools,
-bindings, web UI, ROS2 node smoke). A few Python CLI tests are timing
+bindings, web UI, ROS2 node smoke). CI runs only the `core` label
+(`scripts/ci/run_core_tests.sh`); the total and per-label counts depend on
+the optional components found (GTSAM, ROS 2), so compare against a run of
+the base commit rather than a fixed number. A plain `ctest` also runs
+unlabelled tests that need more than a fresh checkout:
+`python_packaging_tests` and `python_trajectory_bundle_tests` need the
+Python bindings (`libgnsspp`; the default configure requires pybind11, and
+with `-DGNSSPP_BUILD_PYTHON_BINDINGS=OFF` these two fail), and
+`python_smartphone_native_fgo_pdc_factor_hypotheses_tests` reads a local
+`output/smartphone-r5/...` artifact. A few Python CLI tests are timing
 sensitive; if one fails under `-j`, re-run it serially before treating it
 as a regression.
 
