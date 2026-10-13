@@ -197,8 +197,8 @@ Neither profile is a statement about RTK tuning in general.
 epoch whose height differs from the last written epoch by more than
 `max(1 m, 4 m/s * dt)`, adds no delay, and adds `post_filter_dropped_epochs=` to
 the summary. On the four UrbanNav Tokyo replays below it lowered Wrong/FIX only
-slightly (12.1 to 11.2 %, 5.5 to 4.8 %, 1.0 to 0.4 %, 22.2 to 20.5 %) while
-withholding 18 to 34 % of the solutions
+slightly (6.6 to 5.0 %, 5.2 to 4.3 %, 1.1 to 0.4 %, 22.9 to 21.1 %) while
+withholding 19 to 33 % of the solutions
 ([Wrong FIX on the real-time path](../realtime_stress.md#wrong-fix-on-the-real-time-path)).
 It does not remove wrong fixes.
 
@@ -340,23 +340,27 @@ replays and then on your own recorded drives:
 **Do not trust a `gnss live` FIX in a dense urban canyon.** With
 `--preset low-cost` and all constellations (G+R+E+J+C MSM7, `--nav-rinex`,
 surveyed base, real host clock, offline replays of the 2018-12-19 UrbanNav Tokyo
-runs, contract frozen before the run), `gnss live` published FIX epochs more
-than 0.5 m off at these rates
+runs, contract frozen before the run, measured on develop `52853076`),
+`gnss live` published FIX epochs more than 0.5 m off at these rates
 ([source](../realtime_stress.md#wrong-fix-on-the-real-time-path)):
 
 | UrbanNav Tokyo, `--preset low-cost` | FIX, GPS-only to multi | Wrong FIX, GPS-only to multi | Wrong/FIX, GPS-only to multi | FIXED 3D p95, multi |
 |---|---|---|---|---|
-| Shinjuku, Trimble rover | 3511 to 13963 | 1711 to 1687 | 48.7 % to **12.1 %** | 1.59 m |
-| Shinjuku, u-blox rover | 623 to 5043 | 202 to 276 | 32.4 % to **5.5 %** | 0.60 m |
-| Odaiba, Trimble rover | 4419 to 7687 | 125 to 78 | 2.8 % to 1.0 % | 0.17 m |
-| Odaiba, u-blox rover | 0 to 2580 | 0 to 574 | none to **22.2 %** | 3.30 m |
+| Shinjuku, Trimble rover | 3511 to 13636 | 1711 to 905 | 48.7 % to **6.6 %** | 0.78 m |
+| Shinjuku, u-blox rover | 623 to 4988 | 202 to 258 | 32.4 % to **5.2 %** | 0.51 m |
+| Odaiba, Trimble rover | 4419 to 7704 | 125 to 81 | 2.8 % to 1.1 % | 0.17 m |
+| Odaiba, u-blox rover | 0 to 2588 | 0 to 592 | none to **22.9 %** | 3.31 m |
 
-Multi-GNSS fixes three to eight times more epochs and lowers Wrong/FIX on both
-Shinjuku runs and on Odaiba Trimble, but the number of wrong fixes barely goes
-down, and on Odaiba u-blox 22 % of the fixes are wrong. Most are decimetres to a
-few metres off rather than tens of metres, which still matters for anything that
-trusts the FIX flag. On the PPC replays the multi-GNSS low-cost Wrong/FIX is 1.2
-to 3.7 %.
+Multi-GNSS fixes 3.9 and 8.0 times as many epochs on the two Shinjuku runs and
+1.7 times as many on Odaiba Trimble, and lowers Wrong/FIX on all three. The
+number of wrong fixes falls on the two Trimble runs but rises on Shinjuku
+u-blox (202 to 258), and on Odaiba u-blox 23 % of the fixes are wrong. Most are
+decimetres to a few metres off rather than tens of metres, which still matters
+for anything that trusts the FIX flag. On the PPC replays the multi-GNSS
+low-cost Wrong/FIX is 1.2 to 3.7 %. An earlier run of the same contract on
+`b9a6e243` gave 12.1 %, 5.5 %, 1.0 % and 22.2 % in the table order; #615, the
+deterministic same-toe ephemeris order, changed the multi-GNSS numbers
+([details](../realtime_stress.md#wrong-fix-on-the-real-time-path)).
 
 What this page and its options do **not** do:
 
