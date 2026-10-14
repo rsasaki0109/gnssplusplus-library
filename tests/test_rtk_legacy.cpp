@@ -896,7 +896,8 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFi
 // SD ambiguity state each. G02..G05 are held from earlier fixes, G06..G09 are
 // new (they joined, or their ambiguity was reset). The new floats sit on x.5
 // so rounding them would be a coin flip. G10 is held but no longer tracked.
-// The scene is built with the option on (reject) or off (today's behavior).
+// The scene is built with the option on (reject) or off (today's behavior),
+// and with a minimum of held pairs (hold_fix_min_matched_pairs, default 4).
 class RTKHoldFixSceneTest : public ::testing::Test {
 protected:
     static constexpr double kRefAmbiguityCycles = 1000.25;
@@ -907,6 +908,7 @@ protected:
     }
 
     virtual bool unchangedSetOnly() const = 0;
+    virtual int minMatchedPairs() const { return 4; }
 
     static Vector3d basePosition() { return Vector3d(-3961832.0, 3354966.0, 3697065.0); }
 
@@ -917,11 +919,13 @@ protected:
         return time;
     }
 
-    static void buildScene(RTKProcessor& processor, bool unchanged_set_only) {
+    static void buildScene(RTKProcessor& processor, bool unchanged_set_only,
+                           int min_matched_pairs = 4) {
         RTKProcessor::RTKConfig cfg;
         cfg.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
         cfg.min_hold_count = 3;
         cfg.hold_fix_unchanged_set_only = unchanged_set_only;
+        cfg.hold_fix_min_matched_pairs = min_matched_pairs;
         processor.setRTKConfig(cfg);
         processor.setBasePosition(basePosition());
 
@@ -986,7 +990,7 @@ protected:
     }
 
     void SetUp() override {
-        buildScene(processor_, unchangedSetOnly());
+        buildScene(processor_, unchangedSetOnly(), minMatchedPairs());
         time_ = epochTime();
     }
 
@@ -1186,6 +1190,166 @@ TEST_F(RTKHoldFixDefaultTest, AllCandidatesMatchedGivesTheSameResultWithTheOptio
               option_on.getLastDebugTelemetry().hold_fix_jump_m);
 }
 
+// ============================================================
+// Hold-fix minimum of held pairs (opt-in hold_fix_min_matched_pairs)
+// ============================================================
+
+// Minimum raised to 5 with the unchanged-set rule off: the four held pairs of
+// the scene (G02..G05) are no longer enough to fix an epoch.
+class RTKHoldFixMinMatchedTest : public RTKHoldFixSceneTest {
+protected:
+    bool unchangedSetOnly() const override { return false; }
+    int minMatchedPairs() const override { return 5; }
+
+    // tryHoldFix must reject for `reason` and accept nothing: the held set, the
+    // fixed state and the filter position stay untouched.
+    static void expectRejectedAndNothingAccepted(RTKProcessor& processor, const char* reason,
+                                                 int candidate_pairs, int matched_pairs) {
+        const auto pairs_before = Peer::last_dd_pairs_(processor);
+        const auto subset_before = Peer::last_best_subset_(processor);
+        const VectorXd fixed_before = Peer::last_dd_fixed_(processor);
+        const Vector3d fixed_baseline_before = Peer::fixed_baseline_(processor);
+        const Vector3d filter_position_before = Peer::filter_state_(processor).state.head<3>();
+
+        PositionSolution solution;
+        EXPECT_FALSE(Peer::tryHoldFix(processor, Peer::current_sat_data_(processor), epochTime(), 9,
+                                      solution));
+
+        const auto& telemetry = processor.getLastDebugTelemetry();
+        EXPECT_TRUE(telemetry.hold_fix_attempted);
+        EXPECT_FALSE(telemetry.hold_fix_applied);
+        EXPECT_EQ(telemetry.hold_fix_reject_reason, reason);
+        EXPECT_EQ(telemetry.hold_fix_candidate_pairs, candidate_pairs);
+        EXPECT_EQ(telemetry.hold_fix_matched_pairs, matched_pairs);
+
+        // Nothing was accepted: the held set, the fixed state and the filter are untouched.
+        const auto& pairs = Peer::last_dd_pairs_(processor);
+        ASSERT_EQ(pairs.size(), pairs_before.size());
+        for (size_t i = 0; i < pairs.size(); ++i) {
+            EXPECT_EQ(pairs[i].ref_sat, pairs_before[i].ref_sat);
+            EXPECT_EQ(pairs[i].sat, pairs_before[i].sat);
+            EXPECT_EQ(pairs[i].ref_idx, pairs_before[i].ref_idx);
+            EXPECT_EQ(pairs[i].sat_idx, pairs_before[i].sat_idx);
+            EXPECT_EQ(pairs[i].freq, pairs_before[i].freq);
+        }
+        EXPECT_EQ(Peer::last_best_subset_(processor), subset_before);
+        EXPECT_EQ(Peer::last_dd_fixed_(processor), fixed_before);
+        EXPECT_FALSE(Peer::has_fixed_solution_(processor));
+        EXPECT_EQ(Peer::fixed_baseline_(processor), fixed_baseline_before);
+        EXPECT_EQ(Peer::last_num_fixed_ambiguities_(processor), 0);
+        EXPECT_DOUBLE_EQ(Peer::last_ar_ratio_(processor), 0.0);
+        EXPECT_EQ(Peer::filter_state_(processor).state.head<3>(), filter_position_before);
+    }
+};
+
+TEST_F(RTKHoldFixMinMatchedTest, FourHeldPairsBelowTheMinimumRejectAndKeepHeldSet) {
+    // The scene of AllCandidatesMatchedWithStaleHeldPairIsAcceptedAsBefore: only
+    // G02..G05 are candidates and all four are held (the stale G10 does not count).
+    // The legacy floor of 4 passes, the minimum of 5 does not.
+    dropSatellites(processor_, {6, 7, 8, 9});
+    ASSERT_EQ(processor_.getRTKConfig().hold_fix_min_matched_pairs, 5);
+
+    expectRejectedAndNothingAccepted(processor_, "matched_pairs_below_min", 4, 4);
+}
+
+TEST_F(RTKHoldFixMinMatchedTest, NewPairsDoNotCountTowardTheMinimum) {
+    // Full scene: 8 candidates, only G02..G05 carry a held integer. The unchanged-set
+    // rule is off, so without the minimum the four new pairs would be rounded and the
+    // hold accepted. 4 < 5 rejects instead, with its own reason (not "unmatched_pairs"),
+    // and nothing is rounded into the held set.
+    expectRejectedAndNothingAccepted(processor_, "matched_pairs_below_min", 8, 4);
+}
+
+TEST_F(RTKHoldFixMinMatchedTest, FewerThanFourMatchedPairsStillRejectsWithTheLegacyReason) {
+    // Drop two held satellites from tracking: 2 held pairs remain, 4 new ones. The
+    // legacy floor of 4 is checked first, so the minimum of 5 does not change the reason.
+    dropSatellites(processor_, {4, 5});
+    const auto pairs_before = Peer::last_dd_pairs_(processor_).size();
+    const VectorXd fixed_before = Peer::last_dd_fixed_(processor_);
+
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 7, solution));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "matched_pairs_lt4");
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_matched_pairs, 2);
+    EXPECT_EQ(Peer::last_dd_pairs_(processor_).size(), pairs_before);
+    EXPECT_EQ(Peer::last_dd_fixed_(processor_), fixed_before);
+}
+
+TEST_F(RTKHoldFixMinMatchedTest, MinimumIsCheckedBeforeTheUnchangedSetRule) {
+    // Both opt-ins on, full scene (4 of 8 candidates matched): the minimum of 5
+    // rejects first. The unchanged-set rule alone would say "unmatched_pairs".
+    RTKProcessor both_on;
+    buildScene(both_on, true, 5);
+    ASSERT_TRUE(both_on.getRTKConfig().hold_fix_unchanged_set_only);
+
+    expectRejectedAndNothingAccepted(both_on, "matched_pairs_below_min", 8, 4);
+}
+
+TEST_F(RTKHoldFixDefaultTest, DefaultMinimumIsTheLegacyFloorAndFourHeldPairsAreAccepted) {
+    // hold_fix_min_matched_pairs defaults to 4, the legacy floor: the scene that
+    // a minimum of 5 rejects (only G02..G05 are candidates, all held) is accepted
+    // with the same result as in AllCandidatesMatchedWithStaleHeldPairIsAcceptedAsBefore.
+    EXPECT_EQ(processor_.getRTKConfig().hold_fix_min_matched_pairs, 4);
+    dropSatellites(processor_, {6, 7, 8, 9});
+
+    PositionSolution solution;
+    ASSERT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
+
+    const auto& telemetry = processor_.getLastDebugTelemetry();
+    EXPECT_TRUE(telemetry.hold_fix_applied);
+    EXPECT_TRUE(telemetry.hold_fix_reject_reason.empty());
+    EXPECT_EQ(telemetry.hold_fix_candidate_pairs, 4);
+    EXPECT_EQ(telemetry.hold_fix_matched_pairs, 4);
+
+    EXPECT_EQ(solution.status, SolutionStatus::FIXED);
+    EXPECT_EQ(solution.num_fixed_ambiguities, 4);
+    EXPECT_DOUBLE_EQ(solution.ratio, processor_.getRTKConfig().ambiguity_ratio_threshold);
+    EXPECT_TRUE(Peer::fixed_baseline_(processor_).isApprox(Vector3d(1.0, 2.0, 3.0), 1e-9))
+        << Peer::fixed_baseline_(processor_).transpose();
+
+    // The held integers win over the floats (G05 floats at 3.60, the held 3 wins).
+    const auto& pairs = Peer::last_dd_pairs_(processor_);
+    const auto& subset = Peer::last_best_subset_(processor_);
+    const VectorXd& fixed = Peer::last_dd_fixed_(processor_);
+    ASSERT_EQ(pairs.size(), 4u);
+    ASSERT_EQ(subset.size(), 4u);
+    ASSERT_EQ(fixed.size(), 4);
+    EXPECT_EQ(subset, (std::vector<int>{0, 1, 2, 3}));
+    std::map<int, double> integer_by_prn;
+    for (int i = 0; i < 4; ++i) {
+        integer_by_prn[pairs[subset[i]].sat.prn] = fixed(i);
+    }
+    const std::map<int, double> expected = {{2, 12.0}, {3, -7.0}, {4, 25.0}, {5, 3.0}};
+    EXPECT_EQ(integer_by_prn, expected);
+    EXPECT_EQ(Peer::last_num_fixed_ambiguities_(processor_), 4);
+}
+
+TEST_F(RTKHoldFixDefaultTest, MinimumBelowTheLegacyFloorBehavesLikeTheDefault) {
+    // The legacy floor of 4 is checked first, so a smaller minimum changes nothing
+    // (the CLI rejects values below 4 anyway): the accepted hold-fix is identical.
+    RTKProcessor below_floor;
+    buildScene(below_floor, false, 3);
+    ASSERT_EQ(below_floor.getRTKConfig().hold_fix_min_matched_pairs, 3);
+    ASSERT_EQ(processor_.getRTKConfig().hold_fix_min_matched_pairs, 4);
+    dropSatellites(processor_, {6, 7, 8, 9});
+    dropSatellites(below_floor, {6, 7, 8, 9});
+
+    PositionSolution solution_default;
+    PositionSolution solution_below;
+    ASSERT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution_default));
+    ASSERT_TRUE(Peer::tryHoldFix(below_floor, Peer::current_sat_data_(below_floor), time_, 5, solution_below));
+
+    EXPECT_EQ(solution_default.position_ecef, solution_below.position_ecef);
+    EXPECT_EQ(solution_default.status, solution_below.status);
+    EXPECT_EQ(solution_default.ratio, solution_below.ratio);
+    EXPECT_EQ(solution_default.num_fixed_ambiguities, solution_below.num_fixed_ambiguities);
+    EXPECT_EQ(Peer::fixed_baseline_(processor_), Peer::fixed_baseline_(below_floor));
+    EXPECT_EQ(Peer::last_best_subset_(processor_), Peer::last_best_subset_(below_floor));
+    EXPECT_EQ(Peer::last_dd_fixed_(processor_), Peer::last_dd_fixed_(below_floor));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_jump_m,
+              below_floor.getLastDebugTelemetry().hold_fix_jump_m);
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndConfigurable) {
     // Opt-in: the default keeps today's hold-fix (rounding included).
     RTKProcessor processor;
@@ -1201,6 +1365,24 @@ TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndC
     off.hold_fix_unchanged_set_only = false;
     processor.setRTKConfig(off);
     EXPECT_FALSE(processor.getRTKConfig().hold_fix_unchanged_set_only);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixMinMatchedPairsDefaultsToTheLegacyFloorAndIsConfigurable) {
+    // Opt-in: the default is the legacy floor of 4 matched pairs, so the hold-fix is
+    // unchanged unless the minimum is raised.
+    RTKProcessor processor;
+    EXPECT_EQ(processor.getRTKConfig().hold_fix_min_matched_pairs, 4);
+    EXPECT_EQ(RTKProcessor::RTKConfig().hold_fix_min_matched_pairs, 4);
+
+    RTKProcessor::RTKConfig raised;
+    raised.hold_fix_min_matched_pairs = 6;
+    processor.setRTKConfig(raised);
+    EXPECT_EQ(processor.getRTKConfig().hold_fix_min_matched_pairs, 6);
+
+    RTKProcessor::RTKConfig legacy;
+    legacy.hold_fix_min_matched_pairs = 4;
+    processor.setRTKConfig(legacy);
+    EXPECT_EQ(processor.getRTKConfig().hold_fix_min_matched_pairs, 4);
 }
 
 }  // namespace

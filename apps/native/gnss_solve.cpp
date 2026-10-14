@@ -136,6 +136,7 @@ struct SolveConfig {
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
     bool hold_fix_unchanged_set = false;
+    int hold_fix_min_matched_pairs = 4;
     double elevation_mask_deg = 15.0;
     double process_noise_position = 1e-4;
     double process_noise_ambiguity = 1e-8;
@@ -1547,6 +1548,8 @@ void printAdvancedUsage(const char* program_name) {
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
         << "  --hold-fix-unchanged-set   Reject the hold-fix fallback when a DD pair has no held integer (default: off)\n"
+        << "  --hold-fix-min-matched-pairs <n>\n"
+        << "                             Min held DD pairs for the hold-fix fallback (default: 4)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
         << "  --process-noise-position <v>\n"
         << "                             KF process noise for position state, m^2/s (default: 1e-4)\n"
@@ -2559,6 +2562,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.hold_fix_unchanged_set = true;
             continue;
         }
+        if (arg == "--hold-fix-min-matched-pairs" && i + 1 < argc) {
+            config.hold_fix_min_matched_pairs = std::stoi(argv[++i]);
+            continue;
+        }
         // Keep these late-chain options standalone as well. Besides making
         // the parser easier to extend, this keeps MSVC below C1061's nested
         // else-if limit.
@@ -3102,6 +3109,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.hold_ratio_threshold <= 0.0) {
         argumentError("--hold-ratio-threshold must be > 0", argv[0]);
+    }
+    if (config.hold_fix_min_matched_pairs < 4) {
+        argumentError("--hold-fix-min-matched-pairs must be >= 4", argv[0]);
     }
     if (config.elevation_mask_deg < 0.0 || config.elevation_mask_deg >= 90.0) {
         argumentError("--elevation-mask-deg must be in [0, 90)", argv[0]);
@@ -3720,6 +3730,7 @@ int main(int argc, char* argv[]) {
         rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
         rtk_config.min_hold_count = config.min_hold_count;
         rtk_config.hold_fix_unchanged_set_only = config.hold_fix_unchanged_set;
+        rtk_config.hold_fix_min_matched_pairs = config.hold_fix_min_matched_pairs;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         if (config.process_noise_position_set) {
             rtk_config.process_noise_position = config.process_noise_position;

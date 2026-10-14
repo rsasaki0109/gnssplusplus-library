@@ -360,6 +360,14 @@ public:
         /// pairs are rounded to the nearest integer and enter the held set.
         bool hold_fix_unchanged_set_only = false;
 
+        /// Minimum number of DD pairs that must carry a held integer before the
+        /// hold-fix fallback (tryHoldFix) may fix an epoch. Below it the hold is
+        /// rejected ("matched_pairs_below_min"): a small held set has too little
+        /// redundancy to expose a wrong held integer. 4 (default) equals the
+        /// legacy floor ("matched_pairs_lt4", checked first), so the behavior is
+        /// unchanged bit-for-bit; a smaller value has no effect.
+        int hold_fix_min_matched_pairs = 4;
+
         /// Max AR fix position jump from last fixed position in meters.
         /// Applied in addition to the history-based exceedsFixHistoryJump check.
         /// Default 5.0m: rejects wrong-FIX with implausible position jumps.

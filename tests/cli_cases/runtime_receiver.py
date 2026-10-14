@@ -450,6 +450,70 @@ class RuntimeReceiverCases:
             )
             self.assertEqual(replay.returncode, 0, msg=replay.stderr)
             self.assertIn("written_solutions=", replay.stdout)
+    def test_hold_fix_min_matched_pairs_flag_is_accepted_by_solve_live_and_replay(self) -> None:
+        # Opt-in hold-fix rule (RTKConfig::hold_fix_min_matched_pairs): an integer option, listed next to the other
+        # hold options by every RTK tool and parsed by each of them. 4 is the legacy floor, so a smaller value is an
+        # argument error. It is not part of any preset.
+        flag = "--hold-fix-min-matched-pairs"
+        for command, help_option in (("solve", "--help-advanced"), ("live", "--help"), ("replay", "--help")):
+            helped = self.run_gnss(command, help_option)
+            self.assertEqual(helped.returncode, 0, msg=helped.stderr)
+            self.assertIn(flag, helped.stdout, msg=command)
+        # gnss solve parses the flag and only then stops on the missing inputs (an unknown flag is reported first).
+        solve = self.run_gnss("solve", flag, "12")
+        self.assertNotEqual(solve.returncode, 0)
+        self.assertIn("provide --data-dir or all of --rover, --base, and --nav", solve.stderr)
+        self.assertNotIn("unknown or incomplete argument", solve.stderr)
+        # Below the legacy floor of 4 every tool reports an argument error. The input checks run first, so each
+        # command gets inputs that are never opened.
+        for command, inputs in (
+            ("solve", ("--rover", "rover.obs", "--base", "base.obs", "--nav", "base.nav")),
+            ("live", ("--rover-rtcm", "rover.rtcm", "--base-rtcm", "base.rtcm")),
+            ("replay", ("--rover-rinex", "rover.obs", "--base-rtcm", "base.rtcm")),
+        ):
+            rejected = self.run_gnss(command, *inputs, flag, "3")
+            self.assertNotEqual(rejected.returncode, 0, msg=command)
+            self.assertIn("--hold-fix-min-matched-pairs must be >= 4", rejected.stderr, msg=command)
+            self.assertNotIn("unknown or incomplete argument", rejected.stderr, msg=command)
+
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_hold_fix_min_matched_pairs_") as temp_dir:
+            temp_root = Path(temp_dir)
+            live = self.run_gnss(
+                "live",
+                "--rover-rtcm",
+                str(fixture / "rover.rtcm"),
+                "--base-rtcm",
+                str(fixture / "base.rtcm"),
+                flag,
+                "12",
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            )
+            self.assertEqual(live.returncode, 0, msg=live.stderr)
+            self.assertIn("written_solutions=", live.stdout)
+
+            rover_obs = temp_root / "rover.obs"
+            converted = self.run_gnss(
+                "convert", "--format", "rtcm", "--input", str(fixture / "rover.rtcm"),
+                "--obs-out", str(rover_obs), "--gps-week", "2324", "--quiet",
+            )
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            replay = self.run_gnss(
+                "replay",
+                "--rover-rinex",
+                str(rover_obs),
+                "--base-rtcm",
+                str(fixture / "base.rtcm"),
+                flag,
+                "12",
+                "--out",
+                str(temp_root / "replay.pos"),
+                "--quiet",
+            )
+            self.assertEqual(replay.returncode, 0, msg=replay.stderr)
+            self.assertIn("written_solutions=", replay.stdout)
     def test_solve_accepts_low_cost_preset_and_hold_knobs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_preset_") as temp_dir:
             output_path = Path(temp_dir) / "solve_preset.pos"
