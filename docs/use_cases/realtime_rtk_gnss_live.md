@@ -198,7 +198,11 @@ first 21 s of the run, until enough ephemerides were complete. On that log and o
 a 3 h Laura Bassi log, every healthy record that a second transmission confirmed
 matched an IGS BRDC record of the same issue and toe. **`--ubx-nav` was run end to
 end only on static rovers with a clear sky**: it is not validated on a moving rover
-or in a canyon. The measurements, their history and their limits are in
+or in a canyon. That comparison started once, at the beginning of the log. Over
+143 cold starts on three static logs, `--ubx-nav` without a navigation file gave
+0.88 % of FIXED epochs more than 0.5 m off, against 0 with `--nav-rinex`, because
+of the RTK hold-fix fallback (see [Boundary](#boundary)). Add `--nav-rinex` when you
+have a navigation file. The measurements, their history and their limits are in
 [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out).
 
 Multi-constellation MSM needs no flag: the per-constellation messages of one
@@ -427,6 +431,16 @@ What this page and its options do **not** do:
 
 - A `FIXED` status is not an integrity guarantee. Nothing in the `.pos`, the
   summary or the options above is a protection level.
+- **Cold start without a navigation file.** When satellites become usable one
+  after another soon after the first fix, the RTK hold-fix fallback can keep a
+  wrong FIX. This happens when ephemerides come from `--ubx-nav` or from the
+  base stream and there is no `--nav-rinex`. Over 143 cold starts on three static
+  open-sky logs, 0.88 % (`--ubx-nav`) and 0.52 % (ephemerides round-robin from the
+  base) of FIXED epochs were more than 0.5 m off, some held for up to 30 min. With
+  `--nav-rinex` it was 0. Such rows show a ratio of exactly the threshold (3.0
+  with `--preset low-cost`). Pass `--nav-rinex` when you can, and treat a FIXED
+  row at exactly the threshold ratio as held, not validated
+  ([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)).
 - The reported sigma is not calibrated. In the fixture run every FLOAT and FIXED
   row says 0.10 m, the legacy constant (`0.01 m^2 * I`); on PPC FLOAT epochs
   that constant was far too small, with 1202 of 3834 epochs off by 10 m or more
