@@ -98,6 +98,25 @@ TEST(RtkPresetsTest, NoPresetTouchesTheOptInHoldFixUnchangedSetOption) {
     }
 }
 
+TEST(RtkPresetsTest, NoPresetTouchesTheOptInHoldFixMinMatchedPairsOption) {
+    // hold_fix_min_matched_pairs is an explicit opt-in (--hold-fix-min-matched-pairs):
+    // every preset leaves the legacy floor of 4 in place, and neither the library
+    // table nor the app helper sets or clears a raised value.
+    EXPECT_EQ(Cfg().hold_fix_min_matched_pairs, 4);
+    for (const std::string name : {"none", "", "survey", "low-cost", "odaiba", "moving-base"}) {
+        for (const int initial : {4, 12}) {
+            Cfg lib;
+            Cfg app;
+            lib.hold_fix_min_matched_pairs = initial;
+            app.hold_fix_min_matched_pairs = initial;
+            ASSERT_TRUE(applyRtkPreset(lib, name)) << name;
+            ASSERT_TRUE(libgnss_apps::applyRtkConfigPreset(name, app)) << name;
+            EXPECT_EQ(lib.hold_fix_min_matched_pairs, initial) << name;
+            EXPECT_EQ(app.hold_fix_min_matched_pairs, initial) << name;
+        }
+    }
+}
+
 TEST(RtkPresetsTest, UnknownPresetReturnsFalseAndLeavesConfigUntouched) {
     Cfg config;
     config.ratio_threshold = 7.5;

@@ -445,7 +445,10 @@ What this page and its options do **not** do:
   FIXED epochs there. It costs about 6 % of the FIXED epochs on the UrbanNav and
   PPC replays, so it is not the default. Without it, treat a FIXED row at exactly
   the threshold ratio as held, not validated
-  ([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)).
+  ([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)). The other
+  opt-in, `--hold-fix-min-matched-pairs 12`, was not measured on cold starts. On
+  the UrbanNav and PPC replays it took multi-GNSS `gnss live` from 5.60 to 5.28 %
+  of FIXED epochs more than 0.5 m off, keeping 97.9 % of the correct ones.
 - The reported sigma is not calibrated. In the fixture run every FLOAT and FIXED
   row says 0.10 m, the legacy constant (`0.01 m^2 * I`); on PPC FLOAT epochs
   that constant was far too small, with 1202 of 3834 epochs off by 10 m or more

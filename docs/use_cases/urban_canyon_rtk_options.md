@@ -13,12 +13,22 @@ others, so compare OFF and ON on your own data before keeping one.
 | `--rtk-snr-weighting --rtk-snr-elevation-aware` | Signals whose C/N0 is far below what their elevation should give (an overpass blocks a 66° satellite: 48 → 33 dB-Hz). | Many satellites with sudden C/N0 drops at high elevation |
 | `--rtk-snr-code-only` (with the two above) | Same, but inflates only the code variance, keeping the carrier weight. | The elevation-aware option costs you fixes |
 
-These target FLOAT errors. For wrong fixes, `--hold-fix-unchanged-set` refuses the
-hold-fix fallback when a satellite has joined or an ambiguity was reset, instead
-of rounding that ambiguity. On the PPC and UrbanNav Tokyo runs, `gnss_solve
---preset low-cost` went from 5.77 % to 3.10 % of FIXED epochs more than 0.5 m (3D)
-off the reference, at the cost of 7.5 % of the FIXED epochs
-([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)).
+These target FLOAT errors. For wrong fixes, two opt-in rules restrict the hold-fix
+fallback, which keeps a FIX without a ratio test when ambiguity resolution fails.
+The figures are FIXED epochs more than 0.5 m (3D) off the reference, with
+`gnss_solve --preset low-cost`:
+
+- **`--hold-fix-min-matched-pairs 12`** refuses the fallback when fewer than 12
+  pairs carry a held integer.
+  - PPC and UrbanNav Tokyo runs: 5.77 % to 2.85 %, keeping 101 % of the correct
+    FIXED epochs.
+  - SmartPNT-POS and TEX-CUP urban runs never used before: 1.69 % to 1.07 %,
+    keeping 98.5 %.
+- **`--hold-fix-unchanged-set`** refuses it when a satellite has joined or an
+  ambiguity was reset, instead of rounding that ambiguity. PPC and UrbanNav Tokyo
+  runs: 5.77 % to 3.10 %, at the cost of 7.5 % of the FIXED epochs.
+
+See [details](../interfaces.md#rtk-hold-fix-fallback-known-weakness).
 
 ## First output
 

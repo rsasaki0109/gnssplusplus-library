@@ -955,15 +955,75 @@ that was measured:
   - The 26 wrong FIXED epochs of `--ubx-nav` were the same with and without the
     option.
 
+A third rule, also opt-in, refuses the fallback when too few current pairs carry a
+held integer: `--hold-fix-min-matched-pairs <n>` of `gnss solve`, `gnss live` and
+`gnss replay` (`RTKConfig::hold_fix_min_matched_pairs`, reject reason
+`matched_pairs_below_min`). The default 4 is the floor the fallback always had, so
+without the option every tool is byte-identical to before.
+
+It comes from a survey on urban data this project had not used before
+(2026-10-14):
+
+- 11 SmartPNT-POS vehicle runs in Wuhan and Shanghai, with a GNSS/INS reference at
+  the antenna.
+- 2 TEX-CUP days in Austin, with an iXblue GNSS/INS reference.
+- Before any data was read, a fixed rule split them into development runs (6 + 1)
+  and check runs (5 + 1).
+
+With `gnss solve --preset low-cost`, the development runs showed:
+
+- 3.73 % of the scored FIXED epochs were more than 0.5 m (3D) off.
+- 31 % of those were hold-fix rows. Hold-fix rows were wrong 26 % of the time,
+  against 2.7 % for fixes from ambiguity resolution.
+- The wrong hold-fix rows held few pairs: median 14, against 24 for correct ones.
+- Almost all of the wrong hold-fix rows had every candidate pair held, so
+  `--hold-fix-unchanged-set` does not refuse them directly.
+
+The minimum n = 12 was chosen on the development runs by a rule written down before
+the scan. The rule keeps at least 98 % of the correct fixes, then takes the fewest
+wrong ones. The value was then measured once on the check runs under a frozen plan.
+Each cell is FIXED > 0.5 m / scored FIXED:
+
+| Run set (`--preset low-cost`) | Without the options | `--hold-fix-min-matched-pairs 12` | `--hold-fix-unchanged-set` |
+|---|---|---|---|
+| Urban development runs (SmartPNT 6, TEX-CUP 2019-05-09) | 1 015 / 27 213 (3.73 %) | 696 / 26 801 (2.60 %) | 651 / 25 273 (2.58 %) |
+| Urban check runs (SmartPNT 5, TEX-CUP 2019-05-12), scored once | 533 / 31 510 (1.69 %) | 331 / 30 845 (1.07 %) | 330 / 29 876 (1.10 %) |
+| `gnss solve`, PPC 6 runs + UrbanNav Tokyo 4 runs | 4 074 / 70 574 (5.77 %) | 1 972 / 69 112 (2.85 %) | 2 026 / 65 293 (3.10 %) |
+| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4 | 2 179 / 38 903 (5.60 %) | 2 002 / 37 946 (5.28 %) | 2 007 / 36 427 (5.51 %) |
+
+- **Correct FIXED epochs kept**, in the order development runs, check runs,
+  `gnss solve` on PPC and UrbanNav, `gnss live` on PPC and UrbanNav:
+  - with `--hold-fix-min-matched-pairs 12`: 99.6 %, 98.5 %, 101.0 % and 97.9 %;
+  - with `--hold-fix-unchanged-set`: 94.0 %, 95.4 %, 95.1 % and 93.7 %.
+- **On the check runs the gain rests on one run.**
+  - TEX-CUP 2019-05-12 went from 221 to 19 wrong FIXED epochs; a 200-epoch wrong
+    episode was replaced by correct fixes.
+  - Four of the five SmartPNT check runs were unchanged.
+  - On the fifth (Data12) the wrong count stayed at 186, and 4.8 % of its correct
+    FIXED epochs were lost.
+- **The PPC and UrbanNav rows were not used to choose n.** They had been used for
+  the earlier hold-fix decisions above.
+- **Not measured:** the cold-start survey, where `--hold-fix-unchanged-set` is the
+  measured option, and the two options together.
+- **Scoring of the urban data:**
+  - FIXED epochs are matched to the reference within 0.01 s.
+  - Epochs whose reference 3D sigma exceeds 0.10 m are not scored.
+  - The datasets are SmartPNT-POS (Zhu et al., IEEE Transactions on Instrumentation
+    and Measurement, 2024, doi:10.1109/TIM.2024.3488156) and TEX-CUP (Narula et al.,
+    IEEE/ION PLANS 2020, arXiv:2005.00709).
+
 Until the default changes:
 
 - Give `gnss live` a navigation file (`--nav-rinex`, for example the IGS BRDC of
   the day) when you can, also together with `--ubx-nav`.
+- When post-processing a drive with `gnss solve --preset low-cost`, add
+  `--hold-fix-min-matched-pairs 12`. On the runs above it removed a third to a half
+  of the wrong FIXED epochs and kept 98 to 101 % of the correct ones. In `gnss live`
+  the gain was smaller.
 - Use `--hold-fix-unchanged-set` when you prefer fewer wrong fixes to more fixes,
-  in particular on a cold start without a navigation file and when
-  post-processing with `gnss solve`.
-- Without the option, treat a FIXED row whose ratio equals the ratio threshold as
-  held, not validated.
+  in particular on a cold start without a navigation file.
+- Without either option, treat a FIXED row whose ratio equals the ratio threshold
+  as held, not validated.
 
 ## Docker
 
