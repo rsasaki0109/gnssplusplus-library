@@ -2,6 +2,7 @@
 
 #include <Eigen/Dense>
 #include <libgnss++/algorithms/spp.hpp>
+#include <libgnss++/core/constants.hpp>
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/core/observation.hpp>
 #include <libgnss++/core/processor.hpp>
@@ -59,6 +60,8 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_METHOD(varerr)
     GNSSPP_RTK_TEST_METHOD(tryHoldFix)
     GNSSPP_RTK_TEST_METHOD(applyHoldAmbiguity)
+    GNSSPP_RTK_TEST_METHOD(resolveAmbiguities)
+    GNSSPP_RTK_TEST_METHOD(tryWlNlFallback)
 #undef GNSSPP_RTK_TEST_METHOD
 #undef GNSSPP_RTK_TEST_MEMBER
 
@@ -1350,6 +1353,500 @@ TEST_F(RTKHoldFixDefaultTest, MinimumBelowTheLegacyFloorBehavesLikeTheDefault) {
               below_floor.getLastDebugTelemetry().hold_fix_jump_m);
 }
 
+// ============================================================
+// Minimum of non-reference satellites in an AR fix (opt-in min_fix_satellites)
+// ============================================================
+
+// resolveAmbiguities() on a synthetic scene: reference G01 and non-reference
+// satellites that each carry one independent SD ambiguity state per frequency
+// (0.04 cycle^2), so the double differences against G01 have variance 0.08 and
+// covariance 0.04. The floats sit a few hundredths of a cycle off an integer,
+// which LAMBDA fixes with a ratio far above the threshold of 3, unless a scene
+// makes satellites ambiguous on purpose (x.5, larger variance). The position is
+// correlated with the first satellite only, so an applied fix moves
+// fixed_baseline_ off the float baseline. Every run starts from a stale earlier
+// fix in the members the AR step writes, to tell "rejected, nothing written"
+// from "fixed, overwritten".
+class RTKMinFixSatellitesTest : public ::testing::Test {
+protected:
+    static constexpr double kRefAmbiguityCycles = 1000.25;
+    static constexpr int kStalePrn = 30;
+    static constexpr double kStaleFixedInteger = 42.0;
+    static constexpr double kStaleRatio = 2.5;
+    static constexpr int kStaleFixedCount = 1;
+
+    struct Sat {
+        int prn;
+        int freq;         // 0 = L1, 1 = L2
+        double dd_float;  // reference minus satellite [cycles]
+        double variance;  // SD ambiguity variance [cycles^2]
+    };
+
+    // What resolveAmbiguities() leaves behind.
+    struct Outcome {
+        bool resolved = false;
+        bool has_fixed_solution = false;
+        Vector3d fixed_baseline = Vector3d::Zero();
+        std::vector<int> pair_prns;  // satellites of last_dd_pairs_
+        std::vector<int> subset;     // last_best_subset_
+        VectorXd dd_fixed;           // last_dd_fixed_
+        double ar_ratio = 0.0;       // last_ar_ratio_
+        int num_fixed = 0;           // last_num_fixed_ambiguities_
+        bool selected_fixed = false;
+        double selected_ratio = 0.0;
+        int selected_pair_count = 0;
+        int selected_distinct_sats = 0;
+        bool selected_used_subset = false;
+        std::string reject_reason;
+    };
+
+    static SatelliteId gps(int prn) {
+        return SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(prn));
+    }
+
+    static Vector3d floatBaseline() { return Vector3d(1.0, 2.0, 3.0); }
+    static Vector3d staleBaseline() { return Vector3d(7.0, 8.0, 9.0); }
+
+    // The first `count` of G02..G06 on L1, near the integers 12, -7, 25, 3, 7.
+    static std::vector<Sat> cleanSatellites(int count) {
+        const std::vector<Sat> all = {{2, 0, 12.06, 0.04}, {3, 0, -7.04, 0.04}, {4, 0, 25.08, 0.04},
+                                      {5, 0, 2.95, 0.04},  {6, 0, 7.03, 0.04}};
+        return std::vector<Sat>(all.begin(), all.begin() + count);
+    }
+
+    // G02..G05 near integers, G06 and G07 ambiguous (x.5) with the largest
+    // variances. The 6- and 5-satellite sets fail LAMBDA's ratio test (about
+    // 1.1). Partial AR drops G07, then G06, and keeps G02..G05 (ratio about 50).
+    static std::vector<Sat> ambiguousTail() {
+        auto sats = cleanSatellites(4);
+        sats.push_back({6, 0, 7.5, 0.09});
+        sats.push_back({7, 0, -3.5, 0.16});
+        return sats;
+    }
+
+    // Three satellites on two frequencies: six pairs, three satellites.
+    static std::vector<Sat> dualFrequencySatellites() {
+        return {{2, 0, 12.06, 0.04}, {2, 1, 9.95, 0.04},   {3, 0, -7.04, 0.04},
+                {3, 1, 3.04, 0.04},  {4, 0, 25.08, 0.04},  {4, 1, -11.07, 0.04}};
+    }
+
+    static Outcome run(int min_fix_satellites, const std::vector<Sat>& sats) {
+        RTKProcessor processor;
+        RTKProcessor::RTKConfig cfg;
+        cfg.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        cfg.min_fix_satellites = min_fix_satellites;
+        processor.setRTKConfig(cfg);
+        processor.setBasePosition(Vector3d(-3961832.0, 3354966.0, 3697065.0));
+
+        auto& fs = Peer::filter_state_(processor);
+        fs.state = VectorXd::Zero(Peer::kStateCount);
+        fs.covariance = MatrixXd::Zero(Peer::kStateCount, Peer::kStateCount);
+        fs.state.head<3>() = floatBaseline();
+        fs.covariance.topLeftCorner<3, 3>() = Matrix3d::Identity() * 0.01;
+        std::vector<Peer::DDPair> pairs;
+        for (const Sat& sat : sats) {
+            const int ref_idx = Peer::ambiguityIndex(gps(1), sat.freq);
+            const int sat_idx = Peer::ambiguityIndex(gps(sat.prn), sat.freq);
+            fs.state(ref_idx) = kRefAmbiguityCycles;
+            fs.covariance(ref_idx, ref_idx) = 0.04;
+            fs.state(sat_idx) = kRefAmbiguityCycles - sat.dd_float;
+            fs.covariance(sat_idx, sat_idx) = sat.variance;
+            pairs.push_back({gps(1), ref_idx, sat_idx, gps(sat.prn), sat.freq});
+        }
+        const int first_idx = pairs.front().sat_idx;
+        fs.covariance(0, first_idx) = 0.01;
+        fs.covariance(first_idx, 0) = 0.01;
+        Peer::filter_initialized_(processor) = true;
+
+        // The stale earlier fix: one pair of G30 against G29.
+        Peer::last_dd_pairs_(processor) = {Peer::DDPair{gps(29), Peer::ambiguityIndex(gps(29), 0),
+                                                        Peer::ambiguityIndex(gps(kStalePrn), 0),
+                                                        gps(kStalePrn), 0}};
+        Peer::last_best_subset_(processor) = {0};
+        VectorXd stale_fixed(1);
+        stale_fixed << kStaleFixedInteger;
+        Peer::last_dd_fixed_(processor) = stale_fixed;
+        Peer::fixed_baseline_(processor) = staleBaseline();
+        Peer::last_ar_ratio_(processor) = kStaleRatio;
+        Peer::last_num_fixed_ambiguities_(processor) = kStaleFixedCount;
+        Peer::has_fixed_solution_(processor) = true;
+
+        Outcome out;
+        out.resolved = Peer::resolveAmbiguities(processor, pairs);
+        out.has_fixed_solution = Peer::has_fixed_solution_(processor);
+        out.fixed_baseline = Peer::fixed_baseline_(processor);
+        for (const auto& pair : Peer::last_dd_pairs_(processor)) {
+            out.pair_prns.push_back(pair.sat.prn);
+        }
+        out.subset = Peer::last_best_subset_(processor);
+        out.dd_fixed = Peer::last_dd_fixed_(processor);
+        out.ar_ratio = Peer::last_ar_ratio_(processor);
+        out.num_fixed = Peer::last_num_fixed_ambiguities_(processor);
+        const auto& telemetry = processor.getLastDebugTelemetry();
+        out.selected_fixed = telemetry.selected_fixed;
+        out.selected_ratio = telemetry.selected_ratio;
+        out.selected_pair_count = telemetry.selected_pair_count;
+        out.selected_distinct_sats = telemetry.selected_distinct_sats;
+        out.selected_used_subset = telemetry.selected_used_subset;
+        out.reject_reason = telemetry.reject_reason;
+        return out;
+    }
+
+    // The minimum changed nothing: the same fix, bit for bit, as without it.
+    static void expectSameOutcome(const Outcome& expected, const Outcome& actual) {
+        EXPECT_EQ(actual.resolved, expected.resolved);
+        EXPECT_EQ(actual.has_fixed_solution, expected.has_fixed_solution);
+        EXPECT_EQ(actual.fixed_baseline, expected.fixed_baseline);
+        EXPECT_EQ(actual.pair_prns, expected.pair_prns);
+        EXPECT_EQ(actual.subset, expected.subset);
+        EXPECT_EQ(actual.dd_fixed, expected.dd_fixed);
+        EXPECT_EQ(actual.ar_ratio, expected.ar_ratio);
+        EXPECT_EQ(actual.num_fixed, expected.num_fixed);
+        EXPECT_EQ(actual.selected_fixed, expected.selected_fixed);
+        EXPECT_EQ(actual.selected_ratio, expected.selected_ratio);
+        EXPECT_EQ(actual.selected_pair_count, expected.selected_pair_count);
+        EXPECT_EQ(actual.selected_distinct_sats, expected.selected_distinct_sats);
+        EXPECT_EQ(actual.selected_used_subset, expected.selected_used_subset);
+        EXPECT_EQ(actual.reject_reason, expected.reject_reason);
+    }
+
+    // LAMBDA fixed the epoch, the minimum refused it: nothing of the fix was
+    // written, the stale flag is cleared, the stale fix stays.
+    static void expectRejectedKeepingTheStaleFix(const Outcome& out, int distinct_sats,
+                                                 int pair_count, bool used_subset) {
+        EXPECT_FALSE(out.resolved);
+        EXPECT_FALSE(out.has_fixed_solution);
+        EXPECT_EQ(out.reject_reason, "fixed_satellites_below_min");
+        EXPECT_FALSE(out.selected_fixed);
+        EXPECT_GT(out.selected_ratio, 3.0);  // the ratio of an accepted fix
+        EXPECT_EQ(out.selected_distinct_sats, distinct_sats);
+        EXPECT_EQ(out.selected_pair_count, pair_count);
+        EXPECT_EQ(out.selected_used_subset, used_subset);
+
+        EXPECT_EQ(out.fixed_baseline, staleBaseline());
+        EXPECT_EQ(out.pair_prns, (std::vector<int>{kStalePrn}));
+        EXPECT_EQ(out.subset, (std::vector<int>{0}));
+        ASSERT_EQ(out.dd_fixed.size(), 1);
+        EXPECT_EQ(out.dd_fixed(0), kStaleFixedInteger);
+        EXPECT_EQ(out.ar_ratio, kStaleRatio);
+        EXPECT_EQ(out.num_fixed, kStaleFixedCount);
+    }
+};
+
+TEST_F(RTKMinFixSatellitesTest, FullSetFixOfFiveSatellitesIsTheBaselineWithoutTheOption) {
+    const Outcome fix = run(0, cleanSatellites(5));
+
+    EXPECT_TRUE(fix.resolved);
+    EXPECT_TRUE(fix.has_fixed_solution);
+    EXPECT_TRUE(fix.reject_reason.empty());
+    EXPECT_TRUE(fix.selected_fixed);
+    EXPECT_GT(fix.selected_ratio, 3.0);
+    EXPECT_EQ(fix.selected_pair_count, 5);
+    EXPECT_EQ(fix.selected_distinct_sats, 5);
+    EXPECT_FALSE(fix.selected_used_subset);
+
+    // The fix replaced the stale one ...
+    EXPECT_EQ(fix.pair_prns, (std::vector<int>{2, 3, 4, 5, 6}));
+    EXPECT_EQ(fix.subset, (std::vector<int>{0, 1, 2, 3, 4}));
+    ASSERT_EQ(fix.dd_fixed.size(), 5);
+    EXPECT_EQ(fix.dd_fixed, (VectorXd(5) << 12.0, -7.0, 25.0, 3.0, 7.0).finished());
+    EXPECT_EQ(fix.num_fixed, 5);
+    EXPECT_EQ(fix.ar_ratio, fix.selected_ratio);
+    // ... and moved the position off the float baseline.
+    EXPECT_GT((fix.fixed_baseline - floatBaseline()).norm(), 1e-3);
+}
+
+TEST_F(RTKMinFixSatellitesTest, MinimumUpToTheSatelliteCountOfTheFixChangesNothing) {
+    const auto sats = cleanSatellites(5);
+    const Outcome baseline = run(0, sats);
+    ASSERT_TRUE(baseline.resolved);
+
+    // A negative minimum is off like 0; 1 to 5 are all met by the five non-reference satellites.
+    for (const int minimum : {-3, 1, 3, 4, 5}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectSameOutcome(baseline, run(minimum, sats));
+    }
+}
+
+TEST_F(RTKMinFixSatellitesTest, FullSetFixBelowTheMinimumIsRejectedAndKeepsTheStaleFix) {
+    const auto sats = cleanSatellites(5);
+    for (const int minimum : {6, 7, 99}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectRejectedKeepingTheStaleFix(run(minimum, sats), 5, 5, false);
+    }
+}
+
+TEST_F(RTKMinFixSatellitesTest, TheBoundaryIsTheNonReferenceSatelliteCount) {
+    // AR needs four DD pairs, so four non-reference satellites (five with G01) are
+    // the smallest full-set fix. The minimum counts the non-reference ones: 4 passes,
+    // 5 does not.
+    const auto sats = cleanSatellites(4);
+    const Outcome baseline = run(0, sats);
+    ASSERT_TRUE(baseline.resolved);
+    EXPECT_EQ(baseline.selected_distinct_sats, 4);
+
+    expectSameOutcome(baseline, run(4, sats));
+    expectRejectedKeepingTheStaleFix(run(5, sats), 4, 4, false);
+}
+
+TEST_F(RTKMinFixSatellitesTest, SubsetFixIsCountedByTheSatellitesItKeeps) {
+    const auto sats = ambiguousTail();
+    const Outcome baseline = run(0, sats);
+    ASSERT_TRUE(baseline.resolved);
+    EXPECT_TRUE(baseline.selected_used_subset);
+    EXPECT_EQ(baseline.selected_pair_count, 4);
+    EXPECT_EQ(baseline.selected_distinct_sats, 4);
+    EXPECT_EQ(baseline.subset, (std::vector<int>{0, 1, 2, 3}));
+    EXPECT_EQ(baseline.pair_prns.size(), 6u);  // the 6-satellite set stays the candidate set
+    EXPECT_EQ(baseline.dd_fixed, (VectorXd(4) << 12.0, -7.0, 25.0, 3.0).finished());
+
+    // The six satellites seen do not count, only the four the fix keeps.
+    expectSameOutcome(baseline, run(4, sats));
+    expectRejectedKeepingTheStaleFix(run(5, sats), 4, 4, true);
+    expectRejectedKeepingTheStaleFix(run(6, sats), 4, 4, true);
+}
+
+TEST_F(RTKMinFixSatellitesTest, DualFrequencyPairsOfOneSatelliteCountOnce) {
+    // Three satellites on L1 and L2: six pairs, but only three satellites.
+    const auto sats = dualFrequencySatellites();
+    const Outcome baseline = run(0, sats);
+    ASSERT_TRUE(baseline.resolved);
+    EXPECT_EQ(baseline.selected_pair_count, 6);
+    EXPECT_EQ(baseline.selected_distinct_sats, 3);
+    EXPECT_EQ(baseline.dd_fixed, (VectorXd(6) << 12.0, 10.0, -7.0, 3.0, 25.0, -11.0).finished());
+
+    expectSameOutcome(baseline, run(3, sats));
+    expectRejectedKeepingTheStaleFix(run(4, sats), 3, 6, false);
+}
+
+// WL/NL fallback of the same rule: tryWlNlFallback() keeps its legacy floor of
+// 3 resolved satellites, and min_fix_satellites can only raise it. Reference
+// G01 and non-reference satellites with an L1 and an L2 pair each (all L1 pairs
+// first). A satellite passes the Melbourne-Wubbena check when its wide-lane
+// comes out as an integer N_w; its floats are then N1 = N_w + N2 and N2, which
+// the narrow-lane check gives back exactly. A broken satellite lands half a
+// cycle off N_w and is not resolved.
+class RTKMinFixSatellitesWlNlTest : public ::testing::Test {
+protected:
+    static constexpr double kL1Hz = 1575.42e6;
+    static constexpr double kL2Hz = 1227.60e6;
+    static constexpr int kStalePrn = 30;
+    static constexpr double kStaleFixedInteger = 42.0;
+
+    struct Sat {
+        int prn;
+        int wide_lane;  // integer N_w [cycles]
+        int n2;         // integer L2 ambiguity [cycles]
+        bool broken;    // wide-lane half a cycle off: not resolved
+    };
+
+    struct Run {
+        int satellites = 0;
+        // Inputs, as handed to the fallback.
+        VectorXd dd_float_in;
+        MatrixXd qb_in;
+        MatrixXd qab_in;
+        std::vector<int> subset_in;
+        // Outputs.
+        bool fixed = false;
+        double ratio = 0.0;
+        VectorXd dd_float;
+        MatrixXd qb;
+        MatrixXd qab;
+        VectorXd dd_fixed;
+        std::vector<int> subset;
+        bool used_fallback = false;
+        // Members the fallback writes.
+        bool has_fixed_solution = false;
+        Vector3d fixed_baseline = Vector3d::Zero();
+        std::vector<int> pair_prns;
+        std::vector<int> last_subset;
+        VectorXd last_dd_fixed;
+    };
+
+    static SatelliteId gps(int prn) {
+        return SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(prn));
+    }
+
+    static Vector3d floatBaseline() { return Vector3d(1.0, 2.0, 3.0); }
+    static Vector3d staleBaseline() { return Vector3d(7.0, 8.0, 9.0); }
+
+    // The first `count` of G02..G05, the last `broken_count` of them broken.
+    static std::vector<Sat> satellites(int count, int broken_count) {
+        const std::vector<Sat> all = {{2, 3, -5, false}, {3, -2, 8, false}, {4, 5, 2, false},
+                                      {5, 1, -3, false}};
+        std::vector<Sat> sats(all.begin(), all.begin() + count);
+        for (int i = 0; i < broken_count; ++i) {
+            sats[count - 1 - i].broken = true;
+        }
+        return sats;
+    }
+
+    static Run run(int min_fix_satellites, const std::vector<Sat>& sats) {
+        RTKProcessor processor;
+        RTKProcessor::RTKConfig cfg;
+        cfg.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        cfg.enable_wlnl_fallback = true;
+        cfg.min_fix_satellites = min_fix_satellites;
+        processor.setRTKConfig(cfg);
+
+        const double lambda1 = constants::SPEED_OF_LIGHT / kL1Hz;
+        const double lambda2 = constants::SPEED_OF_LIGHT / kL2Hz;
+        auto& sat_data = Peer::current_sat_data_(processor);
+        // Only the rover L1 phase is non-zero, so the Melbourne-Wubbena value of a
+        // satellite is that phase; the reference has 0 and the double difference is -phase.
+        auto add_satellite = [&](int prn, double rover_l1_phase_cycles) {
+            auto& sd = sat_data[gps(prn)];
+            sd.satellite = gps(prn);
+            sd.has_l1 = true;
+            sd.has_l2 = true;
+            sd.l1_frequency_hz = kL1Hz;
+            sd.l2_frequency_hz = kL2Hz;
+            sd.l1_wavelength = lambda1;
+            sd.l2_wavelength = lambda2;
+            sd.rover_l1_phase = rover_l1_phase_cycles;
+        };
+        add_satellite(1, 0.0);
+
+        const int n = static_cast<int>(sats.size());
+        std::vector<Peer::DDPair> pairs;
+        Run out;
+        out.satellites = n;
+        out.dd_float_in = VectorXd::Zero(2 * n);
+        for (int freq = 0; freq < 2; ++freq) {
+            for (int j = 0; j < n; ++j) {
+                const Sat& sat = sats[j];
+                if (freq == 0) {
+                    add_satellite(sat.prn, -(sat.wide_lane + (sat.broken ? 0.5 : 0.0)));
+                }
+                pairs.push_back({gps(1), Peer::ambiguityIndex(gps(1), freq),
+                                 Peer::ambiguityIndex(gps(sat.prn), freq), gps(sat.prn), freq});
+                out.dd_float_in(freq * n + j) = freq == 0 ? sat.wide_lane + sat.n2 : sat.n2;
+            }
+        }
+        out.qb_in = MatrixXd::Identity(2 * n, 2 * n) * 0.02 + MatrixXd::Constant(2 * n, 2 * n, 0.01);
+        out.qab_in = MatrixXd::Zero(3, 2 * n);
+        out.qab_in.row(0).setConstant(0.001);
+        out.subset_in.resize(2 * n);
+        for (int i = 0; i < 2 * n; ++i) {
+            out.subset_in[i] = i;
+        }
+
+        // The stale earlier fix, as in RTKMinFixSatellitesTest.
+        Peer::last_dd_pairs_(processor) = {Peer::DDPair{gps(29), Peer::ambiguityIndex(gps(29), 0),
+                                                        Peer::ambiguityIndex(gps(kStalePrn), 0),
+                                                        gps(kStalePrn), 0}};
+        Peer::last_best_subset_(processor) = {0};
+        VectorXd stale_fixed(1);
+        stale_fixed << kStaleFixedInteger;
+        Peer::last_dd_fixed_(processor) = stale_fixed;
+        Peer::fixed_baseline_(processor) = staleBaseline();
+        Peer::has_fixed_solution_(processor) = false;
+
+        const VectorXd head_state = floatBaseline();
+        out.dd_float = out.dd_float_in;
+        out.qb = out.qb_in;
+        out.qab = out.qab_in;
+        out.subset = out.subset_in;
+        // na = 3 (the position), max_var < 1 as after a few converged epochs.
+        Peer::tryWlNlFallback(processor, 3, 2 * n, 0.2, pairs, head_state, out.dd_float, out.qb,
+                              out.qab, out.dd_fixed, out.fixed, out.ratio, out.subset);
+
+        out.used_fallback = processor.getLastDebugTelemetry().used_wlnl_fallback;
+        out.has_fixed_solution = Peer::has_fixed_solution_(processor);
+        out.fixed_baseline = Peer::fixed_baseline_(processor);
+        for (const auto& pair : Peer::last_dd_pairs_(processor)) {
+            out.pair_prns.push_back(pair.sat.prn);
+        }
+        out.last_subset = Peer::last_best_subset_(processor);
+        out.last_dd_fixed = Peer::last_dd_fixed_(processor);
+        return out;
+    }
+
+    // The fallback fixed the resolved satellites (the first `resolved` of them,
+    // as the scenes break the last ones): both pairs of each, ratio 999.9.
+    static void expectApplied(const Run& out, int resolved) {
+        EXPECT_TRUE(out.fixed);
+        EXPECT_EQ(out.ratio, 999.9);
+        EXPECT_TRUE(out.used_fallback);
+        EXPECT_TRUE(out.has_fixed_solution);
+        std::vector<int> expected_subset;
+        for (int j = 0; j < resolved; ++j) {
+            expected_subset.push_back(j);
+        }
+        for (int j = 0; j < resolved; ++j) {
+            expected_subset.push_back(out.satellites + j);
+        }
+        EXPECT_EQ(out.subset, expected_subset);
+        EXPECT_EQ(out.last_subset, expected_subset);
+        ASSERT_EQ(out.dd_fixed.size(), 2 * resolved);
+        EXPECT_EQ(out.last_dd_fixed, out.dd_fixed);
+        EXPECT_EQ(out.pair_prns.size(), static_cast<size_t>(2 * out.satellites));
+        EXPECT_TRUE(out.fixed_baseline.isApprox(floatBaseline(), 1e-9)) << out.fixed_baseline.transpose();
+    }
+
+    // The fallback was refused before it wrote anything.
+    static void expectRefused(const Run& out) {
+        EXPECT_FALSE(out.fixed);
+        EXPECT_EQ(out.ratio, 0.0);
+        EXPECT_FALSE(out.used_fallback);
+        EXPECT_EQ(out.dd_float, out.dd_float_in);
+        EXPECT_EQ(out.qb, out.qb_in);
+        EXPECT_EQ(out.qab, out.qab_in);
+        EXPECT_EQ(out.dd_fixed.size(), 0);
+        EXPECT_EQ(out.subset, out.subset_in);
+
+        EXPECT_FALSE(out.has_fixed_solution);
+        EXPECT_EQ(out.fixed_baseline, staleBaseline());
+        EXPECT_EQ(out.pair_prns, (std::vector<int>{kStalePrn}));
+        EXPECT_EQ(out.last_subset, (std::vector<int>{0}));
+        ASSERT_EQ(out.last_dd_fixed.size(), 1);
+        EXPECT_EQ(out.last_dd_fixed(0), kStaleFixedInteger);
+    }
+};
+
+TEST_F(RTKMinFixSatellitesWlNlTest, FourResolvedSatellitesPassTheFloorAndAnyMinimumUpToFour) {
+    const auto sats = satellites(4, 0);
+    // Off (0 and below), below the floor of 3, at the floor, and up to the four resolved.
+    for (const int minimum : {-1, 0, 2, 3, 4}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectApplied(run(minimum, sats), 4);
+    }
+}
+
+TEST_F(RTKMinFixSatellitesWlNlTest, MinimumAboveTheResolvedSatellitesRefusesTheFallbackBeforeWritingAnything) {
+    const auto sats = satellites(4, 0);
+    for (const int minimum : {5, 6, 99}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectRefused(run(minimum, sats));
+    }
+}
+
+TEST_F(RTKMinFixSatellitesWlNlTest, ThreeResolvedSatellitesAreTheLegacyFloor) {
+    // One of four broken: three are resolved, the fallback's legacy floor.
+    const auto sats = satellites(4, 1);
+    // A minimum below or at the floor does not change it ...
+    for (const int minimum : {-1, 0, 1, 2, 3}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectApplied(run(minimum, sats), 3);
+    }
+    // ... a higher one refuses it.
+    for (const int minimum : {4, 5}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectRefused(run(minimum, sats));
+    }
+}
+
+TEST_F(RTKMinFixSatellitesWlNlTest, TwoResolvedSatellitesStayBelowTheFloorWhateverTheMinimum) {
+    // Two of four broken: the legacy floor of 3 is not met, and a minimum of 1 or 2
+    // cannot lower it.
+    const auto sats = satellites(4, 2);
+    for (const int minimum : {-1, 0, 1, 2, 3, 4}) {
+        SCOPED_TRACE("min_fix_satellites=" + std::to_string(minimum));
+        expectRefused(run(minimum, sats));
+    }
+}
+
 TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndConfigurable) {
     // Opt-in: the default keeps today's hold-fix (rounding included).
     RTKProcessor processor;
@@ -1383,6 +1880,23 @@ TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixMinMatchedPairsDefaultsToTheLe
     legacy.hold_fix_min_matched_pairs = 4;
     processor.setRTKConfig(legacy);
     EXPECT_EQ(processor.getRTKConfig().hold_fix_min_matched_pairs, 4);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, MinFixSatellitesDefaultsToOffAndIsConfigurable) {
+    // Opt-in: 0 disables the check, so the AR fix is unchanged unless a minimum is set.
+    RTKProcessor processor;
+    EXPECT_EQ(processor.getRTKConfig().min_fix_satellites, 0);
+    EXPECT_EQ(RTKProcessor::RTKConfig().min_fix_satellites, 0);
+
+    RTKProcessor::RTKConfig raised;
+    raised.min_fix_satellites = 6;
+    processor.setRTKConfig(raised);
+    EXPECT_EQ(processor.getRTKConfig().min_fix_satellites, 6);
+
+    RTKProcessor::RTKConfig off;
+    off.min_fix_satellites = 0;
+    processor.setRTKConfig(off);
+    EXPECT_EQ(processor.getRTKConfig().min_fix_satellites, 0);
 }
 
 }  // namespace

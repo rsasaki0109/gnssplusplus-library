@@ -449,6 +449,11 @@ What this page and its options do **not** do:
   opt-in, `--hold-fix-min-matched-pairs 12`, was not measured on cold starts. On
   the UrbanNav and PPC replays it took multi-GNSS `gnss live` from 5.60 to 5.28 %
   of FIXED epochs more than 0.5 m off, keeping 97.9 % of the correct ones.
+  Adding `--min-fix-satellites 4`, which refuses an ambiguity-resolution fix from
+  fewer than 4 non-reference satellites, took it further to 1.49 %, keeping 94.3 %
+  of the correct ones. One u-blox run lost 39.5 % of its correct FIXED epochs.
+  This option was not measured on cold starts either
+  ([details](../interfaces.md#rtk-fixes-from-few-satellites)).
 - The reported sigma is not calibrated. In the fixture run every FLOAT and FIXED
   row says 0.10 m, the legacy constant (`0.01 m^2 * I`); on PPC FLOAT epochs
   that constant was far too small, with 1202 of 3834 epochs off by 10 m or more

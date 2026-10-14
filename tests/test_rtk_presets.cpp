@@ -117,6 +117,25 @@ TEST(RtkPresetsTest, NoPresetTouchesTheOptInHoldFixMinMatchedPairsOption) {
     }
 }
 
+TEST(RtkPresetsTest, NoPresetTouchesTheOptInMinFixSatellitesOption) {
+    // min_fix_satellites is an explicit opt-in (--min-fix-satellites): every preset
+    // leaves it off (0), and neither the library table nor the app helper sets or
+    // clears a raised value.
+    EXPECT_EQ(Cfg().min_fix_satellites, 0);
+    for (const std::string name : {"none", "", "survey", "low-cost", "odaiba", "moving-base"}) {
+        for (const int initial : {0, 6}) {
+            Cfg lib;
+            Cfg app;
+            lib.min_fix_satellites = initial;
+            app.min_fix_satellites = initial;
+            ASSERT_TRUE(applyRtkPreset(lib, name)) << name;
+            ASSERT_TRUE(libgnss_apps::applyRtkConfigPreset(name, app)) << name;
+            EXPECT_EQ(lib.min_fix_satellites, initial) << name;
+            EXPECT_EQ(app.min_fix_satellites, initial) << name;
+        }
+    }
+}
+
 TEST(RtkPresetsTest, UnknownPresetReturnsFalseAndLeavesConfigUntouched) {
     Cfg config;
     config.ratio_threshold = 7.5;

@@ -514,6 +514,124 @@ class RuntimeReceiverCases:
             )
             self.assertEqual(replay.returncode, 0, msg=replay.stderr)
             self.assertIn("written_solutions=", replay.stdout)
+    def test_min_fix_satellites_flag_is_accepted_by_solve_live_and_replay(self) -> None:
+        # Opt-in AR-fix rule (RTKConfig::min_fix_satellites): an integer option, listed next to the other hold options
+        # by every RTK tool and parsed by each of them. 0 means off, so a negative value is an argument error. It is
+        # not part of any preset.
+        flag = "--min-fix-satellites"
+        for command, help_option in (("solve", "--help-advanced"), ("live", "--help"), ("replay", "--help")):
+            helped = self.run_gnss(command, help_option)
+            self.assertEqual(helped.returncode, 0, msg=helped.stderr)
+            self.assertIn(flag, helped.stdout, msg=command)
+        # gnss solve parses the flag and only then stops on the missing inputs (an unknown flag is reported first).
+        solve = self.run_gnss("solve", flag, "6")
+        self.assertNotEqual(solve.returncode, 0)
+        self.assertIn("provide --data-dir or all of --rover, --base, and --nav", solve.stderr)
+        self.assertNotIn("unknown or incomplete argument", solve.stderr)
+        # A negative value is an argument error in every tool. The input checks run first, so each command gets
+        # inputs that are never opened.
+        for command, inputs in (
+            ("solve", ("--rover", "rover.obs", "--base", "base.obs", "--nav", "base.nav")),
+            ("live", ("--rover-rtcm", "rover.rtcm", "--base-rtcm", "base.rtcm")),
+            ("replay", ("--rover-rinex", "rover.obs", "--base-rtcm", "base.rtcm")),
+        ):
+            rejected = self.run_gnss(command, *inputs, flag, "-1")
+            self.assertNotEqual(rejected.returncode, 0, msg=command)
+            self.assertIn("--min-fix-satellites must be >= 0", rejected.stderr, msg=command)
+            self.assertNotIn("unknown or incomplete argument", rejected.stderr, msg=command)
+
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_min_fix_satellites_") as temp_dir:
+            temp_root = Path(temp_dir)
+            live = self.run_gnss(
+                "live",
+                "--rover-rtcm",
+                str(fixture / "rover.rtcm"),
+                "--base-rtcm",
+                str(fixture / "base.rtcm"),
+                flag,
+                "6",
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            )
+            self.assertEqual(live.returncode, 0, msg=live.stderr)
+            self.assertIn("written_solutions=", live.stdout)
+
+            rover_obs = temp_root / "rover.obs"
+            converted = self.run_gnss(
+                "convert", "--format", "rtcm", "--input", str(fixture / "rover.rtcm"),
+                "--obs-out", str(rover_obs), "--gps-week", "2324", "--quiet",
+            )
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            replay = self.run_gnss(
+                "replay",
+                "--rover-rinex",
+                str(rover_obs),
+                "--base-rtcm",
+                str(fixture / "base.rtcm"),
+                flag,
+                "6",
+                "--out",
+                str(temp_root / "replay.pos"),
+                "--quiet",
+            )
+            self.assertEqual(replay.returncode, 0, msg=replay.stderr)
+            self.assertIn("written_solutions=", replay.stdout)
+    def test_min_fix_satellites_reaches_the_solver_of_solve_live_and_replay(self) -> None:
+        # The recorded fixture sees seven GPS satellites, so six non-reference ones. In every tool a minimum of 6 keeps
+        # the fixes of the default run and a minimum of 7 refuses every ambiguity-resolution fix (the hold-fix
+        # fallback has no earlier fix to hold), so the flag must reach the solver and not only the parser.
+        flag = "--min-fix-satellites"
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_min_fix_satellites_effect_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_obs = temp_root / "base.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+
+            def fixed_solutions(summary: str) -> int:
+                return int(summary.split("fixed_solutions=")[1].split()[0])
+
+            def solve(minimum: str) -> int:
+                pos_path = temp_root / f"solve_{minimum}.pos"
+                result = self.run_gnss(
+                    "solve", "--rover", str(rover_obs), "--base", str(base_obs), "--nav", str(base_nav),
+                    "--base-ecef", "-3961905.0275", "3348993.7526", "3698211.7831",
+                    flag, minimum, "--out", str(pos_path), "--no-kml",
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                return sum(int(record["status"]) == 4 for record in self.read_pos_records(pos_path))
+
+            def live(minimum: str) -> int:
+                result = self.run_gnss(
+                    "live", "--rover-rtcm", str(fixture / "rover.rtcm"), "--base-rtcm", str(fixture / "base.rtcm"),
+                    flag, minimum, "--out", str(temp_root / f"live_{minimum}.pos"), "--quiet",
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                return fixed_solutions(result.stdout)
+
+            def replay(minimum: str) -> int:
+                result = self.run_gnss(
+                    "replay", "--rover-rinex", str(rover_obs), "--base-rtcm", str(fixture / "base.rtcm"),
+                    flag, minimum, "--out", str(temp_root / f"replay_{minimum}.pos"), "--quiet",
+                )
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                return fixed_solutions(result.stdout)
+
+            for command, run in (("solve", solve), ("live", live), ("replay", replay)):
+                with self.subTest(command=command):
+                    self.assertGreater(run("6"), 0)
+                    self.assertEqual(run("7"), 0)
     def test_solve_accepts_low_cost_preset_and_hold_knobs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_preset_") as temp_dir:
             output_path = Path(temp_dir) / "solve_preset.pos"

@@ -1025,6 +1025,94 @@ Until the default changes:
 - Without either option, treat a FIXED row whose ratio equals the ratio threshold
   as held, not validated.
 
+### RTK fixes from few satellites
+
+An ambiguity-resolution FIX can rest on very few double differences.
+`--min-fix-satellites <k>` of `gnss solve`, `gnss live` and `gnss replay`
+(`RTKConfig::min_fix_satellites`, reject reason `fixed_satellites_below_min`)
+refuses such a fix:
+
+- It applies to every ambiguity-resolution FIX: full set, subset, and the WL/NL
+  fallback. The fix is refused when its fixed set has fewer than k non-reference
+  satellites. All frequencies of a satellite count once.
+- A refused epoch stays FLOAT unless the hold-fix fallback applies. That path has
+  its own floor, `--hold-fix-min-matched-pairs`.
+- The WL/NL fallback always needed 3 resolved satellites; with the option it needs
+  k.
+- The default 0 disables the check, so without the option every tool is
+  byte-identical to before.
+
+It comes from the urban development runs above, with
+`gnss solve --preset low-cost --hold-fix-min-matched-pairs 12`:
+
+- Full-set ambiguity resolution gave 76.6 % of the FIXED epochs more than 0.5 m
+  (3D) off. Subsets gave 18.5 % and the hold-fix fallback 4.9 %.
+- The smaller the fixed set of an ambiguity-resolution FIX, the more often it was
+  wrong:
+
+  | Non-reference satellites in the fixed set | 2 | 3 | 4 | 15 or more |
+  |---|---:|---:|---:|---:|
+  | Wrong | 32.0 % | 16.1 % | 9.1 % | 0.2 % |
+
+k = 4 was chosen on the development runs by a rule written down before the scan:
+
+1. Keep at least 95 % of the correct fixes.
+2. Take the fewest wrong ones. Within 5 % of that, prefer the smaller k.
+3. No run may get more than 5 wrong FIXED epochs worse.
+
+The value was then measured once on held-out data under a frozen plan. All rows use
+`--preset low-cost --hold-fix-min-matched-pairs 12`. Each cell is FIXED > 0.5 m /
+scored FIXED:
+
+| Run set | Without the option | `--min-fix-satellites 4` | Correct FIXED epochs kept |
+|---|---|---|---|
+| Urban development runs (SmartPNT 6, TEX-CUP 2019-05-09) | 696 / 26 801 (2.60 %) | 355 / 25 636 (1.38 %) | 96.8 % |
+| Held-out GREAT-WHU run (Wuhan, 2020-12-16), scored once | 43 / 8 724 (0.49 %) | 14 / 8 663 (0.16 %) | 99.6 % |
+| Held-out urban check runs (SmartPNT 5, TEX-CUP 2019-05-12), scored once with k | 331 / 30 845 (1.07 %) | 127 / 29 705 (0.43 %) | 96.9 % |
+| `gnss solve`, PPC 6 runs + UrbanNav Tokyo 4 runs | 1 972 / 69 112 (2.85 %) | 806 / 66 336 (1.22 %) | 97.6 % |
+| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4 | 2 002 / 37 946 (5.28 %) | 512 / 34 395 (1.49 %) | 94.3 % |
+
+- **The held-out rows together:**
+  - 374 / 39 569 (0.95 %) went to 141 / 38 368 (0.37 %), keeping 97.5 % of the
+    correct FIXED epochs.
+  - Every run with FIXED epochs had fewer wrong ones.
+  - The lowest share of correct FIXED epochs kept was 93.7 % (TEX-CUP
+    2019-05-12).
+- **One `gnss live` run lost 39.5 % of its correct FIXED epochs.** On UrbanNav
+  Odaiba with the u-blox receiver, the wrong FIXED epochs went from 495 of 2 476 to
+  2 of 1 201. The same run in `gnss solve` lost little (33 / 3 690 to 26 / 3 606).
+  The other five `gnss live` runs kept 93.7 to 99.7 %.
+- **Only one of the three GREAT-WHU sessions counted.**
+  - The 2021-10-13 session, which its authors describe as a GNSS challenge, never
+    reached FIX, with or without the option. It was 1.6 to 19.7 km from the base.
+  - The 2021-10-12 session was excluded by the frozen rule. Its reference file
+    does not say which point it describes, and the drive turned too little to
+    locate that point from the data.
+  - Scored outside the plan with the IMU lever arm from that session's
+    configuration, the 2021-10-12 session went from 2 / 835 to 1 / 825 (98.9 % of
+    the correct FIXED epochs kept).
+- **The SmartPNT and TEX-CUP check runs had been opened once before**, to measure
+  `--hold-fix-min-matched-pairs 12`. k was never run on them before this
+  measurement and they were not used to choose it.
+- **The PPC and UrbanNav rows were not used to choose k.**
+- **Without `--hold-fix-min-matched-pairs 12`** (development runs only), k = 4 took
+  `--preset low-cost` from 1 015 / 27 213 (3.73 %) to 442 / 26 227 (1.69 %),
+  keeping 98.4 % of the correct FIXED epochs.
+- **Not measured:** cold starts.
+- **Scoring of the GREAT-WHU run:**
+  - Same definitions as the SmartPNT-POS and TEX-CUP runs above.
+  - The reference is at the GNSS antenna, as its file name (`...toGNSS`) says. A
+    lever-arm fit on the fixes of `--preset low-cost` agreed within 5 mm.
+  - The data are the sample data of the GREAT-PVT and GREAT-MSF repositories (GREAT
+    group, Wuhan University).
+
+When post-processing a drive with
+`gnss solve --preset low-cost --hold-fix-min-matched-pairs 12`, add
+`--min-fix-satellites 4` if you prefer fewer wrong fixes to a few more fixes. On the
+run sets above it removed 49 to 74 % of the remaining wrong FIXED epochs and kept
+94.3 to 99.6 % of the correct ones. Check its cost on your own receiver before using
+it in `gnss live`.
+
 ## Docker
 
 The repo also ships a multi-stage `Dockerfile`. The runtime image installs:
