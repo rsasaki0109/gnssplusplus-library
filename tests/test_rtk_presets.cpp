@@ -81,6 +81,23 @@ TEST(RtkPresetsTest, LowCostHardCodedTable) {
     EXPECT_EQ(config.max_baseline_length, 20000.0);
 }
 
+TEST(RtkPresetsTest, NoPresetTouchesTheOptInHoldFixUnchangedSetOption) {
+    // hold_fix_unchanged_set_only is an explicit opt-in (--hold-fix-unchanged-set):
+    // neither the library table nor the app helper sets or clears it.
+    for (const std::string name : {"none", "", "survey", "low-cost", "odaiba", "moving-base"}) {
+        for (const bool initial : {false, true}) {
+            Cfg lib;
+            Cfg app;
+            lib.hold_fix_unchanged_set_only = initial;
+            app.hold_fix_unchanged_set_only = initial;
+            ASSERT_TRUE(applyRtkPreset(lib, name)) << name;
+            ASSERT_TRUE(libgnss_apps::applyRtkConfigPreset(name, app)) << name;
+            EXPECT_EQ(lib.hold_fix_unchanged_set_only, initial) << name;
+            EXPECT_EQ(app.hold_fix_unchanged_set_only, initial) << name;
+        }
+    }
+}
+
 TEST(RtkPresetsTest, UnknownPresetReturnsFalseAndLeavesConfigUntouched) {
     Cfg config;
     config.ratio_threshold = 7.5;

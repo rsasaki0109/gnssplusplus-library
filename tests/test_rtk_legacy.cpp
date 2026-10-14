@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -39,6 +40,12 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(last_fixed_position_)
     GNSSPP_RTK_TEST_MEMBER(has_last_fixed_position_)
     GNSSPP_RTK_TEST_MEMBER(consecutive_fix_count_)
+    GNSSPP_RTK_TEST_MEMBER(lock_count_l1_)
+    GNSSPP_RTK_TEST_MEMBER(last_dd_pairs_)
+    GNSSPP_RTK_TEST_MEMBER(last_best_subset_)
+    GNSSPP_RTK_TEST_MEMBER(last_dd_fixed_)
+    GNSSPP_RTK_TEST_MEMBER(last_ar_ratio_)
+    GNSSPP_RTK_TEST_MEMBER(last_num_fixed_ambiguities_)
     GNSSPP_RTK_TEST_METHOD(formDoubleDifferences)
     GNSSPP_RTK_TEST_METHOD(calculateBaseline)
     GNSSPP_RTK_TEST_METHOD(calculateResiduals)
@@ -51,8 +58,15 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_METHOD(validateAmbiguityResolution)
     GNSSPP_RTK_TEST_METHOD(varerr)
     GNSSPP_RTK_TEST_METHOD(tryHoldFix)
+    GNSSPP_RTK_TEST_METHOD(applyHoldAmbiguity)
 #undef GNSSPP_RTK_TEST_METHOD
 #undef GNSSPP_RTK_TEST_MEMBER
+
+    using DDPair = RTKProcessor::DDPair;
+    static constexpr int kStateCount = RTKProcessor::NX;
+    static int ambiguityIndex(const SatelliteId& satellite, int freq) {
+        return RTKProcessor::IB(satellite, freq);
+    }
 };
 
 }  // namespace libgnss
@@ -872,6 +886,321 @@ TEST(RTKLegacyCompatibilityStandaloneTest, ArPolicyDemo5ContinuousDisablesHoldFi
     // Confirm policy is correctly set.
     EXPECT_EQ(processor.getRTKConfig().ar_policy,
               RTKProcessor::RTKConfig::ARPolicy::DEMO5_CONTINUOUS);
+}
+
+// ============================================================
+// Hold-fix only for an unchanged pair set (opt-in hold_fix_unchanged_set_only)
+// ============================================================
+
+// Current epoch: reference G01 and eight GPS satellites G02..G09 on L1, one
+// SD ambiguity state each. G02..G05 are held from earlier fixes, G06..G09 are
+// new (they joined, or their ambiguity was reset). The new floats sit on x.5
+// so rounding them would be a coin flip. G10 is held but no longer tracked.
+// The scene is built with the option on (reject) or off (today's behavior).
+class RTKHoldFixSceneTest : public ::testing::Test {
+protected:
+    static constexpr double kRefAmbiguityCycles = 1000.25;
+    static constexpr double kL1WavelengthM = 0.1902936728;
+
+    static SatelliteId gps(int prn) {
+        return SatelliteId(GNSSSystem::GPS, static_cast<uint8_t>(prn));
+    }
+
+    virtual bool unchangedSetOnly() const = 0;
+
+    static Vector3d basePosition() { return Vector3d(-3961832.0, 3354966.0, 3697065.0); }
+
+    static GNSSTime epochTime() {
+        GNSSTime time;
+        time.week = 2300;
+        time.tow = 100.0;
+        return time;
+    }
+
+    static void buildScene(RTKProcessor& processor, bool unchanged_set_only) {
+        RTKProcessor::RTKConfig cfg;
+        cfg.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        cfg.min_hold_count = 3;
+        cfg.hold_fix_unchanged_set_only = unchanged_set_only;
+        processor.setRTKConfig(cfg);
+        processor.setBasePosition(basePosition());
+
+        auto& fs = Peer::filter_state_(processor);
+        fs.state = VectorXd::Zero(Peer::kStateCount);
+        fs.covariance = MatrixXd::Zero(Peer::kStateCount, Peer::kStateCount);
+        fs.state.head<3>() = Vector3d(1.0, 2.0, 3.0);
+        fs.covariance.topLeftCorner<3, 3>() = Matrix3d::Identity() * 0.01;
+
+        // DD float of each non-reference satellite against G01.
+        const std::map<int, double> dd_float = {
+            {2, 12.10}, {3, -6.85}, {4, 25.20}, {5, 3.60},   // held
+            {6, 7.49}, {7, -3.51}, {8, 15.50}, {9, -9.50}};  // new, near x.5
+        auto& sat_data = Peer::current_sat_data_(processor);
+        auto add_satellite = [&](int prn, double ambiguity_cycles, double elevation) {
+            const SatelliteId sat = gps(prn);
+            auto& sd = sat_data[sat];
+            sd.satellite = sat;
+            sd.has_l1 = true;
+            sd.l1_wavelength = kL1WavelengthM;
+            sd.elevation = elevation;
+            const int idx = Peer::ambiguityIndex(sat, 0);
+            fs.n1_indices[sat] = idx;
+            fs.state(idx) = ambiguity_cycles;
+            fs.covariance(idx, idx) = 0.04;
+            Peer::lock_count_l1_(processor)[sat] = 10;
+        };
+        add_satellite(1, kRefAmbiguityCycles, 1.4);
+        for (const auto& [prn, dd] : dd_float) {
+            add_satellite(prn, kRefAmbiguityCycles - dd, 1.0 - 0.05 * prn);
+        }
+        // Position correlates with the first new satellite only. Any fixed
+        // position that depends on that pair's rounded integer moves.
+        fs.covariance(0, Peer::ambiguityIndex(gps(6), 0)) = 0.01;
+        fs.covariance(Peer::ambiguityIndex(gps(6), 0), 0) = 0.01;
+
+        // Held set from earlier fixes: G10 is stale, and last_best_subset_
+        // does not follow last_dd_pairs_ order.
+        auto make_pair = [&](int prn) {
+            return Peer::DDPair{gps(1), Peer::ambiguityIndex(gps(1), 0), Peer::ambiguityIndex(gps(prn), 0),
+                                gps(prn), 0};
+        };
+        Peer::last_dd_pairs_(processor) = {make_pair(10), make_pair(2), make_pair(3),
+                                           make_pair(4), make_pair(5)};
+        Peer::last_best_subset_(processor) = {1, 2, 3, 4, 0};
+        VectorXd held(5);
+        held << 12.0, -7.0, 25.0, 3.0, 40.0;  // G05 floats at 3.60: the held 3 must win
+        Peer::last_dd_fixed_(processor) = held;
+
+        Peer::consecutive_fix_count_(processor) = 5;
+        Peer::has_last_fixed_position_(processor) = true;
+        Peer::last_fixed_position_(processor) = basePosition() + Vector3d(1.0, 2.0, 3.0);
+    }
+
+    // Stop tracking the given satellites (they are no longer candidates).
+    static void dropSatellites(RTKProcessor& processor, std::initializer_list<int> prns) {
+        auto& fs = Peer::filter_state_(processor);
+        for (int prn : prns) {
+            Peer::current_sat_data_(processor).erase(gps(prn));
+            fs.n1_indices.erase(gps(prn));
+        }
+    }
+
+    void SetUp() override {
+        buildScene(processor_, unchangedSetOnly());
+        time_ = epochTime();
+    }
+
+    RTKProcessor processor_;
+    GNSSTime time_;
+};
+
+// Option on (hold_fix_unchanged_set_only = true): H2.
+class RTKHoldFixUnchangedSetTest : public RTKHoldFixSceneTest {
+protected:
+    bool unchangedSetOnly() const override { return true; }
+};
+
+// Option off (the default): today's behavior, rounding included.
+class RTKHoldFixDefaultTest : public RTKHoldFixSceneTest {
+protected:
+    bool unchangedSetOnly() const override { return false; }
+};
+
+TEST_F(RTKHoldFixUnchangedSetTest, UnmatchedPairRejectsHoldFixAndKeepsHeldSet) {
+    const auto pairs_before = Peer::last_dd_pairs_(processor_);
+    const auto subset_before = Peer::last_best_subset_(processor_);
+    const VectorXd fixed_before = Peer::last_dd_fixed_(processor_);
+    const Vector3d fixed_baseline_before = Peer::fixed_baseline_(processor_);
+    const Vector3d filter_position_before = Peer::filter_state_(processor_).state.head<3>();
+
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 9, solution));
+
+    const auto& telemetry = processor_.getLastDebugTelemetry();
+    EXPECT_TRUE(telemetry.hold_fix_attempted);
+    EXPECT_FALSE(telemetry.hold_fix_applied);
+    EXPECT_EQ(telemetry.hold_fix_reject_reason, "unmatched_pairs");
+    EXPECT_EQ(telemetry.hold_fix_candidate_pairs, 8);
+    EXPECT_EQ(telemetry.hold_fix_matched_pairs, 4);
+
+    // Nothing was accepted: the held set, the fixed state and the filter are untouched.
+    const auto& pairs = Peer::last_dd_pairs_(processor_);
+    ASSERT_EQ(pairs.size(), pairs_before.size());
+    for (size_t i = 0; i < pairs.size(); ++i) {
+        EXPECT_EQ(pairs[i].ref_sat, pairs_before[i].ref_sat);
+        EXPECT_EQ(pairs[i].sat, pairs_before[i].sat);
+        EXPECT_EQ(pairs[i].ref_idx, pairs_before[i].ref_idx);
+        EXPECT_EQ(pairs[i].sat_idx, pairs_before[i].sat_idx);
+        EXPECT_EQ(pairs[i].freq, pairs_before[i].freq);
+    }
+    EXPECT_EQ(Peer::last_best_subset_(processor_), subset_before);
+    EXPECT_EQ(Peer::last_dd_fixed_(processor_), fixed_before);
+    EXPECT_FALSE(Peer::has_fixed_solution_(processor_));
+    EXPECT_EQ(Peer::fixed_baseline_(processor_), fixed_baseline_before);
+    EXPECT_EQ(Peer::last_num_fixed_ambiguities_(processor_), 0);
+    EXPECT_DOUBLE_EQ(Peer::last_ar_ratio_(processor_), 0.0);
+    EXPECT_EQ(Peer::filter_state_(processor_).state.head<3>(), filter_position_before);
+}
+
+TEST_F(RTKHoldFixUnchangedSetTest, AllCandidatesMatchedWithStaleHeldPairIsAcceptedAsBefore) {
+    // Remove the four new satellites: every candidate pair (G02..G05) is held.
+    // G10 stays in the held set although it is no longer a candidate.
+    dropSatellites(processor_, {6, 7, 8, 9});
+
+    PositionSolution solution;
+    ASSERT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
+
+    const auto& telemetry = processor_.getLastDebugTelemetry();
+    EXPECT_TRUE(telemetry.hold_fix_applied);
+    EXPECT_TRUE(telemetry.hold_fix_reject_reason.empty());
+    EXPECT_EQ(telemetry.hold_fix_candidate_pairs, 4);
+    EXPECT_EQ(telemetry.hold_fix_matched_pairs, 4);
+
+    EXPECT_EQ(solution.status, SolutionStatus::FIXED);
+    EXPECT_EQ(solution.num_fixed_ambiguities, 4);
+    EXPECT_DOUBLE_EQ(solution.ratio, processor_.getRTKConfig().ambiguity_ratio_threshold);
+    EXPECT_TRUE(Peer::fixed_baseline_(processor_).isApprox(Vector3d(1.0, 2.0, 3.0), 1e-9))
+        << Peer::fixed_baseline_(processor_).transpose();
+
+    // The held set becomes the current candidate set with the held integers
+    // (G05 floats at 3.60, the held 3 wins); the stale G10 pair is gone.
+    const auto& pairs = Peer::last_dd_pairs_(processor_);
+    const auto& subset = Peer::last_best_subset_(processor_);
+    const VectorXd& fixed = Peer::last_dd_fixed_(processor_);
+    ASSERT_EQ(pairs.size(), 4u);
+    ASSERT_EQ(subset.size(), 4u);
+    ASSERT_EQ(fixed.size(), 4);
+    EXPECT_EQ(subset, (std::vector<int>{0, 1, 2, 3}));
+    std::map<int, double> integer_by_prn;
+    for (int i = 0; i < 4; ++i) {
+        const auto& pair = pairs[subset[i]];
+        EXPECT_EQ(pair.ref_sat, gps(1));
+        EXPECT_EQ(pair.ref_idx, Peer::ambiguityIndex(gps(1), 0));
+        EXPECT_EQ(pair.sat_idx, Peer::ambiguityIndex(pair.sat, 0));
+        integer_by_prn[pair.sat.prn] = fixed(i);
+    }
+    const std::map<int, double> expected = {{2, 12.0}, {3, -7.0}, {4, 25.0}, {5, 3.0}};
+    EXPECT_EQ(integer_by_prn, expected);
+    EXPECT_EQ(Peer::last_num_fixed_ambiguities_(processor_), 4);
+}
+
+TEST_F(RTKHoldFixUnchangedSetTest, FewerThanFourMatchedPairsStillRejectsWithItsOwnReason) {
+    // Drop two held satellites from tracking: 2 held pairs remain, 6 new ones.
+    dropSatellites(processor_, {4, 5});
+    const auto pairs_before = Peer::last_dd_pairs_(processor_).size();
+    const VectorXd fixed_before = Peer::last_dd_fixed_(processor_);
+
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 7, solution));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "matched_pairs_lt4");
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_matched_pairs, 2);
+    EXPECT_EQ(Peer::last_dd_pairs_(processor_).size(), pairs_before);
+    EXPECT_EQ(Peer::last_dd_fixed_(processor_), fixed_before);
+}
+
+TEST_F(RTKHoldFixDefaultTest, UnmatchedPairsAreRoundedAndTheHeldSetGrowsAsToday) {
+    EXPECT_FALSE(processor_.getRTKConfig().hold_fix_unchanged_set_only);
+
+    PositionSolution solution;
+    ASSERT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 9, solution));
+
+    const auto& telemetry = processor_.getLastDebugTelemetry();
+    EXPECT_TRUE(telemetry.hold_fix_applied);
+    EXPECT_TRUE(telemetry.hold_fix_reject_reason.empty());
+    EXPECT_EQ(telemetry.hold_fix_candidate_pairs, 8);
+    EXPECT_EQ(telemetry.hold_fix_matched_pairs, 4);
+    EXPECT_EQ(solution.status, SolutionStatus::FIXED);
+    EXPECT_EQ(solution.num_fixed_ambiguities, 4);
+    EXPECT_DOUBLE_EQ(solution.ratio, processor_.getRTKConfig().ambiguity_ratio_threshold);
+
+    // The four new pairs were rounded from their x.5 floats and entered the held
+    // set, which grows from 4 matched (+ the stale one) to all 8 candidates.
+    const auto& pairs = Peer::last_dd_pairs_(processor_);
+    const auto& subset = Peer::last_best_subset_(processor_);
+    const VectorXd& fixed = Peer::last_dd_fixed_(processor_);
+    ASSERT_EQ(pairs.size(), 8u);
+    ASSERT_EQ(subset.size(), 8u);
+    ASSERT_EQ(fixed.size(), 8);
+    EXPECT_EQ(subset, (std::vector<int>{0, 1, 2, 3, 4, 5, 6, 7}));
+    std::map<int, double> integer_by_prn;
+    for (int i = 0; i < 8; ++i) {
+        integer_by_prn[pairs[subset[i]].sat.prn] = fixed(i);
+    }
+    const std::map<int, double> expected = {{2, 12.0}, {3, -7.0}, {4, 25.0}, {5, 3.0},   // held
+                                            {6, 7.0}, {7, -4.0}, {8, 16.0}, {9, -10.0}};  // rounded
+    EXPECT_EQ(integer_by_prn, expected);
+
+    // The rounded G06 pair (7.49 -> 7) moved the fixed position off the float baseline.
+    EXPECT_GT((Peer::fixed_baseline_(processor_) - Vector3d(1.0, 2.0, 3.0)).norm(), 0.01);
+
+    // applyHoldAmbiguity then pins every held pair, the rounded ones included.
+    Peer::applyHoldAmbiguity(processor_);
+    const auto& fs = Peer::filter_state_(processor_);
+    const int ref_idx = Peer::ambiguityIndex(gps(1), 0);
+    for (const auto& [prn, integer] : expected) {
+        const int idx = Peer::ambiguityIndex(gps(prn), 0);
+        EXPECT_NEAR(fs.state(ref_idx) - fs.state(idx), integer, 1e-9) << "G" << prn;
+        EXPECT_DOUBLE_EQ(fs.covariance(idx, idx), 0.001) << "G" << prn;
+    }
+}
+
+TEST_F(RTKHoldFixDefaultTest, FewerThanFourMatchedPairsRejectsAsToday) {
+    dropSatellites(processor_, {4, 5});
+    const auto pairs_before = Peer::last_dd_pairs_(processor_).size();
+
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 7, solution));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "matched_pairs_lt4");
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_matched_pairs, 2);
+    EXPECT_EQ(Peer::last_dd_pairs_(processor_).size(), pairs_before);
+}
+
+TEST_F(RTKHoldFixDefaultTest, AllCandidatesMatchedGivesTheSameResultWithTheOptionOnOrOff) {
+    // With every candidate pair held there is nothing to round: the option must
+    // not change a single value of the accepted hold-fix.
+    RTKProcessor option_on;
+    buildScene(option_on, true);
+    ASSERT_FALSE(processor_.getRTKConfig().hold_fix_unchanged_set_only);
+    ASSERT_TRUE(option_on.getRTKConfig().hold_fix_unchanged_set_only);
+    dropSatellites(processor_, {6, 7, 8, 9});
+    dropSatellites(option_on, {6, 7, 8, 9});
+
+    PositionSolution solution_off;
+    PositionSolution solution_on;
+    ASSERT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution_off));
+    ASSERT_TRUE(Peer::tryHoldFix(option_on, Peer::current_sat_data_(option_on), time_, 5, solution_on));
+
+    EXPECT_EQ(solution_off.position_ecef, solution_on.position_ecef);
+    EXPECT_EQ(solution_off.status, solution_on.status);
+    EXPECT_EQ(solution_off.ratio, solution_on.ratio);
+    EXPECT_EQ(solution_off.num_fixed_ambiguities, solution_on.num_fixed_ambiguities);
+    EXPECT_EQ(Peer::fixed_baseline_(processor_), Peer::fixed_baseline_(option_on));
+    EXPECT_EQ(Peer::last_best_subset_(processor_), Peer::last_best_subset_(option_on));
+    EXPECT_EQ(Peer::last_dd_fixed_(processor_), Peer::last_dd_fixed_(option_on));
+    ASSERT_EQ(Peer::last_dd_pairs_(processor_).size(), Peer::last_dd_pairs_(option_on).size());
+    for (size_t i = 0; i < Peer::last_dd_pairs_(processor_).size(); ++i) {
+        EXPECT_EQ(Peer::last_dd_pairs_(processor_)[i].sat, Peer::last_dd_pairs_(option_on)[i].sat);
+        EXPECT_EQ(Peer::last_dd_pairs_(processor_)[i].sat_idx, Peer::last_dd_pairs_(option_on)[i].sat_idx);
+    }
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_jump_m,
+              option_on.getLastDebugTelemetry().hold_fix_jump_m);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndConfigurable) {
+    // Opt-in: the default keeps today's hold-fix (rounding included).
+    RTKProcessor processor;
+    EXPECT_FALSE(processor.getRTKConfig().hold_fix_unchanged_set_only);
+    EXPECT_FALSE(RTKProcessor::RTKConfig().hold_fix_unchanged_set_only);
+
+    RTKProcessor::RTKConfig on;
+    on.hold_fix_unchanged_set_only = true;
+    processor.setRTKConfig(on);
+    EXPECT_TRUE(processor.getRTKConfig().hold_fix_unchanged_set_only);
+
+    RTKProcessor::RTKConfig off;
+    off.hold_fix_unchanged_set_only = false;
+    processor.setRTKConfig(off);
+    EXPECT_FALSE(processor.getRTKConfig().hold_fix_unchanged_set_only);
 }
 
 }  // namespace
