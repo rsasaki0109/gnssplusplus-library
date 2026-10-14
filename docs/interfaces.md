@@ -909,8 +909,10 @@ instrumented runs, every FIXED row whose ratio was exactly 3.0 was a hold-fix ro
 (6 429 of 6 429). Over all runs, 97 % (`--ubx-nav`) and 88 % (round-robin) of the
 FIXED rows more than 0.1 m off had that ratio.
 
-Constraining only the held integers and leaving the new pairs float was checked
-under a plan frozen before the run (2026-10-13) and was No-Go:
+Two changes were checked, each under a plan frozen before the run.
+
+Constraining only the held integers and leaving the new pairs float (2026-10-13)
+was No-Go:
 
 - It removed the held 0.1–0.5 m episodes with `--ubx-nav` (3 starts to 0, FIXED
   > 0.5 m 2 241 to 1 787) and improved `gnss solve` on PPC and UrbanNav (FIXED
@@ -921,11 +923,47 @@ under a plan frozen before the run (2026-10-13) and was No-Go:
   multi-GNSS `gnss live` on PPC and UrbanNav from 5.60 % to 7.69 %, against a limit
   of +0.2 points.
 
-The fallback is therefore unchanged. Until it is fixed:
+The second change refuses the fallback whenever any current pair has no held
+integer, so a pair that joined or was reset ends the held FIX instead of being
+rounded (2026-10-14). It removed almost all wrong fixes of the cold-start survey,
+but cost 6 to 8 % of the FIXED epochs on PPC and UrbanNav, most of them correct ones. The
+plan kept at least 98 % of the FIXED epochs, so as the default it was No-Go. It is
+offered as the opt-in `--hold-fix-unchanged-set` of `gnss solve`, `gnss live` and
+`gnss replay` (`RTKConfig::hold_fix_unchanged_set_only`). Without the option every
+tool is byte-identical to before. With it the output is byte-identical to the rule
+that was measured:
+
+| Run set (`--preset low-cost`) | Without the option | With `--hold-fix-unchanged-set` |
+|---|---|---|
+| Cold-start survey above, `--ubx-nav`: FIXED > 0.5 m / starts holding 0.1–0.5 m ≥ 60 s | 2 241 / 3 | 16 / 0 |
+| Same, round-robin ephemerides from the base | 1 329 / 3 | 53 / 0 |
+| Same, `--nav-rinex` | 0 / 0 | 0 / 0 |
+| `gnss solve`, PPC 6 runs + UrbanNav Tokyo 4 runs: FIXED > 0.5 m / FIXED | 4 074 / 70 574 (5.77 %) | 2 026 / 65 293 (3.10 %) |
+| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4: FIXED > 0.5 m / FIXED | 2 179 / 38 903 (5.60 %) | 2 007 / 36 427 (5.51 %) |
+| Held-out check (3DOM rover B 2025-06-07 and 2025-06-08, not used before, 86 cold starts per arm): FIXED > 0.5 m, `--nav-rinex` / `--ubx-nav` / round-robin | 2 / 26 / 1 828 | 0 / 26 / 50 |
+
+- **FIXED epochs kept with the option:**
+  - 99.7 to 99.9 % in the survey arms;
+  - 99.65 to 99.92 % on the held-out logs;
+  - 92.5 % in `gnss solve` and 93.6 % in `gnss live` on PPC and UrbanNav (correct
+    FIXED epochs −4.9 % and −6.3 %).
+- **On the held-out logs the gain rests on few starts:**
+  - One round-robin start accounts for 1 778 of the 1 828 wrong FIXED epochs. It
+    held a fix 0.9 to 1.5 m off from a hold-fix row; with the option those 2 s
+    were FLOAT, and the next fix was correct (0.03 m, ratio 3.4).
+  - One `--nav-rinex` start had the only held 0.1–0.5 m episode (451 s).
+  - The 26 wrong FIXED epochs of `--ubx-nav` were the same with and without the
+    option.
+
+Until the default changes:
 
 - Give `gnss live` a navigation file (`--nav-rinex`, for example the IGS BRDC of
   the day) when you can, also together with `--ubx-nav`.
-- Treat a FIXED row whose ratio equals the ratio threshold as held, not validated.
+- Use `--hold-fix-unchanged-set` when you prefer fewer wrong fixes to more fixes,
+  in particular on a cold start without a navigation file and when
+  post-processing with `gnss solve`.
+- Without the option, treat a FIXED row whose ratio equals the ratio threshold as
+  held, not validated.
 
 ## Docker
 

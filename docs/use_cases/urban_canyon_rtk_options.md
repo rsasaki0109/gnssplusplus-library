@@ -13,6 +13,13 @@ others, so compare OFF and ON on your own data before keeping one.
 | `--rtk-snr-weighting --rtk-snr-elevation-aware` | Signals whose C/N0 is far below what their elevation should give (an overpass blocks a 66° satellite: 48 → 33 dB-Hz). | Many satellites with sudden C/N0 drops at high elevation |
 | `--rtk-snr-code-only` (with the two above) | Same, but inflates only the code variance, keeping the carrier weight. | The elevation-aware option costs you fixes |
 
+These target FLOAT errors. For wrong fixes, `--hold-fix-unchanged-set` refuses the
+hold-fix fallback when a satellite has joined or an ambiguity was reset, instead
+of rounding that ambiguity. On the PPC and UrbanNav Tokyo runs, `gnss_solve
+--preset low-cost` went from 5.77 % to 3.10 % of FIXED epochs more than 0.5 m (3D)
+off the reference, at the cost of 7.5 % of the FIXED epochs
+([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)).
+
 ## First output
 
 Run the same data twice, once without and once with the option. A PPC-style
