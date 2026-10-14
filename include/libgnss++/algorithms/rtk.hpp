@@ -352,6 +352,14 @@ public:
         /// 0 (default) disables the check — existing behavior preserved.
         double max_hold_divergence_m = 0.0;
 
+        /// Hold-fix fallback (tryHoldFix) only for an unchanged DD pair set.
+        /// When true, the hold is rejected ("unmatched_pairs") if any candidate
+        /// pair has no held integer, so a satellite that joined or an
+        /// ambiguity that was reset is never rounded to keep a FIX.
+        /// false (default) keeps the legacy behavior bit-for-bit: unmatched
+        /// pairs are rounded to the nearest integer and enter the held set.
+        bool hold_fix_unchanged_set_only = false;
+
         /// Max AR fix position jump from last fixed position in meters.
         /// Applied in addition to the history-based exceedsFixHistoryJump check.
         /// Default 5.0m: rejects wrong-FIX with implausible position jumps.

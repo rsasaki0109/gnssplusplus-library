@@ -778,6 +778,12 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
 
     debug_telemetry_.hold_fix_matched_pairs = matched;
     if (matched < 4) return reject_hold("matched_pairs_lt4");
+    // Opt-in: the held integers only describe an unchanged pair set. A candidate
+    // pair that joined or was reset has no held integer; reject instead of
+    // using the rounded value computed above
+    if (rtk_config_.hold_fix_unchanged_set_only && matched < nb) {
+        return reject_hold("unmatched_pairs");
+    }
 
     std::vector<rtk_measurement::AmbiguityDifference> differences;
     differences.reserve(nb);
