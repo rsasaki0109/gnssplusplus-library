@@ -30,6 +30,16 @@ The figures are FIXED epochs more than 0.5 m (3D) off the reference, with
 
 See [details](../interfaces.md#rtk-hold-fix-fallback-known-weakness).
 
+A third opt-in, **`--min-fix-satellites 4`**, refuses a fix from ambiguity
+resolution that rests on fewer than 4 non-reference satellites. Added to
+`--hold-fix-min-matched-pairs 12`:
+
+- Held-out GREAT-WHU, SmartPNT-POS and TEX-CUP urban runs: 0.95 % to 0.37 %,
+  keeping 97.5 % of the correct FIXED epochs.
+- PPC and UrbanNav Tokyo runs: 2.85 % to 1.22 %, keeping 97.6 %.
+
+See [details](../interfaces.md#rtk-fixes-from-few-satellites).
+
 ## First output
 
 Run the same data twice, once without and once with the option. A PPC-style

@@ -259,7 +259,9 @@ void RTKProcessor::tryWlNlFallback(int na,
             wl_ok++;
         }
 
-        if (wl_ok >= 3) {
+        // 3 is the legacy floor; min_fix_satellites can only raise it. The check
+        // runs before any state is written, so a refused fallback leaves no trace.
+        if (wl_ok >= std::max(3, rtk_config_.min_fix_satellites)) {
             // Use resolved pairs for position
             std::vector<int> resolved(
                 wlnl_fixed_indices.begin(), wlnl_fixed_indices.end());
@@ -2438,6 +2440,16 @@ bool RTKProcessor::finishAmbiguityResolution(
         if (debug_telemetry_.ar_skip_reason == ARSkipReason::NONE) {
             debug_telemetry_.ar_skip_reason = ARSkipReason::LAMBDA_FAILED;
         }
+        return false;
+    }
+    if (rtk_config_.min_fix_satellites > 0 &&
+        selected_diversity.distinct_sats < rtk_config_.min_fix_satellites) {
+        // Opt-in: too few double-difference directions to trust the fixed position.
+        // distinct_sats counts the non-reference satellites of the selected pairs
+        // (all frequencies of a satellite count once).
+        debug_telemetry_.selected_fixed = false;
+        debug_telemetry_.reject_reason = "fixed_satellites_below_min";
+        has_fixed_solution_ = false;
         return false;
     }
     debug_telemetry_.selected_fixed = true;

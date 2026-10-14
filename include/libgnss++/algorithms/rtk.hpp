@@ -368,6 +368,17 @@ public:
         /// unchanged bit-for-bit; a smaller value has no effect.
         int hold_fix_min_matched_pairs = 4;
 
+        /// Minimum number of non-reference satellites in the fixed DD set of an
+        /// ambiguity-resolution FIX (full set, subset or WL/NL fallback). Each such
+        /// satellite adds one double-difference direction; fewer than 3 cannot
+        /// determine a 3D position. Below it the AR fix is rejected like a failed
+        /// LAMBDA ("fixed_satellites_below_min"): the epoch stays FLOAT unless the
+        /// hold-fix fallback (tryHoldFix) applies, which this option does not touch.
+        /// The WL/NL fallback keeps its legacy floor of 3 resolved satellites and
+        /// raises it to this value. 0 (default) disables the check, so the behavior
+        /// is unchanged bit-for-bit.
+        int min_fix_satellites = 0;
+
         /// Max AR fix position jump from last fixed position in meters.
         /// Applied in addition to the history-based exceedsFixHistoryJump check.
         /// Default 5.0m: rejects wrong-FIX with implausible position jumps.
