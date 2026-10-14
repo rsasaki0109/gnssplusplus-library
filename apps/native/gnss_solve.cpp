@@ -135,6 +135,7 @@ struct SolveConfig {
     double low_count_rescue_max_history_speed_mps = 0.0;
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
+    bool hold_fix_unchanged_set = false;
     double elevation_mask_deg = 15.0;
     double process_noise_position = 1e-4;
     double process_noise_ambiguity = 1e-8;
@@ -1545,6 +1546,7 @@ void printAdvancedUsage(const char* program_name) {
         << "                             (default: 0, disabled)\n"
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
+        << "  --hold-fix-unchanged-set   Reject the hold-fix fallback when a DD pair has no held integer (default: off)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
         << "  --process-noise-position <v>\n"
         << "                             KF process noise for position state, m^2/s (default: 1e-4)\n"
@@ -2551,6 +2553,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--pos-fix-diagnostics") {
             config.pos_fix_diagnostics = true;
+            continue;
+        }
+        if (arg == "--hold-fix-unchanged-set") {
+            config.hold_fix_unchanged_set = true;
             continue;
         }
         // Keep these late-chain options standalone as well. Besides making
@@ -3713,6 +3719,7 @@ int main(int argc, char* argv[]) {
             config.min_subset_dual_frequency_sats_for_ar;
         rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
         rtk_config.min_hold_count = config.min_hold_count;
+        rtk_config.hold_fix_unchanged_set_only = config.hold_fix_unchanged_set;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         if (config.process_noise_position_set) {
             rtk_config.process_noise_position = config.process_noise_position;

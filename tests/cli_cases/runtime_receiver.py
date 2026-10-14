@@ -400,6 +400,56 @@ class RuntimeReceiverCases:
         self.assertIn("--min-full-ratio-for-subset-ar", result.stdout)
         self.assertIn("--max-pos-jump-rate", result.stdout)
         self.assertIn("--max-float-prefit-rms", result.stdout)
+    def test_hold_fix_unchanged_set_flag_is_accepted_by_solve_live_and_replay(self) -> None:
+        # Opt-in hold-fix rule (RTKConfig::hold_fix_unchanged_set_only): a flag without an argument, listed next to
+        # the other hold options by every RTK tool and parsed by each of them. It is not part of any preset.
+        flag = "--hold-fix-unchanged-set"
+        for command, help_option in (("solve", "--help-advanced"), ("live", "--help"), ("replay", "--help")):
+            helped = self.run_gnss(command, help_option)
+            self.assertEqual(helped.returncode, 0, msg=helped.stderr)
+            self.assertIn(flag, helped.stdout, msg=command)
+        # gnss solve parses the flag and only then stops on the missing inputs (an unknown flag is reported first).
+        solve = self.run_gnss("solve", flag)
+        self.assertNotEqual(solve.returncode, 0)
+        self.assertIn("provide --data-dir or all of --rover, --base, and --nav", solve.stderr)
+        self.assertNotIn("unknown or incomplete argument", solve.stderr)
+
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_hold_fix_unchanged_set_") as temp_dir:
+            temp_root = Path(temp_dir)
+            live = self.run_gnss(
+                "live",
+                "--rover-rtcm",
+                str(fixture / "rover.rtcm"),
+                "--base-rtcm",
+                str(fixture / "base.rtcm"),
+                flag,
+                "--out",
+                str(temp_root / "live.pos"),
+                "--quiet",
+            )
+            self.assertEqual(live.returncode, 0, msg=live.stderr)
+            self.assertIn("written_solutions=", live.stdout)
+
+            rover_obs = temp_root / "rover.obs"
+            converted = self.run_gnss(
+                "convert", "--format", "rtcm", "--input", str(fixture / "rover.rtcm"),
+                "--obs-out", str(rover_obs), "--gps-week", "2324", "--quiet",
+            )
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            replay = self.run_gnss(
+                "replay",
+                "--rover-rinex",
+                str(rover_obs),
+                "--base-rtcm",
+                str(fixture / "base.rtcm"),
+                flag,
+                "--out",
+                str(temp_root / "replay.pos"),
+                "--quiet",
+            )
+            self.assertEqual(replay.returncode, 0, msg=replay.stderr)
+            self.assertIn("written_solutions=", replay.stdout)
     def test_solve_accepts_low_cost_preset_and_hold_knobs(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_solve_preset_") as temp_dir:
             output_path = Path(temp_dir) / "solve_preset.pos"
