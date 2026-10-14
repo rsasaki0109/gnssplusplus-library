@@ -78,6 +78,7 @@ struct ReplayConfig {
     int min_satellites_for_ar = 5;
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
+    bool hold_fix_unchanged_set = false;
     double min_full_ratio_for_subset_ar = 0.0;
     double max_position_jump_min_m = 0.0;
     double max_position_jump_rate_mps = 0.0;
@@ -146,6 +147,7 @@ void printUsage(const char* argv0) {
         << "    --min-ar-sats <n>         Minimum satellites for AR (default: 5)\n"
         << "    --min-hold-count <n>      Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "    --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
+        << "    --hold-fix-unchanged-set  Reject the hold-fix fallback when a DD pair has no held integer (default: off)\n"
         << "    --min-full-ratio-for-subset-ar <v> Min full-constellation LAMBDA ratio to accept a subset-AR fix (0=off)\n"
         << "    --max-pos-jump-min <m>    Floor of the motion-aware fixed-jump gate [m] (0=static gate)\n"
         << "    --max-pos-jump-rate <m/s> Per-second growth of the fixed-jump gate; needed for a moving rover (0=off)\n"
@@ -305,6 +307,8 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--hold-ratio-threshold" && i + 1 < argc) {
             config.hold_ratio_threshold = std::stod(argv[++i]);
             config.hold_ratio_threshold_set = true;
+        } else if (arg == "--hold-fix-unchanged-set") {
+            config.hold_fix_unchanged_set = true;
         } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
             config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
             config.min_full_ratio_for_subset_ar_set = true;
@@ -702,6 +706,7 @@ size_t runReplay(const ReplayConfig& config) {
     rtk_config.ar_filter_margin = config.ar_filter_margin;
     rtk_config.min_satellites_for_ar = config.min_satellites_for_ar;
     rtk_config.min_hold_count = config.min_hold_count;
+    rtk_config.hold_fix_unchanged_set_only = config.hold_fix_unchanged_set;
     rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
     rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
     rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;

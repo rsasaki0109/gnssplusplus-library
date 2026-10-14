@@ -202,7 +202,8 @@ or in a canyon. That comparison started once, at the beginning of the log. Over
 143 cold starts on three static logs, `--ubx-nav` without a navigation file gave
 0.88 % of FIXED epochs more than 0.5 m off, against 0 with `--nav-rinex`, because
 of the RTK hold-fix fallback (see [Boundary](#boundary)). Add `--nav-rinex` when you
-have a navigation file. The measurements, their history and their limits are in
+have a navigation file, or `--hold-fix-unchanged-set` (16 against 2 241 such epochs on
+the same starts). The measurements, their history and their limits are in
 [Interfaces](../interfaces.md#broadcast-ephemerides-from-a-u-blox-rover-ubx-nav-nav-rinex-out).
 
 Multi-constellation MSM needs no flag: the per-constellation messages of one
@@ -438,8 +439,12 @@ What this page and its options do **not** do:
   open-sky logs, 0.88 % (`--ubx-nav`) and 0.52 % (ephemerides round-robin from the
   base) of FIXED epochs were more than 0.5 m off, some held for up to 30 min. With
   `--nav-rinex` it was 0. Such rows show a ratio of exactly the threshold (3.0
-  with `--preset low-cost`). Pass `--nav-rinex` when you can, and treat a FIXED
-  row at exactly the threshold ratio as held, not validated
+  with `--preset low-cost`). Pass `--nav-rinex` when you can. The opt-in
+  `--hold-fix-unchanged-set` refuses that fallback when a satellite has joined,
+  which brought those rates to 0.01 and 0.02 % and kept 99.7 to 99.9 % of the
+  FIXED epochs there. It costs about 6 % of the FIXED epochs on the UrbanNav and
+  PPC replays, so it is not the default. Without it, treat a FIXED row at exactly
+  the threshold ratio as held, not validated
   ([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)).
 - The reported sigma is not calibrated. In the fixture run every FLOAT and FIXED
   row says 0.10 m, the legacy constant (`0.01 m^2 * I`); on PPC FLOAT epochs
