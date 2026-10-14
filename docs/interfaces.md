@@ -876,6 +876,57 @@ nothing. If your navigation data carries ephemerides that are unhealthy because
 they are wrong (rather than flagged during a test campaign), RTK will still use
 them.
 
+### RTK hold-fix fallback (known weakness)
+
+After `min_hold_count` consecutive FIXED epochs (8 with `--preset low-cost`), an
+epoch whose ambiguity resolution fails can still be written as FIXED by the
+hold-fix fallback (`RTKProcessor::tryHoldFix`). It reuses the integers held from
+the previous fix and rounds the float double difference of every pair that was not
+held (a satellite that joined, or an ambiguity that was reset), without a ratio
+test. It accepts the result if it lies within 1.0 m (0.1 m static) of the last fix,
+and then holds the rounded integers as well. The ratio column of such a row shows
+the configured threshold (3.0 with `--preset low-cost`), not a measured ratio.
+
+This matters when satellites become usable one after another shortly after a fix,
+which is what a cold start without a navigation file looks like. The ephemerides
+then arrive from the rover's own subframes (`--ubx-nav`) or from the base stream.
+A survey with a written plan fixed in advance measured this on three static 3DOM
+logs (rover A 2025-06-04, rover B 2025-06-05 and 2025-06-06, MOCA base about 3.6 km
+away, `gnss live --preset low-cost`). Each log was cold-started every 300 s for
+30 min, 143 starts per arm. The arms differ only in how the ephemerides arrive:
+
+| Ephemerides | FIXED epochs | FIXED > 0.5 m (3D) | Starts holding a 0.1–0.5 m FIX for ≥ 60 s |
+|---|---:|---:|---:|
+| `--nav-rinex` (all at the first epoch) | 256 512 | 0 | 0 |
+| `--ubx-nav`, no navigation file | 253 313 | 2 241 (0.88 %) | 3 |
+| Base stream, ephemeris messages round-robin over 30 s, no navigation file | 253 924 | 1 329 (0.52 %) | 3 |
+
+In every episode a subset fix on 7 to 9 satellites came first. Galileo and GLONASS
+satellites joined within seconds, the full-set ratio fell to 1.0–1.4, and the
+hold-fix fallback kept the FIX on 83 to 100 % of the epochs while rounding 4 to 12
+new pairs. The held position was 0.2 to 2.4 m off, for up to 30 min. In the
+instrumented runs, every FIXED row whose ratio was exactly 3.0 was a hold-fix row
+(6 429 of 6 429). Over all runs, 97 % (`--ubx-nav`) and 88 % (round-robin) of the
+FIXED rows more than 0.1 m off had that ratio.
+
+Constraining only the held integers and leaving the new pairs float was checked
+under a plan frozen before the run (2026-10-13) and was No-Go:
+
+- It removed the held 0.1–0.5 m episodes with `--ubx-nav` (3 starts to 0, FIXED
+  > 0.5 m 2 241 to 1 787) and improved `gnss solve` on PPC and UrbanNav (FIXED
+  > 0.5 m 5.77 % to 3.95 % of FIXED).
+- It also let the fallback run far more often (2.4 times in `gnss solve` and 3.2
+  times in `gnss live` on PPC and UrbanNav), with few held pairs and many float
+  ones. The round-robin arm went from 1 329 to 2 499 FIXED epochs > 0.5 m, and
+  multi-GNSS `gnss live` on PPC and UrbanNav from 5.60 % to 7.69 %, against a limit
+  of +0.2 points.
+
+The fallback is therefore unchanged. Until it is fixed:
+
+- Give `gnss live` a navigation file (`--nav-rinex`, for example the IGS BRDC of
+  the day) when you can, also together with `--ubx-nav`.
+- Treat a FIXED row whose ratio equals the ratio threshold as held, not validated.
+
 ## Docker
 
 The repo also ships a multi-stage `Dockerfile`. The runtime image installs:
