@@ -920,8 +920,9 @@ was No-Go:
 - It also let the fallback run far more often (2.4 times in `gnss solve` and 3.2
   times in `gnss live` on PPC and UrbanNav), with few held pairs and many float
   ones. The round-robin arm went from 1 329 to 2 499 FIXED epochs > 0.5 m, and
-  multi-GNSS `gnss live` on PPC and UrbanNav from 5.60 % to 7.69 %, against a limit
-  of +0.2 points.
+  multi-GNSS `gnss live` on PPC and UrbanNav from 5.60 % to 7.69 % (before the
+  [Doppler slip fix](realtime_stress.md#doppler-slip-test-and-time-shifted-base-epochs)),
+  against a limit of +0.2 points.
 
 The second change refuses the fallback whenever any current pair has no held
 integer, so a pair that joined or was reset ends the held FIX instead of being
@@ -939,14 +940,19 @@ that was measured:
 | Same, round-robin ephemerides from the base | 1 329 / 3 | 53 / 0 |
 | Same, `--nav-rinex` | 0 / 0 | 0 / 0 |
 | `gnss solve`, PPC 6 runs + UrbanNav Tokyo 4 runs: FIXED > 0.5 m / FIXED | 4 074 / 70 574 (5.77 %) | 2 026 / 65 293 (3.10 %) |
-| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4: FIXED > 0.5 m / FIXED | 2 179 / 38 903 (5.60 %) | 2 007 / 36 427 (5.51 %) |
+| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4: FIXED > 0.5 m / FIXED | 1 630 / 39 771 (4.10 %) | 1 555 / 37 407 (4.16 %) |
 | Held-out check (3DOM rover B 2025-06-07 and 2025-06-08, not used before, 86 cold starts per arm): FIXED > 0.5 m, `--nav-rinex` / `--ubx-nav` / round-robin | 2 / 26 / 1 828 | 0 / 26 / 50 |
 
 - **FIXED epochs kept with the option:**
   - 99.7 to 99.9 % in the survey arms;
   - 99.65 to 99.92 % on the held-out logs;
-  - 92.5 % in `gnss solve` and 93.6 % in `gnss live` on PPC and UrbanNav (correct
-    FIXED epochs −4.9 % and −6.3 %).
+  - 92.5 % in `gnss solve` and 94.1 % in `gnss live` on PPC and UrbanNav (correct
+    FIXED epochs −4.9 % and −6.0 %).
+- **In `gnss live` the option removed few wrong fixes:** 1 630 to 1 555, so the
+  share of wrong FIXED epochs rose slightly (4.10 to 4.16 %). The `gnss live` row
+  was measured after the
+  [Doppler slip fix](realtime_stress.md#doppler-slip-test-and-time-shifted-base-epochs)
+  of 2026-10-15.
 - **On the held-out logs the gain rests on few starts:**
   - One round-robin start accounts for 1 778 of the 1 828 wrong FIXED epochs. It
     held a fix 0.9 to 1.5 m off from a hold-fix row; with the option those 2 s
@@ -989,12 +995,12 @@ Each cell is FIXED > 0.5 m / scored FIXED:
 | Urban development runs (SmartPNT 6, TEX-CUP 2019-05-09) | 1 015 / 27 213 (3.73 %) | 696 / 26 801 (2.60 %) | 651 / 25 273 (2.58 %) |
 | Urban check runs (SmartPNT 5, TEX-CUP 2019-05-12), scored once | 533 / 31 510 (1.69 %) | 331 / 30 845 (1.07 %) | 330 / 29 876 (1.10 %) |
 | `gnss solve`, PPC 6 runs + UrbanNav Tokyo 4 runs | 4 074 / 70 574 (5.77 %) | 1 972 / 69 112 (2.85 %) | 2 026 / 65 293 (3.10 %) |
-| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4 | 2 179 / 38 903 (5.60 %) | 2 002 / 37 946 (5.28 %) | 2 007 / 36 427 (5.51 %) |
+| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4 | 1 630 / 39 771 (4.10 %) | 1 550 / 38 926 (3.98 %) | 1 555 / 37 407 (4.16 %) |
 
 - **Correct FIXED epochs kept**, in the order development runs, check runs,
   `gnss solve` on PPC and UrbanNav, `gnss live` on PPC and UrbanNav:
-  - with `--hold-fix-min-matched-pairs 12`: 99.6 %, 98.5 %, 101.0 % and 97.9 %;
-  - with `--hold-fix-unchanged-set`: 94.0 %, 95.4 %, 95.1 % and 93.7 %.
+  - with `--hold-fix-min-matched-pairs 12`: 99.6 %, 98.5 %, 101.0 % and 98.0 %;
+  - with `--hold-fix-unchanged-set`: 94.0 %, 95.4 %, 95.1 % and 94.0 %.
 - **On the check runs the gain rests on one run.**
   - TEX-CUP 2019-05-12 went from 221 to 19 wrong FIXED epochs; a 200-epoch wrong
     episode was replaced by correct fixes.
@@ -1002,7 +1008,9 @@ Each cell is FIXED > 0.5 m / scored FIXED:
   - On the fifth (Data12) the wrong count stayed at 186, and 4.8 % of its correct
     FIXED epochs were lost.
 - **The PPC and UrbanNav rows were not used to choose n.** They had been used for
-  the earlier hold-fix decisions above.
+  the earlier hold-fix decisions above. The `gnss live` row was measured after the
+  [Doppler slip fix](realtime_stress.md#doppler-slip-test-and-time-shifted-base-epochs)
+  of 2026-10-15, which changed only UrbanNav Odaiba with the u-blox receiver.
 - **Not measured:** the cold-start survey, where `--hold-fix-unchanged-set` is the
   measured option, and the two options together.
 - **Scoring of the urban data:**
@@ -1070,7 +1078,7 @@ scored FIXED:
 | Held-out GREAT-WHU run (Wuhan, 2020-12-16), scored once | 43 / 8 724 (0.49 %) | 14 / 8 663 (0.16 %) | 99.6 % |
 | Held-out urban check runs (SmartPNT 5, TEX-CUP 2019-05-12), scored once with k | 331 / 30 845 (1.07 %) | 127 / 29 705 (0.43 %) | 96.9 % |
 | `gnss solve`, PPC 6 runs + UrbanNav Tokyo 4 runs | 1 972 / 69 112 (2.85 %) | 806 / 66 336 (1.22 %) | 97.6 % |
-| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4 | 2 002 / 37 946 (5.28 %) | 512 / 34 395 (1.49 %) | 94.3 % |
+| Multi-GNSS `gnss live`, PPC 2 + UrbanNav Tokyo 4 | 1 550 / 38 926 (3.98 %) | 518 / 36 447 (1.42 %) | 96.1 % |
 
 - **The held-out rows together:**
   - 374 / 39 569 (0.95 %) went to 141 / 38 368 (0.37 %), keeping 97.5 % of the
@@ -1078,10 +1086,12 @@ scored FIXED:
   - Every run with FIXED epochs had fewer wrong ones.
   - The lowest share of correct FIXED epochs kept was 93.7 % (TEX-CUP
     2019-05-12).
-- **One `gnss live` run lost 39.5 % of its correct FIXED epochs.** On UrbanNav
-  Odaiba with the u-blox receiver, the wrong FIXED epochs went from 495 of 2 476 to
-  2 of 1 201. The same run in `gnss solve` lost little (33 / 3 690 to 26 / 3 606).
-  The other five `gnss live` runs kept 93.7 to 99.7 %.
+- **`gnss live` kept 93.7 to 99.7 % per run.** Before the
+  [Doppler slip fix](realtime_stress.md#doppler-slip-test-and-time-shifted-base-epochs)
+  of 2026-10-15, UrbanNav Odaiba with the u-blox receiver lost 39.5 %: false slips
+  had left few satellites in its fixed sets. After the fix it went from 43 / 3 456
+  to 8 / 3 253 and kept 95.1 %. The `gnss live` row above was measured after the
+  fix.
 - **Only one of the three GREAT-WHU sessions counted.**
   - The 2021-10-13 session, which its authors describe as a GNSS challenge, never
     reached FIX, with or without the option. It was 1.6 to 19.7 km from the base.
@@ -1109,9 +1119,8 @@ scored FIXED:
 When post-processing a drive with
 `gnss solve --preset low-cost --hold-fix-min-matched-pairs 12`, add
 `--min-fix-satellites 4` if you prefer fewer wrong fixes to a few more fixes. On the
-run sets above it removed 49 to 74 % of the remaining wrong FIXED epochs and kept
-94.3 to 99.6 % of the correct ones. Check its cost on your own receiver before using
-it in `gnss live`.
+run sets above it removed 49 to 67 % of the remaining wrong FIXED epochs and kept
+96.1 to 99.6 % of the correct ones. Check its cost on your own receiver.
 
 ## Docker
 
