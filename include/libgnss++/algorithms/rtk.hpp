@@ -2185,6 +2185,14 @@ private:
     // single-difference range rate into a false slip on every satellite.
     GNSSTime doppler_history_time_;
     bool has_doppler_history_time_ = false;
+    // Base-epoch time of the same detector call as doppler_history_time_. The
+    // base epoch does not always advance with the rover epoch (an exact-time
+    // base epoch keeps its own measurement time, an interpolated one takes the
+    // rover time), so the single-difference phase change is predicted with the
+    // base's own span. Set, advanced and cleared together with
+    // doppler_history_time_.
+    GNSSTime doppler_history_base_time_;
+    bool has_doppler_history_base_time_ = false;
     // RTKConfig::use_half_cycle_lli: previous-epoch LLI bit1 per
     // (satellite, frequency index), {rover, base}. Kept across observation
     // gaps like demo5's ssat.slip LLI memory; cleared in reset().
@@ -2328,10 +2336,13 @@ private:
                         const NavigationData& nav);
 
     /**
-     * Update SD biases (RTKLIB udbias): initialize new, reset slipped
+     * Update SD biases (RTKLIB udbias): initialize new, reset slipped.
+     * epoch_time / base_epoch_time are the rover and base epoch times of this
+     * call; the Doppler slip test predicts the single-difference phase change
+     * over the span each of them advanced since the previous call.
      */
     void updateBias(const std::map<SatelliteId, SatelliteData>& sat_data, double dt_s,
-                    const GNSSTime& epoch_time);
+                    const GNSSTime& epoch_time, const GNSSTime& base_epoch_time);
     void updateTdcpDiagnostics(const std::map<SatelliteId, SatelliteData>& sat_data,
                                double dt_s);
 

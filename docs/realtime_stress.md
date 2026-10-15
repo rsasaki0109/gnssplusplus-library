@@ -261,28 +261,31 @@ the run, and the summary line only gains `rover_reconnects=` / `base_reconnects=
 
 **Do not trust a `gnss live` FIX in a dense urban canyon.** Even with all
 constellations, `gnss live --preset low-cost` published FIX epochs that were more
-than 0.5 m off on three of the four UrbanNav Tokyo runs at rates above 5 %. These
+than 0.5 m off on two of the four UrbanNav Tokyo runs at rates above 5 %. These
 are offline replays of the 2018-12-19 runs: G+R+E+J+C MSM7, `--nav-rinex`, the
 surveyed base and the real host clock, measured against a contract frozen
 before the run on 2026-10-12. The numbers below were measured on develop
 `52853076`; the contract was first run on `b9a6e243`, and the multi-GNSS
-numbers changed between the two (see the last bullet).
+numbers changed between the two (see the last bullet). The Odaiba u-blox row
+was measured again on 2026-10-15, after the
+[Doppler slip fix](#doppler-slip-test-and-time-shifted-base-epochs); the other
+rows are unchanged by it.
 
 | UrbanNav Tokyo, `--preset low-cost` | FIX, GPS-only → multi | wrong FIX, GPS-only → multi | Wrong/FIX, GPS-only → multi | FIXED 3D p95, multi |
 |---|---|---|---|---|
 | Shinjuku, Trimble rover | 3511 → 13636 | 1711 → 905 | 48.7 % → **6.6 %** | 0.78 m |
 | Shinjuku, u-blox rover | 623 → 4988 | 202 → 258 | 32.4 % → **5.2 %** | 0.51 m |
 | Odaiba, Trimble rover | 4419 → 7704 | 125 → 81 | 2.8 % → 1.1 % | 0.17 m |
-| Odaiba, u-blox rover | 0 → 2588 | 0 → 592 | – → **22.9 %** | 3.31 m |
+| Odaiba, u-blox rover | 77 → 3456 | 4 → 43 | 5.2 % → 1.2 % | 0.17 m |
 
-* Multi-GNSS fixes 3.9 and 8.0 times as many epochs on the two Shinjuku runs and 1.7 times as many on Odaiba
-  Trimble, and cuts Wrong/FIX on all three. The number of wrong fixes falls on Shinjuku Trimble (1711 → 905)
-  and Odaiba Trimble (125 → 81) and rises on Shinjuku u-blox (202 → 258). On Odaiba u-blox, GPS alone never
-  fixes, while multi-GNSS fixes 42 % of epochs and 23 % of those fixes are wrong.
+* Multi-GNSS fixes 3.9 and 8.0 times as many epochs on the two Shinjuku runs, 1.7 times as many on Odaiba Trimble
+  and 45 times as many on Odaiba u-blox, and cuts Wrong/FIX on all four. The number of wrong fixes falls on
+  Shinjuku Trimble (1711 → 905) and Odaiba Trimble (125 → 81) and rises on Shinjuku u-blox (202 → 258) and Odaiba
+  u-blox (4 → 43). On Odaiba u-blox, GPS alone fixes 1.2 % of epochs and multi-GNSS 56 %.
 * Most of these wrong fixes are decimetres to a few metres off, not tens of metres: see the FIXED 3D p95
   column. That still matters for anything that trusts the FIX flag.
 * `--kinematic-post-filter` (opt-in) lowers multi-GNSS Wrong/FIX only slightly (6.6 → 5.0 %, 5.2 → 4.3 %,
-  1.1 → 0.4 %, 22.9 → 21.1 %). It cuts the all-solution 3D p95 several-fold (Shinjuku Trimble 65 → 5 m) by
+  1.1 → 0.4 %, 1.2 → 1.0 %). It cuts the all-solution 3D p95 several-fold (Shinjuku Trimble 65 → 5 m) by
   withholding 19–33 % of solutions. It does not remove wrong fixes.
 * On the PPC runs the multi-GNSS low-cost Wrong/FIX was 1.2–3.7 %
   (see [Multi-constellation MSM](#multi-constellation-msm-epoch-assembly)), measured before #615 and not
@@ -294,7 +297,8 @@ numbers changed between the two (see the last bullet).
   encoded streams and all GPS-only arms are identical in the two runs, and the multi-GNSS low-cost arms
   differ. Rebuilding develop at `f32ea3b5` (before #615) reproduced all four earlier multi-GNSS low-cost
   results, and `9d58ef51` (#615, deterministic same-toe ephemeris order, Galileo I/NAV first) gave the new
-  ones. The decision rule is unchanged: three of the four runs are still above 5 %.
+  ones. The decision rule is unchanged: three of the four runs were still above 5 %, and two are after the Doppler
+  slip fix.
 
 A frozen-contract check (2026-10-11) of
 `--preset low-cost --kinematic-post-filter` plus `FixRecoveryGuard` was
@@ -329,7 +333,62 @@ Per-flag ablation on the same nine runs, run after the gates (not a gate):
   Wrong/FIX higher, and removes 26 % of wrong FIX.
 - **Status of these numbers.** They come from the ablation run after the No-Go
   decision on the same check runs, so they describe the flag rather than prove
-  it. They are not evidence for a default.
+  it. They are not evidence for a default. All of these GPS-only numbers were
+  measured before the
+  [Doppler slip fix](#doppler-slip-test-and-time-shifted-base-epochs), which
+  changes the Odaiba u-blox run: GPS-only `--preset low-cost` now fixes 77 epochs
+  there, 4 of them wrong, against none before.
+
+## Doppler slip test and time-shifted base epochs
+
+Fixed on 2026-10-15 in the RTK filter (`src/algorithms/rtk_bias.cpp`) and checked under a contract frozen before the
+run. It changed `gnss live` and `gnss replay` on UrbanNav Odaiba with the u-blox rover. The numbers for that run in
+this document, in [`gnss live`](use_cases/realtime_rtk_gnss_live.md) and in [Interfaces](interfaces.md) were measured
+after the fix unless a table says otherwise.
+
+* **Cause.** `gnss live` and `gnss replay` use a base epoch within 1 ms of the rover epoch as it is and interpolate
+  the others to the rover time. The Odaiba u-blox rover tags 6069 of its 6206 epochs 1 ms after the second. With a
+  5 Hz rover and a 1 Hz base the two kinds alternate, so the base epoch advances 0.199 s or 0.201 s while the rover
+  advances 0.2 s. The Doppler slip test predicted the single-difference phase change with the rover's span for both
+  receivers. At a Doppler of 1 kHz that is about one cycle off, against a threshold of 0.2 cycles. With
+  `--preset low-cost --hold-fix-min-matched-pairs 12`, the test flagged false slips on about five satellites at a
+  time at 93.5 % of the epochs at .0 s and .2 s, and an L1 ambiguity was reset on 41 % of all epochs.
+* **Fix.** The test now predicts the change with each receiver's own span. When the two spans agree within 1 µs, or
+  the base span is not known, it evaluates the old expression, so time-matched data gives byte-identical output.
+* **Not affected:** `gnss solve`, which treats a base epoch as time-matched only within 1 µs and interpolates the
+  others; base streams without Doppler (MSM4), where the test does not run; and rovers whose epochs fall on the base
+  epochs.
+* **Byte-identical `.pos` before and after:**
+  * `gnss solve` on PPC Tokyo run1 and Nagoya run3, with and without `--preset low-cost`, and with
+    `--preset low-cost` on the seven urban development runs of
+    [Interfaces](interfaces.md#rtk-hold-fix-fallback-known-weakness) and the four UrbanNav Tokyo runs.
+  * `gnss live` on the other five runs (PPC Tokyo run1 and Nagoya run3, UrbanNav Shinjuku Trimble and u-blox, Odaiba
+    Trimble) with `--preset low-cost`, alone and with `--hold-fix-min-matched-pairs 12`, with that and
+    `--min-fix-satellites 4`, and with `--hold-fix-unchanged-set`.
+  * `gnss live` on the other three UrbanNav runs, GPS-only and multi-GNSS, without options, with `--preset low-cost`
+    and with `--kinematic-post-filter` added.
+  * `gnss replay` on three UrbanNav runs.
+* **Odaiba u-blox, multi-GNSS `gnss live --preset low-cost`.** Each cell is FIXED more than 0.5 m off / FIXED.
+  `gnss solve` on the RINEX of the same run is shown for comparison.
+
+  | Options added | Before the fix | After the fix | `gnss solve` |
+  |---|---|---|---|
+  | none | 592 / 2588 (22.9 %) | 43 / 3456 (1.24 %) | 36 / 3693 (0.97 %) |
+  | `--hold-fix-min-matched-pairs 12` | 495 / 2476 (20.0 %) | 43 / 3456 (1.24 %) | 33 / 3690 (0.89 %) |
+  | `--hold-fix-min-matched-pairs 12 --min-fix-satellites 4` | 2 / 1201 (0.17 %) | 8 / 3253 (0.25 %) | 26 / 3606 (0.72 %) |
+
+  * Correct FIXED epochs went from 1996, 1981 and 1199 to 3413, 3413 and 3245.
+  * With `--hold-fix-min-matched-pairs 12`, the epochs with a Doppler slip went from 37.6 % to 0.29 % (`gnss solve`:
+    0.7 %).
+* **`gnss replay`** (rover RINEX, base RTCM, `--preset low-cost`) on the same run: 6 / 290 to 6 / 291.
+* **Six-run totals** (PPC 2 + UrbanNav Tokyo 4, multi-GNSS, `--preset low-cost`): 2179 / 38903 (5.60 %) to
+  1630 / 39771 (4.10 %); correct FIXED epochs 36724 to 38141.
+* **Without the preset** (outside the contract):
+  * Multi-GNSS went from 9 / 219 to 0 / 461.
+  * With GPS only, one wrong fix lasted longer: 150 / 150 to 460 / 460, all about 1.1 m off with 4 to 6 satellites.
+    The first 150, from the start of the run, are the same in both. Before the fix false slips ended that episode.
+    After it the solution stayed about 1.1 m off for 310 more FIXED epochs within the next 73 s.
+  * GPS alone with `--preset low-cost` fixed 77 epochs, 4 of them wrong (none before).
 
 ## Multi-constellation MSM (epoch assembly)
 
@@ -415,6 +474,9 @@ Per run, `gnss live --preset low-cost` (report only for the O, N and S columns; 
 | Odaiba Trimble | 12,399 | 1.000 | 100.0 % | 5.4, 11.3, 11.3 | 35.6, 62.1, 62.1 | 125, 81, 81 | 2.8, 1.1, 1.1 % |
 | Odaiba u-blox | 6206 | 1.000 | 99.6 % | 5.6, 11.8, 11.8 | 0.0, 41.7, 42.1 | 0, 592, 624 | 0.0, 22.9, 23.9 % |
 
+* These per-run numbers and the gates above were measured before the
+  [Doppler slip fix](#doppler-slip-test-and-time-shifted-base-epochs) of 2026-10-15, which changes the Odaiba u-blox
+  run. They were not measured again.
 * All five criteria pass in every run, including mean `ns` of S at least 5.1 above O: Galileo, QZSS and BeiDou
   satellites are used from the stream alone. S and N agree on the status of 99.4 to 100 % of the epochs. The
   both-FIXED horizontal difference is 0 m at p50 and p95 in every run; the largest single difference is 2.1 m (Odaiba

@@ -11,10 +11,13 @@
 
 #include <libgnss++/algorithms/rtk.hpp>
 
+#include "synthetic_rtk_scene.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -47,6 +50,10 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(last_dd_fixed_)
     GNSSPP_RTK_TEST_MEMBER(last_ar_ratio_)
     GNSSPP_RTK_TEST_MEMBER(last_num_fixed_ambiguities_)
+    GNSSPP_RTK_TEST_MEMBER(doppler_history_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_doppler_history_time_)
+    GNSSPP_RTK_TEST_MEMBER(doppler_history_base_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_doppler_history_base_time_)
     GNSSPP_RTK_TEST_METHOD(formDoubleDifferences)
     GNSSPP_RTK_TEST_METHOD(calculateBaseline)
     GNSSPP_RTK_TEST_METHOD(calculateResiduals)
@@ -1897,6 +1904,153 @@ TEST(RTKLegacyCompatibilityStandaloneTest, MinFixSatellitesDefaultsToOffAndIsCon
     off.min_fix_satellites = 0;
     processor.setRTKConfig(off);
     EXPECT_EQ(processor.getRTKConfig().min_fix_satellites, 0);
+}
+
+// ============================================================
+// Base-epoch time of the Doppler slip history (updateBias)
+// ============================================================
+
+// The Doppler slip test predicts the single-difference phase change over the span the
+// rover and the base each advanced since the previous detector call. updateBias() keeps
+// the base epoch time of that call next to doppler_history_time_; the two are set,
+// advanced and dropped together (long gap, reset()). Synthetic L1 scene whose base
+// epochs alternate between a measurement time 1 ms before the rover epoch and the rover
+// time (what gnss live feeds when exact-time and interpolated base epochs alternate).
+class RTKDopplerBaseSpanHistoryTest : public ::testing::Test {
+protected:
+    static constexpr double kSpacingS = 0.2;
+
+    static Vector3d basePosition() { return Vector3d(6378137.0, 0.0, 0.0); }
+    static Vector3d roverPosition() { return basePosition() + Vector3d(40.0, 30.0, 10.0); }
+
+    void SetUp() override { startProcessor(RTKProcessor::RTKConfig()); }
+
+    void startProcessor(RTKProcessor::RTKConfig config) {
+        nav_ = synthetic_rtk_scene::constellation();
+        prns_ = synthetic_rtk_scene::visible(nav_, synthetic_rtk_scene::epochTime(0.0),
+                                             roverPosition(), 15.0);
+        ASSERT_GE(prns_.size(), 6U);
+        config.position_mode = RTKProcessor::RTKConfig::PositionMode::KINEMATIC;
+        config.elevation_mask = 5.0 * M_PI / 180.0;
+        config.ratio_threshold = 1.0e9;
+        config.ambiguity_ratio_threshold = 1.0e9;
+        processor_ = std::make_unique<RTKProcessor>(config);
+        ProcessorConfig processor_config;
+        processor_config.elevation_mask = 5.0;
+        ASSERT_TRUE(processor_->initialize(processor_config));
+        processor_->setBasePosition(basePosition());
+    }
+
+    ObservationData roverEpoch(double t) const {
+        auto rover = synthetic_rtk_scene::observations(
+            nav_, synthetic_rtk_scene::epochTime(t), roverPosition(), 30.0, prns_, 0.0,
+            /*with_doppler=*/true);
+        rover.receiver_position = roverPosition();
+        return rover;
+    }
+
+    ObservationData baseEpoch(double measured_t) const {
+        return synthetic_rtk_scene::observations(nav_, synthetic_rtk_scene::epochTime(measured_t),
+                                                 basePosition(), 10.0, prns_, 500.0,
+                                                 /*with_doppler=*/true);
+    }
+
+    // One RTK epoch at rover time t with the base measured at t + base_offset_s.
+    GNSSTime process(double t, double base_offset_s) {
+        const auto rover = roverEpoch(t);
+        const auto base = baseEpoch(t + base_offset_s);
+        processor_->processRTKEpoch(rover, base, nav_);
+        return base.time;
+    }
+
+    bool historyTimesAreSet() {
+        return Peer::has_doppler_history_time_(*processor_) &&
+               Peer::has_doppler_history_base_time_(*processor_);
+    }
+
+    bool historyTimesAreClear() {
+        return !Peer::has_doppler_history_time_(*processor_) &&
+               !Peer::has_doppler_history_base_time_(*processor_);
+    }
+
+    NavigationData nav_;
+    std::vector<uint8_t> prns_;
+    std::unique_ptr<RTKProcessor> processor_;
+};
+
+TEST_F(RTKDopplerBaseSpanHistoryTest, StartsWithNoHistory) {
+    EXPECT_TRUE(historyTimesAreClear());
+}
+
+TEST_F(RTKDopplerBaseSpanHistoryTest, BaseTimeIsRecordedWithTheRoverTimeEveryEpoch) {
+    for (int epoch = 0; epoch < 6; ++epoch) {
+        const double t = kSpacingS * epoch;
+        const GNSSTime base_time = process(t, epoch % 2 == 0 ? -0.001 : 0.0);
+        ASSERT_TRUE(historyTimesAreSet()) << "epoch " << epoch;
+        EXPECT_NEAR(Peer::doppler_history_time_(*processor_) - synthetic_rtk_scene::epochTime(t),
+                    0.0, 1.0e-9)
+            << "epoch " << epoch;
+        // The base history holds the base's own (measurement) time, not the rover time.
+        EXPECT_NEAR(Peer::doppler_history_base_time_(*processor_) - base_time, 0.0, 1.0e-9)
+            << "epoch " << epoch;
+        EXPECT_NEAR(Peer::doppler_history_time_(*processor_) -
+                        Peer::doppler_history_base_time_(*processor_),
+                    epoch % 2 == 0 ? 0.001 : 0.0, 1.0e-9)
+            << "epoch " << epoch;
+    }
+}
+
+TEST_F(RTKDopplerBaseSpanHistoryTest, LongGapDropsBothHistoryTimes) {
+    for (int epoch = 0; epoch < 3; ++epoch) process(kSpacingS * epoch, -0.001);
+    ASSERT_TRUE(historyTimesAreSet());
+
+    // The rover epoch comes 9.6 s later: too long for a Doppler prediction, the stored
+    // samples and both history times are dropped.
+    process(10.0, -0.001);
+    EXPECT_TRUE(historyTimesAreClear());
+
+    // The next epoch starts a new history for both.
+    const GNSSTime base_time = process(10.0 + kSpacingS, 0.0);
+    ASSERT_TRUE(historyTimesAreSet());
+    EXPECT_NEAR(Peer::doppler_history_time_(*processor_) -
+                    synthetic_rtk_scene::epochTime(10.0 + kSpacingS),
+                0.0, 1.0e-9);
+    EXPECT_NEAR(Peer::doppler_history_base_time_(*processor_) - base_time, 0.0, 1.0e-9);
+}
+
+TEST_F(RTKDopplerBaseSpanHistoryTest, ResetDropsBothHistoryTimes) {
+    for (int epoch = 0; epoch < 3; ++epoch) process(kSpacingS * epoch, -0.001);
+    ASSERT_TRUE(historyTimesAreSet());
+
+    processor_->reset();
+    EXPECT_TRUE(historyTimesAreClear());
+}
+
+TEST_F(RTKDopplerBaseSpanHistoryTest, DisabledDopplerDetectionKeepsNoHistory) {
+    RTKProcessor::RTKConfig config;
+    config.enable_doppler_slip_detection = false;
+    startProcessor(config);
+    for (int epoch = 0; epoch < 4; ++epoch) process(kSpacingS * epoch, -0.001);
+    EXPECT_TRUE(historyTimesAreClear());
+}
+
+// The second updateBias() call site (formDoubleDifferences(), reached when an epoch was not
+// processed by processRTKEpoch) hands over the base epoch time as well.
+TEST_F(RTKDopplerBaseSpanHistoryTest, FormDoubleDifferencesPassesTheBaseEpochTime) {
+    for (int epoch = 0; epoch < 8; ++epoch) {
+        const double t = kSpacingS * epoch;
+        const auto rover = roverEpoch(t);
+        const auto base = baseEpoch(t + (epoch % 2 == 0 ? -0.001 : 0.0));
+        Peer::formDoubleDifferences(*processor_, rover, base, nav_);
+        ASSERT_TRUE(historyTimesAreSet()) << "epoch " << epoch;
+        EXPECT_NEAR(Peer::doppler_history_time_(*processor_) - rover.time, 0.0, 1.0e-9)
+            << "epoch " << epoch;
+        EXPECT_NEAR(Peer::doppler_history_base_time_(*processor_) - base.time, 0.0, 1.0e-9)
+            << "epoch " << epoch;
+        // Consistent observations on the alternating base epochs: no Doppler slip.
+        EXPECT_EQ(processor_->getLastDebugTelemetry().doppler_slip_l1_count, 0)
+            << "epoch " << epoch;
+    }
 }
 
 }  // namespace

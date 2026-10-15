@@ -311,7 +311,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         handleReferenceSatelliteChange(new_ref, sat_data);
         current_sat_data_ = sat_data;
         const auto bias_started = std::chrono::steady_clock::now();
-        updateBias(sat_data, state_dt, rover_obs.time);
+        updateBias(sat_data, state_dt, rover_obs.time, base_obs.time);
         debug_telemetry_.stage_bias_update_ms +=
             std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - bias_started)

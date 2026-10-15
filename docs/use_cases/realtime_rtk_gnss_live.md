@@ -262,7 +262,7 @@ Neither profile is a statement about RTK tuning in general.
 epoch whose height differs from the last written epoch by more than
 `max(1 m, 4 m/s * dt)`, adds no delay, and adds `post_filter_dropped_epochs=` to
 the summary. On the four UrbanNav Tokyo replays below it lowered Wrong/FIX only
-slightly (6.6 to 5.0 %, 5.2 to 4.3 %, 1.1 to 0.4 %, 22.9 to 21.1 %) while
+slightly (6.6 to 5.0 %, 5.2 to 4.3 %, 1.1 to 0.4 %, 1.2 to 1.0 %) while
 withholding 19 to 33 % of the solutions
 ([Wrong FIX on the real-time path](../realtime_stress.md#wrong-fix-on-the-real-time-path)).
 It does not remove wrong fixes.
@@ -405,8 +405,9 @@ replays and then on your own recorded drives:
 **Do not trust a `gnss live` FIX in a dense urban canyon.** With
 `--preset low-cost` and all constellations (G+R+E+J+C MSM7, `--nav-rinex`,
 surveyed base, real host clock, offline replays of the 2018-12-19 UrbanNav Tokyo
-runs, contract frozen before the run, measured on develop `52853076`),
-`gnss live` published FIX epochs more than 0.5 m off at these rates
+runs, contract frozen before the run, measured on develop `52853076`, Odaiba
+u-blox again after the Doppler slip fix of 2026-10-15), `gnss live` published
+FIX epochs more than 0.5 m off at these rates
 ([source](../realtime_stress.md#wrong-fix-on-the-real-time-path)):
 
 | UrbanNav Tokyo, `--preset low-cost` | FIX, GPS-only to multi | Wrong FIX, GPS-only to multi | Wrong/FIX, GPS-only to multi | FIXED 3D p95, multi |
@@ -414,19 +415,21 @@ runs, contract frozen before the run, measured on develop `52853076`),
 | Shinjuku, Trimble rover | 3511 to 13636 | 1711 to 905 | 48.7 % to **6.6 %** | 0.78 m |
 | Shinjuku, u-blox rover | 623 to 4988 | 202 to 258 | 32.4 % to **5.2 %** | 0.51 m |
 | Odaiba, Trimble rover | 4419 to 7704 | 125 to 81 | 2.8 % to 1.1 % | 0.17 m |
-| Odaiba, u-blox rover | 0 to 2588 | 0 to 592 | none to **22.9 %** | 3.31 m |
+| Odaiba, u-blox rover | 77 to 3456 | 4 to 43 | 5.2 % to 1.2 % | 0.17 m |
 
-Multi-GNSS fixes 3.9 and 8.0 times as many epochs on the two Shinjuku runs and
-1.7 times as many on Odaiba Trimble, and lowers Wrong/FIX on all three. The
-number of wrong fixes falls on the two Trimble runs but rises on Shinjuku
-u-blox (202 to 258), and on Odaiba u-blox 23 % of the fixes are wrong. Most are
-decimetres to a few metres off rather than tens of metres, which still matters
-for anything that trusts the FIX flag. On the PPC replays the multi-GNSS
-low-cost Wrong/FIX was 1.2 to 3.7 % (measured before #615, not re-measured).
-An earlier run of the same contract on
+Multi-GNSS fixes 3.9 and 8.0 times as many epochs on the two Shinjuku runs, 1.7
+times as many on Odaiba Trimble and 45 times as many on Odaiba u-blox, and
+lowers Wrong/FIX on all four. The number of wrong fixes falls on the two
+Trimble runs but rises on the two u-blox runs (202 to 258 and 4 to 43). Most
+are decimetres to a few metres off rather than tens of metres, which still
+matters for anything that trusts the FIX flag. On the PPC replays the
+multi-GNSS low-cost Wrong/FIX was 1.2 to 3.7 % (measured before #615, not
+re-measured). An earlier run of the same contract on
 `b9a6e243` gave 12.1 %, 5.5 %, 1.0 % and 22.2 % in the table order; #615, the
 deterministic same-toe ephemeris order, changed the multi-GNSS numbers
-([details](../realtime_stress.md#wrong-fix-on-the-real-time-path)).
+([details](../realtime_stress.md#wrong-fix-on-the-real-time-path)). Before the
+Doppler slip fix of 2026-10-15, 23 % of the Odaiba u-blox fixes were wrong
+([details](../realtime_stress.md#doppler-slip-test-and-time-shifted-base-epochs)).
 
 What this page and its options do **not** do:
 
@@ -447,11 +450,11 @@ What this page and its options do **not** do:
   the threshold ratio as held, not validated
   ([details](../interfaces.md#rtk-hold-fix-fallback-known-weakness)). The other
   opt-in, `--hold-fix-min-matched-pairs 12`, was not measured on cold starts. On
-  the UrbanNav and PPC replays it took multi-GNSS `gnss live` from 5.60 to 5.28 %
-  of FIXED epochs more than 0.5 m off, keeping 97.9 % of the correct ones.
+  the UrbanNav and PPC replays it took multi-GNSS `gnss live` from 4.10 to 3.98 %
+  of FIXED epochs more than 0.5 m off, keeping 98.0 % of the correct ones.
   Adding `--min-fix-satellites 4`, which refuses an ambiguity-resolution fix from
-  fewer than 4 non-reference satellites, took it further to 1.49 %, keeping 94.3 %
-  of the correct ones. One u-blox run lost 39.5 % of its correct FIXED epochs.
+  fewer than 4 non-reference satellites, took it further to 1.42 %, keeping 96.1 %
+  of the correct ones and at least 93.7 % in every run.
   This option was not measured on cold starts either
   ([details](../interfaces.md#rtk-fixes-from-few-satellites)).
 - The reported sigma is not calibrated. In the fixture run every FLOAT and FIXED
