@@ -406,6 +406,36 @@ inline Vector3d recenterPostfitReceiverPosition(
            (updated_filter_position - prior_filter_position);
 }
 
+// MADOCALIB ppp_res() applies one prefit innovation gate, opt->maxinno
+// (pos2-rejionno = 50 m in the shipped sample.conf / sample_pppar*.conf), to
+// every row. A per-frequency ambiguity is seeded from raw code/ionosphere, so
+// its first phase innovation is routinely 10-59 m; the tighter native floors
+// (10 m converged / 50 m otherwise) would reject that satellite's phase row
+// every epoch, leaving the ambiguity state at its prior variance and
+// starving the wide-lane pairing of that satellite.
+inline constexpr double kMadocaMaxInnovationM = 50.0;
+
+// True on the MADOCA L6E per-frequency (uncombined, estimated-ionosphere) path.
+inline bool madocaPerFrequencyInnovationGateActive(
+    bool require_coherent_ssr,
+    bool ssr_products_loaded,
+    bool use_ionosphere_free,
+    bool estimate_ionosphere,
+    bool use_clas_osr_filter) {
+    return require_coherent_ssr && ssr_products_loaded &&
+           !use_ionosphere_free && estimate_ionosphere &&
+           !use_clas_osr_filter;
+}
+
+// Phase prefit-residual floor: the native floor everywhere, raised to the
+// MADOCALIB maxinno on the MADOCA per-frequency path only.
+inline double phaseInnovationFloorM(double native_floor_m,
+                                    bool madoca_per_frequency_gate) {
+    return madoca_per_frequency_gate
+        ? std::max(native_floor_m, kMadocaMaxInnovationM)
+        : native_floor_m;
+}
+
 inline double madocaIonosphereScale(double frequency_hz) {
     if (!(frequency_hz > 0.0)) {
         return std::numeric_limits<double>::quiet_NaN();

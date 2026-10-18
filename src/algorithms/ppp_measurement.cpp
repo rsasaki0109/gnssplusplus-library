@@ -116,6 +116,16 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
     const double zenith_delay = filter_state_.state(filter_state_.trop_index);
     const bool use_phase_rows =
         ppp_config_.use_carrier_phase_without_precise_products || precise_products_loaded_ || ssr_products_loaded_;
+    // MADOCALIB gates every row with the single prefit innovation limit
+    // maxinno (50 m), so on the MADOCA per-frequency path the native phase
+    // floors are raised to it. Otherwise a freshly seeded per-frequency
+    // ambiguity (first phase innovation 10-59 m) has its phase row rejected
+    // every epoch and its state never leaves the prior variance.
+    const bool madoca_innovation_gate =
+        madocaPerFrequencyInnovationGateActive(
+            require_coherent_ssr_, ssr_products_loaded_,
+            ppp_config_.use_ionosphere_free, ppp_config_.estimate_ionosphere,
+            ppp_config_.use_clas_osr_filter);
 
     for (const auto& observation : observations) {
         if (!observation.valid) {
@@ -337,10 +347,11 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                                                + filter_state_.state(ambiguity_index);
                 const double phase_residual = observation.carrier_phase_if - predicted_phase;
                 if (env_overrides_.res_dump) dumpRes("L1", "phase", phase_residual);
-                const double phase_residual_floor =
+                const double phase_residual_floor = phaseInnovationFloorM(
                     ppp_config_.kinematic_mode
                         ? (converged_ ? 20.0 : 200.0)
-                        : (converged_ ? 10.0 : 50.0);
+                        : (converged_ ? 10.0 : 50.0),
+                    madoca_innovation_gate);
                 const double phase_limit =
                     std::max(
                         ppp_config_.outlier_threshold *
@@ -461,7 +472,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 const double var_cp_l2 = observation.variance_cp > 0.0
                     ? observation.variance_cp
                     : safeVariance(observation.variance_cp_l2, 1e-8);
-                const double phase_floor = converged_ ? 10.0 : 50.0;
+                const double phase_floor = phaseInnovationFloorM(
+                    converged_ ? 10.0 : 50.0, madoca_innovation_gate);
                 const double phase_limit = std::max(
                     ppp_config_.outlier_threshold * std::sqrt(var_cp_l2) * 10.0,
                     phase_floor);
@@ -587,7 +599,8 @@ PPPProcessor::MeasurementEquation PPPProcessor::formMeasurementEquations(
                 : safeVariance(frequency.variance_cp, 1e-8);
             const double phase_limit = std::max(
                 ppp_config_.outlier_threshold * std::sqrt(var_cp) * 10.0,
-                converged_ ? 10.0 : 50.0);
+                phaseInnovationFloorM(
+                    converged_ ? 10.0 : 50.0, madoca_innovation_gate));
             if (env_overrides_.res_dump) dumpRes(band.c_str(), "phase", phase_resid);
             if (!apply_outlier_detection || !ppp_config_.enable_outlier_detection ||
                 std::abs(phase_resid) <= phase_limit) {
