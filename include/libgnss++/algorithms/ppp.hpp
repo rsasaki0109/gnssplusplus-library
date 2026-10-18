@@ -16,8 +16,10 @@
 #include "../iers/tides.hpp"
 #include <Eigen/Dense>
 #include <array>
+#include <map>
 #include <memory>
 #include <mutex>
+#include <set>
 #include <string>
 
 namespace libgnss {
@@ -92,6 +94,8 @@ struct PPPARStageTelemetry {
     size_t n1_lambda_failure_epochs = 0;
     size_t n1_ratio_rejection_epochs = 0;
     size_t n1_fixed_epochs = 0;
+    /// Per-frequency fixes vetoed by the MADOCALIB-style post-fit residual check.
+    size_t postfit_residual_rejected_epochs = 0;
     int last_satellite_candidates = 0;
     int last_wide_lane_pairs = 0;
     int last_n1_candidates = 0;
@@ -109,6 +113,8 @@ PPPConvergenceWindowMetrics evaluatePPPConvergenceWindow(
  * centimeter level positioning without base stations.
  */
 class PPPProcessor : public ProcessorBase {
+    friend struct PPPProcessorTestAccess;  // white-box unit tests (tests/test_ppp.cpp)
+
 public:
     using PPPConfig = ppp_shared::PPPConfig;
     using PPPState = ppp_shared::PPPState;
@@ -422,6 +428,9 @@ public:
 
 private:
     std::map<SatelliteId, PPPAmbiguityInfo> ambiguity_states_;
+    /// Satellites dropped by updateFilter()'s prefit residual screening in the
+    /// most recent epoch (the post-fit fix check does not count their rows).
+    std::set<SatelliteId> last_prefit_screened_satellites_;
     std::map<SatelliteId, std::set<SignalType>>
         pending_ambiguity_frequency_resets_;
     std::map<SatelliteId, CLASDispersionCompensationInfo> clas_dispersion_compensation_;
@@ -741,6 +750,29 @@ private:
     // the narrow-lane N1 by LAMBDA on the L1 ambiguity double differences,
     // applying both as tight Kalman pseudo-measurements.
     bool resolveAmbiguitiesPerFreq(const ObservationData& obs, const NavigationData& nav);
+    // MADOCALIB `ppp_ar(...) && ppp_res(9, ...)` parity, MADOCA L6E per-frequency
+    // path only.  True when the check applies (coherent MADOCA SSR + per-frequency AR).
+    bool madocaPostfitFixCheckActive() const;
+    // |v|/sigma of every post-fit row under `evaluated_state` (receiver positions of
+    // `corrected_observations` recentred from `prior_state`), keyed by
+    // satellite/phase-or-code/band.  Rows of this epoch's prefit-screened
+    // satellites are left out.  filter_state_ is unchanged on return.
+    std::map<std::string, double> madocaPostfitRowNorms(
+        const std::vector<IonosphereFreeObs>& corrected_observations,
+        const NavigationData& nav,
+        const GNSSTime& time,
+        const PPPState& evaluated_state,
+        const PPPState& prior_state);
+    // Veto an accepted per-frequency fix whose fixed-state residuals newly exceed
+    // MADOCALIB's THRES_REJECT while the float-state ones did not.  On rejection the
+    // filter and ambiguity states are restored to their pre-AR values (and the N1
+    // commit bookkeeping is rolled back) and true is returned.  Returns false
+    // without touching anything when the check is not active or the fix stands.
+    bool rejectFixOnPostfitResiduals(
+        const std::map<std::string, double>& float_row_norms,
+        const std::map<std::string, double>& fixed_row_norms,
+        const PPPState& float_filter_state,
+        const std::map<SatelliteId, PPPAmbiguityInfo>& float_ambiguity_states);
     // Remove per-frequency ambiguity/ionosphere states for satellites not seen
     // for several epochs (est-stec only), compacting the filter state so its
     // dimension stays bounded by the currently-tracked satellites.

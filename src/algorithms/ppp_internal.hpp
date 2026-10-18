@@ -9,6 +9,8 @@
 #include <cctype>
 #include <cmath>
 #include <limits>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -404,6 +406,93 @@ inline Vector3d recenterPostfitReceiverPosition(
     }
     return corrected_receiver_position +
            (updated_filter_position - prior_filter_position);
+}
+
+// MADOCALIB accepts a PPP-AR fix only when the post-fit residuals under the
+// fixed state pass ppp_res(): `ppp_ar(...) && ppp_res(9, ...)` (ppp.c).  A
+// row fails when |v| exceeds THRES_REJECT (ppp.c:106) standard deviations.
+inline constexpr double kMadocaPostfitRejectSigma = 4.0;
+
+/// Observation-variance-normalised post-fit residual |v| / sigma per row, keyed
+/// by "<satellite>/<P|C>/<band>" (carrier phase or code, frequency band).
+using PostfitRowNorms = std::map<std::string, double>;
+
+/// The MADOCA post-fit fix check runs only on the MADOCA L6E per-frequency AR
+/// path: the same activation as resolveAmbiguitiesPerFreq() with coherent SSR.
+inline bool madocaPostfitFixCheckActive(
+    PPPProcessor::PPPConfig::ARMethod ar_method,
+    bool use_ionosphere_free,
+    bool estimate_ionosphere,
+    bool require_coherent_ssr,
+    bool ssr_products_loaded) {
+    return require_coherent_ssr && ssr_products_loaded &&
+           ar_method == PPPProcessor::PPPConfig::ARMethod::DD_PER_FREQ &&
+           !use_ionosphere_free && estimate_ionosphere;
+}
+
+/// Normalise every row of a post-fit equation by sqrt of its weight-matrix
+/// diagonal (the observation variance).  Rows of `skipped_satellites` (those
+/// screened out by the prefit gates in this epoch) and rows without a positive
+/// finite variance or a finite residual are left out.  If a key repeats the
+/// largest norm is kept.
+///
+/// `Equation` is PPPProcessor::MeasurementEquation (a private nested type, hence
+/// the template).
+template <typename Equation>
+inline PostfitRowNorms postfitRowNorms(
+    const Equation& equation,
+    const std::set<SatelliteId>& skipped_satellites) {
+    PostfitRowNorms norms;
+    const size_t rows = static_cast<size_t>(equation.residuals.size());
+    if (equation.row_satellites.size() < rows ||
+        equation.row_is_phase.size() < rows ||
+        equation.row_signal_bands.size() < rows ||
+        static_cast<size_t>(equation.weight_matrix.rows()) < rows ||
+        static_cast<size_t>(equation.weight_matrix.cols()) < rows) {
+        return norms;
+    }
+    for (size_t i = 0; i < rows; ++i) {
+        const double variance = equation.weight_matrix(
+            static_cast<Eigen::Index>(i), static_cast<Eigen::Index>(i));
+        const double residual = equation.residuals(static_cast<Eigen::Index>(i));
+        if (!(variance > 0.0) || !std::isfinite(variance) ||
+            !std::isfinite(residual)) {
+            continue;
+        }
+        if (skipped_satellites.count(equation.row_satellites[i]) != 0) {
+            continue;
+        }
+        const std::string key = equation.row_satellites[i].toString() +
+            (equation.row_is_phase[i] ? "/P/" : "/C/") +
+            equation.row_signal_bands[i];
+        const double norm = std::abs(residual) / std::sqrt(variance);
+        const auto inserted = norms.emplace(key, norm);
+        if (!inserted.second) {
+            inserted.first->second = std::max(inserted.first->second, norm);
+        }
+    }
+    return norms;
+}
+
+/// True when some row is within `threshold` sigma under the float state but
+/// beyond it under the fixed state.  Comparing against the float state keeps
+/// rows that were already bad before the fix (e.g. stale ambiguity rows that
+/// MADOCALIB would have excluded) from vetoing it.  Rows present in only one of
+/// the two evaluations are ignored.
+inline bool madocaPostfitRejectsFix(
+    const PostfitRowNorms& float_norms,
+    const PostfitRowNorms& fixed_norms,
+    double threshold = kMadocaPostfitRejectSigma) {
+    for (const auto& [key, fixed_norm] : fixed_norms) {
+        const auto float_it = float_norms.find(key);
+        if (float_it == float_norms.end()) {
+            continue;
+        }
+        if (float_it->second <= threshold && fixed_norm > threshold) {
+            return true;
+        }
+    }
+    return false;
 }
 
 inline double madocaIonosphereScale(double frequency_hz) {
