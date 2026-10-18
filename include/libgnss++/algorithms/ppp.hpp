@@ -340,9 +340,6 @@ public:
     }
 
 private:
-    // White-box unit-test access (defined in tests/test_ppp.cpp).
-    friend struct PPPProcessorTestAccess;
-
     void applyEnvironmentOverridesToPPPConfig();
 
     PPPConfig ppp_config_;
