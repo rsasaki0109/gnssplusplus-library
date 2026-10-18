@@ -650,27 +650,8 @@ PositionSolution PPPProcessor::processEpochStandard(
                 float_solution.num_fixed_ambiguities = 0;
                 const PPPState float_filter_state = filter_state_;
                 const auto float_ambiguity_states = ambiguity_states_;
-                bool fixed =
+                const bool fixed =
                     ppp_config_.enable_ambiguity_resolution && resolveAmbiguities(obs, nav);
-                if (fixed && madocaPostfitFixCheckActive()) {
-                    // MADOCALIB `ppp_ar(...) && ppp_res(9, ...)`: veto the fix when
-                    // a post-fit row newly exceeds 4 sigma under the fixed state.
-                    // A veto restores the pre-AR filter/ambiguity states, and the
-                    // epoch is published as a failed AR without a wide-lane state
-                    // (last_ar_wide_lane_only_ is false after an accepted N1): the
-                    // float solution, PPP_FLOAT.
-                    const auto float_row_norms = madocaPostfitRowNorms(
-                        corrected_if_obs, nav, obs.time,
-                        float_filter_state, float_filter_state);
-                    const auto fixed_row_norms = madocaPostfitRowNorms(
-                        corrected_if_obs, nav, obs.time,
-                        filter_state_, float_filter_state);
-                    if (rejectFixOnPostfitResiduals(
-                            float_row_norms, fixed_row_norms,
-                            float_filter_state, float_ambiguity_states)) {
-                        fixed = false;
-                    }
-                }
                 const bool wide_lane_only =
                     ppp_config_.enable_ambiguity_resolution && last_ar_wide_lane_only_;
                 solution = (fixed || wide_lane_only)

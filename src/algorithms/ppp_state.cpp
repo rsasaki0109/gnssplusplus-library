@@ -774,7 +774,6 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
                                 const NavigationData& nav,
                                 double dt,
                                 bool apply_iono_prediction) {
-    last_prefit_screened_satellites_.clear();
     auto if_obs = formIonosphereFree(obs, nav);
     if (if_obs.size() < static_cast<size_t>(config_.min_satellites)) {
         if (pppDebugEnabled()) {
@@ -915,7 +914,6 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
                     return false;
                 }
                 screened_satellites.insert(worst_satellite);
-                last_prefit_screened_satellites_.insert(worst_satellite);
                 --iteration;  // redo this pass from the predicted state
                 continue;
             }
