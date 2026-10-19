@@ -155,10 +155,42 @@ inline bool applyVelocityMeasurement(ppp_shared::PPPState& filter_state,
     return true;
 }
 
+// True on the MADOCA L6E per-frequency (uncombined, estimated-ionosphere) path.
+inline bool madocaPerFrequencyPath(
+    bool require_coherent_ssr,
+    bool ssr_products_loaded,
+    bool use_ionosphere_free,
+    bool estimate_ionosphere,
+    bool use_clas_osr_filter) {
+    return require_coherent_ssr && ssr_products_loaded &&
+           !use_ionosphere_free && estimate_ionosphere &&
+           !use_clas_osr_filter;
+}
+
+// Post-fit residual screening (drop the worst standardized-residual satellite
+// and re-solve). Off for coherent MADOCA SSR and CLAS OSR, except on the
+// MADOCA per-frequency path, where it corresponds to the 4-sigma satellite
+// exclusion with re-iteration in MADOCALIB ppp_res() (ppp.c).
 inline bool usePostfitResidualScreening(bool kinematic_motion,
                                         bool coherent_madoca_ssr,
-                                        bool clas_osr_filter) {
-    return kinematic_motion && !coherent_madoca_ssr && !clas_osr_filter;
+                                        bool clas_osr_filter,
+                                        bool madoca_per_frequency = false) {
+    return kinematic_motion && !clas_osr_filter &&
+           (!coherent_madoca_ssr || madoca_per_frequency);
+}
+
+// Phase prefit-residual floor. MADOCALIB gates every row with the single
+// prefit innovation limit maxinno (pos2-rejionno = 50 m). The native 10/20 m
+// floors, combined with an L1 + Klobuchar SPP seed, reject most L2 phase rows
+// when the ionosphere is large, so on the MADOCA per-frequency path the floor
+// is raised to the MADOCALIB value; every other path keeps its native floor.
+inline constexpr double kMadocaMaxInnovationM = 50.0;
+
+inline double phaseInnovationFloorM(double native_floor_m,
+                                    bool madoca_per_frequency) {
+    return madoca_per_frequency
+        ? std::max(native_floor_m, kMadocaMaxInnovationM)
+        : native_floor_m;
 }
 
 // Index of the row with the largest standardized post-fit residual

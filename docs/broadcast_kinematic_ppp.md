@@ -107,8 +107,11 @@ epoch, so the extra error came from the filter, not from the data.
    healthy satellites here (the native phase sigma is about 1 cm and has no
    broadcast signal-in-space term): Nagoya U95 39 m instead of 22 m. The
    troposphere now stays between 2.2 and 2.9 m on Tokyo run1. Screening
-   runs for kinematic motion (not `--low-dynamics`) except coherent MADOCA,
-   which stays on its MADOCALIB bridge semantics; CLAS never reaches it.
+   runs for kinematic motion (not `--low-dynamics`). Coherent MADOCA keeps
+   it off except on the per-frequency AR path, which since 2026-10-18 screens
+   like MADOCALIB `ppp_res()` (see
+   [the MADOCALIB migration notes](madocalib_native_migration.md#per-frequency-ar-madocalib-innovation-gate-and-post-fit-screening-2026-10-18)).
+   CLAS never reaches it.
 3. **Single-frequency rows without ionosphere correction (bug).** When a
    satellite's second frequency is missing (32 % of the GLONASS and about
    3 % of the GPS / BeiDou satellite-epochs on Tokyo run1), the

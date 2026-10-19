@@ -685,6 +685,62 @@ is 1.51 -> 0.58 m / 1.23 -> 0.24 m at MIZU and 1.02 -> 0.51 m /
 a static filter seeded from SPP against a kinematic bridge that re-seeds
 every epoch.
 
+#### Per-frequency AR: MADOCALIB innovation gate and post-fit screening (2026-10-18)
+
+Over a full day, native `pppar` / `pppar-ion` lost Fix in the local afternoon
+and evening at low latitudes, and the lost epochs were not a ratio or
+partial-AR question: the float solution itself degraded.  The seed SPP is
+L1-only with Klobuchar, so under a large ionosphere its receiver clock is
+10-27 m off.  The native phase prefit gate then sat at 10 m (L2 and extra
+frequencies) or 20 m (kinematic L1) after convergence and rejected most L2
+rows, while MADOCALIB uses `pos2-rejionno` = 50 m (`sample_pppar.conf`,
+`sample_pppar_iono.conf`).  MADOCALIB also follows each update with
+`ppp_res()` (`ppp.c`), which excludes the satellite of the largest post-fit
+residual beyond four sigmas and redoes the epoch; native screening
+(`usePostfitResidualScreening`) was off for coherent MADOCA.
+
+With L6E loaded on the per-frequency path (uncombined, ionosphere estimated,
+not CLAS OSR), the L1, L2 and extra-frequency phase gates now use
+`max(native floor, 50 m)` and kinematic post-fit screening is on (the w-test
+of [Broadcast kinematic PPP](broadcast_kinematic_ppp.md)).  Both are needed
+together.  Each was tried alone first under its own frozen acceptance plan,
+and both were rejected:
+
+- 50 m alone: +42 % Fix but +89 % truth-labeled wrong Fix.
+- The MADOCALIB post-fit check alone: wrong Fix only −13.9 %, against a
+  −25 % requirement.
+
+The static ionosphere-free `ppp` profile, CLAS, HAS, RTCM SSR, precise-product
+and broadcast-only PPP are unchanged.  The IGS-final MIZU static `.pos` and
+the broadcast-only PPC Tokyo run1 `.pos` are byte-identical before and after.
+
+Held-out check, frozen before the measurement: 23 IGS stations not used in
+development, chosen mechanically and all inside the MADOCA service area
+(BKG 2025/091 30 s MO, NGL `llh.out` latitude −45° to +50° and longitude
+90° E to 180° E, an NGL IGS20 `txyz2` row for 25APR01).  Each ran for 24 h
+of 2025-04-01 at 30 s.  Truth is the NGL IGS20 daily solution.  A wrong Fix
+is a Fix more than 0.20 m (3D) from truth.  A station whose median pre-change
+6-24 h float error exceeded 0.15 m was excluded from the wrong-Fix count as
+truth-inconsistent.  Runs that failed before and after were dropped.
+
+| profile | usable stations | Fix before -> after | wrong Fix before -> after | stations with wrong Fix +20 or more |
+|---|---:|---:|---:|---:|
+| `pppar` | 23 | 34,829 -> 52,936 (+52 %) | 695 -> 162 (−77 %) | 0 |
+| `pppar-ion` | 13 | 24,455 -> 33,645 (+38 %) | 423 -> 125 (−70 %) | 1 |
+
+Against the MADOCALIB bridge (the M5 matrix, oracle outputs of the
+2026-10-12 CI artifact replayed against the current native build), no 1 h /
+6 h case gains a wrong Fix.  Missed fixes drop from 24 to 0 on `mizu.pppar.6h`
+and from 30 to 6 on `mizu.pppar-ion.6h`, and `delta RMS 3D` falls or holds in
+every case: for example `mizu.pppar.6h` 0.0296 -> 0.0185 m and
+`alic.pppar.6h` 0.0483 -> 0.0438 m.  The 1 h / 6 h entries of
+`docs/madoca_release_baseline.json` are regenerated from that replay.  Native
+runtime ceilings keep the larger of the previous CI-measured ceiling and the
+new value.
+
+The 24 h entries are not regenerated here.  They run only on
+`workflow_dispatch` and already predate several earlier native changes.
+
 ### M6 -- Complete the migration
 
 - Promote native behavior only after M2--M5 pass with an explicit opt-out for

@@ -3498,3 +3498,188 @@ TEST(PPPClasTideTest, ReceiverTideStaysDisabledForForeignNetworkByDefault) {
     EXPECT_EQ(mrtklibTokyoClasTideDisplacement(nagoya_ecef, time, 8, weights),
               Vector3d::Zero());
 }
+
+// --- MADOCA per-frequency path: 50 m phase prefit floor + post-fit screening ---
+
+namespace libgnss {
+
+// Befriended by PPPProcessor (see ppp.hpp) to drive formMeasurementEquations
+// with a hand-built filter state.
+struct PPPProcessorTestAccess {
+    using Obs = PPPProcessor::IonosphereFreeObs;
+
+    static PPPProcessor::PPPConfig& config(PPPProcessor& p) { return p.ppp_config_; }
+
+    // One GPS satellite carrying L1/L2/L5 code and phase rows whose code
+    // residuals are zero and whose phase residuals are all `phase_offset_m`.
+    // Returns the phase row bands that survived the prefit gate.
+    static std::vector<std::string> phaseBands(PPPProcessor& p,
+                                               bool madoca,
+                                               bool converged,
+                                               bool kinematic,
+                                               double phase_offset_m) {
+        p.env_overrides_ = PPPEnvOverrides{};
+        p.ppp_config_.use_ionosphere_free = false;
+        p.ppp_config_.estimate_ionosphere = true;
+        p.ppp_config_.use_clas_osr_filter = false;
+        p.ppp_config_.kinematic_mode = kinematic;
+        p.ppp_config_.enable_outlier_detection = true;
+        p.ssr_products_loaded_ = true;
+        p.require_coherent_ssr_ = madoca;
+        p.converged_ = converged;
+
+        const SatelliteId sat(GNSSSystem::GPS, 5);
+        const Vector3d receiver = geodetic2ecef(
+            35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 50.0);
+        const Vector3d satellite = receiver + Vector3d(8.0e6, 6.0e6, 20.0e6);
+        const double range = geodist(satellite, receiver);
+
+        auto& fs = p.filter_state_;
+        fs.pos_index = 0;
+        fs.clock_index = 6;
+        fs.trop_index = 8;
+        const int iono_index = 9;
+        const int n1_index = 10;
+        const int n2_index = 11;
+        const int n3_index = 12;
+        const int ifb_index = 13;
+        fs.total_states = 14;
+        fs.state = VectorXd::Zero(fs.total_states);
+        fs.covariance = MatrixXd::Identity(fs.total_states, fs.total_states);
+        fs.ionosphere_indices[sat] = iono_index;
+        fs.ambiguity_indices[sat] = n1_index;
+        fs.ambiguity_l2_indices[sat] = n2_index;
+        fs.additional_ambiguity_indices[{sat, SignalType::GPS_L5}] = n3_index;
+        fs.receiver_frequency_bias_indices
+            [algorithms::ppp_multifrequency::receiverFrequencyBiasKey(sat, 2)] =
+                ifb_index;
+
+        auto& ambiguity = p.ambiguity_states_[sat];
+        ambiguity.needs_reinitialization = false;
+        ambiguity.lock_count = 5;
+        ambiguity.frequency_lifecycle[SignalType::GPS_L5].lock_count = 5;
+
+        Obs obs;
+        obs.satellite = sat;
+        obs.valid = true;
+        obs.has_carrier_phase = true;
+        obs.has_carrier_phase_l2 = true;
+        obs.has_l2 = true;
+        obs.receiver_position = receiver;
+        obs.satellite_position = satellite;
+        obs.elevation = 0.8;
+        obs.trop_mapping = 1.5;
+        obs.freq_l1 = constants::GPS_L1_FREQ;
+        obs.freq_l2 = constants::GPS_L2_FREQ;
+        obs.pseudorange_if = range;
+        obs.carrier_phase_if = range + phase_offset_m;
+        obs.pseudorange_l2 = range;
+        obs.carrier_phase_l2 = range + phase_offset_m;
+        Obs::AdditionalFrequencyObs l5;
+        l5.ordinal = 2;
+        l5.signal = SignalType::GPS_L5;
+        l5.valid = true;
+        l5.has_carrier_phase = true;
+        l5.frequency = 1176.45e6;
+        l5.pseudorange = range;
+        l5.carrier_phase = range + phase_offset_m;
+        obs.additional_frequencies.push_back(l5);
+
+        NavigationData nav;
+        const auto equation = p.formMeasurementEquations(
+            {obs}, nav, GNSSTime(2300, 100.0), true, false);
+        std::vector<std::string> bands;
+        for (size_t i = 0; i < equation.row_is_phase.size(); ++i) {
+            if (equation.row_is_phase[i]) {
+                bands.push_back(equation.row_signal_bands[i]);
+            }
+        }
+        return bands;
+    }
+};
+
+}  // namespace libgnss
+
+namespace {
+
+std::vector<std::string> madocaGatePhaseBands(bool madoca,
+                                              bool converged,
+                                              double phase_offset_m,
+                                              bool kinematic = false) {
+    PPPProcessor processor;
+    return PPPProcessorTestAccess::phaseBands(
+        processor, madoca, converged, kinematic, phase_offset_m);
+}
+
+const std::vector<std::string> kAllPhaseBands = {"L1", "L2", "L3"};
+
+}  // namespace
+
+TEST(PPPMadocaGateScreen, ConvergedMadocaKeepsPhaseRowsBetween20And40Metres) {
+    for (const double offset_m : {20.0, 30.0, 40.0, -35.0}) {
+        EXPECT_EQ(madocaGatePhaseBands(true, true, offset_m), kAllPhaseBands)
+            << "offset " << offset_m;
+        // Kinematic converged floor is 20 m for L1; MADOCA still reaches 50 m.
+        EXPECT_EQ(madocaGatePhaseBands(true, true, offset_m, true), kAllPhaseBands)
+            << "kinematic offset " << offset_m;
+    }
+}
+
+TEST(PPPMadocaGateScreen, MadocaStillRejectsPhaseBeyondMaxInnovation) {
+    EXPECT_TRUE(madocaGatePhaseBands(true, true, 55.0).empty());
+    EXPECT_TRUE(madocaGatePhaseBands(true, false, 55.0).empty());
+}
+
+TEST(PPPMadocaGateScreen, NonMadocaConvergedRejectsPhaseAbove10Metres) {
+    for (const double offset_m : {20.0, 30.0, 40.0}) {
+        EXPECT_TRUE(madocaGatePhaseBands(false, true, offset_m).empty())
+            << "offset " << offset_m;
+    }
+    // Kinematic converged keeps its 20 m L1 floor and the 10 m L2/L3 floors.
+    EXPECT_EQ(madocaGatePhaseBands(false, true, 15.0, true),
+              std::vector<std::string>{"L1"});
+    EXPECT_TRUE(madocaGatePhaseBands(false, true, 30.0, true).empty());
+}
+
+TEST(PPPMadocaGateScreen, NonMadocaKeepsExistingFloorBelowConvergence) {
+    // Unconverged non-kinematic floor is already 50 m; unchanged.
+    EXPECT_EQ(madocaGatePhaseBands(false, false, 30.0), kAllPhaseBands);
+    EXPECT_TRUE(madocaGatePhaseBands(false, false, 55.0).empty());
+    // Within the converged 10 m floor, both paths agree.
+    EXPECT_EQ(madocaGatePhaseBands(false, true, 5.0), kAllPhaseBands);
+    EXPECT_EQ(madocaGatePhaseBands(true, true, 5.0), kAllPhaseBands);
+}
+
+TEST(PPPMadocaGateScreen, FloorHelperRaisesOnlyOnMadocaPerFrequencyPath) {
+    using namespace ppp_internal;
+    EXPECT_DOUBLE_EQ(phaseInnovationFloorM(10.0, true), 50.0);
+    EXPECT_DOUBLE_EQ(phaseInnovationFloorM(20.0, true), 50.0);
+    EXPECT_DOUBLE_EQ(phaseInnovationFloorM(200.0, true), 200.0);
+    EXPECT_DOUBLE_EQ(phaseInnovationFloorM(10.0, false), 10.0);
+    EXPECT_DOUBLE_EQ(phaseInnovationFloorM(200.0, false), 200.0);
+
+    EXPECT_TRUE(madocaPerFrequencyPath(true, true, false, true, false));
+    EXPECT_FALSE(madocaPerFrequencyPath(false, true, false, true, false));
+    EXPECT_FALSE(madocaPerFrequencyPath(true, false, false, true, false));
+    EXPECT_FALSE(madocaPerFrequencyPath(true, true, true, true, false));
+    EXPECT_FALSE(madocaPerFrequencyPath(true, true, false, false, false));
+    EXPECT_FALSE(madocaPerFrequencyPath(true, true, false, true, true));
+}
+
+TEST(PPPMadocaGateScreen, PostfitScreeningEnabledOnMadocaPerFrequencyPath) {
+    using namespace ppp_internal;
+    // MADOCA per-frequency path (kinematic): enabled.
+    EXPECT_TRUE(usePostfitResidualScreening(true, true, false, true));
+    // Coherent MADOCA outside the per-frequency path (e.g. ionosphere-free): still off.
+    EXPECT_FALSE(usePostfitResidualScreening(true, true, false, false));
+    EXPECT_FALSE(usePostfitResidualScreening(true, true, false));
+    // Static / low-dynamics runs stay off.
+    EXPECT_FALSE(usePostfitResidualScreening(false, true, false, true));
+    // Non-MADOCA kinematic keeps screening; CLAS OSR stays off.
+    EXPECT_TRUE(usePostfitResidualScreening(true, false, false));
+    EXPECT_TRUE(usePostfitResidualScreening(true, false, false, false));
+    EXPECT_FALSE(usePostfitResidualScreening(true, false, true));
+    EXPECT_FALSE(usePostfitResidualScreening(true, true, true, true));
+    EXPECT_FALSE(usePostfitResidualScreening(false, false, false));
+}
+

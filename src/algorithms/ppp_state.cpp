@@ -832,7 +832,11 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
     const bool postfit_screening = usePostfitResidualScreening(
         ppp_config_.kinematic_mode && !ppp_config_.low_dynamics_mode,
         require_coherent_ssr_,
-        ppp_config_.use_clas_osr_filter);
+        ppp_config_.use_clas_osr_filter,
+        madocaPerFrequencyPath(
+            require_coherent_ssr_, ssr_products_loaded_,
+            ppp_config_.use_ionosphere_free, ppp_config_.estimate_ionosphere,
+            ppp_config_.use_clas_osr_filter));
     std::set<SatelliteId> screened_satellites;
     const auto dropScreenedSatellites = [&](MeasurementEquation& equation) {
         std::vector<int> keep;
