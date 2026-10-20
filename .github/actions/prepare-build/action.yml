@@ -133,7 +133,9 @@ runs:
     - name: Build
       shell: bash
       run: |
-        if [[ "${{ inputs.os-name }}" == ubuntu* && "${{ inputs.compiler }}" == "gcc" ]]; then
+        # Two jobs on Ubuntu for both compilers: an unbounded clang build was
+        # killed mid-build twice ("runner has received a shutdown signal").
+        if [[ "${{ inputs.os-name }}" == ubuntu* ]]; then
           cmake --build build --config "${{ inputs.build-type }}" --parallel 2
         else
           cmake --build build --config "${{ inputs.build-type }}" --parallel
