@@ -121,15 +121,21 @@ runs:
           "-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}"
           "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}"
         )
+        # Pin the interpreter that has numpy/matplotlib: on Ubuntu, FindPython3
+        # otherwise prefers a newer system python3 over setup-python's.
         if [[ "${{ inputs.os-name }}" == macos* ]]; then
           cmake_args+=("-DPython3_EXECUTABLE=${GITHUB_WORKSPACE}/.venv/bin/python")
+        else
+          cmake_args+=("-DPython3_EXECUTABLE=$(command -v python)")
         fi
         cmake "${cmake_args[@]}"
 
     - name: Build
       shell: bash
       run: |
-        if [[ "${{ inputs.os-name }}" == ubuntu* && "${{ inputs.compiler }}" == "gcc" ]]; then
+        # Two jobs on Ubuntu for both compilers: an unbounded clang build was
+        # killed mid-build twice ("runner has received a shutdown signal").
+        if [[ "${{ inputs.os-name }}" == ubuntu* ]]; then
           cmake --build build --config "${{ inputs.build-type }}" --parallel 2
         else
           cmake --build build --config "${{ inputs.build-type }}" --parallel
