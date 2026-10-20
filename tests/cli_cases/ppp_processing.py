@@ -607,6 +607,89 @@ class PPPProcessingCases:
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("--madoca-materialization-dump requires --madoca-l6", result.stderr)
             self.assertFalse(dump_path.exists())
+    def run_ppp_with_l6d_shadow(
+        self, temp_root: Path, tag: str, l6d_path: Path | None
+    ) -> tuple[subprocess.CompletedProcess[str], Path, Path]:
+        obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(
+            temp_root, include_first_obs_header=True
+        )
+        out_path = temp_root / f"{tag}.pos"
+        summary_path = temp_root / f"{tag}.json"
+        args = [
+            "ppp",
+            "--static",
+            "--obs",
+            str(obs_path),
+            "--sp3",
+            str(sp3_path),
+            "--clk",
+            str(clk_path),
+            "--no-estimate-troposphere",
+            "--out",
+            str(out_path),
+            "--summary-json",
+            str(summary_path),
+            "--max-epochs",
+            "4",
+        ]
+        if l6d_path is not None:
+            args += ["--madoca-l6d-shadow", str(l6d_path)]
+        return self.run_gnss(*args), out_path, summary_path
+
+    def test_ppp_cli_fails_on_unusable_madoca_l6d_file(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_l6d_failure_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            bad_files = {
+                "empty": b"",
+                "garbage": bytes(range(256)) * 4,
+                "partial": build_synthetic_l6d_message(35.5, 139.0, 5.0)[:100],
+            }
+            for name, payload in bad_files.items():
+                l6d_path = temp_root / f"{name}.l6"
+                l6d_path.write_bytes(payload)
+                result, _, _ = self.run_ppp_with_l6d_shadow(temp_root, name, l6d_path)
+                self.assertNotEqual(result.returncode, 0, msg=name)
+                self.assertIn("failed to load MADOCA L6D corrections", result.stderr, msg=name)
+                self.assertNotIn("outside the MADOCA L6D coverage", result.stderr, msg=name)
+            result, _, _ = self.run_ppp_with_l6d_shadow(
+                temp_root, "missing", temp_root / "does-not-exist.l6"
+            )
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("failed to load MADOCA L6D corrections", result.stderr)
+
+    def test_ppp_cli_continues_without_l6d_outside_madoca_coverage(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_l6d_outside_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            baseline, baseline_pos, _ = self.run_ppp_with_l6d_shadow(temp_root, "baseline", None)
+            self.assertEqual(baseline.returncode, 0, msg=baseline.stderr)
+
+            # The synthetic receiver is near 35N 139E; this area is in Australia.
+            l6d_path = temp_root / "outside.l6"
+            l6d_path.write_bytes(build_synthetic_l6d_message(-30.0, 130.0, 5.0))
+            result, out_path, summary_path = self.run_ppp_with_l6d_shadow(
+                temp_root, "outside", l6d_path
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertEqual(result.stderr.count("outside the MADOCA L6D coverage"), 1)
+            self.assertIn("continuing without L6D ionosphere", result.stderr)
+            self.assertEqual(out_path.read_bytes(), baseline_pos.read_bytes())
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertIs(summary["madoca_l6d_outside_coverage"], True)
+            self.assertIs(summary["madoca_l6d_apply_enabled"], False)
+            self.assertIs(summary["madoca_l6d_shadow_loaded"], False)
+
+    def test_ppp_cli_loads_madoca_l6d_covering_receiver(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_l6d_inside_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            l6d_path = temp_root / "inside.l6"
+            l6d_path.write_bytes(build_synthetic_l6d_message(35.5, 139.0, 5.0))
+            result, _, summary_path = self.run_ppp_with_l6d_shadow(temp_root, "inside", l6d_path)
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            self.assertNotIn("outside the MADOCA L6D coverage", result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertIs(summary["madoca_l6d_outside_coverage"], False)
+            self.assertIs(summary["madoca_l6d_shadow_loaded"], True)
+
     def test_ppp_cli_reports_applied_atmospheric_corrections_from_sampled_ssr(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppp_ssr_atmos_cli_") as temp_dir:
             temp_root = Path(temp_dir)

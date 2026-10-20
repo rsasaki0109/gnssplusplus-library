@@ -10,7 +10,7 @@ does not load the mixin modules as independent suites.
 - `diagnostics_data.py`: doctor, bag, robotics, RINEX, products, IONEX, and DCB checks (14)
 - `analysis_visuals.py`: SPP/visibility/statistics/plot/track/report rendering (11)
 - `cli_surface.py`: help, benchmark, SmartLoc, and built ROS2 node checks (13)
-- `ppp_processing.py`: synthetic and sampled PPP/SSR/CLAS processing checks (24)
+- `ppp_processing.py`: synthetic and sampled PPP/SSR/CLAS processing checks (27)
 - `stream_protocols.py`: stream relay, file protocol decoders, serial decoders, and conversion (34)
 - `qzss_l6_decode.py`: QZSS L6 frame and compact correction decoding (21)
 - `qzss_l6_policy.py`: QZSS L6 bias, atmosphere, phase, and row-policy checks (25)

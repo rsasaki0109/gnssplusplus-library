@@ -205,6 +205,8 @@ void printUsage(const char* program_name) {
         << "  --madoca-l6d-shadow <file>\n"
         << "                          Native L6D ionosphere shadow input (repeatable);\n"
         << "                          reports lookup diagnostics without changing PPP\n"
+        << "                          (both L6D inputs warn and continue without L6D\n"
+        << "                          when the receiver is outside the L6D coverage)\n"
         << "  --madoca-materialization-dump <csv>\n"
         << "                          Dump native MADOCA L6E SSRProducts materialization\n"
         << "                          rows before PPP processing\n"
@@ -1486,6 +1488,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Error: failed to load MADOCA L6E corrections\n";
             return 1;
         }
+        bool madoca_l6d_outside_coverage = false;
         const auto& madoca_l6d_input_paths =
             !options.madoca_l6d_paths.empty()
                 ? options.madoca_l6d_paths
@@ -1519,10 +1522,16 @@ int main(int argc, char* argv[]) {
                 obs_header.approximate_position.y(),
                 obs_header.approximate_position.z(),
             };
-            if (!processor.loadMadocaL6dProducts(
-                    madoca_l6d_input_paths, reference_epoch, receiver_ecef)) {
+            const auto l6d_status = processor.loadMadocaL6dProducts(
+                madoca_l6d_input_paths, reference_epoch, receiver_ecef);
+            if (l6d_status == libgnss::io::MadocaL6dLoadStatus::kFailed) {
                 std::cerr << "Error: failed to load MADOCA L6D corrections\n";
                 return 1;
+            }
+            if (l6d_status == libgnss::io::MadocaL6dLoadStatus::kOutsideCoverage) {
+                madoca_l6d_outside_coverage = true;
+                std::cerr << "Warning: receiver is outside the MADOCA L6D coverage; "
+                             "continuing without L6D ionosphere\n";
             }
         }
 
@@ -1769,8 +1778,11 @@ int main(int argc, char* argv[]) {
                     << madoca_l6d_shadow_last_region << ",\n"
                     << "  \"madoca_l6d_shadow_last_area\": "
                     << madoca_l6d_shadow_last_area << ",\n"
+                    << "  \"madoca_l6d_outside_coverage\": "
+                    << (madoca_l6d_outside_coverage ? "true" : "false") << ",\n"
                     << "  \"madoca_l6d_apply_enabled\": "
-                    << (ppp_config.apply_madoca_l6d_ionosphere ? "true" : "false")
+                    << (processor.getPPPConfig().apply_madoca_l6d_ionosphere
+                            ? "true" : "false")
                     << ",\n"
                     << "  \"madoca_l6d_constraint_epochs\": "
                     << madoca_l6d_constraint_epochs << ",\n"
@@ -1885,7 +1897,7 @@ int main(int argc, char* argv[]) {
                           << madoca_l6d_shadow_stale_epochs << "\n";
                 std::cout << "  MADOCA L6D matched satellites: "
                           << madoca_l6d_shadow_matched_satellites << "\n";
-                if (ppp_config.apply_madoca_l6d_ionosphere) {
+                if (processor.getPPPConfig().apply_madoca_l6d_ionosphere) {
                     std::cout << "  MADOCA L6D constraint epochs: "
                               << madoca_l6d_constraint_epochs << "\n";
                     std::cout << "  MADOCA L6D constraint rows: "
