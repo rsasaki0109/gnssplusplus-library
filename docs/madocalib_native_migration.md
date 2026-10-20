@@ -741,6 +741,70 @@ new value.
 The 24 h entries are not regenerated here.  They run only on
 `workflow_dispatch` and already predate several earlier native changes.
 
+#### Post-fit commit score after a kinematic SPP seed reset (2026-10-20)
+
+The MADOCA post-fit commit rejects a converged epoch when
+`|position update| / log1p(chi2/row)` reaches 0.90.  In `--kinematic` runs the
+position is re-initialised from the SPP seed every epoch, so the update this
+score measures is the seed error.  The seed is L1 with Klobuchar, and that
+error is often about 10 m.  Good epochs were therefore dropped whole: no
+output, and the filter restored.  This was most common at low latitudes in
+the local afternoon.  MADOCALIB has no such rule.
+
+The score rejection is now skipped in epochs whose position was reset to the
+seed.  The following are unchanged:
+
+- the minimum-rows rejection;
+- static and `--low-dynamics` runs;
+- epochs without a reset.
+
+The IGS-final MIZU static and broadcast-only PPC Tokyo run1 `.pos` files are
+byte-identical before and after.  So are the MIZU/ALIC MADOCA `--static`
+24 h `.pos` files and every 1 h / 6 h release-matrix `native.pos`, so the
+release baseline is unchanged.
+
+**Development data** (2025-04-01; MIZU, ALIC and 40 stations; 24 h):
+
+| profile | stations | Fix before -> after | wrong Fix before -> after |
+|---|---:|---:|---:|
+| `pppar` | 42 | 103,721 -> 112,568 | 890 -> 626 |
+| `pppar-ion` | 16 | 39,882 -> 44,091 | 209 -> 230 |
+
+The `pppar-ion` increase is all at CIBG, which lies on the equator.  There,
+after a 1.5 h gap with no committed epoch, the filter re-converged to a wrong
+position.  The seed-referenced score had been catching that.  Three other
+references for the score were tried, and none was kept:
+
+- the previous committed position: the best numbers, but it locks out a
+  moving receiver;
+- that position plus the seed displacement: no better than skipping;
+- that position plus the Doppler velocity × dt: no seed velocity at 10 of the
+  42 stations.
+
+**Held-out check**, frozen before the data was fetched: 2025-04-10, 24 h.
+
+- **Stations:** all 60 with a BKG 30 s MO file, an NGL `llh.out` position at
+  latitude −45° to +50° and longitude 90° E to 180° E, and an NGL IGS20 daily
+  solution for the day.  These include stations used on 2025-04-01.
+- **Truth:** the NGL IGS20 daily solution.  A wrong Fix is a Fix more than
+  0.20 m (3D) from it.
+- **Exclusions:**
+  - a station whose median pre-change 6-24 h float error exceeds 0.15 m does
+    not count toward wrong Fix (4 stations in `pppar`, 2 in `pppar-ion`);
+  - in `pppar-ion`, 29 stations fail to load the L6D corrections, before and
+    after, and are dropped.
+
+| profile | usable stations | Fix before -> after | wrong Fix before -> after | stations with wrong Fix +20 or more |
+|---|---:|---:|---:|---:|
+| `pppar` | 60 | 108,814 -> 136,095 (+25 %) | 449 -> 344 (−23 %) | 1 |
+| `pppar-ion` | 31 | 63,731 -> 71,402 (+12 %) | 149 -> 80 (−46 %) | 0 |
+
+The one `pppar` station with +20 or more is COCO (23 -> 56), where Fix rose
+from 993 to 2,794.
+
+There is no MADOCA data from a moving receiver.  The change only drops the
+rejection under a condition that does not depend on motion.
+
 ### M6 -- Complete the migration
 
 - Promote native behavior only after M2--M5 pass with an explicit opt-out for
