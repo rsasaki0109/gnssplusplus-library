@@ -471,6 +471,7 @@ bool PPPProcessor::initializeFilter(const ObservationData& obs,
 }
 
 void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution) {
+    position_reset_to_seed_this_epoch_ = false;
     if (!filter_initialized_) {
         return;
     }
@@ -708,6 +709,7 @@ void PPPProcessor::predictState(double dt, const PositionSolution* seed_solution
                 filter_state_.pos_index,
                 seed_solution->position_ecef,
                 ppp_config_.initial_position_variance);
+            position_reset_to_seed_this_epoch_ = true;
         }
     }
     constrainStaticVelocityStates();
@@ -1044,11 +1046,8 @@ bool PPPProcessor::updateFilter(const ObservationData& obs,
             converged_ && chi_square_per_row > 0.0
                 ? epoch_position_update_norm_m / std::log1p(chi_square_per_row)
                 : 0.0;
-        const bool postfit_epoch_reject =
-            converged_ &&
-            postfit_stats.normalized_row_count > 0 &&
-            std::isfinite(postfit_epoch_score) &&
-            postfit_epoch_score >= kMadocaPostfitEpochRejectScore;
+        const bool postfit_epoch_reject = madocaPostfitScoreRejectsEpoch(
+            converged_, postfit_stats.normalized_row_count, postfit_epoch_score);
         if (postfit_epoch_reject) {
             if (pppDebugEnabled()) {
                 std::cerr << "[PPP] MADOCA postfit commit rejected epoch at week="
@@ -1439,6 +1438,23 @@ void PPPProcessor::reinitializeScalarState(int index, double value, double varia
     filter_state_.covariance.row(index).setZero();
     filter_state_.covariance.col(index).setZero();
     filter_state_.covariance(index, index) = variance;
+}
+
+bool PPPProcessor::madocaPostfitScoreRejectsEpoch(bool converged,
+                                                  int normalized_row_count,
+                                                  double score) const {
+    // After a per-epoch SPP seed reset the position update is the seed error,
+    // not a filter jump, so the score does not apply to the epoch.
+    return ppp_internal::madocaPostfitScoreRejectsEpoch(
+        ppp_internal::postfitReferenceIsSeedReset(
+            position_reset_to_seed_this_epoch_,
+            ppp_config_.kinematic_mode,
+            ppp_config_.low_dynamics_mode,
+            ppp_config_.reset_kinematic_position_to_spp_each_epoch),
+        converged,
+        normalized_row_count,
+        score,
+        kMadocaPostfitEpochRejectScore);
 }
 
 bool PPPProcessor::useLowDynamicsBroadcastSeedAssist() const {

@@ -179,6 +179,31 @@ inline bool usePostfitResidualScreening(bool kinematic_motion,
            (!coherent_madoca_ssr || madoca_per_frequency);
 }
 
+// True when the epoch's position-update reference is the per-epoch kinematic
+// SPP seed: predictState() re-initialised the position from the seed (kinematic,
+// not low-dynamics, reset_kinematic_position_to_spp_each_epoch). The update
+// the MADOCA post-fit score measures is then the seed error, not a filter jump.
+inline bool postfitReferenceIsSeedReset(bool position_reset_to_seed_this_epoch,
+                                        bool kinematic_mode,
+                                        bool low_dynamics_mode,
+                                        bool reset_kinematic_position_to_spp_each_epoch) {
+    return position_reset_to_seed_this_epoch && kinematic_mode &&
+           !low_dynamics_mode && reset_kinematic_position_to_spp_each_epoch;
+}
+
+// MADOCA post-fit commit: reject the epoch when |position update| /
+// log1p(chi2/row) reaches the threshold while converged. Skipped when the
+// reference is the SPP seed reset (see postfitReferenceIsSeedReset); the
+// minimum-rows rejection is separate and unaffected.
+inline bool madocaPostfitScoreRejectsEpoch(bool reference_is_seed_reset,
+                                           bool converged,
+                                           int normalized_row_count,
+                                           double score,
+                                           double threshold) {
+    return !reference_is_seed_reset && converged && normalized_row_count > 0 &&
+           std::isfinite(score) && score >= threshold;
+}
+
 // Phase prefit-residual floor. MADOCALIB gates every row with the single
 // prefit innovation limit maxinno (pos2-rejionno = 50 m). The native 10/20 m
 // floors, combined with an L1 + Klobuchar SPP seed, reject most L2 phase rows

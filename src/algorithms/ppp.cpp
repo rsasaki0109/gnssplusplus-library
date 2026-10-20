@@ -822,6 +822,7 @@ void PPPProcessor::reset() {
     ocean_loading_coefficients_ = OceanLoadingCoefficients{};
     static_anchor_position_.setZero();
     has_static_anchor_position_ = false;
+    position_reset_to_seed_this_epoch_ = false;
     last_ar_ratio_ = 0.0;
     last_fixed_ambiguities_ = 0;
     last_ar_wide_lane_only_ = false;

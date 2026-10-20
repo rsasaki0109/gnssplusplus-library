@@ -399,6 +399,9 @@ private:
     bool satellite_antex_loaded_ = false;
     Vector3d static_anchor_position_ = Vector3d::Zero();
     bool has_static_anchor_position_ = false;
+    // predictState() re-initialised the position from the per-epoch kinematic
+    // SPP seed in this epoch (the MADOCA post-fit score reference).
+    bool position_reset_to_seed_this_epoch_ = false;
     double last_ar_ratio_ = 0.0;
     int last_fixed_ambiguities_ = 0;
     bool last_ar_wide_lane_only_ = false;
@@ -904,6 +907,9 @@ private:
     void reinitializeVectorState(int start_index, const Vector3d& value, double variance);
     void reinitializeScalarState(int index, double value, double variance);
     bool useLowDynamicsBroadcastSeedAssist() const;
+    bool madocaPostfitScoreRejectsEpoch(bool converged,
+                                        int normalized_row_count,
+                                        double score) const;
     void recoverLowDynamicsBroadcastState(const ObservationData& obs,
                                           const PositionSolution* seed_solution);
     int receiverClockStateIndex(const SatelliteId& satellite) const;

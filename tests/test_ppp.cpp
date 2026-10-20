@@ -24,6 +24,7 @@
 #include <limits>
 #include <sstream>
 #include <string>
+#include <tuple>
 #include <vector>
 
 using namespace libgnss;
@@ -3510,6 +3511,48 @@ struct PPPProcessorTestAccess {
 
     static PPPProcessor::PPPConfig& config(PPPProcessor& p) { return p.ppp_config_; }
 
+    static bool positionResetToSeed(const PPPProcessor& p) {
+        return p.position_reset_to_seed_this_epoch_;
+    }
+
+    // The updateFilter() post-fit commit decision for a given epoch state.
+    static bool postfitScoreRejectsEpoch(PPPProcessor& p,
+                                         bool reset_to_seed_this_epoch,
+                                         bool kinematic,
+                                         bool low_dynamics,
+                                         bool reset_position_each_epoch,
+                                         double score) {
+        p.position_reset_to_seed_this_epoch_ = reset_to_seed_this_epoch;
+        p.ppp_config_.kinematic_mode = kinematic;
+        p.ppp_config_.low_dynamics_mode = low_dynamics;
+        p.ppp_config_.reset_kinematic_position_to_spp_each_epoch = reset_position_each_epoch;
+        return p.madocaPostfitScoreRejectsEpoch(true, 8, score);
+    }
+
+    // Runs predictState() on a minimal broadcast-model filter (position, clock,
+    // troposphere states only) with a valid SPP seed.
+    static void predictFromSeed(PPPProcessor& p,
+                                bool kinematic,
+                                bool low_dynamics,
+                                bool reset_position_each_epoch,
+                                bool seed_valid) {
+        p.ppp_config_.kinematic_mode = kinematic;
+        p.ppp_config_.low_dynamics_mode = low_dynamics;
+        p.ppp_config_.reset_kinematic_position_to_spp_each_epoch = reset_position_each_epoch;
+        p.precise_products_loaded_ = false;
+        p.filter_initialized_ = true;
+        auto& fs = p.filter_state_;
+        fs.total_states = 10;
+        fs.state = VectorXd::Zero(fs.total_states);
+        fs.covariance = MatrixXd::Identity(fs.total_states, fs.total_states);
+        PositionSolution seed;
+        seed.status = seed_valid ? SolutionStatus::SPP : SolutionStatus::NONE;
+        seed.num_satellites = 8;
+        seed.position_ecef = geodetic2ecef(35.0 * M_PI / 180.0, 139.0 * M_PI / 180.0, 50.0);
+        seed.receiver_clock_bias = 12.0;
+        p.predictState(1.0, &seed);
+    }
+
     // One GPS satellite carrying L1/L2/L5 code and phase rows whose code
     // residuals are zero and whose phase residuals are all `phase_offset_m`.
     // Returns the phase row bands that survived the prefit gate.
@@ -3683,3 +3726,90 @@ TEST(PPPMadocaGateScreen, PostfitScreeningEnabledOnMadocaPerFrequencyPath) {
     EXPECT_FALSE(usePostfitResidualScreening(false, false, false));
 }
 
+
+// --- MADOCA post-fit commit: no score rejection against the SPP seed reset ---
+
+TEST(PPPMadocaPostfitSeedReference, ReferenceIsSeedResetOnlyForKinematicResetEpochs) {
+    using namespace ppp_internal;
+    EXPECT_TRUE(postfitReferenceIsSeedReset(true, true, false, true));
+    // No position reset in this epoch.
+    EXPECT_FALSE(postfitReferenceIsSeedReset(false, true, false, true));
+    // Static, low-dynamics and reset-disabled configurations.
+    EXPECT_FALSE(postfitReferenceIsSeedReset(true, false, false, true));
+    EXPECT_FALSE(postfitReferenceIsSeedReset(true, true, true, true));
+    EXPECT_FALSE(postfitReferenceIsSeedReset(true, true, false, false));
+}
+
+TEST(PPPMadocaPostfitSeedReference, ScoreRejectionSkippedOnlyWhenReferenceIsSeedReset) {
+    using namespace ppp_internal;
+    constexpr double kThreshold = 0.90;
+    // Seed-reset epoch: a score at or far above the threshold is not rejected.
+    EXPECT_FALSE(madocaPostfitScoreRejectsEpoch(true, true, 8, 0.90, kThreshold));
+    EXPECT_FALSE(madocaPostfitScoreRejectsEpoch(true, true, 8, 25.0, kThreshold));
+    // Same score without a seed reset (static, low-dynamics, reset disabled,
+    // or no reset this epoch) is rejected as before.
+    EXPECT_TRUE(madocaPostfitScoreRejectsEpoch(false, true, 8, 0.90, kThreshold));
+    EXPECT_TRUE(madocaPostfitScoreRejectsEpoch(false, true, 8, 25.0, kThreshold));
+    // The score threshold, convergence and finiteness conditions are unchanged.
+    EXPECT_FALSE(madocaPostfitScoreRejectsEpoch(false, true, 8, 0.89, kThreshold));
+    EXPECT_FALSE(madocaPostfitScoreRejectsEpoch(false, false, 8, 25.0, kThreshold));
+    EXPECT_FALSE(madocaPostfitScoreRejectsEpoch(false, true, 0, 25.0, kThreshold));
+    EXPECT_FALSE(madocaPostfitScoreRejectsEpoch(
+        false, true, 8, std::numeric_limits<double>::infinity(), kThreshold));
+}
+
+TEST(PPPMadocaPostfitSeedReference, ResetFlagFollowsPredictStatePositionReset) {
+    // Kinematic with the per-epoch seed reset: flag set.
+    {
+        PPPProcessor processor;
+        PPPProcessorTestAccess::predictFromSeed(processor, true, false, true, true);
+        EXPECT_TRUE(PPPProcessorTestAccess::positionResetToSeed(processor));
+        // The next epoch without a valid seed clears it.
+        PPPProcessorTestAccess::predictFromSeed(processor, true, false, true, false);
+        EXPECT_FALSE(PPPProcessorTestAccess::positionResetToSeed(processor));
+        // And it is set again by the next epoch that resets from the seed.
+        PPPProcessorTestAccess::predictFromSeed(processor, true, false, true, true);
+        EXPECT_TRUE(PPPProcessorTestAccess::positionResetToSeed(processor));
+        // Clearing the flag in reset().
+        processor.reset();
+        EXPECT_FALSE(PPPProcessorTestAccess::positionResetToSeed(processor));
+    }
+    // Static, low-dynamics, and kinematic with the reset disabled: never set.
+    for (const auto& [kinematic, low_dynamics, reset_enabled] :
+         {std::tuple{false, false, true},
+          std::tuple{true, true, true},
+          std::tuple{true, false, false}}) {
+        PPPProcessor processor;
+        PPPProcessorTestAccess::predictFromSeed(
+            processor, kinematic, low_dynamics, reset_enabled, true);
+        EXPECT_FALSE(PPPProcessorTestAccess::positionResetToSeed(processor))
+            << "kinematic=" << kinematic << " low_dynamics=" << low_dynamics
+            << " reset_enabled=" << reset_enabled;
+    }
+}
+
+TEST(PPPMadocaPostfitSeedReference, EpochDecisionSkipsScoreRejectionOnlyAfterSeedReset) {
+    PPPProcessor processor;
+    // Kinematic with the per-epoch seed reset, position reset in this epoch:
+    // a score at or above the 0.90 threshold does not reject the epoch.
+    for (const double score : {0.90, 3.0, 100.0}) {
+        EXPECT_FALSE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
+            processor, true, true, false, true, score))
+            << "score " << score;
+    }
+    // Same scores are rejected as before when the position was not reset in
+    // this epoch, in static and low-dynamics runs, and with the reset disabled.
+    for (const double score : {0.90, 3.0, 100.0}) {
+        EXPECT_TRUE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
+            processor, false, true, false, true, score)) << "no reset, score " << score;
+        EXPECT_TRUE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
+            processor, true, false, false, true, score)) << "static, score " << score;
+        EXPECT_TRUE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
+            processor, true, true, true, true, score)) << "low-dynamics, score " << score;
+        EXPECT_TRUE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
+            processor, true, true, false, false, score)) << "reset disabled, score " << score;
+    }
+    // Below the threshold nothing is rejected in either case.
+    EXPECT_FALSE(PPPProcessorTestAccess::postfitScoreRejectsEpoch(
+        processor, false, true, false, true, 0.89));
+}
