@@ -2531,6 +2531,50 @@ def build_synthetic_blq_text(
     )
 
 
+def build_synthetic_l6d_message(ref_lat_deg: float, ref_lon_deg: float, span_deg: float) -> bytes:
+    """One complete 218-byte MADOCA L6D message: MT1 with a single rectangular
+    area (ref +/- span, 0.1 deg units) followed by an empty MT2 for that area."""
+    bits: list[int] = []
+
+    def put(value: int, width: int) -> None:
+        value &= (1 << width) - 1
+        bits.extend((value >> shift) & 1 for shift in range(width - 1, -1, -1))
+
+    put(0x1ACFFC1D, 32)
+    put(200, 8)  # PRN
+    put(2, 3)  # vendor ID
+    put(0, 4)  # facility ID, service ID, nav message extension
+    put(1, 1)  # subframe indicator: first data
+    put(0, 1)  # alert flag
+    put(1, 12)  # MT1 coverage
+    put(0, 4)
+    put(100, 20)  # epoch time
+    put(0, 9)  # update interval, multiple message indicator, IOD
+    put(5, 8)  # region ID
+    put(0, 1)  # region alert
+    put(77, 16)  # length of the MT2 message that follows
+    put(1, 5)  # number of areas
+    put(0, 5)  # area number
+    put(0, 1)  # rectangle
+    put(round(ref_lat_deg * 10.0), 11)
+    put(round(ref_lon_deg * 10.0), 12)
+    put(round(span_deg * 10.0), 8)
+    put(round(span_deg * 10.0), 8)
+    put(2, 12)  # MT2 correction
+    put(0, 4)
+    put(100, 12)
+    put(0, 9)  # update interval, multiple message indicator, IOD
+    put(5, 8)  # region ID
+    put(0, 5)  # area number
+    put(0, 2)  # correction type
+    put(0, 25)  # no satellites
+    bits.extend([0] * (218 * 8 - len(bits)))
+    return bytes(
+        sum(bit << (7 - offset) for offset, bit in enumerate(bits[index : index + 8]))
+        for index in range(0, len(bits), 8)
+    )
+
+
 def build_synthetic_ionex_text() -> str:
     return "".join(
         (
@@ -2579,6 +2623,7 @@ def build_synthetic_ppp_inputs(
     temp_root: Path,
     *,
     include_antenna_header: bool = False,
+    include_first_obs_header: bool = False,
     epochs: int = 8,
 ) -> tuple[Path, Path, Path, tuple[float, float, float]]:
     # The satellites are fixed in ECEF and the observations noise-free, so the
@@ -2646,6 +2691,13 @@ def build_synthetic_ppp_inputs(
             "APPROX POSITION XYZ",
         ),
     ]
+    if include_first_obs_header:
+        obs_lines.append(
+            format_rinex_header_line(
+                f"{2026:6d}{3:6d}{26:6d}{1:6d}{0:6d}{0.0:13.7f}     GPS",
+                "TIME OF FIRST OBS",
+            )
+        )
     if include_antenna_header:
         obs_lines.extend(
             [

@@ -336,23 +336,28 @@ bool PPPProcessor::loadMadocaL6Products(const std::vector<std::string>& l6_files
     return ssr_products_loaded_;
 }
 
-bool PPPProcessor::loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
-                                         const double reference_epoch[6],
-                                         const double receiver_ecef[3]) {
+io::MadocaL6dLoadStatus PPPProcessor::loadMadocaL6dProducts(
+    const std::vector<std::string>& l6d_files,
+    const double reference_epoch[6],
+    const double receiver_ecef[3]) {
     madoca_iono_products_.clear();
     if (l6d_files.empty()) {
-        return false;
+        return io::MadocaL6dLoadStatus::kFailed;
     }
     for (const auto& file : l6d_files) {
         std::vector<io::MadocaIonoSnapshot> snapshots;
         if (!io::decodeMadocaL6dFileToSnapshots(
                 file, reference_epoch, receiver_ecef, snapshots)) {
             madoca_iono_products_.clear();
-            return false;
+            return io::MadocaL6dLoadStatus::kFailed;
         }
         madoca_iono_products_.addSnapshots(snapshots);
     }
-    return !madoca_iono_products_.empty();
+    const auto status = io::classifyMadocaL6dLoad(true, madoca_iono_products_.size());
+    if (status == io::MadocaL6dLoadStatus::kOutsideCoverage) {
+        ppp_config_.apply_madoca_l6d_ionosphere = false;
+    }
+    return status;
 }
 
 bool PPPProcessor::loadIONEXProducts(const std::string& ionex_file) {

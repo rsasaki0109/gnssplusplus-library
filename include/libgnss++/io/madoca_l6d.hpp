@@ -213,4 +213,19 @@ bool decodeMadocaL6dFileToSnapshots(
     std::string* error_message = nullptr,
     const double* gloFreqHz = nullptr);
 
+// Outcome of loading L6D files for one receiver position. A decodable file
+// that never selects an area for the receiver (outside the L6D service area,
+// e.g. a station in Korea or China) is distinct from an unreadable or
+// undecodable one: the former is a valid "no L6D" input, the latter an error.
+enum class MadocaL6dLoadStatus {
+    kLoaded,           // at least one snapshot materialized for the receiver
+    kOutsideCoverage,  // every file decoded, but no snapshot for the receiver
+    kFailed,           // a file was unreadable, undecodable, or had no messages
+};
+
+// all_files_decoded is the conjunction of decodeMadocaL6dFileToSnapshots()
+// over every input file; snapshot_count is the total number it produced.
+MadocaL6dLoadStatus classifyMadocaL6dLoad(bool all_files_decoded,
+                                          std::size_t snapshot_count);
+
 }  // namespace libgnss::io

@@ -160,10 +160,14 @@ public:
 
     // Load receiver-specific L6D ionosphere snapshots. They remain
     // measurement-neutral unless PPPConfig::apply_madoca_l6d_ionosphere is
-    // explicitly enabled.
-    bool loadMadocaL6dProducts(const std::vector<std::string>& l6d_files,
-                               const double reference_epoch[6],
-                               const double receiver_ecef[3]);
+    // explicitly enabled. kFailed leaves the products empty. A receiver
+    // outside the L6D service area (kOutsideCoverage) is not an error: the
+    // products stay empty and apply_madoca_l6d_ionosphere is cleared so the
+    // run is identical to one without L6D input.
+    io::MadocaL6dLoadStatus loadMadocaL6dProducts(
+        const std::vector<std::string>& l6d_files,
+        const double reference_epoch[6],
+        const double receiver_ecef[3]);
     void setMadocaIonoProductsForShadow(const io::MadocaIonoProducts& products) {
         madoca_iono_products_ = products;
     }

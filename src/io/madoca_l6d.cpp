@@ -663,4 +663,13 @@ bool decodeMadocaL6dFileToSnapshots(
     return true;
 }
 
+MadocaL6dLoadStatus classifyMadocaL6dLoad(bool all_files_decoded,
+                                          std::size_t snapshot_count) {
+    if (!all_files_decoded) {
+        return MadocaL6dLoadStatus::kFailed;
+    }
+    return snapshot_count == 0 ? MadocaL6dLoadStatus::kOutsideCoverage
+                               : MadocaL6dLoadStatus::kLoaded;
+}
+
 }  // namespace libgnss::io
