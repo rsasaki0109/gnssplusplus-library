@@ -137,6 +137,19 @@ comparison is wanted. A successful application has a non-empty libgnss++
 `fallback_solutions`, and MADOCA input/materialization fields before
 comparing it.
 
+L6D ionosphere corrections cover only their broadcast areas. On 2025-04-01
+these were Japan and Australia, plus parts of Java at some hours; Korea,
+China, Taiwan, Guam, Singapore and the Pacific islands were outside.
+
+For a receiver outside the coverage, the L6D files still decode, but no
+correction applies at the receiver's RINEX approximate position. `gnss_ppp`
+then prints a warning and runs as if no L6D input was given, as MADOCALIB
+does. The `.pos` is the same as the run without L6D. The summary JSON
+reports `"madoca_l6d_outside_coverage": true` and
+`"madoca_l6d_apply_enabled": false`.
+
+A missing, unreadable or undecodable L6D file is still a fatal error.
+
 ## Supported boundary and next step
 
 The current boundaries are intentionally specific:
