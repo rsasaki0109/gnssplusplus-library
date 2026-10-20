@@ -121,8 +121,12 @@ runs:
           "-DCMAKE_C_COMPILER_LAUNCHER=${CMAKE_C_COMPILER_LAUNCHER}"
           "-DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}"
         )
+        # Pin the interpreter that has numpy/matplotlib: on Ubuntu, FindPython3
+        # otherwise prefers a newer system python3 over setup-python's.
         if [[ "${{ inputs.os-name }}" == macos* ]]; then
           cmake_args+=("-DPython3_EXECUTABLE=${GITHUB_WORKSPACE}/.venv/bin/python")
+        else
+          cmake_args+=("-DPython3_EXECUTABLE=$(command -v python)")
         fi
         cmake "${cmake_args[@]}"
 
