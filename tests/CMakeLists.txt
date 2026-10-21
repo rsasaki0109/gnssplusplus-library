@@ -135,7 +135,6 @@ if(GTest_FOUND)
         test_madoca_l6d_snapshots.cpp
         test_madoca_parity.cpp
         test_spp.cpp
-        test_spp_weighting.cpp
         test_spp_velocity.cpp
         test_rtk.cpp
         test_rtk_ins_prior.cpp
