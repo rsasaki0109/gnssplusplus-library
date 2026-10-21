@@ -60,6 +60,54 @@ class AnalysisVisualsCases:
             self.assertIn("adaptive_robust_activations", payload["spp_qc"])
             self.assertIn("adaptive_robust_tail_measurements", payload["spp_qc"])
             self.assertIn("position_jump_gate_rejections", payload["spp_qc"])
+    def test_spp_cli_defaults_to_the_steeper_weighting(self) -> None:
+        # `gnss spp` weights by a 10 dB SNR slope capped at 32x, GLONASS variance x4
+        # and a 1 m ISB prior; the library defaults behind other solvers stay 20/4/1/0.
+        obs_text = (
+            "     3.04           OBSERVATION DATA    G                   RINEX VERSION / TYPE\n"
+            "G    2 C1C S1C                                              SYS / # / OBS TYPES\n"
+            "                                                            END OF HEADER\n"
+        )
+        nav_text = (
+            "     3.04           NAVIGATION DATA     G                   RINEX VERSION / TYPE\n"
+            "                                                            END OF HEADER\n"
+            "G01 2021 03 10 00 00 00 0.1000000000000E-03 0.0000000000000E+01 0.0000000000000E+01\n"
+            "     0.1000000000000E+01 0.5000000000000E+02 0.4000000000000E-08 0.5000000000000E+00\n"
+            "     0.1000000000000E-05 0.5000000000000E-02 0.1000000000000E-05 0.5153700000000E+04\n"
+            "     0.0000000000000E+01 0.0000000000000E+01 0.0000000000000E+01 0.0000000000000E+01\n"
+            "     0.9600000000000E+00 0.1000000000000E+03 0.5000000000000E+00 0.0000000000000E+01\n"
+            "     0.0000000000000E+01 0.1000000000000E+01 0.2147000000000E+04 0.0000000000000E+01\n"
+            "     0.2000000000000E+01 0.0000000000000E+01 0.0000000000000E+01 0.1000000000000E+01\n"
+            "     0.0000000000000E+01 0.4000000000000E+01 0.0000000000000E+01 0.0000000000000E+01\n"
+        )
+        with tempfile.TemporaryDirectory(prefix="gnss_spp_defaults_cli_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path = temp_root / "empty.obs"
+            nav_path = temp_root / "one.nav"
+            summary_path = temp_root / "spp_summary.json"
+            obs_path.write_text(obs_text, encoding="ascii")
+            nav_path.write_text(nav_text, encoding="ascii")
+
+            result = self.run_gnss(
+                "spp",
+                "--obs",
+                str(obs_path),
+                "--nav",
+                str(nav_path),
+                "--out",
+                str(temp_root / "spp.pos"),
+                "--summary-json",
+                str(summary_path),
+            )
+
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            config = json.loads(summary_path.read_text(encoding="utf-8"))["config"]
+            self.assertEqual(config["snr_weight_slope_db"], 10.0)
+            self.assertEqual(config["snr_weight_max_factor"], 32.0)
+            self.assertEqual(config["glonass_variance_factor"], 4.0)
+            self.assertEqual(config["isb_prior_sigma_m"], 1.0)
+            self.assertEqual(config["snr_reference_dbhz"], 45.0)
+
     def test_visibility_cli_writes_csv_and_summary_for_static_data(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_visibility_cli_") as temp_dir:
             temp_root = Path(temp_dir)

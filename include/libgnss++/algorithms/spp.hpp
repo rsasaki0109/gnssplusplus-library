@@ -17,6 +17,32 @@
 
 namespace libgnss {
 
+namespace spp_utils {
+
+/// Running estimate of one clock group's inter-system bias behind the temporal ISB prior.
+struct IsbTrack {
+    double value = 0.0;  ///< Tracked ISB [m]
+    int count = 0;       ///< Accepted updates since the track was (re)started
+    int rejects = 0;     ///< Consecutive estimates that jumped away from the track
+};
+
+/// Only clock groups with at least this many satellites update the track.
+constexpr int kIsbTrackMinGroupSatellites = 4;
+/// The prior is applied once the track holds at least this many updates.
+constexpr int kIsbTrackMinCountForPrior = 20;
+/// Estimates this far from the track [m] count as jumps instead of updates.
+constexpr double kIsbTrackMaxJumpM = 8.0;
+/// A track is restarted from the estimate after this many consecutive jumps.
+constexpr int kIsbTrackRestartRejects = 31;
+
+/// Fold one epoch's ISB estimate [m] into the track (gain max(0.02, 1/count)).
+void updateIsbTrack(IsbTrack& track, double estimate);
+
+/// True when the track is mature enough to constrain the ISB column.
+bool isbTrackHasPrior(const IsbTrack& track);
+
+} // namespace spp_utils
+
 /**
  * @brief Single Point Positioning (SPP) processor
  * 
@@ -54,6 +80,9 @@ public:
         double max_chi_square_per_dof = 0.0;          ///< Reject solutions above reduced chi-square (<=0 disables)
         bool use_variance_model = true;               ///< Use explicit code/elevation/SNR/atmosphere variance
         double snr_reference_dbhz = 45.0;             ///< CN0 where no SNR penalty is applied
+        double snr_weight_slope_db = 20.0;            ///< Code sigma grows by 10^((reference - snr) / slope)
+        double snr_weight_max_factor = 4.0;           ///< Upper bound of that code sigma factor
+        double glonass_variance_factor = 1.0;         ///< Multiplier on the GLONASS code variance
         double ionosphere_sigma_scale = 0.5;          ///< Residual ionosphere sigma as fraction of correction
         double troposphere_sigma_scale = 0.1;         ///< Residual troposphere sigma as fraction of correction
         bool enable_robust_weighting = false;         ///< Downweight large code residuals inside WLS iterations
@@ -85,6 +114,11 @@ public:
         
         // Clock modeling
         bool model_intersystem_bias = true;           ///< Model inter-system clock biases
+        /// Temporal prior on each clock group's inter-system bias [m] (<=0 disables). The
+        /// bias is nearly constant on a receiver, so a running estimate from groups with
+        /// at least four satellites constrains the ISB column when a group is thin. Only
+        /// applied against a GPS reference clock.
+        double isb_prior_sigma_m = 0.0;
         bool enable_beidou = true;                    ///< Enable BeiDou SPP support
         bool enable_glonass = true;                   ///< Enable GLONASS SPP support
 
@@ -216,6 +250,13 @@ public:
     }
 
     /**
+     * @brief Get the running ISB estimates behind the temporal ISB prior
+     */
+    const std::map<GNSSSystem, spp_utils::IsbTrack>& getIsbTracks() const {
+        return isb_tracks_;
+    }
+
+    /**
      * @brief Load IONEX ionosphere products for SPP ionosphere corrections
      */
     bool loadIONEXProducts(const std::string& ionex_file);
@@ -298,6 +339,7 @@ private:
     bool position_is_cold_start_seed_ = false;
     double receiver_clock_bias_;            ///< Receiver clock bias in seconds
     std::map<GNSSSystem, double> system_biases_; ///< Inter-system clock biases
+    std::map<GNSSSystem, spp_utils::IsbTrack> isb_tracks_; ///< Running ISB per clock group (ISB prior)
     bool has_last_valid_position_ = false;
     Vector3d last_valid_position_;          ///< Last accepted SPP position for jump gating
     GNSSTime last_valid_time_;
@@ -423,6 +465,11 @@ private:
                                        double measurement_variance) const;
     
     /**
+     * @brief Fold an accepted solution's ISB estimates into the running ISB tracks
+     */
+    void updateIsbTracks(const PositionSolution& solution);
+
+    /**
      * @brief Update processing statistics
      */
     void updateStatistics(double processing_time_ms, bool success) const;
@@ -467,6 +514,8 @@ namespace spp_utils {
         double snr_reference_dbhz = 45.0;
         double ionosphere_sigma_scale = 0.5;
         double troposphere_sigma_scale = 0.1;
+        double snr_slope_db = 20.0;
+        double snr_max_factor = 4.0;
     };
 
     /**

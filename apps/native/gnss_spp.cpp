@@ -16,6 +16,7 @@
 #include <libgnss++/core/solution.hpp>
 #include <libgnss++/io/rinex.hpp>
 
+#include "gnss_spp_defaults.hpp"
 #include "json_output_helpers.hpp"
 
 namespace {
@@ -39,7 +40,7 @@ struct Options {
     int max_epochs = 0;
     double elevation_mask_deg = 15.0;
     double snr_mask = 0.0;
-    libgnss::SPPProcessor::SPPConfig spp_config;
+    libgnss::SPPProcessor::SPPConfig spp_config = libgnss_apps::gnssSppDefaultConfig();
     bool quiet = false;
 };
 
@@ -596,6 +597,14 @@ bool writeSummaryJson(const std::string& path,
            << (options.spp_config.use_variance_model ? "true" : "false") << ",\n";
     output << "    \"snr_reference_dbhz\": "
            << options.spp_config.snr_reference_dbhz << ",\n";
+    output << "    \"snr_weight_slope_db\": "
+           << options.spp_config.snr_weight_slope_db << ",\n";
+    output << "    \"snr_weight_max_factor\": "
+           << options.spp_config.snr_weight_max_factor << ",\n";
+    output << "    \"glonass_variance_factor\": "
+           << options.spp_config.glonass_variance_factor << ",\n";
+    output << "    \"isb_prior_sigma_m\": "
+           << options.spp_config.isb_prior_sigma_m << ",\n";
     output << "    \"robust_weighting\": "
            << (options.spp_config.enable_robust_weighting ? "true" : "false") << ",\n";
     output << "    \"robust_threshold_sigma\": "

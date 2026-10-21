@@ -533,6 +533,7 @@ PositionSolution SPPProcessor::processEpoch(
                 }
             }
             if (solution.isValid()) {
+                updateIsbTracks(solution);
                 has_last_valid_position_ = true;
                 last_valid_position_ = solution.position_ecef;
                 last_valid_time_ = solution.time;
@@ -577,11 +578,36 @@ ProcessorStats SPPProcessor::getStats() const {
     return stats;
 }
 
+void SPPProcessor::updateIsbTracks(const PositionSolution& solution) {
+    if (spp_config_.isb_prior_sigma_m <= 0.0 || spp_config_.mrtklib_iflc_code_bias) {
+        return;
+    }
+    // Only a GPS-referenced epoch measures ISBs against the clock the prior is
+    // stored in, and only groups with enough satellites determine theirs well.
+    std::map<GNSSSystem, int> group_counts;
+    for (const auto& id : solution.spp_used_measurements) {
+        ++group_counts[id.clock_group];
+    }
+    const auto gps_it = group_counts.find(GNSSSystem::GPS);
+    if (gps_it == group_counts.end() || gps_it->second <= 0) {
+        return;
+    }
+    for (const auto& [group, estimate] : system_biases_) {
+        const auto count_it = group_counts.find(group);
+        if (count_it == group_counts.end() ||
+            count_it->second < spp_utils::kIsbTrackMinGroupSatellites) {
+            continue;
+        }
+        spp_utils::updateIsbTrack(isb_tracks_[group], estimate);
+    }
+}
+
 void SPPProcessor::reset() {
     estimated_position_.setZero();
     position_is_cold_start_seed_ = false;
     receiver_clock_bias_ = 0.0;
     system_biases_.clear();
+    isb_tracks_.clear();
     has_last_valid_position_ = false;
     last_valid_position_.setZero();
     last_valid_time_ = GNSSTime();
@@ -1298,10 +1324,15 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                 variance_inputs.snr_reference_dbhz = spp_config_.snr_reference_dbhz;
                 variance_inputs.ionosphere_sigma_scale = spp_config_.ionosphere_sigma_scale;
                 variance_inputs.troposphere_sigma_scale = spp_config_.troposphere_sigma_scale;
+                variance_inputs.snr_slope_db = spp_config_.snr_weight_slope_db;
+                variance_inputs.snr_max_factor = spp_config_.snr_weight_max_factor;
                 variance = spp_utils::calculatePseudorangeVariance(variance_inputs);
             }
             if (!spp_config_.mrtklib_iflc_code_bias) {
                 variance *= std::max(1.0, spp_obs.variance_scale);
+            }
+            if (obs.satellite.system == GNSSSystem::GLONASS) {
+                variance *= spp_config_.glonass_variance_factor;
             }
             if (!std::isfinite(variance) || variance <= 0.0) {
                 continue;
@@ -1408,10 +1439,25 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
         // Barometer height row (transient; absent unless solvePositionBaroAided
         // armed it), appended after the n measurement rows.
         const int baro_rows = baro_prior_active_ ? 1 : 0;
+        // Temporal ISB prior rows (absent unless isb_prior_sigma_m is set and
+        // the clock groups are referenced to GPS), after the baro row.
+        struct IsbPriorRow { GNSSSystem group; int col; double prior; };
+        std::vector<IsbPriorRow> isb_prior_rows;
+        const double isb_prior_sigma = spp_config_.isb_prior_sigma_m;
+        if (isb_prior_sigma > 0.0 && !spp_config_.mrtklib_iflc_code_bias &&
+            reference_group == GNSSSystem::GPS) {
+            for (const auto& [group, col] : bias_columns) {
+                const auto it = isb_tracks_.find(group);
+                if (it != isb_tracks_.end() && spp_utils::isbTrackHasPrior(it->second)) {
+                    isb_prior_rows.push_back({group, col, it->second.value});
+                }
+            }
+        }
+        const int isb_rows = static_cast<int>(isb_prior_rows.size());
         MatrixXd H = MatrixXd::Zero(n, num_unknowns);
         VectorXd residuals = VectorXd::Zero(n);
-        MatrixXd weighted_H = MatrixXd::Zero(n + baro_rows, num_unknowns);
-        VectorXd weighted_residuals = VectorXd::Zero(n + baro_rows);
+        MatrixXd weighted_H = MatrixXd::Zero(n + baro_rows + isb_rows, num_unknowns);
+        VectorXd weighted_residuals = VectorXd::Zero(n + baro_rows + isb_rows);
         int iteration_robust_weighted_measurements = 0;
         double iteration_min_robust_weight_factor = 1.0;
         int iteration_tail_measurements = 0;
@@ -1510,6 +1556,12 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
             weighted_H(n, 1) = std::cos(lat) * std::sin(lon) * inv_sigma;
             weighted_H(n, 2) = std::sin(lat) * inv_sigma;
             weighted_residuals(n) = (baro_prior_height_m_ - h) * inv_sigma;
+        }
+        for (int k = 0; k < isb_rows; ++k) {
+            const auto& row = isb_prior_rows[static_cast<std::size_t>(k)];
+            weighted_H(n + baro_rows + k, row.col) = 1.0 / isb_prior_sigma;
+            weighted_residuals(n + baro_rows + k) =
+                (row.prior - bias_estimates[row.group]) / isb_prior_sigma;
         }
 
         VectorXd dx;
@@ -1669,6 +1721,16 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                               std::sin(lat));
             normal.topLeftCorner<3, 3>().noalias() +=
                 (1.0 / (baro_prior_sigma_m_ * baro_prior_sigma_m_)) * up * up.transpose();
+        }
+        if (spp_config_.isb_prior_sigma_m > 0.0 && !spp_config_.mrtklib_iflc_code_bias &&
+            final_reference_group == GNSSSystem::GPS) {
+            for (const auto& [group, col] : final_bias_columns) {
+                const auto it = isb_tracks_.find(group);
+                if (it != isb_tracks_.end() && spp_utils::isbTrackHasPrior(it->second)) {
+                    normal(col, col) +=
+                        1.0 / (spp_config_.isb_prior_sigma_m * spp_config_.isb_prior_sigma_m);
+                }
+            }
         }
         normal = 0.5 * (normal + normal.transpose());
         if (!normal.allFinite()) {
@@ -2447,6 +2509,29 @@ Vector3d geodeticToEcef(const GeodeticCoord& geodetic_pos) {
     return geodetic2ecef(geodetic_pos.latitude, geodetic_pos.longitude, geodetic_pos.height);
 }
 
+void updateIsbTrack(IsbTrack& track, double estimate) {
+    if (track.count == 0) {
+        track.value = estimate;
+        track.count = 1;
+        track.rejects = 0;
+        return;
+    }
+    if (std::abs(estimate - track.value) < kIsbTrackMaxJumpM) {
+        ++track.count;
+        const double gain = std::max(0.02, 1.0 / track.count);
+        track.value += gain * (estimate - track.value);
+        track.rejects = 0;
+    } else if (++track.rejects >= kIsbTrackRestartRejects) {
+        track.value = estimate;
+        track.count = 1;
+        track.rejects = 0;
+    }
+}
+
+bool isbTrackHasPrior(const IsbTrack& track) {
+    return track.count >= kIsbTrackMinCountForPrior;
+}
+
 double calculatePseudorangeVariance(const MeasurementVarianceInputs& inputs) {
     const double base_sigma = std::max(0.1, inputs.pseudorange_sigma_m);
     double sin_el = std::sin(inputs.elevation_rad);
@@ -2463,8 +2548,8 @@ double calculatePseudorangeVariance(const MeasurementVarianceInputs& inputs) {
         inputs.snr_dbhz > 0.0 &&
         inputs.snr_dbhz < snr_reference) {
         const double snr_scale =
-            std::pow(10.0, (snr_reference - inputs.snr_dbhz) / 20.0);
-        code_sigma *= std::clamp(snr_scale, 1.0, 4.0);
+            std::pow(10.0, (snr_reference - inputs.snr_dbhz) / inputs.snr_slope_db);
+        code_sigma *= std::clamp(snr_scale, 1.0, inputs.snr_max_factor);
     }
 
     double variance = code_sigma * code_sigma;
@@ -2848,9 +2933,14 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs,
             variance_inputs.snr_reference_dbhz = spp_config_.snr_reference_dbhz;
             variance_inputs.ionosphere_sigma_scale = spp_config_.ionosphere_sigma_scale;
             variance_inputs.troposphere_sigma_scale = spp_config_.troposphere_sigma_scale;
+            variance_inputs.snr_slope_db = spp_config_.snr_weight_slope_db;
+            variance_inputs.snr_max_factor = spp_config_.snr_weight_max_factor;
             variance = spp_utils::calculatePseudorangeVariance(variance_inputs);
         }
         variance *= std::max(1.0, spp_obs.variance_scale);
+        if (o.satellite.system == GNSSSystem::GLONASS) {
+            variance *= spp_config_.glonass_variance_factor;
+        }
         if (!std::isfinite(variance) || variance <= 0.0) {
             markRejected(spp_obs, "invalid-correction-variance");
             continue;
