@@ -6,27 +6,85 @@ support, upstream OSS, and recent positioning papers.
 
 ## Current Baseline
 
-The native SPP path already has:
+Status as of 2026-10-21. The opening of the original plan listed gaps that have
+since been closed, so this section describes what `SPPProcessor`
+(`src/algorithms/spp.cpp`) does today.
 
-- iterative weighted least squares,
-- broadcast satellite clocks/orbits,
-- Sagnac correction,
-- Klobuchar ionosphere correction,
-- Saastamoinen troposphere correction,
-- elevation weighting,
-- multi-GNSS clock-bias groups,
-- broadcast group delay handling,
-- unhealthy satellite filtering.
+- **Signals and models:**
+  - one primary code observable per satellite, or a code IFLC with
+    `--ionosphere-free`;
+  - BeiDou GEO satellites excluded; health flags taken from the navigation
+    message;
+  - Sagnac and Saastamoinen corrections; Klobuchar ionosphere;
+  - broadcast group delays (TGD/BGD).
+- **Weighting:**
+  - `(3 m / sin el)^2`, scaled by an SNR factor `10^((45 - SNR)/20)` capped at
+    4;
+  - plus ionosphere and troposphere model variances.
+- **Clock groups:** GPS+QZSS form the reference group. GLONASS, Galileo and
+  BeiDou get one bias column each, estimated independently every epoch.
+- **Quality control:**
+  - one MAD-based outlier pass;
+  - leave-one-out RAIM when the solution fails its checks;
+  - a GDOP limit of 50.
+- **SSR:** `gnss spp --ssr` reads CSV orbit/clock/code-bias products. Their code
+  bias keys and sign match the native PPP CSV path. MADOCA L6 products are not
+  read by SPP.
 
-The weakest parts are:
+### Development-data survey (2026-10-21)
 
-- only one primary code observable per satellite is used,
-- `enable_outlier_detection` is configured but not used in the solver loop,
-- the weight model is only `sin(el)^2`,
-- `gnss spp` exposes almost no solver/model options,
-- precise products, IONEX, DCB, and SSR/OSR corrections are available elsewhere
-  in the tree but are not consumable by the SPP path,
-- no code-carrier smoothing or time-series filter exists in the SPP path.
+Development data:
+
+- the 6 PPC runs;
+- SmartPNT Data13-18 and TEX-CUP 2019-05-09;
+- 42 static IGS stations (2025-04-01, broadcast ephemerides only).
+
+Baseline errors:
+
+- **PPC:** mean horizontal p50 2.14 m and p95 15.5 m over the 6 runs.
+- **Static stations:** mean 3D p50 4.42 m and p95 9.80 m.
+
+Error sources:
+
+- **Urban runs:**
+  - NLOS reception and multipath dominate the tail. Removing the satellites
+    more than 10 m from truth would cut the Tokyo run1 horizontal p95 from 20.4 m
+    to 5.9 m.
+  - GLONASS has per-satellite biases of up to about ±6 m, with the same sign at
+    every station.
+  - Clock groups with only one or two satellites leave their bias column nearly
+    undetermined. The largest jumps come from such epochs: up to 6 km in one
+    SmartPNT run.
+- **Open-sky static stations:** the Klobuchar residual dominates, with an up bias
+  of about +2.6 m.
+- **Not the limit:** broadcast orbits and clocks. GPS-only results are nearly the
+  same with IGS final products.
+
+**Rejected candidate.** A steeper SNR weighting (slope 10 dB, factor cap 32),
+4x GLONASS variance and a temporal ISB prior (σ = 1 m) were tested together:
+
+- **Development data:** the PPC mean horizontal p95 fell from 15.5 m to 8.1 m.
+- **Frozen held-out check:**
+  - mean horizontal p95 over 9 urban runs: 5.22 → 4.02 m;
+  - mean 3D p50 over 60 static stations: 4.93 → 4.55 m;
+  - but on one run (TEX-CUP 2019-05-12) the horizontal p50 rose by 50 %, from
+    1.15 m to 1.73 m;
+  - the check allowed at most 25 %, so the change was not adopted.
+
+The weighting depends on the receiver's absolute SNR levels, so it needs a
+receiver-independent form before it can be retried.
+
+**GPS/QZSS IFLC group delay (fixed 2026-10-21).** The IFLC row carried
+`(c1 + c2) * c * TGD = c * TGD` instead of IS-GPS-200's
+`(c1 + c2 * gamma) * c * TGD = 0`. With the fix, the mean per-station 3D p50 of
+`gnss spp --ionosphere-free` on the 42 static stations fell from 4.04 m to
+3.89 m.
+
+**IFLC is still not recommended for urban use.** Its row variance is about 9
+times that of a single-frequency row. Second-frequency code biases are not
+modelled, and several BeiDou satellites carry large IF-minus-Klobuchar offsets
+(cause not identified). Tokyo run1 horizontal p50 goes from 1.78 m to 5.71 m
+with IFLC.
 
 ## Public PPC Real-Data Baseline
 

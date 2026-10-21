@@ -252,6 +252,37 @@ double groupDelayCorrectionMeters(
     }
 }
 
+// IS-GPS-200 defines the L2 (and, by the same relation, L5) group delay as
+// gamma_1k * TGD with gamma_1k = (f1/fk)^2.  A code IFLC row therefore carries
+// (c1 + c2 * gamma_1k) * c * TGD, which is zero for any pair because
+// c1 + c2 * gamma_1k = 0 (the combination removes every 1/f^2 term).  Summing
+// the unscaled TGD on both legs would leave c * TGD behind.  This applies to
+// the native GPS/QZSS IFLC rows only: the literal MRTKLIB IFLC path and the
+// "no explicit code bias" path keep their own handling.
+bool iflcGroupDelayUsesGamma(const SPPProcessor::SPPConfig& config,
+                             GNSSSystem system) {
+    return config.use_ionosphere_free_combination &&
+           !config.mrtklib_iflc_code_bias &&
+           !config.use_official_no_explicit_code_bias &&
+           (system == GNSSSystem::GPS || system == GNSSSystem::QZSS);
+}
+
+double gpsQzssIflcGroupDelayMeters(const Ephemeris& eph,
+                                   SignalType primary_signal,
+                                   SignalType secondary_signal,
+                                   double primary_coeff,
+                                   double secondary_coeff,
+                                   double fallback_meters) {
+    const double f1 = signalFrequencyHz(primary_signal, &eph);
+    const double f2 = signalFrequencyHz(secondary_signal, &eph);
+    if (!(f1 > 0.0) || !(f2 > 0.0)) {
+        return fallback_meters;
+    }
+    const double gamma = (f1 / f2) * (f1 / f2);
+    return (primary_coeff + secondary_coeff * gamma) * eph.tgd *
+           constants::SPEED_OF_LIGHT;
+}
+
 double dcbEntryBiasMeters(const DCBEntry& entry) {
     std::string unit = entry.unit;
     std::transform(unit.begin(), unit.end(), unit.begin(), [](unsigned char ch) {
@@ -1249,6 +1280,11 @@ PositionSolution SPPProcessor::solvePositionLS(const std::vector<SPPObservation>
                               spp_obs.secondary_coeff * groupDelayCorrectionMeters(
                                   secondary_obs, *eph,
                                   spp_config_.use_signal_specific_galileo_group_delay);
+                if (iflcGroupDelayUsesGamma(spp_config_, obs.satellite.system)) {
+                    group_delay = gpsQzssIflcGroupDelayMeters(
+                        *eph, spp_obs.primary_signal, spp_obs.secondary_signal,
+                        spp_obs.primary_coeff, spp_obs.secondary_coeff, group_delay);
+                }
                 // MRTKLIB prange() forms GPS/QZSS IFLC directly from P1/P2;
                 // broadcast TGD is only removed on its single-frequency
                 // branch. Galileo I/NAV follows the same direct-combination
@@ -2821,6 +2857,11 @@ SPPProcessor::preprocessEpoch(const ObservationData& obs,
                           spp_obs.secondary_coeff * groupDelayCorrectionMeters(
                               secondary_obs, *eph,
                               spp_config_.use_signal_specific_galileo_group_delay);
+            if (iflcGroupDelayUsesGamma(spp_config_, o.satellite.system)) {
+                group_delay = gpsQzssIflcGroupDelayMeters(
+                    *eph, spp_obs.primary_signal, spp_obs.secondary_signal,
+                    spp_obs.primary_coeff, spp_obs.secondary_coeff, group_delay);
+            }
         }
 
         double corrected_pr = o.pseudorange

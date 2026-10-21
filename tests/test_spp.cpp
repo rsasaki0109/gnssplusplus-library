@@ -13,6 +13,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <string>
 #include <vector>
 #include <set>
@@ -1290,4 +1291,345 @@ TEST_F(SPPTest, BeiDouEnabledSPPStaysCloseOnOdaibaSequence) {
 
     EXPECT_EQ(count, 20);
     EXPECT_GT(beidou_improves_sat_count, 0);
+}
+
+// ---------------------------------------------------------------------------
+// IFLC broadcast group delay (GPS/QZSS: IS-GPS-200 gamma_1k * TGD).
+// ---------------------------------------------------------------------------
+namespace {
+
+// Same 24-slot Kepler geometry as SyntheticColdStartScene, parameterised by
+// constellation and by the broadcast TGD.  Observations are physical: every
+// signal carries the satellite group delay it would see in the ICD model.
+struct IflcGroupDelayScene {
+    Vector3d truth = Vector3d(-3959000.0, 3354000.0, 3697000.0);
+    double clock_bias_m = 0.0;  // receiver clock folded into truth: isolates group delay
+    GNSSSystem system;
+    NavigationData nav;
+    std::map<int, double> tgd_s;  // by PRN (broadcast TGD, seconds)
+
+    // tgd_by_prn(prn) -> TGD [s]; tgd_secondary_s -> Ephemeris::tgd_secondary.
+    template <typename TgdFn>
+    IflcGroupDelayScene(GNSSSystem sys, TgdFn tgd_by_prn, double tgd_secondary_s = 0.0)
+        : system(sys) {
+        const GNSSTime toe(2300, 100000.0);
+        for (int plane = 0; plane < 6; ++plane) {
+            for (int slot = 0; slot < 4; ++slot) {
+                Ephemeris eph;
+                const int prn = 6 + plane * 4 + slot;  // keeps clear of BDS GEO PRNs
+                eph.valid = true;
+                eph.satellite = SatelliteId(sys, prn);
+                eph.toe = eph.toc = toe;
+                eph.toes = toe.tow;
+                eph.week = 2300;
+                eph.sqrt_a = std::sqrt(26560000.0);
+                eph.e = 0.005;
+                eph.i0 = 55.0 * M_PI / 180.0;
+                eph.omega0 = plane * (M_PI / 3.0);
+                eph.omega = 0.0;
+                eph.m0 = slot * (M_PI / 2.0) + plane * (M_PI / 12.0);
+                eph.omega_dot = -8.0e-9;
+                eph.tgd = tgd_by_prn(prn);
+                eph.tgd_secondary = tgd_secondary_s;
+                tgd_s[prn] = eph.tgd;
+                nav.addEphemeris(eph);
+            }
+        }
+    }
+
+    // obs_delay_m(prn, signal) -> group delay [m] present in that code.
+    template <typename DelayFn>
+    ObservationData observe(const GNSSTime& time,
+                            const std::vector<SignalType>& signals,
+                            DelayFn obs_delay_m) const {
+        ObservationData epoch;
+        epoch.time = time;
+        epoch.receiver_position = Vector3d::Zero();
+        const Vector3d up = truth.normalized();
+        for (const auto& [sat, ephs] : nav.ephemeris_data) {
+            (void)ephs;
+            double tau = 0.075;
+            Vector3d rotated = Vector3d::Zero();
+            double sat_clock_s = 0.0;
+            bool ok = true;
+            for (int i = 0; i < 5; ++i) {
+                Vector3d pos, vel;
+                double clk, drift;
+                // Same navigation-level state the solver uses (per-system
+                // constants, relativistic clock term).
+                if (!nav.calculateSatelliteState(sat, time - tau, pos, vel, clk, drift)) {
+                    ok = false;
+                    break;
+                }
+                sat_clock_s = clk;
+                const double angle = constants::OMEGA_E * tau;
+                Eigen::Matrix3d rot;
+                rot << std::cos(angle), std::sin(angle), 0.0,
+                      -std::sin(angle), std::cos(angle), 0.0,
+                       0.0, 0.0, 1.0;
+                rotated = rot * pos;
+                tau = (rotated - truth).norm() / constants::SPEED_OF_LIGHT;
+            }
+            if (!ok) continue;
+            const Vector3d los = (rotated - truth).normalized();
+            if (std::asin(los.dot(up)) * 180.0 / M_PI < 5.0) continue;
+            for (const SignalType signal : signals) {
+                Observation obs;
+                obs.satellite = sat;
+                obs.signal = signal;
+                obs.pseudorange = (rotated - truth).norm() + clock_bias_m -
+                                  sat_clock_s * constants::SPEED_OF_LIGHT +
+                                  obs_delay_m(sat.prn, signal);
+                obs.pseudorange_observation_type =
+                    (signal == SignalType::GPS_L2C || signal == SignalType::GPS_L2P) ? "C2W" : "";
+                obs.snr = 45.0;
+                obs.valid = true;
+                obs.has_pseudorange = true;
+                epoch.addObservation(obs);
+            }
+        }
+        return epoch;
+    }
+};
+
+ProcessorConfig iflcProcessorConfig() {
+    ProcessorConfig config = syntheticColdStartConfig();
+    config.elevation_mask = 10.0;
+    return config;
+}
+
+SPPProcessor::SPPConfig iflcSppConfig() {
+    SPPProcessor::SPPConfig config;
+    config.use_ionosphere_free_combination = true;
+    config.enable_raim_fde = false;
+    config.enable_outlier_detection = false;
+    return config;
+}
+
+// IFLC coefficients straight from the definition (independent of spp_utils).
+std::pair<double, double> iflcCoefficients(double f1, double f2) {
+    const double d = f1 * f1 - f2 * f2;
+    return {f1 * f1 / d, -f2 * f2 / d};
+}
+
+// Group delay [m] that preprocessEpoch() removed from each IFLC/single row:
+// corrected_pr(TGD = 0) - corrected_pr(TGD = T) for identical observations.
+std::map<int, double> removedGroupDelayByPrn(GNSSSystem system,
+                                             const std::vector<SignalType>& signals,
+                                             double tgd_s,
+                                             const SPPProcessor::SPPConfig& spp_config,
+                                             double tgd_secondary_s = 0.0,
+                                             bool expect_ionosphere_free = true) {
+    const GNSSTime time(2300, 100000.0);
+    const auto zero = [](int) { return 0.0; };
+    const auto with_tgd = [tgd_s](int) { return tgd_s; };
+    const auto no_delay = [](int, SignalType) { return 0.0; };
+    IflcGroupDelayScene scene_zero(system, zero, 0.0);
+    IflcGroupDelayScene scene_tgd(system, with_tgd, tgd_secondary_s);
+    const ObservationData epoch = scene_zero.observe(time, signals, no_delay);
+
+    std::map<int, double> corrected[2];
+    for (int arm = 0; arm < 2; ++arm) {
+        SPPProcessor processor;
+        EXPECT_TRUE(processor.initialize(iflcProcessorConfig()));
+        processor.setSPPConfig(spp_config);
+        const auto result = processor.preprocessEpoch(
+            epoch, arm == 0 ? scene_zero.nav : scene_tgd.nav);
+        for (const auto& m : result.second) {
+            EXPECT_EQ(m.ionosphere_free, expect_ionosphere_free);
+            corrected[arm][m.identity.satellite.prn] = m.corrected_pseudorange;
+        }
+    }
+    std::map<int, double> removed;
+    for (const auto& [prn, value] : corrected[0]) {
+        const auto it = corrected[1].find(prn);
+        if (it != corrected[1].end()) {
+            removed[prn] = value - it->second;
+        }
+    }
+    return removed;
+}
+
+constexpr double kTestTgdSeconds = 12.0e-9;  // 3.6 m: far above any tolerance
+
+}  // namespace
+
+TEST(SPPIflcGroupDelayTest, GpsL1L2RemovesGammaScaledTgd) {
+    const double f1 = constants::GPS_L1_FREQ;
+    const double f2 = constants::GPS_L2_FREQ;
+    const auto [c1, c2] = iflcCoefficients(f1, f2);
+    const double gamma = (f1 / f2) * (f1 / f2);
+    const double expected = (c1 + c2 * gamma) * constants::SPEED_OF_LIGHT * kTestTgdSeconds;
+    // The legacy value (c1 + c2) * c * TGD would be the whole c * TGD.
+    ASSERT_GT(constants::SPEED_OF_LIGHT * kTestTgdSeconds, 3.0);
+    const auto removed = removedGroupDelayByPrn(
+        GNSSSystem::GPS, {SignalType::GPS_L1CA, SignalType::GPS_L2C}, kTestTgdSeconds,
+        iflcSppConfig());
+    ASSERT_GE(removed.size(), 6u);
+    for (const auto& [prn, value] : removed) {
+        EXPECT_NEAR(value, expected, 1e-6) << "G" << prn;
+    }
+}
+
+TEST(SPPIflcGroupDelayTest, GpsL1L5RemovesGammaScaledTgd) {
+    const double f1 = constants::GPS_L1_FREQ;
+    const double f5 = constants::GPS_L5_FREQ;
+    const auto [c1, c5] = iflcCoefficients(f1, f5);
+    const double gamma = (f1 / f5) * (f1 / f5);
+    const double expected = (c1 + c5 * gamma) * constants::SPEED_OF_LIGHT * kTestTgdSeconds;
+    const auto removed = removedGroupDelayByPrn(
+        GNSSSystem::GPS, {SignalType::GPS_L1CA, SignalType::GPS_L5}, kTestTgdSeconds,
+        iflcSppConfig());
+    ASSERT_GE(removed.size(), 6u);
+    for (const auto& [prn, value] : removed) {
+        EXPECT_NEAR(value, expected, 1e-6) << "G" << prn;
+    }
+}
+
+TEST(SPPIflcGroupDelayTest, QzssL1L2AndL1L5RemoveGammaScaledTgd) {
+    for (const SignalType secondary : {SignalType::QZS_L2C, SignalType::QZS_L5}) {
+        const double f1 = constants::GPS_L1_FREQ;
+        const double fk = secondary == SignalType::QZS_L2C ? constants::GPS_L2_FREQ
+                                                           : constants::GPS_L5_FREQ;
+        const auto [c1, ck] = iflcCoefficients(f1, fk);
+        const double gamma = (f1 / fk) * (f1 / fk);
+        const double expected = (c1 + ck * gamma) * constants::SPEED_OF_LIGHT * kTestTgdSeconds;
+        const auto removed = removedGroupDelayByPrn(
+            GNSSSystem::QZSS, {SignalType::QZS_L1CA, secondary}, kTestTgdSeconds,
+            iflcSppConfig());
+        ASSERT_GE(removed.size(), 6u);
+        for (const auto& [prn, value] : removed) {
+            EXPECT_NEAR(value, expected, 1e-6) << "J" << prn;
+        }
+    }
+}
+
+TEST(SPPIflcGroupDelayTest, SingleFrequencyRowsKeepFullTgd) {
+    // An L1-only GPS row (no IFLC possible) still removes c * TGD, both with
+    // and without the IFLC option enabled.
+    for (const bool iflc : {false, true}) {
+        SPPProcessor::SPPConfig config = iflcSppConfig();
+        config.use_ionosphere_free_combination = iflc;
+        const auto removed = removedGroupDelayByPrn(
+            GNSSSystem::GPS, {SignalType::GPS_L1CA}, kTestTgdSeconds, config, 0.0,
+            /*expect_ionosphere_free=*/false);
+        ASSERT_GE(removed.size(), 6u);
+        for (const auto& [prn, value] : removed) {
+            EXPECT_NEAR(value, constants::SPEED_OF_LIGHT * kTestTgdSeconds, 1e-6)
+                << "G" << prn << " iflc=" << iflc;
+        }
+    }
+}
+
+TEST(SPPIflcGroupDelayTest, GpsDualFrequencyWithoutIflcOptionUsesPrimaryOnly) {
+    // Default (non-IFLC) config never forms the combination: unchanged.
+    SPPProcessor::SPPConfig config = iflcSppConfig();
+    config.use_ionosphere_free_combination = false;
+    const auto removed = removedGroupDelayByPrn(
+        GNSSSystem::GPS, {SignalType::GPS_L1CA, SignalType::GPS_L2C}, kTestTgdSeconds, config,
+        0.0, /*expect_ionosphere_free=*/false);
+    ASSERT_GE(removed.size(), 6u);
+    for (const auto& [prn, value] : removed) {
+        EXPECT_NEAR(value, constants::SPEED_OF_LIGHT * kTestTgdSeconds, 1e-6) << "G" << prn;
+    }
+}
+
+TEST(SPPIflcGroupDelayTest, GalileoAndBeiDouIflcRowsAreUnchanged) {
+    // Galileo: every signal returns the same BGD, so IFLC removes
+    // (c1 + c2) * c * BGD = c * BGD (legacy behaviour, not gamma-scaled).
+    {
+        const auto removed = removedGroupDelayByPrn(
+            GNSSSystem::Galileo, {SignalType::GAL_E1, SignalType::GAL_E5A}, kTestTgdSeconds,
+            iflcSppConfig());
+        ASSERT_GE(removed.size(), 6u);
+        for (const auto& [prn, value] : removed) {
+            EXPECT_NEAR(value, constants::SPEED_OF_LIGHT * kTestTgdSeconds, 1e-6) << "E" << prn;
+        }
+    }
+    // BeiDou B1I/B3I: B1I carries TGD1, B3I carries none: c1 * c * TGD1.
+    {
+        const auto [c1, c3] = iflcCoefficients(constants::BDS_B1I_FREQ, constants::BDS_B3I_FREQ);
+        (void)c3;
+        const auto removed = removedGroupDelayByPrn(
+            GNSSSystem::BeiDou, {SignalType::BDS_B1I, SignalType::BDS_B3I}, kTestTgdSeconds,
+            iflcSppConfig());
+        ASSERT_GE(removed.size(), 6u);
+        for (const auto& [prn, value] : removed) {
+            EXPECT_NEAR(value, c1 * constants::SPEED_OF_LIGHT * kTestTgdSeconds, 1e-6)
+                << "C" << prn;
+        }
+    }
+}
+
+TEST(SPPIflcGroupDelayTest, OptOutPathsKeepLegacyHandling) {
+    // use_official_no_explicit_code_bias: no group delay at all.
+    {
+        SPPProcessor::SPPConfig config = iflcSppConfig();
+        config.use_official_no_explicit_code_bias = true;
+        const auto removed = removedGroupDelayByPrn(
+            GNSSSystem::GPS, {SignalType::GPS_L1CA, SignalType::GPS_L2C}, kTestTgdSeconds,
+            config);
+        ASSERT_GE(removed.size(), 6u);
+        for (const auto& [prn, value] : removed) {
+            EXPECT_NEAR(value, 0.0, 1e-6) << "G" << prn;
+        }
+    }
+    // mrtklib_iflc_code_bias (literal MRTKLIB IFLC): the preprocess view keeps
+    // the unscaled (c1 + c2) * c * TGD = c * TGD it always had.
+    {
+        SPPProcessor::SPPConfig config = iflcSppConfig();
+        config.mrtklib_iflc_code_bias = true;
+        const auto removed = removedGroupDelayByPrn(
+            GNSSSystem::GPS, {SignalType::GPS_L1CA, SignalType::GPS_L2C}, kTestTgdSeconds,
+            config);
+        ASSERT_GE(removed.size(), 6u);
+        for (const auto& [prn, value] : removed) {
+            EXPECT_NEAR(value, constants::SPEED_OF_LIGHT * kTestTgdSeconds, 1e-6) << "G" << prn;
+        }
+    }
+}
+
+// End-to-end through solvePositionLS(): per-satellite TGDs of several metres
+// must not leak into an IFLC fix once the L2 leg carries gamma * TGD.
+TEST(SPPIflcGroupDelayTest, GpsIflcFixIsFreeOfTgdLeakage) {
+    const auto tgd = [](int prn) { return (4.0 + 3.0 * (prn % 5)) * 1.0e-9; };  // 4..16 ns
+    IflcGroupDelayScene scene(GNSSSystem::GPS, tgd);
+    const double f1 = constants::GPS_L1_FREQ;
+    const double f2 = constants::GPS_L2_FREQ;
+    const double gamma = (f1 / f2) * (f1 / f2);
+    const auto delay = [&](int prn, SignalType signal) {
+        const double c_tgd = constants::SPEED_OF_LIGHT * scene.tgd_s.at(prn);
+        return signal == SignalType::GPS_L2C ? gamma * c_tgd : c_tgd;
+    };
+    SPPProcessor processor;
+    ASSERT_TRUE(processor.initialize(iflcProcessorConfig()));
+    processor.setSPPConfig(iflcSppConfig());
+    const auto epoch = scene.observe(GNSSTime(2300, 100000.0),
+                                     {SignalType::GPS_L1CA, SignalType::GPS_L2C}, delay);
+    ASSERT_GE(epoch.observations.size(), 16u);
+    const auto solution = processor.processEpoch(epoch, scene.nav);
+    ASSERT_TRUE(solution.isValid());
+    EXPECT_LT((solution.position_ecef - scene.truth).norm(), 0.05);
+    EXPECT_NEAR(solution.receiver_clock_bias, scene.clock_bias_m, 0.05);
+}
+
+TEST(SPPIflcGroupDelayTest, GalileoIflcFixKeepsLegacyBgdRemoval) {
+    // Galileo is outside the gamma change: each IFLC row still subtracts
+    // (c1 + c2) * c * BGD.  Both E1 and E5a carry c * BGD here, so the fix is
+    // exact only when the legacy removal is kept.
+    const auto tgd = [](int prn) { return (4.0 + 3.0 * (prn % 5)) * 1.0e-9; };
+    IflcGroupDelayScene scene(GNSSSystem::Galileo, tgd);
+    const auto delay = [&](int prn, SignalType) {
+        return constants::SPEED_OF_LIGHT * scene.tgd_s.at(prn);
+    };
+    SPPProcessor processor;
+    ASSERT_TRUE(processor.initialize(iflcProcessorConfig()));
+    processor.setSPPConfig(iflcSppConfig());
+    const auto epoch = scene.observe(GNSSTime(2300, 100000.0),
+                                     {SignalType::GAL_E1, SignalType::GAL_E5A}, delay);
+    ASSERT_GE(epoch.observations.size(), 16u);
+    const auto solution = processor.processEpoch(epoch, scene.nav);
+    ASSERT_TRUE(solution.isValid());
+    EXPECT_LT((solution.position_ecef - scene.truth).norm(), 0.05);
+    EXPECT_NEAR(solution.receiver_clock_bias, scene.clock_bias_m, 0.05);
 }
