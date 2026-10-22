@@ -417,6 +417,72 @@ class PPPProcessingCases:
             records = self.read_pos_records(out_path)
             self.assertEqual(len(records), 8)
             self.assertTrue(all(record["status"] in (5, 6) for record in records))
+    def test_ppp_cli_passes_ar_safety_gate_options_to_config(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="gnss_ppp_ar_gate_test_") as temp_dir:
+            temp_root = Path(temp_dir)
+            obs_path, sp3_path, clk_path, _ = build_synthetic_ppp_inputs(temp_root)
+
+            def run(*gate_args: str, summary_name: str):
+                summary_path = temp_root / summary_name
+                result = self.run_gnss(
+                    "ppp",
+                    "--kinematic",
+                    "--enable-ar",
+                    "--ar-method",
+                    "per-freq",
+                    *gate_args,
+                    "--obs",
+                    str(obs_path),
+                    "--sp3",
+                    str(sp3_path),
+                    "--clk",
+                    str(clk_path),
+                    "--no-estimate-troposphere",
+                    "--out",
+                    str(temp_root / (summary_name + ".pos")),
+                    "--summary-json",
+                    str(summary_path),
+                    "--max-epochs",
+                    "4",
+                )
+                return result, summary_path
+
+            result, summary_path = run(summary_name="default.json")
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["ar_min_median_lock_epochs"], 0)
+            self.assertLess(summary["ar_max_fix_position_shift_m"], 0.0)
+
+            result, summary_path = run(
+                "--ar-min-median-lock-epochs",
+                "60",
+                "--ar-max-fix-shift",
+                "0.10",
+                summary_name="gated.json",
+            )
+            self.assertEqual(result.returncode, 0, msg=result.stderr)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+            self.assertEqual(summary["ar_min_median_lock_epochs"], 60)
+            self.assertAlmostEqual(summary["ar_max_fix_position_shift_m"], 0.10)
+
+            for bad_args in (
+                ("--ar-min-median-lock-epochs", "-1"),
+                ("--ar-max-fix-shift", "-0.1"),
+                ("--ar-max-fix-shift", "nan"),
+            ):
+                result, _ = run(*bad_args, summary_name="bad.json")
+                self.assertEqual(result.returncode, 1, msg=bad_args)
+                self.assertIn("Argument error", result.stderr)
+
+            # Non-numeric values fail like every other numeric option (stoi/stod).
+            for bad_args in (
+                ("--ar-min-median-lock-epochs", "many"),
+                ("--ar-max-fix-shift", "far"),
+            ):
+                result, _ = run(*bad_args, summary_name="bad.json")
+                self.assertEqual(result.returncode, 1, msg=bad_args)
+                self.assertIn("Error:", result.stderr)
+
     def test_nav_products_cli_generates_sp3_and_clk_from_static_sample(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_nav_products_cli_") as temp_dir:
             temp_root = Path(temp_dir)

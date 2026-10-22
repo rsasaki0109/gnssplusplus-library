@@ -294,6 +294,48 @@ inline int perFrequencyArMinLockCount(bool madoca_per_frequency,
         : convergence_min_epochs;
 }
 
+// Median lock count of the non-reference satellites of an accepted N1 set:
+// the upper median (element size/2 of the ascending order) so that an even
+// count takes the larger of the two middle values. -1 for an empty set.
+inline int n1MedianLockEpochs(std::vector<int> lock_counts) {
+    if (lock_counts.empty()) {
+        return -1;
+    }
+    std::sort(lock_counts.begin(), lock_counts.end());
+    return lock_counts[lock_counts.size() / 2];
+}
+
+// Optional per-frequency AR safety gate: reject the N1 set when its median
+// lock is below the configured minimum (a median equal to it is kept).
+// min_median_lock_epochs <= 0 disables the gate.
+inline bool n1MedianLockRejects(int min_median_lock_epochs,
+                                const std::vector<int>& lock_counts) {
+    return min_median_lock_epochs > 0 &&
+           n1MedianLockEpochs(lock_counts) < min_median_lock_epochs;
+}
+
+// Optional per-frequency AR safety gate: reject the N1 set when the update
+// moved the position farther than max_shift_m from the pre-AR float position
+// (a shift equal to the limit is kept). A negative limit disables the gate.
+inline bool n1FixShiftRejects(double max_shift_m, double shift_m) {
+    return max_shift_m >= 0.0 && shift_m > max_shift_m;
+}
+
+// Combined gate in the order shift, then median lock. Returns the
+// ar_stage_telemetry_ stage name of the first gate that rejects, or nullptr.
+inline const char* n1SafetyGateRejectionStage(double max_shift_m,
+                                              int min_median_lock_epochs,
+                                              double shift_m,
+                                              const std::vector<int>& lock_counts) {
+    if (n1FixShiftRejects(max_shift_m, shift_m)) {
+        return "n1_safety_gate_shift";
+    }
+    if (n1MedianLockRejects(min_median_lock_epochs, lock_counts)) {
+        return "n1_safety_gate_median_lock";
+    }
+    return nullptr;
+}
+
 inline bool applyGpsL5MeasurementErrorFactor(
     bool madoca_per_frequency,
     SignalType primary_signal,
