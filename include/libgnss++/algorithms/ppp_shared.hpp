@@ -195,14 +195,6 @@ struct PPPConfig {
     enum class ARMethod { DD_IFLC, DD_WLNL, DD_PER_FREQ };
     ARMethod ar_method = ARMethod::DD_IFLC;
     int wl_min_averaging_epochs = 20;
-    // Optional safety gates on the per-frequency (MADOCA) N1 acceptance, off by
-    // default. A fix is rejected, and the epoch stays wide-lane only, when the
-    // median lock count of the fixed satellites (epochs, so it depends on the
-    // data interval) is below ar_min_median_lock_epochs, or when the N1 update
-    // moves the position more than ar_max_fix_position_shift_m from the float
-    // position at AR entry. 0 / negative disable the respective gate.
-    int ar_min_median_lock_epochs = 0;
-    double ar_max_fix_position_shift_m = -1.0;
 
     // Motion model
     bool kinematic_mode = false;

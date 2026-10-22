@@ -387,14 +387,6 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
     ar_stage_telemetry_.last_n1_candidates = 0;
     ar_stage_telemetry_.last_n1_ratio = 0.0;
 
-    // Float position at AR entry, for the optional fixed-position shift gate.
-    const bool n1_shift_gate_enabled = ppp_config_.ar_max_fix_position_shift_m >= 0.0;
-    Vector3d float_position_at_entry = Vector3d::Zero();
-    if (n1_shift_gate_enabled) {
-        float_position_at_entry =
-            filter_state_.state.segment(filter_state_.pos_index, 3);
-    }
-
     const auto dump_position_covariance = [&](const char* stage) {
         if (!env_overrides_.pfdump) {
             return;
@@ -1218,39 +1210,6 @@ bool PPPProcessor::resolveAmbiguitiesPerFreq(const ObservationData& obs,
         ++ar_stage_telemetry_.wide_lane_only_epochs;
         ar_stage_telemetry_.last_stage =
             "wide_lane_only_fixed_position_std_gate";
-        last_ar_wide_lane_only_ = true;
-        return false;
-    }
-
-    // Optional safety gates (off by default): a fix that moves the position
-    // far from the float solution, or whose satellites were tracked only
-    // briefly, is dropped and the epoch keeps the wide-lane-only state.
-    double n1_fix_shift_m = 0.0;
-    if (n1_shift_gate_enabled) {
-        n1_fix_shift_m = (filter_state_.state.segment(filter_state_.pos_index, 3) -
-                          float_position_at_entry).norm();
-    }
-    std::vector<int> n1_lock_counts;
-    if (ppp_config_.ar_min_median_lock_epochs > 0) {
-        n1_lock_counts.reserve(n1_sel.size());
-        for (const int selected : n1_sel) {
-            const DdPair& pair = wl_pairs[static_cast<size_t>(selected)];
-            n1_lock_counts.push_back(
-                ambiguity_states_.at(cands[static_cast<size_t>(pair.sat)].sat)
-                    .lock_count);
-        }
-    }
-    const char* n1_safety_gate_stage = ppp_internal::n1SafetyGateRejectionStage(
-        ppp_config_.ar_max_fix_position_shift_m,
-        ppp_config_.ar_min_median_lock_epochs,
-        n1_fix_shift_m,
-        n1_lock_counts);
-    if (n1_safety_gate_stage != nullptr) {
-        filter_state_.state = wide_lane_state;
-        filter_state_.covariance = wide_lane_covariance;
-        last_fixed_ambiguities_ = nwl;
-        ++ar_stage_telemetry_.wide_lane_only_epochs;
-        ar_stage_telemetry_.last_stage = n1_safety_gate_stage;
         last_ar_wide_lane_only_ = true;
         return false;
     }

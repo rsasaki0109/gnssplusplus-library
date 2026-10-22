@@ -1,6 +1,5 @@
 #include <algorithm>
 #include <chrono>
-#include <cmath>
 #include <ctime>
 #include <exception>
 #include <filesystem>
@@ -94,8 +93,6 @@ struct Options {
     bool apply_static_anchor_blend = false;
     bool enable_ar = false;
     double ar_ratio_threshold = 3.0;
-    int ar_min_median_lock_epochs = 0;
-    double ar_max_fix_shift_m = -1.0;
     std::string ar_method = "iflc";
     double process_noise_iono = 0.0;
     bool process_noise_iono_set = false;
@@ -305,11 +302,6 @@ void printUsage(const char* program_name) {
         << "  --disable-ar            Disable PPP ambiguity fixing (default)\n"
         << "  --ar-ratio-threshold <value>\n"
         << "                          Ratio threshold for PPP ambiguity fixing (default: 3.0)\n"
-        << "  --ar-min-median-lock-epochs <n>\n"
-        << "                          per-freq AR: reject a fix whose median satellite lock is\n"
-        << "                          below n epochs (default: 0 = off; 60 for 30 s data)\n"
-        << "  --ar-max-fix-shift <m>  per-freq AR: reject a fix that moves the position more\n"
-        << "                          than m meters from the float position (default: off)\n"
         << "  --ar-method <name>      AR method: iflc, wlnl, per-freq (default: iflc);\n"
         << "                          per-freq enables uncombined estimated-STEC states\n"
         << "  --process-noise-accel-h <v>\n"
@@ -530,17 +522,6 @@ Options parseArguments(int argc, char* argv[]) {
             options.enable_ar = false;
         } else if (arg == "--ar-ratio-threshold" && i + 1 < argc) {
             options.ar_ratio_threshold = std::stod(argv[++i]);
-        } else if (arg == "--ar-min-median-lock-epochs" && i + 1 < argc) {
-            options.ar_min_median_lock_epochs = std::stoi(argv[++i]);
-            if (options.ar_min_median_lock_epochs < 0) {
-                argumentError("--ar-min-median-lock-epochs must not be negative", argv[0]);
-            }
-        } else if (arg == "--ar-max-fix-shift" && i + 1 < argc) {
-            options.ar_max_fix_shift_m = std::stod(argv[++i]);
-            if (!std::isfinite(options.ar_max_fix_shift_m) ||
-                options.ar_max_fix_shift_m < 0.0) {
-                argumentError("--ar-max-fix-shift must be a non-negative number", argv[0]);
-            }
         } else if (arg == "--ar-method" && i + 1 < argc) {
             options.ar_method = argv[++i];
         } else if (arg == "--process-noise-accel-h" && i + 1 < argc) {
@@ -1287,8 +1268,6 @@ int main(int argc, char* argv[]) {
         ppp_config.convergence_threshold_vertical =
             options.convergence_threshold_vertical;
         ppp_config.ar_ratio_threshold = options.ar_ratio_threshold;
-        ppp_config.ar_min_median_lock_epochs = options.ar_min_median_lock_epochs;
-        ppp_config.ar_max_fix_position_shift_m = options.ar_max_fix_shift_m;
         using ARMethod = libgnss::PPPProcessor::PPPConfig::ARMethod;
         if (options.ar_method == "iflc") {
             ppp_config.ar_method = ARMethod::DD_IFLC;
@@ -1762,10 +1741,6 @@ int main(int argc, char* argv[]) {
                     << "  \"phase_measurement_min_lock_count\": "
                     << ppp_config.phase_measurement_min_lock_count << ",\n"
                     << "  \"ar_ratio_threshold\": " << options.ar_ratio_threshold << ",\n"
-                    << "  \"ar_min_median_lock_epochs\": "
-                    << ppp_config.ar_min_median_lock_epochs << ",\n"
-                    << "  \"ar_max_fix_position_shift_m\": "
-                    << ppp_config.ar_max_fix_position_shift_m << ",\n"
                     << "  \"processed_epochs\": " << processed_epochs << ",\n"
                     << "  \"valid_solutions\": " << valid_solutions << ",\n"
                     << "  \"ppp_float_solutions\": " << ppp_float_solutions << ",\n"
