@@ -174,8 +174,9 @@ replay manifest.
 
 The mechanism tests and all 100 core CTest entries passed, but the full-data
 accuracy gate failed. The runtime/CLI/helper/test changes were **discarded**.
-This branch retains the original gate-coverage fix and the reproducible rejected
-experiments. Neither experiment justifies changing defaults or claiming safe
+The retained gate-coverage fix and reproducible rejected experiments are
+accompanied by a separate [trusted-history repair](rtk_trusted_history_rollback.md).
+Neither experiment justifies changing defaults or claiming safe
 reacquisition. Further work needs to explain incorrect ambiguity selection and
 state evolution across candidate rejection; another continuity threshold or
 confirmation count cannot be justified by these results.
@@ -186,10 +187,10 @@ Four native regression tests cover the fresh-anchor bypass, motion-consistent
 reacquisition after expiry, stale/future/nonfinite tracks, disabled/bootstrap/
 moving-base behavior and rejection before hold/trusted-state mutation. The old
 library reproduces the bypass failures. The complete Release build succeeds.
-After discarding both experiments and rebuilding the retained implementation,
+At restoration checkpoint `6473615a`, after discarding both experiments,
 all 100 core CTest entries pass with
 `CPLUS_INCLUDE_PATH=/workspace/scratch/gnss-deps/include/eigen3` for the two
 helper-compilation tests with a hardcoded system Eigen location. No test source
-was changed for that environment issue. The restored executable is byte-identical
+was changed for that environment issue. That checkpoint's executable is byte-identical
 to the gate-coverage binary used before these experiments. Optional GTSAM,
 OpenCV, ROS2 and Python bindings were not built.

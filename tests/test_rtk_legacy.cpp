@@ -48,6 +48,11 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(has_last_fixed_time_)
     GNSSPP_RTK_TEST_MEMBER(last_trusted_position_)
     GNSSPP_RTK_TEST_MEMBER(has_last_trusted_position_)
+    GNSSPP_RTK_TEST_MEMBER(last_trusted_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_last_trusted_time_)
+    GNSSPP_RTK_TEST_MEMBER(prev_trusted_position_)
+    GNSSPP_RTK_TEST_MEMBER(prev_trusted_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_prev_trusted_position_)
     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_position_ecef_)
     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_time_)
     GNSSPP_RTK_TEST_MEMBER(has_doppler_continuity_position_)
@@ -73,6 +78,7 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_METHOD(solveLAMBDA)
     GNSSPP_RTK_TEST_METHOD(validateAmbiguityResolution)
     GNSSPP_RTK_TEST_METHOD(validateFixedSolution)
+    GNSSPP_RTK_TEST_METHOD(rememberSolution)
     GNSSPP_RTK_TEST_METHOD(varerr)
     GNSSPP_RTK_TEST_METHOD(tryHoldFix)
     GNSSPP_RTK_TEST_METHOD(applyHoldAmbiguity)
@@ -92,6 +98,80 @@ struct RTKProcessorTestAccess {
 
 using namespace libgnss;
 using Peer = RTKProcessorTestAccess;
+
+TEST(RTKTrustedHistoryTest, SameEpochFloatAndFixedReplaceCurrentSampleWithoutAdvancingHistory) {
+    RTKProcessor processor;
+    auto sample = [](double tow, double east, SolutionStatus status) {
+        PositionSolution solution;
+        solution.time = GNSSTime(2300, tow);
+        solution.status = status;
+        solution.num_satellites = 8;
+        solution.position_ecef = Vector3d(6378137, east, 0);
+        return solution;
+    };
+    const auto first = sample(100, 0, SolutionStatus::FIXED);
+    const auto next = sample(101, 1, SolutionStatus::FLOAT);
+    Peer::rememberSolution(processor, first);
+    Peer::rememberSolution(processor, next);
+    for (const auto& same_epoch : {sample(101, 1.1, SolutionStatus::FLOAT),
+                                   sample(101, 1.2, SolutionStatus::FIXED)}) {
+        Peer::rememberSolution(processor, same_epoch);
+        EXPECT_EQ(Peer::last_trusted_position_(processor), same_epoch.position_ecef);
+        EXPECT_EQ(Peer::prev_trusted_position_(processor), first.position_ecef);
+        EXPECT_DOUBLE_EQ(Peer::prev_trusted_time_(processor).tow, 100);
+        EXPECT_DOUBLE_EQ(Peer::last_trusted_time_(processor).tow, 101);
+        const auto velocity = float_trust_policy::estimateVelocityFromTrustedDeltas(
+            Peer::last_trusted_position_(processor), Peer::prev_trusted_position_(processor),
+            Peer::last_trusted_time_(processor) - Peer::prev_trusted_time_(processor), 10.0);
+        EXPECT_NEAR(velocity.y(), same_epoch.position_ecef.y(), 1e-9);
+    }
+}
+
+TEST(RTKTrustedHistoryTest, RejectedFloatRestoresBothTrustSamplesAndPreviousPresenceFlag) {
+    const auto nav = synthetic_rtk_scene::constellation();
+    const Vector3d base_position(6378137, 0, 0);
+    const Vector3d rover_position = base_position + Vector3d(40, 30, 10);
+    const auto prns = synthetic_rtk_scene::visible(
+        nav, synthetic_rtk_scene::epochTime(0), rover_position, 15);
+    ASSERT_GE(prns.size(), 6U);
+    for (bool previous_present : {false, true}) {
+        SCOPED_TRACE(previous_present);
+        RTKProcessor processor;
+        auto config = processor.getRTKConfig();
+        config.ratio_threshold = 1e9;
+        config.ambiguity_ratio_threshold = 1e9;
+        config.elevation_mask = 5 * M_PI / 180;
+        processor.setRTKConfig(config);
+        ProcessorConfig spp_config;
+        spp_config.elevation_mask = 5;
+        ASSERT_TRUE(processor.initialize(spp_config));
+        processor.setBasePosition(base_position);
+        auto process = [&](double offset) {
+            const auto time = synthetic_rtk_scene::epochTime(offset);
+            return processor.processRTKEpoch(
+                synthetic_rtk_scene::observations(nav, time, rover_position, 30, prns, 0),
+                synthetic_rtk_scene::observations(nav, time, base_position, 10, prns, 500), nav);
+        };
+        ASSERT_TRUE(process(0).isValid());
+        ASSERT_TRUE(Peer::has_last_trusted_position_(processor));
+        const Vector3d trusted = Peer::last_trusted_position_(processor);
+        const GNSSTime trusted_time = Peer::last_trusted_time_(processor);
+        const Vector3d previous = trusted - Vector3d(0, 1, 0);
+        Peer::prev_trusted_position_(processor) = previous;
+        Peer::prev_trusted_time_(processor) = trusted_time - 1;
+        Peer::has_prev_trusted_position_(processor) = previous_present;
+        config.max_float_spp_divergence_m = 1e-8;
+        processor.setRTKConfig(config);
+        const auto rejected = process(0.2);
+        ASSERT_EQ(rejected.status, SolutionStatus::SPP);
+        ASSERT_GT(processor.getLastDebugTelemetry().float_update_observation_count, 0);
+        EXPECT_EQ(Peer::last_trusted_position_(processor), trusted);
+        EXPECT_DOUBLE_EQ(Peer::last_trusted_time_(processor) - trusted_time, 0);
+        EXPECT_EQ(Peer::has_prev_trusted_position_(processor), previous_present);
+        EXPECT_EQ(Peer::prev_trusted_position_(processor), previous);
+        EXPECT_DOUBLE_EQ(Peer::prev_trusted_time_(processor) - (trusted_time - 1), 0);
+    }
+}
 
 TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
     RTKProcessor processor;
@@ -1618,7 +1698,13 @@ protected:
         Peer::has_fixed_solution_(processor) = true;
 
         Outcome out;
+        const VectorXd float_state_before_ar = fs.state;
+        const MatrixXd float_covariance_before_ar = fs.covariance;
         out.resolved = Peer::resolveAmbiguities(processor, pairs);
+        // Integer search produces a candidate; it must not commit a conditional
+        // update to the FLOAT filter before the acceptance gates run.
+        EXPECT_EQ(fs.state, float_state_before_ar);
+        EXPECT_EQ(fs.covariance, float_covariance_before_ar);
         out.has_fixed_solution = Peer::has_fixed_solution_(processor);
         out.fixed_baseline = Peer::fixed_baseline_(processor);
         for (const auto& pair : Peer::last_dd_pairs_(processor)) {
