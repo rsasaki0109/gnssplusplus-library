@@ -8,6 +8,7 @@
 #include <libgnss++/algorithms/pseudorange_remasking.hpp>
 #include <libgnss++/algorithms/fgo_quality_anchor.hpp>
 #include <libgnss++/algorithms/fgo_ddpr_gnc.hpp>
+#include <libgnss++/algorithms/course_attitude_seeds.hpp>
 #include <libgnss++/algorithms/hardware_clock_reset.hpp>
 #include <libgnss++/algorithms/pdc_state_bridge.hpp>
 #include <libgnss++/algorithms/residual_ionosphere_contract.hpp>
@@ -1312,6 +1313,21 @@ TEST(HardwareClockResetTest, MarksOnlyListedRawEpochsAsClockJumps) {
     const auto reset=FGOProcessor(config).buildPseudorangeProblem(raw,nav);
     ASSERT_EQ(reset.clock_jumps.size(),3U);
     EXPECT_EQ(reset.clock_jumps,(std::vector<bool>{false,false,true}));
+}
+
+TEST(CourseAttitudeSeedsTest, FillsSlowEpochsFromTheNearestMovingCourse) {
+    namespace cas=libgnss::course_attitude_seeds;
+    const std::vector<Eigen::Vector3d> v{
+        {0.0,1.0,0.0},{0.0,10.0,0.0},{1.0,0.5,0.0},{-10.0,0.0,0.5},{0.0,0.0,0.0}};
+    const auto course=cas::filledCourse(v);
+    ASSERT_EQ(course.size(),5U);
+    EXPECT_DOUBLE_EQ(course[0],M_PI/2);  // leading slow epoch takes the first moving course
+    EXPECT_DOUBLE_EQ(course[1],M_PI/2);  // north
+    EXPECT_DOUBLE_EQ(course[2],M_PI/2);  // slow: previous moving course
+    EXPECT_DOUBLE_EQ(course[3],M_PI);    // west
+    EXPECT_DOUBLE_EQ(course[4],M_PI);
+    EXPECT_THROW(cas::filledCourse({{0.0,1.0,0.0}}),std::invalid_argument);
+    EXPECT_THROW(cas::filledCourse({{std::nan(""),10.0,0.0}}),std::invalid_argument);
 }
 
 TEST(FGORefinementBuilderTest, EstimatesDriftBeforeRejectingRowsUsingUnobservedSeeds) {

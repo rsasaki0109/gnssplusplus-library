@@ -187,6 +187,32 @@
       "rule": "drop the seeds only where the optimized yaw slips a full turn (p95 deviation of body yaw minus course from its median above 90 deg); among the 40 test drives under the current recipe that is ebf-z alone (A505U slips without seeds and is open)",
       "train_evidence_note": "14 checked train Pixel5 drives with seeds show no slip (p95 deviation at most 1.8 deg), so the rule changes no train drive; the evidence is truth-free",
       "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.19 -> 0.16 m, P95 1.01 -> 0.42 m; the seeded GCC control reproduces the submitted rows (P95 1.01 m)"
+    },
+    {
+      "ref": 57600830,
+      "sha256": "a7242b5646da84026f992035eac7d65217a95d5cc214b8fe96622b3c9b781716",
+      "base_ref": 57594243,
+      "base_sha256": "2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e",
+      "private_m": 0.845,
+      "public_m": 0.884,
+      "base_private_m": 0.862,
+      "base_public_m": 0.884,
+      "rows": 71936,
+      "retained_rows_byte_identical": "69552/69552",
+      "replaced": {
+        "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": {
+          "rows": 2384,
+          "solution_sha256": "d68137e10ebb1d10acdbccd6796f6f3232f68a4acb659b9eda800eab3e7eb768",
+          "added_flags": [
+            "--native-course-attitude-seeds-mount-deg",
+            "178.9"
+          ]
+        }
+      },
+      "cause": "The IMU-stage yaw slipped one full turn between epochs 800 and 1400, a local minimum: with yaw = GNSS course + a constant 178.9 deg mount, the 1-s accelerometer matches the GNSS acceleration (along-track residual ~0, constant -0.5 m/s^2 cross-track), while dead-reckoned, velocity-heading and blended seeds all converge to the slipped basin.",
+      "rule": "reseed only a drive whose yaw slips a full turn, with the mount estimated from the slip-free part of its first solution; keep the reseeded run only if the slip disappears and final-vs-GNSS-first P95 drops (A505U: 2.91 -> 1.38 m)",
+      "train_evidence_note": "no train drive slips, so the rule changes no train score; course seeds on all five Samsung train drives leave four within 0.001 m and make mtv-n A205U worse (1.772 -> 5.675 m), which the final-vs-GNSS-first check flags (P95 2.32 -> 8.86 m)",
+      "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.42 -> 0.34 m, P95 2.15 -> 0.88 m"
     }
   ],
   "rejected_on_train": {
@@ -195,10 +221,10 @@
     "per_drive_imu_time_offset_from_truth_lag": "+0.001 m mean over 15 drives",
     "epoch_heading_seeds_all_phones": "pixel4 mtv-b -0.24, pixel4xl +1.00, five drives unchanged",
     "zero_bias_initialization_all_static_drives": "pixel4 mtv-b -0.240, pixel4xl mtv-b +1.000, 12 drives within 0.001 m",
-    "source_phone_imu_noise_samsung": "7 of 8 Samsung train drives worse, 1 unchanged, mean 1.305 -> 1.420 m (it shortened A505U test P95 to taroz 2.15 -> 1.45 m without removing the yaw slip)"
+    "source_phone_imu_noise_samsung": "7 of 8 Samsung train drives worse, 1 unchanged, mean 1.305 -> 1.420 m (it shortened A505U test P95 to taroz 2.15 -> 1.45 m without removing the yaw slip)",
+    "course_attitude_seeds_all_samsung": "four of five Samsung train drives within 0.001 m, mtv-n A205U 1.772 -> 5.675 m (23.8 m with dead-reckoned roll/pitch)"
   },
   "open_issues": {
-    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "IMU-stage yaw slips one full turn between epochs 800 and 1400; the optimized relative rotations leave the integrated gyro by up to 0.65 deg per epoch between epochs 1000 and 1400. Not fixed by zero-bias initialization (P95 to taroz 2.15 -> 2.67 m), epoch heading seeds (2.67 m), dropping stop constraints (2.13 m) or an IMU time offset (inactive without UTC fallback)",
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "taroz uses IdxStart=600 and fills epochs 0-598 with the nearest solution; solving from epoch 599 still leaves the stationary segment 1.4-1.7 m from taroz"
   },
   "reference_targets": {
