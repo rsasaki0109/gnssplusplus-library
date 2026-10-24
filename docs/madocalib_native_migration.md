@@ -805,6 +805,116 @@ from 993 to 2,794.
 There is no MADOCA data from a moving receiver.  The change only drops the
 rejection under a condition that does not depend on motion.
 
+#### Remaining wrong Fix in 24 h kinematic runs: findings and rejected fixes (2026-10-24)
+
+No code change came out of this work.  It records what the remaining wrong
+Fix is and which fixes were tried and rejected, so they are not retried
+blindly.
+
+**Data.** Static IGS stations processed `--kinematic` for 24 h with L6E (and
+L6D for `pppar-ion`) on three development days: 2025-04-01, 2025-04-10 and
+2025-04-30.  On 2025-04-01 they are MIZU, ALIC and the development
+stations above; on the two later days, every station that meets the held-out
+rule above.  2025-04-30 was first the held-out day of the gate below, and was
+used for development only after that check.  The truth and the 0.20 m
+wrong-Fix threshold are as above.  155 station-days are usable: 8
+truth-inconsistent station-days and 1 unreadable RINEX file are excluded.
+
+| profile | Fix | wrong Fix | 0.20-0.30 m | > 0.30 m |
+|---|---:|---:|---:|---:|
+| `pppar` | 355,513 | 1,287 (0.36 %) | 820 | 467 |
+| `pppar-ion` | 351,840 | 1,242 (0.35 %) | 830 | 412 |
+
+**What the remaining wrong Fix is.**
+
+- **The float solution is already off.** On 2025-04-01 and 2025-04-10 (both
+  profiles), there were 1,969 wrong-Fix epochs.  At 1,271 of them (65 %), the
+  float state just before the ambiguity resolution was already more than
+  0.20 m from the truth.  It was within 0.10 m at only 33 (1.7 %).
+- **It is not an integer error.** The fix moves the position by only 1-7 cm.
+  Inside the wrong-Fix windows the fixed integer set hardly changes.  The
+  error varies smoothly, not in steps.
+- **The error is vertical.** It is 10-25 cm, lasts about 1-1.5 h, and the
+  horizontal part is 0-5 cm.
+- **It is concentrated at low latitudes.** On 2025-04-30 (`pppar`), the
+  wrong-Fix rate was 1.28 % of Fix within 10° of the equator and 0.14 % at
+  30° or more.
+- **It is not station-specific.** Stations up to 1,900 km apart in the
+  western Pacific show it at the same time and in the same direction.  It
+  also appears in a GPS-only float solution with IGS final orbits and clocks,
+  so it is not specific to the MADOCA products.  Antenna models and the
+  truth do not explain it: for example, NTUS has a 24 h static solution
+  within 1.0 cm of the truth and still shows +20 cm windows.
+- **L6D makes no difference.** For the stations outside the L6D coverage,
+  `pppar` and `pppar-ion` are identical.
+
+**Rejected: an AR acceptance gate.**
+
+- **The gate:** reject an N1 set when the median lock of its satellites is
+  under 60 epochs (30 min at 30 s), or when the fix moves the position by more
+  than 0.10 m.  A rejected epoch stays wide-lane only.
+- **Development (2025-04-01 and 2025-04-10):** wrong Fix fell by about 55 %.
+- **Held-out check (2025-04-30, 58 usable stations), frozen before the data
+  was fetched:**
+  - `pppar`: wrong Fix 405 -> 238 (58.8 %).
+  - `pppar-ion`: 381 -> 262 (68.8 %), above the frozen 60 % limit.
+  - Wrong Fix above 0.30 m fell from 116 to 13 and from 69 to 4.
+  - Correct Fix fell by about 2 %, and the median time to first Fix grew by
+    11 min.
+- **Why it fell short:** the wrong Fix that remains comes from mature
+  ambiguities (400-1,900 epochs of lock) whose fix moves the position by only
+  1-7 cm, so the gate passes it.
+
+**Rejected: troposphere modelling.** All tried on the three development days:
+
+- **What was tried:**
+  - the ZTD process noise scaled by 0.5 to 4;
+  - the wet mapping function for the estimated ZTD, as MADOCALIB does;
+  - horizontal gradients;
+  - an elevation-dependent wet model variance.
+- **The vertical wobble does not move.** Its correlation with the unchanged
+  run is 0.95-0.999, and the estimated ZTD hardly moves in the wobble windows.
+- **The wet mapping removes only the mean bias.** The mean vertical error of
+  the low-latitude Fix goes from −2.1 cm to +0.1 cm.
+- **Wrong Fix does not fall.** In `pppar` it goes from 1,287 to 1,368 with the
+  wet mapping, and to 1,250 with the gradients added.
+- **The release matrix fails.** In the ALIC `pppar-ion` 6 h case, the largest
+  3D difference from MADOCALIB rises from 0.277 m to 0.356 m, above its
+  0.291 m limit.
+
+**Rejected for now: ionosphere settings.**
+
+- **The ionosphere explains only part of it.** A rate-of-TEC index (ROTI) was
+  computed from each station's own phase data.
+  - The 30-min low-latitude windows with ROTI ≥ 0.5 TECU/min (4.5 % of them)
+    are about 10 times as likely to have a vertical wobble above 10 cm.
+  - They hold only about 10-14 % of the low-latitude wrong Fix.
+  - Wrong Fix above 0.30 m is more tied to them: about 46 % of it (all
+    stations) falls in windows where some satellite above 30° has ROTI ≥ 1.
+  - The high-ROTI windows are after local sunset, which is consistent with
+    equatorial plasma bubbles.
+- **What was tried (`pppar`, 155 station-days):**
+
+| setting | wrong Fix | > 0.30 m | correct Fix |
+|---|---:|---:|---:|
+| unchanged | 1,287 | 467 | 354,226 |
+| `--process-noise-iono 2e-4` (× 2) | 1,177 | 496 | 357,759 |
+| `--process-noise-iono 4e-4` (× 4) | 1,105 | 440 | 358,626 |
+| per satellite × (1 + (ROTI / 0.5)²), at most × 100 | 1,225 | 455 | 355,490 |
+| no N1 fix for 30 min after station ROTI > 0.5 | 1,197 | 444 | 351,864 |
+
+- **The larger process noise helps the 0.20-0.30 m class and availability,
+  but not the large errors.**
+  - It reduces the 0.20-0.30 m wrong Fix and adds about 1 % correct Fix.
+  - The wrong Fix above 0.30 m does not fall.  At × 4 with `pppar-ion`, it
+    rises at mid and high latitudes.
+  - Most of the wrong-Fix reduction comes from a few station-days.  At × 4,
+    the three most improved ones account for 126 of the 182.
+- **The ROTI-based settings help only in the rare disturbed windows.**
+
+None of these settings is recommended.  The default ionosphere process noise
+(1e-4 m²/s) matches MADOCALIB's `stats-prniono`.
+
 ### M6 -- Complete the migration
 
 - Promote native behavior only after M2--M5 pass with an explicit opt-out for

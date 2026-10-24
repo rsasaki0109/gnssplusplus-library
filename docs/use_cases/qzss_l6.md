@@ -150,6 +150,28 @@ reports `"madoca_l6d_outside_coverage": true` and
 
 A missing, unreadable or undecodable L6D file is still a fatal error.
 
+### Fix accuracy at low latitudes
+
+The data: static IGS stations, processed `--kinematic` for 24 h, on three
+days in April 2025.  On those days, about 0.36 % of the Fix epochs were more
+than 0.20 m (3D) from the IGS20 daily truth.  Most of them were 0.20-0.30 m.
+
+- **Where:** these wrong Fix are concentrated within about 10° of the
+  equator.  There the rate was 1.28 % of the Fix on one day, against 0.14 % at
+  30° or more.
+- **What it is:** they are vertical errors of 10-25 cm, lasting about
+  1-1.5 h, that are already in the float solution.  The ambiguities are not
+  wrong.
+- **Larger errors:** larger ones occur after local sunset, when the
+  ionosphere is disturbed.
+- **No setting removes them:** AR acceptance gates, troposphere models and
+  ionosphere process noise were tested, and none of them removed these errors
+  reliably.
+
+Treat a low-latitude MADOCA Fix as good to a few decimetres vertically, not
+centimetres.  The measurements are in the
+[MADOCALIB migration notes](../madocalib_native_migration.md).
+
 ## Supported boundary and next step
 
 The current boundaries are intentionally specific:
