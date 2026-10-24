@@ -136,6 +136,7 @@ struct SolveConfig {
     int min_hold_count = 5;
     double hold_ratio_threshold = 2.0;
     bool hold_fix_unchanged_set = false;
+    bool kf_relinearize_from_epoch_prior = false;
     int hold_fix_min_matched_pairs = 4;
     int min_fix_satellites = 0;
     double elevation_mask_deg = 15.0;
@@ -1549,6 +1550,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --min-hold-count <n>       Consecutive fixes before hold ambiguity is allowed (default: 5)\n"
         << "  --hold-ratio-threshold <v> Ratio threshold used while hold ambiguity is active (default: 2.0)\n"
         << "  --hold-fix-unchanged-set   Reject the hold-fix fallback when a DD pair has no held integer (default: off)\n"
+        << "  --kf-relinearize-from-prior\n"
+        << "                             Apply relinearized KF passes to the epoch prior instead\n"
+        << "                             of re-counting rows on the posterior (default: off)\n"
         << "  --hold-fix-min-matched-pairs <n>\n"
         << "                             Min held DD pairs for the hold-fix fallback (default: 4)\n"
         << "  --min-fix-satellites <k>\n"
@@ -1609,7 +1613,7 @@ void printAdvancedUsage(const char* program_name) {
         << "  --max-fixed-anchor-age <s> Expire the last-FIX jump reference after s seconds\n"
         << "                             (default: 0, disabled)\n"
         << "  --max-fixed-doppler-consensus <m>\n"
-        << "                             Max FIX distance from Doppler-integrated track\n"
+        << "                             Max AR/hold FIX distance from current Doppler track\n"
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
         << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
@@ -2559,6 +2563,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--pos-fix-diagnostics") {
             config.pos_fix_diagnostics = true;
+            continue;
+        }
+        if (arg == "--kf-relinearize-from-prior") {
+            config.kf_relinearize_from_epoch_prior = true;
             continue;
         }
         if (arg == "--hold-fix-unchanged-set") {
@@ -3740,6 +3748,7 @@ int main(int argc, char* argv[]) {
         rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
         rtk_config.min_hold_count = config.min_hold_count;
         rtk_config.hold_fix_unchanged_set_only = config.hold_fix_unchanged_set;
+        rtk_config.kf_relinearize_from_epoch_prior = config.kf_relinearize_from_epoch_prior;
         rtk_config.hold_fix_min_matched_pairs = config.hold_fix_min_matched_pairs;
         rtk_config.min_fix_satellites = config.min_fix_satellites;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;

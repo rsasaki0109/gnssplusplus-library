@@ -1,0 +1,123 @@
+diff --git a/src/algorithms/rtk_epoch.cpp b/src/algorithms/rtk_epoch.cpp
+index 4b769799..c97bef39 100644
+--- a/src/algorithms/rtk_epoch.cpp
++++ b/src/algorithms/rtk_epoch.cpp
+@@ -59,8 +59,19 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
+     // SPP-style Doppler LS directly on the rover observations here -- no
+     // dependency on RTK's DD/ambiguity state, just broadcast ephemeris +
+     // Doppler, per docs/design.md.
+-    if (solution.isValid() &&
+-        (!solution.has_velocity || rtk_config_.max_fixed_doppler_consensus_m > 0.0)) {
++    // A missing RTK/SPP position is not necessarily a missing Doppler epoch.
++    // Keep the enabled continuity track independent of position availability:
++    // its current propagated position is sufficient to linearize Doppler LS.
++    // A stale/missing track cannot be used to manufacture a velocity update.
++    const bool maintain_doppler_track =
++        rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
++        has_doppler_continuity_position_ &&
++        doppler_continuity_position_ecef_.allFinite() &&
++        std::isfinite(rover_obs.time - doppler_continuity_time_) &&
++        std::abs(rover_obs.time - doppler_continuity_time_) <= 1e-6;
++    if ((solution.isValid() &&
++         (!solution.has_velocity || rtk_config_.max_fixed_doppler_consensus_m > 0.0)) ||
++        maintain_doppler_track) {
+         const Vector3d velocity_linearization_position =
+             rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
+                     has_doppler_continuity_position_
+@@ -73,11 +84,17 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
+             std::chrono::duration<double, std::milli>(
+                 std::chrono::steady_clock::now() - velocity_started)
+                 .count();
+-        if (velocity_result.ok) {
++        if (velocity_result.ok && solution.isValid()) {
+             solution.velocity_ecef = velocity_result.velocity_ecef;
+             solution.velocity_covariance = velocity_result.velocity_covariance;
+             solution.has_velocity = true;
+             solution.receiver_clock_drift = velocity_result.receiver_clock_drift;
++        } else if (velocity_result.ok && maintain_doppler_track) {
++            // Refresh only from actual rover Doppler, without creating a
++            // position output or trusting the rejected RTK candidate.
++            last_doppler_velocity_ecef_ = velocity_result.velocity_ecef;
++            last_doppler_velocity_time_ = rover_obs.time;
++            has_last_doppler_velocity_ = true;
+         }
+     }
+ 
+diff --git a/tests/test_rtk_legacy.cpp b/tests/test_rtk_legacy.cpp
+index e988e984..21b1c311 100644
+--- a/tests/test_rtk_legacy.cpp
++++ b/tests/test_rtk_legacy.cpp
+@@ -51,6 +51,9 @@ struct RTKProcessorTestAccess {
+     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_position_ecef_)
+     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_time_)
+     GNSSPP_RTK_TEST_MEMBER(has_doppler_continuity_position_)
++    GNSSPP_RTK_TEST_MEMBER(last_doppler_velocity_ecef_)
++    GNSSPP_RTK_TEST_MEMBER(last_doppler_velocity_time_)
++    GNSSPP_RTK_TEST_MEMBER(has_last_doppler_velocity_)
+     GNSSPP_RTK_TEST_MEMBER(consecutive_fix_count_)
+     GNSSPP_RTK_TEST_MEMBER(lock_count_l1_)
+     GNSSPP_RTK_TEST_MEMBER(last_dd_pairs_)
+@@ -190,6 +193,63 @@ TEST(RTKDopplerConsensusTest, StaleTrackRejectsButDisabledGateAndBootstrapRemain
+     EXPECT_TRUE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+ }
+ 
++TEST(RTKDopplerConsensusTest, DopplerOnlyObservationsMaintainTrackWithoutPositionOutput) {
++    const auto nav = synthetic_rtk_scene::constellation();
++    const Vector3d rover_position(6378177.0, 30.0, 10.0);
++    const auto initial_time = synthetic_rtk_scene::epochTime(0.0);
++    const auto prns = synthetic_rtk_scene::visible(nav, initial_time, rover_position, 15.0);
++    ASSERT_GE(prns.size(), 6U);
++    RTKProcessor processor;
++    auto config = processor.getRTKConfig();
++    config.max_fixed_doppler_consensus_m = 3.0;
++    processor.setRTKConfig(config);
++    processor.setBasePosition(Vector3d(6378137.0, 0.0, 0.0));
++    Peer::has_doppler_continuity_position_(processor) = true;
++    Peer::doppler_continuity_position_ecef_(processor) = rover_position;
++    Peer::doppler_continuity_time_(processor) = initial_time;
++    Peer::has_last_doppler_velocity_(processor) = true;
++    Peer::last_doppler_velocity_ecef_(processor) = Vector3d::Zero();
++    Peer::last_doppler_velocity_time_(processor) = initial_time;
++    for (int epoch = 1; epoch <= 20; ++epoch) {
++        const auto time = synthetic_rtk_scene::epochTime(0.2 * epoch);
++        auto rover = synthetic_rtk_scene::observations(
++            nav, time, rover_position, 0.0, prns, 0.0, true);
++        for (auto& observation : rover.observations) {
++            observation.has_pseudorange = false;
++            observation.has_carrier_phase = false;
++        }
++        const auto solution = processor.processRTKEpoch(rover, ObservationData(time), nav);
++        // No code or phase position is available, but rover Doppler remains usable.
++        EXPECT_FALSE(solution.isValid());
++        EXPECT_TRUE(Peer::has_doppler_continuity_position_(processor));
++        EXPECT_NEAR(time - Peer::last_doppler_velocity_time_(processor), 0.0, 1e-8);
++        EXPECT_NEAR(time - Peer::doppler_continuity_time_(processor), 0.0, 1e-8);
++        EXPECT_LT(Peer::last_doppler_velocity_ecef_(processor).norm(), 0.1);
++        EXPECT_LT((Peer::doppler_continuity_position_ecef_(processor) - rover_position).norm(), 0.5);
++    }
++}
++
++TEST(RTKDopplerConsensusTest, MissingDopplerCannotRefreshVelocityOrPreserveTrackIndefinitely) {
++    RTKProcessor processor;
++    auto config = processor.getRTKConfig();
++    config.max_fixed_doppler_consensus_m = 3.0;
++    processor.setRTKConfig(config);
++    const auto initial_time = synthetic_rtk_scene::epochTime(0.0);
++    Peer::has_doppler_continuity_position_(processor) = true;
++    Peer::doppler_continuity_position_ecef_(processor) = Vector3d(6378177.0, 30.0, 10.0);
++    Peer::doppler_continuity_time_(processor) = initial_time;
++    Peer::has_last_doppler_velocity_(processor) = true;
++    Peer::last_doppler_velocity_ecef_(processor) = Vector3d::Zero();
++    Peer::last_doppler_velocity_time_(processor) = initial_time;
++    for (int epoch = 1; epoch <= 25; ++epoch) {
++        const auto time = synthetic_rtk_scene::epochTime(0.2 * epoch);
++        const auto solution = processor.processRTKEpoch(ObservationData(time), ObservationData(time), NavigationData{});
++        EXPECT_FALSE(solution.isValid());
++        EXPECT_NEAR(Peer::last_doppler_velocity_time_(processor) - initial_time, 0.0, 1e-8);
++    }
++    EXPECT_FALSE(Peer::has_doppler_continuity_position_(processor));
++}
++
+ namespace {
+ 
+ std::string sourcePath(const std::string& relative_path) {

@@ -325,9 +325,19 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             max_kf_iterations = 2;
         }
         const auto filter_started = std::chrono::steady_clock::now();
+        // Later passes only relinearize this epoch's measurements. Opt-in:
+        // apply them to the epoch prior instead of counting them again on
+        // the posterior.
+        const bool relinearize_from_prior = rtk_config_.kf_relinearize_from_epoch_prior;
+        if (relinearize_from_prior) {
+            iterated_update_prior_state_ = filter_state_.state;
+            iterated_update_prior_covariance_ = filter_state_.covariance;
+        }
         for (int iter = 0; iter < max_kf_iterations; ++iter) {
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
+            has_iterated_update_prior_ = relinearize_from_prior && iter > 0;
             filter_ok = updateFilter(sat_data);
+            has_iterated_update_prior_ = false;
             if (!filter_ok) break;
             if (iter == 0 && filter_state_.covariance.rows() >= 3) {
                 first_pass_position_covariance_ =
@@ -368,19 +378,28 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             const bool saved_has_last_trusted = has_last_trusted_position_;
             const GNSSTime saved_last_trusted_time = last_trusted_time_;
             const bool saved_has_last_trusted_time = has_last_trusted_time_;
+            const Vector3d saved_prev_trusted_position = prev_trusted_position_;
+            const GNSSTime saved_prev_trusted_time = prev_trusted_time_;
+            const bool saved_has_prev_trusted = has_prev_trusted_position_;
             fixed_update_gate_previous_position_ = saved_last_solution_position;
             fixed_update_gate_previous_time_ = saved_last_solution_time;
             has_fixed_update_gate_previous_solution_ =
                 saved_has_last_solution && saved_has_last_solution_time;
+            auto restoreTrustedState = [&]() {
+                last_trusted_position_ = saved_last_trusted_position;
+                has_last_trusted_position_ = saved_has_last_trusted;
+                last_trusted_time_ = saved_last_trusted_time;
+                has_last_trusted_time_ = saved_has_last_trusted_time;
+                prev_trusted_position_ = saved_prev_trusted_position;
+                prev_trusted_time_ = saved_prev_trusted_time;
+                has_prev_trusted_position_ = saved_has_prev_trusted;
+            };
             auto restoreRememberedState = [&]() {
                 last_solution_position_ = saved_last_solution_position;
                 has_last_solution_position_ = saved_has_last_solution;
                 last_epoch_time_ = saved_last_solution_time;
                 has_last_epoch_ = saved_has_last_solution_time;
-                last_trusted_position_ = saved_last_trusted_position;
-                has_last_trusted_position_ = saved_has_last_trusted;
-                last_trusted_time_ = saved_last_trusted_time;
-                has_last_trusted_time_ = saved_has_last_trusted_time;
+                restoreTrustedState();
                 consecutive_high_float_residual_count_ = 0;
             };
             last_ar_ratio_ = 0.0;
@@ -707,10 +726,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         }
                         has_fixed_solution_ = false;
                         restoreHoldState(saved_hold_state);
-                        last_trusted_position_ = saved_last_trusted_position;
-                        has_last_trusted_position_ = saved_has_last_trusted;
-                        last_trusted_time_ = saved_last_trusted_time;
-                        has_last_trusted_time_ = saved_has_last_trusted_time;
+                        restoreTrustedState();
                     } else if (!moving_base_mode && shouldResetAfterFixedResidualGate()) {
                         if (rtk_config_.fixed_prefit_quarantine_only) {
                             debug_telemetry_.post_validation_rejected = true;
@@ -745,15 +761,12 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         debug_telemetry_.reject_reason = "fixed_validation";
                     }
                     has_fixed_solution_ = false;
-                    // Mirror the post-validation reject branch above: validateFixedSolution
-                    // ran after generateSolution(FIXED) which updated last_trusted_position_
-                    // via rememberSolution; if we don't roll those back, downstream epochs
-                    // see the rejected fix as "trusted" and fail deviatesTooFarFromSPP /
-                    // trusted-jump gates, cascading into fallback_spp and aborting the run.
-                    last_trusted_position_ = saved_last_trusted_position;
-                    has_last_trusted_position_ = saved_has_last_trusted;
-                    last_trusted_time_ = saved_last_trusted_time;
-                    has_last_trusted_time_ = saved_has_last_trusted_time;
+                    // Validation precedes FIX materialization, but this epoch's
+                    // provisional FLOAT has already called rememberSolution().
+                    // Restore both trust samples before trying the held integers;
+                    // the final kept FLOAT is remembered below. Post-validation
+                    // rejection likewise must discard provisional FIX history.
+                    restoreTrustedState();
                 }
             }
 
