@@ -1,0 +1,233 @@
+diff --git a/include/libgnss++/algorithms/rtk.hpp b/include/libgnss++/algorithms/rtk.hpp
+index a6b0d21..d0dde22 100644
+--- a/include/libgnss++/algorithms/rtk.hpp
++++ b/include/libgnss++/algorithms/rtk.hpp
+@@ -1995,6 +1995,12 @@ private:
+     Matrix3d first_pass_position_covariance_ = Matrix3d::Zero();
+     double first_pass_nis_per_observation_ = 0.0;
+     bool has_first_pass_covariance_ = false;
++    // Epoch prior for the relinearized measurement passes. While set,
++    // updateFilter() gates rows at the current iterate and applies them once
++    // to this prior (iterated EKF) instead of again to the posterior.
++    VectorXd iterated_update_prior_state_;
++    MatrixXd iterated_update_prior_covariance_;
++    bool has_iterated_update_prior_ = false;
+     Vector3d last_trusted_position_ = Vector3d::Zero();
+     bool has_last_trusted_position_ = false;
+     Vector3d fixed_update_gate_previous_position_ = Vector3d::Zero();
+diff --git a/src/algorithms/rtk_epoch.cpp b/src/algorithms/rtk_epoch.cpp
+index 1caa637..6ff4d47 100644
+--- a/src/algorithms/rtk_epoch.cpp
++++ b/src/algorithms/rtk_epoch.cpp
+@@ -325,9 +325,15 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
+             max_kf_iterations = 2;
+         }
+         const auto filter_started = std::chrono::steady_clock::now();
++        // Later passes only relinearize this epoch's measurements; they are
++        // applied to the epoch prior, not counted again on the posterior.
++        iterated_update_prior_state_ = filter_state_.state;
++        iterated_update_prior_covariance_ = filter_state_.covariance;
+         for (int iter = 0; iter < max_kf_iterations; ++iter) {
+             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
++            has_iterated_update_prior_ = iter > 0;
+             filter_ok = updateFilter(sat_data);
++            has_iterated_update_prior_ = false;
+             if (!filter_ok) break;
+             if (iter == 0 && filter_state_.covariance.rows() >= 3) {
+                 first_pass_position_covariance_ =
+diff --git a/src/algorithms/rtk_filter.cpp b/src/algorithms/rtk_filter.cpp
+index 24db4f5..f710240 100644
+--- a/src/algorithms/rtk_filter.cpp
++++ b/src/algorithms/rtk_filter.cpp
+@@ -422,7 +422,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
+ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
+     if (sat_data.size() < 4) return false;
+ 
+-    const auto blocks = buildMeasurementBlocks(sat_data);
++    auto blocks = buildMeasurementBlocks(sat_data);
+     const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
+     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
+         blocks, filter_state_.state.size());
+@@ -468,10 +468,73 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
+         !(std::isfinite(rtk_config_.max_fixed_update_nis_per_observation) &&
+           rtk_config_.max_fixed_update_nis_per_observation > 0.0);
+ 
+-    const double update_outlier_threshold =
++    const double configured_outlier_threshold =
+         rtk_config_.outlier_threshold > 0.0
+             ? rtk_config_.outlier_threshold
+             : 30.0;
++    double update_outlier_threshold = configured_outlier_threshold;
++
++    // Relinearized pass (iterated EKF): the rows were linearized at the
++    // current iterate x_i. Gate them there, as the first pass gates at the
++    // seed, then express the kept rows about the epoch prior x0,
++    //   r0' = r_i + H (x_i - x0),
++    // and apply them once to (x0, P0). Updating the posterior again would
++    // count the same rows twice and shrink the covariance by about half per
++    // pass. In a linear model this pass reproduces the first-pass solution.
++    int relinearization_suppressed = 0;
++    double relinearized_post_sum_sq = 0.0;
++    double relinearized_post_max_abs = 0.0;
++    int relinearized_rows = 0;
++    const bool relinearized_pass =
++        has_iterated_update_prior_ &&
++        iterated_update_prior_state_.size() == filter_state_.state.size() &&
++        iterated_update_prior_covariance_.rows() == filter_state_.state.size() &&
++        iterated_update_prior_covariance_.cols() == filter_state_.state.size();
++    VectorXd iterate_state;
++    MatrixXd iterate_covariance;
++    if (relinearized_pass) {
++        iterate_state = filter_state_.state;
++        iterate_covariance = filter_state_.covariance;
++        const VectorXd delta = filter_state_.state - iterated_update_prior_state_;
++        for (auto& block : blocks) {
++            const double block_threshold =
++                block.kind == rtk_measurement::MeasurementKind::DOPPLER &&
++                        rtk_config_.doppler_row_outlier_threshold_mps > 0.0
++                    ? rtk_config_.doppler_row_outlier_threshold_mps
++                    : configured_outlier_threshold;
++            for (auto& row : block.rows) {
++                ++relinearized_rows;
++                if (std::abs(row.residual) > block_threshold) {
++                    row.residual = 0.0;
++                    row.baseline_coefficients.setZero();
++                    row.state_coefficients.clear();
++                    ++relinearization_suppressed;
++                    continue;
++                }
++                relinearized_post_sum_sq += row.residual * row.residual;
++                relinearized_post_max_abs =
++                    std::max(relinearized_post_max_abs, std::abs(row.residual));
++                double correction = row.baseline_coefficients.dot(delta.head<3>());
++                for (const auto& coefficient : row.state_coefficients) {
++                    if (coefficient.state_index >= 0 &&
++                        coefficient.state_index < delta.size()) {
++                        correction += coefficient.coefficient * delta(coefficient.state_index);
++                    }
++                }
++                row.residual += correction;
++            }
++        }
++        filter_state_.state = iterated_update_prior_state_;
++        filter_state_.covariance = iterated_update_prior_covariance_;
++        measurement_system =
++            rtk_measurement::assembleMeasurementSystem(blocks, filter_state_.state.size());
++        // Already gated at the iterate; the re-expressed residuals are not
++        // geometric residuals and must not be gated again.
++        update_outlier_threshold = std::numeric_limits<double>::infinity();
++        measurement_system.row_outlier_thresholds.assign(
++            static_cast<size_t>(measurement_system.residuals.size()),
++            std::numeric_limits<double>::infinity());
++    }
+     bool adaptive_tracker_updated = false;
+     auto feed_adaptive_tracker =
+         [&](const std::vector<rtk_measurement::MeasurementBlock>& update_blocks,
+@@ -545,7 +608,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
+             doppler_blocks, filter_state_.state.size());
+         doppler_system.row_outlier_thresholds.assign(
+             static_cast<size_t>(doppler_system.residuals.size()),
+-            rtk_config_.doppler_row_outlier_threshold_mps);
++            relinearized_pass ? std::numeric_limits<double>::infinity()
++                              : rtk_config_.doppler_row_outlier_threshold_mps);
+ 
+         const VectorXd state_before_sequential = filter_state_.state;
+         const MatrixXd covariance_before_sequential = filter_state_.covariance;
+@@ -647,6 +711,24 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
+             measurement_system, rtk_measurement::MeasurementKind::PHASE);
+     }
+ 
++    if (relinearized_pass && !update_result.ok) {
++        // A failed pass leaves the previous iterate, as before.
++        filter_state_.state = iterate_state;
++        filter_state_.covariance = iterate_covariance;
++    }
++    if (relinearized_pass) {
++        // Keep the residual diagnostics in their geometric meaning: residuals
++        // at this pass's linearization point after its outlier gate.
++        update_result.suppressed_outliers += relinearization_suppressed;
++        update_result.prefit_residual_rms_m = measurement_diagnostics.residual_rms_m;
++        update_result.prefit_residual_max_abs_m = measurement_diagnostics.residual_max_abs_m;
++        update_result.post_suppression_residual_rms_m =
++            relinearized_rows > 0
++                ? std::sqrt(relinearized_post_sum_sq / static_cast<double>(relinearized_rows))
++                : 0.0;
++        update_result.post_suppression_residual_max_abs_m = relinearized_post_max_abs;
++    }
++
+     if (update_result.ok) {
+         const double correction_norm_m =
+             (filter_state_.state.head<3>() - position_before_update).norm();
+diff --git a/tests/test_rtk_legacy.cpp b/tests/test_rtk_legacy.cpp
+index 00205c6..00a9312 100644
+--- a/tests/test_rtk_legacy.cpp
++++ b/tests/test_rtk_legacy.cpp
+@@ -173,6 +173,68 @@ TEST(RTKTrustedHistoryTest, RejectedFloatRestoresBothTrustSamplesAndPreviousPres
+     }
+ }
+ 
++TEST(RTKIteratedUpdateTest, RelinearizationDoesNotRecountEpochMeasurements) {
++    // Noise-free static scene with an unbiased seed: every row passes the
++    // prefit gate on the first pass, so relinearizing at the updated state
++    // adds no information. A single update and the default iterated update
++    // must leave the same position and double-difference ambiguity
++    // covariance; re-applying the same rows to the posterior halves it.
++    const auto nav = synthetic_rtk_scene::constellation();
++    const Vector3d base_position(6378137, 0, 0);
++    const Vector3d rover_position = base_position + Vector3d(40, 30, 10);
++    const auto prns = synthetic_rtk_scene::visible(
++        nav, synthetic_rtk_scene::epochTime(0), rover_position, 15);
++    ASSERT_GE(prns.size(), 6U);
++    const int reference = Peer::ambiguityIndex(SatelliteId(GNSSSystem::GPS, prns[0]), 0);
++    auto run = [&](int kf_iterations) {
++        RTKProcessor processor;
++        auto config = processor.getRTKConfig();
++        config.ratio_threshold = 1e9;
++        config.ambiguity_ratio_threshold = 1e9;
++        config.elevation_mask = 5 * M_PI / 180;
++        config.kf_iterations = kf_iterations;
++        processor.setRTKConfig(config);
++        ProcessorConfig spp_config;
++        spp_config.elevation_mask = 5;
++        // The scene has no atmosphere: an unbiased SPP seed keeps every row
++        // inside the prefit gate on the first pass.
++        spp_config.use_ionosphere_model = false;
++        spp_config.use_troposphere_model = false;
++        EXPECT_TRUE(processor.initialize(spp_config));
++        processor.setBasePosition(base_position);
++        for (int epoch = 0; epoch < 3; ++epoch) {
++            const auto time = synthetic_rtk_scene::epochTime(epoch);
++            const auto solution = processor.processRTKEpoch(
++                synthetic_rtk_scene::observations(nav, time, rover_position, 30, prns, 0),
++                synthetic_rtk_scene::observations(nav, time, base_position, 10, prns, 500),
++                nav);
++            EXPECT_EQ(solution.status, SolutionStatus::FLOAT);
++            const auto& telemetry = processor.getLastDebugTelemetry();
++            EXPECT_EQ(telemetry.float_update_suppressed_outliers, 0);
++            EXPECT_EQ(telemetry.retained_phase_rows, static_cast<int>(prns.size()) - 1);
++        }
++        return Peer::filter_state_(processor);
++    };
++    const auto single = run(1);
++    const auto iterated = run(4);
++    for (int axis = 0; axis < 3; ++axis) {
++        SCOPED_TRACE(axis);
++        EXPECT_NEAR(iterated.covariance(axis, axis) / single.covariance(axis, axis), 1.0, 1e-3);
++    }
++    auto ddVariance = [&](const auto& state, int index) {
++        return state.covariance(reference, reference) + state.covariance(index, index) -
++               2.0 * state.covariance(reference, index);
++    };
++    for (std::size_t i = 1; i < prns.size(); ++i) {
++        const int index = Peer::ambiguityIndex(SatelliteId(GNSSSystem::GPS, prns[i]), 0);
++        SCOPED_TRACE(static_cast<int>(prns[i]));
++        ASSERT_NE(single.state(index), 0.0);
++        EXPECT_NEAR(ddVariance(iterated, index) / ddVariance(single, index), 1.0, 1e-3);
++        EXPECT_NEAR(iterated.state(reference) - iterated.state(index),
++                    single.state(reference) - single.state(index), 1e-3);
++    }
++}
++
+ TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
+     RTKProcessor processor;
+     auto config = processor.getRTKConfig();

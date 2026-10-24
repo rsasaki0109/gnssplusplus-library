@@ -1,0 +1,1203 @@
+{
+  "scope": "Two trusted-history state defects; no new runtime options or threshold changes. Not a safe FIX recovery or cv-predict promotion.",
+  "repair_source_base": "6473615a4cc1bdefb7f13c85e55b81f701766da6",
+  "repair_source_diff_sha256": "347b51b38816f1c70ecb2f637acfdbb1a5e1a26032bf0d5b8bd2e102bfb7c563",
+  "default_and_age5_doppler3": {
+    "provenance": {
+      "binaries": {
+        "before": {
+          "path": "/workspace/scratch/gnss-solve-before-trust-history",
+          "sha256": "84566f414f86563111bf2807b8e5912b583ff3c7744175c1c3540a3d8a4a2a71"
+        },
+        "after": {
+          "path": "/workspace/scratch/gnss-solve-after-trust-history",
+          "sha256": "854dbf4f8fbd2e2c4f11be95e085ac45cdeb06432f8c8691fc8719caf6bc1f60"
+        }
+      },
+      "inputs": {
+        "Odaiba": {
+          "rover_trimble.obs": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+            "sha256": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8"
+          },
+          "base_trimble.obs": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+            "sha256": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee"
+          },
+          "base.nav": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+            "sha256": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35"
+          },
+          "reference.csv": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/reference.csv",
+            "sha256": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d"
+          }
+        },
+        "Shinjuku": {
+          "rover_trimble.obs": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+            "sha256": "be239dbd20d9d69a0dbc696f1a4b00d75cd3639354d498eec91f08fa65d000eb"
+          },
+          "base_trimble.obs": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+            "sha256": "34a851c54e07b8cac592d37539c85e19d02e1a6b29839a707ab69dba9692c99e"
+          },
+          "base.nav": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+            "sha256": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35"
+          },
+          "reference.csv": {
+            "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/reference.csv",
+            "sha256": "794baaec530f34097cd1f77633902bb2195ce30cdec278945eb5ac911ed65d79"
+          }
+        }
+      },
+      "jobs": 4,
+      "runtime_note": "Concurrent wall times include contention; no speed claim.",
+      "scoring": "Exact GPS week/TOW rounded to 1 ms; no interpolation. FIX status=4. 3D error thresholds describe position accuracy, not integer correctness.",
+      "source_diff_sha256": "347b51b38816f1c70ecb2f637acfdbb1a5e1a26032bf0d5b8bd2e102bfb7c563",
+      "source_head": "6473615a4cc1bdefb7f13c85e55b81f701766da6",
+      "runs": {
+        "Odaiba-before-default": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-before-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Odaiba-before-default.pos"
+          ],
+          "returncode": 0,
+          "wall_seconds": 78.0720864750001,
+          "sha256": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8"
+        },
+        "Odaiba-before-age5_doppler3": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-before-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Odaiba-before-age5_doppler3.pos",
+            "--max-fixed-anchor-age",
+            "5",
+            "--max-fixed-doppler-consensus",
+            "3"
+          ],
+          "returncode": 0,
+          "wall_seconds": 69.05893387099968,
+          "sha256": "bd1a5468fcfd6fc089624808fe8dfd7a9313c74b6f6e075bad115e7fec78357e"
+        },
+        "Odaiba-after-default": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-after-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Odaiba-after-default.pos"
+          ],
+          "returncode": 0,
+          "wall_seconds": 82.4338157559996,
+          "sha256": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8"
+        },
+        "Odaiba-after-age5_doppler3": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-after-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Odaiba-after-age5_doppler3.pos",
+            "--max-fixed-anchor-age",
+            "5",
+            "--max-fixed-doppler-consensus",
+            "3"
+          ],
+          "returncode": 0,
+          "wall_seconds": 74.80371889600065,
+          "sha256": "bd1a5468fcfd6fc089624808fe8dfd7a9313c74b6f6e075bad115e7fec78357e"
+        },
+        "Shinjuku-before-default": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-before-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Shinjuku-before-default.pos"
+          ],
+          "returncode": 0,
+          "wall_seconds": 86.60909565400107,
+          "sha256": "392a7f1981a95b9140b8d5c3e6037658b0cb2ed07ae6e31905a36daba63216e3"
+        },
+        "Shinjuku-before-age5_doppler3": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-before-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Shinjuku-before-age5_doppler3.pos",
+            "--max-fixed-anchor-age",
+            "5",
+            "--max-fixed-doppler-consensus",
+            "3"
+          ],
+          "returncode": 0,
+          "wall_seconds": 82.01554394399864,
+          "sha256": "cf6b3b4c5905c5228c8eaeb38d1c4eaa26889b9439bdba6fd62d334ac25b5710"
+        },
+        "Shinjuku-after-default": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-after-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Shinjuku-after-default.pos"
+          ],
+          "returncode": 0,
+          "wall_seconds": 83.00937707399862,
+          "sha256": "392a7f1981a95b9140b8d5c3e6037658b0cb2ed07ae6e31905a36daba63216e3"
+        },
+        "Shinjuku-after-age5_doppler3": {
+          "argv": [
+            "/workspace/scratch/gnss-solve-after-trust-history",
+            "--rover",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+            "--base",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+            "--nav",
+            "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+            "--mode",
+            "kinematic",
+            "--glonass-ar",
+            "off",
+            "--base-ecef",
+            "-3961904.9530",
+            "3348993.7578",
+            "3698211.7553",
+            "--no-kml",
+            "--out",
+            "/workspace/gnssplusplus-library/output/trust-history-validation/Shinjuku-after-age5_doppler3.pos",
+            "--max-fixed-anchor-age",
+            "5",
+            "--max-fixed-doppler-consensus",
+            "3"
+          ],
+          "returncode": 0,
+          "wall_seconds": 78.47672807300114,
+          "sha256": "cf6b3b4c5905c5228c8eaeb38d1c4eaa26889b9439bdba6fd62d334ac25b5710"
+        }
+      }
+    },
+    "datasets": {
+      "Odaiba": {
+        "default_scored_rows_identical": true,
+        "default_pos_bytes_identical": true,
+        "scores": {
+          "before-default": {
+            "reference_epochs": 12410,
+            "position_epochs": 10984,
+            "missing_epochs": 1426,
+            "unmatched_epochs": 1,
+            "fix_epochs": 1298,
+            "horizontal_m": {
+              "median": 0.3593336591488686,
+              "p95": 4.777151724852944,
+              "max": 18.00884607000676
+            },
+            "fix_3d_m": {
+              "median": 0.03477290563719237,
+              "p95": 0.05695714337412052,
+              "max": 0.12171039383757028
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 10881,
+            "common_horizontal_m": {
+              "median": 0.357234075524506,
+              "p95": 4.766134437120085,
+              "max": 18.00884607000676
+            }
+          },
+          "before-age5_doppler3": {
+            "reference_epochs": 12410,
+            "position_epochs": 10930,
+            "missing_epochs": 1480,
+            "unmatched_epochs": 1,
+            "fix_epochs": 4256,
+            "horizontal_m": {
+              "median": 0.25390189867878815,
+              "p95": 4.896335831415405,
+              "max": 18.00884607000676
+            },
+            "fix_3d_m": {
+              "median": 0.0463574158409145,
+              "p95": 0.20713178630622342,
+              "max": 2.5691245531941362
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 4099,
+              "wrong_fix": 157,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 18,
+              "recovery_s": {
+                "median": 5.400000095367432,
+                "p95": 186.69499988555845,
+                "max": 565.2000000476837
+              },
+              "terminal_outage_right_censored": false,
+              "terminal_outage_elapsed_s": null,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 4253,
+              "wrong_fix": 3,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 16,
+              "recovery_s": {
+                "median": 5.5,
+                "p95": 231.1249998807907,
+                "max": 564.7999999523163
+              },
+              "terminal_outage_right_censored": false,
+              "terminal_outage_elapsed_s": null,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 4256,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 16,
+              "recovery_s": {
+                "median": 5.300000071525574,
+                "p95": 231.1249998807907,
+                "max": 564.7999999523163
+              },
+              "terminal_outage_right_censored": false,
+              "terminal_outage_elapsed_s": null,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 10881,
+            "common_horizontal_m": {
+              "median": 0.2502232608826593,
+              "p95": 4.846068216246721,
+              "max": 18.00884607000676
+            }
+          },
+          "after-default": {
+            "reference_epochs": 12410,
+            "position_epochs": 10984,
+            "missing_epochs": 1426,
+            "unmatched_epochs": 1,
+            "fix_epochs": 1298,
+            "horizontal_m": {
+              "median": 0.3593336591488686,
+              "p95": 4.777151724852944,
+              "max": 18.00884607000676
+            },
+            "fix_3d_m": {
+              "median": 0.03477290563719237,
+              "p95": 0.05695714337412052,
+              "max": 0.12171039383757028
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 10881,
+            "common_horizontal_m": {
+              "median": 0.357234075524506,
+              "p95": 4.766134437120085,
+              "max": 18.00884607000676
+            }
+          },
+          "after-age5_doppler3": {
+            "reference_epochs": 12410,
+            "position_epochs": 10930,
+            "missing_epochs": 1480,
+            "unmatched_epochs": 1,
+            "fix_epochs": 4256,
+            "horizontal_m": {
+              "median": 0.25390189867878815,
+              "p95": 4.896335831415405,
+              "max": 18.00884607000676
+            },
+            "fix_3d_m": {
+              "median": 0.0463574158409145,
+              "p95": 0.20713178630622342,
+              "max": 2.5691245531941362
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 4099,
+              "wrong_fix": 157,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 18,
+              "recovery_s": {
+                "median": 5.400000095367432,
+                "p95": 186.69499988555845,
+                "max": 565.2000000476837
+              },
+              "terminal_outage_right_censored": false,
+              "terminal_outage_elapsed_s": null,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 4253,
+              "wrong_fix": 3,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 16,
+              "recovery_s": {
+                "median": 5.5,
+                "p95": 231.1249998807907,
+                "max": 564.7999999523163
+              },
+              "terminal_outage_right_censored": false,
+              "terminal_outage_elapsed_s": null,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 4256,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 16,
+              "recovery_s": {
+                "median": 5.300000071525574,
+                "p95": 231.1249998807907,
+                "max": 564.7999999523163
+              },
+              "terminal_outage_right_censored": false,
+              "terminal_outage_elapsed_s": null,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 10881,
+            "common_horizontal_m": {
+              "median": 0.2502232608826593,
+              "p95": 4.846068216246721,
+              "max": 18.00884607000676
+            }
+          }
+        }
+      },
+      "Shinjuku": {
+        "default_scored_rows_identical": true,
+        "default_pos_bytes_identical": true,
+        "scores": {
+          "before-default": {
+            "reference_epochs": 20950,
+            "position_epochs": 17716,
+            "missing_epochs": 3234,
+            "unmatched_epochs": 1,
+            "fix_epochs": 122,
+            "horizontal_m": {
+              "median": 0.48343357076668203,
+              "p95": 8.382148758455413,
+              "max": 48.417751333447946
+            },
+            "fix_3d_m": {
+              "median": 0.047091233376308085,
+              "p95": 0.14606229235259202,
+              "max": 0.21718105338472232
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 17600,
+            "common_horizontal_m": {
+              "median": 0.4810606305588758,
+              "p95": 8.325981279639839,
+              "max": 48.417751333447946
+            }
+          },
+          "before-age5_doppler3": {
+            "reference_epochs": 20950,
+            "position_epochs": 17618,
+            "missing_epochs": 3332,
+            "unmatched_epochs": 1,
+            "fix_epochs": 1949,
+            "horizontal_m": {
+              "median": 0.4736305045794007,
+              "p95": 8.343242221322189,
+              "max": 48.417751333447946
+            },
+            "fix_3d_m": {
+              "median": 0.1263901106296624,
+              "p95": 0.2234064726106399,
+              "max": 12.141324847557476
+            },
+            "gross_fix_epochs": [
+              [
+                2032,
+                282847.6
+              ]
+            ],
+            "threshold_0.5m": {
+              "correct_fix": 1936,
+              "wrong_fix": 13,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 7,
+              "recovery_s": {
+                "median": 5.900000095367432,
+                "p95": 751.0400001287459,
+                "max": 800.6000001430511
+              },
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 407.90000009536743,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 1948,
+              "wrong_fix": 1,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 7,
+              "recovery_s": {
+                "median": 5.900000095367432,
+                "p95": 750.9800001144408,
+                "max": 800.6000001430511
+              },
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 407.90000009536743,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 1948,
+              "wrong_fix": 1,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 7,
+              "recovery_s": {
+                "median": 5.900000095367432,
+                "p95": 750.9800001144408,
+                "max": 800.6000001430511
+              },
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 407.90000009536743,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 17600,
+            "common_horizontal_m": {
+              "median": 0.4731565597506149,
+              "p95": 8.325981279639839,
+              "max": 48.417751333447946
+            }
+          },
+          "after-default": {
+            "reference_epochs": 20950,
+            "position_epochs": 17716,
+            "missing_epochs": 3234,
+            "unmatched_epochs": 1,
+            "fix_epochs": 122,
+            "horizontal_m": {
+              "median": 0.48343357076668203,
+              "p95": 8.382148758455413,
+              "max": 48.417751333447946
+            },
+            "fix_3d_m": {
+              "median": 0.047091233376308085,
+              "p95": 0.14606229235259202,
+              "max": 0.21718105338472232
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 17600,
+            "common_horizontal_m": {
+              "median": 0.4810606305588758,
+              "p95": 8.325981279639839,
+              "max": 48.417751333447946
+            }
+          },
+          "after-age5_doppler3": {
+            "reference_epochs": 20950,
+            "position_epochs": 17618,
+            "missing_epochs": 3332,
+            "unmatched_epochs": 1,
+            "fix_epochs": 1949,
+            "horizontal_m": {
+              "median": 0.4736305045794007,
+              "p95": 8.343242221322189,
+              "max": 48.417751333447946
+            },
+            "fix_3d_m": {
+              "median": 0.1263901106296624,
+              "p95": 0.2234064726106399,
+              "max": 12.141324847557476
+            },
+            "gross_fix_epochs": [
+              [
+                2032,
+                282847.6
+              ]
+            ],
+            "threshold_0.5m": {
+              "correct_fix": 1936,
+              "wrong_fix": 13,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 7,
+              "recovery_s": {
+                "median": 5.900000095367432,
+                "p95": 751.0400001287459,
+                "max": 800.6000001430511
+              },
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 407.90000009536743,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 1948,
+              "wrong_fix": 1,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 7,
+              "recovery_s": {
+                "median": 5.900000095367432,
+                "p95": 750.9800001144408,
+                "max": 800.6000001430511
+              },
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 407.90000009536743,
+              "baseline_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 1948,
+              "wrong_fix": 1,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 7,
+              "recovery_s": {
+                "median": 5.900000095367432,
+                "p95": 750.9800001144408,
+                "max": 800.6000001430511
+              },
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 407.90000009536743,
+              "baseline_correct_fix_lost": 0
+            },
+            "common_position_epochs": 17600,
+            "common_horizontal_m": {
+              "median": 0.4731565597506149,
+              "p95": 8.325981279639839,
+              "max": 48.417751333447946
+            }
+          }
+        }
+      }
+    }
+  },
+  "cv_predict": {
+    "recipe": "kinematic, GLONASS AR off, surveyed base, --float-trust-policy cv-predict; other options default; GT scoring only",
+    "source_head": "6473615a4cc1bdefb7f13c85e55b81f701766da6",
+    "source_diff_sha256": "347b51b38816f1c70ecb2f637acfdbb1a5e1a26032bf0d5b8bd2e102bfb7c563",
+    "binaries": {
+      "before": {
+        "path": "/workspace/scratch/gnss-solve-before-trust-history",
+        "sha256": "84566f414f86563111bf2807b8e5912b583ff3c7744175c1c3540a3d8a4a2a71"
+      },
+      "after": {
+        "path": "/workspace/scratch/gnss-solve-after-trust-history",
+        "sha256": "854dbf4f8fbd2e2c4f11be95e085ac45cdeb06432f8c8691fc8719caf6bc1f60"
+      }
+    },
+    "jobs": 4,
+    "runtime_note": "Concurrent solver/core workloads; descriptive wall times only",
+    "inputs": {
+      "Odaiba": {
+        "rover_trimble.obs": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+          "sha256": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8"
+        },
+        "base_trimble.obs": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+          "sha256": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee"
+        },
+        "base.nav": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+          "sha256": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35"
+        },
+        "reference.csv": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/reference.csv",
+          "sha256": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d"
+        }
+      },
+      "Shinjuku": {
+        "rover_trimble.obs": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+          "sha256": "be239dbd20d9d69a0dbc696f1a4b00d75cd3639354d498eec91f08fa65d000eb"
+        },
+        "base_trimble.obs": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+          "sha256": "34a851c54e07b8cac592d37539c85e19d02e1a6b29839a707ab69dba9692c99e"
+        },
+        "base.nav": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+          "sha256": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35"
+        },
+        "reference.csv": {
+          "path": "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/reference.csv",
+          "sha256": "794baaec530f34097cd1f77633902bb2195ce30cdec278945eb5ac911ed65d79"
+        }
+      }
+    },
+    "runs": {
+      "Odaiba-before": {
+        "argv": [
+          "/workspace/scratch/gnss-solve-before-trust-history",
+          "--rover",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+          "--base",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+          "--nav",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+          "--mode",
+          "kinematic",
+          "--glonass-ar",
+          "off",
+          "--base-ecef",
+          "-3961904.9530",
+          "3348993.7578",
+          "3698211.7553",
+          "--no-kml",
+          "--float-trust-policy",
+          "cv-predict",
+          "--out",
+          "/workspace/gnssplusplus-library/output/trust-history-cv-validation/Odaiba-before.pos"
+        ],
+        "returncode": 0,
+        "wall_seconds": 58.42992261099971,
+        "sha256": "7e79342f97d9883df458edf353888905c548b52f2bb3f7583b01c7bc652d6a95"
+      },
+      "Odaiba-after": {
+        "argv": [
+          "/workspace/scratch/gnss-solve-after-trust-history",
+          "--rover",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+          "--base",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+          "--nav",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Odaiba/base.nav",
+          "--mode",
+          "kinematic",
+          "--glonass-ar",
+          "off",
+          "--base-ecef",
+          "-3961904.9530",
+          "3348993.7578",
+          "3698211.7553",
+          "--no-kml",
+          "--float-trust-policy",
+          "cv-predict",
+          "--out",
+          "/workspace/gnssplusplus-library/output/trust-history-cv-validation/Odaiba-after.pos"
+        ],
+        "returncode": 0,
+        "wall_seconds": 59.06078834299842,
+        "sha256": "bec9ef422eb21581587853e3385e6da18216cc721092b319f975f44f9e36ea1b"
+      },
+      "Shinjuku-before": {
+        "argv": [
+          "/workspace/scratch/gnss-solve-before-trust-history",
+          "--rover",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+          "--base",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+          "--nav",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+          "--mode",
+          "kinematic",
+          "--glonass-ar",
+          "off",
+          "--base-ecef",
+          "-3961904.9530",
+          "3348993.7578",
+          "3698211.7553",
+          "--no-kml",
+          "--float-trust-policy",
+          "cv-predict",
+          "--out",
+          "/workspace/gnssplusplus-library/output/trust-history-cv-validation/Shinjuku-before.pos"
+        ],
+        "returncode": 0,
+        "wall_seconds": 77.48519947300156,
+        "sha256": "7fe91cd8bdc3a486856bc96a43f138750408b74edc18897b7edc055111246f3f"
+      },
+      "Shinjuku-after": {
+        "argv": [
+          "/workspace/scratch/gnss-solve-after-trust-history",
+          "--rover",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+          "--base",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+          "--nav",
+          "/workspace/gnssplusplus-library/data/driving/Tokyo_Data/Shinjuku/base.nav",
+          "--mode",
+          "kinematic",
+          "--glonass-ar",
+          "off",
+          "--base-ecef",
+          "-3961904.9530",
+          "3348993.7578",
+          "3698211.7553",
+          "--no-kml",
+          "--float-trust-policy",
+          "cv-predict",
+          "--out",
+          "/workspace/gnssplusplus-library/output/trust-history-cv-validation/Shinjuku-after.pos"
+        ],
+        "returncode": 0,
+        "wall_seconds": 77.14244729800157,
+        "sha256": "a4041ae98d70b905c70bb98cd829772418680d1b93990cff7248e67220da1a1e"
+      }
+    },
+    "datasets": {
+      "Odaiba": {
+        "scores": {
+          "before": {
+            "reference_epochs": 12410,
+            "position_epochs": 10601,
+            "missing_epochs": 1809,
+            "unmatched_epochs": 1,
+            "fix_epochs": 1298,
+            "horizontal_m": {
+              "median": 0.401126188242003,
+              "p95": 11.339417406134263,
+              "max": 43.17756871502919
+            },
+            "fix_3d_m": {
+              "median": 0.03477290563719237,
+              "p95": 0.05695714337412052,
+              "max": 0.12171039383757028
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "before_correct_fix_lost": 0
+            },
+            "common_position_epochs": 10321,
+            "common_horizontal_m": {
+              "median": 0.38847104404559735,
+              "p95": 11.218212073809159,
+              "max": 41.6040247945748
+            }
+          },
+          "after": {
+            "reference_epochs": 12410,
+            "position_epochs": 10583,
+            "missing_epochs": 1827,
+            "unmatched_epochs": 1,
+            "fix_epochs": 1298,
+            "horizontal_m": {
+              "median": 0.4207023836408812,
+              "p95": 16.558913553195627,
+              "max": 35.89662369877308
+            },
+            "fix_3d_m": {
+              "median": 0.03477290563719237,
+              "p95": 0.05695714337412052,
+              "max": 0.12171039383757028
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 1298,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 1095.2000000476837,
+              "before_correct_fix_lost": 0
+            },
+            "common_position_epochs": 10321,
+            "common_horizontal_m": {
+              "median": 0.410305039921331,
+              "p95": 16.804924530194462,
+              "max": 35.89662369877308
+            }
+          }
+        },
+        "pos_bytes_identical": false
+      },
+      "Shinjuku": {
+        "scores": {
+          "before": {
+            "reference_epochs": 20950,
+            "position_epochs": 17794,
+            "missing_epochs": 3156,
+            "unmatched_epochs": 1,
+            "fix_epochs": 122,
+            "horizontal_m": {
+              "median": 0.5180862408426623,
+              "p95": 11.17642221992516,
+              "max": 135.03151743517427
+            },
+            "fix_3d_m": {
+              "median": 0.047091233376308085,
+              "p95": 0.14606229235259202,
+              "max": 0.21718105338472232
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "before_correct_fix_lost": 0
+            },
+            "common_position_epochs": 17117,
+            "common_horizontal_m": {
+              "median": 0.48831989083001776,
+              "p95": 10.316004432852338,
+              "max": 135.03151743517427
+            }
+          },
+          "after": {
+            "reference_epochs": 20950,
+            "position_epochs": 17349,
+            "missing_epochs": 3601,
+            "unmatched_epochs": 1,
+            "fix_epochs": 122,
+            "horizontal_m": {
+              "median": 0.5951390139289636,
+              "p95": 9.764816836647363,
+              "max": 122.38766813326549
+            },
+            "fix_3d_m": {
+              "median": 0.047091233376308085,
+              "p95": 0.14606229235259202,
+              "max": 0.21718105338472232
+            },
+            "gross_fix_epochs": [],
+            "threshold_0.5m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_2.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "before_correct_fix_lost": 0
+            },
+            "threshold_3.0m": {
+              "correct_fix": 122,
+              "wrong_fix": 0,
+              "first_correct_fix_s": 0.3000001907348633,
+              "completed_outages_ge_1s": 0,
+              "recovery_s": null,
+              "terminal_outage_right_censored": true,
+              "terminal_outage_elapsed_s": 2082.4000000953674,
+              "before_correct_fix_lost": 0
+            },
+            "common_position_epochs": 17117,
+            "common_horizontal_m": {
+              "median": 0.5910812213028448,
+              "p95": 9.775228018836962,
+              "max": 122.38766813326549
+            }
+          }
+        },
+        "pos_bytes_identical": false
+      }
+    }
+  },
+  "validation": {
+    "build": "Full Release build succeeded; GTSAM/OpenCV/ROS2 and Python bindings not built",
+    "core": "100/100 core CTest entries passed; CPLUS_INCLUDE_PATH points to locally installed Eigen for helper-compilation tests.",
+    "native_regressions": "Two new RTKTrustedHistoryTest cases fail before and pass after. Existing full/subset/multifrequency AR fixture cases also assert no FLOAT state/covariance mutation during candidate search.",
+    "runtime_note": "Four replay workers; first eight runs overlap build/core tests. CV comparison starts after the first eight. Wall times are descriptive, not a speed comparison.",
+    "final_comment_correction": "A stale comment claiming FIX generation preceded validation was corrected after replay. Rebuild succeeded; final native executable SHA-256 is identical to the tested replay binary.",
+    "final_executable_sha256": "854dbf4f8fbd2e2c4f11be95e085ac45cdeb06432f8c8691fc8719caf6bc1f60"
+  },
+  "interpretation": {
+    "legacy_recipes": "All four before/after POS pairs byte-identical. Previous trust sample is unused by LEGACY; this repair does not explain or cure wrong FIX in the prior recovery experiments.",
+    "cv_predict": "No correct FIX lost or new wrong FIX at the recorded thresholds, but missing outputs increase on both drives and Odaiba H95 worsens. Keep this existing optional policy off by default; no accuracy/recovery recommendation.",
+    "mechanism": "Preserve a distinct earlier trust epoch on same-time replacement; restore both trust samples and the previous-presence flag when rejecting provisional outputs.",
+    "limits": "Two drives from the same collection/receiver family, already inspected; not fresh held-out or hardware-independent validation. Reference position errors do not prove integer-vector correctness."
+  },
+  "review_source_hashes": {
+    "src/algorithms/rtk.cpp": "8a5419cf2416543f663a0abca91b84d953c5b5946c8252ea02b18225b217694d",
+    "src/algorithms/rtk_epoch.cpp": "9786bd3e5d17e9b9e2d177fa647d05fc60b1c0f6a182ff580a783c9733eeae33",
+    "tests/test_rtk_legacy.cpp": "9811b721cd5b5fd949a98c2f5f091993ce5e3e9377ea972ed163f94322a16b4e",
+    "scripts/analysis/evaluate_urbannav_fix_continuity.py": "337fb252e860358fa97f3e2915ef38c58b6ebcd3cbbace629564f7a5a69aaa9b"
+  },
+  "execution_source_hashes": {
+    "src/algorithms/rtk.cpp": "8a5419cf2416543f663a0abca91b84d953c5b5946c8252ea02b18225b217694d",
+    "src/algorithms/rtk_epoch.cpp": "7d1f62202ca782874d5edd56f89d5c68c03ec5fffd5b89d9f1e0897946253071",
+    "tests/test_rtk_legacy.cpp": "9811b721cd5b5fd949a98c2f5f091993ce5e3e9377ea972ed163f94322a16b4e",
+    "scripts/analysis/evaluate_urbannav_fix_continuity.py": "337fb252e860358fa97f3e2915ef38c58b6ebcd3cbbace629564f7a5a69aaa9b"
+  }
+}

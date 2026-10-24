@@ -1,0 +1,432 @@
+diff --git a/apps/native/gnss_solve.cpp b/apps/native/gnss_solve.cpp
+index 48ca2df1..66d6760c 100644
+--- a/apps/native/gnss_solve.cpp
++++ b/apps/native/gnss_solve.cpp
+@@ -212,6 +212,7 @@ struct SolveConfig {
+     double max_position_jump_m = 5.0;
+     double max_fixed_anchor_age_s = 0.0;
+     double max_fixed_doppler_consensus_m = 0.0;
++    int fixed_doppler_bootstrap_epochs = 1;
+     double max_position_jump_min_m = 0.0;
+     double max_position_jump_rate_mps = 0.0;
+     double max_float_spp_divergence_m = 0.0;
+@@ -1071,6 +1072,7 @@ public:
+               << "fixed_candidate_y_m,fixed_candidate_z_m,"
+               << "fixed_candidate_float_separation_m,fixed_candidate_history_jump_m,"
+               << "fixed_candidate_history_dt_s,fixed_candidate_doppler_consensus_distance_m,"
++              << "fixed_doppler_bootstrap_streak,"
+               << "low_count_rescue_evaluated,"
+               << "low_count_rescue_passed,post_validation_rejected,"
+               << "final_fixed_applied,hold_fix_attempted,hold_fix_applied,"
+@@ -1409,6 +1411,7 @@ public:
+         file_ << ",";
+         writeNumber(telemetry.fixed_candidate_doppler_consensus_distance_m);
+         file_ << ","
++              << telemetry.fixed_doppler_bootstrap_streak << ","
+               << telemetry.low_count_rescue_evaluated << ","
+               << telemetry.low_count_rescue_passed << ","
+               << telemetry.post_validation_rejected << ","
+@@ -1611,6 +1614,9 @@ void printAdvancedUsage(const char* program_name) {
+         << "  --max-fixed-doppler-consensus <m>\n"
+         << "                             Max AR/hold FIX distance from current Doppler track\n"
+         << "                             (default: 0, disabled)\n"
++        << "  --fixed-doppler-bootstrap-epochs <n>\n"
++        << "                             Consecutive candidates before starting a Doppler track\n"
++        << "                             (default: 1; requires enabled Doppler consensus for n>1)\n"
+         << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
+         << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
+         << "                             (default: 0, disabled)\n"
+@@ -2307,6 +2313,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
+             config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+             continue;
+         }
++        if (arg == "--fixed-doppler-bootstrap-epochs" && i + 1 < argc) {
++            config.fixed_doppler_bootstrap_epochs = std::stoi(argv[++i]);
++            continue;
++        }
+         if (arg == "--min-fixed-prefit-outliers" && i + 1 < argc) {
+             config.min_fixed_prefit_outliers = std::stoi(argv[++i]);
+             continue;
+@@ -3162,6 +3172,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
+     if (config.max_fixed_doppler_consensus_m < 0.0) {
+         argumentError("--max-fixed-doppler-consensus must be >= 0", argv[0]);
+     }
++    if (config.fixed_doppler_bootstrap_epochs < 1 ||
++        (config.fixed_doppler_bootstrap_epochs > 1 &&
++         !(std::isfinite(config.max_fixed_doppler_consensus_m) &&
++           config.max_fixed_doppler_consensus_m > 0.0))) {
++        argumentError("--fixed-doppler-bootstrap-epochs must be >= 1 and requires enabled Doppler consensus for n>1", argv[0]);
++    }
+     if (config.max_position_jump_min_m < 0.0) {
+         argumentError("--max-pos-jump-min must be >= 0", argv[0]);
+     }
+@@ -3793,6 +3809,7 @@ int main(int argc, char* argv[]) {
+         rtk_config.max_position_jump_m = config.max_position_jump_m;
+         rtk_config.max_fixed_anchor_age_s = config.max_fixed_anchor_age_s;
+         rtk_config.max_fixed_doppler_consensus_m = config.max_fixed_doppler_consensus_m;
++        rtk_config.fixed_doppler_bootstrap_epochs = config.fixed_doppler_bootstrap_epochs;
+         rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
+         rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
+         rtk_config.max_float_spp_divergence_m = config.max_float_spp_divergence_m;
+diff --git a/include/libgnss++/algorithms/rtk.hpp b/include/libgnss++/algorithms/rtk.hpp
+index a6b0d21d..c4afb708 100644
+--- a/include/libgnss++/algorithms/rtk.hpp
++++ b/include/libgnss++/algorithms/rtk.hpp
+@@ -397,6 +397,12 @@ public:
+         /// 0 disables the gate. Moving-base mode bypasses it.
+         double max_fixed_doppler_consensus_m = 0.0;
+ 
++        /// With the Doppler consensus gate enabled and no trusted track,
++        /// require this many consecutive motion-consistent candidate epochs
++        /// before bootstrapping. 1 preserves immediate legacy bootstrap.
++        /// Evidence is tentative and is cleared by missing/rejected candidates.
++        int fixed_doppler_bootstrap_epochs = 1;
++
+         /// Adaptive max AR fix jump from last fixed position.
+         /// When max_position_jump_rate_mps > 0, accepted jump is
+         /// max(max_position_jump_min_m, max_position_jump_rate_mps * dt).
+@@ -1451,6 +1457,7 @@ public:
+             std::numeric_limits<double>::quiet_NaN();
+         double fixed_candidate_doppler_consensus_distance_m =
+             std::numeric_limits<double>::quiet_NaN();
++        int fixed_doppler_bootstrap_streak = 0;
+         bool low_count_rescue_evaluated = false;
+         bool low_count_rescue_passed = false;
+         bool post_validation_rejected = false;
+@@ -1815,6 +1822,8 @@ private:
+     Vector3d doppler_continuity_position_ecef_ = Vector3d::Zero();
+     GNSSTime doppler_continuity_time_;
+     bool has_doppler_continuity_position_ = false;
++    rtk_validation::DopplerBootstrapConfirmation doppler_bootstrap_confirmation_;
++    bool doppler_bootstrap_checked_this_epoch_ = false;
+ 
+     /**
+      * @brief The original processRTKEpoch() body (DD-RTK float/fixed solve).
+@@ -2509,6 +2518,8 @@ private:
+                                const GNSSTime& current_time);
+     bool validateFixedDopplerConsensus(const Vector3d& position,
+                                        const GNSSTime& current_time);
++    bool validateFixedDopplerBootstrap(const Vector3d& position,
++                                       const GNSSTime& current_time);
+     bool validateCpPrFixedCandidate(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                     const GNSSTime& current_time);
+ 
+diff --git a/include/libgnss++/algorithms/rtk_validation.hpp b/include/libgnss++/algorithms/rtk_validation.hpp
+index 30a22297..ec0c5a00 100644
+--- a/include/libgnss++/algorithms/rtk_validation.hpp
++++ b/include/libgnss++/algorithms/rtk_validation.hpp
+@@ -6,6 +6,21 @@
+ 
+ namespace libgnss::rtk_validation {
+ 
++// Tentative evidence only: never a trusted FIX anchor. The processor clears
++// this state on an epoch without an otherwise valid bootstrap candidate.
++class DopplerBootstrapConfirmation {
++public:
++    bool observe(const Eigen::Vector3d& candidate, const GNSSTime& time,
++                 const Eigen::Vector3d& velocity, bool fresh_velocity,
++                 double max_distance_m, int required_epochs);
++    void reset() { count_ = 0; }
++    int count() const { return count_; }
++private:
++    int count_ = 0;
++    GNSSTime time_;
++    Eigen::Vector3d predicted_position_ = Eigen::Vector3d::Zero();
++};
++
+ struct NonFixedDriftGuardConfig {
+     double max_anchor_gap_s = 120.0;
+     double max_anchor_speed_mps = 1.0;
+diff --git a/scripts/analysis/evaluate_urbannav_fix_continuity.py b/scripts/analysis/evaluate_urbannav_fix_continuity.py
+index 9f3aea4c..fdb96b2e 100644
+--- a/scripts/analysis/evaluate_urbannav_fix_continuity.py
++++ b/scripts/analysis/evaluate_urbannav_fix_continuity.py
+@@ -105,9 +105,12 @@ def main():
+     parser.add_argument("--data-root", required=True, type=Path)
+     parser.add_argument("--output", required=True, type=Path)
+     parser.add_argument("--jobs", type=int, default=2)
++    parser.add_argument("--after-bootstrap-epochs", type=int, default=1)
+     args = parser.parse_args()
+     if args.jobs < 1:
+         parser.error("--jobs must be positive")
++    if args.after_bootstrap_epochs < 1:
++        parser.error("--after-bootstrap-epochs must be positive")
+     out = args.output.resolve()
+     out.mkdir(parents=True, exist_ok=True)
+     if any(out.iterdir()):
+@@ -156,6 +159,11 @@ def main():
+                         "--max-fixed-doppler-consensus",
+                         "3",
+                     ]
++                    if version == "after" and args.after_bootstrap_epochs > 1:
++                        argv += [
++                            "--fixed-doppler-bootstrap-epochs",
++                            str(args.after_bootstrap_epochs),
++                        ]
+                 tasks.append((name, argv))
+     manifest = {
+         "binaries": {
+@@ -163,6 +171,7 @@ def main():
+         },
+         "inputs": sources,
+         "jobs": args.jobs,
++        "after_opt_in_bootstrap_epochs": args.after_bootstrap_epochs,
+         "runtime_note": "Concurrent wall times include contention; no speed claim.",
+         "scoring": "Exact GPS week/TOW rounded to 1 ms; no interpolation. FIX status=4. "
+         "3D error thresholds describe position accuracy, not integer correctness.",
+diff --git a/src/algorithms/rtk.cpp b/src/algorithms/rtk.cpp
+index 9ff6549c..55666e77 100644
+--- a/src/algorithms/rtk.cpp
++++ b/src/algorithms/rtk.cpp
+@@ -68,6 +68,7 @@ RTKProcessor::RTKProcessor(const RTKConfig& rtk_config)
+ 
+ void RTKProcessor::setRTKConfig(const RTKConfig& config) {
+     rtk_config_ = config;
++    doppler_bootstrap_confirmation_.reset();
+     l1_l5_mw_arc_bank_ = causal_ambiguity_arc::Bank(
+         rtk_config_.lambda_l1_l5_wlnl_causal_arc_config);
+     wide_lane_mw_arc_bank_ =
+@@ -147,6 +148,8 @@ void RTKProcessor::reset() {
+     fixed_anchor_float_history_.clear();
+     has_last_doppler_velocity_ = false;
+     has_doppler_continuity_position_ = false;
++    doppler_bootstrap_confirmation_.reset();
++    doppler_bootstrap_checked_this_epoch_ = false;
+     current_epoch_nlos_fraction_ = std::numeric_limits<double>::quiet_NaN();
+     current_sat_data_.clear();
+     gf_l1l2_history_.clear();
+diff --git a/src/algorithms/rtk_ar_validate.cpp b/src/algorithms/rtk_ar_validate.cpp
+index 4abd1eaa..b8b8de90 100644
+--- a/src/algorithms/rtk_ar_validate.cpp
++++ b/src/algorithms/rtk_ar_validate.cpp
+@@ -215,6 +215,27 @@ bool RTKProcessor::validateFixedDopplerConsensus(const Vector3d& position,
+     return true;
+ }
+ 
++bool RTKProcessor::validateFixedDopplerBootstrap(const Vector3d& position,
++                                                const GNSSTime& current_time) {
++    if (isMovingBasePositionMode(rtk_config_) ||
++        !(rtk_config_.max_fixed_doppler_consensus_m > 0.0) ||
++        has_doppler_continuity_position_ ||
++        rtk_config_.fixed_doppler_bootstrap_epochs <= 1) {
++        return true;
++    }
++    doppler_bootstrap_checked_this_epoch_ = true;
++    const double velocity_age = current_time - last_doppler_velocity_time_;
++    const bool fresh_velocity = has_last_doppler_velocity_ &&
++        std::isfinite(velocity_age) && velocity_age >= 0.0 && velocity_age <= 2.0;
++    const bool confirmed = doppler_bootstrap_confirmation_.observe(
++        position, current_time, last_doppler_velocity_ecef_, fresh_velocity,
++        rtk_config_.max_fixed_doppler_consensus_m,
++        rtk_config_.fixed_doppler_bootstrap_epochs);
++    debug_telemetry_.fixed_doppler_bootstrap_streak = doppler_bootstrap_confirmation_.count();
++    if (!confirmed) debug_telemetry_.reject_reason = "fixed_doppler_bootstrap_pending";
++    return confirmed;
++}
++
+ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
+                                          const GNSSTime& current_time) {
+     if (!has_fixed_solution_) {
+@@ -674,7 +695,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
+         return false;
+     }
+ 
+-    return true;
++    return validateFixedDopplerBootstrap(new_pos, current_time);
+ }
+ 
+ // ============================================================
+@@ -833,6 +854,9 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
+     if (!validateFixedDopplerConsensus(test_pos, time)) {
+         return reject_hold(debug_telemetry_.reject_reason.c_str());
+     }
++    if (!validateFixedDopplerBootstrap(test_pos, time)) {
++        return reject_hold(debug_telemetry_.reject_reason.c_str());
++    }
+ 
+     // Accept hold fix
+     fixed_baseline_ = xa.head<3>();
+diff --git a/src/algorithms/rtk_epoch.cpp b/src/algorithms/rtk_epoch.cpp
+index 4b769799..59f84afc 100644
+--- a/src/algorithms/rtk_epoch.cpp
++++ b/src/algorithms/rtk_epoch.cpp
+@@ -34,6 +34,7 @@ using namespace rtk_internal;
+ 
+ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
+     const ObservationData& base_obs, const NavigationData& nav) {
++    doppler_bootstrap_checked_this_epoch_ = false;
+     if (rtk_config_.max_fixed_doppler_consensus_m > 0.0 &&
+         has_doppler_continuity_position_ && has_last_doppler_velocity_) {
+         const double dt = rover_obs.time - doppler_continuity_time_;
+@@ -50,6 +51,13 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
+     PositionSolution solution = processRTKEpochInternal(rover_obs, base_obs, nav);
+     updateSafeFixShadowStateMachine(rover_obs.time);
+     applyLibraryFixedQualityGate(solution);
++    if (!doppler_bootstrap_checked_this_epoch_ ||
++        solution.status == SolutionStatus::FIXED ||
++        !solution.isValid() ||
++        debug_telemetry_.post_validation_rejected ||
++        debug_telemetry_.reject_reason != "fixed_doppler_bootstrap_pending") {
++        doppler_bootstrap_confirmation_.reset();
++    }
+ 
+     // Doppler-derived velocity: SPPProcessor now populates has_velocity on
+     // its own solutions (spp.cpp), so the fallback-to-SPP paths inside
+diff --git a/src/algorithms/rtk_validation.cpp b/src/algorithms/rtk_validation.cpp
+index c6043bc3..6cbfe4e8 100644
+--- a/src/algorithms/rtk_validation.cpp
++++ b/src/algorithms/rtk_validation.cpp
+@@ -28,6 +28,33 @@ double horizontalDistanceFromOrigin(const PositionSolution& origin,
+ 
+ }  // namespace
+ 
++bool DopplerBootstrapConfirmation::observe(
++    const Eigen::Vector3d& candidate, const GNSSTime& time,
++    const Eigen::Vector3d& velocity, bool fresh_velocity,
++    double max_distance_m, int required_epochs) {
++    if (!candidate.allFinite() || !std::isfinite(time - time) ||
++        !(max_distance_m > 0.0) || !std::isfinite(max_distance_m) || required_epochs < 1) {
++        reset();
++        return false;
++    }
++    const double dt = time - time_;
++    // A second acceptance path in the same epoch is not another observation.
++    if (count_ > 0 && dt == 0.0) return false;
++    const bool can_propagate = count_ > 0 && std::isfinite(dt) &&
++        dt > 0.0 && dt <= 2.0 && fresh_velocity && velocity.allFinite();
++    const Eigen::Vector3d predicted = predicted_position_ + velocity * dt;
++    if (can_propagate && predicted.allFinite() &&
++        (candidate - predicted).norm() <= max_distance_m) {
++        predicted_position_ = predicted;  // Do not walk the seed toward each candidate.
++        if (count_ < required_epochs) ++count_;
++    } else {
++        predicted_position_ = candidate;
++        count_ = 1;
++    }
++    time_ = time;
++    return count_ >= required_epochs;
++}
++
+ double KinematicPostFilter::anchorDt(const PositionSolution& candidate) const {
+     // Only non-positive / non-finite dt falls back to 1 s (unlike normalizedDt(), which also
+     // replaces dt < 0.5 s): this is gnss_solve's historical kinematic post-filter rule.
+diff --git a/tests/test_rtk_legacy.cpp b/tests/test_rtk_legacy.cpp
+index e988e984..94801834 100644
+--- a/tests/test_rtk_legacy.cpp
++++ b/tests/test_rtk_legacy.cpp
+@@ -51,6 +51,10 @@ struct RTKProcessorTestAccess {
+     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_position_ecef_)
+     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_time_)
+     GNSSPP_RTK_TEST_MEMBER(has_doppler_continuity_position_)
++    GNSSPP_RTK_TEST_MEMBER(last_doppler_velocity_ecef_)
++    GNSSPP_RTK_TEST_MEMBER(last_doppler_velocity_time_)
++    GNSSPP_RTK_TEST_MEMBER(has_last_doppler_velocity_)
++    GNSSPP_RTK_TEST_MEMBER(doppler_bootstrap_confirmation_)
+     GNSSPP_RTK_TEST_MEMBER(consecutive_fix_count_)
+     GNSSPP_RTK_TEST_MEMBER(lock_count_l1_)
+     GNSSPP_RTK_TEST_MEMBER(last_dd_pairs_)
+@@ -93,6 +97,31 @@ struct RTKProcessorTestAccess {
+ using namespace libgnss;
+ using Peer = RTKProcessorTestAccess;
+ 
++TEST(RTKDopplerConsensusTest, BootstrapRemainsTentativeAndMissingCandidateClearsEvidence) {
++    RTKProcessor processor;
++    auto config = processor.getRTKConfig();
++    config.max_fixed_doppler_consensus_m = 3.0;
++    config.fixed_doppler_bootstrap_epochs = 5;
++    processor.setRTKConfig(config);
++    processor.setBasePosition(Vector3d(6378137, 0, 0));
++    Peer::has_fixed_solution_(processor) = true;
++    Peer::fixed_baseline_(processor) = Vector3d::Zero();
++    Peer::has_last_doppler_velocity_(processor) = true;
++    Peer::last_doppler_velocity_ecef_(processor) = Vector3d::Zero();
++    for (int epoch = 0; epoch < 5; ++epoch) {
++        const GNSSTime time(2300, 100 + 0.1 * epoch);
++        Peer::last_doppler_velocity_time_(processor) = time - 0.1;
++        EXPECT_EQ(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time), epoch == 4);
++        EXPECT_EQ(processor.getLastDebugTelemetry().fixed_doppler_bootstrap_streak, epoch + 1);
++        EXPECT_FALSE(Peer::has_last_fixed_position_(processor));
++        EXPECT_FALSE(Peer::has_last_trusted_position_(processor));
++        EXPECT_FALSE(Peer::has_doppler_continuity_position_(processor));
++    }
++    // A normal epoch with no candidate cannot carry confirmation into a later burst.
++    const GNSSTime missing_time(2300, 100.5);
++    processor.processRTKEpoch(ObservationData(missing_time), ObservationData(missing_time), NavigationData{});
++    EXPECT_EQ(Peer::doppler_bootstrap_confirmation_(processor).count(), 0);
++}
+ TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
+     RTKProcessor processor;
+     auto config = processor.getRTKConfig();
+@@ -1237,6 +1266,24 @@ TEST_F(RTKHoldFixUnchangedSetTest, DopplerRejectionCannotMutateHeldOrTrustedFixS
+     EXPECT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
+ }
+ 
++TEST_F(RTKHoldFixUnchangedSetTest, UnconfirmedBootstrapCannotSeedHeldFixState) {
++    dropSatellites(processor_, {6, 7, 8, 9});
++    auto config = processor_.getRTKConfig();
++    config.max_fixed_doppler_consensus_m = 3.0;
++    config.fixed_doppler_bootstrap_epochs = 5;
++    processor_.setRTKConfig(config);
++    const VectorXd held = Peer::last_dd_fixed_(processor_);
++    const auto previous = Peer::last_fixed_position_(processor_);
++    PositionSolution solution;
++    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
++    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "fixed_doppler_bootstrap_pending");
++    EXPECT_EQ(processor_.getLastDebugTelemetry().fixed_doppler_bootstrap_streak, 1);
++    EXPECT_FALSE(processor_.getLastDebugTelemetry().hold_fix_applied);
++    EXPECT_EQ(Peer::last_dd_fixed_(processor_), held);
++    EXPECT_EQ(Peer::last_fixed_position_(processor_), previous);
++    EXPECT_EQ(solution.status, SolutionStatus::NONE);
++}
++
+ TEST_F(RTKHoldFixUnchangedSetTest, FewerThanFourMatchedPairsStillRejectsWithItsOwnReason) {
+     // Drop two held satellites from tracking: 2 held pairs remain, 6 new ones.
+     dropSatellites(processor_, {4, 5});
+diff --git a/tests/test_rtk_validation.cpp b/tests/test_rtk_validation.cpp
+index 86ca3685..828e8de8 100644
+--- a/tests/test_rtk_validation.cpp
++++ b/tests/test_rtk_validation.cpp
+@@ -24,6 +24,43 @@ PositionSolution makeValidationSolution(double tow,
+ 
+ }  // namespace
+ 
++TEST(DopplerBootstrapTest, RequiresDistinctMotionConsistentEpochsWithoutWalkingTheSeed) {
++    rtk_validation::DopplerBootstrapConfirmation confirmation;
++    const Eigen::Vector3d velocity(10.0, 0.0, 0.0);
++    const Eigen::Vector3d origin(6378137.0, 0.0, 0.0);
++    for (int epoch = 0; epoch < 5; ++epoch) {
++        const GNSSTime time(2300, 100.0 + 0.1 * epoch);
++        const auto position = origin + velocity * (0.1 * epoch);
++        EXPECT_EQ(confirmation.observe(position, time, velocity, true, 3.0, 5), epoch == 4);
++        EXPECT_EQ(confirmation.count(), epoch + 1);
++        EXPECT_FALSE(confirmation.observe(position, time, velocity, true, 3.0, 5));
++        EXPECT_EQ(confirmation.count(), epoch + 1);
++    }
++    confirmation.reset();
++    // Individually small candidate steps cannot walk an untrusted absolute seed.
++    EXPECT_FALSE(confirmation.observe(origin, GNSSTime(2300, 100), Eigen::Vector3d::Zero(), true, 3, 5));
++    EXPECT_FALSE(confirmation.observe(origin + Eigen::Vector3d(2, 0, 0), GNSSTime(2300, 100.1), Eigen::Vector3d::Zero(), true, 3, 5));
++    EXPECT_FALSE(confirmation.observe(origin + Eigen::Vector3d(4, 0, 0), GNSSTime(2300, 100.2), Eigen::Vector3d::Zero(), true, 3, 5));
++    EXPECT_EQ(confirmation.count(), 1);
++}
++
++TEST(DopplerBootstrapTest, MissingVelocityGapsTimeReversalAndInvalidInputsCannotConfirm) {
++    rtk_validation::DopplerBootstrapConfirmation confirmation;
++    const Eigen::Vector3d origin(6378137.0, 0.0, 0.0);
++    const Eigen::Vector3d zero = Eigen::Vector3d::Zero();
++    EXPECT_FALSE(confirmation.observe(origin, GNSSTime(2300, 100), zero, true, 3, 3));
++    EXPECT_FALSE(confirmation.observe(origin, GNSSTime(2300, 100.1), zero, false, 3, 3));
++    EXPECT_EQ(confirmation.count(), 1);
++    EXPECT_FALSE(confirmation.observe(origin, GNSSTime(2300, 103), zero, true, 3, 3));
++    EXPECT_EQ(confirmation.count(), 1);
++    EXPECT_FALSE(confirmation.observe(origin, GNSSTime(2300, 102), zero, true, 3, 3));
++    EXPECT_EQ(confirmation.count(), 1);
++    Eigen::Vector3d invalid = origin;
++    invalid.x() = std::numeric_limits<double>::quiet_NaN();
++    EXPECT_FALSE(confirmation.observe(invalid, GNSSTime(2300, 103), zero, true, 3, 3));
++    EXPECT_EQ(confirmation.count(), 0);
++}
++
+ TEST(RTKValidationTest, NormalizesNonFiniteOrShortDt) {
+     EXPECT_DOUBLE_EQ(rtk_validation::normalizedDt(std::numeric_limits<double>::quiet_NaN()), 1.0);
+     EXPECT_DOUBLE_EQ(rtk_validation::normalizedDt(0.1), 1.0);

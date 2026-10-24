@@ -422,7 +422,7 @@ std::vector<rtk_measurement::MeasurementBlock> RTKProcessor::buildMeasurementBlo
 bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_data) {
     if (sat_data.size() < 4) return false;
 
-    const auto blocks = buildMeasurementBlocks(sat_data);
+    auto blocks = buildMeasurementBlocks(sat_data);
     const auto measurement_diagnostics = rtk_measurement::summarizeMeasurementBlocks(blocks);
     auto measurement_system = rtk_measurement::assembleMeasurementSystem(
         blocks, filter_state_.state.size());
@@ -468,10 +468,73 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
         !(std::isfinite(rtk_config_.max_fixed_update_nis_per_observation) &&
           rtk_config_.max_fixed_update_nis_per_observation > 0.0);
 
-    const double update_outlier_threshold =
+    const double configured_outlier_threshold =
         rtk_config_.outlier_threshold > 0.0
             ? rtk_config_.outlier_threshold
             : 30.0;
+    double update_outlier_threshold = configured_outlier_threshold;
+
+    // Relinearized pass (iterated EKF): the rows were linearized at the
+    // current iterate x_i. Gate them there, as the first pass gates at the
+    // seed, then express the kept rows about the epoch prior x0,
+    //   r0' = r_i + H (x_i - x0),
+    // and apply them once to (x0, P0). Updating the posterior again would
+    // count the same rows twice and shrink the covariance by about half per
+    // pass. In a linear model this pass reproduces the first-pass solution.
+    int relinearization_suppressed = 0;
+    double relinearized_post_sum_sq = 0.0;
+    double relinearized_post_max_abs = 0.0;
+    int relinearized_rows = 0;
+    const bool relinearized_pass =
+        has_iterated_update_prior_ &&
+        iterated_update_prior_state_.size() == filter_state_.state.size() &&
+        iterated_update_prior_covariance_.rows() == filter_state_.state.size() &&
+        iterated_update_prior_covariance_.cols() == filter_state_.state.size();
+    VectorXd iterate_state;
+    MatrixXd iterate_covariance;
+    if (relinearized_pass) {
+        iterate_state = filter_state_.state;
+        iterate_covariance = filter_state_.covariance;
+        const VectorXd delta = filter_state_.state - iterated_update_prior_state_;
+        for (auto& block : blocks) {
+            const double block_threshold =
+                block.kind == rtk_measurement::MeasurementKind::DOPPLER &&
+                        rtk_config_.doppler_row_outlier_threshold_mps > 0.0
+                    ? rtk_config_.doppler_row_outlier_threshold_mps
+                    : configured_outlier_threshold;
+            for (auto& row : block.rows) {
+                ++relinearized_rows;
+                if (std::abs(row.residual) > block_threshold) {
+                    row.residual = 0.0;
+                    row.baseline_coefficients.setZero();
+                    row.state_coefficients.clear();
+                    ++relinearization_suppressed;
+                    continue;
+                }
+                relinearized_post_sum_sq += row.residual * row.residual;
+                relinearized_post_max_abs =
+                    std::max(relinearized_post_max_abs, std::abs(row.residual));
+                double correction = row.baseline_coefficients.dot(delta.head<3>());
+                for (const auto& coefficient : row.state_coefficients) {
+                    if (coefficient.state_index >= 0 &&
+                        coefficient.state_index < delta.size()) {
+                        correction += coefficient.coefficient * delta(coefficient.state_index);
+                    }
+                }
+                row.residual += correction;
+            }
+        }
+        filter_state_.state = iterated_update_prior_state_;
+        filter_state_.covariance = iterated_update_prior_covariance_;
+        measurement_system =
+            rtk_measurement::assembleMeasurementSystem(blocks, filter_state_.state.size());
+        // Already gated at the iterate; the re-expressed residuals are not
+        // geometric residuals and must not be gated again.
+        update_outlier_threshold = std::numeric_limits<double>::infinity();
+        measurement_system.row_outlier_thresholds.assign(
+            static_cast<size_t>(measurement_system.residuals.size()),
+            std::numeric_limits<double>::infinity());
+    }
     bool adaptive_tracker_updated = false;
     auto feed_adaptive_tracker =
         [&](const std::vector<rtk_measurement::MeasurementBlock>& update_blocks,
@@ -545,7 +608,8 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
             doppler_blocks, filter_state_.state.size());
         doppler_system.row_outlier_thresholds.assign(
             static_cast<size_t>(doppler_system.residuals.size()),
-            rtk_config_.doppler_row_outlier_threshold_mps);
+            relinearized_pass ? std::numeric_limits<double>::infinity()
+                              : rtk_config_.doppler_row_outlier_threshold_mps);
 
         const VectorXd state_before_sequential = filter_state_.state;
         const MatrixXd covariance_before_sequential = filter_state_.covariance;
@@ -645,6 +709,24 @@ bool RTKProcessor::updateFilter(const std::map<SatelliteId, SatelliteData>& sat_
             measurement_system, rtk_measurement::MeasurementKind::CODE);
         debug_telemetry_.retained_phase_rows = rtk_measurement::countActiveRows(
             measurement_system, rtk_measurement::MeasurementKind::PHASE);
+    }
+
+    if (relinearized_pass && !update_result.ok) {
+        // A failed pass leaves the previous iterate, as before.
+        filter_state_.state = iterate_state;
+        filter_state_.covariance = iterate_covariance;
+    }
+    if (relinearized_pass) {
+        // Keep the residual diagnostics in their geometric meaning: residuals
+        // at this pass's linearization point after its outlier gate.
+        update_result.suppressed_outliers += relinearization_suppressed;
+        update_result.prefit_residual_rms_m = measurement_diagnostics.residual_rms_m;
+        update_result.prefit_residual_max_abs_m = measurement_diagnostics.residual_max_abs_m;
+        update_result.post_suppression_residual_rms_m =
+            relinearized_rows > 0
+                ? std::sqrt(relinearized_post_sum_sq / static_cast<double>(relinearized_rows))
+                : 0.0;
+        update_result.post_suppression_residual_max_abs_m = relinearized_post_max_abs;
     }
 
     if (update_result.ok) {

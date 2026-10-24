@@ -20,3 +20,7 @@ scripts/experiments/** linguist-vendored
 *.py text eol=lf
 *.sh text eol=lf
 apps/compat/gnss_pos2kml text eol=lf
+
+# Frozen unified diffs need the space marking an empty context line. Keep the
+# bytes stable for provenance checks without flagging that patch syntax as code.
+docs/*_experiment.patch text eol=lf whitespace=-blank-at-eol
