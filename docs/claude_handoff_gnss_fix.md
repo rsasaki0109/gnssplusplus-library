@@ -5,6 +5,8 @@
 ユーザーはREADMEの実データ可視化から、**「LOS衛星が多いのにRTK FIXしない理由を調べ、誤FIXを増やさず改善したい」**という調査に進んでいる。
 安全なFIX復帰はまだ未解決。設定の緩和や局所的な拒否ルールを足すだけでは、全区間の誤FIXが増えた。
 直近では、再現テストで証明できた信頼位置履歴の不具合2件を修正した。これは既定設定での誤FIX増加の原因ではなかった。
+その後、**反復KF更新が同じepochの観測を2回適用し、位置・DD整数の共分散を約半分に過小評価する**不具合を再現テストで確定した。
+iterated EKF化（opt-in `--kf-relinearize-from-prior`）は全区間の採用基準を満たさず、**既定は不変**（[詳細](rtk_iterated_update_covariance.md)）。
 
 次の担当は、既存成果を維持して整数候補の誤選択・共分散・受理後の状態発展の調査を続ける。**FIX数だけで改善判定しない。**
 GTはオフライン採点と可視化のカメラにだけ使い、ソルバーには渡さない。
@@ -36,6 +38,7 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 ## 読む順序
 
 1. [AGENTS.md](../AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
+1. [反復更新と共分散](rtk_iterated_update_covariance.md) / [評価JSON](urbannav_iterated_update_evaluation.json): 最新の調査。
 2. [信頼位置履歴の修正](rtk_trusted_history_rollback.md): 最新の実装と影響範囲。
 3. [履歴修正の全12回評価](urbannav_trusted_history_evaluation.json): 既定・実験設定8回とCV設定4回。
 4. [FIX復帰調査](urbannav_doppler_consensus.md): 根拠、従来の不採用実験、限界。
@@ -83,6 +86,30 @@ GTでも約413 m移動している。単なる衛星数不足ではなかった�
 整数探索の既存のfull / subset / multi-frequency合成ケースでも、受理前のFLOAT state / covarianceが完全一致することを追加検査した。
 これは**全てのオプションや状態の完全なトランザクション性を証明するものではない**。
 
+### 反復KF更新が同じ観測を再適用していた（確定・既定は未修正）
+
+`processRTKEpochInternal()` は kinematic で2回 `updateFilter()` を呼ぶ。2回目は更新後の事後状態・共分散に同じ行を再度Kalman更新していた。
+雑音なし・初期値バイアスなしの合成シーンで、1回更新に対し位置分散とDD整数分散が **0.50–0.51倍**（再現テストは修正前に失敗）。
+一方で2回目の再線形化自体は必要: 初期SPPが約4.7 mずれると1回目は18行中14行を3 m prefit gateで除外し、2回目で回復する。
+
+opt-in `--kf-relinearize-from-prior` は、現在iterateでgate → `r0' = r_i + H(x_i - x0)` で事前値へ戻し、(x0, P0) に1回だけ適用する。
+OFFは全8実行でbaselineとPOS byte-identical、ONは実験POSとbyte-identical。
+
+全区間評価（判定規則は実行前に固定、閾値の再調整なし）はNO_GO:
+
+| 対象 | before → after |
+| --- | --- |
+| Odaiba 既定 | FIX 1298→1298、誤FIX 0→0、欠測 1426→1515、水平P95 4.7772→5.1399 |
+| Shinjuku 既定 | FIX 122→122、誤FIX 0→0、欠測 3234→3451、水平P95 8.3821→1.9650 |
+| Odaiba age5_doppler3 | 誤FIX >0.5/2/3 m 157/3/0→103/3/0、欠測 1480→1562、0.5 m復帰P95 186.7→298.5 s |
+| Shinjuku age5_doppler3 | 誤FIX 13/1/1→**516/125/15**、FIX 1949→3972、欠測 3332→3581 |
+
+正しい共分散にすると、過小評価された共分散に合わせて働いていた既存gateを通る候補の集合が変わる。
+既存の誤FIX（baseline age5_doppler3）の大半は少数ペア（Odaiba中央値6ペア、93%が≤6）のAR候補で、float→fixed変位が約0.9 m（正しいFIXは18ペア・0.01 m）。
+**これは観測であり、検証済みgateではない**。この表から閾値を選ぶのは既に棄却した事後調整と同じ。
+
+`RTKProcessor::fixed_baseline_` が未初期化（Eigen）で、メンバー追加後に `RTKHoldFixMinMatchedTest` がNaN比較で失敗した。ゼロ初期化した（POSは不変）。
+
 ## 最新の実データ結果
 
 履歴修正の前後では、両データセットの既定設定と `age5_doppler3` 設定のPOSが全てbyte-identical。
@@ -119,6 +146,7 @@ CVのFIX数は1298 / 122で不変、上記3閾値の誤FIXは前後とも0、正
 | さらに `--min-fix-satellites 4` | 初期比較のShinjukuで3D >3 m誤FIXが14件に増加。ローカルのanchor-guardレポート参照 |
 | 位置出力なしでもDoppler追跡を維持 | Odaiba >0.5 / >2 mが157/3 → 173/13、欠測1480 → 2132。Shinjukuも悪化、単発の大誤差FIXは残った |
 | 初回FIXを5候補連続で確認 | Shinjukuの対象単発FIXは止まったが、全体の >3 m誤FIXが1 → 14、>0.5 mが13 → 473。正しい既定FIXも4/122喪失 |
+| 反復KF更新をiterated EKFに（既定化） | 上の表。欠測増・Odaiba P95悪化・Shinjuku age5の誤FIX急増でNO_GO。opt-inとして保持、パッチは `docs/urbannav_iterated_update_experiment.patch`（`35654026` に適用） |
 
 最後の2案は**実装・CLI・専用テストを本体から除去済み**。再現用の正確なパッチと評価JSONだけを保存。
 
@@ -223,6 +251,23 @@ baselineがない場合は別checkoutの `6473615a` を同じツールチェー�
 | `output/trust-history-cv-validation/` | 最新修正のCV比較4回 |
 | `output/readme-hero/` | 元の2ソルバーPOS、`sky-ar-debug.csv`、`guard-age-doppler-debug.csv` 等 |
 
+## 別環境での再構築（2026-10 実施）
+
+`/workspace/scratch` がない環境では次で再現した（Ubuntu 24.04、GCC 13.3、CMake 3.28）。
+
+```sh
+apt-get install -y libeigen3-dev libgtest-dev pybind11-dev
+pip install --break-system-packages --ignore-installed matplotlib   # 3件のPython coreテスト用
+python3 scripts/readme_hero/fetch_inputs.py --manifest <scratch>/odaiba-manifest.json
+sed 's#"/Odaiba/"#"/Shinjuku/"#' scripts/readme_hero/fetch_inputs.py > <scratch>/fetch_shinjuku.py
+python3 <scratch>/fetch_shinjuku.py --output-dir data/driving/Tokyo_Data/Shinjuku --manifest <scratch>/shinjuku-manifest.json
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DGNSSPP_BUILD_PYTHON_BINDINGS=OFF
+cmake --build build -j4 && ctest --test-dir build -L core -j4
+```
+
+8入力のSHA-256は保存済み評価JSONと一致。`35654026` のbinaryで既定・age5_doppler3の4 POSが保存hashとbyte-identical（GCC 14→13でも一致）。
+system Eigenがあれば `CPLUS_INCLUDE_PATH` は不要。
+
 ## 次に追うコードと検証点
 
 | 場所 | 調べる対象 |
@@ -239,8 +284,10 @@ baselineがない場合は別checkoutの `6473615a` を同じツールチェー�
 
 1. 大誤差FIXの最初の発生点で、採用subset・参照衛星・ratio・DD整数候補・Qb/Qab・float→fixed変位・hold由来かを記録する。
 2. そのepochより前の状態で初めて差が出た箇所を特定し、整数選択そのものと、正当に受理された過去の候補が作る状態の差を分ける。
-3. 同一epochの反復KF更新で共分散を引き継ぐ処理が、再線形化と情報の二重計上を区別できているかを線形toy caseで検証する。
-   対象は `rtk_epoch.cpp` の `updateFilter()` 反復と `rtk_filter.cpp`。**この仮説は今回未検証・未修正。二重計上バグと断定しない。**
+3. ~~反復KF更新の二重計上~~ → **確定**（上記）。ただし修正単独では採用不可。次は opt-in ON の状態で:
+   - `applyHoldAmbiguity()` は条件付き更新ではなく、整数をstateへ代入し位置との相関を0にして分散0.001を置く。ON時のShinjuku誤FIXの約半数がhold由来で、floatが既に誤basin（float→fixed 0.03 m）。hold更新が誤basinを固定するかを再現テストで確かめる。
+   - 正しいQbでのLAMBDA成功率・float→fixed Mahalanobis距離を正誤候補で比較してから、凍結した規則を1つだけ試す。
+   - Doppler軌跡は受理FIXごとに再anchorするため、連続した誤basin（Shinjuku 283274–283289で145 epoch）は検出できない。
 4. ログに現れない別状態の漏れを疑う場合も、受理済みhold更新など意図的な状態変化と区別し、再現テストを先に作る。
 
 診断例: `--debug-epoch-log output/new-debug.csv --max-epochs 15740` をShinjukuの先頭から実行するとTOW 282847.6付近まで到達する。
