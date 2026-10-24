@@ -241,6 +241,44 @@ TEST(RTKIteratedUpdateTest, RelinearizationFromPriorDoesNotRecountEpochMeasureme
     }
 }
 
+TEST(RTKLambdaShadowTest, ReportsPerPairIntegerResidualOfBestCandidate) {
+    // Noise-free scene: the float DD ambiguities sit on integers, so the
+    // largest normalized integer residual is small and named after a pair.
+    const auto nav = synthetic_rtk_scene::constellation();
+    const Vector3d base_position(6378137, 0, 0);
+    const Vector3d rover_position = base_position + Vector3d(40, 30, 10);
+    const auto prns = synthetic_rtk_scene::visible(
+        nav, synthetic_rtk_scene::epochTime(0), rover_position, 15);
+    ASSERT_GE(prns.size(), 6U);
+    RTKProcessor processor;
+    auto config = processor.getRTKConfig();
+    config.ratio_threshold = 1e9;
+    config.ambiguity_ratio_threshold = 1e9;
+    config.elevation_mask = 5 * M_PI / 180;
+    config.lambda_candidate_shadow_count = 2;
+    processor.setRTKConfig(config);
+    ProcessorConfig spp_config;
+    spp_config.elevation_mask = 5;
+    spp_config.use_ionosphere_model = false;
+    spp_config.use_troposphere_model = false;
+    ASSERT_TRUE(processor.initialize(spp_config));
+    processor.setBasePosition(base_position);
+    for (int epoch = 0; epoch < 6; ++epoch) {
+        const auto time = synthetic_rtk_scene::epochTime(epoch);
+        processor.processRTKEpoch(
+            synthetic_rtk_scene::observations(nav, time, rover_position, 30, prns, 0),
+            synthetic_rtk_scene::observations(nav, time, base_position, 10, prns, 500), nav);
+    }
+    const auto& telemetry = processor.getLastDebugTelemetry();
+    ASSERT_TRUE(telemetry.lambda_shadow_solved);
+    ASSERT_TRUE(std::isfinite(telemetry.lambda_shadow_max_abs_z));
+    EXPECT_LT(telemetry.lambda_shadow_max_abs_z, 3.0);
+    EXPECT_EQ(telemetry.lambda_shadow_pairs_abs_z_gt3, 0);
+    EXPECT_GT(telemetry.lambda_shadow_max_z_lock_count, 0);
+    EXPECT_EQ(telemetry.lambda_shadow_max_z_pair.rfind("G", 0), 0U);
+    EXPECT_NE(telemetry.lambda_shadow_max_z_pair.find("/L1"), std::string::npos);
+}
+
 TEST(RTKHoldAmbiguityUpdateTest, LegacyHoldOverwritesInsteadOfConditioningTheState) {
     // A held DD integer is information about the ambiguity differences. As a
     // Kalman pseudo-observation (RTKLIB holdamb, 0.001 cycle^2) it moves the

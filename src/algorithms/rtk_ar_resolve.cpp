@@ -1380,6 +1380,41 @@ bool RTKProcessor::resolveAmbiguities(std::vector<DDPair> dd_pairs) {
                     debug_telemetry_.lambda_shadow_ffrt_min_ratio =
                         ffrt.minimum_second_to_best_ratio;
                 }
+                if (shadow.candidates.cols() >= 1 &&
+                    shadow.candidates.rows() == full_problem.dd_float.size() &&
+                    full_problem.dd_float.size() == static_cast<int>(dd_pairs.size())) {
+                    double max_abs_z = -1.0;
+                    int max_index = -1;
+                    int above_three = 0;
+                    for (int i = 0; i < full_problem.dd_float.size(); ++i) {
+                        const double sigma = std::sqrt(full_problem.Qb(i, i));
+                        if (!(sigma > 0.0)) continue;
+                        const double z = std::abs(
+                            full_problem.dd_float(i) - shadow.candidates(i, 0)) / sigma;
+                        if (z > 3.0) ++above_three;
+                        if (z > max_abs_z) {
+                            max_abs_z = z;
+                            max_index = i;
+                        }
+                    }
+                    if (max_index >= 0) {
+                        const auto& pair = dd_pairs[static_cast<size_t>(max_index)];
+                        const auto& locks = pair.freq == 0 ? lock_count_l1_
+                                          : pair.freq == 1 ? lock_count_l2_
+                                                           : lock_count_l5_;
+                        const auto lock_of = [&](const SatelliteId& satellite) {
+                            const auto it = locks.find(satellite);
+                            return it == locks.end() ? 0 : it->second;
+                        };
+                        debug_telemetry_.lambda_shadow_max_abs_z = max_abs_z;
+                        debug_telemetry_.lambda_shadow_max_z_pair =
+                            pair.ref_sat.toString() + "-" + pair.sat.toString() + "/L" +
+                            std::to_string(pair.freq + 1);
+                        debug_telemetry_.lambda_shadow_max_z_lock_count =
+                            std::min(lock_of(pair.ref_sat), lock_of(pair.sat));
+                        debug_telemetry_.lambda_shadow_pairs_abs_z_gt3 = above_three;
+                    }
+                }
                 if (shadow.squared_residuals.size() >= 1) {
                     const double best_cost = shadow.squared_residuals(0);
                     debug_telemetry_.lambda_shadow_best_cost = best_cost;
