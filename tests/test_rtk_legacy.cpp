@@ -241,6 +241,87 @@ TEST(RTKIteratedUpdateTest, RelinearizationFromPriorDoesNotRecountEpochMeasureme
     }
 }
 
+TEST(RTKHoldAmbiguityUpdateTest, LegacyHoldOverwritesInsteadOfConditioningTheState) {
+    // A held DD integer is information about the ambiguity differences. As a
+    // Kalman pseudo-observation (RTKLIB holdamb, 0.001 cycle^2) it moves the
+    // correlated position and keeps the posterior covariance consistent. The
+    // legacy hold writes the integer into the satellite state, zeroes that
+    // state's correlations (position included) and leaves the position alone.
+    const int n = Peer::kStateCount;
+    const std::vector<int> prns{1, 2, 3, 4};
+    std::vector<int> index;
+    for (const int prn : prns) {
+        index.push_back(Peer::ambiguityIndex(SatelliteId(GNSSSystem::GPS, prn), 0));
+    }
+    std::vector<int> active{0, 1, 2};
+    active.insert(active.end(), index.begin(), index.end());
+    Eigen::MatrixXd factor(active.size(), active.size());
+    for (int r = 0; r < factor.rows(); ++r) {
+        for (int c = 0; c < factor.cols(); ++c) {
+            factor(r, c) = 0.3 * std::sin(1.7 * r + 0.9 * c + 0.4) + (r == c ? 1.0 : 0.0);
+        }
+    }
+    const Eigen::MatrixXd active_covariance = factor * factor.transpose();
+    const std::vector<double> values{1.0, 2.0, 3.0, 100.3, 88.1, 120.6, 95.2};
+    VectorXd integers(3);
+    integers << 12.0, -20.0, 5.0;
+    auto prepare = [&](RTKProcessor& processor, bool kalman_update) {
+        auto config = processor.getRTKConfig();
+        config.hold_ambiguity_kalman_update = kalman_update;
+        processor.setRTKConfig(config);
+        auto& filter = Peer::filter_state_(processor);
+        filter.state = VectorXd::Zero(n);
+        filter.covariance = MatrixXd::Zero(n, n);
+        for (std::size_t r = 0; r < active.size(); ++r) {
+            filter.state(active[r]) = values[r];
+            for (std::size_t c = 0; c < active.size(); ++c) {
+                filter.covariance(active[r], active[c]) = active_covariance(r, c);
+            }
+        }
+        auto& pairs = Peer::last_dd_pairs_(processor);
+        pairs.clear();
+        for (std::size_t i = 1; i < prns.size(); ++i) {
+            pairs.push_back({SatelliteId(GNSSSystem::GPS, prns[0]), index[0], index[i],
+                             SatelliteId(GNSSSystem::GPS, prns[i]), 0});
+        }
+        Peer::last_best_subset_(processor) = {0, 1, 2};
+        Peer::last_dd_fixed_(processor) = integers;
+    };
+    RTKProcessor processor;
+    RTKProcessor conditioned;
+    prepare(processor, false);
+    prepare(conditioned, true);
+    const auto& filter = Peer::filter_state_(processor);
+
+    // Reference: one Kalman update with z = held DD, H = e_ref - e_sat.
+    MatrixXd H = MatrixXd::Zero(3, n);
+    for (int i = 0; i < 3; ++i) {
+        H(i, index[0]) = 1.0;
+        H(i, index[i + 1]) = -1.0;
+    }
+    const VectorXd x0 = filter.state;
+    const MatrixXd P0 = filter.covariance;
+    const MatrixXd S = H * P0 * H.transpose() + 0.001 * MatrixXd::Identity(3, 3);
+    const MatrixXd K = (S.ldlt().solve(H * P0)).transpose();
+    const VectorXd expected_state = x0 + K * (integers - H * x0);
+    const MatrixXd expected_covariance = P0 - K * (H * P0);
+    ASSERT_GT((expected_state.head<3>() - x0.head<3>()).norm(), 0.01);
+
+    Peer::applyHoldAmbiguity(conditioned);
+    const auto& updated = Peer::filter_state_(conditioned);
+    EXPECT_LT((updated.state - expected_state).cwiseAbs().maxCoeff(), 1e-9);
+    EXPECT_LT((updated.covariance - expected_covariance).cwiseAbs().maxCoeff(), 1e-9);
+
+    Peer::applyHoldAmbiguity(processor);
+    const auto& legacy = Peer::filter_state_(processor);
+    EXPECT_EQ(legacy.state.head<3>(), x0.head<3>());
+    for (int i = 0; i < 3; ++i) {
+        EXPECT_NEAR(legacy.state(index[0]) - legacy.state(index[i + 1]), integers(i), 1e-9);
+        EXPECT_DOUBLE_EQ(legacy.covariance(index[i + 1], 0), 0.0);
+        EXPECT_NE(expected_covariance(index[i + 1], 0), 0.0);
+    }
+}
+
 TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
     RTKProcessor processor;
     auto config = processor.getRTKConfig();

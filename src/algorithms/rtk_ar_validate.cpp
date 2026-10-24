@@ -3,6 +3,7 @@
 #include <libgnss++/algorithms/rtk_ar_selection.hpp>
 #include <libgnss++/algorithms/disjoint_satellite_fix_evidence.hpp>
 #include <libgnss++/algorithms/fix_failure_budget.hpp>
+#include <libgnss++/algorithms/kalman.hpp>
 #include <libgnss++/algorithms/lambda.hpp>
 #include <libgnss++/algorithms/rtk_cp_pr_gate.hpp>
 #include <libgnss++/algorithms/rtk_ddpr_anchor.hpp>
@@ -687,6 +688,43 @@ void RTKProcessor::applyHoldAmbiguity() {
 
     auto& x = filter_state_.state;
     auto& P = filter_state_.covariance;
+    constexpr double VAR_HOLDAMB = 0.001;
+
+    if (rtk_config_.hold_ambiguity_kalman_update) {
+        // One measurement update with z = held DD integer, h(x) = x_ref - x_sat,
+        // over the same pairs the legacy overwrite would touch.
+        std::vector<std::pair<int, int>> rows;
+        std::vector<double> held;
+        for (int i = 0; i < (int)last_best_subset_.size(); ++i) {
+            int dd_idx = last_best_subset_[i];
+            if (dd_idx >= (int)last_dd_pairs_.size()) continue;
+            if (!usesHoldAmbiguitySystem(rtk_config_, last_dd_pairs_[dd_idx].ref_sat.system)) continue;
+            int ri = last_dd_pairs_[dd_idx].ref_idx;
+            int si = last_dd_pairs_[dd_idx].sat_idx;
+            if (ri >= n || si >= n) continue;
+            if (x(ri) == 0.0 || x(si) == 0.0) continue;
+            rows.emplace_back(ri, si);
+            held.push_back(last_dd_fixed_(i));
+        }
+        if (rows.empty()) return;
+        const int m = static_cast<int>(rows.size());
+        MatrixXd H = MatrixXd::Zero(m, n);
+        VectorXd v(m);
+        for (int r = 0; r < m; ++r) {
+            H(r, rows[r].first) = 1.0;
+            H(r, rows[r].second) = -1.0;
+            v(r) = held[r] - (x(rows[r].first) - x(rows[r].second));
+        }
+        std::vector<bool> force_active;
+        if (rtk_config_.enable_velocity_states && n >= VELOCITY_STATE_INDEX + VELOCITY_STATES) {
+            force_active.assign(n, false);
+            for (int i = 0; i < VELOCITY_STATES; ++i) {
+                force_active[VELOCITY_STATE_INDEX + i] = true;
+            }
+        }
+        kalmanFilter(x, P, H, v, VAR_HOLDAMB * MatrixXd::Identity(m, m), force_active);
+        return;
+    }
 
     // Direct state adjustment: move SD ambiguities to satisfy DD integer constraints
     // Only adjust the satellite (non-reference) SD ambiguity for each DD pair
@@ -707,7 +745,6 @@ void RTKProcessor::applyHoldAmbiguity() {
 
         // Tighten the satellite ambiguity covariance (leave ref untouched)
         // Reduce cross-correlations with position to prevent position distortion
-        constexpr double VAR_HOLDAMB = 0.001;
         for (int j = 0; j < n; ++j) {
             if (j == si) continue;
             P(si, j) = 0.0;
