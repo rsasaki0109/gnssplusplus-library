@@ -1,12 +1,13 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57594243, Private 0.862 m / Public 0.884 m, 40 drives, 71,936 rows
+# Kaggle ref 57600830, Private 0.845 m / Public 0.884 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
 # Platform note: 31 drives are pinned to MSVC research outputs. The 9 drives
 # changed after ref 56625084 (6 per-phone main Doppler drives, sjc-he2 Pixel5
 # hardware clock reset, sjc-ce1 Pixel7Pro zero-bias IMU initialization, ebf-z
-# Pixel5 without epoch heading seeds), plus the stage-0 runs and height maps
+# Pixel5 without epoch heading seeds; the sjc-r A505U main Doppler drive also
+# takes course attitude seeds), plus the stage-0 runs and height maps
 # of the 8 of them that use a height map, are pinned to Linux GCC 15 outputs.
 # A rebuild on one platform therefore reproduces only its own subset byte for
 # byte.
@@ -26,7 +27,7 @@
 #   final   40 replays: 17 Pixel5 heading + 9 modern clock (both new in
 #           56625084) and 14 height-map/relative-height drives retained
 #           from 56536540, with the per-drive flags added or removed by
-#           57585127, 57586667, 57590194 and 57594243;
+#           57585127, 57586667, 57590194, 57594243 and 57600830;
 #   assemble on the official key list (Kaggle sample_submission order).
 # Stage 0 is skipped for a drive whose height map is already present with
 # the pinned SHA-256, and every run step resumes from completed drives.
@@ -39,7 +40,7 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.862 m / Public 0.884 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.845 m / Public 0.884 m; 40 drives, 71,936 rows"
 runtime_estimate = "~12-18 h"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -114,7 +115,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57594243 (2344a34f...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57600830 (a7242b56...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -163,6 +164,8 @@ readme = "reported"
 # 7 GCC height maps rebuild to their pinned SHA-256, and a partial assembly
 # gives f9526888.... Recipe update to ref 57594243 (same build): ebf-z
 # Pixel5 stage 0, height map and final pinned from the lane, and a partial
-# assembly gives 2344a34f.... Routine verification is intentionally limited
+# assembly gives 2344a34f.... Recipe update to ref 57600830: sjc-r A505U
+# rerun with --native-course-attitude-seeds-mount-deg 178.9 on the build
+# that adds it, and a partial assembly gives a7242b56.... Routine verification is intentionally limited
 # to these subsets; the full 40-drive run (estimate 12-18 h single-process) is
 # available through the same command; see docs/reproduce.md.

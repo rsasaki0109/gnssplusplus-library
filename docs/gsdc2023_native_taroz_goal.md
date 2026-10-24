@@ -6705,3 +6705,45 @@ ebf-x Mi8 was also checked. Taroz sets IdxStart=600 for that drive and fills
 the first 599 stationary epochs with the nearest solution. Solving only from
 epoch 599 still leaves the stationary segment 1.4-1.7 m from taroz, so that
 drive is undecided.
+
+### Course attitude seeds for the sjc-r A505U yaw slip, submission 57600830 (2026-10-24)
+
+A per-factor error dump at the optimized values (experimental build) puts
+most of the IMU-stage error of 2023-05-09 sjc-r A505U between epochs 1000 and
+1400. In that window:
+
+- the CombinedImu factors hold 134k of 168k total error;
+- the TDCP factors are also about 20 times their usual size;
+- at the GNSS-first initial values the TDCP errors are still small, but the
+  IMU errors are already 100k-540k per 50 epochs.
+
+The data do not force the twist. The 1-s mean accelerometer, rotated into
+ENU with yaw = GNSS course + a constant 178.9 deg mount and roll/pitch held at
+their stop values (-1.8 / 10.6 deg), matches the GNSS acceleration in that
+window: the along-track residual is about 0 and the cross-track residual is a
+constant -0.5 m/s^2, which an accelerometer bias absorbs. So the slip is a
+local minimum. Dead-reckoned, velocity-heading and blended seeds all end in
+the same slipped basin.
+
+`--native-course-attitude-seeds-mount-deg DEG` (default off) seeds every IMU
+attitude with yaw = GNSS-first course + DEG and the aligned initial
+roll/pitch. Epochs below 3 m/s reuse the nearest moving course. With the
+mount estimated from the slip-free part of the first solution (178.9 deg):
+
+- the mount stays at 178-180 deg;
+- final-vs-GNSS-first P95 drops from 2.91 to 1.38 m;
+- the distance to the archived taroz output drops from median 0.42 m /
+  P95 2.15 m to 0.34 / 0.88 m.
+
+It is not a general recipe. On five Samsung train drives with their own
+mounts, four are unchanged (within 0.001 m), but mtv-n A205U goes from
+1.772 to 5.675 m. Keeping the dead-reckoned roll/pitch makes it 23.8 m. The
+same truth-free check flags that failure: final-vs-GNSS-first P95 rises from
+2.32 to 8.86 m. So the rule reseeds only a drive whose yaw slips a full turn,
+and keeps the reseeded run only if the slip disappears and
+final-vs-GNSS-first P95 drops. No train drive slips, so the rule changes no
+train score.
+
+Submission 57600830 replaces only A505U in 57594243. It scores **Private
+0.845 m** / Public 0.884 m, 0.063 m from the 0.782 m post-deadline taroz
+score.
