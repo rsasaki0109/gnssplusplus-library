@@ -1,0 +1,816 @@
+{
+  "scope": "Legacy hold overwrite vs conditional Kalman hold (RTKLIB holdamb, R=0.001 cycle^2), alone and with iterated-EKF passes. UrbanNav Tokyo Odaiba/Shinjuku complete drives; reference used only for scoring.",
+  "source_base": "1fb1b6e (develop)",
+  "experiment_source_diff_sha256": "2ece7ef418651713bf27e6d0e92c4376aff0db7bb6beccb81de9d16c90cd0678",
+  "binaries": {
+    "baseline_develop_1fb1b6e": "f480994daf5f7ac47a46f475e6e79f16bbf4f49f4bad0899dbabab71cc858937",
+    "experiment": "55ffc33ce4d86378a105f4c1f1072a7ca93bd4f653961f075c3baef03648f58a"
+  },
+  "baseline_note": "Baseline and R POS are the PR #641 evaluation files (docs/urbannav_iterated_update_evaluation.json); the experiment binary with no flag / with only --kf-relinearize-from-prior reproduces them byte-identically (parity below).",
+  "inputs": {
+    "Odaiba": {
+      "rover_trimble.obs": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8",
+      "base_trimble.obs": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee",
+      "base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+      "reference.csv": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d"
+    },
+    "Shinjuku": {
+      "rover_trimble.obs": "be239dbd20d9d69a0dbc696f1a4b00d75cd3639354d498eec91f08fa65d000eb",
+      "base_trimble.obs": "34a851c54e07b8cac592d37539c85e19d02e1a6b29839a707ab69dba9692c99e",
+      "base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+      "reference.csv": "794baaec530f34097cd1f77633902bb2195ce30cdec278945eb5ac911ed65d79"
+    }
+  },
+  "decision_rule_frozen_before_replay": [
+    "Frozen before replay (2026-10-24 ~22:30 UTC). No parameters to tune (VAR_HOLDAMB fixed at existing 0.001).",
+    "Candidates (same binary, flags only):",
+    "  H  = --hold-kalman-update",
+    "  HR = --hold-kalman-update --kf-relinearize-from-prior",
+    "References: baseline (develop 1fb1b6e, POS byte-identical to PR#641 evaluation 'before'),",
+    "            R = --kf-relinearize-from-prior (PR#641 evaluation 'after').",
+    "Default-adoption gate (H vs baseline, HR vs baseline), per drive x recipe (default, age5_doppler3):",
+    " - wrong FIX >0.5/2/3 m must not increase; baseline-correct FIX loss <=1% at 0.5 and 2 m",
+    " - missing epochs and horizontal P95 must not increase",
+    " - recovery P95 and right-censoring must not increase (0.5/2 m)",
+    " - at least one wrong-FIX population decreases",
+    "Mechanism question (HR vs R, descriptive): does the conditional hold reduce the Shinjuku age5_doppler3",
+    "wrong-FIX population (516/125/15 under R), in particular the hold-fix share?",
+    "Otherwise: NO_GO for default; keep opt-in and record."
+  ],
+  "scoring": "Exact GPS week/TOW rounded to 1 ms; no interpolation; FIX status 4; 3D error thresholds describe position accuracy, not integer correctness.",
+  "runs": {
+    "Odaiba-default-baseline": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos"
+      ],
+      "pos_sha256": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
+      "fix_epochs": 1298,
+      "missing_epochs": 1426,
+      "horizontal_p95_m": 4.777151724852944,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Odaiba-default-R": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "a223d17c890663fbbd96ec1b5f4cf4e15ba472f7e5a62c231f8868486ac2748c",
+      "fix_epochs": 1298,
+      "missing_epochs": 1515,
+      "horizontal_p95_m": 5.139942489528547,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Odaiba-default-H": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--hold-kalman-update"
+      ],
+      "pos_sha256": "82d381c64108fb96d163f266af10e248b35d5a079f038ae0f26e4084688be7d1",
+      "fix_epochs": 1298,
+      "missing_epochs": 1426,
+      "horizontal_p95_m": 4.777151724852944,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Odaiba-default-HR": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--hold-kalman-update",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "b95d822a90fd08a5ef49587125b343e3d873aef5d111733ce94ab5fe902a15db",
+      "fix_epochs": 1298,
+      "missing_epochs": 1515,
+      "horizontal_p95_m": 5.139942489528547,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Odaiba-age5_doppler3-baseline": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3"
+      ],
+      "pos_sha256": "bd1a5468fcfd6fc089624808fe8dfd7a9313c74b6f6e075bad115e7fec78357e",
+      "fix_epochs": 4256,
+      "missing_epochs": 1480,
+      "horizontal_p95_m": 4.896335831415405,
+      "wrong_fix": {
+        "0.5": 157,
+        "2.0": 3,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": 186.69499988555845,
+        "2.0": 231.1249998807907
+      },
+      "right_censored": {
+        "0.5": false,
+        "2.0": false
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Odaiba-age5_doppler3-R": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "0d332aa672a1b40970db8a7a23ad3f0803597af75e09df6c633b8f76a1be2d8a",
+      "fix_epochs": 4297,
+      "missing_epochs": 1562,
+      "horizontal_p95_m": 5.217099614276686,
+      "wrong_fix": {
+        "0.5": 103,
+        "2.0": 3,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": 298.5000000476831,
+        "2.0": 231.35000002384186
+      },
+      "right_censored": {
+        "0.5": false,
+        "2.0": false
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 15,
+        "2.0": 23
+      }
+    },
+    "Odaiba-age5_doppler3-H": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3",
+        "--hold-kalman-update"
+      ],
+      "pos_sha256": "febe4e7664d67663bfda464ac67afe0782376c99b6f0629043578f9526afc1ea",
+      "fix_epochs": 4373,
+      "missing_epochs": 1578,
+      "horizontal_p95_m": 6.233246691608998,
+      "wrong_fix": {
+        "0.5": 110,
+        "2.0": 3,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": 252.57999994754744,
+        "2.0": 274.510000014305
+      },
+      "right_censored": {
+        "0.5": false,
+        "2.0": false
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 11,
+        "2.0": 10
+      }
+    },
+    "Odaiba-age5_doppler3-HR": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Odaiba/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Odaiba/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3",
+        "--hold-kalman-update",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "21a21abe11303f71aa7cda118947ce1c59215a897cb2e31eeeefd2a233e03b7f",
+      "fix_epochs": 4317,
+      "missing_epochs": 1603,
+      "horizontal_p95_m": 6.232116763917508,
+      "wrong_fix": {
+        "0.5": 73,
+        "2.0": 5,
+        "3.0": 2
+      },
+      "recovery_p95_s": {
+        "0.5": 355.14999997615814,
+        "2.0": 331.3450000524517
+      },
+      "right_censored": {
+        "0.5": false,
+        "2.0": false
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 39,
+        "2.0": 79
+      }
+    },
+    "Shinjuku-default-baseline": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos"
+      ],
+      "pos_sha256": "392a7f1981a95b9140b8d5c3e6037658b0cb2ed07ae6e31905a36daba63216e3",
+      "fix_epochs": 122,
+      "missing_epochs": 3234,
+      "horizontal_p95_m": 8.382148758455413,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Shinjuku-default-R": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "c90cf939be724fc10a4e51345ca9ef19b31f3ade1a3677a38cd20b36a0f878c6",
+      "fix_epochs": 122,
+      "missing_epochs": 3451,
+      "horizontal_p95_m": 1.965006831469084,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Shinjuku-default-H": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--hold-kalman-update"
+      ],
+      "pos_sha256": "18cf951ed57b34981149d77095bc9b5a925b2f1de12bd59493a1ba14bad652de",
+      "fix_epochs": 122,
+      "missing_epochs": 3234,
+      "horizontal_p95_m": 8.382148758455413,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Shinjuku-default-HR": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--hold-kalman-update",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "9468304d62455629984dcf53734e0f632be44bb209e36d442ae3823dbab9bb75",
+      "fix_epochs": 122,
+      "missing_epochs": 3451,
+      "horizontal_p95_m": 1.965006831469084,
+      "wrong_fix": {
+        "0.5": 0,
+        "2.0": 0,
+        "3.0": 0
+      },
+      "recovery_p95_s": {
+        "0.5": null,
+        "2.0": null
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Shinjuku-age5_doppler3-baseline": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3"
+      ],
+      "pos_sha256": "cf6b3b4c5905c5228c8eaeb38d1c4eaa26889b9439bdba6fd62d334ac25b5710",
+      "fix_epochs": 1949,
+      "missing_epochs": 3332,
+      "horizontal_p95_m": 8.343242221322189,
+      "wrong_fix": {
+        "0.5": 13,
+        "2.0": 1,
+        "3.0": 1
+      },
+      "recovery_p95_s": {
+        "0.5": 751.0400001287459,
+        "2.0": 750.9800001144408
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 0,
+        "2.0": 0
+      }
+    },
+    "Shinjuku-age5_doppler3-R": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "dd18456b30191ca37f5540bfb37893b3ba698c5c329997dc8fbb23b54de61e57",
+      "fix_epochs": 3972,
+      "missing_epochs": 3581,
+      "horizontal_p95_m": 1.8668130138175647,
+      "wrong_fix": {
+        "0.5": 516,
+        "2.0": 125,
+        "3.0": 15
+      },
+      "recovery_p95_s": {
+        "0.5": 709.6650000810623,
+        "2.0": 701.4800001144407
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 309,
+        "2.0": 253
+      }
+    },
+    "Shinjuku-age5_doppler3-H": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3",
+        "--hold-kalman-update"
+      ],
+      "pos_sha256": "144bddb5dd50c6b0604f3b0a4385cc9daa8de59d4035129267fd3edc670556a8",
+      "fix_epochs": 1912,
+      "missing_epochs": 3331,
+      "horizontal_p95_m": 8.343187152549683,
+      "wrong_fix": {
+        "0.5": 19,
+        "2.0": 1,
+        "3.0": 1
+      },
+      "recovery_p95_s": {
+        "0.5": 751.1800001621245,
+        "2.0": 750.9800001144408
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 112,
+        "2.0": 105
+      }
+    },
+    "Shinjuku-age5_doppler3-HR": {
+      "argv": [
+        "gnss_solve",
+        "--rover",
+        "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs",
+        "--base",
+        "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs",
+        "--nav",
+        "data/driving/Tokyo_Data/Shinjuku/base.nav",
+        "--mode",
+        "kinematic",
+        "--glonass-ar",
+        "off",
+        "--base-ecef",
+        "-3961904.9530",
+        "3348993.7578",
+        "3698211.7553",
+        "--no-kml",
+        "--out",
+        "<out>.pos",
+        "--max-fixed-anchor-age",
+        "5",
+        "--max-fixed-doppler-consensus",
+        "3",
+        "--hold-kalman-update",
+        "--kf-relinearize-from-prior"
+      ],
+      "pos_sha256": "f148a68078fc881ee8797f7cf3e9b73d5ea0fcb00764032265c027441b2d8d01",
+      "fix_epochs": 4227,
+      "missing_epochs": 3569,
+      "horizontal_p95_m": 1.8586949930852241,
+      "wrong_fix": {
+        "0.5": 383,
+        "2.0": 188,
+        "3.0": 24
+      },
+      "recovery_p95_s": {
+        "0.5": 709.7200001120566,
+        "2.0": 709.5200000643729
+      },
+      "right_censored": {
+        "0.5": true,
+        "2.0": true
+      },
+      "baseline_correct_fix_lost": {
+        "0.5": 87,
+        "2.0": 80
+      }
+    }
+  },
+  "parity": {
+    "Odaiba-default": {
+      "flag_off_equals_baseline": true,
+      "relinearize_only_equals_previous_R": true
+    },
+    "Odaiba-age5_doppler3": {
+      "flag_off_equals_baseline": true,
+      "relinearize_only_equals_previous_R": true
+    },
+    "Shinjuku-default": {
+      "flag_off_equals_baseline": true,
+      "relinearize_only_equals_previous_R": true
+    },
+    "Shinjuku-age5_doppler3": {
+      "flag_off_equals_baseline": true,
+      "relinearize_only_equals_previous_R": true
+    }
+  },
+  "wrong_fix_hold_share_0.5m": {
+    "Odaiba-age5_doppler3": {
+      "baseline": "74/157",
+      "H": "7/110",
+      "R": "28/103",
+      "HR": "7/73"
+    },
+    "Shinjuku-age5_doppler3": {
+      "baseline": "4/13",
+      "H": "1/19",
+      "R": "234/516",
+      "HR": "98/383"
+    }
+  },
+  "validation": {
+    "core_ctest": "100/100 passed",
+    "regression": "RTKHoldAmbiguityUpdateTest.LegacyHoldOverwritesInsteadOfConditioningTheState"
+  },
+  "decision": "NO_GO for default for H and HR; option stays off. Nothing retuned."
+}

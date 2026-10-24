@@ -7,6 +7,7 @@
 直近では、再現テストで証明できた信頼位置履歴の不具合2件を修正した。これは既定設定での誤FIX増加の原因ではなかった。
 その後、**反復KF更新が同じepochの観測を2回適用し、位置・DD整数の共分散を約半分に過小評価する**不具合を再現テストで確定した。
 iterated EKF化（opt-in `--kf-relinearize-from-prior`）は全区間の採用基準を満たさず、**既定は不変**（[詳細](rtk_iterated_update_covariance.md)）。
+続いて `applyHoldAmbiguity()` が条件付き更新ではなく上書きであることも再現した。RTKLIB式のKF hold（opt-in `--hold-kalman-update`）はhold由来の誤FIXを大きく減らすが、AR由来の誤FIXは残りNO_GO（[詳細](rtk_hold_ambiguity_update.md)）。
 
 次の担当は、既存成果を維持して整数候補の誤選択・共分散・受理後の状態発展の調査を続ける。**FIX数だけで改善判定しない。**
 GTはオフライン採点と可視化のカメラにだけ使い、ソルバーには渡さない。
@@ -38,7 +39,8 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 ## 読む順序
 
 1. [AGENTS.md](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
-1. [反復更新と共分散](rtk_iterated_update_covariance.md) / [評価JSON](urbannav_iterated_update_evaluation.json): 最新の調査。
+1. [hold更新](rtk_hold_ambiguity_update.md) / [評価JSON](urbannav_hold_update_evaluation.json): 最新の調査。
+1. [反復更新と共分散](rtk_iterated_update_covariance.md) / [評価JSON](urbannav_iterated_update_evaluation.json): その前の調査。
 2. [信頼位置履歴の修正](rtk_trusted_history_rollback.md): 最新の実装と影響範囲。
 3. [履歴修正の全12回評価](urbannav_trusted_history_evaluation.json): 既定・実験設定8回とCV設定4回。
 4. [FIX復帰調査](urbannav_doppler_consensus.md): 根拠、従来の不採用実験、限界。
@@ -146,6 +148,7 @@ CVのFIX数は1298 / 122で不変、上記3閾値の誤FIXは前後とも0、正
 | さらに `--min-fix-satellites 4` | 初期比較のShinjukuで3D >3 m誤FIXが14件に増加。ローカルのanchor-guardレポート参照 |
 | 位置出力なしでもDoppler追跡を維持 | Odaiba >0.5 / >2 mが157/3 → 173/13、欠測1480 → 2132。Shinjukuも悪化、単発の大誤差FIXは残った |
 | 初回FIXを5候補連続で確認 | Shinjukuの対象単発FIXは止まったが、全体の >3 m誤FIXが1 → 14、>0.5 mが13 → 473。正しい既定FIXも4/122喪失 |
+| holdをKF疑似観測に（`--hold-kalman-update`、単独/relinearize併用） | hold由来誤FIXはOdaiba 74→7、Shinjuku(R) 234→98。ただしOdaiba age5でP95 4.90→6.23・欠測+98、Shinjuku age5で誤FIX 13→19・正FIX喪失5.8%、併用では>2/>3 m増。NO_GO、opt-in保持 |
 | 反復KF更新をiterated EKFに（既定化） | 上の表。欠測増・Odaiba P95悪化・Shinjuku age5の誤FIX急増でNO_GO。opt-inとして保持、パッチは `docs/urbannav_iterated_update_experiment.patch`（`35654026` に適用） |
 
 最後の2案は**実装・CLI・専用テストを本体から除去済み**。再現用の正確なパッチと評価JSONだけを保存。
@@ -169,6 +172,7 @@ CVのFIX数は1298 / 122で不変、上記3閾値の誤FIXは前後とも0、正
 - 週とTOWを1 msへ丸めて完全一致で採点。補間・nearest借用で欠測を埋めない。FIX status=4。
 - 「誤FIX」は公開GTに対する3D位置誤差の閾値であり、整数ベクトル自体の誤りの直接証明ではない。
 - 欠測、正しいFIXの喪失、共通出力集合での誤差、復帰時間、末尾のright-censored outageも残す。
+- 注意: `evaluate_urbannav_fix_continuity.py` の `baseline_correct_fix_lost` は**既定recipeのbaseline**に対する喪失。age5_doppler3等の同一recipe比較での喪失ではない（同一recipeではiterated EKFがOdaiba 15 / Shinjuku 309件を喪失）。採用判定では同一recipe比較も見る。
 - 並列ジョブの実時間は競合を含む。速度改善の主張には使わない。
 - 採用条件の考え方は [fix_recovery_guard.md](fix_recovery_guard.md)。FIX数増加や既知の1点の抑止だけでは採用しない。
 
@@ -284,9 +288,9 @@ system Eigenがあれば `CPLUS_INCLUDE_PATH` は不要。
 
 1. 大誤差FIXの最初の発生点で、採用subset・参照衛星・ratio・DD整数候補・Qb/Qab・float→fixed変位・hold由来かを記録する。
 2. そのepochより前の状態で初めて差が出た箇所を特定し、整数選択そのものと、正当に受理された過去の候補が作る状態の差を分ける。
-3. ~~反復KF更新の二重計上~~ → **確定**（上記）。ただし修正単独では採用不可。次は opt-in ON の状態で:
-   - `applyHoldAmbiguity()` は条件付き更新ではなく、整数をstateへ代入し位置との相関を0にして分散0.001を置く。ON時のShinjuku誤FIXの約半数がhold由来で、floatが既に誤basin（float→fixed 0.03 m）。hold更新が誤basinを固定するかを再現テストで確かめる。
-   - 正しいQbでのLAMBDA成功率・float→fixed Mahalanobis距離を正誤候補で比較してから、凍結した規則を1つだけ試す。
+3. ~~反復KF更新の二重計上~~ → **確定**（上記）。ただし修正単独では採用不可。
+   - ~~`applyHoldAmbiguity()` の上書き~~ → **確定**、hold経路の誤basin伝播には効くが主因ではない（[hold更新](rtk_hold_ambiguity_update.md)）。
+   - 次: R/HR（正しいQb・条件付きhold）の下でAR候補の受理を調べる。LAMBDA成功率・float→fixed Mahalanobis距離を正誤候補で比較してから、凍結した規則を1つだけ試す。
    - Doppler軌跡は受理FIXごとに再anchorするため、連続した誤basin（Shinjuku 283274–283289で145 epoch）は検出できない。
 4. ログに現れない別状態の漏れを疑う場合も、受理済みhold更新など意図的な状態変化と区別し、再現テストを先に作る。
 

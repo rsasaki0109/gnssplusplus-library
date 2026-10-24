@@ -157,6 +157,11 @@ public:
         // epoch's rows to the previous pass's posterior and so count them
         // again (docs/rtk_iterated_update_covariance.md).
         bool kf_relinearize_from_epoch_prior = false;
+        // Opt-in: apply held DD integers as a Kalman pseudo-observation
+        // (RTKLIB holdamb, 0.001 cycle^2) that also conditions the correlated
+        // position. Off keeps the legacy overwrite, which writes the integer
+        // into the satellite ambiguity and zeroes its correlations.
+        bool hold_ambiguity_kalman_update = false;
 
         // Measurement noise
         double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)
