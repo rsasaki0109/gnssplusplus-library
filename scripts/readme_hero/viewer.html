@@ -17,8 +17,14 @@
   .detail { padding-left: 40px; color: #b7c4d2; font-size: 12px; font-variant-numeric: tabular-nums; }
   .live { float: right; color: #eef3f8; font-size: 12px; font-variant-numeric: tabular-nums; }
   #view { width: 100%; height: 324px; position: relative; }
-  #clock { position: absolute; z-index: 2; left: 18px; bottom: 12px; padding: 6px 10px; background: #0c111adc; color: #dce5ef; font: 12px monospace; }
+  #clock { position: absolute; z-index: 2; right: 16px; bottom: 12px; padding: 6px 10px; background: #0c111adc; color: #dce5ef; font: 12px monospace; }
   footer { height: 34px; padding: 3px 16px; color: #9aaabd; font-size: 10px; line-height: 14px; }
+  #zenith { position: absolute; z-index: 3; top: 8px; left: 12px; width: 252px; padding: 8px; background: #0c111aee; border: 1px solid #394758; border-radius: 5px; }
+  #zenith .sky-title { display: flex; justify-content: space-between; font-size: 11px; color: #eef3f8; margin-bottom: 3px; }
+  #zenith canvas { width: 234px; height: 234px; display: block; }
+  #zenith .sky-key { font-size: 9px; line-height: 13px; color: #aab2c0; }
+  #sky-counts { font-variant-numeric: tabular-nums; }
+  .sky-los { color: #39e6a8; } .sky-nlos { color: #ff6b6b; }
   .cesium-viewer-bottom { display: none; }
 </style>
 <header><strong>libgnss++</strong><span>UrbanNav Tokyo Odaiba · recorded replay</span></header>
@@ -30,7 +36,14 @@
   <div class="item"><span class="sample rtk"></span><span class="name">RTKLIB demo5</span><span class="live" id="rtk-live"></span>
     <div class="detail" id="rtk-median"></div></div>
 </div>
-<div id="view"><div id="clock"></div></div>
+<div id="view">
+  <div id="clock"></div>
+  <div id="zenith" aria-label="Ground Truth zenith and model-predicted satellite visibility">
+    <div class="sky-title"><strong>GT zenith · PLATEAU</strong><span id="sky-counts"></span></div>
+    <canvas id="sky" width="256" height="256"></canvas>
+    <div class="sky-key"><span class="sky-los">● Model LOS</span> &nbsp; <span class="sky-nlos">× Model NLOS</span> &nbsp; ○ Unassessed<br>Model prediction, not measured<br>Unassessed: &lt;10° or unhealthy ephemeris</div>
+  </div>
+</div>
 <footer>
   PLATEAU / MLIT (2025 buildings) · Map © OpenStreetMap contributors · Horizontal trajectories on a schematic ground plane<br>
   Selected showcase for visible solver differences · Camera follows Ground Truth position + heading · Recorded forward paths
@@ -41,6 +54,56 @@
 // Reference row[5] is measured heading. Solver row[5] is exact-epoch horizontal error.
 window.prepare = async function (data) {
   const C = Cesium;
+  const skyData = await (await fetch('/sky.json')).json();
+  const skyImage = new Image();
+  await new Promise((resolve, reject) => { skyImage.onload = resolve; skyImage.onerror = reject; skyImage.src = '/sky.png'; });
+  const skyCanvas = document.getElementById('sky'), skyContext = skyCanvas.getContext('2d');
+  function drawSky(t) {
+    const index = skyData.frames.findIndex(f => Math.abs(f.time - t) <= 0.001);
+    if (index < 0) throw Error('No exact-time zenith snapshot; refusing to reuse a stale mask');
+    const frame = skyData.frames[index], size = skyData.sprite.cell_size, columns = skyData.sprite.columns;
+    const ctx = skyContext;
+    ctx.clearRect(0, 0, 256, 256);
+    ctx.drawImage(skyImage, (index % columns) * size, Math.floor(index / columns) * size, size, size, 0, 0, 256, 256);
+    ctx.strokeStyle = '#c1cfdd66'; ctx.lineWidth = 0.8;
+    for (const el of [30, 60]) { ctx.beginPath(); ctx.arc(128, 128, 112 * (90 - el) / 90, 0, 2 * Math.PI); ctx.stroke(); }
+    ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(128, 128, 112 * 80 / 90, 0, 2 * Math.PI); ctx.stroke(); ctx.setLineDash([]);
+    const counts = {LOS: 0, NLOS: 0, unassessed: 0};
+    const labelBoxes = [[122,0,136,15],[242,119,256,139],[122,241,137,256],[0,119,15,139]];
+    const labelOrder = [...frame.satellites].sort((a,b) => (a.model_status==='NLOS'?-1:0)-(b.model_status==='NLOS'?-1:0));
+    for (const sat of labelOrder) {
+      counts[sat.model_status]++;
+      const color = sat.model_status === 'LOS' ? '#39e6a8' : sat.model_status === 'NLOS' ? '#ff6b6b' : '#aab2c0';
+      const x = sat.x, y = sat.y;
+      ctx.lineWidth = 4; ctx.strokeStyle = '#101824'; ctx.fillStyle = color;
+      ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2 * Math.PI); ctx.stroke();
+      if (sat.model_status === 'NLOS') {
+        ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x-3,y-3); ctx.lineTo(x+3,y+3); ctx.moveTo(x+3,y-3); ctx.lineTo(x-3,y+3); ctx.stroke();
+      } else { ctx.beginPath(); ctx.arc(x, y, 3.5, 0, 2 * Math.PI); if(sat.model_status==='LOS')ctx.fill(); else {ctx.lineWidth=1.5;ctx.strokeStyle=color;ctx.stroke();} }
+      ctx.font = 'bold 9px monospace'; ctx.lineWidth = 3; ctx.strokeStyle = '#101824';
+      const width = ctx.measureText(sat.id).width;
+      const candidates = [];
+      for (const radius of [9,18,28,40,52]) for (const angle of [-Math.PI/4,Math.PI/4,-3*Math.PI/4,3*Math.PI/4,0,Math.PI,-Math.PI/2,Math.PI/2]) {
+        const tx = x + Math.cos(angle)*radius - (Math.cos(angle)<0 ? width : 0);
+        const ty = y + Math.sin(angle)*radius;
+        const box = [tx-2,ty-10,tx+width+2,ty+3];
+        if (box[0]<3 || box[2]>253 || box[1]<2 || box[3]>253) continue;
+        const overlap = labelBoxes.some(b => box[0]<b[2] && box[2]>b[0] && box[1]<b[3] && box[3]>b[1]);
+        const dots = frame.satellites.some(q => q!==sat && q.x>box[0]-3 && q.x<box[2]+3 && q.y>box[1]-3 && q.y<box[3]+3);
+        candidates.push({tx,ty,box,cost:radius+(overlap?1000:0)+(dots?500:0)});
+      }
+      candidates.sort((a,b)=>a.cost-b.cost);
+      const label = candidates[0] || {tx:x+5,ty:y-5,box:[x,y-15,x+width+8,y]};
+      labelBoxes.push(label.box);
+      ctx.strokeStyle=color; ctx.lineWidth=.7; ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(label.tx+width/2,label.ty-4);ctx.stroke();
+      ctx.strokeStyle='#101824';ctx.lineWidth=3;
+      ctx.strokeText(sat.id, label.tx, label.ty); ctx.fillText(sat.id, label.tx, label.ty);
+    }
+    ctx.fillStyle = '#eef3f8'; ctx.strokeStyle = '#101824'; ctx.lineWidth = 3; ctx.font = 'bold 11px monospace';
+    for(const [label,x,y] of [['N',125,12],['E',244,132],['S',125,253],['W',3,132]]){ctx.strokeText(label,x,y);ctx.fillText(label,x,y);}
+    document.getElementById('sky-counts').textContent = `${counts.LOS} LOS / ${counts.NLOS} NLOS`;
+    window.skyState = { time: frame.time, counts };
+  }
   const ground = data.groundHeight;
   const height = ground + 0.45;
   window.viewers = [];
@@ -125,6 +188,7 @@ window.prepare = async function (data) {
     const target = C.Cartesian3.add(origin, C.Cartesian3.multiplyByScalar(forward, 15, new C.Cartesian3()), new C.Cartesian3());
     const direction = C.Cartesian3.normalize(C.Cartesian3.subtract(target, eye, new C.Cartesian3()), new C.Cartesian3());
     viewer.camera.setView({ destination: eye, orientation: { direction, up } });
+    drawSky(ref[0]);
     for (const track of tracks) {
       const row = nearest(track.rows, ref[0]);
       const available = Math.abs(row[0] - ref[0]) <= 0.001;

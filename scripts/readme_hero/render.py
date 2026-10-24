@@ -21,6 +21,8 @@ p.add_argument(
 p.add_argument("--output", type=Path, default=repo / "docs/odaiba_hero.gif")
 p.add_argument("--basemap", type=Path, default=repo / "docs/odaiba_hero_basemap.png")
 p.add_argument("--cesium-dir", type=Path, required=True)
+p.add_argument("--sky-metadata", type=Path, default=repo / "docs/odaiba_hero_sky.json")
+p.add_argument("--sky-sprite", type=Path, default=repo / "docs/odaiba_hero_sky.png")
 p.add_argument(
     "--cache-dir", type=Path, default=repo / "output/readme-hero/resource-cache"
 )
@@ -30,6 +32,17 @@ a = p.parse_args()
 if not 1 <= a.fps <= 50 or a.frames < 2:
     p.error("fps must be between 1 and 50; at least two frames required")
 data = json.loads(a.scene.read_text())
+sky_metadata = json.loads(a.sky_metadata.read_text())
+if (
+    sky_metadata["inputs"]["trace_sha256"]
+    != hashlib.sha256(a.scene.read_bytes()).hexdigest()
+):
+    p.error("Sky data does not match this trace; regenerate with prepare_sky.py")
+if (
+    sky_metadata["sprite_sha256"]
+    != hashlib.sha256(a.sky_sprite.read_bytes()).hexdigest()
+):
+    p.error("Sky sprite does not match its metadata")
 cache = a.cache_dir
 cache.mkdir(parents=True, exist_ok=True)
 a.output.parent.mkdir(parents=True, exist_ok=True)
@@ -65,7 +78,19 @@ async def main():
                 local = (
                     a.cesium_dir / path.removeprefix("/cesium/")
                     if path.startswith("/cesium/")
-                    else a.basemap if path == "/basemap.png" else root / "viewer.html"
+                    else (
+                        a.basemap
+                        if path == "/basemap.png"
+                        else (
+                            a.sky_metadata
+                            if path == "/sky.json"
+                            else (
+                                a.sky_sprite
+                                if path == "/sky.png"
+                                else root / "viewer.html"
+                            )
+                        )
+                    )
                 )
                 await req.fulfill(
                     path=str(local),
@@ -169,7 +194,7 @@ async def main():
                 raise RuntimeError("No external map resources loaded")
             # Reserve the method colors: a map-dominated adaptive palette can
             # otherwise turn thin orange/mint trajectories into gray pixels.
-            adaptive = frames[len(frames) // 2].quantize(colors=112).getpalette()[:336]
+            adaptive = frames[len(frames) // 2].quantize(colors=108).getpalette()[:324]
             reserved = [
                 "f5ac63",
                 "60e2bb",
@@ -187,6 +212,10 @@ async def main():
                 "17202b",
                 "8093a8",
                 "303945",
+                "39e6a8",
+                "ff6b6b",
+                "aab2c0",
+                "a1c6e1",
             ]
             colors = adaptive + [
                 int(c[j : j + 2], 16) for c in reserved for j in (0, 2, 4)

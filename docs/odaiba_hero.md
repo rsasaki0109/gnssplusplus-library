@@ -61,6 +61,50 @@ The measured trace, heading, errors and selection criteria are retained in
 Input/solution hashes, full-run results and rendering details are in
 [odaiba_hero_provenance.json](odaiba_hero_provenance.json).
 
+## Ground Truth zenith and model LOS/NLOS
+
+The inset is a **synthetic, north-up, 180° equidistant fisheye**, not recorded
+camera footage. Each of the 201 reference epochs has its own building silhouette
+and satellite annotations; the street and sky views use the exact same reference
+epoch. The sky origin is the published reference **ECEF point and height**, not
+the street visualization's flattened display plane.
+
+Satellite IDs are those present in the rover RINEX observations at that epoch.
+The native library's `NavigationData::calculateSatelliteState`, `calculateGeometry`
+and `visibility::projFisheye` compute positions from the accompanying broadcast
+navigation file and project them into the ideal fisheye. The export contains
+4,711 observed satellite/epoch records, with no missing usable ephemerides in this
+run. They are **reported satellites**, not necessarily satellites used in either
+solver's final solution.
+
+- **Green filled dot — model LOS:** no building hit along the eligible ray.
+- **Red × — model NLOS:** a modeled building intersects that ray.
+- **Gray hollow dot — unassessed:** elevation below 10° or an unhealthy ephemeris.
+
+The model uses 115 most-detailed LOD2 tiles (349,853 triangles) from the official
+2025 **Minato, Koto, Chuo and Shinagawa** datasets around the entire route, rather
+than just the tiles visible to the street camera. Draco meshes, glTF node
+transforms, Y-up/Z-up conversion and `CESIUM_RTC` offsets are decoded before
+raycasting in a local ENU frame. Decoded heights are checked against the published
+model envelope. Raycasting uses a 2 km limit; the maximum model height and 10°
+elevation cutoff are checked to ensure that a taller modeled building beyond that
+range cannot change an assessed ray. The sky image and direct satellite rays are
+computed independently and checked for agreement away from silhouette edges.
+
+These are **model predictions**, not measured or ground-truth LOS/NLOS labels.
+They omit unmodeled objects (including trees), other model domains, radio
+reflections and multipath. No unprovided antenna lever arm is inferred; the origin
+is the published reference point. A clear modeled ray does not establish a clean
+received signal. Both the model and map are newer than the drive.
+**Neither solver used these annotations.** The inset supplies geometric context,
+not a causal explanation for the error difference or a 3D-aided solver claim.
+
+The frozen atlas and exact-time satellite metadata are
+[odaiba_hero_sky.png](odaiba_hero_sky.png) and
+[odaiba_hero_sky.json](odaiba_hero_sky.json). Metadata records per-ray status,
+intersection distance, model URLs/hashes and preparation inputs. Rendering rejects
+mismatched trace/atlas hashes instead of reusing a stale sky view.
+
 ## Re-render the recorded trace
 
 Run from the repository root on Linux with Python, npm, and Chromium installed
@@ -130,13 +174,49 @@ reference epochs; both window selection and all displayed errors are checked. Fu
 window is illustrative; see [benchmarks](benchmarks.md) for the full context,
 matching populations and limitations.
 
+## Rebuild the zenith assets (optional)
+
+Normal re-rendering uses the frozen atlas and needs no geometry engine. To
+recalculate the sky from the same public inputs, first run the native build and
+input-download steps above. These preparation-only dependencies were tested:
+
+```bash
+python -m pip install trimesh==5.2.0 embreex==4.4.0.post1 DracoPy==2.2.0
+
+# Point this at Eigen as used by the native build; commonly /usr/include/eigen3.
+hero_eigen_include=/workspace/scratch/gnss-deps/include/eigen3
+c++ -std=c++20 -O2 -Iinclude -I"$hero_eigen_include" \
+  scripts/readme_hero/satellite_geometry.cpp \
+  src/visibility/fisheye_camera.cpp src/visibility/proj_fisheye.cpp \
+  build/libgnss_lib.a build/libgnss_rtk_runtime.a build/libgnss_lib.a \
+  build/third_party/ginan-iers2010/libginan_iers2010.a \
+  build/third_party/sofa/libsofa.a -o output/readme-hero/satellite_geometry
+
+output/readme-hero/satellite_geometry \
+  data/driving/Tokyo_Data/Odaiba/base.nav \
+  data/driving/Tokyo_Data/Odaiba/rover_trimble.obs \
+  data/driving/Tokyo_Data/Odaiba/reference.csv \
+  273700 273720 output/readme-hero/satellites.csv
+
+python scripts/readme_hero/prepare_sky.py \
+  --satellites output/readme-hero/satellites.csv
+```
+
+The preparation uses the inherited proxy and TLS trust, retains content hashes,
+and caches public model tiles under ignored `output/readme-hero/resource-cache`.
+The helper build command matches the tested native, non-GTSAM Linux build. No
+OpenCV installation is needed: the existing native camera/projection code is
+compiled directly, and building visibility is tested with triangle rays.
+After rebuilding the atlas, run the normal GIF-rendering command above.
+
 ## Sources and attribution
 
 - Drive/reference: [UrbanNavDataset](https://github.com/IPNL-POLYU/UrbanNavDataset#tokyo-dataset),
   public Tokyo archive linked by the upstream project. Raw data is downloaded to
   ignored `data/`; it is not added to this PR.
 - Buildings: **国土交通省 Project PLATEAU**, 港区 2025 建築物モデル LOD2,
-  rendered with a uniform color. The exact tileset URL is in the trace and provenance;
+  rendered with a uniform color in the street view; the zenith also uses the neighboring
+  江東区・中央区・品川区 2025 models. Exact tileset URLs are in the trace/sky metadata;
   discover datasets through the [official catalog](https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets).
   See the [PLATEAU site policy](https://www.mlit.go.jp/plateau/site-policy/).
 - Map image: **© OpenStreetMap contributors**,
