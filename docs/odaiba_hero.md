@@ -1,38 +1,65 @@
-# README: real Odaiba trajectories in a 3D city
+# README: three real trajectories in one 3D scene
 
-The opening GIF replays **fresh libgnss++ and RTKLIB solutions** from the public
-UrbanNav Tokyo Odaiba observations. The orange path is RTKLIB `demo5 b34k`;
-the mint path is libgnss++. Buildings are the official Project PLATEAU Koto-ku
-2025 LOD2 model, with an OpenStreetMap road basemap.
+The opening GIF overlays **Ground Truth, libgnss++, and RTKLIB** in a single
+PLATEAU/OpenStreetMap scene. The camera follows Ground Truth position and measured
+heading, so deviations are visible relative to one reference instead of being
+recentered independently in separate panes.
 
-## What is shown
+## Legend and measurements
 
-- GPS week **2032**, TOW **273385.1–273415.1 s**: a 30-second recorded window,
-  played in 12 seconds (2.5×), 96 frames at 8 fps, 960 × 420 pixels.
-- The interval was chosen from reference motion alone: the first continuously
-  moving 30-second window, starting at least 10 seconds into the reference,
-  with forward 1.5-second speed above 2 m/s. It was not selected by comparative
-  positioning error. All 301 solution epochs in this interval are FLOAT for
-  RTKLIB and FIXED for libgnss++; FIXED is a solver state, not an accuracy guarantee.
-- Both panes use the **same reference-driven camera**. Camera positions and
-  headings come from reference, never from either solver. Reference is used
-  after solving for visualization and scoring, not as a solver input.
-- Horizontal coordinates and status codes are unmodified solver outputs.
-  Recorded paths ahead of the playback cursor are visible: this is an offline
-  replay, not a prediction or live-navigation demo. Gaps over 0.5 s are not joined;
-  a missing current solution is labelled `NO SOLUTION`.
-- This is a **horizontal visualization** on a flat schematic ground plane at
-  42 m ellipsoidal height, with the paths drawn just above it. Estimated heights
-  are not visualized; buildings retain their published geometry. The scene
-  cannot measure vertical accuracy or building collisions. The 2025 map/model
-  is context for the older drive, not a reconstruction of its collection date.
+- **White dashed:** Ground Truth (Applanix reference).
+- **Mint solid:** libgnss++. Mint and white overlap where the estimate agrees
+  with the reference; their horizontal coordinates are never offset for legibility.
+- **Orange solid:** RTKLIB `demo5 b34k`.
 
-The trace and basemap are retained in [odaiba_hero_trace.json](odaiba_hero_trace.json)
-and [odaiba_hero_basemap.png](odaiba_hero_basemap.png). Source hashes, commands,
-solver versions and full-run results are recorded in
+The legend shows each method's current solution state and horizontal error for the
+same reference epoch (within 1 ms timestamp tolerance), plus its median horizontal error over the
+**same 171 exactly matched reference/solver epochs**. Selected-window median H is
+**0.21 m for libgnss++ versus 7.50 m for RTKLIB**; P95 is 0.65 versus 9.86 m.
+The native solution is mostly FLOAT here: solver status and actual reference error
+are separate measurements.
+
+## Explicitly selected showcase
+
+This is intentionally a **favorable illustrative segment**, selected to make the
+solver differences visible. It is not a representative or independent benchmark.
+The choice is reproducible with `prepare_trace.py --select-showcase`:
+
+1. Scan nominal 20-second windows on a two-second grid. Align the start to the
+   first exact common epoch within one second after each grid point, so both
+   current-position markers are available at the opening frame.
+2. Require at least 80% exact common-epoch coverage, no common gap above 2.501 s,
+   reference motion above 1 m/s (forward 1.5-second displacement), and native
+   common-epoch horizontal P95 at most 1 m.
+3. Rank eligible windows by descending RTKLIB common-epoch median H; break ties
+   with the earliest start. These filters and the ranking deliberately favor
+   showing the native solver's advantage; the full-run results remain linked below.
+
+This selects GPS week **2032**, TOW **273700.0–273720.0 s**. There are 201 reference
+samples, 191 native solutions (189 FLOAT, two SPP), and 173 RTKLIB solutions
+(101 FLOAT, 72 DGPS). Missing positions remain missing. Gaps over 0.5 s are never
+joined, and a missing current position is labelled `NO SOLUTION`; no gap filling,
+error scaling, or horizontal shifts are used.
+
+The 20-second drive is played in **10 seconds (2×)**: 80 frames at 8 fps,
+**960 × 480 pixels**. The camera stays 32 m behind and 8 m above the reference
+rendering plane, using measured reference heading even near turns. Ground Truth
+is supplied only to the visualization/scoring step, never to either solver.
+
+## Interpretation, data and rendering
+
+This is an offline **horizontal visualization**, with prerecorded forward paths
+visible. A flat schematic ground plane at 42 m ellipsoidal height places all paths
+at 42.45 m; estimated heights are not visualized. Buildings retain their published
+geometry. This is not a vertical-accuracy or building-collision measurement.
+The official **Minato-ku 2025 PLATEAU LOD2** model and current OSM map are context
+for the older drive, not a reconstruction of its collection date.
+
+The measured trace, heading, errors and selection criteria are retained in
+[odaiba_hero_trace.json](odaiba_hero_trace.json). The shared OSM snapshot is
+[odaiba_hero_basemap.png](odaiba_hero_basemap.png), assembled from 20 zoom-18 tiles.
+Input/solution hashes, full-run results and rendering details are in
 [odaiba_hero_provenance.json](odaiba_hero_provenance.json).
-The basemap is a small, cached patch assembled from 20 OSM zoom-18 tiles; the
-renderer uses the identical image in both panes, avoiding unequal streaming detail.
 
 ## Re-render the recorded trace
 
@@ -56,8 +83,8 @@ python scripts/readme_hero/render.py \
   --output output/readme-hero/rebuilt.gif
 ```
 
-GIF palette entries are reserved for the two method colors. Frame delays alternate
-in centiseconds so 8 fps is actually 12 seconds rather than silently rounded faster.
+GIF palette entries are reserved for the method colors and white reference. Frame delays alternate
+in centiseconds so 8 fps is actually 10 seconds rather than silently rounded faster.
 Rasterization and live PLATEAU assets can change; a rebuild is not promised to be
 byte-identical across browser versions. The raw trace snapshot is deterministic.
 
@@ -90,16 +117,16 @@ python scripts/readme_hero/prepare_trace.py \
   --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv \
   --lib-pos output/readme-hero/libgnss.pos \
   --rtklib-pos output/readme-hero/rtklib.pos \
-  --start-tow 273385.1 --duration 30 \
+  --select-showcase --duration 20 \
   --output output/readme-hero/trace.json
 ```
 
 Both solvers read the same rover/base/navigation files and use the same surveyed
 base ECEF coordinate `(-3961904.9530, 3348993.7578, 3698211.7553)` m.
 The default profile and GLONASS AR off match the existing Odaiba benchmark.
-The freshly regenerated trace was checked against the tracked snapshot for exact
-JSON data equality. Full-run scoring reproduced 1,298 vs 205 FIX epochs and
-4.777 vs 25.622 m horizontal P95 on each solver's matched epochs. The GIF's short
+The selected trace is reproducible from the retained solver outputs and exact
+reference epochs; both window selection and all displayed errors are checked. Full-run scoring reproduced 1,298 vs 205 FIX epochs and
+4.777 vs 25.622 m horizontal P95 on each solver's matched epochs. The GIF's deliberately favorable short
 window is illustrative; see [benchmarks](benchmarks.md) for the full context,
 matching populations and limitations.
 
@@ -108,7 +135,7 @@ matching populations and limitations.
 - Drive/reference: [UrbanNavDataset](https://github.com/IPNL-POLYU/UrbanNavDataset#tokyo-dataset),
   public Tokyo archive linked by the upstream project. Raw data is downloaded to
   ignored `data/`; it is not added to this PR.
-- Buildings: **国土交通省 Project PLATEAU**, 江東区 2025 建築物モデル LOD2,
+- Buildings: **国土交通省 Project PLATEAU**, 港区 2025 建築物モデル LOD2,
   rendered with a uniform color. The exact tileset URL is in the trace and provenance;
   discover datasets through the [official catalog](https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets).
   See the [PLATEAU site policy](https://www.mlit.go.jp/plateau/site-policy/).

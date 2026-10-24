@@ -25,7 +25,7 @@ p.add_argument(
     "--cache-dir", type=Path, default=repo / "output/readme-hero/resource-cache"
 )
 p.add_argument("--fps", type=int, default=8)
-p.add_argument("--frames", type=int, default=96)
+p.add_argument("--frames", type=int, default=80)
 a = p.parse_args()
 if not 1 <= a.fps <= 50 or a.frames < 2:
     p.error("fps must be between 1 and 50; at least two frames required")
@@ -53,7 +53,7 @@ async def main():
             ],
         )
         page = await browser.new_page(
-            viewport={"width": 960, "height": 420}, device_scale_factor=1
+            viewport={"width": 960, "height": 480}, device_scale_factor=1
         )
         page.on("pageerror", lambda e: print("JS ERROR", str(e), flush=True))
 

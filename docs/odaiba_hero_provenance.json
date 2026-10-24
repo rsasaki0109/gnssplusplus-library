@@ -1,5 +1,5 @@
 {
-  "schema": "odaiba_readme_hero.v1",
+  "schema": "odaiba_readme_hero.v2",
   "generated_date": "2026-10-24",
   "dataset": {
     "name": "UrbanNav Tokyo Odaiba",
@@ -53,39 +53,76 @@
   },
   "window": {
     "gps_week": 2032,
-    "start_tow": 273385.1,
-    "end_tow": 273415.1,
-    "selection": "first continuously moving 30s interval, at least 10s into reference, forward 1.5s speed > 2 m/s; selected from reference only",
-    "epochs_each": 301,
-    "rtklib_status": "FLOAT",
-    "libgnss_status": "FIXED"
+    "start_tow": 273700,
+    "end_tow": 273720,
+    "selection": {
+      "mode": "favorable_showcase",
+      "grid_s": 2,
+      "start_alignment": "first exact common epoch within 1 s after each grid point",
+      "minimum_exact_common_coverage": 0.8,
+      "maximum_common_gap_s": 2.501,
+      "minimum_reference_forward_1p5s_speed_mps": 1,
+      "maximum_libgnss_common_p95_h_m": 1,
+      "ranking": "largest RTKLIB common-epoch median H; earliest window breaks ties",
+      "eligible_windows": 97,
+      "note": "Deliberately favorable selection to illustrate visible solver differences; not an unbiased benchmark"
+    },
+    "reference_epochs": 201,
+    "libgnss_epochs": 191,
+    "rtklib_epochs": 173,
+    "exact_common_epochs": 171,
+    "libgnss_status_counts": {
+      "FLOAT": 189,
+      "SPP": 2
+    },
+    "rtklib_status_counts": {
+      "FLOAT": 101,
+      "DGPS": 72
+    },
+    "common_epoch_metrics": {
+      "common_epochs": 171,
+      "libgnss": {
+        "median_h_m": 0.20839175763244877,
+        "p95_h_m": 0.6521427537363501
+      },
+      "rtklib": {
+        "median_h_m": 7.502328408132673,
+        "p95_h_m": 9.857474836700835
+      }
+    }
   },
   "visualization": {
-    "camera": "shared reference-driven low chase camera, 18m behind and 7m above reference",
+    "scene": "single scene with all three measured trajectories",
+    "legend": {
+      "Ground Truth": "white dashed",
+      "libgnss++": "mint solid",
+      "RTKLIB demo5": "orange solid"
+    },
+    "camera": "32m behind and 8m above reference rendering plane; Ground Truth horizontal position and measured reference heading exclusively control pose",
     "ground_height_ellipsoidal_m": 42.0,
-    "trace_height_ellipsoidal_m": [
-      42.4,
-      42.45
-    ],
-    "horizontal_positions": "unmodified",
+    "trace_height_ellipsoidal_m": 42.45,
+    "horizontal_positions": "unmodified; never shifted or magnified",
     "forward_paths": "recorded future positions shown during offline replay",
+    "missing_epoch_tolerance_s": 0.001,
+    "maximum_joined_gap_s": 0.5,
     "map_model_epoch": "2025; illustrative context for older drive",
-    "vertical_accuracy_claim": false
+    "vertical_accuracy_claim": false,
+    "markers": "Only exact-reference-time solver samples are shown; no nearest-time borrowing across missing epochs"
   },
   "plateau": {
-    "id": "13108_bldg_lod2_no_texture",
-    "name": "建築物モデル（江東区）",
+    "id": "13103_bldg_lod2_no_texture",
+    "name": "建築物モデル（港区）",
     "pref": "東京都",
     "pref_code": "13",
-    "city": "江東区",
-    "city_code": "13108",
+    "city": "港区",
+    "city_code": "13103",
     "ward": null,
     "ward_code": null,
     "type": "建築物モデル",
     "type_en": "bldg",
-    "url": "https://assets.cms.plateau.reearth.io/assets/69/e06917-ca70-4b93-810b-765fb29ce233/13108_koto-ku_pref_2025_citygml_1_op_bldg_3dtiles_13108_koto-ku_lod2_no_texture/tileset.json",
-    "file_size": 44548490,
-    "composite_url": "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13108-bldg-lod2-notexture-2025/tileset.json",
+    "url": "https://assets.cms.plateau.reearth.io/assets/c7/1aabcb-eb54-4cfe-9b75-3a6458c9d29e/13103_minato-ku_pref_2025_citygml_1_op_bldg_3dtiles_13103_minato-ku_lod2_no_texture/tileset.json",
+    "file_size": 61658936,
+    "composite_url": "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13103-bldg-lod2-notexture-2025/tileset.json",
     "layers": null,
     "year": 2025,
     "registration_year": 2025,
@@ -171,8 +208,8 @@
     "social_card_png": "output/readme-hero/social.png"
   },
   "artifact_inputs": {
-    "docs/odaiba_hero_trace.json": "4c1595437e97574061f318d238f2e5a9e6c0ba80a7a10a1abd4ee191a7939049",
-    "docs/odaiba_hero_basemap.png": "57ebc41f9a67d4a8e9fe8d21267e9b2bf0be8f9e5bea2bc200c0f74dbf09b1ab",
+    "docs/odaiba_hero_trace.json": "e1d0926b59148381821be52e088c43aee53d2ef286148e9a2c98955f50c1902e",
+    "docs/odaiba_hero_basemap.png": "9e38ae2fa465aa30a28b9154c89391f29673e6735d297ef7a2f72b2d9d58e593",
     "output/readme-hero/libgnss.pos": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
     "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5"
   },
@@ -182,16 +219,16 @@
     "pillow": "12.3.0",
     "chromium": "154.0.8037.57",
     "width": 960,
-    "height": 420,
-    "frames": 96,
+    "height": 480,
+    "frames": 80,
     "fps": 8,
-    "duration_ms": 12000,
-    "playback_speed": 2.5
+    "duration_ms": 10000,
+    "playback_speed": 2
   },
   "reproduction_guide": "docs/odaiba_hero.md",
   "artifact": {
     "file": "docs/odaiba_hero.gif",
-    "bytes": 3327595,
-    "sha256": "a5ca95ac1e39bcf55b1290a3f3547c1c10a95749202e64c25733d1cec07f6306"
+    "bytes": 2960424,
+    "sha256": "1035cc7c32e0eb879b681ba15c3584b62052a72fb23d6f9da87b7752cec4ba70"
   }
 }
