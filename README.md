@@ -5,11 +5,12 @@ Modern C++20 GNSS toolkit for non-GUI positioning.
 Native `SPP`, `RTK`, `PPP`, `CLAS/MADOCA`, `RTCM`, `UBX`, and direct `QZSS L6`
 handling without an external RTKLIB runtime.
 
-![Ground Truth in dashed white, libgnss++ in mint, and RTKLIB in orange overlaid in one PLATEAU and OpenStreetMap scene, viewed from a Ground Truth-following camera](docs/odaiba_hero.gif)
+![Ground Truth, libgnss++, and RTKLIB trajectories in one 3D scene, with a Ground Truth-anchored zenith inset showing satellite IDs and model-predicted LOS/NLOS](docs/odaiba_hero.gif)
 
 Selected UrbanNav Odaiba showcase: Ground Truth, libgnss++, and RTKLIB demo5
 in one scene. Median horizontal error on 171 common epochs: **0.21 m vs 7.50 m**
 (libgnss++ vs RTKLIB; this selected segment is not a full-run benchmark).
+Zenith inset: satellite IDs and building-model LOS/NLOS predictions, not measured labels.
 [Data, attribution, and rendering details](docs/odaiba_hero.md).
 
 ## What You Get

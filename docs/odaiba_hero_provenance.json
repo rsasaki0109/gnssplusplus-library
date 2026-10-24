@@ -1,5 +1,5 @@
 {
-  "schema": "odaiba_readme_hero.v2",
+  "schema": "odaiba_readme_hero.v4",
   "generated_date": "2026-10-24",
   "dataset": {
     "name": "UrbanNav Tokyo Odaiba",
@@ -211,7 +211,9 @@
     "docs/odaiba_hero_trace.json": "e1d0926b59148381821be52e088c43aee53d2ef286148e9a2c98955f50c1902e",
     "docs/odaiba_hero_basemap.png": "9e38ae2fa465aa30a28b9154c89391f29673e6735d297ef7a2f72b2d9d58e593",
     "output/readme-hero/libgnss.pos": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
-    "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5"
+    "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5",
+    "docs/odaiba_hero_sky.json": "da87b10ae894445d33c16af2014c0e34d55fcc875b880e3bf99a3ff96414d1e1",
+    "docs/odaiba_hero_sky.png": "45d23fce6347ccf43eb0ba3ee76dec25cc89028c01cde22331bc8272ca633c9f"
   },
   "renderer": {
     "cesium": "1.123.1",
@@ -226,9 +228,45 @@
     "playback_speed": 2
   },
   "reproduction_guide": "docs/odaiba_hero.md",
+  "zenith": {
+    "kind": "synthetic north-up equidistant 180-degree fisheye",
+    "anchor": "published Ground Truth ECEF point/height at exact street-view reference epoch",
+    "satellite_geometry": "Fixed union of 32 clip-reported satellite IDs, propagated independently at each GT epoch via native broadcast state/geometry and projFisheye",
+    "observed_satellite_epoch_records": 4711,
+    "reference_epochs": 201,
+    "geometry": {
+      "wards": [
+        "Minato",
+        "Koto",
+        "Chuo",
+        "Shinagawa"
+      ],
+      "year": 2025,
+      "tiles": 115,
+      "triangles": 349853,
+      "radius_m": 2000.0,
+      "minimum_assessed_elevation_deg": 10
+    },
+    "all_epoch_label_counts": {
+      "unassessed": 402,
+      "LOS": 5947,
+      "NLOS": 83
+    },
+    "interpretation": "Model-predicted building blockage from published GT ECEF; not measured LOS, not historical imagery, no multipath simulation, not used by either solver. <10deg or unhealthy ephemeris is unassessed; clear rays refer only to these modeled wards/range.",
+    "used_by_solvers": false,
+    "preparation_dependencies": {
+      "trimesh": "5.2.0",
+      "embreex": "4.4.0.post1",
+      "DracoPy": "2.2.0"
+    },
+    "geometry_records": 6432,
+    "cohort_size": 32,
+    "unreported_satellite_epoch_records": 1721,
+    "observation_display": "Unreported samples stay visible with their geometric model status; ID * and independent Rx count denote no RINEX sample"
+  },
   "artifact": {
     "file": "docs/odaiba_hero.gif",
-    "bytes": 2960424,
-    "sha256": "1035cc7c32e0eb879b681ba15c3584b62052a72fb23d6f9da87b7752cec4ba70"
+    "bytes": 2475094,
+    "sha256": "f87ceadc0728642017805db6bd15ac1f511ab7bf227222955c32ab58e3f3d8ee"
   }
 }
