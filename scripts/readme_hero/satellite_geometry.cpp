@@ -1,4 +1,4 @@
-// Export observed-satellite geometry using the library's actual broadcast and
+// Export a stable clip-wide satellite cohort using the library's broadcast and
 // fisheye-projection implementations. This is visualization, not a solver input.
 #include <libgnss++/core/navigation.hpp>
 #include <libgnss++/io/rinex.hpp>
@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <map>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -44,36 +45,53 @@ int exportGeometry(int argc, char** argv) {
     camera.width = camera.height = 256;
     camera.xc = camera.yc = 128;
     camera.r_calib = {0, 112}; camera.el_calib = {90, 0}; camera.poly_degree = 1;
-    std::ofstream output(argv[6]);
-    if (!output) throw std::runtime_error("Cannot write output");
-    output << "week,tow,satellite,receiver_x,receiver_y,receiver_z,satellite_x,satellite_y,satellite_z,az_deg,el_deg,fish_x,fish_y,health\n";
-    output << std::setprecision(15);
+    // Use observations only to define a fixed clip-wide cohort and an independent
+    // per-epoch observed flag. A missing observation must not hide a physical
+    // satellite or suppress its geometric visibility calculation.
+    std::set<SatelliteId> cohort;
+    std::map<std::pair<int, long long>, std::set<SatelliteId>> observed;
     ObservationData obs;
-    std::size_t count = 0, missing = 0;
     while (obs_reader.readObservationEpoch(obs)) {
         if (obs.time.tow > end + .001) break;
-        auto ref = reference.find({obs.time.week, std::llround(obs.time.tow * 1000)});
-        if (ref == reference.end()) continue;
-        for (const auto& sat : obs.getSatellites()) {
+        const auto key = std::make_pair(obs.time.week, std::llround(obs.time.tow * 1000));
+        if (!reference.contains(key)) continue;
+        const auto satellites = obs.getSatellites();
+        for (const auto& sat : satellites) {
+            cohort.insert(sat);
+            observed[key].insert(sat);
+        }
+    }
+    if (cohort.empty()) throw std::runtime_error("No satellite cohort in selected observations");
+    std::ofstream output(argv[6]);
+    if (!output) throw std::runtime_error("Cannot write output");
+    output << "week,tow,satellite,receiver_x,receiver_y,receiver_z,satellite_x,satellite_y,satellite_z,az_deg,el_deg,fish_x,fish_y,health,observed\n";
+    output << std::setprecision(15);
+    std::size_t count = 0, observed_count = 0;
+    for (const auto& [key, receiver] : reference) {
+        const GNSSTime time(key.first, key.second / 1000.0);
+        for (const auto& sat : cohort) {
             Vector3d position, velocity; double bias, drift;
-            if (!nav.calculateSatelliteState(sat, obs.time, position, velocity, bias, drift)) { ++missing; continue; }
-            const auto geometry = nav.calculateGeometry(ref->second, position);
+            if (!nav.calculateSatelliteState(sat, time, position, velocity, bias, drift))
+                throw std::runtime_error("Missing cohort ephemeris; refusing to silently drop " + sat.toString());
+            const auto geometry = nav.calculateGeometry(receiver, position);
             const double az = geometry.azimuth * 180 / M_PI, el = geometry.elevation * 180 / M_PI;
             if (el < 0) continue;
             const auto projection = visibility::projFisheye({az}, {el}, camera);
             if (projection.px.size() != 1) throw std::runtime_error("Fisheye projection failed");
-            const auto* eph = nav.getEphemeris(sat, obs.time);
-            output << obs.time.week << ',' << obs.time.tow << ',' << sat.toString();
-            for (int i=0;i<3;++i) output << ',' << ref->second[i];
+            const auto* eph = nav.getEphemeris(sat, time);
+            output << time.week << ',' << time.tow << ',' << sat.toString();
+            for (int i=0;i<3;++i) output << ',' << receiver[i];
             for (int i=0;i<3;++i) output << ',' << position[i];
-            output << ',' << az << ',' << el << ',' << projection.px[0] << ',' << projection.py[0] << ',' << (eph ? eph->health : -1) << '\n';
+            const bool is_observed = observed[key].contains(sat);
+            output << ',' << az << ',' << el << ',' << projection.px[0] << ',' << projection.py[0] << ',' << (eph ? eph->health : -1) << ',' << (is_observed ? 1 : 0) << '\n';
+            observed_count += is_observed;
             ++count;
         }
     }
     if (!count) throw std::runtime_error("No satellite geometry exported");
     output.flush();
     if (!output) throw std::runtime_error("Failed writing satellite geometry");
-    std::cout << "Exported " << count << " observed satellite/epoch records; " << missing << " without usable ephemeris\n";
+    std::cout << "Exported " << count << " cohort satellite/epoch records; " << observed_count << " reported observations; " << cohort.size() << " stable IDs\n";
     return 0;
 }
 

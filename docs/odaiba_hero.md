@@ -69,13 +69,23 @@ and satellite annotations; the street and sky views use the exact same reference
 epoch. The sky origin is the published reference **ECEF point and height**, not
 the street visualization's flattened display plane.
 
-Satellite IDs are those present in the rover RINEX observations at that epoch.
+The displayed population is a **fixed set of 32 satellites reported at least
+once during the selected clip**. Every satellite is propagated from broadcast
+navigation at **every Ground Truth epoch**, independently of whether the receiver
+reported an observation then. It is not the complete broadcast constellation.
+A missing RINEX sample never makes a modeled LOS or NLOS satellite disappear.
+An actual horizon crossing may remove a satellite in other clips; all 32 remain
+above the horizon throughout this recorded interval. Missing ephemerides cause
+preparation to fail instead of silently dropping an ID.
+
 The native library's `NavigationData::calculateSatelliteState`, `calculateGeometry`
-and `visibility::projFisheye` compute positions from the accompanying broadcast
-navigation file and project them into the ideal fisheye. The export contains
-4,711 observed satellite/epoch records, with no missing usable ephemerides in this
-run. They are **reported satellites**, not necessarily satellites used in either
-solver's final solution.
+and `visibility::projFisheye` compute the positions and ideal fisheye projection.
+There are **6,432 geometry records** (32 × 201), with **4,711 reported observations**
+and 1,721 unreported samples. The independent `observed` flag retains that fact.
+An ID suffix **`*`** means no RINEX sample at this epoch; the marker and its
+geometric LOS/NLOS color remain visible. The **Rx** counter counts reported
+RINEX observations, separately from the geometric LOS/NLOS counts. It does not
+claim tracking status or selection in either solver's final solution.
 
 - **Green filled dot — model LOS:** no building hit along the eligible ray.
 - **Red × — model NLOS:** a modeled building intersects that ray.
@@ -101,9 +111,12 @@ not a causal explanation for the error difference or a 3D-aided solver claim.
 
 The frozen atlas and exact-time satellite metadata are
 [odaiba_hero_sky.png](odaiba_hero_sky.png) and
-[odaiba_hero_sky.json](odaiba_hero_sky.json). Metadata records per-ray status,
+[odaiba_hero_sky.json](odaiba_hero_sky.json). Metadata records the fixed cohort, independent observation flags, per-ray status,
 intersection distance, model URLs/hashes and preparation inputs. Rendering rejects
-mismatched trace/atlas hashes instead of reusing a stale sky view.
+mismatched trace/atlas hashes or an obsolete observation-filtered schema instead
+of reusing a stale sky view. `python3 tests/test_readme_hero_satellites.py -v`
+checks the real C04 observation-loss regression and the complete clip continuity;
+the same tests are registered under the CTest `core` label.
 
 ## Re-render the recorded trace
 

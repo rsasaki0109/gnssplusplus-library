@@ -1,4 +1,4 @@
-"""Raycast a GT-anchored, model-only zenith fisheye and observed satellites.
+"""Raycast a GT-anchored, model-only zenith fisheye and a stable satellite cohort.
 
 Dependencies are preparation-only: numpy, Pillow, trimesh, embreex, DracoPy.
 Runtime rendering consumes the frozen sprite/JSON without a geometry engine.
@@ -257,6 +257,7 @@ for index, r in enumerate(ref):
         sv.append(
             {
                 "id": sat["satellite"],
+                "observed": bool(int(sat["observed"])),
                 "az_deg": float(sat["az_deg"]),
                 "el_deg": float(sat["el_deg"]),
                 "x": x,
@@ -273,7 +274,9 @@ for index, r in enumerate(ref):
 a.output_sprite.parent.mkdir(parents=True, exist_ok=True)
 sheet.save(a.output_sprite)
 meta = {
-    "schema": "odaiba_gt_zenith.v1",
+    "schema": "odaiba_gt_zenith.v2",
+    "cohort_ids": sorted({r["satellite"] for r in sat_rows}),
+    "satellite_cohort": "Fixed union of IDs reported at least once in the selected clip; every ID propagated at every reference epoch, independent of observation availability",
     "projection": "ideal equidistant, North up; native projFisheye",
     "sprite": {"cell_size": SIZE, "columns": columns, "frames": len(frames)},
     "frames": frames,

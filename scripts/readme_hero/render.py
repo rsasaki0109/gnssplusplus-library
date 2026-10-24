@@ -33,6 +33,10 @@ if not 1 <= a.fps <= 50 or a.frames < 2:
     p.error("fps must be between 1 and 50; at least two frames required")
 data = json.loads(a.scene.read_text())
 sky_metadata = json.loads(a.sky_metadata.read_text())
+if sky_metadata.get("schema") != "odaiba_gt_zenith.v2":
+    p.error(
+        "Sky snapshot uses an obsolete observation-filtered schema; rebuild the exporter and prepare_sky.py"
+    )
 if (
     sky_metadata["inputs"]["trace_sha256"]
     != hashlib.sha256(a.scene.read_bytes()).hexdigest()

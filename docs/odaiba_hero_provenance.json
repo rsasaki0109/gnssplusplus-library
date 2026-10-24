@@ -1,5 +1,5 @@
 {
-  "schema": "odaiba_readme_hero.v3",
+  "schema": "odaiba_readme_hero.v4",
   "generated_date": "2026-10-24",
   "dataset": {
     "name": "UrbanNav Tokyo Odaiba",
@@ -212,7 +212,7 @@
     "docs/odaiba_hero_basemap.png": "9e38ae2fa465aa30a28b9154c89391f29673e6735d297ef7a2f72b2d9d58e593",
     "output/readme-hero/libgnss.pos": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
     "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5",
-    "docs/odaiba_hero_sky.json": "69d3a68280c52d791d11423fc77bade72d78d79da4fb69ad38aa0d9b95b609a0",
+    "docs/odaiba_hero_sky.json": "da87b10ae894445d33c16af2014c0e34d55fcc875b880e3bf99a3ff96414d1e1",
     "docs/odaiba_hero_sky.png": "45d23fce6347ccf43eb0ba3ee76dec25cc89028c01cde22331bc8272ca633c9f"
   },
   "renderer": {
@@ -231,7 +231,7 @@
   "zenith": {
     "kind": "synthetic north-up equidistant 180-degree fisheye",
     "anchor": "published Ground Truth ECEF point/height at exact street-view reference epoch",
-    "satellite_geometry": "libgnss++ broadcast state/geometry and native visibility::projFisheye; IDs reported by rover RINEX",
+    "satellite_geometry": "Fixed union of 32 clip-reported satellite IDs, propagated independently at each GT epoch via native broadcast state/geometry and projFisheye",
     "observed_satellite_epoch_records": 4711,
     "reference_epochs": 201,
     "geometry": {
@@ -248,9 +248,9 @@
       "minimum_assessed_elevation_deg": 10
     },
     "all_epoch_label_counts": {
-      "LOS": 4474,
-      "unassessed": 207,
-      "NLOS": 30
+      "unassessed": 402,
+      "LOS": 5947,
+      "NLOS": 83
     },
     "interpretation": "Model-predicted building blockage from published GT ECEF; not measured LOS, not historical imagery, no multipath simulation, not used by either solver. <10deg or unhealthy ephemeris is unassessed; clear rays refer only to these modeled wards/range.",
     "used_by_solvers": false,
@@ -258,11 +258,15 @@
       "trimesh": "5.2.0",
       "embreex": "4.4.0.post1",
       "DracoPy": "2.2.0"
-    }
+    },
+    "geometry_records": 6432,
+    "cohort_size": 32,
+    "unreported_satellite_epoch_records": 1721,
+    "observation_display": "Unreported samples stay visible with their geometric model status; ID * and independent Rx count denote no RINEX sample"
   },
   "artifact": {
     "file": "docs/odaiba_hero.gif",
-    "bytes": 2556713,
-    "sha256": "a8bc7b557e8d7573f55ddfbb535e915f9a2be0a4a71892db63373233111c0de7"
+    "bytes": 2475094,
+    "sha256": "f87ceadc0728642017805db6bd15ac1f511ab7bf227222955c32ab58e3f3d8ee"
   }
 }
