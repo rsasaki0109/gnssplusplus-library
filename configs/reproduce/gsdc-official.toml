@@ -1,7 +1,14 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 56625084, Private 0.984 m / Public 0.915 m, 40 drives, 71,936 rows
+# Kaggle ref 57590194, Private 0.862 m / Public 0.902 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
-# gsdc2023_heading_modern_official_readback_20260928.json).
+# gsdc2023_official_readback_20261024.json).
+#
+# Platform note: 32 drives are pinned to MSVC research outputs. The 8 drives
+# replaced after ref 56625084 (6 per-phone main Doppler drives, sjc-he2 Pixel5
+# hardware clock reset, sjc-ce1 Pixel7Pro zero-bias IMU initialization), plus
+# the stage-0 runs and height maps of the 7 of them that use a height map, are
+# pinned to Linux GCC 15 outputs. A rebuild on one platform therefore
+# reproduces only its own subset byte for byte.
 #
 # This lane never talks to Kaggle. It rebuilds the submitted CSV from the raw
 # test drives and gates on its SHA-256; the Kaggle score is external and only
@@ -17,7 +24,8 @@
 #           of those trajectories (25 maps, SHA-pinned);
 #   final   40 replays: 17 Pixel5 heading + 9 modern clock (both new in
 #           56625084) and 14 height-map/relative-height drives retained
-#           from 56536540;
+#           from 56536540, with the per-drive flags added by 57585127,
+#           57586667 and 57590194;
 #   assemble on the official key list (Kaggle sample_submission order).
 # Stage 0 is skipped for a drive whose height map is already present with
 # the pinned SHA-256, and every run step resumes from completed drives.
@@ -30,9 +38,9 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.984 m / Public 0.915 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.862 m / Public 0.902 m; 40 drives, 71,936 rows"
 runtime_estimate = "~12-18 h"
-docs = "docs/use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json"
+docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
 [datasets.gsdc]
 required = [
@@ -105,7 +113,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 56625084 (cbd1fde1...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57590194 (f9526888...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -145,9 +153,13 @@ min = 0
 gate = false
 readme = "reported"
 
-# Local verification (2026-09-29, develop 2f919306, MSVC Release + GTSAM 4.3):
-# 6/40 final drives (all three groups) and 2/25 stage-0 drives rerun
-# byte-identical; 25/25 height maps and the cbd1fde1... submission rebuild
-# from the research solutions. Routine verification is intentionally limited
-# to this subset; the full 40-drive run (estimate 12-18 h single-process) is
+# Local verification (2026-09-29, develop 2f919306, MSVC Release + GTSAM 4.3,
+# recipe for ref 56625084): 6/40 final drives (all three groups) and 2/25
+# stage-0 drives rerun byte-identical; 25/25 height maps and the cbd1fde1...
+# submission rebuild from the research solutions. Recipe update to ref
+# 57590194 (2026-10-24, Linux GCC 15 + GTSAM 4.3.0, develop 5c0481e): the 8
+# replaced final drives rerun byte-identical to the submitted solutions, the
+# 7 GCC height maps rebuild to their pinned SHA-256, and a partial assembly
+# gives f9526888.... Routine verification is intentionally limited to these
+# subsets; the full 40-drive run (estimate 12-18 h single-process) is
 # available through the same command; see docs/reproduce.md.
