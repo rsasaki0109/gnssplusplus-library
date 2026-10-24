@@ -6663,3 +6663,45 @@ GCC outputs:
 
 The other 32 drives remain the MSVC research outputs, so no single platform
 reproduces the whole file byte for byte.
+
+### Yaw slips under epoch heading seeds, submission 57594243 (2026-10-24)
+
+All 40 test drives were rerun with `--native-imu-state-diagnostic`. For each
+drive, the optimized body yaw was compared with the GNSS-first course while
+moving faster than 5 m/s. The p95 deviation from its median is at most
+7.5 deg everywhere except three drives, where the yaw slips a full turn:
+
+- sjc-ce1 Pixel7Pro (static leveling bias; fixed in 57590194);
+- ebf-z Pixel5;
+- sjc-r A505U.
+
+On ebf-z the slip happens under `--native-epoch-heading-attitude-seeds`
+between minutes 3 and 13. The seeds are initial values only, not priors.
+Without them the mount yaw stays at -176 deg throughout, and the distance to
+the archived taroz output drops from median 0.19 m / P95 1.01 m to
+0.16 / 0.42 m. The seeded control run on the same GCC stage 0 and height map
+reproduces the submitted rows (P95 1.01 m), so the gain comes from dropping
+the seeds. The 14 checked train Pixel5 drives with seeds show no slip (p95
+deviation at most 1.8 deg; the mtv-h run with the state diagnostic crashed).
+So the rule is to drop the seeds only on a drive whose optimized yaw slips a
+full turn. Submission 57594243 replaces only ebf-z in 57590194. It scores
+Private 0.862 m / Public **0.884 m**, so ebf-z is a Public drive.
+
+sjc-r A505U stays open. Between epochs 1000 and 1400 (on-ramp and highway)
+the optimized relative rotations leave the integrated gyro by up to 0.65 deg
+per epoch, so another factor overrides the IMU factors there. None of these
+removes the slip:
+
+- the zero-bias initialization;
+- epoch heading seeds (run through the experimental build);
+- dropping the stop constraints;
+- an IMU time offset (inactive without the UTC wall-clock fallback).
+
+`--native-source-phone-imu-noise` shortens P95 to taroz from 2.15 to 1.45 m
+there, but it makes 7 of 8 Samsung train drives worse and leaves the 8th
+unchanged (mean 1.305 -> 1.420 m), so it is rejected.
+
+ebf-x Mi8 was also checked. Taroz sets IdxStart=600 for that drive and fills
+the first 599 stationary epochs with the nearest solution. Solving only from
+epoch 599 still leaves the stationary segment 1.4-1.7 m from taroz, so that
+drive is undecided.

@@ -1,14 +1,15 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57590194, Private 0.862 m / Public 0.902 m, 40 drives, 71,936 rows
+# Kaggle ref 57594243, Private 0.862 m / Public 0.884 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
-# Platform note: 32 drives are pinned to MSVC research outputs. The 8 drives
-# replaced after ref 56625084 (6 per-phone main Doppler drives, sjc-he2 Pixel5
-# hardware clock reset, sjc-ce1 Pixel7Pro zero-bias IMU initialization), plus
-# the stage-0 runs and height maps of the 7 of them that use a height map, are
-# pinned to Linux GCC 15 outputs. A rebuild on one platform therefore
-# reproduces only its own subset byte for byte.
+# Platform note: 31 drives are pinned to MSVC research outputs. The 9 drives
+# changed after ref 56625084 (6 per-phone main Doppler drives, sjc-he2 Pixel5
+# hardware clock reset, sjc-ce1 Pixel7Pro zero-bias IMU initialization, ebf-z
+# Pixel5 without epoch heading seeds), plus the stage-0 runs and height maps
+# of the 8 of them that use a height map, are pinned to Linux GCC 15 outputs.
+# A rebuild on one platform therefore reproduces only its own subset byte for
+# byte.
 #
 # This lane never talks to Kaggle. It rebuilds the submitted CSV from the raw
 # test drives and gates on its SHA-256; the Kaggle score is external and only
@@ -24,8 +25,8 @@
 #           of those trajectories (25 maps, SHA-pinned);
 #   final   40 replays: 17 Pixel5 heading + 9 modern clock (both new in
 #           56625084) and 14 height-map/relative-height drives retained
-#           from 56536540, with the per-drive flags added by 57585127,
-#           57586667 and 57590194;
+#           from 56536540, with the per-drive flags added or removed by
+#           57585127, 57586667, 57590194 and 57594243;
 #   assemble on the official key list (Kaggle sample_submission order).
 # Stage 0 is skipped for a drive whose height map is already present with
 # the pinned SHA-256, and every run step resumes from completed drives.
@@ -38,7 +39,7 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.862 m / Public 0.902 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.862 m / Public 0.884 m; 40 drives, 71,936 rows"
 runtime_estimate = "~12-18 h"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -113,7 +114,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57590194 (f9526888...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57594243 (2344a34f...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -160,6 +161,8 @@ readme = "reported"
 # 57590194 (2026-10-24, Linux GCC 15 + GTSAM 4.3.0, develop 5c0481e): the 8
 # replaced final drives rerun byte-identical to the submitted solutions, the
 # 7 GCC height maps rebuild to their pinned SHA-256, and a partial assembly
-# gives f9526888.... Routine verification is intentionally limited to these
-# subsets; the full 40-drive run (estimate 12-18 h single-process) is
+# gives f9526888.... Recipe update to ref 57594243 (same build): ebf-z
+# Pixel5 stage 0, height map and final pinned from the lane, and a partial
+# assembly gives 2344a34f.... Routine verification is intentionally limited
+# to these subsets; the full 40-drive run (estimate 12-18 h single-process) is
 # available through the same command; see docs/reproduce.md.

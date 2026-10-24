@@ -162,6 +162,31 @@
       },
       "train_evidence_note": "(P50+P95)/2 without/with --native-source-imu-initialization on the 14 scored static-leveling train drives; the other 12 change by at most 0.001 m. mtv-b Pixel4 (0.0053 rad/s) is the only train drive above the rule; Pixel4XL (0.0007 rad/s) shows why the option is not applied everywhere",
       "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.76 -> 0.13 m, P95 2.76 -> 0.33 m"
+    },
+    {
+      "ref": 57594243,
+      "sha256": "2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e",
+      "base_ref": 57590194,
+      "base_sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09",
+      "private_m": 0.862,
+      "public_m": 0.884,
+      "base_private_m": 0.862,
+      "base_public_m": 0.902,
+      "rows": 71936,
+      "retained_rows_byte_identical": "70350/70350",
+      "replaced": {
+        "2022-04-25-22-36-us-ca-ebf-z/pixel5": {
+          "rows": 1586,
+          "solution_sha256": "416f58a63cd87cfbf245a64b8fa2a8bd0e6d8d7983307b7e588fe356af64f7f0",
+          "removed_flags": [
+            "--native-epoch-heading-attitude-seeds"
+          ]
+        }
+      },
+      "cause": "With the epoch heading attitude seeds (initial values only, not priors) the optimized body yaw slips one full turn against the GNSS-first course between minutes 3 and 13; without them the mount yaw stays at -176 deg.",
+      "rule": "drop the seeds only where the optimized yaw slips a full turn (p95 deviation of body yaw minus course from its median above 90 deg); among the 40 test drives under the current recipe that is ebf-z alone (A505U slips without seeds and is open)",
+      "train_evidence_note": "14 checked train Pixel5 drives with seeds show no slip (p95 deviation at most 1.8 deg), so the rule changes no train drive; the evidence is truth-free",
+      "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.19 -> 0.16 m, P95 1.01 -> 0.42 m; the seeded GCC control reproduces the submitted rows (P95 1.01 m)"
     }
   ],
   "rejected_on_train": {
@@ -169,10 +194,12 @@
     "upstream_route_type_l5_parameters": "+0.018 m mean over 36 drives",
     "per_drive_imu_time_offset_from_truth_lag": "+0.001 m mean over 15 drives",
     "epoch_heading_seeds_all_phones": "pixel4 mtv-b -0.24, pixel4xl +1.00, five drives unchanged",
-    "zero_bias_initialization_all_static_drives": "pixel4 mtv-b -0.240, pixel4xl mtv-b +1.000, 12 drives within 0.001 m"
+    "zero_bias_initialization_all_static_drives": "pixel4 mtv-b -0.240, pixel4xl mtv-b +1.000, 12 drives within 0.001 m",
+    "source_phone_imu_noise_samsung": "7 of 8 Samsung train drives worse, 1 unchanged, mean 1.305 -> 1.420 m (it shortened A505U test P95 to taroz 2.15 -> 1.45 m without removing the yaw slip)"
   },
   "open_issues": {
-    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "IMU-stage yaw slips one full turn against the integrated raw gyro between epochs 800 and 1400; the zero-bias initialization makes it worse (P95 to taroz 2.15 -> 2.67 m)"
+    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "IMU-stage yaw slips one full turn between epochs 800 and 1400; the optimized relative rotations leave the integrated gyro by up to 0.65 deg per epoch between epochs 1000 and 1400. Not fixed by zero-bias initialization (P95 to taroz 2.15 -> 2.67 m), epoch heading seeds (2.67 m), dropping stop constraints (2.13 m) or an IMU time offset (inactive without UTC fallback)",
+    "2022-04-25-21-04-us-ca-ebf-x/mi8": "taroz uses IdxStart=600 and fills epochs 0-598 with the nearest solution; solving from epoch 599 still leaves the stationary segment 1.4-1.7 m from taroz"
   },
   "reference_targets": {
     "final_leaderboard_first_private_m": 0.883,
