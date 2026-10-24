@@ -31,6 +31,7 @@ test_rinex_read.cpp
 *.html
 !site-pages/**/*.html
 !apps/commands/visualization/gnss_web.html
+!scripts/readme_hero/viewer.html
 *.kml
 *.pos
 !tests/fixtures/**/*.pos

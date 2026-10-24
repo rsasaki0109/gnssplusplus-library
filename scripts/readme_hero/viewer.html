@@ -1,0 +1,141 @@
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="/cesium/Widgets/widgets.css">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0c111a; color: #eef3f8; font: 14px system-ui; }
+  header { height: 48px; padding: 8px 20px; border-bottom: 1px solid #2a3444; }
+  header strong { font-size: 23px; }
+  header span { float: right; margin-top: 8px; color: #9aaabd; }
+  .legend { display: flex; height: 74px; padding: 10px 20px; gap: 24px; }
+  .item { flex: 1; line-height: 22px; }
+  .name { font-weight: 650; }
+  .sample { display: inline-block; width: 32px; margin-right: 8px; vertical-align: middle; border-top: 4px solid; }
+  .truth { color: #ffffff; border-top-style: dashed; }
+  .native { color: #60e2bb; }
+  .rtk { color: #f5ac63; }
+  .detail { padding-left: 40px; color: #b7c4d2; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .live { float: right; color: #eef3f8; font-size: 12px; font-variant-numeric: tabular-nums; }
+  #view { width: 100%; height: 324px; position: relative; }
+  #clock { position: absolute; z-index: 2; left: 18px; bottom: 12px; padding: 6px 10px; background: #0c111adc; color: #dce5ef; font: 12px monospace; }
+  footer { height: 34px; padding: 3px 16px; color: #9aaabd; font-size: 10px; line-height: 14px; }
+  .cesium-viewer-bottom { display: none; }
+</style>
+<header><strong>libgnss++</strong><span>UrbanNav Tokyo Odaiba · recorded replay</span></header>
+<div class="legend" role="group" aria-label="Trajectory legend and matched-epoch horizontal errors">
+  <div class="item"><span class="sample truth"></span><span class="name">Ground Truth</span>
+    <div class="detail" id="reference-detail">Reference-following camera</div></div>
+  <div class="item"><span class="sample native"></span><span class="name">libgnss++</span><span class="live" id="native-live"></span>
+    <div class="detail" id="native-median"></div></div>
+  <div class="item"><span class="sample rtk"></span><span class="name">RTKLIB demo5</span><span class="live" id="rtk-live"></span>
+    <div class="detail" id="rtk-median"></div></div>
+</div>
+<div id="view"><div id="clock"></div></div>
+<footer>
+  PLATEAU / MLIT (2025 buildings) · Map © OpenStreetMap contributors · Horizontal trajectories on a schematic ground plane<br>
+  Selected showcase for visible solver differences · Camera follows Ground Truth position + heading · Recorded forward paths
+</footer>
+<script src="/cesium/Cesium.js"></script>
+<script>
+// Absolute GPS seconds since 1980-01-06; coordinates are unmodified WGS84 degrees.
+// Reference row[5] is measured heading. Solver row[5] is exact-epoch horizontal error.
+window.prepare = async function (data) {
+  const C = Cesium;
+  const ground = data.groundHeight;
+  const height = ground + 0.45;
+  window.viewers = [];
+  window.tileFailures = [];
+  const point = row => C.Cartesian3.fromDegrees(row[1], row[2], height);
+  function nearest(rows, t) {
+    let lo = 0, hi = rows.length;
+    while (lo < hi) { const m = (lo + hi) >> 1; if (rows[m][0] < t) lo = m + 1; else hi = m; }
+    const a = rows[Math.max(0, lo - 1)], b = rows[Math.min(lo, rows.length - 1)];
+    return Math.abs(a[0] - t) < Math.abs(b[0] - t) ? a : b;
+  }
+  const viewer = new C.Viewer('view', {
+    baseLayer: false, animation: false, timeline: false, baseLayerPicker: false,
+    geocoder: false, homeButton: false, sceneModePicker: false, navigationHelpButton: false,
+    fullscreenButton: false, selectionIndicator: false, infoBox: false, skyBox: false,
+    skyAtmosphere: false, requestRenderMode: true,
+    terrainProvider: new C.CustomHeightmapTerrainProvider({ width: 16, height: 16, callback: () => new Float32Array(256).fill(ground) }),
+    contextOptions: { webgl: { preserveDrawingBuffer: true } }
+  });
+  window.viewers.push(viewer);
+  const first = nearest(data.reference, data.start);
+  viewer.camera.setView({ destination: C.Cartesian3.fromDegrees(first[1], first[2], ground + 40), orientation: { heading: C.Math.toRadians(first[5]), pitch: -0.4, roll: 0 } });
+  viewer.camera.frustum.far = 1400;
+  viewer.camera.frustum.fov = C.Math.toRadians(70);
+  viewer.camera.frustum.near = 0.2;
+  const scene = viewer.scene;
+  scene.globe.maximumScreenSpaceError = 8;
+  scene.backgroundColor = C.Color.fromCssColorString('#101824');
+  scene.globe.baseColor = C.Color.fromCssColorString('#303945');
+  scene.globe.enableLighting = false;
+  scene.fog.enabled = false;
+  scene.highDynamicRange = false;
+  const imagery = viewer.imageryLayers.addImageryProvider(await C.SingleTileImageryProvider.fromUrl('/basemap.png', { rectangle: C.Rectangle.fromDegrees(...data.basemapBounds), credit: '© OpenStreetMap contributors' }));
+  imagery.saturation = 0.2;
+  imagery.brightness = 0.42;
+  const tiles = await C.Cesium3DTileset.fromUrl(data.tilesetUrl, { maximumScreenSpaceError: 16 });
+  tiles.style = new C.Cesium3DTileStyle({ color: "color('#8093a8', 1.0)" });
+  tiles.tileFailed.addEventListener(e => window.tileFailures.push(e.message));
+  scene.primitives.add(tiles);
+  viewer.heroTiles = tiles;
+
+  const tracks = [
+    { rows: data.reference, name: 'Ground Truth', color: '#ffffff', width: 9, dashed: true, marker: 20 },
+    { rows: data.rtklib, name: 'RTKLIB', color: '#f5ac63', width: 5, marker: 13, live: 'rtk-live' },
+    { rows: data.libgnss, name: 'libgnss++', color: '#60e2bb', width: 4.5, marker: 11, live: 'native-live' }
+  ];
+  for (const track of tracks) {
+    const color = C.Color.fromCssColorString(track.color);
+    const material = track.dashed
+      ? new C.PolylineDashMaterialProperty({ color, gapColor: C.Color.TRANSPARENT, dashLength: 20 })
+      : new C.PolylineOutlineMaterialProperty({ color, outlineColor: C.Color.fromCssColorString('#17202b'), outlineWidth: 1 });
+    const rows = track.rows.filter(r => r[0] >= data.start && r[0] <= data.end);
+    const segments = []; let segment = [];
+    for (const row of rows) {
+      if (segment.length && row[0] - segment.at(-1)[0] > 0.5) { segments.push(segment); segment = []; }
+      segment.push(row);
+    }
+    if (segment.length) segments.push(segment);
+    for (const chunk of segments) if (chunk.length > 1) viewer.entities.add({
+      name: track.name,
+      polyline: { positions: chunk.map(point), width: track.width, material, depthFailMaterial: material }
+    });
+    track.markerEntity = viewer.entities.add({
+      name: track.name + ' cursor',
+      position: point(rows[0]),
+      point: { pixelSize: track.marker, color, outlineColor: C.Color.fromCssColorString('#17202b'), outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY }
+    });
+  }
+  document.getElementById('reference-detail').textContent = `${data.metrics.common_epochs} matched epochs · median H`;
+  document.getElementById('native-median').textContent = `Median H ${data.metrics.libgnss.median_h_m.toFixed(2)} m`;
+  document.getElementById('rtk-median').textContent = `Median H ${data.metrics.rtklib.median_h_m.toFixed(2)} m`;
+  window.renderFrame = async function (t) {
+    const ref = nearest(data.reference, t);
+    // Reference position and measured heading exclusively control the camera.
+    const origin = point(ref);
+    const transform = C.Transforms.eastNorthUpToFixedFrame(origin);
+    const heading = C.Math.toRadians(ref[5]);
+    const localForward = new C.Cartesian3(Math.sin(heading), Math.cos(heading), 0);
+    const forward = C.Matrix4.multiplyByPointAsVector(transform, localForward, new C.Cartesian3());
+    const up = C.Matrix4.multiplyByPointAsVector(transform, C.Cartesian3.UNIT_Z, new C.Cartesian3());
+    const eye = C.Cartesian3.add(C.Cartesian3.subtract(origin, C.Cartesian3.multiplyByScalar(forward, 32, new C.Cartesian3()), new C.Cartesian3()), C.Cartesian3.multiplyByScalar(up, 8, new C.Cartesian3()), new C.Cartesian3());
+    const target = C.Cartesian3.add(origin, C.Cartesian3.multiplyByScalar(forward, 15, new C.Cartesian3()), new C.Cartesian3());
+    const direction = C.Cartesian3.normalize(C.Cartesian3.subtract(target, eye, new C.Cartesian3()), new C.Cartesian3());
+    viewer.camera.setView({ destination: eye, orientation: { direction, up } });
+    for (const track of tracks) {
+      const row = nearest(track.rows, ref[0]);
+      const available = Math.abs(row[0] - ref[0]) <= 0.001;
+      track.markerEntity.show = available;
+      if (available) track.markerEntity.position = point(row);
+      if (track.live) document.getElementById(track.live).textContent = !available ? 'NO SOLUTION' : `${row[4]} · ${row[5] == null ? 'H n/a' : 'H ' + row[5].toFixed(2) + ' m'}`;
+    }
+    document.getElementById('clock').textContent = `GPS TOW ${(ref[0] - 2032 * 604800).toFixed(1)} s  |  +${(ref[0] - data.start).toFixed(1)} s`;
+    viewer.render();
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+  };
+  await window.renderFrame(data.start);
+};
+</script>
