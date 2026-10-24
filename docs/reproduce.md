@@ -27,7 +27,7 @@ runner adds no scoring logic of its own.
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
-| Smartphone GSDC official submission | `gsdc-official` | ready | ~30 min per drive; full run ~12-18 h | **Subset verified (by design); mixed platform.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57590194 (`f9526888...`), and the Kaggle score is readback-only. 32 drives are pinned to MSVC outputs and 8 to Linux GCC outputs, so one platform reproduces only its subset. For ref 56625084, 6 of 40 final drives and 2 of 25 stage-0 drives were rerun on MSVC, and all were byte-identical. The 8 drives replaced since then were rerun on GCC, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
+| Smartphone GSDC official submission | `gsdc-official` | ready | ~30 min per drive; full run ~12-18 h | **Subset verified (by design); mixed platform.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57594243 (`2344a34f...`), and the Kaggle score is readback-only. 31 drives are pinned to MSVC outputs and 9 to Linux GCC outputs, so one platform reproduces only its subset. For ref 56625084, 6 of 40 final drives and 2 of 25 stage-0 drives were rerun on MSVC, and all were byte-identical. The 9 drives changed since then were rerun on GCC, and all were byte-identical; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
@@ -634,29 +634,34 @@ for what is and is not recorded there.
 
 ## gsdc-official: rebuilding the Kaggle submission
 
-The README "Smartphone GNSS/IMU" official row is Kaggle submission 57590194
-(Private 0.862 m / Public 0.902 m, 40 test drives, 71,936 rows; readback
+The README "Smartphone GNSS/IMU" official row is Kaggle submission 57594243
+(Private 0.862 m / Public 0.884 m, 40 test drives, 71,936 rows; readback
 record
 [gsdc2023_official_readback_20261024.json](use_cases/records/gsdc2023_official_readback_20261024.json)).
 It is submission 56625084 (Private 0.984 m / Public 0.915 m; record
 [gsdc2023_heading_modern_official_readback_20260928.json](use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json))
-with eight drives replaced by per-drive flags. The flags are listed under
-`research_source.added_flags` in the recipe.
+with nine drives changed by per-drive flags. The flags are listed under
+`research_source.added_flags` / `removed_flags` in the recipe.
 Kaggle scores it against hidden ground truth, so no local run can recompute
 the score. The lane therefore gates on the file itself: the rebuilt
 `submission.csv` must have the SHA-256 of the submitted file,
-`f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09`. The lane
+`2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e`. The lane
 never submits to Kaggle.
 
-**Mixed platform.** The 32 drives retained from 56625084 are pinned to the
-MSVC research outputs. The 8 replaced drives are pinned to Linux GCC 15
-outputs: the 6 per-phone main Doppler drives, sjc-he2 Pixel5 with
-`--android-hardware-clock-reset-clock-jumps`, and sjc-ce1 Pixel7Pro with
-`--native-source-imu-initialization`. The stage-0 runs and height maps of
-the 7 replaced drives that use a height map are pinned to GCC as well. GCC
+**Mixed platform.** The 31 drives retained from 56625084 are pinned to the
+MSVC research outputs. The 9 changed drives are pinned to Linux GCC 15
+outputs:
+
+- the 6 per-phone main Doppler drives;
+- sjc-he2 Pixel5 with `--android-hardware-clock-reset-clock-jumps`;
+- sjc-ce1 Pixel7Pro with `--native-source-imu-initialization`;
+- ebf-z Pixel5 without `--native-epoch-heading-attitude-seeds`.
+
+The stage-0 runs and height maps of the 8 changed drives that use a height
+map are pinned to GCC as well. GCC
 and MSVC outputs of the same drive differ by up to 0.02 m and are not byte
 identical, so a rebuild on one platform matches only its own subset. A full
-SHA-256 match needs the 32 MSVC and 8 GCC solutions combined, or a later
+SHA-256 match needs the 31 MSVC and 9 GCC solutions combined, or a later
 recipe regenerated on one platform.
 
 **Recipe.** `configs/reproduce/gsdc_official_recipe.json` unrolls the chain
@@ -711,6 +716,14 @@ rebuilds all 7 maps to their newly pinned SHA-256. The submitted
 GCC solution. `assemble --allow-partial` runs on the 8 GCC solutions, with
 the other 32 drives filled from the submitted file. It writes `f9526888...`
 (71,936 rows) and reports 8/8 drives identical.
+
+The recipe then moved to 57594243. That submission is 57590194 with the
+ebf-z Pixel5 rows replaced by a run without epoch heading seeds. With the
+seeds, the optimized body yaw slips one full turn against the GNSS course
+between minutes 3 and 13. The ebf-z stage 0, height map and final run come
+from the lane on the same build. `height-maps` rebuilds its map to the
+pinned SHA-256. `assemble --allow-partial` on the 9 GCC solutions writes
+`2344a34f...` and reports 9/9 drives identical.
 
 ### gsdc-official local result (2026-09-29)
 

@@ -1,30 +1,31 @@
 {
  "schema": "gsdc_official_recipe.v1",
- "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57590194 (Private 0.862 m / Public 0.902 m) from the raw test drives. 32 drives are pinned to MSVC research outputs of submission 56625084; the 8 drives replaced since then (research_source.added_flags), with the stage-0 runs and height maps of the 7 that use a height map, are pinned to Linux GCC outputs, so one platform reproduces only its own subset byte for byte. Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
+ "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57594243 (Private 0.862 m / Public 0.884 m) from the raw test drives. 31 drives are pinned to MSVC research outputs of submission 56625084; the 9 drives changed since then (research_source.added_flags / removed_flags), with the stage-0 runs and height maps of the 8 that use a height map, are pinned to Linux GCC outputs, so one platform reproduces only its own subset byte for byte. Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
  "submission": {
   "kaggle_competition": "smartphone-decimeter-2023",
-  "kaggle_ref": 57590194,
+  "kaggle_ref": 57594243,
   "private_score_m": 0.862,
-  "public_score_m": 0.902,
+  "public_score_m": 0.884,
   "readback_record": "docs/use_cases/records/gsdc2023_official_readback_20261024.json",
   "research_log": "docs/gsdc2023_native_taroz_goal.md",
   "research_assembler": "scripts/analysis/assemble_gsdc_heading_modern_test.py",
-  "sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09",
+  "sha256": "2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e",
   "rows": 71936,
   "drives": 40,
   "columns": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
   "line_terminator": "\\n",
   "encoding": "utf-8 (no BOM)",
   "previous_submission": {
-   "kaggle_ref": 57586667,
-   "sha256": "745440aa2fb8af54a906ca73359822dffd0ebdadcc4d0f14692bba87d07231ff"
+   "kaggle_ref": 57590194,
+   "sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09"
   },
   "chain": [
    {"kaggle_ref": 56536540, "sha256": "cf4a73e35852c0554ab8ecb3d65e62f7f268812dc3df5168a62c812313a695cb"},
    {"kaggle_ref": 56625084, "sha256": "cbd1fde10f0f317f7803871b7d00b64a73398498f967b86f2130d8ba8acc26f8", "private_score_m": 0.984, "public_score_m": 0.915, "readback_record": "docs/use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json"},
    {"kaggle_ref": 57585127, "sha256": "b2ef4a88eec4461f82c302dd435011c00fe8fc684e3764d01e6ba58c31f510f7", "private_score_m": 0.982, "public_score_m": 0.902, "replaced_drives": 6},
    {"kaggle_ref": 57586667, "sha256": "745440aa2fb8af54a906ca73359822dffd0ebdadcc4d0f14692bba87d07231ff", "private_score_m": 0.926, "public_score_m": 0.902, "replaced_drives": 1},
-   {"kaggle_ref": 57590194, "sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09", "private_score_m": 0.862, "public_score_m": 0.902, "replaced_drives": 1}
+   {"kaggle_ref": 57590194, "sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09", "private_score_m": 0.862, "public_score_m": 0.902, "replaced_drives": 1},
+   {"kaggle_ref": 57594243, "sha256": "2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e", "private_score_m": 0.862, "public_score_m": 0.884, "replaced_drives": 1}
   ],
   "coordinate_rule": "LatitudeDegrees/LongitudeDegrees are copied verbatim (as text) from the native solution.csv row with the same UnixTimeMillis; no interpolation. Native rows outside the official key list are dropped."
  },
@@ -77,7 +78,7 @@
  },
  "binary": {
   "target": "gnss_fgo_imu_no_base",
-  "note": "The 56625084 research runs used four frozen MSVC Release builds (listed per drive under research_source). The 8 drives replaced since then, and the stage-0 runs of the 7 of them with height maps, used a Linux GCC 15 Release build (research_source.build and binary_sha256); GCC and MSVC outputs differ by up to 0.02 m. The recipe runs one build of the current tree; per-drive identity is checked against output_sha256.",
+  "note": "The 56625084 research runs used four frozen MSVC Release builds (listed per drive under research_source). The 9 drives changed since then, and the stage-0 runs of the 8 of them with height maps, used a Linux GCC 15 Release build (research_source.build and binary_sha256); GCC and MSVC outputs differ by up to 0.02 m. The recipe runs one build of the current tree; per-drive identity is checked against output_sha256.",
   "frozen": [["continuous_raw_clock_v2_20260926.exe", "7c5417bbc3a2d29f1ed7c7ace3ffbb91650fb8a8ce7595eac23813644b5d1316"], ["heading_sparse_admission_20260927.exe", "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53"], ["height_map.exe", "9386777e0985d15a1be90aa6969db87c5892640c693df0930b576d2c19dad10f"], ["source_bias_difference_sigma_admission_fixed.exe", "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899"]]
  },
  "height_maps": {
@@ -287,7 +288,7 @@
    },
    "2022-04-25-22-36-us-ca-ebf-z/pixel5": {
     "path": "{work_dir}/height_maps/2022-04-25-22-36-us-ca-ebf-z__pixel5.csv",
-    "sha256": "f901023902347c3962c1ee45d83013d18d5ee3624a6a052eaad67fd0a7a4978b"
+    "sha256": "0675b9f04ab6058fd9a03d365adb21b13da077cee51b670701c73dc884c6ff81"
    },
    "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": {
     "path": "{work_dir}/height_maps/2022-05-12-20-19-us-ca-mtv-pe1__samsunga325g.csv",
@@ -578,10 +579,9 @@
    "phone": "pixel5",
    "group": "stage0-extra-bands",
    "research_source": {
-    "run": "test40_offset_extra_bands_v1",
-    "frozen_binary": "source_bias_difference_sigma_admission_fixed.exe",
-    "frozen_binary_sha256": "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899",
-    "record_wall_s": 683.5
+    "run": "gcc_stage0_20261024",
+    "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop 5c0481e",
+    "record_wall_s": 169.2
    },
    "inputs": {
     "test/2022-04-25-22-36-us-ca-ebf-z/P227_rnx2.obs": "df34dde1b319800c52d6f82590f1a52c19bc9abf04318575070eb00e52b5fd34",
@@ -591,7 +591,7 @@
    },
    "argv": ["{bin}", "--dataset-id", "2022-04-25-22-36-us-ca-ebf-z/pixel5", "--android-gnss", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_imu.csv", "--nav", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/P227_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "df34dde1b319800c52d6f82590f1a52c19bc9abf04318575070eb00e52b5fd34", "--native-base-position-ecef", "-2668111.2595", "-4304967.2677", "3864897.9219", "--out", "{work_dir}/stage0/2022-04-25-22-36-us-ca-ebf-z__pixel5/solution.csv", "--summary-json", "{work_dir}/stage0/2022-04-25-22-36-us-ca-ebf-z__pixel5/summary.json", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--android-include-first-native-epoch", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands"],
    "output": "{work_dir}/stage0/2022-04-25-22-36-us-ca-ebf-z__pixel5/solution.csv",
-   "output_sha256": "2544a40d5bf2ab5c7757c243ecd3fec8bb70a7420b278cbe2a44831d8c824ab6"
+   "output_sha256": "4b40d4be6e6693a47397d70b592ea1a3aa5e00f63c7ae2afd4f0a26d6413170c"
   },
   {
    "id": "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
@@ -1068,10 +1068,11 @@
    "phone": "pixel5",
    "group": "pixel5-heading",
    "research_source": {
-    "submission": "56625084",
-    "frozen_binary": "heading_sparse_admission_20260927.exe",
-    "frozen_binary_sha256": "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53",
-    "record_wall_s": 330.0
+    "submission": "57594243",
+    "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop 5c0481e",
+    "binary_sha256": "30dfaf2211c274709c0f45418dbd623f1a1b33e01e4475c2c41d4e7a5a10f0ac",
+    "removed_flags": ["--native-epoch-heading-attitude-seeds"],
+    "record_wall_s": 169.0
    },
    "inputs": {
     "test/2022-04-25-22-36-us-ca-ebf-z/P227_rnx2.obs": "df34dde1b319800c52d6f82590f1a52c19bc9abf04318575070eb00e52b5fd34",
@@ -1080,9 +1081,9 @@
     "test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_imu.csv": "7214cabbe074fc349a261aee1644ae0dd6f3757a0742903da11562080ecc1dfc"
    },
    "height_map": "{work_dir}/height_maps/2022-04-25-22-36-us-ca-ebf-z__pixel5.csv",
-   "argv": ["{bin}", "--dataset-id", "2022-04-25-22-36-us-ca-ebf-z/pixel5", "--android-gnss", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_imu.csv", "--nav", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/P227_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "df34dde1b319800c52d6f82590f1a52c19bc9abf04318575070eb00e52b5fd34", "--native-base-position-ecef", "-2668111.2595", "-4304967.2677", "3864897.9219", "--out", "{work_dir}/final/2022-04-25-22-36-us-ca-ebf-z__pixel5/solution.csv", "--summary-json", "{work_dir}/final/2022-04-25-22-36-us-ca-ebf-z__pixel5/summary.json", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--android-include-first-native-epoch", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-height-map", "{work_dir}/height_maps/2022-04-25-22-36-us-ca-ebf-z__pixel5.csv", "--native-source-tdcp-meter-sigma", "--native-phase184-source-tdcp-huber-k", "--native-phase213-main-doppler", "--native-imu-state-diagnostic", "--native-epoch-heading-attitude-seeds"],
+   "argv": ["{bin}", "--dataset-id", "2022-04-25-22-36-us-ca-ebf-z/pixel5", "--android-gnss", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/pixel5/device_imu.csv", "--nav", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-04-25-22-36-us-ca-ebf-z/P227_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "df34dde1b319800c52d6f82590f1a52c19bc9abf04318575070eb00e52b5fd34", "--native-base-position-ecef", "-2668111.2595", "-4304967.2677", "3864897.9219", "--out", "{work_dir}/final/2022-04-25-22-36-us-ca-ebf-z__pixel5/solution.csv", "--summary-json", "{work_dir}/final/2022-04-25-22-36-us-ca-ebf-z__pixel5/summary.json", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--android-include-first-native-epoch", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-height-map", "{work_dir}/height_maps/2022-04-25-22-36-us-ca-ebf-z__pixel5.csv", "--native-source-tdcp-meter-sigma", "--native-phase184-source-tdcp-huber-k", "--native-phase213-main-doppler", "--native-imu-state-diagnostic"],
    "output": "{work_dir}/final/2022-04-25-22-36-us-ca-ebf-z__pixel5/solution.csv",
-   "output_sha256": "105923a84931bca365048de6ba2a71be0fb5c88918db153faf6e19f3349dfe05"
+   "output_sha256": "416f58a63cd87cfbf245a64b8fa2a8bd0e6d8d7983307b7e588fe356af64f7f0"
   },
   {
    "id": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
