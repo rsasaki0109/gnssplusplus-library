@@ -4,7 +4,7 @@
   "official_score": true,
   "truth_used_in_inference": false,
   "build": {
-    "source": "develop a40998e (submission 57585127, 57586667 runs) plus, for the sjc-he2 rerun, an experimental copy whose behaviour is reproduced byte-for-byte by --android-hardware-clock-reset-clock-jumps",
+    "source": "develop a40998e (submission 57585127, 57586667 runs) plus, for the sjc-he2 rerun, an experimental copy whose behaviour is reproduced byte-for-byte by --android-hardware-clock-reset-clock-jumps; submission 57590194 ran develop 5c0481e with --native-source-imu-initialization on sjc-ce1",
     "compiler": "GCC 15 (conda-forge), Release",
     "gtsam": "4.3.0 (conda-forge)",
     "control_parity": "official recipe replays of the 7 replaced drives differ from submission 56625084 by at most 0.02 m; height maps rebuilt from the GCC stage-0 trajectories (all 156 Kaggle train truth files match their pinned SHA-256; the maps differ from the pinned SHA-256 only by boundary points)"
@@ -127,12 +127,59 @@
       "cause": "HardwareClockDiscontinuityCount 5->6 at epoch 149 (TimeNanos and FullBiasNanos both step by 2^32 ms). The loader rebases the receiver-clock reference there, a ~194 m clock step that the positive 100 km clock-jump detector misses; the clock continuity factor then dragged GNSS-first epochs 0-210 by 27-89 m (pseudorange residual median 11-53 m vs 1.2-2.1 m at the archived taroz GNSS-stage positions) and left 2-3.8 m in the final output. Solving epochs 0-147 alone gives 0.6 m.",
       "inventory": "only this drive among the 40 test and 40 train drives changes HardwareClockDiscontinuityCount",
       "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.16 -> 0.05 m, P95 3.26 -> 0.10 m"
+    },
+    {
+      "ref": 57590194,
+      "sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09",
+      "base_ref": 57586667,
+      "base_sha256": "745440aa2fb8af54a906ca73359822dffd0ebdadcc4d0f14692bba87d07231ff",
+      "private_m": 0.862,
+      "public_m": 0.902,
+      "base_private_m": 0.926,
+      "base_public_m": 0.902,
+      "rows": 71936,
+      "retained_rows_byte_identical": "70441/70441",
+      "replaced": {
+        "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro": {
+          "rows": 1495,
+          "solution_sha256": "f3c2ba3d9e86ee1ea454e60bb4ad90dcc30b4fafc8f49a8cad009c0468a4c9d4",
+          "added_flags": [
+            "--native-source-imu-initialization"
+          ]
+        }
+      },
+      "cause": "The static leveling window (first 250 gyro samples, 2.25 s) starts while the car moves at 5 m/s and turns. Its gyro mean (0.0097 rad/s; stop-block mean 0.0004 rad/s) became the initial gyro bias, which the 0.01 rad/s prior and the 5e-7 bias random walk kept (optimized -0.0093 rad/s about the vertical body axis). Body yaw minus GNSS course then rotated at 0.5 deg/s, and the IMU stage left the GNSS-first stage by 2-3 m in curves.",
+      "rule": "apply the existing zero-bias initialization only where the leveling-window gyro mean differs from the stop-block gyro mean by more than 0.005 rad/s; among the 40 test drives that is sjc-ce1 alone (0.0100 rad/s; next 0.0031 rad/s)",
+      "train_evidence_m": {
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4": [
+          0.828,
+          0.588
+        ],
+        "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": [
+          0.422,
+          1.422
+        ]
+      },
+      "train_evidence_note": "(P50+P95)/2 without/with --native-source-imu-initialization on the 14 scored static-leveling train drives; the other 12 change by at most 0.001 m. mtv-b Pixel4 (0.0053 rad/s) is the only train drive above the rule; Pixel4XL (0.0007 rad/s) shows why the option is not applied everywhere",
+      "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.76 -> 0.13 m, P95 2.76 -> 0.33 m"
     }
   ],
   "rejected_on_train": {
     "keep_base_missing_beidou_qzss_uncorrected": "+0.079 m mean over 14 drives",
     "upstream_route_type_l5_parameters": "+0.018 m mean over 36 drives",
     "per_drive_imu_time_offset_from_truth_lag": "+0.001 m mean over 15 drives",
-    "epoch_heading_seeds_all_phones": "pixel4 mtv-b -0.24, pixel4xl +1.00, five drives unchanged"
+    "epoch_heading_seeds_all_phones": "pixel4 mtv-b -0.24, pixel4xl +1.00, five drives unchanged",
+    "zero_bias_initialization_all_static_drives": "pixel4 mtv-b -0.240, pixel4xl mtv-b +1.000, 12 drives within 0.001 m"
+  },
+  "open_issues": {
+    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "IMU-stage yaw slips one full turn against the integrated raw gyro between epochs 800 and 1400; the zero-bias initialization makes it worse (P95 to taroz 2.15 -> 2.67 m)"
+  },
+  "reference_targets": {
+    "final_leaderboard_first_private_m": 0.883,
+    "taroz_gsdc2023_post_deadline": {
+      "private_m": 0.782,
+      "public_m": 0.796,
+      "source": "score image in the taroz/gsdc2023 README (submission_20240919_0824.csv, after deadline)"
+    }
   }
 }

@@ -97,14 +97,14 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k | 1298 vs 205 fixes, Hp95 4.77 vs 25.62 m, Vp95 11.54 vs 43.37 m; lower Hmed on common epochs (0.298 vs 0.553 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
-| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.984 m / Public 0.915 m**; 40 drives, 71,936 native output rows |
+| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.862 m / Public 0.902 m**; 40 drives, 71,936 native output rows |
 
 Reproduce: `python3 apps/gnss.py reproduce list` shows one command per row; see [docs/reproduce.md](docs/reproduce.md) for datasets, tool pins, and the latest local results.
 
 ### Smartphone GNSS/IMU
 
 Official Google Smartphone Decimeter Challenge 2023-2024 submission
-**56625084** (2026-09-28) scored **Private 0.984 m / Public 0.915 m**.
+**57590194** (2026-10-24, after the deadline) scored **Private 0.862 m / Public 0.902 m**.
 The submitted recipe combines Pixel5 heading initialization with Android clock handling
 and observation-model updates for supported phones. All 40 drives and
 71,936 output rows were checked against native solver results.
@@ -112,9 +112,11 @@ and observation-model updates for supported phones. All 40 drives and
 The recipe uses raw GNSS/IMU, broadcast navigation, base observations, and
 training-derived height constraints where configured; evaluation ground
 truth is not used during inference. These official scores are separate from
-the development-route measurements below. The 0.928 m Private target remains
-unmet; work is paused at the sub-meter milestone. See the
-[official score record](docs/use_cases/records/gsdc2023_heading_modern_official_readback_20260928.json)
+the development-route measurements below. The Private score is below the
+0.928 m taroz competition score and the 0.883 m final-leaderboard first
+place; the released taroz/gsdc2023 code scores Private 0.782 m after the
+deadline, which remains the target. See the
+[official score record](docs/use_cases/records/gsdc2023_official_readback_20261024.json)
 and [experiment and validation log](docs/gsdc2023_native_taroz_goal.md).
 
 Base-surveyed correction on the GSDC dev routes (Pixel5, `(P50+P95)/2` m):

@@ -739,8 +739,8 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 56625084)
-        self.assertTrue(submission["sha256"].startswith("cbd1fde1"))
+        self.assertEqual(submission["kaggle_ref"], 57590194)
+        self.assertTrue(submission["sha256"].startswith("f9526888"))
         self.assertEqual(len(recipe["drives"]), 40)
         groups: dict[str, int] = {}
         for drive in recipe["drives"]:

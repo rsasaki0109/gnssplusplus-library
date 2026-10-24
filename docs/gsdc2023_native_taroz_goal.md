@@ -6608,3 +6608,58 @@ first place is 0.043 m. Record:
 reproduce recipe still pins 56625084. The seven replaced drives were run with
 a GCC build, whose control replays match the MSVC outputs within 0.02 m but
 not byte for byte.
+
+### IMU leveling window during a turn, submission 57590194 (2026-10-24)
+
+A per-minute comparison of 57586667 with the archived taroz test output
+(diagnostic only) isolates 2023-06-15 sjc-ce1 Pixel7Pro. The native
+GNSS-first stage stays within 0.1-0.4 m of the taroz GNSS stage. The native
+IMU stage leaves it by 2-3 m, for example for 90 s after a curve near epoch
+1040. The optimized IMU states show why: the gyro bias about the vertical
+body axis is -0.0093 rad/s for the whole drive, and the body yaw minus the
+GNSS course rotates at 0.5 deg/s. The static leveling window (the first 250
+samples, 2.25 s) starts while the car moves at 5 m/s and turns. Its gyro
+mean (0.0097 rad/s) becomes the initial gyro bias, while the stop-block gyro
+mean is 0.0004 rad/s. The 0.01 rad/s bias prior and the 5e-7 bias random
+walk keep that value, and the wrong attitude rotates the specific force in
+every curve. Removing the relative height pairs or the main Doppler leaves
+P95 to taroz at 2.8-2.9 m.
+
+The existing `--native-source-imu-initialization` (zero-bias
+initialization, already used by 10 test drives) fixes it on this drive.
+The estimated gyro bias becomes about 1e-4 rad/s and the mount yaw stays
+constant. The distance to taroz goes from median 0.76 m / P95 2.76 m to
+0.13 / 0.33 m.
+
+Train evidence covers the 14 scored train drives on the static leveling
+path:
+
+- mtv-b Pixel4 improves from 0.828 to 0.588 m. Its leveling window is
+  0.0053 rad/s off the stop-block mean.
+- 12 drives change by at most 0.001 m.
+- mtv-b Pixel4XL gets worse, from 0.422 to 1.422 m. The option also adds
+  epoch heading seeds.
+
+The option is therefore applied only where the leveling-window gyro mean is
+more than 0.005 rad/s from the stop-block gyro mean. Among the 40 test
+drives that is sjc-ce1 alone (0.0100 rad/s; the next is 0.0031 rad/s).
+Submission 57590194 replaces only this drive in 57586667. It scores
+**Private 0.862 m** / Public 0.902 m, below the 0.883 m first place on the
+final leaderboard. The taroz/gsdc2023 README shows a post-deadline
+submission of the released code at Private 0.782 m / Public 0.796 m, which
+remains 0.080 m ahead.
+
+2023-05-09 sjc-r A505U has a separate open issue. Its IMU stage also leaves
+the GNSS stage: the yaw slips a full turn against the integrated raw gyro
+between epochs 800 and 1400. The zero-bias initialization makes it worse
+there (P95 to taroz 2.15 -> 2.67 m).
+
+The official recipe now rebuilds 57590194. These runs are pinned to Linux
+GCC outputs:
+
+- the eight replaced final drives;
+- the stage-0 runs and height maps of the seven of those drives that use a
+  height map.
+
+The other 32 drives remain the MSVC research outputs, so no single platform
+reproduces the whole file byte for byte.
