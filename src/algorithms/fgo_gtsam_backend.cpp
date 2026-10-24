@@ -367,7 +367,11 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
                     !(source_omit_clock && clock_decision.reason ==
                         NativeSourceClockC0DSkipReason::PhoneExcluded) &&
                     !(source_phone_recipe && clock_decision.reason ==
-                        NativeSourceClockC0DSkipReason::Gap)) {
+                        NativeSourceClockC0DSkipReason::Gap) &&
+                    !(clock_decision.reason == NativeSourceClockC0DSkipReason::ClockJump &&
+                      std::binary_search(config.hardware_clock_reset_raw_utc_millis.begin(),
+                                         config.hardware_clock_reset_raw_utc_millis.end(),
+                                         epoch.raw_utc_time_millis))) {
                     std::fprintf(stderr,
                         "[native-raw-staging] ineligible clock edge; clock_jump=%d; dt_s=%.9g\n",
                         clock_jump ? 1 : 0, dt_s);

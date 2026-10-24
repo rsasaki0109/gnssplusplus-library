@@ -1199,6 +1199,11 @@ FGOProcessor::FGOProblem FGOProcessor::buildPseudorangeProblem(
         } else {
             problem.gps_common_pseudorange_delta_m.push_back(0.0);
         }
+        if (std::binary_search(config_.hardware_clock_reset_raw_utc_millis.begin(),
+                               config_.hardware_clock_reset_raw_utc_millis.end(),
+                               seed.raw_utc_time_millis)) {
+            clock_jump = true;
+        }
         problem.gps_common_pseudorange_delta_satellites.push_back(
             static_cast<int>(gps_pseudorange_delta_count));
         problem.clock_jumps.push_back(clock_jump);

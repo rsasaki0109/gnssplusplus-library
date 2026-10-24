@@ -1,0 +1,138 @@
+{
+  "status": "official-score-readback",
+  "date": "2026-10-24",
+  "official_score": true,
+  "truth_used_in_inference": false,
+  "build": {
+    "source": "develop a40998e (submission 57585127, 57586667 runs) plus, for the sjc-he2 rerun, an experimental copy whose behaviour is reproduced byte-for-byte by --android-hardware-clock-reset-clock-jumps",
+    "compiler": "GCC 15 (conda-forge), Release",
+    "gtsam": "4.3.0 (conda-forge)",
+    "control_parity": "official recipe replays of the 7 replaced drives differ from submission 56625084 by at most 0.02 m; height maps rebuilt from the GCC stage-0 trajectories (all 156 Kaggle train truth files match their pinned SHA-256; the maps differ from the pinned SHA-256 only by boundary points)"
+  },
+  "submissions": [
+    {
+      "ref": 57585127,
+      "sha256": "b2ef4a88eec4461f82c302dd435011c00fe8fc684e3764d01e6ba58c31f510f7",
+      "base_ref": 56625084,
+      "base_sha256": "cbd1fde10f0f317f7803871b7d00b64a73398498f967b86f2130d8ba8acc26f8",
+      "private_m": 0.982,
+      "public_m": 0.902,
+      "base_private_m": 0.984,
+      "base_public_m": 0.915,
+      "rows": 71936,
+      "retained_rows_byte_identical": "61681/61681",
+      "replaced": {
+        "2022-07-12-18-37-us-ca-mtv-b/sm-a325f": {
+          "rows": 1782,
+          "solution_sha256": "be05310b0cf9ac1469b7805ac01eb06eb0741ff7e5dc377148bcb540f271ad82",
+          "added_flags": [
+            "--native-phase213-main-doppler",
+            "--android-continuous-clock-reference",
+            "--native-imu-time-offset-ms",
+            "150"
+          ]
+        },
+        "2022-06-28-20-56-us-ca-sjc-r/samsunga32": {
+          "rows": 1829,
+          "solution_sha256": "408f07e448f0cc8b33281fa0cc95a69e0419cfb735fff5e2d15371497944e419",
+          "added_flags": [
+            "--native-phase213-main-doppler",
+            "--android-continuous-clock-reference",
+            "--native-imu-time-offset-ms",
+            "150"
+          ]
+        },
+        "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": {
+          "rows": 2384,
+          "solution_sha256": "72bc4d2ee09d6cc4fff39885174a8fa1e1a98dc12449ade85ec054ea6fb97295",
+          "added_flags": [
+            "--native-phase213-main-doppler",
+            "--android-continuous-clock-reference"
+          ]
+        },
+        "2021-09-14-20-32-us-ca-mtv-k/pixel4": {
+          "rows": 1274,
+          "solution_sha256": "b2c7889e7598c6606624e68f671d3cbb29359086e9a9b3096949d5f3c8b2473b",
+          "added_flags": [
+            "--native-phase213-main-doppler",
+            "--android-continuous-clock-reference"
+          ]
+        },
+        "2021-09-20-19-03-us-ca-mtv-l/pixel4": {
+          "rows": 1796,
+          "solution_sha256": "35326e06ad67a5336bd2f29f9b112eaa1d13a11b8da911ed6dea78652dbe2153",
+          "added_flags": [
+            "--native-phase213-main-doppler",
+            "--android-continuous-clock-reference"
+          ]
+        },
+        "2020-12-11-19-30-us-ca-mtv-e/pixel4xl": {
+          "rows": 1190,
+          "solution_sha256": "19f3d4f6b3d49a737192babaa2dea621eefbe3695d5361a86b81a61478e27c70",
+          "added_flags": [
+            "--native-phase213-main-doppler",
+            "--android-continuous-clock-reference"
+          ]
+        }
+      },
+      "rule": "per-phone recipe on top of the submitted retained-height recipe: sm-a325f/samsunga32 add main Doppler, continuous raw clock reference and +150 ms IMU time offset; sm-a505u/pixel4/pixel4xl add main Doppler and continuous raw clock reference",
+      "train_evidence_m": {
+        "2022-08-04-20-07-us-ca-sjc-q/sm-a325f": [
+          1.965,
+          1.556
+        ],
+        "2022-10-06-21-51-us-ca-mtv-n/sm-a325f": [
+          1.799,
+          1.661
+        ],
+        "2023-05-23-19-56-us-ca-mtv-ie2/sm-a505g": [
+          1.688,
+          1.602
+        ],
+        "2021-07-14-20-50-us-ca-mtv-e/pixel4": [
+          0.377,
+          0.358
+        ],
+        "2021-07-27-19-49-us-ca-mtv-b/pixel4": [
+          0.828,
+          0.787
+        ],
+        "2021-03-16-20-40-us-ca-mtv-b/pixel4xl": [
+          0.422,
+          0.415
+        ]
+      },
+      "train_evidence_note": "(P50+P95)/2 before/after on exposed train drives with the submitted phone recipe minus height constraints; not held out"
+    },
+    {
+      "ref": 57586667,
+      "sha256": "745440aa2fb8af54a906ca73359822dffd0ebdadcc4d0f14692bba87d07231ff",
+      "base_ref": 57585127,
+      "base_sha256": "b2ef4a88eec4461f82c302dd435011c00fe8fc684e3764d01e6ba58c31f510f7",
+      "private_m": 0.926,
+      "public_m": 0.902,
+      "base_private_m": 0.982,
+      "base_public_m": 0.902,
+      "rows": 71936,
+      "retained_rows_byte_identical": "70328/70328",
+      "replaced": {
+        "2023-06-06-22-43-us-ca-sjc-he2/pixel5": {
+          "rows": 1608,
+          "solution_sha256": "4abd464452c7c25ad12bdd8851e95c04a53e6ad5b148cae25e4a92c7f3c2dad5",
+          "added_flags": [
+            "--android-hardware-clock-reset-clock-jumps"
+          ]
+        }
+      },
+      "cause": "HardwareClockDiscontinuityCount 5->6 at epoch 149 (TimeNanos and FullBiasNanos both step by 2^32 ms). The loader rebases the receiver-clock reference there, a ~194 m clock step that the positive 100 km clock-jump detector misses; the clock continuity factor then dragged GNSS-first epochs 0-210 by 27-89 m (pseudorange residual median 11-53 m vs 1.2-2.1 m at the archived taroz GNSS-stage positions) and left 2-3.8 m in the final output. Solving epochs 0-147 alone gives 0.6 m.",
+      "inventory": "only this drive among the 40 test and 40 train drives changes HardwareClockDiscontinuityCount",
+      "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.16 -> 0.05 m, P95 3.26 -> 0.10 m"
+    }
+  ],
+  "rejected_on_train": {
+    "keep_base_missing_beidou_qzss_uncorrected": "+0.079 m mean over 14 drives",
+    "upstream_route_type_l5_parameters": "+0.018 m mean over 36 drives",
+    "per_drive_imu_time_offset_from_truth_lag": "+0.001 m mean over 15 drives",
+    "epoch_heading_seeds_all_phones": "pixel4 mtv-b -0.24, pixel4xl +1.00, five drives unchanged"
+  }
+}
