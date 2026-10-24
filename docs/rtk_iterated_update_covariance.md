@@ -70,8 +70,12 @@ hashes, argv, recovery and censoring.
 | Shinjuku | age5_doppler3 | after | 3,972 | 516 / 125 / 15 | 3,581 | 1.8668 | 1.5853 |
 
 `age5_doppler3` = `--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3`,
-not a recommended recipe. No baseline-correct FIX is lost at 0.5 m or 2 m in any
-run, and the default FIX populations are the same size. But missing output rises
+not a recommended recipe. The evaluator's `baseline_correct_fix_lost` counts
+correct FIX epochs of the *default-recipe* baseline that a run no longer has;
+by that measure nothing is lost, and the default FIX populations are the same
+size. Against the same-recipe baseline, however, the age5_doppler3 experiment
+loses 15 (Odaiba) and 309 (Shinjuku) correct FIX epochs at 0.5 m, and 23 and
+253 at 2 m ([hold follow-up audit](urbannav_hold_update_evaluation.json)). But missing output rises
 in all four runs, horizontal P95 worsens on both Odaiba recipes, Odaiba
 age5_doppler3 recovery P95 at 0.5 m rises from 186.7 s to 298.5 s, and
 Shinjuku age5_doppler3 wrong FIX grows by an order of magnitude. Shinjuku's
