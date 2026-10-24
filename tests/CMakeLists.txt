@@ -819,7 +819,9 @@ if(GTest_FOUND)
         list(APPEND GNSSPP_NO_BASE_CLI_TESTS python_smartphone_paired_epoch_states_cli_tests)
         if(GNSSPP_PYTEST_IMPORT_RESULT EQUAL 0)
             foreach(module IN ITEMS
+                    smartphone_course_attitude_seeds_cli
                     smartphone_epoch_heading_seeds
+                    smartphone_hardware_clock_reset_cli
                     smartphone_include_first_native_epoch
                     smartphone_omit_first_bias_prior
                     smartphone_omit_first_velocity_prior

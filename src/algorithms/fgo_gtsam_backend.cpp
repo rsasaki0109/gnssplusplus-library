@@ -38,6 +38,7 @@
 #include <libgnss++/algorithms/native_imu_bias_density.hpp>
 #include <libgnss++/algorithms/native_raw_p_ecef_doppler_staging.hpp>
 #include <libgnss++/algorithms/doppler_rotation_rate.hpp>
+#include <libgnss++/algorithms/course_attitude_seeds.hpp>
 #include "fgo_gtsam_internal.hpp"
 #include <libgnss++/algorithms/smartphone_temporal_recipe.hpp>
 #include <libgnss++/algorithms/source_tdcp_drift_factor.hpp>
@@ -1474,6 +1475,21 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             for (std::size_t i = 0; i < num_epochs; ++i) {
                 attitude_seed[i] = Rot3(problem.imu.epoch_heading_attitudes_body_to_nav.at(i));
             }
+        }
+        if (config.use_native_course_attitude_seeds) {
+            if (config.use_native_epoch_heading_attitude_seeds ||
+                problem.imu.stop_velocity_seeds_nav.size() != num_epochs) {
+                throw std::invalid_argument(
+                    "Course attitude seeds need one GNSS-first velocity per epoch and no heading seeds");
+            }
+            const std::vector<double> course =
+                course_attitude_seeds::filledCourse(problem.imu.stop_velocity_seeds_nav);
+            const double roll = init_attitude_nav.roll(), pitch = init_attitude_nav.pitch();
+            for (std::size_t i = 0; i < num_epochs; ++i) {
+                attitude_seed[i] = Rot3::Ypr(
+                    course[i] + config.native_course_attitude_seed_mount_rad, pitch, roll);
+            }
+            result.diagnostics.course_attitude_seeds_inserted = num_epochs;
         }
 
         // GNSS antenna positions in nav, for translation + velocity seeds.

@@ -1301,6 +1301,7 @@ public:
         std::size_t tdcp_factors_inserted = 0;
         std::size_t tdcp_only_affine_factors_inserted = 0;
         std::size_t epoch_heading_attitude_seeds_inserted = 0;
+        std::size_t course_attitude_seeds_inserted = 0;
         std::size_t first_imu_bias_priors_inserted = 0;
         std::size_t first_imu_bias_priors_omitted = 0;
         std::size_t first_imu_velocity_priors_inserted = 0;

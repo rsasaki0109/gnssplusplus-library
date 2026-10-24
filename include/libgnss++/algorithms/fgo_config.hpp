@@ -293,6 +293,11 @@ struct Config {
         bool use_source_tdcp_resl_observable = false;
         bool use_native_tdcp_only_affine_geometry = false;
         bool use_native_epoch_heading_attitude_seeds = false;
+        // Opt-in IMU attitude seeds: yaw = GNSS-first course + this phone
+        // mount yaw (rad, Rot3::yaw convention); roll/pitch keep the aligned
+        // initial attitude.  Needs imu.stop_velocity_seeds_nav per epoch.
+        bool use_native_course_attitude_seeds = false;
+        double native_course_attitude_seed_mount_rad = 0.0;
         // Raw Android UTC keys whose HardwareClockDiscontinuityCount changed
         // (hardware_clock_reset::utcKeys, strictly increasing).  The edge into
         // each listed epoch is a clock jump; empty keeps the default detector.
