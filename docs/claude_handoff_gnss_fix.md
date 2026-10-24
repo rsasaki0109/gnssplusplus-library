@@ -37,7 +37,7 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 
 ## 読む順序
 
-1. [AGENTS.md](../AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
+1. [AGENTS.md](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
 1. [反復更新と共分散](rtk_iterated_update_covariance.md) / [評価JSON](urbannav_iterated_update_evaluation.json): 最新の調査。
 2. [信頼位置履歴の修正](rtk_trusted_history_rollback.md): 最新の実装と影響範囲。
 3. [履歴修正の全12回評価](urbannav_trusted_history_evaluation.json): 既定・実験設定8回とCV設定4回。
