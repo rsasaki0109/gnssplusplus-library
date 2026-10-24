@@ -389,8 +389,12 @@ public:
         /// validation. 0 preserves the legacy non-expiring anchor.
         double max_fixed_anchor_age_s = 0.0;
 
-        /// Reject FIX candidates that disagree with an independent position
-        /// track propagated by rover Doppler velocity. 0 disables the gate.
+        /// Reject AR and hold-FIX candidates that disagree with the position
+        /// track propagated by rover Doppler velocity, even with a fresh FIX
+        /// anchor. An existing track must be current to the candidate epoch.
+        /// The first FIX bootstraps the track; this is a continuity check, not
+        /// an independent absolute-position or integer-integrity guarantee.
+        /// 0 disables the gate. Moving-base mode bypasses it.
         double max_fixed_doppler_consensus_m = 0.0;
 
         /// Adaptive max AR fix jump from last fixed position.
@@ -2503,6 +2507,8 @@ private:
      */
     bool validateFixedSolution(const std::map<SatelliteId, SatelliteData>& sat_data,
                                const GNSSTime& current_time);
+    bool validateFixedDopplerConsensus(const Vector3d& position,
+                                       const GNSSTime& current_time);
     bool validateCpPrFixedCandidate(const std::map<SatelliteId, SatelliteData>& sat_data,
                                     const GNSSTime& current_time);
 

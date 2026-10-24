@@ -17,6 +17,7 @@
 #include <cmath>
 #include <filesystem>
 #include <map>
+#include <limits>
 #include <memory>
 #include <string>
 #include <utility>
@@ -43,6 +44,13 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(has_fixed_solution_)
     GNSSPP_RTK_TEST_MEMBER(last_fixed_position_)
     GNSSPP_RTK_TEST_MEMBER(has_last_fixed_position_)
+    GNSSPP_RTK_TEST_MEMBER(last_fixed_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_last_fixed_time_)
+    GNSSPP_RTK_TEST_MEMBER(last_trusted_position_)
+    GNSSPP_RTK_TEST_MEMBER(has_last_trusted_position_)
+    GNSSPP_RTK_TEST_MEMBER(doppler_continuity_position_ecef_)
+    GNSSPP_RTK_TEST_MEMBER(doppler_continuity_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_doppler_continuity_position_)
     GNSSPP_RTK_TEST_MEMBER(consecutive_fix_count_)
     GNSSPP_RTK_TEST_MEMBER(lock_count_l1_)
     GNSSPP_RTK_TEST_MEMBER(last_dd_pairs_)
@@ -64,6 +72,7 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_METHOD(solvePositionWithAmbiguities)
     GNSSPP_RTK_TEST_METHOD(solveLAMBDA)
     GNSSPP_RTK_TEST_METHOD(validateAmbiguityResolution)
+    GNSSPP_RTK_TEST_METHOD(validateFixedSolution)
     GNSSPP_RTK_TEST_METHOD(varerr)
     GNSSPP_RTK_TEST_METHOD(tryHoldFix)
     GNSSPP_RTK_TEST_METHOD(applyHoldAmbiguity)
@@ -83,6 +92,103 @@ struct RTKProcessorTestAccess {
 
 using namespace libgnss;
 using Peer = RTKProcessorTestAccess;
+
+TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
+    RTKProcessor processor;
+    auto config = processor.getRTKConfig();
+    config.max_fixed_anchor_age_s = 5.0;
+    config.max_fixed_doppler_consensus_m = 3.0;
+    processor.setRTKConfig(config);
+    const Vector3d base(6378137.0, 0.0, 0.0);
+    const GNSSTime time(2032, 273936.1);
+    processor.setBasePosition(base);
+    Peer::has_fixed_solution_(processor) = true;
+    Peer::fixed_baseline_(processor) = Vector3d(4.758, 0.0, 0.0);
+    Peer::last_fixed_position_(processor) = base;
+    Peer::has_last_fixed_position_(processor) = true;
+    Peer::last_fixed_time_(processor) = GNSSTime(2032, 273935.9);
+    Peer::has_last_fixed_time_(processor) = true;
+    Peer::has_doppler_continuity_position_(processor) = true;
+    Peer::doppler_continuity_position_ecef_(processor) = base;
+    Peer::doppler_continuity_time_(processor) = time;
+    // Early reacquisition, within the 5 m history limit, with a fresh anchor:
+    // the former conditional skipped the Doppler gate and accepted this jump.
+    EXPECT_FALSE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    EXPECT_EQ(processor.getLastDebugTelemetry().reject_reason, "fixed_doppler_consensus");
+    EXPECT_NEAR(processor.getLastDebugTelemetry().fixed_candidate_doppler_consensus_distance_m,
+                4.758, 1e-8);
+
+    // A candidate that agrees with the current propagated position still passes.
+    Peer::fixed_baseline_(processor) = Vector3d(0.1, 0.0, 0.0);
+    EXPECT_TRUE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+}
+
+TEST(RTKDopplerConsensusTest, ExpiredAnchorDoesNotBlockMotionConsistentReacquisition) {
+    RTKProcessor processor;
+    auto config = processor.getRTKConfig();
+    config.max_fixed_anchor_age_s = 5.0;
+    config.max_fixed_doppler_consensus_m = 3.0;
+    processor.setRTKConfig(config);
+    const Vector3d base(6378137.0, 0.0, 0.0);
+    const GNSSTime time(2032, 273700.0);
+    processor.setBasePosition(base);
+    Peer::has_fixed_solution_(processor) = true;
+    Peer::fixed_baseline_(processor) = Vector3d(415.16, 0.0, 0.0);
+    Peer::last_fixed_position_(processor) = base;
+    Peer::has_last_fixed_position_(processor) = true;
+    Peer::last_fixed_time_(processor) = GNSSTime(2032, 273520.9);
+    Peer::has_last_fixed_time_(processor) = true;
+    Peer::consecutive_fix_count_(processor) = 10;
+    Peer::has_doppler_continuity_position_(processor) = true;
+    Peer::doppler_continuity_position_ecef_(processor) = base + Vector3d(415.0, 0.0, 0.0);
+    Peer::doppler_continuity_time_(processor) = time;
+    EXPECT_TRUE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    // Disabling expiry reproduces the stationary-anchor lockout.
+    config.max_fixed_anchor_age_s = 0.0;
+    processor.setRTKConfig(config);
+    Peer::has_fixed_solution_(processor) = true;
+    Peer::fixed_baseline_(processor) = Vector3d(415.16, 0.0, 0.0);
+    Peer::last_fixed_position_(processor) = base;
+    Peer::has_last_fixed_position_(processor) = true;
+    EXPECT_FALSE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+}
+
+TEST(RTKDopplerConsensusTest, StaleTrackRejectsButDisabledGateAndBootstrapRemainAvailable) {
+    RTKProcessor processor;
+    auto config = processor.getRTKConfig();
+    config.max_fixed_doppler_consensus_m = 3.0;
+    processor.setRTKConfig(config);
+    const Vector3d base(6378137.0, 0.0, 0.0);
+    const GNSSTime time(2300, 100.0);
+    processor.setBasePosition(base);
+    Peer::has_fixed_solution_(processor) = true;
+    Peer::fixed_baseline_(processor) = Vector3d::Zero();
+    Peer::has_doppler_continuity_position_(processor) = true;
+    Peer::doppler_continuity_position_ecef_(processor) = base;
+    Peer::doppler_continuity_time_(processor) = GNSSTime(2300, 99.9);
+    EXPECT_FALSE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    EXPECT_EQ(processor.getLastDebugTelemetry().reject_reason, "fixed_doppler_stale");
+    Peer::doppler_continuity_time_(processor) = GNSSTime(2300, 100.1);
+    EXPECT_FALSE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    Peer::doppler_continuity_time_(processor) = time;
+    Peer::doppler_continuity_position_ecef_(processor).x() =
+        std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    EXPECT_EQ(processor.getLastDebugTelemetry().reject_reason, "fixed_doppler_consensus");
+    Peer::has_doppler_continuity_position_(processor) = false;
+    EXPECT_TRUE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    config.max_fixed_doppler_consensus_m = 0.0;
+    processor.setRTKConfig(config);
+    Peer::has_fixed_solution_(processor) = true;
+    Peer::fixed_baseline_(processor) = Vector3d::Zero();
+    Peer::has_doppler_continuity_position_(processor) = true;
+    Peer::doppler_continuity_position_ecef_(processor) = base + Vector3d(100.0, 0.0, 0.0);
+    EXPECT_TRUE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+    config.max_fixed_doppler_consensus_m = 3.0;
+    config.position_mode = RTKProcessor::RTKConfig::PositionMode::MOVING_BASE;
+    processor.setRTKConfig(config);
+    EXPECT_TRUE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+}
 
 namespace {
 
@@ -1096,6 +1202,39 @@ TEST_F(RTKHoldFixUnchangedSetTest, AllCandidatesMatchedWithStaleHeldPairIsAccept
     const std::map<int, double> expected = {{2, 12.0}, {3, -7.0}, {4, 25.0}, {5, 3.0}};
     EXPECT_EQ(integer_by_prn, expected);
     EXPECT_EQ(Peer::last_num_fixed_ambiguities_(processor_), 4);
+}
+
+TEST_F(RTKHoldFixUnchangedSetTest, DopplerRejectionCannotMutateHeldOrTrustedFixState) {
+    dropSatellites(processor_, {6, 7, 8, 9});
+    auto config = processor_.getRTKConfig();
+    config.max_fixed_doppler_consensus_m = 3.0;
+    processor_.setRTKConfig(config);
+    const auto filter = Peer::filter_state_(processor_);
+    const auto pairs = Peer::last_dd_pairs_(processor_);
+    const auto subset = Peer::last_best_subset_(processor_);
+    const VectorXd integers = Peer::last_dd_fixed_(processor_);
+    const Vector3d previous = Peer::last_fixed_position_(processor_);
+    Peer::has_last_trusted_position_(processor_) = true;
+    Peer::last_trusted_position_(processor_) = previous;
+    Peer::has_doppler_continuity_position_(processor_) = true;
+    Peer::doppler_continuity_time_(processor_) = time_;
+    Peer::doppler_continuity_position_ecef_(processor_) = previous + Vector3d(5.0, 0.0, 0.0);
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "fixed_doppler_consensus");
+    EXPECT_FALSE(processor_.getLastDebugTelemetry().hold_fix_applied);
+    ASSERT_EQ(Peer::last_dd_fixed_(processor_).size(), integers.size());
+    EXPECT_EQ(Peer::last_dd_fixed_(processor_), integers);
+    EXPECT_EQ(Peer::last_best_subset_(processor_), subset);
+    EXPECT_EQ(Peer::last_fixed_position_(processor_), previous);
+    EXPECT_EQ(Peer::last_dd_pairs_(processor_).size(), pairs.size());
+    EXPECT_EQ(Peer::last_trusted_position_(processor_), previous);
+    EXPECT_TRUE(Peer::has_last_trusted_position_(processor_));
+    EXPECT_FALSE(Peer::has_fixed_solution_(processor_));
+    EXPECT_EQ(solution.status, SolutionStatus::NONE);
+    EXPECT_EQ(Peer::filter_state_(processor_).state, filter.state);
+    Peer::doppler_continuity_position_ecef_(processor_) = previous;
+    EXPECT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
 }
 
 TEST_F(RTKHoldFixUnchangedSetTest, FewerThanFourMatchedPairsStillRejectsWithItsOwnReason) {

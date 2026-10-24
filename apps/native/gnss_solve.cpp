@@ -1609,7 +1609,7 @@ void printAdvancedUsage(const char* program_name) {
         << "  --max-fixed-anchor-age <s> Expire the last-FIX jump reference after s seconds\n"
         << "                             (default: 0, disabled)\n"
         << "  --max-fixed-doppler-consensus <m>\n"
-        << "                             Max FIX distance from Doppler-integrated track\n"
+        << "                             Max AR/hold FIX distance from current Doppler track\n"
         << "                             (default: 0, disabled)\n"
         << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
         << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
