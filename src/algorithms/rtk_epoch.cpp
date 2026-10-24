@@ -325,9 +325,19 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             max_kf_iterations = 2;
         }
         const auto filter_started = std::chrono::steady_clock::now();
+        // Later passes only relinearize this epoch's measurements. Opt-in:
+        // apply them to the epoch prior instead of counting them again on
+        // the posterior.
+        const bool relinearize_from_prior = rtk_config_.kf_relinearize_from_epoch_prior;
+        if (relinearize_from_prior) {
+            iterated_update_prior_state_ = filter_state_.state;
+            iterated_update_prior_covariance_ = filter_state_.covariance;
+        }
         for (int iter = 0; iter < max_kf_iterations; ++iter) {
             const Vector3d baseline_before_iter = filter_state_.state.head<3>();
+            has_iterated_update_prior_ = relinearize_from_prior && iter > 0;
             filter_ok = updateFilter(sat_data);
+            has_iterated_update_prior_ = false;
             if (!filter_ok) break;
             if (iter == 0 && filter_state_.covariance.rows() >= 3) {
                 first_pass_position_covariance_ =

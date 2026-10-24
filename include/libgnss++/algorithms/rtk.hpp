@@ -152,6 +152,11 @@ public:
         double process_noise_ambiguity = 1e-8;    // cycles^2/s (very small - ambiguities are constant)
         double process_noise_iono = 1e-4;         // m^2/s for DD ionosphere states
         int kf_iterations = 4;                       // more iterations for position convergence
+        // Opt-in: apply the relinearized passes above to the epoch prior
+        // (iterated EKF). Off keeps the legacy passes, which re-apply the
+        // epoch's rows to the previous pass's posterior and so count them
+        // again (docs/rtk_iterated_update_covariance.md).
+        bool kf_relinearize_from_epoch_prior = false;
 
         // Measurement noise
         double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)
@@ -1970,7 +1975,7 @@ private:
     bool has_ref_satellite_ = false;
 
     // Fixed solution baseline (from LAMBDA)
-    Vector3d fixed_baseline_;
+    Vector3d fixed_baseline_ = Vector3d::Zero();
     bool has_fixed_solution_ = false;
 
     // Last validated fixed position (for position reset in next epoch)
@@ -1995,6 +2000,12 @@ private:
     Matrix3d first_pass_position_covariance_ = Matrix3d::Zero();
     double first_pass_nis_per_observation_ = 0.0;
     bool has_first_pass_covariance_ = false;
+    // Epoch prior for the relinearized measurement passes. While set,
+    // updateFilter() gates rows at the current iterate and applies them once
+    // to this prior (iterated EKF) instead of again to the posterior.
+    VectorXd iterated_update_prior_state_;
+    MatrixXd iterated_update_prior_covariance_;
+    bool has_iterated_update_prior_ = false;
     Vector3d last_trusted_position_ = Vector3d::Zero();
     bool has_last_trusted_position_ = false;
     Vector3d fixed_update_gate_previous_position_ = Vector3d::Zero();

@@ -173,6 +173,74 @@ TEST(RTKTrustedHistoryTest, RejectedFloatRestoresBothTrustSamplesAndPreviousPres
     }
 }
 
+TEST(RTKIteratedUpdateTest, RelinearizationFromPriorDoesNotRecountEpochMeasurements) {
+    // Noise-free static scene with an unbiased seed: every row passes the
+    // prefit gate on the first pass, so relinearizing at the updated state
+    // adds no information. With --kf-relinearize-from-prior a single update
+    // and the iterated update leave the same position and double-difference
+    // ambiguity covariance. The legacy default re-applies the same rows to
+    // the posterior and halves it (docs/rtk_iterated_update_covariance.md).
+    const auto nav = synthetic_rtk_scene::constellation();
+    const Vector3d base_position(6378137, 0, 0);
+    const Vector3d rover_position = base_position + Vector3d(40, 30, 10);
+    const auto prns = synthetic_rtk_scene::visible(
+        nav, synthetic_rtk_scene::epochTime(0), rover_position, 15);
+    ASSERT_GE(prns.size(), 6U);
+    const int reference = Peer::ambiguityIndex(SatelliteId(GNSSSystem::GPS, prns[0]), 0);
+    auto run = [&](int kf_iterations, bool relinearize_from_prior) {
+        RTKProcessor processor;
+        auto config = processor.getRTKConfig();
+        config.ratio_threshold = 1e9;
+        config.ambiguity_ratio_threshold = 1e9;
+        config.elevation_mask = 5 * M_PI / 180;
+        config.kf_iterations = kf_iterations;
+        config.kf_relinearize_from_epoch_prior = relinearize_from_prior;
+        processor.setRTKConfig(config);
+        ProcessorConfig spp_config;
+        spp_config.elevation_mask = 5;
+        // The scene has no atmosphere: an unbiased SPP seed keeps every row
+        // inside the prefit gate on the first pass.
+        spp_config.use_ionosphere_model = false;
+        spp_config.use_troposphere_model = false;
+        EXPECT_TRUE(processor.initialize(spp_config));
+        processor.setBasePosition(base_position);
+        for (int epoch = 0; epoch < 3; ++epoch) {
+            const auto time = synthetic_rtk_scene::epochTime(epoch);
+            const auto solution = processor.processRTKEpoch(
+                synthetic_rtk_scene::observations(nav, time, rover_position, 30, prns, 0),
+                synthetic_rtk_scene::observations(nav, time, base_position, 10, prns, 500),
+                nav);
+            EXPECT_EQ(solution.status, SolutionStatus::FLOAT);
+            const auto& telemetry = processor.getLastDebugTelemetry();
+            EXPECT_EQ(telemetry.float_update_suppressed_outliers, 0);
+            EXPECT_EQ(telemetry.retained_phase_rows, static_cast<int>(prns.size()) - 1);
+        }
+        return Peer::filter_state_(processor);
+    };
+    const auto single = run(1, true);
+    const auto iterated = run(4, true);
+    const auto legacy = run(4, false);
+    EXPECT_EQ(run(1, false).covariance, single.covariance);
+    for (int axis = 0; axis < 3; ++axis) {
+        SCOPED_TRACE(axis);
+        EXPECT_NEAR(iterated.covariance(axis, axis) / single.covariance(axis, axis), 1.0, 1e-3);
+        EXPECT_NEAR(legacy.covariance(axis, axis) / single.covariance(axis, axis), 0.5, 0.01);
+    }
+    auto ddVariance = [&](const auto& state, int index) {
+        return state.covariance(reference, reference) + state.covariance(index, index) -
+               2.0 * state.covariance(reference, index);
+    };
+    for (std::size_t i = 1; i < prns.size(); ++i) {
+        const int index = Peer::ambiguityIndex(SatelliteId(GNSSSystem::GPS, prns[i]), 0);
+        SCOPED_TRACE(static_cast<int>(prns[i]));
+        ASSERT_NE(single.state(index), 0.0);
+        EXPECT_NEAR(ddVariance(iterated, index) / ddVariance(single, index), 1.0, 1e-3);
+        EXPECT_NEAR(ddVariance(legacy, index) / ddVariance(single, index), 0.5, 0.01);
+        EXPECT_NEAR(iterated.state(reference) - iterated.state(index),
+                    single.state(reference) - single.state(index), 1e-3);
+    }
+}
+
 TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
     RTKProcessor processor;
     auto config = processor.getRTKConfig();
