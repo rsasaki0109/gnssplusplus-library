@@ -1,0 +1,197 @@
+{
+  "schema": "odaiba_readme_hero.v1",
+  "generated_date": "2026-10-24",
+  "dataset": {
+    "name": "UrbanNav Tokyo Odaiba",
+    "upstream": "https://github.com/IPNL-POLYU/UrbanNavDataset#tokyo-dataset",
+    "url": "https://dl.dropboxusercontent.com/s/isu1bugpgr8dpas/Tokyo_Data.zip",
+    "files": [
+      {
+        "member": "Tokyo_Data/Odaiba/base.nav",
+        "size": 6916149,
+        "crc32": "3a9f4111",
+        "sha256": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35"
+      },
+      {
+        "member": "Tokyo_Data/Odaiba/base_trimble.obs",
+        "size": 10911525,
+        "crc32": "76b10eaf",
+        "sha256": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee"
+      },
+      {
+        "member": "Tokyo_Data/Odaiba/reference.csv",
+        "size": 3023844,
+        "crc32": "4aafdd2b",
+        "sha256": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d"
+      },
+      {
+        "member": "Tokyo_Data/Odaiba/rover_trimble.obs",
+        "size": 71151487,
+        "crc32": "f2f81f6b",
+        "sha256": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8"
+      }
+    ]
+  },
+  "solvers": {
+    "libgnss_source_commit": "a40998e2f8e7f312ef9f6b4a21b3eb8b52350330",
+    "rtklib_commit": "55a0f2c742a605a3d27a90b17556b2cfdf98ad50",
+    "profile": "default",
+    "mode": "kinematic",
+    "glonass_ar": "off",
+    "base_ecef_m": [
+      -3961904.953,
+      3348993.7578,
+      3698211.7553
+    ]
+  },
+  "build": {
+    "compiler": "GCC 14.2.0",
+    "eigen": "3.4.0",
+    "cmake": "4.4.4",
+    "build_type": "Release",
+    "GTSAM": false
+  },
+  "window": {
+    "gps_week": 2032,
+    "start_tow": 273385.1,
+    "end_tow": 273415.1,
+    "selection": "first continuously moving 30s interval, at least 10s into reference, forward 1.5s speed > 2 m/s; selected from reference only",
+    "epochs_each": 301,
+    "rtklib_status": "FLOAT",
+    "libgnss_status": "FIXED"
+  },
+  "visualization": {
+    "camera": "shared reference-driven low chase camera, 18m behind and 7m above reference",
+    "ground_height_ellipsoidal_m": 42.0,
+    "trace_height_ellipsoidal_m": [
+      42.4,
+      42.45
+    ],
+    "horizontal_positions": "unmodified",
+    "forward_paths": "recorded future positions shown during offline replay",
+    "map_model_epoch": "2025; illustrative context for older drive",
+    "vertical_accuracy_claim": false
+  },
+  "plateau": {
+    "id": "13108_bldg_lod2_no_texture",
+    "name": "建築物モデル（江東区）",
+    "pref": "東京都",
+    "pref_code": "13",
+    "city": "江東区",
+    "city_code": "13108",
+    "ward": null,
+    "ward_code": null,
+    "type": "建築物モデル",
+    "type_en": "bldg",
+    "url": "https://assets.cms.plateau.reearth.io/assets/69/e06917-ca70-4b93-810b-765fb29ce233/13108_koto-ku_pref_2025_citygml_1_op_bldg_3dtiles_13108_koto-ku_lod2_no_texture/tileset.json",
+    "file_size": 44548490,
+    "composite_url": "https://api.plateauview.mlit.go.jp/datacatalog/3dtiles/13108-bldg-lod2-notexture-2025/tileset.json",
+    "layers": null,
+    "year": 2025,
+    "registration_year": 2025,
+    "spec": "5.0",
+    "format": "3D Tiles",
+    "format_version": "1.0",
+    "lod": "2",
+    "texture": false
+  },
+  "osm": {
+    "attribution": "© OpenStreetMap contributors",
+    "copyright": "https://www.openstreetmap.org/copyright",
+    "zoom": 18,
+    "tiles": 20
+  },
+  "full_run_summary": {
+    "base_position": {
+      "ecef_m": [
+        -3961904.953,
+        3348993.7578,
+        3698211.7553
+      ],
+      "source": "MeijoMeguroLab/Open_data docs/2019_dataset.md surveyed base position"
+    },
+    "common_epoch_pairs": 8027,
+    "comparison_png": "output/readme-hero/comparison.png",
+    "dataset": "UrbanNav Tokyo Odaiba",
+    "lib_pos": "output/readme-hero/libgnss.pos",
+    "libgnss_all_epochs": {
+      "epochs": 10985,
+      "fix_epochs": 1298,
+      "fix_rate_pct": 11.816113,
+      "max_h_m": 18.008846,
+      "mean_up_m": -0.108676,
+      "median_abs_up_m": 0.302611,
+      "median_h_m": 0.359331,
+      "p95_abs_up_m": 11.53654,
+      "p95_h_m": 4.777143
+    },
+    "libgnss_common_epochs": {
+      "epochs": 8027,
+      "fix_epochs": 1223,
+      "fix_rate_pct": 15.236078,
+      "max_h_m": 4.748336,
+      "mean_up_m": 0.642023,
+      "median_abs_up_m": 0.267145,
+      "median_h_m": 0.298276,
+      "p95_abs_up_m": 5.70283,
+      "p95_h_m": 2.78094
+    },
+    "libgnss_vs_malib_common_epochs": null,
+    "malib_all_epochs": null,
+    "malib_common_epoch_pairs": null,
+    "malib_common_epochs": null,
+    "malib_pos": null,
+    "preset": null,
+    "reference_csv": "data/driving/Tokyo_Data/Odaiba/reference.csv",
+    "rtklib_all_epochs": {
+      "epochs": 8205,
+      "fix_epochs": 205,
+      "fix_rate_pct": 2.498477,
+      "max_h_m": 78.349906,
+      "mean_up_m": 1.335817,
+      "median_abs_up_m": 0.469333,
+      "median_h_m": 0.56716,
+      "p95_abs_up_m": 43.374901,
+      "p95_h_m": 25.622107
+    },
+    "rtklib_common_epoch_pairs": 8027,
+    "rtklib_common_epochs": {
+      "epochs": 8027,
+      "fix_epochs": 205,
+      "fix_rate_pct": 2.553881,
+      "max_h_m": 78.349906,
+      "mean_up_m": 1.505495,
+      "median_abs_up_m": 0.458971,
+      "median_h_m": 0.552777,
+      "p95_abs_up_m": 43.182285,
+      "p95_h_m": 23.235304
+    },
+    "rtklib_pos": "output/readme-hero/rtklib.pos",
+    "scorecard_png": "output/readme-hero/scorecard.png",
+    "social_card_png": "output/readme-hero/social.png"
+  },
+  "artifact_inputs": {
+    "docs/odaiba_hero_trace.json": "4c1595437e97574061f318d238f2e5a9e6c0ba80a7a10a1abd4ee191a7939049",
+    "docs/odaiba_hero_basemap.png": "57ebc41f9a67d4a8e9fe8d21267e9b2bf0be8f9e5bea2bc200c0f74dbf09b1ab",
+    "output/readme-hero/libgnss.pos": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
+    "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5"
+  },
+  "renderer": {
+    "cesium": "1.123.1",
+    "playwright": "1.62.0",
+    "pillow": "12.3.0",
+    "chromium": "154.0.8037.57",
+    "width": 960,
+    "height": 420,
+    "frames": 96,
+    "fps": 8,
+    "duration_ms": 12000,
+    "playback_speed": 2.5
+  },
+  "reproduction_guide": "docs/odaiba_hero.md",
+  "artifact": {
+    "file": "docs/odaiba_hero.gif",
+    "bytes": 3327595,
+    "sha256": "a5ca95ac1e39bcf55b1290a3f3547c1c10a95749202e64c25733d1cec07f6306"
+  }
+}

@@ -1,0 +1,68 @@
+<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="/cesium/Widgets/widgets.css">
+<style>
+body{margin:0;background:#0c111a;color:#eef3f8;font:14px system-ui}header{height:64px;box-sizing:border-box;padding:12px 24px;border-bottom:1px solid #2a3444}header strong{font-size:24px}header span{float:right;color:#9aaabd;margin-top:12px}.panels{display:flex;height:324px}.panel{position:relative;width:50%}.panel:first-child{border-right:1px solid #394455}.view{width:100%;height:100%}.label{position:absolute;left:16px;top:14px;background:#101824dd;padding:8px 12px;z-index:2;border-left:3px solid var(--color)}footer{height:32px;padding:8px 12px;box-sizing:border-box;font-size:10px;color:#9aaabd}.cesium-viewer-bottom{display:none}
+</style>
+<header><strong>libgnss++</strong><span>UrbanNav Tokyo Odaiba · synchronized replay</span></header>
+<div class="panels"><div class="panel"><div class="label" style="--color:#f5ac63">RTKLIB <span id="status0"></span></div><div class="view" id="left"></div></div><div class="panel"><div class="label" style="--color:#60e2bb">libgnss++ <span id="status1"></span></div><div class="view" id="right"></div></div></div>
+<footer>3D city model: Project PLATEAU / MLIT · Map © OpenStreetMap contributors · Common reference camera · Horizontal replay · recorded paths</footer>
+<script src="/cesium/Cesium.js"></script>
+<script>
+// Input contract: Absolute GPST seconds since 1980-01-06, WGS84 degrees, metres.
+// Each series contains [time, longitude, latitude, ellipsoidal_height, status].
+window.prepare = async function(data, {probe=false}={}) {
+ const C=Cesium;
+ window.viewers=[]; window.tileFailures=[];
+ const sources=[data.rtklib,data.libgnss];
+ function point(r,height=r[3]){return C.Cartesian3.fromDegrees(r[1],r[2],height)}
+ for(let i=0;i<2;i++){
+  const viewer=new C.Viewer(i?'right':'left',{baseLayer:false,animation:false,timeline:false,baseLayerPicker:false,geocoder:false,homeButton:false,sceneModePicker:false,navigationHelpButton:false,fullscreenButton:false,selectionIndicator:false,infoBox:false,skyBox:false,skyAtmosphere:false,terrainProvider:new C.CustomHeightmapTerrainProvider({width:16,height:16,callback:()=>new Float32Array(256).fill(data.groundHeight ?? 0)}),contextOptions:{webgl:{preserveDrawingBuffer:true}},requestRenderMode:true});
+  const first=data.reference.find(r=>r[0]>=(data.start ?? data.reference[0][0])) || data.reference[0]; viewer.camera.setView({destination:point(first,first[3]+10),orientation:{heading:0,pitch:-0.3,roll:0}}); viewer.camera.frustum.far=2000; viewer.camera.frustum.near=0.2; const scene=viewer.scene; scene.globe.maximumScreenSpaceError=8;scene.backgroundColor=C.Color.fromCssColorString('#101824');scene.globe.baseColor=C.Color.fromCssColorString('#303945');scene.globe.enableLighting=false;scene.fog.enabled=false;scene.highDynamicRange=false;
+  if(!probe){
+   if(!data.tilesetUrl)throw Error('A verified PLATEAU tileset URL is required');
+   const imagery=viewer.imageryLayers.addImageryProvider(await C.SingleTileImageryProvider.fromUrl('/basemap.png',{rectangle:C.Rectangle.fromDegrees(...data.basemapBounds),credit:'© OpenStreetMap contributors'})); imagery.saturation=0.25; imagery.brightness=0.42;
+   const tiles=await C.Cesium3DTileset.fromUrl(data.tilesetUrl,{maximumScreenSpaceError:16});
+   tiles.style=new C.Cesium3DTileStyle({color:"color('#8093a8', 1.0)"});
+   tiles.tileFailed.addEventListener(e=>window.tileFailures.push(e.message));
+   scene.primitives.add(tiles);viewer.heroTiles=tiles;
+  }
+  const color=C.Color.fromCssColorString(i?'#60e2bb':'#f5ac63');
+  // Entire recorded window provides the forward path in this offline replay.
+  const displayRows=sources[i].filter(r=>r[0]>=data.start && r[0]<=data.end);
+  let segments=[],segment=[];
+  for(const r of displayRows){if(segment.length && r[0]-segment.at(-1)[0]>0.5){segments.push(segment);segment=[]}segment.push(r)}if(segment.length)segments.push(segment);
+  for(const rows of segments) if(rows.length>1)viewer.entities.add({polyline:{positions:rows.map(r=>point(r,(data.groundHeight ?? r[3])+0.45)),width:4,material:new C.PolylineOutlineMaterialProperty({color:color.withAlpha(0.85),outlineColor:C.Color.fromCssColorString('#17202b'),outlineWidth:1})}});
+  viewer.heroTrail=viewer.entities.add({polyline:{positions:[],width:5,material:new C.PolylineOutlineMaterialProperty({color,outlineColor:C.Color.BLACK,outlineWidth:1}),clampToGround:false}});
+  viewer.heroPoint=viewer.entities.add({position:point(sources[i][0]),point:{pixelSize:10,color,outlineColor:C.Color.WHITE,outlineWidth:2,disableDepthTestDistance:0}});
+  window.viewers.push(viewer);
+ }
+ function nearest(rows,t){let lo=0,hi=rows.length;while(lo<hi){const m=(lo+hi)>>1;if(rows[m][0]<t)lo=m+1;else hi=m}const a=rows[Math.max(0,lo-1)],b=rows[Math.min(lo,rows.length-1)];return Math.abs(a[0]-t)<Math.abs(b[0]-t)?a:b}
+ window.renderFrame=async function(t){
+  const ref=nearest(data.reference,t),ahead=nearest(data.reference,t+1.5);
+  const origin=point(ref),forward=C.Cartesian3.subtract(point(ahead),origin,new C.Cartesian3());
+  if(C.Cartesian3.magnitude(forward)<0.5)throw Error('Choose a moving segment for the chase camera');
+  const up=C.Cartesian3.normalize(origin,new C.Cartesian3());
+  const horizontal=C.Cartesian3.subtract(forward,C.Cartesian3.multiplyByScalar(up,C.Cartesian3.dot(forward,up),new C.Cartesian3()),new C.Cartesian3());C.Cartesian3.normalize(horizontal,horizontal);
+  const eye=C.Cartesian3.add(C.Cartesian3.subtract(origin,C.Cartesian3.multiplyByScalar(horizontal,18,new C.Cartesian3()),new C.Cartesian3()),C.Cartesian3.multiplyByScalar(up,7,new C.Cartesian3()),new C.Cartesian3());
+  const target=C.Cartesian3.add(origin,C.Cartesian3.multiplyByScalar(horizontal,20,new C.Cartesian3()),new C.Cartesian3());
+  const direction=C.Cartesian3.normalize(C.Cartesian3.subtract(target,eye,new C.Cartesian3()),new C.Cartesian3());
+  for(let i=0;i<2;i++){
+   const viewer=window.viewers[i],sample=nearest(sources[i],t),available=Math.abs(sample[0]-t)<=0.25;
+   viewer.camera.setView({destination:eye,orientation:{direction,up}});
+   // Only height is shared for map visibility. Never alter horizontal positions.
+   const rows=sources[i].filter(r=>r[0]>=t-12&&r[0]<=t);
+   let chunk=[];const chunks=[];
+   for(const row of rows){if(chunk.length&&row[0]-chunk[chunk.length-1][0]>0.5){chunks.push(chunk);chunk=[]}chunk.push(row)}if(chunk.length)chunks.push(chunk);
+   // Show the current contiguous segment; never bridge a no-solution interval.
+   const current=chunks.at(-1)||[];
+   viewer.heroTrail.polyline.positions=current.map(r=>point(r,(data.groundHeight ?? nearest(data.reference,r[0])[3])+0.4));
+   viewer.heroTrail.show=available;viewer.heroPoint.show=available;
+   if(available)viewer.heroPoint.position=point(sample,(data.groundHeight ?? ref[3])+0.4);
+   document.getElementById('status'+i).textContent=available?sample[4]:'NO SOLUTION';
+   viewer.render();
+  }
+  await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+ };
+ await window.renderFrame(data.start ?? data.reference[0][0]);
+};
+</script>
