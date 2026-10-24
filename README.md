@@ -5,7 +5,7 @@ Modern C++20 GNSS toolkit for non-GUI positioning.
 Native `SPP`, `RTK`, `PPP`, `CLAS/MADOCA`, `RTCM`, `UBX`, and direct `QZSS L6`
 handling without an external RTKLIB runtime.
 
-![UrbanNav Odaiba social card](docs/driving_odaiba_social_card.png)
+![libgnss++ — Modern C++20 GNSS toolkit: satellites above a city with an illuminated positioning trajectory](docs/libgnsspp_hero.png)
 
 ## What You Get
 
