@@ -6558,3 +6558,53 @@ Readback: use_cases/records/gsdc2023_heading_modern_official_readback_20260928.j
 Submission session 49839 exited 0. Do not resubmit this exact candidate.
 The user's prior submission-confirmation preference is revoked; future
 submissions within this goal do not require repeating that permission request.
+
+### Leaderboard target and Samsung A diagnosis (2026-10-24)
+
+`kaggle competitions leaderboard smartphone-decimeter-2023 -s` lists nori
+(Mitsubishi Electric) first at Private 0.883 m and Taro second at 0.928 m.
+The six retained-recipe Samsung A test drives are all L1-only. A325F/A32 have
+TDCP disabled by the source guard. On train, the archived taroz output is
+also 1.5-1.9 m for these phones. A uniform along-track offset or IMU time
+shift learned leave-one-course-out does not help (-0.02 / +0.00 m). The
+native IMU stage breaks down in sharp turns on A325F (77 and 18 epochs where
+it is 1.5 m worse than GNSS-first), A205U and Pixel4 mtv-b. Pixel5 with epoch
+heading seeds shows none.
+
+### Per-phone main Doppler recipe, submission 57585127 (2026-10-24)
+
+Adding the source final-graph Doppler with the continuous raw clock reference
+removes the turn breakdowns. On A325F an IMU time offset of +150 ms is best
+among -150/0/+150/+250/+400 ms. On train, sjc-q A325F goes 1.965 -> 1.556 m
+and mtv-n A325F 1.799 -> 1.661 m (taroz 1.929 / 1.690 m), A505G 1.688 ->
+1.602 m, and Pixel4/4XL 0.377 -> 0.358, 0.828 -> 0.787, 0.422 -> 0.415 m.
+A205U, A325G and Mi8 do not improve and stay unchanged. Submission 57585127
+replaces only the six test drives sm-a325f, samsunga32, sm-a505u, pixel4 x2
+and pixel4xl in 56625084. It scores Private 0.982 m / Public 0.902 m.
+Rejected on train: keeping base-missing BeiDou/QZSS rows uncorrected
+(+0.079 m), the source Type/L5 parameter table (+0.018 m), per-drive IMU time
+offsets from the truth-derived gyro lag (+0.001 m), and epoch heading seeds
+for all phones (Pixel4XL +1.00 m).
+
+### Hardware clock reset breaks the first segment of sjc-he2 (2026-10-24)
+
+Comparing the submission with the archived taroz test output (diagnostic
+only) shows one large outlier: 2023-06-06 sjc-he2 Pixel5 (P95 3.26 m, 13% of
+epochs beyond 2 m, all in the first 5 minutes). HardwareClockDiscontinuityCount
+changes 5 -> 6 at epoch 149, where TimeNanos and FullBiasNanos both step by
+2^32 ms. The loader rebases the receiver-clock reference there. This is a
+~194 m clock step that the positive 100 km clock-jump detector misses, so the
+clock continuity factor dragged GNSS-first epochs 0-210 by 27-89 m. The
+pseudorange residual median was 11-53 m there, against 1.2-2.1 m at the taroz
+positions. Solving epochs 0-147 alone gives 0.6 m. The default-off
+`--android-hardware-clock-reset-clock-jumps` marks epochs whose
+HardwareClockDiscontinuityCount changes as clock jumps and admits them in raw
+P staging. Only this drive changes the count among the 80 train/test drives.
+With the flag, the output is within median 0.05 m / P95 0.10 m of taroz.
+Submission 57586667 replaces only this drive in 57585127. It scores
+**Private 0.926 m** / Public 0.902 m, below the 0.928 m taroz score. The gap to
+first place is 0.043 m. Record:
+`use_cases/records/gsdc2023_official_readback_20261024.json`. The official
+reproduce recipe still pins 56625084. The seven replaced drives were run with
+a GCC build, whose control replays match the MSVC outputs within 0.02 m but
+not byte for byte.
