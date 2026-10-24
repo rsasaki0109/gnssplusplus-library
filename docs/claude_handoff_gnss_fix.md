@@ -20,7 +20,7 @@ GTはオフライン採点と可視化のカメラにだけ使い、ソルバー
 | Repository | `rsasaki0109/gnssplusplus-library`、元の対象ブランチは `develop` |
 | 作業場所 | `/workspace/gnssplusplus-library` |
 | 現在のブランチ | `fix/rtk-doppler-consensus` |
-| ソルバー最終修正 | `1f38e319a38007c224635dbf1a1239069c9d1fc7` |
+| ソルバー最終修正 | `bd60dfd`（opt-in iterated EKF、既定不変）。その前の履歴修正は `1f38e319a38007c224635dbf1a1239069c9d1fc7` |
 | [PR #641](https://github.com/rsasaki0109/gnssplusplus-library/pull/641) | OPEN / DRAFT、base `develop`。FIX検査・履歴修正・棄却実験の記録。push済み |
 | [PR #639](https://github.com/rsasaki0109/gnssplusplus-library/pull/639) | OPEN / DRAFT、`docs/gnss-hero-zenith`。天頂ビュー。head `5b65458fcf78971ee18fcfa788510e09582db1b3` |
 | [PR #637](https://github.com/rsasaki0109/gnssplusplus-library/pull/637) | マージ済み。GT / RTKLIB / libgnss++を同じ3D空間に描くREADME GIF |
