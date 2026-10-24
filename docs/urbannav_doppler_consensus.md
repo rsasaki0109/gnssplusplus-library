@@ -63,10 +63,11 @@ above 0.5/2/3 m, baseline-correct FIX losses and recovery outages. Terminal
 outages remain right-censored. Runtime measurements include concurrent build
 and diagnostic work and cannot support a speed comparison.
 
-## Decision: no default adoption
+## Initial gate-coverage evaluation: no default adoption
 
 The [complete evaluation](urbannav_doppler_consensus_evaluation.json) retains all
-eight full runs. Default POS files are byte-identical between binaries for both
+eight full runs for the initial gate-coverage patch at `8fcdf6f9`. Default POS
+files are byte-identical between binaries for both
 drives. The previous opt-in results were reproduced before scoring the patch.
 No thresholds were retuned after examining the results.
 
@@ -102,14 +103,93 @@ track's bootstrap position. This needs separate current-observation and
 reinitialization validation; simply expiring the old FIX reference or enabling
 the continuity option does not solve it.
 
-## Tests
+## Discarded experiment: Doppler during missing position output
+
+RTK/SPP output loss does not necessarily mean that rover Doppler observations
+are missing. A separate experiment continued solving Doppler velocity from the
+propagated track even when the position solution was invalid. A synthetic
+Doppler-only scene reproduced the old dependency; both new mechanism tests and
+all 100 core CTest entries passed for that experiment.
+
+However, the [eight full replays](urbannav_doppler_output_gap_evaluation.json)
+failed adoption. With the same age5/doppler3 settings, Odaiba FIX errors above
+0.5/2 m changed from 157/3 to 173/13, and missing output rose from 1,480 to
+2,132. Shinjuku changed from 13/1 to 23/2, with missing output rising from 3,332
+to 3,400; the gross-error FIX at TOW 282847.6 remained. Default outputs were
+byte-identical. These outcomes do not establish that maintaining an unbounded
+relative track is safe.
+
+The runtime/test changes were **discarded**. The exact
+[experimental patch](urbannav_doppler_output_gap_experiment.patch) is retained
+for reproduction on `8fcdf6f9`; its SHA-256 matches the source diff captured by
+the replay manifest. It is not part of the production solver. No threshold was
+retuned to rescue this experiment.
+
+## Discarded experiment: confirm bootstrap over five epochs
+
+A second independent experiment added
+`--fixed-doppler-bootstrap-epochs 5` to the original age5/doppler3 recipe.
+The count was fixed before replay and was not retuned. This experimental
+option is **not present in the production CLI**. Apply its archived
+[source patch](urbannav_doppler_bootstrap_experiment.patch) independently on
+a clean source checkout of `8fcdf6f9` to reproduce it. The patch also extends
+the evaluator, which runs it with `--after-bootstrap-epochs 5`.
+
+With no trusted track, five consecutive otherwise valid candidate epochs had
+to agree with the first tentative position propagated by fresh measured Doppler
+velocity. Pending candidates kept the ordinary FLOAT output. Their fixed
+coordinates and integers were not promoted to trusted state. The tentative seed
+was not moved toward later candidates. A missing candidate, rejected final
+candidate, position discontinuity, stale/missing velocity or time discontinuity
+broke the evidence. AR and hold attempts at the same timestamp could not count
+twice. Reset/config changes cleared it. Gap/velocity-age bounds remained the
+existing 2 s limits. At 10 Hz, five candidates span at least 0.4 s. Initial
+acquisition also required confirmation.
+
+The [eight full replays](urbannav_doppler_bootstrap_evaluation.json) reject this
+experiment as well:
+
+| Drive | Recipe | FIX epochs | FIX >0.5 m / >2 m / >3 m | Missing epochs | Horizontal P95 m |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Odaiba | Gate coverage only | 4,256 | 157 / 3 / 0 | 1,480 | 4.8963 |
+| Odaiba | Five-epoch bootstrap | 4,250 | 157 / 3 / 0 | 1,482 | 4.8964 |
+| Shinjuku | Gate coverage only | 1,949 | 13 / 1 / 1 | 3,332 | 8.3432 |
+| Shinjuku | Five-epoch bootstrap | 4,074 | 473 / 22 / 14 | 3,366 | 8.3075 |
+
+At Shinjuku TOW 282847.6 the candidate is now pending with streak 1; status is
+FLOAT, `final_fixed_applied=0`, and the reason is
+`fixed_doppler_bootstrap_pending`. Every numeric POS row in a 15,740-epoch
+diagnostic prefix matches the full replay. However, new gross-error FIX epochs
+occur at 282745.7–282746.9 and 283306.7. Confirming repeated relative positions
+does not establish that their absolute ambiguity basin is correct. Changed
+acceptance history affects later estimation; rejecting one known bad epoch is
+not a global improvement.
+
+Four previously correct default FIX epochs are lost on each drive, including
+4/122 (3.28%) on Shinjuku, beyond the 1% budget. Missing positions also increase.
+Default POS files remain byte-identical before/after on both drives. Recovery,
+right-censored outages, exact source/binary/input/output hashes and argv are
+retained in the report. The archived patch's hash equals the source diff in its
+replay manifest.
+
+The mechanism tests and all 100 core CTest entries passed, but the full-data
+accuracy gate failed. The runtime/CLI/helper/test changes were **discarded**.
+This branch retains the original gate-coverage fix and the reproducible rejected
+experiments. Neither experiment justifies changing defaults or claiming safe
+reacquisition. Further work needs to explain incorrect ambiguity selection and
+state evolution across candidate rejection; another continuity threshold or
+confirmation count cannot be justified by these results.
+
+## Tests for retained gate coverage
 
 Four native regression tests cover the fresh-anchor bypass, motion-consistent
 reacquisition after expiry, stale/future/nonfinite tracks, disabled/bootstrap/
 moving-base behavior and rejection before hold/trusted-state mutation. The old
 library reproduces the bypass failures. The complete Release build succeeds.
-The core CTest lane initially passes 98/100 tests; the two helper-compilation
-tests with a hardcoded system Eigen location both pass when rerun with
-`CPLUS_INCLUDE_PATH=/workspace/scratch/gnss-deps/include/eigen3`. No test source
-was changed for that environment issue. Optional GTSAM, OpenCV, ROS2 and Python
-bindings were not built.
+After discarding both experiments and rebuilding the retained implementation,
+all 100 core CTest entries pass with
+`CPLUS_INCLUDE_PATH=/workspace/scratch/gnss-deps/include/eigen3` for the two
+helper-compilation tests with a hardcoded system Eigen location. No test source
+was changed for that environment issue. The restored executable is byte-identical
+to the gate-coverage binary used before these experiments. Optional GTSAM,
+OpenCV, ROS2 and Python bindings were not built.
