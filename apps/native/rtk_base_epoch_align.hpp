@@ -144,18 +144,66 @@ inline bool calculateModeledBaseRange(const libgnss::SatelliteId& satellite,
     return std::isfinite(modeled_range);
 }
 
+// Modeled geometric range plus Saastamoinen troposphere from the base, with the
+// satellite state from the given broadcast ephemeris. With
+// `model_range_at_target`, interpolateBaseEpoch uses one ephemeris for all
+// three epochs of an interpolation, so a broadcast set switch inside the gap
+// (a decimetre orbit step) does not enter the interpolated observation.
+inline bool calculateModeledBaseRange(const libgnss::Ephemeris& eph,
+                                      const libgnss::GNSSTime& time,
+                                      double approx_pseudorange,
+                                      const libgnss::Vector3d& base_position,
+                                      const libgnss::NavigationData& nav,
+                                      double& modeled_range) {
+    libgnss::Vector3d sat_pos;
+    libgnss::Vector3d sat_vel;
+    double sat_clk = 0.0;
+    double sat_clk_drift = 0.0;
+
+    const double travel_time = approx_pseudorange > 1.0
+        ? approx_pseudorange / libgnss::constants::SPEED_OF_LIGHT
+        : 0.075;
+    libgnss::GNSSTime tx_time = time - travel_time;
+    if (!eph.calculateSatelliteState(tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift)) {
+        return false;
+    }
+
+    tx_time = tx_time - sat_clk;
+    if (!eph.calculateSatelliteState(tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift)) {
+        return false;
+    }
+
+    const auto geom = nav.calculateGeometry(base_position, sat_pos);
+    if (geom.elevation <= 0.05) {
+        return false;
+    }
+
+    modeled_range = libgnss::geodist(sat_pos, base_position) +
+        libgnss::models::tropDelaySaastamoinen(base_position, geom.elevation);
+    return std::isfinite(modeled_range);
+}
+
 // Linear-in-range interpolation of a base epoch to `target_time`, straddled
 // by two real base epochs `before`/`after`. Same algorithm gnss_solve.cpp
 // uses to align an asynchronous base stream to the rover epoch cadence:
 // interpolate the modeled-range-relative code/phase/Doppler residual
 // linearly in time, rather than the raw observable (which would alias the
 // satellite geometry's own nonlinearity into the interpolated epoch).
+//
+// By default the modeled range is interpolated linearly as well, which
+// reduces the result to a linear interpolation of the raw observable and
+// drops the range curvature (about 1-3 cm at mid-interval for a 1 s base gap;
+// docs/rtk_base_interpolation_curvature.md). `model_range_at_target`
+// evaluates the modeled range at the target time instead, with the ephemeris
+// selected for the target time for all three epochs. It is opt-in because it
+// misses the frozen default gate by noise-level margins.
 inline bool interpolateBaseEpoch(const libgnss::ObservationData& before,
                                  const libgnss::ObservationData& after,
                                  const libgnss::GNSSTime& target_time,
                                  const libgnss::Vector3d& base_position,
                                  const libgnss::NavigationData& nav,
-                                 libgnss::ObservationData& interpolated_epoch) {
+                                 libgnss::ObservationData& interpolated_epoch,
+                                 bool model_range_at_target = false) {
     constexpr double kMaxInterpolationGapSeconds = 2.0;
     const double total_dt = timeDiffSeconds(after.time, before.time);
     if (!std::isfinite(total_dt) || total_dt <= 1e-6 || total_dt > kMaxInterpolationGapSeconds) {
@@ -197,14 +245,30 @@ inline bool interpolateBaseEpoch(const libgnss::ObservationData& before,
         auto& modeled = modeled_range_cache[key.satellite];
         if (!modeled.valid && modeled.before_m == 0.0 && modeled.after_m == 0.0 &&
             modeled.target_m == 0.0) {
-            if (!calculateModeledBaseRange(key.satellite, before.time, obs_before.pseudorange,
-                                           base_position, nav, modeled.before_m) ||
-                !calculateModeledBaseRange(key.satellite, after.time, obs_after.pseudorange,
-                                           base_position, nav, modeled.after_m)) {
-                modeled.before_m = std::numeric_limits<double>::quiet_NaN();
-                continue;
+            if (model_range_at_target) {
+                const libgnss::Ephemeris* eph = nav.getEphemeris(key.satellite, target_time);
+                const double approx_target_code =
+                    obs_before.pseudorange + alpha * (obs_after.pseudorange - obs_before.pseudorange);
+                if (eph == nullptr ||
+                    !calculateModeledBaseRange(*eph, before.time, obs_before.pseudorange,
+                                               base_position, nav, modeled.before_m) ||
+                    !calculateModeledBaseRange(*eph, after.time, obs_after.pseudorange,
+                                               base_position, nav, modeled.after_m) ||
+                    !calculateModeledBaseRange(*eph, target_time, approx_target_code,
+                                               base_position, nav, modeled.target_m)) {
+                    modeled.before_m = std::numeric_limits<double>::quiet_NaN();
+                    continue;
+                }
+            } else {
+                if (!calculateModeledBaseRange(key.satellite, before.time, obs_before.pseudorange,
+                                               base_position, nav, modeled.before_m) ||
+                    !calculateModeledBaseRange(key.satellite, after.time, obs_after.pseudorange,
+                                               base_position, nav, modeled.after_m)) {
+                    modeled.before_m = std::numeric_limits<double>::quiet_NaN();
+                    continue;
+                }
+                modeled.target_m = modeled.before_m + alpha * (modeled.after_m - modeled.before_m);
             }
-            modeled.target_m = modeled.before_m + alpha * (modeled.after_m - modeled.before_m);
             modeled.valid = true;
         }
         if (!modeled.valid) {

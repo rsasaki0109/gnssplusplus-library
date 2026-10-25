@@ -1,0 +1,1009 @@
+{
+ "title": "Base interpolation range curvature: frozen evaluation",
+ "doc": "docs/rtk_base_interpolation_curvature.md",
+ "frozen_rule_written_before_replay": [
+  "Frozen before replay (2026-10-25T04:33Z). Correctness fix, no parameter.",
+  "Change: apps/native/rtk_base_epoch_align.hpp interpolateBaseEpoch evaluates the modeled base range at",
+  "the target time (was: linear interpolation of the modeled range => raw linear interpolation of L/P).",
+  "Repro: RtkBaseAlignmentTest.InterpolationReproducesObservationsGeneratedAtTargetTime (15 mm -> 4.5e-8 m).",
+  "Reference: develop 66383b5 built from a clean worktree (same flags).",
+  "Runs: Trimble Odaiba/Shinjuku (development), u-blox Odaiba/Shinjuku (holdout, 5 ms matching scorer),",
+  "      HK Deep/Harsh (1 Hz rover = 1 Hz base, 0 interpolated epochs: must be byte-identical).",
+  "Recipes: default; age5_doppler3; CD (hero opt-in) -- each fixed vs reference of the same recipe.",
+  "Default-adoption gate (default recipe, every Tokyo run; same gate as docs/fix_recovery_guard.md):",
+  " - wrong FIX >0.5/2/3 m must not increase",
+  " - reference-correct FIX loss <= 1% (0.5 m)",
+  " - missing epochs and horizontal P95 must not increase",
+  " - recovery P95 and right-censoring (0.5 m) must not increase",
+  " - HK POS byte-identical",
+  "age5_doppler3 and CD: descriptive (same columns), not part of the gate.",
+  "Mechanism (descriptive): lambda-shadow cost/pair p50 and max|z| p50 of accepted AR fixes, correct vs wrong,",
+  "age5_doppler3 with --lambda-shadow-candidates (as docs/rtk_ambiguity_consistency_diagnostics.md).",
+  "If any gate item fails: NO_GO for silent default change; report per-run deltas to the user, no retuning."
+ ],
+ "sources": {
+  "reference": "develop 66383b5",
+  "v1": "e109f779197e8eaf4e52976f9f7c5e365c323b9a (modeled range at target time, independent ephemeris selection; superseded)",
+  "v2": "99fd099832580c0795e1a6a88f15b64836493cc8 (one ephemeris for the three epochs)",
+  "opt_in": "0573bf0 (interpolateBaseEpoch model_range_at_target, gnss_solve --base-interp-curvature; default = develop)"
+ },
+ "binaries_sha256": {
+  "reference": "d7b4564f5c720f5db245cd8628772de9575bf54f505901a6e6694cfe32cac442",
+  "v1": "39d5764bb571ada0e8fda0f2b3b9ce81661d7e72e9f0615f346314b50fd0424f",
+  "v2": "660d7b67a5217e0550483e79e49e54ae45aacf928a0f0fa2e812e936d3f4a00b",
+  "opt_in": "bb4c2140c022633d5ada901531800a184fa9c9e8887e453af6926a7676e636bf"
+ },
+ "inputs_sha256": {
+  "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8",
+  "data/driving/Tokyo_Data/Odaiba/rover_ublox.obs": "7541282f75349063dadb2338c921ac80f11eb9aa28d181d43692387279c2837f",
+  "data/driving/Tokyo_Data/Odaiba/base_trimble.obs": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee",
+  "data/driving/Tokyo_Data/Odaiba/base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+  "data/driving/Tokyo_Data/Odaiba/reference.csv": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d",
+  "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs": "be239dbd20d9d69a0dbc696f1a4b00d75cd3639354d498eec91f08fa65d000eb",
+  "data/driving/Tokyo_Data/Shinjuku/rover_ublox.obs": "dece3e6fbbe47e78705570d0e99796460d6d34f75a5dbbf20664a5446def7c3f",
+  "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs": "34a851c54e07b8cac592d37539c85e19d02e1a6b29839a707ab69dba9692c99e",
+  "data/driving/Tokyo_Data/Shinjuku/base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+  "data/driving/Tokyo_Data/Shinjuku/reference.csv": "794baaec530f34097cd1f77633902bb2195ce30cdec278945eb5ac911ed65d79",
+  "data/holdout_hk/urbannav/HKDeepUrban1_novatel/rover.obs": "f2aaad09de3c4304c5f601275a2b8641824ee19f59f979aeded210d04108b5a9",
+  "data/holdout_hk/urbannav/HKDeepUrban1_novatel/base.obs": "b8b705402526ef93bf3a21e95e5fcef2de78e0497f4e5610e3ee5f995c4e79fe",
+  "data/holdout_hk/urbannav/HKDeepUrban1_novatel/base.nav": "101abd626a7f73a9d0f599bfd89d7cb61d70005287d020b0d18a8b6a3258ce1c",
+  "data/holdout_hk/urbannav/HKHarshUrban1_novatel/rover.obs": "f8724beac4dec51bf305331b9399a228ba9b94f4e5d9c16847b03d8416b79082",
+  "data/holdout_hk/urbannav/HKHarshUrban1_novatel/base.obs": "38ff39dd67e525a36b41bb12dd5d3dbbc1d6b3f1865d5a6ba48c1906193ce4ae",
+  "data/holdout_hk/urbannav/HKHarshUrban1_novatel/base.nav": "8080e8cb21bb997665323d7595c03eb2b6d5f56ddb42f5921905975d4bfd3d17"
+ },
+ "native_argv": {
+  "tokyo": "gnss_solve --rover <rover_{trimble,ublox}.obs> --base base_trimble.obs --nav base.nav --mode kinematic --glonass-ar off --base-ecef -3961904.9530 3348993.7578 3698211.7553 --no-kml --out <pos> + recipe flags",
+  "hk": "gnss_solve --rover rover.obs --base base.obs --nav base.nav --mode kinematic --glonass-ar off --base-ecef -2414266.9197 5386768.9868 2407460.0314 --no-kml --out <pos>",
+  "recipes": {
+   "default": [],
+   "age5d3": "--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 (+ --lambda-shadow-candidates 2 --debug-epoch-log <csv>)",
+   "CD": "--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 --fix-history-motion-compensation"
+  }
+ },
+ "scoring": {
+  "trimble": "scripts/analysis/evaluate_urbannav_fix_continuity.py score() (exact 1 ms matching); recovery with its outage rule",
+  "ublox": "0.2 s reference grid, solution matched within 5 ms, error against the reference interpolated to the solution time; recovery with the same outage rule on that grid",
+  "hk": "POS sha256 only"
+ },
+ "base_alignment_counts": {
+  "trimble-Odaiba": {
+   "exact": 1240,
+   "interpolated": 11159
+  },
+  "trimble-Shinjuku": {
+   "exact": 2081,
+   "interpolated": 18710
+  },
+  "ublox-Shinjuku": {
+   "exact": 542,
+   "interpolated": 9934
+  },
+  "HKDeepUrban1": {
+   "exact": 1492,
+   "interpolated": 0
+  },
+  "HKHarshUrban1": {
+   "exact": 2268,
+   "interpolated": 1
+  }
+ },
+ "synthetic_tests": {
+  "InterpolationReproducesObservationsGeneratedAtTargetTime": {
+   "develop_worst_m": {
+    "alpha0.25": 0.0114,
+    "alpha0.5": 0.0152,
+    "alpha0.75": 0.0114
+   },
+   "v2_worst_m": "< 5e-8"
+  },
+  "InterpolationIsNotShiftedByAnEphemerisSwitchInsideTheGap": {
+   "v1_worst_m": {
+    "alpha0.25": 0.0304,
+    "alpha0.5": 0.0609,
+    "alpha0.75": 0.0304
+   },
+   "v2": "< 1e-3 (passes)"
+  }
+ },
+ "geometric_curvature_error_odaiba_base": {
+  "method": "scratch interp_err: |linear 1 Hz interpolation - range at the target time|, el >= 10 deg, GLONASS excluded, DD against the highest satellite of the same system",
+  "undifferenced_alpha0.5_m": {
+   "p50": 0.0024,
+   "p95": 0.0147,
+   "max": 0.0209
+  },
+  "dd_all_alpha_m": {
+   "p50": 0.0049,
+   "p95": 0.0124,
+   "max": 0.0272
+  },
+  "dd_gt_5mm_share": 0.496
+ },
+ "real_data_base_epoch_prediction": {
+  "method": "predict each real base epoch t from the real epochs t-1 and t+1 (alpha 0.5, 2 s gap) and compare carrier phase with the epoch observed at t; between-satellite single difference against the highest satellite of the same system and observation type; el >= 15 deg; GLONASS and LLI-flagged rows excluded",
+  "results": {
+   "Odaiba": {
+    "develop": {
+     "rows": 46631,
+     "p50_m": 0.022,
+     "p95_m": 0.0527,
+     "p99_m": 0.0561,
+     "max_m": 0.0694,
+     "rows_gt_5cm": 5002
+    },
+    "v1_target_time_independent_ephemeris": {
+     "rows": 46631,
+     "p50_m": 0.0018,
+     "p95_m": 0.0059,
+     "p99_m": 0.0087,
+     "max_m": 0.0682,
+     "rows_gt_5cm": 20
+    },
+    "v2_target_time_one_ephemeris": {
+     "rows": 46631,
+     "p50_m": 0.0018,
+     "p95_m": 0.0059,
+     "p99_m": 0.0086,
+     "max_m": 0.0194,
+     "rows_gt_5cm": 0
+    }
+   },
+   "Shinjuku": {
+    "develop": {
+     "rows": 91270,
+     "p50_m": 0.0074,
+     "p95_m": 0.0591,
+     "p99_m": 0.0699,
+     "max_m": 0.0861,
+     "rows_gt_5cm": 10061
+    },
+    "v1_target_time_independent_ephemeris": {
+     "rows": 91270,
+     "p50_m": 0.0017,
+     "p95_m": 0.0055,
+     "p99_m": 0.0079,
+     "max_m": 0.4234,
+     "rows_gt_5cm": 42
+    },
+    "v2_target_time_one_ephemeris": {
+     "rows": 91270,
+     "p50_m": 0.0017,
+     "p95_m": 0.0055,
+     "p99_m": 0.0077,
+     "max_m": 0.0179,
+     "rows_gt_5cm": 0
+    }
+   }
+  }
+ },
+ "results_v2": {
+  "novatel-HKDeepUrban1-default": {
+   "ref": {
+    "epochs": 1014,
+    "sha": "e996c736ebd1"
+   },
+   "new": {
+    "epochs": 1014,
+    "sha": "e996c736ebd1"
+   }
+  },
+  "novatel-HKHarshUrban1-default": {
+   "ref": {
+    "epochs": 1146,
+    "sha": "b74a60827196"
+   },
+   "new": {
+    "epochs": 1146,
+    "sha": "2142c390d9c9"
+   }
+  },
+  "trimble-Odaiba-CD": {
+   "ref": {
+    "fix": 4338,
+    "missing": 1419,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 4.8543,
+    "fix3d_p50": 0.0446,
+    "recP95@0.5": 324.45,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "sha": "6da1c6516c39"
+   },
+   "new": {
+    "fix": 4265,
+    "missing": 1423,
+    "wrong>0.5/2/3": [
+     53,
+     0,
+     0
+    ],
+    "hP95": 4.8617,
+    "fix3d_p50": 0.0408,
+    "recP95@0.5": 324.61,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "sha": "7e7615ad0b06",
+    "ref_correct_lost": 130,
+    "ref_correct_lost_pct": 3.0
+   }
+  },
+  "trimble-Odaiba-age5d3": {
+   "ref": {
+    "fix": 4256,
+    "missing": 1480,
+    "wrong>0.5/2/3": [
+     157,
+     3,
+     0
+    ],
+    "hP95": 4.8963,
+    "fix3d_p50": 0.0456,
+    "recP95@0.5": 186.69,
+    "outages@0.5": 18,
+    "censored@0.5": false,
+    "sha": "bd1a5468fcfd"
+   },
+   "new": {
+    "fix": 4256,
+    "missing": 1480,
+    "wrong>0.5/2/3": [
+     121,
+     0,
+     0
+    ],
+    "hP95": 4.8981,
+    "fix3d_p50": 0.0418,
+    "recP95@0.5": 231.32,
+    "outages@0.5": 16,
+    "censored@0.5": false,
+    "sha": "f9363a30e0ad",
+    "ref_correct_lost": 91,
+    "ref_correct_lost_pct": 2.22
+   }
+  },
+  "trimble-Odaiba-default": {
+   "ref": {
+    "fix": 1298,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7772,
+    "fix3d_p50": 0.0348,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "400eb21f2295"
+   },
+   "new": {
+    "fix": 1298,
+    "missing": 1429,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7769,
+    "fix3d_p50": 0.0314,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "802877418568",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "trimble-Shinjuku-CD": {
+   "ref": {
+    "fix": 2845,
+    "missing": 3273,
+    "wrong>0.5/2/3": [
+     4,
+     0,
+     0
+    ],
+    "hP95": 8.3868,
+    "fix3d_p50": 0.0695,
+    "recP95@0.5": 768.39,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "sha": "ebf956f48839"
+   },
+   "new": {
+    "fix": 2842,
+    "missing": 3277,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "hP95": 8.3681,
+    "fix3d_p50": 0.0648,
+    "recP95@0.5": 768.29,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "sha": "326c9d26ae67",
+    "ref_correct_lost": 11,
+    "ref_correct_lost_pct": 0.39
+   }
+  },
+  "trimble-Shinjuku-age5d3": {
+   "ref": {
+    "fix": 1949,
+    "missing": 3332,
+    "wrong>0.5/2/3": [
+     13,
+     1,
+     1
+    ],
+    "hP95": 8.3432,
+    "fix3d_p50": 0.1247,
+    "recP95@0.5": 751.04,
+    "outages@0.5": 7,
+    "censored@0.5": true,
+    "sha": "cf6b3b4c5905"
+   },
+   "new": {
+    "fix": 1953,
+    "missing": 3317,
+    "wrong>0.5/2/3": [
+     23,
+     6,
+     6
+    ],
+    "hP95": 8.3662,
+    "fix3d_p50": 0.115,
+    "recP95@0.5": 742.92,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "sha": "d845fc7dfefb",
+    "ref_correct_lost": 112,
+    "ref_correct_lost_pct": 5.79
+   }
+  },
+  "trimble-Shinjuku-default": {
+   "ref": {
+    "fix": 122,
+    "missing": 3234,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.3821,
+    "fix3d_p50": 0.0471,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "392a7f1981a9"
+   },
+   "new": {
+    "fix": 122,
+    "missing": 3238,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.3662,
+    "fix3d_p50": 0.0512,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "6daad2c0c831",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Odaiba-CD": {
+   "ref": {
+    "fix": 854,
+    "missing": 921,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6999,
+    "fix3d_p50": 0.0346,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "sha": "de75adb177e1"
+   },
+   "new": {
+    "fix": 853,
+    "missing": 919,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6706,
+    "fix3d_p50": 0.0305,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "sha": "4f84c34838db",
+    "ref_correct_lost": 2,
+    "ref_correct_lost_pct": 0.23
+   }
+  },
+  "ublox-Odaiba-age5d3": {
+   "ref": {
+    "fix": 663,
+    "missing": 922,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 6.7021,
+    "fix3d_p50": 0.0359,
+    "recP95@0.5": 13.0,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "sha": "15d1bb6775aa"
+   },
+   "new": {
+    "fix": 664,
+    "missing": 919,
+    "wrong>0.5/2/3": [
+     3,
+     0,
+     0
+    ],
+    "hP95": 6.6706,
+    "fix3d_p50": 0.031,
+    "recP95@0.5": 13.16,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "sha": "fc88f9c8a3c7",
+    "ref_correct_lost": 17,
+    "ref_correct_lost_pct": 2.57
+   }
+  },
+  "ublox-Odaiba-default": {
+   "ref": {
+    "fix": 461,
+    "missing": 922,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.7021,
+    "fix3d_p50": 0.036,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "9dc7150d61b4"
+   },
+   "new": {
+    "fix": 461,
+    "missing": 920,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6742,
+    "fix3d_p50": 0.032,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "43eb370a4aad",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Shinjuku-CD": {
+   "ref": {
+    "fix": 16,
+    "missing": 2345,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8443,
+    "fix3d_p50": 0.0201,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "3fd1ec7dfaae"
+   },
+   "new": {
+    "fix": 16,
+    "missing": 2344,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8506,
+    "fix3d_p50": 0.017,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "df2c50c8d42a",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Shinjuku-age5d3": {
+   "ref": {
+    "fix": 1,
+    "missing": 2374,
+    "wrong>0.5/2/3": [
+     1,
+     1,
+     0
+    ],
+    "hP95": 5.7359,
+    "fix3d_p50": null,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": false,
+    "sha": "20c141509912"
+   },
+   "new": {
+    "fix": 20,
+    "missing": 2372,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.7476,
+    "fix3d_p50": 0.0682,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "fa3deb788911"
+   }
+  },
+  "ublox-Shinjuku-default": {
+   "ref": {
+    "fix": 1,
+    "missing": 2374,
+    "wrong>0.5/2/3": [
+     1,
+     1,
+     0
+    ],
+    "hP95": 5.7359,
+    "fix3d_p50": null,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": false,
+    "sha": "20c141509912"
+   },
+   "new": {
+    "fix": 20,
+    "missing": 2372,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.7476,
+    "fix3d_p50": 0.0682,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "fa3deb788911"
+   }
+  }
+ },
+ "results_v1_superseded": {
+  "novatel-HKDeepUrban1-default": {
+   "new": {
+    "epochs": 1014,
+    "sha": "e996c736ebd1"
+   }
+  },
+  "novatel-HKHarshUrban1-default": {
+   "new": {
+    "epochs": 1146,
+    "sha": "2142c390d9c9"
+   }
+  },
+  "trimble-Odaiba-CD": {
+   "new": {
+    "fix": 4264,
+    "missing": 1422,
+    "wrong>0.5/2/3": [
+     53,
+     0,
+     0
+    ],
+    "hP95": 4.8617,
+    "fix3d_p50": 0.0408,
+    "recP95@0.5": 324.61,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "sha": "fbc4029bfd02",
+    "ref_correct_lost": 131,
+    "ref_correct_lost_pct": 3.02
+   }
+  },
+  "trimble-Odaiba-age5d3": {
+   "new": {
+    "fix": 4256,
+    "missing": 1480,
+    "wrong>0.5/2/3": [
+     121,
+     0,
+     0
+    ],
+    "hP95": 4.8981,
+    "fix3d_p50": 0.0418,
+    "recP95@0.5": 231.32,
+    "outages@0.5": 16,
+    "censored@0.5": false,
+    "sha": "0e006700ea98",
+    "ref_correct_lost": 91,
+    "ref_correct_lost_pct": 2.22
+   }
+  },
+  "trimble-Odaiba-default": {
+   "new": {
+    "fix": 1298,
+    "missing": 1428,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7769,
+    "fix3d_p50": 0.0314,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "29ec7b4094cd",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "trimble-Shinjuku-CD": {
+   "new": {
+    "fix": 2842,
+    "missing": 3271,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "hP95": 8.3808,
+    "fix3d_p50": 0.0648,
+    "recP95@0.5": 768.29,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "sha": "8cb077e1ea03",
+    "ref_correct_lost": 11,
+    "ref_correct_lost_pct": 0.39
+   }
+  },
+  "trimble-Shinjuku-age5d3": {
+   "new": {
+    "fix": 1953,
+    "missing": 3311,
+    "wrong>0.5/2/3": [
+     23,
+     6,
+     6
+    ],
+    "hP95": 8.376,
+    "fix3d_p50": 0.115,
+    "recP95@0.5": 742.92,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "sha": "ee1d0db6878a",
+    "ref_correct_lost": 112,
+    "ref_correct_lost_pct": 5.79
+   }
+  },
+  "trimble-Shinjuku-default": {
+   "new": {
+    "fix": 122,
+    "missing": 3232,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.376,
+    "fix3d_p50": 0.0512,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "c0772c2e0fc2",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Odaiba-CD": {
+   "new": {
+    "fix": 853,
+    "missing": 919,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6706,
+    "fix3d_p50": 0.0305,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "sha": "1de46a790ac1",
+    "ref_correct_lost": 2,
+    "ref_correct_lost_pct": 0.23
+   }
+  },
+  "ublox-Odaiba-age5d3": {
+   "new": {
+    "fix": 664,
+    "missing": 919,
+    "wrong>0.5/2/3": [
+     3,
+     0,
+     0
+    ],
+    "hP95": 6.6706,
+    "fix3d_p50": 0.031,
+    "recP95@0.5": 13.16,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "sha": "979bb73efefb",
+    "ref_correct_lost": 17,
+    "ref_correct_lost_pct": 2.57
+   }
+  },
+  "ublox-Odaiba-default": {
+   "new": {
+    "fix": 461,
+    "missing": 920,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6742,
+    "fix3d_p50": 0.032,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "09032dd5087b",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Shinjuku-CD": {
+   "new": {
+    "fix": 16,
+    "missing": 2347,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8509,
+    "fix3d_p50": 0.017,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "9e36fadc7878",
+    "ref_correct_lost": 0,
+    "ref_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Shinjuku-age5d3": {
+   "new": {
+    "fix": 20,
+    "missing": 2375,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.7492,
+    "fix3d_p50": 0.0682,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "b3bfc5a2e46f"
+   }
+  },
+  "ublox-Shinjuku-default": {
+   "new": {
+    "fix": 20,
+    "missing": 2375,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.7492,
+    "fix3d_p50": 0.0682,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "sha": "b3bfc5a2e46f"
+   }
+  }
+ },
+ "gate_v2_default_recipe": {
+  "trimble-Odaiba-default": {
+   "wrong_not_increased": true,
+   "ref_correct_loss_le_1pct": true,
+   "missing_not_increased": false,
+   "hP95_not_increased": true,
+   "recovery_p95_not_increased": true,
+   "censoring_not_increased": true
+  },
+  "trimble-Shinjuku-default": {
+   "wrong_not_increased": true,
+   "ref_correct_loss_le_1pct": true,
+   "missing_not_increased": false,
+   "hP95_not_increased": true,
+   "recovery_p95_not_increased": true,
+   "censoring_not_increased": true
+  },
+  "ublox-Odaiba-default": {
+   "wrong_not_increased": true,
+   "ref_correct_loss_le_1pct": true,
+   "missing_not_increased": true,
+   "hP95_not_increased": true,
+   "recovery_p95_not_increased": true,
+   "censoring_not_increased": true
+  },
+  "ublox-Shinjuku-default": {
+   "wrong_not_increased": true,
+   "ref_correct_loss_le_1pct": true,
+   "missing_not_increased": true,
+   "hP95_not_increased": false,
+   "recovery_p95_not_increased": true,
+   "censoring_not_increased": false
+  },
+  "novatel-HK-byte-identical": {
+   "HKDeepUrban1": true,
+   "HKHarshUrban1": false
+  }
+ },
+ "mechanism_v2_trimble_age5d3_accepted_ar": {
+  "Odaiba ref correct": {
+   "ar_fix": 3153,
+   "cost_per_pair_p50": 4.73,
+   "max_abs_z_p50": 4.02,
+   "any_abs_z_gt3": 0.62,
+   "pairs_p50": 19.0
+  },
+  "Odaiba ref wrong": {
+   "ar_fix": 83,
+   "cost_per_pair_p50": 77.09,
+   "max_abs_z_p50": 10.2,
+   "any_abs_z_gt3": 0.88,
+   "pairs_p50": 6.0
+  },
+  "Odaiba new correct": {
+   "ar_fix": 3189,
+   "cost_per_pair_p50": 4.44,
+   "max_abs_z_p50": 3.99,
+   "any_abs_z_gt3": 0.6,
+   "pairs_p50": 19.0
+  },
+  "Odaiba new wrong": {
+   "ar_fix": 48,
+   "cost_per_pair_p50": 76.81,
+   "max_abs_z_p50": 10.78,
+   "any_abs_z_gt3": 0.88,
+   "pairs_p50": 6.0
+  },
+  "Shinjuku ref correct": {
+   "ar_fix": 977,
+   "cost_per_pair_p50": 64.31,
+   "max_abs_z_p50": 6.57,
+   "any_abs_z_gt3": 0.92,
+   "pairs_p50": 14.0
+  },
+  "Shinjuku ref wrong": {
+   "ar_fix": 9,
+   "cost_per_pair_p50": 24.42,
+   "max_abs_z_p50": 6.6,
+   "any_abs_z_gt3": 0.67,
+   "pairs_p50": 8.0
+  },
+  "Shinjuku new correct": {
+   "ar_fix": 971,
+   "cost_per_pair_p50": 68.44,
+   "max_abs_z_p50": 6.21,
+   "any_abs_z_gt3": 0.93,
+   "pairs_p50": 14.0
+  },
+  "Shinjuku new wrong": {
+   "ar_fix": 19,
+   "cost_per_pair_p50": 17.3,
+   "max_abs_z_p50": 6.6,
+   "any_abs_z_gt3": 0.79,
+   "pairs_p50": 8.0
+  }
+ },
+ "wrong_fix_episodes_v2_trimble_gt_0.5m": {
+  "Odaiba default ref": {
+   "episodes": 0,
+   "longest_epochs": 0
+  },
+  "Odaiba default new": {
+   "episodes": 0,
+   "longest_epochs": 0
+  },
+  "Odaiba age5d3 ref": {
+   "episodes": 37,
+   "longest_epochs": 42
+  },
+  "Odaiba age5d3 new": {
+   "episodes": 23,
+   "longest_epochs": 41
+  },
+  "Odaiba CD ref": {
+   "episodes": 4,
+   "longest_epochs": 2
+  },
+  "Odaiba CD new": {
+   "episodes": 3,
+   "longest_epochs": 50
+  },
+  "Shinjuku default ref": {
+   "episodes": 0,
+   "longest_epochs": 0
+  },
+  "Shinjuku default new": {
+   "episodes": 0,
+   "longest_epochs": 0
+  },
+  "Shinjuku age5d3 ref": {
+   "episodes": 8,
+   "longest_epochs": 4
+  },
+  "Shinjuku age5d3 new": {
+   "episodes": 9,
+   "longest_epochs": 7
+  },
+  "Shinjuku CD ref": {
+   "episodes": 3,
+   "longest_epochs": 2
+  },
+  "Shinjuku CD new": {
+   "episodes": 5,
+   "longest_epochs": 4
+  }
+ },
+ "truth_dd_steps_odaiba": {
+  "method": "scratch dd_truth: per signal, DD of (phase - modeled range) at the 1 Hz base epochs, rover range from the reference trajectory (analysis only), transmit time from the measured pseudorange; fixed reference = most-present satellite (el >= 15 deg); GLONASS excluded. Step = median of the next 5 s minus median of the previous 5 s at a > 0.3 cycle change.",
+  "persistent_steps_ge_0.85_cycle_whole": {
+   "event_times": 11,
+   "solver_logged_lli_or_reset_in_same_1s": 9,
+   "no_detector_fired": [
+    "C04 B2I +1 cycle at TOW 273595",
+    "C04 B2I -1 cycle at TOW 273604"
+   ]
+  },
+  "transient_steps_lt_0.15_cycle_after_5s": 10,
+  "note": "The base interpolation error is zero at base epochs, so this 1 Hz analysis cannot see it."
+ },
+ "decision": "NO_GO for a default change (frozen gate missed on Trimble missing +3/+4, u-blox Shinjuku hP95 +1.2 cm, HK Harsh not byte-identical). Shipped as opt-in gnss_solve --base-interp-curvature (interpolateBaseEpoch model_range_at_target); default byte-identical to develop 66383b5.",
+ "opt_in_byte_identity": {
+  "runs": 14,
+  "flag_off_equals_develop_pos": true,
+  "flag_on_equals_v2_pos": true,
+  "note": "same argv as the evaluation, including --lambda-shadow-candidates 2 --debug-epoch-log on age5d3"
+ }
+}
