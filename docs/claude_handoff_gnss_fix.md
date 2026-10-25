@@ -39,7 +39,8 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 ## 読む順序
 
 1. [AGENTS.md](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
-1. [長期lockの過信](rtk_long_lock_overconfidence.md) / [JSON](urbannav_long_lock_overconfidence.json): 最新（挙動変更なし）。10 Hz真値DD（採点・解析専用）で位相誤差の振幅はモデル通り（6–9 mm）だが約3秒の相関と遅い成分、コードは中心はモデル通りで裾が重い（3σ超7%）。10 Hzの白色扱い（凍結予測の1 Hz間引き試験で棄却）、電離層、コードの裾のいずれも主因ではない。次はフィルタ内部（kinematic再seedによる位置/ambiguity相関の喪失、コード由来の初期化、参照衛星切替）。
+1. [max position jumpの動き補正](rtk_max_position_jump_motion.md) / [JSON](urbannav_max_position_jump_motion_evaluation.json): 最新。CDが失う正FIX（Odaiba 37）は全て動き不感の `max_position_jump`（5秒アンカー×5 m）。opt-in `--max-position-jump-motion-compensation`（Dと同じ伝播規則、新閾値なし）で30を回復。M単独は凍結ゲートの列挙項目を全Tokyoで満たす（u-blox Odaiba FIX 461→617、誤FIX 0）が「誤FIXの減少」条項は満たさず既定はメンテナ判断。CDRI（CD+R+I）は誤FIXが増えNO_GO。CDの残る誤FIX 10件はFIX連続区間末尾の0.07–0.15 m/epochのドリフト（Doppler再anchorで未検出）。
+1. [長期lockの過信](rtk_long_lock_overconfidence.md) / [JSON](urbannav_long_lock_overconfidence.json): その前（挙動変更なし）。10 Hz真値DD（採点・解析専用）で位相誤差の振幅はモデル通り（6–9 mm）だが約3秒の相関と遅い成分、コードは中心はモデル通りで裾が重い（3σ超7%）。10 Hzの白色扱い（凍結予測の1 Hz間引き試験で棄却）、電離層、コードの裾のいずれも主因ではない。次はフィルタ内部（kinematic再seedによる位置/ambiguity相関の喪失、コード由来の初期化、参照衛星切替）。
 1. [基地局補間の曲率](rtk_base_interpolation_curvature.md) / [JSON](urbannav_base_interpolation_evaluation.json): その前。`interpolateBaseEpoch()` がモデル距離まで線形補間し、1 Hz基地局の距離曲率（DD p95 1.2 cm）を落としていた不具合を、opt-in `--base-interp-curvature` として修正（**既定は不変**）。固定ゲートは雑音レベルの差（欠損+3/+4、u-blox Shinjuku P95 +1.2 cm、HK Harsh）で不合格。Qbの過信の主因ではない。
 1. [heroクリップのFIX](rtk_hero_clip_fix.md) / [JSON](urbannav_hero_clip_fix_evaluation.json): その前。PR #639のGIFでLOSが多いのにFIXしない理由と、u-blox holdoutでの検証。
 1. [整数一貫性の診断](rtk_ambiguity_consistency_diagnostics.md) / [JSON](urbannav_ambiguity_consistency_diagnostics.json): その前（挙動変更なし）。
