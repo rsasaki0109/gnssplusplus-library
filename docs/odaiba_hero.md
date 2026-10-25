@@ -8,16 +8,43 @@ recentered independently in separate panes.
 ## Legend and measurements
 
 - **White dashed:** Ground Truth (Applanix reference).
-- **Mint solid:** libgnss++. Mint and white overlap where the estimate agrees
-  with the reference; their horizontal coordinates are never offset for legibility.
+- **Mint solid:** libgnss++ with an **opt-in recipe, not the default solver**
+  (see below). Mint and white overlap where the estimate agrees with the
+  reference; their horizontal coordinates are never offset for legibility.
 - **Orange solid:** RTKLIB `demo5 b34k`.
 
 The legend shows each method's current solution state and horizontal error for the
 same reference epoch (within 1 ms timestamp tolerance), plus its median horizontal error over the
 **same 171 exactly matched reference/solver epochs**. Selected-window median H is
-**0.21 m for libgnss++ versus 7.50 m for RTKLIB**; P95 is 0.65 versus 9.86 m.
-The native solution is mostly FLOAT here: solver status and actual reference error
-are separate measurements.
+**0.02 m for libgnss++ versus 7.50 m for RTKLIB**; P95 is 0.65 versus 9.86 m.
+In the window, libgnss++ reports 151 FIXED, 38 FLOAT and two SPP epochs; every
+FIXED epoch is within 0.49 m 3D of the reference (median 2.1 cm).
+
+### Why the libgnss++ track uses an opt-in recipe
+
+With default settings the native solver stays FLOAT through this clip (189
+FLOAT, two SPP; median H 0.21 m), although the zenith inset shows a clear sky.
+Two motion-blind checks reject every integer candidate. One compares it with a
+FIX about three minutes and 400 m old. The other limits consecutive fixes to
+0.2 m apart, which rejects any speed above 2 m/s at 10 Hz. The analysis and the
+full-drive evaluation are in [the hero-clip investigation (PR #645)](https://github.com/rsasaki0109/gnssplusplus-library/pull/645).
+
+The GIF therefore shows `gnss_solve` with
+`--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3
+--low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10
+--fix-history-motion-compensation`. The legend labels it **"libgnss++ (opt-in)
+· not default settings"**. This recipe is **not adopted as the default**. On the
+complete Trimble drives it adds 6 (Odaiba) and 4 (Shinjuku) wrong FIX epochs at
+0.5–2 m, where the default has none, and loses 2.9% of Odaiba's default-correct
+FIX epochs. On the independent u-blox recording of both drives it has no wrong
+FIX. Full run on Odaiba: 4,338 FIX epochs versus 1,298, horizontal P95 4.854 m
+versus 4.777 m.
+
+The brief `NO SOLUTION` at about TOW 273710 is a real reception loss. The
+rover drops from 21 to 8 reported satellites, with carrier phase on about six.
+At that point the OpenStreetMap layer shows a structure crossing the road,
+consistent with an elevated deck. The PLATEAU building model does not include
+it, so the inset still predicts LOS there.
 
 ## Explicitly selected showcase
 
@@ -35,8 +62,10 @@ The choice is reproducible with `prepare_trace.py --select-showcase`:
    with the earliest start. These filters and the ranking deliberately favor
    showing the native solver's advantage; the full-run results remain linked below.
 
-This selects GPS week **2032**, TOW **273700.0–273720.0 s**. There are 201 reference
-samples, 191 native solutions (189 FLOAT, two SPP), and 173 RTKLIB solutions
+This selects GPS week **2032**, TOW **273700.0–273720.0 s**. The window was
+selected from the default-solver output and kept fixed (`--start-tow 273700`)
+when the opt-in trace was rendered; it was not reselected. There are 201 reference
+samples, 191 native solutions (151 FIXED, 38 FLOAT, two SPP), and 173 RTKLIB solutions
 (101 FLOAT, 72 DGPS). Missing positions remain missing. Gaps over 0.5 s are never
 joined, and a missing current position is labelled `NO SOLUTION`; no gap filling,
 error scaling, or horizontal shifts are used.
@@ -60,6 +89,63 @@ The measured trace, heading, errors and selection criteria are retained in
 [odaiba_hero_basemap.png](odaiba_hero_basemap.png), assembled from 20 zoom-18 tiles.
 Input/solution hashes, full-run results and rendering details are in
 [odaiba_hero_provenance.json](odaiba_hero_provenance.json).
+
+## Ground Truth zenith and model LOS/NLOS
+
+The inset is a **synthetic, north-up, 180° equidistant fisheye**, not recorded
+camera footage. Each of the 201 reference epochs has its own building silhouette
+and satellite annotations; the street and sky views use the exact same reference
+epoch. The sky origin is the published reference **ECEF point and height**, not
+the street visualization's flattened display plane.
+
+The displayed population is a **fixed set of 32 satellites reported at least
+once during the selected clip**. Every satellite is propagated from broadcast
+navigation at **every Ground Truth epoch**, independently of whether the receiver
+reported an observation then. It is not the complete broadcast constellation.
+A missing RINEX sample never makes a modeled LOS or NLOS satellite disappear.
+An actual horizon crossing may remove a satellite in other clips; all 32 remain
+above the horizon throughout this recorded interval. Missing ephemerides cause
+preparation to fail instead of silently dropping an ID.
+
+The native library's `NavigationData::calculateSatelliteState`, `calculateGeometry`
+and `visibility::projFisheye` compute the positions and ideal fisheye projection.
+There are **6,432 geometry records** (32 × 201), with **4,711 reported observations**
+and 1,721 unreported samples. The independent `observed` flag retains that fact.
+An ID suffix **`*`** means no RINEX sample at this epoch; the marker and its
+geometric LOS/NLOS color remain visible. The **Rx** counter counts reported
+RINEX observations, separately from the geometric LOS/NLOS counts. It does not
+claim tracking status or selection in either solver's final solution.
+
+- **Green filled dot — model LOS:** no building hit along the eligible ray.
+- **Red × — model NLOS:** a modeled building intersects that ray.
+- **Gray hollow dot — unassessed:** elevation below 10° or an unhealthy ephemeris.
+
+The model uses 115 most-detailed LOD2 tiles (349,853 triangles) from the official
+2025 **Minato, Koto, Chuo and Shinagawa** datasets around the entire route, rather
+than just the tiles visible to the street camera. Draco meshes, glTF node
+transforms, Y-up/Z-up conversion and `CESIUM_RTC` offsets are decoded before
+raycasting in a local ENU frame. Decoded heights are checked against the published
+model envelope. Raycasting uses a 2 km limit; the maximum model height and 10°
+elevation cutoff are checked to ensure that a taller modeled building beyond that
+range cannot change an assessed ray. The sky image and direct satellite rays are
+computed independently and checked for agreement away from silhouette edges.
+
+These are **model predictions**, not measured or ground-truth LOS/NLOS labels.
+They omit unmodeled objects (including trees), other model domains, radio
+reflections and multipath. No unprovided antenna lever arm is inferred; the origin
+is the published reference point. A clear modeled ray does not establish a clean
+received signal. Both the model and map are newer than the drive.
+**Neither solver used these annotations.** The inset supplies geometric context,
+not a causal explanation for the error difference or a 3D-aided solver claim.
+
+The frozen atlas and exact-time satellite metadata are
+[odaiba_hero_sky.png](odaiba_hero_sky.png) and
+[odaiba_hero_sky.json](odaiba_hero_sky.json). Metadata records the fixed cohort, independent observation flags, per-ray status,
+intersection distance, model URLs/hashes and preparation inputs. Rendering rejects
+mismatched trace/atlas hashes or an obsolete observation-filtered schema instead
+of reusing a stale sky view. `python3 tests/test_readme_hero_satellites.py -v`
+checks the real C04 observation-loss regression and the complete clip continuity;
+the same tests are registered under the CTest `core` label.
 
 ## Re-render the recorded trace
 
@@ -93,8 +179,9 @@ byte-identical across browser versions. The raw trace snapshot is deterministic.
 Build `gnss_solve` using the repository's normal CMake instructions. Build
 RTKLIB `demo5 b34k` at commit `55a0f2c742a605a3d27a90b17556b2cfdf98ad50`
 from [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB).
-The tested libgnss++ solver sources are the `develop` base
-`a40998e2f8e7f312ef9f6b4a21b3eb8b52350330`; this PR changes no solver code.
+The opt-in flag `--fix-history-motion-compensation` is added by PR #645
+(tested at `2c1e7cf`); the other flags already exist on `develop`. This
+visualization PR changes no solver code.
 
 ```bash
 # Reads only the four required members, not the entire 4.45 GB ZIP.
@@ -121,6 +208,32 @@ python scripts/readme_hero/prepare_trace.py \
   --output output/readme-hero/trace.json
 ```
 
+The rendered GIF replaces the native track with the opt-in recipe for the same
+fixed window (the native argv is the benchmark's plus the recipe flags):
+
+```bash
+recipe="--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 \
+  --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 \
+  --fix-history-motion-compensation"
+build/apps/gnss_solve --rover data/driving/Tokyo_Data/Odaiba/rover_trimble.obs \
+  --base data/driving/Tokyo_Data/Odaiba/base_trimble.obs \
+  --nav data/driving/Tokyo_Data/Odaiba/base.nav --mode kinematic --glonass-ar off \
+  --base-ecef -3961904.9530 3348993.7578 3698211.7553 --no-kml \
+  --out output/readme-hero/libgnss-cd.pos $recipe
+python scripts/readme_hero/prepare_trace.py \
+  --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv \
+  --lib-pos output/readme-hero/libgnss-cd.pos \
+  --rtklib-pos output/readme-hero/rtklib.pos \
+  --start-tow 273700 --duration 20 --lib-recipe "$recipe" \
+  --output docs/odaiba_hero_trace.json
+python scripts/readme_hero/prepare_sky.py --satellites output/readme-hero/satellites.csv
+```
+
+Without the recipe flags the same argv reproduces the default `libgnss.pos`
+byte-identically (SHA-256 `400eb21f…`), and RTKLIB reproduces `rtklib.pos`
+(`00df30b0…`). The sky atlas regenerates byte-identically; only its bound trace
+hash changes. `--lib-recipe` only labels the legend and records the flags.
+
 Both solvers read the same rover/base/navigation files and use the same surveyed
 base ECEF coordinate `(-3961904.9530, 3348993.7578, 3698211.7553)` m.
 The default profile and GLONASS AR off match the existing Odaiba benchmark.
@@ -130,13 +243,49 @@ reference epochs; both window selection and all displayed errors are checked. Fu
 window is illustrative; see [benchmarks](benchmarks.md) for the full context,
 matching populations and limitations.
 
+## Rebuild the zenith assets (optional)
+
+Normal re-rendering uses the frozen atlas and needs no geometry engine. To
+recalculate the sky from the same public inputs, first run the native build and
+input-download steps above. These preparation-only dependencies were tested:
+
+```bash
+python -m pip install trimesh==5.2.0 embreex==4.4.0.post1 DracoPy==2.2.0
+
+# Point this at Eigen as used by the native build; commonly /usr/include/eigen3.
+hero_eigen_include=/workspace/scratch/gnss-deps/include/eigen3
+c++ -std=c++20 -O2 -Iinclude -I"$hero_eigen_include" \
+  scripts/readme_hero/satellite_geometry.cpp \
+  src/visibility/fisheye_camera.cpp src/visibility/proj_fisheye.cpp \
+  build/libgnss_lib.a build/libgnss_rtk_runtime.a build/libgnss_lib.a \
+  build/third_party/ginan-iers2010/libginan_iers2010.a \
+  build/third_party/sofa/libsofa.a -o output/readme-hero/satellite_geometry
+
+output/readme-hero/satellite_geometry \
+  data/driving/Tokyo_Data/Odaiba/base.nav \
+  data/driving/Tokyo_Data/Odaiba/rover_trimble.obs \
+  data/driving/Tokyo_Data/Odaiba/reference.csv \
+  273700 273720 output/readme-hero/satellites.csv
+
+python scripts/readme_hero/prepare_sky.py \
+  --satellites output/readme-hero/satellites.csv
+```
+
+The preparation uses the inherited proxy and TLS trust, retains content hashes,
+and caches public model tiles under ignored `output/readme-hero/resource-cache`.
+The helper build command matches the tested native, non-GTSAM Linux build. No
+OpenCV installation is needed: the existing native camera/projection code is
+compiled directly, and building visibility is tested with triangle rays.
+After rebuilding the atlas, run the normal GIF-rendering command above.
+
 ## Sources and attribution
 
 - Drive/reference: [UrbanNavDataset](https://github.com/IPNL-POLYU/UrbanNavDataset#tokyo-dataset),
   public Tokyo archive linked by the upstream project. Raw data is downloaded to
   ignored `data/`; it is not added to this PR.
 - Buildings: **国土交通省 Project PLATEAU**, 港区 2025 建築物モデル LOD2,
-  rendered with a uniform color. The exact tileset URL is in the trace and provenance;
+  rendered with a uniform color in the street view; the zenith also uses the neighboring
+  江東区・中央区・品川区 2025 models. Exact tileset URLs are in the trace/sky metadata;
   discover datasets through the [official catalog](https://api.plateauview.mlit.go.jp/datacatalog/plateau-datasets).
   See the [PLATEAU site policy](https://www.mlit.go.jp/plateau/site-policy/).
 - Map image: **© OpenStreetMap contributors**,

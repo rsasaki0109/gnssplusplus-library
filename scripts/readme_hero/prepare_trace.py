@@ -31,6 +31,11 @@ choice.add_argument(
     help="Select a favorable illustrative window; not an unbiased benchmark",
 )
 p.add_argument("--duration", type=float, default=20)
+p.add_argument(
+    "--lib-recipe",
+    default="",
+    help="Non-default gnss_solve flags used for --lib-pos; shown in the legend",
+)
 template = json.loads(
     (Path(__file__).resolve().parents[2] / "docs/odaiba_hero_trace.json").read_text()
 )
@@ -212,6 +217,8 @@ result = {
         },
     },
 }
+if a.lib_recipe:
+    result["libgnssRecipe"] = a.lib_recipe
 a.output.parent.mkdir(parents=True, exist_ok=True)
 a.output.write_text(json.dumps(result, separators=(",", ":")) + "\n")
 print(f"Saved {a.output}: TOW {a.start_tow}–{a.start_tow+a.duration}; {metrics}")

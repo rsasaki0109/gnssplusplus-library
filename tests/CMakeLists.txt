@@ -5,6 +5,10 @@ cmake_minimum_required(VERSION 3.10)
 find_package(GTest REQUIRED)
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
+add_test(NAME python_readme_hero_satellite_tests
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_readme_hero_satellites.py)
+set_tests_properties(python_readme_hero_satellite_tests PROPERTIES LABELS core)
+
 add_test(NAME python_cli_argument_sequencing_tests
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test_cli_argument_sequencing.py)
 add_test(NAME python_gsdc_native_output_audit_tests
