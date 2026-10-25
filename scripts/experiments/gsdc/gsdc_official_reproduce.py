@@ -6,7 +6,7 @@ Backs the ``gnss reproduce gsdc-official`` lane.  The recipe
 test drives, the input files (SHA-256), the exact ``gnss_fgo_imu_no_base`` argv
 and the SHA-256 of the solution the research run wrote.  Nothing here talks to
 Kaggle: the gate is the SHA-256 of the assembled ``submission.csv`` (the file
-submitted as Kaggle ref 57619467); the Kaggle score is a readback record only.
+submitted as Kaggle ref 57629197); the Kaggle score is a readback record only.
 Every drive, stage-0 run and height map is pinned to one Linux GCC build;
 MSVC outputs of the same drives differ by up to 0.08 m.
 
@@ -33,6 +33,12 @@ Subcommands, in lane order:
 
 ``run`` is resumable: a drive whose ``run.json`` records exit 0 and whose
 ``solution.csv`` still has the recorded SHA-256 is skipped.
+
+A drive with an ``input_window`` (taroz ``settings_test.csv`` IdxStart) is
+solved from that epoch: ``run`` first writes its Android GNSS rows from the
+window epoch and its IMU rows from ``imu_lead_ms`` earlier (raw lines, SHA-256
+pinned) under the work dir, and ``assemble`` fills the official keys before
+the first native row with that row, as taroz ``submission.m`` does.
 """
 
 from __future__ import annotations
@@ -234,6 +240,38 @@ def completed(record_path: Path, solution: Path) -> dict[str, Any] | None:
     return record
 
 
+def _row_utc_ms(line: str, column: int) -> int | None:
+    row = next(csv.reader([line]))
+    value = row[column] if len(row) > column else ""
+    return int(float(value)) if value else None
+
+
+def prepare_input_window(entry: Mapping[str, Any], context: Mapping[str, str]) -> int:
+    """Write the windowed Android GNSS/IMU inputs of ``entry``; return the window start (UnixTimeMillis)."""
+    window = entry["input_window"]
+    root = Path(context["gsdc_root"])
+    with (root / window["gnss"]["from"]).open(newline="", encoding="utf-8") as stream:
+        column = next(csv.reader([stream.readline()])).index("utcTimeMillis")
+        epochs = sorted({utc for utc in (_row_utc_ms(line, column) for line in stream) if utc is not None})
+    start = epochs[window["first_epoch_index"]]
+    for part, cut in (("gnss", start), ("imu", start - window["imu_lead_ms"])):
+        spec = window[part]
+        out = Path(render(spec["to"], context))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with (root / spec["from"]).open(newline="", encoding="utf-8") as stream, \
+                out.open("w", newline="", encoding="utf-8") as sink:
+            header = stream.readline()
+            sink.write(header)
+            column = next(csv.reader([header])).index("utcTimeMillis")
+            for line in stream:
+                utc = _row_utc_ms(line, column)
+                if utc is not None and utc >= cut:
+                    sink.write(line)
+        if sha256_file(out) != spec["sha256"]:
+            raise SystemExit(f"{entry['id']}: windowed {part} input {out} does not match its pinned SHA-256")
+    return start
+
+
 def map_is_pinned(recipe: Mapping[str, Any], drive_id: str, context: Mapping[str, str]) -> bool:
     spec = recipe["height_maps"]["maps"].get(drive_id)
     if spec is None:
@@ -307,6 +345,10 @@ def command_run(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int:
             print(f"{label}: would run\n  " + subprocess.list2cmdline([render(i, context) for i in entry["argv"]]))
             continue
         else:
+            if entry.get("input_window"):
+                start = prepare_input_window(entry, context)
+                print(f"{label}: inputs windowed from epoch {entry['input_window']['first_epoch_index']} "
+                      f"(UnixTimeMillis {start})", flush=True)
             print(f"{label}: running (research wall {entry['research_source']['record_wall_s']} s)", flush=True)
             record = run_drive(entry, context, env)
             record_path.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
@@ -444,10 +486,12 @@ def assemble_rows(
     """Return submission rows in official key order and the source of each drive.
 
     Missing drives are an error unless ``fallback`` (the reference submission)
-    supplies them, which only a partial ``--allow-partial`` check uses.
+    supplies them, which only a partial ``--allow-partial`` check uses.  A drive
+    with an ``input_window`` takes its first native row for the keys before it.
     """
     rows: list[list[str]] = []
     sources: dict[str, str] = {}
+    windowed = {entry["id"] for entry in recipe["drives"] if entry.get("input_window")}
     for trip, runs in recipe["keys"]["runs"].items():
         path = solutions.get(trip)
         if path is not None and Path(path).is_file():
@@ -458,10 +502,11 @@ def assemble_rows(
             sources[trip] = "reference"
         else:
             raise SystemExit(f"assemble: no solution for {trip}")
+        first = min(native) if trip in windowed and sources[trip] == "native" and native else None
         for key in expand_keys(runs):
-            if key not in native:
+            if key not in native and (first is None or key > first):
                 raise SystemExit(f"assemble: {trip} has no native row for UnixTimeMillis {key}")
-            lat, lon = native[key]
+            lat, lon = native.get(key) or native[first]
             rows.append([trip, str(key), lat, lon])
     return rows, sources
 

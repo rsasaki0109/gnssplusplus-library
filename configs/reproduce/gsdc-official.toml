@@ -1,5 +1,5 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57619467, Private 0.844 m / Public 0.885 m, 40 drives, 71,936 rows
+# Kaggle ref 57629197, Private 0.844 m / Public 0.850 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
@@ -29,7 +29,8 @@
 #           56625084) and 14 height-map/relative-height drives retained
 #           from 56536540, with the per-drive flags added or removed by
 #           57585127, 57586667, 57590194, 57594243 and 57600830
-#           (57619467 reruns them unchanged on one build);
+#           (57619467 reruns them unchanged on one build; 57626255 solves
+#           ebf-x Mi8 from the taroz IdxStart epoch, see input_window);
 #   assemble on the official key list (Kaggle sample_submission order).
 # Stage 0 is skipped for a drive whose height map is already present with
 # the pinned SHA-256, and every run step resumes from completed drives.
@@ -42,7 +43,7 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.844 m / Public 0.885 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.844 m / Public 0.850 m; 40 drives, 71,936 rows"
 runtime_estimate = "~1.5 h four at a time on 4 cores; up to ~6.5 h one at a time"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -117,7 +118,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57619467 (c46ca65f...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57629197 (f19acb58...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -173,5 +174,9 @@ readme = "reported"
 # 86d1e81 links the same binary): the full lane ran on one build, four
 # replays at a time (25 stage-0 runs, 25 height maps, 40 final drives, ~1.5 h
 # on 4 cores); the 9 GCC final drives and 8 GCC stage-0 runs of 57600830 came
-# out byte-identical, and the assembled file was submitted as 57619467. See
-# docs/reproduce.md.
+# out byte-identical, and the assembled file was submitted as 57619467.
+# Recipe update to ref 57626255 (same build): ebf-x Mi8 runs on inputs
+# windowed from epoch 599 (taroz IdxStart=600) with source TDCP metre sigma
+# and Phase184 Huber; assemble fills its 599 leading keys from the first
+# native row. The lane-built file was submitted as 57629197 (57626255 had
+# dropped trailing zeros in 284 rows). See docs/reproduce.md.
