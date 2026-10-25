@@ -64,6 +64,9 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(last_ar_ratio_)
     GNSSPP_RTK_TEST_MEMBER(last_num_fixed_ambiguities_)
     GNSSPP_RTK_TEST_MEMBER(doppler_history_time_)
+    GNSSPP_RTK_TEST_MEMBER(last_doppler_velocity_ecef_)
+    GNSSPP_RTK_TEST_MEMBER(last_doppler_velocity_time_)
+    GNSSPP_RTK_TEST_MEMBER(has_last_doppler_velocity_)
     GNSSPP_RTK_TEST_MEMBER(has_doppler_history_time_)
     GNSSPP_RTK_TEST_MEMBER(doppler_history_base_time_)
     GNSSPP_RTK_TEST_MEMBER(has_doppler_history_base_time_)
@@ -358,6 +361,40 @@ TEST(RTKHoldAmbiguityUpdateTest, LegacyHoldOverwritesInsteadOfConditioningTheSta
         EXPECT_DOUBLE_EQ(legacy.covariance(index[i + 1], 0), 0.0);
         EXPECT_NE(expected_covariance(index[i + 1], 0), 0.0);
     }
+}
+
+TEST(RTKFixHistoryJumpTest, MotionCompensationKeepsConsistentMovingFixes) {
+    // At 6 m/s and 10 Hz a correct next FIX is 0.6 m from the previous one.
+    // The stationary 0.2 m history check rejects it after three consecutive
+    // fixes; propagating the previous FIX by the Doppler velocity accepts it
+    // and still rejects a candidate 0.5 m off that motion.
+    const Vector3d base(6378137.0, 0.0, 0.0);
+    const GNSSTime previous(2032, 273700.0);
+    const GNSSTime now(2032, 273700.1);
+    auto check = [&](bool compensate, double along_track_m) {
+        RTKProcessor processor;
+        auto config = processor.getRTKConfig();
+        config.fix_history_motion_compensation = compensate;
+        processor.setRTKConfig(config);
+        processor.setBasePosition(base);
+        Peer::has_fixed_solution_(processor) = true;
+        Peer::fixed_baseline_(processor) = Vector3d(0.0, along_track_m, 0.0);
+        Peer::last_fixed_position_(processor) = base;
+        Peer::has_last_fixed_position_(processor) = true;
+        Peer::last_fixed_time_(processor) = previous;
+        Peer::has_last_fixed_time_(processor) = true;
+        Peer::consecutive_fix_count_(processor) = 3;
+        Peer::last_doppler_velocity_ecef_(processor) = Vector3d(0.0, 6.0, 0.0);
+        Peer::last_doppler_velocity_time_(processor) = previous;
+        Peer::has_last_doppler_velocity_(processor) = true;
+        const bool ok =
+            Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), now);
+        return std::make_pair(ok, processor.getLastDebugTelemetry().reject_reason);
+    };
+    EXPECT_EQ(check(false, 0.6), std::make_pair(false, std::string("fix_history_jump")));
+    EXPECT_TRUE(check(true, 0.6).first);
+    EXPECT_EQ(check(true, 1.1), std::make_pair(false, std::string("fix_history_jump")));
+    EXPECT_TRUE(check(false, 0.1).first);
 }
 
 TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
