@@ -197,14 +197,21 @@ inline bool interpolateBaseEpoch(const libgnss::ObservationData& before,
         auto& modeled = modeled_range_cache[key.satellite];
         if (!modeled.valid && modeled.before_m == 0.0 && modeled.after_m == 0.0 &&
             modeled.target_m == 0.0) {
+            // The modeled range is evaluated at the target time: interpolating
+            // it linearly as well would reduce the result to a linear
+            // interpolation of the raw observable and drop the range curvature
+            // (about 1-3 cm at mid-interval for a 1 s base gap).
+            const double approx_target_code =
+                obs_before.pseudorange + alpha * (obs_after.pseudorange - obs_before.pseudorange);
             if (!calculateModeledBaseRange(key.satellite, before.time, obs_before.pseudorange,
                                            base_position, nav, modeled.before_m) ||
                 !calculateModeledBaseRange(key.satellite, after.time, obs_after.pseudorange,
-                                           base_position, nav, modeled.after_m)) {
+                                           base_position, nav, modeled.after_m) ||
+                !calculateModeledBaseRange(key.satellite, target_time, approx_target_code,
+                                           base_position, nav, modeled.target_m)) {
                 modeled.before_m = std::numeric_limits<double>::quiet_NaN();
                 continue;
             }
-            modeled.target_m = modeled.before_m + alpha * (modeled.after_m - modeled.before_m);
             modeled.valid = true;
         }
         if (!modeled.valid) {
