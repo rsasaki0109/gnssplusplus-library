@@ -6747,3 +6747,67 @@ train score.
 Submission 57600830 replaces only A505U in 57594243. It scores **Private
 0.845 m** / Public 0.884 m, 0.063 m from the 0.782 m post-deadline taroz
 score.
+
+### Checks after 57600830 that did not help (2026-10-25)
+
+None of these changed a submission. They are recorded so they are not
+repeated.
+
+**Course-seed rule on every drive.** Every drive was rerun with
+`--native-course-attitude-seeds-mount-deg 180`, dropping epoch heading seeds
+and the source IMU initialization where the recipe has them. The rule keeps a
+rerun only if final-vs-GNSS-first P95 drops below 0.9 of the first run.
+
+- Train, 36 drives:
+  - 34 drives change by at most 0.001 m;
+  - mtv-b Pixel4 improves from 0.828 to 0.588 m (P95 ratio 0.79), so the rule
+    keeps it;
+  - mtv-n A205U gets worse, from 1.772 to 5.673 m (P95 ratio 3.82), so the
+    rule rejects it.
+- Test, 40 drives: the rule keeps exactly the three drives already fixed by
+  hand: sjc-ce1 (0.40), sjc-r A505U (0.48) and ebf-z (0.76). The others stay
+  at 0.998-1.013. mtv-m Mi8 cannot take course seeds, because its leveling
+  window is not stationary and it needs the source IMU initialization.
+
+**Samsung GNSS stage against taroz.**
+
+- The phone position offsets are the same as taroz `add_position_offset`.
+  Most of the earlier along-track gap came from comparing native GNSS-first
+  before that offset with taroz `result_gnss` after it.
+- GNSS-stage velocity error against truth, median / P95 in m/s, native vs
+  taroz:
+  - sjc-q A325F, which has no TDCP: 0.296 / 1.329 vs 0.130 / 0.531, so
+    native is worse;
+  - mtv-ie2 A505G: 0.035 / 0.362 vs 0.103 / 0.514;
+  - sjc-s A325G: 0.061 / 0.417 vs 0.108 / 0.525;
+  - sjc-q Pixel5: 0.035 / 0.110 vs 0.071 / 0.317.
+- `--native-samsung-clock-drift` leaves the solutions of five Samsung train
+  drives bit-identical. The estimated drift only seeds the optimizer.
+- Against taroz final, the median per-phone offset is below 0.1 m except
+  mtv-b A325F, which is +0.45 m along-track. On train, both pipelines sit
+  +0.15-0.22 m along-track from truth for A325F (native +150 ms recipe vs
+  taroz: sjc-q +0.217 vs +0.199 m, mtv-n +0.149 vs +0.156 m), so train does
+  not explain the test gap. The +150 ms IMU offset is applied on the test
+  drive as on train (UTC wall-clock fallback).
+
+**sjc-r A32, mtv-pe1 / lax-hh A325G.** Their IMU stage leaves the GNSS stage
+by about 1 m in a few minutes while taroz final stays near taroz GNSS. The
+per-factor error dump shows no concentration:
+
+- A32: IMU total 1448, with no 100-epoch block above 5x the median except the
+  first;
+- lax-hh A325G: no such block at all.
+
+**IMU bias random walk.** A 12-drive train screen:
+
+| Scale | Change in mean score |
+|---|---:|
+| gyro x10 | +0.006 m |
+| gyro x100 | -0.017 m |
+| accel x4 | +0.002 m |
+| accel x0.25 | -0.001 m |
+
+On all 36 train drives the mean is 0.7646 m at the current value, 0.7598 m
+with gyro x100 and 0.7725 m with gyro x1000. The gyro x100 gain is mtv-b
+Pixel4 alone (-0.169 m, the bad leveling-bias case that the source IMU
+initialization already fixes); the other 35 drives net about 0. Rejected.

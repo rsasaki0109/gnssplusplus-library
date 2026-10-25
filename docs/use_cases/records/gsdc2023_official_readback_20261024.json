@@ -222,7 +222,12 @@
     "epoch_heading_seeds_all_phones": "pixel4 mtv-b -0.24, pixel4xl +1.00, five drives unchanged",
     "zero_bias_initialization_all_static_drives": "pixel4 mtv-b -0.240, pixel4xl mtv-b +1.000, 12 drives within 0.001 m",
     "source_phone_imu_noise_samsung": "7 of 8 Samsung train drives worse, 1 unchanged, mean 1.305 -> 1.420 m (it shortened A505U test P95 to taroz 2.15 -> 1.45 m without removing the yaw slip)",
-    "course_attitude_seeds_all_samsung": "four of five Samsung train drives within 0.001 m, mtv-n A205U 1.772 -> 5.675 m (23.8 m with dead-reckoned roll/pitch)"
+    "course_attitude_seeds_all_samsung": "four of five Samsung train drives within 0.001 m, mtv-n A205U 1.772 -> 5.675 m (23.8 m with dead-reckoned roll/pitch)",
+    "gyro_bias_random_walk_x100": "36 train drives 0.7646 -> 0.7598 m, all of it from mtv-b Pixel4 (-0.169 m, fixed by the source IMU initialization); the other 35 net about 0",
+    "gyro_bias_random_walk_x1000": "36 train drives 0.7646 -> 0.7725 m",
+    "gyro_bias_random_walk_x10": "12-drive screen +0.006 m",
+    "accel_bias_random_walk_x4_or_x0.25": "12-drive screen +0.002 / -0.001 m",
+    "native_samsung_clock_drift_flag": "bit-identical solutions on five Samsung train drives (the estimate only seeds the optimizer)"
   },
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "taroz uses IdxStart=600 and fills epochs 0-598 with the nearest solution; solving from epoch 599 still leaves the stationary segment 1.4-1.7 m from taroz"
@@ -234,5 +239,10 @@
       "public_m": 0.796,
       "source": "score image in the taroz/gsdc2023 README (submission_20240919_0824.csv, after deadline)"
     }
+  },
+  "course_seed_rule_scan": {
+    "rule": "rerun with --native-course-attitude-seeds-mount-deg 180 (dropping heading seeds / source IMU initialization) and keep it only if final-vs-GNSS-first P95 drops below 0.9x",
+    "train_36": "34 within 0.001 m; mtv-b Pixel4 0.828 -> 0.588 m kept (ratio 0.79); mtv-n A205U 1.772 -> 5.673 m rejected (ratio 3.82)",
+    "test_40": "keeps exactly sjc-ce1 (0.40), sjc-r A505U (0.48) and ebf-z (0.76), all already fixed; the rest 0.998-1.013; mtv-m Mi8 needs the source IMU initialization and cannot take course seeds"
   }
 }
