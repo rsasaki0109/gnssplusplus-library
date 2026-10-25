@@ -6,11 +6,9 @@ Backs the ``gnss reproduce gsdc-official`` lane.  The recipe
 test drives, the input files (SHA-256), the exact ``gnss_fgo_imu_no_base`` argv
 and the SHA-256 of the solution the research run wrote.  Nothing here talks to
 Kaggle: the gate is the SHA-256 of the assembled ``submission.csv`` (the file
-submitted as Kaggle ref 57600830); the Kaggle score is a readback record only.
-31 drives are pinned to MSVC research outputs and the 9 drives changed after
-ref 56625084 (with the stage-0 runs and height maps of the 8 that use a
-height map) to Linux GCC outputs, so a rebuild on one platform reproduces only
-its own subset byte for byte.
+submitted as Kaggle ref 57619467); the Kaggle score is a readback record only.
+Every drive, stage-0 run and height map is pinned to one Linux GCC build;
+MSVC outputs of the same drives differ by up to 0.08 m.
 
 Subcommands, in lane order:
 
