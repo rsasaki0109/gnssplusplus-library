@@ -996,5 +996,6 @@
   },
   "transient_steps_lt_0.15_cycle_after_5s": 10,
   "note": "The base interpolation error is zero at base epochs, so this 1 Hz analysis cannot see it."
- }
+ },
+ "decision": "NO_GO for a default change (frozen gate missed on Trimble missing +3/+4, u-blox Shinjuku hP95 +1.2 cm, HK Harsh not byte-identical). Shipped as opt-in gnss_solve --base-interp-curvature (interpolateBaseEpoch model_range_at_target); default byte-identical to develop 66383b5."
 }

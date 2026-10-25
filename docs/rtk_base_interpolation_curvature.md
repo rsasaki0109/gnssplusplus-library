@@ -3,9 +3,10 @@
 This is a follow-up to the [ambiguity consistency diagnostics](rtk_ambiguity_consistency_diagnostics.md).
 That round found long-locked ambiguities drifting off integer. This round
 looked for the cause. It found a defect in how `gnss_solve` and
-`gnss_fuse` align the 1 Hz base to a faster rover. The defect is real and
-fixed in code, but it is **not** the main source of the drift. It also misses
-the frozen default gate by noise-level margins. Record:
+`gnss_fuse` align the 1 Hz base to a faster rover. The defect is real, but
+it is **not** the main source of the drift. The fix misses the frozen default
+gate by noise-level margins, so it is the opt-in `gnss_solve
+--base-interp-curvature`. **Defaults are unchanged.** Record:
 [JSON](urbannav_base_interpolation_evaluation.json).
 
 ## The defect
@@ -42,7 +43,8 @@ cycles).
 
 ## Fix and tests
 
-There were two steps:
+`interpolateBaseEpoch(..., model_range_at_target)` (`gnss_solve
+--base-interp-curvature`) applies the fix. It was built in two steps:
 
 1. **Evaluate the modeled range at the target time** (`e109f77`).
    `RtkBaseAlignmentTest.InterpolationReproducesObservationsGeneratedAtTargetTime`
@@ -57,6 +59,9 @@ There were two steps:
    `RtkBaseAlignmentTest.InterpolationIsNotShiftedByAnEphemerisSwitchInsideTheGap`
    adds a re-referenced ephemeris 0.8 s after toe. The error is 30–61 mm
    after step 1 and below 1 mm after step 2.
+
+`RtkBaseAlignmentTest.DefaultInterpolationIsLinearInTheRawObservable` pins
+the default to the legacy behaviour.
 
 ## Real-data check
 
@@ -149,11 +154,21 @@ makes Qb overconfident.
 
 ## Decision
 
-The frozen rule gives **NO_GO for a silent default change**. The branch fixes
-the helper, so the default output changes. Whether to keep that as a
-correctness fix or put it behind an opt-in flag is the maintainer's call. The
-gate misses are noise-level, and no wrong-FIX population grows under the
-default recipe. Against that, the opt-in recipes move by single episodes.
+The frozen rule gives **NO_GO for a default change**, so the fix is
+**opt-in** (`--base-interp-curvature`). Confirmed bugs that missed the gate
+in earlier rounds were handled the same way: the iterated-update double
+count and the hold overwrite.
+
+The gate misses are noise-level, and no wrong-FIX population grows under the
+default recipe. Two things argue against a default change:
+
+- the opt-in recipes, including the hero clip's CD, move by single episodes;
+- recorded results such as [the hero clip note](rtk_hero_clip_fix.md) would
+  no longer reproduce.
+
+Without the flag, `gnss_solve` POS is byte-identical to develop `66383b5` on
+all 14 runs of this evaluation. With the flag, it is byte-identical to the
+step 2 runs scored above. `gnss_fuse` keeps the default.
 
 Not changed:
 
@@ -171,6 +186,7 @@ using the corrected interpolation as the base, before proposing any rule.
 ## Reproduce
 
 1. Build develop `66383b5` in a worktree and this branch, both Release.
+   The candidate is this branch with `--base-interp-curvature`.
 2. For each rover ∈ {`rover_trimble.obs`, `rover_ublox.obs`}, drive ∈
    {Odaiba, Shinjuku} and recipe, run the native argv listed in the JSON
    `native_argv`. Run HK Deep/Harsh as well; their data are prepared as in

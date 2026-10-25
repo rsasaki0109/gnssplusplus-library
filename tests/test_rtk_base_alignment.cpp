@@ -191,8 +191,10 @@ TEST(RtkBaseAlignmentTest, UnmodelableSatellitesAreOmittedAndEmptyFails) {
 // gnss_solve / gnss_fuse align a 1 Hz base to a faster rover by interpolating
 // between the two bracketing base epochs. The residual to the modeled range is
 // interpolated linearly, so the modeled range itself has to be evaluated at
-// the target time; interpolating it linearly as well reduces the result to a
-// linear interpolation of the raw observable and drops the range curvature.
+// the target time (opt-in `model_range_at_target`, gnss_solve
+// --base-interp-curvature); interpolating it linearly as well reduces the
+// result to a linear interpolation of the raw observable and drops the range
+// curvature.
 TEST(RtkBaseAlignmentTest, InterpolationReproducesObservationsGeneratedAtTargetTime) {
     const NavigationData nav = makeNavigation();
     const GNSSTime after_time = kBaseTime + 1.0;
@@ -207,7 +209,7 @@ TEST(RtkBaseAlignmentTest, InterpolationReproducesObservationsGeneratedAtTargetT
             truth[obs.satellite.prn] = obs;
         ObservationData interpolated;
         ASSERT_TRUE(libgnss_apps::interpolateBaseEpoch(before, after, target, kBase, nav,
-                                                       interpolated));
+                                                       interpolated, true));
         ASSERT_EQ(interpolated.observations.size(), before.observations.size());
         double worst_code = 0.0, worst_phase = 0.0, curvature = 0.0;
         for (std::size_t i = 0; i < interpolated.observations.size(); ++i) {
@@ -249,7 +251,7 @@ TEST(RtkBaseAlignmentTest, InterpolationIsNotShiftedByAnEphemerisSwitchInsideThe
             truth[obs.satellite.prn] = obs;
         ObservationData interpolated;
         ASSERT_TRUE(libgnss_apps::interpolateBaseEpoch(before, after, target, kBase, nav,
-                                                       interpolated));
+                                                       interpolated, true));
         ASSERT_EQ(interpolated.observations.size(), before.observations.size());
         double worst_code = 0.0, worst_phase = 0.0;
         for (const auto& obs : interpolated.observations) {
@@ -261,5 +263,29 @@ TEST(RtkBaseAlignmentTest, InterpolationIsNotShiftedByAnEphemerisSwitchInsideThe
         }
         EXPECT_LT(worst_code, 1e-3) << "alpha " << alpha;
         EXPECT_LT(worst_phase, 1e-3) << "alpha " << alpha;
+    }
+}
+
+// The default keeps the legacy behaviour: the modeled range is interpolated
+// linearly too, so the result equals a linear interpolation of the raw
+// observable.
+TEST(RtkBaseAlignmentTest, DefaultInterpolationIsLinearInTheRawObservable) {
+    const NavigationData nav = makeNavigation();
+    const GNSSTime after_time = kBaseTime + 1.0;
+    const ObservationData before = generate(nav, kBaseTime, after_time);
+    const ObservationData after = generate(nav, after_time, kBaseTime);
+    ASSERT_GE(before.observations.size(), 4U);
+    const double alpha = 0.5;
+    ObservationData interpolated;
+    ASSERT_TRUE(libgnss_apps::interpolateBaseEpoch(before, after, kBaseTime + alpha, kBase, nav,
+                                                   interpolated));
+    ASSERT_EQ(interpolated.observations.size(), before.observations.size());
+    for (std::size_t i = 0; i < interpolated.observations.size(); ++i) {
+        const auto& b = before.observations[i];
+        const auto& a = after.observations[i];
+        const auto& obs = interpolated.observations[i];
+        EXPECT_NEAR(obs.pseudorange, b.pseudorange + alpha * (a.pseudorange - b.pseudorange), 1e-6);
+        EXPECT_NEAR(obs.carrier_phase, b.carrier_phase + alpha * (a.carrier_phase - b.carrier_phase),
+                    1e-6);
     }
 }
