@@ -162,6 +162,11 @@ public:
         // position. Off keeps the legacy overwrite, which writes the integer
         // into the satellite ambiguity and zeroes its correlations.
         bool hold_ambiguity_kalman_update = false;
+        // Opt-in: compare a kinematic AR candidate against the last FIX
+        // propagated by the latest Doppler velocity (both at most 2 s old)
+        // in the consecutive-FIX history check. Off keeps the stationary
+        // last FIX, which rejects consistent fixes above about 2 m/s at 10 Hz.
+        bool fix_history_motion_compensation = false;
 
         // Measurement noise
         double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)

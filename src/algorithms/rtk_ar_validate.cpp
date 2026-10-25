@@ -412,11 +412,23 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         rtk_config_.max_position_jump_rate_mps > 0.0 &&
         fixed_anchor_usable &&
         has_fixed_jump_dt;
+    Vector3d fix_history_reference = last_fixed_position_;
+    if (rtk_config_.fix_history_motion_compensation &&
+        rtk_config_.position_mode != RTKConfig::PositionMode::STATIC &&
+        has_last_fixed_time_ && has_last_doppler_velocity_ &&
+        last_doppler_velocity_ecef_.allFinite()) {
+        const double dt = current_time - last_fixed_time_;
+        const double velocity_age = current_time - last_doppler_velocity_time_;
+        if (std::isfinite(dt) && dt > 0.0 && dt <= 2.0 &&
+            std::isfinite(velocity_age) && velocity_age >= 0.0 && velocity_age <= 2.0) {
+            fix_history_reference += last_doppler_velocity_ecef_ * dt;
+        }
+    }
     if (!isMovingBasePositionMode(rtk_config_) &&
         !use_adaptive_position_jump &&
         rtk_validation::exceedsFixHistoryJump(
             new_pos,
-            last_fixed_position_,
+            fix_history_reference,
             fixed_anchor_usable,
             rtk_config_.position_mode == RTKConfig::PositionMode::STATIC,
             consecutive_fix_count_)) {
