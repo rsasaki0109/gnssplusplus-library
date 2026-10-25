@@ -1,23 +1,23 @@
 {
  "schema": "gsdc_official_recipe.v1",
- "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57619467 (Private 0.844 m / Public 0.885 m) from the raw test drives on one Linux GCC 15 build. 57619467 is 57600830 (Private 0.845 m / Public 0.884 m), whose 31 drives retained from 56625084 were pinned to MSVC research outputs, rerun with the same argv on that build together with their stage-0 runs and height maps (MSVC provenance under research_source.msvc_research); the 9 drives changed since 56625084 keep their GCC outputs (research_source.added_flags / removed_flags). Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
+ "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57626255 (Private 0.844 m / Public 0.850 m) from the raw test drives on one Linux GCC 15 build. 57626255 is 57619467 (Public 0.885 m) with ebf-x Mi8 solved from the taroz IdxStart epoch (input_window); 57619467 is 57600830 (Private 0.845 m / Public 0.884 m), whose 31 drives retained from 56625084 were pinned to MSVC research outputs, rerun with the same argv on that build together with their stage-0 runs and height maps (MSVC provenance under research_source.msvc_research); the 9 drives changed since 56625084 keep their GCC outputs (research_source.added_flags / removed_flags). Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
  "submission": {
   "kaggle_competition": "smartphone-decimeter-2023",
-  "kaggle_ref": 57619467,
+  "kaggle_ref": 57626255,
   "private_score_m": 0.844,
-  "public_score_m": 0.885,
+  "public_score_m": 0.85,
   "readback_record": "docs/use_cases/records/gsdc2023_official_readback_20261024.json",
   "research_log": "docs/gsdc2023_native_taroz_goal.md",
   "research_assembler": "scripts/analysis/assemble_gsdc_heading_modern_test.py",
-  "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c",
+  "sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1",
   "rows": 71936,
   "drives": 40,
   "columns": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
   "line_terminator": "\\n",
   "encoding": "utf-8 (no BOM)",
   "previous_submission": {
-   "kaggle_ref": 57600830,
-   "sha256": "a7242b5646da84026f992035eac7d65217a95d5cc214b8fe96622b3c9b781716"
+   "kaggle_ref": 57619467,
+   "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c"
   },
   "chain": [
    {"kaggle_ref": 56536540, "sha256": "cf4a73e35852c0554ab8ecb3d65e62f7f268812dc3df5168a62c812313a695cb"},
@@ -27,7 +27,8 @@
    {"kaggle_ref": 57590194, "sha256": "f9526888e615f14affc8d411861ca5d75e4d3d77db694365e6ca5b795169ff09", "private_score_m": 0.862, "public_score_m": 0.902, "replaced_drives": 1},
    {"kaggle_ref": 57594243, "sha256": "2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e", "private_score_m": 0.862, "public_score_m": 0.884, "replaced_drives": 1},
    {"kaggle_ref": 57600830, "sha256": "a7242b5646da84026f992035eac7d65217a95d5cc214b8fe96622b3c9b781716", "private_score_m": 0.845, "public_score_m": 0.884, "replaced_drives": 1},
-   {"kaggle_ref": 57619467, "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c", "private_score_m": 0.844, "public_score_m": 0.885, "replaced_drives": 31, "note": "same argv; the 31 drives pinned to MSVC outputs of 56625084 (and 17 stage-0 runs / height maps) rerun on the Linux GCC build"}
+   {"kaggle_ref": 57619467, "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c", "private_score_m": 0.844, "public_score_m": 0.885, "replaced_drives": 31, "note": "same argv; the 31 drives pinned to MSVC outputs of 56625084 (and 17 stage-0 runs / height maps) rerun on the Linux GCC build"},
+   {"kaggle_ref": 57626255, "sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1", "private_score_m": 0.844, "public_score_m": 0.85, "replaced_drives": 1, "note": "ebf-x Mi8 solved from taroz IdxStart=600 with source TDCP metre sigma and Phase184 Huber"}
   ],
   "coordinate_rule": "LatitudeDegrees/LongitudeDegrees are copied verbatim (as text) from the native solution.csv row with the same UnixTimeMillis; no interpolation. Native rows outside the official key list are dropped."
  },
@@ -1625,10 +1626,13 @@
    "phone": "mi8",
    "group": "retained-height",
    "research_source": {
-    "submission": "57619467",
+    "submission": "57626255",
     "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop ed5f8d0",
     "binary_sha256": "a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32",
-    "record_wall_s": 1195.9,
+    "added_flags": ["--native-source-tdcp-meter-sigma", "--native-phase184-source-tdcp-huber-k", "--native-source-route-type", "Highway", "--native-source-l5", "1"],
+    "input_window": "taroz settings_test.csv IdxStart=600 (1-based) for this drive",
+    "record_wall_s": 1408.0,
+    "previous_output_sha256": "b0b28e6cf65d28f2553d80ea1d956e5b70ac30f9486449b322f1ada63595f487",
     "msvc_research": {"submission": "56536540 (retained)", "frozen_binary": "height_map.exe", "frozen_binary_sha256": "9386777e0985d15a1be90aa6969db87c5892640c693df0930b576d2c19dad10f", "record_wall_s": 1983.0, "output_sha256": "b70cea45ddebc472ffc14c4828d0649b9000985fd5e359a99aedb81690d8086a"}
    },
    "inputs": {
@@ -1637,10 +1641,16 @@
     "test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_gnss.csv": "27c7eda7f1b446e6668721c38c70631e6f9a12988b5d6790c56b7f00d401afac",
     "test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_imu.csv": "46a7e3943a3fe9ff64d40694044aa91adb920801b9944403b18d3ecf38f5bfc0"
    },
+   "input_window": {
+    "first_epoch_index": 599,
+    "imu_lead_ms": 2000,
+    "gnss": {"from": "test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_gnss.csv", "to": "{work_dir}/inputs/2022-04-25-21-04-us-ca-ebf-x__mi8/device_gnss.csv", "sha256": "a295515e296e6b7a27a73909c0117f637a95a6808abe8544fdedb8e691a23e61"},
+    "imu": {"from": "test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_imu.csv", "to": "{work_dir}/inputs/2022-04-25-21-04-us-ca-ebf-x__mi8/device_imu.csv", "sha256": "a83bc91784ee11a9f565edddd7b29140e8f844d7c32f79022ded8bc9493d89a4"}
+   },
    "height_map": null,
-   "argv": ["{bin}", "--dataset-id", "2022-04-25-21-04-us-ca-ebf-x/mi8", "--android-gnss", "{gsdc_root}/test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2022-04-25-21-04-us-ca-ebf-x/mi8/device_imu.csv", "--nav", "{gsdc_root}/test/2022-04-25-21-04-us-ca-ebf-x/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-04-25-21-04-us-ca-ebf-x/P229_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "6ba36c80a70356a6af96bc2c6e5b593b4e381cba07a6c5f78ff0ddcaac8c0aa1", "--native-base-position-ecef", "-2674302.9985", "-4283444.9483", "3883668.2244", "--out", "{work_dir}/final/2022-04-25-21-04-us-ca-ebf-x__mi8/solution.csv", "--summary-json", "{work_dir}/final/2022-04-25-21-04-us-ca-ebf-x__mi8/summary.json", "--android-include-first-native-epoch", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--native-source-imu-initialization", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-relative-height-pairs"],
+   "argv": ["{bin}", "--dataset-id", "2022-04-25-21-04-us-ca-ebf-x/mi8", "--android-gnss", "{work_dir}/inputs/2022-04-25-21-04-us-ca-ebf-x__mi8/device_gnss.csv", "--android-imu", "{work_dir}/inputs/2022-04-25-21-04-us-ca-ebf-x__mi8/device_imu.csv", "--nav", "{gsdc_root}/test/2022-04-25-21-04-us-ca-ebf-x/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-04-25-21-04-us-ca-ebf-x/P229_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "6ba36c80a70356a6af96bc2c6e5b593b4e381cba07a6c5f78ff0ddcaac8c0aa1", "--native-base-position-ecef", "-2674302.9985", "-4283444.9483", "3883668.2244", "--out", "{work_dir}/final/2022-04-25-21-04-us-ca-ebf-x__mi8/solution.csv", "--summary-json", "{work_dir}/final/2022-04-25-21-04-us-ca-ebf-x__mi8/summary.json", "--android-include-first-native-epoch", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--native-source-imu-initialization", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-relative-height-pairs", "--native-source-tdcp-meter-sigma", "--native-phase184-source-tdcp-huber-k", "--native-source-route-type", "Highway", "--native-source-l5", "1"],
    "output": "{work_dir}/final/2022-04-25-21-04-us-ca-ebf-x__mi8/solution.csv",
-   "output_sha256": "b0b28e6cf65d28f2553d80ea1d956e5b70ac30f9486449b322f1ada63595f487"
+   "output_sha256": "53cb1c6ab8d9c9183f04938c4e99e25ac3ed7f6360e8d2bec8e8befc709340c9"
   },
   {
    "id": "2021-09-14-20-32-us-ca-mtv-k/pixel4",

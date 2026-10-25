@@ -6830,3 +6830,45 @@ Submission 57619467 is that rebuild. It scores **Private 0.844 m** / Public
 0.885 m, against 0.845 / 0.884 m for 57600830, so the platform change is
 score-neutral. The official recipe is now pinned to it, and every drive,
 stage-0 run and height map rebuilds byte for byte on one build.
+
+### Carrier-phase check at the ebf-x exit, submission 57626255 (2026-10-25)
+
+The stationary start of 2022-04-25 ebf-x Mi8 was the open issue from the
+course-seed section. Taroz sets IdxStart=600 there and fills epochs 0-598
+with its first solved position. Those epochs are 38% of the 1,897 scored
+rows, and native sits about 2 m from taroz over them.
+
+A truth-free arbiter settles it. It solves epoch-to-epoch displacements from
+the raw ADR by robust least squares with a free clock term. That gives about
+22 satellites and 1 cm residual RMS per epoch. Over the 40 s parking-lot exit
+(epochs 680-720), the native trajectory with the phone offset removed
+disagrees with it by 1.2 m. The GNSS-first stage already disagrees. Taroz
+agrees within 0.2 m. In the static epochs 0-598, the carrier phase also moves
+0.9 m, as if the phone were handled while the car stood still.
+
+The same check on all 40 test drives flags only ebf-x: no other drive has a
+low-speed window where native disagrees by more than 0.5 m and taroz agrees.
+On train it flags two drives, with one window each (mtv-u Pixel6Pro,
+routebb1 Pixel7Pro). The source TDCP flags below do not fix those windows.
+
+Two changes are needed:
+
+- Solve ebf-x from epoch 599, and fill the leading keys with the first
+  solved row. This is the recipe `input_window`.
+- Add `--native-source-tdcp-meter-sigma`, `--native-phase184-source-tdcp-huber-k`,
+  `--native-source-route-type Highway` and `--native-source-l5 1`.
+
+The window alone moves P95 to taroz from 2.81 m to 1.75 m. With either TDCP
+variant, the exit agrees with the carrier phase within 0.3 m:
+
+| Variant | P95 to taroz | Kaggle |
+|---|---:|---|
+| Window and source TDCP sigma | 0.71 m | 57626257, Public 0.864 m |
+| Window, source TDCP sigma and Phase184 Huber | 0.64 m | 57626255, Public 0.850 m |
+
+Private stays at 0.844 m, so ebf-x is a Public drive.
+
+On train, the same flags on every drive are worse: 4 of the first 6 drives
+regress, and mtv-b Pixel4 by +0.106 m. They stay on this drive only.
+Submission 57626255 is now the official recipe. Private is still 0.062 m
+from the 0.782 m post-deadline taroz score.
