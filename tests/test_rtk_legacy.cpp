@@ -397,6 +397,42 @@ TEST(RTKFixHistoryJumpTest, MotionCompensationKeepsConsistentMovingFixes) {
     EXPECT_TRUE(check(false, 0.1).first);
 }
 
+TEST(RTKFixHistoryJumpTest, MotionCompensationKeepsConsistentFixesUnderMaxPositionJump) {
+    // At 13 m/s a vehicle is 14.3 m from its last FIX after 1.1 s. The
+    // absolute 5 m jump check against that stationary anchor (usable for
+    // 5 s) rejects every consistent candidate; propagating the anchor by the
+    // Doppler velocity accepts it, still rejects a candidate 6 m off that
+    // motion, and keeps the stationary anchor beyond the 2 s propagation.
+    const Vector3d base(6378137.0, 0.0, 0.0);
+    const GNSSTime previous(2032, 273505.7);
+    auto check = [&](bool compensate, double along_track_m, double dt_s) {
+        RTKProcessor processor;
+        auto config = processor.getRTKConfig();
+        config.max_fixed_anchor_age_s = 5.0;
+        config.max_position_jump_motion_compensation = compensate;
+        processor.setRTKConfig(config);
+        processor.setBasePosition(base);
+        Peer::has_fixed_solution_(processor) = true;
+        Peer::fixed_baseline_(processor) = Vector3d(0.0, along_track_m, 0.0);
+        Peer::last_fixed_position_(processor) = base;
+        Peer::has_last_fixed_position_(processor) = true;
+        Peer::last_fixed_time_(processor) = previous;
+        Peer::has_last_fixed_time_(processor) = true;
+        Peer::consecutive_fix_count_(processor) = 0;
+        Peer::last_doppler_velocity_ecef_(processor) = Vector3d(0.0, 13.0, 0.0);
+        Peer::last_doppler_velocity_time_(processor) = previous + (dt_s - 0.1);
+        Peer::has_last_doppler_velocity_(processor) = true;
+        const bool ok = Peer::validateFixedSolution(
+            processor, Peer::current_sat_data_(processor), previous + dt_s);
+        return std::make_pair(ok, processor.getLastDebugTelemetry().reject_reason);
+    };
+    EXPECT_EQ(check(false, 14.3, 1.1), std::make_pair(false, std::string("max_position_jump")));
+    EXPECT_TRUE(check(true, 14.3, 1.1).first);
+    EXPECT_EQ(check(true, 20.3, 1.1), std::make_pair(false, std::string("max_position_jump")));
+    EXPECT_EQ(check(true, 39.0, 3.0), std::make_pair(false, std::string("max_position_jump")));
+    EXPECT_TRUE(check(false, 4.0, 1.1).first);
+}
+
 TEST(RTKDopplerConsensusTest, FreshFixAnchorCannotBypassCurrentCandidateCheck) {
     RTKProcessor processor;
     auto config = processor.getRTKConfig();
