@@ -1,16 +1,17 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57600830, Private 0.845 m / Public 0.884 m, 40 drives, 71,936 rows
+# Kaggle ref 57619467, Private 0.844 m / Public 0.885 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
-# Platform note: 31 drives are pinned to MSVC research outputs. The 9 drives
-# changed after ref 56625084 (6 per-phone main Doppler drives, sjc-he2 Pixel5
-# hardware clock reset, sjc-ce1 Pixel7Pro zero-bias IMU initialization, ebf-z
-# Pixel5 without epoch heading seeds; the sjc-r A505U main Doppler drive also
-# takes course attitude seeds), plus the stage-0 runs and height maps
-# of the 8 of them that use a height map, are pinned to Linux GCC 15 outputs.
-# A rebuild on one platform therefore reproduces only its own subset byte for
-# byte.
+# Platform note: every final replay, stage-0 run and height map is pinned to
+# one Linux GCC 15 Release build (GTSAM 4.3.0). Ref 57619467 is 57600830
+# rebuilt on that build: 57600830 kept 31 drives at their MSVC research
+# outputs of 56625084 (now under research_source.msvc_research). GCC and MSVC
+# outputs differ by up to 0.08 m, so an MSVC build does not pass the gate.
+# The 9 drives changed after ref 56625084 (6 per-phone main Doppler drives,
+# sjc-he2 Pixel5 hardware clock reset, sjc-ce1 Pixel7Pro zero-bias IMU
+# initialization, ebf-z Pixel5 without epoch heading seeds; the sjc-r A505U
+# main Doppler drive also takes course attitude seeds) keep their flags.
 #
 # This lane never talks to Kaggle. It rebuilds the submitted CSV from the raw
 # test drives and gates on its SHA-256; the Kaggle score is external and only
@@ -27,7 +28,8 @@
 #   final   40 replays: 17 Pixel5 heading + 9 modern clock (both new in
 #           56625084) and 14 height-map/relative-height drives retained
 #           from 56536540, with the per-drive flags added or removed by
-#           57585127, 57586667, 57590194, 57594243 and 57600830;
+#           57585127, 57586667, 57590194, 57594243 and 57600830
+#           (57619467 reruns them unchanged on one build);
 #   assemble on the official key list (Kaggle sample_submission order).
 # Stage 0 is skipped for a drive whose height map is already present with
 # the pinned SHA-256, and every run step resumes from completed drives.
@@ -40,8 +42,8 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.845 m / Public 0.884 m; 40 drives, 71,936 rows"
-runtime_estimate = "~12-18 h"
+readme_row = "Smartphone GNSS/IMU: Private 0.844 m / Public 0.885 m; 40 drives, 71,936 rows"
+runtime_estimate = "~1.5 h four at a time on 4 cores; up to ~6.5 h one at a time"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
 [datasets.gsdc]
@@ -115,7 +117,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57600830 (a7242b56...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57619467 (c46ca65f...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -166,6 +168,10 @@ readme = "reported"
 # Pixel5 stage 0, height map and final pinned from the lane, and a partial
 # assembly gives 2344a34f.... Recipe update to ref 57600830: sjc-r A505U
 # rerun with --native-course-attitude-seeds-mount-deg 178.9 on the build
-# that adds it, and a partial assembly gives a7242b56.... Routine verification is intentionally limited
-# to these subsets; the full 40-drive run (estimate 12-18 h single-process) is
-# available through the same command; see docs/reproduce.md.
+# that adds it, and a partial assembly gives a7242b56.... Recipe update to ref
+# 57619467 (2026-10-25, Linux GCC 15 + GTSAM 4.3.0, develop ed5f8d0; develop
+# 86d1e81 links the same binary): the full lane ran on one build, four
+# replays at a time (25 stage-0 runs, 25 height maps, 40 final drives, ~1.5 h
+# on 4 cores); the 9 GCC final drives and 8 GCC stage-0 runs of 57600830 came
+# out byte-identical, and the assembled file was submitted as 57619467. See
+# docs/reproduce.md.

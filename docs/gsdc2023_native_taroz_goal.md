@@ -6811,3 +6811,22 @@ On all 36 train drives the mean is 0.7646 m at the current value, 0.7598 m
 with gyro x100 and 0.7725 m with gyro x1000. The gyro x100 gain is mtv-b
 Pixel4 alone (-0.169 m, the bad leveling-bias case that the source IMU
 initialization already fixes); the other 35 drives net about 0. Rejected.
+
+### One-build rebuild, submission 57619467 (2026-10-25)
+
+Submission 57600830 still had 31 drives at the MSVC research outputs of
+56625084, so the official recipe could not be reproduced on one build. The
+recipe lane reran them with the same argv on the Linux GCC 15 build that
+produced the 9 changed drives (develop `ed5f8d0`; develop `86d1e81` links
+the same binary). It also reran their 17 stage-0 runs and rebuilt their
+height maps.
+
+- The 9 GCC final drives and the 8 GCC stage-0 runs came out byte-identical.
+- The 31 rerun drives moved by median 0.001 m and P95 0.008 m over all rows.
+  The largest move is 0.079 m on mtv-m Mi8; every other drive moved at most
+  0.025 m.
+
+Submission 57619467 is that rebuild. It scores **Private 0.844 m** / Public
+0.885 m, against 0.845 / 0.884 m for 57600830, so the platform change is
+score-neutral. The official recipe is now pinned to it, and every drive,
+stage-0 run and height map rebuilds byte for byte on one build.

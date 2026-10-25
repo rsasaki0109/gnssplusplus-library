@@ -7,7 +7,8 @@
     "source": "develop a40998e (submission 57585127, 57586667 runs) plus, for the sjc-he2 rerun, an experimental copy whose behaviour is reproduced byte-for-byte by --android-hardware-clock-reset-clock-jumps; submission 57590194 ran develop 5c0481e with --native-source-imu-initialization on sjc-ce1",
     "compiler": "GCC 15 (conda-forge), Release",
     "gtsam": "4.3.0 (conda-forge)",
-    "control_parity": "official recipe replays of the 7 replaced drives differ from submission 56625084 by at most 0.02 m; height maps rebuilt from the GCC stage-0 trajectories (all 156 Kaggle train truth files match their pinned SHA-256; the maps differ from the pinned SHA-256 only by boundary points)"
+    "control_parity": "official recipe replays of the 7 replaced drives differ from submission 56625084 by at most 0.02 m; height maps rebuilt from the GCC stage-0 trajectories (all 156 Kaggle train truth files match their pinned SHA-256; the maps differ from the pinned SHA-256 only by boundary points)",
+    "one_build_rebuild": "submission 57619467: every final replay, stage-0 run and height map rerun on one Linux GCC 15 Release build (gnss_fgo_imu_no_base sha256 a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32, develop ed5f8d0; develop 86d1e81 links the same binary), four replays at a time on 4 cores (~1.5 h)"
   },
   "submissions": [
     {
@@ -213,6 +214,22 @@
       "rule": "reseed only a drive whose yaw slips a full turn, with the mount estimated from the slip-free part of its first solution; keep the reseeded run only if the slip disappears and final-vs-GNSS-first P95 drops (A505U: 2.91 -> 1.38 m)",
       "train_evidence_note": "no train drive slips, so the rule changes no train score; course seeds on all five Samsung train drives leave four within 0.001 m and make mtv-n A205U worse (1.772 -> 5.675 m), which the final-vs-GNSS-first check flags (P95 2.32 -> 8.86 m)",
       "truth_free_diagnostic": "horizontal distance to the archived taroz result_gnss_imu test output: median 0.42 -> 0.34 m, P95 2.15 -> 0.88 m"
+    },
+    {
+      "ref": 57619467,
+      "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c",
+      "base_ref": 57600830,
+      "base_sha256": "a7242b5646da84026f992035eac7d65217a95d5cc214b8fe96622b3c9b781716",
+      "private_m": 0.844,
+      "public_m": 0.885,
+      "base_private_m": 0.845,
+      "base_public_m": 0.884,
+      "rows": 71936,
+      "retained_rows_byte_identical": "14944/14944",
+      "replaced_drives": 31,
+      "cause": "platform only: the 31 drives retained from 56625084 were pinned to MSVC research outputs, so no single build reproduced 57600830; they, their 17 stage-0 runs and height maps were rerun with the same argv on the GCC build",
+      "drift_vs_base": "31 rerun drives: median 0.001 m, P95 0.008 m, max 0.079 m (mtv-m Mi8; every other drive at most 0.025 m)",
+      "reproduction": "the 9 GCC final drives of 57600830 and the 8 GCC stage-0 runs (develop a40998e) rerun byte-identical; with the updated recipe height-maps matches 25/25 and assemble writes c46ca65f... with 40/40 drives identical"
     }
   ],
   "rejected_on_train": {
