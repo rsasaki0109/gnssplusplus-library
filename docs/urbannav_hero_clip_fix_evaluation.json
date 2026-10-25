@@ -1,0 +1,593 @@
+{
+  "scope": "Hero-clip FIX availability (PR #639 GIF): redundancy guard, hold unchanged-set and motion-compensated FIX history check. UrbanNav Tokyo Odaiba/Shinjuku complete drives; Trimble rover = development data, u-blox rover = holdout never used before this round. Reference used only for scoring.",
+  "source_base": "668275b (develop)",
+  "binaries": {
+    "C_C2_runs": "0968a7b87fa04b73b20a3c705c4c45ffacb37564b214324f63224adbf4c93687",
+    "D_CD_default_runs": "d7b4564f5c720f5db245cd8628772de9575bf54f505901a6e6694cfe32cac442"
+  },
+  "decision_rule_frozen_before_each_replay": [
+    "Frozen before replay (2026-10-25 ~00:20 UTC).",
+    "Candidate C = --max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3",
+    "              --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10",
+    "(i.e. reject AR candidates fixing < 10 DD ambiguities; hold path unchanged).",
+    "N=10 was chosen AFTER inspecting Trimble Odaiba/Shinjuku diagnostics (wrong AR median 6 pairs,",
+    "correct 14-19). Trimble results are therefore development evidence only.",
+    "Holdout: rover_ublox.obs of both drives (never used in this investigation), same base/nav/reference/argv.",
+    "Goal-specific check: libgnss++ FIX inside the hero clip (Odaiba TOW 273700-273720) with FIX error <= 0.5 m.",
+    "Default-adoption gate vs default recipe on every run (Trimble + u-blox): wrong FIX >0.5/2/3 m must not",
+    "increase; baseline-correct FIX loss <= 1%; missing and horizontal P95 must not increase;",
+    "recovery P95 / censoring must not increase. No retuning of N after seeing any result.",
+    "",
+    "Amendment (frozen before running C2, after seeing C on Trimble): C left 51/52 Odaiba wrong FIX on the hold",
+    "path, which rounds unmatched pairs without validation. C2 = C + --hold-fix-unchanged-set (existing opt-in).",
+    "C and C2 both go to the u-blox holdout unchanged. Default-correct loss of C on Trimble was 63/1298 (4.9%).",
+    "",
+    "Round 2 (frozen 2026-10-25 before running D/CD): exceedsFixHistoryJump compares a kinematic candidate with the",
+    "stationary last FIX (0.2 m) and rejected 96-100% correct candidates (GT-labelled offline, median 4-8 cm error).",
+    "D  = default + --fix-history-motion-compensation (last FIX + latest Doppler velocity * dt; both <= 2 s old).",
+    "CD = C + --fix-history-motion-compensation. Same gate vs default on Trimble and u-blox; hero clip must show",
+    "continuous FIX without the FFF. pattern. No tolerance (0.2 m) or bound (2 s) is tuned."
+  ],
+  "recipes": {
+    "default": [],
+    "age5_doppler3": [
+      "--max-fixed-anchor-age",
+      "5",
+      "--max-fixed-doppler-consensus",
+      "3"
+    ],
+    "C": [
+      "--max-fixed-anchor-age",
+      "5",
+      "--max-fixed-doppler-consensus",
+      "3",
+      "--low-ratio-guard-threshold",
+      "1e9",
+      "--low-ratio-min-fixed-ambiguities",
+      "10"
+    ],
+    "C2": [
+      "--max-fixed-anchor-age",
+      "5",
+      "--max-fixed-doppler-consensus",
+      "3",
+      "--low-ratio-guard-threshold",
+      "1e9",
+      "--low-ratio-min-fixed-ambiguities",
+      "10",
+      "--hold-fix-unchanged-set"
+    ],
+    "D": [
+      "--fix-history-motion-compensation"
+    ],
+    "CD": [
+      "--max-fixed-anchor-age",
+      "5",
+      "--max-fixed-doppler-consensus",
+      "3",
+      "--low-ratio-guard-threshold",
+      "1e9",
+      "--low-ratio-min-fixed-ambiguities",
+      "10",
+      "--fix-history-motion-compensation"
+    ]
+  },
+  "argv_note": "Native argv of scripts/analysis/evaluate_urbannav_fix_continuity.py plus recipe flags; u-blox runs replace --rover with rover_ublox.obs.",
+  "inputs": {
+    "Odaiba": {
+      "rover_trimble.obs": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8",
+      "rover_ublox.obs": "7541282f75349063dadb2338c921ac80f11eb9aa28d181d43692387279c2837f",
+      "base_trimble.obs": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee",
+      "base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+      "reference.csv": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d"
+    },
+    "Shinjuku": {
+      "rover_trimble.obs": "be239dbd20d9d69a0dbc696f1a4b00d75cd3639354d498eec91f08fa65d000eb",
+      "rover_ublox.obs": "dece3e6fbbe47e78705570d0e99796460d6d34f75a5dbbf20664a5446def7c3f",
+      "base_trimble.obs": "34a851c54e07b8cac592d37539c85e19d02e1a6b29839a707ab69dba9692c99e",
+      "base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+      "reference.csv": "794baaec530f34097cd1f77633902bb2195ce30cdec278945eb5ac911ed65d79"
+    }
+  },
+  "trimble_scoring": "Exact GPS week/TOW rounded to 1 ms (repository evaluator score()).",
+  "ublox_scoring": "u-blox epoch tags carry a constant +1 ms (Odaiba) / +2-3 ms (Shinjuku) offset. Scored on the 0.2 s GT grid: a POS row matches the GT epoch within 5 ms and its error uses GT linearly interpolated to the POS time. Missing solutions stay missing.",
+  "parity": "Without new flags the D/CD binary reproduces the develop default POS byte-identically on Trimble and u-blox, both drives.",
+  "trimble": {
+    "Odaiba-default": {
+      "pos_sha256": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
+      "fix": 1298,
+      "missing": 1426,
+      "hP95_m": 4.777151724852944,
+      "wrong_fix_0.5_2_3": [
+        0,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        null,
+        null
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Odaiba-age5_doppler3": {
+      "pos_sha256": "bd1a5468fcfd6fc089624808fe8dfd7a9313c74b6f6e075bad115e7fec78357e",
+      "fix": 4256,
+      "missing": 1480,
+      "hP95_m": 4.896335831415405,
+      "wrong_fix_0.5_2_3": [
+        157,
+        3,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        186.69499988555845,
+        231.1249998807907
+      ],
+      "right_censored_0.5_2": [
+        false,
+        false
+      ]
+    },
+    "Odaiba-C": {
+      "pos_sha256": "4473453a48041363efa770c27ee78f4222f3f1ba7b22f4fe941034ba19333e99",
+      "fix": 3884,
+      "missing": 1421,
+      "hP95_m": 4.855350469016552,
+      "wrong_fix_0.5_2_3": [
+        52,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        63,
+        63
+      ],
+      "recovery_p95_s_0.5_2": [
+        280.31500003337845,
+        280.1500000357626
+      ],
+      "right_censored_0.5_2": [
+        false,
+        false
+      ]
+    },
+    "Odaiba-C2": {
+      "pos_sha256": "2a4eaf5eb625d7ec180929e9a6dad6bbaa1f5d026d417685ae466c629c5c8559",
+      "fix": 3641,
+      "missing": 1425,
+      "hP95_m": 4.903701056012536,
+      "wrong_fix_0.5_2_3": [
+        1,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        297,
+        297
+      ],
+      "recovery_p95_s_0.5_2": [
+        280.31500003337845,
+        280.28000006675705
+      ],
+      "right_censored_0.5_2": [
+        false,
+        false
+      ]
+    },
+    "Odaiba-D": {
+      "pos_sha256": "870bc29b9a2865da5d3024e458bd210006dc4ca08a099a34acc4cf1aa25d8c6e",
+      "fix": 1454,
+      "missing": 1425,
+      "hP95_m": 4.7771430436225275,
+      "wrong_fix_0.5_2_3": [
+        0,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        null,
+        null
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Odaiba-CD": {
+      "pos_sha256": "6da1c6516c39fad5837ee8d80eac9ede940c3e7d33505263fa786f07dc564e8e",
+      "fix": 4338,
+      "missing": 1419,
+      "hP95_m": 4.854304657304808,
+      "wrong_fix_0.5_2_3": [
+        6,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        37,
+        37
+      ],
+      "recovery_p95_s_0.5_2": [
+        324.4499999999997,
+        324.2500000596043
+      ],
+      "right_censored_0.5_2": [
+        false,
+        false
+      ]
+    },
+    "Shinjuku-default": {
+      "pos_sha256": "392a7f1981a95b9140b8d5c3e6037658b0cb2ed07ae6e31905a36daba63216e3",
+      "fix": 122,
+      "missing": 3234,
+      "hP95_m": 8.382148758455413,
+      "wrong_fix_0.5_2_3": [
+        0,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        null,
+        null
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Shinjuku-age5_doppler3": {
+      "pos_sha256": "cf6b3b4c5905c5228c8eaeb38d1c4eaa26889b9439bdba6fd62d334ac25b5710",
+      "fix": 1949,
+      "missing": 3332,
+      "hP95_m": 8.343242221322189,
+      "wrong_fix_0.5_2_3": [
+        13,
+        1,
+        1
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        751.0400001287459,
+        750.9800001144408
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Shinjuku-C": {
+      "pos_sha256": "e4d87ebfc743707a458abfb35b4c096684ddcaea5a91712188578492274aeeb5",
+      "fix": 2328,
+      "missing": 3294,
+      "hP95_m": 8.38824269974698,
+      "wrong_fix_0.5_2_3": [
+        0,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        672.0350000262257,
+        672.0350000262257
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Shinjuku-C2": {
+      "pos_sha256": "35309880691068ea3d9533c0b573e9662ab85087d9dc8d3eac5fa507f7a28fe3",
+      "fix": 2064,
+      "missing": 3297,
+      "hP95_m": 8.388723009936857,
+      "wrong_fix_0.5_2_3": [
+        0,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        6,
+        6
+      ],
+      "recovery_p95_s_0.5_2": [
+        599.0900000333781,
+        599.0900000333781
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Shinjuku-D": {
+      "pos_sha256": "2e04ed6d73ec93f9dcf10b5be7710dbe4fafd0d86024ebe9384f527e12b640a7",
+      "fix": 122,
+      "missing": 3233,
+      "hP95_m": 8.381910061005156,
+      "wrong_fix_0.5_2_3": [
+        0,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        null,
+        null
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    },
+    "Shinjuku-CD": {
+      "pos_sha256": "ebf956f48839ac13e82bd07ba273a19542696a0a04446971214abce3d8ec4e1a",
+      "fix": 2845,
+      "missing": 3273,
+      "hP95_m": 8.386781549381464,
+      "wrong_fix_0.5_2_3": [
+        4,
+        0,
+        0
+      ],
+      "default_correct_lost_0.5_2": [
+        0,
+        0
+      ],
+      "recovery_p95_s_0.5_2": [
+        768.3899998903272,
+        768.3549999237058
+      ],
+      "right_censored_0.5_2": [
+        true,
+        true
+      ]
+    }
+  },
+  "ublox": {
+    "Odaiba-default": {
+      "grid_epochs": 6205,
+      "matched": 5283,
+      "missing": 922,
+      "fix": 461,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 6.702120266979832,
+      "pos_sha256": "9dc7150d61b4c931f13cff2162086d79e5141a29d15dd7f73c230ba47516dcd1"
+    },
+    "Odaiba-age5_doppler3": {
+      "grid_epochs": 6205,
+      "matched": 5283,
+      "missing": 922,
+      "fix": 663,
+      "wrong": [
+        1,
+        0,
+        0
+      ],
+      "hP95": 6.702120266979832,
+      "default_correct_lost": 0,
+      "pos_sha256": "15d1bb6775aa03b34f8d04b2b8177eccf62eac02367c0388b4914265584e8647"
+    },
+    "Odaiba-C": {
+      "grid_epochs": 6205,
+      "matched": 5284,
+      "missing": 921,
+      "fix": 648,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 6.699889936265662,
+      "default_correct_lost": 0,
+      "pos_sha256": "6392b609129833fc27d37e81261c5ab6e6fd07f6d152d8344ddb8e7be2be77f6"
+    },
+    "Odaiba-C2": {
+      "grid_epochs": 6205,
+      "matched": 5284,
+      "missing": 921,
+      "fix": 615,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 6.699889936265662,
+      "default_correct_lost": 69,
+      "pos_sha256": "3d86d0be79f91812383db41f25d247ed85562b8a2e4ef07edea9350dfc142c5e"
+    },
+    "Odaiba-D": {
+      "grid_epochs": 6205,
+      "matched": 5282,
+      "missing": 923,
+      "fix": 645,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 6.704350597694001,
+      "default_correct_lost": 5,
+      "pos_sha256": "a8feead10f7ba482f110d8005ded557c9a945f36e1af367452f2f8fb0d3b61e9"
+    },
+    "Odaiba-CD": {
+      "grid_epochs": 6205,
+      "matched": 5284,
+      "missing": 921,
+      "fix": 854,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 6.699889936265662,
+      "default_correct_lost": 4,
+      "pos_sha256": "de75adb177e1d56b021923d6850114102cc13beba15acd8134d0fdf675e7d415"
+    },
+    "Shinjuku-default": {
+      "grid_epochs": 10475,
+      "matched": 8101,
+      "missing": 2374,
+      "fix": 1,
+      "wrong": [
+        1,
+        1,
+        0
+      ],
+      "hP95": 5.735866215285676,
+      "pos_sha256": "20c141509912b3cd0860a34329dd85829e554f92d38b859e8d69bd448231fee0"
+    },
+    "Shinjuku-age5_doppler3": {
+      "grid_epochs": 10475,
+      "matched": 8101,
+      "missing": 2374,
+      "fix": 1,
+      "wrong": [
+        1,
+        1,
+        0
+      ],
+      "hP95": 5.735866215285676,
+      "default_correct_lost": 0,
+      "pos_sha256": "20c141509912b3cd0860a34329dd85829e554f92d38b859e8d69bd448231fee0"
+    },
+    "Shinjuku-C": {
+      "grid_epochs": 10475,
+      "matched": 8128,
+      "missing": 2347,
+      "fix": 15,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 5.845893284765952,
+      "default_correct_lost": 0,
+      "pos_sha256": "dc33d6688dfd526b1e8f2dfd531e1797076b932afe6b82ae749ea842ab2d2dc5"
+    },
+    "Shinjuku-C2": {
+      "grid_epochs": 10475,
+      "matched": 8128,
+      "missing": 2347,
+      "fix": 15,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 5.845893284765952,
+      "default_correct_lost": 0,
+      "pos_sha256": "dc33d6688dfd526b1e8f2dfd531e1797076b932afe6b82ae749ea842ab2d2dc5"
+    },
+    "Shinjuku-D": {
+      "grid_epochs": 10475,
+      "matched": 8101,
+      "missing": 2374,
+      "fix": 1,
+      "wrong": [
+        1,
+        1,
+        0
+      ],
+      "hP95": 5.735866215285676,
+      "default_correct_lost": 0,
+      "pos_sha256": "20c141509912b3cd0860a34329dd85829e554f92d38b859e8d69bd448231fee0"
+    },
+    "Shinjuku-CD": {
+      "grid_epochs": 10475,
+      "matched": 8130,
+      "missing": 2345,
+      "fix": 16,
+      "wrong": [
+        0,
+        0,
+        0
+      ],
+      "hP95": 5.844339299312207,
+      "default_correct_lost": 0,
+      "pos_sha256": "3fd1ec7dfaaef3333b2178cead812df48b60ce8152be3a4e4833dee05bf727ad"
+    }
+  },
+  "hero_clip_odaiba_tow_273700_273720": {
+    "default": {
+      "matched_epochs": 191,
+      "fix": 0,
+      "fix_3d_p50_p95_max_m": null,
+      "status_string": "....................................................................................................ss........................................................................................."
+    },
+    "C2": {
+      "matched_epochs": 191,
+      "fix": 112,
+      "fix_3d_p50_p95_max_m": [
+        0.021084688462984055,
+        0.046056686330443984,
+        0.08502287931543305
+      ],
+      "status_string": ".FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.F..ss.....................................FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF.FFF."
+    },
+    "CD": {
+      "matched_epochs": 191,
+      "fix": 151,
+      "fix_3d_p50_p95_max_m": [
+        0.021055640397418366,
+        0.05123995247769811,
+        0.4903455209548438
+      ],
+      "status_string": "FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFss......................................FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+    }
+  },
+  "fix_history_jump_rejections_gt_labelled": {
+    "note": "Candidates rejected by the stationary 0.2 m history check, error of the candidate position vs reference (offline only).",
+    "Odaiba-default": {
+      "n": 624,
+      "share_le_0.5m": 1.0,
+      "median_m": 0.042
+    },
+    "Shinjuku-default": {
+      "n": 28,
+      "share_le_0.5m": 0.964,
+      "median_m": 0.055
+    },
+    "Odaiba-C2": {
+      "n": 658,
+      "share_le_0.5m": 1.0,
+      "median_m": 0.038
+    },
+    "Shinjuku-C2": {
+      "n": 330,
+      "share_le_0.5m": 1.0,
+      "median_m": 0.081
+    }
+  },
+  "decision": "No recipe passes the strict default gate. D (motion compensation alone) is neutral on Trimble but fails on the u-blox holdout by 5/461 (1.08%) correct-FIX loss, +1 missing and +2 mm P95. CD gives continuous correct FIX in the hero clip and 0 wrong FIX on the holdout, but adds 6 (Odaiba) and 4 (Shinjuku) wrong FIX epochs at 0.5-2 m on Trimble and loses 2.9% of Odaiba default-correct FIX. All new behaviour stays opt-in; nothing retuned."
+}

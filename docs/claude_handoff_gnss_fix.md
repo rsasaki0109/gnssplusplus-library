@@ -39,7 +39,8 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 ## 読む順序
 
 1. [AGENTS.md](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
-1. [整数一貫性の診断](rtk_ambiguity_consistency_diagnostics.md) / [JSON](urbannav_ambiguity_consistency_diagnostics.json): 最新の調査（挙動変更なし）。
+1. [heroクリップのFIX](rtk_hero_clip_fix.md) / [JSON](urbannav_hero_clip_fix_evaluation.json): 最新。PR #639のGIFでLOSが多いのにFIXしない理由と、u-blox holdoutでの検証。
+1. [整数一貫性の診断](rtk_ambiguity_consistency_diagnostics.md) / [JSON](urbannav_ambiguity_consistency_diagnostics.json): その前（挙動変更なし）。
 1. [hold更新](rtk_hold_ambiguity_update.md) / [評価JSON](urbannav_hold_update_evaluation.json): その前の調査。
 1. [反復更新と共分散](rtk_iterated_update_covariance.md) / [評価JSON](urbannav_iterated_update_evaluation.json): その前の調査。
 2. [信頼位置履歴の修正](rtk_trusted_history_rollback.md): 最新の実装と影響範囲。
@@ -292,6 +293,8 @@ system Eigenがあれば `CPLUS_INCLUDE_PATH` は不要。
 3. ~~反復KF更新の二重計上~~ → **確定**（上記）。ただし修正単独では採用不可。
    - ~~`applyHoldAmbiguity()` の上書き~~ → **確定**、hold経路の誤basin伝播には効くが主因ではない（[hold更新](rtk_hold_ambiguity_update.md)）。
    - ~~R/HRでのAR候補の受理~~ → 診断済み（[整数一貫性](rtk_ambiguity_consistency_diagnostics.md)）。BSRは正誤とも≈1、full setの最良cost/pairは正しいFIXでも2–137（期待値≈1）で、Qb由来のratio/BSR/χ²では分離できない。整数から外れているのは長期lock（中央値49–198 epoch）のambiguity。誤FIXはfull setが4–10ペアしかないepoch。HRでは正しいFIXでも|z|中央値16–19（hold疑似観測の毎epoch再適用による二重計上の疑い、未検証）。
+   - heroクリップ: 既定では179–199秒前・約400 m先の古いFIXアンカーで全候補が棄却。アンカーを失効させると、今度は `exceedsFixHistoryJump()` の静止前提0.2 m判定が10 Hzで2 m/s超の正しいFIXを3回に1回棄却（`.FFF.`）。opt-in `--fix-history-motion-compensation` を追加。CD（anchor5+Doppler3+10ambiguity下限+動き補正）はクリップで連続FIX（中央値2.1 cm）、u-blox holdoutで誤FIX 0だが、Trimbleで誤FIX 6/4件（0.5–2 m）と正FIX喪失2.9%で既定化は不可。
+   - u-blox rover（`rover_ublox.obs`）は今回初めて使ったholdout。epoch時刻に+1〜3 msの定常オフセットがあるため、5 ms以内で照合し参照を補間して採点する。
    - 次: 長期lockのambiguityが整数から外れる原因（slip検出の取りこぼし・半波長・マルチパス吸収）を、max-|z|ペアとGF/Doppler/code-phase検出器の余裕で突き合わせる。hold再適用の二重計上は合成シーンで先に再現する。
    - Doppler軌跡は受理FIXごとに再anchorするため、連続した誤basin（Shinjuku 283274–283289で145 epoch）は検出できない。
 4. ログに現れない別状態の漏れを疑う場合も、受理済みhold更新など意図的な状態変化と区別し、再現テストを先に作る。
