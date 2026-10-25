@@ -167,6 +167,12 @@ public:
         // in the consecutive-FIX history check. Off keeps the stationary
         // last FIX, which rejects consistent fixes above about 2 m/s at 10 Hz.
         bool fix_history_motion_compensation = false;
+        // Opt-in: propagate the last FIX the same way (Doppler velocity, both
+        // at most 2 s old) before the absolute max_position_jump check. Off
+        // keeps the stationary anchor, which rejects every consistent
+        // candidate once the vehicle has moved max_position_jump_m since the
+        // last FIX (0.4 s at 13 m/s with the 5 m default).
+        bool max_position_jump_motion_compensation = false;
 
         // Measurement noise
         double pseudorange_sigma = 0.3;           // m (eratio = pseudorange_sigma / carrier_phase_sigma = 150)

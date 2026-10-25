@@ -140,6 +140,7 @@ struct SolveConfig {
     bool kf_relinearize_from_epoch_prior = false;
     bool hold_ambiguity_kalman_update = false;
     bool fix_history_motion_compensation = false;
+    bool max_position_jump_motion_compensation = false;
     int hold_fix_min_matched_pairs = 4;
     int min_fix_satellites = 0;
     double elevation_mask_deg = 15.0;
@@ -1565,6 +1566,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --fix-history-motion-compensation\n"
         << "                             Propagate the last FIX by Doppler velocity in the\n"
         << "                             consecutive-FIX 0.2 m history check (default: off)\n"
+        << "  --max-position-jump-motion-compensation\n"
+        << "                             Propagate the last FIX the same way in the absolute\n"
+        << "                             max position jump check (default: off)\n"
         << "  --hold-kalman-update       Apply held DD integers as a Kalman pseudo-observation\n"
         << "                             instead of overwriting the ambiguities (default: off)\n"
         << "  --hold-fix-min-matched-pairs <n>\n"
@@ -2584,6 +2588,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--fix-history-motion-compensation") {
             config.fix_history_motion_compensation = true;
+            continue;
+        }
+        if (arg == "--max-position-jump-motion-compensation") {
+            config.max_position_jump_motion_compensation = true;
             continue;
         }
         if (arg == "--hold-kalman-update") {
@@ -3778,6 +3786,8 @@ int main(int argc, char* argv[]) {
         rtk_config.kf_relinearize_from_epoch_prior = config.kf_relinearize_from_epoch_prior;
         rtk_config.hold_ambiguity_kalman_update = config.hold_ambiguity_kalman_update;
         rtk_config.fix_history_motion_compensation = config.fix_history_motion_compensation;
+        rtk_config.max_position_jump_motion_compensation =
+            config.max_position_jump_motion_compensation;
         rtk_config.hold_fix_min_matched_pairs = config.hold_fix_min_matched_pairs;
         rtk_config.min_fix_satellites = config.min_fix_satellites;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;

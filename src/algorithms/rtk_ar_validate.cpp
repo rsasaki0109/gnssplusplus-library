@@ -412,8 +412,9 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         rtk_config_.max_position_jump_rate_mps > 0.0 &&
         fixed_anchor_usable &&
         has_fixed_jump_dt;
-    Vector3d fix_history_reference = last_fixed_position_;
-    if (rtk_config_.fix_history_motion_compensation &&
+    Vector3d motion_reference = last_fixed_position_;
+    if ((rtk_config_.fix_history_motion_compensation ||
+         rtk_config_.max_position_jump_motion_compensation) &&
         rtk_config_.position_mode != RTKConfig::PositionMode::STATIC &&
         has_last_fixed_time_ && has_last_doppler_velocity_ &&
         last_doppler_velocity_ecef_.allFinite()) {
@@ -421,9 +422,13 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         const double velocity_age = current_time - last_doppler_velocity_time_;
         if (std::isfinite(dt) && dt > 0.0 && dt <= 2.0 &&
             std::isfinite(velocity_age) && velocity_age >= 0.0 && velocity_age <= 2.0) {
-            fix_history_reference += last_doppler_velocity_ecef_ * dt;
+            motion_reference += last_doppler_velocity_ecef_ * dt;
         }
     }
+    const Vector3d& fix_history_reference =
+        rtk_config_.fix_history_motion_compensation ? motion_reference : last_fixed_position_;
+    const Vector3d& position_jump_reference =
+        rtk_config_.max_position_jump_motion_compensation ? motion_reference : last_fixed_position_;
     if (!isMovingBasePositionMode(rtk_config_) &&
         !use_adaptive_position_jump &&
         rtk_validation::exceedsFixHistoryJump(
@@ -446,7 +451,7 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         }
         if (position_jump_limit > 0.0 &&
             rtk_validation::exceedsAbsoluteJump(
-                new_pos, last_fixed_position_, true, position_jump_limit)) {
+                new_pos, position_jump_reference, true, position_jump_limit)) {
             debug_telemetry_.reject_reason =
                 use_adaptive_position_jump ? "adaptive_position_jump" : "max_position_jump";
             return false;
