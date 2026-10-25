@@ -39,7 +39,10 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 ## 読む順序
 
 1. [AGENTS.md](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
-1. [heroクリップのFIX](rtk_hero_clip_fix.md) / [JSON](urbannav_hero_clip_fix_evaluation.json): 最新。PR #639のGIFでLOSが多いのにFIXしない理由と、u-blox holdoutでの検証。
+1. [max position jumpの動き補正](rtk_max_position_jump_motion.md) / [JSON](urbannav_max_position_jump_motion_evaluation.json): 最新。CDが失う正FIX（Odaiba 37）は全て動き不感の `max_position_jump`（5秒アンカー×5 m）。opt-in `--max-position-jump-motion-compensation`（Dと同じ伝播規則、新閾値なし）で30を回復。M単独は凍結ゲートの列挙項目を全Tokyoで満たす（u-blox Odaiba FIX 461→617、誤FIX 0）が「誤FIXの減少」条項は満たさず既定はメンテナ判断。CDRI（CD+R+I）は誤FIXが増えNO_GO。CDの残る誤FIX 10件はFIX連続区間末尾の0.07–0.15 m/epochのドリフト（Doppler再anchorで未検出）。
+1. [長期lockの過信](rtk_long_lock_overconfidence.md) / [JSON](urbannav_long_lock_overconfidence.json): その前（挙動変更なし）。10 Hz真値DD（採点・解析専用）で位相誤差の振幅はモデル通り（6–9 mm）だが約3秒の相関と遅い成分、コードは中心はモデル通りで裾が重い（3σ超7%）。10 Hzの白色扱い（凍結予測の1 Hz間引き試験で棄却）、電離層、コードの裾のいずれも主因ではない。次はフィルタ内部（kinematic再seedによる位置/ambiguity相関の喪失、コード由来の初期化、参照衛星切替）。
+1. [基地局補間の曲率](rtk_base_interpolation_curvature.md) / [JSON](urbannav_base_interpolation_evaluation.json): その前。`interpolateBaseEpoch()` がモデル距離まで線形補間し、1 Hz基地局の距離曲率（DD p95 1.2 cm）を落としていた不具合を、opt-in `--base-interp-curvature` として修正（**既定は不変**）。固定ゲートは雑音レベルの差（欠損+3/+4、u-blox Shinjuku P95 +1.2 cm、HK Harsh）で不合格。Qbの過信の主因ではない。
+1. [heroクリップのFIX](rtk_hero_clip_fix.md) / [JSON](urbannav_hero_clip_fix_evaluation.json): その前。PR #639のGIFでLOSが多いのにFIXしない理由と、u-blox holdoutでの検証。
 1. [整数一貫性の診断](rtk_ambiguity_consistency_diagnostics.md) / [JSON](urbannav_ambiguity_consistency_diagnostics.json): その前（挙動変更なし）。
 1. [hold更新](rtk_hold_ambiguity_update.md) / [評価JSON](urbannav_hold_update_evaluation.json): その前の調査。
 1. [反復更新と共分散](rtk_iterated_update_covariance.md) / [評価JSON](urbannav_iterated_update_evaluation.json): その前の調査。
@@ -295,7 +298,10 @@ system Eigenがあれば `CPLUS_INCLUDE_PATH` は不要。
    - ~~R/HRでのAR候補の受理~~ → 診断済み（[整数一貫性](rtk_ambiguity_consistency_diagnostics.md)）。BSRは正誤とも≈1、full setの最良cost/pairは正しいFIXでも2–137（期待値≈1）で、Qb由来のratio/BSR/χ²では分離できない。整数から外れているのは長期lock（中央値49–198 epoch）のambiguity。誤FIXはfull setが4–10ペアしかないepoch。HRでは正しいFIXでも|z|中央値16–19（hold疑似観測の毎epoch再適用による二重計上の疑い、未検証）。
    - heroクリップ: 既定では179–199秒前・約400 m先の古いFIXアンカーで全候補が棄却。アンカーを失効させると、今度は `exceedsFixHistoryJump()` の静止前提0.2 m判定が10 Hzで2 m/s超の正しいFIXを3回に1回棄却（`.FFF.`）。opt-in `--fix-history-motion-compensation` を追加。CD（anchor5+Doppler3+10ambiguity下限+動き補正）はクリップで連続FIX（中央値2.1 cm）、u-blox holdoutで誤FIX 0だが、Trimbleで誤FIX 6/4件（0.5–2 m）と正FIX喪失2.9%で既定化は不可。
    - u-blox rover（`rover_ublox.obs`）は今回初めて使ったholdout。epoch時刻に+1〜3 msの定常オフセットがあるため、5 ms以内で照合し参照を補間して採点する。
-   - 次: 長期lockのambiguityが整数から外れる原因（slip検出の取りこぼし・半波長・マルチパス吸収）を、max-|z|ペアとGF/Doppler/code-phase検出器の余裕で突き合わせる。hold再適用の二重計上は合成シーンで先に再現する。
+   - ~~長期lockのambiguityが整数から外れる原因~~ → 一部切り分け（[基地局補間](rtk_base_interpolation_curvature.md)）。真値DD（1 Hz、採点専用）の持続的な整数サイクル段差はOdaibaで11時刻、うち9時刻はソルバーが同じ1秒にLLI/リセットを記録、未検出はC04 B2Iの2件のみで主因ではない。基地局補間がモデル距離まで線形補間して曲率を落とす不具合（基地局epochで0、中間で最大のため1 Hz解析には現れない）をopt-in `--base-interp-curvature` で修正したが、受理ARのcost/pair・|z|はほぼ不変（Odaiba 4.73→4.44）。
+   - ~~残る長期lockの過信（マルチパスのfloat吸収か、ambiguity過程雑音か）~~ → 入力側は切り分け済み（[長期lockの過信](rtk_long_lock_overconfidence.md)）。10 Hz白色扱い・電離層・コードの裾はいずれも主因ではない。最大|z|ペアのlockは7–16秒で「長期」というより数相関時間。
+   - 次: フィルタ内部（kinematicのSPP再seedで位置/ambiguity相関が失われる点、0.3 mモデルでのコード由来初期化、参照衛星切替）を、凍結予測→解析の順で検証する。hold再適用の二重計上は合成シーンで先に再現する。
+   - `gnss_live`・`examples/rtk_positioning`・`holdBaseEpoch` は目標時刻の暦を独立に選ぶため、補間区間内の暦切替（数十cm）を拾いうる（未修正）。
    - Doppler軌跡は受理FIXごとに再anchorするため、連続した誤basin（Shinjuku 283274–283289で145 epoch）は検出できない。
 4. ログに現れない別状態の漏れを疑う場合も、受理済みhold更新など意図的な状態変化と区別し、再現テストを先に作る。
 

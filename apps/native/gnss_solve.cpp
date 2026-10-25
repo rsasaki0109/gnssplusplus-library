@@ -94,6 +94,7 @@ struct SolveConfig {
     std::string output_kml_path = "output/rtk_solution.kml";
     bool write_kml = true;
     bool enable_base_interpolation = true;
+    bool base_interpolation_curvature = false;
     bool verbose = false;
     bool base_position_override = false;
     Eigen::Vector3d base_position_ecef = Eigen::Vector3d::Zero();
@@ -139,6 +140,7 @@ struct SolveConfig {
     bool kf_relinearize_from_epoch_prior = false;
     bool hold_ambiguity_kalman_update = false;
     bool fix_history_motion_compensation = false;
+    bool max_position_jump_motion_compensation = false;
     int hold_fix_min_matched_pairs = 4;
     int min_fix_satellites = 0;
     double elevation_mask_deg = 15.0;
@@ -1564,6 +1566,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --fix-history-motion-compensation\n"
         << "                             Propagate the last FIX by Doppler velocity in the\n"
         << "                             consecutive-FIX 0.2 m history check (default: off)\n"
+        << "  --max-position-jump-motion-compensation\n"
+        << "                             Propagate the last FIX the same way in the absolute\n"
+        << "                             max position jump check (default: off)\n"
         << "  --hold-kalman-update       Apply held DD integers as a Kalman pseudo-observation\n"
         << "                             instead of overwriting the ambiguities (default: off)\n"
         << "  --hold-fix-min-matched-pairs <n>\n"
@@ -2073,6 +2078,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --student-t-rtk-front-end  Enable Student-t(nu=4) DD covariance inflation (default: off)\n"
         << "  --no-kinematic-post-filter Disable the kinematic output post-filter\n"
         << "  --no-base-interp           Require exact rover/base epoch alignment\n"
+        << "  --base-interp-curvature    Evaluate the modeled base range at the rover epoch when\n"
+        << "                             interpolating the base (keeps the range curvature;\n"
+        << "                             default: off)\n"
         << "  --verbose                  Print per-epoch progress summary\n"
         << "  -h, --help                 Show concise everyday-use help\n"
         << "  --help-advanced            Show this complete option reference\n";
@@ -2582,6 +2590,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.fix_history_motion_compensation = true;
             continue;
         }
+        if (arg == "--max-position-jump-motion-compensation") {
+            config.max_position_jump_motion_compensation = true;
+            continue;
+        }
         if (arg == "--hold-kalman-update") {
             config.hold_ambiguity_kalman_update = true;
             continue;
@@ -3001,6 +3013,8 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.enable_kinematic_post_filter = false;
         } else if (arg == "--no-base-interp") {
             config.enable_base_interpolation = false;
+        } else if (arg == "--base-interp-curvature") {
+            config.base_interpolation_curvature = true;
         } else if (arg == "--verbose") {
             config.verbose = true;
         } else {
@@ -3772,6 +3786,8 @@ int main(int argc, char* argv[]) {
         rtk_config.kf_relinearize_from_epoch_prior = config.kf_relinearize_from_epoch_prior;
         rtk_config.hold_ambiguity_kalman_update = config.hold_ambiguity_kalman_update;
         rtk_config.fix_history_motion_compensation = config.fix_history_motion_compensation;
+        rtk_config.max_position_jump_motion_compensation =
+            config.max_position_jump_motion_compensation;
         rtk_config.hold_fix_min_matched_pairs = config.hold_fix_min_matched_pairs;
         rtk_config.min_fix_satellites = config.min_fix_satellites;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
@@ -4082,7 +4098,10 @@ int main(int argc, char* argv[]) {
                   << " m/MHz, L2 ICB " << config.glonass_icb_l2_m_per_mhz << " m/MHz)"
                   << std::endl;
         std::cout << "  base interpolation: "
-                  << (config.enable_base_interpolation ? "enabled" : "disabled") << std::endl;
+                  << (config.enable_base_interpolation ? "enabled" : "disabled")
+                  << (config.enable_base_interpolation && config.base_interpolation_curvature
+                          ? " (modeled range at the rover epoch)" : "")
+                  << std::endl;
         if (integrity_gate) {
             std::cout << "  real-time FIX integrity: enabled (max latency "
                       << integrity_gate->maxOutputLatencyEpochs() << " epochs, consensus "
@@ -4275,7 +4294,8 @@ int main(int argc, char* argv[]) {
                        timeDiffSeconds(rover_obs.time, lower_base_obs.time) >= -kExactTimeToleranceSeconds &&
                        timeDiffSeconds(base_obs.time, rover_obs.time) >= -kExactTimeToleranceSeconds &&
                        interpolateBaseEpoch(lower_base_obs, base_obs, rover_obs.time,
-                                            base_position, nav_data, aligned_base_obs)) {
+                                            base_position, nav_data, aligned_base_obs,
+                                            config.base_interpolation_curvature)) {
                 interpolated_base_epochs++;
                 have_aligned_base = true;
                 used_interpolated_base = true;

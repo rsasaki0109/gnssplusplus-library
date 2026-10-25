@@ -1,0 +1,906 @@
+{
+ "title": "Motion-compensated max position jump check (opt-in M) and the CD recipe",
+ "doc": "docs/rtk_max_position_jump_motion.md",
+ "reference_use": "scoring and 0.5 m labels only; never a solver input",
+ "frozen_rule_cdri": [
+  "Frozen before replay (2026-10-25T08:21Z). No new code, no thresholds: combinations of existing opt-ins.",
+  "Binary: gnss_solve develop f48dcd9 (solver identical to 9dcaf29).",
+  "Candidate (chosen a priori): CDRI = CD + --kf-relinearize-from-prior + --base-interp-curvature,",
+  "  CD = --max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 --low-ratio-guard-threshold 1e9",
+  "       --low-ratio-min-fixed-ambiguities 10 --fix-history-motion-compensation.",
+  "Descriptive only: CD, CDR (CD + R), CDI (CD + I).",
+  "Reference: default recipe of the same binary.",
+  "Gate for the candidate (each of Trimble Odaiba, Trimble Shinjuku, u-blox Odaiba, u-blox Shinjuku; same as",
+  "docs/fix_recovery_guard.md): wrong FIX >0.5/2/3 m not increased; default-correct FIX loss <= 1% (0.5 m);",
+  "missing epochs and horizontal P95 not increased; recovery P95 and right-censoring (0.5 m) not increased.",
+  "Trimble = development, u-blox = holdout (used for CD before but no choice was made on it).",
+  "HK Deep/Harsh: already scored by online PVA v3 (development data) and truth biased up to ~1 m:",
+  "descriptive only, wrong FIX at 2/3 m.",
+  "If the candidate fails any gate item: no default change; record, then analyse its wrong-FIX episodes",
+  "and default-correct losses (mechanism), with no retuning."
+ ],
+ "frozen_rule_cdm": [
+  "Frozen before replay (2026-10-25T08:38Z). New opt-in M = --max-position-jump-motion-compensation",
+  "(reuses D's propagation rule unchanged: last FIX + Doppler velocity x dt, dt and velocity age <= 2 s; no new threshold).",
+  "Repro: RTKFixHistoryJumpTest.MotionCompensationKeepsConsistentFixesUnderMaxPositionJump.",
+  "Binary: develop f48dcd9 + this change. Recipes: default, M, CD, CDM (= CD + M).",
+  "1) Byte identity: default and CD POS equal the f48dcd9 runs (runs/cdri) on all 6 runs.",
+  "2) Mechanism prediction (CDM vs CD, Trimble Odaiba): >= 30 of the 37 default-correct epochs CD loses at",
+  "   TOW 273505.9-273510.x are FIX within 0.5 m under CDM.",
+  "3) Default gate (docs/fix_recovery_guard.md) for M and for CDM vs default on Trimble Odaiba/Shinjuku and",
+  "   u-blox Odaiba/Shinjuku: wrong FIX >0.5/2/3 m not increased, default-correct loss <= 1%, missing and hP95",
+  "   not increased, recovery P95 and right-censoring not increased. HK descriptive (2/3 m).",
+  "If a gate item fails: no default change; M stays opt-in and the result is recorded. No retuning."
+ ],
+ "binaries_sha256": {
+  "develop_f48dcd9": "bb4c2140c022633d5ada901531800a184fa9c9e8887e453af6926a7676e636bf",
+  "with_M_fec0a0fb": "0796ef677849732dfe429519402e41de51a6cf8b3c278e31b3b13f2d458bb015"
+ },
+ "recipes": {
+  "CD": "--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 --fix-history-motion-compensation",
+  "R": "--kf-relinearize-from-prior",
+  "I": "--base-interp-curvature",
+  "M": "--max-position-jump-motion-compensation"
+ },
+ "native_argv": "see docs/urbannav_base_interpolation_evaluation.json native_argv (Tokyo and HK), plus the recipe flags",
+ "scoring": {
+  "trimble": "evaluate_urbannav_fix_continuity.score() exact 1 ms",
+  "ublox": "0.2 s grid, 5 ms matching, reference interpolated",
+  "hk": "repository scorer on exact 1 Hz epochs; descriptive only (development data since online PVA holdout v3; truth biased up to about 1 m)"
+ },
+ "results_cdri": {
+  "trimble-Odaiba": {
+   "default": {
+    "fix": 1298,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7772,
+    "fix3d_p50": 0.0348,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "CD": {
+    "fix": 4338,
+    "missing": 1419,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 4.8543,
+    "fix3d_p50": 0.0446,
+    "recP95@0.5": 324.45,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "default_correct_lost": 37,
+    "default_correct_lost_pct": 2.85
+   },
+   "CDR": {
+    "fix": 4308,
+    "missing": 1511,
+    "wrong>0.5/2/3": [
+     43,
+     0,
+     0
+    ],
+    "hP95": 5.2113,
+    "fix3d_p50": 0.0437,
+    "recP95@0.5": 321.24,
+    "outages@0.5": 13,
+    "censored@0.5": false,
+    "default_correct_lost": 37,
+    "default_correct_lost_pct": 2.85
+   },
+   "CDI": {
+    "fix": 4265,
+    "missing": 1423,
+    "wrong>0.5/2/3": [
+     53,
+     0,
+     0
+    ],
+    "hP95": 4.8617,
+    "fix3d_p50": 0.0408,
+    "recP95@0.5": 324.61,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "default_correct_lost": 37,
+    "default_correct_lost_pct": 2.85
+   },
+   "CDRI": {
+    "fix": 4337,
+    "missing": 1493,
+    "wrong>0.5/2/3": [
+     38,
+     0,
+     0
+    ],
+    "hP95": 5.1582,
+    "fix3d_p50": 0.0408,
+    "recP95@0.5": 321.04,
+    "outages@0.5": 13,
+    "censored@0.5": false,
+    "default_correct_lost": 37,
+    "default_correct_lost_pct": 2.85
+   }
+  },
+  "trimble-Shinjuku": {
+   "default": {
+    "fix": 122,
+    "missing": 3234,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.3821,
+    "fix3d_p50": 0.0471,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "CD": {
+    "fix": 2845,
+    "missing": 3273,
+    "wrong>0.5/2/3": [
+     4,
+     0,
+     0
+    ],
+    "hP95": 8.3868,
+    "fix3d_p50": 0.0695,
+    "recP95@0.5": 768.39,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDR": {
+    "fix": 2725,
+    "missing": 3534,
+    "wrong>0.5/2/3": [
+     8,
+     0,
+     0
+    ],
+    "hP95": 1.9718,
+    "fix3d_p50": 0.0772,
+    "recP95@0.5": 743.96,
+    "outages@0.5": 9,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDI": {
+    "fix": 2842,
+    "missing": 3277,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "hP95": 8.3681,
+    "fix3d_p50": 0.0648,
+    "recP95@0.5": 768.29,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDRI": {
+    "fix": 2732,
+    "missing": 3535,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "hP95": 1.9138,
+    "fix3d_p50": 0.0676,
+    "recP95@0.5": 743.84,
+    "outages@0.5": 9,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Odaiba": {
+   "default": {
+    "fix": 461,
+    "missing": 922,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.7021,
+    "fix3d_p50": 0.036,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "CD": {
+    "fix": 854,
+    "missing": 921,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6999,
+    "fix3d_p50": 0.0346,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 0.87
+   },
+   "CDR": {
+    "fix": 854,
+    "missing": 1002,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.6579,
+    "fix3d_p50": 0.0341,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 5,
+    "default_correct_lost_pct": 1.08
+   },
+   "CDI": {
+    "fix": 853,
+    "missing": 919,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6706,
+    "fix3d_p50": 0.0305,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 6,
+    "default_correct_lost_pct": 1.3
+   },
+   "CDRI": {
+    "fix": 853,
+    "missing": 1002,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.6703,
+    "fix3d_p50": 0.0303,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 7,
+    "default_correct_lost_pct": 1.52
+   }
+  },
+  "ublox-Shinjuku": {
+   "default": {
+    "fix": 1,
+    "missing": 2374,
+    "wrong>0.5/2/3": [
+     1,
+     1,
+     0
+    ],
+    "hP95": 5.7359,
+    "fix3d_p50": null,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": false
+   },
+   "CD": {
+    "fix": 16,
+    "missing": 2345,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8443,
+    "fix3d_p50": 0.0201,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDR": {
+    "fix": 16,
+    "missing": 2346,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.3387,
+    "fix3d_p50": 0.019,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDI": {
+    "fix": 16,
+    "missing": 2344,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8506,
+    "fix3d_p50": 0.017,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDRI": {
+    "fix": 16,
+    "missing": 2349,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.3139,
+    "fix3d_p50": 0.0179,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   }
+  },
+  "novatel-HKDeepUrban1": {
+   "default": {
+    "fix": 6,
+    "missing": 478,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 7.2398
+   },
+   "CD": {
+    "fix": 59,
+    "missing": 477,
+    "wrong>0.5/2/3": [
+     58,
+     0,
+     0
+    ],
+    "hP95": 7.2282,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   },
+   "CDR": {
+    "fix": 58,
+    "missing": 472,
+    "wrong>0.5/2/3": [
+     57,
+     0,
+     0
+    ],
+    "hP95": 7.1748,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   },
+   "CDI": {
+    "fix": 59,
+    "missing": 477,
+    "wrong>0.5/2/3": [
+     58,
+     0,
+     0
+    ],
+    "hP95": 7.2282,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   },
+   "CDRI": {
+    "fix": 58,
+    "missing": 472,
+    "wrong>0.5/2/3": [
+     57,
+     0,
+     0
+    ],
+    "hP95": 7.1748,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   }
+  },
+  "novatel-HKHarshUrban1": {
+   "default": {
+    "fix": 7,
+    "missing": 1123,
+    "wrong>0.5/2/3": [
+     7,
+     7,
+     5
+    ],
+    "hP95": 13.8969
+   },
+   "CD": {
+    "fix": 0,
+    "missing": 800,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 32.4958,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDR": {
+    "fix": 0,
+    "missing": 796,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 34.3447,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDI": {
+    "fix": 0,
+    "missing": 800,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 32.4958,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDRI": {
+    "fix": 0,
+    "missing": 796,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 34.3447,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   }
+  }
+ },
+ "results_cdm": {
+  "trimble-Odaiba": {
+   "default": {
+    "fix": 1298,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7772,
+    "fix3d_p50": 0.0348,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "M": {
+    "fix": 1298,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7772,
+    "fix3d_p50": 0.0348,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CD": {
+    "fix": 4338,
+    "missing": 1419,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 4.8543,
+    "fix3d_p50": 0.0446,
+    "recP95@0.5": 324.45,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "default_correct_lost": 37,
+    "default_correct_lost_pct": 2.85
+   },
+   "CDM": {
+    "fix": 4450,
+    "missing": 1419,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 4.8543,
+    "fix3d_p50": 0.0445,
+    "recP95@0.5": 324.45,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "default_correct_lost": 7,
+    "default_correct_lost_pct": 0.54
+   }
+  },
+  "trimble-Shinjuku": {
+   "default": {
+    "fix": 122,
+    "missing": 3234,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.3821,
+    "fix3d_p50": 0.0471,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "M": {
+    "fix": 122,
+    "missing": 3234,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.3821,
+    "fix3d_p50": 0.0471,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CD": {
+    "fix": 2845,
+    "missing": 3273,
+    "wrong>0.5/2/3": [
+     4,
+     0,
+     0
+    ],
+    "hP95": 8.3868,
+    "fix3d_p50": 0.0695,
+    "recP95@0.5": 768.39,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDM": {
+    "fix": 2877,
+    "missing": 3272,
+    "wrong>0.5/2/3": [
+     4,
+     0,
+     0
+    ],
+    "hP95": 8.3867,
+    "fix3d_p50": 0.0707,
+    "recP95@0.5": 768.39,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Odaiba": {
+   "default": {
+    "fix": 461,
+    "missing": 922,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.7021,
+    "fix3d_p50": 0.036,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "M": {
+    "fix": 617,
+    "missing": 922,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.7021,
+    "fix3d_p50": 0.0337,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CD": {
+    "fix": 854,
+    "missing": 921,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6999,
+    "fix3d_p50": 0.0346,
+    "recP95@0.5": 8.61,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 0.87
+   },
+   "CDM": {
+    "fix": 871,
+    "missing": 921,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6999,
+    "fix3d_p50": 0.0344,
+    "recP95@0.5": 8.44,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 0.87
+   }
+  },
+  "ublox-Shinjuku": {
+   "default": {
+    "fix": 1,
+    "missing": 2374,
+    "wrong>0.5/2/3": [
+     1,
+     1,
+     0
+    ],
+    "hP95": 5.7359,
+    "fix3d_p50": null,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": false
+   },
+   "M": {
+    "fix": 1,
+    "missing": 2374,
+    "wrong>0.5/2/3": [
+     1,
+     1,
+     0
+    ],
+    "hP95": 5.7359,
+    "fix3d_p50": null,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": false,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CD": {
+    "fix": 16,
+    "missing": 2345,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8443,
+    "fix3d_p50": 0.0201,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDM": {
+    "fix": 16,
+    "missing": 2345,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8443,
+    "fix3d_p50": 0.0201,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   }
+  },
+  "novatel-HKDeepUrban1": {
+   "default": {
+    "fix": 6,
+    "missing": 478,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 7.2398
+   },
+   "M": {
+    "fix": 17,
+    "missing": 478,
+    "wrong>0.5/2/3": [
+     17,
+     0,
+     0
+    ],
+    "hP95": 7.2398,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CD": {
+    "fix": 59,
+    "missing": 477,
+    "wrong>0.5/2/3": [
+     58,
+     0,
+     0
+    ],
+    "hP95": 7.2282,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   },
+   "CDM": {
+    "fix": 64,
+    "missing": 477,
+    "wrong>0.5/2/3": [
+     63,
+     0,
+     0
+    ],
+    "hP95": 7.2282,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   }
+  },
+  "novatel-HKHarshUrban1": {
+   "default": {
+    "fix": 7,
+    "missing": 1123,
+    "wrong>0.5/2/3": [
+     7,
+     7,
+     5
+    ],
+    "hP95": 13.8969
+   },
+   "M": {
+    "fix": 7,
+    "missing": 1123,
+    "wrong>0.5/2/3": [
+     7,
+     7,
+     5
+    ],
+    "hP95": 13.8969,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CD": {
+    "fix": 0,
+    "missing": 800,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 32.4958,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDM": {
+    "fix": 0,
+    "missing": 800,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 32.4958,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   }
+  }
+ },
+ "byte_identity": "default and CD POS of the M build equal develop f48dcd9 on all 6 runs; M equals default on Trimble Odaiba, Trimble Shinjuku, u-blox Shinjuku and HK Harsh",
+ "cd_lost_epochs_odaiba": {
+  "count": 37,
+  "span_tow": [
+   273505.9,
+   273510.7
+  ],
+  "reject_reason": {
+   "max_position_jump": 30,
+   "low_ratio_weak_integer_system": 7
+  },
+  "fixed_candidate_history_jump_m_growth": "1.33 m per 0.1 s (about 13 m/s) from the last FIX at 273505.7",
+  "recovered_by_CDM": 30,
+  "still_lost_under_CDM": [
+   273505.9,
+   273506.0,
+   273506.1,
+   273506.3,
+   273506.4,
+   273506.5,
+   273506.7
+  ],
+  "new_losses_under_CDM": 0
+ },
+ "cd_wrong_fix_epochs": {
+  "odaiba": 6,
+  "shinjuku": 4,
+  "shape": "end of a FIX streak whose error grows by 0.07-0.15 m per epoch to 0.5-0.9 m; 7 of 10 are hold fixes, all directly after a FIX epoch; the next FLOAT is back near the reference, so the drift is in the FIX, not in the reference",
+  "doppler_integration_separation": {
+   "odaiba_1s_window_m": {
+    "correct_p95": 0.104,
+    "correct_p99": 0.264,
+    "wrong": [
+     0.299,
+     0.346,
+     0.385,
+     0.723,
+     0.743
+    ]
+   },
+   "shinjuku_1s_window_m": {
+    "correct_p95": 0.283,
+    "correct_p99": 0.56,
+    "wrong": [
+     0.256,
+     0.262,
+     0.3,
+     0.73
+    ]
+   },
+   "verdict": "overlaps on Shinjuku; no rule proposed"
+  }
+ },
+ "gate": {
+  "CDRI": "fail (Trimble Odaiba wrong >0.5 m 0 -> 38, Shinjuku 0 -> 10, Odaiba loss 2.85%, missing and P95 up)",
+  "CDM": "fail (Trimble wrong >0.5 m 0 -> 6 and 0 -> 4, inherited from CD); Odaiba loss 2.85% -> 0.54%",
+  "M": "every item of the frozen CDM rule passes on all four Tokyo runs (u-blox Odaiba FIX 461 -> 617, no wrong FIX, no loss, missing/P95/recovery unchanged; other runs byte-identical); the docs/fix_recovery_guard.md clause \"at least one wrong-FIX population must decrease\" is not met (none changes)"
+ },
+ "decision": "M stays opt-in (default off) pending the maintainer: it passes the listed gate items but not the guard-specific decrease clause, and changes only one of four runs"
+}
