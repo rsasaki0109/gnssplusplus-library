@@ -1,0 +1,631 @@
+{
+ "title": "Long-lock ambiguity overconfidence: truth-DD residual statistics and a decimation test",
+ "doc": "docs/rtk_long_lock_overconfidence.md",
+ "solver_change": "none",
+ "reference_use": "analysis residuals and 0.5 m labels only; never a solver input",
+ "frozen_prediction_before_decimation_replay": [
+  "Frozen before replay (2026-10-25T06:53Z). Mechanism test, not a candidate.",
+  "Hypothesis H: long-lock overconfidence comes from treating time-correlated phase errors (amplitude ~ model,",
+  "tau ~ 3 s, slow components) as white at 10 Hz.",
+  "Test: rover RINEX decimated to integer seconds (1 Hz, all epochs then align exactly with the 1 Hz base),",
+  "same gnss_solve (develop 9dcaf29) age5_doppler3 + --lambda-shadow-candidates 2 --debug-epoch-log, Trimble",
+  "Odaiba/Shinjuku. Reference only for 0.5 m correct/wrong labels.",
+  "Prediction under H: accepted AR (non-hold) correct fixes cost/pair p50 drops by >= 3x vs 10 Hz on both drives",
+  "(Odaiba 4.73 -> <= 1.58, Shinjuku 64.3 -> <= 21.4), and max|z| p50 drops by >= 1.7x.",
+  "If not: H is not the dominant mechanism; record and look elsewhere. No solver change in this step."
+ ],
+ "binaries_sha256": {
+  "develop_9dcaf29_gnss_solve": "bb4c2140c022633d5ada901531800a184fa9c9e8887e453af6926a7676e636bf",
+  "develop_equivalent_10Hz_runs": "bb4c2140c022633d5ada901531800a184fa9c9e8887e453af6926a7676e636bf"
+ },
+ "inputs_sha256": {
+  "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8",
+  "data/driving/Tokyo_Data/Odaiba/base_trimble.obs": "5cc6c8d205530deeba6e7b37c3ff002d54ace69ecfd994e1a4b90683e0c165ee",
+  "data/driving/Tokyo_Data/Odaiba/base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+  "data/driving/Tokyo_Data/Odaiba/reference.csv": "fbf3f0054df8e68d7552d1e930221a80bfba45ea37703b64c7abf148750c301d",
+  "data/driving/Tokyo_Data/Shinjuku/rover_trimble.obs": "be239dbd20d9d69a0dbc696f1a4b00d75cd3639354d498eec91f08fa65d000eb",
+  "data/driving/Tokyo_Data/Shinjuku/base_trimble.obs": "34a851c54e07b8cac592d37539c85e19d02e1a6b29839a707ab69dba9692c99e",
+  "data/driving/Tokyo_Data/Shinjuku/base.nav": "c58bd7ecaf7c7a0766fa9bc23ba7b0666172c28c95a13c35ac973f88b2645b35",
+  "data/driving/Tokyo_Data/Shinjuku/reference.csv": "794baaec530f34097cd1f77633902bb2195ce30cdec278945eb5ac911ed65d79"
+ },
+ "decimated_rover_sha256": {
+  "Odaiba": "4d3e1eb4748fd827150b7a9ebe3b8bc040ca9f87d5eda0cad7b6893cc5a80e8e",
+  "Shinjuku": "460a74b783353b61d1e460631c6f99ea3e73cbd694f822e98a1b64936a9f2f62"
+ },
+ "truth_dd_csv_sha256": {
+  "Odaiba": "72e36504b7457ef62b7d3f230bca95aa0beb2aca0b2758eba496f61b49b7d109",
+  "Shinjuku": "ef9326f3a7644a214d6f7584edde769c46067a51c45614769dfad0280009c77c"
+ },
+ "tools": "scripts/analysis/truth_dd/ (export_truth_dd.cpp, phase_residual_correlation.py, code_residual_correlation.py, dispersive_share.py, decimate_rinex.py, ar_consistency_stats.py, maxz_truth_rank.py)",
+ "phase_residuals": {
+  "Odaiba": {
+   "arcs_ge_60s": 84,
+   "std_r_mm_p50": 6.17,
+   "std_eps_mm_p50": 8.57,
+   "model_sigma_mm_p50": 6.46,
+   "std_ratio_p50": 0.91,
+   "tau_s_p25_p50_p75": [
+    1.5,
+    2.9,
+    5.2
+   ],
+   "predicted_white_overconfidence_p50": 48.3,
+   "abs_z_running_mean_postfit": {
+    "10": {
+     "n": 84,
+     "p50": 10.46,
+     "share_gt3": 0.85
+    },
+    "30": {
+     "n": 84,
+     "p50": 17.33,
+     "share_gt3": 0.93
+    },
+    "60": {
+     "n": 84,
+     "p50": 22.44,
+     "share_gt3": 0.96
+    },
+    "120": {
+     "n": 14,
+     "p50": 21.32,
+     "share_gt3": 0.93
+    }
+   },
+   "abs_z_running_mean_raw": {
+    "10": {
+     "n": 84,
+     "p50": 29.38,
+     "share_gt3": 0.93
+    },
+    "30": {
+     "n": 84,
+     "p50": 49.05,
+     "share_gt3": 0.96
+    },
+    "60": {
+     "n": 84,
+     "p50": 57.83,
+     "share_gt3": 0.95
+    },
+    "120": {
+     "n": 14,
+     "p50": 61.76,
+     "share_gt3": 1.0
+    }
+   },
+   "by_signal": {
+    "C L2I": {
+     "arcs": 19,
+     "std_r_mm": 5.88,
+     "model_mm": 6.37,
+     "tau_s": 3.5
+    },
+    "C L7I": {
+     "arcs": 12,
+     "std_r_mm": 6.9,
+     "model_mm": 6.47,
+     "tau_s": 4.5
+    },
+    "E L1X": {
+     "arcs": 7,
+     "std_r_mm": 5.68,
+     "model_mm": 6.5,
+     "tau_s": 3.3
+    },
+    "E L5X": {
+     "arcs": 10,
+     "std_r_mm": 7.39,
+     "model_mm": 6.39,
+     "tau_s": 2.2
+    },
+    "G L1C": {
+     "arcs": 16,
+     "std_r_mm": 6.01,
+     "model_mm": 7.02,
+     "tau_s": 2.1
+    },
+    "G L2W": {
+     "arcs": 9,
+     "std_r_mm": 6.37,
+     "model_mm": 7.09,
+     "tau_s": 2.6
+    },
+    "J L1C": {
+     "arcs": 5,
+     "std_r_mm": 5.28,
+     "model_mm": 5.91,
+     "tau_s": 1.7
+    },
+    "J L2X": {
+     "arcs": 6,
+     "std_r_mm": 6.88,
+     "model_mm": 5.92,
+     "tau_s": 2.1
+    }
+   }
+  },
+  "Shinjuku": {
+   "arcs_ge_60s": 111,
+   "std_r_mm_p50": 8.63,
+   "std_eps_mm_p50": 10.57,
+   "model_sigma_mm_p50": 6.11,
+   "std_ratio_p50": 1.38,
+   "tau_s_p25_p50_p75": [
+    1.7,
+    3.0,
+    4.8
+   ],
+   "predicted_white_overconfidence_p50": 113.4,
+   "abs_z_running_mean_postfit": {
+    "10": {
+     "n": 111,
+     "p50": 6.35,
+     "share_gt3": 0.72
+    },
+    "30": {
+     "n": 111,
+     "p50": 13.06,
+     "share_gt3": 0.89
+    },
+    "60": {
+     "n": 111,
+     "p50": 21.81,
+     "share_gt3": 0.96
+    },
+    "120": {
+     "n": 21,
+     "p50": 30.69,
+     "share_gt3": 1.0
+    }
+   },
+   "abs_z_running_mean_raw": {
+    "10": {
+     "n": 111,
+     "p50": 18.37,
+     "share_gt3": 0.91
+    },
+    "30": {
+     "n": 111,
+     "p50": 36.05,
+     "share_gt3": 0.95
+    },
+    "60": {
+     "n": 111,
+     "p50": 50.1,
+     "share_gt3": 0.97
+    },
+    "120": {
+     "n": 21,
+     "p50": 62.14,
+     "share_gt3": 1.0
+    }
+   },
+   "by_signal": {
+    "C L2I": {
+     "arcs": 23,
+     "std_r_mm": 7.83,
+     "model_mm": 6.26,
+     "tau_s": 3.4
+    },
+    "C L7I": {
+     "arcs": 17,
+     "std_r_mm": 9.53,
+     "model_mm": 6.37,
+     "tau_s": 4.2
+    },
+    "E L1X": {
+     "arcs": 11,
+     "std_r_mm": 9.59,
+     "model_mm": 5.91,
+     "tau_s": 3.6
+    },
+    "E L5X": {
+     "arcs": 15,
+     "std_r_mm": 12.33,
+     "model_mm": 5.91,
+     "tau_s": 2.6
+    },
+    "G L1C": {
+     "arcs": 14,
+     "std_r_mm": 8.35,
+     "model_mm": 6.16,
+     "tau_s": 2.9
+    },
+    "G L2W": {
+     "arcs": 13,
+     "std_r_mm": 8.03,
+     "model_mm": 6.17,
+     "tau_s": 1.7
+    },
+    "J L1C": {
+     "arcs": 9,
+     "std_r_mm": 5.64,
+     "model_mm": 5.88,
+     "tau_s": 1.9
+    },
+    "J L2X": {
+     "arcs": 9,
+     "std_r_mm": 7.9,
+     "model_mm": 5.88,
+     "tau_s": 1.7
+    }
+   }
+  }
+ },
+ "code_residuals": {
+  "Odaiba": {
+   "rows": 223417,
+   "abs_eP_m_p50_p95": [
+    0.49,
+    5.34
+   ],
+   "model_m_p50": 0.97,
+   "robust_std_ratio": 0.71,
+   "std_ratio": 3.46,
+   "share_abs_ratio_gt3": 0.067,
+   "by_elevation": {
+    "15-30": {
+     "rows": 28022,
+     "std_ratio": 5.62,
+     "abs_eP_m_p50": 0.6
+    },
+    "30-45": {
+     "rows": 68862,
+     "std_ratio": 2.74,
+     "abs_eP_m_p50": 0.5
+    },
+    "45-60": {
+     "rows": 92678,
+     "std_ratio": 2.81,
+     "abs_eP_m_p50": 0.51
+    },
+    "60-90": {
+     "rows": 33855,
+     "std_ratio": 3.9,
+     "abs_eP_m_p50": 0.38
+    }
+   },
+   "arcs_ge_60s": 107,
+   "tau_s_p25_p50_p75": [
+    1.6,
+    3.0,
+    5.8
+   ],
+   "running_mean_abs_z": {
+    "10": 3.9,
+    "30": 7.2,
+    "60": 9.3
+   },
+   "running_mean_cycles_p50_p90": {
+    "10": [
+     1.92,
+     7.7
+    ],
+    "30": [
+     1.81,
+     6.28
+    ],
+    "60": [
+     1.77,
+     6.71
+    ]
+   }
+  },
+  "Shinjuku": {
+   "rows": 318749,
+   "abs_eP_m_p50_p95": [
+    0.57,
+    4.94
+   ],
+   "model_m_p50": 0.93,
+   "robust_std_ratio": 0.89,
+   "std_ratio": 9.12,
+   "share_abs_ratio_gt3": 0.075,
+   "by_elevation": {
+    "15-30": {
+     "rows": 16120,
+     "std_ratio": 31.55,
+     "abs_eP_m_p50": 1.07
+    },
+    "30-45": {
+     "rows": 71342,
+     "std_ratio": 7.16,
+     "abs_eP_m_p50": 0.62
+    },
+    "45-60": {
+     "rows": 135400,
+     "std_ratio": 5.65,
+     "abs_eP_m_p50": 0.58
+    },
+    "60-90": {
+     "rows": 95887,
+     "std_ratio": 3.14,
+     "abs_eP_m_p50": 0.5
+    }
+   },
+   "arcs_ge_60s": 142,
+   "tau_s_p25_p50_p75": [
+    1.6,
+    2.9,
+    5.4
+   ],
+   "running_mean_abs_z": {
+    "10": 3.9,
+    "30": 7.9,
+    "60": 10.5
+   },
+   "running_mean_cycles_p50_p90": {
+    "10": [
+     1.75,
+     4.13
+    ],
+    "30": [
+     1.96,
+     4.58
+    ],
+    "60": [
+     1.87,
+     4.53
+    ]
+   }
+  }
+ },
+ "dispersive_share": {
+  "Odaiba": {
+   "G": {
+    "ref": "G24",
+    "arcs_ge_90s": 1,
+    "std_slow_eps1_mm": 6.963,
+    "std_slow_iono_mm": 9.02,
+    "std_slow_eps1_minus_iono_mm": 14.216,
+    "slope": -0.444,
+    "corr": -0.575,
+    "mean_eps1_mm": -80.31,
+    "mean_iono_mm": 11.394
+   },
+   "J": {
+    "ref": "J02",
+    "arcs_ge_90s": 3,
+    "std_slow_eps1_mm": 2.424,
+    "std_slow_iono_mm": 7.736,
+    "std_slow_eps1_minus_iono_mm": 9.802,
+    "slope": -0.127,
+    "corr": -0.443,
+    "mean_eps1_mm": -5.426,
+    "mean_iono_mm": -7.512
+   },
+   "E": {
+    "ref": "E04",
+    "arcs_ge_90s": 2,
+    "std_slow_eps1_mm": 11.316,
+    "std_slow_iono_mm": 7.966,
+    "std_slow_eps1_minus_iono_mm": 16.608,
+    "slope": -0.767,
+    "corr": -0.37,
+    "mean_eps1_mm": 46.458,
+    "mean_iono_mm": 2.761
+   },
+   "C": {
+    "ref": "C06",
+    "arcs_ge_90s": 4,
+    "std_slow_eps1_mm": 2.937,
+    "std_slow_iono_mm": 3.575,
+    "std_slow_eps1_minus_iono_mm": 3.991,
+    "slope": 0.189,
+    "corr": 0.235,
+    "mean_eps1_mm": -3.049,
+    "mean_iono_mm": -8.33
+   }
+  },
+  "Shinjuku": {
+   "G": {
+    "ref": "G12",
+    "arcs_ge_90s": 4,
+    "std_slow_eps1_mm": 20.841,
+    "std_slow_iono_mm": 4.079,
+    "std_slow_eps1_minus_iono_mm": 22.609,
+    "slope": 1.472,
+    "corr": 0.166,
+    "mean_eps1_mm": -16.862,
+    "mean_iono_mm": 1.392
+   },
+   "J": {
+    "ref": "J02",
+    "arcs_ge_90s": 4,
+    "std_slow_eps1_mm": 6.099,
+    "std_slow_iono_mm": 7.352,
+    "std_slow_eps1_minus_iono_mm": 9.887,
+    "slope": -0.219,
+    "corr": -0.353,
+    "mean_eps1_mm": 6.456,
+    "mean_iono_mm": -6.698
+   },
+   "E": {
+    "ref": "E09",
+    "arcs_ge_90s": 8,
+    "std_slow_eps1_mm": 8.149,
+    "std_slow_iono_mm": 4.276,
+    "std_slow_eps1_minus_iono_mm": 11.126,
+    "slope": -0.864,
+    "corr": -0.413,
+    "mean_eps1_mm": -13.951,
+    "mean_iono_mm": -2.831
+   },
+   "C": {
+    "ref": "C06",
+    "arcs_ge_90s": 6,
+    "std_slow_eps1_mm": 8.216,
+    "std_slow_iono_mm": 7.121,
+    "std_slow_eps1_minus_iono_mm": 11.661,
+    "slope": -0.16,
+    "corr": -0.107,
+    "mean_eps1_mm": 9.461,
+    "mean_iono_mm": -7.908
+   }
+  }
+ },
+ "decimation_test_age5d3_accepted_ar": {
+  "Odaiba 10Hz": {
+   "correct": {
+    "ar_fix": 3153,
+    "cost_per_pair_p50": 4.73,
+    "max_abs_z_p50": 4.02,
+    "any_abs_z_gt3": 0.62,
+    "max_z_lock_p50": 157.0,
+    "pairs_p50": 19.0
+   },
+   "wrong": {
+    "ar_fix": 83,
+    "cost_per_pair_p50": 77.09,
+    "max_abs_z_p50": 10.2,
+    "any_abs_z_gt3": 0.88,
+    "max_z_lock_p50": 130.0,
+    "pairs_p50": 6.0
+   }
+  },
+  "Odaiba 10Hz_integer_seconds": {
+   "correct": {
+    "ar_fix": 306,
+    "cost_per_pair_p50": 3.37,
+    "max_abs_z_p50": 3.73,
+    "any_abs_z_gt3": 0.58,
+    "max_z_lock_p50": 147.0,
+    "pairs_p50": 19.0
+   },
+   "wrong": {
+    "ar_fix": 9,
+    "cost_per_pair_p50": 63.29,
+    "max_abs_z_p50": 10.21,
+    "any_abs_z_gt3": 0.89,
+    "max_z_lock_p50": 126.0,
+    "pairs_p50": 6.0
+   }
+  },
+  "Odaiba 1Hz": {
+   "correct": {
+    "ar_fix": 39,
+    "cost_per_pair_p50": 14.44,
+    "max_abs_z_p50": 3.57,
+    "any_abs_z_gt3": 0.56,
+    "max_z_lock_p50": 11.0,
+    "pairs_p50": 15.0
+   },
+   "wrong": {
+    "ar_fix": 3,
+    "cost_per_pair_p50": 8.61,
+    "max_abs_z_p50": 3.02,
+    "any_abs_z_gt3": 0.67,
+    "max_z_lock_p50": 6.0,
+    "pairs_p50": 7.0
+   }
+  },
+  "Shinjuku 10Hz": {
+   "correct": {
+    "ar_fix": 977,
+    "cost_per_pair_p50": 64.31,
+    "max_abs_z_p50": 6.57,
+    "any_abs_z_gt3": 0.92,
+    "max_z_lock_p50": 70.0,
+    "pairs_p50": 14.0
+   },
+   "wrong": {
+    "ar_fix": 9,
+    "cost_per_pair_p50": 24.42,
+    "max_abs_z_p50": 6.6,
+    "any_abs_z_gt3": 0.67,
+    "max_z_lock_p50": 49.0,
+    "pairs_p50": 8.0
+   }
+  },
+  "Shinjuku 10Hz_integer_seconds": {
+   "correct": {
+    "ar_fix": 117,
+    "cost_per_pair_p50": 75.05,
+    "max_abs_z_p50": 6.72,
+    "any_abs_z_gt3": 0.9,
+    "max_z_lock_p50": 69.0,
+    "pairs_p50": 14.0
+   },
+   "wrong": {
+    "ar_fix": 3,
+    "cost_per_pair_p50": 24.42,
+    "max_abs_z_p50": 6.65,
+    "any_abs_z_gt3": 0.67,
+    "max_z_lock_p50": 49.0,
+    "pairs_p50": 8.0
+   }
+  },
+  "Shinjuku 1Hz": {
+   "correct": {
+    "ar_fix": 56,
+    "cost_per_pair_p50": 24.8,
+    "max_abs_z_p50": 7.19,
+    "any_abs_z_gt3": 0.93,
+    "max_z_lock_p50": 13.0,
+    "pairs_p50": 17.0
+   },
+   "wrong": {
+    "ar_fix": 2,
+    "cost_per_pair_p50": 20.9,
+    "max_abs_z_p50": 8.21,
+    "any_abs_z_gt3": 1.0,
+    "max_z_lock_p50": 18.0,
+    "pairs_p50": 7.0
+   }
+  }
+ },
+ "decimation_fix_at_integer_seconds": {
+  "Odaiba": {
+   "10Hz": {
+    "epochs": 1098,
+    "fix": 416,
+    "wrong_gt_0.5": 16
+   },
+   "1Hz": {
+    "epochs": 1086,
+    "fix": 43,
+    "wrong_gt_0.5": 3
+   }
+  },
+  "Shinjuku": {
+   "10Hz": {
+    "epochs": 1758,
+    "fix": 216,
+    "wrong_gt_0.5": 4
+   },
+   "1Hz": {
+    "epochs": 1809,
+    "fix": 66,
+    "wrong_gt_0.5": 2,
+    "wrong_gt_2": 1
+   }
+  }
+ },
+ "max_z_pair_truth_rank": {
+  "Odaiba": {
+   "correct_ar_fixes": 2137,
+   "code_top_third_share": 0.53,
+   "phase_top_third_share": 0.39,
+   "null_top_third_share": 0.39,
+   "code_rank_mean": 0.71,
+   "phase_rank_mean": 0.63,
+   "null_rank_mean": 0.65
+  },
+  "Shinjuku": {
+   "correct_ar_fixes": 433,
+   "code_top_third_share": 0.36,
+   "phase_top_third_share": 0.26,
+   "null_top_third_share": 0.35,
+   "code_rank_mean": 0.67,
+   "phase_rank_mean": 0.62,
+   "null_rank_mean": 0.65
+  },
+  "run": "age5_doppler3 with --base-interp-curvature (matches the truth-DD base alignment), develop 9dcaf29 equivalent"
+ },
+ "verdicts": {
+  "white_noise_overcounting_at_10Hz": "not the dominant mechanism: frozen decimation prediction failed (Odaiba cost/pair 4.73 -> 14.44, Shinjuku 64.31 -> 24.80, max|z| unchanged); caveat: 1 Hz AR sample is small and selected (Odaiba 39 / Shinjuku 56 correct AR fixes)",
+  "ionosphere": "not supported: removing the geometry-free dispersive term increases the slow first-carrier residual on every system and drive (few arcs >= 90 s)",
+  "code_heavy_tail": "partial at most: max-|z| pairs are enriched for large truth code error on Odaiba (0.53 vs 0.39 null), not on Shinjuku"
+ }
+}
