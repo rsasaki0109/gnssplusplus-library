@@ -1131,6 +1131,12 @@ public:
         double lambda_shadow_effective_candidates =
             std::numeric_limits<double>::quiet_NaN();
         int lambda_shadow_best_second_disagreements = 0;
+        // Best full-set candidate, per DD pair: z = (float - integer) /
+        // sqrt(Qb_ii). Locates the pairs that make the best cost large.
+        double lambda_shadow_max_abs_z = std::numeric_limits<double>::quiet_NaN();
+        std::string lambda_shadow_max_z_pair;
+        int lambda_shadow_max_z_lock_count = 0;
+        int lambda_shadow_pairs_abs_z_gt3 = 0;
         bool lambda_shadow_ffrt_table_supported = false;
         bool lambda_shadow_ffrt_accepts_any = false;
         bool lambda_shadow_ffrt_passed = false;
