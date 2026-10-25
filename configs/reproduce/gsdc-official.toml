@@ -1,5 +1,5 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57626255, Private 0.844 m / Public 0.850 m, 40 drives, 71,936 rows
+# Kaggle ref 57629197, Private 0.844 m / Public 0.850 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
@@ -118,7 +118,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57626255 (6c0eca7d...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57629197 (f19acb58...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -178,4 +178,5 @@ readme = "reported"
 # Recipe update to ref 57626255 (same build): ebf-x Mi8 runs on inputs
 # windowed from epoch 599 (taroz IdxStart=600) with source TDCP metre sigma
 # and Phase184 Huber; assemble fills its 599 leading keys from the first
-# native row. See docs/reproduce.md.
+# native row. The lane-built file was submitted as 57629197 (57626255 had
+# dropped trailing zeros in 284 rows). See docs/reproduce.md.

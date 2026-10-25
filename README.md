@@ -111,7 +111,7 @@ Reproduce: `python3 apps/gnss.py reproduce list` shows one command per row; see 
 ### Smartphone GNSS/IMU
 
 Official Google Smartphone Decimeter Challenge 2023-2024 submission
-**57626255** (2026-10-25, after the deadline) scored **Private 0.844 m / Public 0.850 m**.
+**57629197** (2026-10-25, after the deadline) scored **Private 0.844 m / Public 0.850 m**.
 The submitted recipe combines Pixel5 heading initialization with Android clock handling
 and observation-model updates for supported phones. All 40 drives and
 71,936 output rows were rebuilt with one Linux GCC build and checked against

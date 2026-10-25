@@ -6870,5 +6870,7 @@ Private stays at 0.844 m, so ebf-x is a Public drive.
 
 On train, the same flags on every drive are worse: 4 of the first 6 drives
 regress, and mtv-b Pixel4 by +0.106 m. They stay on this drive only.
-Submission 57626255 is now the official recipe. Private is still 0.062 m
+The recipe lane rebuilds it with the native text verbatim. That file has the
+same coordinates and was submitted as 57629197 (same score). It is now the
+official recipe. Private is still 0.062 m
 from the 0.782 m post-deadline taroz score.

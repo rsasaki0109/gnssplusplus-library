@@ -740,8 +740,8 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 57626255)
-        self.assertTrue(submission["sha256"].startswith("6c0eca7d"))
+        self.assertEqual(submission["kaggle_ref"], 57629197)
+        self.assertTrue(submission["sha256"].startswith("f19acb58"))
         windowed = [drive for drive in recipe["drives"] if drive.get("input_window")]
         self.assertEqual([drive["id"] for drive in windowed], ["2022-04-25-21-04-us-ca-ebf-x/mi8"])
         for drive in windowed:

@@ -257,6 +257,19 @@
       },
       "train_evidence_note": "the same TDCP flags on every train drive are worse (4 of the first 6 drives regress, mtv-b Pixel4 +0.106 m); the two train drives the TDCP scan flags (mtv-u Pixel6Pro, routebb1 Pixel7Pro, one window each) are not fixed by them, so they stay on ebf-x only",
       "truth_free_diagnostic": "distance to the taroz test output over all scored rows: P50 0.44 -> 0.31 m, P95 2.81 -> 0.64 m"
+    },
+    {
+      "ref": 57629197,
+      "sha256": "f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f",
+      "base_ref": 57626255,
+      "base_sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1",
+      "private_m": 0.844,
+      "public_m": 0.85,
+      "base_private_m": 0.844,
+      "base_public_m": 0.85,
+      "rows": 71936,
+      "numerically_identical_rows": "71936/71936",
+      "cause": "the recipe lane rebuild of 57626255: the lane copies native text verbatim, while the research fill step (pandas) dropped trailing zeros in 284 ebf-x rows; the official recipe is pinned to this file"
     }
   ],
   "rejected_on_train": {

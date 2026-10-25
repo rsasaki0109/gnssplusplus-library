@@ -1,23 +1,23 @@
 {
  "schema": "gsdc_official_recipe.v1",
- "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57626255 (Private 0.844 m / Public 0.850 m) from the raw test drives on one Linux GCC 15 build. 57626255 is 57619467 (Public 0.885 m) with ebf-x Mi8 solved from the taroz IdxStart epoch (input_window); 57619467 is 57600830 (Private 0.845 m / Public 0.884 m), whose 31 drives retained from 56625084 were pinned to MSVC research outputs, rerun with the same argv on that build together with their stage-0 runs and height maps (MSVC provenance under research_source.msvc_research); the 9 drives changed since 56625084 keep their GCC outputs (research_source.added_flags / removed_flags). Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
+ "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57629197 (Private 0.844 m / Public 0.850 m) from the raw test drives on one Linux GCC 15 build. 57629197 (the lane rebuild of 57626255) is 57619467 (Public 0.885 m) with ebf-x Mi8 solved from the taroz IdxStart epoch (input_window); 57619467 is 57600830 (Private 0.845 m / Public 0.884 m), whose 31 drives retained from 56625084 were pinned to MSVC research outputs, rerun with the same argv on that build together with their stage-0 runs and height maps (MSVC provenance under research_source.msvc_research); the 9 drives changed since 56625084 keep their GCC outputs (research_source.added_flags / removed_flags). Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
  "submission": {
   "kaggle_competition": "smartphone-decimeter-2023",
-  "kaggle_ref": 57626255,
+  "kaggle_ref": 57629197,
   "private_score_m": 0.844,
   "public_score_m": 0.85,
   "readback_record": "docs/use_cases/records/gsdc2023_official_readback_20261024.json",
   "research_log": "docs/gsdc2023_native_taroz_goal.md",
   "research_assembler": "scripts/analysis/assemble_gsdc_heading_modern_test.py",
-  "sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1",
+  "sha256": "f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f",
   "rows": 71936,
   "drives": 40,
   "columns": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
   "line_terminator": "\\n",
   "encoding": "utf-8 (no BOM)",
   "previous_submission": {
-   "kaggle_ref": 57619467,
-   "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c"
+   "kaggle_ref": 57626255,
+   "sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1"
   },
   "chain": [
    {"kaggle_ref": 56536540, "sha256": "cf4a73e35852c0554ab8ecb3d65e62f7f268812dc3df5168a62c812313a695cb"},
@@ -28,7 +28,8 @@
    {"kaggle_ref": 57594243, "sha256": "2344a34f9750485e79290a363b103c14596d90c5ea182e38548a52adf918a65e", "private_score_m": 0.862, "public_score_m": 0.884, "replaced_drives": 1},
    {"kaggle_ref": 57600830, "sha256": "a7242b5646da84026f992035eac7d65217a95d5cc214b8fe96622b3c9b781716", "private_score_m": 0.845, "public_score_m": 0.884, "replaced_drives": 1},
    {"kaggle_ref": 57619467, "sha256": "c46ca65f1100a1e549ac50d18c2518d65863432e19711031ce408d11d29e826c", "private_score_m": 0.844, "public_score_m": 0.885, "replaced_drives": 31, "note": "same argv; the 31 drives pinned to MSVC outputs of 56625084 (and 17 stage-0 runs / height maps) rerun on the Linux GCC build"},
-   {"kaggle_ref": 57626255, "sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1", "private_score_m": 0.844, "public_score_m": 0.85, "replaced_drives": 1, "note": "ebf-x Mi8 solved from taroz IdxStart=600 with source TDCP metre sigma and Phase184 Huber"}
+   {"kaggle_ref": 57626255, "sha256": "6c0eca7d4b5ea871ef1508817e3255ed2a582af019a0a9d016e232dc747ee8d1", "private_score_m": 0.844, "public_score_m": 0.85, "replaced_drives": 1, "note": "ebf-x Mi8 solved from taroz IdxStart=600 with source TDCP metre sigma and Phase184 Huber"},
+   {"kaggle_ref": 57629197, "sha256": "f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f", "private_score_m": 0.844, "public_score_m": 0.85, "replaced_drives": 0, "note": "the recipe lane rebuild of 57626255: same coordinates, native text copied verbatim (57626255 dropped trailing zeros in 284 ebf-x rows)"}
   ],
   "coordinate_rule": "LatitudeDegrees/LongitudeDegrees are copied verbatim (as text) from the native solution.csv row with the same UnixTimeMillis; no interpolation. Native rows outside the official key list are dropped."
  },
