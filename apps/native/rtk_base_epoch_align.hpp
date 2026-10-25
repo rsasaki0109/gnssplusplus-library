@@ -110,7 +110,12 @@ inline double signalWavelength(const libgnss::SatelliteId& satellite,
     return libgnss::constants::SPEED_OF_LIGHT / frequency;
 }
 
-inline bool calculateModeledBaseRange(const libgnss::SatelliteId& satellite,
+// Modeled geometric range plus Saastamoinen troposphere from the base, with the
+// satellite state from the given broadcast ephemeris. interpolateBaseEpoch
+// uses one ephemeris for all three epochs of an interpolation, so a broadcast
+// set switch inside the gap (a decimetre orbit step) does not enter the
+// interpolated observation.
+inline bool calculateModeledBaseRange(const libgnss::Ephemeris& eph,
                                       const libgnss::GNSSTime& time,
                                       double approx_pseudorange,
                                       const libgnss::Vector3d& base_position,
@@ -125,12 +130,12 @@ inline bool calculateModeledBaseRange(const libgnss::SatelliteId& satellite,
         ? approx_pseudorange / libgnss::constants::SPEED_OF_LIGHT
         : 0.075;
     libgnss::GNSSTime tx_time = time - travel_time;
-    if (!nav.calculateSatelliteState(satellite, tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift)) {
+    if (!eph.calculateSatelliteState(tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift)) {
         return false;
     }
 
     tx_time = tx_time - sat_clk;
-    if (!nav.calculateSatelliteState(satellite, tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift)) {
+    if (!eph.calculateSatelliteState(tx_time, sat_pos, sat_vel, sat_clk, sat_clk_drift)) {
         return false;
     }
 
@@ -200,14 +205,17 @@ inline bool interpolateBaseEpoch(const libgnss::ObservationData& before,
             // The modeled range is evaluated at the target time: interpolating
             // it linearly as well would reduce the result to a linear
             // interpolation of the raw observable and drop the range curvature
-            // (about 1-3 cm at mid-interval for a 1 s base gap).
+            // (about 1-3 cm at mid-interval for a 1 s base gap). All three
+            // epochs use the ephemeris selected for the target time.
+            const libgnss::Ephemeris* eph = nav.getEphemeris(key.satellite, target_time);
             const double approx_target_code =
                 obs_before.pseudorange + alpha * (obs_after.pseudorange - obs_before.pseudorange);
-            if (!calculateModeledBaseRange(key.satellite, before.time, obs_before.pseudorange,
+            if (eph == nullptr ||
+                !calculateModeledBaseRange(*eph, before.time, obs_before.pseudorange,
                                            base_position, nav, modeled.before_m) ||
-                !calculateModeledBaseRange(key.satellite, after.time, obs_after.pseudorange,
+                !calculateModeledBaseRange(*eph, after.time, obs_after.pseudorange,
                                            base_position, nav, modeled.after_m) ||
-                !calculateModeledBaseRange(key.satellite, target_time, approx_target_code,
+                !calculateModeledBaseRange(*eph, target_time, approx_target_code,
                                            base_position, nav, modeled.target_m)) {
                 modeled.before_m = std::numeric_limits<double>::quiet_NaN();
                 continue;

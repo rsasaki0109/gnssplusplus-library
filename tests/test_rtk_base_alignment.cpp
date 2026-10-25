@@ -46,6 +46,22 @@ NavigationData makeNavigation() {
     return nav;
 }
 
+// The same orbit re-referenced to toe + dt with an along-track offset of about
+// 0.5 m, standing in for the next broadcast set: nearest-toe selection prefers
+// it from toe + dt / 2 on.
+Ephemeris nextEphemeris(const Ephemeris& eph, double dt) {
+    Ephemeris next = eph;
+    next.toe = eph.toe + dt;
+    next.toc = next.toe;
+    next.tof = next.toe;
+    next.toes = next.toe.tow;
+    const double a = eph.sqrt_a * eph.sqrt_a;
+    const double n = std::sqrt(3.986005e14 / (a * a * a)) + eph.delta_n;
+    next.m0 = eph.m0 + n * dt + 2e-8;
+    next.omega0 = eph.omega0 + eph.omega_dot * dt;
+    return next;
+}
+
 // A base epoch built from the shared model (fixed travel time so it does not
 // depend on the held pseudorange): only satellites visible at both times are kept.
 ObservationData generate(const NavigationData& nav, const GNSSTime& time,
@@ -211,6 +227,38 @@ TEST(RtkBaseAlignmentTest, InterpolationReproducesObservationsGeneratedAtTargetT
         }
         // The scene has range curvature that a raw linear interpolation misses.
         EXPECT_GT(curvature, 5e-3) << "alpha " << alpha;
+        EXPECT_LT(worst_code, 1e-3) << "alpha " << alpha;
+        EXPECT_LT(worst_phase, 1e-3) << "alpha " << alpha;
+    }
+}
+
+// A broadcast ephemeris switch inside the base gap must not enter the
+// interpolated observation: the curvature term has to come from one orbit.
+TEST(RtkBaseAlignmentTest, InterpolationIsNotShiftedByAnEphemerisSwitchInsideTheGap) {
+    const NavigationData truth_nav = makeNavigation();
+    NavigationData nav = makeNavigation();
+    for (uint8_t prn = 1; prn <= 32; ++prn) nav.addEphemeris(nextEphemeris(makeEphemeris(prn), 0.8));
+    const GNSSTime after_time = kBaseTime + 1.0;
+    const ObservationData before = generate(truth_nav, kBaseTime, after_time);
+    const ObservationData after = generate(truth_nav, after_time, kBaseTime);
+    ASSERT_GE(before.observations.size(), 4U);
+    for (const double alpha : {0.25, 0.5, 0.75}) {
+        const GNSSTime target = kBaseTime + alpha;
+        std::map<int, Observation> truth;
+        for (const auto& obs : generate(truth_nav, target, after_time).observations)
+            truth[obs.satellite.prn] = obs;
+        ObservationData interpolated;
+        ASSERT_TRUE(libgnss_apps::interpolateBaseEpoch(before, after, target, kBase, nav,
+                                                       interpolated));
+        ASSERT_EQ(interpolated.observations.size(), before.observations.size());
+        double worst_code = 0.0, worst_phase = 0.0;
+        for (const auto& obs : interpolated.observations) {
+            const auto found = truth.find(obs.satellite.prn);
+            ASSERT_NE(found, truth.end());
+            worst_code = std::max(worst_code, std::abs(obs.pseudorange - found->second.pseudorange));
+            worst_phase = std::max(worst_phase,
+                std::abs((obs.carrier_phase - found->second.carrier_phase) * kLambda));
+        }
         EXPECT_LT(worst_code, 1e-3) << "alpha " << alpha;
         EXPECT_LT(worst_phase, 1e-3) << "alpha " << alpha;
     }
