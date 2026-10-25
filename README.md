@@ -8,8 +8,9 @@ handling without an external RTKLIB runtime.
 ![Ground Truth, libgnss++, and RTKLIB trajectories in one 3D scene, with a Ground Truth-anchored zenith inset showing satellite IDs and model-predicted LOS/NLOS](docs/odaiba_hero.gif)
 
 Selected UrbanNav Odaiba showcase: Ground Truth, libgnss++, and RTKLIB demo5
-in one scene. Median horizontal error on 171 common epochs: **0.21 m vs 7.50 m**
-(libgnss++ vs RTKLIB; this selected segment is not a full-run benchmark).
+in one scene. Median horizontal error on 171 common epochs: **0.02 m vs 7.50 m**
+(libgnss++ with an opt-in reacquisition recipe, not the default settings, vs RTKLIB;
+this selected segment is not a full-run benchmark).
 Zenith inset: satellite IDs and building-model LOS/NLOS predictions, not measured labels.
 [Data, attribution, and rendering details](docs/odaiba_hero.md).
 

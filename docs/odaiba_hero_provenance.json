@@ -1,6 +1,6 @@
 {
-  "schema": "odaiba_readme_hero.v4",
-  "generated_date": "2026-10-24",
+  "schema": "odaiba_readme_hero.v5",
+  "generated_date": "2026-10-25",
   "dataset": {
     "name": "UrbanNav Tokyo Odaiba",
     "upstream": "https://github.com/IPNL-POLYU/UrbanNavDataset#tokyo-dataset",
@@ -33,7 +33,7 @@
     ]
   },
   "solvers": {
-    "libgnss_source_commit": "a40998e2f8e7f312ef9f6b4a21b3eb8b52350330",
+    "libgnss_source_commit": "2c1e7cf (PR #645, fix/rtk-doppler-consensus on develop 668275b)",
     "rtklib_commit": "55a0f2c742a605a3d27a90b17556b2cfdf98ad50",
     "profile": "default",
     "mode": "kinematic",
@@ -42,12 +42,34 @@
       -3961904.953,
       3348993.7578,
       3698211.7553
-    ]
+    ],
+    "libgnss_recipe": "opt-in, not the default solver",
+    "libgnss_extra_flags": [
+      "--max-fixed-anchor-age",
+      "5",
+      "--max-fixed-doppler-consensus",
+      "3",
+      "--low-ratio-guard-threshold",
+      "1e9",
+      "--low-ratio-min-fixed-ambiguities",
+      "10",
+      "--fix-history-motion-compensation"
+    ],
+    "libgnss_recipe_rationale": "docs/rtk_hero_clip_fix.md on PR #645: default rejects every clip candidate against a 3-minute-old FIX anchor and a stationary 0.2 m history check",
+    "libgnss_default_reference": {
+      "pos_sha256": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
+      "clip_status_counts": {
+        "FLOAT": 189,
+        "SPP": 2
+      },
+      "full_run_fix_epochs": 1298,
+      "full_run_p95_h_m": 4.777143
+    }
   },
   "build": {
-    "compiler": "GCC 14.2.0",
-    "eigen": "3.4.0",
-    "cmake": "4.4.4",
+    "compiler": "GCC 13.3.0",
+    "eigen": "3.4.0 (Ubuntu 24.04)",
+    "cmake": "3.28.3",
     "build_type": "Release",
     "GTSAM": false
   },
@@ -65,15 +87,16 @@
       "maximum_libgnss_common_p95_h_m": 1,
       "ranking": "largest RTKLIB common-epoch median H; earliest window breaks ties",
       "eligible_windows": 97,
-      "note": "Deliberately favorable selection to illustrate visible solver differences; not an unbiased benchmark"
+      "note": "Deliberately favorable selection to illustrate visible solver differences; not an unbiased benchmark. The window was selected from the default-solver outputs (PR #639) and kept fixed when the opt-in recipe trace was rendered (--start-tow 273700); it was not reselected with the opt-in output."
     },
     "reference_epochs": 201,
     "libgnss_epochs": 191,
     "rtklib_epochs": 173,
     "exact_common_epochs": 171,
     "libgnss_status_counts": {
-      "FLOAT": 189,
-      "SPP": 2
+      "FIXED": 151,
+      "SPP": 2,
+      "FLOAT": 38
     },
     "rtklib_status_counts": {
       "FLOAT": 101,
@@ -82,8 +105,8 @@
     "common_epoch_metrics": {
       "common_epochs": 171,
       "libgnss": {
-        "median_h_m": 0.20839175763244877,
-        "p95_h_m": 0.6521427537363501
+        "median_h_m": 0.019996048877454906,
+        "p95_h_m": 0.6520773164533946
       },
       "rtklib": {
         "median_h_m": 7.502328408132673,
@@ -147,31 +170,31 @@
       ],
       "source": "MeijoMeguroLab/Open_data docs/2019_dataset.md surveyed base position"
     },
-    "common_epoch_pairs": 8027,
+    "common_epoch_pairs": 8021,
     "comparison_png": "output/readme-hero/comparison.png",
     "dataset": "UrbanNav Tokyo Odaiba",
-    "lib_pos": "output/readme-hero/libgnss.pos",
+    "lib_pos": "output/readme-hero/libgnss-cd.pos",
     "libgnss_all_epochs": {
-      "epochs": 10985,
-      "fix_epochs": 1298,
-      "fix_rate_pct": 11.816113,
+      "epochs": 10992,
+      "fix_epochs": 4338,
+      "fix_rate_pct": 39.465066,
+      "median_h_m": 0.245967,
+      "p95_h_m": 4.854148,
       "max_h_m": 18.008846,
-      "mean_up_m": -0.108676,
-      "median_abs_up_m": 0.302611,
-      "median_h_m": 0.359331,
-      "p95_abs_up_m": 11.53654,
-      "p95_h_m": 4.777143
+      "median_abs_up_m": 0.171485,
+      "p95_abs_up_m": 10.769596,
+      "mean_up_m": -0.085879
     },
     "libgnss_common_epochs": {
-      "epochs": 8027,
-      "fix_epochs": 1223,
-      "fix_rate_pct": 15.236078,
+      "epochs": 8021,
+      "fix_epochs": 3465,
+      "fix_rate_pct": 43.199102,
+      "median_h_m": 0.187045,
+      "p95_h_m": 2.782161,
       "max_h_m": 4.748336,
-      "mean_up_m": 0.642023,
-      "median_abs_up_m": 0.267145,
-      "median_h_m": 0.298276,
-      "p95_abs_up_m": 5.70283,
-      "p95_h_m": 2.78094
+      "median_abs_up_m": 0.097799,
+      "p95_abs_up_m": 5.698912,
+      "mean_up_m": 0.633953
     },
     "libgnss_vs_malib_common_epochs": null,
     "malib_all_epochs": null,
@@ -205,21 +228,44 @@
     },
     "rtklib_pos": "output/readme-hero/rtklib.pos",
     "scorecard_png": "output/readme-hero/scorecard.png",
-    "social_card_png": "output/readme-hero/social.png"
+    "social_card_png": "output/readme-hero/social.png",
+    "libgnss_default_all_epochs": {
+      "epochs": 10985,
+      "fix_epochs": 1298,
+      "fix_rate_pct": 11.816113,
+      "max_h_m": 18.008846,
+      "mean_up_m": -0.108676,
+      "median_abs_up_m": 0.302611,
+      "median_h_m": 0.359331,
+      "p95_abs_up_m": 11.53654,
+      "p95_h_m": 4.777143
+    },
+    "libgnss_default_common_epochs": {
+      "epochs": 8027,
+      "fix_epochs": 1223,
+      "fix_rate_pct": 15.236078,
+      "max_h_m": 4.748336,
+      "mean_up_m": 0.642023,
+      "median_abs_up_m": 0.267145,
+      "median_h_m": 0.298276,
+      "p95_abs_up_m": 5.70283,
+      "p95_h_m": 2.78094
+    },
+    "libgnss_recipe_scope_note": "Opt-in recipe: on the full Trimble drives it adds 6 (Odaiba) and 4 (Shinjuku) wrong FIX epochs at 0.5-2 m vs 0 for the default; see PR #645 evaluation."
   },
   "artifact_inputs": {
-    "docs/odaiba_hero_trace.json": "e1d0926b59148381821be52e088c43aee53d2ef286148e9a2c98955f50c1902e",
+    "docs/odaiba_hero_trace.json": "a20bf1d8ee75f8fb00add7ee3c6dc2f458ad6284c49e9ac4e4fd550af76738d1",
     "docs/odaiba_hero_basemap.png": "9e38ae2fa465aa30a28b9154c89391f29673e6735d297ef7a2f72b2d9d58e593",
-    "output/readme-hero/libgnss.pos": "400eb21f2295dc8ea5cf016158477e908f2baf3c8abe774189f98f85ada813f8",
+    "output/readme-hero/libgnss-cd.pos": "6da1c6516c39fad5837ee8d80eac9ede940c3e7d33505263fa786f07dc564e8e",
     "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5",
-    "docs/odaiba_hero_sky.json": "da87b10ae894445d33c16af2014c0e34d55fcc875b880e3bf99a3ff96414d1e1",
+    "docs/odaiba_hero_sky.json": "b2b2d3aaced579f662a71a9acb25cae77ed0023432cb917fa0d0d5de035ac2fd",
     "docs/odaiba_hero_sky.png": "45d23fce6347ccf43eb0ba3ee76dec25cc89028c01cde22331bc8272ca633c9f"
   },
   "renderer": {
     "cesium": "1.123.1",
     "playwright": "1.62.0",
     "pillow": "12.3.0",
-    "chromium": "154.0.8037.57",
+    "chromium": "153.0.8010.12 (Chrome for Testing, Playwright build 1243)",
     "width": 960,
     "height": 480,
     "frames": 80,
@@ -266,7 +312,7 @@
   },
   "artifact": {
     "file": "docs/odaiba_hero.gif",
-    "bytes": 2475094,
-    "sha256": "f87ceadc0728642017805db6bd15ac1f511ab7bf227222955c32ab58e3f3d8ee"
+    "bytes": 2635075,
+    "sha256": "ea03f5e2c88c0cb2d1652eaea1595a46127e938d61b7698eba98d3b0d52633e4"
   }
 }

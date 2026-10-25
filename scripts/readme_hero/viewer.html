@@ -31,7 +31,7 @@
 <div class="legend" role="group" aria-label="Trajectory legend and matched-epoch horizontal errors">
   <div class="item"><span class="sample truth"></span><span class="name">Ground Truth</span>
     <div class="detail" id="reference-detail">Reference-following camera</div></div>
-  <div class="item"><span class="sample native"></span><span class="name">libgnss++</span><span class="live" id="native-live"></span>
+  <div class="item"><span class="sample native"></span><span class="name" id="native-name">libgnss++</span><span class="live" id="native-live"></span>
     <div class="detail" id="native-median"></div></div>
   <div class="item"><span class="sample rtk"></span><span class="name">RTKLIB demo5</span><span class="live" id="rtk-live"></span>
     <div class="detail" id="rtk-median"></div></div>
@@ -177,6 +177,11 @@ window.prepare = async function (data) {
   }
   document.getElementById('reference-detail').textContent = `${data.metrics.common_epochs} matched epochs · median H`;
   document.getElementById('native-median').textContent = `Median H ${data.metrics.libgnss.median_h_m.toFixed(2)} m`;
+  if (data.libgnssRecipe) {
+    // A non-default solver recipe is labelled in the legend, never implied.
+    document.getElementById('native-name').textContent = 'libgnss++ (opt-in)';
+    document.getElementById('native-median').textContent += ' · not default settings';
+  }
   document.getElementById('rtk-median').textContent = `Median H ${data.metrics.rtklib.median_h_m.toFixed(2)} m`;
   window.renderFrame = async function (t) {
     const ref = nearest(data.reference, t);

@@ -8,16 +8,43 @@ recentered independently in separate panes.
 ## Legend and measurements
 
 - **White dashed:** Ground Truth (Applanix reference).
-- **Mint solid:** libgnss++. Mint and white overlap where the estimate agrees
-  with the reference; their horizontal coordinates are never offset for legibility.
+- **Mint solid:** libgnss++ with an **opt-in recipe, not the default solver**
+  (see below). Mint and white overlap where the estimate agrees with the
+  reference; their horizontal coordinates are never offset for legibility.
 - **Orange solid:** RTKLIB `demo5 b34k`.
 
 The legend shows each method's current solution state and horizontal error for the
 same reference epoch (within 1 ms timestamp tolerance), plus its median horizontal error over the
 **same 171 exactly matched reference/solver epochs**. Selected-window median H is
-**0.21 m for libgnss++ versus 7.50 m for RTKLIB**; P95 is 0.65 versus 9.86 m.
-The native solution is mostly FLOAT here: solver status and actual reference error
-are separate measurements.
+**0.02 m for libgnss++ versus 7.50 m for RTKLIB**; P95 is 0.65 versus 9.86 m.
+In the window, libgnss++ reports 151 FIXED, 38 FLOAT and two SPP epochs; every
+FIXED epoch is within 0.49 m 3D of the reference (median 2.1 cm).
+
+### Why the libgnss++ track uses an opt-in recipe
+
+With default settings the native solver stays FLOAT through this clip (189
+FLOAT, two SPP; median H 0.21 m), although the zenith inset shows a clear sky.
+Two motion-blind checks reject every integer candidate. One compares it with a
+FIX about three minutes and 400 m old. The other limits consecutive fixes to
+0.2 m apart, which rejects any speed above 2 m/s at 10 Hz. The analysis and the
+full-drive evaluation are in [the hero-clip investigation (PR #645)](https://github.com/rsasaki0109/gnssplusplus-library/pull/645).
+
+The GIF therefore shows `gnss_solve` with
+`--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3
+--low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10
+--fix-history-motion-compensation`. The legend labels it **"libgnss++ (opt-in)
+· not default settings"**. This recipe is **not adopted as the default**. On the
+complete Trimble drives it adds 6 (Odaiba) and 4 (Shinjuku) wrong FIX epochs at
+0.5–2 m, where the default has none, and loses 2.9% of Odaiba's default-correct
+FIX epochs. On the independent u-blox recording of both drives it has no wrong
+FIX. Full run on Odaiba: 4,338 FIX epochs versus 1,298, horizontal P95 4.854 m
+versus 4.777 m.
+
+The brief `NO SOLUTION` at about TOW 273710 is a real reception loss. The
+rover drops from 21 to 8 reported satellites, with carrier phase on about six.
+At that point the OpenStreetMap layer shows a structure crossing the road,
+consistent with an elevated deck. The PLATEAU building model does not include
+it, so the inset still predicts LOS there.
 
 ## Explicitly selected showcase
 
@@ -35,8 +62,10 @@ The choice is reproducible with `prepare_trace.py --select-showcase`:
    with the earliest start. These filters and the ranking deliberately favor
    showing the native solver's advantage; the full-run results remain linked below.
 
-This selects GPS week **2032**, TOW **273700.0–273720.0 s**. There are 201 reference
-samples, 191 native solutions (189 FLOAT, two SPP), and 173 RTKLIB solutions
+This selects GPS week **2032**, TOW **273700.0–273720.0 s**. The window was
+selected from the default-solver output and kept fixed (`--start-tow 273700`)
+when the opt-in trace was rendered; it was not reselected. There are 201 reference
+samples, 191 native solutions (151 FIXED, 38 FLOAT, two SPP), and 173 RTKLIB solutions
 (101 FLOAT, 72 DGPS). Missing positions remain missing. Gaps over 0.5 s are never
 joined, and a missing current position is labelled `NO SOLUTION`; no gap filling,
 error scaling, or horizontal shifts are used.
@@ -150,8 +179,9 @@ byte-identical across browser versions. The raw trace snapshot is deterministic.
 Build `gnss_solve` using the repository's normal CMake instructions. Build
 RTKLIB `demo5 b34k` at commit `55a0f2c742a605a3d27a90b17556b2cfdf98ad50`
 from [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB).
-The tested libgnss++ solver sources are the `develop` base
-`a40998e2f8e7f312ef9f6b4a21b3eb8b52350330`; this PR changes no solver code.
+The opt-in flag `--fix-history-motion-compensation` is added by PR #645
+(tested at `2c1e7cf`); the other flags already exist on `develop`. This
+visualization PR changes no solver code.
 
 ```bash
 # Reads only the four required members, not the entire 4.45 GB ZIP.
@@ -177,6 +207,32 @@ python scripts/readme_hero/prepare_trace.py \
   --select-showcase --duration 20 \
   --output output/readme-hero/trace.json
 ```
+
+The rendered GIF replaces the native track with the opt-in recipe for the same
+fixed window (the native argv is the benchmark's plus the recipe flags):
+
+```bash
+recipe="--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 \
+  --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 \
+  --fix-history-motion-compensation"
+build/apps/gnss_solve --rover data/driving/Tokyo_Data/Odaiba/rover_trimble.obs \
+  --base data/driving/Tokyo_Data/Odaiba/base_trimble.obs \
+  --nav data/driving/Tokyo_Data/Odaiba/base.nav --mode kinematic --glonass-ar off \
+  --base-ecef -3961904.9530 3348993.7578 3698211.7553 --no-kml \
+  --out output/readme-hero/libgnss-cd.pos $recipe
+python scripts/readme_hero/prepare_trace.py \
+  --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv \
+  --lib-pos output/readme-hero/libgnss-cd.pos \
+  --rtklib-pos output/readme-hero/rtklib.pos \
+  --start-tow 273700 --duration 20 --lib-recipe "$recipe" \
+  --output docs/odaiba_hero_trace.json
+python scripts/readme_hero/prepare_sky.py --satellites output/readme-hero/satellites.csv
+```
+
+Without the recipe flags the same argv reproduces the default `libgnss.pos`
+byte-identically (SHA-256 `400eb21f…`), and RTKLIB reproduces `rtklib.pos`
+(`00df30b0…`). The sky atlas regenerates byte-identically; only its bound trace
+hash changes. `--lib-recipe` only labels the legend and records the flags.
 
 Both solvers read the same rover/base/navigation files and use the same surveyed
 base ECEF coordinate `(-3961904.9530, 3348993.7578, 3698211.7553)` m.
