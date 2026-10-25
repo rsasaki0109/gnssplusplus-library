@@ -572,6 +572,8 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
         int l1_count = 0;
         double all_sum_sq = 0.0;
         int all_count = 0;
+        double max_abs_residual = -1.0;
+        std::string max_residual_pair;
 
         for (int i = 0; i < static_cast<int>(last_best_subset_.size()); ++i) {
             const int dd_idx = last_best_subset_[i];
@@ -661,12 +663,21 @@ bool RTKProcessor::validateFixedSolution(const std::map<SatelliteId, SatelliteDa
 
             all_sum_sq += residual * residual;
             all_count++;
+            if (std::abs(residual) > max_abs_residual) {
+                max_abs_residual = std::abs(residual);
+                max_residual_pair = pair.ref_sat.toString() + "-" + pair.sat.toString() + "/L" +
+                                    std::to_string(pair.freq + 1);
+            }
             if (use_l1) {
                 l1_sum_sq += residual * residual;
                 l1_count++;
             }
         }
 
+        if (max_abs_residual >= 0.0) {
+            debug_telemetry_.postfix_residual_max_abs_m = max_abs_residual;
+            debug_telemetry_.postfix_residual_max_pair = max_residual_pair;
+        }
         if (l1_count > 0) {
             return std::sqrt(l1_sum_sq / static_cast<double>(l1_count));
         }

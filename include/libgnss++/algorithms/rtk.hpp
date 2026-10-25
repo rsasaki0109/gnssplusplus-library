@@ -1467,6 +1467,10 @@ public:
         bool validation_attempted = false;
         bool validation_passed = false;
         double postfix_residual_rms = std::numeric_limits<double>::quiet_NaN();
+        // Largest |post-fix DD phase residual| [m] over the fixed pairs and its
+        // pair REF-SAT/Lf, from the same pass as postfix_residual_rms.
+        double postfix_residual_max_abs_m = std::numeric_limits<double>::quiet_NaN();
+        std::string postfix_residual_max_pair;
         double fixed_float_jump_m = std::numeric_limits<double>::quiet_NaN();
         Vector3d fixed_candidate_position_ecef = Vector3d::Zero();
         bool fixed_candidate_position_valid = false;

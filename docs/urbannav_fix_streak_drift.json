@@ -1,0 +1,106 @@
+{
+ "title": "CD wrong fixes: single-satellite carrier ramps inside FIX streaks; post-fix max residual telemetry",
+ "doc": "docs/rtk_fix_streak_drift.md",
+ "reference_use": "labels and truth-geometry DD (analysis only); never a solver input",
+ "solver_behaviour": "unchanged; two debug-epoch-log columns appended (postfix_residual_max_abs_m, postfix_residual_max_pair); default and CD POS byte-identical before/after on Trimble Odaiba and Shinjuku",
+ "binary_sha256": "c3d423360fcf5828ea6fe42ed590b9969a737b70667545816599b212879d5c85",
+ "recipe": "CD = --max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 --fix-history-motion-compensation, plus --debug-epoch-log",
+ "episodes": [
+  {
+   "drive": "Shinjuku",
+   "tow": 281297.4,
+   "fix_error_sequence_m": [
+    0.02,
+    0.02,
+    0.07,
+    0.1,
+    0.17,
+    0.24,
+    0.32,
+    0.41,
+    0.57,
+    0.62
+   ],
+   "ratio_sequence": [
+    287.3,
+    98.2,
+    121.2,
+    28.2,
+    19.2,
+    6.8,
+    4.0,
+    3.0,
+    3.0,
+    3.0
+   ],
+   "pairs": 13,
+   "truth_dd_culprit": "G25 L1C -1.45 cycle over 2.3 s (one LLI)",
+   "postfix_max_pair": "G12-G25 from 0.10 m error on, 0.025-0.052 m"
+  },
+  {
+   "drive": "Shinjuku",
+   "tow": 282324.7,
+   "truth_dd_culprit": "G24 L1C -0.57 / L2W -0.45 cycle (LLI)",
+   "postfix_max_pair": "G12-G24 once (0.021 m); then hold fixes (no post-fix residual)"
+  },
+  {
+   "drive": "Shinjuku",
+   "tow": 283170.7,
+   "truth_dd_culprit": "E05 L1X -0.85 / L5X -0.63 cycle (one LLI)",
+   "postfix_max_pair": "E09-E05 early (0.018-0.025 m), then spreads to E31/E24 (up to 0.060 m)"
+  },
+  {
+   "drive": "Odaiba",
+   "tow": 273748.6,
+   "truth_dd_culprit": "E09 L5X +0.53 / L1X +0.43 cycle (no LLI); C24 -0.28",
+   "postfix_max_pair": "C24-C09 / C06-C09 (0.03-0.04 m) before hold fixes"
+  },
+  {
+   "drive": "Odaiba",
+   "tow": 273918.8,
+   "truth_dd_culprit": "J02 L2X -0.60 cycle (no LLI)",
+   "postfix_max_pair": "J01-J02 at the end (0.040-0.080 m)"
+  }
+ ],
+ "postfix_max_abs_m_correct_ar_fixes_away_from_wrong": {
+  "Odaiba": {
+   "n": 4200,
+   "p50": 0.016,
+   "p95": 0.05,
+   "p99": 0.088
+  },
+  "Shinjuku": {
+   "n": 2503,
+   "p50": 0.022,
+   "p95": 0.091,
+   "p99": 40.66
+  }
+ },
+ "postfix_rms_m_correct_ar": {
+  "Odaiba": {
+   "p95": 0.0164,
+   "p99": 0.0234
+  },
+  "Shinjuku": {
+   "p95": 0.039,
+   "p99": 4.18
+  }
+ },
+ "grossly_wrong_integer_in_correct_fixes": {
+  "Shinjuku": {
+   "epochs_with_max_gt_1m": 117,
+   "pairs": {
+    "E09-E05/L2": 60,
+    "G12-G20/L1": 47,
+    "G25-G20/L1": 10
+   },
+   "example": "E09-E05/L2 40.68 m (about 160 E5a cycles) for 6 s from TOW 282806 with 4 cm position error; truth DD of E05 E5a drifts 3 cycles in 22 s after an LLI at 282788"
+  },
+  "Odaiba": {
+   "epochs_with_max_gt_1m": 4,
+   "example": "G20-G13/L1 7.8 m (41 cycles) at TOW 273876.5-8"
+  },
+  "consequence": "such fixes have postfix RMS of metres, so the opt-in max_postfix_residual_rms check would reject correct fixes; whether these integers are later held is not yet checked"
+ },
+ "verdict": "mechanism identified; no rule proposed: the culprit pair is visible early in 3 of 5 episodes, but at 2-5 cm it is inside the correct-fix p95, so a magnitude threshold cannot separate; a persistence test would need its own frozen evaluation"
+}
