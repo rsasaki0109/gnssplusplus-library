@@ -24,12 +24,14 @@
  "sources": {
   "reference": "develop 66383b5",
   "v1": "e109f779197e8eaf4e52976f9f7c5e365c323b9a (modeled range at target time, independent ephemeris selection; superseded)",
-  "v2": "99fd099832580c0795e1a6a88f15b64836493cc8 (one ephemeris for the three epochs)"
+  "v2": "99fd099832580c0795e1a6a88f15b64836493cc8 (one ephemeris for the three epochs)",
+  "opt_in": "0573bf0 (interpolateBaseEpoch model_range_at_target, gnss_solve --base-interp-curvature; default = develop)"
  },
  "binaries_sha256": {
   "reference": "d7b4564f5c720f5db245cd8628772de9575bf54f505901a6e6694cfe32cac442",
   "v1": "39d5764bb571ada0e8fda0f2b3b9ce81661d7e72e9f0615f346314b50fd0424f",
-  "v2": "660d7b67a5217e0550483e79e49e54ae45aacf928a0f0fa2e812e936d3f4a00b"
+  "v2": "660d7b67a5217e0550483e79e49e54ae45aacf928a0f0fa2e812e936d3f4a00b",
+  "opt_in": "bb4c2140c022633d5ada901531800a184fa9c9e8887e453af6926a7676e636bf"
  },
  "inputs_sha256": {
   "data/driving/Tokyo_Data/Odaiba/rover_trimble.obs": "3ebb5c4f95a7a399900109a6b1086f7f359c593abdeb07a453e18f5b2f7e0ee8",
@@ -997,5 +999,11 @@
   "transient_steps_lt_0.15_cycle_after_5s": 10,
   "note": "The base interpolation error is zero at base epochs, so this 1 Hz analysis cannot see it."
  },
- "decision": "NO_GO for a default change (frozen gate missed on Trimble missing +3/+4, u-blox Shinjuku hP95 +1.2 cm, HK Harsh not byte-identical). Shipped as opt-in gnss_solve --base-interp-curvature (interpolateBaseEpoch model_range_at_target); default byte-identical to develop 66383b5."
+ "decision": "NO_GO for a default change (frozen gate missed on Trimble missing +3/+4, u-blox Shinjuku hP95 +1.2 cm, HK Harsh not byte-identical). Shipped as opt-in gnss_solve --base-interp-curvature (interpolateBaseEpoch model_range_at_target); default byte-identical to develop 66383b5.",
+ "opt_in_byte_identity": {
+  "runs": 14,
+  "flag_off_equals_develop_pos": true,
+  "flag_on_equals_v2_pos": true,
+  "note": "same argv as the evaluation, including --lambda-shadow-candidates 2 --debug-epoch-log on age5d3"
+ }
 }
