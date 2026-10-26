@@ -341,6 +341,104 @@
       ],
       "change": "lax-p Pixel5 with the third pass; it crashes in 2 of 3 runs (a GTSAM TBB worker overflows its stack, with an 8 MB or unlimited stack) and finishes with the same solution when pinned to one CPU (recipe single_cpu); (P50+P95)/2 to taroz 0.325 -> 0.300 m; mean over 37 drives to taroz 0.293 m",
       "recipe": "the official recipe is pinned to this file: 30 drives carry --native-imu-refinement-pass (research_source.added_flags, previous_research_source)"
+    },
+    {
+      "ref": 57675079,
+      "sha256": "7e755a4bb0a2c17c41ed121d586b32de1138938c93337b44c737b1acbd4744bb",
+      "base_ref": 57664241,
+      "private_m": 0.811,
+      "public_m": 0.82,
+      "base_private_m": 0.811,
+      "base_public_m": 0.817,
+      "rows": 71936,
+      "replaced": [
+        "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+        "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+        "2022-06-22-20-12-us-ca-lax-hh/samsunga325g"
+      ],
+      "change": "third pass (with --native-source-imu-initialization where missing) on the three drives left out of 57663786 as train-neutral or prerequisite-limited; the mtv-e Pixel4 XL test recipe already carries main Doppler",
+      "truth_free_diagnostic": "(P50+P95)/2 to taroz: mtv-e Pixel4 XL 0.315 -> 0.295 m, mtv-pe1 A325G 0.785 -> 0.625 m, lax-hh A325G 0.630 -> 0.510 m",
+      "outcome": "all three are Public drives; Public worse in sum (split by the probes below)"
+    },
+    {
+      "ref": 57675081,
+      "sha256": "ee500146db5049eaf346dfa9259deeadad04b883c7321e17c703db8de7d2b7fb",
+      "base_ref": 57675079,
+      "private_m": 0.806,
+      "public_m": 0.82,
+      "base_private_m": 0.811,
+      "base_public_m": 0.82,
+      "rows": 71936,
+      "replaced": [
+        "2023-05-09-23-10-us-ca-sjc-r/sm-a505u"
+      ],
+      "change": "sjc-r A505U third pass keeping --native-course-attitude-seeds-mount-deg 178.9, on the build that admits course seeds with source IMU initialization (the initial IMU pass takes the course seeds, the refinement pass that pass attitude)",
+      "truth_free_diagnostic": "(P50+P95)/2 to taroz 0.61 -> 0.56 m, without the 2 m excursion of the run that dropped the course seeds; the recipe argv without the new flags reproduces the pinned output byte for byte on that build"
+    },
+    {
+      "ref": 57677499,
+      "sha256": "aa68a620c1b51aad28cd6563229ce5dc8b332f52ad8188f678429432809f6593",
+      "base_ref": 57664241,
+      "private_m": 0.806,
+      "public_m": 0.817,
+      "base_private_m": 0.811,
+      "base_public_m": 0.817,
+      "rows": 71936,
+      "replaced": [
+        "2023-05-09-23-10-us-ca-sjc-r/sm-a505u"
+      ],
+      "change": "sjc-r A505U alone, as in 57675081"
+    },
+    {
+      "ref": 57677502,
+      "base_ref": 57677499,
+      "private_m": 0.806,
+      "public_m": 0.817,
+      "replaced": [
+        "2020-12-11-19-30-us-ca-mtv-e/pixel4xl"
+      ],
+      "probe": true,
+      "change": "plus mtv-e Pixel4 XL third pass: no change at three decimals; not taken"
+    },
+    {
+      "ref": 57677505,
+      "base_ref": 57677499,
+      "private_m": 0.806,
+      "public_m": 0.821,
+      "replaced": [
+        "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g"
+      ],
+      "probe": true,
+      "change": "plus mtv-pe1 A325G third pass: Public worse although it moved 0.16 m toward taroz; not taken"
+    },
+    {
+      "ref": 57677507,
+      "sha256": "2e0deb2ceace3ae9fb98f34ec38798506deaf31d6325dd045e5e45aed4990dcf",
+      "base_ref": 57677499,
+      "private_m": 0.806,
+      "public_m": 0.816,
+      "replaced": [
+        "2022-06-22-20-12-us-ca-lax-hh/samsunga325g"
+      ],
+      "probe": true,
+      "change": "plus lax-hh A325G third pass: Public better; taken"
+    },
+    {
+      "ref": 57678818,
+      "sha256": "2e0deb2ceace3ae9fb98f34ec38798506deaf31d6325dd045e5e45aed4990dcf",
+      "base_ref": 57664241,
+      "base_sha256": "ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5",
+      "private_m": 0.806,
+      "public_m": 0.816,
+      "base_private_m": 0.811,
+      "base_public_m": 0.817,
+      "rows": 71936,
+      "replaced": [
+        "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+        "2022-06-22-20-12-us-ca-lax-hh/samsunga325g"
+      ],
+      "change": "the file of probe 57677507 submitted as the recipe target",
+      "recipe": "the official recipe is pinned to this file: 32 drives carry --native-imu-refinement-pass"
     }
   ],
   "rejected_on_train": {
@@ -363,9 +461,9 @@
   },
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
-    "samsung_test_drives": "with the third pass mtv-b A325F 1.40 -> 0.77 m and sjc-r A32 0.82 -> 0.59 m from the taroz test output; mtv-pe1 and lax-hh A325G (0.78 / 0.63 m) are not refined (train neutral); no truth-free arbiter for A325F/A32 (ADR unusable)",
+    "samsung_test_drives": "with the third pass mtv-b A325F 1.40 -> 0.77 m and sjc-r A32 0.82 -> 0.59 m from the taroz test output; lax-hh A325G takes the third pass in 57678818 (0.63 -> 0.51 m, Public better); mtv-pe1 A325G moved 0.785 -> 0.625 m toward taroz with it but Public got worse, so it keeps its recipe; no truth-free arbiter for A325F/A32 (ADR unusable)",
     "pixel5_drive_starts": "lax-x resolved by the third pass ((P50+P95)/2 to taroz 0.74 -> 0.21 m; its first 4-5 minutes now agree) and taken in 57663786; ebf-xx 0.60 -> 0.55 m; its exit (epochs 120-240) disagreement with TDCP is at 7-9-satellite epochs, where on train TDCP is the wrong one (native closer to truth in 7 of 7 low-satellite steps)",
-    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "Private drive, 0.61 m from taroz; the third pass needs --native-source-imu-initialization, which the course-seed attitude fix (--native-course-attitude-seeds-mount-deg 178.9) excludes; train A505G gains 0.20 m from the third pass",
+    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "resolved by 57677499/57678818: the third pass now keeps the course seeds (Private 0.811 -> 0.806 m)",
     "2022-04-25-22-36-us-ca-ebf-z/pixel5": "the third pass made it worse (Public 0.821 vs 0.836 with it); kept on 57629197"
   },
   "reference_targets": {
@@ -390,6 +488,7 @@
     "tdcp_arbiter": "raw-ADR epoch-to-epoch displacement (robust LS, free clock) matches ground-truth steps to about 0.3 mm (10 ppm) at 29 m/s and stays within 0.00-0.12 m horizontally over 60-133 static epochs on train; compare it with trajectories converted exactly via ECEF/ENU (a spherical lat/lon conversion adds 0.19-0.24% scale error, which an earlier note mistook for TDCP drift); it cannot be used on phones whose ADR is unreliable (A325F, A32, S908B: 0.9-1.3 m per 30 s window)",
     "height_maps": "test map drives vs relative-height drives: mean (P50+P95)/2 to taroz 0.375 vs 0.354 m; map points within 15 m spanning more than 2 m in height occur on at most 6% of epochs; removing the map moves mtv-b A325F 1.40 -> 1.38 m, sjc-r A32 0.81 -> 0.70 m and mtv-pe1 A325G 0.78 -> 0.84 m from taroz (not adopted)",
     "tdcp_scan_all_speeds": "all 40 test drives, 30-s windows at all speeds: median disagreement 0.05-0.15 m for both pipelines where ADR is usable; native-only (> 0.5 m while taroz < 0.3 m) windows only on mtv-m Mi8 (1.06 m at a 7-satellite epoch, ambiguous) and mtv-a Mi8 (0.52 m); no second ebf-x-type failure",
-    "third_pass": "taroz runs fgo_gnss_imu twice (initflag true, then false with the previous result as input and tighter P/D screens); the native recipe ran one IMU solve until 57663786; with --native-imu-refinement-pass the 35 train drives with taroz move 0.7358 -> 0.7187 m (taroz 0.7123), and without Mi8 and Pixel4 XL the estimate is 0.687 m"
+    "third_pass": "taroz runs fgo_gnss_imu twice (initflag true, then false with the previous result as input and tighter P/D screens); the native recipe ran one IMU solve until 57663786; with --native-imu-refinement-pass the 35 train drives with taroz move 0.7358 -> 0.7187 m (taroz 0.7123), and without Mi8 and Pixel4 XL the estimate is 0.687 m",
+    "taroz_distance_as_proxy": "moving toward taroz is not a reliable proxy for a better score on its own drive: ebf-z (away, worse) and lax-hh A325G (toward, better) follow it, mtv-pe1 A325G (0.16 m toward, Public worse) does not"
   }
 }

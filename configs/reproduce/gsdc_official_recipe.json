@@ -1,23 +1,23 @@
 {
  "schema": "gsdc_official_recipe.v1",
- "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57664241 (Private 0.811 m / Public 0.817 m) from the raw test drives on one Linux GCC 15 build. 57664241 is 57629197 (Private 0.844 m / Public 0.850 m) with the upstream third pass (--native-imu-refinement-pass) on 30 drives (research_source.added_flags; previous_research_source keeps their earlier provenance); 57629197 (the lane rebuild of 57626255) is 57619467 (Public 0.885 m) with ebf-x Mi8 solved from the taroz IdxStart epoch (input_window); 57619467 is 57600830 (Private 0.845 m / Public 0.884 m), whose 31 drives retained from 56625084 were pinned to MSVC research outputs, rerun with the same argv on that build together with their stage-0 runs and height maps (MSVC provenance under research_source.msvc_research); the 9 drives changed since 56625084 keep their GCC outputs (research_source.added_flags / removed_flags). Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
+ "description": "Recipe that rebuilds the Kaggle GSDC 2023-2024 submission 57678818 (Private 0.806 m / Public 0.816 m) from the raw test drives on one Linux GCC 15 build. 57678818 is 57664241 (Private 0.811 m / Public 0.817 m) with the third pass also on sjc-r A505U (keeping its course seeds) and lax-hh A325G; 57664241 is 57629197 (Private 0.844 m / Public 0.850 m) with the upstream third pass (--native-imu-refinement-pass) on 30 drives (research_source.added_flags; previous_research_source keeps their earlier provenance); 57629197 (the lane rebuild of 57626255) is 57619467 (Public 0.885 m) with ebf-x Mi8 solved from the taroz IdxStart epoch (input_window); 57619467 is 57600830 (Private 0.845 m / Public 0.884 m), whose 31 drives retained from 56625084 were pinned to MSVC research outputs, rerun with the same argv on that build together with their stage-0 runs and height maps (MSVC provenance under research_source.msvc_research); the 9 drives changed since 56625084 keep their GCC outputs (research_source.added_flags / removed_flags). Paths are relative to {gsdc_root} (taroz dataset_2023 root), {gsdc_truth_root} (Kaggle train ground truth) and {work_dir}; {bin} is gnss_fgo_imu_no_base.",
  "submission": {
   "kaggle_competition": "smartphone-decimeter-2023",
-  "kaggle_ref": 57664241,
-  "private_score_m": 0.811,
-  "public_score_m": 0.817,
+  "kaggle_ref": 57678818,
+  "private_score_m": 0.806,
+  "public_score_m": 0.816,
   "readback_record": "docs/use_cases/records/gsdc2023_official_readback_20261024.json",
   "research_log": "docs/gsdc2023_native_taroz_goal.md",
   "research_assembler": "scripts/analysis/assemble_gsdc_heading_modern_test.py",
-  "sha256": "ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5",
+  "sha256": "2e0deb2ceace3ae9fb98f34ec38798506deaf31d6325dd045e5e45aed4990dcf",
   "rows": 71936,
   "drives": 40,
   "columns": ["tripId", "UnixTimeMillis", "LatitudeDegrees", "LongitudeDegrees"],
   "line_terminator": "\\n",
   "encoding": "utf-8 (no BOM)",
   "previous_submission": {
-   "kaggle_ref": 57629197,
-   "sha256": "f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f"
+   "kaggle_ref": 57664241,
+   "sha256": "ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5"
   },
   "chain": [
    {"kaggle_ref": 56536540, "sha256": "cf4a73e35852c0554ab8ecb3d65e62f7f268812dc3df5168a62c812313a695cb"},
@@ -32,7 +32,9 @@
    {"kaggle_ref": 57629197, "sha256": "f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f", "private_score_m": 0.844, "public_score_m": 0.85, "replaced_drives": 0, "note": "the recipe lane rebuild of 57626255: same coordinates, native text copied verbatim (57626255 dropped trailing zeros in 284 ebf-x rows)"},
    {"kaggle_ref": 57663786, "sha256": "771e979d1c91228ad8339364b745bbfd47475b9f929614ea163f231f87cbfc8e", "private_score_m": 0.811, "public_score_m": 0.836, "replaced_drives": 30, "note": "upstream third pass (--native-imu-refinement-pass, with source IMU initialization / main Doppler where missing) on every drive but Mi8, Pixel4 XL, A325G, sjc-r A505U and lax-p"},
    {"kaggle_ref": 57663818, "sha256": "d7cb11ddb819cfef8ae204a70199f757c5ffd6a0859aef195d14ccc40a282cb8", "private_score_m": 0.811, "public_score_m": 0.821, "replaced_drives": 1, "note": "ebf-z Pixel5 back to 57629197 (the third pass moved it 0.5-0.9 m off taroz in minutes 5-10)"},
-   {"kaggle_ref": 57664241, "sha256": "ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5", "private_score_m": 0.811, "public_score_m": 0.817, "replaced_drives": 1, "note": "lax-p Pixel5 third pass (single_cpu: a TBB worker overflows its stack in its refinement solve)"}
+   {"kaggle_ref": 57664241, "sha256": "ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5", "private_score_m": 0.811, "public_score_m": 0.817, "replaced_drives": 1, "note": "lax-p Pixel5 third pass (single_cpu: a TBB worker overflows its stack in its refinement solve)"},
+   {"kaggle_ref": 57677499, "sha256": "aa68a620c1b51aad28cd6563229ce5dc8b332f52ad8188f678429432809f6593", "private_score_m": 0.806, "public_score_m": 0.817, "replaced_drives": 1, "note": "sjc-r A505U third pass keeping its course seeds (source IMU initialization with course seeds)"},
+   {"kaggle_ref": 57678818, "sha256": "2e0deb2ceace3ae9fb98f34ec38798506deaf31d6325dd045e5e45aed4990dcf", "private_score_m": 0.806, "public_score_m": 0.816, "replaced_drives": 1, "note": "lax-hh A325G third pass (same file as probe 57677507)"}
   ],
   "coordinate_rule": "LatitudeDegrees/LongitudeDegrees are copied verbatim (as text) from the native solution.csv row with the same UnixTimeMillis; no interpolation. Native rows outside the official key list are dropped."
  },
@@ -85,7 +87,7 @@
  },
  "binary": {
   "target": "gnss_fgo_imu_no_base",
-  "note": "Every final replay, stage-0 run and height map is pinned to one Linux GCC 15 Release build (GTSAM 4.3.0, conda-forge; binary_sha256 a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32, develop ed5f8d0; develop 86d1e81 links the same binary). Submissions up to 57600830 mixed it with the four frozen MSVC Release builds listed here, whose outputs are kept per drive under research_source.msvc_research; GCC and MSVC outputs of the same drive differ by up to 0.08 m. The recipe runs one build of the current tree; per-drive identity is checked against output_sha256.",
+  "note": "Every final replay, stage-0 run and height map is pinned to one Linux GCC 15 Release build (GTSAM 4.3.0, conda-forge; binary_sha256 cccb04cc8d311d92ad9f2169f471115b6b6889ebef96ba977c87565b1701bd30, branch claude/confident-clarke-k37g2b 351aad7, which admits course attitude seeds with source IMU initialization). Outputs whose research_source names binary a29694ad (develop ed5f8d0) were first written by that build. Submissions up to 57600830 mixed it with the four frozen MSVC Release builds listed here, whose outputs are kept per drive under research_source.msvc_research; GCC and MSVC outputs of the same drive differ by up to 0.08 m. The recipe runs one build of the current tree; per-drive identity is checked against output_sha256.",
   "frozen": [["continuous_raw_clock_v2_20260926.exe", "7c5417bbc3a2d29f1ed7c7ace3ffbb91650fb8a8ce7595eac23813644b5d1316"], ["heading_sparse_admission_20260927.exe", "533f678b9e351e805b4424b8d4aa1b52f57bea48c48f755c88f638e53cffaa53"], ["height_map.exe", "9386777e0985d15a1be90aa6969db87c5892640c693df0930b576d2c19dad10f"], ["source_bias_difference_sigma_admission_fixed.exe", "359ab743913f678e143cbf7f014bd18018a4c0b2f30088122f1f51060b5c0899"]]
  },
  "height_maps": {
@@ -1592,11 +1594,14 @@
    "phone": "sm-a505u",
    "group": "retained-height",
    "research_source": {
-    "submission": "57600830",
-    "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop b1b2e3d + course attitude seeds",
-    "binary_sha256": "a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32",
-    "added_flags": ["--native-phase213-main-doppler", "--android-continuous-clock-reference", "--native-course-attitude-seeds-mount-deg", "178.9"],
-    "record_wall_s": 143.0
+    "submission": "57677499",
+    "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), branch claude/confident-clarke-k37g2b 351aad7",
+    "binary_sha256": "cccb04cc8d311d92ad9f2169f471115b6b6889ebef96ba977c87565b1701bd30",
+    "added_flags": ["--native-export-gnss-stage", "--native-export-imu-stage", "--native-source-imu-initialization", "--native-imu-refinement-pass"],
+    "record_wall_s": 236.0,
+    "previous_output_sha256": "d68137e10ebb1d10acdbccd6796f6f3232f68a4acb659b9eda800eab3e7eb768",
+    "previous_research_source": {"submission": "57600830", "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop b1b2e3d + course attitude seeds", "binary_sha256": "a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32", "added_flags": ["--native-phase213-main-doppler", "--android-continuous-clock-reference", "--native-course-attitude-seeds-mount-deg", "178.9"], "record_wall_s": 143.0},
+    "note": "keeps --native-course-attitude-seeds-mount-deg 178.9: the initial IMU pass takes the course seeds instead of the source heading seeds, and the refinement pass the initial pass attitude"
    },
    "inputs": {
     "test/2023-05-09-23-10-us-ca-sjc-r/P226_rnx2.obs": "c9f5fedea6e252dd45678c8efc82e9abb1b305c1dd53e7ba6b55e69f1374aad7",
@@ -1605,9 +1610,9 @@
     "test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u/device_imu.csv": "e72f68c3bc1852b4938ad34df9035579f426c170c68e21fa430e6df444aa0b88"
    },
    "height_map": "{work_dir}/height_maps/2023-05-09-23-10-us-ca-sjc-r__sm-a505u.csv",
-   "argv": ["{bin}", "--dataset-id", "2023-05-09-23-10-us-ca-sjc-r/sm-a505u", "--android-gnss", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u/device_imu.csv", "--nav", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/P226_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "c9f5fedea6e252dd45678c8efc82e9abb1b305c1dd53e7ba6b55e69f1374aad7", "--native-base-position-ecef", "-2677501.0355", "-4314063.4966", "3847179.5880", "--out", "{work_dir}/final/2023-05-09-23-10-us-ca-sjc-r__sm-a505u/solution.csv", "--summary-json", "{work_dir}/final/2023-05-09-23-10-us-ca-sjc-r__sm-a505u/summary.json", "--android-include-first-native-epoch", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-height-map", "{work_dir}/height_maps/2023-05-09-23-10-us-ca-sjc-r__sm-a505u.csv", "--native-phase213-main-doppler", "--android-continuous-clock-reference", "--native-course-attitude-seeds-mount-deg", "178.9"],
+   "argv": ["{bin}", "--dataset-id", "2023-05-09-23-10-us-ca-sjc-r/sm-a505u", "--android-gnss", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/sm-a505u/device_imu.csv", "--nav", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2023-05-09-23-10-us-ca-sjc-r/P226_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "c9f5fedea6e252dd45678c8efc82e9abb1b305c1dd53e7ba6b55e69f1374aad7", "--native-base-position-ecef", "-2677501.0355", "-4314063.4966", "3847179.5880", "--out", "{work_dir}/final/2023-05-09-23-10-us-ca-sjc-r__sm-a505u/solution.csv", "--summary-json", "{work_dir}/final/2023-05-09-23-10-us-ca-sjc-r__sm-a505u/summary.json", "--android-include-first-native-epoch", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-height-map", "{work_dir}/height_maps/2023-05-09-23-10-us-ca-sjc-r__sm-a505u.csv", "--native-phase213-main-doppler", "--android-continuous-clock-reference", "--native-course-attitude-seeds-mount-deg", "178.9", "--native-export-gnss-stage", "--native-export-imu-stage", "--native-source-imu-initialization", "--native-imu-refinement-pass"],
    "output": "{work_dir}/final/2023-05-09-23-10-us-ca-sjc-r__sm-a505u/solution.csv",
-   "output_sha256": "d68137e10ebb1d10acdbccd6796f6f3232f68a4acb659b9eda800eab3e7eb768"
+   "output_sha256": "781c0d53ecc28a0c772119a30db63fa452cf1c5aaa287bacf523b69aa56a1597"
   },
   {
    "id": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
@@ -1837,11 +1842,13 @@
    "phone": "samsunga325g",
    "group": "retained-height",
    "research_source": {
-    "submission": "57619467",
+    "submission": "57678818",
     "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop ed5f8d0",
     "binary_sha256": "a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32",
-    "record_wall_s": 105.1,
-    "msvc_research": {"submission": "56536540 (retained)", "frozen_binary": "height_map.exe", "frozen_binary_sha256": "9386777e0985d15a1be90aa6969db87c5892640c693df0930b576d2c19dad10f", "record_wall_s": 239.9, "output_sha256": "36d3d6af9b52114760cb2a002f584a6fe0af9544d0b390c1a4710f0ed8fd2126"}
+    "added_flags": ["--native-export-gnss-stage", "--native-export-imu-stage", "--native-phase213-main-doppler", "--native-imu-refinement-pass"],
+    "record_wall_s": 109.0,
+    "previous_output_sha256": "e8f51bbcde60d018ba58b7c7b07cfc479733ba440b7ed34ece116841502178e3",
+    "previous_research_source": {"submission": "57619467", "build": "gnss_fgo_imu_no_base, Linux GCC 15 Release, GTSAM 4.3.0 (conda-forge), develop ed5f8d0", "binary_sha256": "a29694ad193c133f920b29b959033cd65f48b53437bfdadb9e192726556abd32", "record_wall_s": 105.1, "msvc_research": {"submission": "56536540 (retained)", "frozen_binary": "height_map.exe", "frozen_binary_sha256": "9386777e0985d15a1be90aa6969db87c5892640c693df0930b576d2c19dad10f", "record_wall_s": 239.9, "output_sha256": "36d3d6af9b52114760cb2a002f584a6fe0af9544d0b390c1a4710f0ed8fd2126"}}
    },
    "inputs": {
     "test/2022-06-22-20-12-us-ca-lax-hh/MLFP_rnx2.obs": "a137f66a127d20062a5c57a18fd87e928a65dad54e764c76cf87fe54e01e03da",
@@ -1850,9 +1857,9 @@
     "test/2022-06-22-20-12-us-ca-lax-hh/samsunga325g/device_imu.csv": "cee335814fa7112505aa5229bf4a9b166c7d5cc90508c21a1e7e1670cb7ca86b"
    },
    "height_map": null,
-   "argv": ["{bin}", "--dataset-id", "2022-06-22-20-12-us-ca-lax-hh/samsunga325g", "--android-gnss", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/samsunga325g/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/samsunga325g/device_imu.csv", "--nav", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/MLFP_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "a137f66a127d20062a5c57a18fd87e928a65dad54e764c76cf87fe54e01e03da", "--native-base-position-ecef", "-2431725.4905", "-4707759.7517", "3539203.5852", "--out", "{work_dir}/final/2022-06-22-20-12-us-ca-lax-hh__samsunga325g/solution.csv", "--summary-json", "{work_dir}/final/2022-06-22-20-12-us-ca-lax-hh__samsunga325g/summary.json", "--android-include-first-native-epoch", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--native-source-imu-initialization", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-relative-height-pairs"],
+   "argv": ["{bin}", "--dataset-id", "2022-06-22-20-12-us-ca-lax-hh/samsunga325g", "--android-gnss", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/samsunga325g/device_gnss.csv", "--android-imu", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/samsunga325g/device_imu.csv", "--nav", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/brdc.nav", "--native-base-rinex", "{gsdc_root}/test/2022-06-22-20-12-us-ca-lax-hh/MLFP_rnx2.obs", "--all-epochs", "--android-raw-utc-keys", "--android-raw-clock-only", "--android-utc-wall-clock-fallback", "--native-pdc-imu-tdcp-no-bridge", "--native-source-direct-observable-quality", "--native-source-clock-c0d-factor", "--native-source-clock-c0d-meter-state-parity", "--native-source-clock-c0d-active-solve-diagnostic", "--native-source-clock-c0d-gnss-first-meter-state-handoff", "--native-source-clock-c0d-epoch-vector-parity", "--native-source-clock-c0d-phase99-main-multifrontal-qr-solver", "--native-phase157-raw-p-bootstrap", "--native-phase165-raw-p-no-doppler-graph", "--native-phase167-raw-p-no-doppler-lm-termination-budget", "--native-phase171-raw-p-no-doppler-imu-main", "--native-phase171-raw-p-ecef-doppler-gnss-first", "--native-upstream-stop-constraints", "--native-lm-lambda-floor", "--native-base-pseudorange-compensation", "--native-base-pseudorange-source-miss-mask", "--native-base-rinex-sha256", "a137f66a127d20062a5c57a18fd87e928a65dad54e764c76cf87fe54e01e03da", "--native-base-position-ecef", "-2431725.4905", "-4707759.7517", "3539203.5852", "--out", "{work_dir}/final/2022-06-22-20-12-us-ca-lax-hh__samsunga325g/solution.csv", "--summary-json", "{work_dir}/final/2022-06-22-20-12-us-ca-lax-hh__samsunga325g/summary.json", "--android-include-first-native-epoch", "--native-temporal-seed-initialization", "--native-sparse-p-staging", "--native-source-imu-initialization", "--native-upstream-position-offset", "--native-base-pseudorange-preserve-additional-frequency-bands", "--native-relative-height-pairs", "--native-export-gnss-stage", "--native-export-imu-stage", "--native-phase213-main-doppler", "--native-imu-refinement-pass"],
    "output": "{work_dir}/final/2022-06-22-20-12-us-ca-lax-hh__samsunga325g/solution.csv",
-   "output_sha256": "e8f51bbcde60d018ba58b7c7b07cfc479733ba440b7ed34ece116841502178e3"
+   "output_sha256": "29b428ffbdd9234b034e80ace2f92e17d3f28efa02e758905fa5b127c692d59b"
   },
   {
    "id": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
