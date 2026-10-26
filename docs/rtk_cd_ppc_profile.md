@@ -84,7 +84,7 @@ The biggest cause is the Doppler consensus check (D, 3 m), not the
 10-ambiguity floor. In P, only 5–12% of the correct AR fixes have fewer than
 10 fixed ambiguities, so the floor alone would already cost more than 1%.
 
-[`doppler_consensus_age.py`](../scripts/analysis/truth_dd/doppler_consensus_age.py)
+`scripts/analysis/truth_dd/doppler_consensus_age.py`
 splits the check's decisions by the age of its Doppler track, that is, the
 time since the last accepted FIX re-anchored it. Over the three runs:
 
@@ -108,10 +108,10 @@ time since the last accepted FIX re-anchored it. Over the three runs:
 
 ## Why the track drifts: PPC Doppler velocity
 
-[`doppler_residuals.cpp`](../scripts/analysis/truth_dd/doppler_residuals.cpp)
+`scripts/analysis/truth_dd/doppler_residuals.cpp`
 solves `spp_velocity::solveVelocityFromObservations()` at the reference
 position and compares it with the reference velocity.
-[`doppler_velocity_stats.py`](../scripts/analysis/truth_dd/doppler_velocity_stats.py)
+`scripts/analysis/truth_dd/doppler_velocity_stats.py`
 summarizes the output. The reference velocity is consistent with the
 reference positions: the finite-difference p95 is 0.05–0.17 m/s.
 
