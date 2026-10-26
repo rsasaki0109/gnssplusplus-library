@@ -6897,13 +6897,13 @@ model.
   than 0.8 m from the offset-aligned GNSS-first, it is closer to truth in 83%
   of 7,985 train epochs.
 
-**Carrier phase arbitrates only at low speed.** The raw-ADR displacement check
-that found ebf-x is accurate for static and low-speed windows (about 1 cm RMS,
-0.1-0.3 m over 40-80 s). At highway speed it drifts by about 0.2% of the
-distance, so it cannot decide the lax-x or ebf-xx starts. In lax-x, the native
-final stays on both GNSS stages for the first 4 minutes, while the taroz final
-moves about 1 m from its own. On train, the native first five minutes are level
-with taroz (0.544 vs 0.516 m).
+**Carrier phase does not decide the drive starts.** The raw-ADR displacement
+check that found ebf-x does not decide the lax-x or ebf-xx starts either (see
+the correction below: an earlier note here blamed a 0.2% drift at highway
+speed on the check, but the drift came from the comparison). In lax-x, the
+native final stays on both GNSS stages for the first 4 minutes, while the
+taroz final moves about 1 m from its own. On train, the native first five
+minutes are level with taroz (0.544 vs 0.516 m).
 
 **Height maps are not a common cause.** Mean distance to taroz is 0.375 m on
 the 24 test map drives and 0.354 m on the 14 relative-height drives. Map
@@ -6922,3 +6922,37 @@ map:
 The changes are mixed, so no-map is not adopted. On train, native is level
 with or better than taroz for A325F, so these test disagreements do not show
 which side is wrong.
+
+### Correction: the carrier-phase check works at speed (2026-10-26)
+
+The 0.2% drift at highway speed reported above was not in the raw-ADR
+displacement check. It was in the comparison: the trajectories were turned
+into metres on a sphere of radius 6,371 km. At 37.4 deg N the meridian and
+prime-vertical radii are 0.19% smaller and 0.24% larger than that. The ebf-x
+segment that moved 1,433 m east therefore picked up about 3.4 m, which is the
+2.9-3.4 m first blamed on the check. With exact ECEF/ENU conversion:
+
+- **Train, against ground truth.** One-second TDCP steps match the
+  ground-truth steps to about 0.3 mm (10 ppm) at 29 m/s. Rotating the
+  satellites for Earth rotation (Sagnac) changes the horizontal by less than
+  0.1 mm. Over static runs of 60-133 epochs, the TDCP displacement stays within
+  0.00-0.12 m horizontally. The 0.9 m that ebf-x shows over its first 600
+  static epochs is well above that.
+- **Phones whose ADR cannot be used.** On train, 30-s TDCP windows of A325F
+  miss the truth by 0.9-1.2 m, while native and taroz miss it by about 0.2 m.
+  This is why taroz drops TDCP for A325F/A32. On test, sjc-r A32 and sjc-ke2
+  S908B disagree with both pipelines by about 1.3 m as well. The check says
+  nothing on those phones.
+- **All 40 test drives, all speeds, 30-s windows.** Median disagreement with
+  TDCP is 0.05-0.15 m for both pipelines on the drives with usable ADR. Native
+  disagrees by more than 0.5 m in a window where taroz stays within 0.3 m on
+  two drives:
+  - mtv-m Mi8, epochs 1260-1290: 1.06 m. The step happens at one epoch with 7
+    satellites, so it cannot be told apart from a TDCP outlier.
+  - mtv-a Mi8, epochs 930-960: 0.52 m.
+- **The drive starts.** Over 60-epoch windows at the ebf-xx exit (epochs
+  120-240), native disagrees with TDCP by 2.6 / 1.7 m and taroz by 1.2 / 0.7 m.
+  Both miss, so the check does not decide. The first 3 minutes of lax-x have
+  TDCP gaps.
+
+The check therefore finds no second ebf-x-type failure on test.
