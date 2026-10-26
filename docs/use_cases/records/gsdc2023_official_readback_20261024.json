@@ -291,7 +291,7 @@
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
     "samsung_test_drives": "mtv-b A325F, sjc-r A32 and mtv-pe1 A325G sit (P50+P95)/2 = 1.40, 0.81 and 0.78 m from the taroz test output; no truth-free arbiter decides which pipeline is right (no TDCP in taroz for A325F/A32, high-speed TDCP unreliable); on train native is level with or better than taroz for A325F",
-    "pixel5_drive_starts": "lax-x and ebf-xx differ from taroz by 1.0-1.6 m in their first 4-5 minutes; in lax-x the native final stays on both GNSS stages while the taroz final departs about 1 m from its own; on train the native first 5 minutes are level with taroz (0.544 vs 0.516 m)"
+    "pixel5_drive_starts": "lax-x and ebf-xx differ from taroz by 1.0-1.6 m in their first 4-5 minutes; in lax-x the native final stays on both GNSS stages while the taroz final departs about 1 m from its own; on train the native first 5 minutes are level with taroz (0.544 vs 0.516 m); the Pixel5 heading recipe already carries source TDCP metre sigma and Phase184 Huber, so adding them leaves ebf-xx byte-identical and its exit (epochs 120-240) still disagrees with TDCP by 2.6 / 1.7 m"
   },
   "reference_targets": {
     "final_leaderboard_first_private_m": 0.883,
