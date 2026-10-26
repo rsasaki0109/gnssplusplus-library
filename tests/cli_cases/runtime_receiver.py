@@ -110,7 +110,7 @@ class RuntimeReceiverCases:
         self.assertIn("--ubx-nav", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
         self.assertIn("--mode <kinematic|moving-base>", result.stdout)
-        self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
+        self.assertIn("--preset <survey|low-cost|moving-base|urban>", result.stdout)
         self.assertIn("--arfilter", result.stdout)
         self.assertIn("--no-arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
@@ -389,7 +389,7 @@ class RuntimeReceiverCases:
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
+        self.assertIn("--preset <survey|low-cost|moving-base|urban>", result.stdout)
         self.assertIn("--arfilter", result.stdout)
         self.assertIn("--no-arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
@@ -641,6 +641,53 @@ class RuntimeReceiverCases:
 
         help_result = self.run_gnss("solve", "--help")
         self.assertIn("survey|low-cost|moving-base|odaiba|urban", help_result.stdout)
+
+    def test_urban_preset_and_its_flags_reach_the_solver_of_live_and_replay(self) -> None:
+        # --preset urban (docs/rtk_doppler_consensus_age.md) in the streaming tools. The fixture has 12 fixable
+        # ambiguities: the preset's floor of 10 keeps every default fix, while an explicit floor of 13 refuses every
+        # AR fix, which only happens if the preset's low-ratio guard threshold and the explicit flag reach the solver.
+        cdme = (
+            "--max-fixed-anchor-age", "5",
+            "--max-fixed-doppler-consensus", "3",
+            "--max-fixed-doppler-consensus-age", "5",
+            "--low-ratio-guard-threshold", "1e9",
+            "--low-ratio-min-fixed-ambiguities", "10",
+            "--fix-history-motion-compensation",
+            "--max-position-jump-motion-compensation",
+        )
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_urban_preset_streaming_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            converted = self.run_gnss(
+                "convert", "--format", "rtcm", "--input", str(fixture / "rover.rtcm"), "--obs-out", str(rover_obs),
+                "--gps-week", "2324", "--quiet",
+            )
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+
+            def run(command: str, name: str, *extra: str) -> tuple[int, list[str]]:
+                output_path = temp_root / f"{command}_{name}.pos"
+                if command == "live":
+                    inputs = ("--rover-rtcm", str(fixture / "rover.rtcm"), "--base-rtcm", str(fixture / "base.rtcm"))
+                else:
+                    inputs = ("--rover-rinex", str(rover_obs), "--base-rtcm", str(fixture / "base.rtcm"))
+                result = self.run_gnss(command, *inputs, *extra, "--out", str(output_path), "--quiet")
+                self.assertEqual(result.returncode, 0, msg=f"{command} {name}: {result.stderr}")
+                fixed = int(result.stdout.split("fixed_solutions=")[1].split()[0])
+                rows = [line for line in output_path.read_text(encoding="ascii").splitlines() if not line.startswith("%")]
+                return fixed, rows
+
+            for command in ("live", "replay"):
+                with self.subTest(command=command):
+                    default_fixed, _ = run(command, "default")
+                    preset_fixed, preset_rows = run(command, "preset", "--preset", "urban")
+                    flag_fixed, flag_rows = run(command, "flags", *cdme)
+                    floor_fixed, _ = run(command, "floor", "--preset", "urban", "--low-ratio-min-fixed-ambiguities", "13")
+                    self.assertGreater(default_fixed, 0)
+                    self.assertEqual(preset_fixed, default_fixed)
+                    self.assertEqual(flag_rows, preset_rows)
+                    self.assertEqual(flag_fixed, preset_fixed)
+                    self.assertEqual(floor_fixed, 0)
 
     def test_min_fix_satellites_reaches_the_solver_of_solve_live_and_replay(self) -> None:
         # The recorded fixture sees seven GPS satellites, so six non-reference ones. In every tool a minimum of 6 keeps
