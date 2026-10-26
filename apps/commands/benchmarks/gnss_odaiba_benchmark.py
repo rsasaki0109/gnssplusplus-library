@@ -203,9 +203,9 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--preset",
-        choices=("survey", "low-cost", "moving-base", "odaiba"),
+        choices=("survey", "low-cost", "moving-base", "odaiba", "urban"),
         default=None,
-        help="Optional RTK tuning preset passed through to gnss solve (e.g. odaiba).",
+        help="Optional RTK tuning preset passed through to gnss solve (e.g. urban).",
     )
     parser.add_argument(
         "--base-position",

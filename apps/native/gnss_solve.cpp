@@ -82,7 +82,8 @@ enum class RTKTuningPreset {
     SURVEY,
     LOW_COST,
     MOVING_BASE,
-    ODAIBA
+    ODAIBA,
+    URBAN
 };
 
 struct SolveConfig {
@@ -211,6 +212,11 @@ struct SolveConfig {
     bool max_position_jump_min_m_set = false;
     bool max_position_jump_rate_mps_set = false;
     bool min_full_ratio_for_subset_ar_set = false;
+    bool low_ratio_guard_threshold_set = false;
+    bool low_ratio_min_fixed_ambiguities_set = false;
+    bool max_fixed_anchor_age_s_set = false;
+    bool max_fixed_doppler_consensus_m_set = false;
+    bool max_fixed_doppler_consensus_age_s_set = false;
     libgnss::RTKProcessor::RTKConfig::ARPolicy ar_policy =
         libgnss::RTKProcessor::RTKConfig::ARPolicy::EXTENDED;
     double max_hold_divergence_m = 0.0;
@@ -1497,7 +1503,7 @@ void printUsage(const char* program_name) {
         << "  --nav <file>            Navigation RINEX file\n\n"
         << "Common options:\n"
         << "  --config <path>         Load flat TOML defaults; CLI options override them\n"
-        << "  --preset <name>         survey|low-cost|moving-base|odaiba\n"
+        << "  --preset <name>         survey|low-cost|moving-base|odaiba|urban\n"
         << "  --mode <name>           auto|kinematic|static|moving-base\n"
         << "  --iono <name>           auto|off|iflc|est\n"
         << "  --ratio <value>         Ambiguity ratio threshold\n"
@@ -1530,7 +1536,7 @@ void printAdvancedUsage(const char* program_name) {
         << "                             Position mode (default: auto)\n"
         << "  --iono <auto|off|iflc|est> Ionosphere option (default: auto)\n"
         << "  --ratio <value|sat-count>  Fixed or satellite-count-aware Ratio threshold\n"
-        << "  --preset <survey|low-cost|moving-base|odaiba>\n"
+        << "  --preset <survey|low-cost|moving-base|odaiba|urban>\n"
         << "                             Apply a named RTK tuning preset\n"
         << "  --rtk-reported-covariance <legacy|filter|first-pass|spp-consistency>\n"
         << "                             Covariance reported on RTK FLOAT epochs (default: legacy\n"
@@ -2148,6 +2154,7 @@ RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* progr
     if (value == "low-cost") return RTKTuningPreset::LOW_COST;
     if (value == "moving-base") return RTKTuningPreset::MOVING_BASE;
     if (value == "odaiba") return RTKTuningPreset::ODAIBA;
+    if (value == "urban") return RTKTuningPreset::URBAN;
     argumentError("unsupported --preset value: " + value, program_name);
 }
 
@@ -2216,6 +2223,29 @@ void applyRTKTuningPreset(SolveConfig& config) {
                 config.max_float_prefit_residual_max_m = 10.0;
             if (!config.max_float_prefit_residual_reset_streak_set)
                 config.max_float_prefit_residual_reset_streak = 5;
+            return;
+        case RTKTuningPreset::URBAN:
+            // The CDME recipe on top of the default profile
+            // (docs/rtk_doppler_consensus_age.md): a FIX anchor expires after
+            // 5 s, a fixed candidate must agree within 3 m with a Doppler track
+            // that itself expires 5 s after its last FIX, AR needs at least 10
+            // fixed ambiguities, and the fix-history and position-jump gates
+            // allow for the rover's motion. More FIX than RTKLIB demo5 with no
+            // more wrong FIX on the UrbanNav Tokyo and PPC runs, but more
+            // 0.5-2 m wrong FIX and missing epochs than the default.
+            if (!config.max_fixed_anchor_age_s_set) config.max_fixed_anchor_age_s = 5.0;
+            if (!config.max_fixed_doppler_consensus_m_set) {
+                config.max_fixed_doppler_consensus_m = 3.0;
+            }
+            if (!config.max_fixed_doppler_consensus_age_s_set) {
+                config.max_fixed_doppler_consensus_age_s = 5.0;
+            }
+            if (!config.low_ratio_guard_threshold_set) config.low_ratio_guard_threshold = 1e9;
+            if (!config.low_ratio_min_fixed_ambiguities_set) {
+                config.low_ratio_min_fixed_ambiguities = 10;
+            }
+            config.fix_history_motion_compensation = true;
+            config.max_position_jump_motion_compensation = true;
             return;
         case RTKTuningPreset::MOVING_BASE:
             if (!config.ratio_threshold_set) config.ratio_threshold = 2.8;
@@ -2336,14 +2366,17 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--max-fixed-anchor-age" && i + 1 < argc) {
             config.max_fixed_anchor_age_s = std::stod(argv[++i]);
+            config.max_fixed_anchor_age_s_set = true;
             continue;
         }
         if (arg == "--max-fixed-doppler-consensus" && i + 1 < argc) {
             config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_m_set = true;
             continue;
         }
         if (arg == "--max-fixed-doppler-consensus-age" && i + 1 < argc) {
             config.max_fixed_doppler_consensus_age_s = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_age_s_set = true;
             continue;
         }
         if (arg == "--min-fixed-prefit-outliers" && i + 1 < argc) {
@@ -2503,10 +2536,12 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--low-ratio-guard-threshold" && i + 1 < argc) {
             config.low_ratio_guard_threshold = std::stod(argv[++i]);
+            config.low_ratio_guard_threshold_set = true;
             continue;
         }
         if (arg == "--low-ratio-min-fixed-ambiguities" && i + 1 < argc) {
             config.low_ratio_min_fixed_ambiguities = std::stoi(argv[++i]);
+            config.low_ratio_min_fixed_ambiguities_set = true;
             continue;
         }
         if (arg == "--low-count-rescue-ratio" && i + 1 < argc) {
@@ -4120,6 +4155,29 @@ int main(int argc, char* argv[]) {
                   << (config.enable_base_interpolation && config.base_interpolation_curvature
                           ? " (modeled range at the rover epoch)" : "")
                   << std::endl;
+        if (config.max_fixed_anchor_age_s > 0.0 || config.max_fixed_doppler_consensus_m > 0.0 ||
+            config.low_ratio_min_fixed_ambiguities > 0 || config.fix_history_motion_compensation ||
+            config.max_position_jump_motion_compensation) {
+            const auto limit = [](double value, const char* unit) {
+                std::ostringstream text;
+                if (value > 0.0) {
+                    text << value << ' ' << unit;
+                } else {
+                    text << "off";
+                }
+                return text.str();
+            };
+            std::cout << "  fix recovery: anchor age " << limit(config.max_fixed_anchor_age_s, "s")
+                      << ", Doppler consensus " << limit(config.max_fixed_doppler_consensus_m, "m")
+                      << ", consensus track age "
+                      << limit(config.max_fixed_doppler_consensus_age_s, "s")
+                      << ", low-ratio floor " << config.low_ratio_min_fixed_ambiguities
+                      << " ambiguities below ratio " << config.low_ratio_guard_threshold
+                      << ", motion compensation history "
+                      << (config.fix_history_motion_compensation ? "on" : "off") << ", jump "
+                      << (config.max_position_jump_motion_compensation ? "on" : "off")
+                      << std::endl;
+        }
         if (integrity_gate) {
             std::cout << "  real-time FIX integrity: enabled (max latency "
                       << integrity_gate->maxOutputLatencyEpochs() << " epochs, consensus "

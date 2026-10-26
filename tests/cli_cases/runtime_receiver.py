@@ -578,6 +578,70 @@ class RuntimeReceiverCases:
             )
             self.assertEqual(replay.returncode, 0, msg=replay.stderr)
             self.assertIn("written_solutions=", replay.stdout)
+    def test_solve_urban_preset_is_the_cdme_recipe(self) -> None:
+        # --preset urban packages the opt-in CDME recipe (docs/rtk_doppler_consensus_age.md). It must solve exactly
+        # like the explicit flags, an explicit flag must still win, and runs without it must not report the gates.
+        cdme = (
+            "--max-fixed-anchor-age", "5",
+            "--max-fixed-doppler-consensus", "3",
+            "--max-fixed-doppler-consensus-age", "5",
+            "--low-ratio-guard-threshold", "1e9",
+            "--low-ratio-min-fixed-ambiguities", "10",
+            "--fix-history-motion-compensation",
+            "--max-position-jump-motion-compensation",
+        )
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_urban_preset_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_obs = temp_root / "base.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            inputs = (
+                "--rover", str(rover_obs), "--base", str(base_obs), "--nav", str(base_nav),
+                "--base-ecef", "-3961905.0275", "3348993.7526", "3698211.7831",
+                "--mode", "kinematic", "--no-kml",
+            )
+
+            def solve(name: str, *extra: str) -> tuple[list[str], list[str]]:
+                output_path = temp_root / f"{name}.pos"
+                result = self.run_gnss("solve", *inputs, *extra, "--out", str(output_path))
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                gates = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith("fix recovery:")]
+                rows = [line for line in output_path.read_text(encoding="ascii").splitlines() if not line.startswith("%")]
+                return gates, rows
+
+            preset_gates, preset_rows = solve("preset", "--preset", "urban")
+            flag_gates, flag_rows = solve("flags", *cdme)
+            default_gates, _ = solve("default")
+            override_gates, _ = solve("override", "--preset", "urban", "--max-fixed-doppler-consensus", "2")
+
+        self.assertEqual(
+            preset_gates,
+            [
+                "fix recovery: anchor age 5 s, Doppler consensus 3 m, consensus track age 5 s, "
+                "low-ratio floor 10 ambiguities below ratio 1e+09, motion compensation history on, jump on"
+            ],
+        )
+        self.assertEqual(flag_gates, preset_gates)
+        self.assertGreater(len(preset_rows), 0)
+        self.assertEqual(flag_rows, preset_rows)
+        self.assertEqual(default_gates, [])
+        self.assertEqual(len(override_gates), 1)
+        self.assertIn("Doppler consensus 2 m,", override_gates[0])
+        self.assertIn("consensus track age 5 s", override_gates[0])
+
+        help_result = self.run_gnss("solve", "--help")
+        self.assertIn("survey|low-cost|moving-base|odaiba|urban", help_result.stdout)
+
     def test_min_fix_satellites_reaches_the_solver_of_solve_live_and_replay(self) -> None:
         # The recorded fixture sees seven GPS satellites, so six non-reference ones. In every tool a minimum of 6 keeps
         # the fixes of the default run and a minimum of 7 refuses every ambiguity-resolution fix (the hold-fix

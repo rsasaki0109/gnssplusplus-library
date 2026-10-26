@@ -11,7 +11,8 @@ Selected UrbanNav Odaiba showcase: Ground Truth, libgnss++, and RTKLIB demo5
 in one scene. Median horizontal error on 172 common epochs: **0.38 m vs 7.41 m**
 (libgnss++ default settings vs RTKLIB demo5, both with GPS, GLONASS, Galileo, QZSS
 and BeiDou; a favorable selected segment, not a full-run benchmark: over the whole
-drive demo5 fixes more epochs, see the Urban RTK row below).
+drive demo5 fixes more epochs than the default settings, while `--preset urban`
+fixes more than demo5 with fewer wrong fixes, see the Urban RTK row below).
 Zenith inset: satellite IDs and LOS/NLOS predictions from PLATEAU buildings and bridges, not measured labels.
 [Data, attribution, and rendering details](docs/odaiba_hero.md).
 
@@ -103,7 +104,7 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 | RTK | PPC Tokyo/Nagoya vs RTKLIB `demo5` b34k | +56.9 pp fix rate, +44.9 pp official score, -11.33 m P95 H delta (six-run average; demo5 publishes mostly FLOAT/SINGLE on more epochs, so Positioning is -9.7 pp) |
 | GNSS/IMU FGO | PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | Higher fix rate on all 3 runs (avg +10.7 pp); <50 cm fraction higher on 2 of 3 runs (avg +7.9 pp, run1 -1.8 pp); fixed-only RMS wins 2 of 3 runs |
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
-| Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k, both multi-GNSS | `--preset odaiba` 7961 vs 5839 fixes, Hmed 0.043 vs 0.190 m; default profile 1298 fixes with lower Hp95/Vp95 (4.78/11.54 vs 7.86/15.72 m); both solvers use the surveyed base position |
+| Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k, both multi-GNSS | `--preset urban` 7467 vs 5839 fixes with fewer wrong fixes (9/0/0 vs 19/4/4 beyond 0.5/2/3 m) and lower Hmed/Hp95/Vp95 (0.046/4.86/10.77 vs 0.190/7.86/15.72 m); default profile 1298 fixes with lower Hp95/Vp95 (4.78/11.54 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
 | Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.844 m / Public 0.850 m**; 40 drives, 71,936 native output rows |
 
