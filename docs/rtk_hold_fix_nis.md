@@ -94,6 +94,61 @@ The frozen gates came out as follows:
 trade goes to the maintainer. The option stays opt-in, and `--preset urban` is
 unchanged.
 
+## Variant: keep the hold path open after a NIS-only rejection
+
+In the UH debug logs, few of the lost correct fixes are direct rejections:
+3 of 104 on nagoya/run3 and 8 of 230 on tokyo/run2.
+
+- **nagoya/run3:** 97 of the 104 are U hold fixes that UH never attempted. The
+  rejected epoch was FLOAT, which restarted the fix run and closed the hold
+  path.
+- **tokyo/run2:** most are AR fixes that stopped resolving.
+
+The opt-in `hold_fix_update_nis_keeps_hold_run`
+(`--hold-fix-update-nis-keeps-hold-run`) keeps that run for the hold-fix
+fallback and the hold. The run ends when any of these happens:
+
+- a fix extends the run past it;
+- the hold is rejected for any other reason;
+- a reacquisition reset;
+- an SPP fallback;
+- a FLOAT epoch without that rejection.
+
+`consecutive_fix_count_` and its other uses are unchanged. Two tests cover it:
+`NisRejectedHoldKeepsTheHoldPathOpenOnlyWhenAsked` and
+`KeptHoldRunEndsAtAnyOtherHoldRejection`.
+
+UH2 = UH + the flag, under a new frozen rule:
+
+| | U | UH | UH2 |
+| --- | ---: | ---: | ---: |
+| FIX (10 runs) | 58330 | 57738 | 57771 |
+| Audited wrong >0.5 m | 256 | 142 | 181 |
+| Phase-confirmed wrong | 133 | 36 | 58 |
+| U-correct loss on nagoya/run1 / run3 | – | 2.53% / 9.90% | 0.46% / 9.90% |
+| U-correct loss on tokyo/run1 / run2 / run3 | – | 3.44 / 3.45 / 1.60% | 2.81 / 2.45 / 1.60% |
+
+- **Where it helps:** fewer lost fixes on nagoya/run1 and tokyo/run1–2.
+- **What it costs:** it gives back part of the wrong-FIX reduction. On
+  Shinjuku, audited wrong FIX rise from 50 under UH to 84 under UH2.
+- **nagoya/run3 does not move, for a different reason:**
+  1. At TOW 553961.2 the float update NIS per observation is 1559, yet the
+     legacy hold keeps fixing correctly.
+  2. UH2 rejects that hold for its NIS, so the inconsistent update reaches the
+     float.
+  3. The next hold candidate is more than 1 m off and fails the hold jump check,
+     which ends the kept run.
+  4. 108 correct hold epochs are lost.
+- **What the NIS cannot tell apart:** a NIS spike can come from the
+  measurements while the held integers are right, so it does not separate:
+  - a hold that is wrong because it overwrote a stale float (Shinjuku 281650);
+  - a correct hold that is riding through bad measurements (nagoya/run3).
+
+Gates A and W pass. L fails on PPC tokyo/run1–3 and nagoya/run3, and M on
+Shinjuku, u-blox Shinjuku and tokyo/run3. P1 (nagoya/run3 loss below 5%) and P2
+(audited total at most 160) are not met. **Neither variant is added to
+`--preset urban`; both stay opt-in.**
+
 ## Why `--preset urban` publishes fewer epochs than the default
 
 `gnss solve` runs a kinematic post-filter by default. Once a FIX has been
