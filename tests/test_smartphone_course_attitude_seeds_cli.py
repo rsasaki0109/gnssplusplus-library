@@ -19,14 +19,18 @@ def recipe_args():
     return args
 
 
-@pytest.mark.parametrize('extra', [
-    ['--native-epoch-heading-attitude-seeds'],
-    ['--native-source-imu-initialization'],
-])
-def test_rejects_other_attitude_seeds(extra):
-    result = invoke([*recipe_args(), *extra, *FLAG])
+def test_rejects_epoch_heading_seeds():
+    result = invoke([*recipe_args(), '--native-epoch-heading-attitude-seeds', *FLAG])
     assert result.returncode == 2
     assert MESSAGE in result.stderr
+
+
+def test_admits_source_imu_initialization():
+    # Course seeds replace the source heading seeds in the initial IMU pass.
+    result = invoke([*recipe_args(), '--native-source-imu-initialization', *FLAG])
+    assert result.returncode != 0
+    assert MESSAGE not in result.stderr
+    assert 'failed to open raw Android GNSS CSV' in result.stderr
 
 
 def test_requires_android_raw_input():
