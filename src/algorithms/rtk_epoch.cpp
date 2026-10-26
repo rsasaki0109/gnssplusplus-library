@@ -94,6 +94,7 @@ PositionSolution RTKProcessor::processRTKEpoch(const ObservationData& rover_obs,
         // a rejected RTK basin contaminate the Doppler continuity state.
         doppler_continuity_position_ecef_ = solution.position_ecef;
         doppler_continuity_time_ = rover_obs.time;
+        doppler_continuity_anchor_time_ = rover_obs.time;
         has_doppler_continuity_position_ = true;
     }
 

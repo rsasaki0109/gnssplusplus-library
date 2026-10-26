@@ -217,6 +217,7 @@ struct SolveConfig {
     double max_position_jump_m = 5.0;
     double max_fixed_anchor_age_s = 0.0;
     double max_fixed_doppler_consensus_m = 0.0;
+    double max_fixed_doppler_consensus_age_s = 0.0;
     double max_position_jump_min_m = 0.0;
     double max_position_jump_rate_mps = 0.0;
     double max_float_spp_divergence_m = 0.0;
@@ -1097,7 +1098,8 @@ public:
               << "float_position_covariance_trace_m2,"
               << "lambda_shadow_max_abs_z,lambda_shadow_max_z_pair,"
               << "lambda_shadow_max_z_lock_count,lambda_shadow_pairs_abs_z_gt3,"
-              << "postfix_residual_max_abs_m,postfix_residual_max_pair\n";
+              << "postfix_residual_max_abs_m,postfix_residual_max_pair,"
+              << "fixed_candidate_doppler_consensus_age_s\n";
         return true;
     }
 
@@ -1465,7 +1467,9 @@ public:
               << telemetry.lambda_shadow_max_z_lock_count << ","
               << telemetry.lambda_shadow_pairs_abs_z_gt3 << ",";
         writeNumber(telemetry.postfix_residual_max_abs_m);
-        file_ << "," << telemetry.postfix_residual_max_pair << "\n";
+        file_ << "," << telemetry.postfix_residual_max_pair << ",";
+        writeNumber(telemetry.fixed_candidate_doppler_consensus_age_s);
+        file_ << "\n";
         file_.flush();
     }
 
@@ -1636,6 +1640,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --max-fixed-doppler-consensus <m>\n"
         << "                             Max AR/hold FIX distance from current Doppler track\n"
         << "                             (default: 0, disabled)\n"
+        << "  --max-fixed-doppler-consensus-age <s>\n"
+        << "                             Stop the Doppler track vetoing s seconds after an\n"
+        << "                             accepted FIX last re-anchored it (default: 0, no limit)\n"
         << "  --max-pos-jump-min <v>     Min adaptive AR fix jump in meters (default: 0)\n"
         << "  --max-pos-jump-rate <v>    Max adaptive AR fix jump rate in m/s\n"
         << "                             (default: 0, disabled)\n"
@@ -2333,6 +2340,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--max-fixed-doppler-consensus" && i + 1 < argc) {
             config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--max-fixed-doppler-consensus-age" && i + 1 < argc) {
+            config.max_fixed_doppler_consensus_age_s = std::stod(argv[++i]);
             continue;
         }
         if (arg == "--min-fixed-prefit-outliers" && i + 1 < argc) {
@@ -3208,6 +3219,9 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     if (config.max_fixed_doppler_consensus_m < 0.0) {
         argumentError("--max-fixed-doppler-consensus must be >= 0", argv[0]);
     }
+    if (config.max_fixed_doppler_consensus_age_s < 0.0) {
+        argumentError("--max-fixed-doppler-consensus-age must be >= 0", argv[0]);
+    }
     if (config.max_position_jump_min_m < 0.0) {
         argumentError("--max-pos-jump-min must be >= 0", argv[0]);
     }
@@ -3844,6 +3858,7 @@ int main(int argc, char* argv[]) {
         rtk_config.max_position_jump_m = config.max_position_jump_m;
         rtk_config.max_fixed_anchor_age_s = config.max_fixed_anchor_age_s;
         rtk_config.max_fixed_doppler_consensus_m = config.max_fixed_doppler_consensus_m;
+        rtk_config.max_fixed_doppler_consensus_age_s = config.max_fixed_doppler_consensus_age_s;
         rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
         rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
         rtk_config.max_float_spp_divergence_m = config.max_float_spp_divergence_m;

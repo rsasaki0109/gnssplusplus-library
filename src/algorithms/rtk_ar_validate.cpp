@@ -199,6 +199,14 @@ bool RTKProcessor::validateFixedDopplerConsensus(const Vector3d& position,
         !has_doppler_continuity_position_) {
         return true;
     }
+    // An expired track is no reference: its integration error has outgrown the
+    // gate and only an accepted FIX could re-anchor it.
+    const double anchor_age = current_time - doppler_continuity_anchor_time_;
+    debug_telemetry_.fixed_candidate_doppler_consensus_age_s = anchor_age;
+    if (rtk_config_.max_fixed_doppler_consensus_age_s > 0.0 && std::isfinite(anchor_age) &&
+        anchor_age > rtk_config_.max_fixed_doppler_consensus_age_s) {
+        return true;
+    }
     // A recent FIX anchor does not establish consistency of this candidate.
     // Validate before it can seed trusted positions or held integers. A track
     // that could not be propagated to this epoch is not a current reference.
