@@ -282,6 +282,44 @@ TEST(RTKLambdaShadowTest, ReportsPerPairIntegerResidualOfBestCandidate) {
     EXPECT_NE(telemetry.lambda_shadow_max_z_pair.find("/L1"), std::string::npos);
 }
 
+TEST(RTKPostFixResidualTest, ReportsLargestPairResidualAlongsideRms) {
+    // Noise-free scene: once fixed, every DD phase residual is near zero; the
+    // largest one is named after its pair and bounds the RMS from above.
+    const auto nav = synthetic_rtk_scene::constellation();
+    const Vector3d base_position(6378137, 0, 0);
+    const Vector3d rover_position = base_position + Vector3d(40, 30, 10);
+    const auto prns = synthetic_rtk_scene::visible(
+        nav, synthetic_rtk_scene::epochTime(0), rover_position, 15);
+    ASSERT_GE(prns.size(), 6U);
+    RTKProcessor processor;
+    auto config = processor.getRTKConfig();
+    config.elevation_mask = 5 * M_PI / 180;
+    processor.setRTKConfig(config);
+    ProcessorConfig spp_config;
+    spp_config.elevation_mask = 5;
+    spp_config.use_ionosphere_model = false;
+    spp_config.use_troposphere_model = false;
+    ASSERT_TRUE(processor.initialize(spp_config));
+    processor.setBasePosition(base_position);
+    bool fixed_by_ar = false;
+    for (int epoch = 0; epoch < 10 && !fixed_by_ar; ++epoch) {
+        const auto time = synthetic_rtk_scene::epochTime(epoch);
+        const auto solution = processor.processRTKEpoch(
+            synthetic_rtk_scene::observations(nav, time, rover_position, 30, prns, 0),
+            synthetic_rtk_scene::observations(nav, time, base_position, 10, prns, 500), nav);
+        fixed_by_ar = solution.status == SolutionStatus::FIXED &&
+                      !processor.getLastDebugTelemetry().hold_fix_applied &&
+                      std::isfinite(processor.getLastDebugTelemetry().postfix_residual_rms);
+    }
+    ASSERT_TRUE(fixed_by_ar);
+    const auto& telemetry = processor.getLastDebugTelemetry();
+    ASSERT_TRUE(std::isfinite(telemetry.postfix_residual_max_abs_m));
+    EXPECT_LT(telemetry.postfix_residual_max_abs_m, 0.01);
+    EXPECT_GE(telemetry.postfix_residual_max_abs_m + 1e-12, telemetry.postfix_residual_rms);
+    EXPECT_EQ(telemetry.postfix_residual_max_pair.rfind("G", 0), 0U);
+    EXPECT_NE(telemetry.postfix_residual_max_pair.find("/L"), std::string::npos);
+}
+
 TEST(RTKHoldAmbiguityUpdateTest, LegacyHoldOverwritesInsteadOfConditioningTheState) {
     // A held DD integer is information about the ambiguity differences. As a
     // Kalman pseudo-observation (RTKLIB holdamb, 0.001 cycle^2) it moves the

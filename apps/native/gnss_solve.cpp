@@ -1096,7 +1096,8 @@ public:
               << "float_update_student_t_mean_weight,"
               << "float_position_covariance_trace_m2,"
               << "lambda_shadow_max_abs_z,lambda_shadow_max_z_pair,"
-              << "lambda_shadow_max_z_lock_count,lambda_shadow_pairs_abs_z_gt3\n";
+              << "lambda_shadow_max_z_lock_count,lambda_shadow_pairs_abs_z_gt3,"
+              << "postfix_residual_max_abs_m,postfix_residual_max_pair\n";
         return true;
     }
 
@@ -1462,7 +1463,9 @@ public:
         writeNumber(telemetry.lambda_shadow_max_abs_z);
         file_ << "," << telemetry.lambda_shadow_max_z_pair << ","
               << telemetry.lambda_shadow_max_z_lock_count << ","
-              << telemetry.lambda_shadow_pairs_abs_z_gt3 << "\n";
+              << telemetry.lambda_shadow_pairs_abs_z_gt3 << ",";
+        writeNumber(telemetry.postfix_residual_max_abs_m);
+        file_ << "," << telemetry.postfix_residual_max_pair << "\n";
         file_.flush();
     }
 
