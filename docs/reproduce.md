@@ -914,6 +914,15 @@ Kaggle readback:
 mtv-pe1 A325G moved 0.16 m toward taroz and still made Public worse, so it
 keeps its recipe. Pixel4 XL made no difference at three decimals.
 
+The binary changes, so the whole lane was rerun from scratch on the new
+build (`gnss_fgo_imu_no_base` SHA-256 `cccb04cc...`), four replays at a time
+on 4 cores. It took 2 h 21 min:
+
+- the 25 stage-0 runs and 25 height maps match their pinned SHA-256;
+- the 40 final drives are identical to their research outputs (lax-p with
+  `single_cpu`);
+- `assemble` writes `2e0deb2c...`.
+
 ### gsdc-official local result (2026-09-29)
 
 Develop `2f919306` (native sources unchanged since `4b22fe43`) was built with

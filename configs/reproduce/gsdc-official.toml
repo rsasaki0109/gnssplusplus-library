@@ -185,5 +185,7 @@ readme = "reported"
 # to one CPU: a GTSAM TBB worker overflows its stack in its refinement solve).
 # Recipe update to ref 57678818: sjc-r A505U (keeping its course seeds) and
 # lax-hh A325G also take the third pass, on the build that admits course
-# attitude seeds with source IMU initialization.
+# attitude seeds with source IMU initialization; the full lane (25 stage-0
+# runs, 25 height maps, 40 final drives, 2 h 21 min on 4 cores) reran on that
+# build from scratch, byte-identical throughout.
 # See docs/reproduce.md.
