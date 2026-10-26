@@ -337,10 +337,16 @@ def summarize(matched: list[MatchedEpoch], fixed_status: int, label: str) -> dic
     horiz = np.array([epoch.horiz_error_m for epoch in matched])
     up_signed = np.array([epoch.up_m for epoch in matched])
     up_abs = np.abs(up_signed)
-    fix_count = sum(epoch.status == fixed_status for epoch in matched)
+    fixed = np.array([epoch.status == fixed_status for epoch in matched])
+    fix_count = int(fixed.sum())
+    error_3d = np.hypot(horiz, up_signed)
     return {
         "epochs": len(matched),
         "fix_epochs": int(fix_count),
+        # FIXED epochs whose 3D error from reference.csv exceeds the threshold.
+        "fix_wrong_gt_0p5_m": int(np.sum(fixed & (error_3d > 0.5))),
+        "fix_wrong_gt_2_m": int(np.sum(fixed & (error_3d > 2.0))),
+        "fix_wrong_gt_3_m": int(np.sum(fixed & (error_3d > 3.0))),
         "fix_rate_pct": 100.0 * fix_count / len(matched),
         "median_h_m": float(np.median(horiz)),
         "p95_h_m": float(np.percentile(horiz, 95)),

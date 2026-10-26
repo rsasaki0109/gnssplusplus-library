@@ -55,6 +55,7 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(has_prev_trusted_position_)
     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_position_ecef_)
     GNSSPP_RTK_TEST_MEMBER(doppler_continuity_time_)
+    GNSSPP_RTK_TEST_MEMBER(doppler_continuity_anchor_time_)
     GNSSPP_RTK_TEST_MEMBER(has_doppler_continuity_position_)
     GNSSPP_RTK_TEST_MEMBER(consecutive_fix_count_)
     GNSSPP_RTK_TEST_MEMBER(lock_count_l1_)
@@ -529,6 +530,41 @@ TEST(RTKDopplerConsensusTest, ExpiredAnchorDoesNotBlockMotionConsistentReacquisi
     Peer::last_fixed_position_(processor) = base;
     Peer::has_last_fixed_position_(processor) = true;
     EXPECT_FALSE(Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time));
+}
+
+TEST(RTKDopplerConsensusTest, DriftedTrackLocksOutUntilItsAnchorExpires) {
+    // Odaiba CDM: after a long FIX gap the Doppler-integrated track is 7-11 m
+    // off, so it rejects every later candidate, all of them correct, for up to
+    // 2704 epochs; only an accepted FIX could re-anchor it. A track whose last
+    // anchor is older than max_fixed_doppler_consensus_age_s no longer vetoes.
+    RTKProcessor processor;
+    auto config = processor.getRTKConfig();
+    config.max_fixed_doppler_consensus_m = 3.0;
+    processor.setRTKConfig(config);
+    const Vector3d base(6378137.0, 0.0, 0.0);
+    const GNSSTime time(2032, 274250.0);
+    processor.setBasePosition(base);
+    auto validate = [&](double anchor_age_s) {
+        Peer::has_fixed_solution_(processor) = true;
+        Peer::fixed_baseline_(processor) = Vector3d::Zero();
+        Peer::has_doppler_continuity_position_(processor) = true;
+        Peer::doppler_continuity_position_ecef_(processor) = base + Vector3d(0.0, 9.0, 0.0);
+        Peer::doppler_continuity_time_(processor) = time;
+        Peer::doppler_continuity_anchor_time_(processor) = time - anchor_age_s;
+        const bool ok =
+            Peer::validateFixedSolution(processor, Peer::current_sat_data_(processor), time);
+        return std::make_pair(ok, processor.getLastDebugTelemetry().reject_reason);
+    };
+    // Legacy (no expiry): a 270 s old drifted track still vetoes.
+    EXPECT_EQ(validate(270.0), std::make_pair(false, std::string("fixed_doppler_consensus")));
+
+    config.max_fixed_doppler_consensus_age_s = 5.0;
+    processor.setRTKConfig(config);
+    EXPECT_TRUE(validate(270.0).first);
+    EXPECT_NEAR(processor.getLastDebugTelemetry().fixed_candidate_doppler_consensus_age_s, 270.0,
+                1e-6);
+    // A track re-anchored within the age limit keeps vetoing a disagreeing candidate.
+    EXPECT_EQ(validate(2.0), std::make_pair(false, std::string("fixed_doppler_consensus")));
 }
 
 TEST(RTKDopplerConsensusTest, StaleTrackRejectsButDisabledGateAndBootstrapRemainAvailable) {

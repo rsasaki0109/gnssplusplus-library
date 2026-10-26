@@ -22,7 +22,7 @@ runner adds no scoring logic of its own.
 |---|---|---|---:|---|
 | RTK: PPC Tokyo/Nagoya vs RTKLIB `demo5` | `rtk-demo5` | ready | ~13 min | **Pass.** README refreshed 2026-09-28 and again 2026-10-10 (Linux gcc 13.3); and 2026-10-11 (Doppler/phase slip-test interval fix: +56.9 pp fix rate, weighted official score 68.108% to 68.120%); see [README refresh](#readme-refresh-2026-09-28), [2026-10-10 refresh](#readme-refresh-2026-10-10) and [2026-10-11 refresh](#readme-refresh-2026-10-11) |
 | CLAS PPP: six PPC runs vs MRTKLIB CLAS | `clas-ppc` | ready | ~45 min | **Pass.** README refreshed 2026-10-10: reproduces 25.117% FIX, 0.359 m FIX RMS2D, 0 FIX > 3 m, 58,259 epochs, all hard gates (L6/SSR expansion ~14 min + six `gnss_ppp` runs ~30 min) |
-| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~4 min | **Pass.** README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: all gates pass; the `--preset odaiba` claim is restated (more fixes, lower Hmed; all-epoch Hp95/Vp95 reported, not gated); re-run 2026-10-11 after the Doppler/phase slip-test interval fix: default arm bit-identical, preset 7961 fixes, Hp95 5.28 m, Vp95 13.89 m; see [2026-10-10 refresh](#readme-refresh-2026-10-10) and [2026-10-11 refresh](#readme-refresh-2026-10-11) |
+| Urban RTK: UrbanNav Odaiba vs RTKLIB `demo5` | `odaiba` | ready | ~7 min | **Pass.** 2026-10-26: demo5 runs multi-GNSS (`pos1-navsys = 61`) and the demo5 claim moved to `--preset urban` (more fixes, no more wrong fixes, lower Hmed/Hp95/Vp95); see [2026-10-26 refresh](#readme-refresh-2026-10-26). Before that: README refreshed 2026-09-29 after both solvers switched to the surveyed base position (removing a 0.70 m west bias in every fixed epoch); see [odaiba base position](#odaiba-base-position-2026-09-29). Re-run 2026-10-10 on the original 10 Hz rover: all gates pass; the `--preset odaiba` claim is restated (more fixes, lower Hmed; all-epoch Hp95/Vp95 reported, not gated); re-run 2026-10-11 after the Doppler/phase slip-test interval fix: default arm bit-identical, preset 7961 fixes, Hp95 5.28 m, Vp95 13.89 m; see [2026-10-10 refresh](#readme-refresh-2026-10-10) and [2026-10-11 refresh](#readme-refresh-2026-10-11) |
 | SPP: PPC adaptive robust + policy gate | `spp-policy` | ready | ~4 min | **Pass.** No P95 regression on 4/4 runs; drop <= 0.98 pp |
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
@@ -122,7 +122,7 @@ python3 apps/gnss.py reproduce rtk-demo5 --ppc-root /datasets/PPC-Dataset \
 # CLAS PPP-RTK vs MRTKLIB v0.4.2 (downloads QZSS L6 automatically)
 python3 apps/gnss.py reproduce clas-ppc --ppc-root /datasets/PPC-Dataset --check
 
-# UrbanNav Odaiba RTK vs RTKLIB demo5, default and --preset odaiba
+# UrbanNav Odaiba RTK vs RTKLIB demo5, default, --preset urban and --preset odaiba
 python3 apps/gnss.py reproduce odaiba --urbannav-root /datasets/UrbanNav/Tokyo_Data \
   --rtklib-bin "$RTKLIB_RNX2RTKP" --check
 
@@ -439,6 +439,39 @@ comparable; on the 9,906 common epochs measured now it is 11.81 m against
 fewer FLOAT epochs than the default (1,935 against 9,577). 604 of the preset's 629 epochs with more than 10 m
 vertical error lie in the two stationary deep-canyon windows. See
 [benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot).
+
+## README refresh (2026-10-26)
+
+**`odaiba`.** Two changes on this date:
+
+- `scripts/rtklib_odaiba.conf` now runs demo5 with every constellation
+  (`pos1-navsys = 61`), as libgnss++ does. Until then demo5 ran GPS-only and
+  had 205 fixes; it now has 5839.
+- The demo5 claim moved from `--preset odaiba` to `--preset urban`, the CDME
+  fix-recovery recipe of
+  [rtk_doppler_consensus_age.md](rtk_doppler_consensus_age.md).
+
+The lane's summaries now count wrong fixes: FIXED epochs whose 3D error from
+`reference.csv` exceeds 0.5, 2 and 3 m. The lane gates `--preset urban`
+against demo5 on all of the claims below. It still gates `--preset odaiba`
+against the default arm only.
+
+| Claim | demo5 b34k | `--preset urban` | Result |
+|---|---:|---:|---|
+| More fixes | 5839 | **7467** | pass |
+| No more wrong fixes >0.5 / 2 / 3 m | 19 / 4 / 4 | **9 / 0 / 0** | pass |
+| Lower Hmed | 0.190 m | **0.046 m** | pass |
+| Lower Hp95 | 7.856 m | **4.860 m** | pass |
+| Lower Vp95 | 15.722 m | **10.770 m** | pass |
+
+The default profile keeps a lower Hp95/Vp95 than demo5 (4.777/11.537 m),
+with 1298 fixes and no wrong fix. `--preset odaiba` has 7961 fixes but 109 /
+5 / 5 wrong fixes, so it is no longer claimed against demo5.
+
+These numbers were measured with `gnss odaiba-benchmark` on develop plus the
+preset, reusing the 2026-10-26 demo5 POS. The `--preset urban` POS is
+byte-identical to the CDME POS of the evaluation, and the default POS is
+unchanged.
 
 ## fgo-tokyo local result (2026-09-28)
 

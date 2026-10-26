@@ -110,7 +110,7 @@ class RuntimeReceiverCases:
         self.assertIn("--ubx-nav", result.stdout)
         self.assertIn("--base-hold-seconds", result.stdout)
         self.assertIn("--mode <kinematic|moving-base>", result.stdout)
-        self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
+        self.assertIn("--preset <survey|low-cost|moving-base|urban>", result.stdout)
         self.assertIn("--arfilter", result.stdout)
         self.assertIn("--no-arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
@@ -389,7 +389,7 @@ class RuntimeReceiverCases:
     def test_replay_command_help_mentions_arfilter(self) -> None:
         result = self.run_gnss("replay", "--help")
         self.assertEqual(result.returncode, 0, msg=result.stderr)
-        self.assertIn("--preset <survey|low-cost|moving-base>", result.stdout)
+        self.assertIn("--preset <survey|low-cost|moving-base|urban>", result.stdout)
         self.assertIn("--arfilter", result.stdout)
         self.assertIn("--no-arfilter", result.stdout)
         self.assertIn("--arfilter-margin", result.stdout)
@@ -578,6 +578,117 @@ class RuntimeReceiverCases:
             )
             self.assertEqual(replay.returncode, 0, msg=replay.stderr)
             self.assertIn("written_solutions=", replay.stdout)
+    def test_solve_urban_preset_is_the_cdme_recipe(self) -> None:
+        # --preset urban packages the opt-in CDME recipe (docs/rtk_doppler_consensus_age.md). It must solve exactly
+        # like the explicit flags, an explicit flag must still win, and runs without it must not report the gates.
+        cdme = (
+            "--max-fixed-anchor-age", "5",
+            "--max-fixed-doppler-consensus", "3",
+            "--max-fixed-doppler-consensus-age", "5",
+            "--low-ratio-guard-threshold", "1e9",
+            "--low-ratio-min-fixed-ambiguities", "10",
+            "--fix-history-motion-compensation",
+            "--max-position-jump-motion-compensation",
+        )
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_solve_urban_preset_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            base_obs = temp_root / "base.obs"
+            base_nav = temp_root / "base.nav"
+            for source, outputs in (
+                ("rover.rtcm", ("--obs-out", str(rover_obs))),
+                ("base.rtcm", ("--obs-out", str(base_obs), "--nav-out", str(base_nav))),
+            ):
+                converted = self.run_gnss(
+                    "convert", "--format", "rtcm", "--input", str(fixture / source), *outputs,
+                    "--gps-week", "2324", "--quiet",
+                )
+                self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+            inputs = (
+                "--rover", str(rover_obs), "--base", str(base_obs), "--nav", str(base_nav),
+                "--base-ecef", "-3961905.0275", "3348993.7526", "3698211.7831",
+                "--mode", "kinematic", "--no-kml",
+            )
+
+            def solve(name: str, *extra: str) -> tuple[list[str], list[str]]:
+                output_path = temp_root / f"{name}.pos"
+                result = self.run_gnss("solve", *inputs, *extra, "--out", str(output_path))
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                gates = [line.strip() for line in result.stdout.splitlines() if line.strip().startswith("fix recovery:")]
+                rows = [line for line in output_path.read_text(encoding="ascii").splitlines() if not line.startswith("%")]
+                return gates, rows
+
+            preset_gates, preset_rows = solve("preset", "--preset", "urban")
+            flag_gates, flag_rows = solve("flags", *cdme)
+            default_gates, _ = solve("default")
+            override_gates, _ = solve("override", "--preset", "urban", "--max-fixed-doppler-consensus", "2")
+
+        self.assertEqual(
+            preset_gates,
+            [
+                "fix recovery: anchor age 5 s, Doppler consensus 3 m, consensus track age 5 s, "
+                "low-ratio floor 10 ambiguities below ratio 1e+09, motion compensation history on, jump on"
+            ],
+        )
+        self.assertEqual(flag_gates, preset_gates)
+        self.assertGreater(len(preset_rows), 0)
+        self.assertEqual(flag_rows, preset_rows)
+        self.assertEqual(default_gates, [])
+        self.assertEqual(len(override_gates), 1)
+        self.assertIn("Doppler consensus 2 m,", override_gates[0])
+        self.assertIn("consensus track age 5 s", override_gates[0])
+
+        help_result = self.run_gnss("solve", "--help")
+        self.assertIn("survey|low-cost|moving-base|odaiba|urban", help_result.stdout)
+
+    def test_urban_preset_and_its_flags_reach_the_solver_of_live_and_replay(self) -> None:
+        # --preset urban (docs/rtk_doppler_consensus_age.md) in the streaming tools. The fixture has 12 fixable
+        # ambiguities: the preset's floor of 10 keeps every default fix, while an explicit floor of 13 refuses every
+        # AR fix, which only happens if the preset's low-ratio guard threshold and the explicit flag reach the solver.
+        cdme = (
+            "--max-fixed-anchor-age", "5",
+            "--max-fixed-doppler-consensus", "3",
+            "--max-fixed-doppler-consensus-age", "5",
+            "--low-ratio-guard-threshold", "1e9",
+            "--low-ratio-min-fixed-ambiguities", "10",
+            "--fix-history-motion-compensation",
+            "--max-position-jump-motion-compensation",
+        )
+        fixture = ROOT_DIR / "tests" / "fixtures" / "realtime_stress"
+        with tempfile.TemporaryDirectory(prefix="gnss_urban_preset_streaming_") as temp_dir:
+            temp_root = Path(temp_dir)
+            rover_obs = temp_root / "rover.obs"
+            converted = self.run_gnss(
+                "convert", "--format", "rtcm", "--input", str(fixture / "rover.rtcm"), "--obs-out", str(rover_obs),
+                "--gps-week", "2324", "--quiet",
+            )
+            self.assertEqual(converted.returncode, 0, msg=converted.stderr)
+
+            def run(command: str, name: str, *extra: str) -> tuple[int, list[str]]:
+                output_path = temp_root / f"{command}_{name}.pos"
+                if command == "live":
+                    inputs = ("--rover-rtcm", str(fixture / "rover.rtcm"), "--base-rtcm", str(fixture / "base.rtcm"))
+                else:
+                    inputs = ("--rover-rinex", str(rover_obs), "--base-rtcm", str(fixture / "base.rtcm"))
+                result = self.run_gnss(command, *inputs, *extra, "--out", str(output_path), "--quiet")
+                self.assertEqual(result.returncode, 0, msg=f"{command} {name}: {result.stderr}")
+                fixed = int(result.stdout.split("fixed_solutions=")[1].split()[0])
+                rows = [line for line in output_path.read_text(encoding="ascii").splitlines() if not line.startswith("%")]
+                return fixed, rows
+
+            for command in ("live", "replay"):
+                with self.subTest(command=command):
+                    default_fixed, _ = run(command, "default")
+                    preset_fixed, preset_rows = run(command, "preset", "--preset", "urban")
+                    flag_fixed, flag_rows = run(command, "flags", *cdme)
+                    floor_fixed, _ = run(command, "floor", "--preset", "urban", "--low-ratio-min-fixed-ambiguities", "13")
+                    self.assertGreater(default_fixed, 0)
+                    self.assertEqual(preset_fixed, default_fixed)
+                    self.assertEqual(flag_rows, preset_rows)
+                    self.assertEqual(flag_fixed, preset_fixed)
+                    self.assertEqual(floor_fixed, 0)
+
     def test_min_fix_satellites_reaches_the_solver_of_solve_live_and_replay(self) -> None:
         # The recorded fixture sees seven GPS satellites, so six non-reference ones. In every tool a minimum of 6 keeps
         # the fixes of the default run and a minimum of 7 refuses every ambiguity-resolution fix (the hold-fix

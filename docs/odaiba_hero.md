@@ -8,44 +8,38 @@ recentered independently in separate panes.
 ## Legend and measurements
 
 - **White dashed:** Ground Truth (Applanix reference).
-- **Mint solid:** libgnss++ with an **opt-in recipe, not the default solver**
-  (see below). Mint and white overlap where the estimate agrees with the
-  reference; their horizontal coordinates are never offset for legibility.
-- **Orange solid:** RTKLIB `demo5 b34k`.
+- **Mint solid:** libgnss++ `gnss_solve` with its **default settings** (the
+  Odaiba benchmark's default arm). Mint and white overlap where the estimate
+  agrees with the reference; their horizontal coordinates are never offset for
+  legibility.
+- **Orange solid:** RTKLIB `demo5 b34k` with GPS, GLONASS, Galileo, QZSS and
+  BeiDou (`pos1-navsys = 61`, GLONASS AR off), the same constellations as
+  libgnss++.
 
 The legend shows each method's current solution state and horizontal error for the
 same reference epoch (within 1 ms timestamp tolerance), plus its median horizontal error over the
-**same 171 exactly matched reference/solver epochs**. Selected-window median H is
-**0.02 m for libgnss++ versus 7.50 m for RTKLIB**; P95 is 0.65 versus 9.86 m.
-In the window, libgnss++ reports 151 FIXED, 38 FLOAT and two SPP epochs; every
-FIXED epoch is within 0.49 m 3D of the reference (median 2.1 cm).
+**same 172 exactly matched reference/solver epochs**. Selected-window median H is
+**0.38 m for libgnss++ versus 7.41 m for RTKLIB**; P95 is 0.88 versus 12.52 m.
+Neither solver fixes much here: libgnss++ reports 177 FLOAT and three SPP
+epochs, RTKLIB 176 FLOAT, 14 DGPS and three FIXED. The difference is the FLOAT
+solution. The window follows a stationary deep-canyon stop (TOW 273750–273860)
+where both solvers are metres off. RTKLIB leaves it with a 7–11 m FLOAT bias that
+lasts about 35 s (median 0.74 m from TOW 273894), while libgnss++ is back within
+0.9 m (P95) when the window starts.
 
-### Why the libgnss++ track uses an opt-in recipe
+### Correction: RTKLIB now uses every constellation (2026-10-26)
 
-With default settings the native solver stays FLOAT through this clip (189
-FLOAT, two SPP; median H 0.21 m), although the zenith inset shows a clear sky.
-Two motion-blind checks reject every integer candidate. One compares it with a
-FIX about three minutes and 400 m old. The other limits consecutive fixes to
-0.2 m apart, which rejects any speed above 2 m/s at 10 Hz. The analysis and the
-full-drive evaluation are in [the hero-clip investigation (PR #645)](https://github.com/rsasaki0109/gnssplusplus-library/pull/645).
-
-The GIF therefore shows `gnss_solve` with
-`--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3
---low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10
---fix-history-motion-compensation`. The legend labels it **"libgnss++ (opt-in)
-· not default settings"**. This recipe is **not adopted as the default**. On the
-complete Trimble drives it adds 6 (Odaiba) and 4 (Shinjuku) wrong FIX epochs at
-0.5–2 m, where the default has none, and loses 2.9% of Odaiba's default-correct
-FIX epochs. On the independent u-blox recording of both drives it has no wrong
-FIX. Full run on Odaiba: 4,338 FIX epochs versus 1,298, horizontal P95 4.854 m
-versus 4.777 m.
-
-The brief `NO SOLUTION` at about TOW 273710 is a real reception loss. The
-rover drops from 21 to 8 reported satellites, with carrier phase on about six.
-At that point a deck crosses over the road. It is in the PLATEAU **bridge**
-model, not the building model, so the inset raycasts both (see below). From TOW
-273709.7 to 273710.8 the deck blocks 10–19 assessed satellites, and the inset
-marks them model NLOS.
+Earlier versions of this GIF showed TOW 273700–273720 with RTKLIB run
+**GPS-only** (`scripts/rtklib_odaiba.conf` had `pos1-navsys = 1`). There RTKLIB
+could use five GPS satellites while the receiver reported 16–24 above its 15°
+mask, and it stayed DGPS/FLOAT at 7.5 m. With every constellation RTKLIB fixes
+147 of that window's 201 epochs (median H 0.01 m), as well as the opt-in libgnss++
+recipe those versions displayed. The window was therefore reselected with the
+same documented criteria against the corrected RTKLIB output. In the new window
+libgnss++ needs no opt-in recipe. The full-run comparison is in
+[benchmarks](benchmarks.md#urbannav-tokyo-odaiba-snapshot): with the fair
+baseline, demo5 fixes more epochs than the default profile, which keeps the lower
+Hp95/Vp95.
 
 ## Explicitly selected showcase
 
@@ -63,13 +57,12 @@ The choice is reproducible with `prepare_trace.py --select-showcase`:
    with the earliest start. These filters and the ranking deliberately favor
    showing the native solver's advantage; the full-run results remain linked below.
 
-This selects GPS week **2032**, TOW **273700.0–273720.0 s**. The window was
-selected from the default-solver output and kept fixed (`--start-tow 273700`)
-when the opt-in trace was rendered; it was not reselected. There are 201 reference
-samples, 191 native solutions (151 FIXED, 38 FLOAT, two SPP), and 173 RTKLIB solutions
-(101 FLOAT, 72 DGPS). Missing positions remain missing. Gaps over 0.5 s are never
-joined, and a missing current position is labelled `NO SOLUTION`; no gap filling,
-error scaling, or horizontal shifts are used.
+Of 147 eligible windows this selects GPS week **2032**, TOW **273874.0–273894.0 s**,
+from the default libgnss++ output and the multi-GNSS RTKLIB output. There are 201
+reference samples, 180 native solutions (177 FLOAT, three SPP) and 193 RTKLIB
+solutions (176 FLOAT, 14 DGPS, three FIXED). Missing positions remain missing.
+Gaps over 0.5 s are never joined, and a missing current position is labelled
+`NO SOLUTION`; no gap filling, error scaling, or horizontal shifts are used.
 
 The 20-second drive is played in **10 seconds (2×)**: 80 frames at 8 fps,
 **960 × 480 pixels**. The camera stays 32 m behind and 8 m above the reference
@@ -82,7 +75,8 @@ This is an offline **horizontal visualization**, with prerecorded forward paths
 visible. A flat schematic ground plane at 42 m ellipsoidal height places all paths
 at 42.45 m; estimated heights are not visualized. Buildings retain their published
 geometry. This is not a vertical-accuracy or building-collision measurement.
-The official **Minato-ku 2025 PLATEAU LOD2** model and current OSM map are context
+The official **Minato-ku 2025 PLATEAU LOD2** buildings and the bridges of the
+zenith model, with the current OSM map, are context
 for the older drive, not a reconstruction of its collection date.
 
 The measured trace, heading, errors and selection criteria are retained in
@@ -99,19 +93,19 @@ and satellite annotations; the street and sky views use the exact same reference
 epoch. The sky origin is the published reference **ECEF point and height**, not
 the street visualization's flattened display plane.
 
-The displayed population is a **fixed set of 32 satellites reported at least
+The displayed population is a **fixed set of 25 satellites reported at least
 once during the selected clip**. Every satellite is propagated from broadcast
 navigation at **every Ground Truth epoch**, independently of whether the receiver
 reported an observation then. It is not the complete broadcast constellation.
 A missing RINEX sample never makes a modeled LOS or NLOS satellite disappear.
-An actual horizon crossing may remove a satellite in other clips; all 32 remain
+An actual horizon crossing may remove a satellite in other clips; all 25 remain
 above the horizon throughout this recorded interval. Missing ephemerides cause
 preparation to fail instead of silently dropping an ID.
 
 The native library's `NavigationData::calculateSatelliteState`, `calculateGeometry`
 and `visibility::projFisheye` compute the positions and ideal fisheye projection.
-There are **6,432 geometry records** (32 × 201), with **4,711 reported observations**
-and 1,721 unreported samples. The independent `observed` flag retains that fact.
+There are **5,025 geometry records** (25 × 201), with **2,803 reported observations**
+and 2,222 unreported samples. The independent `observed` flag retains that fact.
 An ID suffix **`*`** means no RINEX sample at this epoch; the marker and its
 geometric LOS/NLOS color remain visible. The **Rx** counter counts reported
 RINEX observations, separately from the geometric LOS/NLOS counts. It does not
@@ -121,10 +115,10 @@ claim tracking status or selection in either solver's final solution.
 - **Red × — model NLOS:** a modeled building or bridge intersects that ray.
 - **Gray hollow dot — unassessed:** elevation below 10° or an unhealthy ephemeris.
 
-The model uses 236 most-detailed LOD2 tiles (554,731 triangles) from the official
-2025 **Minato, Koto, Chuo and Shinagawa** datasets around the entire route, rather
-than just the tiles visible to the street camera: 115 building (`bldg`) tiles and
-121 bridge (`brid`) tiles. Bridges cover decks and elevated walkways, which block
+The model uses 238 most-detailed LOD2 tiles (553,555 triangles) from the official
+2025 **Minato, Koto, Chuo and Shinagawa** datasets within 2 km of the clip, rather
+than just the tiles visible to the street camera: 119 building (`bldg`) tiles and
+119 bridge (`brid`) tiles. Bridges cover decks and elevated walkways, which block
 the sky as solidly as buildings. The street view draws the same bridge tilesets.
 Draco meshes, glTF node transforms, Y-up/Z-up conversion and `CESIUM_RTC` offsets
 are decoded before raycasting in a local ENU frame, from both b3dm and glb (3D
@@ -135,23 +129,20 @@ cannot change an assessed ray. The sky image and direct satellite rays are compu
 independently and checked for agreement away from silhouette edges. Each NLOS ray
 records the class it hit (`hit_class`).
 
-**Effect of the bridge class.** Buildings alone gave the following, over the clip's
-assessed samples:
+**Effect of the bridge class.** The bridge class was added for a deck that crossed
+the road in the earlier window (TOW 273710), where the receiver dropped to eight
+reported satellites. This window drives along an elevated structure that is also in
+the bridge class. Over its assessed samples:
 
-- 1,473 of 5,947 model LOS samples (24.8%) had no RINEX observation;
-- 30 of 83 model NLOS samples (36.1%) had one.
+| Model | LOS samples without a RINEX observation | NLOS samples with one |
+| --- | ---: | ---: |
+| Buildings only | 1,103 of 3,598 (30.7%) | 111 of 1,226 (9.1%) |
+| Buildings and bridges | 335 of 2,584 (13.0%) | 357 of 2,240 (15.9%) |
 
-With bridges, the same counts are 1,212 of 5,577 (21.7%) and 139 of 453 (30.7%).
-That is, the model agrees better with reception in both directions. Every changed
-label is LOS → NLOS caused by that one deck, from TOW 273705.7 to 273713.8. Before
-and after the vehicle passes beneath it, the deck hides low satellites 13–32 m
-away. The bridges of the other wards change no label.
-
-The remaining unreported LOS samples have two sources:
-
-- reacquisition in the 1–2 s after the deck;
-- intermittent GLONASS and BeiDou GEO tracking (R06, R08, R10, R16, C02, C04),
-  which no modeled structure explains.
+Bridges remove most of the model-LOS samples the receiver did not report. Their
+NLOS samples are reported more often than building NLOS: 23.4% (246 of 1,052) of
+bridge-blocked samples against 9.3% (111 of 1,188) of building-blocked ones. A
+signal can still arrive around an elevated deck or by reflection.
 
 These are **model predictions**, not measured or ground-truth LOS/NLOS labels.
 They omit unmodeled objects (including trees), other model domains, radio
@@ -201,10 +192,9 @@ byte-identical across browser versions. The raw trace snapshot is deterministic.
 
 Build `gnss_solve` using the repository's normal CMake instructions. Build
 RTKLIB `demo5 b34k` at commit `55a0f2c742a605a3d27a90b17556b2cfdf98ad50`
-from [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB).
-The opt-in flag `--fix-history-motion-compensation` is added by PR #645
-(tested at `2c1e7cf`); the other flags already exist on `develop`. This
-visualization PR changes no solver code.
+from [rtklibexplorer/RTKLIB](https://github.com/rtklibexplorer/RTKLIB)
+(`make LDLIBS=-lm` in `app/consapp/rnx2rtkp/gcc` when no gfortran is installed).
+`scripts/rtklib_odaiba.conf` selects every constellation (`pos1-navsys = 61`).
 
 ```bash
 # Reads only the four required members, not the entire 4.45 GB ZIP.
@@ -228,41 +218,21 @@ python scripts/readme_hero/prepare_trace.py \
   --lib-pos output/readme-hero/libgnss.pos \
   --rtklib-pos output/readme-hero/rtklib.pos \
   --select-showcase --duration 20 \
-  --output output/readme-hero/trace.json
-```
-
-The rendered GIF replaces the native track with the opt-in recipe for the same
-fixed window (the native argv is the benchmark's plus the recipe flags):
-
-```bash
-recipe="--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 \
-  --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 \
-  --fix-history-motion-compensation"
-build/apps/gnss_solve --rover data/driving/Tokyo_Data/Odaiba/rover_trimble.obs \
-  --base data/driving/Tokyo_Data/Odaiba/base_trimble.obs \
-  --nav data/driving/Tokyo_Data/Odaiba/base.nav --mode kinematic --glonass-ar off \
-  --base-ecef -3961904.9530 3348993.7578 3698211.7553 --no-kml \
-  --out output/readme-hero/libgnss-cd.pos $recipe
-python scripts/readme_hero/prepare_trace.py \
-  --reference-csv data/driving/Tokyo_Data/Odaiba/reference.csv \
-  --lib-pos output/readme-hero/libgnss-cd.pos \
-  --rtklib-pos output/readme-hero/rtklib.pos \
-  --start-tow 273700 --duration 20 --lib-recipe "$recipe" \
   --output docs/odaiba_hero_trace.json
 python scripts/readme_hero/prepare_sky.py --satellites output/readme-hero/satellites.csv
 ```
 
-Without the recipe flags the same argv reproduces the default `libgnss.pos`
-byte-identically (SHA-256 `400eb21f…`), and RTKLIB reproduces `rtklib.pos`
-(`00df30b0…`). The sky atlas regenerates byte-identically; only its bound trace
-hash changes. `--lib-recipe` only labels the legend and records the flags.
+The benchmark reproduces the default `libgnss.pos` byte-identically (SHA-256
+`400eb21f…`) and the multi-GNSS `rtklib.pos` as `8d3f8cdd…` when run from the
+repository root with these relative input paths (RTKLIB writes them into its
+header). The GPS-only `rtklib.pos` of earlier versions was `00df30b0…`.
 
 Both solvers read the same rover/base/navigation files and use the same surveyed
 base ECEF coordinate `(-3961904.9530, 3348993.7578, 3698211.7553)` m.
 The default profile and GLONASS AR off match the existing Odaiba benchmark.
 The selected trace is reproducible from the retained solver outputs and exact
-reference epochs; both window selection and all displayed errors are checked. Full-run scoring reproduced 1,298 vs 205 FIX epochs and
-4.777 vs 25.622 m horizontal P95 on each solver's matched epochs. The GIF's deliberately favorable short
+reference epochs; both window selection and all displayed errors are checked. Full-run scoring gives 1,298 vs 5,839 FIX epochs and
+4.777 vs 7.856 m horizontal P95 on each solver's matched epochs. The GIF's deliberately favorable short
 window is illustrative; see [benchmarks](benchmarks.md) for the full context,
 matching populations and limitations.
 
@@ -288,7 +258,7 @@ output/readme-hero/satellite_geometry \
   data/driving/Tokyo_Data/Odaiba/base.nav \
   data/driving/Tokyo_Data/Odaiba/rover_trimble.obs \
   data/driving/Tokyo_Data/Odaiba/reference.csv \
-  273700 273720 output/readme-hero/satellites.csv
+  273874 273894 output/readme-hero/satellites.csv
 
 python scripts/readme_hero/prepare_sky.py \
   --satellites output/readme-hero/satellites.csv
