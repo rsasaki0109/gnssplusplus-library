@@ -477,14 +477,42 @@ constellations: demo5 runs with `pos1-navsys = 61` (GPS, GLONASS, Galileo,
 QZSS, BeiDou; GLONASS AR off), as libgnss++ does. All-epoch statistics are over
 each solver's matched output epochs; libgnss++ publishes 10,985 epochs versus
 12,079 for demo5. On the 10,973 epochs both publish, demo5 Hmed is **0.063 m**
-versus 0.359 m for the default profile; the preset and demo5 share 10,034
-epochs, where Hmed is 0.043 versus 0.049 m.
+versus 0.359 m for the default profile. `--preset urban` publishes the same
+epochs as the default; on the 10,971 it shares with demo5, its Hmed, Hp95 and
+Vp95 are 0.046, 4.854 and 10.772 m against 0.063, 6.705 and 13.586 m. The
+`--preset odaiba` arm and demo5 share 10,034 epochs, where Hmed is 0.043
+versus 0.049 m.
 
-| Config | Fix | Rate | Hmed (m) | Hp95 (m) | Vp95 (m) |
-|---|---:|---:|:---:|:---:|:---:|
-| RTKLIB demo5 b34k | 5839 | 48.34% | 0.190 | 7.856 | 15.722 |
-| libgnss++ default | 1298 (−4541) | 11.82% | 0.359 | **4.777** | **11.537** |
-| libgnss++ `--preset odaiba` | **7961** (+2122) | **79.25%** | **0.043** | 5.258 | 13.110 |
+Wrong FIX counts FIXED epochs whose 3D error from `reference.csv` exceeds 0.5,
+2 and 3 m.
+
+| Config | Fix | Rate | Wrong FIX >0.5/2/3 m | Hmed (m) | Hp95 (m) | Vp95 (m) |
+|---|---:|---:|:---:|:---:|:---:|:---:|
+| RTKLIB demo5 b34k | 5839 | 48.34% | 19 / 4 / 4 | 0.190 | 7.856 | 15.722 |
+| libgnss++ default | 1298 (−4541) | 11.82% | **0 / 0 / 0** | 0.359 | **4.777** | 11.537 |
+| libgnss++ `--preset urban` | 7467 (+1628) | 67.97% | 9 / 0 / 0 | 0.046 | 4.860 | **10.770** |
+| libgnss++ `--preset odaiba` | **7961** (+2122) | **79.25%** | 109 / 5 / 5 | **0.043** | 5.258 | 13.110 |
+
+**`--preset urban` (2026-10-26).** It is the CDME fix-recovery recipe of
+[rtk_doppler_consensus_age.md](rtk_doppler_consensus_age.md) on top of the
+default profile. It sets five gates:
+- a FIX anchor expires after 5 s;
+- a fixed candidate must agree within 3 m with a Doppler track, which expires
+  5 s after its last FIX;
+- AR needs at least 10 fixed ambiguities;
+- the fix-history check allows for the rover's motion;
+- the position-jump check allows for the rover's motion.
+
+It is the README claim against demo5. It has more fixes, no more wrong fixes
+at any threshold, and a lower Hmed, Hp95 and Vp95. The lane gates all of these.
+The recipe also has more FIX and no more wrong FIX than demo5 on the u-blox
+Odaiba and Shinjuku drives and the six PPC runs. Trimble Shinjuku is the
+exception. There it has 11491 against 6313 FIX and no wrong fix beyond 2 m
+(demo5: 112), but more 0.5–2 m wrong fixes: 242 against 128
+([evaluation](rtk_doppler_consensus_age.md)).
+It is not the default because it adds 0.5–2 m wrong fixes and missing epochs
+compared with the default profile. `--preset odaiba` has more fixes still, but
+109 wrong fixes beyond 0.5 m, so it is no longer claimed against demo5.
 
 **Correction (2026-10-26).** Until this date `scripts/rtklib_odaiba.conf` ran
 demo5 **GPS-only** (`pos1-navsys = 1`) while libgnss++ used every
@@ -492,7 +520,8 @@ constellation. That table row read 205 fixes (2.50%), Hmed 0.567 m, Hp95
 25.622 m and Vp95 43.375 m. The former claims that the default profile has
 "6.3x fixes" and a lower common-epoch Hmed than demo5 came from that mismatch
 and are withdrawn. The default profile keeps a lower Hp95/Vp95 than demo5; the
-preset has more fixes and a lower Hmed. The PPC demo5 comparisons were not
+`--preset odaiba` arm has more fixes and a lower Hmed (later on 2026-10-26 the
+claim moved to `--preset urban`, above). The PPC demo5 comparisons were not
 affected: `ppc-demo` already rewrote the shared file to `pos1-navsys = 61`.
 
 `--preset odaiba` is the `low-cost` profile plus Melbourne-Wubbena wide-lane

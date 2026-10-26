@@ -4,9 +4,9 @@
 [lane]
 name = "odaiba"
 status = "ready"
-title = "UrbanNav Tokyo Odaiba RTK: libgnss++ default and --preset odaiba vs RTKLIB demo5"
-readme_row = "Urban RTK (both multi-GNSS): --preset odaiba 7961 vs 5839 fixes, lower Hmed; default lower Hp95/Vp95 (4.78/11.54 vs 7.86/15.72 m)"
-runtime_estimate = "~5 min"
+title = "UrbanNav Tokyo Odaiba RTK: libgnss++ default, --preset urban and --preset odaiba vs RTKLIB demo5"
+readme_row = "Urban RTK (both multi-GNSS): --preset urban 7467 vs 5839 fixes, fewer wrong fixes (9/0/0 vs 19/4/4 beyond 0.5/2/3 m), lower Hmed/Hp95/Vp95; default lower Hp95/Vp95"
+runtime_estimate = "~7 min"
 docs = "docs/benchmarks.md"
 
 [datasets.urbannav]
@@ -37,6 +37,22 @@ argv = [
   "--scorecard-png", "{work_dir}/default/driving_odaiba_scorecard.png",
   "--social-card-png", "{work_dir}/default/driving_odaiba_social_card.png",
   "--summary-json", "{work_dir}/default/summary.json",
+]
+
+[[steps]]
+name = "odaiba-benchmark-preset-urban"
+argv = [
+  "{gnss}", "odaiba-benchmark",
+  "--dataset-dir", "{urbannav_root}/Odaiba",
+  "--preset", "urban",
+  "--use-existing-rtklib-solution",
+  "--rtklib-pos", "{work_dir}/rtklib_demo5.pos",
+  "--lib-pos", "{work_dir}/preset_urban/rtk_solution.pos",
+  "--lib-kml", "{work_dir}/preset_urban/rtk_solution.kml",
+  "--comparison-png", "{work_dir}/preset_urban/driving_odaiba_comparison.png",
+  "--scorecard-png", "{work_dir}/preset_urban/driving_odaiba_scorecard.png",
+  "--social-card-png", "{work_dir}/preset_urban/driving_odaiba_social_card.png",
+  "--summary-json", "{work_dir}/preset_urban/summary.json",
 ]
 
 [[steps]]
@@ -82,23 +98,39 @@ argv = [
 # (205 fixes, Hp95 25.62 m); with pos1-navsys=61 it has 5839 fixes. The former
 # claims "6.3x fixes" and "lower Hmed on common epochs" for the default profile
 # no longer hold and are withdrawn.
-# Claims: --preset odaiba has more fixes and a lower Hmed than demo5; the default
-# profile has a lower Hp95/Vp95 than demo5 (all matched epochs).
+# 2026-10-26 (later): the README claim moved from --preset odaiba to
+# --preset urban (the CDME fix-recovery recipe, docs/rtk_doppler_consensus_age.md).
+# --preset odaiba has more fixes than demo5 but also more wrong fixes (109/5/5
+# FIXED epochs beyond 0.5/2/3 m from reference.csv against 19/4/4); it is still
+# run and gated against the default arm, but no longer claimed against demo5.
+# Claims: --preset urban has more fixes, no more wrong fixes at each threshold,
+# and a lower Hmed/Hp95/Vp95 than demo5; the default profile has a lower
+# Hp95/Vp95 than demo5 (all matched epochs).
 [[metrics]]
-name = "preset odaiba fix epochs minus demo5"
-source = "{work_dir}/preset_odaiba/summary.json"
+name = "preset urban fix epochs minus demo5"
+source = "{work_dir}/preset_urban/summary.json"
 path = "libgnss_all_epochs.fix_epochs"
 minus_path = "rtklib_all_epochs.fix_epochs"
 min = 1
-readme = "More fixes (--preset odaiba)"
+readme = "More fixes (--preset urban)"
 
 [[metrics]]
-name = "preset odaiba median_h_m minus demo5 (m)"
-source = "{work_dir}/preset_odaiba/summary.json"
-path = "libgnss_all_epochs.median_h_m"
-minus_path = "rtklib_all_epochs.median_h_m"
+name = "preset urban {field} minus demo5"
+source = "{work_dir}/preset_urban/summary.json"
+path = "libgnss_all_epochs.{field}"
+minus_path = "rtklib_all_epochs.{field}"
+max = 0
+readme = "fewer wrong fixes (--preset urban)"
+foreach = [{ field = "fix_wrong_gt_0p5_m" }, { field = "fix_wrong_gt_2_m" }, { field = "fix_wrong_gt_3_m" }]
+
+[[metrics]]
+name = "preset urban {field} minus demo5 (m)"
+source = "{work_dir}/preset_urban/summary.json"
+path = "libgnss_all_epochs.{field}"
+minus_path = "rtklib_all_epochs.{field}"
 max = 0.0
-readme = "lower Hmed (--preset odaiba)"
+readme = "lower Hmed/Hp95/Vp95 (--preset urban)"
+foreach = [{ field = "median_h_m" }, { field = "p95_h_m" }, { field = "p95_abs_up_m" }]
 
 [[metrics]]
 name = "default {field} minus demo5 (m)"
@@ -122,6 +154,9 @@ foreach = [
   { field = "median_h_m", expected = 0.190, abs_tol = 0.0005 },
   { field = "p95_h_m", expected = 7.856, abs_tol = 0.0005 },
   { field = "p95_abs_up_m", expected = 15.722, abs_tol = 0.0005 },
+  { field = "fix_wrong_gt_0p5_m", expected = 19, abs_tol = 0 },
+  { field = "fix_wrong_gt_2_m", expected = 4, abs_tol = 0 },
+  { field = "fix_wrong_gt_3_m", expected = 4, abs_tol = 0 },
 ]
 
 [[metrics]]
@@ -136,6 +171,9 @@ foreach = [
   { field = "median_h_m", expected = 0.359, abs_tol = 0.01 },
   { field = "p95_h_m", expected = 4.777, abs_tol = 0.1 },
   { field = "p95_abs_up_m", expected = 11.537, abs_tol = 0.2 },
+  { field = "fix_wrong_gt_0p5_m", expected = 0, abs_tol = 2 },
+  { field = "fix_wrong_gt_2_m", expected = 0, abs_tol = 1 },
+  { field = "fix_wrong_gt_3_m", expected = 0, abs_tol = 1 },
 ]
 
 # `--preset odaiba` = low-cost profile + arc-smoothed MW wide-lane AR
@@ -195,4 +233,24 @@ foreach = [
   { field = "median_h_m", expected = 0.043, abs_tol = 0.01 },
   { field = "p95_h_m", expected = 5.258, abs_tol = 0.1 },
   { field = "p95_abs_up_m", expected = 13.110, abs_tol = 0.2 },
+  { field = "fix_wrong_gt_0p5_m", expected = 109, abs_tol = 20 },
+  { field = "fix_wrong_gt_2_m", expected = 5, abs_tol = 3 },
+  { field = "fix_wrong_gt_3_m", expected = 5, abs_tol = 3 },
+]
+
+[[metrics]]
+name = "table: libgnss++ --preset urban {field}"
+source = "{work_dir}/preset_urban/summary.json"
+path = "libgnss_all_epochs.{field}"
+gate = false
+readme = "docs/benchmarks.md table"
+foreach = [
+  { field = "fix_epochs", expected = 7467.000, abs_tol = 120 },
+  { field = "fix_rate_pct", expected = 67.975, abs_tol = 1.2 },
+  { field = "median_h_m", expected = 0.046, abs_tol = 0.01 },
+  { field = "p95_h_m", expected = 4.860, abs_tol = 0.1 },
+  { field = "p95_abs_up_m", expected = 10.770, abs_tol = 0.2 },
+  { field = "fix_wrong_gt_0p5_m", expected = 9, abs_tol = 5 },
+  { field = "fix_wrong_gt_2_m", expected = 0, abs_tol = 1 },
+  { field = "fix_wrong_gt_3_m", expected = 0, abs_tol = 1 },
 ]
