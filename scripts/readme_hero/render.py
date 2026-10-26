@@ -170,7 +170,9 @@ async def main():
                 await page.evaluate("t=>renderFrame(t)", t)
                 try:
                     await page.wait_for_function(
-                        "viewers.every(v=>v.scene.globe.tilesLoaded && v.heroTiles.tilesLoaded)",
+                        # requestRenderMode only advances tiles on a render;
+                        # glb (Draco) content finishes decoding asynchronously.
+                        "(viewers.forEach(v=>v.scene.requestRender()), viewers.every(v=>v.scene.globe.tilesLoaded && v.heroTiles.tilesLoaded && v.bridgeTiles.every(t=>t.tilesLoaded)))",
                         timeout=60000,
                     )
                 except Exception:
@@ -178,7 +180,7 @@ async def main():
                     print(
                         "LOAD STATE",
                         await page.evaluate(
-                            "viewers.map(v=>({globe:v.scene.globe.tilesLoaded,city:v.heroTiles.tilesLoaded,pending:v.heroTiles.statistics.numberOfPendingRequests,processing:v.heroTiles.statistics.numberOfTilesProcessing}))"
+                            "viewers.map(v=>({globe:v.scene.globe.tilesLoaded,city:v.heroTiles.tilesLoaded,pending:v.heroTiles.statistics.numberOfPendingRequests,processing:v.heroTiles.statistics.numberOfTilesProcessing,bridges:v.bridgeTiles.map(t=>({loaded:t.tilesLoaded,pending:t.statistics.numberOfPendingRequests,processing:t.statistics.numberOfTilesProcessing,selected:t.statistics.selected}))}))"
                         ),
                         flush=True,
                     )

@@ -42,9 +42,10 @@ versus 4.777 m.
 
 The brief `NO SOLUTION` at about TOW 273710 is a real reception loss. The
 rover drops from 21 to 8 reported satellites, with carrier phase on about six.
-At that point the OpenStreetMap layer shows a structure crossing the road,
-consistent with an elevated deck. The PLATEAU building model does not include
-it, so the inset still predicts LOS there.
+At that point a deck crosses over the road. It is in the PLATEAU **bridge**
+model, not the building model, so the inset raycasts both (see below). From TOW
+273709.7 to 273710.8 the deck blocks 10–19 assessed satellites, and the inset
+marks them model NLOS.
 
 ## Explicitly selected showcase
 
@@ -117,18 +118,40 @@ RINEX observations, separately from the geometric LOS/NLOS counts. It does not
 claim tracking status or selection in either solver's final solution.
 
 - **Green filled dot — model LOS:** no building hit along the eligible ray.
-- **Red × — model NLOS:** a modeled building intersects that ray.
+- **Red × — model NLOS:** a modeled building or bridge intersects that ray.
 - **Gray hollow dot — unassessed:** elevation below 10° or an unhealthy ephemeris.
 
-The model uses 115 most-detailed LOD2 tiles (349,853 triangles) from the official
+The model uses 236 most-detailed LOD2 tiles (554,731 triangles) from the official
 2025 **Minato, Koto, Chuo and Shinagawa** datasets around the entire route, rather
-than just the tiles visible to the street camera. Draco meshes, glTF node
-transforms, Y-up/Z-up conversion and `CESIUM_RTC` offsets are decoded before
-raycasting in a local ENU frame. Decoded heights are checked against the published
-model envelope. Raycasting uses a 2 km limit; the maximum model height and 10°
-elevation cutoff are checked to ensure that a taller modeled building beyond that
-range cannot change an assessed ray. The sky image and direct satellite rays are
-computed independently and checked for agreement away from silhouette edges.
+than just the tiles visible to the street camera: 115 building (`bldg`) tiles and
+121 bridge (`brid`) tiles. Bridges cover decks and elevated walkways, which block
+the sky as solidly as buildings. The street view draws the same bridge tilesets.
+Draco meshes, glTF node transforms, Y-up/Z-up conversion and `CESIUM_RTC` offsets
+are decoded before raycasting in a local ENU frame, from both b3dm and glb (3D
+Tiles 1.1) content. Decoded heights are checked against the published model
+envelope. Raycasting uses a 2 km limit; the maximum model height and 10° elevation
+cutoff are checked to ensure that a taller modeled structure beyond that range
+cannot change an assessed ray. The sky image and direct satellite rays are computed
+independently and checked for agreement away from silhouette edges. Each NLOS ray
+records the class it hit (`hit_class`).
+
+**Effect of the bridge class.** Buildings alone gave the following, over the clip's
+assessed samples:
+
+- 1,473 of 5,947 model LOS samples (24.8%) had no RINEX observation;
+- 30 of 83 model NLOS samples (36.1%) had one.
+
+With bridges, the same counts are 1,212 of 5,577 (21.7%) and 139 of 453 (30.7%).
+That is, the model agrees better with reception in both directions. Every changed
+label is LOS → NLOS caused by that one deck, from TOW 273705.7 to 273713.8. Before
+and after the vehicle passes beneath it, the deck hides low satellites 13–32 m
+away. The bridges of the other wards change no label.
+
+The remaining unreported LOS samples have two sources:
+
+- reacquisition in the 1–2 s after the deck;
+- intermittent GLONASS and BeiDou GEO tracking (R06, R08, R10, R16, C02, C04),
+  which no modeled structure explains.
 
 These are **model predictions**, not measured or ground-truth LOS/NLOS labels.
 They omit unmodeled objects (including trees), other model domains, radio

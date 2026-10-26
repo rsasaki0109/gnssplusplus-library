@@ -46,6 +46,20 @@ class SkySatelliteContinuityTest(unittest.TestCase):
             math.hypot(after["x"] - before["x"], after["y"] - before["y"]), 0.01
         )
 
+    def test_bridge_deck_is_modeled_where_reception_drops(self):
+        # Public Odaiba regression: a PLATEAU bridge deck crosses the road near
+        # TOW 273710, where the receiver reports only 8 satellites. With
+        # buildings alone the whole assessed sky stayed LOS there.
+        self.assertTrue(self.sky["model"]["classes"]["brid"])
+        under = self.frame_at(273710.4)["satellites"]
+        nlos = [r for r in under if r["model_status"] == "NLOS"]
+        self.assertGreaterEqual(len(nlos), 15)
+        self.assertTrue(all(r["hit_class"] == "brid" for r in nlos))
+        self.assertLessEqual(sum(r["observed"] for r in under), 10)
+        clear = self.frame_at(273705.0)["satellites"]
+        self.assertLessEqual(sum(r["model_status"] == "NLOS" for r in clear), 2)
+        self.assertGreaterEqual(sum(r["observed"] for r in clear), 20)
+
     def test_observation_availability_stays_independent_of_model_visibility(self):
         rows = [r for f in self.frames for r in f["satellites"]]
         self.assertEqual(len(rows), 6432)
