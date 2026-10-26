@@ -1,0 +1,898 @@
+{
+ "title": "CDMH (CD + motion-compensated max jump + Kalman hold) frozen evaluation; PPC-Dataset acquisition",
+ "doc": "docs/rtk_cdmh_ppc_evaluation.md",
+ "reference_use": "scoring and 0.5 m labels only; never a solver input",
+ "frozen_rule": "Frozen before replay (2026-10-26T01:53Z). No new code, no thresholds: existing opt-ins.\nBinary: develop 2e224ea. Recipes: default, CDM (= CD + --max-position-jump-motion-compensation),\nCDMH (= CDM + --hold-kalman-update).\nMechanism (PPC tokyo/run2): CDM stays in a hold-fix streak 0.28-0.44 m off for ~24 s from TOW 177058.8\n(legacy hold overwrite keeps the biased basin) and then loses 55 default-correct epochs (lambda_not_fixed).\nPrediction: under CDMH that streak is shorter and the default-correct loss on tokyo/run2 is < 2%.\nGate for CDMH vs default (docs/fix_recovery_guard.md, every run, including the decrease clause): wrong FIX\n>0.5/2/3 m not increased; default-correct loss <= 1% (0.5 m); missing and horizontal P95 not increased;\nrecovery P95 and right-censoring not increased; at least one wrong-FIX population decreases.\nRuns: PPC tokyo/nagoya run1-3 (development), Trimble Odaiba/Shinjuku (development), u-blox Odaiba/Shinjuku\n(holdout), HK Deep/Harsh (descriptive, 2/3 m). Reference only for scoring. No retuning after the replay.\n",
+ "frozen_rule_sha256": "918ffb28009e58123baa0049893113c6574167bc68aa74e1c2ebdd5ef2625f5c",
+ "binary": {
+  "source": "develop 2e224eafb3eba6cb8109d78a6d35c3e816ca27d1",
+  "gnss_solve_sha256": "c3d423360fcf5828ea6fe42ed590b9969a737b70667545816599b212879d5c85"
+ },
+ "recipes": {
+  "default": "",
+  "CDM": "--max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 --low-ratio-guard-threshold 1e9 --low-ratio-min-fixed-ambiguities 10 --fix-history-motion-compensation --max-position-jump-motion-compensation",
+  "CDMH": "CDM + --hold-kalman-update"
+ },
+ "native_argv": {
+  "ppc": "gnss_solve --rover <run>/rover.obs --base <run>/base.obs --nav <run>/base.nav --mode kinematic --glonass-ar off --base-ecef <base.obs APPROX POSITION XYZ> --no-kml --out <pos> + recipe flags",
+  "tokyo_hk": "see docs/urbannav_base_interpolation_evaluation.json native_argv",
+  "note": "PPC uses the same bare command line as Tokyo, not the repository PPC RTK profile (apps/commands/benchmarks/gnss_ppc_native_replay.py COMMON: --preset low-cost --ratio 2.4 --max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter); numbers are not comparable with docs/ppc_development_results.md or docs/ppc_fix_recovery_evaluation.json"
+ },
+ "ppc_dataset": {
+  "source": "https://github.com/taroz/PPC-Dataset (README download link)",
+  "download_url": "https://chibakoudai-my.sharepoint.com/:u:/g/personal/66lsm6_chibatech_ac_jp/ETmyNr1VrcpFjqxgjXJdgkQBkfTwnykhSPOVKClOUBNOMQ?download=1",
+  "download_note": "the SharePoint redirect chain sets session cookies; without a cookie jar curl ends at HTTP 403. curl -L -c cj.txt -b cj.txt succeeds. Not a network-policy block.",
+  "zip_bytes": 162247330,
+  "zip_sha256": "460b21747a78c8cca60190895b32615b9943cf4f75a20864280bb86a01b76658",
+  "extracted_to": "data/PPC-Dataset (gitignored), members under .git/ excluded",
+  "files_sha256": {
+   "tokyo/run1/rover.obs": "97e7b370d381a64760cd07d251bcf5df2dc2b3b6dd2444323ff8d6f35e4689e5",
+   "tokyo/run1/base.obs": "2624939cd82cdbd839a32ccb4d22f9f846e7613a934b45539b5f98e8c31e37f8",
+   "tokyo/run1/base.nav": "6a8fcef262ae62854f971cf383ee17c19fddd7d49071effc0f94c156b923d4b7",
+   "tokyo/run1/reference.csv": "8e468a6a959cd47144f4ad1f1dc0129e7ee160011f4d236e4ffdb63b203373e9",
+   "tokyo/run2/rover.obs": "e53eb349617edf22d1df677d1c40348108c7eba97dd0fadbdc8f1b3bff035098",
+   "tokyo/run2/base.obs": "a6b5dff7f23fbad57b0b38743c7def15feafe8a2745ac52815c51c7de3c078d3",
+   "tokyo/run2/base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+   "tokyo/run2/reference.csv": "e43ff28e01becf2f50a3fff3b326e61179cd722b9b4a8d0b70998af991fa5f53",
+   "tokyo/run3/rover.obs": "ea8e16a7b0093e6a4d108cb5baea2ac8b1986bf274f0bba5612a6fba23a4f3a3",
+   "tokyo/run3/base.obs": "3ae4f799acee74709c6613765d12d3eda501295444e3cc8891f2d4bd40b672e8",
+   "tokyo/run3/base.nav": "0a2b86b715674207d9d1b154ac73b8b2bce26f63b10ce0a5b9548b10fb5476fa",
+   "tokyo/run3/reference.csv": "a0872e258e3728c5bd07ef169565124b4434fc9601bcfc3c01f8c0b6cdd9ce49",
+   "nagoya/run1/rover.obs": "d9ee4e38c857f109cb430dab34e7958867060edb99e5f8b1c020abdd29d345cb",
+   "nagoya/run1/base.obs": "7c5738135ee203bbb10925e57d5e98f7c9d5cd84ee27b0d92e386a6a29a2b872",
+   "nagoya/run1/base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+   "nagoya/run1/reference.csv": "804f7b1d6845c2c5c717fe7868b7637a4a40bfb2e4a9f6811042b18d5ef00e0d",
+   "nagoya/run2/rover.obs": "e838a42e9a9ea5e982807949e66b8fcd6c33de1202568ff47a656a3c5392edc6",
+   "nagoya/run2/base.obs": "2e427849b22fa2f419951c7583f9ef3d009691091812ebe734b41dc3596cf2f2",
+   "nagoya/run2/base.nav": "a039eee00b68fdf58ceccc0839d6c6bf9d28d159c76ac0b3d305022829493ddf",
+   "nagoya/run2/reference.csv": "21bfeefda4a2977192ea91dc7fde2be2ad0b1c042cd627b1086356aeb40fa99e",
+   "nagoya/run3/rover.obs": "41e6a6c886abca3034f570dbfdc6fe070e76427dd8e46fbfdc0e9b0aa3e67c46",
+   "nagoya/run3/base.obs": "5d7e539ef386856e4179e8b1dba21da2c9c96705f7ead8fac1798f041b8f1b43",
+   "nagoya/run3/base.nav": "4a8e0e074c45604052936043a5dadd674d9a972c5f9c27a866ca4f9667df22d5",
+   "nagoya/run3/reference.csv": "574cca92f00d6cdc1b88badc07fb08d9587eb108aa0185e82d2146a2eb72e564"
+  },
+  "role": "development data (already used in this repository); not a holdout"
+ },
+ "scoring": {
+  "ppc": "evaluate_urbannav_fix_continuity.score() exact 1 ms on the 5 Hz reference; wrong_episodes_0.5 = runs of consecutive (<0.25 s) FIX epochs beyond 0.5 m",
+  "trimble": "evaluate_urbannav_fix_continuity.score() exact 1 ms",
+  "ublox": "0.2 s grid, 5 ms matching, reference interpolated",
+  "hk": "repository scorer on exact 1 Hz epochs; descriptive only (2/3 m)",
+  "default_correct_lost": "default FIX epochs within 0.5 m that are not FIX within 0.5 m under the recipe"
+ },
+ "scorer_sha256": {
+  "eval_ppc.py": "a175906265728aaadebc953eb255685dfe6504b132a2e2ce8534a3bdd2f30b9c",
+  "eval_recipes.py": "18f26a27ed691e787d5b5a9e5cffff677d9854cdd06d3f9aea4fb1ae827f97a4",
+  "eval_interp.py": "9a375a6b5c09e90271432f26c6aa39287028aa9414ff9a37c2a11a8581597863"
+ },
+ "ppc_pos_sha256": {
+  "nagoya-run1-default.pos": "4780bd0b87230fad4c9c6e4a7f9c416b86bf32374a8ac05d52786160060bd071",
+  "nagoya-run2-default.pos": "55050ea651ce84d76cd9472009bdba49a7c64a3dcc3078e5fc08008b307bcd64",
+  "nagoya-run3-default.pos": "9262f9e51990df5b9f2f9313378fa2acb24cb7fb683c464d8822964fd4b11024",
+  "tokyo-run1-default.pos": "55ae247bcf6e2310a3bfaf608451ae3ed325dea5445600fb8a468574afbf8a9f",
+  "tokyo-run2-default.pos": "24b2718ae7cf4a28beddeceeecef76550b6d21d58288864559cc785a08d7a5d3",
+  "tokyo-run3-default.pos": "b727ecd752bf91004d0bb3fdbb8591407f21831e3b93d9e0bc7d368c84191941",
+  "nagoya-run1-CDM.pos": "2c7d2f5378d7ccf09725fea658bec7350a43ad5d07e8fd89377d96bb8597c1f6",
+  "nagoya-run2-CDM.pos": "8d701085d98aa4f52b42ebf0ce1621029077f27a8467f792f0093e193a7aa7cc",
+  "nagoya-run3-CDM.pos": "ccffc33d2b11fb215ca1d48de4c6eda63b77a2fa8e52af15dc216c5020603130",
+  "tokyo-run1-CDM.pos": "7de9d5000c30adba4ee1f7c04b4a976021d229abbdb432453489c446b8bea850",
+  "tokyo-run2-CDM.pos": "a9877a1fd3b4ff8729e760b0bc419d05d0e55e887b951eff9bd01da1802d13b8",
+  "tokyo-run3-CDM.pos": "a231379546b26840d888c68aeed554f0eb88bd813195b1b1ffc8bce8a757fbaa",
+  "nagoya-run1-CDMH.pos": "af3cf89ff246ae334328bcc155d479fe6b4b327886ff7b207635c1d3b63ade9a",
+  "nagoya-run2-CDMH.pos": "8a9fe4b4654e4990731264fc542a3bce80d943b863eed8fd73cfe9305443eef0",
+  "nagoya-run3-CDMH.pos": "b65412ffee7ef26d1d487c2c4cc8fc0ae75db3c47c2c49bfd1699e8352940ecd",
+  "tokyo-run1-CDMH.pos": "eb1544b2685195d25adde65647adaa553b867388fc3aed390053b8000f40b431",
+  "tokyo-run2-CDMH.pos": "3d34e23b2aa7ef621537cd6678496ea99cd2320301187118cd11e3c8eac97bf9",
+  "tokyo-run3-CDMH.pos": "044c026a2177da16bfb38a0c8c0e732eeed9e75f9ec4416f6df8201a149fc057"
+ },
+ "results": {
+  "ppc-tokyo/run1": {
+   "default": {
+    "fix": 772,
+    "missing": 1196,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 6.6545,
+    "fix3d_p50": 0.0344,
+    "recP95@0.5": 1.0,
+    "outages@0.5": 1,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1
+   },
+   "CDM": {
+    "fix": 1395,
+    "missing": 1198,
+    "wrong>0.5/2/3": [
+     5,
+     0,
+     0
+    ],
+    "hP95": 6.6545,
+    "fix3d_p50": 0.0317,
+    "recP95@0.5": 1206.68,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 3,
+    "default_correct_lost": 1,
+    "default_correct_lost_pct": 0.13
+   },
+   "CDMH": {
+    "fix": 1439,
+    "missing": 1197,
+    "wrong>0.5/2/3": [
+     3,
+     0,
+     0
+    ],
+    "hP95": 6.6545,
+    "fix3d_p50": 0.0315,
+    "recP95@0.5": 1356.24,
+    "outages@0.5": 3,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 3,
+    "default_correct_lost": 1,
+    "default_correct_lost_pct": 0.13
+   }
+  },
+  "ppc-tokyo/run2": {
+   "default": {
+    "fix": 879,
+    "missing": 602,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 1.9948,
+    "fix3d_p50": 0.0379,
+    "recP95@0.5": 3.4,
+    "outages@0.5": 1,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1
+   },
+   "CDM": {
+    "fix": 1310,
+    "missing": 614,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 2.015,
+    "fix3d_p50": 0.0416,
+    "recP95@0.5": 780.84,
+    "outages@0.5": 7,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 55,
+    "default_correct_lost_pct": 6.26
+   },
+   "CDMH": {
+    "fix": 1386,
+    "missing": 604,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 1.9951,
+    "fix3d_p50": 0.0407,
+    "recP95@0.5": 1001.82,
+    "outages@0.5": 3,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 20,
+    "default_correct_lost_pct": 2.28
+   }
+  },
+  "ppc-tokyo/run3": {
+   "default": {
+    "fix": 749,
+    "missing": 1021,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.111,
+    "fix3d_p50": 0.0299,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0
+   },
+   "CDM": {
+    "fix": 1134,
+    "missing": 1021,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.111,
+    "fix3d_p50": 0.0272,
+    "recP95@0.5": 1.0,
+    "outages@0.5": 1,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 8,
+    "default_correct_lost_pct": 1.07
+   },
+   "CDMH": {
+    "fix": 1138,
+    "missing": 1021,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.111,
+    "fix3d_p50": 0.0271,
+    "recP95@0.5": 1.0,
+    "outages@0.5": 1,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 0.53
+   }
+  },
+  "ppc-nagoya/run1": {
+   "default": {
+    "fix": 18,
+    "missing": 841,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 1.3594,
+    "fix3d_p50": 0.113,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0
+   },
+   "CDM": {
+    "fix": 2033,
+    "missing": 841,
+    "wrong>0.5/2/3": [
+     10,
+     0,
+     0
+    ],
+    "hP95": 1.3802,
+    "fix3d_p50": 0.1026,
+    "recP95@0.5": 456.76,
+    "outages@0.5": 7,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 2,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDMH": {
+    "fix": 2086,
+    "missing": 846,
+    "wrong>0.5/2/3": [
+     11,
+     0,
+     0
+    ],
+    "hP95": 1.3643,
+    "fix3d_p50": 0.1029,
+    "recP95@0.5": 486.1,
+    "outages@0.5": 6,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 3,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   }
+  },
+  "ppc-nagoya/run2": {
+   "default": {
+    "fix": 1130,
+    "missing": 1770,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 11.4446,
+    "fix3d_p50": 0.0955,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1
+   },
+   "CDM": {
+    "fix": 1173,
+    "missing": 1780,
+    "wrong>0.5/2/3": [
+     2,
+     0,
+     0
+    ],
+    "hP95": 11.3969,
+    "fix3d_p50": 0.0946,
+    "recP95@0.5": 30.2,
+    "outages@0.5": 1,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 6,
+    "default_correct_lost_pct": 0.53
+   },
+   "CDMH": {
+    "fix": 1177,
+    "missing": 1780,
+    "wrong>0.5/2/3": [
+     2,
+     0,
+     0
+    ],
+    "hP95": 11.3969,
+    "fix3d_p50": 0.0917,
+    "recP95@0.5": 30.0,
+    "outages@0.5": 1,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 0.35
+   }
+  },
+  "ppc-nagoya/run3": {
+   "default": {
+    "fix": 12,
+    "missing": 1460,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.5921,
+    "fix3d_p50": 0.1284,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0
+   },
+   "CDM": {
+    "fix": 591,
+    "missing": 1472,
+    "wrong>0.5/2/3": [
+     15,
+     0,
+     0
+    ],
+    "hP95": 8.5891,
+    "fix3d_p50": 0.134,
+    "recP95@0.5": 6.44,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 2,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDMH": {
+    "fix": 664,
+    "missing": 1466,
+    "wrong>0.5/2/3": [
+     4,
+     0,
+     0
+    ],
+    "hP95": 8.5932,
+    "fix3d_p50": 0.1302,
+    "recP95@0.5": 6.76,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 2,
+    "default_correct_lost": 8,
+    "default_correct_lost_pct": 66.67
+   }
+  },
+  "trimble-Odaiba": {
+   "default": {
+    "fix": 1298,
+    "missing": 1426,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 4.7772,
+    "fix3d_p50": 0.0348,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "CDM": {
+    "fix": 4450,
+    "missing": 1419,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 4.8543,
+    "fix3d_p50": 0.0445,
+    "recP95@0.5": 324.45,
+    "outages@0.5": 12,
+    "censored@0.5": false,
+    "default_correct_lost": 7,
+    "default_correct_lost_pct": 0.54
+   },
+   "CDMH": {
+    "fix": 4366,
+    "missing": 1421,
+    "wrong>0.5/2/3": [
+     7,
+     0,
+     0
+    ],
+    "hP95": 4.9175,
+    "fix3d_p50": 0.044,
+    "recP95@0.5": 302.4,
+    "outages@0.5": 13,
+    "censored@0.5": false,
+    "default_correct_lost": 7,
+    "default_correct_lost_pct": 0.54
+   }
+  },
+  "trimble-Shinjuku": {
+   "default": {
+    "fix": 122,
+    "missing": 3234,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 8.3821,
+    "fix3d_p50": 0.0471,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "CDM": {
+    "fix": 2877,
+    "missing": 3272,
+    "wrong>0.5/2/3": [
+     4,
+     0,
+     0
+    ],
+    "hP95": 8.3867,
+    "fix3d_p50": 0.0707,
+    "recP95@0.5": 768.39,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "CDMH": {
+    "fix": 2869,
+    "missing": 3273,
+    "wrong>0.5/2/3": [
+     3,
+     0,
+     0
+    ],
+    "hP95": 8.3868,
+    "fix3d_p50": 0.0872,
+    "recP95@0.5": 768.39,
+    "outages@0.5": 8,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   }
+  },
+  "ublox-Odaiba": {
+   "default": {
+    "fix": 461,
+    "missing": 922,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.7021,
+    "fix3d_p50": 0.036,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true
+   },
+   "CDM": {
+    "fix": 871,
+    "missing": 921,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6999,
+    "fix3d_p50": 0.0344,
+    "recP95@0.5": 8.44,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 0.87
+   },
+   "CDMH": {
+    "fix": 870,
+    "missing": 921,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 6.6999,
+    "fix3d_p50": 0.0344,
+    "recP95@0.5": 8.44,
+    "outages@0.5": 2,
+    "censored@0.5": true,
+    "default_correct_lost": 5,
+    "default_correct_lost_pct": 1.08
+   }
+  },
+  "ublox-Shinjuku": {
+   "default": {
+    "fix": 1,
+    "missing": 2374,
+    "wrong>0.5/2/3": [
+     1,
+     1,
+     0
+    ],
+    "hP95": 5.7359,
+    "fix3d_p50": null,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": false
+   },
+   "CDM": {
+    "fix": 16,
+    "missing": 2345,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8443,
+    "fix3d_p50": 0.0201,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDMH": {
+    "fix": 16,
+    "missing": 2345,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.8443,
+    "fix3d_p50": 0.0201,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   }
+  },
+  "novatel-HKDeepUrban1": {
+   "default": {
+    "fix": 6,
+    "missing": 478,
+    "wrong>0.5/2/3": [
+     6,
+     0,
+     0
+    ],
+    "hP95": 7.2398
+   },
+   "CDM": {
+    "fix": 64,
+    "missing": 477,
+    "wrong>0.5/2/3": [
+     63,
+     0,
+     0
+    ],
+    "hP95": 7.2282,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   },
+   "CDMH": {
+    "fix": 64,
+    "missing": 477,
+    "wrong>0.5/2/3": [
+     63,
+     0,
+     0
+    ],
+    "hP95": 7.2282,
+    "default_correct_lost": 4,
+    "default_correct_lost_pct": 66.67
+   }
+  },
+  "novatel-HKHarshUrban1": {
+   "default": {
+    "fix": 7,
+    "missing": 1123,
+    "wrong>0.5/2/3": [
+     7,
+     7,
+     5
+    ],
+    "hP95": 13.8969
+   },
+   "CDM": {
+    "fix": 0,
+    "missing": 800,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 32.4958,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   },
+   "CDMH": {
+    "fix": 0,
+    "missing": 800,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 32.4958,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": null
+   }
+  }
+ },
+ "gate_vs_default": {
+  "CDM": {
+   "ppc-tokyo/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 1->5",
+     "missing increased 1196->1198",
+     "recovery P95 increased 1.0->1206.68"
+    ]
+   },
+   "ppc-tokyo/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 6.26% > 1%",
+     "missing increased 602->614",
+     "horizontal P95 increased 1.9948->2.015",
+     "recovery P95 increased 3.4->780.84"
+    ]
+   },
+   "ppc-tokyo/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 1.07% > 1%",
+     "recovery P95 increased None->1.0"
+    ]
+   },
+   "ppc-nagoya/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->10",
+     "horizontal P95 increased 1.3594->1.3802",
+     "recovery P95 increased None->456.76"
+    ]
+   },
+   "ppc-nagoya/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 1->2",
+     "missing increased 1770->1780",
+     "recovery P95 increased None->30.2"
+    ]
+   },
+   "ppc-nagoya/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->15",
+     "missing increased 1460->1472",
+     "recovery P95 increased None->6.44"
+    ]
+   },
+   "trimble-Odaiba": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->6",
+     "horizontal P95 increased 4.7772->4.8543",
+     "recovery P95 increased None->324.45"
+    ]
+   },
+   "trimble-Shinjuku": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->4",
+     "missing increased 3234->3272",
+     "horizontal P95 increased 8.3821->8.3867",
+     "recovery P95 increased None->768.39"
+    ]
+   },
+   "ublox-Odaiba": {
+    "passed": false,
+    "failed_conditions": [
+     "recovery P95 increased None->8.44"
+    ]
+   },
+   "ublox-Shinjuku": {
+    "passed": false,
+    "failed_conditions": [
+     "horizontal P95 increased 5.7359->5.8443",
+     "right-censoring increased false->true"
+    ]
+   },
+   "novatel-HKDeepUrban1": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "novatel-HKHarshUrban1": {
+    "passed": false,
+    "failed_conditions": [
+     "horizontal P95 increased 13.8969->32.4958"
+    ]
+   }
+  },
+  "CDMH": {
+   "ppc-tokyo/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 1->3",
+     "missing increased 1196->1197",
+     "recovery P95 increased 1.0->1356.24"
+    ]
+   },
+   "ppc-tokyo/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 2.28% > 1%",
+     "missing increased 602->604",
+     "horizontal P95 increased 1.9948->1.9951",
+     "recovery P95 increased 3.4->1001.82"
+    ]
+   },
+   "ppc-tokyo/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "recovery P95 increased None->1.0"
+    ]
+   },
+   "ppc-nagoya/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->11",
+     "missing increased 841->846",
+     "horizontal P95 increased 1.3594->1.3643",
+     "recovery P95 increased None->486.1"
+    ]
+   },
+   "ppc-nagoya/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 1->2",
+     "missing increased 1770->1780",
+     "recovery P95 increased None->30.0"
+    ]
+   },
+   "ppc-nagoya/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->4",
+     "default-correct loss 66.67% > 1%",
+     "missing increased 1460->1466",
+     "horizontal P95 increased 8.5921->8.5932",
+     "recovery P95 increased None->6.76"
+    ]
+   },
+   "trimble-Odaiba": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->7",
+     "horizontal P95 increased 4.7772->4.9175",
+     "recovery P95 increased None->302.4"
+    ]
+   },
+   "trimble-Shinjuku": {
+    "passed": false,
+    "failed_conditions": [
+     "wrong>0.5m increased 0->3",
+     "missing increased 3234->3273",
+     "horizontal P95 increased 8.3821->8.3868",
+     "recovery P95 increased None->768.39"
+    ]
+   },
+   "ublox-Odaiba": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 1.08% > 1%",
+     "recovery P95 increased None->8.44"
+    ]
+   },
+   "ublox-Shinjuku": {
+    "passed": false,
+    "failed_conditions": [
+     "horizontal P95 increased 5.7359->5.8443",
+     "right-censoring increased false->true"
+    ]
+   },
+   "novatel-HKDeepUrban1": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "novatel-HKHarshUrban1": {
+    "passed": false,
+    "failed_conditions": [
+     "horizontal P95 increased 13.8969->32.4958"
+    ]
+   }
+  }
+ },
+ "wrong_fix_decrease_runs": {
+  "CDM": [
+   "ublox-Shinjuku",
+   "novatel-HKHarshUrban1"
+  ],
+  "CDMH": [
+   "ublox-Shinjuku",
+   "novatel-HKHarshUrban1"
+  ]
+ },
+ "prediction": {
+  "text": "under CDMH the tokyo/run2 biased hold streak is shorter and the default-correct loss is < 2%",
+  "streak": "met: FIX epochs with error > 0.25 m in TOW 177050-177100 fall from 124 (177054.0-177083.0) to 2",
+  "loss": "not met: 2.28% (20 epochs) vs 6.26% (55) under CDM"
+ },
+ "losses_are_float": "every default-correct epoch lost by CDM or CDMH on PPC is a FLOAT (status 3) epoch, never a wrong FIX or a missing epoch",
+ "tokyo_run2_lost_clusters_tow": {
+  "CDM": [
+   [
+    177083.4,
+    177088.6,
+    21
+   ],
+   [
+    177090.0,
+    177094.8,
+    19
+   ],
+   "plus 15 scattered 1-3 epoch clusters to 177205.2"
+  ],
+  "CDMH": [
+   [
+    177048.0,
+    177050.0,
+    3
+   ],
+   [
+    177058.8,
+    177060.4,
+    5
+   ],
+   "plus 12 scattered 1-3 epoch clusters to 177205.2"
+  ]
+ },
+ "nagoya_run3_note": "default has 12 FIX epochs; CDMH loses 8 of them (TOW 553843.0-553844.8, FLOAT), so the 1% rule fails at 66.67%; CDMH wrong FIX > 0.5 m 15 (CDM) -> 4",
+ "missing_epochs_note": "CDM and CDMH add 1-12 missing epochs on five PPC runs vs default. 53 default-only epochs under CDM: 15 lie within 5 s after a CDM FIX (gnss_solve FLOAT drift-from-fixed guard window); in the tokyo/run2 example the debug log shows both solver-invalid epochs and FLOAT epochs that are not written. Mechanism not established.",
+ "decision": "NO_GO: CDMH stays opt-in recipe flags only (all flags already exist); no default change; no retuning after the replay",
+ "tokyo_run2_cdm_mechanism": {
+  "source": "CDM --debug-epoch-log replay (same binary and argv + debug log; POS byte-identical to the scored CDM POS)",
+  "177054.0-177058.8": "AR fixes already 0.25-0.44 m off (17 AR, 7 hold)",
+  "177058.8-177083.2": "122 hold fixes; AR reject: lambda_not_fixed 109, low_ratio_weak_integer_system 10, fix_history_jump 1; 2 AR",
+  "177083.2-177096": "hold no longer applied; FLOAT with lambda_not_fixed 44, max_position_jump 10"
+ }
+}
