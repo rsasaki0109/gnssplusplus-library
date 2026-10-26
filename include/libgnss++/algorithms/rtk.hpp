@@ -418,6 +418,13 @@ public:
         /// 0 disables the gate. Moving-base mode bypasses it.
         double max_fixed_doppler_consensus_m = 0.0;
 
+        /// Age limit of the Doppler consensus track since an accepted FIX last
+        /// re-anchored it. Its integration error grows with that age, and only
+        /// an accepted FIX can re-anchor it, so a drifted track would otherwise
+        /// veto every later candidate. Past this age the gate does not veto.
+        /// 0 keeps the track without a limit (legacy behavior).
+        double max_fixed_doppler_consensus_age_s = 0.0;
+
         /// Adaptive max AR fix jump from last fixed position.
         /// When max_position_jump_rate_mps > 0, accepted jump is
         /// max(max_position_jump_min_m, max_position_jump_rate_mps * dt).
@@ -1482,6 +1489,8 @@ public:
             std::numeric_limits<double>::quiet_NaN();
         double fixed_candidate_doppler_consensus_distance_m =
             std::numeric_limits<double>::quiet_NaN();
+        double fixed_candidate_doppler_consensus_age_s =
+            std::numeric_limits<double>::quiet_NaN();
         bool low_count_rescue_evaluated = false;
         bool low_count_rescue_passed = false;
         bool post_validation_rejected = false;
@@ -1845,6 +1854,7 @@ private:
     bool has_last_doppler_velocity_ = false;
     Vector3d doppler_continuity_position_ecef_ = Vector3d::Zero();
     GNSSTime doppler_continuity_time_;
+    GNSSTime doppler_continuity_anchor_time_;
     bool has_doppler_continuity_position_ = false;
 
     /**
