@@ -149,8 +149,8 @@ The JSON records the binary, input, POS and scorer hashes.
 
 ## Open
 
-- **CD family on the PPC RTK profile.** CDM/CDMH on top of the repository's
-  PPC profile has not been evaluated. That is the configuration a PPC user
-  runs.
+- **CD family on the PPC RTK profile.** Evaluated in the
+  [PPC profile note](rtk_cd_ppc_profile.md): NO_GO. There the Doppler
+  consensus check locks out, and it does so under the bare argv here too.
 - **Missing epochs.** The extra missing epochs under CD on PPC need their
   own reproduction.

@@ -40,7 +40,8 @@ PR #639と#641は別作業。現在のブランチには未マージの天頂ビ
 ## 読む順序
 
 1. [AGENTS.md](https://github.com/rsasaki0109/gnssplusplus-library/blob/develop/AGENTS.md): CMake / coreテスト / per-concern TU / Conventional Commits。
-1. [CDMHのPPC評価](rtk_cdmh_ppc_evaluation.md) / [JSON](ppc_cdmh_evaluation.json): 最新（コード変更なし）。PPC-Dataset（SharePointはcookie jar必須、無しだと403だがネットワーク遮断ではない）を取得し、Tokyoと同じ素のargvで default / CDM / CDMH（CDM+`--hold-kalman-update`）を凍結評価。CDMはPPCでFIX 3560→7636、誤FIXは全て<2 mだがtokyo/run2で正FIX 6.26%喪失（旧holdの上書きが0.25–0.44 m偏った解を約24秒保持→その後もLAMBDA失敗）。CDMHで偏ったFIXは124→2 epoch、喪失6.26→2.28%（予測<2%は未達）、nagoya/run3の誤FIX 15→4。ただしdefault比の採用条件は12区間中11で不合格（誤FIX増6区間、喪失>1%が3区間、欠測増）でNO_GO・既定不変。注意: PPCはリポジトリのPPC RTKプロファイル（`--preset low-cost --ratio 2.4 ...`）ではないので既存PPC資料と数値比較しない。
+1. [PPC用RTK設定上のCD系](rtk_cd_ppc_profile.md) / [JSON](ppc_profile_cd_evaluation.json): 最新（ソルバー変更なし、解析ツール3本追加）。リポジトリのPPC用RTK設定P（`--preset low-cost --ratio 2.4 ...`）にM / CDM / CDMHを重ねて凍結評価。P+MはPとbyte一致。P+CDMは>2 mの誤FIXを918→0にするが正FIXを58–89%失いNO_GO。主因はDoppler整合性検査（D）のロックアウト: 軌跡は受理FIXでしか再anchorされず、経過時間の上限がないため、3 mを超えて漂流すると以後の正しい候補（真値誤差1–16 cm）を全て棄却する（3区間で正9556件棄却・誤13件、最長2807 epoch≒9分）。素のargvのCDMでも同じ（tokyo/run2で3513 epoch）。漂流の原因はPPCのDoppler速度の裾（真値位置で解いてもp95 1.5–3.5 m/s、行ごとの外れ値除去なし）。最大残差の4σ除外で誤差p95は31–49%減るが5秒で3 mは超える。
+1. [CDMHのPPC評価](rtk_cdmh_ppc_evaluation.md) / [JSON](ppc_cdmh_evaluation.json): その前（コード変更なし）。PPC-Dataset（SharePointはcookie jar必須、無しだと403だがネットワーク遮断ではない）を取得し、Tokyoと同じ素のargvで default / CDM / CDMH（CDM+`--hold-kalman-update`）を凍結評価。CDMはPPCでFIX 3560→7636、誤FIXは全て<2 mだがtokyo/run2で正FIX 6.26%喪失（旧holdの上書きが0.25–0.44 m偏った解を約24秒保持→その後もLAMBDA失敗）。CDMHで偏ったFIXは124→2 epoch、喪失6.26→2.28%（予測<2%は未達）、nagoya/run3の誤FIX 15→4。ただしdefault比の採用条件は12区間中11で不合格（誤FIX増6区間、喪失>1%が3区間、欠測増）でNO_GO・既定不変。注意: PPCはリポジトリのPPC RTKプロファイル（`--preset low-cost --ratio 2.4 ...`）ではないので既存PPC資料と数値比較しない。
 1. [FIX連続区間のドリフト](rtk_fix_streak_drift.md) / [JSON](urbannav_fix_streak_drift.json): その前（挙動変更なし、debug列2つ追加）。CDの残る誤FIXは、1衛星の位相が1–2秒で0.4–1.5サイクル非整数にランプ／段差する区間（LLIなしも多い）にFIXが追従したもの。`postfix_residual_max_pair` は5件中3件で早期に原因衛星を示すが大きさ2–5 cmは正FIXのp95内。副次: 正しいFIXに数十〜160サイクル誤った整数のペアが混じる例（Shinjuku 117 epoch）。holdされるかは未確認。
 1. [max position jumpの動き補正](rtk_max_position_jump_motion.md) / [JSON](urbannav_max_position_jump_motion_evaluation.json): その前。CDが失う正FIX（Odaiba 37）は全て動き不感の `max_position_jump`（5秒アンカー×5 m）。opt-in `--max-position-jump-motion-compensation`（Dと同じ伝播規則、新閾値なし）で30を回復。M単独は凍結ゲートの列挙項目を全Tokyoで満たす（u-blox Odaiba FIX 461→617、誤FIX 0）が「誤FIXの減少」条項は満たさず既定はメンテナ判断。CDRI（CD+R+I）は誤FIXが増えNO_GO。CDの残る誤FIX 10件はFIX連続区間末尾の0.07–0.15 m/epochのドリフト（Doppler再anchorで未検出）。
 1. [長期lockの過信](rtk_long_lock_overconfidence.md) / [JSON](urbannav_long_lock_overconfidence.json): その前（挙動変更なし）。10 Hz真値DD（採点・解析専用）で位相誤差の振幅はモデル通り（6–9 mm）だが約3秒の相関と遅い成分、コードは中心はモデル通りで裾が重い（3σ超7%）。10 Hzの白色扱い（凍結予測の1 Hz間引き試験で棄却）、電離層、コードの裾のいずれも主因ではない。次はフィルタ内部（kinematic再seedによる位置/ambiguity相関の喪失、コード由来の初期化、参照衛星切替）。
@@ -158,6 +159,7 @@ CVのFIX数は1298 / 122で不変、上記3閾値の誤FIXは前後とも0、正
 | 初回FIXを5候補連続で確認 | Shinjukuの対象単発FIXは止まったが、全体の >3 m誤FIXが1 → 14、>0.5 mが13 → 473。正しい既定FIXも4/122喪失 |
 | holdをKF疑似観測に（`--hold-kalman-update`、単独/relinearize併用） | hold由来誤FIXはOdaiba 74→7、Shinjuku(R) 234→98。ただしOdaiba age5でP95 4.90→6.23・欠測+98、Shinjuku age5で誤FIX 13→19・正FIX喪失5.8%、併用では>2/>3 m増。NO_GO、opt-in保持 |
 | CDMH（CD + `--max-position-jump-motion-compensation` + `--hold-kalman-update`）の既定化 | PPC 6区間・Tokyo 4区間・HKで凍結評価。holdの偏りは解消方向（tokyo/run2喪失6.26→2.28%）だが、default比で誤FIX増6区間・喪失>1%が3区間・欠測増でNO_GO。[記録](rtk_cdmh_ppc_evaluation.md) |
+| PPC用RTK設定PにM / CDM / CDMHを追加 | P+MはPとbyte一致、P+CDM/CDMHは>2 m誤FIX 0だが正FIX 58–90%喪失でNO_GO。Dのロックアウトが主因。[記録](rtk_cd_ppc_profile.md) |
 | 反復KF更新をiterated EKFに（既定化） | 上の表。欠測増・Odaiba P95悪化・Shinjuku age5の誤FIX急増でNO_GO。opt-inとして保持、パッチは `docs/urbannav_iterated_update_experiment.patch`（`35654026` に適用） |
 
 「位置出力なしでもDoppler追跡を維持」と「初回FIXを5候補連続で確認」の2案は**実装・CLI・専用テストを本体から除去済み**。再現用の正確なパッチと評価JSONだけを保存。
@@ -313,7 +315,8 @@ system Eigenがあれば `CPLUS_INCLUDE_PATH` は不要。
    - 次: フィルタ内部（kinematicのSPP再seedで位置/ambiguity相関が失われる点、0.3 mモデルでのコード由来初期化、参照衛星切替）を、凍結予測→解析の順で検証する。hold再適用の二重計上は合成シーンで先に再現する。
    - `gnss_live`・`examples/rtk_positioning`・`holdBaseEpoch` は目標時刻の暦を独立に選ぶため、補間区間内の暦切替（数十cm）を拾いうる（未修正）。
    - ~~CDの正FIX喪失（tokyo/run2）とhold basin~~ → 旧holdの上書きが原因の一部（[CDMH](rtk_cdmh_ppc_evaluation.md)）。KF holdで大半解消するが採用条件は不合格。
-   - 次の候補: (a) CD系をリポジトリのPPC RTKプロファイル上で評価（PPC利用者が実際に使う設定、未評価）、(b) PPCでCD系だけ欠測が1–12 epoch増える原因（53件中15件は `gnss_solve` のFIX後5秒のFLOATドリフト判定の窓内、残りは未特定）を再現テストから。
+   - ~~CD系をPPC RTKプロファイル上で評価~~ → NO_GO（[記録](rtk_cd_ppc_profile.md)）。Dの基準軌跡に経過時間・不確かさの上限がなくロックアウトする欠陥と、Doppler速度解が行ごとの外れ値に弱い欠陥の2つを特定（いずれも未修正）。
+   - 次の候補: (a) Dの基準軌跡の失効条件（再現テスト→凍結評価。新しい閾値を要するのでTokyo/PPC/HK全てで評価）、(b) Doppler速度解のロバスト化（`gnss_solve` のFLOAT継続とfusionの既定経路にも効くので影響範囲が広い）、(c) PPCでCD系だけ欠測が1–12 epoch増える原因（53件中15件は `gnss_solve` のFIX後5秒のFLOATドリフト判定の窓内、残りは未特定）。
    - Doppler軌跡は受理FIXごとに再anchorするため、連続した誤basin（Shinjuku 283274–283289で145 epoch）は検出できない。
 4. ログに現れない別状態の漏れを疑う場合も、受理済みhold更新など意図的な状態変化と区別し、再現テストを先に作る。
 
