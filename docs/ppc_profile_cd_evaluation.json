@@ -1,0 +1,1591 @@
+{
+ "title": "CD family on the repository PPC RTK profile (P); Doppler consensus lock-out and PPC Doppler velocity quality",
+ "doc": "docs/rtk_cd_ppc_profile.md",
+ "reference_use": "scoring, labels and analysis-only residuals; never a solver input",
+ "frozen_rule": "Frozen before replay (2026-10-26T02:07Z). No new code, no thresholds: existing opt-in flags only.\nBinary: develop 2e224ea (bin/gnss-solve-dev2e224ea, sha256 c3d42336...5c85).\nProfile P = repository PPC RTK profile, argv exactly as apps/commands/benchmarks/gnss_ppc_native_replay.py:\n  gnss_solve --rover rover.obs --base base.obs --nav base.nav --mode kinematic --no-kml\n             --preset low-cost --ratio 2.4 --max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter --out <pos>\n  (no --base-ecef: header APPROX POSITION, as in the replay tool; no --glonass-ar).\nRecipes: P; P+M (--max-position-jump-motion-compensation); P+CDM (CD + M); P+CDMH (CDM + --hold-kalman-update).\nCD = --max-fixed-anchor-age 5 --max-fixed-doppler-consensus 3 --low-ratio-guard-threshold 1e9\n     --low-ratio-min-fixed-ambiguities 10 --fix-history-motion-compensation\nRuns: PPC tokyo/nagoya run1-3 (development data). Reference only for scoring (exact 1 ms, eval_ppc scoring).\nSanity (not a gate): P fixed epochs within 5% of docs/ppc_fix_recovery_evaluation.json (8235764f) per run.\nPredictions (mechanism):\n  1. P+M: P already uses a 30 m/s motion-aware jump limit, so M is nearly inert:\n     FIX count within 1% of P on every run.\n  2. P+CDM: the 10-ambiguity floor and Doppler consensus reject weak subset fixes:\n     wrong FIX >0.5 m and >2 m each decrease on at least 5 of 6 runs;\n     P-correct loss exceeds 1% on at least one run (so the gate fails).\n  3. P+CDMH: summed wrong FIX >0.5 m over 6 runs <= P+CDM.\nGate for each recipe vs P (docs/fix_recovery_guard.md, every run): wrong FIX >0.5/2/3 m not increased;\nP-correct loss <= 1% (0.5 m); missing and horizontal P95 not increased; recovery P95 and right-censoring\nnot increased; at least one wrong-FIX population decreases.\nIf a recipe passes every run: report as a GO candidate for the PPC profile to the user (no default change\nin this round). Otherwise NO_GO. No retuning after the replay.\n",
+ "frozen_rule_sha256": "62a4f7882f0dd11000d385eaf684e0fa4fd99e9e312f5b9f9360204d5294c213",
+ "binary": {
+  "source": "develop 2e224eafb3eba6cb8109d78a6d35c3e816ca27d1",
+  "gnss_solve_sha256": "c3d423360fcf5828ea6fe42ed590b9969a737b70667545816599b212879d5c85"
+ },
+ "native_argv": "gnss_solve --rover <run>/rover.obs --base <run>/base.obs --nav <run>/base.nav --mode kinematic --no-kml --preset low-cost --ratio 2.4 --max-subset-ar-drop-steps 18 --rtk-snr-weighting --no-arfilter + recipe flags --out <pos> (apps/commands/benchmarks/gnss_ppc_native_replay.py COMMON)",
+ "recipes": {
+  "P": "",
+  "P+M": "--max-position-jump-motion-compensation",
+  "P+CDM": "CD (docs/ppc_cdmh_evaluation.json) + --max-position-jump-motion-compensation",
+  "P+CDMH": "P+CDM + --hold-kalman-update"
+ },
+ "inputs": "docs/ppc_cdmh_evaluation.json ppc_dataset.files_sha256",
+ "scorer_sha256": {
+  "eval_ppc_profile.py": "fe3cdedea841a4afe75dc84e1209f29dcb8767b009ceacc5f83b16a0dc9f13c3",
+  "eval_ppc.py": "a175906265728aaadebc953eb255685dfe6504b132a2e2ce8534a3bdd2f30b9c"
+ },
+ "sanity_vs_recorded_P": "fixed epochs within 0.3% of docs/ppc_fix_recovery_evaluation.json (8235764f) on all six runs",
+ "pos_sha256": {
+  "nagoya-run1-P+CDM.pos": "6b493828364721a90851a566310768acb21ed62610a13b16cfe64acaeba3948a",
+  "nagoya-run1-P+CDMH.pos": "0f2adfa911c0d5a9b229148ba7e32fc6f147d5bc992cfcc451b939884b1c208a",
+  "nagoya-run1-P+M.pos": "7e61f0fe4d4db0bb22df21e919d6ada97979f0d2d673da213680cc606b8dd39a",
+  "nagoya-run1-P.pos": "7e61f0fe4d4db0bb22df21e919d6ada97979f0d2d673da213680cc606b8dd39a",
+  "nagoya-run2-P+CDM.pos": "a56cc43a8a6f79423fb1ebe51b64aec95106c6072ade7928bdf745c867ffa287",
+  "nagoya-run2-P+CDMH.pos": "de2b99d957be15bfe244ebd42d43487f604798ec5583ed1ca36e0035aa9eec0f",
+  "nagoya-run2-P+M.pos": "708f6c3b6d3daaf40595a4aea286d381d94b602e42b09fe52dfb20921e001b4f",
+  "nagoya-run2-P.pos": "708f6c3b6d3daaf40595a4aea286d381d94b602e42b09fe52dfb20921e001b4f",
+  "nagoya-run3-P+CDM.pos": "2c7ccee55309f5809108aa8d4dcb817ae9988e38607c8ff37bc4b332ce09ee4c",
+  "nagoya-run3-P+CDMH.pos": "029748c1103b70ed0a6b2df6b9447b201e2936c2a839388f7a2038f219c43f7b",
+  "nagoya-run3-P+M.pos": "d387b6cc07b29fc24bb05f934d489aa2ae0420840c1bfeca8f5958d962b16c90",
+  "nagoya-run3-P.pos": "d387b6cc07b29fc24bb05f934d489aa2ae0420840c1bfeca8f5958d962b16c90",
+  "tokyo-run1-P+CDM.pos": "68b8454662c309a1c6063de1114b5fe2024c30d936a9dfffa46d47c74fcfe775",
+  "tokyo-run1-P+CDMH.pos": "5b68c7fe53a605b67903dbba0d9f153cd2855b8ef7d5a3d2e93c4f58e7456d8b",
+  "tokyo-run1-P+M.pos": "a2203645f4dd074e66d13e6c8391e58911112df7cec2db7a876b83d853e1d756",
+  "tokyo-run1-P.pos": "a2203645f4dd074e66d13e6c8391e58911112df7cec2db7a876b83d853e1d756",
+  "tokyo-run2-P+CDM.pos": "111041d5828fa1b3c3f6c91b2f31d2287cf268d38551b74d65d909a5b5fb8abe",
+  "tokyo-run2-P+CDMH.pos": "eab9330642c77844449d2cb00a82e24a3bc4ed77dd0e749e590974e1d254ef2b",
+  "tokyo-run2-P+M.pos": "d2b203656629104bb96ea0b517151fe112d40a615e730a8813d20b623429bfd2",
+  "tokyo-run2-P.pos": "d2b203656629104bb96ea0b517151fe112d40a615e730a8813d20b623429bfd2",
+  "tokyo-run3-P+CDM.pos": "33a1da5e24becbf29ce499d5afc0085b6bab78235c34592fa40826b4ab596fa3",
+  "tokyo-run3-P+CDMH.pos": "1b9c546bfb54665e9b06223657d866467bce88417d1357b9273371902ac59432",
+  "tokyo-run3-P+M.pos": "1e0a294c5efa37502994a847310f8ca39c20678a7ce38896fc6475e2a91559c8",
+  "tokyo-run3-P.pos": "1e0a294c5efa37502994a847310f8ca39c20678a7ce38896fc6475e2a91559c8"
+ },
+ "results": {
+  "tokyo/run1": {
+   "P": {
+    "fix": 8873,
+    "missing": 1722,
+    "wrong>0.5/2/3": [
+     788,
+     217,
+     193
+    ],
+    "hP95": 1.3832,
+    "fix3d_p50": 0.0372,
+    "recP95@0.5": 42.76,
+    "outages@0.5": 49,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 94
+   },
+   "P+M": {
+    "fix": 8873,
+    "missing": 1722,
+    "wrong>0.5/2/3": [
+     788,
+     217,
+     193
+    ],
+    "hP95": 1.3832,
+    "fix3d_p50": 0.0372,
+    "recP95@0.5": 42.76,
+    "outages@0.5": 49,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 94,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "P+CDM": {
+    "fix": 1111,
+    "missing": 2037,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 3.1547,
+    "fix3d_p50": 0.0299,
+    "recP95@0.5": 1069.12,
+    "outages@0.5": 7,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 6977,
+    "default_correct_lost_pct": 86.3
+   },
+   "P+CDMH": {
+    "fix": 1481,
+    "missing": 2037,
+    "wrong>0.5/2/3": [
+     2,
+     0,
+     0
+    ],
+    "hP95": 3.1547,
+    "fix3d_p50": 0.0489,
+    "recP95@0.5": 1279.36,
+    "outages@0.5": 4,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 2,
+    "default_correct_lost": 6838,
+    "default_correct_lost_pct": 84.58
+   }
+  },
+  "tokyo/run2": {
+   "P": {
+    "fix": 7152,
+    "missing": 703,
+    "wrong>0.5/2/3": [
+     129,
+     40,
+     26
+    ],
+    "hP95": 0.9081,
+    "fix3d_p50": 0.0423,
+    "recP95@0.5": 42.08,
+    "outages@0.5": 33,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 35
+   },
+   "P+M": {
+    "fix": 7152,
+    "missing": 703,
+    "wrong>0.5/2/3": [
+     129,
+     40,
+     26
+    ],
+    "hP95": 0.9081,
+    "fix3d_p50": 0.0423,
+    "recP95@0.5": 42.08,
+    "outages@0.5": 33,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 35,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "P+CDM": {
+    "fix": 1038,
+    "missing": 720,
+    "wrong>0.5/2/3": [
+     119,
+     0,
+     0
+    ],
+    "hP95": 1.4718,
+    "fix3d_p50": 0.0364,
+    "recP95@0.5": 954.94,
+    "outages@0.5": 4,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 3,
+    "default_correct_lost": 6105,
+    "default_correct_lost_pct": 86.93
+   },
+   "P+CDMH": {
+    "fix": 869,
+    "missing": 720,
+    "wrong>0.5/2/3": [
+     80,
+     0,
+     0
+    ],
+    "hP95": 1.4708,
+    "fix3d_p50": 0.0366,
+    "recP95@0.5": 555.66,
+    "outages@0.5": 12,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 14,
+    "default_correct_lost": 6238,
+    "default_correct_lost_pct": 88.82
+   }
+  },
+  "tokyo/run3": {
+   "P": {
+    "fix": 11303,
+    "missing": 1495,
+    "wrong>0.5/2/3": [
+     340,
+     32,
+     17
+    ],
+    "hP95": 0.8803,
+    "fix3d_p50": 0.033,
+    "recP95@0.5": 49.6,
+    "outages@0.5": 75,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 60
+   },
+   "P+M": {
+    "fix": 11303,
+    "missing": 1495,
+    "wrong>0.5/2/3": [
+     340,
+     32,
+     17
+    ],
+    "hP95": 0.8803,
+    "fix3d_p50": 0.033,
+    "recP95@0.5": 49.6,
+    "outages@0.5": 75,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 60,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "P+CDM": {
+    "fix": 1161,
+    "missing": 1449,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 2.5171,
+    "fix3d_p50": 0.0285,
+    "recP95@0.5": 3.08,
+    "outages@0.5": 3,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 9802,
+    "default_correct_lost_pct": 89.41
+   },
+   "P+CDMH": {
+    "fix": 1164,
+    "missing": 1450,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 2.5146,
+    "fix3d_p50": 0.029,
+    "recP95@0.5": null,
+    "outages@0.5": 0,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 9814,
+    "default_correct_lost_pct": 89.52
+   }
+  },
+  "nagoya/run1": {
+   "P": {
+    "fix": 5789,
+    "missing": 952,
+    "wrong>0.5/2/3": [
+     837,
+     314,
+     26
+    ],
+    "hP95": 0.7554,
+    "fix3d_p50": 0.1033,
+    "recP95@0.5": 156.92,
+    "outages@0.5": 13,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 27
+   },
+   "P+M": {
+    "fix": 5789,
+    "missing": 952,
+    "wrong>0.5/2/3": [
+     837,
+     314,
+     26
+    ],
+    "hP95": 0.7554,
+    "fix3d_p50": 0.1033,
+    "recP95@0.5": 156.92,
+    "outages@0.5": 13,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 27,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "P+CDM": {
+    "fix": 1880,
+    "missing": 924,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 1.3136,
+    "fix3d_p50": 0.1179,
+    "recP95@0.5": 585.44,
+    "outages@0.5": 4,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 3315,
+    "default_correct_lost_pct": 66.94
+   },
+   "P+CDMH": {
+    "fix": 1842,
+    "missing": 930,
+    "wrong>0.5/2/3": [
+     177,
+     0,
+     0
+    ],
+    "hP95": 1.3088,
+    "fix3d_p50": 0.1043,
+    "recP95@0.5": 544.26,
+    "outages@0.5": 4,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 3546,
+    "default_correct_lost_pct": 71.61
+   }
+  },
+  "nagoya/run2": {
+   "P": {
+    "fix": 4658,
+    "missing": 2512,
+    "wrong>0.5/2/3": [
+     434,
+     27,
+     20
+    ],
+    "hP95": 5.1985,
+    "fix3d_p50": 0.1731,
+    "recP95@0.5": 174.77,
+    "outages@0.5": 28,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 32
+   },
+   "P+M": {
+    "fix": 4658,
+    "missing": 2512,
+    "wrong>0.5/2/3": [
+     434,
+     27,
+     20
+    ],
+    "hP95": 5.1985,
+    "fix3d_p50": 0.1731,
+    "recP95@0.5": 174.77,
+    "outages@0.5": 28,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 32,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "P+CDM": {
+    "fix": 786,
+    "missing": 2529,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.7672,
+    "fix3d_p50": 0.181,
+    "recP95@0.5": 10.55,
+    "outages@0.5": 6,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 3439,
+    "default_correct_lost_pct": 81.42
+   },
+   "P+CDMH": {
+    "fix": 857,
+    "missing": 2529,
+    "wrong>0.5/2/3": [
+     0,
+     0,
+     0
+    ],
+    "hP95": 5.7672,
+    "fix3d_p50": 0.0957,
+    "recP95@0.5": 10.12,
+    "outages@0.5": 3,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 0,
+    "default_correct_lost": 3418,
+    "default_correct_lost_pct": 80.92
+   }
+  },
+  "nagoya/run3": {
+   "P": {
+    "fix": 2300,
+    "missing": 1891,
+    "wrong>0.5/2/3": [
+     694,
+     288,
+     261
+    ],
+    "hP95": 10.6418,
+    "fix3d_p50": 0.1255,
+    "recP95@0.5": 95.28,
+    "outages@0.5": 23,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 63
+   },
+   "P+M": {
+    "fix": 2300,
+    "missing": 1891,
+    "wrong>0.5/2/3": [
+     694,
+     288,
+     261
+    ],
+    "hP95": 10.6418,
+    "fix3d_p50": 0.1255,
+    "recP95@0.5": 95.28,
+    "outages@0.5": 23,
+    "censored@0.5": false,
+    "wrong_episodes_0.5": 63,
+    "default_correct_lost": 0,
+    "default_correct_lost_pct": 0.0
+   },
+   "P+CDM": {
+    "fix": 681,
+    "missing": 2002,
+    "wrong>0.5/2/3": [
+     7,
+     0,
+     0
+    ],
+    "hP95": 10.236,
+    "fix3d_p50": 0.1324,
+    "recP95@0.5": 6.34,
+    "outages@0.5": 10,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 4,
+    "default_correct_lost": 939,
+    "default_correct_lost_pct": 58.47
+   },
+   "P+CDMH": {
+    "fix": 668,
+    "missing": 1999,
+    "wrong>0.5/2/3": [
+     1,
+     0,
+     0
+    ],
+    "hP95": 10.2358,
+    "fix3d_p50": 0.1365,
+    "recP95@0.5": 6.72,
+    "outages@0.5": 5,
+    "censored@0.5": true,
+    "wrong_episodes_0.5": 1,
+    "default_correct_lost": 954,
+    "default_correct_lost_pct": 59.4
+   }
+  }
+ },
+ "gate_vs_P": {
+  "P+M": {
+   "tokyo/run1": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "tokyo/run2": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "tokyo/run3": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "nagoya/run1": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "nagoya/run2": {
+    "passed": true,
+    "failed_conditions": []
+   },
+   "nagoya/run3": {
+    "passed": true,
+    "failed_conditions": []
+   }
+  },
+  "P+CDM": {
+   "tokyo/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 86.3% > 1%",
+     "missing increased 1722->2037",
+     "horizontal P95 increased 1.3832->3.1547",
+     "recovery P95 increased 42.76->1069.12",
+     "right-censoring increased false->true"
+    ]
+   },
+   "tokyo/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 86.93% > 1%",
+     "missing increased 703->720",
+     "horizontal P95 increased 0.9081->1.4718",
+     "recovery P95 increased 42.08->954.94",
+     "right-censoring increased false->true"
+    ]
+   },
+   "tokyo/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 89.41% > 1%",
+     "horizontal P95 increased 0.8803->2.5171",
+     "right-censoring increased false->true"
+    ]
+   },
+   "nagoya/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 66.94% > 1%",
+     "horizontal P95 increased 0.7554->1.3136",
+     "recovery P95 increased 156.92->585.44",
+     "right-censoring increased false->true"
+    ]
+   },
+   "nagoya/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 81.42% > 1%",
+     "missing increased 2512->2529",
+     "horizontal P95 increased 5.1985->5.7672",
+     "right-censoring increased false->true"
+    ]
+   },
+   "nagoya/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 58.47% > 1%",
+     "missing increased 1891->2002",
+     "right-censoring increased false->true"
+    ]
+   }
+  },
+  "P+CDMH": {
+   "tokyo/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 84.58% > 1%",
+     "missing increased 1722->2037",
+     "horizontal P95 increased 1.3832->3.1547",
+     "recovery P95 increased 42.76->1279.36",
+     "right-censoring increased false->true"
+    ]
+   },
+   "tokyo/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 88.82% > 1%",
+     "missing increased 703->720",
+     "horizontal P95 increased 0.9081->1.4708",
+     "recovery P95 increased 42.08->555.66",
+     "right-censoring increased false->true"
+    ]
+   },
+   "tokyo/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 89.52% > 1%",
+     "horizontal P95 increased 0.8803->2.5146",
+     "right-censoring increased false->true"
+    ]
+   },
+   "nagoya/run1": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 71.61% > 1%",
+     "horizontal P95 increased 0.7554->1.3088",
+     "recovery P95 increased 156.92->544.26",
+     "right-censoring increased false->true"
+    ]
+   },
+   "nagoya/run2": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 80.92% > 1%",
+     "missing increased 2512->2529",
+     "horizontal P95 increased 5.1985->5.7672",
+     "right-censoring increased false->true"
+    ]
+   },
+   "nagoya/run3": {
+    "passed": false,
+    "failed_conditions": [
+     "default-correct loss 59.4% > 1%",
+     "missing increased 1891->1999",
+     "right-censoring increased false->true"
+    ]
+   }
+  }
+ },
+ "wrong_fix_decrease_runs": {
+  "P+CDM": [
+   "tokyo/run1",
+   "tokyo/run2",
+   "tokyo/run3",
+   "nagoya/run1",
+   "nagoya/run2",
+   "nagoya/run3"
+  ],
+  "P+CDMH": [
+   "tokyo/run1",
+   "tokyo/run2",
+   "tokyo/run3",
+   "nagoya/run1",
+   "nagoya/run2",
+   "nagoya/run3"
+  ]
+ },
+ "predictions": {
+  "1_P+M_inert": "met: P+M POS byte-identical to P on all six runs",
+  "2_P+CDM_wrong_down_loss_up": "met: wrong >0.5 m and >2 m decrease on all six runs (>2 m: 918 -> 0 summed); P-correct loss 66.94-89.41% on every run",
+  "3_P+CDMH_le_P+CDM": "not met: summed wrong >0.5 m 260 vs 127 (nagoya/run1: one 35 s streak 551489.2-551524.4 up to 1.32 m under CDMH, a single epoch under CDM)"
+ },
+ "summed_wrong_gt_0.5m": {
+  "P": 3222,
+  "P+CDM": 127,
+  "P+CDMH": 260
+ },
+ "loss_attribution_P+CDM": {
+  "source": "P and P+CDM replayed with --debug-epoch-log (POS byte-identical to the scored POS); reject_reason in P+CDM at P-correct epochs that P+CDM loses",
+  "tokyo/run1": {
+   "lost": 6977,
+   "fixed_doppler_consensus": 4009,
+   "too_few_pairs": 1168,
+   "low_ratio_weak_integer_system": 925,
+   "lambda_not_fixed": 791,
+   "none": 84
+  },
+  "tokyo/run2": {
+   "lost": 6105,
+   "fixed_doppler_consensus": 3523,
+   "lambda_not_fixed": 1632,
+   "too_few_pairs": 661,
+   "low_ratio_weak_integer_system": 273,
+   "none": 16
+  },
+  "nagoya/run1": {
+   "lost": 3315,
+   "fixed_doppler_consensus": 1310,
+   "too_few_pairs": 1009,
+   "lambda_not_fixed": 821,
+   "low_ratio_weak_integer_system": 173,
+   "none": 2
+  },
+  "P_AR_fixes_below_10_ambiguities": {
+   "tokyo/run1": {
+    "correct": "915/7763 (12%)",
+    "wrong_le_2m": "282/558",
+    "wrong_gt_2m": "175/175"
+   },
+   "tokyo/run2": {
+    "correct": "297/6464 (5%)",
+    "wrong_le_2m": "76/78",
+    "wrong_gt_2m": "39/39"
+   },
+   "nagoya/run1": {
+    "correct": "334/4939 (7%)",
+    "wrong_le_2m": "76/512",
+    "wrong_gt_2m": "70/294"
+   }
+  }
+ },
+ "doppler_consensus_lockout": {
+  "script": "scripts/analysis/truth_dd/doppler_consensus_age.py",
+  "per_run": {
+   "tokyo-run1": {
+    "run": "run1",
+    "by_track_age_s": {
+     "[0,2)": {
+      "correct_accepted": 1101,
+      "correct_rejected": 0,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       0.03,
+       0.28
+      ]
+     },
+     "[2,5)": {
+      "correct_accepted": 2,
+      "correct_rejected": 7,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       5.53,
+       5.67
+      ]
+     },
+     "[5,15)": {
+      "correct_accepted": 3,
+      "correct_rejected": 53,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       5.87,
+       7.54
+      ]
+     },
+     "[15,30)": {
+      "correct_accepted": 0,
+      "correct_rejected": 46,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       4.98,
+       7.35
+      ]
+     },
+     "[30,60)": {
+      "correct_accepted": 1,
+      "correct_rejected": 321,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       4.65,
+       19.61
+      ]
+     },
+     "[60,120)": {
+      "correct_accepted": 0,
+      "correct_rejected": 318,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       19.55,
+       54.71
+      ]
+     },
+     "[120,600)": {
+      "correct_accepted": 0,
+      "correct_rejected": 1386,
+      "wrong_accepted": 0,
+      "wrong_rejected": 1,
+      "track_error_from_correct_p50_p95": [
+       215.79,
+       260.51
+      ]
+     },
+     "[600,inf)": {
+      "correct_accepted": 0,
+      "correct_rejected": 2095,
+      "wrong_accepted": 0,
+      "wrong_rejected": 4,
+      "track_error_from_correct_p50_p95": [
+       192.79,
+       461.58
+      ]
+     }
+    },
+    "longest_reject_run_without_fix": {
+     "epochs": 2807,
+     "start_tow": 187793.6
+    }
+   },
+   "tokyo-run2": {
+    "run": "run2",
+    "by_track_age_s": {
+     "[0,2)": {
+      "correct_accepted": 918,
+      "correct_rejected": 0,
+      "wrong_accepted": 2,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       0.06,
+       0.22
+      ]
+     },
+     "[2,5)": {
+      "correct_accepted": 1,
+      "correct_rejected": 0,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       0.72,
+       0.72
+      ]
+     },
+     "[5,15)": {
+      "correct_accepted": 0,
+      "correct_rejected": 52,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       4.76,
+       5.12
+      ]
+     },
+     "[15,30)": {
+      "correct_accepted": 0,
+      "correct_rejected": 84,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       6.12,
+       6.28
+      ]
+     },
+     "[30,60)": {
+      "correct_accepted": 2,
+      "correct_rejected": 135,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       12.81,
+       14.74
+      ]
+     },
+     "[60,120)": {
+      "correct_accepted": 0,
+      "correct_rejected": 363,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       17.96,
+       26.69
+      ]
+     },
+     "[120,600)": {
+      "correct_accepted": 0,
+      "correct_rejected": 2057,
+      "wrong_accepted": 0,
+      "wrong_rejected": 2,
+      "track_error_from_correct_p50_p95": [
+       48.61,
+       117.47
+      ]
+     },
+     "[600,inf)": {
+      "correct_accepted": 0,
+      "correct_rejected": 1289,
+      "wrong_accepted": 0,
+      "wrong_rejected": 4,
+      "track_error_from_correct_p50_p95": [
+       153.72,
+       273.49
+      ]
+     }
+    },
+    "longest_reject_run_without_fix": {
+     "epochs": 2790,
+     "start_tow": 177209.6
+    }
+   },
+   "nagoya-run1": {
+    "run": "run1",
+    "by_track_age_s": {
+     "[0,2)": {
+      "correct_accepted": 1870,
+      "correct_rejected": 0,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       0.02,
+       0.21
+      ]
+     },
+     "[2,5)": {
+      "correct_accepted": 1,
+      "correct_rejected": 0,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       0.49,
+       0.49
+      ]
+     },
+     "[5,15)": {
+      "correct_accepted": 1,
+      "correct_rejected": 0,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       0.35,
+       0.35
+      ]
+     },
+     "[15,30)": {
+      "correct_accepted": 0,
+      "correct_rejected": 9,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       24.38,
+       24.46
+      ]
+     },
+     "[30,60)": {
+      "correct_accepted": 0,
+      "correct_rejected": 21,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       23.95,
+       24.37
+      ]
+     },
+     "[60,120)": {
+      "correct_accepted": 0,
+      "correct_rejected": 75,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       60.26,
+       60.43
+      ]
+     },
+     "[120,600)": {
+      "correct_accepted": 0,
+      "correct_rejected": 1232,
+      "wrong_accepted": 0,
+      "wrong_rejected": 2,
+      "track_error_from_correct_p50_p95": [
+       19.61,
+       470.16
+      ]
+     },
+     "[600,inf)": {
+      "correct_accepted": 0,
+      "correct_rejected": 13,
+      "wrong_accepted": 0,
+      "wrong_rejected": 0,
+      "track_error_from_correct_p50_p95": [
+       464.19,
+       465.0
+      ]
+     }
+    },
+    "longest_reject_run_without_fix": {
+     "epochs": 707,
+     "start_tow": 551593.8
+    }
+   }
+  },
+  "summary": "over the three runs the check rejected 9556 correct candidates (3D error 1-16 cm) and 13 wrong ones; beyond 2 s since the last accepted FIX it accepted 11 correct candidates in total. The track is re-anchored only by an accepted FIX, so once it drifts past 3 m it vetoes every later candidate until a gap over 2 s drops it (longest: 2807 epochs, about 9 min, on tokyo/run1).",
+  "bare_argv_CDM_tokyo_run2": {
+   "run": "run2",
+   "by_track_age_s": {
+    "[0,2)": {
+     "correct_accepted": 1215,
+     "correct_rejected": 0,
+     "wrong_accepted": 1,
+     "wrong_rejected": 0,
+     "track_error_from_correct_p50_p95": [
+      0.05,
+      0.22
+     ]
+    },
+    "[2,5)": {
+     "correct_accepted": 14,
+     "correct_rejected": 1,
+     "wrong_accepted": 0,
+     "wrong_rejected": 0,
+     "track_error_from_correct_p50_p95": [
+      0.31,
+      2.0
+     ]
+    },
+    "[5,15)": {
+     "correct_accepted": 4,
+     "correct_rejected": 57,
+     "wrong_accepted": 0,
+     "wrong_rejected": 0,
+     "track_error_from_correct_p50_p95": [
+      4.84,
+      5.27
+     ]
+    },
+    "[15,30)": {
+     "correct_accepted": 0,
+     "correct_rejected": 150,
+     "wrong_accepted": 0,
+     "wrong_rejected": 0,
+     "track_error_from_correct_p50_p95": [
+      5.25,
+      6.9
+     ]
+    },
+    "[30,60)": {
+     "correct_accepted": 0,
+     "correct_rejected": 268,
+     "wrong_accepted": 0,
+     "wrong_rejected": 0,
+     "track_error_from_correct_p50_p95": [
+      7.35,
+      15.32
+     ]
+    },
+    "[60,120)": {
+     "correct_accepted": 0,
+     "correct_rejected": 563,
+     "wrong_accepted": 0,
+     "wrong_rejected": 0,
+     "track_error_from_correct_p50_p95": [
+      18.63,
+      26.78
+     ]
+    },
+    "[120,600)": {
+     "correct_accepted": 0,
+     "correct_rejected": 2880,
+     "wrong_accepted": 0,
+     "wrong_rejected": 2,
+     "track_error_from_correct_p50_p95": [
+      47.91,
+      95.21
+     ]
+    },
+    "[600,inf)": {
+     "correct_accepted": 0,
+     "correct_rejected": 1325,
+     "wrong_accepted": 0,
+     "wrong_rejected": 6,
+     "track_error_from_correct_p50_p95": [
+      153.69,
+      273.61
+     ]
+    }
+   },
+   "longest_reject_run_without_fix": {
+    "epochs": 3513,
+    "start_tow": 177209.4
+   }
+  },
+  "bare_argv_note": "same lock-out under the bare-argv CDM of docs/rtk_cdmh_ppc_evaluation.md: 5244 correct and 8 wrong candidates rejected, 3513-epoch lock-out from TOW 177209.4"
+ },
+ "doppler_velocity_quality": {
+  "script": "scripts/analysis/truth_dd/doppler_residuals.cpp + doppler_velocity_stats.py",
+  "reference_velocity_check": "reference ENU velocity vs reference position finite difference: p95 0.045 m/s (tokyo/run1), 0.17 m/s (nagoya/run1)",
+  "stats": {
+   "runs": {
+    "tokyo-run1": {
+     "epochs": 11922,
+     "lib_ok": 11911,
+     "lib_err_p50_p95_p99": [
+      0.279,
+      3.179,
+      6.203
+     ],
+     "lib_drift_p50_p95": {
+      "1": [
+       0.227,
+       2.764
+      ],
+      "2": [
+       0.451,
+       5.283
+      ],
+      "5": [
+       1.012,
+       12.56
+      ],
+      "15": [
+       3.755,
+       32.663
+      ],
+      "60": [
+       20.949,
+       106.982
+      ],
+      "300": [
+       115.457,
+       225.263
+      ]
+     },
+     "rob_ok": 11911,
+     "rob_err_p50_p95_p99": [
+      0.243,
+      1.611,
+      3.276
+     ],
+     "rob_drift_p50_p95": {
+      "1": [
+       0.208,
+       1.453
+      ],
+      "2": [
+       0.389,
+       2.494
+      ],
+      "5": [
+       0.797,
+       5.781
+      ],
+      "15": [
+       2.645,
+       15.278
+      ],
+      "60": [
+       9.944,
+       53.39
+      ],
+      "300": [
+       63.794,
+       100.69
+      ]
+     },
+     "rob_dropped_mean": 0.459
+    },
+    "tokyo-run2": {
+     "epochs": 9151,
+     "lib_ok": 9151,
+     "lib_err_p50_p95_p99": [
+      0.159,
+      1.989,
+      3.781
+     ],
+     "lib_drift_p50_p95": {
+      "1": [
+       0.129,
+       1.888
+      ],
+      "2": [
+       0.22,
+       3.397
+      ],
+      "5": [
+       0.498,
+       7.104
+      ],
+      "15": [
+       1.869,
+       19.232
+      ],
+      "60": [
+       10.375,
+       54.186
+      ],
+      "300": [
+       65.151,
+       146.735
+      ]
+     },
+     "rob_ok": 9151,
+     "rob_err_p50_p95_p99": [
+      0.152,
+      1.176,
+      2.122
+     ],
+     "rob_drift_p50_p95": {
+      "1": [
+       0.121,
+       0.988
+      ],
+      "2": [
+       0.199,
+       1.978
+      ],
+      "5": [
+       0.458,
+       4.615
+      ],
+      "15": [
+       1.522,
+       9.701
+      ],
+      "60": [
+       7.641,
+       20.304
+      ],
+      "300": [
+       30.971,
+       56.777
+      ]
+     },
+     "rob_dropped_mean": 0.358
+    },
+    "tokyo-run3": {
+     "epochs": 15301,
+     "lib_ok": 15288,
+     "lib_err_p50_p95_p99": [
+      0.113,
+      1.476,
+      2.894
+     ],
+     "lib_drift_p50_p95": {
+      "1": [
+       0.088,
+       1.433
+      ],
+      "2": [
+       0.168,
+       2.703
+      ],
+      "5": [
+       0.355,
+       5.148
+      ],
+      "15": [
+       1.111,
+       14.407
+      ],
+      "60": [
+       5.632,
+       35.466
+      ],
+      "300": [
+       42.77,
+       80.817
+      ]
+     },
+     "rob_ok": 15288,
+     "rob_err_p50_p95_p99": [
+      0.11,
+      0.903,
+      1.703
+     ],
+     "rob_drift_p50_p95": {
+      "1": [
+       0.086,
+       0.79
+      ],
+      "2": [
+       0.163,
+       1.445
+      ],
+      "5": [
+       0.33,
+       3.229
+      ],
+      "15": [
+       1.001,
+       7.087
+      ],
+      "60": [
+       3.817,
+       21.623
+      ],
+      "300": [
+       22.13,
+       44.473
+      ]
+     },
+     "rob_dropped_mean": 0.202
+    },
+    "nagoya-run1": {
+     "epochs": 7582,
+     "lib_ok": 7537,
+     "lib_err_p50_p95_p99": [
+      0.094,
+      3.51,
+      8.077
+     ],
+     "lib_drift_p50_p95": {
+      "1": [
+       0.063,
+       3.368
+      ],
+      "2": [
+       0.111,
+       5.949
+      ],
+      "5": [
+       0.216,
+       13.086
+      ],
+      "15": [
+       0.478,
+       41.1
+      ],
+      "60": [
+       5.191,
+       122.875
+      ],
+      "300": [
+       193.154,
+       401.149
+      ]
+     },
+     "rob_ok": 7537,
+     "rob_err_p50_p95_p99": [
+      0.093,
+      1.81,
+      4.991
+     ],
+     "rob_drift_p50_p95": {
+      "1": [
+       0.063,
+       1.671
+      ],
+      "2": [
+       0.111,
+       2.723
+      ],
+      "5": [
+       0.216,
+       6.364
+      ],
+      "15": [
+       0.474,
+       17.771
+      ],
+      "60": [
+       3.567,
+       72.677
+      ],
+      "300": [
+       85.467,
+       166.698
+      ]
+     },
+     "rob_dropped_mean": 0.302
+    },
+    "nagoya-run2": {
+     "epochs": 9440,
+     "lib_ok": 9387,
+     "lib_err_p50_p95_p99": [
+      0.094,
+      2.965,
+      4.728
+     ],
+     "lib_drift_p50_p95": {
+      "1": [
+       0.063,
+       2.969
+      ],
+      "2": [
+       0.11,
+       5.024
+      ],
+      "5": [
+       0.211,
+       10.79
+      ],
+      "15": [
+       0.575,
+       24.064
+      ],
+      "60": [
+       6.555,
+       54.238
+      ],
+      "300": [
+       55.213,
+       177.49
+      ]
+     },
+     "rob_ok": 9387,
+     "rob_err_p50_p95_p99": [
+      0.094,
+      1.532,
+      2.863
+     ],
+     "rob_drift_p50_p95": {
+      "1": [
+       0.062,
+       1.375
+      ],
+      "2": [
+       0.11,
+       2.496
+      ],
+      "5": [
+       0.211,
+       4.887
+      ],
+      "15": [
+       0.569,
+       9.925
+      ],
+      "60": [
+       5.555,
+       24.053
+      ],
+      "300": [
+       22.605,
+       61.427
+      ]
+     },
+     "rob_dropped_mean": 0.491
+    },
+    "nagoya-run3": {
+     "epochs": 5201,
+     "lib_ok": 5190,
+     "lib_err_p50_p95_p99": [
+      0.298,
+      2.996,
+      4.948
+     ],
+     "lib_drift_p50_p95": {
+      "1": [
+       0.257,
+       3.052
+      ],
+      "2": [
+       0.407,
+       5.184
+      ],
+      "5": [
+       1.246,
+       10.112
+      ],
+      "15": [
+       3.845,
+       23.861
+      ],
+      "60": [
+       16.618,
+       59.726
+      ],
+      "300": [
+       118.364,
+       149.305
+      ]
+     },
+     "rob_ok": 5190,
+     "rob_err_p50_p95_p99": [
+      0.281,
+      2.081,
+      3.456
+     ],
+     "rob_drift_p50_p95": {
+      "1": [
+       0.236,
+       1.784
+      ],
+      "2": [
+       0.407,
+       3.138
+      ],
+      "5": [
+       0.933,
+       6.887
+      ],
+      "15": [
+       2.882,
+       13.775
+      ],
+      "60": [
+       12.81,
+       36.117
+      ],
+      "300": [
+       50.375,
+       94.457
+      ]
+     },
+     "rob_dropped_mean": 0.492
+    }
+   },
+   "per_signal": {
+    "sys1/sig0": {
+     "n": 403176,
+     "p50_p95": [
+      0.028,
+      0.985
+     ],
+     "frac_gt_1mps": 0.049
+    },
+    "sys1/sig3": {
+     "n": 383677,
+     "p50_p95": [
+      0.026,
+      0.78
+     ],
+     "frac_gt_1mps": 0.04
+    },
+    "sys1/sig4": {
+     "n": 24540,
+     "p50_p95": [
+      0.162,
+      3.175
+     ],
+     "frac_gt_1mps": 0.155
+    },
+    "sys2/sig5": {
+     "n": 249975,
+     "p50_p95": [
+      0.031,
+      1.153
+     ],
+     "frac_gt_1mps": 0.057
+    },
+    "sys2/sig7": {
+     "n": 228253,
+     "p50_p95": [
+      0.032,
+      1.409
+     ],
+     "frac_gt_1mps": 0.066
+    },
+    "sys2/sig8": {
+     "n": 8662,
+     "p50_p95": [
+      0.049,
+      0.385
+     ],
+     "frac_gt_1mps": 0.016
+    },
+    "sys4/sig9": {
+     "n": 324429,
+     "p50_p95": [
+      0.029,
+      0.654
+     ],
+     "frac_gt_1mps": 0.033
+    },
+    "sys4/sig10": {
+     "n": 348255,
+     "p50_p95": [
+      0.029,
+      0.688
+     ],
+     "frac_gt_1mps": 0.034
+    },
+    "sys4/sig11": {
+     "n": 30651,
+     "p50_p95": [
+      0.179,
+      3.424
+     ],
+     "frac_gt_1mps": 0.16
+    },
+    "sys8/sig13": {
+     "n": 580522,
+     "p50_p95": [
+      0.024,
+      0.509
+     ],
+     "frac_gt_1mps": 0.026
+    },
+    "sys8/sig14": {
+     "n": 283799,
+     "p50_p95": [
+      0.024,
+      0.372
+     ],
+     "frac_gt_1mps": 0.022
+    },
+    "sys8/sig15": {
+     "n": 356186,
+     "p50_p95": [
+      0.024,
+      0.654
+     ],
+     "frac_gt_1mps": 0.032
+    },
+    "sys8/sig16": {
+     "n": 12996,
+     "p50_p95": [
+      0.114,
+      2.572
+     ],
+     "frac_gt_1mps": 0.134
+    },
+    "sys8/sig17": {
+     "n": 12363,
+     "p50_p95": [
+      0.207,
+      3.101
+     ],
+     "frac_gt_1mps": 0.182
+    },
+    "sys16/sig18": {
+     "n": 146926,
+     "p50_p95": [
+      0.023,
+      0.602
+     ],
+     "frac_gt_1mps": 0.031
+    },
+    "sys16/sig19": {
+     "n": 149061,
+     "p50_p95": [
+      0.024,
+      0.602
+     ],
+     "frac_gt_1mps": 0.033
+    },
+    "sys16/sig20": {
+     "n": 12571,
+     "p50_p95": [
+      0.117,
+      1.986
+     ],
+     "frac_gt_1mps": 0.11
+    }
+   }
+  },
+  "robust_variant": "drop the worst residual beyond 4 sigma (sigma = 0.5 m/s / sin el) and re-solve; analysis only, not in the solver"
+ },
+ "decision": "NO_GO for all three. P+M passes every listed item only because its POS is identical to P, so the decrease clause fails; P+CDM and P+CDMH fail on every run. No default or profile change; no retuning"
+}
