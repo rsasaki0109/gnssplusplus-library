@@ -6874,3 +6874,51 @@ The recipe lane rebuilds it with the native text verbatim. That file has the
 same coordinates and was submitted as 57629197 (same score). It is now the
 official recipe. Private is still 0.062 m
 from the 0.782 m post-deadline taroz score.
+
+### Where the remaining Private gap is not (2026-10-25)
+
+None of these changed a submission. The Private score is 0.844 m against the
+0.782 m post-deadline taroz score.
+
+**Train is level.** On 35 train drives run with the per-phone test recipes,
+native scores 0.718 m mean (P50+P95)/2 and the taroz `result_gnss_imu` 0.712 m.
+So the test gap should sit in a few test drives rather than in the general
+model.
+
+- **Offsets.** Both taroz result files already include `add_position_offset`:
+  `fgo_gnss.m` and `fgo_gnss_imu.m` apply it before saving. Compare them with
+  the native final, not with the native GNSS-first stage.
+- **Along-track error.** On moving epochs, native along-track |error| is 0.314 m
+  and taroz 0.267 m, while cross-track is level (0.295 / 0.294 m). The excess
+  is drive-specific: sm-a505g sits +0.79 m ahead of truth, taroz +0.36 m. A
+  truth-free shift by the leave-one-out phone-family bias makes train worse
+  (0.7475 -> 0.7628 m).
+- **IMU-stage departures are mostly right.** When the native final sits more
+  than 0.8 m from the offset-aligned GNSS-first, it is closer to truth in 83%
+  of 7,985 train epochs.
+
+**Carrier phase arbitrates only at low speed.** The raw-ADR displacement check
+that found ebf-x is accurate for static and low-speed windows (about 1 cm RMS,
+0.1-0.3 m over 40-80 s). At highway speed it drifts by about 0.2% of the
+distance, so it cannot decide the lax-x or ebf-xx starts. In lax-x, the native
+final stays on both GNSS stages for the first 4 minutes, while the taroz final
+moves about 1 m from its own. On train, the native first five minutes are level
+with taroz (0.544 vs 0.516 m).
+
+**Height maps are not a common cause.** Mean distance to taroz is 0.375 m on
+the 24 test map drives and 0.354 m on the 14 relative-height drives. Map
+points within 15 m that span more than 2 m in height (overpasses) appear on at
+most 6% of epochs.
+
+The three largest disagreements with taroz are Samsung map drives. Without the
+map:
+
+| Drive | With map | Without map |
+|---|---:|---:|
+| mtv-b A325F | 1.40 m | 1.38 m |
+| sjc-r A32 | 0.81 m | 0.70 m |
+| mtv-pe1 A325G | 0.78 m | 0.84 m |
+
+The changes are mixed, so no-map is not adopted. On train, native is level
+with or better than taroz for A325F, so these test disagreements do not show
+which side is wrong.

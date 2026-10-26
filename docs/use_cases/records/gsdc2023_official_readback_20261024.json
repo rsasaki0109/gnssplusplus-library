@@ -284,10 +284,14 @@
     "gyro_bias_random_walk_x1000": "36 train drives 0.7646 -> 0.7725 m",
     "gyro_bias_random_walk_x10": "12-drive screen +0.006 m",
     "accel_bias_random_walk_x4_or_x0.25": "12-drive screen +0.002 / -0.001 m",
-    "native_samsung_clock_drift_flag": "bit-identical solutions on five Samsung train drives (the estimate only seeds the optimizer)"
+    "native_samsung_clock_drift_flag": "bit-identical solutions on five Samsung train drives (the estimate only seeds the optimizer)",
+    "source_tdcp_metre_sigma_phase184_huber_all_drives": "4 of the first 6 train drives worse (mean +0.031 m; mtv-b Pixel4 +0.106 m); kept on ebf-x only",
+    "along_track_shift_per_phone_family": "truth-free shift of -b along the solution's own heading (b = leave-one-out family median along-track bias): mean over 36 drives 0.7475 -> 0.7628 m"
   },
   "open_issues": {
-    "2022-04-25-21-04-us-ca-ebf-x/mi8": "taroz uses IdxStart=600 and fills epochs 0-598 with the nearest solution; solving from epoch 599 still leaves the stationary segment 1.4-1.7 m from taroz"
+    "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
+    "samsung_test_drives": "mtv-b A325F, sjc-r A32 and mtv-pe1 A325G sit (P50+P95)/2 = 1.40, 0.81 and 0.78 m from the taroz test output; no truth-free arbiter decides which pipeline is right (no TDCP in taroz for A325F/A32, high-speed TDCP unreliable); on train native is level with or better than taroz for A325F",
+    "pixel5_drive_starts": "lax-x and ebf-xx differ from taroz by 1.0-1.6 m in their first 4-5 minutes; in lax-x the native final stays on both GNSS stages while the taroz final departs about 1 m from its own; on train the native first 5 minutes are level with taroz (0.544 vs 0.516 m)"
   },
   "reference_targets": {
     "final_leaderboard_first_private_m": 0.883,
@@ -301,5 +305,14 @@
     "rule": "rerun with --native-course-attitude-seeds-mount-deg 180 (dropping heading seeds / source IMU initialization) and keep it only if final-vs-GNSS-first P95 drops below 0.9x",
     "train_36": "34 within 0.001 m; mtv-b Pixel4 0.828 -> 0.588 m kept (ratio 0.79); mtv-n A205U 1.772 -> 5.673 m rejected (ratio 3.82)",
     "test_40": "keeps exactly sjc-ce1 (0.40), sjc-r A505U (0.48) and ebf-z (0.76), all already fixed; the rest 0.998-1.013; mtv-m Mi8 needs the source IMU initialization and cannot take course seeds"
+  },
+  "taroz_comparison_notes": {
+    "train_recipe_equivalent": "35 train drives with the per-phone test recipes: native mean (P50+P95)/2 0.718 m, taroz result_gnss_imu 0.712 m",
+    "offset_convention": "taroz result_gnss.mat and result_gnss_imu.mat already include add_position_offset (fgo_gnss.m / fgo_gnss_imu.m apply it before saving); compare them with the native final, not the native GNSS-first stage",
+    "along_track": "moving epochs: native along-track |error| median 0.314 m vs taroz 0.267 m, cross-track 0.295 vs 0.294 m; the excess is drive-specific (sm-a505g +0.79 vs +0.36 m), not a phone-family bias",
+    "final_departs_from_gnss_first": "train epochs where the native final is more than 0.8 m from the native GNSS-first (offset-aligned): the final is closer to truth in 82.7% of 7,985 epochs",
+    "static_disagreement": "train static epochs where native and taroz differ by more than 1 m: 102 epochs, taroz closer in 73%",
+    "tdcp_arbiter": "raw-ADR epoch-to-epoch displacement (robust LS, free clock) is reliable for static and low-speed windows (about 1 cm RMS, 0.1-0.3 m over 40-80 s); at highway speed it drifts by about 0.2% of distance and cannot arbitrate",
+    "height_maps": "test map drives vs relative-height drives: mean (P50+P95)/2 to taroz 0.375 vs 0.354 m; map points within 15 m spanning more than 2 m in height occur on at most 6% of epochs; removing the map moves mtv-b A325F 1.40 -> 1.38 m, sjc-r A32 0.81 -> 0.70 m and mtv-pe1 A325G 0.78 -> 0.84 m from taroz (not adopted)"
   }
 }
