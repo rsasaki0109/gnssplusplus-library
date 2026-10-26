@@ -874,11 +874,16 @@ follows:
 | 57663818 | ebf-z back to 57629197 | 0.821 m | 0.811 m |
 | 57664241 | plus lax-p (recipe) | 0.817 m | 0.811 m |
 
-lax-p Pixel5 overflows the default 8 MB stack in its refinement solve
-(SIGSEGV after about 25 minutes). The recipe gives that drive
-`stack_limit: "unlimited"`. `run` then lifts the child's soft RLIMIT_STACK,
-and it refuses to start the drive when the hard limit is finite
-(`ulimit -Hs`).
+lax-p Pixel5 crashes in its refinement solve in about two runs out of three
+(SIGSEGV after 25-30 minutes): a TBB worker thread inside GTSAM overflows its
+stack. Lifting the stack limit (`ulimit -s unlimited`) does not help, because
+TBB sizes its worker stacks itself. Pinned to one CPU, TBB starts no workers
+and the drive finishes in 1,670 s with the same solution. That holds with an
+8 MB or an unlimited stack. The recipe gives that drive `single_cpu: true`,
+and `run` pins the child to the first CPU it may use. Through the lane
+driver, `run --stage final` on the 30 changed drives writes the research
+solutions byte for byte. `assemble`, with the other 10 drives from the
+57629197 rebuild, writes `ea13dc36...` with 40/40 drives identical.
 
 ### gsdc-official local result (2026-09-29)
 

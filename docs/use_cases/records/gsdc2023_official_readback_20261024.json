@@ -288,7 +288,7 @@
         "pixel4xl (mtv-e)": "train mtv-b Pixel4 XL +0.868 m; the prerequisites alone give +0.999 m",
         "samsunga325g (mtv-pe1, lax-hh)": "train sjc-s +0.004 m (refinement -0.067 m, prerequisites +0.071 m)",
         "sjc-r sm-a505u": "incompatible with its --native-course-attitude-seeds-mount-deg 178.9; without the course seeds the third pass moves minutes 22-26 about 2 m off taroz ((P50+P95)/2 to taroz 0.61 -> 1.42 m)",
-        "lax-p pixel5": "the refinement pass overflowed the default 8 MB stack (SIGSEGV); added in 57664241"
+        "lax-p pixel5": "its refinement solve crashed (a GTSAM TBB worker overflowed its stack); added in 57664241"
       },
       "train_evidence": {
         "drives": 36,
@@ -339,7 +339,7 @@
       "replaced": [
         "2022-02-24-15-10-us-ca-lax-p/pixel5"
       ],
-      "change": "lax-p Pixel5 with the third pass, run with the soft RLIMIT_STACK unlimited (recipe stack_limit); (P50+P95)/2 to taroz 0.325 -> 0.300 m; mean over 37 drives to taroz 0.293 m",
+      "change": "lax-p Pixel5 with the third pass; it crashes in 2 of 3 runs (a GTSAM TBB worker overflows its stack, with an 8 MB or unlimited stack) and finishes with the same solution when pinned to one CPU (recipe single_cpu); (P50+P95)/2 to taroz 0.325 -> 0.300 m; mean over 37 drives to taroz 0.293 m",
       "recipe": "the official recipe is pinned to this file: 30 drives carry --native-imu-refinement-pass (research_source.added_flags, previous_research_source)"
     }
   ],

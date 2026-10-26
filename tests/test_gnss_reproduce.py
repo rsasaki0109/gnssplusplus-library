@@ -748,7 +748,7 @@ class GsdcOfficialLaneTest(unittest.TestCase):
             for flag in ("--native-export-gnss-stage", "--native-export-imu-stage",
                          "--native-source-imu-initialization", "--native-phase213-main-doppler"):
                 self.assertIn(flag, drive["argv"])
-        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("stack_limit")],
+        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("single_cpu")],
                          ["2022-02-24-15-10-us-ca-lax-p/pixel5"])
         windowed = [drive for drive in recipe["drives"] if drive.get("input_window")]
         self.assertEqual([drive["id"] for drive in windowed], ["2022-04-25-21-04-us-ca-ebf-x/mi8"])
@@ -940,37 +940,32 @@ class GsdcOfficialLaneTest(unittest.TestCase):
             with self.assertRaises(SystemExit):  # the window fill applies to windowed drives only
                 driver.assemble_rows(recipe, solutions)
 
-    def test_stack_limit_lifts_the_child_soft_stack_limit(self) -> None:
-        import resource
-
+    def test_single_cpu_pins_the_child_to_one_cpu(self) -> None:
         driver = self._import()
-        self.assertIsNone(driver.stack_limit_preexec({"id": "a"}))
-        with self.assertRaises(SystemExit):
-            driver.stack_limit_preexec({"id": "a", "stack_limit": "64m"})
-        if resource.getrlimit(resource.RLIMIT_STACK)[1] != resource.RLIM_INFINITY:
+        self.assertIsNone(driver.single_cpu_preexec({"id": "a"}))
+        if not hasattr(os, "sched_setaffinity"):
             with self.assertRaises(SystemExit):
-                driver.stack_limit_preexec({"id": "a", "stack_limit": "unlimited"})
+                driver.single_cpu_preexec({"id": "a", "single_cpu": True})
             return
         with tempfile.TemporaryDirectory() as tmp:
             tmp_path = Path(tmp)
             fake = tmp_path / "fake_solver.py"
             fake.write_text(textwrap.dedent("""
-                import resource, sys
+                import os, sys
                 out = sys.argv[sys.argv.index('--out') + 1]
-                open(out, 'w').write(str(resource.getrlimit(resource.RLIMIT_STACK)[0]))
+                open(out, 'w').write(str(len(os.sched_getaffinity(0))))
             """), encoding="utf-8")
-            for limit, expected in ((None, None), ("unlimited", str(resource.RLIM_INFINITY))):
+            for single, expected in ((False, len(os.sched_getaffinity(0))), (True, 1)):
                 entry = {"id": "a-course/phone1", "group": "pixel5-heading", "output_sha256": "",
                          "output": "{work_dir}/final/a__phone1/solution.csv",
                          "argv": [sys.executable, str(fake), "--out", "{work_dir}/final/a__phone1/solution.csv"]}
-                if limit:
-                    entry["stack_limit"] = limit
+                if single:
+                    entry["single_cpu"] = True
                 record = driver.run_drive(entry, {"work_dir": str(tmp_path)}, os.environ)
                 self.assertEqual(record["returncode"], 0)
-                self.assertEqual(record["stack_limit"], limit)
-                soft = (tmp_path / "final" / "a__phone1" / "solution.csv").read_text(encoding="utf-8")
-                if expected:
-                    self.assertEqual(soft, expected)
+                self.assertEqual(record["single_cpu"], single)
+                cpus = (tmp_path / "final" / "a__phone1" / "solution.csv").read_text(encoding="utf-8")
+                self.assertEqual(cpus, str(expected))
 
     def test_run_resume_skips_completed_drives(self) -> None:
         driver = self._import()

@@ -40,9 +40,10 @@ window epoch and its IMU rows from ``imu_lead_ms`` earlier (raw lines, SHA-256
 pinned) under the work dir, and ``assemble`` fills the official keys before
 the first native row with that row, as taroz ``submission.m`` does.
 
-A drive with ``stack_limit: "unlimited"`` runs with the soft RLIMIT_STACK
-lifted (``ulimit -s unlimited``); lax-p Pixel5 overflows the default 8 MB
-stack in its refinement IMU pass.
+A drive with ``single_cpu: true`` runs pinned to one CPU, so GTSAM's TBB
+starts no worker threads: in the refinement IMU pass of lax-p Pixel5 a TBB
+worker overflows its stack in about two runs out of three, while the
+single-threaded solve finishes with the same solution.
 """
 
 from __future__ import annotations
@@ -284,23 +285,19 @@ def map_is_pinned(recipe: Mapping[str, Any], drive_id: str, context: Mapping[str
     return path.is_file() and sha256_file(path) == spec["sha256"]
 
 
-def stack_limit_preexec(entry: Mapping[str, Any]) -> Callable[[], None] | None:
-    """Child setup for ``stack_limit: "unlimited"``: lift the soft RLIMIT_STACK (needs an unlimited hard limit)."""
-    limit = entry.get("stack_limit")
-    if limit is None:
+def single_cpu_preexec(entry: Mapping[str, Any]) -> Callable[[], None] | None:
+    """Child setup for ``single_cpu``: pin the solver to one CPU so GTSAM's TBB starts no worker threads."""
+    if not entry.get("single_cpu"):
         return None
-    if limit != "unlimited":
-        raise SystemExit(f"{entry['id']}: unsupported stack_limit {limit!r}")
-    import resource  # POSIX only; the recipe pins a Linux build
-
-    if resource.getrlimit(resource.RLIMIT_STACK)[1] != resource.RLIM_INFINITY:
-        raise SystemExit(f"{entry['id']}: stack_limit unlimited needs an unlimited hard RLIMIT_STACK (ulimit -Hs)")
-    return lambda: resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+    if not hasattr(os, "sched_setaffinity"):
+        raise SystemExit(f"{entry['id']}: single_cpu needs os.sched_setaffinity (Linux); the recipe pins a Linux build")
+    cpu = min(os.sched_getaffinity(0))
+    return lambda: os.sched_setaffinity(0, {cpu})
 
 
 def run_drive(entry: Mapping[str, Any], context: Mapping[str, str], env: Mapping[str, str]) -> dict[str, Any]:
     argv = [render(item, context) for item in entry["argv"]]
-    preexec = stack_limit_preexec(entry)
+    preexec = single_cpu_preexec(entry)
     solution = Path(render(entry["output"], context))
     folder = solution.parent
     folder.mkdir(parents=True, exist_ok=True)
@@ -322,7 +319,7 @@ def run_drive(entry: Mapping[str, Any], context: Mapping[str, str], env: Mapping
         "id": entry["id"],
         "group": entry["group"],
         "argv": argv,
-        "stack_limit": entry.get("stack_limit"),
+        "single_cpu": bool(entry.get("single_cpu")),
         "returncode": returncode,
         "started_unix": round(started_unix, 3),
         "wall_s": round(elapsed, 1),

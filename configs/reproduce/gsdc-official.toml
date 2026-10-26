@@ -181,6 +181,6 @@ readme = "reported"
 # native row. The lane-built file was submitted as 57629197 (57626255 had
 # dropped trailing zeros in 284 rows). Recipe update to ref 57664241 (same
 # build): 30 drives add --native-imu-refinement-pass (the upstream third
-# pass) and its prerequisites; lax-p Pixel5 runs with stack_limit
-# "unlimited" (its refinement solve overflows the 8 MB default stack).
+# pass) and its prerequisites; lax-p Pixel5 runs with single_cpu (pinned
+# to one CPU: a GTSAM TBB worker overflows its stack in its refinement solve).
 # See docs/reproduce.md.

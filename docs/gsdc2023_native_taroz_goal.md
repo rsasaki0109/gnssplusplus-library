@@ -7027,10 +7027,12 @@ test output, as (P50+P95)/2:
 | 57663818 | ebf-z back to 57629197 | 0.821 m | 0.811 m |
 | 57664241 | plus lax-p | **0.817 m** | 0.811 m |
 
-lax-p first crashed (SIGSEGV after 1,510 s) in the refinement solve: the
-default 8 MB stack overflowed. With `ulimit -s unlimited` it completes in
-1,255 s. The recipe sets `stack_limit: "unlimited"` on that drive, and the
-lane lifts the child's soft RLIMIT_STACK for it.
+lax-p crashes (SIGSEGV) in its refinement solve in two of three runs. In
+each crash a GTSAM TBB worker thread overflows its stack, with an 8 MB stack
+or with `ulimit -s unlimited`, so the one run that finished was lucky. Pinned
+to one CPU, TBB starts no workers, and the drive finishes in 1,670 s with the
+same solution, with either stack limit. The recipe sets `single_cpu: true` on
+that drive, and the lane pins it.
 
 The official recipe is now 57664241: 30 drives carry the pass (their old
 provenance under `research_source.previous_research_source`). Private is
