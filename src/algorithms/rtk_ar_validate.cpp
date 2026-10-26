@@ -906,6 +906,13 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     if (!validateFixedDopplerConsensus(test_pos, time)) {
         return reject_hold(debug_telemetry_.reject_reason.c_str());
     }
+    const double max_update_nis = rtk_config_.hold_fix_max_update_nis_per_observation;
+    const double update_nis =
+        current_update_diagnostics_.normalized_innovation_squared_per_observation;
+    if (std::isfinite(max_update_nis) && max_update_nis > 0.0 &&
+        std::isfinite(update_nis) && update_nis > max_update_nis) {
+        return reject_hold("hold_fix_update_nis");
+    }
 
     // Accept hold fix
     fixed_baseline_ = xa.head<3>();

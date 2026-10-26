@@ -389,6 +389,14 @@ public:
         /// unchanged bit-for-bit; a smaller value has no effect.
         int hold_fix_min_matched_pairs = 4;
 
+        /// Reject a hold-fix candidate ("hold_fix_update_nis") when the float
+        /// update of the same epoch has a normalized innovation squared per
+        /// observation above this limit. max_fixed_update_nis_per_observation
+        /// guards only AR candidates, so a hold fix can follow an update that
+        /// contradicts the held integers. 0 (default) disables the check, so the
+        /// behavior is unchanged bit-for-bit.
+        double hold_fix_max_update_nis_per_observation = 0.0;
+
         /// Minimum number of non-reference satellites in the fixed DD set of an
         /// ambiguity-resolution FIX (full set, subset or WL/NL fallback). Each such
         /// satellite adds one double-difference direction; fewer than 3 cannot
