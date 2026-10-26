@@ -6,7 +6,7 @@ Backs the ``gnss reproduce gsdc-official`` lane.  The recipe
 test drives, the input files (SHA-256), the exact ``gnss_fgo_imu_no_base`` argv
 and the SHA-256 of the solution the research run wrote.  Nothing here talks to
 Kaggle: the gate is the SHA-256 of the assembled ``submission.csv`` (the file
-submitted as Kaggle ref 57629197); the Kaggle score is a readback record only.
+submitted as Kaggle ref 57664241); the Kaggle score is a readback record only.
 Every drive, stage-0 run and height map is pinned to one Linux GCC build;
 MSVC outputs of the same drives differ by up to 0.08 m.
 
@@ -39,6 +39,10 @@ solved from that epoch: ``run`` first writes its Android GNSS rows from the
 window epoch and its IMU rows from ``imu_lead_ms`` earlier (raw lines, SHA-256
 pinned) under the work dir, and ``assemble`` fills the official keys before
 the first native row with that row, as taroz ``submission.m`` does.
+
+A drive with ``stack_limit: "unlimited"`` runs with the soft RLIMIT_STACK
+lifted (``ulimit -s unlimited``); lax-p Pixel5 overflows the default 8 MB
+stack in its refinement IMU pass.
 """
 
 from __future__ import annotations
@@ -54,7 +58,7 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Callable, Iterable, Mapping, Sequence
 
 ROOT_DIR = Path(__file__).resolve().parents[3]
 DEFAULT_RECIPE = ROOT_DIR / "configs" / "reproduce" / "gsdc_official_recipe.json"
@@ -280,8 +284,23 @@ def map_is_pinned(recipe: Mapping[str, Any], drive_id: str, context: Mapping[str
     return path.is_file() and sha256_file(path) == spec["sha256"]
 
 
+def stack_limit_preexec(entry: Mapping[str, Any]) -> Callable[[], None] | None:
+    """Child setup for ``stack_limit: "unlimited"``: lift the soft RLIMIT_STACK (needs an unlimited hard limit)."""
+    limit = entry.get("stack_limit")
+    if limit is None:
+        return None
+    if limit != "unlimited":
+        raise SystemExit(f"{entry['id']}: unsupported stack_limit {limit!r}")
+    import resource  # POSIX only; the recipe pins a Linux build
+
+    if resource.getrlimit(resource.RLIMIT_STACK)[1] != resource.RLIM_INFINITY:
+        raise SystemExit(f"{entry['id']}: stack_limit unlimited needs an unlimited hard RLIMIT_STACK (ulimit -Hs)")
+    return lambda: resource.setrlimit(resource.RLIMIT_STACK, (resource.RLIM_INFINITY, resource.RLIM_INFINITY))
+
+
 def run_drive(entry: Mapping[str, Any], context: Mapping[str, str], env: Mapping[str, str]) -> dict[str, Any]:
     argv = [render(item, context) for item in entry["argv"]]
+    preexec = stack_limit_preexec(entry)
     solution = Path(render(entry["output"], context))
     folder = solution.parent
     folder.mkdir(parents=True, exist_ok=True)
@@ -291,7 +310,7 @@ def run_drive(entry: Mapping[str, Any], context: Mapping[str, str], env: Mapping
     stop = threading.Event()
     with (folder / "stdout.log").open("w", encoding="utf-8", errors="replace") as out, \
             (folder / "stderr.log").open("w", encoding="utf-8", errors="replace") as err:
-        process = subprocess.Popen(argv, stdout=out, stderr=err, env=dict(env))
+        process = subprocess.Popen(argv, stdout=out, stderr=err, env=dict(env), preexec_fn=preexec)
         monitor = threading.Thread(target=_monitor_peak_rss, args=(process.pid, stop, peak), daemon=True)
         monitor.start()
         returncode = process.wait()
@@ -303,6 +322,7 @@ def run_drive(entry: Mapping[str, Any], context: Mapping[str, str], env: Mapping
         "id": entry["id"],
         "group": entry["group"],
         "argv": argv,
+        "stack_limit": entry.get("stack_limit"),
         "returncode": returncode,
         "started_unix": round(started_unix, 3),
         "wall_s": round(elapsed, 1),

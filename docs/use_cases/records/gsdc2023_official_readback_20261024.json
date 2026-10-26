@@ -270,6 +270,77 @@
       "rows": 71936,
       "numerically_identical_rows": "71936/71936",
       "cause": "the recipe lane rebuild of 57626255: the lane copies native text verbatim, while the research fill step (pandas) dropped trailing zeros in 284 ebf-x rows; the official recipe is pinned to this file"
+    },
+    {
+      "ref": 57663786,
+      "sha256": "771e979d1c91228ad8339364b745bbfd47475b9f929614ea163f231f87cbfc8e",
+      "base_ref": 57629197,
+      "base_sha256": "f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f",
+      "private_m": 0.811,
+      "public_m": 0.836,
+      "base_private_m": 0.844,
+      "base_public_m": 0.85,
+      "rows": 71936,
+      "replaced_drives": 30,
+      "change": "--native-imu-refinement-pass: the upstream third pass (taroz run_fgo.m runs fgo_gnss, then fgo_gnss_imu twice; the last one re-screens P/D around the first GNSS/IMU trajectory with the tighter final thresholds, 20/15 m and 3 m/s, and solves again); it needs --native-export-gnss-stage, --native-export-imu-stage, --native-source-imu-initialization and --native-phase213-main-doppler, added where the drive recipe lacked them",
+      "not_refined": {
+        "mi8, xiaomimi8 (5 drives)": "train +0.061 m mean, 4 of 4 drives worse (+0.039 to +0.085 m)",
+        "pixel4xl (mtv-e)": "train mtv-b Pixel4 XL +0.868 m; the prerequisites alone give +0.999 m",
+        "samsunga325g (mtv-pe1, lax-hh)": "train sjc-s +0.004 m (refinement -0.067 m, prerequisites +0.071 m)",
+        "sjc-r sm-a505u": "incompatible with its --native-course-attitude-seeds-mount-deg 178.9; without the course seeds the third pass moves minutes 22-26 about 2 m off taroz ((P50+P95)/2 to taroz 0.61 -> 1.42 m)",
+        "lax-p pixel5": "the refinement pass overflowed the default 8 MB stack (SIGSEGV); added in 57664241"
+      },
+      "train_evidence": {
+        "drives": 36,
+        "mean_m": "0.7646 -> 0.7443 (35 drives with taroz: 0.7358 -> 0.7187, taroz 0.7123)",
+        "per_phone_total_delta_m": {
+          "sm-a325f (2)": -0.437,
+          "sm-a505g (1)": -0.202,
+          "pixel4 (2)": -0.138,
+          "sm-a205u (1)": -0.131,
+          "sm-s908b (1)": -0.026,
+          "pixel7pro (4)": -0.02,
+          "pixel5 (14)": -0.015,
+          "sm-g988b (2)": -0.013,
+          "pixel6pro (3)": -0.006,
+          "samsunga325g (1)": 0.004,
+          "mi8 (4)": 0.061,
+          "pixel4xl (1)": 0.868
+        },
+        "refinement_only_delta_m": "against the same recipe with only the missing prerequisites added: sm-a325f -0.216, sm-a205u -0.131, pixel4xl -0.131, sm-a505g -0.117, samsunga325g -0.067, sm-s908b -0.026, pixel7pro -0.020, pixel4 -0.018, pixel5 -0.015 (11 of 14 better), sm-g988b -0.013, pixel6pro -0.006, mi8 +0.049",
+        "stop_and_observation_stages": "--native-source-imu-stop-phases --native-source-imu-observation-stages on top: within 0.011 m of the refinement pass alone on 11 drives; not used"
+      },
+      "truth_free_diagnostic": "distance to the taroz test output ((P50+P95)/2): mtv-b A325F 1.40 -> 0.77 m, lax-x Pixel5 0.74 -> 0.21 m (its first 4-5 minutes now agree), sjc-r A32 0.82 -> 0.59 m, ebf-zz 0.32 -> 0.21 m, ebf-z 0.29 -> 0.52 m; mean over 37 drives 0.348 -> 0.300 m (sjc-r A505U without course seeds, not taken, 0.61 -> 1.42 m)"
+    },
+    {
+      "ref": 57663818,
+      "sha256": "d7cb11ddb819cfef8ae204a70199f757c5ffd6a0859aef195d14ccc40a282cb8",
+      "base_ref": 57663786,
+      "private_m": 0.811,
+      "public_m": 0.821,
+      "base_private_m": 0.811,
+      "base_public_m": 0.836,
+      "rows": 71936,
+      "replaced": [
+        "2022-04-25-22-36-us-ca-ebf-z/pixel5"
+      ],
+      "change": "ebf-z Pixel5 back to its 57629197 rows (probe of the third pass on a Public drive)",
+      "cause": "the third pass moved ebf-z 0.5-0.9 m off taroz in minutes 5-10; raw-ADR 30-s windows agree with both trajectories (median 0.06 / 0.09 m), so the move is an offset the carrier phase cannot arbitrate; Kaggle Public says it was worse"
+    },
+    {
+      "ref": 57664241,
+      "sha256": "ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5",
+      "base_ref": 57663818,
+      "private_m": 0.811,
+      "public_m": 0.817,
+      "base_private_m": 0.811,
+      "base_public_m": 0.821,
+      "rows": 71936,
+      "replaced": [
+        "2022-02-24-15-10-us-ca-lax-p/pixel5"
+      ],
+      "change": "lax-p Pixel5 with the third pass, run with the soft RLIMIT_STACK unlimited (recipe stack_limit); (P50+P95)/2 to taroz 0.325 -> 0.300 m; mean over 37 drives to taroz 0.293 m",
+      "recipe": "the official recipe is pinned to this file: 30 drives carry --native-imu-refinement-pass (research_source.added_flags, previous_research_source)"
     }
   ],
   "rejected_on_train": {
@@ -286,12 +357,16 @@
     "accel_bias_random_walk_x4_or_x0.25": "12-drive screen +0.002 / -0.001 m",
     "native_samsung_clock_drift_flag": "bit-identical solutions on five Samsung train drives (the estimate only seeds the optimizer)",
     "source_tdcp_metre_sigma_phase184_huber_all_drives": "4 of the first 6 train drives worse (mean +0.031 m; mtv-b Pixel4 +0.106 m); kept on ebf-x only",
-    "along_track_shift_per_phone_family": "truth-free shift of -b along the solution's own heading (b = leave-one-out family median along-track bias): mean over 36 drives 0.7475 -> 0.7628 m"
+    "along_track_shift_per_phone_family": "truth-free shift of -b along the solution's own heading (b = leave-one-out family median along-track bias): mean over 36 drives 0.7475 -> 0.7628 m",
+    "refinement_pass_mi8": "third pass on 4 Mi8 train drives +0.039 to +0.085 m (mean +0.061 m); also worse in the 2026-09 records; Mi8 test drives keep the two-stage recipe",
+    "refinement_prerequisites_pixel4xl": "--native-source-imu-initialization with --native-phase213-main-doppler on mtv-b Pixel4 XL 0.422 -> 1.421 m (the third pass then 1.290 m); mtv-e Pixel4 XL keeps its recipe"
   },
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
-    "samsung_test_drives": "mtv-b A325F, sjc-r A32 and mtv-pe1 A325G sit (P50+P95)/2 = 1.40, 0.81 and 0.78 m from the taroz test output; no truth-free arbiter decides which pipeline is right (no TDCP in taroz for A325F/A32, high-speed TDCP unreliable); on train native is level with or better than taroz for A325F",
-    "pixel5_drive_starts": "lax-x and ebf-xx differ from taroz by 1.0-1.6 m in their first 4-5 minutes; in lax-x the native final stays on both GNSS stages while the taroz final departs about 1 m from its own; on train the native first 5 minutes are level with taroz (0.544 vs 0.516 m); the Pixel5 heading recipe already carries source TDCP metre sigma and Phase184 Huber, so adding them leaves ebf-xx byte-identical and its exit (epochs 120-240) still disagrees with TDCP by 2.6 / 1.7 m"
+    "samsung_test_drives": "with the third pass mtv-b A325F 1.40 -> 0.77 m and sjc-r A32 0.82 -> 0.59 m from the taroz test output; mtv-pe1 and lax-hh A325G (0.78 / 0.63 m) are not refined (train neutral); no truth-free arbiter for A325F/A32 (ADR unusable)",
+    "pixel5_drive_starts": "lax-x resolved by the third pass ((P50+P95)/2 to taroz 0.74 -> 0.21 m; its first 4-5 minutes now agree) and taken in 57663786; ebf-xx 0.60 -> 0.55 m; its exit (epochs 120-240) disagreement with TDCP is at 7-9-satellite epochs, where on train TDCP is the wrong one (native closer to truth in 7 of 7 low-satellite steps)",
+    "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "Private drive, 0.61 m from taroz; the third pass needs --native-source-imu-initialization, which the course-seed attitude fix (--native-course-attitude-seeds-mount-deg 178.9) excludes; train A505G gains 0.20 m from the third pass",
+    "2022-04-25-22-36-us-ca-ebf-z/pixel5": "the third pass made it worse (Public 0.821 vs 0.836 with it); kept on 57629197"
   },
   "reference_targets": {
     "final_leaderboard_first_private_m": 0.883,
@@ -314,6 +389,7 @@
     "static_disagreement": "train static epochs where native and taroz differ by more than 1 m: 102 epochs, taroz closer in 73%",
     "tdcp_arbiter": "raw-ADR epoch-to-epoch displacement (robust LS, free clock) matches ground-truth steps to about 0.3 mm (10 ppm) at 29 m/s and stays within 0.00-0.12 m horizontally over 60-133 static epochs on train; compare it with trajectories converted exactly via ECEF/ENU (a spherical lat/lon conversion adds 0.19-0.24% scale error, which an earlier note mistook for TDCP drift); it cannot be used on phones whose ADR is unreliable (A325F, A32, S908B: 0.9-1.3 m per 30 s window)",
     "height_maps": "test map drives vs relative-height drives: mean (P50+P95)/2 to taroz 0.375 vs 0.354 m; map points within 15 m spanning more than 2 m in height occur on at most 6% of epochs; removing the map moves mtv-b A325F 1.40 -> 1.38 m, sjc-r A32 0.81 -> 0.70 m and mtv-pe1 A325G 0.78 -> 0.84 m from taroz (not adopted)",
-    "tdcp_scan_all_speeds": "all 40 test drives, 30-s windows at all speeds: median disagreement 0.05-0.15 m for both pipelines where ADR is usable; native-only (> 0.5 m while taroz < 0.3 m) windows only on mtv-m Mi8 (1.06 m at a 7-satellite epoch, ambiguous) and mtv-a Mi8 (0.52 m); no second ebf-x-type failure"
+    "tdcp_scan_all_speeds": "all 40 test drives, 30-s windows at all speeds: median disagreement 0.05-0.15 m for both pipelines where ADR is usable; native-only (> 0.5 m while taroz < 0.3 m) windows only on mtv-m Mi8 (1.06 m at a 7-satellite epoch, ambiguous) and mtv-a Mi8 (0.52 m); no second ebf-x-type failure",
+    "third_pass": "taroz runs fgo_gnss_imu twice (initflag true, then false with the previous result as input and tighter P/D screens); the native recipe ran one IMU solve until 57663786; with --native-imu-refinement-pass the 35 train drives with taroz move 0.7358 -> 0.7187 m (taroz 0.7123), and without Mi8 and Pixel4 XL the estimate is 0.687 m"
   }
 }

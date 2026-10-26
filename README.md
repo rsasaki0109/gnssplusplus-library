@@ -106,16 +106,17 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k, both multi-GNSS | `--preset urban` 7467 vs 5839 fixes with fewer wrong fixes (9/0/0 vs 19/4/4 beyond 0.5/2/3 m) and lower Hmed/Hp95/Vp95 (0.046/4.86/10.77 vs 0.190/7.86/15.72 m); default profile 1298 fixes with lower Hp95/Vp95 (4.78/11.54 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
-| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.844 m / Public 0.850 m**; 40 drives, 71,936 native output rows |
+| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.811 m / Public 0.817 m**; 40 drives, 71,936 native output rows |
 
 Reproduce: `python3 apps/gnss.py reproduce list` shows one command per row; see [docs/reproduce.md](docs/reproduce.md) for datasets, tool pins, and the latest local results.
 
 ### Smartphone GNSS/IMU
 
 Official Google Smartphone Decimeter Challenge 2023-2024 submission
-**57629197** (2026-10-25, after the deadline) scored **Private 0.844 m / Public 0.850 m**.
+**57664241** (2026-10-26, after the deadline) scored **Private 0.811 m / Public 0.817 m**.
 The submitted recipe combines Pixel5 heading initialization with Android clock handling
-and observation-model updates for supported phones. All 40 drives and
+and observation-model updates for supported phones. On 30 drives, a second GNSS/IMU pass
+re-screens the observations around the first one, as the taroz pipeline does. All 40 drives and
 71,936 output rows were rebuilt with one Linux GCC build and checked against
 native solver results.
 

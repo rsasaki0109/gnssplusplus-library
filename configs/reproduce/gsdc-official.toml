@@ -1,5 +1,5 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57629197, Private 0.844 m / Public 0.850 m, 40 drives, 71,936 rows
+# Kaggle ref 57664241, Private 0.811 m / Public 0.817 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
@@ -43,7 +43,7 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.844 m / Public 0.850 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.811 m / Public 0.817 m; 40 drives, 71,936 rows"
 runtime_estimate = "~1.5 h four at a time on 4 cores; up to ~6.5 h one at a time"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -118,7 +118,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57629197 (f19acb58...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57664241 (ea13dc36...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -179,4 +179,8 @@ readme = "reported"
 # windowed from epoch 599 (taroz IdxStart=600) with source TDCP metre sigma
 # and Phase184 Huber; assemble fills its 599 leading keys from the first
 # native row. The lane-built file was submitted as 57629197 (57626255 had
-# dropped trailing zeros in 284 rows). See docs/reproduce.md.
+# dropped trailing zeros in 284 rows). Recipe update to ref 57664241 (same
+# build): 30 drives add --native-imu-refinement-pass (the upstream third
+# pass) and its prerequisites; lax-p Pixel5 runs with stack_limit
+# "unlimited" (its refinement solve overflows the 8 MB default stack).
+# See docs/reproduce.md.

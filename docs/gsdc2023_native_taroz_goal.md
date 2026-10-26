@@ -6967,3 +6967,80 @@ Adding `--native-source-tdcp-meter-sigma` alone, or with Phase184 Huber
 (Highway, L5=1), leaves the ebf-xx solution byte-identical. So with them
 already in place, the exit (epochs 120-240) still disagrees with TDCP by
 2.6 / 1.7 m, and the first 5 minutes still sit a median 0.92 m from taroz.
+
+### Upstream third pass, submissions 57663786-57664241 (2026-10-26)
+
+The taroz pipeline solves each drive three times (`run_fgo.m`): `fgo_gnss`,
+then `fgo_gnss_imu` twice. The last pass takes the first GNSS/IMU
+trajectory as input. It re-screens pseudorange and Doppler around that
+trajectory with the tighter final thresholds (50/30 m to 20/15 m for P,
+20 m/s to 3 m/s for D) and solves again. Every test recipe stopped after one
+IMU solve. The native `--native-imu-refinement-pass` is that third pass. It
+was mixed in September, when the official score was 1.055 m, and had not
+been tried since. It needs `--native-export-gnss-stage`,
+`--native-export-imu-stage`, `--native-source-imu-initialization` and
+`--native-phase213-main-doppler`. Where a recipe lacked them, they were added
+too.
+
+On train it helps every phone except Mi8 (36 drives, per-phone test
+recipes, no height map). The 35 drives with taroz output move from
+0.7358 m to 0.7187 m (taroz 0.7123 m). Without Mi8 and Pixel4 XL they move
+to 0.687 m.
+
+| Phone (train drives) | Third pass alone | With missing prerequisites |
+|---|---:|---:|
+| A325F (2) | -0.216 m | -0.437 m |
+| A505G (1) | -0.117 m | -0.202 m |
+| Pixel4 (2) | -0.018 m | -0.138 m |
+| A205U (1) | -0.131 m | -0.131 m |
+| S908B / Pixel7Pro / G988B | -0.013 to -0.026 m | same |
+| Pixel5 (14; 11 better) | -0.015 m | same |
+| Pixel6Pro (3) | -0.006 m | same |
+| A325G (1) | -0.067 m | +0.004 m |
+| Mi8 (4; 4 worse) | +0.049 m | +0.061 m |
+| Pixel4 XL (1) | -0.131 m | +0.868 m |
+
+"Alone" compares against the same recipe with only the missing prerequisites
+added. On Pixel4 XL the prerequisites themselves cost +0.999 m. Adding the
+upstream stop/observation stages on top changes 11 drives by at most
+0.011 m.
+
+On test, the other 32 drives were rerun with the pass. These were left out: Mi8 (5
+drives), Pixel4 XL, and A325G (2, neutral on train). Distance to the taroz
+test output, as (P50+P95)/2:
+
+- mtv-b A325F: 1.40 m -> 0.77 m.
+- lax-x Pixel5: 0.74 m -> 0.21 m. Its first 4-5 minutes, the
+  `pixel5_drive_starts` issue, now agree.
+- sjc-r A32: 0.82 m -> 0.59 m.
+- ebf-z Pixel5: 0.29 m -> 0.52 m. Minutes 5-10 moved 0.5-0.9 m. Raw-ADR
+  30-s windows agree with both trajectories, so this is an offset the
+  carrier phase cannot settle.
+- sjc-r A505U: 0.61 m -> 1.42 m, with up to about 2 m in minutes 22-26. The
+  pass cannot keep its course seeds (`--native-course-attitude-seeds-mount-deg`
+  excludes source IMU initialization), so this run dropped them.
+
+| Kaggle | Change | Public | Private |
+|---|---|---:|---:|
+| 57629197 | before | 0.850 m | 0.844 m |
+| 57663786 | third pass on 30 drives (not A505U, not lax-p) | 0.836 m | **0.811 m** |
+| 57663818 | ebf-z back to 57629197 | 0.821 m | 0.811 m |
+| 57664241 | plus lax-p | **0.817 m** | 0.811 m |
+
+lax-p first crashed (SIGSEGV after 1,510 s) in the refinement solve: the
+default 8 MB stack overflowed. With `ulimit -s unlimited` it completes in
+1,255 s. The recipe sets `stack_limit: "unlimited"` on that drive, and the
+lane lifts the child's soft RLIMIT_STACK for it.
+
+The official recipe is now 57664241: 30 drives carry the pass (their old
+provenance under `research_source.previous_research_source`). Private is
+0.029 m from the 0.782 m post-deadline taroz score, and Public 0.021 m from
+its 0.796 m. Left open:
+
+- sjc-r A505U, a Private drive: train A505G gains 0.20 m from the pass, but
+  on test it needs the course seeds.
+- The Mi8 drives.
+- ebf-xx: its exit (epochs 120-240) still disagrees with TDCP. The
+  disagreement sits at 7-9-satellite epochs. In the 7 train steps of that kind
+  (10 or fewer satellites, native and TDCP more than 0.3 m apart), native was
+  closer to truth every time, so TDCP is the suspect there.
