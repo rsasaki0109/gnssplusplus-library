@@ -6956,3 +6956,14 @@ segment that moved 1,433 m east therefore picked up about 3.4 m, which is the
   TDCP gaps.
 
 The check therefore finds no second ebf-x-type failure on test.
+
+The ebf-x TDCP flags are no lever for the ebf-xx start. The Pixel5 heading
+recipe already carries them:
+
+- `tdcp_contract.source_tdcp_meter_sigma_requested` is true;
+- `phase184_source_tdcp_huber_k_enabled` is true, with setting type Highway.
+
+Adding `--native-source-tdcp-meter-sigma` alone, or with Phase184 Huber
+(Highway, L5=1), leaves the ebf-xx solution byte-identical. So with them
+already in place, the exit (epochs 120-240) still disagrees with TDCP by
+2.6 / 1.7 m, and the first 5 minutes still sit a median 0.92 m from taroz.
