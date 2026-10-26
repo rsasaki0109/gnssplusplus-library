@@ -798,12 +798,13 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
     debug_telemetry_.hold_fix_attempted = true;
     const auto reject_hold = [&](const char* reason) {
         debug_telemetry_.hold_fix_reject_reason = reason;
+        nis_suspended_hold_run_ = 0;
         return false;
     };
     if (isMovingBasePositionMode(rtk_config_)) {
         return reject_hold("moving_base");
     }
-    if (!rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
+    if (!rtk_validation::canAttemptHoldFix(holdEligibleFixCount(),
                                            rtk_config_.min_hold_count,
                                            has_last_fixed_position_,
                                            last_dd_fixed_.size() > 0)) {
@@ -911,7 +912,12 @@ bool RTKProcessor::tryHoldFix(const std::map<SatelliteId, SatelliteData>& sat_da
         current_update_diagnostics_.normalized_innovation_squared_per_observation;
     if (std::isfinite(max_update_nis) && max_update_nis > 0.0 &&
         std::isfinite(update_nis) && update_nis > max_update_nis) {
-        return reject_hold("hold_fix_update_nis");
+        const int run = holdEligibleFixCount();
+        reject_hold("hold_fix_update_nis");
+        if (rtk_config_.hold_fix_update_nis_keeps_hold_run) {
+            nis_suspended_hold_run_ = run;
+        }
+        return false;
     }
 
     // Accept hold fix

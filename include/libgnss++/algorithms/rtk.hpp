@@ -397,6 +397,14 @@ public:
         /// behavior is unchanged bit-for-bit.
         double hold_fix_max_update_nis_per_observation = 0.0;
 
+        /// When the hold fix is rejected only by hold_fix_max_update_nis_per_observation,
+        /// skip that epoch without closing the hold path: the run of fixes it had
+        /// still counts for the hold-fix fallback and the hold of later epochs
+        /// until a fix extends the run or any other hold rejection or reset ends
+        /// it. Other uses of the consecutive-fix count are unchanged. false
+        /// (default): the rejected epoch is FLOAT and resets the run as before.
+        bool hold_fix_update_nis_keeps_hold_run = false;
+
         /// Minimum number of non-reference satellites in the fixed DD set of an
         /// ambiguity-resolution FIX (full set, subset or WL/NL fallback). Each such
         /// satellite adds one double-difference direction; fewer than 3 cannot
@@ -2058,6 +2066,12 @@ private:
 
     // Consecutive fix tracking for holdamb
     int consecutive_fix_count_ = 0;
+    // Fix run kept for the hold-fix fallback after a hold fix rejected only by
+    // hold_fix_max_update_nis_per_observation (hold_fix_update_nis_keeps_hold_run).
+    int nis_suspended_hold_run_ = 0;
+    int holdEligibleFixCount() const {
+        return std::max(consecutive_fix_count_, nis_suspended_hold_run_);
+    }
 
     // Consecutive float tracking for ambiguity auto-reset gate
     int consecutive_float_count_ = 0;

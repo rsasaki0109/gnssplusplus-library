@@ -144,6 +144,7 @@ struct SolveConfig {
     bool max_position_jump_motion_compensation = false;
     int hold_fix_min_matched_pairs = 4;
     double hold_fix_max_update_nis_per_observation = 0.0;
+    bool hold_fix_update_nis_keeps_hold_run = false;
     int min_fix_satellites = 0;
     double elevation_mask_deg = 15.0;
     double process_noise_position = 1e-4;
@@ -1590,6 +1591,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --hold-fix-max-update-nis-per-obs <v>\n"
         << "                             Reject a hold fix when the float update NIS per observation\n"
         << "                             exceeds v (default: 0 = off)\n"
+        << "  --hold-fix-update-nis-keeps-hold-run\n"
+        << "                             After such a rejection keep the hold-fix fallback available\n"
+        << "                             instead of restarting the fix run (default: off)\n"
         << "  --min-fix-satellites <k>\n"
         << "                             Min non-reference satellites in an ambiguity-resolution FIX (default: 0 = off)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
@@ -2665,6 +2669,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
         }
         if (arg == "--hold-fix-max-update-nis-per-obs" && i + 1 < argc) {
             config.hold_fix_max_update_nis_per_observation = std::stod(argv[++i]);
+            continue;
+        }
+        if (arg == "--hold-fix-update-nis-keeps-hold-run") {
+            config.hold_fix_update_nis_keeps_hold_run = true;
             continue;
         }
         if (arg == "--min-fix-satellites" && i + 1 < argc) {
@@ -3854,6 +3862,7 @@ int main(int argc, char* argv[]) {
         rtk_config.hold_fix_min_matched_pairs = config.hold_fix_min_matched_pairs;
         rtk_config.hold_fix_max_update_nis_per_observation =
             config.hold_fix_max_update_nis_per_observation;
+        rtk_config.hold_fix_update_nis_keeps_hold_run = config.hold_fix_update_nis_keeps_hold_run;
         rtk_config.min_fix_satellites = config.min_fix_satellites;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         if (config.process_noise_position_set) {
