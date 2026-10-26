@@ -43,7 +43,8 @@ the limit. The next accepted FIX re-anchors it. The debug CSV gains
 The evaluated value is 5 s, the CD recipe's existing `--max-fixed-anchor-age`;
 it was not tuned. CDME = CDM + `--max-fixed-doppler-consensus-age 5`.
 `gnss solve --preset urban` sets exactly these flags, and its POS is
-byte-identical to them.
+byte-identical to them. `gnss live` and `gnss replay` accept the same flags
+and preset.
 
 ## Result against RTKLIB demo5 (the goal: more FIX, no more wrong FIX)
 

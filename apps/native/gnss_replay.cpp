@@ -48,7 +48,8 @@ enum class RTKTuningPreset {
     NONE,
     SURVEY,
     LOW_COST,
-    MOVING_BASE
+    MOVING_BASE,
+    URBAN
 };
 
 struct ReplayConfig {
@@ -82,6 +83,13 @@ struct ReplayConfig {
     int hold_fix_min_matched_pairs = 4;
     int min_fix_satellites = 0;
     double min_full_ratio_for_subset_ar = 0.0;
+    double max_fixed_anchor_age_s = 0.0;
+    double max_fixed_doppler_consensus_m = 0.0;
+    double max_fixed_doppler_consensus_age_s = 0.0;
+    double low_ratio_guard_threshold = 0.0;
+    int low_ratio_min_fixed_ambiguities = 0;
+    bool fix_history_motion_compensation = false;
+    bool max_position_jump_motion_compensation = false;
     double max_position_jump_min_m = 0.0;
     double max_position_jump_rate_mps = 0.0;
     double max_float_prefit_residual_rms_m = 0.0;
@@ -98,6 +106,11 @@ struct ReplayConfig {
     bool min_hold_count_set = false;
     bool hold_ratio_threshold_set = false;
     bool min_full_ratio_for_subset_ar_set = false;
+    bool max_fixed_anchor_age_s_set = false;
+    bool max_fixed_doppler_consensus_m_set = false;
+    bool max_fixed_doppler_consensus_age_s_set = false;
+    bool low_ratio_guard_threshold_set = false;
+    bool low_ratio_min_fixed_ambiguities_set = false;
     bool max_position_jump_min_m_set = false;
     bool max_position_jump_rate_mps_set = false;
     bool max_float_prefit_residual_rms_m_set = false;
@@ -141,7 +154,7 @@ void printUsage(const char* argv0) {
         << "  Solver\n"
         << "    --mode <kinematic|static|moving-base> Replay mode (default: kinematic)\n"
         << "    --ratio <value>           Ambiguity ratio threshold (default: 3.0)\n"
-        << "    --preset <survey|low-cost|moving-base>\n"
+        << "    --preset <survey|low-cost|moving-base|urban>\n"
         << "                              Apply a named RTK tuning preset\n"
         << "    --arfilter                Require extra ratio margin for subset AR fixes\n"
         << "    --no-arfilter             Disable subset AR filter margin even if a preset enables it\n"
@@ -153,6 +166,13 @@ void printUsage(const char* argv0) {
         << "    --hold-fix-min-matched-pairs <n> Min held DD pairs for the hold-fix fallback (default: 4)\n"
         << "    --min-fix-satellites <k>  Min non-reference satellites in an ambiguity-resolution FIX (default: 0 = off)\n"
         << "    --min-full-ratio-for-subset-ar <v> Min full-constellation LAMBDA ratio to accept a subset-AR fix (0=off)\n"
+        << "    --max-fixed-anchor-age <s> Expire a FIX anchor after s seconds (0=never)\n"
+        << "    --max-fixed-doppler-consensus <m> Reject a FIX more than m from the Doppler track (0=off)\n"
+        << "    --max-fixed-doppler-consensus-age <s> Doppler track stops vetoing s seconds after its last FIX (0=never)\n"
+        << "    --low-ratio-guard-threshold <v> Below this ratio a FIX needs the minimum fixed ambiguities (0=off)\n"
+        << "    --low-ratio-min-fixed-ambiguities <n> Minimum fixed ambiguities for that guard (0=off)\n"
+        << "    --fix-history-motion-compensation Allow for rover motion in the FIX history check\n"
+        << "    --max-position-jump-motion-compensation Allow for rover motion in the max position jump check\n"
         << "    --max-pos-jump-min <m>    Floor of the motion-aware fixed-jump gate [m] (0=static gate)\n"
         << "    --max-pos-jump-rate <m/s> Per-second growth of the fixed-jump gate; needed for a moving rover (0=off)\n"
         << "    --max-float-prefit-rms <m> Float prefit DD residual RMS that triggers divergence reset (0=off)\n"
@@ -197,6 +217,7 @@ RTKTuningPreset parseRTKTuningPreset(const std::string& value, const char* argv0
     if (value == "survey") return RTKTuningPreset::SURVEY;
     if (value == "low-cost") return RTKTuningPreset::LOW_COST;
     if (value == "moving-base") return RTKTuningPreset::MOVING_BASE;
+    if (value == "urban") return RTKTuningPreset::URBAN;
     argumentError("unsupported --preset value: " + value, argv0);
 }
 
@@ -228,6 +249,17 @@ void applyRTKTuningPreset(ReplayConfig& config) {
             if (!config.max_float_prefit_residual_rms_m_set) config.max_float_prefit_residual_rms_m = 4.0;
             if (!config.max_float_prefit_residual_max_m_set) config.max_float_prefit_residual_max_m = 10.0;
             if (!config.max_float_prefit_residual_reset_streak_set) config.max_float_prefit_residual_reset_streak = 5;
+            return;
+        case RTKTuningPreset::URBAN:
+            // Same as gnss_solve --preset urban: the CDME fix-recovery recipe of
+            // docs/rtk_doppler_consensus_age.md on top of the default profile.
+            if (!config.max_fixed_anchor_age_s_set) config.max_fixed_anchor_age_s = 5.0;
+            if (!config.max_fixed_doppler_consensus_m_set) config.max_fixed_doppler_consensus_m = 3.0;
+            if (!config.max_fixed_doppler_consensus_age_s_set) config.max_fixed_doppler_consensus_age_s = 5.0;
+            if (!config.low_ratio_guard_threshold_set) config.low_ratio_guard_threshold = 1e9;
+            if (!config.low_ratio_min_fixed_ambiguities_set) config.low_ratio_min_fixed_ambiguities = 10;
+            config.fix_history_motion_compensation = true;
+            config.max_position_jump_motion_compensation = true;
             return;
         case RTKTuningPreset::MOVING_BASE:
             if (!config.ratio_threshold_set) config.ratio_threshold = 2.8;
@@ -320,6 +352,25 @@ ReplayConfig parseArguments(int argc, char** argv) {
         } else if (arg == "--min-full-ratio-for-subset-ar" && i + 1 < argc) {
             config.min_full_ratio_for_subset_ar = std::stod(argv[++i]);
             config.min_full_ratio_for_subset_ar_set = true;
+        } else if (arg == "--max-fixed-anchor-age" && i + 1 < argc) {
+            config.max_fixed_anchor_age_s = std::stod(argv[++i]);
+            config.max_fixed_anchor_age_s_set = true;
+        } else if (arg == "--max-fixed-doppler-consensus" && i + 1 < argc) {
+            config.max_fixed_doppler_consensus_m = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_m_set = true;
+        } else if (arg == "--max-fixed-doppler-consensus-age" && i + 1 < argc) {
+            config.max_fixed_doppler_consensus_age_s = std::stod(argv[++i]);
+            config.max_fixed_doppler_consensus_age_s_set = true;
+        } else if (arg == "--low-ratio-guard-threshold" && i + 1 < argc) {
+            config.low_ratio_guard_threshold = std::stod(argv[++i]);
+            config.low_ratio_guard_threshold_set = true;
+        } else if (arg == "--low-ratio-min-fixed-ambiguities" && i + 1 < argc) {
+            config.low_ratio_min_fixed_ambiguities = std::stoi(argv[++i]);
+            config.low_ratio_min_fixed_ambiguities_set = true;
+        } else if (arg == "--fix-history-motion-compensation") {
+            config.fix_history_motion_compensation = true;
+        } else if (arg == "--max-position-jump-motion-compensation") {
+            config.max_position_jump_motion_compensation = true;
         } else if (arg == "--max-pos-jump-min" && i + 1 < argc) {
             config.max_position_jump_min_m = std::stod(argv[++i]);
             config.max_position_jump_min_m_set = true;
@@ -409,6 +460,21 @@ ReplayConfig parseArguments(int argc, char** argv) {
     }
     if (config.max_position_jump_rate_mps < 0.0) {
         argumentError("--max-pos-jump-rate must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_anchor_age_s < 0.0) {
+        argumentError("--max-fixed-anchor-age must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_doppler_consensus_m < 0.0) {
+        argumentError("--max-fixed-doppler-consensus must be >= 0", argv[0]);
+    }
+    if (config.max_fixed_doppler_consensus_age_s < 0.0) {
+        argumentError("--max-fixed-doppler-consensus-age must be >= 0", argv[0]);
+    }
+    if (config.low_ratio_guard_threshold < 0.0) {
+        argumentError("--low-ratio-guard-threshold must be >= 0", argv[0]);
+    }
+    if (config.low_ratio_min_fixed_ambiguities < 0) {
+        argumentError("--low-ratio-min-fixed-ambiguities must be >= 0", argv[0]);
     }
     if (config.max_float_prefit_residual_rms_m < 0.0) {
         argumentError("--max-float-prefit-rms must be >= 0", argv[0]);
@@ -724,6 +790,14 @@ size_t runReplay(const ReplayConfig& config) {
     rtk_config.hold_fix_min_matched_pairs = config.hold_fix_min_matched_pairs;
     rtk_config.min_fix_satellites = config.min_fix_satellites;
     rtk_config.min_full_ratio_for_subset_ar = config.min_full_ratio_for_subset_ar;
+    rtk_config.max_fixed_anchor_age_s = config.max_fixed_anchor_age_s;
+    rtk_config.max_fixed_doppler_consensus_m = config.max_fixed_doppler_consensus_m;
+    rtk_config.max_fixed_doppler_consensus_age_s = config.max_fixed_doppler_consensus_age_s;
+    rtk_config.low_ratio_guard_threshold = config.low_ratio_guard_threshold;
+    rtk_config.low_ratio_min_fixed_ambiguities = config.low_ratio_min_fixed_ambiguities;
+    rtk_config.fix_history_motion_compensation = config.fix_history_motion_compensation;
+    rtk_config.max_position_jump_motion_compensation =
+        config.max_position_jump_motion_compensation;
     rtk_config.max_position_jump_min_m = config.max_position_jump_min_m;
     rtk_config.max_position_jump_rate_mps = config.max_position_jump_rate_mps;
     rtk_config.max_float_prefit_residual_rms_m = config.max_float_prefit_residual_rms_m;
