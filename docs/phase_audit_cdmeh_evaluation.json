@@ -1,0 +1,2254 @@
+{
+ "title": "Carrier-phase audit of wrong-FIX labels; CDMEH (CDME + Kalman hold) frozen evaluation",
+ "doc": "docs/rtk_phase_audit.md",
+ "reference_use": "The reference trajectory is used only for scoring and for the analysis-only phase audit; never a solver input.",
+ "phase_audit": {
+  "tool": "scripts/analysis/truth_dd/phase_audit.py (labels identical to the scratch tool used for the frozen runs on CDME and RTKLIB Shinjuku)",
+  "input": "scripts/analysis/truth_dd/export_truth_dd.cpp output, Trimble 10 Hz and PPC 5 Hz rover epochs",
+  "frozen_rule": "Phase-consistency audit of wrong-FIX labels (analysis only; never a solver input)\nFrozen 2026-10-26 before applying to any full run.\n\nMotivation: CDME Shinjuku TOW 283198-283247 (vehicle stopped) is FIX with a steady\n+0.41 m north offset from the reference. The ambiguity function (AF) of 28-30 DD\ncarrier phases is ~0.0 at the reference and 0.92 at the FIX position, and a +-1 m\ngrid search peaks at the FIX position.\n\nData: dd_truth10 export (10 Hz rover epochs, base aligned like the solver), Trimble.\nDD per (system, obs type), reference = highest elevation, rover LLI 0, el >= 15 deg.\nAF(x) = mean cos(2*pi*(DD_phase - DD_range(x))/lambda), DD_range moved from the\nreference with the rover LOS (linear in dx).\nAFn(x) = max AF over a 3D grid within +-0.10 m (0.02 m step) of x, applied\nsymmetrically to the reference and the solver position.\n\nLabels for every FIX epoch with 3D error > 0.5 m:\n  - n_DD < 10                         -> undetermined (few DD)\n  - AFn(sol) >= 0.8 and AFn(ref) < 0.5 -> reference_inconsistent (phase supports the FIX)\n  - AFn(ref) >= 0.8 and AFn(sol) < 0.5 -> wrong_fix_confirmed (phase supports the reference)\n  - otherwise                          -> undetermined\nControls: FIX epochs with 3D error < 0.10 m; report the share with AFn(ref) >= 0.8 and\nAFn(sol) >= 0.8, and the share that would be labelled reference_inconsistent.\n\nPredictions written before the full run:\n  P1 controls: >= 80% have both AFn >= 0.8.\n  P2 RTKLIB Shinjuku wrong FIX > 3 m (112): at most 5% reference_inconsistent.\n  P3 CDME Shinjuku wrong FIX (242): majority (>50%) reference_inconsistent.\nRaw counts are never replaced; audited counts are reported next to them.\nNo threshold is changed after seeing the full-run output.\n",
+  "frozen_rule_sha256": "88c2b015ddb6e408dbb6fb0ed55fc671e14a7e43837fc8d8196e40027e75a12c",
+  "truth_dd_csv_sha256": {
+   "trimble-Odaiba": "72e36504b7457ef62b7d3f230bca95aa0beb2aca0b2758eba496f61b49b7d109",
+   "trimble-Shinjuku": "ef9326f3a7644a214d6f7584edde769c46067a51c45614769dfad0280009c77c",
+   "ppc-tokyo-run1": "2494670c9f471f9fe02a7ede8038335ee31a15e52ae02dd93da2694141757825",
+   "ppc-tokyo-run2": "46b7cfa5f3c5b459cc26018ba4ac60dfb68973c8751fc1c45b98458252f4c204",
+   "ppc-tokyo-run3": "b3e81cc344aba990f3345a49e6a8a923b079c94aa49332e770c4ac70eb04fa22",
+   "ppc-nagoya-run1": "a4c3cd30853feb3eb51deb80629556b966bd7db632c30fbb266638c6720291c4",
+   "ppc-nagoya-run2": "eae6616bd2586679c766e08fd5a08f47f4be854a4f3283d9848bccdfe3220dcb",
+   "ppc-nagoya-run3": "333ad94335ddb73284ae7c75da73a2149ec2502a043a510a2101ad2b8379d62c"
+  },
+  "motivating_epochs": {
+   "what": "CDME Trimble Shinjuku TOW 283198-283247, vehicle stopped (reference speed 0), FIX with a steady +0.41 m north offset",
+   "af_at_reference": "-0.01 to 0.14 (sampled every 6 s, n_DD 19-30)",
+   "af_at_fix": "0.84-0.96",
+   "grid_peak": "+-1 m horizontal grid search peaks at the FIX position, horizontally within 2 cm",
+   "control": "TOW 283168-283174, FIX within 0.08 m of the reference: AF at the reference 0.92 / 0.76"
+  },
+  "labels": {
+   "ppc-nagoya-run1": {
+    "RTKLIB": {
+     "n_wrong": 81,
+     "labels": {
+      "undetermined_few_dd": 21,
+      "undetermined": 48,
+      "wrong_fix_confirmed": 12
+     },
+     "controls": {
+      "sampled": 69,
+      "both_afn_ge_0_8": 60,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 0,
+     "labels": {},
+     "controls": {
+      "sampled": 1,
+      "both_afn_ge_0_8": 1,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 10,
+     "labels": {
+      "wrong_fix_confirmed": 7,
+      "undetermined": 3
+     },
+     "controls": {
+      "sampled": 86,
+      "both_afn_ge_0_8": 79,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 19,
+     "labels": {
+      "undetermined": 8,
+      "undetermined_few_dd": 4,
+      "wrong_fix_confirmed": 7
+     },
+     "controls": {
+      "sampled": 234,
+      "both_afn_ge_0_8": 178,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 14,
+     "labels": {
+      "wrong_fix_confirmed": 9,
+      "undetermined": 5
+     },
+     "controls": {
+      "sampled": 194,
+      "both_afn_ge_0_8": 138,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "ppc-nagoya-run2": {
+    "RTKLIB": {
+     "n_wrong": 239,
+     "labels": {
+      "undetermined": 199,
+      "undetermined_few_dd": 15,
+      "wrong_fix_confirmed": 24,
+      "reference_inconsistent": 1
+     },
+     "controls": {
+      "sampled": 40,
+      "both_afn_ge_0_8": 37,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 1,
+     "labels": {
+      "wrong_fix_confirmed": 1
+     },
+     "controls": {
+      "sampled": 65,
+      "both_afn_ge_0_8": 63,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 2,
+     "labels": {
+      "undetermined": 1,
+      "wrong_fix_confirmed": 1
+     },
+     "controls": {
+      "sampled": 68,
+      "both_afn_ge_0_8": 66,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 26,
+     "labels": {
+      "undetermined": 16,
+      "wrong_fix_confirmed": 1,
+      "reference_inconsistent": 9
+     },
+     "controls": {
+      "sampled": 102,
+      "both_afn_ge_0_8": 97,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 33,
+     "labels": {
+      "wrong_fix_confirmed": 2,
+      "reference_inconsistent": 9,
+      "undetermined": 22
+     },
+     "controls": {
+      "sampled": 101,
+      "both_afn_ge_0_8": 93,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "ppc-nagoya-run3": {
+    "RTKLIB": {
+     "n_wrong": 92,
+     "labels": {
+      "undetermined": 49,
+      "wrong_fix_confirmed": 21,
+      "undetermined_few_dd": 22
+     },
+     "controls": {
+      "sampled": 6,
+      "both_afn_ge_0_8": 4,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 0,
+     "labels": {},
+     "controls": {
+      "sampled": 1,
+      "both_afn_ge_0_8": 1,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 15,
+     "labels": {
+      "wrong_fix_confirmed": 15
+     },
+     "controls": {
+      "sampled": 4,
+      "both_afn_ge_0_8": 4,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 18,
+     "labels": {
+      "wrong_fix_confirmed": 16,
+      "undetermined": 2
+     },
+     "controls": {
+      "sampled": 25,
+      "both_afn_ge_0_8": 22,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 13,
+     "labels": {
+      "undetermined": 12,
+      "wrong_fix_confirmed": 1
+     },
+     "controls": {
+      "sampled": 35,
+      "both_afn_ge_0_8": 31,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "ppc-tokyo-run1": {
+    "RTKLIB": {
+     "n_wrong": 123,
+     "labels": {
+      "undetermined": 54,
+      "wrong_fix_confirmed": 55,
+      "undetermined_few_dd": 14
+     },
+     "controls": {
+      "sampled": 82,
+      "both_afn_ge_0_8": 82,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 1,
+     "labels": {
+      "wrong_fix_confirmed": 1
+     },
+     "controls": {
+      "sampled": 75,
+      "both_afn_ge_0_8": 74,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 5,
+     "labels": {
+      "undetermined": 1,
+      "wrong_fix_confirmed": 4
+     },
+     "controls": {
+      "sampled": 135,
+      "both_afn_ge_0_8": 128,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 24,
+     "labels": {
+      "undetermined": 15,
+      "wrong_fix_confirmed": 9
+     },
+     "controls": {
+      "sampled": 386,
+      "both_afn_ge_0_8": 320,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 129,
+     "labels": {
+      "wrong_fix_confirmed": 37,
+      "undetermined": 92
+     },
+     "controls": {
+      "sampled": 550,
+      "both_afn_ge_0_8": 470,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "ppc-tokyo-run2": {
+    "RTKLIB": {
+     "n_wrong": 15,
+     "labels": {
+      "wrong_fix_confirmed": 8,
+      "undetermined": 5,
+      "undetermined_few_dd": 2
+     },
+     "controls": {
+      "sampled": 105,
+      "both_afn_ge_0_8": 98,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 1,
+     "labels": {
+      "wrong_fix_confirmed": 1
+     },
+     "controls": {
+      "sampled": 85,
+      "both_afn_ge_0_8": 68,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 1,
+     "labels": {
+      "undetermined": 1
+     },
+     "controls": {
+      "sampled": 116,
+      "both_afn_ge_0_8": 101,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 5,
+     "labels": {
+      "undetermined": 3,
+      "wrong_fix_confirmed": 2
+     },
+     "controls": {
+      "sampled": 600,
+      "both_afn_ge_0_8": 540,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 9,
+     "labels": {
+      "undetermined": 6,
+      "wrong_fix_confirmed": 3
+     },
+     "controls": {
+      "sampled": 600,
+      "both_afn_ge_0_8": 531,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "ppc-tokyo-run3": {
+    "RTKLIB": {
+     "n_wrong": 85,
+     "labels": {
+      "undetermined": 62,
+      "wrong_fix_confirmed": 9,
+      "undetermined_few_dd": 14
+     },
+     "controls": {
+      "sampled": 632,
+      "both_afn_ge_0_8": 605,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 0,
+     "labels": {},
+     "controls": {
+      "sampled": 73,
+      "both_afn_ge_0_8": 70,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 0,
+     "labels": {},
+     "controls": {
+      "sampled": 111,
+      "both_afn_ge_0_8": 104,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 35,
+     "labels": {
+      "undetermined_few_dd": 2,
+      "wrong_fix_confirmed": 28,
+      "undetermined": 5
+     },
+     "controls": {
+      "sampled": 1025,
+      "both_afn_ge_0_8": 925,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 8,
+     "labels": {
+      "undetermined_few_dd": 2,
+      "wrong_fix_confirmed": 3,
+      "undetermined": 3
+     },
+     "controls": {
+      "sampled": 1061,
+      "both_afn_ge_0_8": 946,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "trimble-Odaiba": {
+    "RTKLIB": {
+     "n_wrong": 19,
+     "labels": {
+      "undetermined_few_dd": 14,
+      "wrong_fix_confirmed": 2,
+      "undetermined": 3
+     },
+     "controls": {
+      "sampled": 558,
+      "both_afn_ge_0_8": 553,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 0,
+     "labels": {},
+     "controls": {
+      "sampled": 130,
+      "both_afn_ge_0_8": 130,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 6,
+     "labels": {
+      "undetermined_few_dd": 2,
+      "undetermined": 4
+     },
+     "controls": {
+      "sampled": 424,
+      "both_afn_ge_0_8": 421,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 9,
+     "labels": {
+      "undetermined_few_dd": 2,
+      "undetermined": 6,
+      "wrong_fix_confirmed": 1
+     },
+     "controls": {
+      "sampled": 624,
+      "both_afn_ge_0_8": 611,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 8,
+     "labels": {
+      "undetermined_few_dd": 5,
+      "undetermined": 3
+     },
+     "controls": {
+      "sampled": 626,
+      "both_afn_ge_0_8": 608,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   },
+   "trimble-Shinjuku": {
+    "RTKLIB": {
+     "n_wrong": 128,
+     "labels": {
+      "undetermined": 30,
+      "undetermined_few_dd": 77,
+      "wrong_fix_confirmed": 21
+     },
+     "controls": {
+      "sampled": 415,
+      "both_afn_ge_0_8": 400,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "default": {
+     "n_wrong": 0,
+     "labels": {},
+     "controls": {
+      "sampled": 10,
+      "both_afn_ge_0_8": 10,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDM": {
+     "n_wrong": 4,
+     "labels": {
+      "wrong_fix_confirmed": 3,
+      "undetermined_few_dd": 1
+     },
+     "controls": {
+      "sampled": 188,
+      "both_afn_ge_0_8": 160,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDME": {
+     "n_wrong": 242,
+     "labels": {
+      "wrong_fix_confirmed": 69,
+      "undetermined": 34,
+      "undetermined_few_dd": 16,
+      "reference_inconsistent": 123
+     },
+     "controls": {
+      "sampled": 619,
+      "both_afn_ge_0_8": 548,
+      "labelled_reference_inconsistent": 0
+     }
+    },
+    "CDMEH": {
+     "n_wrong": 190,
+     "labels": {
+      "wrong_fix_confirmed": 3,
+      "undetermined": 26,
+      "undetermined_few_dd": 12,
+      "reference_inconsistent": 149
+     },
+     "controls": {
+      "sampled": 698,
+      "both_afn_ge_0_8": 624,
+      "labelled_reference_inconsistent": 0
+     }
+    }
+   }
+  },
+  "cdme_shinjuku_episodes": [
+   {
+    "start": 281297.4,
+    "end": 281297.5,
+    "n": 2,
+    "max_err_m": 0.616,
+    "labels": {
+     "wrong_fix_confirmed": 2
+    }
+   },
+   {
+    "start": 281473.1,
+    "end": 281473.1,
+    "n": 1,
+    "max_err_m": 0.527,
+    "labels": {
+     "undetermined": 1
+    }
+   },
+   {
+    "start": 281487.8,
+    "end": 281488.1,
+    "n": 4,
+    "max_err_m": 1.114,
+    "labels": {
+     "undetermined": 4
+    }
+   },
+   {
+    "start": 281512.6,
+    "end": 281512.7,
+    "n": 2,
+    "max_err_m": 0.729,
+    "labels": {
+     "wrong_fix_confirmed": 2
+    }
+   },
+   {
+    "start": 281650.1,
+    "end": 281656.4,
+    "n": 64,
+    "max_err_m": 0.747,
+    "labels": {
+     "wrong_fix_confirmed": 64
+    }
+   },
+   {
+    "start": 281686.5,
+    "end": 281686.5,
+    "n": 1,
+    "max_err_m": 0.606,
+    "labels": {
+     "undetermined": 1
+    }
+   },
+   {
+    "start": 281805.5,
+    "end": 281806.2,
+    "n": 4,
+    "max_err_m": 0.536,
+    "labels": {
+     "undetermined": 4
+    }
+   },
+   {
+    "start": 281807.6,
+    "end": 281807.8,
+    "n": 3,
+    "max_err_m": 0.595,
+    "labels": {
+     "undetermined": 3
+    }
+   },
+   {
+    "start": 281814.0,
+    "end": 281814.3,
+    "n": 2,
+    "max_err_m": 0.531,
+    "labels": {
+     "undetermined_few_dd": 2
+    }
+   },
+   {
+    "start": 281816.3,
+    "end": 281816.5,
+    "n": 3,
+    "max_err_m": 0.702,
+    "labels": {
+     "undetermined_few_dd": 3
+    }
+   },
+   {
+    "start": 282031.3,
+    "end": 282031.5,
+    "n": 3,
+    "max_err_m": 0.567,
+    "labels": {
+     "undetermined": 3
+    }
+   },
+   {
+    "start": 282324.7,
+    "end": 282324.7,
+    "n": 1,
+    "max_err_m": 0.788,
+    "labels": {
+     "undetermined_few_dd": 1
+    }
+   },
+   {
+    "start": 282683.4,
+    "end": 282683.5,
+    "n": 2,
+    "max_err_m": 1.768,
+    "labels": {
+     "undetermined_few_dd": 2
+    }
+   },
+   {
+    "start": 283170.7,
+    "end": 283170.7,
+    "n": 1,
+    "max_err_m": 0.503,
+    "labels": {
+     "wrong_fix_confirmed": 1
+    }
+   },
+   {
+    "start": 283255.5,
+    "end": 283265.1,
+    "n": 96,
+    "max_err_m": 0.737,
+    "labels": {
+     "undetermined": 14,
+     "reference_inconsistent": 80,
+     "undetermined_few_dd": 2
+    }
+   },
+   {
+    "start": 283284.3,
+    "end": 283289.1,
+    "n": 49,
+    "max_err_m": 1.322,
+    "labels": {
+     "reference_inconsistent": 43,
+     "undetermined_few_dd": 6
+    }
+   },
+   {
+    "start": 283345.6,
+    "end": 283345.9,
+    "n": 4,
+    "max_err_m": 0.79,
+    "labels": {
+     "undetermined": 4
+    }
+   }
+  ],
+  "predictions": {
+   "P1_controls_both_consistent_ge_80pct": "met for every run and solver except PPC nagoya/run1 CDME (178/234, 76%) and CDMEH (138/194, 71%) and nagoya/run3 RTKLIB (4 of 6). No sampled control epoch is labelled reference_inconsistent on any run.",
+   "P2_rtklib_shinjuku_gt3m_ref_inconsistent_le_5pct": "met: 0 of 112",
+   "P3_cdme_shinjuku_majority_ref_inconsistent": "met: 123 of 242 (50.8%)"
+  }
+ },
+ "cdme_genuine_episode": {
+  "tow": "281650.1-281656.4 (64 epochs, 0.63-0.75 m, wrong_fix_confirmed)",
+  "mechanism": [
+   "281649.6-281650.0: correct subset AR fixes (19 of 25 pairs, ratio 3.0); float 0.99 m off with position covariance trace 1.8e-4 m^2",
+   "at the 5th consecutive fix (min_hold_count) the legacy hold overwrites the held SD ambiguities and zeroes their cross-covariances, leaving the float position 1 m off",
+   "281650.1: float NIS per observation 1 -> 52.5, LAMBDA fails, hold fix 0.65 m from the last fix (< 1 m hold jump) and 0.667 m from a 0.1 s old Doppler track (< 3 m) is accepted; it continues for 6.6 s",
+   "with --hold-kalman-update the state stays consistent and the epochs are correct AR fixes (ratio 34-40, 26 pairs)"
+  ]
+ },
+ "cdmeh": {
+  "frozen_rule": "Frozen before the full replay (2026-10-26, after one exploratory Shinjuku Trimble run, disclosed below).\nRecipe under test: CDMEH = CDME + --hold-kalman-update (every flag already exists; no code change, no new threshold).\nBinary: develop 2219d1d (bin/gnss-solve-2219d1d, sha256 prefix 332104cb097646bd). default, CDM, CDME rerun with the same binary.\nMechanism (CDME Shinjuku Trimble debug log): TOW 281649.6-281650.0 are correct subset AR fixes (19/25 pairs, ratio 3.0)\nwhile the float is 0.99 m off with position covariance trace 1.8e-4 m^2. At the 5th consecutive fix the legacy hold\noverwrites the held SD ambiguities (cross-covariances zeroed) but leaves the float position 1 m off. Next epoch the float\nNIS jumps 1 -> 52, LAMBDA fails, and hold fixes 0.63-0.72 m off are accepted for 6.6 s (64 epochs; hold jump 0.65 m < 1 m,\nDoppler distance 0.667 m < 3 m). The Kalman hold conditions position and ambiguities together.\nExploratory run already seen (Shinjuku Trimble only): CDMEH raw wrong >0.5 m 190 (CDME 242); phase audit:\n  wrong_fix_confirmed 3 (CDME 69), reference_inconsistent 149 (CDME 123); episode 281650 gone.\nScoring: as the CDME round (Trimble/PPC exact 1 ms, u-blox 0.2 s grid 5 ms, HK descriptive 2/3 m; gate A 0.11 s matching).\nPhase audit layer: decision_rule_phase_audit.txt (sha 88c2b015...), applied to Trimble Odaiba/Shinjuku and the six PPC runs\nfor every solver; u-blox and HK are not audited (raw only). Audited wrong count = raw wrong minus reference_inconsistent.\nGates (per run):\n A raw: CDMEH vs RTKLIB demo5 multi-GNSS: more FIX AND wrong >0.5/2/3 m each <= RTKLIB.\n A audited (Trimble + PPC): same with audited wrong counts for both solvers.\n C' (effect of H on CDME): wrong >0.5/2/3 m not increased (raw, and audited where available); CDME-correct loss <= 1%;\n   missing and horizontal P95 not increased.\n B (fix_recovery_guard.md vs default): reported; expected to fail as for CDM/CDME.\nPredictions:\n P1 Trimble Odaiba: CDMEH FIX within +-5% of CDME (7467) and raw wrong >0.5 m <= 19.\n P2 PPC nagoya/run3: CDMEH raw wrong >0.5 m < CDME (18).\n P3 Gate A: CDMEH passes raw on >= 9 of 10 runs; Trimble Shinjuku fails raw (190 > 128) and passes audited.\n P4 Gate C': CDME-correct loss <= 1% on every run except possibly u-blox Odaiba.\nDecision: if A (audited where available, raw elsewhere) holds on all 10 runs AND C' holds on every run (audited wrong where\navailable) -> propose CDMEH to the user as the documented opt-in recipe that beats RTKLIB; otherwise record as is.\nNo default change in this round. No retuning after the replay.\n",
+  "frozen_rule_sha256": "8a594a86b7dd0aa033b56375679f27a27c2bb59c7a6081a1e08c3bc01f9c193b",
+  "binary": {
+   "source": "develop 2219d1d",
+   "gnss_solve_sha256": "332104cb097646bde15d7fbf788e3b95af3ae50122e63c7eb01c2a89b6fd1789",
+   "reproduction": "default, CDM and CDME POS byte-identical to the CDME round on all 24 Tokyo/HK and 6 PPC CDME files"
+  },
+  "recipes": {
+   "CDME": "CDM + --max-fixed-doppler-consensus-age 5",
+   "CDMEH": "CDME + --hold-kalman-update"
+  },
+  "results_tokyo_hk": {
+   "trimble-Odaiba": {
+    "default": {
+     "fix": 1298,
+     "missing": 1426,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 4.7772,
+     "fix3d_p50": 0.0348,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true
+    },
+    "CDM": {
+     "fix": 4450,
+     "missing": 1419,
+     "wrong>0.5/2/3": [
+      6,
+      0,
+      0
+     ],
+     "hP95": 4.8543,
+     "fix3d_p50": 0.0445,
+     "recP95@0.5": 324.45,
+     "outages@0.5": 12,
+     "censored@0.5": false,
+     "default_correct_lost": 7,
+     "default_correct_lost_pct": 0.54
+    },
+    "CDME": {
+     "fix": 7467,
+     "missing": 1426,
+     "wrong>0.5/2/3": [
+      9,
+      0,
+      0
+     ],
+     "hP95": 4.8599,
+     "fix3d_p50": 0.0464,
+     "recP95@0.5": 115.17,
+     "outages@0.5": 20,
+     "censored@0.5": false,
+     "default_correct_lost": 7,
+     "default_correct_lost_pct": 0.54
+    },
+    "CDMEH": {
+     "fix": 7510,
+     "missing": 1471,
+     "wrong>0.5/2/3": [
+      8,
+      0,
+      0
+     ],
+     "hP95": 4.9196,
+     "fix3d_p50": 0.0466,
+     "recP95@0.5": 116.19,
+     "outages@0.5": 19,
+     "censored@0.5": false,
+     "default_correct_lost": 7,
+     "default_correct_lost_pct": 0.54
+    }
+   },
+   "trimble-Shinjuku": {
+    "default": {
+     "fix": 122,
+     "missing": 3234,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 8.3821,
+     "fix3d_p50": 0.0471,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true
+    },
+    "CDM": {
+     "fix": 2877,
+     "missing": 3272,
+     "wrong>0.5/2/3": [
+      4,
+      0,
+      0
+     ],
+     "hP95": 8.3867,
+     "fix3d_p50": 0.0707,
+     "recP95@0.5": 768.39,
+     "outages@0.5": 8,
+     "censored@0.5": true,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    },
+    "CDME": {
+     "fix": 11491,
+     "missing": 3336,
+     "wrong>0.5/2/3": [
+      242,
+      0,
+      0
+     ],
+     "hP95": 8.3383,
+     "fix3d_p50": 0.0894,
+     "recP95@0.5": 130.07,
+     "outages@0.5": 35,
+     "censored@0.5": false,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    },
+    "CDMEH": {
+     "fix": 12361,
+     "missing": 3396,
+     "wrong>0.5/2/3": [
+      190,
+      0,
+      0
+     ],
+     "hP95": 8.7305,
+     "fix3d_p50": 0.0888,
+     "recP95@0.5": 105.5,
+     "outages@0.5": 33,
+     "censored@0.5": false,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    }
+   },
+   "ublox-Odaiba": {
+    "default": {
+     "fix": 461,
+     "missing": 922,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 6.7021,
+     "fix3d_p50": 0.036,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true
+    },
+    "CDM": {
+     "fix": 871,
+     "missing": 921,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 6.6999,
+     "fix3d_p50": 0.0344,
+     "recP95@0.5": 8.44,
+     "outages@0.5": 2,
+     "censored@0.5": true,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 0.87
+    },
+    "CDME": {
+     "fix": 3130,
+     "missing": 975,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 7.2142,
+     "fix3d_p50": 0.0429,
+     "recP95@0.5": 99.1,
+     "outages@0.5": 31,
+     "censored@0.5": true,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 0.87
+    },
+    "CDMEH": {
+     "fix": 3148,
+     "missing": 957,
+     "wrong>0.5/2/3": [
+      3,
+      0,
+      0
+     ],
+     "hP95": 7.4792,
+     "fix3d_p50": 0.0439,
+     "recP95@0.5": 99.1,
+     "outages@0.5": 31,
+     "censored@0.5": true,
+     "default_correct_lost": 5,
+     "default_correct_lost_pct": 1.08
+    }
+   },
+   "ublox-Shinjuku": {
+    "default": {
+     "fix": 1,
+     "missing": 2374,
+     "wrong>0.5/2/3": [
+      1,
+      1,
+      0
+     ],
+     "hP95": 5.7359,
+     "fix3d_p50": null,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": false
+    },
+    "CDM": {
+     "fix": 16,
+     "missing": 2345,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 5.8443,
+     "fix3d_p50": 0.0201,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": null
+    },
+    "CDME": {
+     "fix": 3582,
+     "missing": 2399,
+     "wrong>0.5/2/3": [
+      10,
+      0,
+      0
+     ],
+     "hP95": 5.726,
+     "fix3d_p50": 0.0745,
+     "recP95@0.5": 158.0,
+     "outages@0.5": 43,
+     "censored@0.5": false,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": null
+    },
+    "CDMEH": {
+     "fix": 4048,
+     "missing": 2445,
+     "wrong>0.5/2/3": [
+      57,
+      0,
+      0
+     ],
+     "hP95": 5.0525,
+     "fix3d_p50": 0.0743,
+     "recP95@0.5": 108.0,
+     "outages@0.5": 48,
+     "censored@0.5": false,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": null
+    }
+   },
+   "novatel-HKDeepUrban1": {
+    "default": {
+     "fix": 6,
+     "missing": 478,
+     "wrong>0.5/2/3": [
+      6,
+      0,
+      0
+     ],
+     "hP95": 7.2398
+    },
+    "CDM": {
+     "fix": 64,
+     "missing": 477,
+     "wrong>0.5/2/3": [
+      63,
+      0,
+      0
+     ],
+     "hP95": 7.2282,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 66.67
+    },
+    "CDME": {
+     "fix": 107,
+     "missing": 540,
+     "wrong>0.5/2/3": [
+      105,
+      0,
+      0
+     ],
+     "hP95": 7.5124,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 66.67
+    },
+    "CDMEH": {
+     "fix": 107,
+     "missing": 540,
+     "wrong>0.5/2/3": [
+      105,
+      0,
+      0
+     ],
+     "hP95": 7.5124,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 66.67
+    }
+   },
+   "novatel-HKHarshUrban1": {
+    "default": {
+     "fix": 7,
+     "missing": 1123,
+     "wrong>0.5/2/3": [
+      7,
+      7,
+      5
+     ],
+     "hP95": 13.8969
+    },
+    "CDM": {
+     "fix": 0,
+     "missing": 800,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 32.4958,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": null
+    },
+    "CDME": {
+     "fix": 0,
+     "missing": 800,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 32.4958,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": null
+    },
+    "CDMEH": {
+     "fix": 0,
+     "missing": 800,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 32.4958,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": null
+    }
+   }
+  },
+  "results_ppc": {
+   "tokyo/run1": {
+    "default": {
+     "fix": 772,
+     "missing": 1196,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 6.6545,
+     "fix3d_p50": 0.0344,
+     "recP95@0.5": 1.0,
+     "outages@0.5": 1,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 1
+    },
+    "CDM": {
+     "fix": 1395,
+     "missing": 1198,
+     "wrong>0.5/2/3": [
+      5,
+      0,
+      0
+     ],
+     "hP95": 6.6545,
+     "fix3d_p50": 0.0317,
+     "recP95@0.5": 1206.68,
+     "outages@0.5": 5,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 3,
+     "default_correct_lost": 1,
+     "default_correct_lost_pct": 0.13
+    },
+    "CDME": {
+     "fix": 4328,
+     "missing": 1232,
+     "wrong>0.5/2/3": [
+      24,
+      1,
+      1
+     ],
+     "hP95": 5.5665,
+     "fix3d_p50": 0.0367,
+     "recP95@0.5": 82.49,
+     "outages@0.5": 34,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 12,
+     "default_correct_lost": 1,
+     "default_correct_lost_pct": 0.13
+    },
+    "CDMEH": {
+     "fix": 6306,
+     "missing": 1259,
+     "wrong>0.5/2/3": [
+      129,
+      7,
+      5
+     ],
+     "hP95": 5.5779,
+     "fix3d_p50": 0.0333,
+     "recP95@0.5": 52.83,
+     "outages@0.5": 38,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 33,
+     "default_correct_lost": 1,
+     "default_correct_lost_pct": 0.13
+    }
+   },
+   "tokyo/run2": {
+    "default": {
+     "fix": 879,
+     "missing": 602,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 1.9948,
+     "fix3d_p50": 0.0379,
+     "recP95@0.5": 3.4,
+     "outages@0.5": 1,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 1
+    },
+    "CDM": {
+     "fix": 1310,
+     "missing": 614,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 2.015,
+     "fix3d_p50": 0.0416,
+     "recP95@0.5": 780.84,
+     "outages@0.5": 7,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 1,
+     "default_correct_lost": 55,
+     "default_correct_lost_pct": 6.26
+    },
+    "CDME": {
+     "fix": 6669,
+     "missing": 638,
+     "wrong>0.5/2/3": [
+      5,
+      0,
+      0
+     ],
+     "hP95": 2.0536,
+     "fix3d_p50": 0.035,
+     "recP95@0.5": 51.15,
+     "outages@0.5": 36,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 4,
+     "default_correct_lost": 55,
+     "default_correct_lost_pct": 6.26
+    },
+    "CDMEH": {
+     "fix": 6845,
+     "missing": 630,
+     "wrong>0.5/2/3": [
+      9,
+      0,
+      0
+     ],
+     "hP95": 2.0473,
+     "fix3d_p50": 0.0377,
+     "recP95@0.5": 60.04,
+     "outages@0.5": 23,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 8,
+     "default_correct_lost": 20,
+     "default_correct_lost_pct": 2.28
+    }
+   },
+   "tokyo/run3": {
+    "default": {
+     "fix": 749,
+     "missing": 1021,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 4.111,
+     "fix3d_p50": 0.0299,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 0
+    },
+    "CDM": {
+     "fix": 1134,
+     "missing": 1021,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 4.111,
+     "fix3d_p50": 0.0272,
+     "recP95@0.5": 1.0,
+     "outages@0.5": 1,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 0,
+     "default_correct_lost": 8,
+     "default_correct_lost_pct": 1.07
+    },
+    "CDME": {
+     "fix": 10910,
+     "missing": 1510,
+     "wrong>0.5/2/3": [
+      35,
+      0,
+      0
+     ],
+     "hP95": 3.0969,
+     "fix3d_p50": 0.0332,
+     "recP95@0.5": 56.22,
+     "outages@0.5": 55,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 5,
+     "default_correct_lost": 8,
+     "default_correct_lost_pct": 1.07
+    },
+    "CDMEH": {
+     "fix": 11350,
+     "missing": 1301,
+     "wrong>0.5/2/3": [
+      8,
+      0,
+      0
+     ],
+     "hP95": 2.5932,
+     "fix3d_p50": 0.0337,
+     "recP95@0.5": 49.8,
+     "outages@0.5": 41,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 6,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 0.53
+    }
+   },
+   "nagoya/run1": {
+    "default": {
+     "fix": 18,
+     "missing": 841,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 1.3594,
+     "fix3d_p50": 0.113,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 0
+    },
+    "CDM": {
+     "fix": 2033,
+     "missing": 841,
+     "wrong>0.5/2/3": [
+      10,
+      0,
+      0
+     ],
+     "hP95": 1.3802,
+     "fix3d_p50": 0.1026,
+     "recP95@0.5": 456.76,
+     "outages@0.5": 7,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 2,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    },
+    "CDME": {
+     "fix": 5280,
+     "missing": 865,
+     "wrong>0.5/2/3": [
+      19,
+      0,
+      0
+     ],
+     "hP95": 0.6574,
+     "fix3d_p50": 0.1069,
+     "recP95@0.5": 71.9,
+     "outages@0.5": 15,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 8,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    },
+    "CDMEH": {
+     "fix": 4820,
+     "missing": 856,
+     "wrong>0.5/2/3": [
+      14,
+      0,
+      0
+     ],
+     "hP95": 1.0263,
+     "fix3d_p50": 0.1116,
+     "recP95@0.5": 137.17,
+     "outages@0.5": 12,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 5,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    }
+   },
+   "nagoya/run2": {
+    "default": {
+     "fix": 1130,
+     "missing": 1770,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 11.4446,
+     "fix3d_p50": 0.0955,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 1
+    },
+    "CDM": {
+     "fix": 1173,
+     "missing": 1780,
+     "wrong>0.5/2/3": [
+      2,
+      0,
+      0
+     ],
+     "hP95": 11.3969,
+     "fix3d_p50": 0.0946,
+     "recP95@0.5": 30.2,
+     "outages@0.5": 1,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 1,
+     "default_correct_lost": 6,
+     "default_correct_lost_pct": 0.53
+    },
+    "CDME": {
+     "fix": 4404,
+     "missing": 1791,
+     "wrong>0.5/2/3": [
+      26,
+      0,
+      0
+     ],
+     "hP95": 11.4526,
+     "fix3d_p50": 0.1369,
+     "recP95@0.5": 343.0,
+     "outages@0.5": 13,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 4,
+     "default_correct_lost": 6,
+     "default_correct_lost_pct": 0.53
+    },
+    "CDMEH": {
+     "fix": 3909,
+     "missing": 1798,
+     "wrong>0.5/2/3": [
+      33,
+      2,
+      0
+     ],
+     "hP95": 11.3991,
+     "fix3d_p50": 0.1506,
+     "recP95@0.5": 333.87,
+     "outages@0.5": 14,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 3,
+     "default_correct_lost": 4,
+     "default_correct_lost_pct": 0.35
+    }
+   },
+   "nagoya/run3": {
+    "default": {
+     "fix": 12,
+     "missing": 1460,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 8.5921,
+     "fix3d_p50": 0.1284,
+     "recP95@0.5": null,
+     "outages@0.5": 0,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 0
+    },
+    "CDM": {
+     "fix": 591,
+     "missing": 1472,
+     "wrong>0.5/2/3": [
+      15,
+      0,
+      0
+     ],
+     "hP95": 8.5891,
+     "fix3d_p50": 0.134,
+     "recP95@0.5": 6.44,
+     "outages@0.5": 5,
+     "censored@0.5": true,
+     "wrong_episodes_0.5": 2,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    },
+    "CDME": {
+     "fix": 1069,
+     "missing": 1489,
+     "wrong>0.5/2/3": [
+      18,
+      2,
+      0
+     ],
+     "hP95": 8.5838,
+     "fix3d_p50": 0.1301,
+     "recP95@0.5": 307.68,
+     "outages@0.5": 12,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 4,
+     "default_correct_lost": 0,
+     "default_correct_lost_pct": 0.0
+    },
+    "CDMEH": {
+     "fix": 1206,
+     "missing": 1499,
+     "wrong>0.5/2/3": [
+      13,
+      2,
+      0
+     ],
+     "hP95": 8.5996,
+     "fix3d_p50": 0.1261,
+     "recP95@0.5": 278.92,
+     "outages@0.5": 14,
+     "censored@0.5": false,
+     "wrong_episodes_0.5": 7,
+     "default_correct_lost": 8,
+     "default_correct_lost_pct": 66.67
+    }
+   }
+  },
+  "gate_a": {
+   "trimble-Odaiba": {
+    "RTKLIB": {
+     "fix": 5839,
+     "wrong>0.5/2/3": [
+      19,
+      4,
+      4
+     ],
+     "audited_wrong>0.5/2/3": [
+      19,
+      4,
+      4
+     ],
+     "hP95": 7.856
+    },
+    "default": {
+     "fix": 1298,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 4.777,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 4450,
+     "wrong>0.5/2/3": [
+      6,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      6,
+      0,
+      0
+     ],
+     "hP95": 4.854,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDME": {
+     "fix": 7467,
+     "wrong>0.5/2/3": [
+      9,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      9,
+      0,
+      0
+     ],
+     "hP95": 4.86,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 7510,
+     "wrong>0.5/2/3": [
+      8,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      8,
+      0,
+      0
+     ],
+     "hP95": 4.92,
+     "A_raw": true,
+     "A_audited": true
+    }
+   },
+   "ublox-Odaiba": {
+    "RTKLIB": {
+     "fix": 1857,
+     "wrong>0.5/2/3": [
+      92,
+      69,
+      44
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 13.181
+    },
+    "default": {
+     "fix": 461,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 6.7,
+     "A_raw": false
+    },
+    "CDM": {
+     "fix": 871,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 6.698,
+     "A_raw": false
+    },
+    "CDME": {
+     "fix": 3130,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 7.214,
+     "A_raw": true
+    },
+    "CDMEH": {
+     "fix": 3148,
+     "wrong>0.5/2/3": [
+      3,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 7.477,
+     "A_raw": true
+    }
+   },
+   "trimble-Shinjuku": {
+    "RTKLIB": {
+     "fix": 6313,
+     "wrong>0.5/2/3": [
+      128,
+      112,
+      112
+     ],
+     "audited_wrong>0.5/2/3": [
+      128,
+      112,
+      112
+     ],
+     "hP95": 12.95
+    },
+    "default": {
+     "fix": 122,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 8.382,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 2877,
+     "wrong>0.5/2/3": [
+      4,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      4,
+      0,
+      0
+     ],
+     "hP95": 8.387,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDME": {
+     "fix": 11491,
+     "wrong>0.5/2/3": [
+      242,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      119,
+      0,
+      0
+     ],
+     "hP95": 8.338,
+     "A_raw": false,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 12361,
+     "wrong>0.5/2/3": [
+      190,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      41,
+      0,
+      0
+     ],
+     "hP95": 8.73,
+     "A_raw": false,
+     "A_audited": true
+    }
+   },
+   "ublox-Shinjuku": {
+    "RTKLIB": {
+     "fix": 792,
+     "wrong>0.5/2/3": [
+      93,
+      81,
+      81
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 20.007
+    },
+    "default": {
+     "fix": 1,
+     "wrong>0.5/2/3": [
+      1,
+      1,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 5.736,
+     "A_raw": false
+    },
+    "CDM": {
+     "fix": 16,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 5.844,
+     "A_raw": false
+    },
+    "CDME": {
+     "fix": 3582,
+     "wrong>0.5/2/3": [
+      10,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 5.725,
+     "A_raw": true
+    },
+    "CDMEH": {
+     "fix": 4048,
+     "wrong>0.5/2/3": [
+      57,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": null,
+     "hP95": 5.049,
+     "A_raw": true
+    }
+   },
+   "ppc-tokyo-run1": {
+    "RTKLIB": {
+     "fix": 995,
+     "wrong>0.5/2/3": [
+      123,
+      105,
+      104
+     ],
+     "audited_wrong>0.5/2/3": [
+      123,
+      105,
+      104
+     ],
+     "hP95": 22.72
+    },
+    "default": {
+     "fix": 772,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 6.654,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 1395,
+     "wrong>0.5/2/3": [
+      5,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      5,
+      0,
+      0
+     ],
+     "hP95": 6.654,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDME": {
+     "fix": 4328,
+     "wrong>0.5/2/3": [
+      24,
+      1,
+      1
+     ],
+     "audited_wrong>0.5/2/3": [
+      24,
+      1,
+      1
+     ],
+     "hP95": 5.566,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 6306,
+     "wrong>0.5/2/3": [
+      129,
+      7,
+      5
+     ],
+     "audited_wrong>0.5/2/3": [
+      129,
+      7,
+      5
+     ],
+     "hP95": 5.578,
+     "A_raw": false,
+     "A_audited": false
+    }
+   },
+   "ppc-tokyo-run2": {
+    "RTKLIB": {
+     "fix": 1151,
+     "wrong>0.5/2/3": [
+      15,
+      13,
+      13
+     ],
+     "audited_wrong>0.5/2/3": [
+      15,
+      13,
+      13
+     ],
+     "hP95": 7.94
+    },
+    "default": {
+     "fix": 879,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 1.995,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 1310,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 2.015,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDME": {
+     "fix": 6669,
+     "wrong>0.5/2/3": [
+      5,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      5,
+      0,
+      0
+     ],
+     "hP95": 2.054,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 6845,
+     "wrong>0.5/2/3": [
+      9,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      9,
+      0,
+      0
+     ],
+     "hP95": 2.047,
+     "A_raw": true,
+     "A_audited": true
+    }
+   },
+   "ppc-tokyo-run3": {
+    "RTKLIB": {
+     "fix": 6675,
+     "wrong>0.5/2/3": [
+      85,
+      48,
+      44
+     ],
+     "audited_wrong>0.5/2/3": [
+      85,
+      48,
+      44
+     ],
+     "hP95": 13.438
+    },
+    "default": {
+     "fix": 749,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 4.111,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 1134,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 4.111,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDME": {
+     "fix": 10910,
+     "wrong>0.5/2/3": [
+      35,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      35,
+      0,
+      0
+     ],
+     "hP95": 3.097,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 11350,
+     "wrong>0.5/2/3": [
+      8,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      8,
+      0,
+      0
+     ],
+     "hP95": 2.593,
+     "A_raw": true,
+     "A_audited": true
+    }
+   },
+   "ppc-nagoya-run1": {
+    "RTKLIB": {
+     "fix": 1577,
+     "wrong>0.5/2/3": [
+      81,
+      77,
+      76
+     ],
+     "audited_wrong>0.5/2/3": [
+      81,
+      77,
+      76
+     ],
+     "hP95": 23.551
+    },
+    "default": {
+     "fix": 18,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 1.359,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 2033,
+     "wrong>0.5/2/3": [
+      10,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      10,
+      0,
+      0
+     ],
+     "hP95": 1.38,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDME": {
+     "fix": 5280,
+     "wrong>0.5/2/3": [
+      19,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      19,
+      0,
+      0
+     ],
+     "hP95": 0.657,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 4820,
+     "wrong>0.5/2/3": [
+      14,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      14,
+      0,
+      0
+     ],
+     "hP95": 1.026,
+     "A_raw": true,
+     "A_audited": true
+    }
+   },
+   "ppc-nagoya-run2": {
+    "RTKLIB": {
+     "fix": 2133,
+     "wrong>0.5/2/3": [
+      239,
+      229,
+      223
+     ],
+     "audited_wrong>0.5/2/3": [
+      238,
+      228,
+      222
+     ],
+     "hP95": 38.561
+    },
+    "default": {
+     "fix": 1130,
+     "wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      1,
+      0,
+      0
+     ],
+     "hP95": 11.445,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 1173,
+     "wrong>0.5/2/3": [
+      2,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      2,
+      0,
+      0
+     ],
+     "hP95": 11.397,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDME": {
+     "fix": 4404,
+     "wrong>0.5/2/3": [
+      26,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      17,
+      0,
+      0
+     ],
+     "hP95": 11.453,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 3909,
+     "wrong>0.5/2/3": [
+      33,
+      2,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      24,
+      2,
+      0
+     ],
+     "hP95": 11.399,
+     "A_raw": true,
+     "A_audited": true
+    }
+   },
+   "ppc-nagoya-run3": {
+    "RTKLIB": {
+     "fix": 291,
+     "wrong>0.5/2/3": [
+      92,
+      82,
+      75
+     ],
+     "audited_wrong>0.5/2/3": [
+      92,
+      82,
+      75
+     ],
+     "hP95": 7.526
+    },
+    "default": {
+     "fix": 12,
+     "wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      0,
+      0,
+      0
+     ],
+     "hP95": 8.592,
+     "A_raw": false,
+     "A_audited": false
+    },
+    "CDM": {
+     "fix": 591,
+     "wrong>0.5/2/3": [
+      15,
+      0,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      15,
+      0,
+      0
+     ],
+     "hP95": 8.589,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDME": {
+     "fix": 1069,
+     "wrong>0.5/2/3": [
+      18,
+      2,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      18,
+      2,
+      0
+     ],
+     "hP95": 8.584,
+     "A_raw": true,
+     "A_audited": true
+    },
+    "CDMEH": {
+     "fix": 1206,
+     "wrong>0.5/2/3": [
+      13,
+      2,
+      0
+     ],
+     "audited_wrong>0.5/2/3": [
+      13,
+      2,
+      0
+     ],
+     "hP95": 8.6,
+     "A_raw": true,
+     "A_audited": true
+    }
+   }
+  },
+  "gate_c_prime": [
+   "== Tokyo / HK (CDMEH vs CDME)",
+   "trimble-Odaiba: FIX 7467->7510 wrong [9, 0, 0]->[8, 0, 0] missing 1426->1471 hP95 4.8599->4.9196 loss 76 (1.02%) FAIL CDME-correct loss 76 (1.02%); missing 1426->1471; hP95 4.8599->4.9196",
+   "trimble-Shinjuku: FIX 11491->12361 wrong [242, 0, 0]->[190, 0, 0] missing 3336->3396 hP95 8.3383->8.7305 loss 975 (8.67%) FAIL CDME-correct loss 975 (8.67%); missing 3336->3396; hP95 8.3383->8.7305",
+   "ublox-Odaiba: FIX 3130->3148 wrong [0, 0, 0]->[3, 0, 0] missing 975->957 hP95 7.2142->7.4792 loss 21 (0.67%) FAIL wrong>0.5 0->3; hP95 7.2142->7.4792",
+   "ublox-Shinjuku: FIX 3582->4048 wrong [10, 0, 0]->[57, 0, 0] missing 2399->2445 hP95 5.726->5.0525 loss 93 (2.60%) FAIL wrong>0.5 10->57; CDME-correct loss 93 (2.60%); missing 2399->2445",
+   "HK HKDeepUrban1 (2/3 m, descriptive): FIX 107->107 wrong [105, 0, 0]->[105, 0, 0] missing 540->540 hP95 7.5124->7.5124 loss 0 (0.00%) PASS",
+   "HK HKHarshUrban1 (2/3 m, descriptive): FIX 0->0 wrong [0, 0, 0]->[0, 0, 0] missing 800->800 hP95 32.4958->32.4958 loss 0 (0.00%) PASS",
+   "== PPC ppc (CDMEH vs CDME)",
+   "tokyo/run1: FIX 4328->6306 wrong [24, 1, 1]->[129, 7, 5] missing 1232->1259 hP95 5.5665->5.5779 loss 163 (3.79%) FAIL wrong>0.5 24->129; wrong>2 1->7; wrong>3 1->5; CDME-correct loss 163 (3.79%); missing 1232->1259; hP95 5.5665->5.5779",
+   "tokyo/run2: FIX 6669->6845 wrong [5, 0, 0]->[9, 0, 0] missing 638->630 hP95 2.0536->2.0473 loss 255 (3.83%) FAIL wrong>0.5 5->9; CDME-correct loss 255 (3.83%)",
+   "tokyo/run3: FIX 10910->11350 wrong [35, 0, 0]->[8, 0, 0] missing 1510->1301 hP95 3.0969->2.5932 loss 218 (2.00%) FAIL CDME-correct loss 218 (2.00%)",
+   "nagoya/run1: FIX 5280->4820 wrong [19, 0, 0]->[14, 0, 0] missing 865->856 hP95 0.6574->1.0263 loss 764 (14.52%) FAIL CDME-correct loss 764 (14.52%); hP95 0.6574->1.0263",
+   "nagoya/run2: FIX 4404->3909 wrong [26, 0, 0]->[33, 2, 0] missing 1791->1798 hP95 11.4526->11.3991 loss 565 (12.91%) FAIL wrong>0.5 26->33; wrong>2 0->2; CDME-correct loss 565 (12.91%); missing 1791->1798",
+   "nagoya/run3: FIX 1069->1206 wrong [18, 2, 0]->[13, 2, 0] missing 1489->1499 hP95 8.5838->8.5996 loss 30 (2.85%) FAIL CDME-correct loss 30 (2.85%); missing 1489->1499; hP95 8.5838->8.5996"
+  ],
+  "gate_b": "fails: raw wrong >0.5 m rises against default on all 10 Tokyo/PPC runs",
+  "predictions": {
+   "P1_odaiba": "met: FIX 7510 (CDME 7467), wrong >0.5 m 8",
+   "P2_nagoya_run3": "met: 13 < 18",
+   "P3_gate_a": "not met: raw passes 8 of 10 (fails Trimble Shinjuku 190 > 128 and PPC tokyo/run1 129/7/5 > 123/105/104 at 0.5 m); audited passes 9 of 10",
+   "P4_gate_c_loss": "not met: CDME-correct loss above 1% on 9 of 10 Tokyo/PPC runs (1.02-14.52%; u-blox Odaiba 0.67%); gate C' fails on all 10, HK passes"
+  },
+  "decision": "NO_GO. CDMEH is not proposed; --hold-kalman-update stays opt-in. No default change, no retuning."
+ },
+ "cdme_gate_a_audited": "CDME passes gate A on all 10 runs when wrong FIX are counted after the phase audit (Trimble Shinjuku 119/0/0 vs RTKLIB 128/112/112; other runs unchanged or raw). Raw: 9 of 10.",
+ "rtklib": {
+  "version": "demo5 b34k 55a0f2c",
+  "config": "scripts/rtklib_odaiba.conf (pos1-navsys=61)"
+ }
+}
