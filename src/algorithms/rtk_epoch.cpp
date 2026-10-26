@@ -149,6 +149,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
             current_spp_solution_ = spp;
             rememberSolution(spp);
             consecutive_fix_count_ = 0;
+            nis_suspended_hold_run_ = 0;
             consecutive_float_count_ = 0;
             consecutive_nonfix_count_ = 0;
             consecutive_high_float_residual_count_ = 0;
@@ -508,6 +509,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 solution = float_solution;
                 updateStatistics(SolutionStatus::FLOAT);
                 consecutive_fix_count_ = 0;
+                nis_suspended_hold_run_ = 0;
                 resetAmbiguityStatesForReacquisition(rover_obs, nav, true);
                 has_last_fixed_position_ = false;
                 has_last_fixed_time_ = false;
@@ -741,6 +743,9 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     } else {
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
+                        if (consecutive_fix_count_ >= nis_suspended_hold_run_) {
+                            nis_suspended_hold_run_ = 0;
+                        }
                         consecutive_float_count_ = 0;
                         recordFixedEpoch(solution);
                         debug_telemetry_.final_fixed_applied = true;
@@ -752,7 +757,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                         has_last_fixed_time_ = true;
 
                         // holdamb: constrain SD ambiguities toward validated DD integers
-                        if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
+                        if (holdEligibleFixCount() >= rtk_config_.min_hold_count) {
                             applyHoldAmbiguity();
                         }
                         applied_fix_solution = true;
@@ -779,7 +784,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                  debug_telemetry_
                      .safe_fix_shadow_failure_budget_passed) &&
                 rtk_config_.ar_policy != RTKConfig::ARPolicy::DEMO5_CONTINUOUS &&
-                rtk_validation::canAttemptHoldFix(consecutive_fix_count_,
+                rtk_validation::canAttemptHoldFix(holdEligibleFixCount(),
                                                   rtk_config_.min_hold_count,
                                                   saved_hold_state.has_last_fixed_position,
                                                   saved_hold_state.hasHeldIntegers())) {
@@ -790,10 +795,13 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                     } else {
                         updateStatistics(SolutionStatus::FIXED);
                         consecutive_fix_count_++;
+                        if (consecutive_fix_count_ >= nis_suspended_hold_run_) {
+                            nis_suspended_hold_run_ = 0;
+                        }
                         consecutive_float_count_ = 0;
                         recordFixedEpoch(solution);
                         debug_telemetry_.final_fixed_applied = true;
-                        if (consecutive_fix_count_ >= rtk_config_.min_hold_count) {
+                        if (holdEligibleFixCount() >= rtk_config_.min_hold_count) {
                             applyHoldAmbiguity();
                         }
                         applied_fix_solution = true;
@@ -827,6 +835,10 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
                 }
                 updateStatistics(SolutionStatus::FLOAT);
                 consecutive_fix_count_ = 0;
+                if (reset_after_high_float ||
+                    debug_telemetry_.hold_fix_reject_reason != "hold_fix_update_nis") {
+                    nis_suspended_hold_run_ = 0;
+                }
                 if (reset_after_high_float) {
                     resetAmbiguityStatesForReacquisition(rover_obs, nav, false);
                 } else {
@@ -859,6 +871,7 @@ PositionSolution RTKProcessor::processRTKEpochInternal(const ObservationData& ro
         }
         recordFallbackEpoch(rover_obs, nav);
         consecutive_fix_count_ = 0;
+        nis_suspended_hold_run_ = 0;
         consecutive_float_count_ = 0;
         consecutive_nonfix_count_ = 0;
         consecutive_high_float_residual_count_ = 0;

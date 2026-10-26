@@ -321,6 +321,7 @@ void RTKProcessor::recordFallbackEpoch(
     const ObservationData& rover_obs,
     const NavigationData& nav) {
     consecutive_fix_count_ = 0;
+    nis_suspended_hold_run_ = 0;
     consecutive_float_count_ = 0;
     consecutive_high_float_residual_count_ = 0;
     consecutive_high_fixed_residual_count_ = 0;

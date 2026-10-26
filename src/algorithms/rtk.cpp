@@ -183,6 +183,7 @@ void RTKProcessor::reset() {
     current_epoch_slips_l5_.clear();
     ambiguity_arc_bank_.reset();
     consecutive_fix_count_ = 0;
+    nis_suspended_hold_run_ = 0;
     consecutive_float_count_ = 0;
     consecutive_nonfix_count_ = 0;
     consecutive_high_float_residual_count_ = 0;

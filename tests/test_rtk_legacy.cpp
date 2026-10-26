@@ -71,6 +71,8 @@ struct RTKProcessorTestAccess {
     GNSSPP_RTK_TEST_MEMBER(has_doppler_history_time_)
     GNSSPP_RTK_TEST_MEMBER(doppler_history_base_time_)
     GNSSPP_RTK_TEST_MEMBER(has_doppler_history_base_time_)
+    GNSSPP_RTK_TEST_MEMBER(current_update_diagnostics_)
+    GNSSPP_RTK_TEST_MEMBER(nis_suspended_hold_run_)
     GNSSPP_RTK_TEST_METHOD(formDoubleDifferences)
     GNSSPP_RTK_TEST_METHOD(calculateBaseline)
     GNSSPP_RTK_TEST_METHOD(calculateResiduals)
@@ -1722,6 +1724,99 @@ TEST_F(RTKHoldFixDefaultTest, FewerThanFourMatchedPairsRejectsAsToday) {
     EXPECT_EQ(Peer::last_dd_pairs_(processor_).size(), pairs_before);
 }
 
+TEST_F(RTKHoldFixDefaultTest, HoldFixIgnoresAnInconsistentFloatUpdateUnlessItsNisLimitIsSet) {
+    // UrbanNav Shinjuku TOW 281650.1 under --preset urban: the float update NIS per
+    // observation jumps from 1 to 52.5, LAMBDA fails, and the hold fix that follows is
+    // 0.65 m off. The fixed-update NIS gate guards only AR candidates, so the hold path
+    // accepts it. hold_fix_max_update_nis_per_observation applies a limit to it.
+    dropSatellites(processor_, {6, 7, 8, 9});
+    Peer::current_update_diagnostics_(processor_).normalized_innovation_squared_per_observation = 52.5;
+    auto config = processor_.getRTKConfig();
+    config.max_fixed_update_nis_per_observation = 10.0;
+    processor_.setRTKConfig(config);
+    PositionSolution legacy;
+    EXPECT_TRUE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, legacy));
+    EXPECT_TRUE(processor_.getLastDebugTelemetry().hold_fix_applied);
+
+    RTKProcessor limited;
+    buildScene(limited, false);
+    dropSatellites(limited, {6, 7, 8, 9});
+    config = limited.getRTKConfig();
+    config.hold_fix_max_update_nis_per_observation = 10.0;
+    limited.setRTKConfig(config);
+    Peer::current_update_diagnostics_(limited).normalized_innovation_squared_per_observation = 52.5;
+    const auto pairs = Peer::last_dd_pairs_(limited);
+    const auto subset = Peer::last_best_subset_(limited);
+    const VectorXd integers = Peer::last_dd_fixed_(limited);
+    const Vector3d previous = Peer::last_fixed_position_(limited);
+    PositionSolution rejected;
+    EXPECT_FALSE(Peer::tryHoldFix(limited, Peer::current_sat_data_(limited), time_, 5, rejected));
+    EXPECT_EQ(limited.getLastDebugTelemetry().hold_fix_reject_reason, "hold_fix_update_nis");
+    EXPECT_FALSE(limited.getLastDebugTelemetry().hold_fix_applied);
+    EXPECT_FALSE(Peer::has_fixed_solution_(limited));
+    EXPECT_EQ(rejected.status, SolutionStatus::NONE);
+    EXPECT_EQ(Peer::last_dd_fixed_(limited), integers);
+    EXPECT_EQ(Peer::last_best_subset_(limited), subset);
+    EXPECT_EQ(Peer::last_dd_pairs_(limited).size(), pairs.size());
+    EXPECT_EQ(Peer::last_fixed_position_(limited), previous);
+
+    // A consistent update keeps the hold fix, with the same position as without the limit.
+    Peer::current_update_diagnostics_(limited).normalized_innovation_squared_per_observation = 2.0;
+    PositionSolution accepted;
+    ASSERT_TRUE(Peer::tryHoldFix(limited, Peer::current_sat_data_(limited), time_, 5, accepted));
+    EXPECT_EQ(accepted.position_ecef, legacy.position_ecef);
+}
+
+TEST_F(RTKHoldFixDefaultTest, NisRejectedHoldKeepsTheHoldPathOpenOnlyWhenAsked) {
+    // Under --preset urban + --hold-fix-max-update-nis-per-obs 10 most of the lost correct
+    // fixes are later hold fixes that were never attempted: the NIS rejection made the epoch
+    // FLOAT, the FLOAT epoch reset the consecutive-fix run, and the hold path stayed closed
+    // until min_hold_count new AR fixes. hold_fix_update_nis_keeps_hold_run keeps it open.
+    for (const bool keep : {false, true}) {
+        SCOPED_TRACE(keep ? "keep hold run" : "legacy");
+        RTKProcessor processor;
+        buildScene(processor, false);
+        dropSatellites(processor, {6, 7, 8, 9});
+        auto config = processor.getRTKConfig();
+        config.hold_fix_max_update_nis_per_observation = 10.0;
+        config.hold_fix_update_nis_keeps_hold_run = keep;
+        processor.setRTKConfig(config);
+        Peer::current_update_diagnostics_(processor).normalized_innovation_squared_per_observation = 52.5;
+        PositionSolution rejected;
+        ASSERT_FALSE(Peer::tryHoldFix(processor, Peer::current_sat_data_(processor), time_, 5, rejected));
+        EXPECT_EQ(processor.getLastDebugTelemetry().hold_fix_reject_reason, "hold_fix_update_nis");
+        EXPECT_EQ(Peer::nis_suspended_hold_run_(processor), keep ? 5 : 0);
+
+        // The FLOAT epoch resets the run; the next update is consistent again.
+        Peer::consecutive_fix_count_(processor) = 0;
+        Peer::current_update_diagnostics_(processor).normalized_innovation_squared_per_observation = 2.0;
+        PositionSolution next;
+        EXPECT_EQ(Peer::tryHoldFix(processor, Peer::current_sat_data_(processor), time_, 5, next), keep);
+        if (!keep) {
+            EXPECT_EQ(processor.getLastDebugTelemetry().hold_fix_reject_reason, "preconditions");
+        }
+    }
+}
+
+TEST_F(RTKHoldFixDefaultTest, KeptHoldRunEndsAtAnyOtherHoldRejection) {
+    dropSatellites(processor_, {6, 7, 8, 9});
+    auto config = processor_.getRTKConfig();
+    config.hold_fix_max_update_nis_per_observation = 10.0;
+    config.hold_fix_update_nis_keeps_hold_run = true;
+    processor_.setRTKConfig(config);
+    Peer::consecutive_fix_count_(processor_) = 0;
+    Peer::nis_suspended_hold_run_(processor_) = 5;
+    // The last FIX is 2 m away: the 1 m hold jump limit rejects, and the kept run ends.
+    Peer::last_fixed_position_(processor_) += Vector3d(2.0, 0.0, 0.0);
+    PositionSolution solution;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, solution));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "position_jump");
+    EXPECT_EQ(Peer::nis_suspended_hold_run_(processor_), 0);
+    PositionSolution again;
+    EXPECT_FALSE(Peer::tryHoldFix(processor_, Peer::current_sat_data_(processor_), time_, 5, again));
+    EXPECT_EQ(processor_.getLastDebugTelemetry().hold_fix_reject_reason, "preconditions");
+}
+
 TEST_F(RTKHoldFixDefaultTest, AllCandidatesMatchedGivesTheSameResultWithTheOptionOnOrOff) {
     // With every candidate pair held there is nothing to round: the option must
     // not change a single value of the accepted hold-fix.
@@ -2428,6 +2523,11 @@ TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUnchangedSetOnlyDefaultOffAndC
     off.hold_fix_unchanged_set_only = false;
     processor.setRTKConfig(off);
     EXPECT_FALSE(processor.getRTKConfig().hold_fix_unchanged_set_only);
+}
+
+TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixUpdateNisLimitDefaultsOff) {
+    EXPECT_EQ(RTKProcessor::RTKConfig{}.hold_fix_max_update_nis_per_observation, 0.0);
+    EXPECT_FALSE(RTKProcessor::RTKConfig{}.hold_fix_update_nis_keeps_hold_run);
 }
 
 TEST(RTKLegacyCompatibilityStandaloneTest, HoldFixMinMatchedPairsDefaultsToTheLegacyFloorAndIsConfigurable) {
