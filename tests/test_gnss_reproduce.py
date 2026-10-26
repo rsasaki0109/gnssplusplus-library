@@ -740,8 +740,16 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 57629197)
-        self.assertTrue(submission["sha256"].startswith("f19acb58"))
+        self.assertEqual(submission["kaggle_ref"], 57664241)
+        self.assertTrue(submission["sha256"].startswith("ea13dc36"))
+        refined = [drive for drive in recipe["drives"] if "--native-imu-refinement-pass" in drive["argv"]]
+        self.assertEqual(len(refined), 30)
+        for drive in refined:  # the refinement pass needs the exported stages, source init and main Doppler
+            for flag in ("--native-export-gnss-stage", "--native-export-imu-stage",
+                         "--native-source-imu-initialization", "--native-phase213-main-doppler"):
+                self.assertIn(flag, drive["argv"])
+        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("single_cpu")],
+                         ["2022-02-24-15-10-us-ca-lax-p/pixel5"])
         windowed = [drive for drive in recipe["drives"] if drive.get("input_window")]
         self.assertEqual([drive["id"] for drive in windowed], ["2022-04-25-21-04-us-ca-ebf-x/mi8"])
         for drive in windowed:
@@ -931,6 +939,33 @@ class GsdcOfficialLaneTest(unittest.TestCase):
             second.write_text("\n".join([lines[0], *lines[2:]]) + "\n", encoding="utf-8")
             with self.assertRaises(SystemExit):  # the window fill applies to windowed drives only
                 driver.assemble_rows(recipe, solutions)
+
+    def test_single_cpu_pins_the_child_to_one_cpu(self) -> None:
+        driver = self._import()
+        self.assertIsNone(driver.single_cpu_preexec({"id": "a"}))
+        if not hasattr(os, "sched_setaffinity"):
+            with self.assertRaises(SystemExit):
+                driver.single_cpu_preexec({"id": "a", "single_cpu": True})
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            fake = tmp_path / "fake_solver.py"
+            fake.write_text(textwrap.dedent("""
+                import os, sys
+                out = sys.argv[sys.argv.index('--out') + 1]
+                open(out, 'w').write(str(len(os.sched_getaffinity(0))))
+            """), encoding="utf-8")
+            for single, expected in ((False, len(os.sched_getaffinity(0))), (True, 1)):
+                entry = {"id": "a-course/phone1", "group": "pixel5-heading", "output_sha256": "",
+                         "output": "{work_dir}/final/a__phone1/solution.csv",
+                         "argv": [sys.executable, str(fake), "--out", "{work_dir}/final/a__phone1/solution.csv"]}
+                if single:
+                    entry["single_cpu"] = True
+                record = driver.run_drive(entry, {"work_dir": str(tmp_path)}, os.environ)
+                self.assertEqual(record["returncode"], 0)
+                self.assertEqual(record["single_cpu"], single)
+                cpus = (tmp_path / "final" / "a__phone1" / "solution.csv").read_text(encoding="utf-8")
+                self.assertEqual(cpus, str(expected))
 
     def test_run_resume_skips_completed_drives(self) -> None:
         driver = self._import()

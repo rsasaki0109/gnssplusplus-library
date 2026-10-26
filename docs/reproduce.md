@@ -27,7 +27,7 @@ runner adds no scoring logic of its own.
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
-| Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: ~6 min per drive; full run ~1.5 h four at a time on 4 cores (up to ~6.5 h one at a time) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57629197 (`f19acb58...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
+| Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: ~6 min per drive; full run ~1.5 h four at a time on 4 cores (up to ~6.5 h one at a time) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57664241 (`ea13dc36...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, and 57664241 added the upstream third pass on 30 drives; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
@@ -667,8 +667,8 @@ for what is and is not recorded there.
 
 ## gsdc-official: rebuilding the Kaggle submission
 
-The README "Smartphone GNSS/IMU" official row is Kaggle submission 57629197
-(Private 0.844 m / Public 0.850 m, 40 test drives, 71,936 rows; readback
+The README "Smartphone GNSS/IMU" official row is Kaggle submission 57664241
+(Private 0.811 m / Public 0.817 m, 40 test drives, 71,936 rows; readback
 record
 [gsdc2023_official_readback_20261024.json](use_cases/records/gsdc2023_official_readback_20261024.json)).
 It is submission 56625084 (Private 0.984 m / Public 0.915 m; record
@@ -677,10 +677,12 @@ with ten drives changed by per-drive flags, rebuilt on one Linux GCC
 build. The flags are listed under `research_source.added_flags` /
 `removed_flags` in the recipe. One of them, ebf-x Mi8, is also solved from a
 later epoch (`input_window`; see the 2026-10-25 ebf-x subsection below).
+Thirty drives then take the upstream third pass (see the 2026-10-26
+subsection below).
 Kaggle scores it against hidden ground truth, so no local run can recompute
 the score. The lane therefore gates on the file itself: the rebuilt
 `submission.csv` must have the SHA-256 of the submitted file,
-`f19acb58ae3017789714ab5564c97b69f96e2b320578d6464154de394e38621f`. The lane
+`ea13dc3665207804bf146a3e3e90fd3568ab56d9c43ac9ac40f3db80051d81c5`. The lane
 never submits to Kaggle.
 
 **One platform.** Every final replay, stage-0 run and height map is pinned
@@ -840,6 +842,48 @@ writes `f19acb58...` with 40/40 drives identical. The research file
 57626255 has the same coordinates, but its fill step dropped trailing zeros
 in 284 rows. The lane-built file was therefore submitted as 57629197, and Kaggle
 scores it the same, Private 0.844 m / Public 0.850 m.
+
+### gsdc-official third pass (2026-10-26)
+
+The recipe then moved to 57664241. Taroz `run_fgo.m` solves each drive with
+`fgo_gnss` and then `fgo_gnss_imu` twice. The last pass re-screens P and D
+around the first GNSS/IMU trajectory with the tighter final thresholds and
+solves again. Until now the native recipes ran one IMU solve. Thirty drives
+now add `--native-imu-refinement-pass`. They also add the flags it requires
+where the recipe lacked them: `--native-export-gnss-stage`,
+`--native-export-imu-stage`, `--native-source-imu-initialization` and
+`--native-phase213-main-doppler`. These are listed per drive under
+`research_source.added_flags`; the previous provenance is under
+`research_source.previous_research_source`.
+
+Drives without the pass:
+
+- Mi8 (5 drives): worse on train, +0.061 m mean.
+- Pixel4 XL: the prerequisites cost +1.0 m on train.
+- A325G (2 drives): neutral on train.
+- sjc-r A505U: its course seeds exclude source IMU initialization.
+- ebf-z Pixel5: Kaggle Public was worse with it (0.836 m vs 0.821 m).
+
+On the 35 train drives with taroz output, the pass moves the mean from
+0.7358 m to 0.7187 m (taroz 0.7123 m). Kaggle scores the three steps as
+follows:
+
+| Ref | Change | Public | Private |
+|---|---|---:|---:|
+| 57663786 | third pass on 30 drives, with ebf-z and without lax-p | 0.836 m | 0.811 m |
+| 57663818 | ebf-z back to 57629197 | 0.821 m | 0.811 m |
+| 57664241 | plus lax-p (recipe) | 0.817 m | 0.811 m |
+
+lax-p Pixel5 crashes in its refinement solve in about two runs out of three
+(SIGSEGV after 25-30 minutes): a TBB worker thread inside GTSAM overflows its
+stack. Lifting the stack limit (`ulimit -s unlimited`) does not help, because
+TBB sizes its worker stacks itself. Pinned to one CPU, TBB starts no workers
+and the drive finishes in 1,670 s with the same solution. That holds with an
+8 MB or an unlimited stack. The recipe gives that drive `single_cpu: true`,
+and `run` pins the child to the first CPU it may use. Through the lane
+driver, `run --stage final` on the 30 changed drives writes the research
+solutions byte for byte. `assemble`, with the other 10 drives from the
+57629197 rebuild, writes `ea13dc36...` with 40/40 drives identical.
 
 ### gsdc-official local result (2026-09-29)
 
