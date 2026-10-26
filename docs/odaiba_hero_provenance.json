@@ -1,6 +1,6 @@
 {
   "schema": "odaiba_readme_hero.v5",
-  "generated_date": "2026-10-25",
+  "generated_date": "2026-10-26",
   "dataset": {
     "name": "UrbanNav Tokyo Odaiba",
     "upstream": "https://github.com/IPNL-POLYU/UrbanNavDataset#tokyo-dataset",
@@ -258,8 +258,8 @@
     "docs/odaiba_hero_basemap.png": "9e38ae2fa465aa30a28b9154c89391f29673e6735d297ef7a2f72b2d9d58e593",
     "output/readme-hero/libgnss-cd.pos": "6da1c6516c39fad5837ee8d80eac9ede940c3e7d33505263fa786f07dc564e8e",
     "output/readme-hero/rtklib.pos": "00df30b05c1712f91dda94a5a43b0fe7f5519c0bbdc96593f7ee9c7d4484f3a5",
-    "docs/odaiba_hero_sky.json": "b2b2d3aaced579f662a71a9acb25cae77ed0023432cb917fa0d0d5de035ac2fd",
-    "docs/odaiba_hero_sky.png": "45d23fce6347ccf43eb0ba3ee76dec25cc89028c01cde22331bc8272ca633c9f"
+    "docs/odaiba_hero_sky.json": "afd09e9b2a5fc78c6b6bcf0be4782b990e347fc5f36f9156fc40bfe3be999b22",
+    "docs/odaiba_hero_sky.png": "c9e17fec906d581e3805325fc748eef08f9bf4936e31b6808bc856128cb2f5ae"
   },
   "renderer": {
     "cesium": "1.123.1",
@@ -288,17 +288,25 @@
         "Shinagawa"
       ],
       "year": 2025,
-      "tiles": 115,
-      "triangles": 349853,
+      "tiles": 236,
+      "triangles": 554731,
       "radius_m": 2000.0,
-      "minimum_assessed_elevation_deg": 10
+      "minimum_assessed_elevation_deg": 10,
+      "tiles_by_class": {
+        "bldg": 115,
+        "brid": 121
+      },
+      "classes": [
+        "bldg",
+        "brid"
+      ]
     },
     "all_epoch_label_counts": {
       "unassessed": 402,
-      "LOS": 5947,
-      "NLOS": 83
+      "LOS": 5577,
+      "NLOS": 453
     },
-    "interpretation": "Model-predicted building blockage from published GT ECEF; not measured LOS, not historical imagery, no multipath simulation, not used by either solver. <10deg or unhealthy ephemeris is unassessed; clear rays refer only to these modeled wards/range.",
+    "interpretation": "Model-predicted building and bridge blockage from published GT ECEF; not measured LOS, not historical imagery, no multipath simulation, not used by either solver. <10deg or unhealthy ephemeris is unassessed; clear rays refer only to these modeled wards/range.",
     "used_by_solvers": false,
     "preparation_dependencies": {
       "trimesh": "5.2.0",
@@ -308,11 +316,24 @@
     "geometry_records": 6432,
     "cohort_size": 32,
     "unreported_satellite_epoch_records": 1721,
-    "observation_display": "Unreported samples stay visible with their geometric model status; ID * and independent Rx count denote no RINEX sample"
+    "observation_display": "Unreported samples stay visible with their geometric model status; ID * and independent Rx count denote no RINEX sample",
+    "nlos_by_hit_class": {
+      "bldg": 79,
+      "brid": 374
+    }
   },
   "artifact": {
     "file": "docs/odaiba_hero.gif",
-    "bytes": 2635075,
-    "sha256": "ea03f5e2c88c0cb2d1652eaea1595a46127e938d61b7698eba98d3b0d52633e4"
+    "bytes": 3124079,
+    "sha256": "42abb5afbfa05ce957f3e31546118929d055b0be3930cba8f845994b0c49ec5f"
+  },
+  "street_view_bridges": {
+    "urls": [
+      "https://assets.cms.plateau.reearth.io/assets/4c/2e16d4-56fd-492f-a67b-bbb38e8ef0d0/13103_minato-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+      "https://assets.cms.plateau.reearth.io/assets/e5/a12f70-6426-49c1-94d3-0f8299e0d53f/13108_koto-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+      "https://assets.cms.plateau.reearth.io/assets/2f/77dc90-7824-4349-924a-f5f862c430d4/13102_chuo-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+      "https://assets.cms.plateau.reearth.io/assets/46/3c7ed9-452b-4210-980f-5cdb3bc9b3c3/13109_shinagawa-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json"
+    ],
+    "note": "same PLATEAU 2025 LOD2 bridge tilesets as the zenith model, drawn with the building style"
   }
 }
