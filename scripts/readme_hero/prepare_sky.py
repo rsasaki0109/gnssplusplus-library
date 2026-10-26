@@ -33,10 +33,22 @@ p.add_argument("--output-json", type=Path, default=ROOT / "docs/odaiba_hero_sky.
 p.add_argument("--output-sprite", type=Path, default=ROOT / "docs/odaiba_hero_sky.png")
 a = p.parse_args()
 s = json.loads(a.trace.read_text())
-models = [s["tilesetUrl"], KOTO] + [
+building_models = [s["tilesetUrl"], KOTO] + [
     "https://assets.cms.plateau.reearth.io/assets/92/43303e-6eb5-44ad-b65f-e21e63bdf98a/13102_chuo-ku_pref_2025_citygml_1_op_bldg_3dtiles_13102_chuo-ku_lod2_no_texture/tileset.json",
     "https://assets.cms.plateau.reearth.io/assets/be/403449-37a8-4dbb-a756-c3d4e6639f5d/13109_shinagawa-ku_pref_2025_citygml_1_op_bldg_3dtiles_13109_shinagawa-ku_lod2_no_texture/tileset.json",
 ]
+# Bridges (decks, elevated roads and walkways) block the sky as solidly as
+# buildings but are a separate PLATEAU class. Without them the deck crossing
+# the road near TOW 273710, where the receiver drops from 21 to 8 reported
+# satellites, would stay model LOS. Same 2025 release, LOD2, same four wards.
+BRIDGE_MODELS = [
+    "https://assets.cms.plateau.reearth.io/assets/4c/2e16d4-56fd-492f-a67b-bbb38e8ef0d0/13103_minato-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+    "https://assets.cms.plateau.reearth.io/assets/e5/a12f70-6426-49c1-94d3-0f8299e0d53f/13108_koto-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+    "https://assets.cms.plateau.reearth.io/assets/2f/77dc90-7824-4349-924a-f5f862c430d4/13102_chuo-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+    "https://assets.cms.plateau.reearth.io/assets/46/3c7ed9-452b-4210-980f-5cdb3bc9b3c3/13109_shinagawa-ku_pref_2025_citygml_1_op_brid_3dtiles_lod2/tileset.json",
+]
+models = building_models + BRIDGE_MODELS
+model_class = {**{u: "bldg" for u in building_models}, **{u: "brid" for u in BRIDGE_MODELS}}
 cache = a.cache_dir
 cache.mkdir(parents=True, exist_ok=True)
 records = []
@@ -97,6 +109,7 @@ bounds = np.radians(
     ]
 )
 urls = []
+url_class = []
 max_height = -math.inf
 min_height = math.inf
 for model in models:
@@ -124,9 +137,10 @@ for model in models:
         children = node.get("children", [])
         if "content" in node and (not children or refine == "ADD"):
             uri = node["content"].get("uri", node["content"].get("url"))
-            if not uri.endswith(".b3dm"):
-                raise RuntimeError("Expected pinned b3dm model")
+            if not uri.endswith((".b3dm", ".glb")):
+                raise RuntimeError("Expected pinned b3dm or glb model")
             urls.append(urljoin(model, uri))
+            url_class.append(model_class[model])
         for child in children:
             collect(child, refine)
 
@@ -138,13 +152,20 @@ if (max_height - min(r[3] for r in ref)) / math.tan(math.radians(min_el)) >= rad
 print("Fetching", len(urls), "leaf tiles from the modeled wards", flush=True)
 blobs = list(ThreadPoolExecutor(4).map(fetch, urls))
 meshes = []
+face_class = []
 yup = np.array([[1, 0, 0], [0, 0, -1], [0, 1, 0]])
-for url, blob in zip(urls, blobs):
-    magic, version, length, ftj, ftb, btj, btb = struct.unpack("<4s6I", blob[:28])
-    if magic != b"b3dm" or version != 1 or length != len(blob):
-        raise RuntimeError("Invalid b3dm")
-    feature = json.loads(blob[28 : 28 + ftj])
-    glb = blob[28 + ftj + ftb + btj + btb :]
+for url, kind, blob in zip(urls, url_class, blobs):
+    if url.endswith(".glb"):
+        # 3D Tiles 1.1 content: the glTF itself, without a b3dm feature table.
+        if blob[:4] != b"glTF" or struct.unpack("<I", blob[8:12])[0] != len(blob):
+            raise RuntimeError("Invalid glb")
+        feature, glb = {}, blob
+    else:
+        magic, version, length, ftj, ftb, btj, btb = struct.unpack("<4s6I", blob[:28])
+        if magic != b"b3dm" or version != 1 or length != len(blob):
+            raise RuntimeError("Invalid b3dm")
+        feature = json.loads(blob[28 : 28 + ftj])
+        glb = blob[28 + ftj + ftb + btj + btb :]
     json_length = struct.unpack("<I", glb[12:16])[0]
     gltf = json.loads(glb[20 : 20 + json_length])
     # Trimesh decodes Draco and node transforms, but not CESIUM_RTC.
@@ -174,14 +195,18 @@ for url, blob in zip(urls, blobs):
         raise RuntimeError("Decoded mesh violates the published height envelope")
     vertices = (ecef - origin) @ R.T
     meshes.append(trimesh.Trimesh(vertices=vertices, faces=loaded.faces, process=False))
+    face_class += [kind] * len(loaded.faces)
     records.append(
         {
             "url": url,
+            "class": kind,
             "sha256": hashlib.sha256(blob).hexdigest(),
             "triangles": len(loaded.faces),
         }
     )
 mesh = trimesh.util.concatenate(meshes)
+if len(face_class) != len(mesh.faces):
+    raise RuntimeError("Face classes do not follow the concatenated mesh")
 ray = RayMeshIntersector(mesh)
 print("Built BVH:", len(mesh.faces), "triangles", flush=True)
 
@@ -237,7 +262,7 @@ for index, r in enumerate(ref):
         direction = pos - receiver
         direction /= np.linalg.norm(direction)
         direction = direction @ R.T
-        loc, _, _ = ray.intersects_location(
+        loc, _, hit = ray.intersects_location(
             np.array([orig]), np.array([direction]), multiple_hits=False
         )
         blocked = bool(
@@ -266,6 +291,7 @@ for index, r in enumerate(ref):
                 "hit_distance_m": (
                     float(np.linalg.norm(loc[0] - orig)) if blocked else None
                 ),
+                "hit_class": face_class[int(hit[0])] if blocked else None,
             }
         )
     frames.append({"time": r[0], "satellites": sv})
@@ -282,16 +308,17 @@ meta = {
     "frames": frames,
     "model": {
         "urls": models,
+        "classes": {"bldg": building_models, "brid": BRIDGE_MODELS},
         "wards": ["Minato", "Koto", "Chuo", "Shinagawa"],
         "year": 2025,
         "radius_m": radius,
         "classification_min_elevation_deg": min_el,
         "maximum_model_height_ellipsoidal_m": max_height,
-        "geometry": "most-detailed REPLACE leaves; ADD content retained; glTF Y-up to Z-up plus CESIUM_RTC",
+        "geometry": "most-detailed REPLACE leaves; ADD content retained; b3dm and glb content; glTF Y-up to Z-up plus CESIUM_RTC",
         "triangles": len(mesh.faces),
         "tiles": records,
     },
-    "interpretation": "Model-predicted building blockage from published GT ECEF; not measured LOS, not historical imagery, no multipath simulation, not used by either solver. <10deg or unhealthy ephemeris is unassessed; clear rays refer only to these modeled wards/range.",
+    "interpretation": "Model-predicted building and bridge blockage from published GT ECEF; not measured LOS, not historical imagery, no multipath simulation, not used by either solver. <10deg or unhealthy ephemeris is unassessed; clear rays refer only to these modeled wards/range.",
     "inputs": {
         "trace_sha256": hashlib.sha256(a.trace.read_bytes()).hexdigest(),
         "satellite_geometry_csv_sha256": hashlib.sha256(

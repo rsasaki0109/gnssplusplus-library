@@ -45,7 +45,7 @@
   </div>
 </div>
 <footer>
-  PLATEAU / MLIT (2025 buildings) · Map © OpenStreetMap contributors · Horizontal trajectories on a schematic ground plane<br>
+  PLATEAU / MLIT (2025 buildings, bridges) · Map © OpenStreetMap contributors · Horizontal trajectories on a schematic ground plane<br>
   Selected showcase for visible solver differences · Camera follows Ground Truth position + heading · Recorded forward paths
 </footer>
 <script src="/cesium/Cesium.js"></script>
@@ -147,6 +147,16 @@ window.prepare = async function (data) {
   tiles.tileFailed.addEventListener(e => window.tileFailures.push(e.message));
   scene.primitives.add(tiles);
   viewer.heroTiles = tiles;
+  // The zenith model also raycasts PLATEAU bridges (decks, elevated walkways);
+  // show the same structures in the street view so both panels agree.
+  viewer.bridgeTiles = [];
+  for (const url of skyData.model.classes.brid) {
+    const bridges = await C.Cesium3DTileset.fromUrl(url, { maximumScreenSpaceError: 16 });
+    bridges.style = new C.Cesium3DTileStyle({ color: "color('#8093a8', 1.0)" });
+    bridges.tileFailed.addEventListener(e => window.tileFailures.push(e.message));
+    scene.primitives.add(bridges);
+    viewer.bridgeTiles.push(bridges);
+  }
 
   const tracks = [
     { rows: data.reference, name: 'Ground Truth', color: '#ffffff', width: 9, dashed: true, marker: 20 },
