@@ -30,15 +30,6 @@ CARD_BG = "#fffaf2"
 FIG_BG = "#f4efe6"
 
 
-def format_delta_higher(lib_value: float, rtklib_value: float, unit: str = "") -> str:
-    delta = lib_value - rtklib_value
-    if unit == "%":
-        return f"{delta:+.1f} pt"
-    if unit:
-        return f"{delta:+.0f} {unit}"
-    return f"{delta:+.0f}"
-
-
 def format_delta_lower(lib_value: float, rtklib_value: float, unit: str) -> str:
     delta = rtklib_value - lib_value
     if unit == "mm":
@@ -58,6 +49,39 @@ def improvement_text(lib_value: float, rtklib_value: float) -> str:
     if rtklib_value <= 0.0:
         return "n/a"
     return f"{100.0 * (1.0 - lib_value / rtklib_value):.0f}%"
+
+
+METRIC_NAMES = {
+    "epochs": "matched epochs",
+    "fix_rate": "fix rate",
+    "common_median_h": "common median H",
+    "common_median_up": "common median |Up|",
+    "common_p95_h": "common P95 H",
+}
+
+
+def metric_leaders(lib_summary: dict[str, float], rtklib_summary: dict[str, float],
+                   lib_common: dict[str, float], rtklib_common: dict[str, float]) -> dict[str, str]:
+    """Which solver leads each scorecard metric; ties go to RTKLIB (no lead claimed)."""
+    def lead(lib_better: bool) -> str:
+        return "libgnss++" if lib_better else "RTKLIB"
+
+    return {
+        "epochs": lead(lib_summary["epochs"] > rtklib_summary["epochs"]),
+        "fix_rate": lead(lib_summary["fix_rate_pct"] > rtklib_summary["fix_rate_pct"]),
+        "common_median_h": lead(lib_common["median_h_m"] < rtklib_common["median_h_m"]),
+        "common_median_up": lead(lib_common["median_abs_up_m"] < rtklib_common["median_abs_up_m"]),
+        "common_p95_h": lead(lib_common["p95_h_m"] < rtklib_common["p95_h_m"]),
+    }
+
+
+def takeaway_text(leaders: dict[str, str]) -> str:
+    parts = []
+    for solver in ("libgnss++", "RTKLIB"):
+        names = [METRIC_NAMES[key] for key, winner in leaders.items() if winner == solver]
+        if names:
+            parts.append(f"{solver} leads on {', '.join(names)}")
+    return "Takeaway: " + "; ".join(parts) + "."
 
 
 def add_card(ax, x: float, y: float, w: float, h: float, title: str, headline: str,
@@ -140,17 +164,8 @@ def main() -> None:
         rtklib_fixed_status=1,
     )
 
-    wins = 0
-    if lib_summary["epochs"] > rtklib_summary["epochs"]:
-        wins += 1
-    if lib_summary["fix_rate_pct"] > rtklib_summary["fix_rate_pct"]:
-        wins += 1
-    if lib_common_summary["median_h_m"] < rtklib_common_summary["median_h_m"]:
-        wins += 1
-    if lib_common_summary["median_abs_up_m"] < rtklib_common_summary["median_abs_up_m"]:
-        wins += 1
-    if lib_common_summary["p95_h_m"] < rtklib_common_summary["p95_h_m"]:
-        wins += 1
+    leaders = metric_leaders(lib_summary, rtklib_summary, lib_common_summary, rtklib_common_summary)
+    wins = sum(winner == "libgnss++" for winner in leaders.values())
 
     median_gap_mm = (
         lib_common_summary["median_h_m"] - rtklib_common_summary["median_h_m"]
@@ -159,21 +174,15 @@ def main() -> None:
         lib_common_summary["median_abs_up_m"] - rtklib_common_summary["median_abs_up_m"]
     ) * 1000.0
     fix_ratio = ratio_text(lib_summary["fix_rate_pct"], rtklib_summary["fix_rate_pct"])
-    common_median_winner = (
-        "libgnss++"
-        if lib_common_summary["median_h_m"] < rtklib_common_summary["median_h_m"]
-        else "RTKLIB"
+    epochs_winner = leaders["epochs"]
+    fix_winner = leaders["fix_rate"]
+    lead_fix_ratio = ratio_text(
+        max(lib_summary["fix_rate_pct"], rtklib_summary["fix_rate_pct"]),
+        min(lib_summary["fix_rate_pct"], rtklib_summary["fix_rate_pct"]),
     )
-    common_up_winner = (
-        "libgnss++"
-        if lib_common_summary["median_abs_up_m"] < rtklib_common_summary["median_abs_up_m"]
-        else "RTKLIB"
-    )
-    common_p95_winner = (
-        "libgnss++"
-        if lib_common_summary["p95_h_m"] < rtklib_common_summary["p95_h_m"]
-        else "RTKLIB"
-    )
+    common_median_winner = leaders["common_median_h"]
+    common_up_winner = leaders["common_median_up"]
+    common_p95_winner = leaders["common_p95_h"]
     p95_improvement = (
         improvement_text(lib_common_summary["p95_h_m"], rtklib_common_summary["p95_h_m"])
         if common_p95_winner == "libgnss++"
@@ -204,15 +213,15 @@ def main() -> None:
         0.08,
         boxstyle="round,pad=0.01,rounding_size=0.03",
         linewidth=0.0,
-        facecolor="#e7f6ec",
+        facecolor="#e7f6ec" if wins >= 3 else "#fff1dd",
     )
     ax.add_patch(badge)
     ax.text(
         0.17,
         0.72,
-        f"Leads on {wins}/5 metrics",
+        f"libgnss++ leads {wins}/5",
         fontsize=16,
-        color=WIN_COLOR,
+        color=WIN_COLOR if wins >= 3 else LOSS_COLOR,
         weight="bold",
         ha="center",
         va="center",
@@ -257,15 +266,15 @@ def main() -> None:
         ax, 0.05, 0.42, 0.26, 0.18,
         "Matched Epochs",
         f"{int(lib_summary['epochs'])} vs {int(rtklib_summary['epochs'])}",
-        f"libgnss++ keeps {format_delta_higher(lib_summary['epochs'], rtklib_summary['epochs'])} more matched epochs",
-        "libgnss++",
+        f"{epochs_winner} keeps {abs(int(lib_summary['epochs']) - int(rtklib_summary['epochs']))} more matched epochs",
+        epochs_winner,
     )
     add_card(
         ax, 0.35, 0.42, 0.26, 0.18,
         "Fix Rate",
         f"{lib_summary['fix_rate_pct']:.1f}% vs {rtklib_summary['fix_rate_pct']:.1f}%",
-        f"libgnss++ is {fix_ratio} higher on this run",
-        "libgnss++",
+        f"{fix_winner} is {lead_fix_ratio} higher on this run",
+        fix_winner,
     )
     add_card(
         ax, 0.65, 0.42, 0.26, 0.18,
@@ -299,7 +308,7 @@ def main() -> None:
     ax.text(
         0.05,
         0.045,
-        "Takeaway: on common epochs libgnss++ is near-parity in median and better in vertical median plus tail, while keeping broader coverage overall.",
+        takeaway_text(leaders),
         fontsize=12.5,
         color=TEXT_COLOR,
         weight="bold",

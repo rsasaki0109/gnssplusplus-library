@@ -271,6 +271,26 @@ class ScorecardHelpersTest(unittest.TestCase):
         self.assertEqual(scorecard.improvement_text(1.0, 0.0), "n/a")
         self.assertEqual(scorecard.improvement_text(1.0, 4.0), "75%")
 
+    def test_metric_leaders_credit_rtklib_where_it_is_better(self) -> None:
+        # Odaiba 2026-10-26 (multi-GNSS demo5): RTKLIB publishes more epochs,
+        # fixes more and has the lower common medians; libgnss++ the lower P95.
+        leaders = scorecard.metric_leaders(
+            {"epochs": 10985, "fix_rate_pct": 11.8},
+            {"epochs": 12079, "fix_rate_pct": 48.3},
+            {"median_h_m": 0.359, "median_abs_up_m": 0.302, "p95_h_m": 4.78},
+            {"median_h_m": 0.063, "median_abs_up_m": 0.064, "p95_h_m": 6.73},
+        )
+        self.assertEqual(leaders["epochs"], "RTKLIB")
+        self.assertEqual(leaders["fix_rate"], "RTKLIB")
+        self.assertEqual(leaders["common_median_h"], "RTKLIB")
+        self.assertEqual(leaders["common_median_up"], "RTKLIB")
+        self.assertEqual(leaders["common_p95_h"], "libgnss++")
+        self.assertEqual(
+            scorecard.takeaway_text(leaders),
+            "Takeaway: libgnss++ leads on common P95 H; RTKLIB leads on matched epochs, "
+            "fix rate, common median H, common median |Up|.",
+        )
+
     def test_ppc_scorecard_loads_coverage_matrix_summary(self) -> None:
         with tempfile.TemporaryDirectory(prefix="gnss_ppc_scorecard_summary_") as temp_dir:
             summary_json = Path(temp_dir) / "summary.json"

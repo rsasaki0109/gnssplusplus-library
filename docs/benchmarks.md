@@ -472,16 +472,28 @@ Comparison baseline: [RTKLIB demo5](https://github.com/rtklibexplorer/RTKLIB) b3
 (`55a0f2c`) with `scripts/rtklib_odaiba.conf`
 
 Reproduce with `gnss reproduce odaiba` (kinematic, low-cost preset). Both
-solvers use the surveyed base position described below. All-epoch statistics
-are over each solver's matched output epochs; libgnss++ publishes 10,973 epochs
-versus 8,205 for demo5. On the 8,027 epochs both solvers publish, libgnss++
-Hmed is **0.298 m** versus 0.553 m.
+solvers use the surveyed base position described below and the same
+constellations: demo5 runs with `pos1-navsys = 61` (GPS, GLONASS, Galileo,
+QZSS, BeiDou; GLONASS AR off), as libgnss++ does. All-epoch statistics are over
+each solver's matched output epochs; libgnss++ publishes 10,985 epochs versus
+12,079 for demo5. On the 10,973 epochs both publish, demo5 Hmed is **0.063 m**
+versus 0.359 m for the default profile; the preset and demo5 share 10,034
+epochs, where Hmed is 0.043 versus 0.049 m.
 
 | Config | Fix | Rate | Hmed (m) | Hp95 (m) | Vp95 (m) |
 |---|---:|---:|:---:|:---:|:---:|
-| RTKLIB demo5 b34k | 205 | 2.50% | 0.567 | 25.622 | 43.375 |
-| libgnss++ default | 1298 (+1093) | 11.83% | 0.359 | **4.773** | **11.537** |
-| libgnss++ `--preset odaiba` | **7961** (+6663) | **79.00%** | **0.043** | 5.284 | 13.892 |
+| RTKLIB demo5 b34k | 5839 | 48.34% | 0.190 | 7.856 | 15.722 |
+| libgnss++ default | 1298 (−4541) | 11.82% | 0.359 | **4.777** | **11.537** |
+| libgnss++ `--preset odaiba` | **7961** (+2122) | **79.25%** | **0.043** | 5.258 | 13.110 |
+
+**Correction (2026-10-26).** Until this date `scripts/rtklib_odaiba.conf` ran
+demo5 **GPS-only** (`pos1-navsys = 1`) while libgnss++ used every
+constellation. That table row read 205 fixes (2.50%), Hmed 0.567 m, Hp95
+25.622 m and Vp95 43.375 m. The former claims that the default profile has
+"6.3x fixes" and a lower common-epoch Hmed than demo5 came from that mismatch
+and are withdrawn. The default profile keeps a lower Hp95/Vp95 than demo5; the
+preset has more fixes and a lower Hmed. The PPC demo5 comparisons were not
+affected: `ppc-demo` already rewrote the shared file to `pos1-navsys = 61`.
 
 `--preset odaiba` is the `low-cost` profile plus Melbourne-Wubbena wide-lane
 AR averaged over each satellite's continuous arc
@@ -489,11 +501,14 @@ AR averaged over each satellite's continuous arc
 gates it against the default arm on Fix count and Hmed; its all-epoch Hp95 and
 Vp95 are reported, not gated.
 
-These numbers were measured on 2026-10-11 on the original 10 Hz Trimble rover
-(develop `ced3d057` plus the Doppler/phase slip-test interval fix, Linux gcc
-13.3 Release; demo5 b34k is unchanged from 2026-09-29). The default arm is
-bit-identical to the 2026-10-10 measurement; the slip-test fix only moved the
-preset row (2026-10-10: 8002 fixes, Hp95 5.293 m, Vp95 15.307 m). Both
+These numbers were measured on 2026-10-26 on the original 10 Hz Trimble rover
+(develop `8b2b77d1`, Linux gcc 13.3 Release; demo5 b34k `55a0f2c`, multi-GNSS).
+The default arm keeps its 1298 fixes from 2026-10-11 (Hp95 4.773 → 4.777 m on
+10,973 → 10,985 matched epochs). The preset arm moved slightly (2026-10-11:
+7961 fixes, 79.00%, Hp95 5.284 m, Vp95 13.892 m on 10,077 epochs); the tail
+analysis below refers to that 2026-10-11 run. On 2026-10-11 (develop `ced3d057`
+plus the Doppler/phase slip-test interval fix) the default arm was bit-identical
+to the 2026-10-10 measurement, and the slip-test fix only moved the preset row (2026-10-10: 8002 fixes, Hp95 5.293 m, Vp95 15.307 m). Both
 supersede the 2026-09-29 values (default 922 fixes, Hp95 5.873 m, Vp95
 16.419 m; preset 6115 fixes, Hp95 5.131 m, Vp95 9.740 m), which predate the
 BeiDou B1I mapping (#577) and later develop changes.
