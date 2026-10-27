@@ -7072,3 +7072,40 @@ official recipe is pinned to it, with 32 drives on the pass. The mtv-pe1
 probe also shows that moving toward taroz does not by itself predict a
 better score on a drive. Private is now 0.024 m from the 0.782 m taroz
 post-deadline score, and Public 0.020 m from its 0.796 m.
+
+### Where the remaining gap is: Kaggle probes with the taroz output (2026-10-27)
+
+These probes are diagnostic only. The archived taroz test output
+(`result_gnss_imu.mat`, assembled as taroz `submission.m` does) scores
+exactly the README numbers: Public 0.796 m / Private 0.782 m (57683971).
+
+To locate the gap, single drives of 57678818 were replaced by the taroz rows
+and resubmitted, one drive at a time and then one phone group at a time.
+The per-drive results are in the readback record under
+`taroz_kaggle_probes`. The Private split holds about 20 drives: one
+assembly misaligned sjc-r A205U by 2 epochs, about 470 m, and scored
+Private 24.117 m. So a per-drive delta times about 20 gives the
+(P50+P95)/2 difference on that drive.
+
+- **Private.** Most of the gap sits on three drives: lax-n Pixel5 (-0.010,
+  about 0.20 m on the drive), sjc-we1 Pixel7Pro (-0.007) and sjc-r A505U
+  (-0.006). The rest is spread thin, and native is better on five Private
+  drives.
+- **Public.** mtv-m Mi8 (-0.018) and ebf-xx Pixel5 (-0.017) dominate. Native
+  is better on ebf-x Mi8 (+0.014), mtv-e G988B (+0.007) and mtv-b A325F
+  (+0.006).
+- **Phone groups (Public / Private).** Pixel5 -0.010 / -0.011; other Pixels
+  -0.002 / -0.010; Samsung +0.007 / -0.004; Mi8 -0.014 / -0.001.
+
+On the drives taroz wins, the two trajectories differ by 0.1-0.4 m, varying
+slowly over minutes, often at the drive start:
+
+- ebf-xx: about 0.9 m while static over 0-150 s. Taroz is right there,
+  which settles the `pixel5_drive_starts` question for this drive.
+- lax-n: 0.2-0.45 m over the first 270 s.
+- mtv-m Mi8: 0.6-0.8 m over its static runs.
+
+Train shows no such deficit with the current recipes. Over 35 drives, the
+first-5-minute median error is 0.506 m for native and 0.516 m for taroz, and
+0.471 m against 0.479 m for the rest. So the remaining gap does not point to
+one fix that train could validate.
