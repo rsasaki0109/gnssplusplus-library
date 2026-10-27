@@ -1,5 +1,5 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57664241, Private 0.811 m / Public 0.817 m, 40 drives, 71,936 rows
+# Kaggle ref 57678818, Private 0.806 m / Public 0.816 m, 40 drives, 71,936 rows
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
@@ -43,7 +43,7 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.811 m / Public 0.817 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.806 m / Public 0.816 m; 40 drives, 71,936 rows"
 runtime_estimate = "~1.5 h four at a time on 4 cores; up to ~6.5 h one at a time"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -118,7 +118,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57664241 (ea13dc36...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57678818 (2e0deb2c...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true
@@ -183,4 +183,9 @@ readme = "reported"
 # build): 30 drives add --native-imu-refinement-pass (the upstream third
 # pass) and its prerequisites; lax-p Pixel5 runs with single_cpu (pinned
 # to one CPU: a GTSAM TBB worker overflows its stack in its refinement solve).
+# Recipe update to ref 57678818: sjc-r A505U (keeping its course seeds) and
+# lax-hh A325G also take the third pass, on the build that admits course
+# attitude seeds with source IMU initialization; the full lane (25 stage-0
+# runs, 25 height maps, 40 final drives, 2 h 21 min on 4 cores) reran on that
+# build from scratch, byte-identical throughout.
 # See docs/reproduce.md.

@@ -1763,9 +1763,9 @@ bool parseArguments(int argc, char** argv, Options& options) {
     }
     if (options.native_course_attitude_seeds &&
         (!android_raw || !phase171_imu_main || !phase171_ecef_doppler ||
-         options.native_epoch_heading_attitude_seeds || options.native_source_imu_initialization)) {
+         options.native_epoch_heading_attitude_seeds)) {
         std::cerr << "--native-course-attitude-seeds-mount-deg requires Android raw Phase171 ECEF-D "
-                     "without epoch heading seeds or source IMU initialization\n";
+                     "without epoch heading seeds\n";
         return false;
     }
     if (options.native_imu_time_offset_override &&
@@ -13245,7 +13245,8 @@ int main(int argc, char** argv) {
         config.use_source_tdcp_resl_observable = options.native_source_tdcp_resl_observable;
         config.use_native_tdcp_only_affine_geometry = options.native_tdcp_only_affine_geometry;
         config.use_native_epoch_heading_attitude_seeds =
-            options.native_epoch_heading_attitude_seeds || options.native_source_imu_initialization;
+            options.native_epoch_heading_attitude_seeds ||
+            (options.native_source_imu_initialization && !options.native_course_attitude_seeds);
         config.use_native_course_attitude_seeds = options.native_course_attitude_seeds;
         config.native_course_attitude_seed_mount_rad =
             options.native_course_attitude_seed_mount_deg * M_PI / 180.0;
@@ -14873,6 +14874,12 @@ int main(int argc, char** argv) {
                     imu_report.refinement_gnss_drift_handoff = true;
                 }
                 auto final_config = config;
+                if (options.native_course_attitude_seeds) {
+                    // Course seeds start the initial IMU pass only; the
+                    // refinement pass takes that pass's optimized attitude.
+                    final_config.use_native_course_attitude_seeds = false;
+                    final_config.use_native_epoch_heading_attitude_seeds = true;
+                }
                 if (options.native_source_imu_stop_phases)
                     final_config.native_imu_stop_phase = libgnss::NativeImuStopPhase::Final;
                 if (options.native_source_imu_observation_stages)

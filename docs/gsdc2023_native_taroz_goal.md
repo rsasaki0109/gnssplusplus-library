@@ -7046,3 +7046,29 @@ its 0.796 m. Left open:
   disagreement sits at 7-9-satellite epochs. In the 7 train steps of that kind
   (10 or fewer satellites, native and TDCP more than 0.3 m apart), native was
   closer to truth every time, so TDCP is the suspect there.
+
+### Course seeds with the third pass, submission 57678818 (2026-10-26)
+
+sjc-r A505U, a Private drive, could not take the third pass. Its course seeds
+(`--native-course-attitude-seeds-mount-deg 178.9`, for a phone mounted
+backwards) excluded `--native-source-imu-initialization`, which turns on the
+epoch heading seeds. The solver now lets course seeds replace the source
+heading seeds in the initial IMU pass. The refinement pass then takes that
+pass's optimized attitude. The drive moves from 0.61 m to 0.56 m from taroz,
+without the 2 m excursion of the run that dropped the course seeds. Kaggle
+Private drops from 0.811 m to 0.806 m (57677499).
+
+The three drives still without the pass were probed one at a time on top of
+that file:
+
+- mtv-e Pixel4 XL: Public unchanged at 0.817 m.
+- mtv-pe1 A325G: 0.785 m -> 0.625 m from taroz, but Public worsens to
+  0.821 m.
+- lax-hh A325G: 0.630 m -> 0.510 m from taroz, and Public improves to
+  0.816 m.
+
+Taking lax-hh gives 57678818, **Private 0.806 m / Public 0.816 m**. The
+official recipe is pinned to it, with 32 drives on the pass. The mtv-pe1
+probe also shows that moving toward taroz does not by itself predict a
+better score on a drive. Private is now 0.024 m from the 0.782 m taroz
+post-deadline score, and Public 0.020 m from its 0.796 m.
