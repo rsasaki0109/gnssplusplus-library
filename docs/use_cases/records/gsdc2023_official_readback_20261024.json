@@ -462,7 +462,7 @@
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
     "samsung_test_drives": "with the third pass mtv-b A325F 1.40 -> 0.77 m and sjc-r A32 0.82 -> 0.59 m from the taroz test output; lax-hh A325G takes the third pass in 57678818 (0.63 -> 0.51 m, Public better); mtv-pe1 A325G moved 0.785 -> 0.625 m toward taroz with it but Public got worse, so it keeps its recipe; no truth-free arbiter for A325F/A32 (ADR unusable)",
-    "pixel5_drive_starts": "lax-x resolved by the third pass ((P50+P95)/2 to taroz 0.74 -> 0.21 m; its first 4-5 minutes now agree) and taken in 57663786; ebf-xx 0.60 -> 0.55 m; its exit (epochs 120-240) disagreement with TDCP is at 7-9-satellite epochs, where on train TDCP is the wrong one (native closer to truth in 7 of 7 low-satellite steps)",
+    "pixel5_drive_starts": "lax-x resolved by the third pass ((P50+P95)/2 to taroz 0.74 -> 0.21 m; its first 4-5 minutes now agree) and taken in 57663786; ebf-xx 0.60 -> 0.55 m; its exit (epochs 120-240) disagreement with TDCP is at 7-9-satellite epochs, where on train TDCP is the wrong one (native closer to truth in 7 of 7 low-satellite steps); Kaggle per-drive swaps say taroz is right at the ebf-xx start (Public -0.017, about 0.34 m on the drive)",
     "2023-05-09-23-10-us-ca-sjc-r/sm-a505u": "resolved by 57677499/57678818: the third pass now keeps the course seeds (Private 0.811 -> 0.806 m)",
     "2022-04-25-22-36-us-ca-ebf-z/pixel5": "the third pass made it worse (Public 0.821 vs 0.836 with it); kept on 57629197"
   },
@@ -490,5 +490,369 @@
     "tdcp_scan_all_speeds": "all 40 test drives, 30-s windows at all speeds: median disagreement 0.05-0.15 m for both pipelines where ADR is usable; native-only (> 0.5 m while taroz < 0.3 m) windows only on mtv-m Mi8 (1.06 m at a 7-satellite epoch, ambiguous) and mtv-a Mi8 (0.52 m); no second ebf-x-type failure",
     "third_pass": "taroz runs fgo_gnss_imu twice (initflag true, then false with the previous result as input and tighter P/D screens); the native recipe ran one IMU solve until 57663786; with --native-imu-refinement-pass the 35 train drives with taroz move 0.7358 -> 0.7187 m (taroz 0.7123), and without Mi8 and Pixel4 XL the estimate is 0.687 m",
     "taroz_distance_as_proxy": "moving toward taroz is not a reliable proxy for a better score on its own drive: ebf-z (away, worse) and lax-hh A325G (toward, better) follow it, mtv-pe1 A325G (0.16 m toward, Public worse) does not"
+  },
+  "taroz_kaggle_probes": {
+    "purpose": "diagnostic only (not our pipeline): locate the remaining gap to the taroz post-deadline score by Kaggle readback",
+    "taroz_archive": {
+      "ref": 57683971,
+      "public_m": 0.796,
+      "private_m": 0.782,
+      "note": "the archived taroz/gsdc2023 test result_gnss_imu.mat files, assembled as taroz submission.m does, reproduce the README score exactly; sjc-r A205U must be matched on the UTC keys of phone_data.mat (its 1,697 solved epochs drop the first 2 of 1,699 device_gnss keys)"
+    },
+    "split_size": "an earlier assembly that misaligned A205U by 2 epochs (about 470 m) scored Private 24.117 m (57683941), so the Private split holds about 20 drives; per-drive deltas below times about 20 give the per-drive (P50+P95)/2 difference",
+    "group_swaps": {
+      "base": "ref 57678818 (Public 0.816 / Private 0.806 m) with one phone group replaced by the taroz rows",
+      "pixel5 (17)": {
+        "ref": 57684010,
+        "public_m": 0.806,
+        "private_m": 0.795
+      },
+      "pixel4, pixel4xl, pixel6pro, pixel7pro (9)": {
+        "ref": 57684013,
+        "public_m": 0.814,
+        "private_m": 0.796
+      },
+      "samsung (9)": {
+        "ref": 57684014,
+        "public_m": 0.823,
+        "private_m": 0.802
+      },
+      "mi8, xiaomimi8 (5)": {
+        "ref": 57684015,
+        "public_m": 0.802,
+        "private_m": 0.805
+      }
+    },
+    "per_drive_swaps": {
+      "base": "ref 57678818 with one trip replaced by the taroz rows; delta_m = score change in that trip's split (negative: taroz better); unresolved = no change at three decimals in either split",
+      "drives": [
+        {
+          "trip": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+          "ref": 57684352,
+          "public_m": 0.816,
+          "private_m": 0.796,
+          "split": "private",
+          "delta_m": -0.01
+        },
+        {
+          "trip": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+          "ref": 57684448,
+          "public_m": 0.816,
+          "private_m": 0.799,
+          "split": "private",
+          "delta_m": -0.007
+        },
+        {
+          "trip": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+          "ref": 57684455,
+          "public_m": 0.816,
+          "private_m": 0.8,
+          "split": "private",
+          "delta_m": -0.006
+        },
+        {
+          "trip": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+          "ref": 57684330,
+          "public_m": 0.816,
+          "private_m": 0.803,
+          "split": "private",
+          "delta_m": -0.003
+        },
+        {
+          "trip": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+          "ref": 57684457,
+          "public_m": 0.816,
+          "private_m": 0.803,
+          "split": "private",
+          "delta_m": -0.003
+        },
+        {
+          "trip": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+          "ref": 57684350,
+          "public_m": 0.816,
+          "private_m": 0.804,
+          "split": "private",
+          "delta_m": -0.002
+        },
+        {
+          "trip": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+          "ref": 57684374,
+          "public_m": 0.816,
+          "private_m": 0.804,
+          "split": "private",
+          "delta_m": -0.002
+        },
+        {
+          "trip": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+          "ref": 57684438,
+          "public_m": 0.816,
+          "private_m": 0.804,
+          "split": "private",
+          "delta_m": -0.002
+        },
+        {
+          "trip": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+          "ref": 57684467,
+          "public_m": 0.816,
+          "private_m": 0.804,
+          "split": "private",
+          "delta_m": -0.002
+        },
+        {
+          "trip": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+          "ref": 57684479,
+          "public_m": 0.816,
+          "private_m": 0.804,
+          "split": "private",
+          "delta_m": -0.002
+        },
+        {
+          "trip": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+          "ref": 57684340,
+          "public_m": 0.816,
+          "private_m": 0.805,
+          "split": "private",
+          "delta_m": -0.001
+        },
+        {
+          "trip": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+          "ref": 57684341,
+          "public_m": 0.816,
+          "private_m": 0.805,
+          "split": "private",
+          "delta_m": -0.001
+        },
+        {
+          "trip": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+          "ref": 57684354,
+          "public_m": 0.816,
+          "private_m": 0.807,
+          "split": "private",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+          "ref": 57684371,
+          "public_m": 0.816,
+          "private_m": 0.807,
+          "split": "private",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+          "ref": 57684466,
+          "public_m": 0.816,
+          "private_m": 0.807,
+          "split": "private",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+          "ref": 57684469,
+          "public_m": 0.816,
+          "private_m": 0.807,
+          "split": "private",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+          "ref": 57684367,
+          "public_m": 0.816,
+          "private_m": 0.81,
+          "split": "private",
+          "delta_m": 0.004
+        },
+        {
+          "trip": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+          "ref": 57684347,
+          "public_m": 0.798,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": -0.018
+        },
+        {
+          "trip": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+          "ref": 57684394,
+          "public_m": 0.799,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": -0.017
+        },
+        {
+          "trip": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+          "ref": 57684412,
+          "public_m": 0.81,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": -0.006
+        },
+        {
+          "trip": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+          "ref": 57684398,
+          "public_m": 0.811,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": -0.005
+        },
+        {
+          "trip": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+          "ref": 57684363,
+          "public_m": 0.813,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": -0.003
+        },
+        {
+          "trip": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+          "ref": 57684452,
+          "public_m": 0.814,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": -0.002
+        },
+        {
+          "trip": "2020-12-11-19-30-us-ca-mtv-e/pixel4xl",
+          "ref": 57684322,
+          "public_m": 0.817,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+          "ref": 57684389,
+          "public_m": 0.817,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+          "ref": 57684420,
+          "public_m": 0.817,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.001
+        },
+        {
+          "trip": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+          "ref": 57684323,
+          "public_m": 0.818,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.002
+        },
+        {
+          "trip": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+          "ref": 57684360,
+          "public_m": 0.818,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.002
+        },
+        {
+          "trip": "2022-04-25-22-36-us-ca-ebf-z/pixel5",
+          "ref": 57684386,
+          "public_m": 0.818,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.002
+        },
+        {
+          "trip": "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g",
+          "ref": 57684405,
+          "public_m": 0.818,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.002
+        },
+        {
+          "trip": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+          "ref": 57684445,
+          "public_m": 0.819,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.003
+        },
+        {
+          "trip": "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+          "ref": 57684433,
+          "public_m": 0.822,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.006
+        },
+        {
+          "trip": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+          "ref": 57684327,
+          "public_m": 0.823,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.007
+        },
+        {
+          "trip": "2022-04-25-21-04-us-ca-ebf-x/mi8",
+          "ref": 57684381,
+          "public_m": 0.83,
+          "private_m": 0.806,
+          "split": "public",
+          "delta_m": 0.014
+        },
+        {
+          "trip": "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+          "ref": 57684343,
+          "public_m": 0.816,
+          "private_m": 0.806,
+          "split": "unresolved",
+          "delta_m": 0.0
+        },
+        {
+          "trip": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+          "ref": 57684361,
+          "public_m": 0.816,
+          "private_m": 0.806,
+          "split": "unresolved",
+          "delta_m": 0.0
+        },
+        {
+          "trip": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+          "ref": 57684380,
+          "public_m": 0.816,
+          "private_m": 0.806,
+          "split": "unresolved",
+          "delta_m": 0.0
+        },
+        {
+          "trip": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+          "ref": 57684443,
+          "public_m": 0.816,
+          "private_m": 0.806,
+          "split": "unresolved",
+          "delta_m": 0.0
+        },
+        {
+          "trip": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+          "ref": 57684460,
+          "public_m": 0.816,
+          "private_m": 0.806,
+          "split": "unresolved",
+          "delta_m": 0.0
+        },
+        {
+          "trip": "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+          "ref": 57684475,
+          "public_m": 0.816,
+          "private_m": 0.806,
+          "split": "unresolved",
+          "delta_m": 0.0
+        }
+      ]
+    },
+    "findings": [
+      "Private: lax-n Pixel5 (-0.010), sjc-we1 Pixel7Pro (-0.007) and sjc-r A505U (-0.006) carry most of the gap; the rest is spread thin and native is better on 5 Private drives",
+      "Public: mtv-m Mi8 (-0.018) and ebf-xx Pixel5 (-0.017) dominate; native is better on ebf-x Mi8 (+0.014), mtv-e G988B (+0.007) and mtv-b A325F (+0.006)",
+      "the drives taroz wins differ from native by slowly varying 0.1-0.4 m over minutes, often at the drive start (ebf-xx static 0-150 s about 0.9 m, lax-n first 270 s 0.2-0.45 m, mtv-m Mi8 static runs 0.6-0.8 m); taroz is the better one there",
+      "train shows no such start deficit with the current recipes: first 5 minutes median error 0.506 m native vs 0.516 m taroz over 35 drives (rest 0.471 vs 0.479 m)"
+    ]
   }
 }
