@@ -45,7 +45,7 @@ name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
 readme_row = "Smartphone GNSS/IMU: Private 0.767 m / Public 0.782 m (test-tuned); 40 drives, 71,936 rows"
-runtime_estimate = "~1.5 h four at a time on 4 cores; up to ~6.5 h one at a time"
+runtime_estimate = "~3 h with --jobs 4 on 4 cores"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
 [datasets.gsdc]
@@ -190,5 +190,9 @@ readme = "reported"
 # lax-hh A325G also take the third pass, on the build that admits course
 # attitude seeds with source IMU initialization; the full lane (25 stage-0
 # runs, 25 height maps, 40 final drives, 2 h 21 min on 4 cores) reran on that
-# build from scratch, byte-identical throughout.
+# build from scratch, byte-identical throughout. Recipe update to ref
+# 57717122 (test-tuned: 18 drives use the setting that scored best in
+# single-drive Kaggle probes) on the build that sizes TBB worker stacks at
+# 64 MiB (lax-p unpinned); the lane driver reran everything from scratch
+# with --jobs 4 in 2 h 51 min on 4 cores, byte-identical throughout.
 # See docs/reproduce.md.
