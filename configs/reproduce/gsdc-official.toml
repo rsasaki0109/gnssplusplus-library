@@ -1,7 +1,8 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57733487, Private 0.775 m / Public 0.804 m, 40 drives, 71,936 rows
+# Kaggle ref 57742915, Private 0.714 m / Public 0.732 m, 40 drives, 71,936 rows
 # (no Kaggle feedback: 22 drives take a variant picked by a truth-free rule
-# fixed on train, then a cross-track snap to a road map from train truth)
+# fixed on train, and 32 drives add the native cross-track road prior from a
+# road map built from train truth)
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
@@ -33,20 +34,21 @@
 #           57585127, 57586667, 57590194, 57594243 and 57600830
 #           (57619467 reruns them unchanged on one build; 57626255 solves
 #           ebf-x Mi8 from the taroz IdxStart epoch, see input_window);
-#   assemble on the official key list (Kaggle sample_submission order),
-#           then the road snap (road_snap) toward the train-truth road map.
+#   roads   per-drive road maps from Kaggle train ground truth within 30 m
+#           of the drive's raw WLS track (32 maps, SHA-pinned);
+#   assemble on the official key list (Kaggle sample_submission order).
 # Stage 0 is skipped for a drive whose height map is already present with
 # the pinned SHA-256, and every run step resumes from completed drives.
 #
 # Needs a GTSAM 4.3 build of gnss_fgo_imu_no_base; on Windows set
 # GTSAM_BIN_DIR to the GTSAM DLL directory. Runs one solver at a time.
-# The height-map step and the road snap need numpy, pandas and scipy.
+# The height-map and road-map steps need numpy, pandas and scipy.
 
 [lane]
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.775 m / Public 0.804 m (no Kaggle feedback); 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.714 m / Public 0.732 m (no Kaggle feedback); 40 drives, 71,936 rows"
 runtime_estimate = "~3 h with --jobs 4 on 4 cores"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -68,7 +70,7 @@ dataset = "taroz dataset_2023 (GSDC 2023 test drives + CORS base RINEX + brdc.na
 archive_sha256 = "bda30ab456e6fd6f83550c246e8dbd287306d5385f1f1069c99c16298e647408"
 truth = "Kaggle smartphone-decimeter-2023 train ground_truth.csv (156 files, SHA-256 pinned in the recipe), via --gsdc-truth-root"
 
-# 1. Check every raw input and the train truth (height maps and road snap).
+# 1. Check every raw input and the train truth (height and road maps).
 [[steps]]
 name = "verify-gsdc-official-inputs"
 argv = [
@@ -100,7 +102,17 @@ argv = [
   "--allow-mismatch",
 ]
 
-# 4. The 40 final replays, one process at a time.
+# 4. Road maps from the raw WLS tracks + Kaggle train ground truth.
+[[steps]]
+name = "build-gsdc-official-road-maps"
+argv = [
+  "{python}", "scripts/experiments/gsdc/gsdc_official_reproduce.py", "road-maps",
+  "--work-dir", "{work_dir}",
+  "--gsdc-root", "{gsdc_root}",
+  "--gsdc-truth-root", "{gsdc_truth_root}",
+]
+
+# 5. The 40 final replays.
 [[steps]]
 name = "run-gsdc-official-final"
 argv = [
@@ -112,8 +124,7 @@ argv = [
   "--jobs", "4",
 ]
 
-# 5. Assemble on the official key list, snap toward the train-truth road map,
-#    and compare with the submitted CSV.
+# 6. Assemble on the official key list and compare with the submitted CSV.
 [[steps]]
 name = "assemble-gsdc-official-submission"
 argv = [
@@ -125,7 +136,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57733487 (a81ceb0b...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57742915 (12d39d57...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true

@@ -743,16 +743,27 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 57733487)
-        self.assertTrue(submission["sha256"].startswith("a81ceb0b"))
+        self.assertEqual(submission["kaggle_ref"], 57742915)
+        self.assertTrue(submission["sha256"].startswith("12d39d57"))
         truth_free = [drive for drive in recipe["drives"] if "truth_free" in drive["research_source"]]
         self.assertEqual(len(truth_free), 22)
         for drive in truth_free:  # every picked variant keeps its 57678818 provenance
             self.assertEqual(len(drive["research_source"]["previous_output_sha256"]), 64)
             self.assertEqual("--native-height-map" in drive["argv"], drive["height_map"] is not None)
-        snap = recipe["road_snap"]
-        self.assertEqual(snap["truth_files"], "height_maps.truth_files")
-        self.assertEqual((snap["radius_m"], snap["heading_deg"], snap["max_offset_m"], snap["step"]), (6.0, 25.0, 1.0, 0.5))
+        self.assertNotIn("road_snap", recipe)  # 57742915 replaces the post-hoc snap with the native road prior
+        roads = recipe["road_maps"]
+        self.assertEqual(roads["truth_files"], "height_maps.truth_files")
+        self.assertEqual(len(roads["maps"]), 32)
+        for drive in recipe["drives"]:
+            argv = drive["argv"]
+            if drive["id"] in roads["maps"]:
+                self.assertEqual(drive["road_map"], roads["maps"][drive["id"]]["path"])
+                self.assertEqual(argv[argv.index("--native-road-map") + 1], drive["road_map"])
+                self.assertEqual(argv[argv.index("--native-road-map-sigma-m") + 1], "0.5")
+            else:
+                self.assertIsNone(drive["road_map"])
+                self.assertNotIn("--native-road-map", argv)
+        self.assertEqual(sum(1 for d in recipe["drives"] if d["research_source"].get("submission") == "57742915"), 26)
         refined = [drive for drive in recipe["drives"] if "--native-imu-refinement-pass" in drive["argv"]]
         self.assertEqual(len(refined), 32)
         for drive in refined:  # the refinement pass needs the exported stages, source init and main Doppler
@@ -792,7 +803,7 @@ class GsdcOfficialLaneTest(unittest.TestCase):
                 self.assertEqual(argv[argv.index("--native-height-map") + 1], maps[entry["id"]]["path"])
         self.assertEqual(len(recipe["height_maps"]["truth_files"]), 156)
 
-    def test_dry_run_renders_the_five_steps(self) -> None:
+    def test_dry_run_renders_the_six_steps(self) -> None:
         result = subprocess.run(
             [
                 sys.executable, str(GNSS_CLI), "reproduce", "gsdc-official", "--dry-run",
@@ -807,6 +818,7 @@ class GsdcOfficialLaneTest(unittest.TestCase):
             "gsdc_official_reproduce.py verify-inputs",
             "gsdc_official_reproduce.py run --stage stage0",
             "gsdc_official_reproduce.py height-maps",
+            "gsdc_official_reproduce.py road-maps",
             "gsdc_official_reproduce.py run --stage final",
             "gsdc_official_reproduce.py assemble",
             "--gsdc-truth-root /datasets/gsdc2023/kaggle_train_gt",
@@ -993,6 +1005,39 @@ class GsdcOfficialLaneTest(unittest.TestCase):
                     Path(tmp) / f"{name}.csv", index=False)
             self.assertLess(select.prres(device, heights, Path(tmp) / "true.csv"), 1e-3)
             self.assertGreater(select.prres(device, heights, Path(tmp) / "shifted.csv"), 1.0)
+
+    @unittest.skipUnless(HAVE_SCIPY_STACK, "numpy, pandas and scipy are needed for the road maps")
+    def test_road_maps_keep_moving_truth_near_the_raw_wls_track(self) -> None:
+        driver = self._import()
+        lat0, radius = 37.4, 6371008.8
+        metres_lon = math.radians(1.0) * radius * math.cos(math.radians(lat0))
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            files = {}
+            for name, lat, lon_step_m, count in (("near", lat0, 10.0, 30), ("parked", lat0, 0.1, 10),
+                                                 ("far", lat0 + 0.01, 10.0, 30)):
+                path = tmp_path / "train" / name / "p" / "ground_truth.csv"
+                path.parent.mkdir(parents=True)
+                path.write_text("UnixTimeMillis,LatitudeDegrees,LongitudeDegrees,AltitudeMeters\n" + "".join(
+                    f"{1000 * i},{lat},{-122.0 + lon_step_m * i / metres_lon},{5.0}\n" for i in range(count)), encoding="utf-8")
+                files[f"train/{name}/p/ground_truth.csv"] = driver.sha256_file(path)
+            recipe = {"height_maps": {"truth_files": files}}
+            points = driver.load_road_points(recipe, tmp_path)
+            self.assertEqual(len(points), 30 + 30)  # the parked file never moves 1 m per epoch
+            self.assertAlmostEqual(float(points.heading_east.abs().max()), 1.0, places=6)
+            # A raw WLS track along the first road (ECEF), 1 km long: only the "near" road is within 30 m.
+            lat, lon = math.radians(lat0), [math.radians(-122.0 + 10.0 * i / metres_lon) for i in range(30)]
+            a, f = 6378137.0, 1 / 298.257223563
+            e2 = f * (2 - f)
+            n = a / math.sqrt(1 - e2 * math.sin(lat) ** 2)
+            device = tmp_path / "device_gnss.csv"
+            device.write_text("WlsPositionXEcefMeters,WlsPositionYEcefMeters,WlsPositionZEcefMeters\n" + "".join(
+                f"{(n + 5) * math.cos(lat) * math.cos(x)},{(n + 5) * math.cos(lat) * math.sin(x)},{(n * (1 - e2) + 5) * math.sin(lat)}\n"
+                for x in lon), encoding="utf-8")
+            out = tmp_path / "road_maps" / "drive.csv"
+            self.assertEqual(driver.build_road_map(device, points, out), {"points": 30})
+            self.assertTrue(out.read_text(encoding="utf-8").startswith(
+                "lat_deg,lon_deg,height_m,heading_east,heading_north\n37.400000000,"))
 
     def test_input_window_writes_raw_rows_from_the_window_epoch(self) -> None:
         driver = self._import()

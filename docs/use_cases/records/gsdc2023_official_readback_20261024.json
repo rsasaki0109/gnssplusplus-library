@@ -586,6 +586,23 @@
       "recipe": "the official recipe is pinned to this file: 22 drives under research_source.truth_free, road_snap in assemble",
       "caveats": "no Kaggle score chose anything, but the variant types were chosen after the per-drive probes of 57717122, and this is the best of five truth-free submissions (57726666, 57732745, 57733311, 57733407, 57733487)",
       "vs_taroz_post_deadline": "Private 0.775 vs 0.782 m (ahead), Public 0.804 vs 0.796 m (behind)"
+    },
+    {
+      "ref": 57742915,
+      "sha256": "12d39d57a8ff3d4deb520e87355873a194ae86e635a70afb9f54e5f40d9ba12f",
+      "base_ref": 57732745,
+      "private_m": 0.714,
+      "public_m": 0.732,
+      "base_private_m": 0.784,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "test_tuned": false,
+      "replaced_drives": 26,
+      "change": "the 57732745 recipe plus the native cross-track road prior (--native-road-map, sigma 0.5 m, Huber 0.5; map points within 6 m heading within 25 deg, median offset under 1 m) on the 32 drives whose road map (156 train truth files within 30 m of the raw WLS track) is non-empty; no post-hoc snap",
+      "train_validation": "36 drives, maps without the drive's course and trip: -0.106 m mean, 22 better / 1 worse (mtv-h Pixel5 +0.098 m); sigma not tuned; post-hoc snap on top -0.099 m",
+      "recipe": "the official recipe is pinned to this file: road_maps (32 maps) and --native-road-map on those drives",
+      "caveats": "no Kaggle score chose anything; the variant types were chosen after the per-drive probes of 57717122, and this is the sixth no-feedback submission",
+      "vs_taroz_post_deadline": "Private 0.714 vs 0.782 m, Public 0.732 vs 0.796 m (ahead on both)"
     }
   ],
   "rejected_on_train": {
@@ -608,7 +625,8 @@
     "refinement_pass_toggle_by_prres": "36 drives: oracle -0.0005 m, prres rule +0.046 m (1 of 16 picks right)",
     "relative_height_pairs": "12 of 36 drives run: mean +0.0037 m, 6 better / 6 worse (3x slower, one out of memory); stopped",
     "average_current_and_motion": "per-epoch mean of the current and XXVV motion outputs -0.0035 m, median of three variants -0.0011 m; the prres/phone selection gives -0.0077 m",
-    "road_snap_full_step": "median snap moving by the full offset: +0.0156 m on 36 train drives (a neighbouring lane's truth pulls the epoch across)"
+    "road_snap_full_step": "median snap moving by the full offset: +0.0156 m on 36 train drives (a neighbouring lane's truth pulls the epoch across)",
+    "road_snap_on_top_of_road_prior": "post-hoc median snap after the native road prior: -0.1058 -> -0.0986 m on 36 train drives (7 better / 15 worse)"
   },
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
