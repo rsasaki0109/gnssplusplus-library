@@ -132,17 +132,24 @@ UH2 = UH + the flag, under a new frozen rule:
 - **What it costs:** it gives back part of the wrong-FIX reduction. On
   Shinjuku, audited wrong FIX rise from 50 under UH to 84 under UH2.
 - **nagoya/run3 does not move, for a different reason:**
-  1. At TOW 553961.2 the float update NIS per observation is 1559, yet the
-     legacy hold keeps fixing correctly.
+  1. At TOW 553961.2 the float update NIS per observation is 1559. The
+     legacy hold there was described here as correct. It is not: under U it is
+     0.87 m off, and U's holds stay 0.9–1.0 m off for 2.8 s before they come
+     back to about 0.2 m ([phase-fit note](rtk_hold_fix_phase_fit.md)).
   2. UH2 rejects that hold for its NIS, so the inconsistent update reaches the
      float.
   3. The next hold candidate is more than 1 m off and fails the hold jump check,
      which ends the kept run.
-  4. 108 correct hold epochs are lost.
+  4. 108 correct hold epochs are lost: the later U holds, after U's wrong
+     stretch.
 - **What the NIS cannot tell apart:** a NIS spike can come from the
   measurements while the held integers are right, so it does not separate:
   - a hold that is wrong because it overwrote a stale float (Shinjuku 281650);
-  - a correct hold that is riding through bad measurements (nagoya/run3).
+  - a correct hold that is riding through bad measurements (nagoya/run3
+    553958.2–553961.0 under U, NIS 10.7–11.6, 0.17–0.18 m off).
+
+  The [phase-fit note](rtk_hold_fix_phase_fit.md) separates the two with the
+  carrier-phase fit of the hold position.
 
 Gates A and W pass. L fails on PPC tokyo/run1–3 and nagoya/run3, and M on
 Shinjuku, u-blox Shinjuku and tokyo/run3. P1 (nagoya/run3 loss below 5%) and P2
