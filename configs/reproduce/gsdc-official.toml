@@ -85,6 +85,7 @@ argv = [
   "--work-dir", "{work_dir}",
   "--gsdc-root", "{gsdc_root}",
   "--bin", "{bin:gnss_fgo_imu_no_base}",
+  "--jobs", "4",
 ]
 
 # 3. Height maps from the stage-0 trajectories + Kaggle train ground truth.
@@ -106,6 +107,7 @@ argv = [
   "--work-dir", "{work_dir}",
   "--gsdc-root", "{gsdc_root}",
   "--bin", "{bin:gnss_fgo_imu_no_base}",
+  "--jobs", "4",
 ]
 
 # 5. Assemble on the official key list and compare with the submitted CSV.

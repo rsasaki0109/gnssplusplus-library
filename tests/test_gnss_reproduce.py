@@ -967,6 +967,32 @@ class GsdcOfficialLaneTest(unittest.TestCase):
                 cpus = (tmp_path / "final" / "a__phone1" / "solution.csv").read_text(encoding="utf-8")
                 self.assertEqual(cpus, str(expected))
 
+    def test_run_jobs_runs_drives_at_once(self) -> None:
+        driver = self._import()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            recipe, work = self._synthetic_recipe(tmp_path)
+            fake = tmp_path / "fake_solver.py"
+            fake.write_text(textwrap.dedent("""
+                import sys, time
+                out = sys.argv[sys.argv.index('--out') + 1]
+                start = time.time(); time.sleep(1.0)
+                open(out, 'w').write(f'{start}\\n')
+            """), encoding="utf-8")
+            for drive in recipe["drives"]:
+                drive["argv"] = ["{bin}", str(fake), "--dataset-id", drive["id"], "--out", drive["output"]]
+                drive["research_source"] = {"record_wall_s": 1.0}
+            recipe_path = tmp_path / "recipe.json"
+            recipe_path.write_text(json.dumps(recipe), encoding="utf-8")
+            argv = ["--recipe", str(recipe_path), "run", "--stage", "final", "--work-dir", str(work),
+                    "--bin", sys.executable, "--jobs", "2"]
+            self.assertEqual(driver.main(argv), 0)
+            starts = [float((work / "final" / d["id"].replace("/", "__") / "solution.csv").read_text().strip())
+                      for d in recipe["drives"]]
+            self.assertLess(abs(starts[0] - starts[1]), 0.8)  # both drives ran at once
+            progress = json.loads((work / "final_progress.json").read_text(encoding="utf-8"))
+            self.assertEqual(sorted(progress), sorted(d["id"] for d in recipe["drives"]))
+
     def test_run_resume_skips_completed_drives(self) -> None:
         driver = self._import()
         with tempfile.TemporaryDirectory() as tmp:
