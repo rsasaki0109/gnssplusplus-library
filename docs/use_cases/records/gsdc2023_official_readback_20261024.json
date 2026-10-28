@@ -489,6 +489,103 @@
         "tdcp": "7 drives: rule picks 3, 3 right, mean -0.0300 m (= oracle)"
       },
       "outcome": "Private 0.806 -> 0.792 m without test feedback (the Kaggle-probe selection 57717122 reached 0.767 m); Public unchanged, the ebf-xx Pixel5 motion pick (+0.012 on its probe) cancelling the gains"
+    },
+    {
+      "ref": 57727174,
+      "sha256": "02208f4f20aa299e90f8f35df6beedc05dcf0beddf70f45a19bce20edfa216b6",
+      "base_ref": 57717122,
+      "private_m": 0.767,
+      "public_m": 0.782,
+      "rows": 71936,
+      "test_tuned": true,
+      "change": "the 57717122 file submitted again (same SHA-256), only to show it as the latest submission"
+    },
+    {
+      "ref": 57732745,
+      "sha256": "9045daf631cfba840c3a84c2e8ccaf6f210958ba38875e5d12c9e3e74a0edd58",
+      "base_ref": 57678818,
+      "private_m": 0.784,
+      "public_m": 0.816,
+      "base_private_m": 0.806,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "test_tuned": false,
+      "replaced_drives": 22,
+      "change": "truth-free rule v2, fixed on train: drop the height map where the median height spread of map points within 15 m of the 57678818 trajectory is >= 0.3 m (10 drives); XXVV motion on A325F/A325G/A205U; otherwise the variant (XXVV motion, source TDCP) with the lowest prres when below the base; no Kaggle feedback",
+      "picks": {
+        "2022-02-23-17-46-us-ca-lax-n/pixel5": "motion",
+        "2022-02-23-22-35-us-ca-lax-m/pixel5": "motion",
+        "2022-02-24-15-10-us-ca-lax-p/pixel5": "motion",
+        "2022-03-22-18-44-us-ca-mtv-pe1/pixel5": "nomap+motion",
+        "2022-04-27-18-16-us-ca-ebf-zz/pixel5": "motion",
+        "2022-04-27-19-23-us-ca-ebf-xx/pixel5": "motion",
+        "2023-04-27-19-25-us-ca-mtv-pe1/pixel5": "nomap+motion",
+        "2023-05-23-21-06-us-ca-mtv-de1/pixel5": "motion",
+        "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": "nomap+motion",
+        "2021-11-05-18-28-us-ca-mtv-m/pixel6pro": "nomap+motion",
+        "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": "motion",
+        "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro": "nomap+motion",
+        "2022-10-06-20-46-us-ca-sjc-r/sm-a205u": "motion",
+        "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": "nomap+motion",
+        "2022-04-27-21-55-us-ca-ebf-ww/mi8": "tdcp",
+        "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8": "nomap+motion",
+        "2021-09-14-20-32-us-ca-mtv-k/pixel4": "nomap",
+        "2021-09-28-21-56-us-ca-mtv-a/mi8": "nomap",
+        "2020-12-11-19-30-us-ca-mtv-e/pixel4xl": "nomap",
+        "2022-07-12-18-37-us-ca-mtv-b/sm-a325f": "motion",
+        "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": "motion",
+        "2021-09-20-19-03-us-ca-mtv-l/pixel4": "motion"
+      },
+      "train_validation": {
+        "height_map": "18 train drives with leave-one-course-out maps: always on +0.0032 m (per 36 drives), oracle -0.0054 m; corr(d_score, map height spread) +0.49; train spreads below 0.21 m or above 0.40 m",
+        "motion_by_phone": "A325F/A325G/A205U: all 4 train drives gain (-0.013, -0.093, -0.064, -0.039 m); prres misses two of them",
+        "rule_on_train": "motion rule (phones + prres) -0.0077 m in sample"
+      }
+    },
+    {
+      "ref": 57733311,
+      "sha256": "d54b6d18ae0d94f3e4a7d83ebf2f11f08e1d22dcae3c888b5867ebc0133c748c",
+      "base_ref": 57732745,
+      "private_m": 0.777,
+      "public_m": 0.809,
+      "base_private_m": 0.784,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "test_tuned": false,
+      "replaced_drives": 0,
+      "change": "cross-track snap: per moving epoch, the offset to the nearest same-direction train-truth point within 6 m (heading within 25 deg), moved by half when |offset| < 1 m; map from the 40 taroz train drives",
+      "train_validation": "leave-one-course-out map, 36 drives: -0.0054 m; 18 covered, 15 better / 3 worse"
+    },
+    {
+      "ref": 57733407,
+      "sha256": "5c6ef95a9e37a2e49ca5bc323647301be7117ad0a381239594a50e9f16b65627",
+      "base_ref": 57732745,
+      "private_m": 0.777,
+      "public_m": 0.807,
+      "base_private_m": 0.784,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "test_tuned": false,
+      "replaced_drives": 0,
+      "change": "the same snap with the map from all 156 Kaggle train ground-truth files (the height-map truth set)",
+      "train_validation": "leave-one-course-out map, 36 drives: -0.0094 m; 24 covered, 18 better / 5 worse"
+    },
+    {
+      "ref": 57733487,
+      "sha256": "a81ceb0bc10a65a38c7186ce25ff3704b1b2362523a8aff6319e698825e2009f",
+      "base_ref": 57732745,
+      "private_m": 0.775,
+      "public_m": 0.804,
+      "base_private_m": 0.784,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "test_tuned": false,
+      "replaced_drives": 0,
+      "change": "road snap with the median of all kept offsets (|offset| < 1 m) along their mean normal, half step, map from all 156 train files",
+      "train_validation": "leave-one-course-out map, 36 drives: -0.0143 m, 19 better / 5 worse (full step +0.0151 m)",
+      "recipe": "the official recipe is pinned to this file: 22 drives under research_source.truth_free, road_snap in assemble",
+      "caveats": "no Kaggle score chose anything, but the variant types were chosen after the per-drive probes of 57717122, and this is the best of five truth-free submissions (57726666, 57732745, 57733311, 57733407, 57733487)",
+      "vs_taroz_post_deadline": "Private 0.775 vs 0.782 m (ahead), Public 0.804 vs 0.796 m (behind)"
     }
   ],
   "rejected_on_train": {
@@ -507,7 +604,11 @@
     "source_tdcp_metre_sigma_phase184_huber_all_drives": "4 of the first 6 train drives worse (mean +0.031 m; mtv-b Pixel4 +0.106 m); kept on ebf-x only",
     "along_track_shift_per_phone_family": "truth-free shift of -b along the solution's own heading (b = leave-one-out family median along-track bias): mean over 36 drives 0.7475 -> 0.7628 m",
     "refinement_pass_mi8": "third pass on 4 Mi8 train drives +0.039 to +0.085 m (mean +0.061 m); also worse in the 2026-09 records; Mi8 test drives keep the two-stage recipe",
-    "refinement_prerequisites_pixel4xl": "--native-source-imu-initialization with --native-phase213-main-doppler on mtv-b Pixel4 XL 0.422 -> 1.421 m (the third pass then 1.290 m); mtv-e Pixel4 XL keeps its recipe"
+    "refinement_prerequisites_pixel4xl": "--native-source-imu-initialization with --native-phase213-main-doppler on mtv-b Pixel4 XL 0.422 -> 1.421 m (the third pass then 1.290 m); mtv-e Pixel4 XL keeps its recipe",
+    "refinement_pass_toggle_by_prres": "36 drives: oracle -0.0005 m, prres rule +0.046 m (1 of 16 picks right)",
+    "relative_height_pairs": "12 of 36 drives run: mean +0.0037 m, 6 better / 6 worse (3x slower, one out of memory); stopped",
+    "average_current_and_motion": "per-epoch mean of the current and XXVV motion outputs -0.0035 m, median of three variants -0.0011 m; the prres/phone selection gives -0.0077 m",
+    "road_snap_full_step": "median snap moving by the full offset: +0.0151 m on 36 train drives (a neighbouring lane's truth pulls the epoch across)"
   },
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
@@ -540,7 +641,8 @@
     "tdcp_scan_all_speeds": "all 40 test drives, 30-s windows at all speeds: median disagreement 0.05-0.15 m for both pipelines where ADR is usable; native-only (> 0.5 m while taroz < 0.3 m) windows only on mtv-m Mi8 (1.06 m at a 7-satellite epoch, ambiguous) and mtv-a Mi8 (0.52 m); no second ebf-x-type failure",
     "third_pass": "taroz runs fgo_gnss_imu twice (initflag true, then false with the previous result as input and tighter P/D screens); the native recipe ran one IMU solve until 57663786; with --native-imu-refinement-pass the 35 train drives with taroz move 0.7358 -> 0.7187 m (taroz 0.7123), and without Mi8 and Pixel4 XL the estimate is 0.687 m",
     "taroz_distance_as_proxy": "moving toward taroz is not a reliable proxy for a better score on its own drive: ebf-z (away, worse) and lax-hh A325G (toward, better) follow it, mtv-pe1 A325G (0.16 m toward, Public worse) does not",
-    "noise_floor": "train per-drive native-taroz difference: mean -0.025 m, std 0.124 m, about +/-0.028 m on a 20-drive mean; averaging native and taroz trajectories gives 0.680 m vs native 0.687 m"
+    "noise_floor": "train per-drive native-taroz difference: mean -0.025 m, std 0.124 m, about +/-0.028 m on a 20-drive mean; averaging native and taroz trajectories gives 0.680 m vs native 0.687 m",
+    "samsung_a505g_along_track": "train sm-a505g: native final +0.73 m along-track vs taroz +0.36 m, roughly constant with speed and acceleration; native and taroz yaw agree within 1 deg (offset applied the same way); cause not found, one train drive per phone"
   },
   "taroz_kaggle_probes": {
     "purpose": "diagnostic only (not our pipeline): locate the remaining gap to the taroz post-deadline score by Kaggle readback",
