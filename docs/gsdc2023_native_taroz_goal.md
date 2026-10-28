@@ -7109,3 +7109,40 @@ Train shows no such deficit with the current recipes. Over 35 drives, the
 first-5-minute median error is 0.506 m for native and 0.516 m for taroz, and
 0.471 m against 0.479 m for the rest. So the remaining gap does not point to
 one fix that train could validate.
+
+### Test-tuned per-drive settings, submission 57717122 (2026-10-28)
+
+**This step is tuned on the test set.** On train, native and taroz are tied
+in expectation. The per-drive difference has a standard deviation of
+0.124 m, about ±0.028 m on a 20-drive mean. So the 0.024 m Private gap was
+within drive-to-drive noise, and no single fix stood out. The user chose to
+win on Kaggle readback instead.
+
+Single-drive probes started from 57678818. A candidate replaced one drive,
+and its score change was read in that drive's split. The candidates were:
+
+- the third pass removed (57629197 output), probed on 32 drives;
+- XXVV motion, source TDCP sigma/Huber, no height constraint, the third
+  pass, RPYReset and the source stop/observation stages. These were rerun
+  on the 18 drives with the largest taroz gaps, and the 41 pairs that moved
+  the drive were probed.
+
+Per drive, the setting with the largest strict improvement at three decimals
+was kept:
+
+| Setting | Drives |
+|---|---|
+| XXVV motion | mtv-de1, sjc-r A205U, lax-n, mtv-xe1 Pixel7Pro, mtv-l, mtv-k, sjc-we1, sjc-ke2 S908B, lax-hh A325G |
+| source TDCP sigma/Huber | mtv-m Mi8, mtv-pe1 Xiaomi Mi8, ebf-ww Mi8, mtv-a Mi8 |
+| no height constraint | lax-x, sjc-ce1 Pixel7Pro, sjc-r Pixel5 |
+| no third pass | mtv-g Pixel5, mtv-pe1 Pixel5 2022-03-22 |
+
+The combined file is 57717122, **Private 0.767 m / Public 0.782 m**, below
+the taroz post-deadline 0.782 / 0.796 m. The probe deltas summed to -0.044
+(Private) and -0.031 (Public). The combined file landed 0.005 above the
+Private sum and 0.003 below the Public sum.
+
+These choices do not generalize. XXVV motion on the 36 train drives moves
+the mean from 0.7134 m to 0.7213 m: Samsung drives improve, while Pixel5,
+Pixel7Pro and G988B get worse. The 57717122 score is therefore a test-tuned
+result. The last recipe before this tuning is 57678818 (0.806 / 0.816 m).

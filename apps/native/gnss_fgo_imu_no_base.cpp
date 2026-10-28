@@ -46,6 +46,11 @@
 #include <libgnss++/io/rinex.hpp>
 
 #include <Eigen/Geometry>
+#include <gtsam/config.h>
+#if defined(GTSAM_USE_TBB) && __has_include(<tbb/global_control.h>)
+#include <tbb/global_control.h>
+#define GNSSPP_TBB_WORKER_STACK 1
+#endif
 
 #include <array>
 #include <algorithm>
@@ -12050,6 +12055,11 @@ std::string makeSummary(const Options& options,
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef GNSSPP_TBB_WORKER_STACK
+    // GTSAM eliminates on TBB worker threads; the refinement solve of long
+    // drives (lax-p, 4,515 epochs) overflows TBB's default worker stack.
+    tbb::global_control tbb_worker_stack(tbb::global_control::thread_stack_size, std::size_t{64} << 20);
+#endif
     Options options;
     if (!parseArguments(argc, argv, options)) return 2;
     if (options.native_phase180_android_clock_preflight) {

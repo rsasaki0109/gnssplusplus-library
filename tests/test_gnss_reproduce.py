@@ -740,16 +740,15 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 57678818)
-        self.assertTrue(submission["sha256"].startswith("2e0deb2c"))
+        self.assertEqual(submission["kaggle_ref"], 57717122)
+        self.assertTrue(submission["sha256"].startswith("02208f4f"))
         refined = [drive for drive in recipe["drives"] if "--native-imu-refinement-pass" in drive["argv"]]
-        self.assertEqual(len(refined), 32)
+        self.assertEqual(len(refined), 30)
         for drive in refined:  # the refinement pass needs the exported stages, source init and main Doppler
             for flag in ("--native-export-gnss-stage", "--native-export-imu-stage",
                          "--native-source-imu-initialization", "--native-phase213-main-doppler"):
                 self.assertIn(flag, drive["argv"])
-        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("single_cpu")],
-                         ["2022-02-24-15-10-us-ca-lax-p/pixel5"])
+        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("single_cpu")], [])
         windowed = [drive for drive in recipe["drives"] if drive.get("input_window")]
         self.assertEqual([drive["id"] for drive in windowed], ["2022-04-25-21-04-us-ca-ebf-x/mi8"])
         for drive in windowed:
@@ -966,6 +965,32 @@ class GsdcOfficialLaneTest(unittest.TestCase):
                 self.assertEqual(record["single_cpu"], single)
                 cpus = (tmp_path / "final" / "a__phone1" / "solution.csv").read_text(encoding="utf-8")
                 self.assertEqual(cpus, str(expected))
+
+    def test_run_jobs_runs_drives_at_once(self) -> None:
+        driver = self._import()
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            recipe, work = self._synthetic_recipe(tmp_path)
+            fake = tmp_path / "fake_solver.py"
+            fake.write_text(textwrap.dedent("""
+                import sys, time
+                out = sys.argv[sys.argv.index('--out') + 1]
+                start = time.time(); time.sleep(1.0)
+                open(out, 'w').write(f'{start}\\n')
+            """), encoding="utf-8")
+            for drive in recipe["drives"]:
+                drive["argv"] = ["{bin}", str(fake), "--dataset-id", drive["id"], "--out", drive["output"]]
+                drive["research_source"] = {"record_wall_s": 1.0}
+            recipe_path = tmp_path / "recipe.json"
+            recipe_path.write_text(json.dumps(recipe), encoding="utf-8")
+            argv = ["--recipe", str(recipe_path), "run", "--stage", "final", "--work-dir", str(work),
+                    "--bin", sys.executable, "--jobs", "2"]
+            self.assertEqual(driver.main(argv), 0)
+            starts = [float((work / "final" / d["id"].replace("/", "__") / "solution.csv").read_text().strip())
+                      for d in recipe["drives"]]
+            self.assertLess(abs(starts[0] - starts[1]), 0.8)  # both drives ran at once
+            progress = json.loads((work / "final_progress.json").read_text(encoding="utf-8"))
+            self.assertEqual(sorted(progress), sorted(d["id"] for d in recipe["drives"]))
 
     def test_run_resume_skips_completed_drives(self) -> None:
         driver = self._import()

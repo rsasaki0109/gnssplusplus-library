@@ -6,7 +6,7 @@ Backs the ``gnss reproduce gsdc-official`` lane.  The recipe
 test drives, the input files (SHA-256), the exact ``gnss_fgo_imu_no_base`` argv
 and the SHA-256 of the solution the research run wrote.  Nothing here talks to
 Kaggle: the gate is the SHA-256 of the assembled ``submission.csv`` (the file
-submitted as Kaggle ref 57678818); the Kaggle score is a readback record only.
+submitted as Kaggle ref 57717122); the Kaggle score is a readback record only.
 Every drive, stage-0 run and height map is pinned to one Linux GCC build;
 MSVC outputs of the same drives differ by up to 0.08 m.
 
@@ -24,7 +24,8 @@ Subcommands, in lane order:
     Kaggle train ground truth, and check them against the pinned SHA-256.
 ``run --stage final``
     Run the 40 final replays (17 Pixel5 heading, 9 modern clock, 14 retained
-    height-map/relative-height drives), one process at a time.
+    height-map/relative-height drives), one process at a time unless
+    ``--jobs N`` runs N at once (outputs do not depend on it).
 ``assemble``
     Assemble ``submission.csv`` on the official key list (Kaggle
     sample_submission order), copying each native coordinate verbatim, and
@@ -49,6 +50,7 @@ single-threaded solve finishes with the same solution.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import csv
 import hashlib
 import json
@@ -342,6 +344,30 @@ def command_run(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int:
     failures = 0
     progress_path = Path(args.work_dir) / f"{args.stage}_progress.json"
     progress: dict[str, Any] = {}
+    lock = threading.Lock()
+
+    def note(entry: Mapping[str, Any], record: Mapping[str, Any]) -> None:
+        nonlocal failures
+        with lock:
+            progress[entry["id"]] = {key: record[key] for key in ("returncode", "wall_s", "identical", "solution_sha256")}
+            if record["returncode"] != 0:
+                failures += 1
+            progress_path.parent.mkdir(parents=True, exist_ok=True)
+            progress_path.write_text(json.dumps(progress, indent=1) + "\n", encoding="utf-8")
+
+    def execute(label: str, entry: Mapping[str, Any], record_path: Path) -> None:
+        if entry.get("input_window"):
+            start = prepare_input_window(entry, context)
+            print(f"{label}: inputs windowed from epoch {entry['input_window']['first_epoch_index']} "
+                  f"(UnixTimeMillis {start})", flush=True)
+        print(f"{label}: running (research wall {entry['research_source']['record_wall_s']} s)", flush=True)
+        record = run_drive(entry, context, env)
+        record_path.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
+        print(f"{label}: exit {record['returncode']} in {record['wall_s']} s, "
+              f"{'identical' if record['identical'] else 'DIFFERS from the research output'}", flush=True)
+        note(entry, record)
+
+    pending = []
     for index, entry in enumerate(entries, start=1):
         solution = Path(render(entry["output"], context))
         record_path = solution.parent / "run.json"
@@ -353,29 +379,19 @@ def command_run(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int:
         record = None if args.force else completed(record_path, solution)
         if record is not None:
             print(f"{label}: done ({'identical' if record['identical'] else 'DIFFERS'}, {record['wall_s']} s)", flush=True)
+            note(entry, record)
         elif entry.get("height_map") and not Path(render(entry["height_map"], context)).is_file():
             print(f"{label}: height map {render(entry['height_map'], context)} missing "
                   "(run --stage stage0 and height-maps first)", file=sys.stderr, flush=True)
             failures += 1
-            continue
         elif args.dry_run:
             print(f"{label}: would run\n  " + subprocess.list2cmdline([render(i, context) for i in entry["argv"]]))
-            continue
         else:
-            if entry.get("input_window"):
-                start = prepare_input_window(entry, context)
-                print(f"{label}: inputs windowed from epoch {entry['input_window']['first_epoch_index']} "
-                      f"(UnixTimeMillis {start})", flush=True)
-            print(f"{label}: running (research wall {entry['research_source']['record_wall_s']} s)", flush=True)
-            record = run_drive(entry, context, env)
-            record_path.write_text(json.dumps(record, indent=1) + "\n", encoding="utf-8")
-            print(f"{label}: exit {record['returncode']} in {record['wall_s']} s, "
-                  f"{'identical' if record['identical'] else 'DIFFERS from the research output'}", flush=True)
-        progress[entry["id"]] = {key: record[key] for key in ("returncode", "wall_s", "identical", "solution_sha256")}
-        if record["returncode"] != 0:
-            failures += 1
-        progress_path.parent.mkdir(parents=True, exist_ok=True)
-        progress_path.write_text(json.dumps(progress, indent=1) + "\n", encoding="utf-8")
+            pending.append((label, entry, record_path))
+    # Drives of one stage are independent; --jobs only changes how many run at once.
+    with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+        for future in [pool.submit(execute, *item) for item in pending]:
+            future.result()
     return 1 if failures else 0
 
 
@@ -658,6 +674,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     run.add_argument("--dll-dir", default=None, help="Prepended to PATH (default: $GTSAM_BIN_DIR).")
     run.add_argument("--limit", type=int, default=None)
     run.add_argument("--force", action="store_true", help="Rerun drives that already completed.")
+    run.add_argument("--jobs", type=int, default=1, help="Run this many drives at once (outputs do not depend on it).")
     run.add_argument("--dry-run", action="store_true")
     maps = sub.add_parser("height-maps", help="Build and check the height maps from stage-0 trajectories.")
     common(maps)
