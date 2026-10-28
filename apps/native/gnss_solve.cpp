@@ -145,6 +145,7 @@ struct SolveConfig {
     int hold_fix_min_matched_pairs = 4;
     double hold_fix_max_update_nis_per_observation = 0.0;
     bool hold_fix_update_nis_keeps_hold_run = false;
+    double hold_fix_update_nis_max_phase_fit = 0.0;
     int min_fix_satellites = 0;
     double elevation_mask_deg = 15.0;
     double process_noise_position = 1e-4;
@@ -1107,7 +1108,7 @@ public:
               << "lambda_shadow_max_abs_z,lambda_shadow_max_z_pair,"
               << "lambda_shadow_max_z_lock_count,lambda_shadow_pairs_abs_z_gt3,"
               << "postfix_residual_max_abs_m,postfix_residual_max_pair,"
-              << "fixed_candidate_doppler_consensus_age_s\n";
+              << "fixed_candidate_doppler_consensus_age_s,hold_fix_phase_fit\n";
         return true;
     }
 
@@ -1477,6 +1478,8 @@ public:
         writeNumber(telemetry.postfix_residual_max_abs_m);
         file_ << "," << telemetry.postfix_residual_max_pair << ",";
         writeNumber(telemetry.fixed_candidate_doppler_consensus_age_s);
+        file_ << ",";
+        writeNumber(telemetry.hold_fix_phase_fit);
         file_ << "\n";
         file_.flush();
     }
@@ -1594,6 +1597,9 @@ void printAdvancedUsage(const char* program_name) {
         << "  --hold-fix-update-nis-keeps-hold-run\n"
         << "                             After such a rejection keep the hold-fix fallback available\n"
         << "                             instead of restarting the fix run (default: off)\n"
+        << "  --hold-fix-update-nis-max-phase-fit <af>\n"
+        << "                             Apply that NIS limit only when the hold position's DD phase\n"
+        << "                             fit (0..1, from 10 pairs) is below af (default: 0 = NIS alone)\n"
         << "  --min-fix-satellites <k>\n"
         << "                             Min non-reference satellites in an ambiguity-resolution FIX (default: 0 = off)\n"
         << "  --elevation-mask-deg <v>   Elevation mask in degrees (default: 15)\n"
@@ -2675,6 +2681,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
             config.hold_fix_update_nis_keeps_hold_run = true;
             continue;
         }
+        if (arg == "--hold-fix-update-nis-max-phase-fit" && i + 1 < argc) {
+            config.hold_fix_update_nis_max_phase_fit = std::stod(argv[++i]);
+            continue;
+        }
         if (arg == "--min-fix-satellites" && i + 1 < argc) {
             config.min_fix_satellites = std::stoi(argv[++i]);
             continue;
@@ -3230,6 +3240,10 @@ SolveConfig parseArguments(int argc, char* argv[]) {
     }
     if (config.hold_fix_max_update_nis_per_observation < 0.0) {
         argumentError("--hold-fix-max-update-nis-per-obs must be >= 0", argv[0]);
+    }
+    if (config.hold_fix_update_nis_max_phase_fit < 0.0 ||
+        config.hold_fix_update_nis_max_phase_fit > 1.0) {
+        argumentError("--hold-fix-update-nis-max-phase-fit must be in [0, 1]", argv[0]);
     }
     if (config.min_fix_satellites < 0) {
         argumentError("--min-fix-satellites must be >= 0", argv[0]);
@@ -3863,6 +3877,7 @@ int main(int argc, char* argv[]) {
         rtk_config.hold_fix_max_update_nis_per_observation =
             config.hold_fix_max_update_nis_per_observation;
         rtk_config.hold_fix_update_nis_keeps_hold_run = config.hold_fix_update_nis_keeps_hold_run;
+        rtk_config.hold_fix_update_nis_max_phase_fit = config.hold_fix_update_nis_max_phase_fit;
         rtk_config.min_fix_satellites = config.min_fix_satellites;
         rtk_config.elevation_mask = config.elevation_mask_deg * M_PI / 180.0;
         if (config.process_noise_position_set) {
