@@ -1067,6 +1067,16 @@ On train, each map was built without the drive's own course and trip:
 The caveats of 57733487 still apply: the variant types came from the
 57717122 probes, and 57742915 is the sixth no-feedback submission.
 
+The lane driver reran the new recipe from scratch on the build that adds the
+prior (`gnss_fgo_imu_no_base` SHA-256 `7a9b7264...`; with the prior off it
+reproduces the earlier outputs) with `--jobs 4`. It took 2 h 23 min on 4
+cores:
+
+- the 15 stage-0 runs, 15 height maps and 32 road maps match their pinned
+  SHA-256;
+- the 40 final drives are identical to their research outputs;
+- `assemble` writes `12d39d57...`.
+
 ### gsdc-official local result (2026-09-29)
 
 Develop `2f919306` (native sources unchanged since `4b22fe43`) was built with

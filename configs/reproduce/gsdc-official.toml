@@ -215,4 +215,9 @@ readme = "reported"
 # driver reran it from scratch with --jobs 4 in 2 h 27 min on 4 cores (15
 # stage-0 runs, 15 height maps, 40 final drives), byte-identical throughout;
 # assemble writes 9045daf6... before and a81ceb0b... after the snap.
+# Recipe update to ref 57742915 (the native road prior on the 32 drives with a
+# road map; no post-hoc snap) on the build that adds --native-road-map: the
+# lane driver reran it from scratch with --jobs 4 in 2 h 23 min on 4 cores (15
+# stage-0 runs, 15 height maps, 32 road maps, 40 final drives), byte-identical
+# throughout; assemble writes 12d39d57....
 # See docs/reproduce.md.
