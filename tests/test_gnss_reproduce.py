@@ -748,8 +748,7 @@ class GsdcOfficialLaneTest(unittest.TestCase):
             for flag in ("--native-export-gnss-stage", "--native-export-imu-stage",
                          "--native-source-imu-initialization", "--native-phase213-main-doppler"):
                 self.assertIn(flag, drive["argv"])
-        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("single_cpu")],
-                         ["2022-02-24-15-10-us-ca-lax-p/pixel5"])
+        self.assertEqual([drive["id"] for drive in recipe["drives"] if drive.get("single_cpu")], [])
         windowed = [drive for drive in recipe["drives"] if drive.get("input_window")]
         self.assertEqual([drive["id"] for drive in windowed], ["2022-04-25-21-04-us-ca-ebf-x/mi8"])
         for drive in windowed:

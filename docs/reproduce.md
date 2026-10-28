@@ -955,6 +955,11 @@ moves the mean from 0.7134 m to 0.7213 m, with 18 drives better and 18
 worse. Each drive's probe ref and score are under
 `research_source.test_tuned`.
 
+The native app now gives TBB worker threads a 64 MiB stack. Three
+concurrent lax-p runs that are not pinned to one CPU finish with the pinned
+solution, so the drive no longer needs `single_cpu`. `run` also takes
+`--jobs N`, and the lane manifest passes `--jobs 4`.
+
 ### gsdc-official local result (2026-09-29)
 
 Develop `2f919306` (native sources unchanged since `4b22fe43`) was built with
