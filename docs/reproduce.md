@@ -979,7 +979,7 @@ Kaggle score chose anything. Starting again from 57678818:
 
 1. **Height map.** A drive drops its height map when the map points within
    15 m of its 57678818 trajectory span a median height of 0.3 m or more.
-   On train, with maps built without the drive's own course, the map hurts
+   On train, with maps built without the drive's own course and trip, the map hurts
    more as that spread grows. 10 drives drop it.
 2. **XXVV motion.** A325F, A325G and A205U always take it (all 4 train
    drives of these phones gain). Other drives take it when it lowers the
@@ -991,8 +991,8 @@ Kaggle score chose anything. Starting again from 57678818:
    from the 156 train ground-truth files. Each moving epoch moves across
    track by half the median offset to map points within 6 m whose heading
    is within 25 degrees, using only offsets under 1 m. On train, with the
-   map built without the drive's own course, this gives -0.0143 m mean
-   (P50+P95)/2, with 19 drives better and 5 worse.
+   map built without the drive's own course and trip, this gives
+   -0.0130 m mean (P50+P95)/2, with 18 drives better and 6 worse.
 
 22 drives change: XXVV motion on 11, no height map plus XXVV motion on 7, no
 height map on 3, and source TDCP on ebf-ww Mi8. Their research outputs come

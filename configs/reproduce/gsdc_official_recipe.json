@@ -1689,7 +1689,7 @@
   }
  ],
  "road_snap": {
-  "rule": "Truth-free on test (the map is Kaggle train ground truth only), fixed on train before it touched test: map points are every height_maps.truth_files row (each file sorted by UnixTimeMillis, east/north = equirectangular metres with R and lat0 below) whose central-difference step is > 1 m, with that step as its heading. Per drive, in submission order: epochs whose own central-difference step is > 1 m look up map points within radius_m whose heading is within heading_deg of theirs; each point gives the epoch offset along its left normal; offsets with |offset| < max_offset_m are kept, and the epoch moves by -step * median(kept) along the normalised mean of their normals. Train check (leave-one-course-out map, 36 drives): -0.0143 m mean (P50+P95)/2, 19 better / 5 worse.",
+  "rule": "Truth-free on test (the map is Kaggle train ground truth only), fixed on train before it touched test: map points are every height_maps.truth_files row (each file sorted by UnixTimeMillis, east/north = equirectangular metres with R and lat0 below) whose central-difference step is > 1 m, with that step as its heading. Per drive, in submission order: epochs whose own central-difference step is > 1 m look up map points within radius_m whose heading is within heading_deg of theirs; each point gives the epoch offset along its left normal; offsets with |offset| < max_offset_m are kept, and the epoch moves by -step * median(kept) along the normalised mean of their normals. Train check (map without the drive's course and trip, 36 drives): -0.0130 m mean (P50+P95)/2, 18 better / 6 worse.",
   "truth_files": "height_maps.truth_files",
   "earth_radius_m": 6371008.8,
   "lat0_deg": 37.4,

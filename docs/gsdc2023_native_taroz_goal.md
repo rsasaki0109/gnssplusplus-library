@@ -7187,7 +7187,7 @@ this is the best. The variant types come from the per-drive probes of
 
 - **Refinement-pass toggle.** The oracle gains only -0.0005 m, and the
   prres rule loses +0.046 m. Left out.
-- **Height map.** Maps were built without the drive's own course; 18
+- **Height map.** Maps were built without the drive's own course and trip; 18
   drives have coverage. Always on costs +0.0032 m and the oracle gains
   -0.0054 m. prres does not tell when the map hurts. The median height
   spread of map points within 15 m of the trajectory does (correlation
@@ -7218,15 +7218,18 @@ drive per phone a per-phone correction cannot be checked.
 maps do vertically. Each moving epoch looks up train-truth points within 6 m
 that head within 25 degrees of it. It takes their offsets along their
 normals, keeps those under 1 m, and moves by half of a summary offset. On
-train the map is built without the drive's own course:
+train the map is built without the drive's own course, and without truth
+recorded during the same trip by another phone filed under a different
+course name (3 of the 36 drives have such a twin; the first numbers
+recorded here kept it, which overstated the gains slightly):
 
 | Snap | Train change | Better / worse | Test (Private / Public) |
 |---|---:|---|---|
-| nearest point, map from the 40 taroz train drives | -0.0054 m | 15 / 3 of 18 covered | 0.777 / 0.809 (57733311) |
-| nearest point, all 156 train files | -0.0094 m | 18 / 5 of 24 covered | 0.777 / 0.807 (57733407) |
-| median of all kept offsets, 156 files | -0.0143 m | 19 / 5 | **0.775 / 0.804** (57733487) |
+| nearest point, map from the 40 taroz train drives | -0.0050 m | 14 / 3 of 18 covered | 0.777 / 0.809 (57733311) |
+| nearest point, all 156 train files | -0.0076 m | 17 / 6 of 24 covered | 0.777 / 0.807 (57733407) |
+| median of all kept offsets, 156 files | -0.0130 m | 18 / 6 | **0.775 / 0.804** (57733487) |
 
-Moving by the full offset instead of half loses on train (+0.0151 m with
+Moving by the full offset instead of half loses on train (+0.0156 m with
 the median), because a neighbouring lane's truth then pulls the epoch
 across. The snap is the `road_snap` step of the lane's `assemble`. Against
 the released taroz code (0.782 / 0.796 m), 57733487 is ahead on Private

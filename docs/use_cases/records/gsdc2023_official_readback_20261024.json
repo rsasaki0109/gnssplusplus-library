@@ -537,7 +537,7 @@
         "2021-09-20-19-03-us-ca-mtv-l/pixel4": "motion"
       },
       "train_validation": {
-        "height_map": "18 train drives with leave-one-course-out maps: always on +0.0032 m (per 36 drives), oracle -0.0054 m; corr(d_score, map height spread) +0.49; train spreads below 0.21 m or above 0.40 m",
+        "height_map": "18 train drives with maps built without the drive's course and trip: always on +0.0032 m (per 36 drives), oracle -0.0054 m; corr(d_score, map height spread) +0.49; train spreads below 0.21 m or above 0.40 m",
         "motion_by_phone": "A325F/A325G/A205U: all 4 train drives gain (-0.013, -0.093, -0.064, -0.039 m); prres misses two of them",
         "rule_on_train": "motion rule (phones + prres) -0.0077 m in sample"
       }
@@ -554,7 +554,7 @@
       "test_tuned": false,
       "replaced_drives": 0,
       "change": "cross-track snap: per moving epoch, the offset to the nearest same-direction train-truth point within 6 m (heading within 25 deg), moved by half when |offset| < 1 m; map from the 40 taroz train drives",
-      "train_validation": "leave-one-course-out map, 36 drives: -0.0054 m; 18 covered, 15 better / 3 worse"
+      "train_validation": "map without the drive's course and trip, 36 drives: -0.0050 m; 18 covered, 14 better / 3 worse"
     },
     {
       "ref": 57733407,
@@ -568,7 +568,7 @@
       "test_tuned": false,
       "replaced_drives": 0,
       "change": "the same snap with the map from all 156 Kaggle train ground-truth files (the height-map truth set)",
-      "train_validation": "leave-one-course-out map, 36 drives: -0.0094 m; 24 covered, 18 better / 5 worse"
+      "train_validation": "map without the drive's course and trip, 36 drives: -0.0076 m; 24 covered, 17 better / 6 worse"
     },
     {
       "ref": 57733487,
@@ -582,7 +582,7 @@
       "test_tuned": false,
       "replaced_drives": 0,
       "change": "road snap with the median of all kept offsets (|offset| < 1 m) along their mean normal, half step, map from all 156 train files",
-      "train_validation": "leave-one-course-out map, 36 drives: -0.0143 m, 19 better / 5 worse (full step +0.0151 m)",
+      "train_validation": "map without the drive's course and trip, 36 drives: -0.0130 m, 18 better / 6 worse (full step +0.0156 m); the first record kept same-trip truth of another phone on 3 drives and gave -0.0143 m, 19 / 5",
       "recipe": "the official recipe is pinned to this file: 22 drives under research_source.truth_free, road_snap in assemble",
       "caveats": "no Kaggle score chose anything, but the variant types were chosen after the per-drive probes of 57717122, and this is the best of five truth-free submissions (57726666, 57732745, 57733311, 57733407, 57733487)",
       "vs_taroz_post_deadline": "Private 0.775 vs 0.782 m (ahead), Public 0.804 vs 0.796 m (behind)"
@@ -608,7 +608,7 @@
     "refinement_pass_toggle_by_prres": "36 drives: oracle -0.0005 m, prres rule +0.046 m (1 of 16 picks right)",
     "relative_height_pairs": "12 of 36 drives run: mean +0.0037 m, 6 better / 6 worse (3x slower, one out of memory); stopped",
     "average_current_and_motion": "per-epoch mean of the current and XXVV motion outputs -0.0035 m, median of three variants -0.0011 m; the prres/phone selection gives -0.0077 m",
-    "road_snap_full_step": "median snap moving by the full offset: +0.0151 m on 36 train drives (a neighbouring lane's truth pulls the epoch across)"
+    "road_snap_full_step": "median snap moving by the full offset: +0.0156 m on 36 train drives (a neighbouring lane's truth pulls the epoch across)"
   },
   "open_issues": {
     "2022-04-25-21-04-us-ca-ebf-x/mi8": "resolved by 57626255/57629197 (input_window + source TDCP sigma/Huber)",
