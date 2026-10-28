@@ -118,9 +118,11 @@ first place on the final private leaderboard, and of the released
 taroz/gsdc2023 code after the deadline (0.782 / 0.796 m). A late entry is not
 ranked. The score is tuned on the test set: 18 of the 40 drives use the
 native setting that scored best when probed one drive at a time on Kaggle.
-Before that tuning, 57678818 scored 0.806 / 0.816 m. It uses raw GNSS/IMU,
-broadcast navigation, base observations and train-derived height maps, with
-no test truth. To rebuild it, see `gsdc-official` in
+Before that tuning, 57678818 scored 0.806 / 0.816 m. Picking the per-drive
+variants with a truth-free rule validated on train, instead of Kaggle
+probes, scores 0.792 / 0.817 m (57726666). It uses raw GNSS/IMU, broadcast
+navigation, base observations and train-derived height maps, with no test
+truth. To rebuild it, see `gsdc-official` in
 [docs/reproduce.md](docs/reproduce.md). Scores and the experiment log are in
 the [score record](docs/use_cases/records/gsdc2023_official_readback_20261024.json)
 and the [log](docs/gsdc2023_native_taroz_goal.md).

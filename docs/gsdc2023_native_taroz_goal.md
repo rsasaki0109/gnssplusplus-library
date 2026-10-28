@@ -7146,3 +7146,30 @@ These choices do not generalize. XXVV motion on the 36 train drives moves
 the mean from 0.7134 m to 0.7213 m: Samsung drives improve, while Pixel5,
 Pixel7Pro and G988B get worse. The 57717122 score is therefore a test-tuned
 result. The last recipe before this tuning is 57678818 (0.806 / 0.816 m).
+
+### Truth-free per-drive selection, submission 57726666 (2026-10-28)
+
+The Kaggle-probe selection of 57717122 is tuned on the test set. This step
+asks how much of it a truth-free rule recovers. The rule is a
+pseudorange-residual metric (prres): the median over epochs of the median
+absolute residual of corrected raw pseudoranges against the trajectory,
+after removing a per-epoch, per-constellation clock.
+
+- **Train, current recipe against XXVV motion (36 drives).** The change in
+  prres correlates with the change in score at 0.63. The raw-ADR TDCP
+  window metric correlates at only 0.33. "Take the variant when prres
+  drops" picks 13 drives, 10 of them correctly. It gains -0.0048 m on the
+  mean, where the oracle gains -0.0161 m and always-on loses +0.0079 m.
+- **Train, source TDCP (7 drives).** The rule picks 3 drives, all 3
+  correctly, and gains the full oracle (-0.0300 m).
+
+On test, the same rule ran on all 40 drives from 57678818, with XXVV motion
+everywhere and source TDCP where it was run. It replaced 15 drives: 13
+with motion and 2 with TDCP. Kaggle scores the file **Private 0.792 m** /
+Public 0.817 m (57726666), from 0.806 / 0.816 m, with no test feedback.
+That recovers about 36% of the Private gain of the probe selection, close
+to the share the rule recovers on train. Public stays level because the
+ebf-xx Pixel5 motion pick (+0.012 on its probe) cancels the gains. The
+official recipe stays on the test-tuned 57717122. 57726666 is the best
+score reached without test feedback, 0.010 m from the taroz post-deadline
+Private.

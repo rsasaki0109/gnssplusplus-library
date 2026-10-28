@@ -453,6 +453,42 @@
       "test_tuned": true,
       "change": "per drive, the native setting with the largest strict improvement in its single-drive Kaggle probe (XXVV motion on 9 drives, source TDCP sigma/Huber on 4 Mi8, no height constraint on 3, no third pass on 2)",
       "generalization": "XXVV motion on the 36 train drives: mean 0.7134 -> 0.7213 m, 18 better / 18 worse; the choices are test-tuned"
+    },
+    {
+      "ref": 57726666,
+      "sha256": "08ec89367b332b28bd08a23907c311938908e32bd8783614de4ef6e150ea48cf",
+      "base_ref": 57678818,
+      "private_m": 0.792,
+      "public_m": 0.817,
+      "base_private_m": 0.806,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "replaced_drives": 15,
+      "test_tuned": false,
+      "change": "truth-free per-drive selection: among the 57678818 output and its native variants (XXVV motion on all 40 drives, source TDCP sigma/Huber where it was run), keep the one with the lowest pseudorange-residual metric when it is below the 57678818 output; no Kaggle feedback",
+      "picks": {
+        "2022-02-23-17-46-us-ca-lax-n/pixel5": "motion",
+        "2022-02-23-22-35-us-ca-lax-m/pixel5": "motion",
+        "2022-02-24-15-10-us-ca-lax-p/pixel5": "motion",
+        "2022-04-27-18-16-us-ca-ebf-zz/pixel5": "motion",
+        "2022-04-27-19-23-us-ca-ebf-xx/pixel5": "motion",
+        "2023-05-23-21-06-us-ca-mtv-de1/pixel5": "motion",
+        "2021-08-31-20-37-us-ca-mtv-e/sm-g988b": "motion",
+        "2021-11-05-18-28-us-ca-mtv-m/pixel6pro": "motion",
+        "2022-03-17-20-16-us-ca-sjc-q/sm-g988b": "motion",
+        "2022-05-12-20-19-us-ca-mtv-pe1/samsunga325g": "motion",
+        "2022-04-27-21-55-us-ca-ebf-ww/mi8": "tdcp",
+        "2021-09-14-20-32-us-ca-mtv-k/pixel4": "tdcp",
+        "2020-12-11-19-30-us-ca-mtv-e/pixel4xl": "motion",
+        "2022-06-22-20-12-us-ca-lax-hh/samsunga325g": "motion",
+        "2021-09-20-19-03-us-ca-mtv-l/pixel4": "motion"
+      },
+      "metric": "prres = median over epochs of the median |corrected raw pseudorange - geometric range| after removing a per-epoch, per-constellation clock (elevation > 15 deg, C/N0 > 25 dB-Hz, at least 6 rows); trajectory height from the GNSS-first stage (WLS where no stage was exported)",
+      "train_validation": {
+        "motion": "36 drives: always-on 0.7134 -> 0.7213 m; rule prres-lower picks 13, 10 right, mean -0.0048 m (oracle -0.0161 m); corr(d_score, d_prres) 0.63, corr with the raw-ADR TDCP window metric 0.33",
+        "tdcp": "7 drives: rule picks 3, 3 right, mean -0.0300 m (= oracle)"
+      },
+      "outcome": "Private 0.806 -> 0.792 m without test feedback (the Kaggle-probe selection 57717122 reached 0.767 m); Public unchanged, the ebf-xx Pixel5 motion pick (+0.012 on its probe) cancelling the gains"
     }
   ],
   "rejected_on_train": {
