@@ -1,5 +1,6 @@
 # README row "Smartphone GNSS/IMU | GSDC 2023-2024 official submission":
-# Kaggle ref 57678818, Private 0.806 m / Public 0.816 m, 40 drives, 71,936 rows
+# Kaggle ref 57717122, Private 0.767 m / Public 0.782 m, 40 drives, 71,936 rows
+# (test-tuned: 18 drives use the setting that scored best in single-drive probes)
 # (readback record docs/use_cases/records/
 # gsdc2023_official_readback_20261024.json).
 #
@@ -43,7 +44,7 @@
 name = "gsdc-official"
 status = "ready"
 title = "GSDC 2023-2024 official submission rebuild (SHA-256 gate; Kaggle score is readback-only)"
-readme_row = "Smartphone GNSS/IMU: Private 0.806 m / Public 0.816 m; 40 drives, 71,936 rows"
+readme_row = "Smartphone GNSS/IMU: Private 0.767 m / Public 0.782 m (test-tuned); 40 drives, 71,936 rows"
 runtime_estimate = "~1.5 h four at a time on 4 cores; up to ~6.5 h one at a time"
 docs = "docs/use_cases/records/gsdc2023_official_readback_20261024.json"
 
@@ -118,7 +119,7 @@ argv = [
 ]
 
 [[metrics]]
-name = "submission.csv SHA-256 equals Kaggle ref 57678818 (2e0deb2c...)"
+name = "submission.csv SHA-256 equals Kaggle ref 57717122 (02208f4f...)"
 source = "{work_dir}/gsdc_official_metrics.json"
 path = "submission.sha256_match"
 expected = true

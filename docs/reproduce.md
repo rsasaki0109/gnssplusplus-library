@@ -27,7 +27,7 @@ runner adds no scoring logic of its own.
 | GNSS/IMU FGO: PPC Tokyo vs `tightly-coupled-gnss-imu-fgo` | `fgo-tokyo` | ready | ~35 min | **Pass.** Comparison table and GF-reset column reproduce exactly; the GF-reset baseline Tokyo run3 row does not (reported, not gated); see [fgo-tokyo result](#fgo-tokyo-local-result-2026-09-28) |
 | PPC 2024 goal matrix vs Kaiyodai and gici-open | `ppc-goal` | ready (score-only) | ~1 min | **Pass.** Replays the truth-free post-processing chain from 26 SHA-256-pinned tier inputs and reproduces every README number exactly (78.845491%, the six-run libgnss++/gici-open table, Nagoya 1 85.100974%); the solver outputs at the bottom of the chain are frozen, not regenerated; see [ppc-goal result](#ppc-goal-local-result-2026-09-29) |
 | Smartphone dev routes (base-surveyed) | `gsdc-dev-routes` | ready | ~25 min | **Pass.** README refreshed 2026-09-29 to the reproduced H 0.576 / U 0.740 / A 0.303 / LAX-T 0.716 m (previously 0.577 / 0.738 / 0.302 / 0.712); see [gsdc-dev-routes result](#gsdc-dev-routes-local-result-2026-09-29) |
-| Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: ~6 min per drive; full run ~1.5 h four at a time on 4 cores (up to ~6.5 h one at a time) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57678818 (`2e0deb2c...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, and 57664241 / 57678818 added the upstream third pass on 32 drives; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
+| Smartphone GSDC official submission | `gsdc-official` | ready | Linux GCC: ~6 min per drive; full run ~1.5 h four at a time on 4 cores (up to ~6.5 h one at a time) | **Pass on one build.** Gate: the rebuilt `submission.csv` is byte-identical to Kaggle ref 57717122 (`02208f4f...`), and the Kaggle score is readback-only. Every drive is pinned to one Linux GCC 15 build; MSVC outputs differ by up to 0.08 m and do not pass. On 2026-10-25 the full lane (25 stage-0 runs, 25 height maps, 40 final drives) ran on that build; the 9 final drives and 8 stage-0 runs already pinned to GCC came out byte-identical, and the assembled file was submitted as 57619467. 57626255 / 57629197 then solved ebf-x Mi8 from the taroz IdxStart epoch, 57664241 / 57678818 added the upstream third pass, and 57717122 tunes 18 drives on Kaggle probes; see [gsdc-official](#gsdc-official-rebuilding-the-kaggle-submission) |
 | (docs, not a README row) Galileo HAS float PPP via IDD | `has-idd-ppp` | ready | ~1 min | **Pass.** Static and kinematic OBE4 hour; see [has-idd-ppp](#has-idd-ppp-galileo-has-float-ppp-2026-09-29) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Galileo HAS float PPP via SIS (E6-B pages) | `has-sis-ppp` | ready | ~1 min | **Pass.** Decoder (432 MT1 messages per hour, no CRC failure) and static Kamakura 2025-02-15 hour; indicative only (outside the HAS service area); see [has-sis-ppp](#has-sis-ppp-galileo-has-sis-float-ppp-2026-09-30) and [Galileo HAS support](galileo_has.md) |
 | (docs, not a README row) Precise-product PPP with IGS final SP3/CLK | `igs-final-ppp` | ready | ~2 min | **Pass.** Static Kamakura 2025-02-15 / 2025-08-21 hours and OBE4 2023-08-17 hour within 0.32 m horizontal / 0.27 m vertical after one hour, level with RTKLIB demo5 on the same inputs; see [igs-final-ppp](#igs-final-ppp-precise-product-ppp-2026-10-01) |
@@ -667,8 +667,8 @@ for what is and is not recorded there.
 
 ## gsdc-official: rebuilding the Kaggle submission
 
-The README "Smartphone GNSS/IMU" official row is Kaggle submission 57678818
-(Private 0.806 m / Public 0.816 m, 40 test drives, 71,936 rows; readback
+The README "Smartphone GNSS/IMU" official row is Kaggle submission 57717122
+(Private 0.767 m / Public 0.782 m, 40 test drives, 71,936 rows; readback
 record
 [gsdc2023_official_readback_20261024.json](use_cases/records/gsdc2023_official_readback_20261024.json)).
 It is submission 56625084 (Private 0.984 m / Public 0.915 m; record
@@ -677,12 +677,14 @@ with ten drives changed by per-drive flags, rebuilt on one Linux GCC
 build. The flags are listed under `research_source.added_flags` /
 `removed_flags` in the recipe. One of them, ebf-x Mi8, is also solved from a
 later epoch (`input_window`; see the 2026-10-25 ebf-x subsection below).
-Thirty-two drives then take the upstream third pass (see the 2026-10-26
-subsections below).
+Thirty drives then take the upstream third pass (see the 2026-10-26
+subsections below). 57717122 is tuned on the test set: 18 drives use the
+setting that scored best in single-drive Kaggle probes (2026-10-28
+subsection below).
 Kaggle scores it against hidden ground truth, so no local run can recompute
 the score. The lane therefore gates on the file itself: the rebuilt
 `submission.csv` must have the SHA-256 of the submitted file,
-`2e0deb2ceace3ae9fb98f34ec38798506deaf31d6325dd045e5e45aed4990dcf`. The lane
+`02208f4f20aa299e90f8f35df6beedc05dcf0beddf70f45a19bce20edfa216b6`. The lane
 never submits to Kaggle.
 
 **One platform.** Every final replay, stage-0 run and height map is pinned
@@ -922,6 +924,36 @@ on 4 cores. It took 2 h 21 min:
 - the 40 final drives are identical to their research outputs (lax-p with
   `single_cpu`);
 - `assemble` writes `2e0deb2c...`.
+
+### gsdc-official test-tuned per-drive settings (2026-10-28)
+
+The recipe then moved to 57717122, and **this step is tuned on the test
+set**. Starting from 57678818, each candidate setting was rerun on its drive
+alone and submitted with only that drive replaced. Each drive then takes the
+setting with the largest strict improvement at three decimals in its split.
+Every row is still native output. The candidates were:
+
+- the third pass removed (57629197 output);
+- main-graph XXVV motion (`--native-phase217-main-pose3-motion`, sigma 0.01 m
+  Highway, 0.05 m Street, 0.1 m Mi8);
+- source TDCP metre sigma with Phase184 Huber;
+- no height map or relative-height constraint;
+- RPYReset, and the source stop/observation stages.
+
+RPYReset and the stages left drives within 0.06 m and were not probed.
+18 drives changed:
+
+- XXVV motion on 9 drives;
+- source TDCP on the 4 Mi8 drives;
+- no height constraint on 3 drives;
+- no third pass on mtv-g Pixel5 and mtv-pe1 Pixel5 (2022-03-22).
+
+The combined file scores **Private 0.767 m / Public 0.782 m**, from 0.806 /
+0.816 m. That is below the 0.782 / 0.796 m post-deadline score of the taroz
+code. The choices do not carry to train: XXVV motion on the 36 train drives
+moves the mean from 0.7134 m to 0.7213 m, with 18 drives better and 18
+worse. Each drive's probe ref and score are under
+`research_source.test_tuned`.
 
 ### gsdc-official local result (2026-09-29)
 

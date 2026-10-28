@@ -740,10 +740,10 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 57678818)
-        self.assertTrue(submission["sha256"].startswith("2e0deb2c"))
+        self.assertEqual(submission["kaggle_ref"], 57717122)
+        self.assertTrue(submission["sha256"].startswith("02208f4f"))
         refined = [drive for drive in recipe["drives"] if "--native-imu-refinement-pass" in drive["argv"]]
-        self.assertEqual(len(refined), 32)
+        self.assertEqual(len(refined), 30)
         for drive in refined:  # the refinement pass needs the exported stages, source init and main Doppler
             for flag in ("--native-export-gnss-stage", "--native-export-imu-stage",
                          "--native-source-imu-initialization", "--native-phase213-main-doppler"):

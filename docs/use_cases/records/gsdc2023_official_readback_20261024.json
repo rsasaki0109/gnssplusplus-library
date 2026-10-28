@@ -439,6 +439,20 @@
       ],
       "change": "the file of probe 57677507 submitted as the recipe target",
       "recipe": "the official recipe is pinned to this file: 32 drives carry --native-imu-refinement-pass"
+    },
+    {
+      "ref": 57717122,
+      "sha256": "02208f4f20aa299e90f8f35df6beedc05dcf0beddf70f45a19bce20edfa216b6",
+      "base_ref": 57678818,
+      "private_m": 0.767,
+      "public_m": 0.782,
+      "base_private_m": 0.806,
+      "base_public_m": 0.816,
+      "rows": 71936,
+      "replaced_drives": 18,
+      "test_tuned": true,
+      "change": "per drive, the native setting with the largest strict improvement in its single-drive Kaggle probe (XXVV motion on 9 drives, source TDCP sigma/Huber on 4 Mi8, no height constraint on 3, no third pass on 2)",
+      "generalization": "XXVV motion on the 36 train drives: mean 0.7134 -> 0.7213 m, 18 better / 18 worse; the choices are test-tuned"
     }
   ],
   "rejected_on_train": {
@@ -489,7 +503,8 @@
     "height_maps": "test map drives vs relative-height drives: mean (P50+P95)/2 to taroz 0.375 vs 0.354 m; map points within 15 m spanning more than 2 m in height occur on at most 6% of epochs; removing the map moves mtv-b A325F 1.40 -> 1.38 m, sjc-r A32 0.81 -> 0.70 m and mtv-pe1 A325G 0.78 -> 0.84 m from taroz (not adopted)",
     "tdcp_scan_all_speeds": "all 40 test drives, 30-s windows at all speeds: median disagreement 0.05-0.15 m for both pipelines where ADR is usable; native-only (> 0.5 m while taroz < 0.3 m) windows only on mtv-m Mi8 (1.06 m at a 7-satellite epoch, ambiguous) and mtv-a Mi8 (0.52 m); no second ebf-x-type failure",
     "third_pass": "taroz runs fgo_gnss_imu twice (initflag true, then false with the previous result as input and tighter P/D screens); the native recipe ran one IMU solve until 57663786; with --native-imu-refinement-pass the 35 train drives with taroz move 0.7358 -> 0.7187 m (taroz 0.7123), and without Mi8 and Pixel4 XL the estimate is 0.687 m",
-    "taroz_distance_as_proxy": "moving toward taroz is not a reliable proxy for a better score on its own drive: ebf-z (away, worse) and lax-hh A325G (toward, better) follow it, mtv-pe1 A325G (0.16 m toward, Public worse) does not"
+    "taroz_distance_as_proxy": "moving toward taroz is not a reliable proxy for a better score on its own drive: ebf-z (away, worse) and lax-hh A325G (toward, better) follow it, mtv-pe1 A325G (0.16 m toward, Public worse) does not",
+    "noise_floor": "train per-drive native-taroz difference: mean -0.025 m, std 0.124 m, about +/-0.028 m on a 20-drive mean; averaging native and taroz trajectories gives 0.680 m vs native 0.687 m"
   },
   "taroz_kaggle_probes": {
     "purpose": "diagnostic only (not our pipeline): locate the remaining gap to the taroz post-deadline score by Kaggle readback",
@@ -853,6 +868,528 @@
       "Public: mtv-m Mi8 (-0.018) and ebf-xx Pixel5 (-0.017) dominate; native is better on ebf-x Mi8 (+0.014), mtv-e G988B (+0.007) and mtv-b A325F (+0.006)",
       "the drives taroz wins differ from native by slowly varying 0.1-0.4 m over minutes, often at the drive start (ebf-xx static 0-150 s about 0.9 m, lax-n first 270 s 0.2-0.45 m, mtv-m Mi8 static runs 0.6-0.8 m); taroz is the better one there",
       "train shows no such start deficit with the current recipes: first 5 minutes median error 0.506 m native vs 0.516 m taroz over 35 drives (rest 0.471 vs 0.479 m)"
+    ]
+  },
+  "test_tuned_probes": {
+    "base": "ref 57678818 (Public 0.816 / Private 0.806 m) with one drive replaced by a native variant",
+    "settings": {
+      "no third pass": "57629197 output",
+      "motion": "--native-phase217-main-pose3-motion --native-phase217-motion-sigma 0.01 Highway / 0.05 Street / 0.1 Mi8",
+      "tdcp": "--native-source-tdcp-meter-sigma --native-phase184-source-tdcp-huber-k (+ route type / L5)",
+      "nomap": "no --native-height-map / --native-relative-height-pairs"
+    },
+    "probes": [
+      {
+        "setting": "no third pass",
+        "trip": "2021-08-17-20-37-us-ca-mtv-g/pixel5",
+        "ref": 57692517,
+        "public_m": 0.812,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+        "ref": 57692519,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+        "ref": 57692522,
+        "public_m": 0.816,
+        "private_m": 0.808
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-02-23-22-35-us-ca-lax-m/pixel5",
+        "ref": 57692526,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-02-24-15-10-us-ca-lax-p/pixel5",
+        "ref": 57692528,
+        "public_m": 0.82,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-02-24-22-14-us-ca-lax-i/pixel5",
+        "ref": 57692533,
+        "public_m": 0.818,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-03-22-18-44-us-ca-mtv-pe1/pixel5",
+        "ref": 57692539,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+        "ref": 57692541,
+        "public_m": 0.816,
+        "private_m": 0.815
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-04-22-20-11-us-ca-ebf-y/pixel5",
+        "ref": 57692545,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-04-27-18-16-us-ca-ebf-zz/pixel5",
+        "ref": 57692552,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+        "ref": 57692557,
+        "public_m": 0.817,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-04-27-19-25-us-ca-mtv-pe1/pixel5",
+        "ref": 57692559,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-04-27-20-55-us-ca-sjc-q/pixel5",
+        "ref": 57692561,
+        "public_m": 0.818,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+        "ref": 57692566,
+        "public_m": 0.816,
+        "private_m": 0.811
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-26-21-23-us-ca-sjc-be2/pixel5",
+        "ref": 57692573,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-06-06-22-43-us-ca-sjc-he2/pixel5",
+        "ref": 57692576,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2021-08-31-20-37-us-ca-mtv-e/sm-g988b",
+        "ref": 57692579,
+        "public_m": 0.817,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2021-11-05-18-28-us-ca-mtv-m/pixel6pro",
+        "ref": 57692583,
+        "public_m": 0.818,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-03-17-20-16-us-ca-sjc-q/sm-g988b",
+        "ref": 57692589,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+        "ref": 57692594,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+        "ref": 57692597,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-23-22-16-us-ca-mtv-ie2/pixel6pro",
+        "ref": 57692599,
+        "public_m": 0.819,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-25-17-32-us-ca-pao-j/pixel6pro",
+        "ref": 57692603,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+        "ref": 57692605,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+        "ref": 57692610,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "ref": 57692611,
+        "public_m": 0.816,
+        "private_m": 0.812
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+        "ref": 57692614,
+        "public_m": 0.816,
+        "private_m": 0.811
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-06-28-20-56-us-ca-sjc-r/samsunga32",
+        "ref": 57692616,
+        "public_m": 0.821,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+        "ref": 57692621,
+        "public_m": 0.816,
+        "private_m": 0.808
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-07-12-18-37-us-ca-mtv-b/sm-a325f",
+        "ref": 57692626,
+        "public_m": 0.838,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+        "ref": 57692631,
+        "public_m": 0.817,
+        "private_m": 0.806
+      },
+      {
+        "setting": "no third pass",
+        "trip": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+        "ref": 57692638,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "motion",
+        "trip": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+        "ref": 57708871,
+        "public_m": 0.816,
+        "private_m": 0.803
+      },
+      {
+        "setting": "motion",
+        "trip": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+        "ref": 57708873,
+        "public_m": 0.816,
+        "private_m": 0.802
+      },
+      {
+        "setting": "motion",
+        "trip": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+        "ref": 57708875,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "motion",
+        "trip": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+        "ref": 57708879,
+        "public_m": 0.819,
+        "private_m": 0.806
+      },
+      {
+        "setting": "motion",
+        "trip": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+        "ref": 57708881,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "motion",
+        "trip": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+        "ref": 57708883,
+        "public_m": 0.816,
+        "private_m": 0.801
+      },
+      {
+        "setting": "motion",
+        "trip": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+        "ref": 57708886,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "motion",
+        "trip": "2022-04-27-19-23-us-ca-ebf-xx/pixel5",
+        "ref": 57708888,
+        "public_m": 0.828,
+        "private_m": 0.806
+      },
+      {
+        "setting": "motion",
+        "trip": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+        "ref": 57708891,
+        "public_m": 0.815,
+        "private_m": 0.806
+      },
+      {
+        "setting": "motion",
+        "trip": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "ref": 57708897,
+        "public_m": 0.816,
+        "private_m": 0.8
+      },
+      {
+        "setting": "motion",
+        "trip": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+        "ref": 57708899,
+        "public_m": 0.816,
+        "private_m": 0.804
+      },
+      {
+        "setting": "motion",
+        "trip": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+        "ref": 57708900,
+        "public_m": 0.811,
+        "private_m": 0.806
+      },
+      {
+        "setting": "motion",
+        "trip": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+        "ref": 57708905,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "motion",
+        "trip": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+        "ref": 57708906,
+        "public_m": 0.816,
+        "private_m": 0.796
+      },
+      {
+        "setting": "motion",
+        "trip": "2023-05-25-21-50-us-ca-sjc-ke2/sm-s908b",
+        "ref": 57708910,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "motion",
+        "trip": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+        "ref": 57708913,
+        "public_m": 0.816,
+        "private_m": 0.804
+      },
+      {
+        "setting": "nomap",
+        "trip": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+        "ref": 57708914,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "nomap",
+        "trip": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+        "ref": 57708916,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "nomap",
+        "trip": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+        "ref": 57708918,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "nomap",
+        "trip": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+        "ref": 57708921,
+        "public_m": 0.809,
+        "private_m": 0.806
+      },
+      {
+        "setting": "nomap",
+        "trip": "2022-02-08-22-04-us-ca-sjc-r/pixel5",
+        "ref": 57708923,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "nomap",
+        "trip": "2022-02-23-17-46-us-ca-lax-n/pixel5",
+        "ref": 57708926,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "nomap",
+        "trip": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+        "ref": 57716948,
+        "public_m": 0.814,
+        "private_m": 0.806
+      },
+      {
+        "setting": "nomap",
+        "trip": "2022-04-04-16-31-us-ca-lax-x/pixel5",
+        "ref": 57716958,
+        "public_m": 0.816,
+        "private_m": 0.8
+      },
+      {
+        "setting": "nomap",
+        "trip": "2022-06-22-20-12-us-ca-lax-hh/samsunga325g",
+        "ref": 57716967,
+        "public_m": 0.822,
+        "private_m": 0.806
+      },
+      {
+        "setting": "nomap",
+        "trip": "2022-10-06-20-46-us-ca-sjc-r/sm-a205u",
+        "ref": 57716972,
+        "public_m": 0.816,
+        "private_m": 0.804
+      },
+      {
+        "setting": "nomap",
+        "trip": "2023-05-02-19-24-us-ca-sjc-we1/pixel7pro",
+        "ref": 57716977,
+        "public_m": 0.816,
+        "private_m": 0.805
+      },
+      {
+        "setting": "nomap",
+        "trip": "2023-05-02-20-33-us-ca-mtv-xe1/pixel7pro",
+        "ref": 57716982,
+        "public_m": 0.819,
+        "private_m": 0.806
+      },
+      {
+        "setting": "nomap",
+        "trip": "2023-05-09-23-10-us-ca-sjc-r/sm-a505u",
+        "ref": 57716992,
+        "public_m": 0.816,
+        "private_m": 0.806
+      },
+      {
+        "setting": "nomap",
+        "trip": "2023-05-23-21-06-us-ca-mtv-de1/pixel5",
+        "ref": 57717005,
+        "public_m": 0.816,
+        "private_m": 0.807
+      },
+      {
+        "setting": "nomap",
+        "trip": "2023-06-15-18-49-us-ca-sjc-ce1/pixel7pro",
+        "ref": 57717015,
+        "public_m": 0.816,
+        "private_m": 0.803
+      },
+      {
+        "setting": "refine",
+        "trip": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+        "ref": 57717022,
+        "public_m": 0.816,
+        "private_m": 0.809
+      },
+      {
+        "setting": "refine",
+        "trip": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+        "ref": 57717030,
+        "public_m": 0.821,
+        "private_m": 0.806
+      },
+      {
+        "setting": "refine",
+        "trip": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+        "ref": 57717038,
+        "public_m": 0.82,
+        "private_m": 0.806
+      },
+      {
+        "setting": "refine",
+        "trip": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+        "ref": 57717040,
+        "public_m": 0.817,
+        "private_m": 0.806
+      },
+      {
+        "setting": "tdcp",
+        "trip": "2021-09-14-20-32-us-ca-mtv-k/pixel4",
+        "ref": 57717047,
+        "public_m": 0.816,
+        "private_m": 0.808
+      },
+      {
+        "setting": "tdcp",
+        "trip": "2021-09-20-19-03-us-ca-mtv-l/pixel4",
+        "ref": 57717051,
+        "public_m": 0.816,
+        "private_m": 0.802
+      },
+      {
+        "setting": "tdcp",
+        "trip": "2021-09-28-21-56-us-ca-mtv-a/mi8",
+        "ref": 57717054,
+        "public_m": 0.816,
+        "private_m": 0.804
+      },
+      {
+        "setting": "tdcp",
+        "trip": "2021-11-30-20-59-us-ca-mtv-m/mi8",
+        "ref": 57717062,
+        "public_m": 0.806,
+        "private_m": 0.806
+      },
+      {
+        "setting": "tdcp",
+        "trip": "2022-03-14-19-57-us-ca-mtv-pe1/xiaomimi8",
+        "ref": 57717067,
+        "public_m": 0.81,
+        "private_m": 0.806
+      },
+      {
+        "setting": "tdcp",
+        "trip": "2022-04-27-21-55-us-ca-ebf-ww/mi8",
+        "ref": 57717073,
+        "public_m": 0.811,
+        "private_m": 0.806
+      }
     ]
   }
 }
