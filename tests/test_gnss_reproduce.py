@@ -946,6 +946,54 @@ class GsdcOfficialLaneTest(unittest.TestCase):
                                                           "out": tmp_path / "out.csv", "metrics_json": tmp_path / "m.json"})(),
                                         {**recipe, "keys": {"runs": {}}, "drives": []})
 
+    def test_truthfree_rule_choices(self) -> None:
+        self._import()
+        select = __import__("gsdc_truthfree_select")
+        prres = {"base": 1.20, "motion": 1.19, "tdcp": 1.21, "nomap": 1.30, "nomap+motion": 1.25}
+        self.assertEqual(select.choose("pixel5", prres, None), "motion")
+        self.assertEqual(select.choose("pixel5", {**prres, "motion": 1.25}, 0.29), "base")
+        self.assertEqual(select.choose("pixel5", prres, 0.3), "nomap+motion")  # map dropped at 0.3 m spread
+        self.assertEqual(select.choose("pixel5", {**prres, "nomap": 1.2}, 0.5), "nomap")
+        self.assertEqual(select.choose("sm-a325f", {**prres, "motion": 9.0}, None), "motion")  # phone rule
+        self.assertEqual(select.choose("samsunga325g", prres, 0.6), "nomap+motion")
+        self.assertEqual(select.choose("mi8", {"base": 1.0, "motion": 1.0}, None), "base")  # a tie keeps base
+
+    @unittest.skipUnless(HAVE_SCIPY_STACK, "numpy, pandas and scipy are needed for prres")
+    def test_truthfree_prres_is_zero_on_the_true_track_and_grows_off_it(self) -> None:
+        self._import()
+        select = __import__("gsdc_truthfree_select")
+        import numpy as np  # noqa: PLC0415
+        import pandas as pd  # noqa: PLC0415
+
+        receiver = select._llh_to_ecef(np.array([37.4]), np.array([-122.0]), np.array([10.0]))[0]
+        up = receiver / np.linalg.norm(receiver)
+        east = np.cross([0.0, 0.0, 1.0], up)
+        east /= np.linalg.norm(east)
+        north = np.cross(up, east)
+        rows = []
+        for epoch in range(3):
+            for sv in range(8):
+                azimuth = 2 * np.pi * sv / 8
+                los = np.cos(np.radians(45)) * (np.cos(azimuth) * north + np.sin(azimuth) * east) + np.sin(np.radians(45)) * up
+                sat = receiver + 2.2e7 * los
+                rng = np.linalg.norm(sat - receiver) + select.OMEGA * (sat[0] * receiver[1] - sat[1] * receiver[0]) / select.C
+                rows.append({"utcTimeMillis": 1000 * (epoch + 1), "ConstellationType": 1, "SignalType": "GPS_L1_CA",
+                             "RawPseudorangeMeters": rng + 1234.5, "SvClockBiasMeters": 0.0, "IsrbMeters": 0.0,
+                             "IonosphericDelayMeters": 0.0, "TroposphericDelayMeters": 0.0,
+                             "SvPositionXEcefMeters": sat[0], "SvPositionYEcefMeters": sat[1], "SvPositionZEcefMeters": sat[2],
+                             "SvElevationDegrees": 45.0, "Cn0DbHz": 40.0})
+        with tempfile.TemporaryDirectory() as tmp:
+            device = Path(tmp) / "device_gnss.csv"
+            pd.DataFrame(rows).to_csv(device, index=False)
+            heights = pd.DataFrame({"phone": "p", "UnixTimeMillis": [1000, 2000, 3000],
+                                    "X": receiver[0], "Y": receiver[1], "Z": receiver[2]})
+            for shift_m, name in ((0.0, "true"), (5.0, "shifted")):
+                lon = -122.0 + np.degrees(shift_m / (6378137.0 * np.cos(np.radians(37.4))))
+                pd.DataFrame({"UnixTimeMillis": [1000, 2000, 3000], "LatitudeDegrees": 37.4, "LongitudeDegrees": lon}).to_csv(
+                    Path(tmp) / f"{name}.csv", index=False)
+            self.assertLess(select.prres(device, heights, Path(tmp) / "true.csv"), 1e-3)
+            self.assertGreater(select.prres(device, heights, Path(tmp) / "shifted.csv"), 1.0)
+
     def test_input_window_writes_raw_rows_from_the_window_epoch(self) -> None:
         driver = self._import()
         with tempfile.TemporaryDirectory() as tmp:

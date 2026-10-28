@@ -1014,6 +1014,14 @@ of 57717122. Also, 57733487 is the best of these five submissions. The
 test-tuned 57717122 (0.767 / 0.782 m) stays in git history (develop
 `e9a1f20`) and in the readback record.
 
+`scripts/experiments/gsdc/gsdc_truthfree_select.py` recomputes the picks
+from the 57678818 outputs, the variant outputs and the 25 height maps of
+57678818 (`--variants-dir <dir>/<variant>/<course>/<phone>/solution.csv`,
+`--maps-dir`, `--gsdc-root`). With the research outputs it picks the same 22
+drives and gives every `prres_m` recorded under `research_source.truth_free`;
+it exits non-zero when a pick differs from the recipe. The lane itself runs
+the pinned argv and does not rerun the candidates.
+
 `assemble` writes the 57732745 file (`9045daf6...`) first and then snaps it.
 `--gsdc-truth-root` is therefore needed even when the height maps are
 already built. The rewritten coordinates use `%.10f`.
