@@ -403,6 +403,8 @@ struct Options {
     bool native_omit_first_imu_velocity_prior = false;
     bool native_relative_height_pairs = false;
     std::string native_height_map_path;
+    std::string native_road_map_path;
+    double native_road_map_sigma_m = 0.5;
     double native_gnss_first_doppler_threshold_mps = 0.0;
     double native_phase217_motion_sigma_m = 0.05;
     bool native_pseudorange_remasking = false;
@@ -614,7 +616,8 @@ void usage(const char* program) {
                  " [--native-course-attitude-seeds-mount-deg DEG]"
                  " [--native-omit-first-imu-bias-prior]"
                  " [--native-omit-first-imu-velocity-prior]"
-                 " [--native-relative-height-pairs] [--native-pseudorange-remasking]\n";
+                 " [--native-relative-height-pairs] [--native-pseudorange-remasking]"
+                 " [--native-road-map PATH [--native-road-map-sigma-m S]]\n";
     std::cout << "Phase149/163 prep and Phase165 graph modes accept --obs/--nav or"
                  " --android-gnss/--nav "
                  "with --summary-json only; it omits --out and IMU.\n";
@@ -805,6 +808,17 @@ bool parseArguments(int argc, char** argv, Options& options) {
             options.native_export_gnss_stage_factors = true;
             continue;
         }
+        if (arg == "--native-road-map-sigma-m") {
+            std::string value;
+            if (!requireValue(argc, argv, i, value)) return false;
+            try {
+                options.native_road_map_sigma_m = std::stod(value);
+            } catch (...) {
+                return false;
+            }
+            if (!(options.native_road_map_sigma_m > 0.0)) return false;
+            continue;
+        }
         if (arg == "--native-phase217-motion-sigma") {
             std::string value;
             if (!requireValue(argc, argv, i, value)) return false;
@@ -895,6 +909,8 @@ bool parseArguments(int argc, char** argv, Options& options) {
             if (!requireValue(argc, argv, i, options.summary_path)) return false;
         } else if (arg == "--native-height-map") {
             if (!requireValue(argc, argv, i, options.native_height_map_path)) return false;
+        } else if (arg == "--native-road-map") {
+            if (!requireValue(argc, argv, i, options.native_road_map_path)) return false;
         } else if (arg == "--dataset-id") {
             if (!requireValue(argc, argv, i, options.dataset_id)) return false;
         } else if (arg == "--max-epochs") {
@@ -1378,6 +1394,12 @@ bool parseArguments(int argc, char** argv, Options& options) {
          options.native_relative_height_pairs ||
          options.native_phase135_official_affine_measurement_family)) {
         std::cerr << "--native-height-map requires Phase171 ECEF-D, excludes relative height pairs and Phase135\n";
+        return false;
+    }
+    if (!options.native_road_map_path.empty() &&
+        (!phase171_imu_main || !phase171_ecef_doppler ||
+         options.native_phase135_official_affine_measurement_family)) {
+        std::cerr << "--native-road-map requires Phase171 ECEF-D and excludes Phase135\n";
         return false;
     }
     if (options.native_relative_height_pairs &&
@@ -10641,6 +10663,14 @@ std::string makeSummary(const Options& options,
         << "    \"height_map_sigma_m\": 0.1,\n"
         << "    \"height_map_huber_k\": 0.5,\n"
         << "    \"height_map_horizontal_radius_m\": 15,\n"
+        << "    \"road_map_requested\": " << (options.native_road_map_path.empty() ? "false" : "true") << ",\n"
+        << "    \"road_map_points\": " << result.diagnostics.road_map_points << ",\n"
+        << "    \"road_map_factors_inserted\": " << result.diagnostics.road_map_factors_inserted << ",\n"
+        << "    \"road_map_sigma_m\": " << options.native_road_map_sigma_m << ",\n"
+        << "    \"road_map_huber_k\": 0.5,\n"
+        << "    \"road_map_radius_m\": 6,\n"
+        << "    \"road_map_heading_deg\": 25,\n"
+        << "    \"road_map_max_offset_m\": 1,\n"
         << "    \"first_imu_velocity_priors_inserted\": "
         << result.diagnostics.first_imu_velocity_priors_inserted << ",\n"
         << "    \"first_imu_velocity_priors_omitted\": "
@@ -13305,6 +13335,48 @@ int main(int argc, char** argv) {
                 return 1;
             }
         }
+        if (!options.native_road_map_path.empty()) {
+            // CSV header lat_deg,lon_deg,height_m,heading_east,heading_north
+            // (train ground truth only; heading is the unit local course).
+            constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+            std::ifstream map_stream(options.native_road_map_path);
+            std::string line;
+            if (!map_stream || !std::getline(map_stream, line)) {
+                std::cerr << "failed to read --native-road-map\n";
+                return 1;
+            }
+            while (std::getline(map_stream, line)) {
+                if (!line.empty() && line.back() == '\r') line.pop_back();
+                if (line.empty()) continue;
+                std::stringstream row(line);
+                std::string field[5];
+                for (auto& text : field) {
+                    if (!std::getline(row, text, ',')) {
+                        std::cerr << "malformed --native-road-map row\n";
+                        return 1;
+                    }
+                }
+                const double lat = std::stod(field[0]) * kDegToRad;
+                const double lon = std::stod(field[1]) * kDegToRad;
+                const double east = std::stod(field[3]);
+                const double north = std::stod(field[4]);
+                const auto ecef = libgnss::geodetic2ecef(lat, lon, std::stod(field[2]));
+                const Eigen::Vector3d heading =
+                    east * Eigen::Vector3d(-std::sin(lon), std::cos(lon), 0.0) +
+                    north * Eigen::Vector3d(-std::sin(lat) * std::cos(lon), -std::sin(lat) * std::sin(lon), std::cos(lat));
+                if (!ecef.allFinite() || !heading.allFinite() || !(heading.norm() > 0.5)) {
+                    std::cerr << "nonfinite --native-road-map row\n";
+                    return 1;
+                }
+                config.native_road_map_ecef.push_back(ecef);
+                config.native_road_map_heading_ecef.push_back(heading.normalized());
+            }
+            if (config.native_road_map_ecef.empty()) {
+                std::cerr << "--native-road-map has no points\n";
+                return 1;
+            }
+            config.native_road_map_sigma_m = options.native_road_map_sigma_m;
+        }
         config.retain_native_pseudorange_remasking_pool = options.native_pseudorange_remasking;
         config.use_native_raw_p_no_doppler_graph = false;
         // The dedicated ECEF-D selector belongs only to the GNSS-first
@@ -13899,6 +13971,8 @@ int main(int argc, char** argv) {
         gnss_first_config.omit_native_first_imu_velocity_prior = false;
         gnss_first_config.use_native_relative_height_pairs = false;
         gnss_first_config.native_height_map_ecef.clear();
+        gnss_first_config.native_road_map_ecef.clear();
+        gnss_first_config.native_road_map_heading_ecef.clear();
         gnss_first_config.native_doppler_residual_threshold_override_mps =
             options.native_gnss_first_doppler_threshold_mps;
         gnss_first_config.use_native_batch_nhc = false;
@@ -14830,6 +14904,8 @@ int main(int argc, char** argv) {
                 initial_config.native_imu_observation_phase = libgnss::NativeImuObservationPhase::Initialization;
                 initial_config.use_native_relative_height_pairs = false;
                 initial_config.native_height_map_ecef.clear();
+                initial_config.native_road_map_ecef.clear();
+                initial_config.native_road_map_heading_ecef.clear();
                 auto refreshed = [&]() {
                     if (!options.native_source_stage_position_offsets)
                         return libgnss::native_imu_refinement::rebuildInitial(

@@ -3017,6 +3017,59 @@ FGOProcessor::FGOResult optimizeProblemWithGtsam(
             ++result.diagnostics.height_map_factors_inserted;
         }
     }
+    // Cross-track road prior: map points within 6 m horizontally of a moving
+    // seed whose heading is within 25 deg of the seed's course give the seed
+    // offset along their left normals; offsets under 1 m (same lane) are kept
+    // and the position is held toward seed - median * mean normal (Huber 0.5).
+    if (!config.native_road_map_ecef.empty()) {
+        if (!use_pose3)
+            throw std::invalid_argument("Road map requires the Pose3 IMU main graph");
+        if (config.native_road_map_heading_ecef.size() != config.native_road_map_ecef.size() ||
+            !(config.native_road_map_sigma_m > 0.0))
+            throw std::invalid_argument("Road map needs one heading per point and a positive sigma");
+        result.diagnostics.road_map_points = config.native_road_map_ecef.size();
+        const auto noise = gtsam::noiseModel::Robust::Create(
+            gtsam::noiseModel::mEstimator::Huber::Create(0.5),
+            gtsam::noiseModel::Isotropic::Sigma(1, config.native_road_map_sigma_m));
+        const gtsam::Vector3 up =
+            ecef_T_nav.rotation().rotate(gtsam::Vector3::UnitZ());
+        constexpr double kRadius = 6.0, kMaxOffset = 1.0, kMinStep = 1.0;
+        const double min_cos = std::cos(25.0 * 3.14159265358979323846 / 180.0);
+        std::vector<double> offsets;
+        for (std::size_t i = 0; i < num_epochs; ++i) {
+            const Vector3d& seed = problem.epochs[i].position_ecef;
+            const std::size_t prev = i > 0 ? i - 1 : i;
+            const std::size_t next = i + 1 < num_epochs ? i + 1 : i;
+            if (!seed.allFinite() || next == prev) continue;
+            Vector3d step = (problem.epochs[next].position_ecef - problem.epochs[prev].position_ecef) /
+                            static_cast<double>(next - prev);
+            step -= up * up.dot(step);
+            if (!step.allFinite() || step.norm() < kMinStep) continue;
+            const Vector3d course = step.normalized();
+            offsets.clear();
+            Vector3d normal_sum = Vector3d::Zero();
+            for (std::size_t k = 0; k < config.native_road_map_ecef.size(); ++k) {
+                const Vector3d d = seed - config.native_road_map_ecef[k];
+                if (std::abs(d.x()) > 50.0 || std::abs(d.y()) > 50.0 || std::abs(d.z()) > 50.0) continue;
+                if ((d - up * up.dot(d)).norm() > kRadius) continue;
+                const Vector3d& heading = config.native_road_map_heading_ecef[k];
+                if (!(heading.dot(course) > min_cos)) continue;
+                const Vector3d normal = up.cross(heading);
+                const double offset = normal.dot(d);
+                if (std::abs(offset) >= kMaxOffset) continue;
+                offsets.push_back(offset);
+                normal_sum += normal;
+            }
+            if (offsets.empty() || !(normal_sum.norm() > 0.0)) continue;
+            std::sort(offsets.begin(), offsets.end());
+            const std::size_t mid = offsets.size() / 2;
+            const double median = offsets.size() % 2 ? offsets[mid] : 0.5 * (offsets[mid - 1] + offsets[mid]);
+            const Vector3d normal = normal_sum.normalized();
+            graph.emplace_shared<AbsoluteHeightPoseFactor>(
+                positionKey(i), normal, Point3(seed - median * normal), gnss_lever_arm, noise);
+            ++result.diagnostics.road_map_factors_inserted;
+        }
+    }
 
     // --- Upstream stationary-stop constraints -----------------------------
     // fgo_gnss_imu.m adds a robust zero-velocity prior when the raw IMU stop
