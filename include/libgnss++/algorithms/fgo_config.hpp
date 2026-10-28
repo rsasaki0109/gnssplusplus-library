@@ -310,6 +310,12 @@ struct Config {
         // ECEF points of a road-height map built from train ground truth.
         // Empty disables the factor; never populated from the evaluated drive.
         std::vector<Vector3d> native_height_map_ecef;
+        // Cross-track road prior: ECEF points of a road map built from train
+        // ground truth and their unit horizontal headings (same size). Empty
+        // disables the factor; never populated from the evaluated drive.
+        std::vector<Vector3d> native_road_map_ecef;
+        std::vector<Vector3d> native_road_map_heading_ecef;
+        double native_road_map_sigma_m = 0.5;
         // Optional override of the upstream Doppler residual screen (m/s).
         // Non-positive keeps the published final-pass 3 m/s; the upstream
         // initial GNSS pass (initflag) uses 20 m/s.

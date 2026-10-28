@@ -835,6 +835,7 @@ if(GTest_FOUND)
                     smartphone_omit_first_velocity_prior
                     smartphone_pseudorange_remasking
                     smartphone_relative_height_pairs
+                    smartphone_road_map_cli
                     smartphone_source_tdcp_meter_sigma
                     smartphone_source_tdcp_resl_observable
                     smartphone_tdcp_only_affine_geometry)

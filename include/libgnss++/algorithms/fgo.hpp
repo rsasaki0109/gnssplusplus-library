@@ -1310,6 +1310,8 @@ public:
         std::size_t relative_height_factors_inserted = 0;
         std::size_t height_map_points = 0;
         std::size_t height_map_factors_inserted = 0;
+        std::size_t road_map_points = 0;
+        std::size_t road_map_factors_inserted = 0;
         // Phase118 official route-Type Huber-k metadata.  These fields are
         // provenance only; the selected threshold is applied only to ordinary
         // TDCP factors and never changes sigma, equations, admission, or any

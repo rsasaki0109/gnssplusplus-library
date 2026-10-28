@@ -106,27 +106,28 @@ See the [v0.3.0 release highlights](docs/releases/v0.3.0.md) and
 | CLAS PPP | Six PPC Tokyo/Nagoya runs vs MRTKLIB CLAS | 25.117% aggregate FIX, 0.359 m FIX RMS2D, and zero FIX epochs above 3 m across 58,259 scored epochs; every run passes the MRTKLIB v0.4.2 FIX-rate and FIX-RMS2D hard gates |
 | Urban RTK | UrbanNav Tokyo Odaiba vs RTKLIB `demo5` b34k, both multi-GNSS | `--preset urban` 7467 vs 5839 fixes with fewer wrong fixes (9/0/0 vs 19/4/4 beyond 0.5/2/3 m) and lower Hmed/Hp95/Vp95 (0.046/4.86/10.77 vs 0.190/7.86/15.72 m); default profile 1298 fixes with lower Hp95/Vp95 (4.78/11.54 m); both solvers use the surveyed base position |
 | SPP | PPC SPP adaptive robust + policy gate (Tokyo run1, Nagoya run1-3) | No P95 H regression with <=1 pp positioning drop on the 4 checked runs |
-| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.775 m / Public 0.804 m** (late, no Kaggle feedback), ahead of the 0.883 m final-leaderboard first place; the taroz post-deadline code scores 0.782 / 0.796 m |
+| Smartphone GNSS/IMU | GSDC 2023-2024 official submission | **Private 0.714 m / Public 0.732 m** (late, no Kaggle feedback), ahead of the 0.883 m final-leaderboard first place and of the 0.782 / 0.796 m taroz post-deadline code |
 
 Reproduce: `python3 apps/gnss.py reproduce list` shows one command per row; see [docs/reproduce.md](docs/reproduce.md) for datasets, tool pins, and the latest local results.
 
 ### Smartphone GNSS/IMU
 
-Google Smartphone Decimeter Challenge 2023-2024: late submission **57733487**
-scores **Private 0.775 m / Public 0.804 m**. That is ahead of the 0.883 m
+Google Smartphone Decimeter Challenge 2023-2024: late submission **57742915**
+scores **Private 0.714 m / Public 0.732 m**. That is ahead of the 0.883 m
 first place on the final private leaderboard. A late entry is not ranked.
 The released taroz/gsdc2023 code scores 0.782 / 0.796 m after the deadline.
 
-No Kaggle score picked anything in 57733487. On 22 of the 40 drives a rule
-fixed on train picks a native variant, and a last step moves epochs across
-track toward a road map built from train ground truth. Two caveats: the
-variant types were chosen after per-drive Kaggle probes, and 57733487 is the
-best of five such submissions (from 0.792 m). Picking the per-drive settings
-by those probes instead scores 0.767 / 0.782 m (57717122, test-tuned). It
-uses raw GNSS/IMU, broadcast navigation, base observations and train ground
-truth (height and road maps), with no test truth. To rebuild it, see
-`gsdc-official` in [docs/reproduce.md](docs/reproduce.md). Scores and the
-experiment log are in the
+No Kaggle score picked anything in 57742915. On 22 of the 40 drives a rule
+fixed on train picks a native variant. On 32 drives the factor graph adds a
+cross-track road prior from a road map built from train ground truth
+(`--native-road-map`). Two caveats: the variant types were chosen after
+per-drive Kaggle probes, and 57742915 is the sixth such submission (from
+0.792 m). Picking the per-drive settings by those probes instead scores
+0.767 / 0.782 m (57717122, test-tuned). It uses raw GNSS/IMU, broadcast
+navigation, base observations and train ground truth (height and road maps),
+with no test truth. To rebuild it, see `gsdc-official` in
+[docs/reproduce.md](docs/reproduce.md). Scores and the experiment log are in
+the
 [score record](docs/use_cases/records/gsdc2023_official_readback_20261024.json)
 and the [log](docs/gsdc2023_native_taroz_goal.md).
 

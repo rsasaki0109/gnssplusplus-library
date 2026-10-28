@@ -7187,7 +7187,7 @@ this is the best. The variant types come from the per-drive probes of
 
 - **Refinement-pass toggle.** The oracle gains only -0.0005 m, and the
   prres rule loses +0.046 m. Left out.
-- **Height map.** Maps were built without the drive's own course; 18
+- **Height map.** Maps were built without the drive's own course and trip; 18
   drives have coverage. Always on costs +0.0032 m and the oracle gains
   -0.0054 m. prres does not tell when the map hurts. The median height
   spread of map points within 15 m of the trajectory does (correlation
@@ -7218,16 +7218,51 @@ drive per phone a per-phone correction cannot be checked.
 maps do vertically. Each moving epoch looks up train-truth points within 6 m
 that head within 25 degrees of it. It takes their offsets along their
 normals, keeps those under 1 m, and moves by half of a summary offset. On
-train the map is built without the drive's own course:
+train the map is built without the drive's own course, and without truth
+recorded during the same trip by another phone filed under a different
+course name (3 of the 36 drives have such a twin; the first numbers
+recorded here kept it, which overstated the gains slightly):
 
 | Snap | Train change | Better / worse | Test (Private / Public) |
 |---|---:|---|---|
-| nearest point, map from the 40 taroz train drives | -0.0054 m | 15 / 3 of 18 covered | 0.777 / 0.809 (57733311) |
-| nearest point, all 156 train files | -0.0094 m | 18 / 5 of 24 covered | 0.777 / 0.807 (57733407) |
-| median of all kept offsets, 156 files | -0.0143 m | 19 / 5 | **0.775 / 0.804** (57733487) |
+| nearest point, map from the 40 taroz train drives | -0.0050 m | 14 / 3 of 18 covered | 0.777 / 0.809 (57733311) |
+| nearest point, all 156 train files | -0.0076 m | 17 / 6 of 24 covered | 0.777 / 0.807 (57733407) |
+| median of all kept offsets, 156 files | -0.0130 m | 18 / 6 | **0.775 / 0.804** (57733487) |
 
-Moving by the full offset instead of half loses on train (+0.0151 m with
+Moving by the full offset instead of half loses on train (+0.0156 m with
 the median), because a neighbouring lane's truth then pulls the epoch
 across. The snap is the `road_snap` step of the lane's `assemble`. Against
 the released taroz code (0.782 / 0.796 m), 57733487 is ahead on Private
 and behind on Public.
+
+### Road prior in the factor graph, submission 57742915 (2026-10-28)
+
+The post-hoc snap moves epochs only after the solve. This step gives the
+same road map to the native factor graph as a cross-track prior
+(`--native-road-map`), the horizontal counterpart of the height map. For a
+moving seed, map points within 6 m heading within 25 degrees give the seed's
+offset along their left normals. Offsets under 1 m are kept, and the
+position is held toward the seed minus the median offset along their mean
+normal (`AbsoluteHeightPoseFactor` with that normal; sigma 0.5 m, Huber
+0.5). The GNSS-first and observation-stage initial graphs drop it, as they
+drop the height map.
+
+**Train.** Each map holds the moving points of the 156 train truth files
+within 30 m of the drive's raw WLS track. The drive's own course and trip
+are left out. Over the 36 drives:
+
+- the mean (P50+P95)/2 drops by -0.106 m, with 22 better and 1 worse
+  (mtv-h Pixel5 +0.098 m);
+- the largest gains are on Samsung and street drives: mtv-ie2 A505G -0.48 m,
+  2023-09-07 Pixel5 -0.46 m, mtv-n A205U -0.35 m, mtv-xe1 Pixel5 -0.34 m;
+- sigma 0.5 m was the default set before the first run and was not tuned;
+- adding the post-hoc snap on top loses (-0.106 -> -0.099 m).
+
+**Test.** The 57733487 recipe, with the post-hoc snap dropped, adds the prior
+on the 32 drives with a non-empty map. 26 of their outputs change; lax and
+ebf drives have no train truth within 30 m. Kaggle scores it **Private
+0.714 m / Public 0.732 m** (57742915), from 0.775 / 0.804 m. That is ahead
+of the released taroz code on both splits (0.782 / 0.796 m) and of the
+test-tuned 57717122 (0.767 / 0.782 m). It is the sixth submission made
+without Kaggle feedback, and the variant types still come from the 57717122
+probes.

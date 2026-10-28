@@ -6,7 +6,7 @@ Backs the ``gnss reproduce gsdc-official`` lane.  The recipe
 test drives, the input files (SHA-256), the exact ``gnss_fgo_imu_no_base`` argv
 and the SHA-256 of the solution the research run wrote.  Nothing here talks to
 Kaggle: the gate is the SHA-256 of the assembled ``submission.csv`` (the file
-submitted as Kaggle ref 57733487); the Kaggle score is a readback record only.
+submitted as Kaggle ref 57742915); the Kaggle score is a readback record only.
 Every drive, stage-0 run and height map is pinned to one Linux GCC build;
 MSVC outputs of the same drives differ by up to 0.08 m.
 
@@ -14,7 +14,7 @@ Subcommands, in lane order:
 
 ``verify-inputs``
     Check the SHA-256 of every raw input and every train ``ground_truth.csv``
-    the height maps and the road snap need.
+    the height and road maps need.
 ``run --stage stage0``
     Run the 15 stage-0 (offset + extra-band) replays whose trajectories select
     the height-map points.  A drive is skipped when its height map is already
@@ -22,6 +22,10 @@ Subcommands, in lane order:
 ``height-maps``
     Build the per-drive height maps from the stage-0 trajectories and the
     Kaggle train ground truth, and check them against the pinned SHA-256.
+``road-maps``
+    Build the per-drive road maps (train ground truth within 30 m of the
+    drive's raw WLS track, with each point's heading) and check them against
+    the pinned SHA-256.
 ``run --stage final``
     Run the 40 final replays (17 Pixel5 heading, 9 modern clock, 14 retained
     height-map/relative-height drives), one process at a time unless
@@ -200,11 +204,11 @@ def command_verify_inputs(args: argparse.Namespace, recipe: Mapping[str, Any]) -
         and sha256_file(Path(render(spec["path"], make_context(args)))) == spec["sha256"]
         for spec in recipe["height_maps"]["maps"].values()
     )
-    truth_needed = not maps_present or "road_snap" in recipe
+    truth_needed = not maps_present or "road_snap" in recipe or "road_maps" in recipe
     if truth_needed:
         if not args.gsdc_truth_root:
             problems.append("height maps are not built yet and --gsdc-truth-root is not set" if not maps_present
-                            else "the road snap needs the train ground truth and --gsdc-truth-root is not set")
+                            else "the road maps need the train ground truth and --gsdc-truth-root is not set")
         else:
             for relative, digest in truth_files.items():
                 located = locate_truth(Path(args.gsdc_truth_root), relative)
@@ -388,6 +392,10 @@ def command_run(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int:
             print(f"{label}: height map {render(entry['height_map'], context)} missing "
                   "(run --stage stage0 and height-maps first)", file=sys.stderr, flush=True)
             failures += 1
+        elif entry.get("road_map") and not Path(render(entry["road_map"], context)).is_file():
+            print(f"{label}: road map {render(entry['road_map'], context)} missing (run road-maps first)",
+                  file=sys.stderr, flush=True)
+            failures += 1
         elif args.dry_run:
             print(f"{label}: would run\n  " + subprocess.list2cmdline([render(i, context) for i in entry["argv"]]))
         else:
@@ -486,6 +494,102 @@ def command_height_maps(args: argparse.Namespace, recipe: Mapping[str, Any]) -> 
     Path(args.work_dir).mkdir(parents=True, exist_ok=True)
     (Path(args.work_dir) / "height_maps_report.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
     print(f"height-maps: {sum(1 for r in report.values() if r['identical'])}/{len(wanted)} match the pinned SHA-256")
+    return 1 if mismatches and not args.allow_mismatch else 0
+
+
+# --------------------------------------------------------------------------
+# road-maps
+# --------------------------------------------------------------------------
+
+
+def load_road_points(recipe: Mapping[str, Any], truth_root: Path) -> Any:
+    """Moving train-truth points with their unit local heading, in ``truth_files`` key order.
+
+    Each file is sorted by time; a point is kept when its central-difference
+    step (local east/north metres) exceeds 1 m, and that step is its heading.
+    """
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+
+    frames = []
+    for relative, digest in sorted(recipe["height_maps"]["truth_files"].items()):
+        located = locate_truth(truth_root, relative)
+        if located is None:
+            raise SystemExit(f"road-maps: ground truth {relative} not found under {truth_root}")
+        if sha256_file(located) != digest:
+            raise SystemExit(f"road-maps: SHA-256 mismatch for {located}")
+        frame = pd.read_csv(located).sort_values("UnixTimeMillis")
+        lat, lon = frame.LatitudeDegrees.values, frame.LongitudeDegrees.values
+        north = np.radians(lat) * EARTH_RADIUS_M
+        d_east = np.gradient(np.radians(lon)) * EARTH_RADIUS_M * np.cos(np.radians(lat))
+        d_north = np.gradient(north)
+        length = np.hypot(d_east, d_north)
+        keep = length > 1.0
+        frames.append(pd.DataFrame({
+            "lat_deg": lat[keep], "lon_deg": lon[keep], "height_m": frame.AltitudeMeters.values[keep],
+            "heading_east": d_east[keep] / length[keep], "heading_north": d_north[keep] / length[keep]}))
+    return pd.concat(frames, ignore_index=True)
+
+
+def build_road_map(device_gnss: Path, points: Any, out: Path) -> dict[str, Any]:
+    """Keep the road points within 30 m of the drive's raw WLS track (no solver run, no test truth)."""
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+    from scipy.spatial import cKDTree  # noqa: PLC0415
+
+    columns = ["WlsPositionXEcefMeters", "WlsPositionYEcefMeters", "WlsPositionZEcefMeters"]
+    xyz = pd.read_csv(device_gnss, usecols=columns).dropna().values
+    a, f = 6378137.0, 1 / 298.257223563
+    e2 = f * (2 - f)
+    lon = np.arctan2(xyz[:, 1], xyz[:, 0])
+    p = np.hypot(xyz[:, 0], xyz[:, 1])
+    lat = np.arctan2(xyz[:, 2], p * (1 - e2))
+    for _ in range(5):
+        n = a / np.sqrt(1 - e2 * np.sin(lat) ** 2)
+        height = p / np.cos(lat) - n
+        lat = np.arctan2(xyz[:, 2], p * (1 - e2 * n / (n + height)))
+    lat0 = np.radians(37.4)
+
+    def en(lat_deg: Any, lon_deg: Any) -> Any:
+        return np.c_[np.radians(lon_deg) * EARTH_RADIUS_M * np.cos(lat0), np.radians(lat_deg) * EARTH_RADIUS_M]
+
+    distance, _ = cKDTree(en(np.degrees(lat), np.degrees(lon))).query(
+        en(points.lat_deg.values, points.lon_deg.values), distance_upper_bound=30)
+    keep = points[np.isfinite(distance)]
+    out.parent.mkdir(parents=True, exist_ok=True)
+    keep.to_csv(out, index=False, float_format="%.9f", lineterminator="\n")
+    return {"points": int(len(keep))}
+
+
+def command_road_maps(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int:
+    context = make_context(args)
+    drives = {entry["id"]: entry for entry in recipe["drives"]}
+    wanted = select([{"id": key} for key in recipe.get("road_maps", {}).get("maps", {})], args.drives, None)
+    points = None
+    report: dict[str, Any] = {}
+    mismatches = 0
+    for item in wanted:
+        drive_id = item["id"]
+        spec = recipe["road_maps"]["maps"][drive_id]
+        out = Path(render(spec["path"], context))
+        if out.is_file() and sha256_file(out) == spec["sha256"] and not args.force:
+            report[drive_id] = {"sha256": spec["sha256"], "identical": True, "built": False}
+            continue
+        if points is None:
+            if not args.gsdc_truth_root:
+                raise SystemExit("road-maps: pass --gsdc-truth-root")
+            points = load_road_points(recipe, Path(args.gsdc_truth_root))
+        device_gnss = Path(args.gsdc_root) / next(
+            relative for relative in drives[drive_id]["inputs"] if relative.endswith("/device_gnss.csv"))
+        info = build_road_map(device_gnss, points, out)
+        observed = sha256_file(out)
+        report[drive_id] = {**info, "sha256": observed, "identical": observed == spec["sha256"], "built": True}
+        print(f"{drive_id}: {info['points']} points, "
+              f"{'identical' if observed == spec['sha256'] else 'DIFFERS from the pinned map'}", flush=True)
+        mismatches += observed != spec["sha256"]
+    Path(args.work_dir).mkdir(parents=True, exist_ok=True)
+    (Path(args.work_dir) / "road_maps_report.json").write_text(json.dumps(report, indent=1) + "\n", encoding="utf-8")
+    print(f"road-maps: {sum(1 for r in report.values() if r['identical'])}/{len(wanted)} match the pinned SHA-256")
     return 1 if mismatches and not args.allow_mismatch else 0
 
 
@@ -789,6 +893,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     common(maps)
     maps.add_argument("--force", action="store_true")
     maps.add_argument("--allow-mismatch", action="store_true")
+    roads = sub.add_parser("road-maps", help="Build and check the road maps from the raw WLS tracks and train truth.")
+    common(roads)
+    roads.add_argument("--force", action="store_true")
+    roads.add_argument("--allow-mismatch", action="store_true")
     assemble = sub.add_parser("assemble", help="Assemble submission.csv and check the SHA-256 gate.")
     common(assemble)
     assemble.add_argument("--out", type=Path, required=True)
@@ -809,6 +917,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "verify-inputs": command_verify_inputs,
         "run": command_run,
         "height-maps": command_height_maps,
+        "road-maps": command_road_maps,
         "assemble": command_assemble,
     }
     return handlers[args.command](args, recipe)
