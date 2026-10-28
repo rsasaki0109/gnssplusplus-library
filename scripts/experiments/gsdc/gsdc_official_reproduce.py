@@ -6,7 +6,7 @@ Backs the ``gnss reproduce gsdc-official`` lane.  The recipe
 test drives, the input files (SHA-256), the exact ``gnss_fgo_imu_no_base`` argv
 and the SHA-256 of the solution the research run wrote.  Nothing here talks to
 Kaggle: the gate is the SHA-256 of the assembled ``submission.csv`` (the file
-submitted as Kaggle ref 57717122); the Kaggle score is a readback record only.
+submitted as Kaggle ref 57733487); the Kaggle score is a readback record only.
 Every drive, stage-0 run and height map is pinned to one Linux GCC build;
 MSVC outputs of the same drives differ by up to 0.08 m.
 
@@ -14,9 +14,9 @@ Subcommands, in lane order:
 
 ``verify-inputs``
     Check the SHA-256 of every raw input and every train ``ground_truth.csv``
-    the height maps need.
+    the height maps and the road snap need.
 ``run --stage stage0``
-    Run the 25 stage-0 (offset + extra-band) replays whose trajectories select
+    Run the 15 stage-0 (offset + extra-band) replays whose trajectories select
     the height-map points.  A drive is skipped when its height map is already
     present with the pinned SHA-256.
 ``height-maps``
@@ -28,9 +28,11 @@ Subcommands, in lane order:
     ``--jobs N`` runs N at once (outputs do not depend on it).
 ``assemble``
     Assemble ``submission.csv`` on the official key list (Kaggle
-    sample_submission order), copying each native coordinate verbatim, and
-    report the SHA-256 gate plus per-drive identity and row differences
-    against ``--reference-submission`` when that file is available.
+    sample_submission order), copying each native coordinate verbatim; when
+    the recipe has ``road_snap``, move epochs across track toward a road map
+    built from the train ground truth.  Report the SHA-256 gate plus per-drive
+    identity and row differences against ``--reference-submission`` when that
+    file is available.
 
 ``run`` is resumable: a drive whose ``run.json`` records exit 0 and whose
 ``solution.csv`` still has the recorded SHA-256 is skipped.
@@ -198,9 +200,11 @@ def command_verify_inputs(args: argparse.Namespace, recipe: Mapping[str, Any]) -
         and sha256_file(Path(render(spec["path"], make_context(args)))) == spec["sha256"]
         for spec in recipe["height_maps"]["maps"].values()
     )
-    if not maps_present:
+    truth_needed = not maps_present or "road_snap" in recipe
+    if truth_needed:
         if not args.gsdc_truth_root:
-            problems.append("height maps are not built yet and --gsdc-truth-root is not set")
+            problems.append("height maps are not built yet and --gsdc-truth-root is not set" if not maps_present
+                            else "the road snap needs the train ground truth and --gsdc-truth-root is not set")
         else:
             for relative, digest in truth_files.items():
                 located = locate_truth(Path(args.gsdc_truth_root), relative)
@@ -213,7 +217,7 @@ def command_verify_inputs(args: argparse.Namespace, recipe: Mapping[str, Any]) -
     for problem in problems:
         print(f"error: {problem}", file=sys.stderr)
     print(f"verify-inputs: {len(wanted)} raw inputs, "
-          f"{'height maps already present' if maps_present else f'{len(truth_files)} ground-truth files'}; "
+          f"{f'{len(truth_files)} ground-truth files' if truth_needed else 'height maps already present'}; "
           f"{len(problems)} problem(s)")
     return 1 if problems else 0
 
@@ -486,6 +490,99 @@ def command_height_maps(args: argparse.Namespace, recipe: Mapping[str, Any]) -> 
 
 
 # --------------------------------------------------------------------------
+# road snap
+# --------------------------------------------------------------------------
+
+
+def load_road_map(recipe: Mapping[str, Any], truth_root: Path) -> tuple[Any, Any]:
+    """Road-map points (east/north metres) and unit headings from the train ground truth.
+
+    Files are read in ``truth_files`` key order, each sorted by time; a point
+    keeps its central-difference step as heading when that step exceeds
+    ``map_min_step_m``.  The numpy sequence is the one the rule was fixed
+    with, so the snapped coordinates (and the SHA-256 gate) depend on it.
+    """
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+
+    spec = recipe["road_snap"]
+    radius, lat0 = spec["earth_radius_m"], np.radians(spec["lat0_deg"])
+    points, headings = [], []
+    for relative, digest in sorted(recipe["height_maps"]["truth_files"].items()):
+        located = locate_truth(truth_root, relative)
+        if located is None:
+            raise SystemExit(f"road snap: ground truth {relative} not found under {truth_root}")
+        if sha256_file(located) != digest:
+            raise SystemExit(f"road snap: SHA-256 mismatch for {located}")
+        frame = pd.read_csv(located).sort_values("UnixTimeMillis")
+        xy = np.c_[np.radians(frame.LongitudeDegrees.values) * radius * np.cos(lat0),
+                   np.radians(frame.LatitudeDegrees.values) * radius]
+        step = np.gradient(xy, axis=0)
+        length = np.linalg.norm(step, axis=1)
+        keep = length > spec["map_min_step_m"]
+        points.append(xy[keep])
+        headings.append(step[keep] / length[keep, None])
+    return np.vstack(points), np.vstack(headings)
+
+
+def road_snap(recipe: Mapping[str, Any], truth_root: Path, path: Path) -> dict[str, Any]:
+    """Move the epochs of the submission at ``path`` across track toward the road map, in place.
+
+    Per epoch whose own step exceeds ``min_epoch_step_m``: map points within
+    ``radius_m`` heading within ``heading_deg`` of it give its offset along
+    their left normals; offsets under ``max_offset_m`` are kept and the epoch
+    moves by ``-step * median`` along their normalised mean normal.  Every
+    coordinate is then written with ``float_format``.
+    """
+    import numpy as np  # noqa: PLC0415
+    import pandas as pd  # noqa: PLC0415
+    from scipy.spatial import cKDTree  # noqa: PLC0415
+
+    spec = recipe["road_snap"]
+    radius, lat0 = spec["earth_radius_m"], np.radians(spec["lat0_deg"])
+    points, headings = load_road_map(recipe, truth_root)
+    tree = cKDTree(points)
+    min_cos = np.cos(np.radians(spec["heading_deg"]))
+    submission = pd.read_csv(path)
+    snapped = submission.copy()
+    moved = 0
+    touched: list[str] = []
+    largest = 0.0
+    for trip, frame in submission.groupby("tripId", sort=False):
+        frame = frame.sort_values("UnixTimeMillis")
+        xy = np.c_[np.radians(frame.LongitudeDegrees.values) * radius * np.cos(lat0),
+                   np.radians(frame.LatitudeDegrees.values) * radius]
+        step = np.gradient(xy, axis=0)
+        length = np.linalg.norm(step, axis=1)
+        unit = step / np.maximum(length, 1e-6)[:, None]
+        shift = np.zeros_like(xy)
+        for i, near in enumerate(tree.query_ball_point(xy, spec["radius_m"])):
+            if length[i] < spec["min_epoch_step_m"] or not near:
+                continue
+            near = np.array(near)
+            near = near[(headings[near] @ unit[i]) > min_cos]
+            if not len(near):
+                continue
+            normals = np.c_[-headings[near, 1], headings[near, 0]]
+            offsets = np.einsum("ij,ij->i", xy[i] - points[near], normals)
+            kept = np.abs(offsets) < spec["max_offset_m"]
+            if kept.sum() >= 1:
+                normal = normals[kept].mean(0)
+                normal /= np.linalg.norm(normal)
+                shift[i] = -spec["step"] * np.median(offsets[kept]) * normal
+        out = xy + shift
+        snapped.loc[frame.index, "LatitudeDegrees"] = np.degrees(out[:, 1] / radius)
+        snapped.loc[frame.index, "LongitudeDegrees"] = np.degrees(out[:, 0] / (radius * np.cos(lat0)))
+        size = np.linalg.norm(shift, axis=1)
+        if (size > 0).any():
+            moved += int((size > 0).sum())
+            touched.append(trip)
+            largest = max(largest, float(size.max()))
+    snapped.to_csv(path, index=False, float_format=spec["float_format"], lineterminator="\n")
+    return {"epochs_moved": moved, "drives_touched": len(touched), "max_shift_m": round(largest, 4)}
+
+
+# --------------------------------------------------------------------------
 # assemble
 # --------------------------------------------------------------------------
 
@@ -590,6 +687,14 @@ def command_assemble(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int
     rows, sources = assemble_rows(recipe, solutions, reference if args.allow_partial else None)
     out = Path(args.out)
     observed = write_submission(rows, out)
+    snap = None
+    if "road_snap" in recipe:
+        if not args.gsdc_truth_root:
+            raise SystemExit("assemble: the road snap needs --gsdc-truth-root")
+        snap = {"assembled_sha256": observed, **road_snap(recipe, Path(args.gsdc_truth_root), out)}
+        observed = sha256_file(out)
+        with out.open(newline="", encoding="utf-8") as stream:
+            rows = list(csv.reader(stream))[1:]
     expected = recipe["submission"]["sha256"]
     drive_report = compare_drives(rows, reference)
     records: dict[str, Any] = {}
@@ -622,6 +727,7 @@ def command_assemble(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int
             "sha256_match": observed == expected,
             "partial": any(d["source"] != "native" for d in drive_report.values()),
         },
+        "road_snap": snap,
         "drives_total": len(drive_report),
         "drives_native": len(native),
         "drives_identical": sum(1 for d in native if d["solution_identical"]),
@@ -635,6 +741,9 @@ def command_assemble(args: argparse.Namespace, recipe: Mapping[str, Any]) -> int
     }
     Path(args.metrics_json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.metrics_json).write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    if snap is not None:
+        print(f"road snap: {snap['epochs_moved']} epochs moved on {snap['drives_touched']} drives "
+              f"(max {snap['max_shift_m']} m; assembled before the snap: {snap['assembled_sha256']})")
     print(f"submission: {out} rows={len(rows)} sha256={observed}")
     print(f"expected  : {expected} -> {'MATCH' if observed == expected else 'DIFFERENT'}")
     print(f"native drives identical to the research outputs: {metrics['drives_identical']}/{len(native)}"

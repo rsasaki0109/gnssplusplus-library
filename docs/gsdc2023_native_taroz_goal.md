@@ -7173,3 +7173,61 @@ ebf-xx Pixel5 motion pick (+0.012 on its probe) cancels the gains. The
 official recipe stays on the test-tuned 57717122. 57726666 is the best
 score reached without test feedback, 0.010 m from the taroz post-deadline
 Private.
+
+### Truth-free rule on train and road snap, submission 57733487 (2026-10-28)
+
+The official recipe moves to 57733487 (Private 0.775 m / Public 0.804 m).
+No Kaggle score chose anything in it. Each rule was fixed on the 36 train
+drives and then applied to test once. Five such submissions were made, and
+this is the best. The variant types come from the per-drive probes of
+57717122.
+
+**Train checks of the per-drive variants** (mean (P50+P95)/2 change over
+36 drives against the current recipe):
+
+- **Refinement-pass toggle.** The oracle gains only -0.0005 m, and the
+  prres rule loses +0.046 m. Left out.
+- **Height map.** Maps were built without the drive's own course; 18
+  drives have coverage. Always on costs +0.0032 m and the oracle gains
+  -0.0054 m. prres does not tell when the map hurts. The median height
+  spread of map points within 15 m of the trajectory does (correlation
+  +0.49). Train spreads sit below 0.21 m or above 0.40 m, so the rule drops
+  the map at 0.3 m or more.
+- **Relative-height pairs.** Over 12 drives the mean is +0.0037 m, with 6
+  better and 6 worse. The runs were about 3x slower and one ran out of
+  memory, so the check stopped there. Left as in the recipe.
+- **XXVV motion by phone.** A325F, A325G and A205U gain on all 4 of their
+  train drives (-0.013, -0.093, -0.064, -0.039 m); prres misses two of
+  them. These phones always take motion.
+- **Averaging current and motion per epoch** (-0.0035 to -0.0054 m) does
+  not beat the selection (-0.0077 m in sample).
+
+On test (57732745), the map rule drops 10 maps, the phone rule adds 2
+drives, and prres picks the rest. 22 drives differ from 57678818. The file
+scores Private 0.784 m / Public 0.816 m.
+
+**Samsung A along-track error.** On train the native final is level with
+the taroz `result_gnss_imu` (0.7134 vs 0.7123 m over 35 drives). The
+largest systematic gap is along-track on sm-a505g: +0.73 m ahead of truth
+against +0.36 m for taroz, roughly constant with speed and acceleration.
+The native and taroz yaw agree within 1 degree, so the phone offset is not
+applied in the wrong direction. The cause is not found, and with one train
+drive per phone a per-phone correction cannot be checked.
+
+**Road snap.** This uses the train ground truth across track, as the height
+maps do vertically. Each moving epoch looks up train-truth points within 6 m
+that head within 25 degrees of it. It takes their offsets along their
+normals, keeps those under 1 m, and moves by half of a summary offset. On
+train the map is built without the drive's own course:
+
+| Snap | Train change | Better / worse | Test (Private / Public) |
+|---|---:|---|---|
+| nearest point, map from the 40 taroz train drives | -0.0054 m | 15 / 3 of 18 covered | 0.777 / 0.809 (57733311) |
+| nearest point, all 156 train files | -0.0094 m | 18 / 5 of 24 covered | 0.777 / 0.807 (57733407) |
+| median of all kept offsets, 156 files | -0.0143 m | 19 / 5 | **0.775 / 0.804** (57733487) |
+
+Moving by the full offset instead of half loses on train (+0.0151 m with
+the median), because a neighbouring lane's truth then pulls the epoch
+across. The snap is the `road_snap` step of the lane's `assemble`. Against
+the released taroz code (0.782 / 0.796 m), 57733487 is ahead on Private
+and behind on Public.

@@ -7,6 +7,7 @@ These tests need no datasets or built binaries.
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -24,6 +25,8 @@ sys.path.insert(0, str(ROOT_DIR / "apps" / "commands"))
 sys.path.insert(0, str(ROOT_DIR / "apps" / "commands" / "benchmarks"))
 
 import gnss_reproduce as reproduce  # noqa: E402
+
+HAVE_SCIPY_STACK = all(importlib.util.find_spec(name) for name in ("numpy", "pandas", "scipy"))
 
 
 READY_LANES = {
@@ -740,10 +743,18 @@ class GsdcOfficialLaneTest(unittest.TestCase):
         self.assertNotIn("E:/", text)
         self.assertNotIn("E:\\\\", text)
         submission = recipe["submission"]
-        self.assertEqual(submission["kaggle_ref"], 57717122)
-        self.assertTrue(submission["sha256"].startswith("02208f4f"))
+        self.assertEqual(submission["kaggle_ref"], 57733487)
+        self.assertTrue(submission["sha256"].startswith("a81ceb0b"))
+        truth_free = [drive for drive in recipe["drives"] if "truth_free" in drive["research_source"]]
+        self.assertEqual(len(truth_free), 22)
+        for drive in truth_free:  # every picked variant keeps its 57678818 provenance
+            self.assertEqual(len(drive["research_source"]["previous_output_sha256"]), 64)
+            self.assertEqual("--native-height-map" in drive["argv"], drive["height_map"] is not None)
+        snap = recipe["road_snap"]
+        self.assertEqual(snap["truth_files"], "height_maps.truth_files")
+        self.assertEqual((snap["radius_m"], snap["heading_deg"], snap["max_offset_m"], snap["step"]), (6.0, 25.0, 1.0, 0.5))
         refined = [drive for drive in recipe["drives"] if "--native-imu-refinement-pass" in drive["argv"]]
-        self.assertEqual(len(refined), 30)
+        self.assertEqual(len(refined), 32)
         for drive in refined:  # the refinement pass needs the exported stages, source init and main Doppler
             for flag in ("--native-export-gnss-stage", "--native-export-imu-stage",
                          "--native-source-imu-initialization", "--native-phase213-main-doppler"):
@@ -888,6 +899,52 @@ class GsdcOfficialLaneTest(unittest.TestCase):
             self.assertTrue(payload["submission"]["partial"])
             self.assertTrue(payload["submission"]["sha256_match"])
             self.assertEqual(payload["drives_native"], 1)
+
+    @unittest.skipUnless(HAVE_SCIPY_STACK, "numpy, pandas and scipy are needed for the road snap")
+    def test_road_snap_moves_epochs_across_track_toward_the_truth_road(self) -> None:
+        driver = self._import()
+        lat0, radius = 37.4, 6371008.8
+        metres_lon = math.radians(1.0) * radius * math.cos(math.radians(lat0))
+        metres_lat = math.radians(1.0) * radius
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            truth = tmp_path / "truth" / "train" / "c1" / "p1" / "ground_truth.csv"
+            truth.parent.mkdir(parents=True)
+            # An eastbound road along lat0, one truth point per 10 m.
+            truth.write_text("UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\n" + "".join(
+                f"{1000 * i},{lat0},{-122.0 + 10.0 * i / metres_lon}\n" for i in range(60)), encoding="utf-8")
+            recipe = {
+                "height_maps": {"truth_files": {"train/c1/p1/ground_truth.csv": driver.sha256_file(truth)}},
+                "road_snap": {"earth_radius_m": radius, "lat0_deg": lat0, "map_min_step_m": 1.0, "min_epoch_step_m": 1.0,
+                              "radius_m": 6.0, "heading_deg": 25.0, "max_offset_m": 1.0, "step": 0.5,
+                              "float_format": "%.10f"},
+            }
+            rows = []
+            for trip, north_m, direction in (("near", 0.4, 1), ("far", 1.5, 1), ("westbound", 0.4, -1)):
+                for i in range(10, 30):
+                    east = 100.0 + direction * 8.0 * (i - 10)
+                    rows.append([trip, str(1000 * i), f"{lat0 + north_m / metres_lat:.10f}",
+                                 f"{-122.0 + east / metres_lon:.10f}"])
+            rows += [["static", str(1000 * i), f"{lat0 + 0.4 / metres_lat:.10f}", f"{-122.0 + 150.0 / metres_lon:.10f}"]
+                     for i in range(10, 15)]
+            path = tmp_path / "submission.csv"
+            driver.write_submission(rows, path)
+            stats = driver.road_snap(recipe, tmp_path / "truth", path)
+            snapped = driver.read_submission(path)
+            north = {trip: [(float(lat) - lat0) * metres_lat for lat, _ in by_key.values()] for trip, by_key in snapped.items()}
+            for value in north["near"]:  # half of the 0.4 m offset is removed
+                self.assertAlmostEqual(value, 0.2, places=3)
+            for trip, expected in (("far", 1.5), ("westbound", 0.4), ("static", 0.4)):  # beyond 1 m, opposite heading, not moving
+                for value in north[trip]:
+                    self.assertAlmostEqual(value, expected, places=3)
+            self.assertEqual(stats, {"epochs_moved": 20, "drives_touched": 1, "max_shift_m": 0.2})
+            self.assertTrue(path.read_text(encoding="utf-8").startswith("tripId,UnixTimeMillis,LatitudeDegrees,LongitudeDegrees\n"))
+            # assemble needs the train truth whenever the recipe has a road snap
+            with self.assertRaises(SystemExit):
+                driver.command_assemble(type("Args", (), {"work_dir": tmp_path, "gsdc_root": None, "gsdc_truth_root": None,
+                                                          "reference_submission": None, "allow_partial": False,
+                                                          "out": tmp_path / "out.csv", "metrics_json": tmp_path / "m.json"})(),
+                                        {**recipe, "keys": {"runs": {}}, "drives": []})
 
     def test_input_window_writes_raw_rows_from_the_window_epoch(self) -> None:
         driver = self._import()
