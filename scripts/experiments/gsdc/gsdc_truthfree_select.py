@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Recompute the truth-free per-drive picks of the GSDC official recipe (Kaggle ref 57733487).
+"""Recompute the truth-free per-drive picks of the GSDC official recipe (since Kaggle ref 57733487).
 
 The recipe pins each drive's argv; this script audits how its 22 changed drives
 were chosen.  From the 57678818 output and the native variant outputs of every
