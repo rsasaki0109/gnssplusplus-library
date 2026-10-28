@@ -89,7 +89,7 @@ dedicated follow-up.
 | MADOCALIB `exec_ppp` | Native PPP runs end to end across the MIZU/ALIC release matrix | native | Keep all 1 h/6 h/24 h trajectory and runtime baselines green |
 | MADOCALIB `exec_pppar` | Windows and authoritative Ubuntu Release both match the oracle's 108 Fix / 10 Float over all 118 epochs | native | Keep exact status agreement, no wrong/missed Fix, RMS at most 0.20 m, and maximum at most 1.0 m |
 | MADOCALIB `exec_pppar-ion` | Native opt-in L6D application runs across the MIZU/ALIC release matrix with explicit status baselines | native opt-in | Keep all 1 h/6 h/24 h trajectory, status, row, and runtime baselines green |
-| Triple/quad-frequency PPP-AR expansion | Not part of the frozen dual-frequency #148 profiles or fixtures | deferred to #387 | Add dedicated fixtures, ambiguity/state parity, and release baselines before claiming support |
+| Triple/quad-frequency PPP-AR expansion | Not part of the frozen dual-frequency #148 profiles or fixtures; the oracle already runs `l1+2+3+4` ([measurement](#387-frequency-measurement-and-24-h-baseline-refresh-2026-10-28)) | deferred to #387 | Add dedicated fixtures, ambiguity/state parity, and release baselines before claiming support |
 | Linked `postpos()` bridge | Non-installed `gnss_madocalib_oracle` | oracle-only | Available only in `MADOCALIB_PARITY_LINK=ON` builds; absent from normal `gnss_ppp` help and parsing |
 
 ## Current Numerical Baselines
@@ -999,3 +999,62 @@ documented one-release-cycle window, and use
 future triple/quad-frequency solver expansion.  Such expansion must add
 fixtures and baselines rather than silently widening the completed #148
 contract.
+
+### #387 frequency measurement and 24 h baseline refresh (2026-10-28)
+
+**The oracle is already quad-frequency.** The `pppar` and `pppar-ion` bridge
+commands load MADOCALIB's `sample_pppar.conf` and `sample_pppar_iono.conf`.
+Both set `pos1-frequency = l1+2+3+4`, and the parity link builds MADOCALIB with
+`NFREQ=5`. The M5 matrix therefore already compares native PPP-AR with a
+quad-frequency MADOCALIB.
+
+**MADOCALIB itself gains from the third frequency only at the first fix.** The
+`pppar` profile was run through the bridge on MIZU/ALIC 2025-04-01 for 24 h
+(30 s, L6E 204/206), with only `pos1-frequency` changed. First fix is counted
+from 00:00 GPST.
+
+| MADOCALIB `pos1-frequency` | MIZU first fix | MIZU FIX (1 h / 24 h) | ALIC first fix | ALIC FIX (1 h / 24 h) |
+| --- | ---: | --- | ---: | --- |
+| `l1+2` | 450 s | 105 / 2865 | 630 s | 96 / 2856 |
+| `l1+2+3` | 360 s | 108 / 2868 | 270 s | 99 / 2859 |
+| `l1+2+3+4` | 360 s | 108 / 2868 | 270 s | 99 / 2859 |
+
+- **The fourth frequency changes no status** on these fixtures.
+- **After convergence the frequencies agree to millimetres.** The horizontal
+  RMS after the first hour, against each station's own quad-frequency median,
+  is 1.15 / 1.12 / 1.12 cm on MIZU and 1.27 / 1.22 / 1.22 cm on ALIC.
+
+**Native already matches the quad-frequency oracle.** Native develop `3cb7230`
+was compared with the matrix oracle over 24 h:
+
+- **MIZU:** status agrees at every epoch (2845 FIX each), with the first fix
+  at 360 s for both, no wrong or missed fix, and a delta RMS of 1.6 cm.
+- **ALIC:** native has 2846 FIX against the oracle's 2836, with 1 missed fix.
+  Its first fix comes at 300 s against the oracle's 270 s. In the first hour
+  it fixes 11 epochs where the oracle is still float.
+
+On these fixtures native PPP-AR already performs like MADOCALIB's triple- and
+quad-frequency configuration, and better than its dual-frequency one. The
+measured gap is the 30 s first fix on ALIC. What #387 still needs is the
+following:
+
+- a per-frequency ambiguity and state audit;
+- a fixture on which a fourth frequency changes the solution.
+
+**The 24 h baselines are regenerated from this replay.** They had not been
+regenerated since before `e18edbc` (#630), so each 24 h `pppar` and
+`pppar-ion` case failed its exact status-count contract on improved native
+output. The changes are these:
+
+- `pppar` missed fixes: MIZU 921 → 0, ALIC 554 → 1.
+- `pppar-ion` missed fixes: MIZU 918 → 6, ALIC 579 → 2.
+- `mizu.ppp.24h`: matched epochs 2597 → 2855; delta RMS ceiling 1.34 → 0.15 m.
+- The bridge status counts are unchanged in every case.
+- `alic.pppar-ion.24h` now records one wrong fix in the matrix sense: native
+  FIX while the oracle is float.
+  - The epoch is TOW 173130, 30 s before the oracle's first fix.
+  - It is 1.3 cm from the oracle's fix at the next epoch.
+- Native runtime ceilings keep the larger of the previous ceiling and twice the
+  runtime measured here. This container ran three cases in parallel.
+- The 1 h / 6 h entries are unchanged. `pppar` 1 h / 6 h was re-run here and
+  passes.
