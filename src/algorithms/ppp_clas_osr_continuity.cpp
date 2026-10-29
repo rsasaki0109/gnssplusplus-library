@@ -1378,6 +1378,35 @@ std::vector<OSRCorrection> computeOSR(
                     bias.phase_source_signal_id = static_cast<uint8_t>(phase_code);
                     bias.phase_fallback = false;
                 }
+                // CLAS broadcasts Galileo biases for L1X/L5X only; receivers
+                // report C1C/C5Q.  Without a same-band match MRTKLIB v0.5.1
+                // strands every Galileo cell (pbias/cbias CSSRINVALID).
+                if (pppEnvOverrides().clas_galileo &&
+                    sat.system == GNSSSystem::Galileo) {
+                    namespace bias_identity = algorithms::ppp_bias_identity;
+                    if (phase_code > 0 && !bias.phase_present) {
+                        const int same_band =
+                            bias_identity::sameBandBiasCode(ssr_pbias_rtklib, phase_code);
+                        if (same_band > 0) {
+                            bias.phase_bias_m =
+                                ssr_pbias_rtklib.at(static_cast<uint8_t>(same_band));
+                            bias.phase_present = true;
+                            bias.phase_source_signal_id = static_cast<uint8_t>(same_band);
+                            bias.phase_fallback = true;
+                        }
+                    }
+                    if (code > 0 && !bias.code_present) {
+                        const int same_band =
+                            bias_identity::sameBandBiasCode(ssr_cbias_rtklib, code);
+                        if (same_band > 0) {
+                            bias.code_bias_m =
+                                ssr_cbias_rtklib.at(static_cast<uint8_t>(same_band));
+                            bias.code_present = true;
+                            bias.code_source_signal_id = static_cast<uint8_t>(same_band);
+                            bias.code_fallback = true;
+                        }
+                    }
+                }
             }
             osr.code_bias_signal_ids[f] = bias.code_signal_id;
             osr.phase_bias_signal_ids[f] = bias.phase_signal_id;

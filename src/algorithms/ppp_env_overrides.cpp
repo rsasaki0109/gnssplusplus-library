@@ -313,6 +313,7 @@ PPPEnvOverrides PPPEnvOverrides::fromEnvironment() {
         envDoubleOr("GNSS_PPP_CLAS_POST_RESET_RATIO_FLOOR", 5.0);
     overrides.clas_post_reset_quarantine_max_nfix =
         envIntOr("GNSS_PPP_CLAS_POST_RESET_QUARANTINE_MAX_NFIX", 7);
+    overrides.clas_galileo = envExactOne("GNSS_PPP_CLAS_GALILEO");
     overrides.clas_seed_residual_exclusion_m =
         envDoubleOr("GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M", 20.0);
     overrides.clas_hold_cont_min_track =

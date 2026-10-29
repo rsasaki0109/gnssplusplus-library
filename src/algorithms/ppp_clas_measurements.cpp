@@ -67,7 +67,10 @@ MeasurementBuildResult buildEpochMeasurements(
             // The v0.5.1 CLAS residual path leaves Galileo unusable on this
             // dataset (ssat.vsat remains zero); retain those states for the
             // common layout but do not initialize them from absent rows.
-            if (osr.satellite.system == GNSSSystem::Galileo) continue;
+            if (osr.satellite.system == GNSSSystem::Galileo &&
+                !pppEnvOverrides().clas_galileo) {
+                continue;
+            }
             for (int f = 0; f < osr.num_frequencies; ++f) {
                 if (osr.satellite.system == GNSSSystem::QZSS && f > 0) {
                     continue;
@@ -144,7 +147,8 @@ MeasurementBuildResult buildEpochMeasurements(
             continue;
         }
         if (mrtklib_parity &&
-            osr.satellite.system == GNSSSystem::Galileo) {
+            osr.satellite.system == GNSSSystem::Galileo &&
+            !pppEnvOverrides().clas_galileo) {
             continue;
         }
         // MRTKLIB clas_osr_corrmeas() requires STEC data for this satellite
@@ -607,6 +611,14 @@ MeasurementBuildResult buildEpochMeasurements(
         // Form DD rows for each selected group. MRTKLIB searches with >=, so
         // equal-elevation ties select the later observation (lines 1303-1321).
         int dd_covariance_block = 0;
+        constexpr double kClasGalileoFreshPositionVarianceM2 = 100.0;
+        constexpr double kClasGalileoFreshCodeGateM = 20.0;
+        const bool galileo_fresh_position_code_gate =
+            mrtklib_dd && pppEnvOverrides().clas_galileo &&
+            filter_state.covariance.block(filter_state.pos_index,
+                                          filter_state.pos_index, 3, 3)
+                        .trace() / 3.0 >
+                kClasGalileoFreshPositionVarianceM2;
         for (auto& [group_key, member_indices] : sd_groups) {
             if (member_indices.size() < 2) continue;
 
@@ -653,6 +665,15 @@ MeasurementBuildResult buildEpochMeasurements(
             for (size_t idx : member_indices) {
                 if (idx == ref_index) continue;
                 const auto& sat_row = result.measurements[idx];
+                // GNSS_PPP_CLAS_GALILEO: right after a reset the position is
+                // still seed-quality and the innovation test cannot reject a
+                // NLOS code row, so drop DD code rows beyond claslib's 20 m
+                // SPP exclusion threshold until the position converges.
+                if (galileo_fresh_position_code_gate && !group_key.is_phase &&
+                    std::abs(ref_row.residual - sat_row.residual) >
+                        kClasGalileoFreshCodeGateM) {
+                    continue;
+                }
                 MeasurementRow sd_row;
                 sd_row.H = ref_row.H - sat_row.H;
                 sd_row.residual = ref_row.residual - sat_row.residual;

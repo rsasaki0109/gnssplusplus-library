@@ -465,7 +465,8 @@ FixValidationStats validateFixedSolution(
         // set as well.  On this v0.5.1 CLAS dataset Galileo never acquires a
         // valid phase row, and QZSS contributes L1 only.
         if (mrtklib_parity &&
-            osr.satellite.system == GNSSSystem::Galileo) {
+            osr.satellite.system == GNSSSystem::Galileo &&
+            !pppEnvOverrides().clas_galileo) {
             continue;
         }
 

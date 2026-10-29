@@ -354,6 +354,12 @@ rise from 9,186 to 10,055; see the
 [seed note](docs/ppc_clas_seed_residual_exclusion.md). Set
 `GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M=0` for the previous seed.
 
+Opt-in `GNSS_PPP_CLAS_GALILEO=1` adds Galileo E1/E5a rows (CLAS Galileo
+biases are matched on the same frequency band). Over the six runs FIX rises
+to 35.87% and FIX within 0.3 m from 17.26% to 24.53% of epochs, but 76 FIX
+epochs land above 3 m, so the default stays GPS+QZSS; see the
+[Galileo note](docs/ppc_clas_galileo_opt_in.md).
+
 The production defaults are held floor 4 and maximum reduced-publication
 streak 5. Set `GNSS_PPP_CLAS_AR_HELD_MIN_DD_ROWS=6` and
 `GNSS_PPP_CLAS_AR_HELD_MAX_PUBLICATION_STREAK=1` to reproduce the previous

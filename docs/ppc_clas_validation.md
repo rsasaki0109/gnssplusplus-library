@@ -19,6 +19,11 @@ error changes. `GNSS_PPP_CLAS_SEED_RESIDUAL_EXCLUSION_M=0` restores the
 previous seed byte for byte. Details:
 [ppc_clas_seed_residual_exclusion.md](ppc_clas_seed_residual_exclusion.md).
 
+`GNSS_PPP_CLAS_GALILEO=1` is an opt-in Galileo profile. It raises six-run
+FIX to 35.87% and FIX within 0.3 m from 17.26% to 24.53% of epochs, but adds
+76 FIX epochs above 3 m, so it is not part of this sign-off. Details:
+[ppc_clas_galileo_opt_in.md](ppc_clas_galileo_opt_in.md).
+
 The accepted policy keeps the ordinary CLAS direct state-DD floor at six rows.
 Only an uninterrupted valid ambiguity hold from a preceding full-row FIX may
 publish a reduced four-row solution, and the bridge is capped at five

@@ -138,6 +138,7 @@ nav:
           - Selective Arc Restart: fgo_selective_arc_restart_plan.md
       - PPC:
           - CLAS Full Table: ppc_clas_full_table.md
+          - CLAS Galileo Opt-in: ppc_clas_galileo_opt_in.md
           - CLAS Seed Residual Exclusion: ppc_clas_seed_residual_exclusion.md
           - CLAS Validation: ppc_clas_validation.md
           - Fix Integrity Audit: ppc_fix_integrity_audit.md
